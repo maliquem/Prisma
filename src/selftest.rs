@@ -123,12 +123,16 @@ pub fn tweaks(path: &str) {
         Act::Dw(Hive::User, "Software\\PrismaTesteReversao", "Mexido", 2),
     ];
     let mut j = Vec::new();
-    let bad = tw::apply_acts("teste", ACTS, &mut j);
+    let mut lines = Vec::new();
+    let bad = tw::apply_acts("teste", ACTS, &mut j, &mut |l| lines.push(l));
     let _ = writeln!(s, "aplicou: falhas {bad}, entradas {}", j.len());
     let _ = writeln!(s, "depois: existia {:?} naoexistia {:?}", reg::dword(Hive::User, k, "Existia"), reg::dword(Hive::User, k, "NaoExistia"));
     // Outro programa muda um valor depois do Prisma.
     reg::write_dword(Hive::User, k, "Mexido", 99);
     let r = tw::undo("teste", &mut j);
+    for l in lines.iter().chain(&r.lines) {
+        let _ = writeln!(s, "{l}");
+    }
     let _ = writeln!(s, "desfez: {} restaurados, intocados {:?}, diario {}", r.restored, r.skipped, j.len());
     let _ = writeln!(s, "existia volta a 7: {:?}", reg::dword(Hive::User, k, "Existia"));
     let _ = writeln!(s, "naoexistia sumiu: {:?}", reg::read(Hive::User, k, "NaoExistia"));
@@ -213,4 +217,22 @@ pub fn toolrun(path: &str) {
     let _ = writeln!(s, "falhou: {:?}", t::sfc_verdict("2026-11-04 09:00:00", bad));
     let _ = writeln!(s, "sem log: {:?}", t::sfc_verdict("2026-11-04 09:00:00", ""));
     let _ = std::fs::write(path, s);
+}
+
+/// Passo a passo real sobre uma chave de teste, para conferir o painel de log sem tocar no Windows.
+pub fn tweak_log() -> Vec<String> {
+    use crate::sys::tweaks::{self as tw, Act};
+    use crate::sys::reg::{self, Hive};
+    const ACTS: &[Act] = &[
+        Act::Dw(Hive::User, "Software\\PrismaTesteReversao\\Politicas\\Microsoft\\Windows\\Otimizacao de Entrega", "ValorDeTesteComNomeBemComprido", 1),
+        Act::Dw(Hive::User, "Software\\PrismaTesteReversao", "Existia", 1),
+    ];
+    reg::write_dword(Hive::User, "Software\\PrismaTesteReversao", "Existia", 7);
+    let mut lines = vec!["▸ 12:00:00  Ajuste de demonstração".to_string()];
+    let mut j = Vec::new();
+    tw::apply_acts("teste", ACTS, &mut j, &mut |l| lines.push(l));
+    lines.push("▸ 12:00:01  Desfazendo".to_string());
+    lines.extend(tw::undo("teste", &mut j).lines);
+    let _ = std::process::Command::new("reg").args(["delete", "HKCU\\Software\\PrismaTesteReversao", "/f"]).output();
+    lines
 }

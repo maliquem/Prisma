@@ -1,6 +1,6 @@
 [package]
 name = "prisma"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Utilitário leve para Windows: fullscreen, volume por programa, monitor, energia e captura"
 
@@ -38,6 +38,7 @@ features = [
     "Win32_Media_Multimedia",
     "Win32_NetworkManagement_IpHelper",
     "Win32_NetworkManagement_Ndis",
+    "Win32_Networking_WinHttp",
     "Win32_Networking_WinSock",
     "Win32_Security",
     "Win32_Security_Cryptography",
@@ -51,6 +52,7 @@ features = [
     "Win32_System_Diagnostics_Debug",
     "Win32_System_Diagnostics_Etw",
     "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_Kernel",
     "Win32_System_EventLog",
     "Win32_System_IO",
     "Win32_System_JobObjects",

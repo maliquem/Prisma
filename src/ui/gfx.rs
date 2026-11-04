@@ -175,7 +175,7 @@ fn format(size: f32, weight: Weight, wrap: bool) -> IDWriteTextFormat {
 /// Mede o texto em DIPs. `max_w` limita a largura quando há quebra de linha.
 pub fn measure(text: &str, size: f32, weight: Weight, max_w: Option<f32>) -> (f32, f32) {
     let f = format(size, weight, max_w.is_some());
-    let t = wide(text);
+    let t = wide(&crate::i18n::tr(text));
     shared(|s| unsafe {
         let layout = s
             .dw
@@ -346,7 +346,7 @@ impl Canvas {
 
     fn text_ex(&self, r: Rect, s: &str, size: f32, c: Color, a: Align, wt: Weight, wrap: bool) {
         let f = format(size, wt, wrap);
-        let t = wide(s);
+        let t = wide(&crate::i18n::tr(s));
         unsafe {
             let _ = f.SetTextAlignment(match a {
                 Align::Left => DWRITE_TEXT_ALIGNMENT_LEADING,

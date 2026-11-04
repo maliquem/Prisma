@@ -110,7 +110,9 @@ fn draw_profiles(ui: &mut Ui, app: &mut App, r: Rect) {
     }
 
     let foot = 72.0;
-    let l = rect(r.x, r.y + 108.0, r.w, r.h - 108.0 - foot - 12.0);
+    let room = r.h - 108.0 - foot - 12.0;
+    let list_h = if app.cfg.tw_log { (room - 12.0) / 2.0 } else { room };
+    let l = rect(r.x, r.y + 108.0, r.w, list_h);
     ui.card(l);
     let rows: Vec<usize> = (0..CATALOG.len())
         .filter(|i| {
@@ -166,7 +168,17 @@ fn draw_profiles(ui: &mut Ui, app: &mut App, r: Rect) {
         app.tw_undo(id);
     }
 
-    let f = rect(r.x, l.bottom() + 12.0, r.w, foot);
+    if app.cfg.tw_log {
+        let b = rect(r.x, l.bottom() + 12.0, r.w, list_h);
+        ui.card(b);
+        if run.lines.is_empty() {
+            ui.c.text(rect(b.x + 12.0, b.y + 12.0, b.w - 24.0, 22.0), "O passo a passo aparece aqui ao aplicar ou desfazer.", 13.0, MUTED, Align::Left, Weight::Regular);
+        } else {
+            log_view(ui, "tw-log", b.inset(12.0), &run.lines);
+        }
+    }
+
+    let f = rect(r.x, r.bottom() - foot, r.w, foot);
     ui.card_on(f);
     let sel: Vec<&'static str> = CATALOG
         .iter()
@@ -192,7 +204,12 @@ fn draw_profiles(ui: &mut Ui, app: &mut App, r: Rect) {
             "Aplicado, mas uma conferência falhou. Veja o que mudou.".to_string()
         });
     }
-    ui.c.text(rect(f.x + 16.0, f.y + 4.0, f.w - 500.0, 64.0), &msg, 13.0, TEXT2, Align::Left, Weight::Regular);
+    ui.c.text_wrap(rect(f.x + 16.0, f.y + 12.0, f.w - 590.0, 52.0), &msg, 13.0, TEXT2, Weight::Regular);
+    let mut show = app.cfg.tw_log;
+    if ui.check("tw-log", rect(f.right() - 566.0, f.y + 14.0, 96.0, 44.0), "Ver log", &mut show) {
+        app.cfg.tw_log = show;
+        app.cfg.save();
+    }
     let mut rp = app.cfg.un_restore;
     if ui.check("tw-rp", rect(f.right() - 470.0, f.y + 14.0, 130.0, 44.0), "Restauração", &mut rp) {
         app.cfg.un_restore = rp;

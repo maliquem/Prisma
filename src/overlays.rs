@@ -15,7 +15,7 @@ use crate::ui::{Ui, UiState};
 const HOT: f32 = 90.0;
 
 fn fmt_gb(b: u64) -> String {
-    format!("{:.1} GB", b as f64 / (1u64 << 30) as f64).replace('.', ",")
+    format!("{:.1} GB", b as f64 / (1u64 << 30) as f64).replace('.', crate::i18n::comma())
 }
 
 fn metrics(s: &Snapshot) -> [(&'static str, f32, String); 4] {

@@ -20,10 +20,10 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let top = 88.0;
     let cw = (w - 36.0) / 4.0;
     let cards = [
-        ("CPU", format!("{:.0}", s.cpu), "%", if s.ghz > 0.0 { format!("{:.2} GHz", s.ghz).replace('.', ",") } else { String::new() }, &s.hist_cpu),
+        ("CPU", format!("{:.0}", s.cpu), "%", if s.ghz > 0.0 { format!("{:.2} GHz", s.ghz).replace('.', crate::i18n::comma()) } else { String::new() }, &s.hist_cpu),
         ("GPU", format!("{:.0}", s.gpu.util), "%", format!("{} °C", s.gpu.temp), &s.hist_gpu),
-        ("RAM", format!("{:.1}", s.ram_used as f64 / (1u64 << 30) as f64).replace('.', ","), "GB", format!("de {}", fmt_gb(s.ram_total)), &s.hist_ram),
-        ("VRAM", format!("{:.1}", s.gpu.used as f64 / (1u64 << 30) as f64).replace('.', ","), "GB", format!("de {}", fmt_gb(s.gpu.total)), &s.hist_vram),
+        ("RAM", format!("{:.1}", s.ram_used as f64 / (1u64 << 30) as f64).replace('.', crate::i18n::comma()), "GB", format!("de {}", fmt_gb(s.ram_total)), &s.hist_ram),
+        ("VRAM", format!("{:.1}", s.gpu.used as f64 / (1u64 << 30) as f64).replace('.', crate::i18n::comma()), "GB", format!("de {}", fmt_gb(s.gpu.total)), &s.hist_vram),
     ];
     for (i, (name, val, unit, right, hist)) in cards.iter().enumerate() {
         let r = rect(x + i as f32 * (cw + 12.0), top, cw, 118.0);
@@ -151,7 +151,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let lines = [
         ("Mais usado", format!("Núcleo {} · {:.0}%", best.0, best.1)),
         ("Menos usado", format!("Núcleo {} · {:.0}%", least.0, least.1)),
-        ("Frequência", if s.ghz > 0.0 { format!("{:.2} GHz", s.ghz).replace('.', ",") } else { "—".into() }),
+        ("Frequência", if s.ghz > 0.0 { format!("{:.2} GHz", s.ghz).replace('.', crate::i18n::comma()) } else { "—".into() }),
     ];
     for (i, (k, v)) in lines.iter().enumerate() {
         let y = dy + i as f32 * 22.0;

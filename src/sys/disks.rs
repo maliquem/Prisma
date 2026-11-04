@@ -315,7 +315,7 @@ fn nvme(h: HANDLE) -> Option<Health> {
         level = Level::Warn;
         notes.push(if life <= 10 { "Pouca vida útil restante".to_string() } else { "Temperatura ou reserva pedem atenção".to_string() });
     }
-    let gb = |v: u64| format!("{:.1} TB", v as f64 / 1e12).replace('.', ",");
+    let gb = |v: u64| format!("{:.1} TB", v as f64 / 1e12).replace('.', crate::i18n::comma());
     Some(Health {
         level,
         summary: if notes.is_empty() { "Sem sinais de problema".to_string() } else { notes.join(" · ") },

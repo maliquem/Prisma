@@ -39,6 +39,7 @@ pub const WM_TRAY: u32 = WM_APP + 2;
 pub const WM_SHOW: u32 = WM_APP + 3;
 const WM_PICK: u32 = WM_APP + 4;
 const TIMER_HUD: usize = 7;
+const WM_UPDATED: u32 = WM_APP + 77;
 pub const ACT_SHOT: i32 = HK_SHOT;
 pub const ACT_RECORD: i32 = HK_REC;
 
@@ -118,6 +119,11 @@ pub struct App {
     pub tw_apps: Vec<String>,
     tw_apps_slot: std::sync::Arc<Mutex<Option<Vec<String>>>>,
     pub tw_run: tweaks::Shared,
+    pub upd: crate::sys::update::Shared,
+    pub upd_confirm: bool,
+    upd_told: bool,
+    upd_last: Option<Instant>,
+    started: Instant,
     pub audit: audit::Shared,
     pub tool_sel: usize,
     pub tool_drive: usize,
@@ -130,6 +136,8 @@ pub struct App {
     pub tool_dst: String,
     pub tool_run: tools::Shared,
     pub programs: Vec<uninstall::Program>,
+    pub un_sort: u8,
+    pub boot_sort: u8,
     pub un_search: String,
     pub un_confirm: bool,
     pub un_review: bool,
@@ -254,6 +262,11 @@ pub fn start(background: bool) {
             tw_apps: Vec::new(),
             tw_apps_slot: Default::default(),
             tw_run: Default::default(),
+            upd: Default::default(),
+            upd_confirm: false,
+            upd_told: false,
+            upd_last: None,
+            started: Instant::now(),
             audit: Default::default(),
             tool_sel: 0,
             tool_drive: 0,
@@ -266,6 +279,8 @@ pub fn start(background: bool) {
             tool_dst: String::new(),
             tool_run: Default::default(),
             programs: Vec::new(),
+            un_sort: 0,
+            boot_sort: 0,
             un_search: String::new(),
             un_confirm: false,
             un_review: false,
@@ -380,6 +395,16 @@ pub fn start(background: bool) {
                 crate::selftest::audit(path);
                 std::process::exit(0);
             }
+            if a == "--test-crash" {
+                windows::Win32::System::Diagnostics::Debug::RaiseException(0xE000_0001, 0, None);
+            }
+            if a == "--test-panic" {
+                panic!("teste do relatório");
+            }
+            if a == "--twlog" {
+                app.cfg.tw_log = true;
+                app.tw_run.lock().unwrap().lines = crate::selftest::tweak_log();
+            }
             if a == "--profiles" {
                 app.page = Page::Tweaks;
                 app.tw_tab = 1;
@@ -389,6 +414,23 @@ pub fn start(background: bool) {
                         app.tw_on.insert(t.id);
                     }
                 }
+            }
+            if let Some(path) = a.strip_prefix("--test-svc=") {
+                let mut out = String::new();
+                // Sem fechar nada entre um e outro: cada abertura tem de fechar a anterior.
+                for name in ["Agendador de Tarefas", "Adaptador de Desempenho WMI", "Windows Update"] {
+                    let t0 = Instant::now();
+                    let r = services::open_properties(name);
+                    let elapsed = t0.elapsed();
+                    let open = services::console_windows();
+                    out += &format!("{name}: {r:?} em {elapsed:?}, consoles {}\n", open.len());
+                    for f in open {
+                        out += &format!("  {:?}\n", services::console_dump(f));
+                    }
+                }
+                services::close_consoles();
+                let _ = std::fs::write(path, out);
+                std::process::exit(0);
             }
             if let Some(d) = a.strip_prefix("--scan=") {
                 app.page = Page::Analyze;
@@ -780,6 +822,12 @@ impl App {
 
     pub fn tw_undo(&mut self, id: &str) {
         let rep = tweaks::undo(id, &mut self.tw_journal);
+        {
+            let mut run = self.tw_run.lock().unwrap();
+            let what = if id.is_empty() { "Desfazendo tudo" } else { "Desfazendo" };
+            run.lines.push(format!("▸ {}  {what}", crate::sys::tools::clock()));
+            run.lines.extend(rep.lines.iter().cloned());
+        }
         self.log(&format!("desfez ajustes {id}: {} restaurados, {} intocados", rep.restored, rep.skipped.len()));
         let msg = if !rep.apps.is_empty() {
             format!("{} valores restaurados. Apps voltam pela Loja.", rep.restored)
@@ -809,6 +857,58 @@ impl App {
             .unwrap_or_else(|| exe.trim_end_matches(".exe").trim_end_matches(".EXE").to_string());
         self.exe_names.insert(key, n.clone());
         n
+    }
+
+    /// Procura uma vez logo depois de abrir e depois a cada dia.
+    fn update_tick(&mut self) {
+        use crate::sys::update::{self, Phase};
+        if !self.cfg.update_auto {
+            return;
+        }
+        let due = match self.upd_last {
+            Some(t) => t.elapsed().as_secs() > 86_400,
+            None => self.started.elapsed().as_secs() > 8,
+        };
+        let idle = matches!(self.upd.lock().unwrap().phase, Phase::Idle | Phase::Latest | Phase::Failed(_));
+        if due && idle {
+            self.upd_last = Some(Instant::now());
+            update::check(self.upd.clone());
+        }
+        let s = self.upd.lock().unwrap().clone();
+        if s.phase == Phase::Available && !self.upd_told {
+            self.upd_told = true;
+            self.toast.info(&format!("Nova versão {} disponível em Configurações", s.version));
+        }
+    }
+
+    pub fn update_now(&mut self) {
+        let busy = self.tw_run.lock().unwrap().running || self.tool_run.lock().unwrap().running || self.un_job.lock().unwrap().running || self.rec_start.is_some();
+        if busy {
+            self.toast.info("Espere a tarefa em andamento terminar.");
+        } else {
+            crate::sys::update::install(self.upd.clone(), self.hub.0 as isize, WM_UPDATED);
+        }
+    }
+
+    pub fn sort_boot(&mut self, by: u8) {
+        self.boot_sort = by;
+        self.boot_sel = None;
+        self.boot_confirm = false;
+        match by {
+            1 => self.boot_items.sort_by_key(|i| (!i.enabled, i.name.to_lowercase())),
+            2 => self.boot_items.sort_by_key(|i| (i.enabled, i.name.to_lowercase())),
+            _ => self.boot_items.sort_by_key(|i| i.name.to_lowercase()),
+        }
+    }
+
+    pub fn sort_programs(&mut self, by: u8) {
+        self.un_sort = by;
+        match by {
+            1 => self.programs.sort_by_key(|p| (std::cmp::Reverse(p.size), p.name.to_lowercase())),
+            // A data vem como AAAAMMDD: comparar o texto já dá a ordem certa.
+            2 => self.programs.sort_by_key(|p| (std::cmp::Reverse(p.date.clone()), p.name.to_lowercase())),
+            _ => self.programs.sort_by_key(|p| p.name.to_lowercase()),
+        }
     }
 
     pub fn select_boot(&mut self, i: usize) {
@@ -949,7 +1049,7 @@ impl App {
             return;
         }
         let ram: u64 = selected.iter().map(|c| c.ram).sum();
-        let gb = format!("{:.1}", ram as f64 / (1u64 << 30) as f64).replace('.', ",");
+        let gb = format!("{:.1}", ram as f64 / (1u64 << 30) as f64).replace('.', crate::i18n::comma());
         let n = selected.len();
         let title = if self.detector.game_exe.is_empty() {
             "Otimizar".to_string()
@@ -1055,6 +1155,7 @@ impl App {
 
         self.widget.update(&self.cfg, &self.snap);
         self.full.sweep();
+        self.update_tick();
         if self.last_save.elapsed().as_secs() > 300 {
             self.last_save = Instant::now();
             self.usage.save();
@@ -1120,11 +1221,13 @@ impl App {
             Page::Uninstall => {
                 if self.programs.is_empty() {
                     self.programs = uninstall::list();
+                    self.sort_programs(self.un_sort);
                 }
             }
             Page::Startup => {
                 if self.boot_items.is_empty() {
                     self.boot_items = autostart::list();
+                    self.sort_boot(self.boot_sort);
                 }
             }
             Page::Services => self.services = services::list(),
@@ -1235,6 +1338,7 @@ impl App {
         let mut lost = false;
         unsafe {
             m.rt.BeginDraw();
+            m.ui.view_h = h;
             let ui = crate::ui::Ui::begin(&m.canvas, &mut m.ui);
             m.canvas.clear(BG);
             pages::draw(ui, self, rect(0.0, 0.0, w, h));
@@ -1295,13 +1399,14 @@ impl App {
     fn tray_menu(&mut self) {
         unsafe {
             let menu = CreatePopupMenu().unwrap();
-            let _ = AppendMenuW(menu, MF_STRING, TRAY_OPEN as usize, w!("Abrir o Prisma"));
+            let item = |s: &str| HSTRING::from(crate::i18n::tr(s).as_ref());
+            let _ = AppendMenuW(menu, MF_STRING, TRAY_OPEN as usize, &item("Abrir o Prisma"));
             let flag = if self.widget.visible { MF_CHECKED } else { MF_UNCHECKED };
             let _ = AppendMenuW(menu, MF_STRING | flag, TRAY_WIDGET as usize, w!("Widget"));
-            let _ = AppendMenuW(menu, MF_STRING, TRAY_OPT as usize, w!("Otimizar agora"));
-            let _ = AppendMenuW(menu, MF_STRING, TRAY_SHOT as usize, w!("Tirar foto da área"));
+            let _ = AppendMenuW(menu, MF_STRING, TRAY_OPT as usize, &item("Otimizar agora"));
+            let _ = AppendMenuW(menu, MF_STRING, TRAY_SHOT as usize, &item("Tirar foto da área"));
             let _ = AppendMenuW(menu, MF_SEPARATOR, 0, None);
-            let _ = AppendMenuW(menu, MF_STRING, TRAY_EXIT as usize, w!("Sair"));
+            let _ = AppendMenuW(menu, MF_STRING, TRAY_EXIT as usize, &item("Sair"));
             let mut p = POINT::default();
             let _ = GetCursorPos(&mut p);
             let _ = SetForegroundWindow(self.hub);
@@ -1345,6 +1450,10 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
             });
             LRESULT(0)
         }
+        WM_UPDATED => {
+            PostQuitMessage(0);
+            LRESULT(0)
+        }
         WM_TIMER => {
             with(|a| a.hud_update());
             LRESULT(0)
@@ -1355,6 +1464,7 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                     if autostart::add(&path) {
                         a.log(&format!("inicialização adicionou {path}"));
                         a.boot_items = autostart::list();
+                        a.sort_boot(a.boot_sort);
                         a.invalidate();
                     }
                 });
@@ -1477,6 +1587,14 @@ unsafe extern "system" fn main_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
                     mw.ui.released = true;
                 }
                 let _ = ReleaseCapture();
+                a.invalidate();
+                Some(0)
+            }
+            WM_RBUTTONUP => {
+                mouse_xy(a, l);
+                if let Some(mw) = &mut a.main {
+                    mw.ui.right_released = true;
+                }
                 a.invalidate();
                 Some(0)
             }

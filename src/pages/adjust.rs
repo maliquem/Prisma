@@ -40,7 +40,8 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         }
     }
 
-    let r1 = rect(x, top + 208.0, w, 92.0);
+    let half = (w - 12.0) / 2.0;
+    let r1 = rect(x, top + 208.0, half, 92.0);
     ui.card(r1);
     ui.label(rect(r1.x + 16.0, r1.y + 10.0, r1.w - 32.0, 18.0), "Atalho de Otimizar", TEXT2);
     if ui.hotkey("hk-opt", rect(r1.x + 16.0, r1.y + 34.0, 240.0, 44.0), &mut app.cfg.hk_optimize) {
@@ -48,12 +49,66 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         app.register_hotkeys();
     }
 
+    let rl = rect(r1.right() + 12.0, r1.y, half, 92.0);
+    ui.card(rl);
+    ui.label(rect(rl.x + 16.0, rl.y + 10.0, rl.w - 32.0, 18.0), "Idioma", TEXT2);
+
+    let ru = rect(x, top + 312.0, w, 112.0);
+    draw_update(ui, app, ru);
+
     if !app.hk_errors.is_empty() {
-        let r2 = rect(x, top + 312.0, w, 40.0 + app.hk_errors.len() as f32 * 22.0);
+        let r2 = rect(x, top + 436.0, w, 40.0 + app.hk_errors.len() as f32 * 22.0);
         ui.card(r2);
         ui.c.text(rect(r2.x + 16.0, r2.y + 8.0, r2.w - 32.0, 22.0), "Atalhos que não funcionaram", 14.0, WARN, Align::Left, Weight::Semibold);
         for (i, e) in app.hk_errors.iter().enumerate() {
             ui.label(rect(r2.x + 16.0, r2.y + 32.0 + i as f32 * 22.0, r2.w - 32.0, 20.0), e, TEXT2);
         }
+    }
+
+    // Lista por último, para abrir por cima do resto.
+    let opts = vec!["Português (Brasil)".to_string(), "English".to_string()];
+    let mut v = app.cfg.lang_en as usize;
+    if ui.select("lang", rect(rl.x + 16.0, rl.y + 34.0, 240.0, 44.0), &opts, &mut v) {
+        app.cfg.lang_en = v == 1;
+        app.cfg.save();
+        crate::i18n::set_english(app.cfg.lang_en);
+    }
+}
+
+fn draw_update(ui: &mut Ui, app: &mut App, r: Rect) {
+    use crate::sys::update::{self, Phase};
+    ui.card(r);
+    let s = app.upd.lock().unwrap().clone();
+    ui.title(rect(r.x + 16.0, r.y + 10.0, 260.0, 22.0), "Atualizações");
+    ui.label(rect(r.x + 16.0, r.y + 32.0, 260.0, 18.0), &format!("Versão {}", update::current()), MUTED);
+    let (text, color) = match &s.phase {
+        Phase::Idle => ("Busca só o GitHub do Prisma, sem enviar dados seus.".to_string(), TEXT2),
+        Phase::Checking => ("Procurando…".to_string(), TEXT2),
+        Phase::Latest => ("Você está na versão mais recente.".to_string(), TEXT2),
+        Phase::Available => (format!("Versão {} disponível", s.version), ACCENT),
+        Phase::Downloading(p) => (format!("Baixando a atualização… {p}%"), ACCENT),
+        Phase::Installing => ("Instalando…".to_string(), ACCENT),
+        Phase::Failed(e) => (e.to_string(), WARN),
+    };
+    ui.c.text_wrap(rect(r.x + 276.0, r.y + 10.0, r.w - 276.0 - 256.0, 44.0), &text, 13.0, color, Weight::Regular);
+    let b = rect(r.right() - 236.0, r.y + 12.0, 220.0, 40.0);
+    let working = matches!(s.phase, Phase::Checking | Phase::Downloading(_) | Phase::Installing);
+    if s.phase == Phase::Available {
+        let label = if app.upd_confirm { "Confirmar: instalar e reiniciar".to_string() } else { format!("Instalar a versão {}", s.version) };
+        if ui.button("upd-go", b, &label, true) {
+            if app.upd_confirm {
+                app.upd_confirm = false;
+                app.update_now();
+            } else {
+                app.upd_confirm = true;
+            }
+        }
+    } else if ui.button_ex("upd-check", b, "Procurar agora", false, !working) {
+        update::check(app.upd.clone());
+    }
+    let mut auto = app.cfg.update_auto;
+    if ui.check("upd-auto", rect(r.x + 16.0, r.y + 60.0, 320.0, 44.0), "Procurar ao abrir o programa", &mut auto) {
+        app.cfg.update_auto = auto;
+        app.cfg.save();
     }
 }

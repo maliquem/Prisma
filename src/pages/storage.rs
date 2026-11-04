@@ -23,7 +23,7 @@ fn level_name(l: Level) -> &'static str {
 
 fn fmt_size(b: u64) -> String {
     if b >= 1_000_000_000_000 {
-        format!("{:.1} TB", b as f64 / 1e12).replace('.', ",")
+        format!("{:.1} TB", b as f64 / 1e12).replace('.', crate::i18n::comma())
     } else {
         format!("{} GB", b / 1_000_000_000)
     }
@@ -31,7 +31,7 @@ fn fmt_size(b: u64) -> String {
 
 fn fmt_hours(h: u64) -> String {
     if h >= 24 * 365 {
-        format!("{h} h ({:.1} anos)", h as f64 / (24.0 * 365.0)).replace('.', ",")
+        format!("{h} h ({:.1} anos)", h as f64 / (24.0 * 365.0)).replace('.', crate::i18n::comma())
     } else {
         format!("{h} h")
     }

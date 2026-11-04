@@ -17,4 +17,5 @@ pub mod reg;
 pub mod services;
 pub mod tools;
 pub mod tweaks;
+pub mod update;
 pub mod uninstall;

@@ -99,6 +99,31 @@ fn dword(k: HKEY, name: &str) -> u32 {
     }
 }
 
+/// A data no registro não tem formato único. Deixa em AAAAMMDD; se for ambígua, fica sem data.
+fn normal_date(s: &str) -> String {
+    let s = s.trim();
+    if s.len() == 8 && s.bytes().all(|b| b.is_ascii_digit()) {
+        return s.to_string();
+    }
+    let t: Vec<&str> = s.split(|c: char| !c.is_ascii_alphanumeric()).filter(|p| !p.is_empty()).collect();
+    let num = |p: &str| p.parse::<u32>().ok();
+    if t.len() >= 3 && t[0].len() == 4 {
+        if let (Some(y), Some(m), Some(d)) = (num(t[0]), num(t[1]), num(t[2])) {
+            return format!("{y:04}{m:02}{d:02}");
+        }
+    }
+    const MONTHS: [&str; 12] = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+    let month = t.iter().position(|p| MONTHS.iter().any(|m| p.eq_ignore_ascii_case(m)));
+    if let Some(i) = month {
+        let m = MONTHS.iter().position(|n| t[i].eq_ignore_ascii_case(n)).unwrap_or(0) + 1;
+        let year = t.iter().find(|p| p.len() == 4).and_then(|p| num(p));
+        if let (Some(y), Some(d)) = (year, t.get(i + 1).and_then(|p| num(p))) {
+            return format!("{y:04}{m:02}{d:02}");
+        }
+    }
+    String::new()
+}
+
 pub fn list() -> Vec<Program> {
     let mut out: Vec<Program> = Vec::new();
     for (root, base) in [
@@ -126,7 +151,7 @@ pub fn list() -> Vec<Program> {
                     publisher: text(e, "Publisher"),
                     version: text(e, "DisplayVersion"),
                     size: dword(e, "EstimatedSize") as u64 * 1024,
-                    date: text(e, "InstallDate"),
+                    date: normal_date(&text(e, "InstallDate")),
                     quiet: text(e, "QuietUninstallString"),
                     location,
                     icon,

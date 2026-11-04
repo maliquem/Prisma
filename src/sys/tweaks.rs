@@ -125,7 +125,7 @@ pub const CATALOG: &[Tweak] = &[
     Tweak {
         id: "maps",
         title: "Serviço de mapas abre só quando precisar",
-        note: "O único serviço automático que vale mudar neste PC.",
+        note: "O único serviço automático que vale mudar.",
         class: R1, base: "JDP", opt: "", subjective: false,
         acts: &[Svc("MapsBroker", 3)],
     },
@@ -156,7 +156,7 @@ pub const CATALOG: &[Tweak] = &[
     Tweak {
         id: "ai",
         title: "IA do Windows desligada onde a política vale",
-        note: "Paint e análise de dados. O Recall nem roda neste PC, pois exige NPU.",
+        note: "Paint e análise de dados. O Recall só roda em PCs com NPU.",
         class: R1, base: "P", opt: "JD", subjective: true,
         acts: &[
             Dw(U, "Software\\Policies\\Microsoft\\Windows\\WindowsAI", "DisableAIDataAnalysis", 1),
@@ -284,7 +284,7 @@ pub const LEFT_OUT: &[(&str, &str, &str)] = &[
     ("Pagefile desligado", "Um PC de 32 GB chegou a usar 39 GB de memória reservada.", "Documentado"),
     ("Bloquear atualizações", "A Microsoft recomenda contra, e há relatos de quebra.", "Documentado"),
     ("Defender, UAC, SmartScreen", "Reduzem segurança, sem ganho.", "Documentado"),
-    ("Virtualização desligada", "Derruba o WSL, que está em uso aqui.", "Documentado"),
+    ("Virtualização desligada", "Derruba o WSL e outras máquinas virtuais.", "Documentado"),
     ("Remover Edge ou Loja", "Sem reversão confiável.", "Documentado"),
 ];
 
@@ -439,41 +439,74 @@ pub fn status(t: &Tweak, journal: &[Entry], apps: &[String]) -> Status {
 }
 
 /// Aplica um ajuste e registra o estado anterior. Devolve quantas ações falharam.
-pub fn apply(t: &Tweak, journal: &mut Vec<Entry>) -> usize {
-    apply_acts(t.id, t.acts, journal)
+pub fn apply(t: &Tweak, journal: &mut Vec<Entry>, log: &mut dyn FnMut(String)) -> usize {
+    apply_acts(t.id, t.acts, journal, log)
 }
 
-pub fn apply_acts(id: &str, acts: &[Act], journal: &mut Vec<Entry>) -> usize {
+/// Valor do registro como aparece no passo a passo.
+fn show_reg(s: &str) -> String {
+    match s.split_once(':') {
+        Some(("4", b)) => {
+            let v = unhex(b);
+            v.get(..4).map_or(s.to_string(), |d| u32::from_le_bytes([d[0], d[1], d[2], d[3]]).to_string())
+        }
+        Some((_, _)) => "outro valor".to_string(),
+        None => "não existia".to_string(),
+    }
+}
+
+fn show_svc(s: &str) -> String {
+    let (start, delayed) = s.split_once(':').unwrap_or((s, "0"));
+    match (start, delayed) {
+        ("2", "1") => "Automático com atraso".to_string(),
+        ("2", _) => "Automático".to_string(),
+        ("3", _) => "Manual".to_string(),
+        ("4", _) => "Desativado".to_string(),
+        _ => format!("tipo {start}"),
+    }
+}
+
+pub fn apply_acts(id: &str, acts: &[Act], journal: &mut Vec<Entry>, log: &mut dyn FnMut(String)) -> usize {
     let mut failed = 0;
     for a in acts {
         match a {
             Dw(h, k, n, v) => {
                 let target = format!("reg|{}|{k}|{n}", h.tag());
+                let name = format!("{}\\{k}\\{n}", h.tag());
                 let before = reg_state(*h, k, n);
                 if reg::write_dword(*h, k, n, *v) {
+                    log(format!("  ✓ Registro {name}: {} → {v}", show_reg(&before)));
                     journal.push(Entry { tweak: id.into(), target, before, after: reg_state(*h, k, n) });
                     save_journal(journal);
                 } else {
+                    log(format!("  ✗ Registro {name}: o Windows recusou a escrita"));
                     failed += 1;
                 }
             }
             Svc(n, s) => {
                 let before = svc_state(n);
                 if before == "-" {
+                    log(format!("  Serviço {n}: não existe neste PC, nada a fazer"));
                     continue;
                 }
                 if set_service(n, *s, false) {
-                    journal.push(Entry { tweak: id.into(), target: format!("svc|{n}"), before, after: svc_state(n) });
+                    let after = svc_state(n);
+                    log(format!("  ✓ Serviço {n}: início {} → {}", show_svc(&before), show_svc(&after)));
+                    journal.push(Entry { tweak: id.into(), target: format!("svc|{n}"), before, after });
                     save_journal(journal);
                 } else {
+                    log(format!("  ✗ Serviço {n}: o Windows recusou a mudança"));
                     failed += 1;
                 }
             }
             App(n) => {
+                log(format!("  Removendo o app {n}…"));
                 if remove_app(n) {
+                    log(format!("  ✓ App {n}: removido"));
                     journal.push(Entry { tweak: id.into(), target: format!("app|{n}"), before: "instalado".into(), after: "removido".into() });
                     save_journal(journal);
                 } else {
+                    log(format!("  ✗ App {n}: continua instalado"));
                     failed += 1;
                 }
             }
@@ -489,6 +522,7 @@ pub struct UndoReport {
     pub skipped: Vec<String>,
     /// Apps removidos voltam pela Loja, não aqui.
     pub apps: Vec<String>,
+    pub lines: Vec<String>,
 }
 
 /// Desfaz um ajuste, ou todos com `id` vazio, do mais novo para o mais velho.
@@ -504,7 +538,9 @@ pub fn undo(id: &str, journal: &mut Vec<Entry>) -> UndoReport {
         match p[0] {
             "reg" if p.len() == 4 => {
                 let h = Hive::parse(p[1]);
+                let name = format!("{}\\{}\\{}", p[1], p[2], p[3]);
                 if reg_state(h, p[2], p[3]) != e.after {
+                    rep.lines.push(format!("  ✗ Registro {name}: mudou depois do Prisma, ficou como está"));
                     rep.skipped.push(format!("{}\\{}", p[2], p[3]));
                     continue;
                 }
@@ -515,24 +551,36 @@ pub fn undo(id: &str, journal: &mut Vec<Entry>) -> UndoReport {
                     reg::write(h, p[2], p[3], t.parse().unwrap_or(4), &unhex(b))
                 };
                 if ok {
+                    rep.lines.push(if e.before == "-" {
+                        format!("  ✓ Registro {name}: removido, como era antes")
+                    } else {
+                        format!("  ✓ Registro {name}: voltou para {}", show_reg(&e.before))
+                    });
                     rep.restored += 1;
                 } else {
+                    rep.lines.push(format!("  ✗ Registro {name}: não consegui restaurar"));
                     keep.push(e);
                 }
             }
             "svc" if p.len() == 2 => {
                 if svc_state(p[1]) != e.after {
+                    rep.lines.push(format!("  ✗ Serviço {}: mudou depois do Prisma, ficou como está", p[1]));
                     rep.skipped.push(p[1].to_string());
                     continue;
                 }
                 let (s, d) = e.before.split_once(':').unwrap_or(("3", "0"));
                 if set_service(p[1], s.parse().unwrap_or(3), d == "1") {
+                    rep.lines.push(format!("  ✓ Serviço {}: início voltou para {}", p[1], show_svc(&e.before)));
                     rep.restored += 1;
                 } else {
+                    rep.lines.push(format!("  ✗ Serviço {}: não consegui restaurar", p[1]));
                     keep.push(e);
                 }
             }
-            "app" if p.len() == 2 => rep.apps.push(p[1].to_string()),
+            "app" if p.len() == 2 => {
+                rep.lines.push(format!("  App {}: volta pela Loja, não por aqui", p[1]));
+                rep.apps.push(p[1].to_string());
+            }
             _ => {}
         }
     }
@@ -551,9 +599,14 @@ pub struct Run {
     pub failed: Vec<String>,
     pub restore: Option<bool>,
     pub checks: Vec<(bool, String)>,
+    pub lines: Vec<String>,
 }
 
 pub type Shared = Arc<Mutex<Run>>;
+
+fn say(s: &Shared, line: String) {
+    s.lock().unwrap().lines.push(line);
+}
 
 /// Confere que o essencial segue de pé depois de aplicar.
 fn verify() -> Vec<(bool, String)> {
@@ -567,25 +620,38 @@ fn verify() -> Vec<(bool, String)> {
     ]
 }
 
+use super::tools::clock;
+
 pub fn start(ids: Vec<&'static str>, restore: bool, shared: Shared) {
     *shared.lock().unwrap() = Run { running: true, total: ids.len(), ..Default::default() };
     let _ = std::thread::Builder::new().name("ajustes".into()).spawn(move || {
+        let begin = std::time::Instant::now();
         if restore {
+            say(&shared, format!("▸ {}  Ponto de restauração", clock()));
             let ok = super::uninstall::restore_point("Prisma: antes de ajustar o Windows");
             shared.lock().unwrap().restore = Some(ok);
+            say(&shared, if ok { "  ✓ Criado".to_string() } else { "  ✗ O Windows recusou".to_string() });
         }
         let mut j = load_journal();
         for id in ids {
             let Some(t) = CATALOG.iter().find(|t| t.id == id) else { continue };
             shared.lock().unwrap().current = t.title.to_string();
-            let bad = apply(t, &mut j);
+            say(&shared, format!("▸ {}  {}", clock(), t.title));
+            let log = shared.clone();
+            let bad = apply(t, &mut j, &mut |l| say(&log, l));
             let mut s = shared.lock().unwrap();
             s.done += 1;
             if bad > 0 {
                 s.failed.push(t.title.to_string());
             }
         }
+        say(&shared, format!("▸ {}  Conferindo o essencial", clock()));
+        shared.lock().unwrap().current = "Conferindo o essencial".to_string();
         let c = verify();
+        for (ok, text) in &c {
+            say(&shared, format!("  {} {text}", if *ok { "✓" } else { "✗" }));
+        }
+        say(&shared, format!("▸ {}  Fim, em {}", clock(), super::tools::elapsed(begin.elapsed())));
         let mut s = shared.lock().unwrap();
         s.checks = c;
         s.current.clear();

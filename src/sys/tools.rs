@@ -5,6 +5,7 @@ use std::io::Read;
 use std::os::windows::process::CommandExt;
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use windows::Win32::Globalization::*;
 
@@ -90,16 +91,7 @@ fn push(s: &Shared, line: &str) {
     }
 }
 
-fn run_cmd(exe: &str, args: &[String], enc: Enc, out: &Shared) -> Option<i32> {
-    let mut c = Command::new(exe)
-        .args(args)
-        .creation_flags(0x0800_0000)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .stdin(Stdio::null())
-        .spawn()
-        .ok()?;
-    let mut o = c.stdout.take()?;
+fn pump(mut o: impl Read, enc: Enc, out: &Shared) {
     let mut buf = [0u8; 4096];
     let mut pending: Vec<u8> = Vec::new();
     let mut text = String::new();
@@ -117,7 +109,45 @@ fn run_cmd(exe: &str, args: &[String], enc: Enc, out: &Shared) -> Option<i32> {
         }
     }
     push(out, &text);
+}
+
+fn run_cmd(exe: &str, args: &[String], enc: Enc, out: &Shared) -> Option<i32> {
+    let mut c = Command::new(exe)
+        .args(args)
+        .creation_flags(0x0800_0000)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .stdin(Stdio::null())
+        .spawn()
+        .ok()?;
+    let (o, e) = (c.stdout.take()?, c.stderr.take()?);
+    let errors = out.clone();
+    let t = std::thread::spawn(move || pump(e, enc, &errors));
+    pump(o, enc, out);
+    let _ = t.join();
     c.wait().ok()?.code()
+}
+
+/// Comando como seria digitado, para quem acompanha saber o que rodou.
+fn shown(exe: &str, args: &[String]) -> String {
+    let mut s = format!("  > {exe}");
+    for a in args {
+        if a.contains(' ') {
+            s += &format!(" \"{a}\"");
+        } else {
+            s += &format!(" {a}");
+        }
+    }
+    s
+}
+
+pub fn elapsed(d: Duration) -> String {
+    let s = d.as_secs();
+    if s >= 60 {
+        format!("{} min {} s", s / 60, s % 60)
+    } else {
+        format!("{:.1} s", d.as_secs_f32()).replace('.', crate::i18n::comma())
+    }
 }
 
 /// Resultado de cada etapa, entregue ao veredito do fluxo.
@@ -133,11 +163,14 @@ pub fn start(steps: Vec<Step>, verdict: Verdict, shared: Shared) {
     *shared.lock().unwrap() = Run { running: true, ..Default::default() };
     let _ = std::thread::Builder::new().name("ferramenta".into()).spawn(move || {
         let mut done = Vec::new();
+        let begin = Instant::now();
         for s in steps {
             shared.lock().unwrap().step = s.label.clone();
-            push(&shared, &format!("▸ {}", s.label));
+            push(&shared, &format!("▸ {}  {}", clock(), s.label));
+            let t0 = Instant::now();
             let (code, ok) = match s.work {
                 Work::Cmd { exe, args, enc } => {
+                    push(&shared, &shown(&exe, &args));
                     let c = run_cmd(&exe, &args, enc, &shared);
                     (c, c == Some(0))
                 }
@@ -150,8 +183,16 @@ pub fn start(steps: Vec<Step>, verdict: Verdict, shared: Shared) {
                     (None, ok)
                 }
             };
+            let time = elapsed(t0.elapsed());
+            // Vários programas devolvem código diferente de zero sem ter falhado: o veredito decide.
+            push(&shared, &match (ok, code) {
+                (true, _) => format!("  ✓ Etapa concluída em {time}"),
+                (false, Some(c)) => format!("  Terminou com código {c} em {time}"),
+                (false, None) => format!("  ✗ Não concluiu ({time})"),
+            });
             done.push(Done { label: s.label, code, ok });
         }
+        push(&shared, &format!("▸ {}  Fim, em {}", clock(), elapsed(begin.elapsed())));
         let v = verdict(&done);
         let mut r = shared.lock().unwrap();
         r.step.clear();
@@ -173,6 +214,11 @@ pub fn simple(ok_text: &'static str, fail_text: &'static str) -> Verdict {
 
 pub fn neutral(text: &'static str) -> Verdict {
     Box::new(move |_| (Level::Unknown, text.to_string()))
+}
+
+/// Hora atual, para as linhas do passo a passo.
+pub fn clock() -> String {
+    now_stamp().get(11..).unwrap_or_default().to_string()
 }
 
 pub fn now_stamp() -> String {

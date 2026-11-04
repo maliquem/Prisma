@@ -46,6 +46,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let list = rect(l.x + 8.0, l.y + 54.0, l.w - 16.0, l.h - 62.0);
     ui.begin_scroll("svc", list, rows.len() as f32 * 34.0);
     let mut pick = None;
+    let mut props = None;
     let first = (ui.scroll_y() / 34.0) as usize;
     let last = first + (list.h / 34.0) as usize + 2;
     for (row, &i) in rows.iter().enumerate().take(last).skip(first) {
@@ -58,6 +59,10 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         if ui.hit(&format!("s{i}"), r) {
             pick = Some(s.name.clone());
         }
+        if ui.right_hit(r) {
+            pick = Some(s.name.clone());
+            props = Some(s.display.clone());
+        }
         ui.c.circle(r.x + 16.0, y + 17.0, 4.0, if s.running { ACCENT } else { BORDER2 });
         ui.c.text(rect(r.x + 30.0, y, r.w - 130.0, 34.0), &s.display, 14.0, TEXT, Align::Left, Weight::Regular);
         ui.c.text(rect(r.right() - 100.0, y, 92.0, 34.0), s.start_name(), 12.0, MUTED, Align::Right, Weight::Regular);
@@ -65,6 +70,14 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     ui.end_scroll();
     if let Some(n) = pick {
         app.select_service(n);
+    }
+    if let Some(d) = props {
+        if app.elevated {
+            app.toast.info("Abrindo as propriedades no Windows");
+            services::show_properties(d);
+        } else {
+            app.toast.info("Precisa do Prisma como administrador");
+        }
     }
 
     let r = rect(l.right() + 12.0, top, rw, h);
@@ -104,5 +117,5 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
             }));
         }
     }
-    ui.c.text_wrap(rect(r.x + 16.0, r.bottom() - 56.0, r.w - 32.0, 44.0), "Mudar o tipo de início abre a janela Serviços do Windows.", 12.0, MUTED, Weight::Regular);
+    ui.c.text_wrap(rect(r.x + 16.0, r.bottom() - 56.0, r.w - 32.0, 44.0), "Botão direito no serviço abre as propriedades dele no Windows.", 12.0, MUTED, Weight::Regular);
 }

@@ -1,0 +1,730 @@
+# Texto em português <TAB> texto em inglês. {} marca um trecho variável; {1}, {2} mudam a ordem.
+Abrir o Prisma com Ctrl+Shift+Esc, no lugar do Gerenciador de Tarefas	Open Prisma with Ctrl+Shift+Esc instead of Task Manager
+Atalho de Otimizar	Optimize shortcut
+Atalhos que não funcionaram	Shortcuts that did not work
+Configurações	Settings
+Em Arquivos de Programas, com atalho e entrada para desinstalar.	In Program Files, with a shortcut and an uninstall entry.
+Iniciar com o Windows, como administrador	Start with Windows, as administrator
+Instalar libera o início com o Windows e a troca do Gerenciador de Tarefas.	Installing unlocks starting with Windows and replacing Task Manager.
+Instalar no PC	Install on this PC
+Início com o Windows, permissões e atalhos gerais.	Startup, permissions, language and updates.
+Reabrir como administrador	Reopen as administrator
+Roda de qualquer pasta. As configurações ficam ao lado do programa, em PrismaData.	Runs from any folder. Settings stay next to the program, in PrismaData.
+Versão instalada	Installed version
+Versão portátil	Portable version
+Abrir no Explorador	Open in Explorer
+Analisando…	Analyzing…
+Analisar	Analyze
+Apagar	Delete
+Apagar pede admin	Delete needs admin
+Confirmar: Lixeira	Confirm: Recycle Bin
+Disco {}:	Disk {}:
+Enviado para a Lixeira	Sent to the Recycle Bin
+Escolha um disco e clique em Analisar.	Choose a disk and click Analyze.
+Espaço em disco	Disk space
+Lendo {} de {} registros	Reading {} of {} records
+Maiores arquivos	Largest files
+Mostra o que ocupa espaço em cada disco.	Shows what takes up space on each disk.
+Não consegui apagar	Could not delete
+Os {} maiores arquivos do disco	The {} largest files on the disk
+Pastas	Folders
+Sem extensão	No extension
+Tipos de arquivo	File types
+lendo a tabela do NTFS	reading the NTFS table
+percorrendo as pastas	walking the folders
+{} itens lidos	{} items read
+{} arquivos	{} files
+{} arquivos em {} s, {}	{} files in {} s, {}
+A gravação parou por um erro	Recording stopped because of an error
+Abrir o Prisma	Open Prisma
+Aumentar volume	Volume up
+Desfazendo	Undoing
+Desfazendo tudo	Undoing everything
+Diminuir volume	Volume down
+Fechar {} {} para liberar {} GB de RAM?	Close {} {} to free {3} GB of RAM?
+programa	program
+programas	programs
+Foto da tela inteira	Full screen photo
+Foto da área	Area photo
+Foto salva e copiada	Photo saved and copied
+Gravar	Record
+Gravação salva em {}	Recording saved to {}
+Janela restaurada	Window restored
+Mudo	Mute
+Nada para fechar agora	Nothing to close right now
+Não consegui capturar a tela	Could not capture the screen
+Não consegui salvar a foto	Could not save the photo
+O replay está desligado na tela Captura	Replay is turned off on the Capture page
+O replay só grava em modo jogo	Replay only records in game mode
+Otimizar	Optimize
+Otimizar agora	Optimize now
+Sair	Exit
+Sem bordas	Borderless
+Tirar foto da área	Take area photo
+{} não tem som tocando	{} is not playing sound
+{}: {} já está em uso	{}: {} is already in use
+{} detectado	{} detected
+{} restaurados, {} mudaram depois e ficaram como estão	{} restored, {} changed later and were left as they are
+{} valores restaurados	{} values restored
+{} valores restaurados. Apps voltam pela Loja.	{} values restored. Apps come back through the Store.
+{} · {} desfaz	{} · {} undoes
+Últimos {} s salvos	Last {} s saved
+Agendamento de GPU desligado	GPU scheduling off
+Agendamento de GPU ligado	GPU scheduling on
+Alguma ferramenta ou atualização marcou esses apps. Sem Game Pass isso não costuma atrapalhar.	A tool or update flagged these apps. Without Game Pass this usually causes no trouble.
+Arquivo de paginação desligado	Page file turned off
+Disco {} ({}) pede cuidado	Disk {} ({}) needs care
+Integridade da Memória desligada	Memory Integrity off
+Integridade da Memória ligada	Memory Integrity on
+Jogos e compilações podem falhar sem aviso. Ligue em Sistema, Avançado, Desempenho.	Games and builds can fail without warning. Turn it on in System, Advanced, Performance.
+Já houve caso em que isso quebrou o Windows Update. Veja antes de aplicar qualquer ajuste.	This has broken Windows Update before. Check it before applying any tweak.
+Lista de processos indisponível	Process list unavailable
+Mais nova que os testes do catálogo. Os ajustes funcionam, com o rótulo Não testado nesta build.	Newer than the catalog tests. Tweaks still work, labeled Not tested on this build.
+Na prática o Windows trata como Necessários. O perfil grava o valor correto.	In practice Windows treats it as Required. The profile writes the correct value.
+Necessário para a geração de quadros do DLSS.	Needed for DLSS frame generation.
+O DLSS Frame Generation exige ele ligado, em Configurações, Sistema, Tela, Gráficos.	DLSS Frame Generation needs it on, in Settings, System, Display, Graphics.
+O PC fica com menos proteção contra drivers maliciosos. A Microsoft pode religar em atualizações.	The PC has less protection against malicious drivers. Microsoft may turn it back on in updates.
+Pasta Windows.old presente	Windows.old folder present
+Permite voltar de versão. Apagar libera espaço, mas encerra essa volta.	Lets you roll back. Deleting it frees space but ends that option.
+Proteção ativa. Em jogos limitados pela CPU custa cerca de 6%; em 4K, cerca de 2%. A escolha é sua, na tela oficial.	Protection active. It costs about 6% in CPU-limited games and about 2% at 4K. The choice is yours, on the official page.
+Reinicie antes de aplicar ajustes ou reparar o Windows.	Restart before applying tweaks or repairing Windows.
+Reinício pendente	Restart pending
+Serviço TrustedInstaller alterado	TrustedInstaller service changed
+Telemetria em 0, valor que o Pro não suporta	Telemetry at 0, a value Pro does not support
+{} apps do Windows foram retirados antes	{} Windows apps were removed before
+{} de hardware. Veja em Ferramentas, Histórico de falhas.	{} from hardware. See Tools, Crash history.
+{} quedas ou erros graves em 90 dias	{} crashes or serious errors in 90 days
+{}. Copie o que importa antes de qualquer reparo.	{}. Copy what matters before any repair.
+Pasta Inicializar	Startup folder
+Pasta Inicializar, todos os usuários	Startup folder, all users
+Registro, programas de 32 bits	Registry, 32-bit programs
+Registro, só este usuário	Registry, this user only
+Registro, todos os usuários	Registry, all users
+1 minuto	1 minute
+2 minutos	2 minutes
+15 segundos	15 seconds
+30 segundos	30 seconds
+1080p a 60 FPS	1080p at 60 FPS
+1440p a 60 FPS	1440p at 60 FPS
+4K a 60 FPS	4K at 60 FPS
+AV1 pela GPU	AV1 on the GPU
+Atalhos e pasta	Shortcuts and folder
+Captura	Capture
+Cerca de {} MB por minuto	About {} MB per minute
+Cor com HDR ligado na tela	Color when the display is in HDR
+Em modo jogo, guarda os últimos segundos na memória. O atalho salva sem interromper.	In game mode, keeps the last seconds in memory. The shortcut saves without interrupting.
+Estimativa, varia com a cena	Estimate, varies with the scene
+Formato de foto	Photo format
+Gravar e parar	Record and stop
+Gravar em HDR10	Record in HDR10
+Gravar em SDR	Record in SDR
+H.264 (mais compatível)	H.264 (most compatible)
+HEVC pela GPU	HEVC on the GPU
+Janela em foco	Focused window
+Ligar replay	Turn on replay
+Microfone	Microphone
+Monitor em foco	Focused monitor
+Mostrar o cursor	Show the cursor
+Nativo: {} FPS	Native: {} FPS
+PNG e JPEG XR em HDR	PNG and JPEG XR in HDR
+PNG em SDR	PNG in SDR
+Parar	Stop
+Pasta	Folder
+Resolução e FPS	Resolution and FPS
+Salvar replay	Save replay
+Som do sistema	System sound
+Tela	Screen
+Tirar foto	Take photo
+Tudo fica no seu PC. Nada é enviado.	Everything stays on your PC. Nothing is sent.
+Vídeo	Video
+Espaço	Space
+Nenhum	None
+Tecla {}	Key {}
+Atributo {} abaixo do limite do fabricante	Attribute {} below the manufacturer limit
+Blocos com erro (30 dias)	Bad blocks (30 days)
+Desligamentos incorretos	Unsafe shutdowns
+Erros de cabo	Cable errors
+Erros de mídia	Media errors
+Este disco não respondeu	This disk did not respond
+O adaptador USB não libera os dados de saúde	The USB adapter does not expose health data
+O próprio disco prevê falha	The disk itself predicts failure
+O próprio disco reportou alerta crítico	The disk itself reported a critical warning
+Outro	Other
+Partidas do motor	Spin-ups
+Pouca vida útil restante	Little life left
+Reserva de blocos abaixo do mínimo	Spare blocks below the minimum
+Reserva disponível	Available spare
+Sem sinais de problema	No signs of trouble
+Setores incorrigíveis	Uncorrectable sectors
+Setores pendentes	Pending sectors
+Setores realocados	Reallocated sectors
+Temperatura alta	High temperature
+Temperatura ou reserva pedem atenção	Temperature or spare need attention
+Total escrito	Total written
+Total lido	Total read
+Vezes ligado	Power cycles
+Vida útil restante	Life left
+{} blocos com erro em 30 dias	{} bad blocks in 30 days
+{} erros de mídia	{} media errors
+{}, o último em {}	{}, the latest on {}
+{} setores realocados	{} reallocated sectors
+{}% (mínimo {}%)	{}% (minimum {}%)
+{} setores instáveis	{} unstable sectors
+{} · {}	{} · {}
+{} · {} · {}	{} · {} · {}
+Ao entrar em modo jogo	When entering game mode
+CPU acima de 35% por 20 s	CPU above 35% for 20 s
+Carga alta há {} min	High load for {} min
+Com jogo ou carga pesada	With a game or heavy load
+Criar planos Prisma	Create Prisma plans
+Em repouso	At rest
+Energia	Power
+GPU 3D acima de 40% por 5 s	GPU 3D above 40% for 5 s
+Jogo em tela cheia ou sem bordas	Game in fullscreen or borderless
+Modo jogo há {} min · {} detectado	Game mode for {} min · {} detected
+Mínimo	Minimum
+No resto do tempo	The rest of the time
+Núcleos	Cores
+O que conta como carga	What counts as load
+Otimizar sem perguntar	Optimize without asking
+Perguntar se quero otimizar	Ask whether to optimize
+Plano	Plan
+Seus planos na tomada	Your plans on AC power
+Steam, Epic, GOG e Xbox	Steam, Epic, GOG and Xbox
+Sua Economia de energia mantém a CPU em 100% mínimo, então quase não economiza.	Your Power Saver plan keeps the CPU at 100% minimum, so it saves almost nothing.
+Só trocar o plano	Just switch the plan
+Troca automática	Automatic switching
+Volta ao repouso após 60 s sem carga.	Returns to rest after 60 s without load.
+Últimas 2 horas	Last 2 hours
+sem codificador de vídeo na GPU	no video encoder on the GPU
+Assinado por {}	Signed by {}
+Assinatura inválida	Invalid signature
+Sem assinatura própria	No signature of its own
+Aplicar sozinho quando o programa abrir de novo	Apply automatically when the program opens again
+Atalho	Shortcut
+Deixa a janela em foco em tela cheia sem bordas. O mesmo atalho desfaz.	Makes the focused window borderless fullscreen. The same shortcut undoes it.
+Janela	Window
+Janelas abertas	Open windows
+Restaurar	Restore
+Tela cheia	Fullscreen
+O Prisma fechou sozinho da última vez. O relatório ficou guardado.	Prisma closed unexpectedly last time. The report was saved.
+Remover o Prisma deste computador? Suas configurações ficam guardadas.	Remove Prisma from this computer? Your settings are kept.
+Não consegui instalar o Prisma.	Could not install Prisma.
+Ajustes do Windows	Windows tweaks
+Carga alta	High load
+Desinstalar	Uninstall
+Discos e redes	Disks and networks
+Energia automática	Automatic power
+Ferramentas	Tools
+Inicialização	Startup
+Modo jogo ativo	Game mode on
+Plano desconhecido	Unknown plan
+Pressione as teclas	Press the keys
+Programas	Programs
+Repouso	Rest
+Serviços	Services
+Troca automática desligada	Automatic switching off
+Cada coluna é um núcleo	Each column is a core
+Disco	Disk
+Finalizar tarefa	End task
+Frequência	Frequency
+Mais usado	Most used
+Menos usado	Least used
+Núcleo {} · {}	Core {} · {}
+Programa	Program
+Rede	Network
+de {}	of {}
+{} threads · {} · {}	{} threads · {} · {}
+Blacklist	Never-close list
+Detecção automática	Automatic detection
+Fechar 1 selecionado	Close 1 selected
+Fechar {} selecionados	Close {} selected
+Forçar	Force
+Libera {} de RAM	Frees {} of RAM
+Nada é fechado sem você confirmar.	Nothing is closed without your confirmation.
+Nunca fechar	Never close
+Não	No
+Não fecharam: {}	Did not close: {}
+Pede para o programa fechar normalmente, então trabalho não salvo gera o aviso dele. Forçar é uma opção à parte.	Asks the program to close normally, so unsaved work triggers its own prompt. Force is a separate option.
+Pode fechar	Can close
+Proteger	Protect
+Sem sugestões agora. O Prisma aprende com o que você usa.	No suggestions right now. Prisma learns from what you use.
+Sempre	Always
+Sempre fechar ao otimizar	Always close when optimizing
+Sim	Yes
+Você usa {} sempre. Colocar na blacklist?	You always use {}. Add it to the never-close list?
+Whitelist	Always-close list
+{} · {} VRAM	{} · {} VRAM
+{} ficou {} dias aberto sem você usar. Colocar na whitelist?	{} stayed open for {} days without being used. Add it to the always-close list?
+Aberto em segundo plano	Open in the background
+Sem janela aberta	No open window
+Sempre fechar (whitelist)	Always close (always-close list)
+Agora não	Not now
+Fechar	Close
+Ver lista	See list
+Agr. garantido	Aggr. guaranteed
+Agressivo	Aggressive
+Desligado	Off
+Efic. agressivo	Effic. aggressive
+Efic. garantido	Effic. guaranteed
+Eficiente	Efficient
+Abrindo as propriedades no Windows	Opening the properties in Windows
+Automático	Automatic
+Botão direito no serviço abre as propriedades dele no Windows.	Right-click a service to open its properties in Windows.
+Buscar	Search
+Editar no Windows	Edit in Windows
+Escolha um serviço para ver o que ele faz.	Choose a service to see what it does.
+Executável	Executable
+Iniciar	Start
+O serviço não traz descrição.	This service has no description.
+Parado	Stopped
+Parados	Stopped
+Precisa do Prisma como administrador	Needs Prisma as administrator
+Reiniciar	Restart
+Rodando	Running
+Rodando · PID {}	Running · PID {}
+Todos	All
+{} rodando de {}.	{} running out of {}.
+Arraste para escolher a área · Enter copia a tela inteira · Esc cancela	Drag to choose the area · Enter copies the whole screen · Esc cancels
+Caneta	Pen
+Elipse	Ellipse
+Foto copiada	Photo copied
+Foto fixada: arraste para mover, botão direito fecha	Pinned photo: drag to move, right-click closes
+Foto salva	Photo saved
+Linha	Line
+Marcador	Highlighter
+Não consegui copiar	Could not copy
+Não consegui gerar a imagem	Could not create the image
+Número	Number
+Olá, mundo	Hello, world
+Pixelar	Pixelate
+Retângulo	Rectangle
+Seta	Arrow
+Texto	Text
+Adicionar	Add
+Assinatura	Signature
+Ativado	Enabled
+Ativados	Enabled
+Comando	Command
+Confirmar remoção	Confirm removal
+Desativado	Disabled
+Desativados	Disabled
+Escolha um item para ver de onde ele vem e quem assinou.	Choose an item to see where it comes from and who signed it.
+Nome	Name
+Remover da inicialização	Remove from startup
+{} de {} abrem com o Windows.	{} of {} open with Windows.
+Atenção	Warning
+Ativo {}	Active {}
+Baixando {}	Downloading {}
+Bom	Good
+Conectado · {}	Connected · {}
+Conectado · {} · {}	Connected · {} · {}
+Desconectado	Disconnected
+Disco {}	Disk {}
+Discos	Disks
+Enviando {}	Uploading {}
+Lendo o disco…	Reading the disk…
+Ler saúde de novo	Read health again
+Ler {} · Gravar {}	Read {} · Write {}
+Número de série	Serial number
+Redes	Networks
+Risco	At risk
+Saúde	Health
+Sem dados	No data
+Temperatura	Temperature
+Tempo ligado	Power-on time
+Total: {} recebidos, {} enviados	Total: {} received, {} sent
+Tudo que está ligado no PC, em tempo real.	Everything connected to the PC, in real time.
+{} h ({} anos)	{} h ({} years)
+{} livres de {}	{} free of {}
+  Marcada: {}	  Selected: {}
+  Marcas removidas do registro	  Selections removed from the registry
+  Terminou com código {} em {}	  Exited with code {} in {}
+  ✓ Etapa concluída em {}	  ✓ Step finished in {}
+  ✗ Não concluiu ({})	  ✗ Did not finish ({})
+A cópia não começou.	The copy did not start.
+A verificação achou problemas que não corrigiu. Veja a saída acima.	The check found problems it did not fix. See the output above.
+A verificação não começou.	The check did not start.
+Abre as opções de recuperação, inclusive Modo de Segurança. Reinicia agora.	Opens the recovery options, including Safe Mode. Restarts now.
+Abre o Diagnóstico de Memória do Windows, que reinicia o PC e testa antes de ligar.	Opens Windows Memory Diagnostic, which restarts the PC and tests before booting.
+Algo não terminou	Something did not finish
+Algo não terminou: {}	Something did not finish: {}
+Alterando	Changing
+Analisando	Analyzing
+Analisar cache de atualizações	Analyze update cache
+Atalhos para ferramentas escondidas.	Shortcuts to hidden tools.
+Atualiza pelo winget, um por um, sem janelas.	Updates through winget, one by one, without windows.
+Atualizando	Updating
+Atualizar todos os programas	Update all programs
+Atualizações concluídas.	Updates finished.
+Automático do roteador	Automatic from the router
+Avançado	Advanced
+Avisa o SSD sobre o espaço livre. Só para SSD saudável.	Tells the SSD about free space. Only for a healthy SSD.
+Bloqueado em disco suspeito.	Blocked on a suspect disk.
+Cache de DNS limpo.	DNS cache cleared.
+Conferindo	Checking
+Confiabilidade	Reliability
+Confira a saída: o defrag devolve sucesso até quando falha.	Check the output: defrag reports success even when it fails.
+Confirmar	Confirm
+Confirme acima para liberar.	Confirm above to unlock.
+Consertar o Windows Update	Fix Windows Update
+Copiando	Copying
+Copiar dados de um disco com defeito	Copy data from a failing disk
+Corrigir (/f)	Fix (/f)
+Corrigir e ler a superfície (/r)	Fix and read the surface (/r)
+Cópia concluída. Confira os arquivos no destino.	Copy finished. Check the files at the destination.
+DISM: conferir e reparar a imagem	DISM: check and repair the image
+DNS alterado. Confira acima.	DNS changed. Check above.
+De onde	From
+Desfaz o item anterior, em todos os discos.	Undoes the previous item, on all disks.
+Desligamento inesperado	Unexpected shutdown
+Desligar libera o hiberfil.sys, mas pode afetar a Inicialização Rápida.	Turning it off frees hiberfil.sys but may affect Fast Startup.
+Diagnóstico	Diagnostics
+Dispositivos	Devices
+Drivers com problema	Drivers with problems
+Erro de hardware (WHEA)	Hardware error (WHEA)
+Erros encontrados e corrigidos.	Errors found and fixed.
+Escolha origem e destino.	Choose source and destination.
+Escolhendo o que limpar	Choosing what to clean
+Escolher pasta	Choose folder
+Estado da recuperação	Recovery status
+Estados disponíveis	Available states
+Este disco está suspeito: copie os dados antes de qualquer reparo. Modos que escrevem podem piorar a perda.	This disk is suspect: copy your data before any repair. Modes that write can make the loss worse.
+Eventos	Events
+Evita que o Windows rode a verificação sozinho ao ligar num disco suspeito, até você copiar os dados.	Stops Windows from running the check by itself at boot on a suspect disk, until you copy your data.
+Excluindo do chkdsk automático	Excluding from automatic chkdsk
+Executar	Run
+Falhas	Crashes
+Gerar pacote de suporte	Create support package
+Guardada em {}	Saved to {}
+Hibernação desligada.	Hibernation off.
+Hibernação ligada.	Hibernation on.
+Histórico de falhas	Crash history
+Horários em UTC. Vários itens no mesmo horário costumam ser a mesma queda.	Times in UTC. Several items at the same time are usually the same crash.
+Impedir verificação automática	Prevent automatic check
+Já copiei os dados e aceito o risco	I copied my data and accept the risk
+Lendo	Reading
+Lendo o log do sistema	Reading the system log
+Liberados {}	{} freed
+Ligar ou desligar hibernação	Turn hibernation on or off
+Limpando	Cleaning
+Limpar arquivos do sistema	Clean system files
+Limpar cache de DNS	Clear DNS cache
+Limpar cache de atualizações	Clean update cache
+Limpeza	Cleanup
+Limpeza concluída. Windows.old e Lixeira não foram tocados.	Cleanup finished. Windows.old and the Recycle Bin were not touched.
+Lista acima.	List above.
+Lista dispositivos com erro. Só leitura.	Lists devices with errors. Read only.
+Lista o que tem versão nova pelo winget.	Lists what has a new version through winget.
+Lê o último resultado. Sem registro não quer dizer aprovado.	Reads the latest result. No record does not mean it passed.
+Mostra quanto a pasta WinSxS ocupa de verdade e se vale limpar.	Shows how much the WinSxS folder really uses and whether cleaning is worth it.
+Mostra se o ambiente de recuperação do Windows está ativo.	Shows whether the Windows recovery environment is active.
+Muda o servidor de nomes do adaptador. DNS criptografado se ativa em Configurações, Rede.	Changes the adapter's name server. Encrypted DNS is turned on in Settings, Network.
+Nem tudo atualizou; veja acima	Not everything updated; see above
+Nem tudo atualizou; veja acima: {}	Not everything updated; see above: {}
+Nenhum resultado registrado. Isso não quer dizer aprovado.	No result recorded. That does not mean it passed.
+Nenhuma queda ou erro grave em 90 dias.	No crashes or serious errors in 90 days.
+Não achei o registro do SFC. Confira a saída acima.	Could not find the SFC record. Check the output above.
+Não funcionou	It did not work
+Não funcionou: {}	It did not work: {}
+Não funcionou por inteiro	It did not fully work
+Não funcionou por inteiro: {}	It did not fully work: {}
+Não iniciou	Did not start
+Não iniciou: {}	Did not start: {}
+O DISM não conseguiu reparar a imagem. Veja a saída acima e o arquivo dism.log.	DISM could not repair the image. See the output above and the dism.log file.
+O SFC não conseguiu reparar {} arquivos. Veja CBS.log e rode o reparo de novo após reiniciar.	SFC could not repair {} files. See CBS.log and run the repair again after restarting.
+O destino precisa estar em outro disco.	The destination must be on another disk.
+O disco do sistema está suspeito: resolva isso antes de reparar o Windows.	The system disk is suspect: deal with that before repairing Windows.
+O disco está em uso: a verificação pede reinício. Em disco suspeito, copie os dados antes.	The disk is in use: the check needs a restart. On a suspect disk, copy your data first.
+O modo /r lê toda a superfície por muitas horas: bloqueado em disco suspeito.	The /r mode reads the whole surface for many hours: blocked on a suspect disk.
+O modo sem reparo só lê. Os modos que corrigem escrevem no disco e ficam bloqueados em disco suspeito.	The no-repair mode only reads. Modes that fix write to the disk and are blocked on a suspect disk.
+O passo a passo aparece aqui.	The step-by-step log appears here.
+O que acorda o PC	What wakes the PC
+O que impede o sono	What prevents sleep
+O que o Windows esconde em linha de comando, com resultado em português.	What Windows hides in the command line, with plain results.
+Otimizar SSD (TRIM)	Optimize SSD (TRIM)
+Pacote salvo na pasta indicada acima.	Package saved to the folder shown above.
+Painéis do Windows	Windows panels
+Para onde (outro disco)	To (another disk)
+Para os serviços, renomeia as pastas de cache sem apagá-las e religa tudo. Para quando as atualizações travam.	Stops the services, renames the cache folders without deleting them and starts everything again. For when updates get stuck.
+Parar {}	Stop {}
+Parte dos arquivos não foi copiada: pode ser área danificada. Veja a saída acima.	Some files were not copied: it may be a damaged area. See the output above.
+Pasta: {}	Folder: {}
+Pede administrador	Needs administrator
+Pedindo a limpeza	Requesting the cleanup
+Primeiro degrau quando sites não abrem. Não tem efeito colateral.	First step when sites do not open. It has no side effects.
+Primeiro passo em disco suspeito. Lê uma vez, pula o que estiver ruim e registra o que falhou. Só escreve no destino.	First step on a suspect disk. Reads once, skips what is bad and records what failed. Writes only to the destination.
+Procurando	Searching
+Pronto. Lembre de desfazer depois de trocar o disco.	Done. Remember to undo this after replacing the disk.
+Pronto. Procure atualizações de novo em Configurações.	Done. Check for updates again in Settings.
+Pronto. Reinicie para valer.	Done. Restart for it to take effect.
+Recursos	Features
+Refazer a pilha de rede	Reset the network stack
+Reinicia direto na configuração da placa-mãe.	Restarts straight into the motherboard setup.
+Reiniciando	Restarting
+Reiniciando.	Restarting.
+Reiniciar em modo avançado	Restart in advanced mode
+Reiniciar na BIOS	Restart into BIOS
+Reinício sem desligar corretamente	Restart without a clean shutdown
+Reinícios inesperados, telas azuis e erros de hardware dos últimos 90 dias. Só leitura.	Unexpected restarts, blue screens and hardware errors from the last 90 days. Read only.
+Religar {}	Start {}
+Renomear as pastas de cache	Rename the cache folders
+Reparar	Repair
+Reparar o Windows	Repair Windows
+Reparar online (/scan)	Repair online (/scan)
+Reparou {} arquivos. Reinicie e rode de novo para confirmar.	Repaired {} files. Restart and run it again to confirm.
+Roda a tarefa do próprio Windows, que preserva 30 dias de atualizações.	Runs Windows' own task, which keeps 30 days of updates.
+Roda o DISM, que baixa o que estiver danificado, e depois o SFC, nessa ordem, como manda a Microsoft. Pode levar de 10 a 30 minutos e usa o disco do sistema.	Runs DISM, which downloads what is damaged, then SFC, in the order Microsoft recommends. It can take 10 to 30 minutes and uses the system disk.
+Rodando…	Running…
+SFC: conferir os arquivos do sistema	SFC: check the system files
+Salva relatório de vídeo, informações do sistema e histórico de falhas numa pasta.	Saves a video report, system information and crash history to a folder.
+Salvando a configuração atual	Saving the current configuration
+Segundo degrau: Winsock e TCP/IP. Salva o estado atual antes. Pede reinício.	Second step: Winsock and TCP/IP. Saves the current state first. Needs a restart.
+Sem administrador, as duas últimas podem falhar.	Without administrator rights, the last two may fail.
+Sem problemas no sistema de arquivos.	No file system problems.
+Servidor principal	Primary server
+Servidor secundário	Secondary server
+Sistema	System
+Só verificar, sem reparar	Check only, no repair
+TRIM é só para SSD.	TRIM is only for SSDs.
+Tarefa iniciada: ela segue em segundo plano por alguns minutos.	Task started: it continues in the background for a few minutes.
+Tela azul	Blue screen
+Temporários, restos de atualização e relatórios. Não toca em Windows.old, Lixeira, Downloads nem shaders.	Temporary files, update leftovers and reports. Does not touch Windows.old, the Recycle Bin, Downloads or shaders.
+Testar memória	Test memory
+Timers de despertar	Wake timers
+Todas as opções	All options
+Trocar DNS	Change DNS
+Três estados possíveis: passou, com erros ou sem resultado.	Three possible states: passed, with errors or no result.
+Veja a recomendação no fim da saída.	See the recommendation at the end of the output.
+Veja o estado acima.	See the status above.
+Ver programas desatualizados	See outdated programs
+Ver resultado do teste de memória	See memory test result
+Verificando {}	Checking {}
+Verificar disco	Check disk
+Verificação automática de volta ao padrão.	Automatic check back to default.
+Voltando ao automático	Going back to automatic
+Voltando ao padrão	Going back to default
+Voltar a verificação automática	Restore automatic check
+Windows íntegro: nenhum arquivo corrompido.	Windows is intact: no corrupted files.
+automático	automatic
+sem erros	no errors
+veja o Visualizador de Eventos	see Event Viewer
+{} guardada em {}	{} saved to {}
+{} evento {}: {}	{} event {}: {}
+Último despertar	Last wake
+Último despertar, estados de energia disponíveis e o que impede o sono.	Last wake, available power states and what prevents sleep.
+▸ {}  {}	▸ {}  {}
+▸ {}  Fim, em {}	▸ {}  Finished, in {}
+Fim, em {}	Finished, in {}
+Ponto de restauração	Restore point
+  App {}: volta pela Loja, não por aqui	  App {}: comes back through the Store, not here
+  Removendo o app {}…	  Removing the app {}…
+  Serviço {}: não existe neste PC, nada a fazer	  Service {}: not on this PC, nothing to do
+  ✓ App {}: removido	  ✓ App {}: removed
+  ✓ Criado	  ✓ Created
+  ✓ Registro {}: removido, como era antes	  ✓ Registry {}: removed, as it was before
+  ✓ Registro {}: voltou para {}	  ✓ Registry {}: back to {}
+  ✓ Registro {}: {} → {}	  ✓ Registry {}: {} → {}
+  ✓ Serviço {}: início {} → {}	  ✓ Service {}: startup {} → {}
+  ✓ Serviço {}: início voltou para {}	  ✓ Service {}: startup back to {}
+  ✗ App {}: continua instalado	  ✗ App {}: still installed
+  ✗ O Windows recusou	  ✗ Windows refused
+  ✗ Registro {}: mudou depois do Prisma, ficou como está	  ✗ Registry {}: changed after Prisma, left as it is
+  ✗ Registro {}: não consegui restaurar	  ✗ Registry {}: could not restore
+  ✗ Registro {}: o Windows recusou a escrita	  ✗ Registry {}: Windows refused the write
+  ✗ Serviço {}: o Windows recusou a mudança	  ✗ Service {}: Windows refused the change
+  ✗ Serviço {}: mudou depois do Prisma, ficou como está	  ✗ Service {}: changed after Prisma, left as it is
+  ✗ Serviço {}: não consegui restaurar	  ✗ Service {}: could not restore
+  ✓ {}	  ✓ {}
+  ✗ {}	  ✗ {}
+6% de FPS em 720p e cerca de 2% em 4K, mas tira uma proteção real do kernel. A escolha fica na tela oficial do Windows.	6% of FPS at 720p and about 2% at 4K, but it removes a real kernel protection. The choice stays on the official Windows page.
+A Microsoft recomenda contra, e há relatos de quebra.	Microsoft advises against it, and there are reports of breakage.
+Abrir tela do Windows	Open Windows page
+Aplicado	Applied
+Aplicado, mas uma conferência falhou. Veja o que mudou.	Applied, but one check failed. See what changed.
+Aplicado. Windows Update, Loja e Central de Segurança conferidos.	Applied. Windows Update, Store and Security Center checked.
+Aplicar {}	Apply {}
+Atualizações sem compartilhar com outros PCs	Updates without sharing with other PCs
+Auditoria	Audit
+Automático com atraso	Automatic (delayed)
+Baixo impacto.	Low impact.
+Bloquear atualizações	Block updates
+Bloqueia correções automáticas de problemas da Microsoft.	Blocks Microsoft's automatic problem fixes.
+Cada item foi pesquisado. Menos ajustes aqui é uma decisão, não uma falta.	Every item was researched. Fewer tweaks here is a decision, not a gap.
+Caminhos de arquivo longos	Long file paths
+Central de Segurança ativa	Security Center active
+Conferindo o essencial	Checking the essentials
+Confirmar: aplicar {}	Confirm: apply {}
+Consenso entre as seis ferramentas analisadas.	Consensus among the six tools analyzed.
+Consenso entre ferramentas, mas muita gente usa.	Consensus among tools, but many people use it.
+Conveniência, e ajuda a notar arquivos disfarçados.	Convenience, and it helps spot disguised files.
+Conveniência.	Convenience.
+Copiar e colar entre aparelhos para de funcionar.	Copy and paste between devices stops working.
+Dados de diagnóstico no mínimo do Pro	Diagnostic data at the Pro minimum
+Derruba o WSL e outras máquinas virtuais.	Breaks WSL and other virtual machines.
+Desde 2020 o Windows não muda a resolução de outros programas.	Since 2020 Windows does not change the timer resolution of other programs.
+Desenvolvimento	Development
+Desfazer	Undo
+Desfazer tudo	Undo all
+Documentado	Documented
+Evita erros em projetos grandes. Pode pedir reinício.	Avoids errors in large projects. May need a restart.
+Ferramentas de timer	Timer tools
+Fica em Necessários. Desligar por completo não existe no Pro.	Stays at Required. Turning it off completely does not exist on Pro.
+Finalizar tarefa na barra de tarefas	End task on the taskbar
+Fora da lista	Left out
+IA do Windows desligada onde a política vale	Windows AI off where the policy applies
+Jogo	Gaming
+Jogos modernos usam UDP nos dados críticos.	Modern games use UDP for critical data.
+Já estava assim	Already like this
+Limiar de svchost	svchost threshold
+Limpadores de RAM	RAM cleaners
+Listas de serviços em massa	Bulk service lists
+Loja do Windows presente	Windows Store present
+Mantém o histórico da área de transferência funcionando.	Keeps clipboard history working.
+Medido	Measured
+Menu Iniciar sem recomendações	Start menu without recommendations
+Modo Desenvolvedor	Developer Mode
+Modo MSI, isolar núcleos, afinidade	MSI mode, core isolation, affinity
+Mostrar extensões de arquivo	Show file extensions
+Nenhum jogo foi visto usando; o valor 100 impediu o serviço de iniciar.	No game was seen using it; the value 100 stopped the service from starting.
+Notícias, Clima, Solitaire, Clipchamp, Feedback, Office Hub, To Do e Power Automate.	News, Weather, Solitaire, Clipchamp, Feedback, Office Hub, To Do and Power Automate.
+Não aplicados: {}	Not applied: {}
+Não desliga o Bing por inteiro: essa opção não existe no Pro.	Does not fully turn off Bing: that option does not exist on Pro.
+Não melhora, e a latência de rede subiu ao desligar.	No improvement, and network latency rose when it was turned off.
+Não testado nesta build ({}, {}).	Not tested on this build ({}, {}).
+O Windows continua baixando normalmente da Microsoft.	Windows keeps downloading normally from Microsoft.
+O Windows desfez	Windows undid it
+O Windows recusou o ponto de restauração. {}	Windows refused the restore point. {}
+O Windows recusou o ponto de restauração	Windows refused the restore point
+O passo a passo aparece aqui ao aplicar ou desfazer.	The step-by-step log appears here when you apply or undo.
+O que o Prisma achou neste PC	What Prisma found on this PC
+O que outros otimizadores fazem e o Prisma não	What other optimizers do and Prisma does not
+O único serviço automático que vale mudar.	The only automatic service worth changing.
+Opcional e com aviso: há relatos de efeito em conquistas do Xbox.	Optional, with a warning: there are reports of effects on Xbox achievements.
+Pagefile desligado	Page file off
+Paint e análise de dados. O Recall só roda em PCs com NPU.	Paint and data analysis. Recall only runs on PCs with an NPU.
+Parar o serviço de telemetria	Stop the telemetry service
+Pede reinício	Needs restart
+Perfis	Profiles
+Permite instalar pacotes de teste e criar links sem administrador.	Lets you install test packages and create links without administrator rights.
+Pesquisa sem destaques, nuvem e localização	Search without highlights, cloud and location
+Planos Ultimate e Bitsum	Ultimate and Bitsum plans
+Ponto de restauração criado. {}	Restore point created. {}
+Pouco ou nada, e um jogo ficou injogável.	Little or nothing, and one game became unplayable.
+Preserva WSL e virtualização, e liga caminhos longos.	Keeps WSL and virtualization, and turns on long paths.
+Privacidade	Privacy
+Quebraram Bluetooth; as ferramentas sérias recuaram disso.	They broke Bluetooth; serious tools backed away from this.
+Questão de gosto	Matter of taste
+Questão de gosto.	Matter of taste.
+Reduz o envio de dados até o limite do Pro.	Reduces data sent, down to the Pro limit.
+Reduzem segurança, sem ganho.	They reduce security with no gain.
+Relatos	Reports
+Remover Edge ou Loja	Remove Edge or Store
+Remover Notas, Alarmes e Gravador	Remove Notepad, Alarms and Recorder
+Remover apps que quase ninguém usa	Remove apps almost nobody uses
+Remover o app Copilot	Remove the Copilot app
+Restauração	Restore point
+Sem ID de publicidade e experiências personalizadas	No advertising ID or tailored experiences
+Sem conteúdo sugerido e instalação silenciosa de apps	No suggested content or silent app installs
+Sem ganho medido. Só evita que o Windows grave os últimos segundos.	No measured gain. It only stops Windows from recording the last seconds.
+Sem ganho medido; a purga repetida causou travadas com 32 GB.	No measured gain; repeated purging caused stutter with 32 GB.
+Sem gravação em segundo plano do Game Bar	No Game Bar background recording
+Sem pedidos de feedback e com menos relatórios	No feedback requests and fewer reports
+Sem publicar histórico de atividades	No activity history publishing
+Sem reversão confiável.	No reliable way back.
+Sem teste independente em Ryzen 5000.	No independent test on Ryzen 5000.
+Serviço de mapas abre só quando precisar	Maps service opens only when needed
+Sem efeito comprovado.	No proven effect.
+Só leitura: nada foi alterado.	Read only: nothing was changed.
+Só o app. A Microsoft não oferece política clara para o Pro.	Just the app. Microsoft offers no clear policy for Pro.
+Só o que tem efeito comprovado. Tudo pode ser desfeito.	Only what has a proven effect. Everything can be undone.
+Só para este usuário: as políticas equivalentes não valem no Pro.	This user only: the equivalent policies do not apply on Pro.
+Tira o painel de notícias.	Removes the news panel.
+Transferência em segundo plano não está desativada	Background transfer is not disabled
+Travou serviços do Xbox; dois projetos removeram.	It froze Xbox services; two projects removed it.
+Um PC de 32 GB chegou a usar 39 GB de memória reservada.	A 32 GB PC ended up using 39 GB of reserved memory.
+Ver discos	See disks
+Ver log	Show log
+Verifica o que importa para jogar e tira ruído. Não promete FPS.	Checks what matters for gaming and removes noise. It promises no FPS.
+Verificando…	Checking…
+Verificar de novo	Check again
+Virtualização desligada	Virtualization off
+Volta só pela Loja	Comes back only through the Store
+Widgets desligados	Widgets off
+Windows Update não está desativado	Windows Update is not disabled
+não existia	did not exist
+outro valor	another value
+tipo {}	type {}
+{} de {}: {}	{} of {}: {}
+Área de transferência sem nuvem	Clipboard without cloud
+Arquivo	File
+Buscar por nome ou empresa	Search by name or company
+Concluído:	Done:
+Concluído: {}	Done: {}
+Confirmar: remover {}	Confirm: remove {}
+Criar ponto de restauração	Create restore point
+Data	Date
+Desinstalando	Uninstalling
+Desinstalar 1	Uninstall 1
+Desinstalar {}	Uninstall {}
+Limpar {} selecionados	Clean {} selected
+Manter tudo	Keep everything
+Nada sobrou.	Nothing left over.
+Não abriu:	Did not open:
+Não abriu: {}	Did not open: {}
+O que sobrou	What was left over
+Ordenar por	Sort by
+Pastas vão para a Lixeira. O registro ganha um backup antes.	Folders go to the Recycle Bin. The registry gets a backup first.
+Ponto de restauração pedido	Restore point requested
+Procurando restos…	Looking for leftovers…
+Registro	Registry
+Removendo {}…	Removing {}…
+Restos limpos	Leftovers cleaned
+Se o programa abrir a própria janela, siga por ela.	If the program opens its own window, follow it there.
+Sem janela quando der	No window when possible
+Tamanho	Size
+{} itens não saíram	{} items did not come out
+{} programas instalados.	{} programs installed.
+{} restos encontrados. Confira antes de limpar.	{} leftovers found. Review them before cleaning.
+10% por toque	10% per press
+2% por toque	2% per press
+5% por toque	5% per press
+Agora: {} + tecla de volume ou mudo	Now: {} + volume or mute key
+As teclas de volume do teclado, com o modificador, mudam só o programa em foco.	The keyboard volume keys, with the modifier, change only the focused program.
+Em foco	In focus
+Modificador (pode combinar dois)	Modifier (you can combine two)
+Mostrar aviso na tela	Show on-screen notice
+Nenhum programa com som agora.	No program playing sound right now.
+Passo	Step
+Programas com som	Programs with sound
+Silenciado	Muted
+Tocando	Playing
+Volume por programa	Per-program volume
+Anéis	Rings
+Atalho para ligar e desligar	Shortcut to turn on and off
+Barras finas	Thin bars
+Instrumento	Instrument
+Mostra CPU, GPU, RAM e VRAM por cima de tudo. Arraste para mudar de lugar.	Shows CPU, GPU, RAM and VRAM on top of everything. Drag to move it.
+Mostrar widget	Show widget
+Pílula	Pill
+Idioma	Language
+Atualizações	Updates
+Versão {}	Version {}
+Procurar agora	Check now
+Procurar ao abrir o programa	Check when the program opens
+Procurando…	Checking…
+Você está na versão mais recente.	You are on the latest version.
+Versão {} disponível	Version {} available
+Instalar a versão {}	Install version {}
+Confirmar: instalar e reiniciar	Confirm: install and restart
+Baixando a atualização… {}%	Downloading the update… {}%
+Instalando…	Installing…
+Não consegui acessar o GitHub.	Could not reach GitHub.
+Ainda não há versão publicada.	No version has been published yet.
+O arquivo baixado não confere. Nada foi alterado.	The downloaded file does not match. Nothing was changed.
+Sem permissão nesta pasta. Reabra como administrador.	No permission in this folder. Reopen as administrator.
+Não consegui trocar o programa. Nada foi alterado.	Could not replace the program. Nothing was changed.
+Espere a tarefa em andamento terminar.	Wait for the running task to finish.
+Nova versão {} disponível em Configurações	New version {} available in Settings
+Atualizado para a versão {}	Updated to version {}
+Busca só o GitHub do Prisma, sem enviar dados seus.	Contacts only Prisma's GitHub page and sends none of your data.

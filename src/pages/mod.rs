@@ -200,7 +200,7 @@ pub fn header(ui: &Ui, a: Rect, title: &str, sub: &str) {
 }
 
 pub fn fmt_gb(b: u64) -> String {
-    format!("{:.1} GB", b as f64 / (1u64 << 30) as f64).replace('.', ",")
+    format!("{:.1} GB", b as f64 / (1u64 << 30) as f64).replace('.', crate::i18n::comma())
 }
 
 pub fn fmt_mem(b: u64) -> String {
@@ -215,9 +215,9 @@ pub fn fmt_rate(b: u64) -> String {
     if b == 0 {
         "0".into()
     } else if b >= 1 << 30 {
-        format!("{:.1} GB/s", b as f64 / (1u64 << 30) as f64).replace('.', ",")
+        format!("{:.1} GB/s", b as f64 / (1u64 << 30) as f64).replace('.', crate::i18n::comma())
     } else if b >= 1 << 20 {
-        format!("{:.1} MB/s", b as f64 / (1u64 << 20) as f64).replace('.', ",")
+        format!("{:.1} MB/s", b as f64 / (1u64 << 20) as f64).replace('.', crate::i18n::comma())
     } else {
         format!("{} KB/s", (b >> 10).max(1))
     }
@@ -227,10 +227,56 @@ pub fn fmt_pct(v: f32) -> String {
     if v >= 10.0 || v == 0.0 {
         format!("{v:.0}%")
     } else {
-        format!("{v:.1}%").replace('.', ",")
+        format!("{v:.1}%").replace('.', crate::i18n::comma())
     }
 }
 
 pub fn app_name(exe: &str) -> &str {
     exe.strip_suffix(".exe").or(exe.strip_suffix(".EXE")).unwrap_or(exe)
+}
+
+/// Quebra uma linha longa, de preferência em espaço ou barra.
+fn wrap_line(line: &str, cols: usize) -> Vec<String> {
+    let mut c: Vec<char> = line.chars().collect();
+    let mut out = Vec::new();
+    while c.len() > cols {
+        let cut = c[cols / 2..cols].iter().rposition(|x| *x == ' ' || *x == '\\').map_or(cols, |i| cols / 2 + i + 1);
+        out.push(c[..cut].iter().collect());
+        let mut rest = vec![' '; 4];
+        rest.extend_from_slice(&c[cut..]);
+        c = rest;
+    }
+    out.push(c.into_iter().collect());
+    out
+}
+
+/// Passo a passo de uma tarefa: rola, acompanha o fim e nunca passa da borda.
+pub fn log_view(ui: &mut Ui, key: &str, r: Rect, lines: &[String]) {
+    const ROW: f32 = 19.0;
+    let cols = ((r.w / 7.0) as usize).max(24);
+    let rows: Vec<(String, Color, Weight)> = lines
+        .iter()
+        .flat_map(|l| {
+            let l = crate::i18n::tr(l);
+            let t = l.trim_start();
+            let (color, weight) = if t.starts_with('▸') {
+                (TEXT, Weight::Semibold)
+            } else if t.starts_with('✗') {
+                (WARN, Weight::Regular)
+            } else if t.starts_with('✓') {
+                (ACCENT, Weight::Regular)
+            } else {
+                (TEXT2, Weight::Regular)
+            };
+            wrap_line(&l, cols).into_iter().map(move |s| (s, color, weight))
+        })
+        .collect();
+    ui.stick_bottom(key);
+    ui.begin_scroll(key, r, rows.len() as f32 * ROW);
+    let first = (ui.scroll_y() / ROW) as usize;
+    let last = first + (r.h / ROW) as usize + 2;
+    for (i, (s, color, weight)) in rows.iter().enumerate().take(last).skip(first) {
+        ui.c.text(rect(r.x, r.y + i as f32 * ROW, r.w, ROW), s, 12.0, *color, Align::Left, *weight);
+    }
+    ui.end_scroll();
 }

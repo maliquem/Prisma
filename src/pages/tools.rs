@@ -256,10 +256,11 @@ fn plan(id: Id, app: &mut App, letter: char) -> Option<(Vec<Step>, tools::Verdic
             let (b1, b2) = (before.clone(), before.clone());
             (
                 vec![
-                    native("Escolhendo o que limpar", move |_| {
+                    native("Escolhendo o que limpar", move |l| {
                         *b1.lock().unwrap() = free();
                         for c in tools::CLEAN {
                             reg::write_dword(reg::Hive::Machine, &format!("{KEY}\\{c}"), "StateFlags0099", 2);
+                            l.push(format!("  Marcada: {c}"));
                         }
                         true
                     }),
@@ -268,6 +269,7 @@ fn plan(id: Id, app: &mut App, letter: char) -> Option<(Vec<Step>, tools::Verdic
                         for c in tools::CLEAN {
                             reg::delete(reg::Hive::Machine, &format!("{KEY}\\{c}"), "StateFlags0099");
                         }
+                        l.push("  Marcas removidas do registro".to_string());
                         let got = free().saturating_sub(*b2.lock().unwrap());
                         l.push(format!("Liberados {}", fmt_mem(got)));
                         true
@@ -513,6 +515,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let out = rect(px, oy, pw, r.bottom() - oy - 14.0);
     ui.c.round(out, 8.0, SIDE);
     let mut body = out.inset(10.0);
+    // O resultado fica no fim: os textos dele apontam para a saída acima.
     if let Some((lv, msg)) = &run.verdict {
         let color = match lv {
             Level::Good => ACCENT,
@@ -520,16 +523,16 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
             Level::Risk => REC,
             Level::Unknown => TEXT2,
         };
-        ui.c.text_wrap(rect(body.x, body.y, body.w, 40.0), msg, 14.0, color, Weight::Semibold);
-        body = rect(body.x, body.y + 44.0, body.w, body.h - 44.0);
+        ui.c.text_wrap(rect(body.x, body.bottom() - 40.0, body.w, 40.0), msg, 14.0, color, Weight::Semibold);
+        body = rect(body.x, body.y, body.w, body.h - 46.0);
     } else if run.running {
-        ui.c.text(rect(body.x, body.y, body.w, 22.0), &run.step, 14.0, ACCENT, Align::Left, Weight::Semibold);
-        body = rect(body.x, body.y + 28.0, body.w, body.h - 28.0);
+        ui.c.text(rect(body.x, body.bottom() - 22.0, body.w, 22.0), &run.step, 14.0, ACCENT, Align::Left, Weight::Semibold);
+        body = rect(body.x, body.y, body.w, body.h - 28.0);
     }
-    let shown = (body.h / 19.0) as usize;
-    let start = run.lines.len().saturating_sub(shown);
-    for (i, line) in run.lines[start..].iter().enumerate() {
-        ui.c.text(rect(body.x, body.y + i as f32 * 19.0, body.w, 19.0), line, 12.0, TEXT2, Align::Left, Weight::Regular);
+    if run.lines.is_empty() {
+        ui.c.text(rect(body.x, body.y, body.w, 22.0), "O passo a passo aparece aqui.", 13.0, MUTED, Align::Left, Weight::Regular);
+    } else {
+        log_view(ui, "tool-log", body, &run.lines);
     }
 
     // Listas por último, para abrirem por cima do resto.

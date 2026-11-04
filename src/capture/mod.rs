@@ -363,7 +363,8 @@ pub fn choose_exe(owner: HWND) -> Option<String> {
     use windows::Win32::UI::Shell::*;
     unsafe {
         let d: IFileOpenDialog = CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER).ok()?;
-        let f = [COMDLG_FILTERSPEC { pszName: w!("Programas"), pszSpec: w!("*.exe") }];
+        let name = HSTRING::from(crate::i18n::tr("Programas").as_ref());
+        let f = [COMDLG_FILTERSPEC { pszName: PCWSTR(name.as_ptr()), pszSpec: w!("*.exe") }];
         d.SetFileTypes(&f).ok()?;
         d.Show(Some(owner)).ok()?;
         let item = d.GetResult().ok()?;

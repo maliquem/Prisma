@@ -1,0 +1,41 @@
+# Uma etiqueta vX.Y.Z compila o Prisma e publica a versão que o programa oferece como atualização.
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check version
+        shell: pwsh
+        run: |
+          $v = (Select-String -Path Cargo.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          if ("v$v" -ne $env:GITHUB_REF_NAME) { throw "Cargo.toml has $v, tag is $env:GITHUB_REF_NAME" }
+
+      - name: Build
+        run: cargo build --release --locked
+
+      - name: Package
+        shell: pwsh
+        run: |
+          Copy-Item target/release/prisma.exe Prisma.exe
+          $hash = (Get-FileHash Prisma.exe -Algorithm SHA256).Hash.ToLower()
+          [IO.File]::WriteAllText("Prisma.exe.sha256", "$hash  Prisma.exe`n")
+          $v = $env:GITHUB_REF_NAME.TrimStart('v')
+          $text = Get-Content CHANGELOG.md -Raw -Encoding utf8
+          $notes = [regex]::Match($text, "(?ms)^## $([regex]::Escape($v))\s*\r?\n(.*?)(?=^## |\z)").Groups[1].Value.Trim()
+          [IO.File]::WriteAllText("notes.md", $notes)
+
+      - name: Publish
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create $env:GITHUB_REF_NAME Prisma.exe Prisma.exe.sha256 --title "Prisma $($env:GITHUB_REF_NAME)" --notes-file notes.md

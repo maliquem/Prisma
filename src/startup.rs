@@ -190,3 +190,10 @@ pub fn uninstall() {
     let line = format!("/c ping -n 3 127.0.0.1 >nul & rmdir /s /q \"{}\"", install_dir().display());
     let _ = Command::new("cmd").raw_arg(line).creation_flags(NO_WINDOW).spawn();
 }
+
+/// A versão mostrada na lista de programas do Windows acompanha a atualização.
+pub fn refresh_version() {
+    if is_installed() {
+        reg_add("DisplayVersion", "REG_SZ", env!("CARGO_PKG_VERSION"));
+    }
+}

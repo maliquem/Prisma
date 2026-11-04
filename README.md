@@ -1,79 +1,98 @@
 # Prisma
 
-Utilitário leve para Windows 11, todo em Rust, sem framework de interface. Fica na bandeja e só carrega o que está em uso.
+**English** · [Português (Brasil)](README.pt-BR.md)
 
-## Portátil ou instalado
+A lightweight utility for Windows 11, written entirely in Rust with no UI framework. It sits in the tray, loads only what is in use and fits in a single 1.2 MB file. It replaces Task Manager and brings together the small tools a PC gamer usually collects one by one.
 
-É um único `prisma.exe`.
+**[Download the latest version](https://github.com/maliquem/Prisma/releases/latest)**
 
-- **Portátil:** rode de qualquer pasta. As configurações ficam em `PrismaData`, ao lado do programa, e nada é registrado no Windows.
-- **Instalado:** em **Ajustes**, clique em **Instalar no PC**. O Prisma vai para Arquivos de Programas, ganha atalho no menu Iniciar e aparece na lista de programas do Windows.
+![Prisma widget styles](docs/widget.png)
 
-Só a versão instalada pode iniciar com o Windows e substituir o Gerenciador de Tarefas. Um programa que abre como administrador sem perguntar precisa ficar numa pasta que só administrador altera.
+## Getting started
 
-## Primeiro uso
+Prisma is one file, `Prisma.exe`, with nothing else to install. Windows may warn about an unknown publisher the first time, because the file is not code-signed.
 
-1. Abra `prisma.exe` e, em **Ajustes**, clique em **Instalar no PC**.
-2. Marque **Iniciar com o Windows** e, se quiser, a opção de abrir o Prisma com Ctrl+Shift+Esc.
-3. Em **Widget**, escolha um dos quatro estilos.
+- **Portable:** run it from any folder. Settings stay in `PrismaData`, next to the program, and nothing is registered in Windows.
+- **Installed:** open **Settings** and click **Install on this PC**. Prisma moves to Program Files, gets a Start menu shortcut and appears in the Windows program list.
 
-## Atalhos padrão
+Only the installed version can start with Windows and replace Task Manager.
 
-Todos podem ser trocados no programa.
+The interface comes in English and Brazilian Portuguese. Prisma starts in your Windows language, and you can change it in **Settings**. Text that comes from Windows itself, such as service descriptions and command output, stays in the Windows language.
 
-| Ação | Atalho |
+## Updates
+
+Prisma checks this page when it opens and once a day. When there is a new version it tells you, and nothing is installed until you click **Install** in **Settings**. It downloads the file from this page, checks its SHA-256 hash, swaps the program and restarts. The check sends no data of yours, and you can turn it off. The installed version needs Prisma running as administrator to update.
+
+## Features
+
+- **Monitor:** per-core CPU, GPU, RAM, VRAM, disk and network for each program, with icons and End task.
+- **Disks and networks:** speed, active time and free space for each disk, plus a health grade (Good, Warning, At risk) from SMART, including USB drives. Each network shows speed, address and total transferred.
+- **Disk space:** analyzes a whole disk by reading the NTFS table, with folders, largest files, file types and a visual map. Opens in Explorer and, as administrator, sends files to the Recycle Bin.
+- **Startup:** turns on, turns off, adds and removes what opens with Windows, and shows who signed each program. Sorts by name, enabled or disabled.
+- **Services:** description, start, stop and restart. As administrator, right-clicking a service opens its own Windows properties window.
+- **Uninstall:** removes in batches, creates a restore point and looks for leftovers. Sorts by name, size or install date. Only items carrying the exact program name come selected, folders go to the Recycle Bin and the registry gets a backup first.
+- **Replace Task Manager:** an option that makes Ctrl+Shift+Esc open Prisma. Uninstalling gives Task Manager back.
+- **Windows tweaks:** first a read-only audit, then layered Gaming, Development and Privacy profiles with documented effects only. The Left out tab explains what was excluded and why. Each change records the previous value, and Undo only restores what nobody touched afterwards. No profile touches updates, antivirus, UAC, Memory Integrity or virtualization. **Show log** displays every change, before and after.
+- **Tools:** Windows repair (DISM, then SFC), crash history, Windows Update reset, disk check, network, DNS, cleanup, winget, diagnostics and advanced restart. On a suspect disk, modes that write are blocked. The step-by-step log shows the exact command, its output, errors and the time of each step.
+- **Optimize:** suggests what to close and always asks. The never-close list is respected, the always-close list closes those programs, and automatic detection suggests names for both.
+- **Power:** detects a game or high load and switches the power plan, going back to rest after 60 s without load.
+- **Per-game profile:** remembers borderless mode and volume for each program.
+- **Fullscreenizer:** turns the focused window into borderless fullscreen.
+- **Per-program volume:** the keyboard volume keys, with a modifier, change only the focused program.
+- **Widget:** CPU, GPU, RAM and VRAM over everything, in four styles.
+- **Capture:** photos with annotations and video in AV1, HEVC or H.264. When the display is in HDR, it records in SDR or HDR10.
+- **Replay:** in game mode, keeps the last seconds in memory.
+- **Crash report:** if Prisma crashes, it saves a report in its data folder and tells you the next time it opens. The report stays on your PC.
+
+![Windows tweaks profiles](docs/profiles.png)
+
+## Default shortcuts
+
+All of them can be changed in the program.
+
+| Action | Shortcut |
 | --- | --- |
 | Fullscreenizer | Ctrl + Alt + F |
-| Volume do programa em foco | Ctrl + teclas de volume e mudo |
+| Focused program volume | Ctrl + volume and mute keys |
 | Widget | Ctrl + Alt + W |
-| Otimizar | Ctrl + Alt + O |
-| Foto da área | Ctrl + Alt + P |
-| Foto da tela inteira | Ctrl + Alt + A |
-| Gravar e parar | Ctrl + Alt + R |
-| Salvar replay | Ctrl + Alt + B |
+| Optimize | Ctrl + Alt + O |
+| Area photo | Ctrl + Alt + P |
+| Full screen photo | Ctrl + Alt + A |
+| Record and stop | Ctrl + Alt + R |
+| Save replay | Ctrl + Alt + B |
 
-Na foto: Enter copia, Ctrl + S salva, Ctrl + Z desfaz e Esc cancela. Foto fixada: arraste para mover, botão direito fecha.
+On a photo: Enter copies, Ctrl + S saves, Ctrl + Z undoes and Esc cancels. Pinned photo: drag to move, right-click closes.
 
-## Funções
+## Limits
 
-- **Monitor:** CPU por núcleo, GPU, RAM, VRAM, disco e rede de cada programa, com ícones e Finalizar tarefa.
-- **Discos e redes:** velocidade, tempo ativo e espaço de cada disco, e nota de saúde (Bom, Atenção, Risco) pelo SMART, inclusive em HDs USB. Cada rede mostra velocidade, endereço e total transferido.
-- **Espaço em disco:** analisa um disco inteiro lendo a tabela do NTFS, com pastas, maiores arquivos, tipos e mapa visual. Abre no Explorador e, como administrador, manda para a Lixeira.
-- **Inicialização:** liga, desliga, adiciona e remove o que abre com o Windows, e mostra quem assinou cada programa.
-- **Serviços:** lista com descrição em português, iniciar, parar e reiniciar. Editar abre a janela do Windows.
-- **Desinstalar:** remove em lote, cria ponto de restauração e procura restos. Só vem marcado o que tem o nome exato do programa, pastas vão para a Lixeira e o registro ganha backup em `%APPDATA%\Prisma\backups`.
-- **Substituir o Gerenciador de Tarefas:** opção em Ajustes que faz Ctrl+Shift+Esc abrir o Prisma. A desinstalação devolve o Gerenciador de Tarefas.
-- **Ajustes do Windows:** primeiro uma auditoria que só lê o PC. Depois os perfis Jogo, Desenvolvimento e Privacidade, em camadas, só com ajustes de efeito documentado. A aba Fora da lista explica o que ficou de fora e por quê. Cada mudança guarda o valor anterior em `diario.txt`, e Desfazer só restaura o que ninguém mexeu depois. Nenhum perfil toca em atualizações, antivírus, UAC, Integridade da Memória ou virtualização.
-- **Ferramentas:** reparo do Windows (DISM e depois SFC), histórico de falhas, Windows Update, verificação de disco, rede, DNS, limpeza, winget, diagnóstico e reinício avançado, com resultado em português. Em disco suspeito, os modos que escrevem ficam bloqueados.
-- **Otimizar:** sugere o que fechar e sempre pergunta. Blacklist nunca fecha, whitelist sempre fecha. A detecção automática sugere nomes para as duas listas.
-- **Energia:** detecta jogo ou carga alta e troca o plano. Volta ao repouso depois de 60 s sem carga.
-- **Perfil por jogo:** lembra tela sem bordas e volume de cada programa.
-- **Captura:** foto com anotações e vídeo em AV1, HEVC ou H.264. Com a tela em HDR, grava em SDR ou HDR10.
-- **Replay:** em modo jogo, guarda os últimos segundos na memória.
+- A game in exclusive fullscreen must be in windowed mode before using Fullscreenizer.
+- No CPU temperature or power reading, since they need a kernel driver.
+- Profiles do not promise FPS. The value is privacy and less noise.
+- Removed apps come back through the Store, and that can fail.
+- The health grade is an indicator, not a guarantee: a disk can fail without warning.
+- The network column, disk health and fast NTFS reading need Prisma as administrator.
+- Everything Prisma changes in the system is recorded in `acoes.log`, in its data folder.
+- H.264 has no 10-bit mode: recording HDR10 uses HEVC instead.
+- Protected content, such as Netflix, comes out black in captures.
 
-## Limites
+## Requirements
 
-- Jogo em tela cheia exclusiva precisa estar em modo janela antes do Fullscreenizer.
-- Sem temperatura e consumo da CPU, porque exigem driver de kernel.
-- Os perfis não prometem FPS: debloat não tem ganho medido em CPU moderna. O valor é privacidade e menos ruído.
-- Apps removidos voltam pela Loja, e a volta pode falhar.
-- A nota de saúde é um indicador, não uma garantia: disco pode falhar sem aviso.
-- Coluna de rede, saúde dos discos e leitura rápida do NTFS exigem o Prisma como administrador.
-- Tudo que o Prisma muda no sistema fica registrado em `%APPDATA%\Prisma\acoes.log`.
-- H.264 não tem 10 bits: gravar em HDR10 com ele usa HEVC.
-- Conteúdo protegido, como Netflix, sai preto nas capturas.
+64-bit Windows 11.
 
-## Requisitos
+- Recording video needs a video encoder on the GPU (NVIDIA, AMD or Intel) and, on Windows N editions, the Media Feature Pack. Without it, only recording is unavailable.
+- GPU temperature depends on the NVIDIA driver. The other readings work on any card.
 
-Windows 11 de 64 bits. Nada para instalar: o `prisma.exe` traz tudo que precisa.
-
-- Gravar vídeo exige codificador de vídeo na GPU (NVIDIA, AMD ou Intel) e, em edições N do Windows, o Pacote de Recursos de Mídia. Sem isso, só a gravação fica indisponível.
-- Temperatura da GPU depende do driver da NVIDIA; as demais leituras funcionam em qualquer placa.
-
-## Compilar
+## Building
 
 ```bash
 cargo build --release
 ```
 
-Precisa do Rust e das Build Tools do Visual Studio. Configuração em `%APPDATA%\Prisma`.
+Needs Rust and the Visual Studio Build Tools.
+
+## Publishing a version
+
+1. Update `version` in `Cargo.toml`, add the section to `CHANGELOG.md` and update both READMEs.
+2. Commit and push a tag such as `v0.3.0`.
+
+GitHub then builds `Prisma.exe` and publishes the release with its hash, and every copy of Prisma offers the update.

@@ -34,6 +34,13 @@ fn draw_list(ui: &mut Ui, app: &mut App, a: Rect) {
     let mut q = std::mem::take(&mut app.un_search);
     ui.search("un-q", rect(l.x + 12.0, l.y + 10.0, 320.0, 36.0), &mut q, "Buscar por nome ou empresa");
     app.un_search = q;
+    ui.c.text(rect(l.right() - 360.0, l.y + 10.0, 92.0, 36.0), "Ordenar por", 13.0, MUTED, Align::Right, Weight::Regular);
+    for (i, name) in ["Nome", "Tamanho", "Data"].iter().enumerate() {
+        let b = rect(l.right() - 262.0 + i as f32 * 84.0, l.y + 10.0, 78.0, 36.0);
+        if ui.button(&format!("us{i}"), b, name, app.un_sort == i as u8) {
+            app.sort_programs(i as u8);
+        }
+    }
     let needle = app.un_search.to_lowercase();
     let rows: Vec<usize> = app
         .programs
@@ -189,5 +196,6 @@ fn draw_review(ui: &mut Ui, app: &mut App, a: Rect, job: &uninstall::Job) {
         app.un_left = None;
         app.un_review = false;
         app.programs = uninstall::list();
+        app.sort_programs(app.un_sort);
     }
 }

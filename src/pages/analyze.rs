@@ -14,7 +14,7 @@ fn tint(s: &str) -> Color {
 
 fn fmt_size(b: u64) -> String {
     if b >= 1 << 30 {
-        format!("{:.1} GB", b as f64 / (1u64 << 30) as f64).replace('.', ",")
+        format!("{:.1} GB", b as f64 / (1u64 << 30) as f64).replace('.', crate::i18n::comma())
     } else if b >= 1 << 20 {
         format!("{} MB", b >> 20)
     } else {
@@ -81,7 +81,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let sub = match app.scan.lock().unwrap().as_ref() {
         Some(s) => {
             let how = if s.used_mft { "lendo a tabela do NTFS" } else { "percorrendo as pastas" };
-            format!("{} arquivos em {:.1} s, {how}", s.files, s.elapsed.as_secs_f32()).replace('.', ",")
+            format!("{} arquivos em {:.1} s, {how}", s.files, s.elapsed.as_secs_f32()).replace('.', crate::i18n::comma())
         }
         None => "Mostra o que ocupa espaço em cada disco.".to_string(),
     };
@@ -293,7 +293,7 @@ fn draw_result(ui: &mut Ui, app: &mut App, s: &Scan, area: Rect) {
         ui.c.text(rect(list.x + 28.0, y, 130.0, 30.0), &name, 13.0, TEXT, Align::Left, Weight::Regular);
         let info = format!("{} arquivos", ty.files);
         ui.c.text(rect(list.x + 150.0, y, list.w - 330.0, 30.0), &info, 12.0, MUTED, Align::Left, Weight::Regular);
-        let pct = format!("{:.1}%", ty.size as f32 / vol as f32 * 100.0).replace('.', ",");
+        let pct = format!("{:.1}%", ty.size as f32 / vol as f32 * 100.0).replace('.', crate::i18n::comma());
         ui.c.text(rect(list.right() - 176.0, y, 74.0, 30.0), &fmt_size(ty.size), 13.0, TEXT, Align::Right, Weight::Regular);
         ui.c.text(rect(list.right() - 92.0, y, 84.0, 30.0), &pct, 12.0, MUTED, Align::Right, Weight::Regular);
     }

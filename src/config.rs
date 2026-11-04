@@ -121,7 +121,9 @@ pub struct Config {
     pub replay_on: bool,
     pub replay_secs: u32,
     pub lang_en: bool,
+    pub update_auto: bool,
     pub un_restore: bool,
+    pub tw_log: bool,
     pub un_silent: bool,
 }
 
@@ -167,8 +169,10 @@ impl Default for Config {
             shot_hdr: false,
             replay_on: false,
             replay_secs: 30,
-            lang_en: false,
+            lang_en: !crate::i18n::system_is_portuguese(),
+            update_auto: true,
             un_restore: true,
+            tw_log: false,
             un_silent: true,
         }
     }
@@ -255,7 +259,9 @@ impl Config {
                 "replay_on" => c.replay_on = b,
                 "replay_secs" => c.replay_secs = v.parse().unwrap_or(30),
                 "lang_en" => c.lang_en = b,
+                "update_auto" => c.update_auto = b,
                 "un_restore" => c.un_restore = b,
+                "tw_log" => c.tw_log = b,
                 "un_silent" => c.un_silent = b,
                 _ => {}
             }
@@ -324,7 +330,9 @@ impl Config {
         let _ = writeln!(s, "replay_on={}", b(self.replay_on));
         let _ = writeln!(s, "replay_secs={}", self.replay_secs);
         let _ = writeln!(s, "lang_en={}", b(self.lang_en));
+        let _ = writeln!(s, "update_auto={}", b(self.update_auto));
         let _ = writeln!(s, "un_restore={}", b(self.un_restore));
+        let _ = writeln!(s, "tw_log={}", b(self.tw_log));
         let _ = writeln!(s, "un_silent={}", b(self.un_silent));
         let path = config_path();
         let _ = std::fs::create_dir_all(path.parent().unwrap());

@@ -31,14 +31,20 @@ pub struct UiState {
     pub down: bool,
     pub pressed: bool,
     pub released: bool,
+    pub right_released: bool,
     pub wheel: f32,
     active: u64,
     popup: Option<Popup>,
+    /// A lista acabou de abrir: o clique que a abriu não pode fechá-la.
+    popup_new: bool,
+    pub view_h: f32,
     popup_pick: Option<(u64, usize)>,
     pub capturing: u64,
     pub key_event: Option<Hotkey>,
     pub key_cancel: bool,
     scroll: HashMap<u64, f32>,
+    scroll_max: HashMap<u64, f32>,
+    stick: u64,
     pub needs_redraw: bool,
     icons: HashMap<String, Option<windows::Win32::Graphics::Direct2D::ID2D1Bitmap>>,
     /// Campo de texto com o foco, e o que foi digitado desde o último desenho.
@@ -51,6 +57,7 @@ impl UiState {
     fn end_frame(&mut self) {
         self.pressed = false;
         self.released = false;
+        self.right_released = false;
         self.wheel = 0.0;
         self.key_event = None;
         self.key_cancel = false;
@@ -105,6 +112,11 @@ impl<'a> Ui<'a> {
         let id = hash_id(key);
         let max = (content_h - r.h).max(0.0);
         let mut v = self.s.scroll.get(&id).copied().unwrap_or(0.0);
+        if self.s.stick == id {
+            v = max;
+            self.s.stick = 0;
+        }
+        self.s.scroll_max.insert(id, max);
         if !self.blocked && r.contains(self.s.mx, self.s.my) && self.s.wheel != 0.0 {
             v -= self.s.wheel * 72.0;
             self.s.needs_redraw = true;
@@ -122,6 +134,15 @@ impl<'a> Ui<'a> {
         self.c.pop_clip();
         self.dy = 0.0;
         self.clip = None;
+    }
+
+    /// Se a lista está no fim, continua no fim quando crescer. Rolar para cima solta.
+    pub fn stick_bottom(&mut self, key: &str) {
+        let id = hash_id(key);
+        let v = self.s.scroll.get(&id).copied().unwrap_or(0.0);
+        if v >= self.s.scroll_max.get(&id).copied().unwrap_or(0.0) - 2.0 {
+            self.s.stick = id;
+        }
     }
 
     /// Volta uma lista ao topo, ao trocar de pasta ou de aba.
@@ -210,13 +231,18 @@ impl<'a> Ui<'a> {
         if self.clickable(id, r) {
             let h = options.len() as f32 * 36.0 + 8.0;
             let y = r.y - self.dy;
-            let top = y + r.h + 4.0;
+            let mut top = y + r.h + 4.0;
+            // Sem espaço embaixo, a lista abre para cima.
+            if self.s.view_h > 0.0 && top + h > self.s.view_h - 8.0 {
+                top = (y - h - 4.0).max(8.0);
+            }
             self.s.popup = Some(Popup {
                 id,
                 rect: rect(r.x, top, r.w, h),
                 options: options.to_vec(),
                 selected: *sel,
             });
+            self.s.popup_new = true;
             self.s.needs_redraw = true;
         }
         self.c.round(r, 8.0, SIDE);
@@ -327,6 +353,11 @@ impl<'a> Ui<'a> {
         changed
     }
 
+    /// Clique com o botão direito numa área.
+    pub fn right_hit(&mut self, r: Rect) -> bool {
+        self.s.right_released && self.hover(r)
+    }
+
     /// Botão com área invisível, para linhas clicáveis.
     pub fn hit(&mut self, key: &str, r: Rect) -> bool {
         self.clickable(hash_id(key), r)
@@ -348,13 +379,14 @@ impl<'a> Ui<'a> {
                 }
                 let color = if i == p.selected { ACCENT } else { TEXT };
                 self.c.text(r.inset_xy(8.0, 0.0), o, 14.0, color, Align::Left, Weight::Regular);
-                if hover && self.s.released {
+                if hover && self.s.released && !self.s.popup_new {
                     pick = Some((p.id, i));
                 }
             }
-            if self.s.released {
+            if self.s.released && !self.s.popup_new {
                 close = true;
             }
+            self.s.popup_new = false;
         }
         if close {
             self.s.popup = None;
