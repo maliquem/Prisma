@@ -17,15 +17,20 @@ pub fn is_enabled() -> bool {
 
 /// Precisa rodar como administrador. Devolve false quando o Windows recusa.
 pub fn set_enabled(on: bool) -> bool {
-    let mut cmd = Command::new("schtasks");
     if on {
-        let exe = std::env::current_exe().unwrap_or_default();
-        let run = format!("\"{}\" --background", exe.display());
-        cmd.args(["/Create", "/F", "/TN", TASK, "/SC", "ONLOGON", "/RL", "HIGHEST", "/TR", &run]);
-    } else {
-        cmd.args(["/Delete", "/F", "/TN", TASK]);
+        return create_task(&std::env::current_exe().unwrap_or_default());
     }
-    cmd.creation_flags(NO_WINDOW).output().map(|o| o.status.success()).unwrap_or(false)
+    let cmd = Command::new("schtasks").args(["/Delete", "/F", "/TN", TASK]).creation_flags(NO_WINDOW).output();
+    cmd.map(|o| o.status.success()).unwrap_or(false)
+}
+
+fn create_task(exe: &std::path::Path) -> bool {
+    let run = format!("\"{}\" --background", exe.display());
+    let cmd = Command::new("schtasks")
+        .args(["/Create", "/F", "/TN", TASK, "/SC", "ONLOGON", "/RL", "HIGHEST", "/TR", &run])
+        .creation_flags(NO_WINDOW)
+        .output();
+    cmd.map(|o| o.status.success()).unwrap_or(false)
 }
 
 pub fn is_elevated() -> bool {
@@ -157,6 +162,8 @@ pub fn install(open_after: bool, parent: Option<u32>) -> bool {
     if !make_shortcut(&d, &shortcut().display().to_string()) {
         return false;
     }
+    // Instalar já liga o início com o Windows; quem não quiser desliga em Configurações.
+    create_task(&dest);
     reg_add("DisplayName", "REG_SZ", "Prisma");
     reg_add("DisplayVersion", "REG_SZ", env!("CARGO_PKG_VERSION"));
     reg_add("DisplayIcon", "REG_SZ", &d);

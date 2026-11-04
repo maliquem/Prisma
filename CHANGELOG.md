@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.2
+
+- Installing now turns on starting with Windows, and it can be turned off in Settings. / Instalar agora liga o início com o Windows, que pode ser desligado em Configurações.
+
 ## 0.3.1
 
 - Fixed the Start menu shortcut, so Windows search finds the installed Prisma. / Corrigido o atalho do menu Iniciar, para a pesquisa do Windows achar o Prisma instalado.

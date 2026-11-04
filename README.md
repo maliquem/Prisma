@@ -15,7 +15,7 @@ Prisma is one file, `Prisma.exe`, with nothing else to install. Windows may warn
 - **Portable:** run it from any folder. Settings stay in `PrismaData`, next to the program, and nothing is registered in Windows.
 - **Installed:** open **Settings** and click **Install on this PC**. Prisma moves to Program Files, gets a Start menu shortcut and appears in the Windows program list.
 
-Only the installed version can start with Windows. Task Manager can be replaced in both, but on the portable version the shortcut stops working if you move or delete the file.
+The installed version starts with Windows by default, and you can turn that off in **Settings**. The portable version does not start with Windows. Task Manager can be replaced in both, but on the portable version the shortcut stops working if you move or delete the file.
 
 The interface comes in English and Brazilian Portuguese. Prisma starts in your Windows language, and you can change it in **Settings**. Text that comes from Windows itself, such as service descriptions and command output, stays in the Windows language.
 

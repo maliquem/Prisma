@@ -15,7 +15,7 @@ O Prisma é um único arquivo, `Prisma.exe`, sem mais nada para instalar. O Wind
 - **Portátil:** rode de qualquer pasta. As configurações ficam em `PrismaData`, ao lado do programa, e nada é registrado no Windows.
 - **Instalado:** abra **Configurações** e clique em **Instalar no PC**. O Prisma vai para Arquivos de Programas, ganha atalho no menu Iniciar e aparece na lista de programas do Windows.
 
-Só a versão instalada pode iniciar com o Windows. O Gerenciador de Tarefas pode ser substituído nas duas, mas na portátil o atalho para de funcionar se você mover ou apagar o arquivo.
+A versão instalada inicia com o Windows por padrão, e você desliga isso em **Configurações**. A portátil não inicia com o Windows. O Gerenciador de Tarefas pode ser substituído nas duas, mas na portátil o atalho para de funcionar se você mover ou apagar o arquivo.
 
 A interface vem em português do Brasil e inglês. O Prisma começa no idioma do Windows, e você troca em **Configurações**. Textos que vêm do próprio Windows, como descrições de serviços e saída de comandos, ficam no idioma do Windows.
 
