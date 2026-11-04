@@ -11,6 +11,8 @@ use std::hash::{Hash, Hasher};
 use crate::config::Hotkey;
 use gfx::*;
 
+const BAR_W: f32 = 12.0;
+
 fn hash_id(key: &str) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
     key.hash(&mut h);
@@ -22,6 +24,24 @@ struct Popup {
     rect: Rect,
     options: Vec<String>,
     selected: usize,
+    /// Opções de menu que aparecem apagadas e não respondem.
+    off: Vec<bool>,
+}
+
+/// Pergunta no meio da tela: nada atrás dela responde até escolher.
+struct Ask {
+    id: u64,
+    title: String,
+    body: String,
+    /// Só avisa: mostra OK em vez de Sim e Não.
+    notice: bool,
+}
+
+struct Bar {
+    r: Rect,
+    y: f32,
+    h: f32,
+    id: u64,
 }
 
 #[derive(Default)]
@@ -38,6 +58,11 @@ pub struct UiState {
     /// A lista acabou de abrir: o clique que a abriu não pode fechá-la.
     popup_new: bool,
     pub view_h: f32,
+    pub view_w: f32,
+    ask: Option<Ask>,
+    ask_new: bool,
+    answer: Option<u64>,
+    grab: f32,
     popup_pick: Option<(u64, usize)>,
     pub capturing: u64,
     pub key_event: Option<Hotkey>,
@@ -54,6 +79,11 @@ pub struct UiState {
 }
 
 impl UiState {
+    /// Fecha a pergunta aberta como se a resposta fosse não.
+    pub fn close_ask(&mut self) -> bool {
+        self.ask.take().is_some()
+    }
+
     fn end_frame(&mut self) {
         self.pressed = false;
         self.released = false;
@@ -70,12 +100,13 @@ pub struct Ui<'a> {
     dy: f32,
     blocked: bool,
     clip: Option<Rect>,
+    bar: Option<Bar>,
 }
 
 impl<'a> Ui<'a> {
     pub fn begin(c: &'a Canvas, s: &'a mut UiState) -> Self {
-        let blocked = s.popup.is_some();
-        Self { c, s, dy: 0.0, blocked, clip: None }
+        let blocked = s.popup.is_some() || s.ask.is_some();
+        Self { c, s, dy: 0.0, blocked, clip: None, bar: None }
     }
 
     fn hover(&self, r: Rect) -> bool {
@@ -86,6 +117,10 @@ impl<'a> Ui<'a> {
             if !c.contains(self.s.mx, self.s.my) {
                 return false;
             }
+        }
+        // A barra de rolagem fica por cima da lista: o clique nela não seleciona a linha.
+        if self.bar.as_ref().is_some_and(|b| self.s.mx >= b.r.right() - BAR_W) {
+            return false;
         }
         r.contains(self.s.mx, self.s.my + self.dy)
     }
@@ -121,6 +156,29 @@ impl<'a> Ui<'a> {
             v -= self.s.wheel * 72.0;
             self.s.needs_redraw = true;
         }
+        self.bar = None;
+        if max > 0.0 {
+            let bar_id = id ^ 2;
+            let h = (r.h * r.h / content_h).max(32.0);
+            let span = r.h - h;
+            let top = r.y + span * (v.clamp(0.0, max) / max);
+            let over = self.s.mx >= r.right() - BAR_W && self.s.mx <= r.right() && self.s.my >= r.y && self.s.my <= r.bottom();
+            if !self.blocked && over && self.s.pressed {
+                self.s.active = bar_id;
+                // Clicar fora do trilho claro leva a barra até ali.
+                let on_thumb = self.s.my >= top && self.s.my <= top + h;
+                self.s.grab = if on_thumb { self.s.my - top } else { h / 2.0 };
+            }
+            if self.s.active == bar_id {
+                v = (self.s.my - self.s.grab - r.y) / span * max;
+                self.s.needs_redraw = true;
+                if self.s.released || !self.s.down {
+                    self.s.active = 0;
+                }
+            }
+            v = v.clamp(0.0, max);
+            self.bar = Some(Bar { r, y: r.y + span * (v / max), h, id: bar_id });
+        }
         v = v.clamp(0.0, max);
         self.s.scroll.insert(id, v);
         self.dy = v;
@@ -134,6 +192,13 @@ impl<'a> Ui<'a> {
         self.c.pop_clip();
         self.dy = 0.0;
         self.clip = None;
+        if let Some(b) = self.bar.take() {
+            let hot = self.s.active == b.id;
+            let near = !self.blocked && b.r.contains(self.s.mx, self.s.my) && self.s.mx >= b.r.right() - BAR_W;
+            let color = if hot { ACCENT } else if near { TEXT2 } else { BORDER2 };
+            let w = if hot || near { 8.0 } else { 6.0 };
+            self.c.round(rect(b.r.right() - w - 1.0, b.y, w, b.h), w / 2.0, color);
+        }
     }
 
     /// Se a lista está no fim, continua no fim quando crescer. Rolar para cima solta.
@@ -241,6 +306,7 @@ impl<'a> Ui<'a> {
                 rect: rect(r.x, top, r.w, h),
                 options: options.to_vec(),
                 selected: *sel,
+                off: Vec::new(),
             });
             self.s.popup_new = true;
             self.s.needs_redraw = true;
@@ -253,6 +319,86 @@ impl<'a> Ui<'a> {
         let (ax, ay) = (r.right() - 24.0, r.y + r.h / 2.0 - 2.0);
         self.c.line(ax, ay, ax + 5.0, ay + 5.0, MUTED, 1.5);
         self.c.line(ax + 5.0, ay + 5.0, ax + 10.0, ay, MUTED, 1.5);
+        changed
+    }
+
+    /// Abre um menu onde o mouse está. A escolha chega depois por `menu_pick`.
+    pub fn menu(&mut self, key: &str, items: &[(&str, bool)]) {
+        let w = 230.0;
+        let h = items.len() as f32 * 36.0 + 8.0;
+        let mut x = self.s.mx;
+        let mut y = self.s.my;
+        if self.s.view_w > 0.0 && x + w > self.s.view_w - 8.0 {
+            x = self.s.view_w - w - 8.0;
+        }
+        if self.s.view_h > 0.0 && y + h > self.s.view_h - 8.0 {
+            y = (y - h).max(8.0);
+        }
+        self.s.popup = Some(Popup {
+            id: hash_id(key),
+            rect: rect(x, y, w, h),
+            options: items.iter().map(|i| i.0.to_string()).collect(),
+            selected: usize::MAX,
+            off: items.iter().map(|i| !i.1).collect(),
+        });
+        self.s.popup_new = true;
+        self.s.needs_redraw = true;
+    }
+
+    pub fn menu_pick(&mut self, key: &str) -> Option<usize> {
+        let id = hash_id(key);
+        match self.s.popup_pick {
+            Some((pid, v)) if pid == id => {
+                self.s.popup_pick = None;
+                Some(v)
+            }
+            _ => None,
+        }
+    }
+
+    /// Pergunta Sim ou Não. A resposta chega depois por `answered`, com a mesma chave.
+    pub fn ask(&mut self, key: &str, title: &str, body: &str) {
+        self.s.ask = Some(Ask { id: hash_id(key), title: title.to_string(), body: body.to_string(), notice: false });
+        self.s.ask_new = true;
+        self.s.needs_redraw = true;
+    }
+
+    /// Aviso com um botão só.
+    pub fn notice(&mut self, title: &str, body: &str) {
+        self.s.ask = Some(Ask { id: 0, title: title.to_string(), body: body.to_string(), notice: true });
+        self.s.ask_new = true;
+        self.s.needs_redraw = true;
+    }
+
+    pub fn answered(&mut self, key: &str) -> bool {
+        let id = hash_id(key);
+        if self.s.answer == Some(id) {
+            self.s.answer = None;
+            return true;
+        }
+        false
+    }
+
+    /// Número com botões de menos e mais.
+    pub fn stepper(&mut self, key: &str, r: Rect, val: &mut u32, range: (u32, u32), step: u32, unit: &str) -> bool {
+        let mut changed = false;
+        self.c.round(r, 8.0, SIDE);
+        self.c.round_line(r, 8.0, BORDER, 1.0);
+        let less = rect(r.x, r.y, 30.0, r.h);
+        let more = rect(r.right() - 30.0, r.y, 30.0, r.h);
+        if self.clickable(hash_id(&format!("{key}-")), less) {
+            *val = val.saturating_sub(step).max(range.0);
+            changed = true;
+        }
+        if self.clickable(hash_id(&format!("{key}+")), more) {
+            *val = (*val + step).min(range.1);
+            changed = true;
+        }
+        for (b, s) in [(less, "−"), (more, "+")] {
+            let color = if self.hover(b) { ACCENT } else { TEXT2 };
+            self.c.text(b, s, 16.0, color, Align::Center, Weight::Semibold);
+        }
+        self.c.text(r, &format!("{val}{unit}"), 13.0, TEXT, Align::Center, Weight::Regular);
         changed
     }
 
@@ -373,17 +519,24 @@ impl<'a> Ui<'a> {
             self.c.round_line(shadow, 10.0, BORDER2, 1.0);
             for (i, o) in p.options.iter().enumerate() {
                 let r = rect(p.rect.x + 4.0, p.rect.y + 4.0 + i as f32 * 36.0, p.rect.w - 8.0, 36.0);
-                let hover = r.contains(self.s.mx, self.s.my);
+                let off = p.off.get(i).copied().unwrap_or(false);
+                let hover = !off && r.contains(self.s.mx, self.s.my);
                 if hover {
                     self.c.round(r, 6.0, BORDER);
                 }
-                let color = if i == p.selected { ACCENT } else { TEXT };
+                let color = if off {
+                    MUTED
+                } else if i == p.selected {
+                    ACCENT
+                } else {
+                    TEXT
+                };
                 self.c.text(r.inset_xy(8.0, 0.0), o, 14.0, color, Align::Left, Weight::Regular);
                 if hover && self.s.released && !self.s.popup_new {
                     pick = Some((p.id, i));
                 }
             }
-            if self.s.released && !self.s.popup_new {
+            if (self.s.released || self.s.right_released) && !self.s.popup_new {
                 close = true;
             }
             self.s.popup_new = false;
@@ -393,7 +546,51 @@ impl<'a> Ui<'a> {
             self.s.popup_pick = pick;
             self.s.needs_redraw = true;
         }
+        self.draw_ask();
         self.blocked = false;
         self.s.end_frame();
+    }
+
+    fn draw_ask(&mut self) {
+        let Some(a) = &self.s.ask else { return };
+        let (vw, vh) = (self.s.view_w, self.s.view_h);
+        self.c.fill(rect(0.0, 0.0, vw, vh), rgb(0x000000).alpha(0.6));
+        let w = 460.0f32.min(vw - 48.0);
+        let body_h = measure(&a.body, 14.0, Weight::Regular, Some(w - 48.0)).1;
+        let h = 76.0 + body_h + 76.0;
+        let b = rect((vw - w) / 2.0, (vh - h) / 2.0, w, h);
+        self.c.round(b, 14.0, CARD2);
+        self.c.round_line(b, 14.0, BORDER2, 1.0);
+        self.c.text(rect(b.x + 24.0, b.y + 22.0, b.w - 48.0, 28.0), &a.title, 17.0, TEXT, Align::Left, Weight::Semibold);
+        self.c.text_wrap(rect(b.x + 24.0, b.y + 62.0, b.w - 48.0, body_h + 4.0), &a.body, 14.0, TEXT2, Weight::Regular);
+        let by = b.bottom() - 60.0;
+        let yes = rect(b.right() - 24.0 - 112.0, by, 112.0, 40.0);
+        let no = rect(yes.x - 120.0, by, 112.0, 40.0);
+        let (mx, my) = (self.s.mx, self.s.my);
+        let bg = if yes.contains(mx, my) { rgb(0xa9d9ff) } else { ACCENT };
+        self.c.round(yes, 8.0, bg);
+        self.c.text(yes, if a.notice { "OK" } else { "Sim" }, 14.0, ON_ACCENT, Align::Center, Weight::Semibold);
+        if !a.notice {
+            if no.contains(mx, my) {
+                self.c.round(no, 8.0, BORDER);
+            }
+            self.c.round_line(no, 8.0, BORDER2, 1.0);
+            self.c.text(no, "Não", 14.0, TEXT, Align::Center, Weight::Regular);
+        }
+        if self.s.released && !self.s.ask_new {
+            let id = a.id;
+            let notice = a.notice;
+            if yes.contains(mx, my) {
+                self.s.ask = None;
+                if !notice {
+                    self.s.answer = Some(id);
+                }
+                self.s.needs_redraw = true;
+            } else if !notice && no.contains(mx, my) {
+                self.s.ask = None;
+                self.s.needs_redraw = true;
+            }
+        }
+        self.s.ask_new = false;
     }
 }

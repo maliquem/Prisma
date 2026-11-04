@@ -31,6 +31,8 @@ pub struct Settings {
     pub codec: Codec,
     pub cursor: bool,
     pub sys_audio: bool,
+    /// Programa cujo som entra sozinho na gravação; 0 quando não há.
+    pub audio_pid: u32,
     pub mic: bool,
     pub hdr10: bool,
     pub replay_secs: u32,
@@ -354,9 +356,9 @@ fn run(mut cfg: Settings, rx: Receiver<Cmd>, status: &Status, info: &std::sync::
 
         let stop_audio = Arc::new(AtomicBool::new(false));
         let (atx, arx) = channel::<Pkt>();
-        let want_audio = cfg.sys_audio || cfg.mic;
+        let want_audio = cfg.sys_audio || cfg.mic || cfg.audio_pid != 0;
         if want_audio {
-            sound::spawn(cfg.sys_audio, cfg.mic, stop_audio.clone(), atx.clone());
+            sound::spawn(cfg.sys_audio, cfg.audio_pid, cfg.mic, stop_audio.clone(), atx.clone());
         }
         drop(atx);
 

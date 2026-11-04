@@ -3,6 +3,27 @@
 use super::*;
 use crate::sys::services::{self, Action};
 
+fn run_action(app: &mut App, name: &str, a: Action) {
+    if !app.elevated {
+        app.toast.info("Precisa do Prisma como administrador");
+        return;
+    }
+    services::control(name.to_string(), a);
+    app.log(&format!("serviço {name}: {}", match a {
+        Action::Start => "iniciar",
+        Action::Stop => "parar",
+        Action::Restart => "reiniciar",
+    }));
+}
+
+fn ask_action(ui: &mut Ui, display: &str, stop: bool) {
+    if stop {
+        ui.ask("svc-stop", "Parar este serviço?", &format!("{display} vai parar agora. Programas que dependem dele podem deixar de funcionar."));
+    } else {
+        ui.ask("svc-restart", "Reiniciar este serviço?", &format!("{display} vai parar e iniciar de novo."));
+    }
+}
+
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let running = app.services.iter().filter(|s| s.running).count();
     let sub = format!("{running} rodando de {}.", app.services.len());
@@ -46,7 +67,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let list = rect(l.x + 8.0, l.y + 54.0, l.w - 16.0, l.h - 62.0);
     ui.begin_scroll("svc", list, rows.len() as f32 * 34.0);
     let mut pick = None;
-    let mut props = None;
+    let mut right = None;
     let first = (ui.scroll_y() / 34.0) as usize;
     let last = first + (list.h / 34.0) as usize + 2;
     for (row, &i) in rows.iter().enumerate().take(last).skip(first) {
@@ -61,7 +82,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         }
         if ui.right_hit(r) {
             pick = Some(s.name.clone());
-            props = Some(s.display.clone());
+            right = Some((s.name.clone(), s.display.clone(), s.running));
         }
         ui.c.circle(r.x + 16.0, y + 17.0, 4.0, if s.running { ACCENT } else { BORDER2 });
         ui.c.text(rect(r.x + 30.0, y, r.w - 130.0, 34.0), &s.display, 14.0, TEXT, Align::Left, Weight::Regular);
@@ -71,12 +92,32 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     if let Some(n) = pick {
         app.select_service(n);
     }
-    if let Some(d) = props {
-        if app.elevated {
-            app.toast.info("Abrindo as propriedades no Windows");
-            services::show_properties(d);
-        } else {
-            app.toast.info("Precisa do Prisma como administrador");
+    if let Some((n, d, on)) = right {
+        app.svc_target = Some((n, d));
+        ui.menu("svc-menu", &[("Iniciar", !on), ("Parar", on), ("Reiniciar", on), ("Propriedades", true)]);
+    }
+    if let Some(i) = ui.menu_pick("svc-menu") {
+        if let Some((n, d)) = app.svc_target.clone() {
+            match i {
+                0 => run_action(app, &n, Action::Start),
+                1 => ask_action(ui, &d, true),
+                2 => ask_action(ui, &d, false),
+                _ if app.elevated => {
+                    app.toast.info("Abrindo as propriedades no Windows");
+                    services::show_properties(d);
+                }
+                _ => app.toast.info("Precisa do Prisma como administrador"),
+            }
+        }
+    }
+    if ui.answered("svc-stop") {
+        if let Some((n, _)) = app.svc_target.clone() {
+            run_action(app, &n, Action::Stop);
+        }
+    }
+    if ui.answered("svc-restart") {
+        if let Some((n, _)) = app.svc_target.clone() {
+            run_action(app, &n, Action::Restart);
         }
     }
 
@@ -98,24 +139,17 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
 
     let bw = (r.w - 40.0) / 2.0;
     let by = r.bottom() - 108.0;
-    let act = if s.running {
-        ui.button("svc-stop", rect(r.x + 16.0, by, bw, 44.0), "Parar", false).then_some(Action::Stop)
-    } else {
-        ui.button("svc-start", rect(r.x + 16.0, by, bw, 44.0), "Iniciar", true).then_some(Action::Start)
-    };
-    let again = ui.button_ex("svc-re", rect(r.x + 24.0 + bw, by, bw, 44.0), "Reiniciar", false, s.running);
-    let act = if again { Some(Action::Restart) } else { act };
-    if let Some(a) = act {
-        if !app.elevated {
-            app.toast.info("Precisa do Prisma como administrador");
-        } else {
-            services::control(name.clone(), a);
-            app.log(&format!("serviço {name}: {}", match a {
-                Action::Start => "iniciar",
-                Action::Stop => "parar",
-                Action::Restart => "reiniciar",
-            }));
+    if s.running {
+        if ui.button("svc-stop-b", rect(r.x + 16.0, by, bw, 44.0), "Parar", false) {
+            app.svc_target = Some((name.clone(), s.display.clone()));
+            ask_action(ui, &s.display, true);
         }
+    } else if ui.button("svc-start", rect(r.x + 16.0, by, bw, 44.0), "Iniciar", true) {
+        run_action(app, &name, Action::Start);
     }
-    ui.c.text_wrap(rect(r.x + 16.0, r.bottom() - 56.0, r.w - 32.0, 44.0), "Botão direito no serviço abre as propriedades dele no Windows.", 12.0, MUTED, Weight::Regular);
+    if ui.button_ex("svc-re", rect(r.x + 24.0 + bw, by, bw, 44.0), "Reiniciar", false, s.running) {
+        app.svc_target = Some((name.clone(), s.display.clone()));
+        ask_action(ui, &s.display, false);
+    }
+    ui.c.text_wrap(rect(r.x + 16.0, r.bottom() - 56.0, r.w - 32.0, 44.0), "Botão direito no serviço mostra iniciar, parar, reiniciar e propriedades.", 12.0, MUTED, Weight::Regular);
 }

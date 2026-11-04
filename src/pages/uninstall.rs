@@ -1,7 +1,8 @@
 //! Desinstalador: escolher, remover em lote e limpar o que sobrou.
 
 use super::*;
-use crate::sys::uninstall::{self, LeftKind};
+use crate::config::Defaults;
+use crate::sys::uninstall::{self, LeftKind, Stage};
 
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let job = app.un_job.lock().unwrap().clone();
@@ -25,6 +26,7 @@ fn fmt_date(d: &str) -> String {
 fn draw_list(ui: &mut Ui, app: &mut App, a: Rect) {
     let sub = format!("{} programas instalados.", app.programs.len());
     header(ui, a, "Desinstalar", &sub);
+    defaults_button(ui, app, a.right() - 124.0, Defaults::Uninstall, "Volta as opções de ponto de restauração e de desinstalar sem janela ao padrão.");
     let x = a.x + 28.0;
     let top = 88.0;
     let foot = 76.0;
@@ -35,10 +37,11 @@ fn draw_list(ui: &mut Ui, app: &mut App, a: Rect) {
     ui.search("un-q", rect(l.x + 12.0, l.y + 10.0, 320.0, 36.0), &mut q, "Buscar por nome ou empresa");
     app.un_search = q;
     ui.c.text(rect(l.right() - 360.0, l.y + 10.0, 92.0, 36.0), "Ordenar por", 13.0, MUTED, Align::Right, Weight::Regular);
-    for (i, name) in ["Nome", "Tamanho", "Data"].iter().enumerate() {
+    // Na mesma ordem das colunas da lista.
+    for (i, (name, by)) in [("Nome", 0u8), ("Data", 2), ("Tamanho", 1)].iter().enumerate() {
         let b = rect(l.right() - 262.0 + i as f32 * 84.0, l.y + 10.0, 78.0, 36.0);
-        if ui.button(&format!("us{i}"), b, name, app.un_sort == i as u8) {
-            app.sort_programs(i as u8);
+        if ui.button(&format!("us{i}"), b, name, app.un_sort == *by) {
+            app.sort_programs(*by);
         }
     }
     let needle = app.un_search.to_lowercase();
@@ -63,7 +66,6 @@ fn draw_list(ui: &mut Ui, app: &mut App, a: Rect) {
         let mut on = p.on;
         if ui.check(&format!("u{i}"), rect(r.x + 8.0, y, r.w - 16.0, 44.0), "", &mut on) {
             app.programs[i].on = on;
-            app.un_confirm = false;
         }
         let path = if p.icon.is_empty() { p.name.clone() } else { p.icon.clone() };
         ui.file_icon(&path, &p.name, rect(r.x + 38.0, y + 10.0, 24.0, 24.0));
@@ -90,26 +92,23 @@ fn draw_list(ui: &mut Ui, app: &mut App, a: Rect) {
         app.cfg.un_silent = c;
         app.cfg.save();
     }
-    let label = if app.un_confirm {
-        format!("Confirmar: remover {n}")
-    } else if n == 1 {
-        "Desinstalar 1".to_string()
-    } else {
-        format!("Desinstalar {n}")
-    };
+    let label = if n == 1 { "Desinstalar 1".to_string() } else { format!("Desinstalar {n}") };
     let ok = n > 0 && app.elevated;
     if ui.button_ex("un-go", rect(f.right() - 216.0, f.y + 16.0, 200.0, 44.0), &label, true, ok) {
-        if app.un_confirm {
-            app.un_confirm = false;
-            app.un_review = true;
-            let chosen: Vec<_> = app.programs.iter().filter(|p| p.on).cloned().collect();
-            for p in &chosen {
-                app.log(&format!("desinstalou {} {}", p.name, p.version));
-            }
-            uninstall::start(chosen, app.cfg.un_silent, app.cfg.un_restore, app.un_job.clone());
-        } else {
-            app.un_confirm = true;
+        let names: Vec<&str> = app.programs.iter().filter(|p| p.on).map(|p| p.name.as_str()).collect();
+        let mut body = names.iter().take(6).copied().collect::<Vec<_>>().join(", ");
+        if names.len() > 6 {
+            body = format!("{body} e mais {}", names.len() - 6);
         }
+        ui.ask("un-go", "Desinstalar estes programas?", &body);
+    }
+    if ui.answered("un-go") {
+        app.un_review = true;
+        let chosen: Vec<_> = app.programs.iter().filter(|p| p.on).cloned().collect();
+        for p in &chosen {
+            app.log(&format!("desinstalou {} {}", p.name, p.version));
+        }
+        uninstall::start(chosen, app.cfg.un_silent, app.cfg.un_restore, app.un_job.clone());
     }
     if !app.elevated {
         ui.c.text(rect(f.right() - 460.0, f.y + 16.0, 236.0, 44.0), "Precisa do Prisma como administrador", 12.0, WARN, Align::Right, Weight::Regular);
@@ -117,22 +116,25 @@ fn draw_list(ui: &mut Ui, app: &mut App, a: Rect) {
 }
 
 fn draw_running(ui: &mut Ui, a: Rect, job: &uninstall::Job) {
-    header(ui, a, "Desinstalando", "Se o programa abrir a própria janela, siga por ela.");
+    let title = if job.stage == Stage::Scanning { "Procurando restos" } else { "Desinstalando" };
+    header(ui, a, title, "Se o programa abrir a própria janela, siga por ela.");
     let r = rect(a.x + 28.0, 88.0, a.w - 56.0, a.h - 108.0);
     ui.card(r);
-    let mut y = r.y + 16.0;
-    if let Some(ok) = job.restore {
-        let t = if ok { "Ponto de restauração pedido" } else { "O Windows recusou o ponto de restauração" };
-        ui.c.text(rect(r.x + 16.0, y, r.w - 32.0, 24.0), t, 14.0, if ok { TEXT } else { WARN }, Align::Left, Weight::Regular);
-        y += 30.0;
+    let lines = job.lines();
+    let list = r.inset(16.0);
+    ui.stick_bottom("un-run");
+    ui.begin_scroll("un-run", list, lines.len() as f32 * 28.0);
+    for (i, (text, color, strong)) in lines.iter().enumerate() {
+        let c = match color {
+            1 => ACCENT,
+            2 => WARN,
+            3 => MUTED,
+            _ => TEXT2,
+        };
+        let w = if *strong { Weight::Semibold } else { Weight::Regular };
+        ui.c.text(rect(list.x, list.y + i as f32 * 28.0, list.w - 16.0, 24.0), text, 14.0, c, Align::Left, w);
     }
-    for (n, ok) in &job.done {
-        let t = format!("{} {n}", if *ok { "Concluído:" } else { "Não abriu:" });
-        ui.c.text(rect(r.x + 16.0, y, r.w - 32.0, 24.0), &t, 14.0, if *ok { TEXT2 } else { WARN }, Align::Left, Weight::Regular);
-        y += 28.0;
-    }
-    let cur = if job.current.is_empty() { "Procurando restos…".to_string() } else { format!("Removendo {}…", job.current) };
-    ui.c.text(rect(r.x + 16.0, y, r.w - 32.0, 24.0), &cur, 14.0, ACCENT, Align::Left, Weight::Semibold);
+    ui.end_scroll();
 }
 
 fn draw_review(ui: &mut Ui, app: &mut App, a: Rect, job: &uninstall::Job) {
@@ -141,7 +143,14 @@ fn draw_review(ui: &mut Ui, app: &mut App, a: Rect, job: &uninstall::Job) {
     }
     let left = app.un_left.as_mut().unwrap();
     let n = left.iter().filter(|l| l.on).count();
-    let sub = if left.is_empty() { "Nada sobrou.".to_string() } else { format!("{} restos encontrados. Confira antes de limpar.", left.len()) };
+    let stuck: Vec<&str> = job.done.iter().filter(|d| !d.1).map(|d| d.0.as_str()).collect();
+    let sub = if !stuck.is_empty() {
+        format!("Não foi removido: {}", stuck.join(", "))
+    } else if left.is_empty() {
+        "Nada sobrou.".to_string()
+    } else {
+        format!("{} restos encontrados. Só vêm marcados os que têm o nome exato; confira os outros.", left.len())
+    };
     header(ui, a, "O que sobrou", &sub);
     let x = a.x + 28.0;
     let top = 88.0;
@@ -173,23 +182,29 @@ fn draw_review(ui: &mut Ui, app: &mut App, a: Rect, job: &uninstall::Job) {
     ui.card_on(f);
     let note = "Pastas vão para a Lixeira. O registro ganha um backup antes.";
     ui.c.text(rect(f.x + 16.0, f.y + 16.0, f.w - 460.0, 44.0), note, 13.0, TEXT2, Align::Left, Weight::Regular);
-    let close = ui.button("left-no", rect(f.right() - 400.0, f.y + 16.0, 160.0, 44.0), "Manter tudo", false);
-    let clean = ui.button_ex("left-go", rect(f.right() - 232.0, f.y + 16.0, 216.0, 44.0), &format!("Limpar {n} selecionados"), true, n > 0);
+    let keep = if left.is_empty() { "Fechar" } else { "Manter tudo" };
+    let close = ui.button("left-no", rect(f.right() - 400.0, f.y + 16.0, 160.0, 44.0), keep, false);
+    if ui.button_ex("left-go", rect(f.right() - 232.0, f.y + 16.0, 216.0, 44.0), &format!("Limpar {n} selecionados"), true, n > 0) {
+        ui.ask("left-go", "Limpar os restos selecionados?", "Pastas e arquivos vão para a Lixeira. As chaves do registro são apagadas depois de um backup.");
+    }
+    let clean = ui.answered("left-go");
     if clean {
         let back = crate::config::data_dir().join("backups");
         let items = app.un_left.clone().unwrap_or_default();
-        let mut failed = 0;
+        let (mut removed, mut failed) = (0, Vec::new());
         for it in items.iter().filter(|l| l.on) {
             if uninstall::remove(it, &back) {
                 app.log(&format!("limpou {}", it.label));
+                removed += 1;
             } else {
-                failed += 1;
+                failed.push(it.label.clone());
             }
         }
-        if failed > 0 {
-            app.toast.info(&format!("{failed} itens não saíram"));
+        if failed.is_empty() {
+            ui.notice("Restos excluídos", &format!("{removed} itens foram excluídos com sucesso."));
         } else {
-            app.toast.info("Restos limpos");
+            let list = failed.iter().take(4).cloned().collect::<Vec<_>>().join(", ");
+            ui.notice("Alguns restos não saíram", &format!("{removed} itens excluídos, {} não saíram: {list}", failed.len()));
         }
     }
     if clean || close {

@@ -16,6 +16,7 @@ fn color(l: Level) -> Color {
 
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     header(ui, a, "Ajustes do Windows", "Só o que tem efeito comprovado. Tudo pode ser desfeito.");
+    defaults_button(ui, app, a.right() - 484.0, crate::config::Defaults::Tweaks, "Volta as opções Ver log e Restauração ao padrão. Os ajustes aplicados continuam como estão: para reverter, use Desfazer.");
     let bw = 112.0;
     for (i, name) in ["Auditoria", "Perfis", "Fora da lista"].iter().enumerate() {
         let b = rect(a.right() - 28.0 - (3 - i) as f32 * (bw + 8.0) + 8.0, 28.0, bw, 40.0);
@@ -216,17 +217,18 @@ fn draw_profiles(ui: &mut Ui, app: &mut App, r: Rect) {
         app.cfg.save();
     }
     if ui.button_ex("tw-all", rect(f.right() - 330.0, f.y + 14.0, 120.0, 44.0), "Desfazer tudo", false, !app.tw_journal.is_empty()) {
+        ui.ask("tw-all", "Desfazer tudo?", "Todos os ajustes aplicados pelo Prisma voltam ao valor anterior, menos o que foi mudado depois.");
+    }
+    if ui.answered("tw-all") {
         app.tw_undo("");
     }
-    let label = if app.tw_confirm { format!("Confirmar: aplicar {}", sel.len()) } else { format!("Aplicar {}", sel.len()) };
+    let label = format!("Aplicar {}", sel.len());
     if ui.button_ex("tw-go", rect(f.right() - 202.0, f.y + 14.0, 186.0, 44.0), &label, true, !sel.is_empty() && app.elevated && !run.running) {
-        if app.tw_confirm {
-            app.tw_confirm = false;
-            app.log(&format!("aplicou ajustes: {}", sel.join(" ")));
-            tweaks::start(sel, app.cfg.un_restore, app.tw_run.clone());
-        } else {
-            app.tw_confirm = true;
-        }
+        ui.ask("tw-go", "Aplicar estes ajustes?", &format!("{} ajustes vão mudar o Windows. Tudo pode ser desfeito depois.", sel.len()));
+    }
+    if ui.answered("tw-go") {
+        app.log(&format!("aplicou ajustes: {}", sel.join(" ")));
+        tweaks::start(sel, app.cfg.un_restore, app.tw_run.clone());
     }
 }
 

@@ -1,4 +1,23 @@
 use super::*;
+use crate::sys::procs;
+
+/// Uma linha da lista, seja o programa inteiro ou um processo só.
+struct Row {
+    exe: String,
+    pids: Vec<u32>,
+    cpu: f32,
+    ram: u64,
+    gpu: f32,
+    vram: u64,
+    disk: u64,
+    net: u64,
+}
+
+fn ask_end(ui: &mut Ui, app: &App) {
+    let Some((exe, pids)) = &app.mon_target else { return };
+    let what = if pids.len() > 1 { format!("{} ({})", app_name(exe), pids.len()) } else { app_name(exe).to_string() };
+    ui.ask("proc-end", "Finalizar tarefa?", &format!("{what} será fechado à força. O que não foi salvo nesse programa será perdido."));
+}
 
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let s = app.snap.clone();
@@ -44,22 +63,35 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let tw = w - core_w - 12.0;
     let t = rect(x, by, tw, bh);
     ui.card(t);
-    ui.title(rect(t.x + 16.0, t.y + 12.0, 200.0, 22.0), "Programas");
-    let selected = app.selected.clone();
-    let can_end = selected.as_ref().is_some_and(|s| !crate::optimizer::is_system(s));
-    if ui.button_ex("end-task", rect(t.right() - 156.0, t.y + 8.0, 140.0, 32.0), "Finalizar tarefa", false, can_end) {
-        if let Some(s) = selected.as_ref() {
-            if let Some(g) = app.snap.groups.iter().find(|g| &g.exe == s) {
-                crate::optimizer::force(&g.pids);
-            }
-            app.selected = None;
+    for (i, name) in ["Programas", "Detalhes"].iter().enumerate() {
+        if ui.button(&format!("mt{i}"), rect(t.x + 12.0 + i as f32 * 104.0, t.y + 8.0, 98.0, 32.0), name, app.mon_tab == i as u8) {
+            app.mon_tab = i as u8;
+            app.mon_filter = None;
         }
+    }
+    let details = app.mon_tab == 1;
+    if let Some(f) = &app.mon_filter {
+        let text = format!("Mostrando {}", app_name(f));
+        ui.c.text(rect(t.x + 226.0, t.y + 8.0, t.w - 396.0, 32.0), &text, 13.0, MUTED, Align::Left, Weight::Regular);
+    }
+    let target: Option<(String, Vec<u32>)> = if details {
+        app.sel_pid.and_then(|pid| s.procs.iter().find(|p| p.pid == pid)).map(|p| (p.exe.clone(), vec![p.pid]))
+    } else {
+        app.selected.as_ref().and_then(|e| s.groups.iter().find(|g| &g.exe == e)).map(|g| (g.exe.clone(), g.pids.clone()))
+    };
+    let can_end = target.as_ref().is_some_and(|t| !crate::optimizer::is_system(&t.0));
+    if ui.button_ex("end-task", rect(t.right() - 156.0, t.y + 8.0, 140.0, 32.0), "Finalizar tarefa", false, can_end) {
+        app.mon_target = target.clone();
+        ask_end(ui, app);
     }
     let cols = [("CPU", 54.0), ("RAM", 68.0), ("GPU", 48.0), ("VRAM", 68.0), ("Disco", 76.0), ("Rede", 76.0)];
     let total: f32 = cols.iter().map(|c| c.1 + 6.0).sum();
     let hy = t.y + 44.0;
-    let mut cx = t.right() - 16.0 - total;
-    ui.label(rect(t.x + 24.0, hy, 160.0, 22.0), "Programa", MUTED);
+    let mut cx = t.right() - 22.0 - total;
+    ui.label(rect(t.x + 24.0, hy, 160.0, 22.0), if details { "Nome" } else { "Programa" }, MUTED);
+    if details {
+        ui.c.text(rect(cx - 66.0, hy, 60.0, 22.0), "PID", 12.0, MUTED, Align::Right, Weight::Regular);
+    }
     for (i, (name, cw)) in cols.iter().enumerate() {
         let r = rect(cx, hy, *cw, 22.0);
         let sel = app.sort == i as u8;
@@ -70,7 +102,15 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         cx += cw + 6.0;
     }
 
-    let mut rows = s.groups.clone();
+    let mut rows: Vec<Row> = if details {
+        s.procs
+            .iter()
+            .filter(|p| app.mon_filter.as_ref().is_none_or(|f| f.eq_ignore_ascii_case(&p.exe)))
+            .map(|p| Row { exe: p.exe.clone(), pids: vec![p.pid], cpu: p.cpu, ram: p.ram, gpu: p.gpu, vram: p.vram, disk: p.disk, net: p.net })
+            .collect()
+    } else {
+        s.groups.iter().map(|g| Row { exe: g.exe.clone(), pids: g.pids.clone(), cpu: g.cpu, ram: g.ram, gpu: g.gpu, vram: g.vram, disk: g.disk, net: g.net }).collect()
+    };
     match app.sort {
         1 => rows.sort_by(|a, b| b.ram.cmp(&a.ram)),
         2 => rows.sort_by(|a, b| b.gpu.partial_cmp(&a.gpu).unwrap()),
@@ -80,41 +120,98 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         _ => rows.sort_by(|a, b| b.cpu.partial_cmp(&a.cpu).unwrap()),
     }
     let list = rect(t.x + 8.0, hy + 24.0, t.w - 16.0, t.bottom() - hy - 32.0);
-    rows.truncate(80);
-    ui.begin_scroll("procs", list, rows.len() as f32 * 34.0);
-    for (i, p) in rows.iter().enumerate() {
+    let key = if details { "procs-d" } else { "procs" };
+    ui.begin_scroll(key, list, rows.len() as f32 * 34.0);
+    let first = (ui.scroll_y() / 34.0) as usize;
+    let last = first + (list.h / 34.0) as usize + 2;
+    for (i, p) in rows.iter().enumerate().take(last).skip(first) {
         let y = list.y + i as f32 * 34.0;
         let r = rect(list.x, y, list.w, 34.0);
-        let sel = app.selected.as_deref() == Some(p.exe.as_str());
+        let pid = p.pids.first().copied().unwrap_or(0);
+        let sel = if details { app.sel_pid == Some(pid) } else { app.selected.as_deref() == Some(p.exe.as_str()) };
         if sel {
             ui.c.round(r, 6.0, CARD2);
         } else if ui.is_hover(r) {
             ui.c.round(r, 6.0, CARD2.alpha(0.5));
         }
-        if y + 34.0 >= list.y && y - ui.scroll_y() <= list.bottom() {
-            if let Some(path) = app.path_of(&p.exe, p.pids.first().copied().unwrap_or(0)) {
-                ui.file_icon(&path, &p.exe, rect(r.x + 10.0, y + 8.0, 18.0, 18.0));
-            } else {
-                ui.c.round(rect(r.x + 10.0, y + 8.0, 18.0, 18.0), 5.0, LINE);
-            }
+        let path = app.path_of(&p.exe, pid);
+        if let Some(path) = &path {
+            ui.file_icon(path, &p.exe, rect(r.x + 10.0, y + 8.0, 18.0, 18.0));
+        } else {
+            ui.c.round(rect(r.x + 10.0, y + 8.0, 18.0, 18.0), 5.0, LINE);
         }
-        let base = app.name_of(&p.exe, p.pids.first().copied().unwrap_or(0));
-        let name = if p.pids.len() > 1 { format!("{base} ({})", p.pids.len()) } else { base };
-        let nw = list.w - total - 40.0;
+        let name = if details {
+            p.exe.clone()
+        } else {
+            let base = app.name_of(&p.exe, pid);
+            if p.pids.len() > 1 { format!("{base} ({})", p.pids.len()) } else { base }
+        };
+        let nw = list.w - total - 46.0 - if details { 66.0 } else { 0.0 };
         ui.c.text(rect(r.x + 36.0, y, nw, 34.0), &name, 14.0, TEXT, Align::Left, Weight::Regular);
         let net = if s.net_ok { fmt_rate(p.net) } else { "—".to_string() };
         let vals = [fmt_pct(p.cpu), fmt_mem(p.ram), fmt_pct(p.gpu.min(100.0)), fmt_mem(p.vram), fmt_rate(p.disk), net];
-        let mut cx = t.right() - 16.0 - total;
+        let mut cx = t.right() - 22.0 - total;
+        if details {
+            ui.c.text(rect(cx - 66.0, y, 60.0, 34.0), &pid.to_string(), 13.0, MUTED, Align::Right, Weight::Regular);
+        }
         for (j, v) in vals.iter().enumerate() {
             let cw = cols[j].1;
             ui.c.text(rect(cx, y, cw, 34.0), v, 13.0, TEXT, Align::Right, Weight::Regular);
             cx += cw + 6.0;
         }
-        if ui.hit(&format!("row{}", p.exe), r) {
+        if ui.hit(&format!("row{}", if details { pid.to_string() } else { p.exe.clone() }), r) {
             app.selected = Some(p.exe.clone());
+            app.sel_pid = Some(pid);
+        }
+        if ui.right_hit(r) {
+            app.selected = Some(p.exe.clone());
+            app.sel_pid = Some(pid);
+            app.mon_target = Some((p.exe.clone(), p.pids.clone()));
+            let found = path.is_some();
+            ui.menu(
+                "proc-menu",
+                &[
+                    ("Finalizar tarefa", !crate::optimizer::is_system(&p.exe)),
+                    (if details { "Ver todos os processos" } else { "Ir para detalhes" }, true),
+                    ("Abrir local do arquivo", found),
+                    ("Pesquisar online", true),
+                    ("Propriedades", found),
+                ],
+            );
         }
     }
     ui.end_scroll();
+    if let Some(i) = ui.menu_pick("proc-menu") {
+        if let Some((exe, pids)) = app.mon_target.clone() {
+            let path = app.path_of(&exe, pids.first().copied().unwrap_or(0));
+            match i {
+                0 => ask_end(ui, app),
+                1 => {
+                    app.mon_tab = 1;
+                    app.mon_filter = if details { None } else { Some(exe) };
+                    ui.reset_scroll("procs-d");
+                }
+                2 => {
+                    if let Some(p) = path {
+                        procs::reveal(&p);
+                    }
+                }
+                3 => procs::search_online(&exe),
+                _ => {
+                    if let Some(p) = path {
+                        procs::file_properties(&p);
+                    }
+                }
+            }
+        }
+    }
+    if ui.answered("proc-end") {
+        if let Some((_, pids)) = app.mon_target.take() {
+            crate::optimizer::force(&pids);
+            app.selected = None;
+            app.sel_pid = None;
+        }
+    }
 
     let c = rect(t.right() + 12.0, by, core_w, bh);
     ui.card(c);

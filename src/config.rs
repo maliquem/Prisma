@@ -65,6 +65,29 @@ pub fn vk_name(vk: u32) -> String {
     }
 }
 
+/// Programa que já usou o Fullscreenizer.
+#[derive(Clone, Default, Debug)]
+pub struct FsApp {
+    pub exe: String,
+    pub path: String,
+    /// Aplica sozinho sempre que o programa abrir.
+    pub auto: bool,
+}
+
+/// Tela cujas opções voltam ao padrão.
+#[derive(Clone, Copy, PartialEq)]
+pub enum Defaults {
+    Capture,
+    Energy,
+    Fullscreen,
+    Volume,
+    Widget,
+    Optimize,
+    Settings,
+    Tweaks,
+    Uninstall,
+}
+
 /// Lembrança por jogo: o que aplicar quando esse programa volta a abrir.
 #[derive(Clone, Default, Debug)]
 pub struct Profile {
@@ -105,6 +128,11 @@ pub struct Config {
     pub rule_gpu: bool,
     pub rule_cpu: bool,
     pub rule_library: bool,
+    pub load_gpu_pct: u32,
+    pub load_gpu_secs: u32,
+    pub load_cpu_pct: u32,
+    pub load_cpu_secs: u32,
+    pub fs_apps: Vec<FsApp>,
     pub black: Vec<String>,
     pub white: Vec<String>,
     pub ignored: Vec<String>,
@@ -154,6 +182,11 @@ impl Default for Config {
             rule_gpu: true,
             rule_cpu: true,
             rule_library: true,
+            load_gpu_pct: 40,
+            load_gpu_secs: 5,
+            load_cpu_pct: 35,
+            load_cpu_secs: 20,
+            fs_apps: Vec::new(),
             black: Vec::new(),
             white: Vec::new(),
             ignored: Vec::new(),
@@ -235,6 +268,16 @@ impl Config {
                 "black" => c.black.push(v.into()),
                 "white" => c.white.push(v.into()),
                 "ignored" => c.ignored.push(v.into()),
+                "load_gpu_pct" => c.load_gpu_pct = v.parse().unwrap_or(40),
+                "load_gpu_secs" => c.load_gpu_secs = v.parse().unwrap_or(5),
+                "load_cpu_pct" => c.load_cpu_pct = v.parse().unwrap_or(35),
+                "load_cpu_secs" => c.load_cpu_secs = v.parse().unwrap_or(20),
+                "fs_app" => {
+                    let p: Vec<&str> = v.splitn(3, '|').collect();
+                    if p.len() == 3 {
+                        c.fs_apps.push(FsApp { exe: p[0].into(), auto: p[1] == "1", path: p[2].into() });
+                    }
+                }
                 "profile" => {
                     let p: Vec<&str> = v.split('|').collect();
                     if p.len() == 5 {
@@ -264,6 +307,13 @@ impl Config {
                 "tw_log" => c.tw_log = b,
                 "un_silent" => c.un_silent = b,
                 _ => {}
+            }
+        }
+        // A lista substitui a lembrança antiga por programa.
+        for p in c.profiles.iter_mut().filter(|p| p.borderless) {
+            p.borderless = false;
+            if !c.fs_apps.iter().any(|a| a.exe.eq_ignore_ascii_case(&p.exe)) {
+                c.fs_apps.push(FsApp { exe: p.exe.clone(), path: String::new(), auto: true });
             }
         }
         c
@@ -332,11 +382,104 @@ impl Config {
         let _ = writeln!(s, "lang_en={}", b(self.lang_en));
         let _ = writeln!(s, "update_auto={}", b(self.update_auto));
         let _ = writeln!(s, "un_restore={}", b(self.un_restore));
+        let _ = writeln!(s, "load_gpu_pct={}", self.load_gpu_pct);
+        let _ = writeln!(s, "load_gpu_secs={}", self.load_gpu_secs);
+        let _ = writeln!(s, "load_cpu_pct={}", self.load_cpu_pct);
+        let _ = writeln!(s, "load_cpu_secs={}", self.load_cpu_secs);
+        for a in &self.fs_apps {
+            let _ = writeln!(s, "fs_app={}|{}|{}", a.exe, b(a.auto), a.path);
+        }
         let _ = writeln!(s, "tw_log={}", b(self.tw_log));
         let _ = writeln!(s, "un_silent={}", b(self.un_silent));
         let path = config_path();
         let _ = std::fs::create_dir_all(path.parent().unwrap());
         let _ = std::fs::write(path, s);
+    }
+
+    pub fn fs_auto(&self, exe: &str) -> bool {
+        self.fs_apps.iter().any(|a| a.auto && a.exe.eq_ignore_ascii_case(exe))
+    }
+
+    /// Acrescenta o programa à lista, sem mudar a escolha de quem já estava nela.
+    pub fn fs_note(&mut self, exe: &str, path: &str) {
+        match self.fs_apps.iter_mut().find(|a| a.exe.eq_ignore_ascii_case(exe)) {
+            Some(a) if a.path.is_empty() => a.path = path.to_string(),
+            Some(_) => {}
+            None => self.fs_apps.push(FsApp { exe: exe.to_string(), path: path.to_string(), auto: false }),
+        }
+    }
+
+    pub fn reset(&mut self, page: Defaults) {
+        let d = Config::default();
+        match page {
+            Defaults::Capture => {
+                self.hk_shot = d.hk_shot;
+                self.hk_shot_full = d.hk_shot_full;
+                self.hk_record = d.hk_record;
+                self.hk_replay = d.hk_replay;
+                self.cap_dir = d.cap_dir;
+                self.cap_target = d.cap_target;
+                self.cap_mode = d.cap_mode;
+                self.cap_codec = d.cap_codec;
+                self.cap_hdr = d.cap_hdr;
+                self.cap_sys_audio = d.cap_sys_audio;
+                self.cap_mic = d.cap_mic;
+                self.cap_cursor = d.cap_cursor;
+                self.shot_hdr = d.shot_hdr;
+                self.replay_on = d.replay_on;
+                self.replay_secs = d.replay_secs;
+            }
+            Defaults::Energy => {
+                self.power_auto = d.power_auto;
+                self.plan_game = d.plan_game;
+                self.plan_rest = d.plan_rest;
+                self.on_game = d.on_game;
+                self.rule_fullscreen = d.rule_fullscreen;
+                self.rule_gpu = d.rule_gpu;
+                self.rule_cpu = d.rule_cpu;
+                self.rule_library = d.rule_library;
+                self.load_gpu_pct = d.load_gpu_pct;
+                self.load_gpu_secs = d.load_gpu_secs;
+                self.load_cpu_pct = d.load_cpu_pct;
+                self.load_cpu_secs = d.load_cpu_secs;
+            }
+            Defaults::Fullscreen => {
+                self.hk_fullscreen = d.hk_fullscreen;
+                for a in &mut self.fs_apps {
+                    a.auto = false;
+                }
+            }
+            Defaults::Volume => {
+                self.vol_mods = d.vol_mods;
+                self.vol_step = d.vol_step;
+                self.vol_osd = d.vol_osd;
+            }
+            Defaults::Widget => {
+                self.hk_widget = d.hk_widget;
+                self.widget_on = d.widget_on;
+                self.widget_style = d.widget_style;
+                self.widget_x = d.widget_x;
+                self.widget_y = d.widget_y;
+            }
+            Defaults::Optimize => {
+                self.black = d.black;
+                self.white = d.white;
+                self.ignored = d.ignored;
+            }
+            Defaults::Settings => {
+                self.hk_optimize = d.hk_optimize;
+                self.update_auto = d.update_auto;
+                self.lang_en = d.lang_en;
+            }
+            Defaults::Tweaks => {
+                self.tw_log = d.tw_log;
+                self.un_restore = d.un_restore;
+            }
+            Defaults::Uninstall => {
+                self.un_restore = d.un_restore;
+                self.un_silent = d.un_silent;
+            }
+        }
     }
 
     pub fn profile_mut(&mut self, exe: &str) -> &mut Profile {

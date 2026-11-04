@@ -165,7 +165,6 @@ fn draw_result(ui: &mut Ui, app: &mut App, s: &Scan, area: Rect) {
         let x = if i == 0 { l.x + 12.0 } else { l.x + 102.0 };
         if ui.button(name, rect(x, l.y + 10.0, w, 36.0), name, app.scan_tab == i as u8) {
             app.scan_tab = i as u8;
-            app.scan_confirm = false;
             ui.reset_scroll("tree");
         }
     }
@@ -213,7 +212,6 @@ fn draw_result(ui: &mut Ui, app: &mut App, s: &Scan, area: Rect) {
         }
         if !entered && ui.hit(&format!("n{k}"), rect(r.x, r.y, r.w - 40.0, r.h)) {
             sel = Some(k);
-            app.scan_confirm = false;
         }
         let name = s.name(k);
         let color = if n.is_dir() { ACCENT } else { TEXT };
@@ -238,20 +236,12 @@ fn draw_result(ui: &mut Ui, app: &mut App, s: &Scan, area: Rect) {
         open_in_explorer(&tp, target != s.root);
     }
     let can = app.elevated && sel.is_some() && !mft::protected(&tp);
-    let label = if !app.elevated {
-        "Apagar pede admin"
-    } else if app.scan_confirm {
-        "Confirmar: Lixeira"
-    } else {
-        "Apagar"
-    };
+    let label = if app.elevated { "Apagar" } else { "Apagar pede admin" };
     if ui.button_ex("del", rect(f.x + bw + 8.0, f.y + 42.0, bw, 44.0), label, false, can) {
-        if app.scan_confirm {
-            app.scan_confirm = false;
-            app.scan_delete = sel;
-        } else {
-            app.scan_confirm = true;
-        }
+        ui.ask("scan-del", "Enviar para a Lixeira?", &tp);
+    }
+    if ui.answered("scan-del") {
+        app.scan_delete = sel;
     }
 
     let rx = l.right() + 12.0;
@@ -302,7 +292,6 @@ fn draw_result(ui: &mut Ui, app: &mut App, s: &Scan, area: Rect) {
     if let Some(n) = next {
         app.scan_at = Some(n);
         app.scan_sel = None;
-        app.scan_confirm = false;
         ui.reset_scroll("tree");
         ui.s.needs_redraw = true;
     }

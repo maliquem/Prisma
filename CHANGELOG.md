@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.0
+
+- Fixed the crash when Prisma closed, which also made installing look like it did nothing. / Corrigida a queda ao fechar o Prisma, que também fazia a instalação parecer não funcionar.
+- Monitor: right-click menu and Details tab with every process. / Monitor: menu do botão direito e aba Detalhes com cada processo.
+- Draggable scroll bar on every list. / Barra de rolagem para arrastar em todas as listas.
+- Confirmation pop-ups instead of clicking twice on the same button. / Popups de confirmação no lugar de dois cliques no mesmo botão.
+- Services: right-click menu with start, stop, restart and properties. / Serviços: menu do botão direito com iniciar, parar, reiniciar e propriedades.
+- Uninstall: real step-by-step, wider leftover search and a result message. / Desinstalar: passo a passo real, busca de restos mais ampla e mensagem de resultado.
+- Each tool keeps its own log. / Cada ferramenta guarda o próprio log.
+- Power: choose the percentage and time for CPU and GPU load. / Energia: porcentagem e tempo de carga configuráveis.
+- Fullscreenizer: saved program list with Automatic option. / Fullscreenizer: lista de programas salvos com opção Automático.
+- Capture: Print Screen can be used as a shortcut, and a window can be recorded with only its own sound. / Captura: aceita Print Screen e grava só o som da janela.
+- Button to turn the Task Manager replacement on and off. / Botão para ligar e desligar a troca do Gerenciador de Tarefas.
+- Default button on each page. / Botão Padrão em cada tela.
+
 ## 0.2.0
 
 - Updates from GitHub, in Settings. / Atualização pelo GitHub, em Configurações.

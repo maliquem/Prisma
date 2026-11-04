@@ -6,12 +6,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use windows::core::*;
+use windows::Win32::Foundation::*;
 use windows::Win32::Media::Audio::*;
 use windows::Win32::Media::KernelStreaming::*;
 use windows::Win32::Media::MediaFoundation::*;
 use windows::Win32::Media::Multimedia::*;
 use windows::Win32::System::Com::*;
 use windows::Win32::System::Performance::*;
+use windows::Win32::System::Threading::{CreateEventW, SetEvent, WaitForSingleObject};
 
 use super::mux::Pkt;
 
@@ -51,6 +53,66 @@ unsafe fn open(flow: EDataFlow, loopback: bool) -> Result<Source> {
     }
     let f = format();
     client.Initialize(AUDCLNT_SHAREMODE_SHARED, flags, 2_000_000, 0, &f.Format, None)?;
+    let capture: IAudioCaptureClient = client.GetService()?;
+    client.Start()?;
+    Ok(Source { client, capture })
+}
+
+#[implement(IActivateAudioInterfaceCompletionHandler, IAgileObject)]
+struct Activated(isize);
+
+impl IAgileObject_Impl for Activated_Impl {}
+
+impl IActivateAudioInterfaceCompletionHandler_Impl for Activated_Impl {
+    fn ActivateCompleted(&self, _op: Ref<'_, IActivateAudioInterfaceAsyncOperation>) -> Result<()> {
+        unsafe { SetEvent(HANDLE(self.0 as *mut _)) }
+    }
+}
+
+/// Mesma memória de um PROPVARIANT com VT_BLOB: a API só aceita os parâmetros assim.
+#[repr(C)]
+struct Blob {
+    vt: u16,
+    pad: [u16; 3],
+    size: u32,
+    data: *const AUDIOCLIENT_ACTIVATION_PARAMS,
+}
+
+/// Grava só um programa e os processos filhos dele. Existe desde o Windows 10 2004.
+unsafe fn open_process(pid: u32) -> Result<Source> {
+    const VT_BLOB: u16 = 65;
+    let params = AUDIOCLIENT_ACTIVATION_PARAMS {
+        ActivationType: AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK,
+        Anonymous: AUDIOCLIENT_ACTIVATION_PARAMS_0 {
+            ProcessLoopbackParams: AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS {
+                TargetProcessId: pid,
+                ProcessLoopbackMode: PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE,
+            },
+        },
+    };
+    let blob = Blob { vt: VT_BLOB, pad: [0; 3], size: std::mem::size_of_val(&params) as u32, data: &params };
+    let event = CreateEventW(None, false, false, None)?;
+    let handler: IActivateAudioInterfaceCompletionHandler = Activated(event.0 as isize).into();
+    let op = ActivateAudioInterfaceAsync(w!("VAD\\Process_Loopback"), &IAudioClient::IID, Some(&blob as *const Blob as *const _), &handler)?;
+    let waited = WaitForSingleObject(event, 5000);
+    let _ = CloseHandle(event);
+    if waited != WAIT_OBJECT_0 {
+        return Err(Error::from(E_FAIL));
+    }
+    let mut hr = HRESULT(0);
+    let mut unknown = None;
+    op.GetActivateResult(&mut hr, &mut unknown)?;
+    hr.ok()?;
+    let client: IAudioClient = unknown.ok_or_else(|| Error::from(E_FAIL))?.cast()?;
+    let f = format();
+    client.Initialize(
+        AUDCLNT_SHAREMODE_SHARED,
+        AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY,
+        2_000_000,
+        0,
+        &f.Format,
+        None,
+    )?;
     let capture: IAudioCaptureClient = client.GetService()?;
     client.Start()?;
     Ok(Source { client, capture })
@@ -147,19 +209,46 @@ fn now_100ns() -> i64 {
     (c as i128 * 10_000_000 / f as i128) as i64
 }
 
-pub fn spawn(system: bool, mic: bool, stop: Arc<AtomicBool>, tx: Sender<Pkt>) {
+pub fn spawn(system: bool, pid: u32, mic: bool, stop: Arc<AtomicBool>, tx: Sender<Pkt>) {
     let _ = std::thread::Builder::new().name("audio".into()).spawn(move || unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
         let _ = MFStartup(MF_VERSION, MFSTARTUP_LITE);
-        if let Err(e) = run(system, mic, &stop, &tx) {
+        if let Err(e) = run(system, pid, mic, &stop, &tx) {
             eprintln!("áudio: {e:?}");
         }
         let _ = MFShutdown();
     });
 }
 
-unsafe fn run(system: bool, mic: bool, stop: &AtomicBool, tx: &Sender<Pkt>) -> Result<()> {
-    let sys = if system { open(eRender, true).ok() } else { None };
+/// Teste: mede o pico do som de um programa durante `ms`.
+#[cfg(debug_assertions)]
+pub fn probe(pid: u32, ms: u64) -> String {
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        let s = match open_process(pid) {
+            Ok(s) => s,
+            Err(e) => return format!("erro {e:?}"),
+        };
+        let mut v = Vec::new();
+        let t0 = std::time::Instant::now();
+        while t0.elapsed().as_millis() < ms as u128 {
+            std::thread::sleep(Duration::from_millis(20));
+            read(&s, &mut v);
+        }
+        let _ = s.client.Stop();
+        let peak = v.iter().fold(0.0f32, |a, x| a.max(x.abs()));
+        format!("{} amostras, pico {peak:.3}", v.len())
+    }
+}
+
+unsafe fn run(system: bool, pid: u32, mic: bool, stop: &AtomicBool, tx: &Sender<Pkt>) -> Result<()> {
+    let sys = if system {
+        open(eRender, true).ok()
+    } else if pid != 0 {
+        open_process(pid).ok()
+    } else {
+        None
+    };
     let micro = if mic { open(eCapture, false).ok() } else { None };
     let aac = Aac::new()?;
     let start = now_100ns();

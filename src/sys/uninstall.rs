@@ -403,7 +403,48 @@ fn starts_with_dir(a: &str, b: &str) -> bool {
     a == b || a.starts_with(&format!("{b}\\"))
 }
 
+/// Pasta tirada do ícone ou do desinstalador, para quem não informa onde foi instalado.
+fn dir_of(cmd: &str) -> Option<PathBuf> {
+    let c = cmd.trim();
+    let path = if let Some(rest) = c.strip_prefix('"') {
+        rest.split('"').next()?.to_string()
+    } else {
+        c.split(',').next()?.split(" /").next()?.to_string()
+    };
+    let p = Path::new(&path);
+    if !p.is_absolute() {
+        return None;
+    }
+    let dir = p.parent()?;
+    let low = dir.to_string_lossy().to_ascii_lowercase();
+    if low.contains("\\windows\\") || low.contains("\\installshield") || low.contains("package cache") || dir.parent().is_none() {
+        return None;
+    }
+    Some(dir.to_path_buf())
+}
+
+fn stem_of(cmd: &str) -> Option<String> {
+    let c = cmd.trim().trim_start_matches('"');
+    let end = c.to_ascii_lowercase().find(".exe")?;
+    let name = Path::new(&c[..end]).file_name()?.to_string_lossy().to_string();
+    let n = norm(&name);
+    (!n.starts_with("unins") && !n.starts_with("setup") && !n.starts_with("update")).then_some(n)
+}
+
+/// Lugares onde programas costumam deixar pasta com o próprio nome.
+fn deep_roots() -> Vec<PathBuf> {
+    let mut v = roots();
+    if let Ok(h) = std::env::var("USERPROFILE") {
+        let h = PathBuf::from(h);
+        for s in ["AppData\\LocalLow", "Documents", "Documents\\My Games", "Saved Games", ""] {
+            v.push(h.join(s));
+        }
+    }
+    v
+}
+
 /// Procura o que sobrou. `others` são os programas que seguem instalados.
+/// Nome exato vem marcado. Nome parecido aparece desmarcado, para a pessoa decidir.
 pub fn scan(p: &Program, others: &[Program]) -> Vec<Leftover> {
     let mut out: Vec<Leftover> = Vec::new();
     let name = clean_name(&p.name);
@@ -418,7 +459,36 @@ pub fn scan(p: &Program, others: &[Program]) -> Vec<Leftover> {
             !o.location.is_empty() && (starts_with_dir(&o.location, path) || starts_with_dir(path, &o.location))
         })
     };
+    let other_names: Vec<String> = others.iter().map(|o| norm(&clean_name(&o.name))).filter(|n| n.len() >= 4).collect();
+    let taken = |f: &str| other_names.iter().any(|o| f.starts_with(o.as_str()) || o.starts_with(f));
     let publisher_alone = !others.iter().any(|o| norm(&clean_publisher(&o.publisher)) == np);
+
+    // Outros nomes que o mesmo programa usa: sem a empresa na frente, a pasta e o executável.
+    let dir = if !p.location.is_empty() { Some(PathBuf::from(&p.location)) } else { dir_of(&p.icon).or_else(|| dir_of(&p.uninstall)) };
+    let leaf = dir.as_ref().and_then(|d| d.file_name()).map(|f| norm(&f.to_string_lossy())).unwrap_or_default();
+    let mut names = vec![nn.clone()];
+    if !np.is_empty() && nn.len() > np.len() + 3 {
+        if let Some(rest) = nn.strip_prefix(&np) {
+            names.push(rest.to_string());
+        }
+    }
+    names.push(leaf.clone());
+    let stem = stem_of(&p.icon).or_else(|| stem_of(&p.uninstall)).unwrap_or_default();
+    names.push(stem.clone());
+    names.retain(|n| !too_generic(n) && !taken(n));
+    names.dedup();
+    // 0 não tem relação, 1 parece e 2 é o nome exato.
+    let grade = |f: &str| -> u8 {
+        if f == nn || (!leaf.is_empty() && f == leaf && !too_generic(&leaf)) {
+            2
+        } else if too_generic(f) || f.len() < 5 || taken(f) {
+            0
+        } else if names.iter().any(|n| f == n || (n.len() >= 5 && (f.starts_with(n.as_str()) || n.starts_with(f)))) {
+            1
+        } else {
+            0
+        }
+    };
     let mut add = |path: PathBuf, on: bool| {
         let s = path.display().to_string();
         if out.iter().any(|l| l.label.eq_ignore_ascii_case(&s)) || shared(&s) {
@@ -437,68 +507,100 @@ pub fn scan(p: &Program, others: &[Program]) -> Vec<Leftover> {
             on,
         });
     };
-    if !p.location.is_empty() && norm(&p.location) != "" && Path::new(&p.location).is_dir() {
-        let leaf = Path::new(&p.location).file_name().map(|f| norm(&f.to_string_lossy())).unwrap_or_default();
-        if !too_generic(&leaf) {
-            add(PathBuf::from(&p.location), true);
+    if let Some(d) = &dir {
+        if d.is_dir() && !too_generic(&leaf) {
+            add(d.clone(), grade(&leaf) == 2);
         }
     }
-    for root in roots() {
+    for root in deep_roots() {
         let Ok(rd) = std::fs::read_dir(&root) else { continue };
         for e in rd.flatten() {
+            if !e.path().is_dir() {
+                continue;
+            }
             let f = norm(&e.file_name().to_string_lossy());
-            if f == nn {
-                add(e.path(), true);
-            } else if !np.is_empty() && f == np && !too_generic(&np) {
-                let Ok(inner) = std::fs::read_dir(e.path()) else { continue };
-                let mut kids = 0;
-                for i in inner.flatten() {
-                    kids += 1;
-                    if norm(&i.file_name().to_string_lossy()) == nn {
-                        add(i.path(), true);
+            match grade(&f) {
+                2 => add(e.path(), true),
+                1 => add(e.path(), false),
+                _ if !np.is_empty() && f == np && !too_generic(&np) => {
+                    let Ok(inner) = std::fs::read_dir(e.path()) else { continue };
+                    let mut kids = 0;
+                    for i in inner.flatten() {
+                        kids += 1;
+                        match grade(&norm(&i.file_name().to_string_lossy())) {
+                            2 => add(i.path(), true),
+                            1 => add(i.path(), false),
+                            _ => {}
+                        }
+                    }
+                    if kids <= 1 && publisher_alone {
+                        add(e.path(), false);
                     }
                 }
-                if kids <= 1 && publisher_alone {
-                    add(e.path(), false);
-                }
+                _ => {}
             }
         }
     }
-    for base in ["APPDATA", "PROGRAMDATA"] {
-        let Ok(b) = std::env::var(base) else { continue };
-        let menu = PathBuf::from(b).join("Microsoft\\Windows\\Start Menu\\Programs");
+    let mut menus = Vec::new();
+    for (base, sub) in [("APPDATA", "Microsoft\\Windows\\Start Menu\\Programs"), ("PROGRAMDATA", "Microsoft\\Windows\\Start Menu\\Programs"), ("USERPROFILE", "Desktop"), ("PUBLIC", "Desktop")] {
+        if let Ok(b) = std::env::var(base) {
+            menus.push(PathBuf::from(b).join(sub));
+        }
+    }
+    for menu in menus {
         let Ok(rd) = std::fs::read_dir(&menu) else { continue };
         for e in rd.flatten() {
             let stem = Path::new(&e.file_name()).file_stem().map(|s| norm(&s.to_string_lossy())).unwrap_or_default();
-            if stem == nn {
-                add(e.path(), true);
+            match grade(&stem) {
+                2 => add(e.path(), true),
+                1 => add(e.path(), false),
+                _ => {}
             }
         }
     }
     let mut regs: Vec<(HKEY, String, bool)> = vec![(HKEY(p.hive as *mut _), p.key.clone(), true)];
+    if !stem.is_empty() {
+        for root in [HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE] {
+            let base = "Software\\Microsoft\\Windows\\CurrentVersion\\App Paths";
+            let Some(k) = open_key(root, base) else { continue };
+            for sub in subkeys(k) {
+                if norm(sub.to_ascii_lowercase().trim_end_matches(".exe")) == stem {
+                    regs.push((root, format!("{base}\\{sub}"), true));
+                }
+            }
+            unsafe {
+                let _ = RegCloseKey(k);
+            }
+        }
+    }
     for root in [HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE] {
         for base in ["Software", "Software\\WOW6432Node"] {
             let Some(k) = open_key(root, base) else { continue };
             for sub in subkeys(k) {
                 let n = norm(&sub);
-                if n == nn {
-                    regs.push((root, format!("{base}\\{sub}"), true));
-                } else if !np.is_empty() && n == np && !too_generic(&np) {
-                    let path = format!("{base}\\{sub}");
-                    if let Some(pk) = open_key(root, &path) {
-                        let inner = subkeys(pk);
-                        for s2 in &inner {
-                            if norm(s2) == nn {
-                                regs.push((root, format!("{path}\\{s2}"), true));
+                match grade(&n) {
+                    2 => regs.push((root, format!("{base}\\{sub}"), true)),
+                    1 => regs.push((root, format!("{base}\\{sub}"), false)),
+                    _ if !np.is_empty() && n == np && !too_generic(&np) => {
+                        let path = format!("{base}\\{sub}");
+                        if let Some(pk) = open_key(root, &path) {
+                            let inner = subkeys(pk);
+                            for s2 in &inner {
+                                match grade(&norm(s2)) {
+                                    2 => regs.push((root, format!("{path}\\{s2}"), true)),
+                                    1 => regs.push((root, format!("{path}\\{s2}"), false)),
+                                    _ => {}
+                                }
+                            }
+                            if inner.len() <= 1 && publisher_alone {
+                                regs.push((root, path.clone(), false));
+                            }
+                            unsafe {
+                                let _ = RegCloseKey(pk);
                             }
                         }
-                        if inner.len() <= 1 && publisher_alone {
-                            regs.push((root, path.clone(), false));
-                        }
-                        unsafe {
-                            let _ = RegCloseKey(pk);
-                        }
                     }
+                    _ => {}
                 }
             }
             unsafe {
@@ -558,37 +660,120 @@ pub fn remove(l: &Leftover, backups: &Path) -> bool {
     }
 }
 
+#[derive(Clone, Copy, Default, PartialEq, Debug)]
+pub enum Stage {
+    #[default]
+    Restore,
+    Removing,
+    Scanning,
+}
+
 #[derive(Clone, Default)]
 pub struct Job {
     pub running: bool,
+    pub stage: Stage,
+    pub queue: Vec<String>,
     pub current: String,
     pub done: Vec<(String, bool)>,
     pub restore: Option<bool>,
+    pub want_restore: bool,
     pub leftovers: Vec<Leftover>,
+}
+
+impl Job {
+    /// Passo a passo da tela: texto, cor (0 normal, 1 destaque, 2 aviso, 3 apagada) e peso.
+    pub fn lines(&self) -> Vec<(String, u8, bool)> {
+        let mut v = Vec::new();
+        match self.restore {
+            Some(true) => v.push(("Ponto de restauração criado".to_string(), 0, false)),
+            Some(false) => v.push(("O Windows recusou o ponto de restauração".to_string(), 2, false)),
+            None if self.want_restore => v.push(("Criando ponto de restauração…".to_string(), 1, true)),
+            None => {}
+        }
+        for n in &self.queue {
+            if let Some(d) = self.done.iter().find(|d| &d.0 == n) {
+                if d.1 {
+                    v.push((format!("Desinstalado: {n}"), 0, false));
+                } else {
+                    v.push((format!("Não foi removido: {n}"), 2, false));
+                }
+            } else if *n == self.current {
+                v.push((format!("Desinstalando {n}…"), 1, true));
+            } else {
+                v.push((format!("Na fila: {n}"), 3, false));
+            }
+        }
+        if self.stage == Stage::Scanning {
+            v.push(("Procurando restos…".to_string(), 1, true));
+        }
+        v
+    }
 }
 
 pub type Shared = Arc<Mutex<Job>>;
 
-pub fn start(list: Vec<Program>, silent: bool, restore: bool, shared: Shared) {
-    *shared.lock().unwrap() = Job { running: true, ..Default::default() };
-    let _ = std::thread::Builder::new().name("desinstalar".into()).spawn(move || {
-        let names: Vec<String> = list.iter().map(|p| p.name.clone()).collect();
-        if restore {
-            shared.lock().unwrap().restore = Some(restore_point("Prisma: antes de desinstalar"));
+/// A entrada sumiu da lista do Windows? Alguns desinstaladores demoram um pouco a tirar.
+fn removed(p: &Program) -> bool {
+    for _ in 0..10 {
+        match open_key(HKEY(p.hive as *mut _), &p.key) {
+            Some(k) => unsafe {
+                let _ = RegCloseKey(k);
+            },
+            None => return true,
         }
+        std::thread::sleep(Duration::from_millis(300));
+    }
+    false
+}
+
+pub fn start(list: Vec<Program>, silent: bool, restore: bool, shared: Shared) {
+    let queue: Vec<String> = list.iter().map(|p| p.name.clone()).collect();
+    *shared.lock().unwrap() = Job { running: true, queue, want_restore: restore, ..Default::default() };
+    let _ = std::thread::Builder::new().name("desinstalar".into()).spawn(move || {
+        if restore {
+            let ok = restore_point("Prisma: antes de desinstalar");
+            shared.lock().unwrap().restore = Some(ok);
+        }
+        shared.lock().unwrap().stage = Stage::Removing;
+        let mut gone = Vec::new();
         for p in &list {
             shared.lock().unwrap().current = p.name.clone();
-            let ok = run_and_wait(&command(p, silent));
+            let ok = run_and_wait(&command(p, silent)) && removed(p);
             shared.lock().unwrap().done.push((p.name.clone(), ok));
+            // Quem cancelou o desinstalador continua com o programa: nada dele é resto.
+            if ok {
+                gone.push(p);
+            }
         }
-        let others: Vec<Program> = crate::sys::uninstall::list().into_iter().filter(|o| !names.contains(&o.name)).collect();
+        {
+            let mut j = shared.lock().unwrap();
+            j.current.clear();
+            j.stage = Stage::Scanning;
+        }
+        let others = list_all_except(&gone);
         let mut found = Vec::new();
-        for p in &list {
+        for p in &gone {
             found.extend(scan(p, &others));
         }
         let mut j = shared.lock().unwrap();
         j.leftovers = found;
-        j.current.clear();
         j.running = false;
     });
+}
+
+fn list_all_except(gone: &[&Program]) -> Vec<Program> {
+    crate::sys::uninstall::list().into_iter().filter(|o| !gone.iter().any(|g| g.name == o.name)).collect()
+}
+
+/// Teste: o que seria mostrado se este programa tivesse saído. Só lê.
+#[cfg(debug_assertions)]
+pub fn scan_preview(name: &str) -> String {
+    let all = list();
+    let Some(p) = all.iter().find(|p| p.name.to_lowercase().contains(&name.to_lowercase())) else { return "nao achei".into() };
+    let others: Vec<Program> = all.iter().filter(|o| o.name != p.name).cloned().collect();
+    let mut s = format!("{} | {} | {}\n", p.name, p.location, p.icon);
+    for l in scan(p, &others) {
+        s += &format!("{} {} {}\n", if l.on { "[x]" } else { "[ ]" }, l.size >> 20, l.label);
+    }
+    s
 }

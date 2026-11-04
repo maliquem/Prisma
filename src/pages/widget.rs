@@ -4,6 +4,7 @@ const STYLES: [&str; 4] = ["Pílula", "Barras finas", "Anéis", "Instrumento"];
 
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     header(ui, a, "Widget", "Mostra CPU, GPU, RAM e VRAM por cima de tudo. Arraste para mudar de lugar.");
+    defaults_button(ui, app, a.right() - 124.0, crate::config::Defaults::Widget, "Volta o atalho, o estilo e a posição do widget ao padrão, e esconde o widget.");
     let x = a.x + 28.0;
     let w = a.w - 56.0;
     let top = 88.0;

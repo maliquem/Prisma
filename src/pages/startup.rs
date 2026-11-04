@@ -83,19 +83,16 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     ui.c.text_wrap(rect(r.x + 16.0, y + 20.0, r.w - 32.0, 120.0), &it.command, 12.0, TEXT2, Weight::Regular);
 
     let b = rect(r.x + 16.0, r.bottom() - 56.0, r.w - 32.0, 44.0);
-    let label = if app.boot_confirm { "Confirmar remoção" } else { "Remover da inicialização" };
-    if ui.button("boot-rm", b, label, false) {
-        if app.boot_confirm {
-            if autostart::remove(&it) {
-                app.log(&format!("inicialização removeu {} = {}", it.name, it.command));
-                app.boot_items.remove(i);
-                app.boot_sel = None;
-            } else {
-                app.toast.info("Precisa do Prisma como administrador");
-            }
-            app.boot_confirm = false;
+    if ui.button("boot-rm", b, "Remover da inicialização", false) {
+        ui.ask("boot-rm", "Remover da inicialização?", &format!("{} deixa de abrir com o Windows. O programa continua instalado.", it.name));
+    }
+    if ui.answered("boot-rm") {
+        if autostart::remove(&it) {
+            app.log(&format!("inicialização removeu {} = {}", it.name, it.command));
+            app.boot_items.remove(i);
+            app.boot_sel = None;
         } else {
-            app.boot_confirm = true;
+            app.toast.info("Precisa do Prisma como administrador");
         }
     }
 }

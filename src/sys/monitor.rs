@@ -38,6 +38,19 @@ pub struct Group {
     pub net: u64,
 }
 
+/// Uma linha da aba Detalhes: um processo, não o programa inteiro.
+#[derive(Clone, Default)]
+pub struct ProcRow {
+    pub pid: u32,
+    pub exe: String,
+    pub cpu: f32,
+    pub ram: u64,
+    pub gpu: f32,
+    pub vram: u64,
+    pub disk: u64,
+    pub net: u64,
+}
+
 #[derive(Clone, Default)]
 pub struct Snapshot {
     pub cpu: f32,
@@ -52,6 +65,7 @@ pub struct Snapshot {
     pub hist_ram: VecDeque<f32>,
     pub hist_vram: VecDeque<f32>,
     pub groups: Vec<Group>,
+    pub procs: Vec<ProcRow>,
     pub detail: bool,
     /// False quando falta administrador e a coluna de rede não tem dados.
     pub net_ok: bool,
@@ -392,36 +406,48 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
         } else {
             counters = None;
         }
+        let mut rows = Vec::with_capacity(if detail { procs.len() } else { 0 });
         for p in procs {
             let before = prev_time.get(&p.pid).copied().unwrap_or(p.time);
             let dt = (p.time - before).max(0) as f32 / 1e7;
             times.insert(p.pid, p.time);
             let g = groups.entry(p.exe.to_ascii_lowercase()).or_default();
+            let mut row = ProcRow { pid: p.pid, cpu: dt / elapsed / logical * 100.0, ram: p.ram, ..Default::default() };
+            if detail {
+                row.exe = p.exe.clone();
+            }
             if g.exe.is_empty() {
                 g.exe = p.exe;
             }
             g.pids.push(p.pid);
-            g.cpu += dt / elapsed / logical * 100.0;
             if detail {
                 let done = prev_io.get(&p.pid).copied().unwrap_or(p.io);
                 io_map.insert(p.pid, p.io);
                 match io_now.get(&p.pid) {
                     Some(v) => {
-                        g.net += (v.net as f32 / elapsed) as u64;
-                        g.disk += (v.disk as f32 / elapsed) as u64;
+                        row.net = (v.net as f32 / elapsed) as u64;
+                        row.disk = (v.disk as f32 / elapsed) as u64;
                     }
                     None if trace.is_none() => {
-                        g.disk += (p.io.saturating_sub(done) as f32 / elapsed) as u64;
+                        row.disk = (p.io.saturating_sub(done) as f32 / elapsed) as u64;
                     }
                     None => {}
                 }
             }
-            g.ram += p.ram;
-            g.gpu += pgpu.get(&p.pid).copied().unwrap_or(0.0);
+            row.gpu = pgpu.get(&p.pid).copied().unwrap_or(0.0);
             // O Windows às vezes reporta mais do que a placa tem; isso não é VRAM real.
             let v = pvram.get(&p.pid).copied().unwrap_or(0);
             if gpu.total == 0 || v <= gpu.total {
-                g.vram += v;
+                row.vram = v;
+            }
+            g.cpu += row.cpu;
+            g.ram += row.ram;
+            g.gpu += row.gpu;
+            g.vram += row.vram;
+            g.net += row.net;
+            g.disk += row.disk;
+            if detail {
+                rows.push(row);
             }
         }
         prev_time = times;
@@ -454,6 +480,7 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
             s.hist_ram = h_ram.clone();
             s.hist_vram = h_vram.clone();
             s.groups = groups;
+            s.procs = rows;
             s.detail = detail;
             s.net_ok = trace.is_some();
         }

@@ -40,7 +40,7 @@ struct Item {
     group: &'static str,
     title: &'static str,
     desc: &'static str,
-    /// Muda algo no sistema: pede confirmação em dois cliques.
+    /// Muda algo no sistema: pergunta antes de rodar.
     writes: bool,
 }
 
@@ -375,7 +375,6 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
                 ui.c.text(r.inset_xy(10.0, 0.0), LIST[*i].title, 14.0, TEXT, Align::Left, Weight::Regular);
                 if ui.hit(&format!("t{i}"), r) {
                     app.tool_sel = *i;
-                    app.tool_confirm = false;
                     app.tool_ack = false;
                     app.tool_mode = 0;
                 }
@@ -483,7 +482,10 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         dns_at = Some(rect(px, y, 240.0, 44.0));
     }
 
-    let run = app.tool_run.lock().unwrap().clone();
+    let sel = app.tool_sel.min(LIST.len() - 1);
+    let shared = app.tool_log(sel);
+    let run = shared.lock().unwrap().clone();
+    let busy = app.tool_busy();
     let need_admin = elevate_needed(it.id) && !app.elevated;
     let bw = 210.0;
     let by = y + if it.id == Id::Dns { 54.0 } else { 0.0 } + if it.id == Id::Chkdsk { 0.0 } else { 0.0 };
@@ -491,20 +493,25 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         "Rodando…".to_string()
     } else if need_admin {
         "Pede administrador".to_string()
-    } else if app.tool_confirm {
-        "Confirmar".to_string()
     } else {
         "Executar".to_string()
     };
-    let ok = !run.running && !need_admin && blocked.is_none();
+    if busy && !run.running && blocked.is_none() {
+        blocked = Some("Outra ferramenta está rodando. Espere terminar.".to_string());
+    }
+    let ok = !busy && !need_admin && blocked.is_none();
+    let mut go = false;
     if ui.button_ex("go", rect(px, by, bw, 44.0), &label, true, ok) {
-        if it.writes && !app.tool_confirm {
-            app.tool_confirm = true;
+        if it.writes {
+            ui.ask("tool-go", "Executar esta ferramenta?", &format!("{}. {}", it.title, it.desc));
         } else {
-            app.tool_confirm = false;
-            if let Some((steps, verdict)) = plan(it.id, app, letter) {
-                tools::start(steps, verdict, app.tool_run.clone());
-            }
+            go = true;
+        }
+    }
+    go |= ui.answered("tool-go");
+    if go {
+        if let Some((steps, verdict)) = plan(it.id, app, letter) {
+            tools::start(steps, verdict, shared.clone());
         }
     }
     if let Some(b) = &blocked {
@@ -532,7 +539,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     if run.lines.is_empty() {
         ui.c.text(rect(body.x, body.y, body.w, 22.0), "O passo a passo aparece aqui.", 13.0, MUTED, Align::Left, Weight::Regular);
     } else {
-        log_view(ui, "tool-log", body, &run.lines);
+        log_view(ui, &format!("tool-log{sel}"), body, &run.lines);
     }
 
     // Listas por último, para abrirem por cima do resto.
@@ -555,7 +562,6 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
             if ui.select("mode", rect(s.right() + 8.0, s.y, 300.0, 44.0), &opts, &mut v) {
                 app.tool_mode = v;
                 app.tool_ack = false;
-                app.tool_confirm = false;
             }
         }
         let opts: Vec<String> = letters.iter().map(|d| format!("Disco {d}:")).collect();
@@ -563,7 +569,6 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         if ui.select("drv", s, &opts, &mut v) {
             app.tool_drive = v;
             app.tool_ack = false;
-            app.tool_confirm = false;
         }
     }
 }

@@ -728,3 +728,77 @@ Espere a tarefa em andamento terminar.	Wait for the running task to finish.
 Nova versão {} disponível em Configurações	New version {} available in Settings
 Atualizado para a versão {}	Updated to version {}
 Busca só o GitHub do Prisma, sem enviar dados seus.	Contacts only Prisma's GitHub page and sends none of your data.
+Programas salvos	Saved programs
+Quem usa o Fullscreenizer uma vez entra na lista. Marque Automático para aplicar sempre que o programa abrir.	Any program you use Fullscreenizer on joins the list. Mark Automatic to apply it whenever the program opens.
+Nenhum programa ainda. Use o Fullscreenizer em uma janela ou clique em Adicionar.	No programs yet. Use Fullscreenizer on a window or click Add.
+Detalhes	Details
+Mostrando {}	Showing {}
+Ir para detalhes	Go to details
+Ver todos os processos	Show all processes
+Abrir local do arquivo	Open file location
+Pesquisar online	Search online
+Propriedades	Properties
+Finalizar tarefa?	End task?
+{} será fechado à força. O que não foi salvo nesse programa será perdido.	{} will be force-closed. Anything unsaved in this program will be lost.
+Parar este serviço?	Stop this service?
+{} vai parar agora. Programas que dependem dele podem deixar de funcionar.	{} will stop now. Programs that depend on it may stop working.
+Reiniciar este serviço?	Restart this service?
+{} vai parar e iniciar de novo.	{} will stop and start again.
+Botão direito no serviço mostra iniciar, parar, reiniciar e propriedades.	Right-click a service for start, stop, restart and properties.
+Remover da inicialização?	Remove from startup?
+{} deixa de abrir com o Windows. O programa continua instalado.	{} will no longer open with Windows. The program stays installed.
+Desinstalar estes programas?	Uninstall these programs?
+{} e mais {}	{} and {} more
+Limpar os restos selecionados?	Clean the selected leftovers?
+Pastas e arquivos vão para a Lixeira. As chaves do registro são apagadas depois de um backup.	Folders and files go to the Recycle Bin. Registry keys are deleted after a backup.
+Restos excluídos	Leftovers deleted
+{} itens foram excluídos com sucesso.	{} items were deleted successfully.
+Alguns restos não saíram	Some leftovers did not come out
+{} itens excluídos, {} não saíram: {}	{} items deleted, {} did not come out: {}
+Não foi removido: {}	Not removed: {}
+{} restos encontrados. Só vêm marcados os que têm o nome exato; confira os outros.	{} leftovers found. Only exact name matches come selected; review the others.
+Procurando restos	Looking for leftovers
+Criando ponto de restauração…	Creating restore point…
+Ponto de restauração criado	Restore point created
+Desinstalado: {}	Uninstalled: {}
+Desinstalando {}…	Uninstalling {}…
+Na fila: {}	Queued: {}
+Executar esta ferramenta?	Run this tool?
+Outra ferramenta está rodando. Espere terminar.	Another tool is running. Wait for it to finish.
+Desfazer tudo?	Undo everything?
+Todos os ajustes aplicados pelo Prisma voltam ao valor anterior, menos o que foi mudado depois.	All tweaks applied by Prisma go back to their previous value, except what was changed later.
+Aplicar estes ajustes?	Apply these tweaks?
+{} ajustes vão mudar o Windows. Tudo pode ser desfeito depois.	{} tweaks will change Windows. Everything can be undone later.
+Enviar para a Lixeira?	Send to the Recycle Bin?
+Acima de	Above
+GPU 3D	GPU 3D
+Som do sistema ligado: grava todos os sons do PC.	System sound on: records all PC sounds.
+Som do sistema desligado: grava só o som da janela capturada.	System sound off: records only the sound of the captured window.
+Som do sistema desligado: não grava o som do PC. Para gravar um programa só, escolha Janela em foco.	System sound off: PC sound is not recorded. To record a single program, choose Focused window.
+Instalar no PC?	Install on this PC?
+O Prisma vai para Arquivos de Programas e reabre de lá. O Windows pede permissão de administrador.	Prisma moves to Program Files and reopens from there. Windows asks for administrator permission.
+A instalação precisa da permissão de administrador	Installing needs administrator permission
+Substituir o Gerenciador de Tarefas	Replace Task Manager
+Ligado: Ctrl+Shift+Esc abre o Prisma.	On: Ctrl+Shift+Esc opens Prisma.
+Desligado: Ctrl+Shift+Esc abre o Gerenciador de Tarefas do Windows.	Off: Ctrl+Shift+Esc opens Windows Task Manager.
+Ativar	Turn on
+Desativar	Turn off
+Devolver o Gerenciador de Tarefas?	Give back Task Manager?
+Ctrl+Shift+Esc volta a abrir o Gerenciador de Tarefas do Windows.	Ctrl+Shift+Esc goes back to opening Windows Task Manager.
+Substituir o Gerenciador de Tarefas?	Replace Task Manager?
+Ctrl+Shift+Esc passa a abrir o Prisma. Dá para desfazer aqui a qualquer momento.	Ctrl+Shift+Esc will open Prisma. You can undo this here at any time.
+Ctrl+Shift+Esc passa a abrir este arquivo do Prisma. Se você mover ou apagar o arquivo, o atalho deixa de abrir qualquer coisa até desativar aqui. A versão instalada não tem esse risco.	Ctrl+Shift+Esc will open this Prisma file. If you move or delete the file, the shortcut opens nothing until you turn this off here. The installed version does not have this risk.
+Instalar a atualização?	Install the update?
+O Prisma vai baixar a versão {}, reiniciar e continuar com as suas configurações.	Prisma will download version {}, restart and keep your settings.
+Padrão	Default
+Voltar ao padrão?	Back to default?
+As opções desta tela voltaram ao padrão	This page's options are back to default
+Volta atalhos, pasta, formatos, som e replay ao padrão.	Resets shortcuts, folder, formats, sound and replay to default.
+Volta os planos, a troca automática e o que conta como carga ao padrão.	Resets the plans, automatic switching and what counts as load to default.
+Volta o atalho ao padrão e desliga o modo automático de todos os programas. A lista continua salva.	Resets the shortcut to default and turns off automatic mode for all programs. The list stays saved.
+Volta as opções de ponto de restauração e de desinstalar sem janela ao padrão.	Resets the restore point and windowless uninstall options to default.
+Volta as opções Ver log e Restauração ao padrão. Os ajustes aplicados continuam como estão: para reverter, use Desfazer.	Resets the Show log and Restore point options to default. Applied tweaks stay as they are: use Undo to revert them.
+Volta o atalho de Otimizar, o idioma e a busca de atualização ao padrão.	Resets the Optimize shortcut, language and update check to default.
+Esvazia as listas de nunca fechar e sempre fechar, e as sugestões recusadas. Essa ação não fecha nenhum programa.	Empties the never-close and always-close lists and the declined suggestions. This does not close any program.
+Volta o modificador, o passo e o aviso na tela ao padrão.	Resets the modifier, step and on-screen notice to default.
+Volta o atalho, o estilo e a posição do widget ao padrão, e esconde o widget.	Resets the widget shortcut, style and position to default, and hides the widget.

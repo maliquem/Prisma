@@ -12,6 +12,16 @@ fn plan_select(ui: &mut Ui, key: &str, r: Rect, app_plans: &[String], ids: &[Str
     false
 }
 
+/// Linha "Acima de X% por Y s".
+fn load_row(ui: &mut Ui, key: &str, r: Rect, pct: &mut u32, secs: &mut u32) -> bool {
+    ui.c.text(rect(r.x, r.y, 66.0, r.h), "Acima de", 13.0, TEXT2, Align::Left, Weight::Regular);
+    let mut changed = ui.stepper(&format!("{key}p"), rect(r.x + 66.0, r.y, 92.0, r.h), pct, (5, 95), 5, "%");
+    ui.c.text(rect(r.x + 158.0, r.y, 26.0, r.h), "por", 13.0, TEXT2, Align::Center, Weight::Regular);
+    let step = if *secs < 10 { 1 } else { 5 };
+    changed |= ui.stepper(&format!("{key}s"), rect(r.x + 184.0, r.y, r.w - 184.0, r.h), secs, (1, 120), step, " s");
+    changed
+}
+
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let sub = match app.detector.mode {
         Mode::Rest => "Em repouso".to_string(),
@@ -28,6 +38,8 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         app.cfg.power_auto = auto;
         app.cfg.save();
     }
+
+    defaults_button(ui, app, a.right() - 304.0, crate::config::Defaults::Energy, "Volta os planos, a troca automática e o que conta como carga ao padrão.");
 
     let x = a.x + 28.0;
     let w = a.w - 56.0;
@@ -91,21 +103,19 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         ui.c.text(rect(cx, hy, *cw, 20.0), n, 12.0, MUTED, Align::Left, Weight::Regular);
         cx += cw + 8.0;
     }
-    let mut warn = false;
+    let bad_plan = |i: usize, min: u32| app.plans[i].id.starts_with("a1841308") && min >= 100;
+    let warn = app.plan_values.iter().enumerate().any(|(i, v)| bad_plan(i, v.min as u32));
+    let list = rect(t.x + 8.0, hy + 24.0, t.w - 16.0, t.bottom() - hy - 24.0 - if warn { 34.0 } else { 8.0 });
+    ui.begin_scroll("plans", list, app.plan_values.len() as f32 * 32.0);
     for (i, v) in app.plan_values.iter().enumerate() {
-        let y = hy + 24.0 + i as f32 * 32.0;
-        if y + 32.0 > t.bottom() - 28.0 {
-            break;
-        }
-        let r = rect(t.x + 8.0, y, t.w - 16.0, 32.0);
+        let y = list.y + i as f32 * 32.0;
+        let r = rect(list.x, y, list.w, 32.0);
         let current = app.plans[i].id == app.active_plan;
         if current {
             ui.c.round(r, 6.0, CARD2);
         }
         ui.c.text(rect(r.x + 16.0, y, r.w - total - 28.0, 32.0), &v.name, 14.0, TEXT, Align::Left, Weight::Regular);
-        let is_saver = app.plans[i].id.starts_with("a1841308");
-        let bad = is_saver && v.min >= 100;
-        warn |= bad;
+        let bad = bad_plan(i, v.min as u32);
         let cells = [format!("{}%", v.min), v.epp.to_string(), power::boost_name(v.boost).to_string(), format!("{}%", v.park)];
         let mut cx = t.right() - 16.0 - total;
         for (j, c) in cells.iter().enumerate() {
@@ -114,6 +124,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
             cx += cols[j].1 + 8.0;
         }
     }
+    ui.end_scroll();
     if warn {
         let msg = "Sua Economia de energia mantém a CPU em 100% mínimo, então quase não economiza.";
         ui.c.text(rect(t.x + 16.0, t.bottom() - 28.0, t.w - 32.0, 20.0), msg, 13.0, WARN, Align::Left, Weight::Regular);
@@ -124,17 +135,22 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     ui.title(rect(rr.x + 16.0, rr.y + 10.0, rr.w - 32.0, 22.0), "O que conta como carga");
     let c = &mut app.cfg;
     let mut changed = false;
-    let rules: [(&str, &mut bool); 4] = [
-        ("Jogo em tela cheia ou sem bordas", &mut c.rule_fullscreen),
-        ("GPU 3D acima de 40% por 5 s", &mut c.rule_gpu),
-        ("CPU acima de 35% por 20 s", &mut c.rule_cpu),
-        ("Steam, Epic, GOG e Xbox", &mut c.rule_library),
-    ];
-    for (i, (label, v)) in rules.into_iter().enumerate() {
-        let y = rr.y + 40.0 + i as f32 * 44.0;
-        changed |= ui.check(label, rect(rr.x + 16.0, y, rr.w - 32.0, 44.0), label, v);
-    }
-    ui.label(rect(rr.x + 16.0, rr.y + 222.0, rr.w - 32.0, 20.0), "Volta ao repouso após 60 s sem carga.", MUTED);
+    let rx = rr.x + 16.0;
+    let rw = rr.w - 32.0;
+    let mut y = rr.y + 40.0;
+    changed |= ui.check("r-full", rect(rx, y, rw, 40.0), "Jogo em tela cheia ou sem bordas", &mut c.rule_fullscreen);
+    y += 44.0;
+    changed |= ui.check("r-gpu", rect(rx, y, rw, 40.0), "GPU 3D", &mut c.rule_gpu);
+    y += 40.0;
+    changed |= load_row(ui, "g", rect(rx, y, rw, 36.0), &mut c.load_gpu_pct, &mut c.load_gpu_secs);
+    y += 48.0;
+    changed |= ui.check("r-cpu", rect(rx, y, rw, 40.0), "CPU", &mut c.rule_cpu);
+    y += 40.0;
+    changed |= load_row(ui, "c", rect(rx, y, rw, 36.0), &mut c.load_cpu_pct, &mut c.load_cpu_secs);
+    y += 48.0;
+    changed |= ui.check("r-lib", rect(rx, y, rw, 40.0), "Steam, Epic, GOG e Xbox", &mut c.rule_library);
+    y += 46.0;
+    ui.label(rect(rx, y, rw, 20.0), "Volta ao repouso após 60 s sem carga.", MUTED);
 
     // Por último, porque a lista aberta fica por cima do resto.
     let mut on = app.cfg.on_game as usize;

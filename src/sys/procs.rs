@@ -118,3 +118,47 @@ pub fn all_windows() -> Vec<HWND> {
     }
     out
 }
+
+/// Mostra o arquivo selecionado no Explorador.
+pub fn reveal(path: &str) {
+    use std::os::windows::process::CommandExt;
+    let _ = std::process::Command::new("explorer").raw_arg(format!("/select,\"{path}\"")).spawn();
+}
+
+/// Abre a janela de propriedades do próprio Windows para o arquivo.
+pub fn file_properties(path: &str) {
+    use windows::core::{w, HSTRING};
+    use windows::Win32::UI::Shell::*;
+    use windows::Win32::UI::WindowsAndMessaging::SW_SHOW;
+    let file = HSTRING::from(path);
+    let mut info = SHELLEXECUTEINFOW {
+        cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
+        fMask: SEE_MASK_INVOKEIDLIST,
+        lpVerb: w!("properties"),
+        lpFile: windows::core::PCWSTR(file.as_ptr()),
+        nShow: SW_SHOW.0,
+        ..Default::default()
+    };
+    unsafe {
+        let _ = ShellExecuteExW(&mut info);
+    }
+}
+
+/// Pesquisa o nome do programa no navegador padrão.
+pub fn search_online(exe: &str) {
+    use windows::core::{w, HSTRING};
+    use windows::Win32::UI::Shell::ShellExecuteW;
+    use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+    let mut q = String::new();
+    for b in exe.bytes() {
+        if b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_') {
+            q.push(b as char);
+        } else {
+            q.push_str(&format!("%{b:02X}"));
+        }
+    }
+    let url = format!("https://www.google.com/search?q={q}");
+    unsafe {
+        ShellExecuteW(None, w!("open"), &HSTRING::from(url), None, None, SW_SHOWNORMAL);
+    }
+}

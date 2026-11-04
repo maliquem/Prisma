@@ -246,14 +246,19 @@ pub fn install(shared: Shared, hub: isize, quit: u32) {
     });
 }
 
-/// A nova versão espera a antiga sair antes de assumir, e depois apaga o arquivo velho.
-pub fn after_update(pid: u32) {
+/// Espera outra cópia sair, para esta não encontrar o programa ainda aberto.
+pub fn wait_exit(pid: u32) {
     unsafe {
         if let Ok(h) = OpenProcess(PROCESS_SYNCHRONIZE, false, pid) {
             let _ = WaitForSingleObject(h, 15_000);
             let _ = CloseHandle(h);
         }
     }
+}
+
+/// A nova versão espera a antiga sair antes de assumir, e depois apaga o arquivo velho.
+pub fn after_update(pid: u32) {
+    wait_exit(pid);
     if let Some((_, old, _)) = side_paths() {
         for _ in 0..20 {
             if std::fs::remove_file(&old).is_ok() || !old.exists() {

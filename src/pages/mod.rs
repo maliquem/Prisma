@@ -193,6 +193,16 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
     ui.end();
 }
 
+/// Botão Padrão: pergunta antes e volta só as opções daquela tela.
+pub fn defaults_button(ui: &mut Ui, app: &mut App, x: f32, page: crate::config::Defaults, body: &str) {
+    if ui.button("defaults-btn", rect(x, 30.0, 96.0, 36.0), "Padrão", false) {
+        ui.ask("defaults", "Voltar ao padrão?", body);
+    }
+    if ui.answered("defaults") {
+        app.reset_defaults(page);
+    }
+}
+
 pub fn header(ui: &Ui, a: Rect, title: &str, sub: &str) {
     let x = a.x + 28.0;
     ui.c.text(rect(x, 22.0, a.w - 56.0, 32.0), title, 24.0, TEXT, Align::Left, Weight::Semibold);

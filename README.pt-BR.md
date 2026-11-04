@@ -15,7 +15,7 @@ O Prisma é um único arquivo, `Prisma.exe`, sem mais nada para instalar. O Wind
 - **Portátil:** rode de qualquer pasta. As configurações ficam em `PrismaData`, ao lado do programa, e nada é registrado no Windows.
 - **Instalado:** abra **Configurações** e clique em **Instalar no PC**. O Prisma vai para Arquivos de Programas, ganha atalho no menu Iniciar e aparece na lista de programas do Windows.
 
-Só a versão instalada pode iniciar com o Windows e substituir o Gerenciador de Tarefas.
+Só a versão instalada pode iniciar com o Windows. O Gerenciador de Tarefas pode ser substituído nas duas, mas na portátil o atalho para de funcionar se você mover ou apagar o arquivo.
 
 A interface vem em português do Brasil e inglês. O Prisma começa no idioma do Windows, e você troca em **Configurações**. Textos que vêm do próprio Windows, como descrições de serviços e saída de comandos, ficam no idioma do Windows.
 
@@ -25,26 +25,28 @@ O Prisma procura nesta página ao abrir e uma vez por dia. Quando há versão no
 
 ## Funções
 
-- **Monitor:** CPU por núcleo, GPU, RAM, VRAM, disco e rede de cada programa, com ícones e Finalizar tarefa.
+- **Monitor:** CPU por núcleo, GPU, RAM, VRAM, disco e rede de cada programa, com ícones. O botão direito finaliza a tarefa, vai para os detalhes, abre o local do arquivo, pesquisa online e mostra as propriedades. A aba Detalhes lista cada processo com o PID.
 - **Discos e redes:** velocidade, tempo ativo e espaço de cada disco, e nota de saúde (Bom, Atenção, Risco) pelo SMART, inclusive em HDs USB. Cada rede mostra velocidade, endereço e total transferido.
 - **Espaço em disco:** analisa um disco inteiro lendo a tabela do NTFS, com pastas, maiores arquivos, tipos e mapa visual. Abre no Explorador e, como administrador, manda para a Lixeira.
 - **Inicialização:** liga, desliga, adiciona e remove o que abre com o Windows, e mostra quem assinou cada programa. Ordena por nome, ativados ou desativados.
-- **Serviços:** descrição, iniciar, parar e reiniciar. Com o Prisma como administrador, o botão direito abre a janela de propriedades do próprio Windows para aquele serviço.
-- **Desinstalar:** remove em lote, cria ponto de restauração e procura restos. Ordena por nome, tamanho ou data de instalação. Só vem marcado o que tem o nome exato do programa, pastas vão para a Lixeira e o registro ganha backup antes.
-- **Substituir o Gerenciador de Tarefas:** opção que faz Ctrl+Shift+Esc abrir o Prisma. A desinstalação devolve o Gerenciador de Tarefas.
+- **Serviços:** descrição, iniciar, parar e reiniciar. O botão direito mostra iniciar, parar, reiniciar e propriedades, que abre a janela do próprio Windows para aquele serviço.
+- **Desinstalar:** remove em lote, cria ponto de restauração, procura restos e informa o que foi excluído. Ordena por nome, data ou tamanho. Só vem marcado o que tem o nome exato, nomes parecidos aparecem para você conferir, pastas vão para a Lixeira e o registro ganha backup antes.
+- **Substituir o Gerenciador de Tarefas:** um botão em Configurações faz Ctrl+Shift+Esc abrir o Prisma, e outro devolve. A desinstalação também devolve o Gerenciador de Tarefas.
 - **Ajustes do Windows:** primeiro uma auditoria que só lê o PC. Depois os perfis Jogo, Desenvolvimento e Privacidade, em camadas, só com ajustes de efeito documentado. A aba Fora da lista explica o que ficou de fora e por quê. Cada mudança guarda o valor anterior, e Desfazer só restaura o que ninguém mexeu depois. Nenhum perfil toca em atualizações, antivírus, UAC, Integridade da Memória ou virtualização. **Ver log** mostra cada mudança, com o antes e o depois.
-- **Ferramentas:** reparo do Windows (DISM e depois SFC), histórico de falhas, Windows Update, verificação de disco, rede, DNS, limpeza, winget, diagnóstico e reinício avançado. Em disco suspeito, os modos que escrevem ficam bloqueados. O passo a passo mostra o comando exato, a saída, os erros e o tempo de cada etapa.
+- **Ferramentas:** reparo do Windows (DISM e depois SFC), histórico de falhas, Windows Update, verificação de disco, rede, DNS, limpeza, winget, diagnóstico e reinício avançado. Em disco suspeito, os modos que escrevem ficam bloqueados. Cada ferramenta guarda o próprio passo a passo, com o comando exato, a saída, os erros e o tempo de cada etapa.
 - **Otimizar:** sugere o que fechar e sempre pergunta. Blacklist nunca fecha, whitelist sempre fecha. A detecção automática sugere nomes para as duas listas.
-- **Energia:** detecta jogo ou carga alta e troca o plano. Volta ao repouso depois de 60 s sem carga.
-- **Perfil por jogo:** lembra tela sem bordas e volume de cada programa.
-- **Fullscreenizer:** deixa a janela em foco em tela cheia sem bordas.
+- **Energia:** detecta jogo ou carga alta e troca o plano. Volta ao repouso depois de 60 s sem carga. Você escolhe a porcentagem e o tempo que contam como carga na CPU e na GPU.
+- **Perfil por jogo:** lembra o volume de cada programa.
+- **Fullscreenizer:** deixa a janela em foco em tela cheia sem bordas. Quem usa uma vez entra numa lista salva, onde dá para adicionar, remover e marcar Automático para aplicar sempre que o programa abrir.
 - **Volume por programa:** as teclas de volume do teclado, com um modificador, mudam só o programa em foco.
 - **Widget:** CPU, GPU, RAM e VRAM por cima de tudo, em quatro estilos.
-- **Captura:** foto com anotações e vídeo em AV1, HEVC ou H.264. Com a tela em HDR, grava em SDR ou HDR10.
+- **Captura:** foto com anotações e vídeo em AV1, HEVC ou H.264. Com a tela em HDR, grava em SDR ou HDR10. Com Som do sistema ligado, grava todos os sons do PC. Desligado e com Janela em foco, grava só o som daquela janela.
 - **Replay:** em modo jogo, guarda os últimos segundos na memória.
 - **Relatório de falha:** se o Prisma cair, ele guarda um relatório na pasta de dados e avisa na próxima abertura. O relatório fica só no seu PC.
 
 ![Perfis dos Ajustes do Windows](docs/profiles.png)
+
+Ações que mudam algo pedem confirmação em um popup, todas as listas têm barra de rolagem para arrastar, e o botão Padrão de cada tela volta as opções dela.
 
 ## Atalhos padrão
 
@@ -56,7 +58,7 @@ Todos podem ser trocados no programa.
 | Volume do programa em foco | Ctrl + teclas de volume e mudo |
 | Widget | Ctrl + Alt + W |
 | Otimizar | Ctrl + Alt + O |
-| Foto da área | Ctrl + Alt + P |
+| Foto da área | Ctrl + Alt + P (também aceita Print Screen, se você configurar) |
 | Foto da tela inteira | Ctrl + Alt + A |
 | Gravar e parar | Ctrl + Alt + R |
 | Salvar replay | Ctrl + Alt + B |

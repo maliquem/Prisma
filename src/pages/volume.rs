@@ -5,6 +5,7 @@ use crate::config::{MOD_ALT, MOD_CTRL, MOD_SHIFT};
 
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     header(ui, a, "Volume por programa", "As teclas de volume do teclado, com o modificador, mudam só o programa em foco.");
+    defaults_button(ui, app, a.right() - 124.0, crate::config::Defaults::Volume, "Volta o modificador, o passo e o aviso na tela ao padrão.");
     let x = a.x + 28.0;
     let w = a.w - 56.0;
     let top = 88.0;

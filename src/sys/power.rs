@@ -257,12 +257,12 @@ impl Detector {
 
     pub fn tick(&mut self, cfg: &Config, cpu: f32, gpu: f32) -> Event {
         let now = Instant::now();
-        let gpu_on = cfg.rule_gpu && gpu > 40.0;
-        let cpu_on = cfg.rule_cpu && cpu > 35.0;
+        let gpu_on = cfg.rule_gpu && gpu > cfg.load_gpu_pct as f32;
+        let cpu_on = cfg.rule_cpu && cpu > cfg.load_cpu_pct as f32;
         self.gpu_since = if gpu_on { self.gpu_since.or(Some(now)) } else { None };
         self.cpu_since = if cpu_on { self.cpu_since.or(Some(now)) } else { None };
-        let gpu_load = self.gpu_since.is_some_and(|t| now - t >= Duration::from_secs(5));
-        let cpu_load = self.cpu_since.is_some_and(|t| now - t >= Duration::from_secs(20));
+        let gpu_load = self.gpu_since.is_some_and(|t| now - t >= Duration::from_secs(cfg.load_gpu_secs as u64));
+        let cpu_load = self.cpu_since.is_some_and(|t| now - t >= Duration::from_secs(cfg.load_cpu_secs as u64));
 
         let fg = unsafe { GetForegroundWindow() };
         let mut game: Option<(String, u32)> = None;

@@ -31,6 +31,7 @@ fn list_card(ui: &mut Ui, r: Rect, title: &str, sub: &str, key: &str, items: &mu
 
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     header(ui, a, "Otimizar", "Nada é fechado sem você confirmar.");
+    defaults_button(ui, app, a.right() - 124.0, crate::config::Defaults::Optimize, "Esvazia as listas de nunca fechar e sempre fechar, e as sugestões recusadas. Essa ação não fecha nenhum programa.");
     let x = a.x + 28.0;
     let w = a.w - 56.0;
     let top = 88.0;

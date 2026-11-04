@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use windows::core::*;
+use crate::config::Defaults;
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Direct2D::*;
 use windows::Win32::Graphics::Direct2D::Common::*;
@@ -40,6 +41,7 @@ pub const WM_SHOW: u32 = WM_APP + 3;
 const WM_PICK: u32 = WM_APP + 4;
 const TIMER_HUD: usize = 7;
 const WM_UPDATED: u32 = WM_APP + 77;
+const WM_PICK_FS: u32 = WM_APP + 78;
 pub const ACT_SHOT: i32 = HK_SHOT;
 pub const ACT_RECORD: i32 = HK_REC;
 
@@ -114,14 +116,13 @@ pub struct App {
     pub tw_tab: u8,
     pub tw_layers: Vec<char>,
     pub tw_on: HashSet<&'static str>,
-    pub tw_confirm: bool,
     pub tw_journal: Vec<tweaks::Entry>,
     pub tw_apps: Vec<String>,
     tw_apps_slot: std::sync::Arc<Mutex<Option<Vec<String>>>>,
     pub tw_run: tweaks::Shared,
     pub upd: crate::sys::update::Shared,
-    pub upd_confirm: bool,
     upd_told: bool,
+    tm_check: Option<Instant>,
     upd_last: Option<Instant>,
     started: Instant,
     pub audit: audit::Shared,
@@ -130,16 +131,13 @@ pub struct App {
     pub tool_mode: usize,
     pub tool_net: usize,
     pub tool_dns: usize,
-    pub tool_confirm: bool,
     pub tool_ack: bool,
     pub tool_src: String,
     pub tool_dst: String,
-    pub tool_run: tools::Shared,
     pub programs: Vec<uninstall::Program>,
     pub un_sort: u8,
     pub boot_sort: u8,
     pub un_search: String,
-    pub un_confirm: bool,
     pub un_review: bool,
     pub un_job: uninstall::Shared,
     pub un_left: Option<Vec<uninstall::Leftover>>,
@@ -149,19 +147,24 @@ pub struct App {
     pub scan_at: Option<u32>,
     pub scan_tab: u8,
     pub scan_sel: Option<u32>,
-    pub scan_confirm: bool,
     pub scan_delete: Option<u32>,
     pub installed: bool,
     pub boot_items: Vec<autostart::Item>,
     pub boot_sel: Option<usize>,
     pub boot_sig: Option<String>,
-    pub boot_confirm: bool,
     pub services: Vec<services::Service>,
     pub svc_filter: u8,
     pub svc_search: String,
     pub svc_sel: Option<String>,
     pub svc_info: (String, String),
     pub selected: Option<String>,
+    pub mon_tab: u8,
+    pub mon_filter: Option<String>,
+    pub sel_pid: Option<u32>,
+    /// Alvo do menu aberto no Monitor: programa, processos e o primeiro PID.
+    pub mon_target: Option<(String, Vec<u32>)>,
+    pub svc_target: Option<(String, String)>,
+    tool_logs: std::collections::HashMap<usize, tools::Shared>,
     exe_names: std::collections::HashMap<String, String>,
     exe_paths: std::collections::HashMap<String, Option<String>>,
     pub elevated: bool,
@@ -257,14 +260,13 @@ pub fn start(background: bool) {
             tw_tab: 0,
             tw_layers: Vec::new(),
             tw_on: HashSet::new(),
-            tw_confirm: false,
             tw_journal: tweaks::load_journal(),
             tw_apps: Vec::new(),
             tw_apps_slot: Default::default(),
             tw_run: Default::default(),
             upd: Default::default(),
-            upd_confirm: false,
             upd_told: false,
+            tm_check: None,
             upd_last: None,
             started: Instant::now(),
             audit: Default::default(),
@@ -273,16 +275,13 @@ pub fn start(background: bool) {
             tool_mode: 0,
             tool_net: 0,
             tool_dns: 0,
-            tool_confirm: false,
             tool_ack: false,
             tool_src: String::new(),
             tool_dst: String::new(),
-            tool_run: Default::default(),
             programs: Vec::new(),
             un_sort: 0,
             boot_sort: 0,
             un_search: String::new(),
-            un_confirm: false,
             un_review: false,
             un_job: Default::default(),
             un_left: None,
@@ -292,19 +291,23 @@ pub fn start(background: bool) {
             scan_at: None,
             scan_tab: 0,
             scan_sel: None,
-            scan_confirm: false,
             scan_delete: None,
             installed: crate::startup::is_installed(),
             boot_items: Vec::new(),
             boot_sel: None,
             boot_sig: None,
-            boot_confirm: false,
             services: Vec::new(),
             svc_filter: 0,
             svc_search: String::new(),
             svc_sel: None,
             svc_info: Default::default(),
             selected: None,
+            mon_tab: 0,
+            mon_filter: None,
+            sel_pid: None,
+            mon_target: None,
+            svc_target: None,
+            tool_logs: std::collections::HashMap::new(),
             exe_names: std::collections::HashMap::new(),
             exe_paths: std::collections::HashMap::new(),
             elevated: crate::startup::is_elevated(),
@@ -355,6 +358,7 @@ pub fn start(background: bool) {
                     codec,
                     cursor: true,
                     sys_audio: true,
+                    audio_pid: 0,
                     mic: false,
                     hdr10: std::env::var("PRISMA_HDR10").is_ok(),
                     replay_secs: 3,
@@ -400,6 +404,16 @@ pub fn start(background: bool) {
             }
             if a == "--test-panic" {
                 panic!("teste do relatório");
+            }
+            if let Some(v) = a.strip_prefix("--test-scan=") {
+                let (name, path) = v.split_once('|').unwrap_or((v, "scan.txt"));
+                let _ = std::fs::write(path, crate::sys::uninstall::scan_preview(name));
+                std::process::exit(0);
+            }
+            if let Some(v) = a.strip_prefix("--test-proc-audio=") {
+                let (pid, path) = v.split_once('|').unwrap_or((v, "som.txt"));
+                let _ = std::fs::write(path, capture::sound::probe(pid.parse().unwrap_or(0), 4000));
+                std::process::exit(0);
             }
             if a == "--twlog" {
                 app.cfg.tw_log = true;
@@ -688,6 +702,8 @@ impl App {
             },
             cursor: self.cfg.cap_cursor,
             sys_audio: self.cfg.cap_sys_audio,
+            // Sem o som do sistema, a janela capturada grava só o som dela.
+            audio_pid: if !self.cfg.cap_sys_audio && self.cfg.cap_target == 1 && !fg.is_invalid() { procs::window_pid(fg) } else { 0 },
             mic: self.cfg.cap_mic,
             hdr10: self.cfg.cap_hdr,
             replay_secs: if replay { self.cfg.replay_secs } else { 0 },
@@ -881,8 +897,17 @@ impl App {
         }
     }
 
+    /// Cada ferramenta guarda o próprio passo a passo.
+    pub fn tool_log(&mut self, i: usize) -> tools::Shared {
+        self.tool_logs.entry(i).or_default().clone()
+    }
+
+    pub fn tool_busy(&self) -> bool {
+        self.tool_logs.values().any(|t| t.lock().unwrap().running)
+    }
+
     pub fn update_now(&mut self) {
-        let busy = self.tw_run.lock().unwrap().running || self.tool_run.lock().unwrap().running || self.un_job.lock().unwrap().running || self.rec_start.is_some();
+        let busy = self.tw_run.lock().unwrap().running || self.tool_busy() || self.un_job.lock().unwrap().running || self.rec_start.is_some();
         if busy {
             self.toast.info("Espere a tarefa em andamento terminar.");
         } else {
@@ -893,7 +918,6 @@ impl App {
     pub fn sort_boot(&mut self, by: u8) {
         self.boot_sort = by;
         self.boot_sel = None;
-        self.boot_confirm = false;
         match by {
             1 => self.boot_items.sort_by_key(|i| (!i.enabled, i.name.to_lowercase())),
             2 => self.boot_items.sort_by_key(|i| (i.enabled, i.name.to_lowercase())),
@@ -913,7 +937,6 @@ impl App {
 
     pub fn select_boot(&mut self, i: usize) {
         self.boot_sel = Some(i);
-        self.boot_confirm = false;
         self.boot_sig = self.boot_items.get(i).map(|it| fileinfo::check(&it.path).label());
     }
 
@@ -923,8 +946,26 @@ impl App {
     }
 
     /// A cópia nova abre sozinha; esta precisa sair para liberar o nome.
-    pub fn quit_after_install(&self) {
-        unsafe { PostQuitMessage(0) };
+    /// Se a pessoa recusar a permissão do Windows, nada muda e o programa continua aberto.
+    pub fn install_now(&mut self) {
+        if crate::startup::run_elevated(&format!("--install={}", std::process::id())) {
+            unsafe { PostQuitMessage(0) };
+        } else {
+            self.toast.info("A instalação precisa da permissão de administrador");
+        }
+    }
+
+    /// Liga ou desliga Ctrl+Shift+Esc. Sem administrador, uma cópia elevada faz a troca.
+    pub fn set_taskmgr(&mut self, on: bool) {
+        if self.elevated {
+            if crate::startup::set_replace_taskmgr(on) {
+                self.replaces_tm = on;
+                self.log(if on { "passou a substituir o Gerenciador de Tarefas" } else { "devolveu o Gerenciador de Tarefas" });
+            }
+        } else if crate::startup::run_elevated(&format!("--set-taskmgr={}", on as u8)) {
+            self.log(if on { "passou a substituir o Gerenciador de Tarefas" } else { "devolveu o Gerenciador de Tarefas" });
+            self.tm_check = Some(Instant::now());
+        }
     }
 
     pub fn pick_exe(&self) {
@@ -987,11 +1028,54 @@ impl App {
         if let Some(on) = self.full.toggle(h) {
             let msg = format!("{} · {} desfaz", if on { "Sem bordas" } else { "Janela restaurada" }, self.cfg.hk_fullscreen.label());
             self.toast.info(&msg);
-            if self.cfg.fs_remember {
-                self.cfg.profile_mut(&exe).borderless = on;
-                self.cfg.save();
+            if on {
+                self.note_fullscreen(h, &exe);
             }
         }
+    }
+
+    /// Quem usou o Fullscreenizer uma vez entra na lista de programas salvos.
+    fn note_fullscreen(&mut self, h: HWND, exe: &str) {
+        let path = procs::image_path(procs::window_pid(h)).unwrap_or_default();
+        self.cfg.fs_note(exe, &path);
+        self.cfg.save();
+    }
+
+    pub fn toggle_window(&mut self, h: HWND, exe: &str) {
+        if self.full.toggle(h) == Some(true) {
+            self.note_fullscreen(h, exe);
+        }
+    }
+
+    pub fn pick_fullscreen_app(&self) {
+        unsafe {
+            let _ = PostMessageW(Some(self.hub), WM_PICK_FS, WPARAM(0), LPARAM(0));
+        }
+    }
+
+    /// Volta as opções de uma tela ao padrão e aplica na hora.
+    pub fn reset_defaults(&mut self, page: Defaults) {
+        self.cfg.reset(page);
+        self.cfg.save();
+        match page {
+            Defaults::Capture => {
+                self.register_hotkeys();
+                self.replay_changed();
+            }
+            Defaults::Widget => {
+                let on = self.cfg.widget_on;
+                self.set_widget(on);
+                self.widget.update(&self.cfg, &self.snap);
+                self.register_hotkeys();
+            }
+            Defaults::Settings => {
+                crate::i18n::set_english(self.cfg.lang_en);
+                self.register_hotkeys();
+            }
+            Defaults::Fullscreen => self.register_hotkeys(),
+            _ => {}
+        }
+        self.toast.info("As opções desta tela voltaram ao padrão");
     }
 
     pub fn toggle_widget(&mut self) {
@@ -1156,6 +1240,12 @@ impl App {
         self.widget.update(&self.cfg, &self.snap);
         self.full.sweep();
         self.update_tick();
+        if let Some(t) = self.tm_check {
+            self.replaces_tm = crate::startup::replaces_taskmgr();
+            if t.elapsed().as_secs() > 6 {
+                self.tm_check = None;
+            }
+        }
         if self.last_save.elapsed().as_secs() > 300 {
             self.last_save = Instant::now();
             self.usage.save();
@@ -1176,10 +1266,10 @@ impl App {
     }
 
     fn apply_profile(&mut self, h: HWND, exe: &str) {
-        let Some(p) = self.cfg.profile(exe).cloned() else { return };
-        if p.borderless && !self.full.is_on(h) {
+        if self.cfg.fs_auto(exe) && !self.full.is_on(h) {
             self.full.apply(h);
         }
+        let Some(p) = self.cfg.profile(exe).cloned() else { return };
         if p.volume >= 0 {
             for s in audio::for_process(self.fg_pid) {
                 s.set_volume(p.volume as f32 / 100.0);
@@ -1339,6 +1429,7 @@ impl App {
         unsafe {
             m.rt.BeginDraw();
             m.ui.view_h = h;
+            m.ui.view_w = w;
             let ui = crate::ui::Ui::begin(&m.canvas, &mut m.ui);
             m.canvas.clear(BG);
             pages::draw(ui, self, rect(0.0, 0.0, w, h));
@@ -1368,6 +1459,10 @@ impl App {
 
     fn on_key(&mut self, vk: u32) {
         let Some(m) = &mut self.main else { return };
+        if vk == 0x1B && m.ui.close_ask() {
+            self.invalidate();
+            return;
+        }
         if m.ui.capturing == 0 {
             return;
         }
@@ -1456,6 +1551,16 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
         }
         WM_TIMER => {
             with(|a| a.hud_update());
+            LRESULT(0)
+        }
+        WM_PICK_FS => {
+            if let Some(path) = capture::choose_exe(h) {
+                with(|a| {
+                    a.cfg.fs_note(&procs::exe_name(&path), &path);
+                    a.cfg.save();
+                    a.invalidate();
+                });
+            }
             LRESULT(0)
         }
         WM_PICK if w.0 == 1 => {
@@ -1608,6 +1713,11 @@ unsafe extern "system" fn main_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
             }
             WM_KEYDOWN | WM_SYSKEYDOWN => {
                 a.on_key(w.0 as u32);
+                None
+            }
+            // O Windows só entrega a tecla Print Screen ao soltar.
+            WM_KEYUP | WM_SYSKEYUP if w.0 == 0x2C => {
+                a.on_key(0x2C);
                 None
             }
             WM_CHAR => {

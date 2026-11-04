@@ -11,6 +11,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     if ui.button("shot", rect(a.right() - 268.0, 24.0, 120.0, 44.0), "Tirar foto", false) {
         app.post_action(ACT_SHOT);
     }
+    defaults_button(ui, app, a.right() - 372.0, crate::config::Defaults::Capture, "Volta atalhos, pasta, formatos, som e replay ao padrão.");
     let label = if app.is_recording() { "Parar" } else { "Gravar" };
     if ui.button("rec", rect(a.right() - 140.0, 24.0, 112.0, 44.0), label, true) {
         app.post_action(ACT_RECORD);
@@ -43,7 +44,16 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     changed |= ui.check("c-sys", rect(col(0), y, 170.0, 44.0), "Som do sistema", &mut c.cap_sys_audio);
     changed |= ui.check("c-mic", rect(col(0) + 180.0, y, 130.0, 44.0), "Microfone", &mut c.cap_mic);
     changed |= ui.check("c-cur", rect(col(0) + 320.0, y, 170.0, 44.0), "Mostrar o cursor", &mut c.cap_cursor);
-    y += 52.0;
+    y += 44.0;
+    let sound = if c.cap_sys_audio {
+        "Som do sistema ligado: grava todos os sons do PC."
+    } else if c.cap_target == 1 {
+        "Som do sistema desligado: grava só o som da janela capturada."
+    } else {
+        "Som do sistema desligado: não grava o som do PC. Para gravar um programa só, escolha Janela em foco."
+    };
+    ui.c.text_wrap(rect(col(0), y, l.w - 32.0, 22.0), sound, 13.0, TEXT2, Weight::Regular);
+    y += 30.0;
 
     let (mw, mh, mf) = match c.cap_mode {
         1 => (3840, 2160, 60),

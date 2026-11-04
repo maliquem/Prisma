@@ -51,15 +51,14 @@ pub fn is_elevated() -> bool {
     }
 }
 
-/// Roda uma cópia com a confirmação do Windows.
-pub fn run_elevated(args: &str) {
+/// Roda uma cópia com a confirmação do Windows. Devolve false se a pessoa recusar.
+pub fn run_elevated(args: &str) -> bool {
     use windows::core::*;
     use windows::Win32::UI::Shell::ShellExecuteW;
     use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
     let exe = std::env::current_exe().unwrap_or_default();
-    unsafe {
-        ShellExecuteW(None, w!("runas"), &HSTRING::from(exe.as_os_str()), &HSTRING::from(args), None, SW_SHOWNORMAL);
-    }
+    let r = unsafe { ShellExecuteW(None, w!("runas"), &HSTRING::from(exe.as_os_str()), &HSTRING::from(args), None, SW_SHOWNORMAL) };
+    r.0 as isize > 32
 }
 
 /// Abre uma cópia com a confirmação do Windows e fecha esta.
@@ -141,7 +140,7 @@ fn reg_add(name: &str, ty: &str, value: &str) {
 
 /// Copia para Arquivos de Programas, registra no Windows e leva as configurações junto.
 /// Lá dentro só administrador escreve, então abrir como administrador sem pedir é seguro.
-pub fn install(open_after: bool) -> bool {
+pub fn install(open_after: bool, parent: Option<u32>) -> bool {
     let dir = install_dir();
     if std::fs::create_dir_all(&dir).is_err() {
         return false;
@@ -175,7 +174,15 @@ pub fn install(open_after: bool) -> bool {
             }
         }
     }
-    !open_after || Command::new(&dest).spawn().is_ok()
+    if !open_after {
+        return true;
+    }
+    // A cópia nova espera a portátil fechar: com as duas abertas, ela só avisaria a outra e sairia.
+    let mut run = Command::new(&dest);
+    if let Some(pid) = parent {
+        run.arg(format!("--wait={pid}"));
+    }
+    run.spawn().is_ok()
 }
 
 /// Desfaz tudo. As configurações ficam, para uma reinstalação.

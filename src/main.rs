@@ -33,8 +33,9 @@ fn main() {
         }
         return;
     }
-    if std::env::args().any(|a| a == "--install") {
-        if !startup::install(true) {
+    if let Some(arg) = std::env::args().find(|a| a.starts_with("--install")) {
+        let parent = arg.strip_prefix("--install=").and_then(|p| p.parse::<u32>().ok());
+        if !startup::install(true, parent) {
             unsafe {
                 let msg = HSTRING::from(i18n::tr("Não consegui instalar o Prisma.").as_ref());
                 MessageBoxW(None, &msg, w!("Prisma"), MB_OK | MB_ICONERROR);
@@ -42,15 +43,24 @@ fn main() {
         }
         return;
     }
-    let updated = std::env::args().find_map(|a| a.strip_prefix("--updated=").and_then(|p| p.parse::<u32>().ok()));
+    let pid_arg = |name: &str| std::env::args().find_map(|a| a.strip_prefix(name).and_then(|p| p.parse::<u32>().ok()));
+    let updated = pid_arg("--updated=");
     if let Some(pid) = updated {
         sys::update::after_update(pid);
+    }
+    if let Some(pid) = pid_arg("--wait=") {
+        sys::update::wait_exit(pid);
+    }
+    if let Some(v) = std::env::args().find_map(|a| a.strip_prefix("--set-taskmgr=").map(|v| v == "1")) {
+        startup::set_replace_taskmgr(v);
+        return;
     }
     unsafe {
         // A versão de desenvolvimento roda ao lado da que está em uso.
         let name = if cfg!(debug_assertions) { w!("Local\\PrismaAppDev") } else { w!("Local\\PrismaApp") };
         let _mutex = CreateMutexW(None, true, name);
-        if GetLastError() == ERROR_ALREADY_EXISTS {
+        // Acesso negado também quer dizer que existe: a outra cópia roda como administrador.
+        if matches!(GetLastError(), ERROR_ALREADY_EXISTS | ERROR_ACCESS_DENIED) {
             if let Ok(h) = FindWindowW(w!("PrismaHub"), None) {
                 let monitor = std::env::args().any(|a| a == "--taskmgr") as usize;
                 let _ = PostMessageW(Some(h), app::WM_SHOW, WPARAM(monitor), LPARAM(0));
@@ -80,5 +90,8 @@ fn main() {
             DispatchMessageW(&msg);
         }
         app::shutdown();
+        // Sair sem destruir o que ainda está carregado: o Direct3D não sobrevive à ordem
+        // de saída do Windows e derrubava o processo aqui, depois de tudo salvo.
+        let _ = TerminateProcess(GetCurrentProcess(), 0);
     }
 }
