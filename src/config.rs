@@ -121,6 +121,8 @@ pub struct Config {
     pub replay_on: bool,
     pub replay_secs: u32,
     pub lang_en: bool,
+    pub un_restore: bool,
+    pub un_silent: bool,
 }
 
 impl Default for Config {
@@ -130,7 +132,7 @@ impl Default for Config {
             hk_fullscreen: Hotkey::new(MOD_CTRL | MOD_ALT, b'F' as u32),
             hk_widget: Hotkey::new(MOD_CTRL | MOD_ALT, b'W' as u32),
             hk_optimize: Hotkey::new(MOD_CTRL | MOD_ALT, b'O' as u32),
-            hk_shot: Hotkey::new(MOD_CTRL | MOD_ALT, b'S' as u32),
+            hk_shot: Hotkey::new(MOD_CTRL | MOD_ALT, b'P' as u32),
             hk_shot_full: Hotkey::new(MOD_CTRL | MOD_ALT, b'A' as u32),
             hk_record: Hotkey::new(MOD_CTRL | MOD_ALT, b'R' as u32),
             hk_replay: Hotkey::new(MOD_CTRL | MOD_ALT, b'B' as u32),
@@ -143,7 +145,7 @@ impl Default for Config {
             widget_x: 24,
             widget_y: 24,
             power_auto: true,
-            plan_game: "aead177f-ad3a-4424-aaea-03508d489617".into(),
+            plan_game: "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c".into(),
             plan_rest: "381b4222-f694-41f0-9685-ff5bb260df2e".into(),
             on_game: 0,
             rule_fullscreen: true,
@@ -166,6 +168,8 @@ impl Default for Config {
             replay_on: false,
             replay_secs: 30,
             lang_en: false,
+            un_restore: true,
+            un_silent: true,
         }
     }
 }
@@ -175,13 +179,19 @@ fn default_capture_dir() -> String {
     format!("{base}\\Videos\\Prisma")
 }
 
-fn config_path() -> PathBuf {
-    let base = std::env::var("APPDATA").unwrap_or_else(|_| ".".into());
-    PathBuf::from(base).join("Prisma").join("config.ini")
+/// Instalado guarda em %APPDATA%; portátil guarda ao lado do programa.
+pub fn data_dir() -> PathBuf {
+    if crate::startup::is_installed() {
+        let base = std::env::var("APPDATA").unwrap_or_else(|_| ".".into());
+        PathBuf::from(base).join("Prisma")
+    } else {
+        let exe = std::env::current_exe().unwrap_or_default();
+        exe.parent().map(|p| p.join("PrismaData")).unwrap_or_else(|| PathBuf::from("PrismaData"))
+    }
 }
 
-pub fn data_dir() -> PathBuf {
-    config_path().parent().unwrap().to_path_buf()
+fn config_path() -> PathBuf {
+    data_dir().join("config.ini")
 }
 
 impl Config {
@@ -245,6 +255,8 @@ impl Config {
                 "replay_on" => c.replay_on = b,
                 "replay_secs" => c.replay_secs = v.parse().unwrap_or(30),
                 "lang_en" => c.lang_en = b,
+                "un_restore" => c.un_restore = b,
+                "un_silent" => c.un_silent = b,
                 _ => {}
             }
         }
@@ -312,6 +324,8 @@ impl Config {
         let _ = writeln!(s, "replay_on={}", b(self.replay_on));
         let _ = writeln!(s, "replay_secs={}", self.replay_secs);
         let _ = writeln!(s, "lang_en={}", b(self.lang_en));
+        let _ = writeln!(s, "un_restore={}", b(self.un_restore));
+        let _ = writeln!(s, "un_silent={}", b(self.un_silent));
         let path = config_path();
         let _ = std::fs::create_dir_all(path.parent().unwrap());
         let _ = std::fs::write(path, s);

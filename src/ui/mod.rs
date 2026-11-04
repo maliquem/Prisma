@@ -2,6 +2,7 @@
 //! e os controles respondem ao mouse nesse mesmo passe.
 
 pub mod gfx;
+pub mod icons;
 pub mod layered;
 
 use std::collections::HashMap;
@@ -39,6 +40,11 @@ pub struct UiState {
     pub key_cancel: bool,
     scroll: HashMap<u64, f32>,
     pub needs_redraw: bool,
+    icons: HashMap<String, Option<windows::Win32::Graphics::Direct2D::ID2D1Bitmap>>,
+    /// Campo de texto com o foco, e o que foi digitado desde o último desenho.
+    pub focus: u64,
+    pub typed: String,
+    pub backspace: u32,
 }
 
 impl UiState {
@@ -116,6 +122,15 @@ impl<'a> Ui<'a> {
         self.c.pop_clip();
         self.dy = 0.0;
         self.clip = None;
+    }
+
+    /// Volta uma lista ao topo, ao trocar de pasta ou de aba.
+    pub fn reset_scroll(&mut self, key: &str) {
+        self.s.scroll.remove(&hash_id(key));
+    }
+
+    pub fn scroll_y(&self) -> f32 {
+        self.dy
     }
 
     pub fn card(&self, r: Rect) {
@@ -259,6 +274,56 @@ impl<'a> Ui<'a> {
         let txt = if active { "Pressione as teclas".to_string() } else { hk.label() };
         let color = if active { ACCENT } else { TEXT };
         self.c.text(r.inset_xy(10.0, 0.0), &txt, 14.0, color, Align::Left, Weight::Regular);
+        changed
+    }
+
+    /// Ícone do programa em `path`. Sem ícone, desenha a inicial de `name`.
+    pub fn file_icon(&mut self, path: &str, name: &str, r: Rect) {
+        let key = path.to_ascii_lowercase();
+        if !self.s.icons.contains_key(&key) {
+            let b = icons::load(path).and_then(|(w, h, px)| self.c.bitmap(w, h, &px));
+            self.s.icons.insert(key.clone(), b);
+        }
+        match self.s.icons.get(&key).and_then(|b| b.as_ref()) {
+            Some(b) => self.c.draw_bitmap(b, r),
+            None => {
+                self.c.round(r, 6.0, LINE);
+                let l: String = name.chars().next().map(|c| c.to_uppercase().to_string()).unwrap_or_default();
+                self.c.text(r, &l, 11.0, TEXT2, Align::Center, Weight::Semibold);
+            }
+        }
+    }
+
+    /// Campo de busca. Clique dá o foco; digitação chega pela janela.
+    pub fn search(&mut self, key: &str, r: Rect, text: &mut String, hint: &str) -> bool {
+        let id = hash_id(key);
+        if self.clickable(id, r) {
+            self.s.focus = id;
+        } else if self.s.released && !self.hover(r) && self.s.focus == id {
+            self.s.focus = 0;
+        }
+        let on = self.s.focus == id;
+        let mut changed = false;
+        if on {
+            if !self.s.typed.is_empty() {
+                text.push_str(&self.s.typed);
+                self.s.typed.clear();
+                changed = true;
+            }
+            for _ in 0..self.s.backspace {
+                changed |= text.pop().is_some();
+            }
+            self.s.backspace = 0;
+        }
+        self.c.round(r, 8.0, SIDE);
+        self.c.round_line(r, 8.0, if on { ACCENT } else { BORDER }, 1.0);
+        let t = r.inset_xy(10.0, 0.0);
+        if text.is_empty() && !on {
+            self.c.text(t, hint, 14.0, MUTED, Align::Left, Weight::Regular);
+        } else {
+            let shown = if on { format!("{text}|") } else { text.clone() };
+            self.c.text(t, &shown, 14.0, TEXT, Align::Left, Weight::Regular);
+        }
         changed
     }
 

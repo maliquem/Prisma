@@ -6,6 +6,8 @@ mod config;
 mod optimizer;
 mod overlays;
 mod pages;
+#[cfg(debug_assertions)]
+mod selftest;
 mod startup;
 mod sys;
 mod ui;
@@ -19,11 +21,29 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 
 fn main() {
     let background = std::env::args().any(|a| a == "--background");
+    if std::env::args().any(|a| a == "--uninstall") {
+        unsafe {
+            let msg = w!("Remover o Prisma deste computador? Suas configurações ficam guardadas.");
+            if MessageBoxW(None, msg, w!("Prisma"), MB_YESNO | MB_ICONQUESTION) == IDYES {
+                startup::uninstall();
+            }
+        }
+        return;
+    }
+    if std::env::args().any(|a| a == "--install") {
+        if !startup::install(true) {
+            unsafe {
+                MessageBoxW(None, w!("Não consegui instalar o Prisma."), w!("Prisma"), MB_OK | MB_ICONERROR);
+            }
+        }
+        return;
+    }
     unsafe {
         let _mutex = CreateMutexW(None, true, w!("Local\\PrismaApp"));
         if GetLastError() == ERROR_ALREADY_EXISTS {
             if let Ok(h) = FindWindowW(w!("PrismaHub"), None) {
-                let _ = PostMessageW(Some(h), app::WM_SHOW, WPARAM(0), LPARAM(0));
+                let monitor = std::env::args().any(|a| a == "--taskmgr") as usize;
+                let _ = PostMessageW(Some(h), app::WM_SHOW, WPARAM(monitor), LPARAM(0));
             }
             return;
         }

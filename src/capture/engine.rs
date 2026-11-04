@@ -326,8 +326,21 @@ fn run(mut cfg: Settings, rx: Receiver<Cmd>, status: &Status, info: &std::sync::
         let mut conv = Converter::new(&d.dev, &d.ctx, src_w, src_h, out_w, out_h, cfg.fps, hdr10)?;
         let in_view = conv.input_view(&mid)?;
 
-        let bits = bitrate(out_w, out_h, cfg.fps, cfg.codec);
-        let mut enc = Encoder::new(&d.dev, cfg.codec, out_w, out_h, cfg.fps, bits, hdr10)?;
+        // Placa sem o codec escolhido cai para o melhor que ela tiver.
+        let order = [cfg.codec, Codec::Av1, Codec::Hevc, Codec::H264];
+        let mut made = None;
+        for c in order {
+            if hdr10 && c == Codec::H264 {
+                continue;
+            }
+            let bits = bitrate(out_w, out_h, cfg.fps, c);
+            if let Ok(e) = Encoder::new(&d.dev, c, out_w, out_h, cfg.fps, bits, hdr10) {
+                cfg.codec = c;
+                made = Some(e);
+                break;
+            }
+        }
+        let mut enc = made.ok_or_else(|| Error::new(E_FAIL, "sem codificador de vídeo na GPU"))?;
         {
             let dyn_ = if hdr10 { "HDR" } else { "SDR" };
             let codec = match cfg.codec {

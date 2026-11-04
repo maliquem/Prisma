@@ -1,11 +1,18 @@
 //! Telas da janela principal, na direção visual Grafite.
 
 mod adjust;
+mod analyze;
 mod capture;
 mod energy;
 mod fullscreen;
 mod monitor;
 mod optimize;
+mod services;
+mod startup;
+mod storage;
+mod tools;
+mod tweaks;
+mod uninstall;
 mod volume;
 mod widget;
 
@@ -16,6 +23,13 @@ use crate::ui::Ui;
 #[derive(Clone, Copy, PartialEq)]
 pub enum Page {
     Monitor,
+    Storage,
+    Analyze,
+    Startup,
+    Services,
+    Uninstall,
+    Tweaks,
+    Tools,
     Optimize,
     Energy,
     Fullscreen,
@@ -62,15 +76,55 @@ const ICON_ADJ: Icon = &[
     &[(8., 15.), (8., 19.)],
 ];
 
+const ICON_DISK: Icon = &[
+    &[(4., 6.), (20., 6.), (20., 18.), (4., 18.), (4., 6.)],
+    &[(4., 12.), (20., 12.)],
+    &[(16., 15.), (17., 15.)],
+    &[(16., 9.), (17., 9.)],
+];
+
+const ICON_MAP: Icon = &[
+    &[(4., 4.), (20., 4.), (20., 20.), (4., 20.), (4., 4.)],
+    &[(12., 4.), (12., 20.)],
+    &[(12., 12.), (20., 12.)],
+];
+const ICON_DEL: Icon = &[
+    &[(5., 7.), (19., 7.)],
+    &[(9., 7.), (10., 4.), (14., 4.), (15., 7.)],
+    &[(7., 7.), (8., 20.), (16., 20.), (17., 7.)],
+];
+const ICON_TW: Icon = &[
+    &[(12., 3.), (19., 6.), (19., 12.), (16., 18.), (12., 21.), (8., 18.), (5., 12.), (5., 6.), (12., 3.)],
+    &[(9., 12.), (11., 14.), (15., 10.)],
+];
+const ICON_TOOL: Icon = &[
+    &[(5., 19.), (13., 11.)],
+    &[(13., 11.), (12., 7.), (15., 4.), (19., 4.), (16., 7.), (17., 8.), (20., 5.), (20., 9.), (17., 12.), (13., 11.)],
+];
+const ICON_BOOT: Icon = &[&[(12., 4.), (12., 16.)], &[(7., 9.), (12., 4.), (17., 9.)], &[(5., 20.), (19., 20.)]];
+const ICON_SVC: Icon = &[
+    &[(4., 5.), (20., 5.), (20., 10.), (4., 10.), (4., 5.)],
+    &[(4., 14.), (20., 14.), (20., 19.), (4., 19.), (4., 14.)],
+    &[(7., 7.5), (8., 7.5)],
+    &[(7., 16.5), (8., 16.5)],
+];
+
 const NAV: &[(Page, &str, Icon)] = &[
     (Page::Monitor, "Monitor", ICON_MON),
+    (Page::Storage, "Discos e redes", ICON_DISK),
+    (Page::Analyze, "Espaço em disco", ICON_MAP),
+    (Page::Startup, "Inicialização", ICON_BOOT),
+    (Page::Services, "Serviços", ICON_SVC),
+    (Page::Uninstall, "Desinstalar", ICON_DEL),
+    (Page::Tweaks, "Ajustes do Windows", ICON_TW),
+    (Page::Tools, "Ferramentas", ICON_TOOL),
     (Page::Optimize, "Otimizar", ICON_OPT),
     (Page::Energy, "Energia", ICON_POW),
     (Page::Fullscreen, "Fullscreenizer", ICON_WIN),
     (Page::Volume, "Volume", ICON_VOL),
     (Page::Capture, "Captura", ICON_CAP),
     (Page::Widget, "Widget", ICON_WID),
-    (Page::Adjust, "Ajustes", ICON_ADJ),
+    (Page::Adjust, "Configurações", ICON_ADJ),
 ];
 
 const SIDE_W: f32 = 216.0;
@@ -82,23 +136,23 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
     c.icon(24.0, 20.0, 22.0, &[&[(12., 3.), (3., 20.), (21., 20.), (12., 3.)], &[(12., 3.), (12., 20.)]], ACCENT);
     c.text(rect(56.0, 18.0, 150.0, 26.0), "Prisma", 16.0, TEXT, Align::Left, Weight::Semibold);
 
-    let mut y = 64.0;
+    let mut y = 58.0;
     for (page, label, icon) in NAV {
-        let r = rect(12.0, y, SIDE_W - 24.0, 40.0);
+        let r = rect(12.0, y, SIDE_W - 24.0, 32.0);
         let current = app.page == *page;
         let hover = ui.is_hover(r);
         if current || hover {
             ui.c.round(r, 8.0, if current { CARD2 } else { CARD });
         }
         let color = if current { WHITE } else { TEXT2 };
-        ui.c.icon(r.x + 12.0, r.y + 11.0, 18.0, icon, color);
+        ui.c.icon(r.x + 12.0, r.y + 7.0, 18.0, icon, color);
         ui.c.text(rect(r.x + 42.0, r.y, r.w - 48.0, r.h), label, 14.0, color, Align::Left, Weight::Regular);
         if ui.hit(label, r) && !current {
             app.page = *page;
             app.refresh_page();
             ui.s.needs_redraw = true;
         }
-        y += 42.0;
+        y += 33.0;
     }
 
     let chip = rect(12.0, full.h - 88.0, SIDE_W - 24.0, 76.0);
@@ -121,6 +175,13 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
     let area = rect(SIDE_W, 0.0, full.w - SIDE_W, full.h);
     match app.page {
         Page::Monitor => monitor::draw(&mut ui, app, area),
+        Page::Storage => storage::draw(&mut ui, app, area),
+        Page::Analyze => analyze::draw(&mut ui, app, area),
+        Page::Startup => startup::draw(&mut ui, app, area),
+        Page::Services => services::draw(&mut ui, app, area),
+        Page::Uninstall => uninstall::draw(&mut ui, app, area),
+        Page::Tweaks => tweaks::draw(&mut ui, app, area),
+        Page::Tools => tools::draw(&mut ui, app, area),
         Page::Optimize => optimize::draw(&mut ui, app, area),
         Page::Energy => energy::draw(&mut ui, app, area),
         Page::Fullscreen => fullscreen::draw(&mut ui, app, area),
@@ -147,6 +208,18 @@ pub fn fmt_mem(b: u64) -> String {
         fmt_gb(b)
     } else {
         format!("{} MB", b >> 20)
+    }
+}
+
+pub fn fmt_rate(b: u64) -> String {
+    if b == 0 {
+        "0".into()
+    } else if b >= 1 << 30 {
+        format!("{:.1} GB/s", b as f64 / (1u64 << 30) as f64).replace('.', ",")
+    } else if b >= 1 << 20 {
+        format!("{:.1} MB/s", b as f64 / (1u64 << 20) as f64).replace('.', ",")
+    } else {
+        format!("{} KB/s", (b >> 10).max(1))
     }
 }
 

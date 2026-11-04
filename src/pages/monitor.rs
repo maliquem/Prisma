@@ -40,16 +40,26 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
 
     let by = top + 130.0;
     let bh = a.h - by - 20.0;
-    let core_w = 290.0;
+    let core_w = 236.0;
     let tw = w - core_w - 12.0;
     let t = rect(x, by, tw, bh);
     ui.card(t);
     ui.title(rect(t.x + 16.0, t.y + 12.0, 200.0, 22.0), "Programas");
-    let cols = [("CPU", 64.0), ("RAM", 80.0), ("GPU", 64.0), ("VRAM", 80.0)];
-    let total: f32 = cols.iter().map(|c| c.1 + 8.0).sum();
-    let hy = t.y + 38.0;
+    let selected = app.selected.clone();
+    let can_end = selected.as_ref().is_some_and(|s| !crate::optimizer::is_system(s));
+    if ui.button_ex("end-task", rect(t.right() - 156.0, t.y + 8.0, 140.0, 32.0), "Finalizar tarefa", false, can_end) {
+        if let Some(s) = selected.as_ref() {
+            if let Some(g) = app.snap.groups.iter().find(|g| &g.exe == s) {
+                crate::optimizer::force(&g.pids);
+            }
+            app.selected = None;
+        }
+    }
+    let cols = [("CPU", 54.0), ("RAM", 68.0), ("GPU", 48.0), ("VRAM", 68.0), ("Disco", 76.0), ("Rede", 76.0)];
+    let total: f32 = cols.iter().map(|c| c.1 + 6.0).sum();
+    let hy = t.y + 44.0;
     let mut cx = t.right() - 16.0 - total;
-    ui.label(rect(t.x + 24.0, hy, 200.0, 22.0), "Programa", MUTED);
+    ui.label(rect(t.x + 24.0, hy, 160.0, 22.0), "Programa", MUTED);
     for (i, (name, cw)) in cols.iter().enumerate() {
         let r = rect(cx, hy, *cw, 22.0);
         let sel = app.sort == i as u8;
@@ -57,7 +67,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         if ui.hit(name, r) {
             app.sort = i as u8;
         }
-        cx += cw + 8.0;
+        cx += cw + 6.0;
     }
 
     let mut rows = s.groups.clone();
@@ -65,30 +75,43 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         1 => rows.sort_by(|a, b| b.ram.cmp(&a.ram)),
         2 => rows.sort_by(|a, b| b.gpu.partial_cmp(&a.gpu).unwrap()),
         3 => rows.sort_by(|a, b| b.vram.cmp(&a.vram)),
+        4 => rows.sort_by(|a, b| b.disk.cmp(&a.disk)),
+        5 => rows.sort_by(|a, b| b.net.cmp(&a.net)),
         _ => rows.sort_by(|a, b| b.cpu.partial_cmp(&a.cpu).unwrap()),
     }
     let list = rect(t.x + 8.0, hy + 24.0, t.w - 16.0, t.bottom() - hy - 32.0);
-    rows.truncate(60);
+    rows.truncate(80);
     ui.begin_scroll("procs", list, rows.len() as f32 * 34.0);
     for (i, p) in rows.iter().enumerate() {
         let y = list.y + i as f32 * 34.0;
         let r = rect(list.x, y, list.w, 34.0);
-        if i == 0 {
+        let sel = app.selected.as_deref() == Some(p.exe.as_str());
+        if sel {
             ui.c.round(r, 6.0, CARD2);
+        } else if ui.is_hover(r) {
+            ui.c.round(r, 6.0, CARD2.alpha(0.5));
         }
-        let name = if p.pids.len() > 1 {
-            format!("{} ({} processos)", app_name(&p.exe), p.pids.len())
-        } else {
-            app_name(&p.exe).to_string()
-        };
-        let nw = list.w - total - 28.0;
-        ui.c.text(rect(r.x + 16.0, y, nw, 34.0), &name, 14.0, TEXT, Align::Left, Weight::Regular);
-        let vals = [fmt_pct(p.cpu), fmt_mem(p.ram), fmt_pct(p.gpu.min(100.0)), fmt_mem(p.vram)];
+        if y + 34.0 >= list.y && y - ui.scroll_y() <= list.bottom() {
+            if let Some(path) = app.path_of(&p.exe, p.pids.first().copied().unwrap_or(0)) {
+                ui.file_icon(&path, &p.exe, rect(r.x + 10.0, y + 8.0, 18.0, 18.0));
+            } else {
+                ui.c.round(rect(r.x + 10.0, y + 8.0, 18.0, 18.0), 5.0, LINE);
+            }
+        }
+        let base = app.name_of(&p.exe, p.pids.first().copied().unwrap_or(0));
+        let name = if p.pids.len() > 1 { format!("{base} ({})", p.pids.len()) } else { base };
+        let nw = list.w - total - 40.0;
+        ui.c.text(rect(r.x + 36.0, y, nw, 34.0), &name, 14.0, TEXT, Align::Left, Weight::Regular);
+        let net = if s.net_ok { fmt_rate(p.net) } else { "—".to_string() };
+        let vals = [fmt_pct(p.cpu), fmt_mem(p.ram), fmt_pct(p.gpu.min(100.0)), fmt_mem(p.vram), fmt_rate(p.disk), net];
         let mut cx = t.right() - 16.0 - total;
         for (j, v) in vals.iter().enumerate() {
             let cw = cols[j].1;
-            ui.c.text(rect(cx, y, cw, 34.0), v, 14.0, TEXT, Align::Right, Weight::Regular);
-            cx += cw + 8.0;
+            ui.c.text(rect(cx, y, cw, 34.0), v, 13.0, TEXT, Align::Right, Weight::Regular);
+            cx += cw + 6.0;
+        }
+        if ui.hit(&format!("row{}", p.exe), r) {
+            app.selected = Some(p.exe.clone());
         }
     }
     ui.end_scroll();
@@ -96,7 +119,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let c = rect(t.right() + 12.0, by, core_w, bh);
     ui.card(c);
     ui.title(rect(c.x + 16.0, c.y + 12.0, 200.0, 22.0), "Núcleos");
-    ui.label(rect(c.x + 16.0, c.y + 34.0, c.w - 32.0, 20.0), "Cada coluna é um núcleo com 2 threads", MUTED);
+    ui.label(rect(c.x + 16.0, c.y + 34.0, c.w - 32.0, 20.0), "Cada coluna é um núcleo", MUTED);
     let n = (s.threads.len() / 2).max(1);
     let gap = 8.0;
     let col = (c.w - 32.0 - gap * (n as f32 - 1.0)) / n as f32;

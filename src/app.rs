@@ -27,6 +27,7 @@ use crate::overlays::{Hud, Prompt, PromptAnswer, Toast, Widget};
 use crate::pages::{self, Page};
 use crate::sys::audio::{self, Session};
 use crate::sys::fullscreen::Fullscreenizer;
+use crate::sys::{audit, autostart, disks, fileinfo, mft, nets, services, tools, tweaks, uninstall};
 use crate::sys::monitor::{self, Snapshot};
 use crate::sys::power::{self, Detector, Event, Mode, Plan, PlanValues};
 use crate::sys::procs;
@@ -104,8 +105,60 @@ pub struct App {
     pending: Vec<(String, Vec<u32>, Instant)>,
     pub windows: Vec<WinInfo>,
     pub sort: u8,
+    pub store_tab: u8,
+    pub disks: Vec<disks::Disk>,
+    pub disk_sel: usize,
+    pub health: disks::HealthMap,
+    pub nets: Vec<nets::Net>,
+    pub tw_tab: u8,
+    pub tw_layers: Vec<char>,
+    pub tw_on: HashSet<&'static str>,
+    pub tw_confirm: bool,
+    pub tw_journal: Vec<tweaks::Entry>,
+    pub tw_apps: Vec<String>,
+    tw_apps_slot: std::sync::Arc<Mutex<Option<Vec<String>>>>,
+    pub tw_run: tweaks::Shared,
+    pub audit: audit::Shared,
+    pub tool_sel: usize,
+    pub tool_drive: usize,
+    pub tool_mode: usize,
+    pub tool_net: usize,
+    pub tool_dns: usize,
+    pub tool_confirm: bool,
+    pub tool_ack: bool,
+    pub tool_src: String,
+    pub tool_dst: String,
+    pub tool_run: tools::Shared,
+    pub programs: Vec<uninstall::Program>,
+    pub un_search: String,
+    pub un_confirm: bool,
+    pub un_review: bool,
+    pub un_job: uninstall::Shared,
+    pub un_left: Option<Vec<uninstall::Leftover>>,
+    pub scan: mft::Slot,
+    pub scan_progress: std::sync::Arc<mft::Progress>,
+    pub scan_drive: usize,
+    pub scan_at: Option<u32>,
+    pub scan_tab: u8,
+    pub scan_sel: Option<u32>,
+    pub scan_confirm: bool,
+    pub scan_delete: Option<u32>,
+    pub installed: bool,
+    pub boot_items: Vec<autostart::Item>,
+    pub boot_sel: Option<usize>,
+    pub boot_sig: Option<String>,
+    pub boot_confirm: bool,
+    pub services: Vec<services::Service>,
+    pub svc_filter: u8,
+    pub svc_search: String,
+    pub svc_sel: Option<String>,
+    pub svc_info: (String, String),
+    pub selected: Option<String>,
+    exe_names: std::collections::HashMap<String, String>,
+    exe_paths: std::collections::HashMap<String, Option<String>>,
     pub elevated: bool,
     pub autostart: bool,
+    pub replaces_tm: bool,
     fg_pid: u32,
     pub fg_exe: String,
     asked: HashSet<String>,
@@ -160,6 +213,8 @@ pub fn start(background: bool) {
             None,
         )
         .expect("janela de controle");
+        // Sem isso, uma cópia comum não consegue avisar a cópia aberta como administrador.
+        let _ = ChangeWindowMessageFilterEx(hub, WM_SHOW, MSGFLT_ALLOW, None);
         let cfg = Config::load();
         let shared = monitor::spawn(hub.0 as isize, WM_TICK);
         let mut app = App {
@@ -186,8 +241,60 @@ pub fn start(background: bool) {
             pending: Vec::new(),
             windows: Vec::new(),
             sort: 0,
+            store_tab: 0,
+            disks: Vec::new(),
+            disk_sel: 0,
+            health: Default::default(),
+            nets: Vec::new(),
+            tw_tab: 0,
+            tw_layers: Vec::new(),
+            tw_on: HashSet::new(),
+            tw_confirm: false,
+            tw_journal: tweaks::load_journal(),
+            tw_apps: Vec::new(),
+            tw_apps_slot: Default::default(),
+            tw_run: Default::default(),
+            audit: Default::default(),
+            tool_sel: 0,
+            tool_drive: 0,
+            tool_mode: 0,
+            tool_net: 0,
+            tool_dns: 0,
+            tool_confirm: false,
+            tool_ack: false,
+            tool_src: String::new(),
+            tool_dst: String::new(),
+            tool_run: Default::default(),
+            programs: Vec::new(),
+            un_search: String::new(),
+            un_confirm: false,
+            un_review: false,
+            un_job: Default::default(),
+            un_left: None,
+            scan: Default::default(),
+            scan_progress: Default::default(),
+            scan_drive: 0,
+            scan_at: None,
+            scan_tab: 0,
+            scan_sel: None,
+            scan_confirm: false,
+            scan_delete: None,
+            installed: crate::startup::is_installed(),
+            boot_items: Vec::new(),
+            boot_sel: None,
+            boot_sig: None,
+            boot_confirm: false,
+            services: Vec::new(),
+            svc_filter: 0,
+            svc_search: String::new(),
+            svc_sel: None,
+            svc_info: Default::default(),
+            selected: None,
+            exe_names: std::collections::HashMap::new(),
+            exe_paths: std::collections::HashMap::new(),
             elevated: crate::startup::is_elevated(),
             autostart: crate::startup::is_enabled(),
+            replaces_tm: crate::startup::replaces_taskmgr(),
             fg_pid: 0,
             fg_exe: String::new(),
             asked: HashSet::new(),
@@ -249,6 +356,46 @@ pub fn start(background: bool) {
                 h.stop();
                 std::process::exit(0);
             }
+            if let Some(path) = a.strip_prefix("--selftest=") {
+                crate::selftest::run(path, app.shared.clone());
+                std::process::exit(0);
+            }
+            if let Some(path) = a.strip_prefix("--test-uninstall=") {
+                crate::selftest::fake_uninstall(path);
+                std::process::exit(0);
+            }
+            if let Some(path) = a.strip_prefix("--test-misc=") {
+                crate::selftest::misc(path);
+                std::process::exit(0);
+            }
+            if let Some(path) = a.strip_prefix("--test-tweaks=") {
+                crate::selftest::tweaks(path);
+                std::process::exit(0);
+            }
+            if let Some(path) = a.strip_prefix("--test-tools=") {
+                crate::selftest::toolrun(path);
+                std::process::exit(0);
+            }
+            if let Some(path) = a.strip_prefix("--test-audit=") {
+                crate::selftest::audit(path);
+                std::process::exit(0);
+            }
+            if a == "--profiles" {
+                app.page = Page::Tweaks;
+                app.tw_tab = 1;
+                app.tw_layers = vec!['J', 'D'];
+                for t in tweaks::CATALOG {
+                    if t.base.chars().any(|c| "JD".contains(c)) {
+                        app.tw_on.insert(t.id);
+                    }
+                }
+            }
+            if let Some(d) = a.strip_prefix("--scan=") {
+                app.page = Page::Analyze;
+                let c = d.chars().next().unwrap_or('X');
+                app.scan_drive = mft::drives().iter().position(|l| *l == c).unwrap_or(0);
+                mft::start(c, app.scan_progress.clone(), app.scan.clone());
+            }
             if a == "--test-gpu" {
                 let mut k = crate::sys::kmt::Kmt::new().expect("kmt");
                 k.read();
@@ -287,6 +434,13 @@ pub fn start(background: bool) {
                 }
             }
             app.page = match a.as_str() {
+                "--page=storage" => Page::Storage,
+                "--page=boot" => Page::Startup,
+                "--page=tweaks" => Page::Tweaks,
+                "--page=tools" => Page::Tools,
+                "--page=uninstall" => Page::Uninstall,
+                "--page=analyze" => Page::Analyze,
+                "--page=services" => Page::Services,
                 "--page=optimize" => Page::Optimize,
                 "--page=energy" => Page::Energy,
                 "--page=full" => Page::Fullscreen,
@@ -356,8 +510,11 @@ impl App {
             return;
         }
         self.cfg.first_run = false;
-        if let (Some(rest), _) = power::ensure_prisma_plans() {
-            self.cfg.plan_rest = rest;
+        // O modo portátil não deixa rastros: planos só na versão instalada.
+        if self.installed {
+            if let (Some(rest), _) = power::ensure_prisma_plans() {
+                self.cfg.plan_rest = rest;
+            }
         }
         self.cfg.save();
     }
@@ -572,6 +729,117 @@ impl App {
     pub fn hud_stop(&mut self) {
         if self.rec_start.is_some() {
             self.toggle_record();
+        }
+    }
+
+    /// Caminho do executável, lembrado por nome para não abrir o processo a cada quadro.
+    pub fn path_of(&mut self, exe: &str, pid: u32) -> Option<String> {
+        self.exe_paths.entry(exe.to_ascii_lowercase()).or_insert_with(|| procs::image_path(pid)).clone()
+    }
+
+    fn load_disks(&mut self) {
+        if self.disks.is_empty() {
+            self.disks = disks::list();
+            self.nets = nets::list();
+            if self.health.lock().unwrap().is_empty() {
+                disks::spawn_health(&self.disks, self.health.clone());
+            }
+        }
+    }
+
+    pub fn go(&mut self, page: Page) {
+        self.page = page;
+        self.refresh_page();
+        self.invalidate();
+    }
+
+    /// Letras em discos com nota abaixo de Bom.
+    pub fn suspect_letters(&self) -> Vec<char> {
+        let h = self.health.lock().unwrap();
+        let bad = |n: u32| h.get(&n).is_some_and(|v| matches!(v.level, disks::Level::Warn | disks::Level::Risk));
+        self.disks.iter().filter(|d| bad(d.number)).flat_map(|d| d.volumes.iter().map(|v| v.letter)).collect()
+    }
+
+    /// Roda em segundo plano e espera a saúde dos discos para não dar falso "tudo certo".
+    pub fn start_audit(&mut self) {
+        *self.audit.lock().unwrap() = None;
+        let list: Vec<(u32, String, Vec<char>)> =
+            self.disks.iter().map(|d| (d.number, d.name.clone(), d.volumes.iter().map(|v| v.letter).collect())).collect();
+        let (slot, health) = (self.audit.clone(), self.health.clone());
+        let _ = std::thread::Builder::new().name("auditoria".into()).spawn(move || {
+            for _ in 0..120 {
+                if health.lock().unwrap().len() >= list.len() {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(250));
+            }
+            let h: Vec<(u32, disks::Health)> = health.lock().unwrap().iter().map(|(k, v)| (*k, v.clone())).collect();
+            *slot.lock().unwrap() = Some(audit::run(&list, &h));
+        });
+    }
+
+    pub fn tw_undo(&mut self, id: &str) {
+        let rep = tweaks::undo(id, &mut self.tw_journal);
+        self.log(&format!("desfez ajustes {id}: {} restaurados, {} intocados", rep.restored, rep.skipped.len()));
+        let msg = if !rep.apps.is_empty() {
+            format!("{} valores restaurados. Apps voltam pela Loja.", rep.restored)
+        } else if rep.skipped.is_empty() {
+            format!("{} valores restaurados", rep.restored)
+        } else {
+            format!("{} restaurados, {} mudaram depois e ficaram como estão", rep.restored, rep.skipped.len())
+        };
+        self.toast.info(&msg);
+    }
+
+    pub fn pick_tool_folder(&self, which: usize) {
+        unsafe {
+            let _ = PostMessageW(Some(self.hub), WM_PICK, WPARAM(which), LPARAM(0));
+        }
+    }
+
+    /// Nome amigável gravado no executável; sem ele, o nome do arquivo.
+    pub fn name_of(&mut self, exe: &str, pid: u32) -> String {
+        let key = exe.to_ascii_lowercase();
+        if let Some(n) = self.exe_names.get(&key) {
+            return n.clone();
+        }
+        let n = self
+            .path_of(exe, pid)
+            .and_then(|p| fileinfo::description(&p))
+            .unwrap_or_else(|| exe.trim_end_matches(".exe").trim_end_matches(".EXE").to_string());
+        self.exe_names.insert(key, n.clone());
+        n
+    }
+
+    pub fn select_boot(&mut self, i: usize) {
+        self.boot_sel = Some(i);
+        self.boot_confirm = false;
+        self.boot_sig = self.boot_items.get(i).map(|it| fileinfo::check(&it.path).label());
+    }
+
+    pub fn select_service(&mut self, name: String) {
+        self.svc_info = services::details(&name);
+        self.svc_sel = Some(name);
+    }
+
+    /// A cópia nova abre sozinha; esta precisa sair para liberar o nome.
+    pub fn quit_after_install(&self) {
+        unsafe { PostQuitMessage(0) };
+    }
+
+    pub fn pick_exe(&self) {
+        unsafe {
+            let _ = PostMessageW(Some(self.hub), WM_PICK, WPARAM(1), LPARAM(0));
+        }
+    }
+
+    /// Registro simples de tudo que o Prisma mudou no sistema, para consultar e desfazer.
+    pub fn log(&self, line: &str) {
+        use std::io::Write;
+        let t = unsafe { windows::Win32::System::SystemInformation::GetLocalTime() };
+        let path = crate::config::data_dir().join("acoes.log");
+        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+            let _ = writeln!(f, "{:04}-{:02}-{:02} {:02}:{:02}:{:02} {line}", t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond);
         }
     }
 
@@ -829,8 +1097,48 @@ impl App {
             Page::Optimize => self.refresh_candidates(),
             Page::Fullscreen => self.refresh_windows(),
             Page::Energy => self.active_plan = power::active().unwrap_or_default(),
+            Page::Tweaks => {
+                self.load_disks();
+                if self.audit.lock().unwrap().is_none() {
+                    self.start_audit();
+                }
+                if self.tw_apps.is_empty() {
+                    if let Some(v) = self.tw_apps_slot.lock().unwrap().take() {
+                        self.tw_apps = v;
+                    } else {
+                        let slot = self.tw_apps_slot.clone();
+                        let _ = std::thread::Builder::new().name("apps".into()).spawn(move || {
+                            *slot.lock().unwrap() = Some(tweaks::installed_apps());
+                        });
+                    }
+                }
+                self.tw_journal = tweaks::load_journal();
+            }
+            Page::Tools => {
+                self.load_disks();
+            }
+            Page::Uninstall => {
+                if self.programs.is_empty() {
+                    self.programs = uninstall::list();
+                }
+            }
+            Page::Startup => {
+                if self.boot_items.is_empty() {
+                    self.boot_items = autostart::list();
+                }
+            }
+            Page::Services => self.services = services::list(),
+            Page::Storage => {
+                self.load_disks();
+                disks::sample(&mut self.disks);
+                nets::sample(&mut self.nets);
+            }
             _ => {}
         }
+        let fast = matches!(self.page, Page::Storage | Page::Tools | Page::Tweaks)
+            || self.scan_progress.running.load(Ordering::Relaxed)
+            || self.un_job.lock().unwrap().running;
+        monitor::FAST.store(fast && self.main.is_some(), Ordering::Relaxed);
         let detail = matches!(self.page, Page::Monitor | Page::Optimize);
         monitor::DETAIL.store(detail && self.main.is_some(), Ordering::Relaxed);
     }
@@ -882,7 +1190,7 @@ impl App {
             let _ = DwmSetWindowAttribute(h, DWMWA_CAPTION_COLOR, &cap as *const _ as _, 4);
             let dpi = GetDpiForWindow(h);
             let scale = dpi as f32 / 96.0;
-            let mut r = RECT { left: 0, top: 0, right: (1180.0 * scale) as i32, bottom: (780.0 * scale) as i32 };
+            let mut r = RECT { left: 0, top: 0, right: (1280.0 * scale) as i32, bottom: (820.0 * scale) as i32 };
             let _ = AdjustWindowRectExForDpi(&mut r, WS_OVERLAPPEDWINDOW, false, WINDOW_EX_STYLE(0), dpi);
             let _ = SetWindowPos(
                 h,
@@ -1029,11 +1337,41 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
             LRESULT(0)
         }
         WM_SHOW => {
-            with(|a| a.show_main());
+            with(|a| {
+                if w.0 == 1 {
+                    a.page = Page::Monitor;
+                }
+                a.show_main();
+            });
             LRESULT(0)
         }
         WM_TIMER => {
             with(|a| a.hud_update());
+            LRESULT(0)
+        }
+        WM_PICK if w.0 == 1 => {
+            if let Some(path) = capture::choose_exe(h) {
+                with(|a| {
+                    if autostart::add(&path) {
+                        a.log(&format!("inicialização adicionou {path}"));
+                        a.boot_items = autostart::list();
+                        a.invalidate();
+                    }
+                });
+            }
+            LRESULT(0)
+        }
+        WM_PICK if w.0 >= 2 => {
+            if let Some(dir) = capture::choose_folder(h) {
+                with(|a| {
+                    if w.0 == 2 {
+                        a.tool_src = dir;
+                    } else {
+                        a.tool_dst = dir;
+                    }
+                    a.invalidate();
+                });
+            }
             LRESULT(0)
         }
         WM_PICK => {
@@ -1113,8 +1451,8 @@ unsafe extern "system" fn main_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
             WM_GETMINMAXINFO => {
                 let mi = &mut *(l.0 as *mut MINMAXINFO);
                 let s = GetDpiForWindow(h) as f32 / 96.0;
-                mi.ptMinTrackSize.x = (960.0 * s) as i32;
-                mi.ptMinTrackSize.y = (620.0 * s) as i32;
+                mi.ptMinTrackSize.x = (1100.0 * s) as i32;
+                mi.ptMinTrackSize.y = (700.0 * s) as i32;
                 Some(0)
             }
             WM_MOUSEMOVE => {
@@ -1154,9 +1492,39 @@ unsafe extern "system" fn main_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
                 a.on_key(w.0 as u32);
                 None
             }
+            WM_CHAR => {
+                if let Some(mw) = &mut a.main {
+                    if mw.ui.focus != 0 {
+                        match w.0 as u32 {
+                            8 => mw.ui.backspace += 1,
+                            c if c >= 32 => {
+                                if let Some(c) = char::from_u32(c) {
+                                    mw.ui.typed.push(c);
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                a.invalidate();
+                Some(0)
+            }
             WM_DESTROY => {
                 a.main = None;
                 a.sessions.clear();
+                a.exe_paths.clear();
+                a.disks = Vec::new();
+                a.nets = Vec::new();
+                a.scan_progress.cancel.store(true, Ordering::Relaxed);
+                *a.scan.lock().unwrap() = None;
+                a.scan_at = None;
+                a.boot_items = Vec::new();
+                a.services = Vec::new();
+                if !a.un_review {
+                    a.programs = Vec::new();
+                }
+                a.exe_names.clear();
+                monitor::FAST.store(false, Ordering::Relaxed);
                 monitor::DETAIL.store(false, Ordering::Relaxed);
                 a.cfg.save();
                 let me = windows::Win32::System::Threading::GetCurrentProcess();

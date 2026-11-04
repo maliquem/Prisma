@@ -357,6 +357,23 @@ pub fn choose_folder(owner: HWND) -> Option<String> {
     }
 }
 
+/// Janela do Windows para escolher um programa.
+pub fn choose_exe(owner: HWND) -> Option<String> {
+    use windows::Win32::UI::Shell::Common::COMDLG_FILTERSPEC;
+    use windows::Win32::UI::Shell::*;
+    unsafe {
+        let d: IFileOpenDialog = CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER).ok()?;
+        let f = [COMDLG_FILTERSPEC { pszName: w!("Programas"), pszSpec: w!("*.exe") }];
+        d.SetFileTypes(&f).ok()?;
+        d.Show(Some(owner)).ok()?;
+        let item = d.GetResult().ok()?;
+        let p = item.GetDisplayName(SIGDN_FILESYSPATH).ok()?;
+        let s = p.to_string().ok();
+        CoTaskMemFree(Some(p.0 as *const _));
+        s
+    }
+}
+
 /// Deixa uma janela nossa de fora de fotos e vídeos.
 pub fn hide_from_capture(h: HWND) {
     unsafe {

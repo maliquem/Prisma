@@ -369,6 +369,26 @@ impl Canvas {
         }
     }
 
+    /// Bitmap BGRA pré-multiplicado, usado nos ícones de programas.
+    pub fn bitmap(&self, w: u32, h: u32, px: &[u8]) -> Option<ID2D1Bitmap> {
+        let props = D2D1_BITMAP_PROPERTIES {
+            pixelFormat: D2D1_PIXEL_FORMAT {
+                format: windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM,
+                alphaMode: D2D1_ALPHA_MODE_PREMULTIPLIED,
+            },
+            dpiX: 96.0,
+            dpiY: 96.0,
+        };
+        let size = D2D_SIZE_U { width: w, height: h };
+        unsafe { self.rt.CreateBitmap(size, Some(px.as_ptr() as *const _), w * 4, &props).ok() }
+    }
+
+    pub fn draw_bitmap(&self, b: &ID2D1Bitmap, r: Rect) {
+        unsafe {
+            self.rt.DrawBitmap(b, Some(&r.d2d()), 1.0, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, None);
+        }
+    }
+
     pub fn push_clip(&self, r: Rect) {
         unsafe { self.rt.PushAxisAlignedClip(&r.d2d(), D2D1_ANTIALIAS_MODE_ALIASED) }
     }

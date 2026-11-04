@@ -14,6 +14,7 @@ use windows::Win32::System::Power::*;
 use windows::Win32::System::SystemInformation::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
+use super::etw::{self, Trace};
 use super::kmt::Kmt;
 use super::nvml::{GpuReading, Nvml};
 
@@ -32,6 +33,9 @@ pub struct Group {
     pub ram: u64,
     pub gpu: f32,
     pub vram: u64,
+    /// Bytes por segundo.
+    pub disk: u64,
+    pub net: u64,
 }
 
 #[derive(Clone, Default)]
@@ -49,6 +53,8 @@ pub struct Snapshot {
     pub hist_vram: VecDeque<f32>,
     pub groups: Vec<Group>,
     pub detail: bool,
+    /// False quando falta administrador e a coluna de rede não tem dados.
+    pub net_ok: bool,
 }
 
 impl Snapshot {
@@ -69,6 +75,8 @@ impl Snapshot {
 }
 
 pub static DETAIL: AtomicBool = AtomicBool::new(false);
+/// Atualiza a cada segundo, sem as leituras caras do modo detalhado.
+pub static FAST: AtomicBool = AtomicBool::new(false);
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
@@ -86,10 +94,11 @@ struct Proc {
     pid: u32,
     time: i64,
     ram: u64,
+    io: u64,
     exe: String,
 }
 
-fn read_processes(buf: &mut Vec<u8>) -> Vec<Proc> {
+fn read_processes(buf: &mut Vec<u8>, threads: Option<&mut HashMap<u32, u32>>) -> Vec<Proc> {
     unsafe {
         loop {
             let mut ret = 0u32;
@@ -105,6 +114,7 @@ fn read_processes(buf: &mut Vec<u8>) -> Vec<Proc> {
         }
         let mut out = Vec::with_capacity(512);
         let mut off = 0usize;
+        let mut threads = threads;
         loop {
             let p = buf.as_ptr().add(off);
             let next = (p as *const u32).read_unaligned() as usize;
@@ -114,13 +124,22 @@ fn read_processes(buf: &mut Vec<u8>) -> Vec<Proc> {
             let name_len = (p.add(56) as *const u16).read_unaligned() as usize / 2;
             let name_ptr = (p.add(64) as *const *const u16).read_unaligned();
             let pid = (p.add(80) as *const usize).read_unaligned() as u32;
+            let reads = (p.add(232) as *const u64).read_unaligned();
+            let writes = (p.add(240) as *const u64).read_unaligned();
+            if let Some(map) = &mut threads {
+                let n = (p.add(4) as *const u32).read_unaligned() as usize;
+                for i in 0..n {
+                    let tid = (p.add(256 + i * 80 + 48) as *const usize).read_unaligned() as u32;
+                    map.insert(tid, pid);
+                }
+            }
             if pid != 0 {
                 let exe = if name_ptr.is_null() {
                     "System".to_string()
                 } else {
                     String::from_utf16_lossy(std::slice::from_raw_parts(name_ptr, name_len))
                 };
-                out.push(Proc { pid, time: user + kernel, ram: private, exe });
+                out.push(Proc { pid, time: user + kernel, ram: private, io: reads + writes, exe });
             }
             if next == 0 {
                 break;
@@ -304,6 +323,9 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
     let mut prev_cpu = Vec::new();
     let mut threads = Vec::new();
     let mut prev_time: HashMap<u32, i64> = HashMap::new();
+    let mut prev_io: HashMap<u32, u64> = HashMap::new();
+    let mut trace: Option<Trace> = None;
+    let mut trace_tried = false;
     let mut pbuf = vec![0u8; 1 << 20];
     let mut cbuf = Vec::new();
     let mut counters: Option<GpuCounters> = None;
@@ -341,7 +363,22 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
             gpu.total = extra.total;
         }
 
-        let procs = read_processes(&mut pbuf);
+        if detail && !trace_tried {
+            trace_tried = true;
+            trace = Trace::start();
+        } else if !detail {
+            trace = None;
+            trace_tried = false;
+        }
+        let mut tids = HashMap::new();
+        let procs = read_processes(&mut pbuf, if trace.is_some() { Some(&mut tids) } else { None });
+        let io_now = if trace.is_some() {
+            etw::set_threads(tids);
+            etw::take()
+        } else {
+            HashMap::new()
+        };
+        let mut io_map = HashMap::with_capacity(procs.len());
         let mut groups: HashMap<String, Group> = HashMap::with_capacity(procs.len());
         let mut times = HashMap::with_capacity(procs.len());
         let (mut pgpu, mut pvram, mut perf) = (HashMap::new(), HashMap::new(), 0.0);
@@ -365,6 +402,20 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
             }
             g.pids.push(p.pid);
             g.cpu += dt / elapsed / logical * 100.0;
+            if detail {
+                let done = prev_io.get(&p.pid).copied().unwrap_or(p.io);
+                io_map.insert(p.pid, p.io);
+                match io_now.get(&p.pid) {
+                    Some(v) => {
+                        g.net += (v.net as f32 / elapsed) as u64;
+                        g.disk += (v.disk as f32 / elapsed) as u64;
+                    }
+                    None if trace.is_none() => {
+                        g.disk += (p.io.saturating_sub(done) as f32 / elapsed) as u64;
+                    }
+                    None => {}
+                }
+            }
             g.ram += p.ram;
             g.gpu += pgpu.get(&p.pid).copied().unwrap_or(0.0);
             // O Windows às vezes reporta mais do que a placa tem; isso não é VRAM real.
@@ -374,6 +425,7 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
             }
         }
         prev_time = times;
+        prev_io = io_map;
         let mut groups: Vec<Group> = groups.into_values().collect();
         groups.sort_by(|a, b| {
             let (x, y) = (a.cpu + a.gpu, b.cpu + b.gpu);
@@ -403,10 +455,12 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
             s.hist_vram = h_vram.clone();
             s.groups = groups;
             s.detail = detail;
+            s.net_ok = trace.is_some();
         }
         unsafe {
             let _ = PostMessageW(Some(HWND(hub as *mut _)), msg, WPARAM(0), LPARAM(0));
         }
-        std::thread::sleep(Duration::from_millis(if detail { 1000 } else { 2000 }));
+        let fast = detail || FAST.load(Ordering::Relaxed);
+        std::thread::sleep(Duration::from_millis(if fast { 1000 } else { 2000 }));
     }
 }

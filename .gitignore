@@ -1,2 +1,4 @@
 /target
 *.pdb
+/research_notes
+/dist

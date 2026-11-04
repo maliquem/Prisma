@@ -1,35 +1,46 @@
 use super::*;
 
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
-    header(ui, a, "Ajustes", "Início com o Windows, permissões e atalhos gerais.");
+    header(ui, a, "Configurações", "Início com o Windows, permissões e atalhos gerais.");
     let x = a.x + 28.0;
     let w = a.w - 56.0;
     let top = 88.0;
-    let r0 = rect(x, top, w, 150.0);
+    let r0 = rect(x, top, w, 196.0);
     ui.card(r0);
-    let mut on = app.autostart;
-    let enabled = app.elevated;
-    if enabled {
-        if ui.check("auto", rect(r0.x + 16.0, r0.y + 8.0, r0.w - 32.0, 44.0), "Iniciar com o Windows, como administrador", &mut on) {
-            if crate::startup::set_enabled(on) {
-                app.autostart = on;
-            }
+    let (mode, hint) = if app.installed {
+        ("Versão instalada", "Em Arquivos de Programas, com atalho e entrada para desinstalar.")
+    } else {
+        ("Versão portátil", "Roda de qualquer pasta. As configurações ficam ao lado do programa, em PrismaData.")
+    };
+    ui.c.text(rect(r0.x + 16.0, r0.y + 8.0, r0.w - 32.0, 26.0), mode, 15.0, TEXT, Align::Left, Weight::Semibold);
+    ui.c.text(rect(r0.x + 16.0, r0.y + 34.0, r0.w - 32.0, 20.0), hint, 13.0, MUTED, Align::Left, Weight::Regular);
+    if app.installed {
+        let mut on = app.autostart;
+        if ui.check("auto", rect(r0.x + 16.0, r0.y + 58.0, r0.w - 32.0, 44.0), "Iniciar com o Windows, como administrador", &mut on) && crate::startup::set_enabled(on) {
+            app.autostart = on;
+        }
+        let mut tm = app.replaces_tm;
+        let label = "Abrir o Prisma com Ctrl+Shift+Esc, no lugar do Gerenciador de Tarefas";
+        if ui.check("tm", rect(r0.x + 16.0, r0.y + 102.0, r0.w - 32.0, 44.0), label, &mut tm) && crate::startup::set_replace_taskmgr(tm) {
+            app.replaces_tm = tm;
+            app.log(if tm { "passou a substituir o Gerenciador de Tarefas" } else { "devolveu o Gerenciador de Tarefas" });
+        }
+        if !app.elevated && ui.button("elev", rect(r0.x + 16.0, r0.y + 146.0, 240.0, 40.0), "Reabrir como administrador", true) {
+            crate::startup::relaunch_elevated();
         }
     } else {
-        let t = if app.autostart { "Inicia com o Windows" } else { "Não inicia com o Windows" };
-        ui.c.text(rect(r0.x + 16.0, r0.y + 8.0, r0.w - 32.0, 44.0), t, 14.0, TEXT, Align::Left, Weight::Regular);
-    }
-    let st = if app.elevated {
-        "Rodando como administrador: consegue mexer em todas as janelas e processos."
-    } else {
-        "Rodando sem administrador: não alcança programas abertos como administrador."
-    };
-    ui.c.text(rect(r0.x + 16.0, r0.y + 54.0, r0.w - 32.0, 22.0), st, 13.0, MUTED, Align::Left, Weight::Regular);
-    if !app.elevated && ui.button("elev", rect(r0.x + 16.0, r0.y + 90.0, 240.0, 44.0), "Reabrir como administrador", true) {
-        crate::startup::relaunch_elevated();
+        let t = "Instalar libera o início com o Windows e a troca do Gerenciador de Tarefas.";
+        ui.c.text(rect(r0.x + 16.0, r0.y + 62.0, r0.w - 32.0, 22.0), t, 13.0, TEXT2, Align::Left, Weight::Regular);
+        if ui.button("install", rect(r0.x + 16.0, r0.y + 94.0, 200.0, 44.0), "Instalar no PC", true) {
+            crate::startup::run_elevated("--install");
+            app.quit_after_install();
+        }
+        if !app.elevated && ui.button("elev", rect(r0.x + 224.0, r0.y + 94.0, 240.0, 44.0), "Reabrir como administrador", false) {
+            crate::startup::relaunch_elevated();
+        }
     }
 
-    let r1 = rect(x, top + 162.0, w, 92.0);
+    let r1 = rect(x, top + 208.0, w, 92.0);
     ui.card(r1);
     ui.label(rect(r1.x + 16.0, r1.y + 10.0, r1.w - 32.0, 18.0), "Atalho de Otimizar", TEXT2);
     if ui.hotkey("hk-opt", rect(r1.x + 16.0, r1.y + 34.0, 240.0, 44.0), &mut app.cfg.hk_optimize) {
@@ -38,7 +49,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     }
 
     if !app.hk_errors.is_empty() {
-        let r2 = rect(x, top + 266.0, w, 40.0 + app.hk_errors.len() as f32 * 22.0);
+        let r2 = rect(x, top + 312.0, w, 40.0 + app.hk_errors.len() as f32 * 22.0);
         ui.card(r2);
         ui.c.text(rect(r2.x + 16.0, r2.y + 8.0, r2.w - 32.0, 22.0), "Atalhos que não funcionaram", 14.0, WARN, Align::Left, Weight::Semibold);
         for (i, e) in app.hk_errors.iter().enumerate() {
