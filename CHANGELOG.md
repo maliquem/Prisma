@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1
+
+- Fixed the Start menu shortcut, so Windows search finds the installed Prisma. / Corrigido o atalho do menu Iniciar, para a pesquisa do Windows achar o Prisma instalado.
+
 ## 0.3.0
 
 - Fixed the crash when Prisma closed, which also made installing look like it did nothing. / Corrigida a queda ao fechar o Prisma, que também fazia a instalação parecer não funcionar.

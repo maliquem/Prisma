@@ -123,6 +123,8 @@ fn make_shortcut(target: &str, lnk: &str) -> bool {
     use windows::Win32::System::Com::*;
     use windows::Win32::UI::Shell::*;
     unsafe {
+        // A instalação roda antes do resto do programa, sem o COM iniciado.
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
         let Ok(l) = CoCreateInstance::<_, IShellLinkW>(&ShellLink, None, CLSCTX_INPROC_SERVER) else { return false };
         let _ = l.SetPath(&HSTRING::from(target));
         let _ = l.SetDescription(w!("Prisma"));
@@ -151,7 +153,10 @@ pub fn install(open_after: bool, parent: Option<u32>) -> bool {
         return false;
     }
     let d = dest.display().to_string();
-    make_shortcut(&d, &shortcut().display().to_string());
+    // Sem o atalho, a pesquisa do Windows não encontra o programa.
+    if !make_shortcut(&d, &shortcut().display().to_string()) {
+        return false;
+    }
     reg_add("DisplayName", "REG_SZ", "Prisma");
     reg_add("DisplayVersion", "REG_SZ", env!("CARGO_PKG_VERSION"));
     reg_add("DisplayIcon", "REG_SZ", &d);
@@ -198,9 +203,13 @@ pub fn uninstall() {
     let _ = Command::new("cmd").raw_arg(line).creation_flags(NO_WINDOW).spawn();
 }
 
-/// A versão mostrada na lista de programas do Windows acompanha a atualização.
+/// Depois de atualizar: a lista de programas mostra a versão nova e o atalho volta se faltar.
 pub fn refresh_version() {
     if is_installed() {
         reg_add("DisplayVersion", "REG_SZ", env!("CARGO_PKG_VERSION"));
+        if !shortcut().exists() {
+            let exe = install_dir().join("prisma.exe").display().to_string();
+            make_shortcut(&exe, &shortcut().display().to_string());
+        }
     }
 }
