@@ -2,7 +2,7 @@
 
 **English** · [Português (Brasil)](README.pt-BR.md)
 
-A lightweight utility for Windows 11, written entirely in Rust with no UI framework. It sits in the tray, loads only what is in use and fits in a single 1.2 MB file. It replaces Task Manager and brings together the small tools a PC gamer usually collects one by one.
+A lightweight utility for Windows 11, written entirely in Rust with no UI framework. It sits in the tray, loads only what is in use and fits in a single 1.3 MB file. It replaces Task Manager and brings together the small tools a PC gamer usually collects one by one.
 
 **[Download the latest version](https://github.com/maliquem/Prisma/releases/latest)**
 
@@ -89,6 +89,10 @@ cargo build --release
 ```
 
 Needs Rust and the Visual Studio Build Tools.
+
+## License
+
+[PolyForm Noncommercial 1.0.0](LICENSE). You can use, change and share Prisma for any noncommercial purpose. Selling it or using it commercially needs separate permission from the author.
 
 ## Publishing a version
 

@@ -2,7 +2,7 @@
 
 [English](README.md) · **Português (Brasil)**
 
-Utilitário leve para Windows 11, todo em Rust, sem framework de interface. Fica na bandeja, só carrega o que está em uso e cabe em um único arquivo de 1,2 MB. Substitui o Gerenciador de Tarefas e reúne as pequenas ferramentas que quem joga no PC costuma juntar uma a uma.
+Utilitário leve para Windows 11, todo em Rust, sem framework de interface. Fica na bandeja, só carrega o que está em uso e cabe em um único arquivo de 1,3 MB. Substitui o Gerenciador de Tarefas e reúne as pequenas ferramentas que quem joga no PC costuma juntar uma a uma.
 
 **[Baixar a versão mais recente](https://github.com/maliquem/Prisma/releases/latest)**
 
@@ -89,6 +89,10 @@ cargo build --release
 ```
 
 Precisa do Rust e das Build Tools do Visual Studio.
+
+## Licença
+
+[PolyForm Noncommercial 1.0.0](LICENSE). Você pode usar, alterar e compartilhar o Prisma para qualquer fim não comercial. Vender ou usar comercialmente exige permissão à parte do autor.
 
 ## Publicar uma versão
 
