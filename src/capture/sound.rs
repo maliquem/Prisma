@@ -1,0 +1,202 @@
+//! Áudio da gravação: som do sistema e microfone, misturados e codificados em AAC.
+
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::Sender;
+use std::sync::Arc;
+use std::time::Duration;
+
+use windows::core::*;
+use windows::Win32::Media::Audio::*;
+use windows::Win32::Media::KernelStreaming::*;
+use windows::Win32::Media::MediaFoundation::*;
+use windows::Win32::Media::Multimedia::*;
+use windows::Win32::System::Com::*;
+use windows::Win32::System::Performance::*;
+
+use super::mux::Pkt;
+
+const CLSID_AAC_ENCODER: GUID = GUID::from_u128(0x93af0c51_2275_45d2_a35b_f2ba21caed00);
+const RATE: u32 = 48000;
+const FRAME: usize = 1024;
+
+fn format() -> WAVEFORMATEXTENSIBLE {
+    WAVEFORMATEXTENSIBLE {
+        Format: WAVEFORMATEX {
+            wFormatTag: WAVE_FORMAT_EXTENSIBLE as u16,
+            nChannels: 2,
+            nSamplesPerSec: RATE,
+            nAvgBytesPerSec: RATE * 8,
+            nBlockAlign: 8,
+            wBitsPerSample: 32,
+            cbSize: 22,
+        },
+        Samples: WAVEFORMATEXTENSIBLE_0 { wValidBitsPerSample: 32 },
+        dwChannelMask: 3,
+        SubFormat: KSDATAFORMAT_SUBTYPE_IEEE_FLOAT,
+    }
+}
+
+struct Source {
+    client: IAudioClient,
+    capture: IAudioCaptureClient,
+}
+
+unsafe fn open(flow: EDataFlow, loopback: bool) -> Result<Source> {
+    let en: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
+    let dev = en.GetDefaultAudioEndpoint(flow, eConsole)?;
+    let client: IAudioClient = dev.Activate(CLSCTX_ALL, None)?;
+    let mut flags = AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY;
+    if loopback {
+        flags |= AUDCLNT_STREAMFLAGS_LOOPBACK;
+    }
+    let f = format();
+    client.Initialize(AUDCLNT_SHAREMODE_SHARED, flags, 2_000_000, 0, &f.Format, None)?;
+    let capture: IAudioCaptureClient = client.GetService()?;
+    client.Start()?;
+    Ok(Source { client, capture })
+}
+
+unsafe fn read(s: &Source, out: &mut Vec<f32>) {
+    while s.capture.GetNextPacketSize().unwrap_or(0) > 0 {
+        let mut data = std::ptr::null_mut();
+        let mut frames = 0;
+        let mut flags = 0;
+        if s.capture.GetBuffer(&mut data, &mut frames, &mut flags, None, None).is_err() {
+            return;
+        }
+        let n = frames as usize * 2;
+        if flags & AUDCLNT_BUFFERFLAGS_SILENT.0 as u32 != 0 {
+            out.resize(out.len() + n, 0.0);
+        } else {
+            out.extend_from_slice(std::slice::from_raw_parts(data as *const f32, n));
+        }
+        let _ = s.capture.ReleaseBuffer(frames);
+    }
+}
+
+struct Aac {
+    mft: IMFTransform,
+}
+
+impl Aac {
+    unsafe fn new() -> Result<Self> {
+        let mft: IMFTransform = CoCreateInstance(&CLSID_AAC_ENCODER, None, CLSCTX_INPROC_SERVER)?;
+        let input = MFCreateMediaType()?;
+        input.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Audio)?;
+        input.SetGUID(&MF_MT_SUBTYPE, &MFAudioFormat_PCM)?;
+        input.SetUINT32(&MF_MT_AUDIO_BITS_PER_SAMPLE, 16)?;
+        input.SetUINT32(&MF_MT_AUDIO_SAMPLES_PER_SECOND, RATE)?;
+        input.SetUINT32(&MF_MT_AUDIO_NUM_CHANNELS, 2)?;
+        mft.SetInputType(0, &input, 0)?;
+        let out = MFCreateMediaType()?;
+        out.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Audio)?;
+        out.SetGUID(&MF_MT_SUBTYPE, &MFAudioFormat_AAC)?;
+        out.SetUINT32(&MF_MT_AUDIO_BITS_PER_SAMPLE, 16)?;
+        out.SetUINT32(&MF_MT_AUDIO_SAMPLES_PER_SECOND, RATE)?;
+        out.SetUINT32(&MF_MT_AUDIO_NUM_CHANNELS, 2)?;
+        out.SetUINT32(&MF_MT_AUDIO_AVG_BYTES_PER_SECOND, 24000)?;
+        mft.SetOutputType(0, &out, 0)?;
+        mft.ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, 0)?;
+        Ok(Self { mft })
+    }
+
+    unsafe fn encode(&self, pcm: &[i16], pts: i64, tx: &Sender<Pkt>) -> Result<()> {
+        let bytes = std::slice::from_raw_parts(pcm.as_ptr() as *const u8, pcm.len() * 2);
+        let buf = MFCreateMemoryBuffer(bytes.len() as u32)?;
+        let mut p = std::ptr::null_mut();
+        buf.Lock(&mut p, None, None)?;
+        std::ptr::copy_nonoverlapping(bytes.as_ptr(), p, bytes.len());
+        buf.Unlock()?;
+        buf.SetCurrentLength(bytes.len() as u32)?;
+        let s = MFCreateSample()?;
+        s.AddBuffer(&buf)?;
+        s.SetSampleTime(pts)?;
+        s.SetSampleDuration(pcm.len() as i64 / 2 * 10_000_000 / RATE as i64)?;
+        self.mft.ProcessInput(0, &s, 0)?;
+        let mut next = pts;
+        loop {
+            let ob = MFCreateMemoryBuffer(4096)?;
+            let os = MFCreateSample()?;
+            os.AddBuffer(&ob)?;
+            let mut out = [MFT_OUTPUT_DATA_BUFFER { pSample: std::mem::ManuallyDrop::new(Some(os.clone())), ..Default::default() }];
+            let mut st = 0;
+            let r = self.mft.ProcessOutput(0, &mut out, &mut st);
+            drop(std::mem::ManuallyDrop::into_inner(std::mem::replace(&mut out[0].pSample, std::mem::ManuallyDrop::new(None))));
+            if r.is_err() {
+                return Ok(());
+            }
+            let mut p = std::ptr::null_mut();
+            let mut len = 0;
+            ob.Lock(&mut p, None, Some(&mut len))?;
+            let data = std::slice::from_raw_parts(p, len as usize).to_vec();
+            ob.Unlock()?;
+            if !data.is_empty() {
+                let _ = tx.send(Pkt { data, pts: next, key: true });
+                next += FRAME as i64 * 10_000_000 / RATE as i64;
+            }
+        }
+    }
+}
+
+fn now_100ns() -> i64 {
+    let (mut c, mut f) = (0i64, 0i64);
+    unsafe {
+        let _ = QueryPerformanceCounter(&mut c);
+        let _ = QueryPerformanceFrequency(&mut f);
+    }
+    (c as i128 * 10_000_000 / f as i128) as i64
+}
+
+pub fn spawn(system: bool, mic: bool, stop: Arc<AtomicBool>, tx: Sender<Pkt>) {
+    let _ = std::thread::Builder::new().name("audio".into()).spawn(move || unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        let _ = MFStartup(MF_VERSION, MFSTARTUP_LITE);
+        if let Err(e) = run(system, mic, &stop, &tx) {
+            eprintln!("áudio: {e:?}");
+        }
+        let _ = MFShutdown();
+    });
+}
+
+unsafe fn run(system: bool, mic: bool, stop: &AtomicBool, tx: &Sender<Pkt>) -> Result<()> {
+    let sys = if system { open(eRender, true).ok() } else { None };
+    let micro = if mic { open(eCapture, false).ok() } else { None };
+    let aac = Aac::new()?;
+    let start = now_100ns();
+    let mut produced: i64 = 0;
+    let (mut a, mut b) = (Vec::<f32>::new(), Vec::<f32>::new());
+    let mut pcm = vec![0i16; FRAME * 2];
+    while !stop.load(Ordering::Relaxed) {
+        std::thread::sleep(Duration::from_millis(10));
+        if let Some(s) = &sys {
+            read(s, &mut a);
+        }
+        if let Some(m) = &micro {
+            read(m, &mut b);
+        }
+        // Sem som tocando o Windows não entrega nada: completa com silêncio para manter o tempo.
+        let expected = (now_100ns() - start) * RATE as i64 / 10_000_000;
+        let have = produced + (a.len() / 2) as i64;
+        if have + 2400 < expected {
+            a.resize(a.len() + ((expected - have) * 2) as usize, 0.0);
+        }
+        while a.len() >= FRAME * 2 {
+            for i in 0..FRAME * 2 {
+                let m = b.get(i).copied().unwrap_or(0.0);
+                pcm[i] = ((a[i] + m).clamp(-1.0, 1.0) * 32767.0) as i16;
+            }
+            a.drain(..FRAME * 2);
+            b.drain(..(FRAME * 2).min(b.len()));
+            let pts = start + produced * 10_000_000 / RATE as i64;
+            aac.encode(&pcm, pts, tx)?;
+            produced += FRAME as i64;
+        }
+    }
+    if let Some(s) = &sys {
+        let _ = s.client.Stop();
+    }
+    if let Some(m) = &micro {
+        let _ = m.client.Stop();
+    }
+    Ok(())
+}

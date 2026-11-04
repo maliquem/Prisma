@@ -1,0 +1,1194 @@
+//! Estado do programa e janelas principais. Tudo aqui roda na thread da interface.
+
+use std::cell::RefCell;
+use std::collections::HashSet;
+use std::sync::atomic::Ordering;
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
+
+use windows::core::*;
+use windows::Win32::Foundation::*;
+use windows::Win32::Graphics::Direct2D::*;
+use windows::Win32::Graphics::Direct2D::Common::*;
+use windows::Win32::Graphics::Dwm::*;
+use windows::Win32::Graphics::Gdi::*;
+use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows::Win32::UI::HiDpi::{AdjustWindowRectExForDpi, GetDpiForWindow};
+use windows::Win32::UI::Input::KeyboardAndMouse::*;
+use windows::Win32::UI::Shell::*;
+use windows::Win32::UI::WindowsAndMessaging::*;
+
+use crate::capture;
+use crate::config::{Config, Hotkey, MOD_ALT, MOD_CTRL, MOD_SHIFT, MOD_WIN};
+use crate::optimizer::{self, Candidate, Usage};
+use crate::capture::engine::{self, Cmd, Handle, Settings, Target};
+use crate::capture::mux::Codec;
+use crate::overlays::{Hud, Prompt, PromptAnswer, Toast, Widget};
+use crate::pages::{self, Page};
+use crate::sys::audio::{self, Session};
+use crate::sys::fullscreen::Fullscreenizer;
+use crate::sys::monitor::{self, Snapshot};
+use crate::sys::power::{self, Detector, Event, Mode, Plan, PlanValues};
+use crate::sys::procs;
+use crate::ui::gfx::*;
+use crate::ui::UiState;
+
+pub const WM_TICK: u32 = WM_APP + 1;
+pub const WM_TRAY: u32 = WM_APP + 2;
+pub const WM_SHOW: u32 = WM_APP + 3;
+const WM_PICK: u32 = WM_APP + 4;
+const TIMER_HUD: usize = 7;
+pub const ACT_SHOT: i32 = HK_SHOT;
+pub const ACT_RECORD: i32 = HK_REC;
+
+const HK_FULL: i32 = 1;
+const HK_WIDGET: i32 = 2;
+const HK_OPT: i32 = 3;
+const HK_SHOT: i32 = 4;
+const HK_SHOT_FULL: i32 = 5;
+const HK_REC: i32 = 6;
+const HK_REPLAY: i32 = 7;
+const HK_VOL_UP: i32 = 10;
+const HK_VOL_DOWN: i32 = 11;
+const HK_MUTE: i32 = 12;
+
+const VK_VOL_UP: u32 = 0xAF;
+const VK_VOL_DOWN: u32 = 0xAE;
+const VK_MUTE: u32 = 0xAD;
+
+const TRAY_OPEN: u32 = 1;
+const TRAY_WIDGET: u32 = 2;
+const TRAY_OPT: u32 = 3;
+const TRAY_SHOT: u32 = 4;
+const TRAY_EXIT: u32 = 9;
+
+pub struct MainWin {
+    pub hwnd: HWND,
+    pub rt: ID2D1HwndRenderTarget,
+    pub canvas: Canvas,
+    pub ui: UiState,
+    pub scale: f32,
+    pub w: f32,
+    pub h: f32,
+}
+
+pub struct WinInfo {
+    pub hwnd: HWND,
+    pub title: String,
+    pub exe: String,
+    pub size: (i32, i32),
+}
+
+pub struct App {
+    pub cfg: Config,
+    pub hub: HWND,
+    shared: Arc<Mutex<Snapshot>>,
+    pub snap: Snapshot,
+    pub main: Option<MainWin>,
+    pub page: Page,
+    pub full: Fullscreenizer,
+    pub detector: Detector,
+    pub widget: Widget,
+    pub toast: Toast,
+    pub prompt: Prompt,
+    pub usage: Usage,
+    pub hk_errors: Vec<String>,
+    pub sessions: Vec<Session>,
+    pub plans: Vec<Plan>,
+    pub plan_values: Vec<PlanValues>,
+    pub active_plan: String,
+    pub cands: Vec<Candidate>,
+    pub unchecked: HashSet<String>,
+    pub checked: HashSet<String>,
+    pub stubborn: Vec<(String, Vec<u32>)>,
+    pending: Vec<(String, Vec<u32>, Instant)>,
+    pub windows: Vec<WinInfo>,
+    pub sort: u8,
+    pub elevated: bool,
+    pub autostart: bool,
+    fg_pid: u32,
+    pub fg_exe: String,
+    asked: HashSet<String>,
+    last_tick: Instant,
+    last_save: Instant,
+    capturing_keys: bool,
+    engine: Option<Handle>,
+    rec_start: Option<Instant>,
+    hud: Hud,
+}
+
+thread_local! {
+    static APP: RefCell<Option<App>> = const { RefCell::new(None) };
+}
+
+/// Acessa o estado. Devolve None numa mensagem reentrante, que segue para o padrão.
+pub fn with<R>(f: impl FnOnce(&mut App) -> R) -> Option<R> {
+    APP.with(|a| a.try_borrow_mut().ok().and_then(|mut g| g.as_mut().map(f)))
+}
+
+pub fn start(background: bool) {
+    unsafe {
+        let inst = GetModuleHandleW(None).unwrap_or_default();
+        let wc = WNDCLASSW {
+            lpfnWndProc: Some(hub_proc),
+            lpszClassName: w!("PrismaHub"),
+            hInstance: inst.into(),
+            ..Default::default()
+        };
+        RegisterClassW(&wc);
+        let main = WNDCLASSW {
+            lpfnWndProc: Some(main_proc),
+            lpszClassName: w!("PrismaMain"),
+            hInstance: inst.into(),
+            hCursor: LoadCursorW(None, IDC_ARROW).unwrap_or_default(),
+            hIcon: LoadIconW(Some(inst.into()), PCWSTR(1 as *const u16)).unwrap_or_default(),
+            ..Default::default()
+        };
+        RegisterClassW(&main);
+        let hub = CreateWindowExW(
+            WINDOW_EX_STYLE(0),
+            w!("PrismaHub"),
+            w!("Prisma"),
+            WS_OVERLAPPED,
+            0,
+            0,
+            0,
+            0,
+            None,
+            None,
+            Some(inst.into()),
+            None,
+        )
+        .expect("janela de controle");
+        let cfg = Config::load();
+        let shared = monitor::spawn(hub.0 as isize, WM_TICK);
+        let mut app = App {
+            hub,
+            shared,
+            snap: Snapshot::default(),
+            main: None,
+            page: Page::Monitor,
+            full: Fullscreenizer::default(),
+            detector: Detector::new(),
+            widget: Widget::new(),
+            toast: Toast::new(),
+            prompt: Prompt::new(),
+            usage: Usage::load(),
+            hk_errors: Vec::new(),
+            sessions: Vec::new(),
+            plans: Vec::new(),
+            plan_values: Vec::new(),
+            active_plan: String::new(),
+            cands: Vec::new(),
+            unchecked: HashSet::new(),
+            checked: HashSet::new(),
+            stubborn: Vec::new(),
+            pending: Vec::new(),
+            windows: Vec::new(),
+            sort: 0,
+            elevated: crate::startup::is_elevated(),
+            autostart: crate::startup::is_enabled(),
+            fg_pid: 0,
+            fg_exe: String::new(),
+            asked: HashSet::new(),
+            last_tick: Instant::now(),
+            last_save: Instant::now(),
+            capturing_keys: false,
+            engine: None,
+            rec_start: None,
+            hud: Hud::new(),
+            cfg,
+        };
+        app.first_run();
+        #[cfg(debug_assertions)]
+        for a in std::env::args() {
+            if let Some(path) = a.strip_prefix("--test-grab=") {
+                let mon = capture::cursor_monitor();
+                eprintln!("{:?}", capture::monitor_color(mon));
+                let t = Instant::now();
+                match capture::grab(mon) {
+                    Ok(f) => {
+                        eprintln!("{}x{} hdr={} {:?}", f.w, f.h, f.half.is_some(), t.elapsed());
+                        eprintln!("{:?}", capture::save_png(path, f.w, f.h, &f.bgra));
+                        if let Some(h) = &f.half {
+                            eprintln!("{:?}", capture::save_jxr(&format!("{path}.jxr"), f.w, f.h, h));
+                        }
+                    }
+                    Err(e) => eprintln!("erro {e:?}"),
+                }
+                std::process::exit(0);
+            }
+            if let Some(path) = a.strip_prefix("--test-rec=") {
+                use capture::engine::*;
+                let mon = capture::cursor_monitor();
+                let codec = match std::env::var("PRISMA_CODEC").as_deref() {
+                    Ok("hevc") => capture::mux::Codec::Hevc,
+                    Ok("h264") => capture::mux::Codec::H264,
+                    _ => capture::mux::Codec::Av1,
+                };
+                let h = start(Settings {
+                    target: Target::Monitor(mon.0 as isize),
+                    out_h: 0,
+                    fps: 60,
+                    codec,
+                    cursor: true,
+                    sys_audio: true,
+                    mic: false,
+                    hdr10: std::env::var("PRISMA_HDR10").is_ok(),
+                    replay_secs: 3,
+                });
+                std::thread::sleep(std::time::Duration::from_millis(1500));
+                h.send(Cmd::Record(path.to_string()));
+                std::thread::sleep(std::time::Duration::from_secs(6));
+                h.send(Cmd::SaveReplay(format!("{path}.replay.mp4")));
+                std::thread::sleep(std::time::Duration::from_millis(300));
+                h.send(Cmd::StopRecord);
+                std::thread::sleep(std::time::Duration::from_millis(300));
+                let (f, d, b) = (h.status.frames.load(std::sync::atomic::Ordering::Relaxed), h.status.dropped.load(std::sync::atomic::Ordering::Relaxed), h.status.bytes.load(std::sync::atomic::Ordering::Relaxed));
+                eprintln!("quadros {f} perdidos {d} bytes {b} falhou {} {}", h.status.failed.load(std::sync::atomic::Ordering::Relaxed), h.info.lock().unwrap());
+                h.stop();
+                std::process::exit(0);
+            }
+            if a == "--test-gpu" {
+                let mut k = crate::sys::kmt::Kmt::new().expect("kmt");
+                k.read();
+                for _ in 0..3 {
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                    let r = k.read();
+                    eprintln!("kmt uso {:.1}% vram {} de {} MB", r.util, r.used >> 20, r.total >> 20);
+                }
+                if let Some(n) = crate::sys::nvml::Nvml::load() {
+                    let r = n.read();
+                    eprintln!("nvml uso {:.1}% vram {} de {} MB {} C", r.util, r.used >> 20, r.total >> 20, r.temp);
+                }
+                std::process::exit(0);
+            }
+            if a == "--test-audio" {
+                for s in audio::sessions() {
+                    eprintln!("{} pid {} vol {:.2} mudo {} ativo {}", s.exe, s.pid, s.volume, s.muted, s.active);
+                }
+                if let Some(s) = audio::sessions().into_iter().next() {
+                    let v = s.volume;
+                    let pid = s.pid;
+                    eprintln!("mudança {:?}", audio::change_focused(pid, audio::Change::Step(-5)).map(|r| r.0));
+                    eprintln!("lido {:?}", audio::for_process(pid).first().map(|x| x.volume));
+                    for x in audio::for_process(pid) {
+                        x.set_volume(v);
+                    }
+                    eprintln!("restaurado {:?}", audio::for_process(pid).first().map(|x| x.volume));
+                }
+                std::process::exit(0);
+            }
+            if let Some(path) = a.strip_prefix("--test-overlay=") {
+                let mon = capture::cursor_monitor();
+                if let Ok(f) = capture::grab(mon) {
+                    capture::shot::open(f, mon, String::new(), false);
+                    capture::shot::debug_setup(path);
+                }
+            }
+            app.page = match a.as_str() {
+                "--page=optimize" => Page::Optimize,
+                "--page=energy" => Page::Energy,
+                "--page=full" => Page::Fullscreen,
+                "--page=volume" => Page::Volume,
+                "--page=capture" => Page::Capture,
+                "--page=widget" => Page::Widget,
+                "--page=adjust" => Page::Adjust,
+                _ => app.page,
+            };
+        }
+        app.refresh_plans();
+        app.register_hotkeys();
+        app.widget.set_visible(app.cfg.widget_on);
+        tray_add(hub, true);
+        let open = !background && !std::env::args().any(|a| a.starts_with("--test-"));
+        APP.with(|a| *a.borrow_mut() = Some(app));
+        if open {
+            let _ = PostMessageW(Some(hub), WM_SHOW, WPARAM(0), LPARAM(0));
+        }
+    }
+}
+
+pub fn shutdown() {
+    with(|a| {
+        if a.rec_start.is_some() {
+            a.toggle_record();
+        }
+        a.stop_engine();
+        a.cfg.save();
+        a.usage.save();
+        tray_remove(a.hub);
+    });
+}
+
+unsafe fn tray_add(hub: HWND, add: bool) {
+    let inst = GetModuleHandleW(None).unwrap_or_default();
+    let mut nid = NOTIFYICONDATAW {
+        cbSize: std::mem::size_of::<NOTIFYICONDATAW>() as u32,
+        hWnd: hub,
+        uID: 1,
+        uFlags: NIF_ICON | NIF_MESSAGE | NIF_TIP,
+        uCallbackMessage: WM_TRAY,
+        hIcon: LoadIconW(Some(inst.into()), PCWSTR(1 as *const u16)).unwrap_or_default(),
+        ..Default::default()
+    };
+    let tip: Vec<u16> = "Prisma".encode_utf16().collect();
+    nid.szTip[..tip.len()].copy_from_slice(&tip);
+    let _ = Shell_NotifyIconW(if add { NIM_ADD } else { NIM_MODIFY }, &nid);
+}
+
+fn tray_remove(hub: HWND) {
+    let nid = NOTIFYICONDATAW {
+        cbSize: std::mem::size_of::<NOTIFYICONDATAW>() as u32,
+        hWnd: hub,
+        uID: 1,
+        ..Default::default()
+    };
+    unsafe {
+        let _ = Shell_NotifyIconW(NIM_DELETE, &nid);
+    }
+}
+
+impl App {
+    /// Na primeira vez, cria os planos do Prisma. O jogo segue no plano que já estava.
+    fn first_run(&mut self) {
+        if !self.cfg.first_run {
+            return;
+        }
+        self.cfg.first_run = false;
+        if let (Some(rest), _) = power::ensure_prisma_plans() {
+            self.cfg.plan_rest = rest;
+        }
+        self.cfg.save();
+    }
+
+    pub fn refresh_plans(&mut self) {
+        self.plans = power::list();
+        self.plan_values = self.plans.iter().map(power::values).collect();
+        self.active_plan = power::active().unwrap_or_default();
+    }
+
+    pub fn register_hotkeys(&mut self) {
+        unsafe {
+            for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_REC, HK_REPLAY, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE] {
+                let _ = UnregisterHotKey(Some(self.hub), id);
+            }
+        }
+        self.hk_errors.clear();
+        let c = &self.cfg;
+        let list = [
+            (HK_FULL, c.hk_fullscreen, "Fullscreenizer", true),
+            (HK_WIDGET, c.hk_widget, "Widget", true),
+            (HK_OPT, c.hk_optimize, "Otimizar", true),
+            (HK_SHOT, c.hk_shot, "Foto da área", true),
+            (HK_SHOT_FULL, c.hk_shot_full, "Foto da tela inteira", true),
+            (HK_REC, c.hk_record, "Gravar", true),
+            (HK_REPLAY, c.hk_replay, "Replay", true),
+            (HK_VOL_UP, Hotkey::new(c.vol_mods, VK_VOL_UP), "Aumentar volume", false),
+            (HK_VOL_DOWN, Hotkey::new(c.vol_mods, VK_VOL_DOWN), "Diminuir volume", false),
+            (HK_MUTE, Hotkey::new(c.vol_mods, VK_MUTE), "Mudo", true),
+        ];
+        let mut errors = Vec::new();
+        for (id, hk, name, norepeat) in list {
+            if hk.vk == 0 {
+                continue;
+            }
+            let mut m = HOT_KEY_MODIFIERS(hk.mods);
+            if norepeat {
+                m |= MOD_NOREPEAT;
+            }
+            if unsafe { RegisterHotKey(Some(self.hub), id, m, hk.vk) }.is_err() {
+                errors.push(format!("{name}: {} já está em uso", hk.label()));
+            }
+        }
+        self.hk_errors = errors;
+    }
+
+    fn pause_hotkeys(&mut self, on: bool) {
+        if self.capturing_keys == on {
+            return;
+        }
+        self.capturing_keys = on;
+        if on {
+            unsafe {
+                for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_REC, HK_REPLAY] {
+                    let _ = UnregisterHotKey(Some(self.hub), id);
+                }
+            }
+        } else {
+            self.register_hotkeys();
+        }
+    }
+
+    fn fg_info(&self) -> Option<(HWND, u32, String)> {
+        unsafe {
+            let h = GetForegroundWindow();
+            if h.is_invalid() {
+                return None;
+            }
+            let pid = procs::window_pid(h);
+            let exe = procs::image_path(pid).map(|p| procs::exe_name(&p))?;
+            Some((h, pid, exe))
+        }
+    }
+
+    fn on_hotkey(&mut self, id: i32) {
+        match id {
+            HK_FULL => self.toggle_fullscreen(),
+            HK_WIDGET => self.toggle_widget(),
+            HK_OPT => self.optimize_prompt(true),
+            HK_SHOT => self.take_shot(),
+            HK_SHOT_FULL => self.take_full_shot(),
+            HK_REC => self.toggle_record(),
+            HK_REPLAY => self.save_replay(),
+            HK_VOL_UP => self.volume(audio::Change::Step(self.cfg.vol_step as i32)),
+            HK_VOL_DOWN => self.volume(audio::Change::Step(-(self.cfg.vol_step as i32))),
+            HK_MUTE => self.volume(audio::Change::ToggleMute),
+            _ => {}
+        }
+    }
+
+    /// Pede uma ação de um botão pela fila, fora do desenho da tela.
+    pub fn post_action(&self, id: i32) {
+        unsafe {
+            let _ = PostMessageW(Some(self.hub), WM_HOTKEY, WPARAM(id as usize), LPARAM(0));
+        }
+    }
+
+    pub fn pick_folder(&self) {
+        unsafe {
+            let _ = PostMessageW(Some(self.hub), WM_PICK, WPARAM(0), LPARAM(0));
+        }
+    }
+
+    pub fn is_recording(&self) -> bool {
+        self.rec_start.is_some()
+    }
+
+    fn capture_settings(&self, replay: bool) -> Settings {
+        let fg = unsafe { GetForegroundWindow() };
+        let mon = unsafe { MonitorFromWindow(fg, MONITOR_DEFAULTTOPRIMARY) };
+        let target = match self.cfg.cap_target {
+            1 if !fg.is_invalid() => Target::Window(fg.0 as isize),
+            _ => Target::Monitor(mon.0 as isize),
+        };
+        let (out_h, fps) = match self.cfg.cap_mode {
+            1 => (2160, 60),
+            2 => (1440, 60),
+            3 => (1080, 60),
+            _ => (0, native_fps(mon)),
+        };
+        Settings {
+            target,
+            out_h,
+            fps,
+            codec: match self.cfg.cap_codec {
+                1 => Codec::Hevc,
+                2 => Codec::H264,
+                _ => Codec::Av1,
+            },
+            cursor: self.cfg.cap_cursor,
+            sys_audio: self.cfg.cap_sys_audio,
+            mic: self.cfg.cap_mic,
+            hdr10: self.cfg.cap_hdr,
+            replay_secs: if replay { self.cfg.replay_secs } else { 0 },
+        }
+    }
+
+    fn start_engine(&mut self, replay: bool) {
+        if self.engine.is_none() {
+            let s = self.capture_settings(replay);
+            self.engine = Some(engine::start(s));
+        }
+    }
+
+    fn stop_engine(&mut self) {
+        if let Some(e) = self.engine.take() {
+            e.stop();
+        }
+    }
+
+    fn end_record_ui(&mut self) {
+        self.rec_start = None;
+        self.hud.hide();
+        unsafe {
+            let _ = KillTimer(Some(self.hub), TIMER_HUD);
+        }
+    }
+
+    fn toggle_record(&mut self) {
+        if self.rec_start.is_some() {
+            if let Some(e) = &self.engine {
+                e.send(Cmd::StopRecord);
+            }
+            self.end_record_ui();
+            if !(self.cfg.replay_on && self.detector.mode == Mode::Game) {
+                self.stop_engine();
+            }
+            self.toast.info(&format!("Gravação salva em {}", self.cfg.cap_dir));
+            return;
+        }
+        self.start_engine(false);
+        let path = capture::new_path(&self.cfg.cap_dir, "mp4");
+        if let Some(e) = &self.engine {
+            e.send(Cmd::Record(path));
+        }
+        self.rec_start = Some(Instant::now());
+        self.hud_update();
+        unsafe {
+            SetTimer(Some(self.hub), TIMER_HUD, 1000, None);
+        }
+    }
+
+    fn save_replay(&mut self) {
+        if !self.cfg.replay_on {
+            self.toast.info("O replay está desligado na tela Captura");
+            return;
+        }
+        match &self.engine {
+            Some(e) => {
+                e.send(Cmd::SaveReplay(capture::new_path(&self.cfg.cap_dir, "mp4")));
+                self.toast.info(&format!("Últimos {} s salvos", self.cfg.replay_secs));
+            }
+            None => self.toast.info("O replay só grava em modo jogo"),
+        }
+    }
+
+    fn hud_update(&mut self) {
+        let Some(t) = self.rec_start else { return };
+        let Some(e) = &self.engine else { return };
+        let dead = !e.status.running.load(Ordering::Relaxed) && t.elapsed().as_secs() > 2;
+        if e.status.failed.load(Ordering::Relaxed) || dead {
+            self.end_record_ui();
+            self.stop_engine();
+            self.toast.info("A gravação parou por um erro");
+            return;
+        }
+        let info = e.info.lock().unwrap().clone();
+        let bytes = e.status.bytes.load(Ordering::Relaxed);
+        self.hud.update(t.elapsed().as_secs(), &info, bytes);
+    }
+
+    pub fn hud_stop(&mut self) {
+        if self.rec_start.is_some() {
+            self.toggle_record();
+        }
+    }
+
+    fn take_shot(&mut self) {
+        let mon = capture::cursor_monitor();
+        match capture::grab(mon) {
+            Ok(f) => capture::shot::open(f, mon, self.cfg.cap_dir.clone(), self.cfg.shot_hdr),
+            Err(_) => self.toast.info("Não consegui capturar a tela"),
+        }
+    }
+
+    fn take_full_shot(&mut self) {
+        let Ok(f) = capture::grab(capture::cursor_monitor()) else {
+            self.toast.info("Não consegui capturar a tela");
+            return;
+        };
+        let path = capture::new_path(&self.cfg.cap_dir, "png");
+        let mut ok = capture::save_png(&path, f.w, f.h, &f.bgra).is_ok();
+        if let (true, Some(half)) = (self.cfg.shot_hdr, &f.half) {
+            ok &= capture::save_jxr(&capture::new_path(&self.cfg.cap_dir, "jxr"), f.w, f.h, half).is_ok();
+        }
+        capture::copy_to_clipboard(self.hub, f.w, f.h, &f.bgra);
+        self.toast.info(if ok { "Foto salva e copiada" } else { "Não consegui salvar a foto" });
+    }
+
+    fn volume(&mut self, ch: audio::Change) {
+        let Some((_, pid, exe)) = self.fg_info() else { return };
+        let name = exe.trim_end_matches(".exe").to_string();
+        match audio::change_focused(pid, ch) {
+            Some((vol, muted)) => {
+                if self.cfg.vol_osd {
+                    self.toast.volume(&name, vol, muted);
+                }
+                if self.detector.game_pid == pid && !exe.is_empty() {
+                    self.cfg.profile_mut(&exe).volume = (vol * 100.0).round() as i32;
+                    self.cfg.save();
+                }
+            }
+            None => self.toast.info(&format!("{name} não tem som tocando")),
+        }
+    }
+
+    fn toggle_fullscreen(&mut self) {
+        let Some((h, _, exe)) = self.fg_info() else { return };
+        if let Some(on) = self.full.toggle(h) {
+            let msg = format!("{} · {} desfaz", if on { "Sem bordas" } else { "Janela restaurada" }, self.cfg.hk_fullscreen.label());
+            self.toast.info(&msg);
+            if self.cfg.fs_remember {
+                self.cfg.profile_mut(&exe).borderless = on;
+                self.cfg.save();
+            }
+        }
+    }
+
+    pub fn toggle_widget(&mut self) {
+        let on = !self.widget.visible;
+        self.set_widget(on);
+    }
+
+    pub fn set_widget(&mut self, on: bool) {
+        self.cfg.widget_on = on;
+        self.widget.set_visible(on);
+        self.widget.update(&self.cfg, &self.snap);
+        self.cfg.save();
+    }
+
+    pub fn refresh_candidates(&mut self) {
+        let fg = self.fg_pid;
+        self.cands = optimizer::candidates(&self.cfg, &self.usage, &self.snap.groups, fg, self.detector.game_pid);
+        for c in &mut self.cands {
+            if self.unchecked.contains(&c.exe) {
+                c.on = false;
+            } else if self.checked.contains(&c.exe) {
+                c.on = true;
+            }
+        }
+    }
+
+    pub fn close_selected(&mut self) {
+        self.refresh_candidates();
+        let now = Instant::now();
+        let picked: Vec<usize> = self.cands.iter().enumerate().filter(|(_, c)| c.on).map(|(i, _)| i).collect();
+        for i in picked {
+            let c = &self.cands[i];
+            if optimizer::close(c) {
+                self.pending.push((c.exe.clone(), c.pids.clone(), now));
+            } else {
+                self.stubborn.push((c.exe.clone(), c.pids.clone()));
+            }
+        }
+    }
+
+    pub fn force_stubborn(&mut self) {
+        for (_, pids) in self.stubborn.drain(..) {
+            optimizer::force(&pids);
+        }
+    }
+
+    /// Mostra a pergunta de otimização. `manual` mostra mesmo sem nada a fechar.
+    fn optimize_prompt(&mut self, manual: bool) {
+        self.refresh_candidates();
+        let selected: Vec<&Candidate> = self.cands.iter().filter(|c| c.on).collect();
+        if selected.is_empty() {
+            if manual {
+                self.toast.info("Nada para fechar agora");
+            }
+            return;
+        }
+        let ram: u64 = selected.iter().map(|c| c.ram).sum();
+        let gb = format!("{:.1}", ram as f64 / (1u64 << 30) as f64).replace('.', ",");
+        let n = selected.len();
+        let title = if self.detector.game_exe.is_empty() {
+            "Otimizar".to_string()
+        } else {
+            format!("{} detectado", self.detector.game_exe.trim_end_matches(".exe"))
+        };
+        let plural = if n == 1 { "programa" } else { "programas" };
+        self.prompt.ask(title, format!("Fechar {n} {plural} para liberar {gb} GB de RAM?"));
+    }
+
+    pub fn prompt_mouse(&mut self, msg: u32, x: f32, y: f32) {
+        match self.prompt.mouse(msg, x, y) {
+            Some(PromptAnswer::Close) => {
+                self.prompt.hide();
+                self.close_selected();
+            }
+            Some(PromptAnswer::List) => {
+                self.prompt.hide();
+                self.page = Page::Optimize;
+                self.show_main();
+            }
+            Some(PromptAnswer::Dismiss) => self.prompt.hide(),
+            None => {}
+        }
+    }
+
+    pub fn prompt_hide(&mut self) {
+        self.prompt.hide();
+    }
+
+    fn apply_plan(&mut self, id: &str) {
+        if !id.is_empty() && self.active_plan != id && power::set_active(id) {
+            self.active_plan = id.to_string();
+        }
+    }
+
+    fn on_tick(&mut self) {
+        self.snap = self.shared.lock().unwrap().clone();
+        let secs = self.last_tick.elapsed().as_secs().max(1);
+        self.last_tick = Instant::now();
+
+        if let Some((h, pid, exe)) = self.fg_info() {
+            if pid != self.fg_pid {
+                self.fg_pid = pid;
+                self.fg_exe = exe.clone();
+                self.apply_profile(h, &exe);
+            }
+        }
+        let fg_exe = self.fg_exe.clone();
+        self.usage.note(&self.snap.groups, &fg_exe, secs);
+
+        let ev = self.detector.tick(&self.cfg, self.snap.cpu, self.snap.gpu.util);
+        match ev {
+            Event::Enter { game } => {
+                if game.is_some() && self.cfg.replay_on {
+                    self.start_engine(true);
+                }
+                if self.cfg.power_auto {
+                    let mut plan = self.cfg.plan_game.clone();
+                    if let Some(p) = game.as_ref().and_then(|g| self.cfg.profile(g)) {
+                        if !p.plan.is_empty() {
+                            plan = p.plan.clone();
+                        }
+                    }
+                    self.apply_plan(&plan);
+                }
+                if let Some(g) = game {
+                    if self.cfg.on_game != 2 && self.asked.insert(g.clone()) {
+                        if self.cfg.on_game == 1 {
+                            self.close_selected();
+                        } else {
+                            self.optimize_prompt(false);
+                        }
+                    }
+                }
+            }
+            Event::Leave => {
+                if self.rec_start.is_none() {
+                    self.stop_engine();
+                }
+                if self.cfg.power_auto {
+                    let plan = self.cfg.plan_rest.clone();
+                    self.apply_plan(&plan);
+                }
+            }
+            Event::None => {}
+        }
+
+        let now = Instant::now();
+        let mut done = Vec::new();
+        for (i, (exe, pids, t)) in self.pending.iter().enumerate() {
+            if now.duration_since(*t).as_secs() >= 3 {
+                let alive = self.snap.groups.iter().any(|g| g.pids.iter().any(|p| pids.contains(p)));
+                if alive {
+                    self.stubborn.push((exe.clone(), pids.clone()));
+                }
+                done.push(i);
+            }
+        }
+        for i in done.into_iter().rev() {
+            self.pending.remove(i);
+        }
+
+        self.widget.update(&self.cfg, &self.snap);
+        self.full.sweep();
+        if self.last_save.elapsed().as_secs() > 300 {
+            self.last_save = Instant::now();
+            self.usage.save();
+        }
+        if self.main.is_some() {
+            self.refresh_page();
+            self.invalidate();
+        }
+    }
+
+    pub fn replay_changed(&mut self) {
+        if !self.cfg.replay_on && self.rec_start.is_none() {
+            self.stop_engine();
+        }
+        if self.cfg.replay_on && self.detector.mode == Mode::Game {
+            self.start_engine(true);
+        }
+    }
+
+    fn apply_profile(&mut self, h: HWND, exe: &str) {
+        let Some(p) = self.cfg.profile(exe).cloned() else { return };
+        if p.borderless && !self.full.is_on(h) {
+            self.full.apply(h);
+        }
+        if p.volume >= 0 {
+            for s in audio::for_process(self.fg_pid) {
+                s.set_volume(p.volume as f32 / 100.0);
+            }
+        }
+        match p.widget {
+            1 if !self.widget.visible => self.widget.set_visible(true),
+            2 if self.widget.visible => self.widget.set_visible(false),
+            _ => {}
+        }
+    }
+
+    pub fn refresh_page(&mut self) {
+        match self.page {
+            Page::Volume => self.sessions = audio::sessions(),
+            Page::Optimize => self.refresh_candidates(),
+            Page::Fullscreen => self.refresh_windows(),
+            Page::Energy => self.active_plan = power::active().unwrap_or_default(),
+            _ => {}
+        }
+        let detail = matches!(self.page, Page::Monitor | Page::Optimize);
+        monitor::DETAIL.store(detail && self.main.is_some(), Ordering::Relaxed);
+    }
+
+    fn refresh_windows(&mut self) {
+        let own = self.main.as_ref().map(|m| m.hwnd);
+        self.windows = procs::top_windows()
+            .into_iter()
+            .filter(|h| Some(*h) != own)
+            .map(|h| {
+                let exe = procs::image_path(procs::window_pid(h)).map(|p| procs::exe_name(&p)).unwrap_or_default();
+                let mut r = RECT::default();
+                unsafe {
+                    let _ = GetClientRect(h, &mut r);
+                }
+                WinInfo { hwnd: h, title: procs::window_title(h), exe, size: (r.right, r.bottom) }
+            })
+            .collect();
+    }
+
+    pub fn show_main(&mut self) {
+        if let Some(m) = &self.main {
+            unsafe {
+                let _ = ShowWindow(m.hwnd, SW_RESTORE);
+                let _ = SetForegroundWindow(m.hwnd);
+            }
+            return;
+        }
+        unsafe {
+            let inst = GetModuleHandleW(None).unwrap_or_default();
+            let h = CreateWindowExW(
+                WINDOW_EX_STYLE(0),
+                w!("PrismaMain"),
+                w!("Prisma"),
+                WS_OVERLAPPEDWINDOW,
+                CW_USEDEFAULT,
+                CW_USEDEFAULT,
+                100,
+                100,
+                None,
+                None,
+                Some(inst.into()),
+                None,
+            )
+            .expect("janela principal");
+            let dark: BOOL = true.into();
+            let _ = DwmSetWindowAttribute(h, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark as *const _ as _, 4);
+            let cap: u32 = 0x00221d1b;
+            let _ = DwmSetWindowAttribute(h, DWMWA_CAPTION_COLOR, &cap as *const _ as _, 4);
+            let dpi = GetDpiForWindow(h);
+            let scale = dpi as f32 / 96.0;
+            let mut r = RECT { left: 0, top: 0, right: (1180.0 * scale) as i32, bottom: (780.0 * scale) as i32 };
+            let _ = AdjustWindowRectExForDpi(&mut r, WS_OVERLAPPEDWINDOW, false, WINDOW_EX_STYLE(0), dpi);
+            let _ = SetWindowPos(
+                h,
+                None,
+                0,
+                0,
+                r.right - r.left,
+                r.bottom - r.top,
+                SWP_NOMOVE | SWP_NOZORDER,
+            );
+            let mut c = RECT::default();
+            let _ = GetClientRect(h, &mut c);
+            let rt = hwnd_target(h, c.right as u32, c.bottom as u32, dpi as f32).expect("alvo de desenho");
+            let base: ID2D1RenderTarget = rt.cast().unwrap();
+            self.main = Some(MainWin {
+                hwnd: h,
+                rt,
+                canvas: Canvas::new(base),
+                ui: UiState::default(),
+                scale,
+                w: c.right as f32 / scale,
+                h: c.bottom as f32 / scale,
+            });
+            self.refresh_plans();
+            self.refresh_page();
+            let _ = ShowWindow(h, SW_SHOW);
+            let _ = SetForegroundWindow(h);
+        }
+    }
+
+    pub fn invalidate(&self) {
+        if let Some(m) = &self.main {
+            unsafe {
+                let _ = InvalidateRect(Some(m.hwnd), None, false);
+            }
+        }
+    }
+
+    fn paint(&mut self) {
+        let Some(mut m) = self.main.take() else { return };
+        let (w, h) = (m.w, m.h);
+        let mut lost = false;
+        unsafe {
+            m.rt.BeginDraw();
+            let ui = crate::ui::Ui::begin(&m.canvas, &mut m.ui);
+            m.canvas.clear(BG);
+            pages::draw(ui, self, rect(0.0, 0.0, w, h));
+            if m.rt.EndDraw(None, None).is_err() {
+                lost = true;
+            }
+        }
+        if lost {
+            let dpi = 96.0 * m.scale;
+            let px = D2D_SIZE_U { width: (m.w * m.scale) as u32, height: (m.h * m.scale) as u32 };
+            if let Ok(rt) = hwnd_target(m.hwnd, px.width, px.height, dpi) {
+                let base: ID2D1RenderTarget = rt.cast().unwrap();
+                m.canvas = Canvas::new(base);
+                m.rt = rt;
+            }
+        }
+        self.pause_hotkeys(m.ui.capturing != 0);
+        let again = std::mem::take(&mut m.ui.needs_redraw);
+        let hwnd = m.hwnd;
+        self.main = Some(m);
+        if again {
+            unsafe {
+                let _ = InvalidateRect(Some(hwnd), None, false);
+            }
+        }
+    }
+
+    fn on_key(&mut self, vk: u32) {
+        let Some(m) = &mut self.main else { return };
+        if m.ui.capturing == 0 {
+            return;
+        }
+        let down = |k: VIRTUAL_KEY| unsafe { GetAsyncKeyState(k.0 as i32) as u16 & 0x8000 != 0 };
+        match vk {
+            0x1B => m.ui.key_cancel = true,
+            0x08 => m.ui.key_event = Some(Hotkey::new(0, 0)),
+            0x10 | 0x11 | 0x12 | 0x5B | 0x5C => return,
+            _ => {
+                let mut mods = 0;
+                if down(VK_CONTROL) {
+                    mods |= MOD_CTRL;
+                }
+                if down(VK_MENU) {
+                    mods |= MOD_ALT;
+                }
+                if down(VK_SHIFT) {
+                    mods |= MOD_SHIFT;
+                }
+                if down(VK_LWIN) || down(VK_RWIN) {
+                    mods |= MOD_WIN;
+                }
+                m.ui.key_event = Some(Hotkey::new(mods, vk));
+            }
+        }
+        self.invalidate();
+    }
+
+    fn tray_menu(&mut self) {
+        unsafe {
+            let menu = CreatePopupMenu().unwrap();
+            let _ = AppendMenuW(menu, MF_STRING, TRAY_OPEN as usize, w!("Abrir o Prisma"));
+            let flag = if self.widget.visible { MF_CHECKED } else { MF_UNCHECKED };
+            let _ = AppendMenuW(menu, MF_STRING | flag, TRAY_WIDGET as usize, w!("Widget"));
+            let _ = AppendMenuW(menu, MF_STRING, TRAY_OPT as usize, w!("Otimizar agora"));
+            let _ = AppendMenuW(menu, MF_STRING, TRAY_SHOT as usize, w!("Tirar foto da área"));
+            let _ = AppendMenuW(menu, MF_SEPARATOR, 0, None);
+            let _ = AppendMenuW(menu, MF_STRING, TRAY_EXIT as usize, w!("Sair"));
+            let mut p = POINT::default();
+            let _ = GetCursorPos(&mut p);
+            let _ = SetForegroundWindow(self.hub);
+            let cmd = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_NONOTIFY, p.x, p.y, None, self.hub, None);
+            let _ = DestroyMenu(menu);
+            match cmd.0 as u32 {
+                TRAY_OPEN => self.show_main(),
+                TRAY_WIDGET => self.toggle_widget(),
+                TRAY_OPT => self.optimize_prompt(true),
+                TRAY_SHOT => self.on_hotkey(HK_SHOT),
+                TRAY_EXIT => PostQuitMessage(0),
+                _ => {}
+            }
+        }
+    }
+}
+
+static TASKBAR_MSG: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
+
+unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT {
+    let tb = *TASKBAR_MSG.get_or_init(|| RegisterWindowMessageW(w!("TaskbarCreated")));
+    if m == tb {
+        tray_add(h, true);
+        return LRESULT(0);
+    }
+    match m {
+        WM_HOTKEY => {
+            with(|a| a.on_hotkey(w.0 as i32));
+            LRESULT(0)
+        }
+        WM_TICK => {
+            with(|a| a.on_tick());
+            LRESULT(0)
+        }
+        WM_SHOW => {
+            with(|a| a.show_main());
+            LRESULT(0)
+        }
+        WM_TIMER => {
+            with(|a| a.hud_update());
+            LRESULT(0)
+        }
+        WM_PICK => {
+            if let Some(dir) = capture::choose_folder(h) {
+                with(|a| {
+                    a.cfg.cap_dir = dir;
+                    a.cfg.save();
+                    a.invalidate();
+                });
+            }
+            LRESULT(0)
+        }
+        WM_TRAY => {
+            match l.0 as u32 {
+                WM_LBUTTONUP => {
+                    with(|a| a.show_main());
+                }
+                WM_RBUTTONUP => {
+                    with(|a| a.tray_menu());
+                }
+                _ => {}
+            }
+            LRESULT(0)
+        }
+        _ => DefWindowProcW(h, m, w, l),
+    }
+}
+
+fn mouse_xy(a: &mut App, l: LPARAM) {
+    if let Some(mw) = &mut a.main {
+        let (x, y) = ((l.0 & 0xffff) as i16 as f32, ((l.0 >> 16) & 0xffff) as i16 as f32);
+        mw.ui.mx = x / mw.scale;
+        mw.ui.my = y / mw.scale;
+    }
+}
+
+unsafe extern "system" fn main_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT {
+    let r = with(|a| {
+        match m {
+            WM_PAINT => {
+                let mut ps = PAINTSTRUCT::default();
+                BeginPaint(h, &mut ps);
+                a.paint();
+                let _ = EndPaint(h, &ps);
+                Some(0)
+            }
+            WM_ERASEBKGND => Some(1),
+            WM_SIZE => {
+                if let Some(mw) = &mut a.main {
+                    let (pw, ph) = ((l.0 & 0xffff) as u32, ((l.0 >> 16) & 0xffff) as u32);
+                    if pw > 0 && ph > 0 {
+                        let _ = mw.rt.Resize(&D2D_SIZE_U { width: pw, height: ph });
+                        mw.w = pw as f32 / mw.scale;
+                        mw.h = ph as f32 / mw.scale;
+                    }
+                }
+                Some(0)
+            }
+            WM_DPICHANGED => {
+                let dpi = (w.0 & 0xffff) as u32;
+                let rc = &*(l.0 as *const RECT);
+                if let Some(mw) = &mut a.main {
+                    mw.scale = dpi as f32 / 96.0;
+                    mw.rt.SetDpi(dpi as f32, dpi as f32);
+                }
+                let _ = SetWindowPos(
+                    h,
+                    None,
+                    rc.left,
+                    rc.top,
+                    rc.right - rc.left,
+                    rc.bottom - rc.top,
+                    SWP_NOZORDER | SWP_NOACTIVATE,
+                );
+                Some(0)
+            }
+            WM_GETMINMAXINFO => {
+                let mi = &mut *(l.0 as *mut MINMAXINFO);
+                let s = GetDpiForWindow(h) as f32 / 96.0;
+                mi.ptMinTrackSize.x = (960.0 * s) as i32;
+                mi.ptMinTrackSize.y = (620.0 * s) as i32;
+                Some(0)
+            }
+            WM_MOUSEMOVE => {
+                mouse_xy(a, l);
+                a.invalidate();
+                Some(0)
+            }
+            WM_LBUTTONDOWN => {
+                mouse_xy(a, l);
+                if let Some(mw) = &mut a.main {
+                    mw.ui.down = true;
+                    mw.ui.pressed = true;
+                }
+                SetCapture(h);
+                a.invalidate();
+                Some(0)
+            }
+            WM_LBUTTONUP => {
+                mouse_xy(a, l);
+                if let Some(mw) = &mut a.main {
+                    mw.ui.down = false;
+                    mw.ui.released = true;
+                }
+                let _ = ReleaseCapture();
+                a.invalidate();
+                Some(0)
+            }
+            WM_MOUSEWHEEL => {
+                let d = ((w.0 >> 16) & 0xffff) as i16 as f32 / 120.0;
+                if let Some(mw) = &mut a.main {
+                    mw.ui.wheel += d;
+                }
+                a.invalidate();
+                Some(0)
+            }
+            WM_KEYDOWN | WM_SYSKEYDOWN => {
+                a.on_key(w.0 as u32);
+                None
+            }
+            WM_DESTROY => {
+                a.main = None;
+                a.sessions.clear();
+                monitor::DETAIL.store(false, Ordering::Relaxed);
+                a.cfg.save();
+                let me = windows::Win32::System::Threading::GetCurrentProcess();
+                let _ = windows::Win32::System::Memory::SetProcessWorkingSetSizeEx(me, usize::MAX, usize::MAX, Default::default());
+                Some(0)
+            }
+            _ => None,
+        }
+    });
+    match r.flatten() {
+        Some(v) => LRESULT(v),
+        None => DefWindowProcW(h, m, w, l),
+    }
+}
+
+
+/// Frequência do monitor arredondada: 119 vira 120 e 59 vira 60.
+pub fn native_fps(mon: HMONITOR) -> u32 {
+    unsafe {
+        let mut mi = MONITORINFOEXW::default();
+        mi.monitorInfo.cbSize = std::mem::size_of::<MONITORINFOEXW>() as u32;
+        let _ = GetMonitorInfoW(mon, &mut mi as *mut _ as *mut _);
+        let mut dm = DEVMODEW { dmSize: std::mem::size_of::<DEVMODEW>() as u16, ..Default::default() };
+        let name = PCWSTR(mi.szDevice.as_ptr());
+        if EnumDisplaySettingsW(name, ENUM_CURRENT_SETTINGS, &mut dm).as_bool() {
+            match dm.dmDisplayFrequency {
+                0 | 1 => 60,
+                f if (f + 1) % 10 == 0 => f + 1,
+                f => f,
+            }
+        } else {
+            60
+        }
+    }
+}
