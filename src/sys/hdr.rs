@@ -67,6 +67,9 @@ pub struct Screen {
     pub overridden: bool,
     pub hdr_flavor: Option<u32>,
     pub profile: Option<Profile>,
+    pub adapter: LUID,
+    pub source: u32,
+    pub gdi: String,
 }
 
 #[derive(Clone, Default, Debug)]
@@ -163,7 +166,7 @@ pub fn parse(e: &[u8]) -> Edid {
     out
 }
 
-type Matrix = [[f64; 3]; 3];
+pub type Matrix = [[f64; 3]; 3];
 
 fn inverse(m: &Matrix) -> Option<Matrix> {
     let c = |r1: usize, c1: usize, r2: usize, c2: usize| m[r1][c1] * m[r2][c2] - m[r1][c2] * m[r2][c1];
@@ -189,7 +192,7 @@ fn product(a: &Matrix, b: &Matrix) -> Matrix {
 }
 
 /// Matriz de RGB para XYZ com branco D65.
-fn to_xyz(p: [[f64; 2]; 3]) -> Option<Matrix> {
+pub fn to_xyz(p: [[f64; 2]; 3]) -> Option<Matrix> {
     let m: Matrix = [
         [p[0][0] / p[0][1], p[1][0] / p[1][1], p[2][0] / p[2][1]],
         [1.0, 1.0, 1.0],
@@ -201,16 +204,20 @@ fn to_xyz(p: [[f64; 2]; 3]) -> Option<Matrix> {
     Some(std::array::from_fn(|r| std::array::from_fn(|c| m[r][c] * s[c])))
 }
 
-/// O app do Windows mistura as primárias de BT.709 para P3 por um fator. Acha esse fator.
-fn saturation(m: &Matrix) -> Option<f32> {
+/// O app do Windows mistura as primárias de BT.709 para P3 por um fator.
+pub fn saturation_matrix(t: f64) -> Option<Matrix> {
     const REC709: [[f64; 2]; 3] = [[0.64, 0.33], [0.3, 0.6], [0.15, 0.06]];
     const P3: [[f64; 2]; 3] = [[0.68, 0.32], [0.265, 0.69], [0.15, 0.06]];
-    let base = inverse(&to_xyz(REC709)?)?;
+    let mix: [[f64; 2]; 3] = std::array::from_fn(|p| std::array::from_fn(|c| REC709[p][c] + (P3[p][c] - REC709[p][c]) * t));
+    Some(product(&to_xyz(mix)?, &inverse(&to_xyz(REC709)?)?))
+}
+
+/// Acha o fator de uma matriz gravada no perfil.
+fn saturation(m: &Matrix) -> Option<f32> {
     let mut best = (1.0, 0.0);
     for i in 0..=150 {
         let t = i as f64 / 100.0;
-        let mix: [[f64; 2]; 3] = std::array::from_fn(|p| std::array::from_fn(|c| REC709[p][c] + (P3[p][c] - REC709[p][c]) * t));
-        let fit = product(&to_xyz(mix)?, &base);
+        let fit = saturation_matrix(t)?;
         let error = (0..9).map(|k| (fit[k / 3][k % 3] - m[k / 3][k % 3]).abs()).fold(0.0, f64::max);
         if error < best.0 {
             best = (error, t);
@@ -280,23 +287,29 @@ fn file_date(path: &std::path::Path) -> String {
     format!("{:04}-{m:02}-{d:02}", yoe + era * 400 + (m <= 2) as i64)
 }
 
-fn active_profile(adapter: LUID, source: u32) -> Option<Profile> {
+/// Nome do arquivo do perfil de HDR que está valendo nesta tela.
+pub fn default_profile(adapter: LUID, source: u32) -> Option<String> {
     unsafe {
         let scopes = [WCS_PROFILE_MANAGEMENT_SCOPE_CURRENT_USER, WCS_PROFILE_MANAGEMENT_SCOPE_SYSTEM_WIDE];
         let name = scopes.iter().find_map(|s| ColorProfileGetDisplayDefault(*s, adapter, source, CPT_ICC, CPST_EXTENDED_DISPLAY_COLOR_MODE).ok().filter(|n| !n.is_null()))?;
         let file = name.to_string().unwrap_or_default();
         let _ = windows::Win32::Foundation::LocalFree(Some(HLOCAL(name.0 as *mut _)));
-        let dir = std::path::PathBuf::from(std::env::var("SystemRoot").unwrap_or_default()).join("System32\\spool\\drivers\\color");
-        let path = dir.join(&file);
-        let mut p = parse_profile(&std::fs::read(&path).ok()?)?;
-        p.date = file_date(&path);
-        p.name = file;
-        Some(p)
+        Some(file)
     }
 }
 
+fn active_profile(adapter: LUID, source: u32) -> Option<Profile> {
+    let file = default_profile(adapter, source)?;
+    let dir = std::path::PathBuf::from(std::env::var("SystemRoot").unwrap_or_default()).join("System32\\spool\\drivers\\color");
+    let path = dir.join(&file);
+    let mut p = parse_profile(&std::fs::read(&path).ok()?)?;
+    p.date = file_date(&path);
+    p.name = file;
+    Some(p)
+}
+
 /// O que o Windows informa aos jogos, por nome de saída.
-fn windows_light() -> HashMap<String, Light> {
+pub fn windows_light() -> HashMap<String, Light> {
     let mut out = HashMap::new();
     unsafe {
         let Ok(factory) = CreateDXGIFactory1::<IDXGIFactory1>() else { return out };
@@ -451,6 +464,9 @@ fn screens() -> Vec<Screen> {
                 s.sdr_white = white.SDRWhiteLevel as f32 / 1000.0 * 80.0;
             }
             s.windows = reported.get(&gdi).copied();
+            s.adapter = p.sourceInfo.adapterId;
+            s.source = p.sourceInfo.id;
+            s.gdi = gdi.clone();
             s.hardware = hardware_edid(&gdi, &device);
             if parts.len() > 2 {
                 let key = format!("SYSTEM\\CurrentControlSet\\Enum\\DISPLAY\\{}\\{}\\Device Parameters", parts[1], parts[2]);

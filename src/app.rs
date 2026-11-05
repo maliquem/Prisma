@@ -176,6 +176,9 @@ pub struct App {
     force_hook: Option<HHOOK>,
     pub hdr: crate::sys::hdr::Shared,
     pub hdr_screen: usize,
+    pub hdr_mode: usize,
+    pub hdr_keep_sat: usize,
+    pub cal: crate::sys::hdrcal::Shared,
     pub pick_for: Option<crate::pages::picker::Target>,
     pub pick_search: String,
     pub pick_list: crate::sys::catalog::Shared,
@@ -327,6 +330,9 @@ pub fn start(background: bool) {
             force_hook: None,
             hdr: Default::default(),
             hdr_screen: 0,
+            hdr_mode: 0,
+            hdr_keep_sat: 0,
+            cal: Default::default(),
             pick_for: None,
             pick_search: String::new(),
             pick_list: Default::default(),
@@ -468,6 +474,29 @@ pub fn start(background: bool) {
             }
             if a == "--test-panic" {
                 panic!("teste do relatório");
+            }
+            if let Some(path) = a.strip_prefix("--test-patterns=") {
+                let info = crate::sys::hdr::read();
+                let _ = std::fs::write(path, crate::sys::patterns::exact_test(&info.screens[0].gdi));
+                std::process::exit(0);
+            }
+            if let Some(v) = a.strip_prefix("--test-restore=") {
+                let (path, previous) = v.split_once('|').unwrap();
+                let info = crate::sys::hdr::read();
+                let s = &info.screens[0];
+                let t = crate::sys::hdrcal::Target { adapter: s.adapter, source: s.source };
+                let _ = std::fs::write(path, crate::sys::hdrcal::restore_test(t, previous));
+                std::process::exit(0);
+            }
+            if let Some(path) = a.strip_prefix("--test-profile=") {
+                use crate::sys::hdrcal::{self, Target};
+                let info = crate::sys::hdr::read();
+                let s = &info.screens[0];
+                let p = s.profile.as_ref().unwrap();
+                let t = Target { adapter: s.adapter, source: s.source };
+                let e = s.hardware.as_ref().unwrap();
+                let _ = std::fs::write(path, hdrcal::activation_test(t, &s.gdi, &p.name, p.light, e.primaries, p.saturation.unwrap_or(0.0)));
+                std::process::exit(0);
             }
             if let Some(path) = a.strip_prefix("--test-hdr=") {
                 let _ = std::fs::write(path, format!("{:#?}", crate::sys::hdr::read()));

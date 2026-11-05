@@ -8,6 +8,17 @@ pub const MOD_CTRL: u32 = 2;
 pub const MOD_SHIFT: u32 = 4;
 pub const MOD_WIN: u32 = 8;
 
+/// Perfil feito pela calibração do Prisma, um por modo de imagem da TV.
+#[derive(Clone, Default, Debug)]
+pub struct HdrProfile {
+    pub screen: String,
+    pub mode: String,
+    pub file: String,
+    pub peak: f32,
+    pub full: f32,
+    pub black: f32,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
 pub struct Hotkey {
     pub mods: u32,
@@ -143,6 +154,7 @@ pub struct Config {
     pub load_cpu_pct: u32,
     pub load_cpu_secs: u32,
     pub fs_apps: Vec<FsApp>,
+    pub hdr_profiles: Vec<HdrProfile>,
     pub snd_apps: Vec<SndApp>,
     pub black: Vec<String>,
     pub white: Vec<String>,
@@ -199,6 +211,7 @@ impl Default for Config {
             load_cpu_pct: 35,
             load_cpu_secs: 20,
             fs_apps: Vec::new(),
+            hdr_profiles: Vec::new(),
             snd_apps: Vec::new(),
             black: Vec::new(),
             white: Vec::new(),
@@ -290,6 +303,13 @@ impl Config {
                     let p: Vec<&str> = v.splitn(4, '|').collect();
                     if p.len() == 4 {
                         c.snd_apps.push(SndApp { exe: p[0].into(), output: p[1].into(), input: p[2].into(), path: p[3].into() });
+                    }
+                }
+                "hdr_profile" => {
+                    let p: Vec<&str> = v.split('|').collect();
+                    if p.len() == 6 {
+                        let num = |s: &str| s.parse().unwrap_or(0.0);
+                        c.hdr_profiles.push(HdrProfile { screen: p[0].into(), mode: p[1].into(), file: p[2].into(), peak: num(p[3]), full: num(p[4]), black: num(p[5]) });
                     }
                 }
                 "fs_app" => {
@@ -409,6 +429,9 @@ impl Config {
         let _ = writeln!(s, "load_cpu_secs={}", self.load_cpu_secs);
         for a in &self.snd_apps {
             let _ = writeln!(s, "snd_app={}|{}|{}|{}", a.exe, a.output, a.input, a.path);
+        }
+        for p in &self.hdr_profiles {
+            let _ = writeln!(s, "hdr_profile={}|{}|{}|{}|{}|{}", p.screen, p.mode, p.file, p.peak, p.full, p.black);
         }
         for a in &self.fs_apps {
             let _ = writeln!(s, "fs_app={}|{}|{}", a.exe, b(a.auto), a.path);

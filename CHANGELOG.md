@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.6
+
+- HDR calibration of your own: exact HDR test patterns for black, peak at five window sizes and each color channel, then a profile with the display's real primaries, saved per TV picture mode. / Calibração própria de HDR: padrões exatos para preto, pico em cinco tamanhos de janela e cada canal de cor, e um perfil com as primárias reais da tela, salvo por modo de imagem da TV.
+- A result where the shape never vanishes is refused, because the TV is rolling off instead of clipping. / Resultado em que a forma nunca some é recusado, porque a TV está suavizando em vez de cortar.
+
 ## 0.3.5
 
 - New HDR page: reads the display, the calibration profile, declared brightness, Dolby Vision and sound, and warns in plain words. It changes nothing on the PC. / Nova aba HDR: lê a tela, o perfil de calibração, o brilho declarado, o Dolby Vision e o som, e avisa em palavras simples. Ela não muda nada no PC.

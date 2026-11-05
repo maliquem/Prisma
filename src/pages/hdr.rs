@@ -1,5 +1,8 @@
 use super::*;
+use crate::config::HdrProfile;
 use crate::sys::hdr::{Edid, Info, Light, Profile, Screen};
+use crate::sys::hdrcal::{self, Phase, Spec, Start, Target};
+use crate::sys::patterns::{Measured, WINDOWS};
 
 const ROW: f32 = 28.0;
 
@@ -188,8 +191,129 @@ fn alerts(info: &Info, s: &Screen) -> Vec<String> {
     out
 }
 
+const MODES: [(&str, &str); 6] = [("Jogo", "Jogo"), ("Filmmaker", "Filmmaker"), ("Cinema", "Cinema"), ("Padrão", "Padrao"), ("Vívido", "Vivido"), ("Outro", "Outro")];
+
+fn target(s: &Screen) -> Target {
+    Target { adapter: s.adapter, source: s.source }
+}
+
+fn start(app: &App, s: &Screen) {
+    let active = s.profile.as_ref().map(|p| p.name.clone()).unwrap_or_default();
+    let job = Start { gdi: s.gdi.clone(), active };
+    hdrcal::begin(app.cal.clone(), job, app.main.as_ref().map_or(0, |m| m.hwnd.0 as isize));
+}
+
+fn start_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen) {
+    ui.card(r);
+    ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Calibração própria");
+    let text = "Você ajusta os padrões a olho e o Prisma grava o resultado como perfil de HDR. Antes de começar, deixe a TV no modo de imagem em que você joga, desligue o mapeamento dinâmico (use HGIG se houver), desligue a luz noturna do Windows e deixe a sala como quando você joga. Leva cerca de 5 minutos e abre em tela cheia.";
+    ui.c.text_wrap(rect(r.x + 16.0, r.y + 42.0, r.w - 32.0, 62.0), text, 13.0, TEXT2, Weight::Regular);
+    let y = r.y + 110.0;
+    ui.c.text(rect(r.x + 16.0, y, 150.0, 36.0), "Modo de imagem da TV", 13.0, MUTED, Align::Left, Weight::Regular);
+    let names: Vec<String> = MODES.iter().map(|m| m.0.to_string()).collect();
+    let mut sel = app.hdr_mode;
+    if ui.select("hdr-mode", rect(r.x + 170.0, y, 200.0, 36.0), &names, &mut sel) {
+        app.hdr_mode = sel;
+    }
+    if s.mode == 2 {
+        if ui.button("hdr-start", rect(r.right() - 216.0, y, 200.0, 36.0), "Começar calibração", true) {
+            start(app, s);
+        }
+    } else {
+        ui.c.text(rect(r.right() - 316.0, y, 300.0, 36.0), "Ligue o HDR para calibrar.", 13.0, WARN, Align::Right, Weight::Regular);
+    }
+}
+
+fn review_row(ui: &Ui, r: Rect, y: f32, label: &str, value: f32) {
+    row(ui, r, y, label, &format!("{} nits", nits(value)), TEXT);
+}
+
+fn review_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen, m: Measured) {
+    ui.card(r);
+    ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Resultado da calibração");
+    let half = rect(r.x, r.y, r.w / 2.0, r.h);
+    let side = rect(r.x + r.w / 2.0, r.y, r.w / 2.0, r.h);
+    let y = r.y + 42.0;
+    review_row(ui, half, y, "Preto", m.black);
+    for (i, w) in WINDOWS.iter().enumerate() {
+        review_row(ui, half, y + ROW * (i + 1) as f32, &format!("Pico em {w}% da tela"), m.windows[i]);
+    }
+    for (i, name) in ["Vermelho", "Verde", "Azul"].iter().enumerate() {
+        review_row(ui, side, y + ROW * i as f32, name, m.channels[i]);
+    }
+    let (peak, full) = (m.windows[1], m.windows[4]);
+    let honest = peak < hdrcal::HONEST_LIMIT && full < hdrcal::HONEST_LIMIT;
+    let current = s.profile.as_ref().and_then(|p| p.saturation).unwrap_or(0.0);
+    let keep = current >= 0.01;
+    let mut options = vec!["Saturação neutra".to_string()];
+    if keep {
+        options.push(format!("Manter reforço de {:.0}%", current * 100.0));
+    }
+    let mut sel = app.hdr_keep_sat.min(options.len() - 1);
+    if ui.select("hdr-sat", rect(side.x + 16.0, y + ROW * 3.0 + 4.0, side.w - 32.0, 36.0), &options, &mut sel) {
+        app.hdr_keep_sat = sel;
+    }
+    let by = r.bottom() - 48.0;
+    if !honest {
+        let text = "A forma não sumiu antes de 4000 nits: a TV está suavizando em vez de cortar, e o resultado não é confiável. Desligue o mapeamento dinâmico ou use HGIG e repita.";
+        ui.c.text_wrap(rect(r.x + 16.0, by - 8.0, r.w - 148.0, 44.0), text, 13.0, WARN, Weight::Regular);
+    } else if ui.button("hdr-save", rect(r.right() - 340.0, by, 200.0, 36.0), "Salvar e ativar", true) {
+        let e = s.hardware.as_ref().or(s.active.as_ref());
+        let spec = Spec {
+            file: hdrcal::file_name(MODES[app.hdr_mode].1),
+            light: Light { peak, full: full.min(peak), black: m.black },
+            primaries: e.map(|e| e.primaries).unwrap_or_default(),
+            saturation: if sel == 1 { current } else { 0.0 },
+        };
+        hdrcal::save(app.cal.clone(), spec, target(s), s.gdi.clone(), app.main.as_ref().map_or(0, |m| m.hwnd.0 as isize));
+    }
+    if ui.button("hdr-drop", rect(r.right() - 124.0, by, 108.0, 36.0), "Descartar", false) {
+        hdrcal::discard(&app.cal);
+    }
+}
+
+fn saved_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen, list: &[HdrProfile], previous: &str) {
+    ui.card(r);
+    ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Perfis do Prisma");
+    let active = s.profile.as_ref().map_or("", |p| p.name.as_str());
+    let mut y = r.y + 42.0;
+    let mut pick = None;
+    for (i, p) in list.iter().enumerate() {
+        let x = r.x + 16.0;
+        ui.c.text(rect(x, y, 170.0, 36.0), &p.mode, 13.0, TEXT, Align::Left, Weight::Regular);
+        let text = format!("Pico {} · Tela cheia {} · Preto {}", nits(p.peak), nits(p.full), nits(p.black));
+        ui.c.text(rect(x + 170.0, y, r.w - 330.0, 36.0), &text, 13.0, TEXT2, Align::Left, Weight::Regular);
+        if p.file.eq_ignore_ascii_case(active) {
+            ui.c.text(rect(r.right() - 124.0, y, 108.0, 36.0), "Ativo", 13.0, ACCENT, Align::Center, Weight::Regular);
+        } else if ui.button(&format!("hdr-use{i}"), rect(r.right() - 124.0, y + 2.0, 108.0, 32.0), "Ativar", false) {
+            pick = Some(p.file.clone());
+        }
+        y += 38.0;
+    }
+    let old = !previous.is_empty() && !previous.eq_ignore_ascii_case(active);
+    if old {
+        ui.c.text(rect(r.x + 16.0, y, r.w - 240.0, 36.0), &format!("Perfil anterior: {previous}"), 13.0, MUTED, Align::Left, Weight::Regular);
+        if ui.button("hdr-prev", rect(r.right() - 124.0, y + 2.0, 108.0, 32.0), "Voltar", false) {
+            pick = Some(previous.to_string());
+        }
+    }
+    if let Some(file) = pick {
+        if !hdrcal::activate(target(s), &file) {
+            app.toast.info("O Windows não aceitou o perfil.");
+        }
+        app.load_hdr();
+    }
+}
+
+fn cal_height(phase: &Phase) -> f32 {
+    match phase {
+        Phase::Review(_) => 270.0,
+        _ => 170.0,
+    }
+}
+
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
-    header(ui, a, "HDR", "O que a tela, o perfil e o Windows estão informando. Nada aqui muda o PC.");
+    header(ui, a, "HDR", "O que a tela, o perfil e o Windows estão informando, e a calibração própria.");
     let (info, busy) = {
         let s = app.hdr.lock().unwrap();
         (s.info.clone(), s.busy)
@@ -221,10 +345,52 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let cw = (w - 12.0) / 2.0;
     let note_h = if notes.is_empty() { 0.0 } else { 54.0 + notes.len() as f32 * 44.0 };
     let (h1, h2, h3) = (190.0, 186.0, 200.0);
-    let total = note_h + h1 + h2 + h3 + 24.0;
+    let (phase, previous) = {
+        let st = app.cal.lock().unwrap();
+        (st.phase.clone(), st.previous.clone())
+    };
+    if let Phase::Saved(spec, live) = &phase {
+        app.cfg.hdr_profiles.retain(|p| p.screen != s.name || p.mode != MODES[app.hdr_mode].0);
+        let l = spec.light;
+        app.cfg.hdr_profiles.push(HdrProfile { screen: s.name.clone(), mode: MODES[app.hdr_mode].0.to_string(), file: spec.file.clone(), peak: l.peak, full: l.full, black: l.black });
+        app.cfg.save();
+        app.cal.lock().unwrap().phase = Phase::Idle;
+        let text = if *live { "Perfil salvo e ativado." } else { "Perfil ativado. O Windows ainda informa os valores antigos aos jogos." };
+        app.toast.info(text);
+        app.load_hdr();
+    }
+    let cal_h = cal_height(&phase);
+    let saved: Vec<HdrProfile> = app.cfg.hdr_profiles.iter().filter(|p| p.screen == s.name).cloned().collect();
+    let shown = previous.is_empty() || s.profile.as_ref().is_some_and(|p| p.name.eq_ignore_ascii_case(&previous));
+    let saved_h = if saved.is_empty() && shown { 0.0 } else { 54.0 + (saved.len() + !shown as usize) as f32 * 38.0 + 12.0 };
+    let total = cal_h + 12.0 + saved_h + note_h + h1 + h2 + h3 + 24.0;
     let view = rect(x, top, w, a.h - top - 20.0);
     ui.begin_scroll("hdr", view, total);
     let mut y = top;
+    let r = rect(x, y, w, cal_h);
+    match phase {
+        Phase::Review(m) => review_card(ui, app, r, s, m),
+        Phase::Measuring => {
+            ui.card(r);
+            ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Calibração própria");
+            ui.c.text(rect(r.x + 16.0, r.y + 42.0, r.w - 32.0, 24.0), "Os padrões estão abertos na tela.", 13.0, TEXT2, Align::Left, Weight::Regular);
+        }
+        Phase::Saving => {
+            ui.card(r);
+            ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Calibração própria");
+            ui.c.text(rect(r.x + 16.0, r.y + 42.0, r.w - 32.0, 24.0), "Gravando e conferindo o perfil…", 13.0, TEXT2, Align::Left, Weight::Regular);
+        }
+        Phase::Failed(e) => {
+            start_card(ui, app, r, s);
+            ui.c.text(rect(r.x + 170.0, r.y + 12.0, r.w - 186.0, 22.0), e, 13.0, WARN, Align::Right, Weight::Regular);
+        }
+        _ => start_card(ui, app, r, s),
+    }
+    y += cal_h + 12.0;
+    if saved_h > 0.0 {
+        saved_card(ui, app, rect(x, y, w, saved_h - 12.0), s, &saved, &previous);
+        y += saved_h;
+    }
     if !notes.is_empty() {
         let r = rect(x, y, w, note_h - 12.0);
         ui.card(r);

@@ -882,8 +882,45 @@ Há um override de EDID nesta tela. O Windows usa os valores dele, não os que a
 Há um override de EDID nesta tela, e esta placa não permite ler a ficha original.	This display has an EDID override, and this graphics card cannot read the original data.
 A tela declara Dolby Vision, mas não o modo 4:4:4 de baixa latência. Segundo relatos, é isso que faz o Windows não mostrar a certificação Dolby Vision.	The display declares Dolby Vision, but not the low latency 4:4:4 mode. According to user reports, that is why Windows does not show the Dolby Vision certification.
 A tela só aceita PCM de 2 canais. Com o som espacial desligado, todo o som do PC sai em estéreo.	The display only accepts 2-channel PCM. With spatial sound off, all PC audio comes out in stereo.
-O que a tela, o perfil e o Windows estão informando. Nada aqui muda o PC.	What the display, the profile and Windows are reporting. Nothing here changes your PC.
+O que a tela, o perfil e o Windows estão informando, e a calibração própria.	What the display, the profile and Windows are reporting, plus your own calibration.
 Lendo…	Reading…
 Ler de novo	Read again
 Lendo a tela e o perfil…	Reading the display and the profile…
 Não consegui ler as telas.	Could not read the displays.
+Calibração própria	Own calibration
+Você ajusta os padrões a olho e o Prisma grava o resultado como perfil de HDR. Antes de começar, deixe a TV no modo de imagem em que você joga, desligue o mapeamento dinâmico (use HGIG se houver), desligue a luz noturna do Windows e deixe a sala como quando você joga. Leva cerca de 5 minutos e abre em tela cheia.	You adjust the patterns by eye and Prisma saves the result as an HDR profile. Before you start, set the TV to the picture mode you play in, turn off dynamic tone mapping (use HGIG if available), turn off Windows night light and keep the room as it is when you play. It takes about 5 minutes and opens full screen.
+Modo de imagem da TV	TV picture mode
+Filmmaker	Filmmaker
+Cinema	Cinema
+Vívido	Vivid
+Começar calibração	Start calibration
+Ligue o HDR para calibrar.	Turn on HDR to calibrate.
+Resultado da calibração	Calibration result
+Pico em {}% da tela	Peak at {}% of the screen
+Vermelho	Red
+Verde	Green
+Azul	Blue
+Saturação neutra	Neutral saturation
+Manter reforço de {}%	Keep {}% boost
+A forma não sumiu antes de 4000 nits: a TV está suavizando em vez de cortar, e o resultado não é confiável. Desligue o mapeamento dinâmico ou use HGIG e repita.	The shape did not vanish before 4000 nits: the TV is rolling off instead of clipping, so the result is not reliable. Turn off dynamic tone mapping or use HGIG and try again.
+Salvar e ativar	Save and activate
+Descartar	Discard
+Perfis do Prisma	Prisma profiles
+Pico {} · Tela cheia {} · Preto {}	Peak {} · Full screen {} · Black {}
+Ativo	Active
+Perfil anterior: {}	Previous profile: {}
+O Windows não aceitou o perfil.	Windows did not accept the profile.
+Perfil salvo e ativado.	Profile saved and activated.
+Os padrões estão abertos na tela.	The patterns are open on the screen.
+Gravando e conferindo o perfil…	Saving and checking the profile…
+O Windows não aceitou o perfil. O perfil anterior foi mantido.	Windows did not accept the profile. The previous profile was kept.
+Não consegui abrir os padrões em HDR.	Could not open the HDR patterns.
+Passo {} de {}: preto	Step {} of {}: black
+Passo {} de {}: pico em janela de {}%	Step {} of {}: peak in a {}% window
+Passo {} de {}: canal vermelho	Step {} of {}: red channel
+Passo {} de {}: canal verde	Step {} of {}: green channel
+Passo {} de {}: canal azul	Step {} of {}: blue channel
+Abaixe até as formas sumirem e pare no primeiro valor em que somem. Agora: {} nits. S liga ou desliga a moldura.	Lower it until the shapes vanish and stop at the first value where they do. Now: {} nits. S turns the frame on or off.
+Aumente até o quadrado do centro sumir e pare no primeiro valor em que some. Agora: {} nits.	Raise it until the center square vanishes and stop at the first value where it does. Now: {} nits.
+← → ajustam · ↑ ↓ ajustam mais rápido · Enter confirma · Backspace volta · H esconde este texto · Esc sai	← → adjust · ↑ ↓ adjust faster · Enter confirms · Backspace goes back · H hides this text · Esc exits
+Perfil ativado. O Windows ainda informa os valores antigos aos jogos.	Profile activated. Windows still reports the old values to games.
