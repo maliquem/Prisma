@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.8
+
+- Calibration patterns now go through Windows composition, like the Windows calibration app. The T key switches to the direct path to compare. / Os padrões da calibração agora passam pela composição do Windows, como no app de calibração. A tecla T troca para o caminho direto, para comparar.
+
 ## 0.3.7
 
 - Fixed the peak patterns: the dark square now sits on a full-signal background, so it vanishes at the point where the display clips. / Corrigidos os padrões de pico: o quadrado escuro agora fica sobre um fundo no máximo do sinal e some no ponto em que a tela corta.

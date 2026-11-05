@@ -922,5 +922,6 @@ Passo {} de {}: canal verde	Step {} of {}: green channel
 Passo {} de {}: canal azul	Step {} of {}: blue channel
 Abaixe até as formas sumirem e pare no primeiro valor em que somem. Agora: {} nits. S liga ou desliga a moldura.	Lower it until the shapes vanish and stop at the first value where they do. Now: {} nits. S turns the frame on or off.
 Aumente até o quadrado escuro do centro sumir no fundo claro e pare no primeiro valor em que some. Agora: {} nits.	Raise it until the dark center square vanishes into the bright background and stop at the first value where it does. Now: {} nits.
-← → ajustam · ↑ ↓ ajustam mais rápido · Enter confirma · Backspace volta · H esconde este texto · Esc sai	← → adjust · ↑ ↓ adjust faster · Enter confirms · Backspace goes back · H hides this text · Esc exits
+← → ajustam · ↑ ↓ ajustam mais rápido · Enter confirma · Backspace volta · H esconde este texto · T troca o caminho (agora pelo Windows) · Esc sai	← → adjust · ↑ ↓ adjust faster · Enter confirms · Backspace goes back · H hides this text · T switches the path (now through Windows) · Esc exits
+← → ajustam · ↑ ↓ ajustam mais rápido · Enter confirma · Backspace volta · H esconde este texto · T troca o caminho (agora direto) · Esc sai	← → adjust · ↑ ↓ adjust faster · Enter confirms · Backspace goes back · H hides this text · T switches the path (now direct) · Esc exits
 Perfil ativado. O Windows ainda informa os valores antigos aos jogos.	Profile activated. Windows still reports the old values to games.

@@ -10,6 +10,7 @@ use windows::Win32::Graphics::Direct3D::*;
 use windows::Win32::Graphics::Direct3D11::*;
 use windows::Win32::Graphics::Dxgi::Common::*;
 use windows::Win32::Graphics::Dxgi::*;
+use windows::Win32::Graphics::Gdi::{CreateRectRgn, SetWindowRgn, HRGN};
 use windows::Win32::Graphics::Imaging::*;
 use windows::Win32::System::Com::*;
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
@@ -94,6 +95,7 @@ struct Run {
     now: usize,
     surround: bool,
     hidden: bool,
+    composed: bool,
     settling: bool,
     done: Option<bool>,
 }
@@ -161,7 +163,8 @@ impl Run {
         let step = &self.steps[self.now];
         let n = self.now + 1;
         let total = self.steps.len();
-        let keys = "← → ajustam · ↑ ↓ ajustam mais rápido · Enter confirma · Backspace volta · H esconde este texto · Esc sai";
+        let path = if self.composed { "pelo Windows" } else { "direto" };
+        let keys = format!("← → ajustam · ↑ ↓ ajustam mais rápido · Enter confirma · Backspace volta · H esconde este texto · T troca o caminho (agora {path}) · Esc sai");
         match step.kind {
             Kind::Black => (
                 format!("Passo {n} de {total}: preto"),
@@ -222,6 +225,15 @@ impl Run {
         self.swap.Present(1, DXGI_PRESENT(0)).ok()
     }
 
+    /// Tirar uma linha da janela faz o Windows compor a imagem, como no app de calibração.
+    /// Direto na tela, a TV não recebe as mesmas informações e pode nem cortar.
+    fn apply_path(&self, hwnd: HWND) {
+        unsafe {
+            let region = if self.composed { CreateRectRgn(0, 0, self.size.0, self.size.1 - 1) } else { HRGN::default() };
+            SetWindowRgn(hwnd, Some(region), true);
+        }
+    }
+
     fn nudge(&mut self, by: i32) {
         let step = &mut self.steps[self.now];
         step.code = (step.code + by).clamp(0, TOP);
@@ -261,6 +273,10 @@ impl Run {
             VK_UP => self.nudge(8),
             k if k.0 == b'H' as u16 => self.hidden = !self.hidden,
             k if k.0 == b'S' as u16 => self.surround = !self.surround,
+            k if k.0 == b'T' as u16 => {
+                self.composed = !self.composed;
+                self.apply_path(hwnd);
+            }
             _ => return,
         }
     }
@@ -410,6 +426,7 @@ unsafe fn open(gdi: &str, area: Option<RECT>) -> Result<(HWND, Run)> {
         now: 0,
         surround: true,
         hidden: false,
+        composed: true,
         settling: false,
         done: None,
     };
@@ -429,6 +446,7 @@ pub fn run(gdi: &str) -> std::result::Result<Measured, Option<&'static str>> {
         #[cfg(not(debug_assertions))]
         let area = None;
         let (hwnd, run) = open(gdi, area).map_err(|_| Some(FAILED))?;
+        run.apply_path(hwnd);
         let _ = run.draw();
         RUN.with(|r| *r.borrow_mut() = Some(run));
         let _ = ShowWindow(hwnd, SW_SHOW);
