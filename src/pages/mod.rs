@@ -11,6 +11,7 @@ mod monitor;
 mod optimize;
 pub mod picker;
 mod plan_edit;
+pub mod report;
 mod services;
 mod startup;
 mod storage;
@@ -43,6 +44,7 @@ pub enum Page {
     Capture,
     Widget,
     Adjust,
+    Report,
 }
 
 type Icon = &'static [&'static [(f32, f32)]];
@@ -58,6 +60,16 @@ const ICON_WIN: Icon = &[
     &[(20., 9.), (20., 4.), (15., 4.)],
     &[(4., 15.), (4., 20.), (9., 20.)],
     &[(20., 15.), (20., 20.), (15., 20.)],
+];
+const ICON_BUG: Icon = &[
+    &[(9., 9.), (15., 9.), (17., 12.), (17., 16.), (15., 19.), (12., 20.), (9., 19.), (7., 16.), (7., 12.), (9., 9.)],
+    &[(12., 9.), (12., 20.)],
+    &[(9.5, 9.), (8., 5.)],
+    &[(14.5, 9.), (16., 5.)],
+    &[(7., 13.), (3., 12.)],
+    &[(17., 13.), (21., 12.)],
+    &[(7.5, 17.), (4., 19.)],
+    &[(16.5, 17.), (20., 19.)],
 ];
 const ICON_HDR: Icon = &[
     &[(12., 3.), (12., 5.)],
@@ -149,6 +161,7 @@ const NAV: &[(Page, &str, Icon)] = &[
     (Page::Capture, "Captura", ICON_CAP),
     (Page::Widget, "Widget", ICON_WID),
     (Page::Adjust, "Configurações", ICON_ADJ),
+    (Page::Report, "Reportar bug", ICON_BUG),
 ];
 
 const SIDE_W: f32 = 216.0;
@@ -161,22 +174,29 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
     c.text(rect(56.0, 18.0, 150.0, 26.0), "Prisma", 16.0, TEXT, Align::Left, Weight::Semibold);
 
     let mut y = 58.0;
+    // Em janela baixa as linhas apertam para não entrar no cartão de energia.
+    let step = ((full.h - 96.0 - y) / NAV.len() as f32).min(33.0).floor();
     for (page, label, icon) in NAV {
-        let r = rect(12.0, y, SIDE_W - 24.0, 32.0);
+        let r = rect(12.0, y, SIDE_W - 24.0, step - 1.0);
         let current = app.page == *page;
         let hover = ui.is_hover(r);
         if current || hover {
             ui.c.round(r, 8.0, if current { CARD2 } else { CARD });
         }
         let color = if current { WHITE } else { TEXT2 };
-        ui.c.icon(r.x + 12.0, r.y + 7.0, 18.0, icon, color);
+        ui.c.icon(r.x + 12.0, r.y + (r.h - 18.0) / 2.0, 18.0, icon, color);
         ui.c.text(rect(r.x + 42.0, r.y, r.w - 48.0, r.h), label, 14.0, color, Align::Left, Weight::Regular);
         if ui.hit(label, r) && !current {
+            if *page == Page::Report {
+                app.report.area = report::area_of(app.page);
+            } else {
+                crate::report::note(&format!("page: {label}"));
+            }
             app.page = *page;
             app.refresh_page();
             ui.s.needs_redraw = true;
         }
-        y += 33.0;
+        y += step;
     }
 
     let chip = rect(12.0, full.h - 88.0, SIDE_W - 24.0, 76.0);
@@ -197,6 +217,11 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
     ui.c.text(rect(cx, chip.y + 48.0, chip.w - 24.0, 18.0), state, 12.0, ACCENT, Align::Left, Weight::Regular);
 
     let area = rect(SIDE_W, 0.0, full.w - SIDE_W, full.h);
+    if app.page != Page::Report {
+        if let Some(t) = &mut app.report.text {
+            t.hide();
+        }
+    }
     match app.page {
         Page::Monitor => monitor::draw(&mut ui, app, area),
         Page::Meter => meter::draw(&mut ui, app, area),
@@ -215,6 +240,7 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
         Page::Capture => capture::draw(&mut ui, app, area),
         Page::Widget => widget::draw(&mut ui, app, area),
         Page::Adjust => adjust::draw(&mut ui, app, area),
+        Page::Report => report::draw(&mut ui, app, area),
     }
     ui.end();
 }

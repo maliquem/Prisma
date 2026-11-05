@@ -48,6 +48,8 @@ const WM_PICK_GAME: u32 = WM_APP + 80;
 const WM_POW_IN: u32 = WM_APP + 81;
 const WM_PICK_METER: u32 = WM_APP + 83;
 const WM_POW_OUT: u32 = WM_APP + 82;
+const WM_REPORT_PHOTO: u32 = WM_APP + 84;
+const WM_REPORT_DONE: u32 = WM_APP + 85;
 
 static FORCE_VK: AtomicU32 = AtomicU32::new(0);
 static FORCE_MODS: AtomicU32 = AtomicU32::new(0);
@@ -188,6 +190,9 @@ pub struct App {
     pub meter: crate::meter::Meter,
     pub rec_window: bool,
     pub pw_sel: String,
+    pub report: crate::report::Form,
+    /// Janela e escala durante o desenho, quando `main` está emprestada ao passe.
+    pub paint_window: (HWND, f32),
     pub pw_edit: Option<String>,
     pub pw_search: String,
     pub pw_hidden: bool,
@@ -351,6 +356,8 @@ pub fn start(background: bool) {
             meter: crate::meter::Meter::new(),
             rec_window: true,
             pw_sel: String::new(),
+            report: crate::report::Form::default(),
+            paint_window: (HWND::default(), 1.0),
             pw_edit: None,
             pw_search: String::new(),
             pw_hidden: false,
@@ -500,6 +507,10 @@ pub fn start(background: bool) {
             }
             if a == "--test-crash" {
                 windows::Win32::System::Diagnostics::Debug::RaiseException(0xE000_0001, 0, None);
+            }
+            if let Some(path) = a.strip_prefix("--test-report=") {
+                crate::report::self_test(path, &Snapshot::default());
+                std::process::exit(0);
             }
             if a == "--test-panic" {
                 panic!("teste do relatório");
@@ -716,6 +727,7 @@ pub fn start(background: bool) {
                 "--page=capture" => Page::Capture,
                 "--page=widget" => Page::Widget,
                 "--page=adjust" => Page::Adjust,
+                "--page=report" => Page::Report,
                 _ => app.page,
             };
         }
@@ -1438,6 +1450,56 @@ impl App {
         self.log(&format!("plano {}: {} = {value}{}", plan.name, s.name, if dc { " na bateria" } else { "" }));
     }
 
+    pub fn pick_report_photo(&self) {
+        unsafe {
+            let _ = PostMessageW(Some(self.hub), WM_REPORT_PHOTO, WPARAM(0), LPARAM(0));
+        }
+    }
+
+    pub fn prepare_report(&mut self) {
+        let area = crate::i18n::tr(crate::pages::report::areas()[self.report.area]).into_owned();
+        let pc = crate::report::machine(&self.snap, self.paint_window.1);
+        let log = crate::report::recent_log();
+        self.report.prepare(&area, &pc, &log);
+    }
+
+    pub fn copy_report_photo(&mut self) {
+        if let Some(p) = &self.report.photo {
+            let ok = capture::copy_to_clipboard(self.paint_window.0, p.w, p.h, &p.bgra);
+            self.toast.info(if ok { "Foto copiada" } else { "Não consegui copiar" });
+        }
+    }
+
+    pub fn copy_report_text(&mut self) {
+        if let Some(r) = &self.report.ready {
+            let ok = capture::copy_text(self.paint_window.0, &r.full);
+            self.toast.info(if ok { "Relatório copiado" } else { "Não consegui copiar" });
+        }
+    }
+
+    /// A foto não cabe no endereço: ela vai para a área de transferência, e o texto fica pronto na página.
+    pub fn send_report(&mut self) {
+        let Some(r) = &self.report.ready else { return };
+        if r.short {
+            capture::copy_text(self.paint_window.0, &r.full);
+        } else if let Some(p) = &self.report.photo {
+            capture::copy_to_clipboard(self.paint_window.0, p.w, p.h, &p.bgra);
+        }
+        if crate::report::open_url(&r.url) {
+            self.report.view = crate::report::View::Sent;
+        } else {
+            self.toast.info("Não consegui abrir o navegador");
+        }
+    }
+
+    pub fn send_report_direct(&mut self) {
+        if let Some(p) = &self.report.photo {
+            capture::copy_to_clipboard(self.paint_window.0, p.w, p.h, &p.bgra);
+        }
+        self.report.view = crate::report::View::Direct;
+        crate::report::start_direct(&self.report, self.hub.0 as isize, WM_REPORT_DONE);
+    }
+
     pub fn import_plan(&self) {
         unsafe {
             let _ = PostMessageW(Some(self.hub), WM_POW_IN, WPARAM(0), LPARAM(0));
@@ -1849,7 +1911,7 @@ impl App {
                 WINDOW_EX_STYLE(0),
                 w!("PrismaMain"),
                 w!("Prisma"),
-                WS_OVERLAPPEDWINDOW,
+                WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
                 CW_USEDEFAULT,
                 CW_USEDEFAULT,
                 100,
@@ -1908,6 +1970,7 @@ impl App {
     fn paint(&mut self) {
         let Some(mut m) = self.main.take() else { return };
         let (w, h) = (m.w, m.h);
+        self.paint_window = (m.hwnd, m.scale);
         let mut lost = false;
         unsafe {
             m.rt.BeginDraw();
@@ -2052,6 +2115,22 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
             }
             LRESULT(0)
         }
+        WM_REPORT_PHOTO => {
+            if let Some(path) = capture::choose_file(h, "Imagens", w!("*.png;*.jpg;*.jpeg;*.bmp;*.webp")) {
+                with(|a| {
+                    match capture::load_image(&path) {
+                        Some((w, h, px)) => a.report.photo = Some(crate::report::Photo::new(w, h, px)),
+                        None => a.toast.info("Não consegui abrir essa imagem"),
+                    }
+                    a.invalidate();
+                });
+            }
+            LRESULT(0)
+        }
+        WM_REPORT_DONE => {
+            with(|a| a.invalidate());
+            LRESULT(0)
+        }
         WM_POW_IN => {
             if let Some(path) = capture::choose_file(h, "Planos de energia", w!("*.pow")) {
                 with(|a| {
@@ -2170,6 +2249,10 @@ fn mouse_xy(a: &mut App, l: LPARAM) {
 }
 
 unsafe extern "system" fn main_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT {
+    // Vem também durante o desenho, quando o estado está ocupado.
+    if m == WM_CTLCOLOREDIT {
+        return crate::ui::edit::paint_colors(HDC(w.0 as *mut _));
+    }
     let r = with(|a| {
         match m {
             WM_PAINT => {
@@ -2283,7 +2366,13 @@ unsafe extern "system" fn main_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
                 a.invalidate();
                 Some(0)
             }
+            // A caixa de texto avisa cada mudança: o botão de enviar depende dela.
+            WM_COMMAND if (w.0 >> 16) as u32 == EN_CHANGE => {
+                a.invalidate();
+                Some(0)
+            }
             WM_DESTROY => {
+                a.report.window_closed();
                 a.main = None;
                 a.sessions.clear();
                 a.exe_paths.clear();

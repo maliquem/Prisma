@@ -77,6 +77,10 @@ struct Reply {
 
 /// Pede por HTTPS. O WinHTTP segue os redirecionamentos e recusa voltar para HTTP.
 fn send(url: &str, headers: &str, follow: bool) -> Result<Reply, ()> {
+    request(w!("GET"), url, headers, follow, &[])
+}
+
+fn request(verb: PCWSTR, url: &str, headers: &str, follow: bool, data: &[u8]) -> Result<Reply, ()> {
     let (host, path) = wide_host(url).ok_or(())?;
     let agent = HSTRING::from(format!("Prisma/{}", env!("CARGO_PKG_VERSION")));
     unsafe {
@@ -88,7 +92,7 @@ fn send(url: &str, headers: &str, follow: bool) -> Result<Reply, ()> {
         if conn.0.is_null() {
             return Err(());
         }
-        let req = Handle(WinHttpOpenRequest(conn.0, w!("GET"), &HSTRING::from(path), PCWSTR::null(), PCWSTR::null(), std::ptr::null(), WINHTTP_FLAG_SECURE));
+        let req = Handle(WinHttpOpenRequest(conn.0, verb, &HSTRING::from(path), PCWSTR::null(), PCWSTR::null(), std::ptr::null(), WINHTTP_FLAG_SECURE));
         if req.0.is_null() {
             return Err(());
         }
@@ -99,7 +103,8 @@ fn send(url: &str, headers: &str, follow: bool) -> Result<Reply, ()> {
             let list: Vec<u16> = headers.encode_utf16().collect();
             WinHttpAddRequestHeaders(req.0, &list, WINHTTP_ADDREQ_FLAG_ADD).map_err(|_| ())?;
         }
-        WinHttpSendRequest(req.0, None, None, 0, 0, 0).map_err(|_| ())?;
+        let body = (!data.is_empty()).then_some(data.as_ptr() as *const _);
+        WinHttpSendRequest(req.0, None, body, data.len() as u32, data.len() as u32, 0).map_err(|_| ())?;
         WinHttpReceiveResponse(req.0, std::ptr::null_mut()).map_err(|_| ())?;
         let (mut status, mut total) = (0u32, 0u32);
         let flag = WINHTTP_QUERY_FLAG_NUMBER;
@@ -121,6 +126,14 @@ fn read(r: &Reply, mut chunk: impl FnMut(&[u8])) -> Result<(), ()> {
         }
         chunk(&buf[..got as usize]);
     }
+}
+
+/// Envio para a API, usado pelo relatório de bug.
+pub fn post(url: &str, headers: &str, data: &str) -> Result<(u32, String), ()> {
+    let r = request(w!("POST"), url, headers, true, data.as_bytes())?;
+    let mut body = Vec::new();
+    read(&r, |c| body.extend_from_slice(c))?;
+    Ok((r.status, String::from_utf8_lossy(&body).into_owned()))
 }
 
 /// Uma conexão só, para a API, o hash e quando as partes falham.
@@ -229,7 +242,7 @@ pub fn speed_test() -> String {
 }
 
 /// Lê um texto do JSON da API. A resposta é conhecida: não vale carregar um analisador por isso.
-fn json_text(json: &str, key: &str) -> Option<String> {
+pub fn json_text(json: &str, key: &str) -> Option<String> {
     let start = json.find(&format!("\"{key}\":"))? + key.len() + 3;
     let rest = json[start..].trim_start().strip_prefix('"')?;
     let mut out = String::new();

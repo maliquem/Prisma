@@ -341,6 +341,88 @@ pub fn copy_to_clipboard(owner: HWND, w: u32, h: u32, bgra: &[u8]) -> bool {
     }
 }
 
+/// Copia um texto para a área de transferência.
+pub fn copy_text(owner: HWND, text: &str) -> bool {
+    use windows::Win32::System::DataExchange::*;
+    use windows::Win32::System::Memory::*;
+    const CF_UNICODETEXT: u32 = 13;
+    unsafe {
+        let wide: Vec<u16> = text.encode_utf16().chain([0]).collect();
+        let Ok(mem) = GlobalAlloc(GMEM_MOVEABLE, wide.len() * 2) else { return false };
+        let p = GlobalLock(mem) as *mut u16;
+        if p.is_null() {
+            return false;
+        }
+        std::ptr::copy_nonoverlapping(wide.as_ptr(), p, wide.len());
+        let _ = GlobalUnlock(mem);
+        if OpenClipboard(Some(owner)).is_err() {
+            return false;
+        }
+        let _ = EmptyClipboard();
+        let ok = SetClipboardData(CF_UNICODETEXT, Some(HANDLE(mem.0))).is_ok();
+        let _ = CloseClipboard();
+        ok
+    }
+}
+
+/// Lê a imagem copiada, em BGRA de cima para baixo.
+pub fn clipboard_image() -> Option<(u32, u32, Vec<u8>)> {
+    use windows::Win32::System::DataExchange::*;
+    use windows::Win32::System::Memory::*;
+    const CF_DIB: u32 = 8;
+    unsafe {
+        OpenClipboard(None).ok()?;
+        let read = || {
+            let mem = HGLOBAL(GetClipboardData(CF_DIB).ok()?.0);
+            let p = GlobalLock(mem) as *const u8;
+            if p.is_null() {
+                return None;
+            }
+            let bi = &*(p as *const BITMAPINFOHEADER);
+            let (w, h) = (bi.biWidth as usize, bi.biHeight.unsigned_abs() as usize);
+            let bytes = bi.biBitCount as usize / 8;
+            let bitfields = bi.biCompression == BI_BITFIELDS.0 && bi.biSize == 40;
+            let fine = w > 0 && h > 0 && matches!(bytes, 3 | 4) && (bi.biCompression == BI_RGB.0 || bi.biCompression == BI_BITFIELDS.0);
+            let mut out = None;
+            if fine {
+                let start = p.add(bi.biSize as usize + if bitfields { 12 } else { 0 });
+                let row = (w * bytes + 3) & !3;
+                let mut px = vec![255u8; w * h * 4];
+                for y in 0..h {
+                    let from = if bi.biHeight > 0 { h - 1 - y } else { y };
+                    let line = start.add(from * row);
+                    for x in 0..w {
+                        // O alfa do Windows costuma vir zerado: a foto é sempre opaca.
+                        std::ptr::copy_nonoverlapping(line.add(x * bytes), px.as_mut_ptr().add((y * w + x) * 4), 3);
+                    }
+                }
+                out = Some((w as u32, h as u32, px));
+            }
+            let _ = GlobalUnlock(mem);
+            out
+        };
+        let image = read();
+        let _ = CloseClipboard();
+        image
+    }
+}
+
+/// Abre uma imagem do disco em BGRA.
+pub fn load_image(path: &str) -> Option<(u32, u32, Vec<u8>)> {
+    unsafe {
+        let wic: IWICImagingFactory = CoCreateInstance(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER).ok()?;
+        let dec = wic.CreateDecoderFromFilename(&HSTRING::from(path), None, GENERIC_READ, WICDecodeMetadataCacheOnDemand).ok()?;
+        let frame = dec.GetFrame(0).ok()?;
+        let conv = wic.CreateFormatConverter().ok()?;
+        conv.Initialize(&frame, &GUID_WICPixelFormat32bppBGRA, WICBitmapDitherTypeNone, None, 0.0, WICBitmapPaletteTypeCustom).ok()?;
+        let (mut w, mut h) = (0, 0);
+        conv.GetSize(&mut w, &mut h).ok()?;
+        let mut px = vec![0u8; w as usize * h as usize * 4];
+        conv.CopyPixels(std::ptr::null(), w * 4, &mut px).ok()?;
+        Some((w, h, px))
+    }
+}
+
 /// Janela do Windows para escolher pasta.
 pub fn choose_folder(owner: HWND) -> Option<String> {
     use windows::Win32::UI::Shell::*;

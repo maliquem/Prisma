@@ -9,6 +9,7 @@ mod optimizer;
 mod meter;
 mod overlays;
 mod pages;
+mod report;
 #[cfg(debug_assertions)]
 mod selftest;
 mod startup;
@@ -82,7 +83,7 @@ fn main() {
         if crash::pending() {
             app::with(|a| {
                 a.log("o Prisma tinha caído: relatório em falha_anterior.dmp");
-                a.toast.info("O Prisma fechou sozinho da última vez. O relatório ficou guardado.");
+                a.toast.info("O Prisma fechou sozinho da última vez. Se puder, conte em Reportar bug.");
             });
         }
         let mut msg = MSG::default();

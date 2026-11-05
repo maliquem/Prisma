@@ -1,6 +1,7 @@
 //! Interface imediata desenhada só quando algo muda: cada redesenho descreve a tela
 //! e os controles respondem ao mouse nesse mesmo passe.
 
+pub mod edit;
 pub mod gfx;
 pub mod icons;
 pub mod layered;
@@ -81,6 +82,11 @@ pub struct UiState {
 }
 
 impl UiState {
+    /// Há lista ou pergunta na frente: janelas filhas do Windows ficariam por cima delas.
+    pub fn covered(&self) -> bool {
+        self.popup.is_some() || self.ask.is_some()
+    }
+
     /// Fecha a pergunta aberta como se a resposta fosse não.
     pub fn close_ask(&mut self) -> bool {
         self.ask.take().is_some()

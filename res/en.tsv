@@ -207,7 +207,6 @@ Janela	Window
 Janelas abertas	Open windows
 Restaurar	Restore
 Tela cheia	Fullscreen
-O Prisma fechou sozinho da última vez. O relatório ficou guardado.	Prisma closed unexpectedly last time. The report was saved.
 Remover o Prisma deste computador? Suas configurações ficam guardadas.	Remove Prisma from this computer? Your settings are kept.
 Não consegui instalar o Prisma.	Could not install Prisma.
 Ajustes do Windows	Windows tweaks
@@ -1063,3 +1062,60 @@ Variação	Variation
 Medidor compacto	Compact meter
 Medidor completo	Full meter
 Esconder medidor	Hide meter
+Reportar bug	Report a bug
+Preencha aqui. O navegador abre o GitHub com tudo escrito.	Fill this in. Your browser opens GitHub with everything written.
+Função com problema	Feature with the problem
+Gravidade	Severity
+Leve	Minor
+Moderado	Moderate
+Grave	Severe
+Incomoda, mas dá para usar.	Annoying, but still usable.
+Atrapalha o uso, mas tem como contornar.	Gets in the way, but there is a workaround.
+Trava, fecha, perde dados ou impede o uso.	Freezes, closes, loses data or blocks use.
+O que aconteceu? Conte o que fez, o que esperava e o que viu.	What happened? Tell what you did, what you expected and what you saw.
+Foto (opcional)	Picture (optional)
+Ajuda em bugs visuais. Use o atalho de foto do Prisma, copie e clique em Colar.	Helps with visual bugs. Use Prisma's photo shortcut, copy, then click Paste.
+Escolher	Choose
+Colar	Paste
+Tirar a foto	Remove picture
+Incluir dados do PC e registro	Include PC data and log
+Ver o que vai junto	See what goes along
+A página do GitHub é pública. Nome de usuário, nome do PC e caminhos de arquivo não vão junto.	GitHub pages are public. User name, PC name and file paths are left out.
+Enviar pelo navegador	Send through browser
+Enviar direto	Send directly
+Outra coisa	Something else
+Se o GitHub pedir, entre na sua conta. O texto continua lá depois.	If GitHub asks, sign in to your account. The text stays there afterwards.
+O texto era grande demais para o endereço: clique na descrição, selecione tudo e aperte Ctrl+V.	The text was too long for the link: click the description, select everything and press Ctrl+V.
+Clique em Copiar a foto, depois clique no fim da descrição e aperte Ctrl+V.	Click Copy the picture, then click the end of the description and press Ctrl+V.
+Clique no fim da descrição e aperte Ctrl+V: a foto já está copiada.	Click the end of the description and press Ctrl+V: the picture is already copied.
+Confira o texto e clique em Create no GitHub.	Check the text and click Create on GitHub.
+Falta só confirmar no navegador	Only the browser confirmation is left
+Copiar a foto	Copy the picture
+Copiar o relatório	Copy the report
+Abrir de novo	Open again
+Voltar ao formulário	Back to the form
+Novo relatório	New report
+Falando com o GitHub...	Talking to GitHub...
+Digite este código na página que abriu	Type this code on the page that opened
+Depois de autorizar, o Prisma cria a página sozinho. A autorização vale só para este envio e não fica guardada.	After you authorize, Prisma creates the page by itself. The authorization is only for this report and is not stored.
+Enviando...	Sending...
+Relatório enviado. Obrigado!	Report sent. Thank you!
+A página abriu no navegador. A foto está copiada: clique no campo de comentário, aperte Ctrl+V e clique em Comment.	The page opened in your browser. The picture is copied: click the comment box, press Ctrl+V and click Comment.
+A página abriu no navegador.	The page opened in your browser.
+Não deu para enviar direto	Could not send directly
+Não consegui falar com o GitHub.	Could not reach GitHub.
+O código expirou. Tente de novo.	The code expired. Try again.
+O GitHub recusou a autorização.	GitHub refused the authorization.
+Função	Feature
+Versão	Version
+O que aconteceu	What happened
+Foto	Picture
+Apague esta linha e cole a foto aqui (Ctrl+V).	Delete this line and paste the picture here (Ctrl+V).
+O texto não coube no endereço. Apague esta linha e cole o relatório completo (Ctrl+V).	The text did not fit in the link. Delete this line and paste the full report (Ctrl+V).
+Dados do PC e registro	PC data and log
+Não há imagem copiada	No image copied
+Relatório copiado	Report copied
+Não consegui abrir o navegador	Could not open the browser
+Não consegui abrir essa imagem	Could not open this image
+Imagens	Images
+O Prisma fechou sozinho da última vez. Se puder, conte em Reportar bug.	Prisma closed unexpectedly last time. If you can, tell us in Report a bug.

@@ -251,6 +251,7 @@ impl Toast {
     }
 
     pub fn info(&mut self, text: &str) {
+        crate::report::note(text);
         let text = text.to_string();
         let tw = measure(&text, 14.0, Weight::Regular, None).0 + 32.0;
         self.show(tw.max(120.0), 40.0, 56.0, move |c, r| {

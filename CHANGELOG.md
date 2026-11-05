@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1
+
+- New Report a bug page: choose the feature and severity, describe the problem, add a picture, and your browser opens GitHub with everything written. You confirm before anything is published. / Nova aba Reportar bug: escolha a função e a gravidade, descreva o problema, junte uma foto, e o navegador abre o GitHub com tudo escrito. Nada é publicado antes de você confirmar.
+- The report can carry PC data and a short log, with no user name, PC name or file paths, and you can see it before sending or leave it out. / O relatório pode levar dados do PC e um registro curto, sem nome de usuário, nome do PC ou caminhos de arquivo, e dá para ver antes de enviar ou deixar de fora.
+- The side menu no longer overlaps the power card on small windows. / O menu lateral não invade mais o cartão de energia em janelas pequenas.
+
 ## 0.5.0
 
 - New Meter page: compact bar and full panel over the game, with FPS, 1% and 0.1% lows, frame time, CPU, GPU, VRAM and RAM. Nothing runs inside the game. / Nova aba Medidor: barra compacta e painel completo sobre o jogo, com FPS, 1% e 0,1% low, frame time, CPU, GPU, VRAM e RAM. Nada roda dentro do jogo.
