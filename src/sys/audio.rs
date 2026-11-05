@@ -55,7 +55,8 @@ pub fn sessions() -> Vec<Session> {
                     continue;
                 }
                 let pid = ctl2.GetProcessId().unwrap_or(0);
-                if pid == 0 {
+                // O fluxo que mantém o som acordado não é um programa com som.
+                if pid == 0 || pid == std::process::id() {
                     continue;
                 }
                 let Ok(vol) = ctl.cast::<ISimpleAudioVolume>() else { continue };

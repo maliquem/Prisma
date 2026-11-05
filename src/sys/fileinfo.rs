@@ -34,6 +34,27 @@ pub fn description(path: &str) -> Option<String> {
     }
 }
 
+/// Versão do arquivo, como 310.2.1.
+pub fn version(path: &str) -> Option<String> {
+    use windows::Win32::Storage::FileSystem::VS_FIXEDFILEINFO;
+    unsafe {
+        let name = HSTRING::from(path);
+        let size = GetFileVersionInfoSizeW(&name, None);
+        if size == 0 {
+            return None;
+        }
+        let mut data = vec![0u8; size as usize];
+        GetFileVersionInfoW(&name, None, size, data.as_mut_ptr() as *mut _).ok()?;
+        let mut p = std::ptr::null_mut();
+        let mut n = 0;
+        if !VerQueryValueW(data.as_ptr() as *const _, w!("\\"), &mut p, &mut n).as_bool() {
+            return None;
+        }
+        let f = &*(p as *const VS_FIXEDFILEINFO);
+        Some(format!("{}.{}.{}", f.dwFileVersionMS >> 16, f.dwFileVersionMS & 0xffff, f.dwFileVersionLS >> 16))
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Signature {
     /// Assinatura válida, com o nome de quem assinou.

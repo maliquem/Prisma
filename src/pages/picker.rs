@@ -8,6 +8,7 @@ pub enum Target {
     Sound,
     Fullscreen,
     HdrGame,
+    MeterGame,
 }
 
 pub fn add_button(ui: &mut Ui, app: &mut App, r: Rect, target: Target) {
@@ -15,6 +16,7 @@ pub fn add_button(ui: &mut Ui, app: &mut App, r: Rect, target: Target) {
         Target::Sound => ("add-sound", "add-sound-menu"),
         Target::Fullscreen => ("add-full", "add-full-menu"),
         Target::HdrGame => ("add-game", "add-game-menu"),
+        Target::MeterGame => ("add-meter", "add-meter-menu"),
     };
     if ui.button(key, r, "Adicionar", false) {
         ui.menu(menu, &[("Da lista de programas", true), ("Escolher arquivo .exe", true)]);
@@ -33,6 +35,7 @@ fn add(app: &mut App, target: Target, path: &str) {
             app.cfg.snd_entry(&exe, path);
         }
         Target::Fullscreen => app.cfg.fs_note(&exe, path),
+        Target::MeterGame => app.add_meter_game(&exe, path),
         Target::HdrGame => {
             if !app.cfg.hdr_games.iter().any(|g| g.exe.eq_ignore_ascii_case(&exe)) {
                 app.cfg.hdr_games.push(crate::config::HdrGame { exe, path: path.to_string(), mode: 0 });

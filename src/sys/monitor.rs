@@ -89,6 +89,8 @@ impl Snapshot {
 }
 
 pub static DETAIL: AtomicBool = AtomicBool::new(false);
+/// O medidor sobre o jogo também precisa das leituras completas.
+pub static METER: AtomicBool = AtomicBool::new(false);
 /// Atualiza a cada segundo, sem as leituras caras do modo detalhado.
 pub static FAST: AtomicBool = AtomicBool::new(false);
 
@@ -348,7 +350,7 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
     let (mut h_cpu, mut h_gpu, mut h_ram, mut h_vram) =
         (VecDeque::new(), VecDeque::new(), VecDeque::new(), VecDeque::new());
     loop {
-        let detail = DETAIL.load(Ordering::Relaxed);
+        let detail = DETAIL.load(Ordering::Relaxed) || METER.load(Ordering::Relaxed);
         let cpu = read_cpu(&mut prev_cpu, &mut threads);
         let elapsed = last.elapsed().as_secs_f32().max(0.05);
         last = Instant::now();
@@ -374,6 +376,9 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
             let extra = n.read();
             gpu.temp = extra.temp;
             gpu.mhz = extra.mhz;
+            gpu.mem_mhz = extra.mem_mhz;
+            gpu.fan = extra.fan;
+            gpu.watts = extra.watts;
             gpu.total = extra.total;
         }
 

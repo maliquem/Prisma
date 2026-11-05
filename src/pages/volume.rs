@@ -154,7 +154,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let x = a.x + 28.0;
     let w = a.w - 56.0;
     let top = 88.0;
-    let cw = (w - 12.0) / 2.0;
+    let cw = (w - 24.0) / 3.0;
     let r0 = rect(x, top, cw, 132.0);
     ui.card_on(r0);
     ui.label(rect(r0.x + 16.0, r0.y + 10.0, r0.w - 32.0, 18.0), "Modificador (pode combinar dois)", TEXT2);
@@ -191,6 +191,12 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         app.cfg.save();
     }
 
+    let r2 = rect(r1.right() + 12.0, top, cw, 132.0);
+    ui.card(r2);
+    ui.label(rect(r2.x + 16.0, r2.y + 10.0, r2.w - 32.0, 18.0), "Manter o som acordado", TEXT2);
+    let hint = "Evita o corte no começo do som em HDMI e Dolby. Para sozinho depois de 10 minutos sem uso.";
+    ui.c.text_wrap(rect(r2.x + 16.0, r2.y + 78.0, r2.w - 32.0, 48.0), hint, 12.0, MUTED, Weight::Regular);
+
     let t = rect(x, top + 144.0, w, a.h - top - 164.0);
     ui.card(t);
     if app.pick_for == Some(Target::Sound) {
@@ -199,6 +205,13 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         draw_list(ui, app, t);
     }
 
+    let keep = ["Desligado".to_string(), "Silêncio puro".to_string(), "Sinal inaudível".to_string()];
+    let mut s = app.cfg.snd_keep as usize;
+    if ui.select("keep", rect(r2.x + 16.0, r2.y + 34.0, r2.w - 32.0, 36.0), &keep, &mut s) {
+        app.cfg.snd_keep = s as u8;
+        app.cfg.save();
+        crate::sys::keepalive::set(s as u8);
+    }
     let opts = ["2% por toque".to_string(), "5% por toque".to_string(), "10% por toque".to_string()];
     let vals = [2u32, 5, 10];
     let mut sel = vals.iter().position(|v| *v == app.cfg.vol_step).unwrap_or(1);

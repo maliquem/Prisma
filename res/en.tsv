@@ -981,3 +981,85 @@ Não consegui importar esse arquivo	Could not import this file
 Plano exportado	Plan exported
 Não consegui exportar o plano	Could not export the plan
 Geral	General
+Editar	Edit
+Selecione um plano primeiro	Select a plan first
+Manter o som acordado	Keep the sound awake
+Silêncio puro	Pure silence
+Sinal inaudível	Inaudible signal
+Evita o corte no começo do som em HDMI e Dolby. Para sozinho depois de 10 minutos sem uso.	Avoids the cut at the start of sounds on HDMI and Dolby. It stops by itself after 10 idle minutes.
+Medidor	Meter
+Leitor de performance, limitador de FPS e HDR automático por jogo.	Performance reader, FPS limiter and automatic HDR per game.
+Volta atalhos, opacidade, itens e regras ao padrão. A lista de jogos continua salva.	Restores shortcuts, opacity, items and rules. The game list stays saved.
+Quando o medidor liga	When the meter turns on
+Só nos jogos da lista	Only for listed games
+Em todos, menos os da lista	All except listed games
+HDR automático	Automatic HDR
+Só na lista	Listed only
+Todos, menos a lista	All except listed
+Liga o HDR do Windows quando o jogo abrir e volta quando fechar. É separado do medidor.	Turns on Windows HDR when the game opens and back when it closes. Separate from the meter.
+Mostrar compacto	Show compact
+Mostrar completo	Show full
+Esconder tudo	Hide all
+Opacidade do compacto	Compact opacity
+Opacidade do completo	Full opacity
+O que aparece no completo	What the full view shows
+Fica em uma coluna. A segunda só abre se não couber na tela.	One column. A second one opens only if it does not fit.
+FPS e médias	FPS and averages
+Frame time	Frame time
+Latência do PC	PC latency
+Limitador	Limiter
+Upscaling	Upscaling
+Geração de quadros	Frame generation
+Reflex	Reflex
+CPU por núcleo	CPU per core
+VRAM e RAM	VRAM and RAM
+Disco e rede	Disk and network
+Modo de exibição	Display mode
+Tempo de jogo	Play time
+Jogos	Games
+Abrir em	Open in
+Limitando	Limiting
+Perfil DLSS	DLSS profile
+Nenhum jogo ainda. Use Adicionar.	No games yet. Use Add.
+Anti-cheat detectado	Anti-cheat detected
+Nenhum anti-cheat detectado	No anti-cheat detected
+Compacto	Compact
+Completo	Full
+Manual	Manual
+Com geração	With generation
+FPS real	Real FPS
+Ligar	Turn on
+Não ligar	Do not turn on
+Do jogo	From the game
+Recomendado	Recommended
+Limite gravado. Vale na próxima abertura do jogo.	Limit saved. It applies the next time the game opens.
+Não consegui gravar no driver NVIDIA.	Could not write to the NVIDIA driver.
+Latência	Latency
+Medindo {} min	Measuring {} min
+Flip direto	Direct flip
+Composto pelo Windows	Composed by Windows
+{} reais + {} gerados	{} real + {} generated
+Média	Average
+Só em jogos com Reflex	Only in games with Reflex
+Limite	Limit
+Método	Method
+Limite do driver	Driver limit
+Medindo há {} min de {}.	Measuring for {} of {} min.
+Limite {} vale na próxima abertura do jogo.	Limit {} applies the next time the game opens.
+Nenhum carregado	None loaded
+{} · carregado	{} · loaded
+Ligada · {}x	On · {}x
+{} carregado	{} loaded
+Não detectada	Not detected
+Integrado no jogo	Built into the game
+Não detectado	Not detected
+Pico informado	Reported peak
+Sugestão no jogo: pico {} nits · branco 200 nits	In-game suggestion: peak {} nits · white 200 nits
+Núcleo	Core
+Memória	Memory
+{} MHz · ventoinha {}%	{} MHz · fan {}%
+Variação	Variation
+{} ms · variação {} ms	{} ms · variation {} ms
+Medidor compacto	Compact meter
+Medidor completo	Full meter
+Esconder medidor	Hide meter

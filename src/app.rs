@@ -40,11 +40,13 @@ pub const WM_TRAY: u32 = WM_APP + 2;
 pub const WM_SHOW: u32 = WM_APP + 3;
 const WM_PICK: u32 = WM_APP + 4;
 const TIMER_HUD: usize = 7;
+const TIMER_METER: usize = 77;
 const WM_UPDATED: u32 = WM_APP + 77;
 const WM_PICK_FS: u32 = WM_APP + 78;
 const WM_PICK_SND: u32 = WM_APP + 79;
 const WM_PICK_GAME: u32 = WM_APP + 80;
 const WM_POW_IN: u32 = WM_APP + 81;
+const WM_PICK_METER: u32 = WM_APP + 83;
 const WM_POW_OUT: u32 = WM_APP + 82;
 
 static FORCE_VK: AtomicU32 = AtomicU32::new(0);
@@ -107,6 +109,9 @@ const HK_REPLAY: i32 = 7;
 const HK_FORCE: i32 = 8;
 const HK_SHOT_WIN: i32 = 9;
 const HK_REC_FULL: i32 = 13;
+const HK_METER_C: i32 = 14;
+const HK_METER_F: i32 = 15;
+const HK_METER_O: i32 = 16;
 const HK_VOL_UP: i32 = 10;
 const HK_VOL_DOWN: i32 = 11;
 const HK_MUTE: i32 = 12;
@@ -180,7 +185,9 @@ pub struct App {
     upd_told: bool,
     tm_check: Option<Instant>,
     force_hook: Option<HHOOK>,
+    pub meter: crate::meter::Meter,
     pub rec_window: bool,
+    pub pw_sel: String,
     pub pw_edit: Option<String>,
     pub pw_search: String,
     pub pw_hidden: bool,
@@ -341,7 +348,9 @@ pub fn start(background: bool) {
             upd_told: false,
             tm_check: None,
             force_hook: None,
+            meter: crate::meter::Meter::new(),
             rec_window: true,
+            pw_sel: String::new(),
             pw_edit: None,
             pw_search: String::new(),
             pw_hidden: false,
@@ -546,6 +555,25 @@ pub fn start(background: bool) {
                 let _ = std::fs::write(path, out);
                 std::process::exit(0);
             }
+            if let Some(path) = a.strip_prefix("--test-keep=") {
+                let _ = std::fs::write(path, crate::sys::keepalive::probe(2, 3));
+                std::process::exit(0);
+            }
+            if let Some(v) = a.strip_prefix("--test-frames=") {
+                let p: Vec<&str> = v.split('|').collect();
+                let _ = std::fs::write(p[0], crate::sys::frames::measure(p[1].parse().unwrap(), p[2].parse().unwrap()));
+                std::process::exit(0);
+            }
+            if let Some(v) = a.strip_prefix("--test-drs=") {
+                let p: Vec<&str> = v.split('|').collect();
+                let r = match p[2] {
+                    "0" => crate::sys::drs::test_clear(p[1]),
+                    "read" => format!("{:?}", crate::sys::drs::read(p[1], crate::sys::drs::FRAME_LIMIT)),
+                    fps => crate::sys::drs::test(p[1], fps.parse().unwrap()),
+                };
+                let _ = std::fs::write(p[0], r);
+                std::process::exit(0);
+            }
             if let Some(path) = a.strip_prefix("--test-catalog=") {
                 let t = Instant::now();
                 let list = crate::sys::catalog::list(Vec::new());
@@ -684,6 +712,7 @@ pub fn start(background: bool) {
                 "--page=full" => Page::Fullscreen,
                 "--page=volume" => Page::Volume,
                 "--page=hdr" => Page::Hdr,
+                "--page=meter" => Page::Meter,
                 "--page=capture" => Page::Capture,
                 "--page=widget" => Page::Widget,
                 "--page=adjust" => Page::Adjust,
@@ -692,6 +721,7 @@ pub fn start(background: bool) {
         }
         app.refresh_plans();
         app.register_hotkeys();
+        crate::sys::keepalive::set(app.cfg.snd_keep);
         app.widget.set_visible(app.cfg.widget_on);
         tray_add(hub, true);
         let open = !background && !std::env::args().any(|a| a.starts_with("--test-"));
@@ -703,6 +733,7 @@ pub fn start(background: bool) {
 }
 
 pub fn shutdown() {
+    with(|a| a.meter.leave());
     with(|a| {
         if a.rec_start.is_some() {
             a.toggle_record(true);
@@ -767,7 +798,7 @@ impl App {
     pub fn register_hotkeys(&mut self) {
         self.unhook_force_key();
         unsafe {
-            for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_REPLAY, HK_FORCE, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE] {
+            for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_REPLAY, HK_FORCE, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE] {
                 let _ = UnregisterHotKey(Some(self.hub), id);
             }
         }
@@ -782,6 +813,9 @@ impl App {
             (HK_SHOT_WIN, c.hk_shot_win, "Foto da janela", true),
             (HK_REC, c.hk_record, "Gravar janela", true),
             (HK_REC_FULL, c.hk_record_full, "Gravar tela", true),
+            (HK_METER_C, c.hk_meter_compact, "Medidor compacto", true),
+            (HK_METER_F, c.hk_meter_full, "Medidor completo", true),
+            (HK_METER_O, c.hk_meter_off, "Esconder medidor", true),
             (HK_REPLAY, c.hk_replay, "Replay", true),
             (HK_FORCE, c.hk_force, "Fechar à força", true),
             (HK_VOL_UP, Hotkey::new(c.vol_mods, VK_VOL_UP), "Aumentar volume", false),
@@ -825,7 +859,7 @@ impl App {
         if on {
             self.unhook_force_key();
             unsafe {
-                for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_REPLAY, HK_FORCE] {
+                for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_REPLAY, HK_FORCE] {
                     let _ = UnregisterHotKey(Some(self.hub), id);
                 }
             }
@@ -854,6 +888,9 @@ impl App {
             HK_SHOT => self.take_shot(),
             HK_SHOT_FULL => self.take_full_shot(),
             HK_SHOT_WIN => self.take_window_shot(),
+            HK_METER_C => self.meter_view(crate::meter::VIEW_COMPACT),
+            HK_METER_F => self.meter_view(crate::meter::VIEW_FULL),
+            HK_METER_O => self.meter_view(crate::meter::VIEW_OFF),
             HK_REC => self.toggle_record(true),
             HK_REC_FULL => self.toggle_record(false),
             HK_REPLAY => self.save_replay(),
@@ -1407,9 +1444,69 @@ impl App {
         }
     }
 
-    pub fn export_plan(&self) {
+    pub fn export_plan(&mut self, id: &str) {
+        self.pw_sel = id.to_string();
         unsafe {
             let _ = PostMessageW(Some(self.hub), WM_POW_OUT, WPARAM(0), LPARAM(0));
+        }
+    }
+
+    fn meter_view(&mut self, view: u8) {
+        self.meter.show(view);
+        self.meter_timer();
+        if view != crate::meter::VIEW_OFF {
+            self.load_hdr();
+        }
+    }
+
+    fn meter_timer(&self) {
+        unsafe {
+            if self.meter.view != crate::meter::VIEW_OFF {
+                SetTimer(Some(self.hub), TIMER_METER, 250, None);
+            } else {
+                let _ = KillTimer(Some(self.hub), TIMER_METER);
+            }
+        }
+    }
+
+    fn meter_tick(&mut self) {
+        let game = (self.detector.mode == Mode::Game && !self.detector.game_exe.is_empty()).then(|| {
+            let exe = self.detector.game_exe.clone();
+            let pid = self.detector.game_pid;
+            let path = procs::image_path(pid).unwrap_or_default();
+            (exe, pid, path)
+        });
+        #[cfg(debug_assertions)]
+        let game = game.or_else(|| {
+            let pid: u32 = std::env::var("PRISMA_METER_GAME").ok()?.parse().ok()?;
+            let path = procs::image_path(pid)?;
+            Some((procs::exe_name(&path), pid, path))
+        });
+        let was = self.meter.view;
+        #[cfg(debug_assertions)]
+        let pid = std::env::var("PRISMA_METER_PID").ok().and_then(|v| v.parse().ok()).unwrap_or(self.fg_pid);
+        #[cfg(not(debug_assertions))]
+        let pid = self.fg_pid;
+        self.meter.tick(&mut self.cfg, game, pid);
+        if was != self.meter.view {
+            self.meter_timer();
+        }
+    }
+
+    fn meter_paint(&mut self) {
+        let info = self.hdr.lock().unwrap().info.clone();
+        let light = info.as_ref().and_then(|i| i.screens.first()).and_then(|s| s.windows.map(|l| (s.mode == 2, l)));
+        self.meter.paint(&self.cfg, &self.snap, light);
+    }
+
+    /// Taxa da tela do jogo, para o teto do limitador.
+    pub fn refresh_hz(&self) -> f32 {
+        native_fps(capture::cursor_monitor()) as f32
+    }
+
+    pub fn add_meter_game(&mut self, exe: &str, path: &str) {
+        if !self.cfg.meter_games.iter().any(|g| g.exe.eq_ignore_ascii_case(exe)) {
+            self.cfg.meter_games.push(crate::config::MeterGame { exe: exe.to_string(), path: path.to_string(), limit_fps: crate::meter::first_limit(self.refresh_hz()), limit_real: true, ..Default::default() });
         }
     }
 
@@ -1428,6 +1525,7 @@ impl App {
             Target::Sound => WM_PICK_SND,
             Target::Fullscreen => WM_PICK_FS,
             Target::HdrGame => WM_PICK_GAME,
+            Target::MeterGame => WM_PICK_METER,
         };
         unsafe {
             let _ = PostMessageW(Some(self.hub), msg, WPARAM(0), LPARAM(0));
@@ -1618,6 +1716,7 @@ impl App {
             self.pending.remove(i);
         }
 
+        self.meter_tick();
         self.widget.update(&self.cfg, &self.snap);
         self.full.sweep();
         self.update_tick();
@@ -1934,7 +2033,13 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
             LRESULT(0)
         }
         WM_TIMER => {
-            with(|a| a.hud_update());
+            with(|a| {
+                if w.0 == TIMER_METER {
+                    a.meter_paint();
+                } else {
+                    a.hud_update();
+                }
+            });
             LRESULT(0)
         }
         WM_PICK_SND => {
@@ -1959,7 +2064,7 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
             LRESULT(0)
         }
         WM_POW_OUT => {
-            let plan = APP.with(|a| a.borrow().as_ref().and_then(|a| a.pw_edit.as_ref().and_then(|id| a.plans.iter().find(|p| p.id == *id).cloned())));
+            let plan = APP.with(|a| a.borrow().as_ref().and_then(|a| a.plans.iter().find(|p| p.id == a.pw_sel).cloned()));
             if let Some(plan) = plan {
                 if let Some(path) = capture::save_file(h, "Planos de energia", w!("*.pow"), &plan.name) {
                     let done = crate::sys::powerplan::export(&path, &plan.id);
@@ -1968,6 +2073,16 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                         a.toast.info(if done { "Plano exportado" } else { failed });
                     });
                 }
+            }
+            LRESULT(0)
+        }
+        WM_PICK_METER => {
+            if let Some(path) = capture::choose_exe(h) {
+                with(|a| {
+                    a.add_meter_game(&procs::exe_name(&path), &path);
+                    a.cfg.save();
+                    a.invalidate();
+                });
             }
             LRESULT(0)
         }

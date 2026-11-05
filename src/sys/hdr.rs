@@ -72,6 +72,47 @@ pub struct Screen {
     pub gdi: String,
 }
 
+/// Primeira tela que aceita HDR: adaptador, saída e se o HDR está ligado.
+pub fn hdr_output() -> Option<(LUID, u32, bool)> {
+    unsafe {
+        let (mut np, mut nm) = (0u32, 0u32);
+        GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &mut np, &mut nm).ok().ok()?;
+        let mut paths = vec![DISPLAYCONFIG_PATH_INFO::default(); np as usize];
+        let mut modes = vec![DISPLAYCONFIG_MODE_INFO::default(); nm as usize];
+        QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &mut np, paths.as_mut_ptr(), &mut nm, modes.as_mut_ptr(), None).ok().ok()?;
+        paths[..np as usize].iter().find_map(|p| {
+            let (adapter, id) = (p.targetInfo.adapterId, p.targetInfo.id);
+            let mut color = ColorInfo2::default();
+            (info_type(&mut color, DISPLAYCONFIG_DEVICE_INFO_TYPE(15), adapter, id) && color.value & 0x10 != 0).then_some((adapter, id, color.mode == 2))
+        })
+    }
+}
+
+/// Liga ou desliga o HDR e espera a tela chegar lá.
+pub fn set_hdr(adapter: LUID, output: u32, on: bool) -> bool {
+    #[repr(C)]
+    struct SetState {
+        header: DISPLAYCONFIG_DEVICE_INFO_HEADER,
+        value: u32,
+    }
+    let mut s = SetState { header: DISPLAYCONFIG_DEVICE_INFO_HEADER::default(), value: on as u32 };
+    s.header.r#type = DISPLAYCONFIG_DEVICE_INFO_TYPE(16);
+    s.header.size = std::mem::size_of::<SetState>() as u32;
+    s.header.adapterId = adapter;
+    s.header.id = output;
+    if unsafe { DisplayConfigSetDeviceInfo(&s.header) } != 0 {
+        return false;
+    }
+    for _ in 0..200 {
+        let mut color = ColorInfo2::default();
+        if info_type(&mut color, DISPLAYCONFIG_DEVICE_INFO_TYPE(15), adapter, output) && (color.mode == 2) == on {
+            return true;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    false
+}
+
 #[derive(Clone, Default, Debug)]
 pub struct Info {
     pub screens: Vec<Screen>,

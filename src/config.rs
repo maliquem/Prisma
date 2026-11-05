@@ -8,6 +8,25 @@ pub const MOD_CTRL: u32 = 2;
 pub const MOD_SHIFT: u32 = 4;
 pub const MOD_WIN: u32 = 8;
 
+/// Jogo da lista do Medidor.
+#[derive(Clone, Default, Debug)]
+pub struct MeterGame {
+    pub exe: String,
+    pub path: String,
+    /// 0 compacto, 1 completo, 2 nenhum.
+    pub view: u8,
+    /// 0 desligado, 1 automático, 2 manual.
+    pub limit_mode: u8,
+    pub limit_fps: u32,
+    pub limit_real: bool,
+    /// O automático já mediu este jogo.
+    pub measured: bool,
+    /// 0 segue a regra geral, 1 liga, 2 não liga.
+    pub hdr: u8,
+    /// 0 do jogo, 1 recomendado, 2 K, 3 L, 4 M.
+    pub preset: u8,
+}
+
 /// Escolha de Auto HDR de um jogo: 0 Windows decide, 1 força, 2 desliga.
 #[derive(Clone, Default, Debug)]
 pub struct HdrGame {
@@ -105,6 +124,7 @@ pub struct SndApp {
 /// Tela cujas opções voltam ao padrão.
 #[derive(Clone, Copy, PartialEq)]
 pub enum Defaults {
+    Meter,
     Capture,
     Energy,
     Fullscreen,
@@ -166,6 +186,16 @@ pub struct Config {
     pub fs_apps: Vec<FsApp>,
     pub hdr_profiles: Vec<HdrProfile>,
     pub hdr_games: Vec<HdrGame>,
+    pub meter_games: Vec<MeterGame>,
+    pub meter_rule: u8,
+    pub meter_hdr: u8,
+    pub meter_items: u32,
+    pub meter_op_compact: u32,
+    pub meter_op_full: u32,
+    pub hk_meter_compact: Hotkey,
+    pub hk_meter_full: Hotkey,
+    pub hk_meter_off: Hotkey,
+    pub snd_keep: u8,
     pub snd_apps: Vec<SndApp>,
     pub black: Vec<String>,
     pub white: Vec<String>,
@@ -226,6 +256,16 @@ impl Default for Config {
             fs_apps: Vec::new(),
             hdr_profiles: Vec::new(),
             hdr_games: Vec::new(),
+            meter_games: Vec::new(),
+            meter_rule: 1,
+            meter_hdr: 0,
+            meter_items: crate::meter::ITEMS_DEFAULT,
+            meter_op_compact: 84,
+            meter_op_full: 88,
+            hk_meter_compact: Hotkey::new(MOD_CTRL | MOD_ALT, b'1' as u32),
+            hk_meter_full: Hotkey::new(MOD_CTRL | MOD_ALT, b'2' as u32),
+            hk_meter_off: Hotkey::new(MOD_CTRL | MOD_ALT, b'0' as u32),
+            snd_keep: 0,
             snd_apps: Vec::new(),
             black: Vec::new(),
             white: Vec::new(),
@@ -319,6 +359,22 @@ impl Config {
                     let p: Vec<&str> = v.splitn(4, '|').collect();
                     if p.len() == 4 {
                         c.snd_apps.push(SndApp { exe: p[0].into(), output: p[1].into(), input: p[2].into(), path: p[3].into() });
+                    }
+                }
+                "snd_keep" => c.snd_keep = v.parse().unwrap_or(0),
+                "meter_rule" => c.meter_rule = v.parse().unwrap_or(1),
+                "meter_hdr" => c.meter_hdr = v.parse().unwrap_or(0),
+                "meter_items" => c.meter_items = v.parse().unwrap_or(crate::meter::ITEMS_DEFAULT),
+                "meter_op_compact" => c.meter_op_compact = v.parse().unwrap_or(84),
+                "meter_op_full" => c.meter_op_full = v.parse().unwrap_or(88),
+                "hk_meter_compact" => c.hk_meter_compact = Hotkey::parse(v),
+                "hk_meter_full" => c.hk_meter_full = Hotkey::parse(v),
+                "hk_meter_off" => c.hk_meter_off = Hotkey::parse(v),
+                "meter_game" => {
+                    let p: Vec<&str> = v.split('|').collect();
+                    if p.len() == 9 {
+                        let n = |s: &str| s.parse().unwrap_or(0);
+                        c.meter_games.push(MeterGame { exe: p[0].into(), view: n(p[1]), limit_mode: n(p[2]), limit_fps: p[3].parse().unwrap_or(0), limit_real: p[4] == "1", measured: p[5] == "1", hdr: n(p[6]), preset: n(p[7]), path: p[8].into() });
                     }
                 }
                 "hdr_game" => {
@@ -454,6 +510,18 @@ impl Config {
         for a in &self.snd_apps {
             let _ = writeln!(s, "snd_app={}|{}|{}|{}", a.exe, a.output, a.input, a.path);
         }
+        let _ = writeln!(s, "snd_keep={}", self.snd_keep);
+        let _ = writeln!(s, "meter_rule={}", self.meter_rule);
+        let _ = writeln!(s, "meter_hdr={}", self.meter_hdr);
+        let _ = writeln!(s, "meter_items={}", self.meter_items);
+        let _ = writeln!(s, "meter_op_compact={}", self.meter_op_compact);
+        let _ = writeln!(s, "meter_op_full={}", self.meter_op_full);
+        hk(&mut s, "hk_meter_compact", self.hk_meter_compact);
+        hk(&mut s, "hk_meter_full", self.hk_meter_full);
+        hk(&mut s, "hk_meter_off", self.hk_meter_off);
+        for g in &self.meter_games {
+            let _ = writeln!(s, "meter_game={}|{}|{}|{}|{}|{}|{}|{}|{}", g.exe, g.view, g.limit_mode, g.limit_fps, b(g.limit_real), b(g.measured), g.hdr, g.preset, g.path);
+        }
         for g in &self.hdr_games {
             let _ = writeln!(s, "hdr_game={}|{}|{}", g.exe, g.mode, g.path);
         }
@@ -536,6 +604,16 @@ impl Config {
                 for a in &mut self.fs_apps {
                     a.auto = false;
                 }
+            }
+            Defaults::Meter => {
+                self.meter_rule = d.meter_rule;
+                self.meter_hdr = d.meter_hdr;
+                self.meter_items = d.meter_items;
+                self.meter_op_compact = d.meter_op_compact;
+                self.meter_op_full = d.meter_op_full;
+                self.hk_meter_compact = d.hk_meter_compact;
+                self.hk_meter_full = d.hk_meter_full;
+                self.hk_meter_off = d.hk_meter_off;
             }
             Defaults::Volume => {
                 self.vol_mods = d.vol_mods;

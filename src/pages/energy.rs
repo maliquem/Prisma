@@ -87,11 +87,25 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let t = rect(x, by, w - rules_w - 12.0, bh);
     ui.card(t);
     ui.title(rect(t.x + 16.0, t.y + 10.0, 300.0, 22.0), "Seus planos na tomada");
-    if ui.button("pw-in", rect(t.right() - 116.0, t.y + 8.0, 100.0, 36.0), "Importar", false) {
+    let chosen = app.plans.iter().find(|p| p.id == app.pw_sel).map(|p| p.id.clone());
+    let (bx, by2) = (t.right() - 16.0, t.y + 8.0);
+    if ui.button("pw-edit", rect(bx - 84.0, by2, 84.0, 36.0), "Editar", false) {
+        match &chosen {
+            Some(id) => app.open_plan(id),
+            None => app.toast.info("Selecione um plano primeiro"),
+        }
+    }
+    if ui.button("pw-out", rect(bx - 184.0, by2, 92.0, 36.0), "Exportar", false) {
+        match &chosen {
+            Some(id) => app.export_plan(id),
+            None => app.toast.info("Selecione um plano primeiro"),
+        }
+    }
+    if ui.button("pw-in", rect(bx - 284.0, by2, 92.0, 36.0), "Importar", false) {
         app.import_plan();
     }
     let has_prisma = app.plans.iter().any(|p| p.name == power::NAME_REST);
-    if !has_prisma && ui.button("mk", rect(t.right() - 294.0, t.y + 8.0, 170.0, 36.0), "Criar planos Prisma", true) {
+    if !has_prisma && ui.button("mk", rect(bx - 462.0, by2, 170.0, 36.0), "Criar planos Prisma", true) {
         let (rest, game) = power::ensure_prisma_plans();
         if let Some(r) = rest {
             app.cfg.plan_rest = r;
@@ -103,7 +117,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let cols = [("Mínimo", 70.0), ("EPP", 50.0), ("Boost", 104.0), ("Núcleos", 70.0)];
     let total: f32 = cols.iter().map(|c| c.1 + 8.0).sum();
     let hy = t.y + 44.0;
-    ui.label(rect(t.x + 24.0, hy, 200.0, 20.0), "Plano", MUTED);
+    ui.label(rect(t.x + 40.0, hy, 200.0, 20.0), "Plano", MUTED);
     let mut cx = t.right() - 16.0 - total;
     for (n, cw) in &cols {
         ui.c.text(rect(cx, hy, *cw, 20.0), n, 12.0, MUTED, Align::Left, Weight::Regular);
@@ -113,18 +127,27 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let warn = app.plan_values.iter().enumerate().any(|(i, v)| bad_plan(i, v.min as u32));
     let list = rect(t.x + 8.0, hy + 24.0, t.w - 16.0, t.bottom() - hy - 24.0 - if warn { 34.0 } else { 8.0 });
     ui.begin_scroll("plans", list, app.plan_values.len() as f32 * 32.0);
-    let mut open = None;
     for (i, v) in app.plan_values.iter().enumerate() {
         let y = list.y + i as f32 * 32.0;
         let r = rect(list.x, y, list.w, 32.0);
-        let current = app.plans[i].id == app.active_plan;
-        if current || ui.is_hover(r) {
+        let selected = app.plans[i].id == app.pw_sel;
+        if selected {
+            ui.c.round(r, 6.0, CARD2);
+            ui.c.round_line(r, 6.0, ACCENT, 1.0);
+        } else if ui.is_hover(r) {
             ui.c.round(r, 6.0, CARD2);
         }
         if ui.hit(&format!("pl{i}"), r) {
-            open = Some(app.plans[i].id.clone());
+            app.pw_sel = app.plans[i].id.clone();
         }
-        ui.c.text(rect(r.x + 16.0, y, r.w - total - 28.0, 32.0), &v.name, 14.0, TEXT, Align::Left, Weight::Regular);
+        if ui.right_hit(r) {
+            app.pw_sel = app.plans[i].id.clone();
+            ui.menu("pw-menu", &[("Exportar", true), ("Editar", true)]);
+        }
+        if app.plans[i].id == app.active_plan {
+            ui.c.text(rect(r.x + 16.0, y, 14.0, 32.0), "●", 10.0, ACCENT, Align::Left, Weight::Regular);
+        }
+        ui.c.text(rect(r.x + 32.0, y, r.w - total - 44.0, 32.0), &v.name, 14.0, TEXT, Align::Left, Weight::Regular);
         let bad = bad_plan(i, v.min as u32);
         let cells = [format!("{}%", v.min), v.epp.to_string(), power::boost_name(v.boost).to_string(), format!("{}%", v.park)];
         let mut cx = t.right() - 16.0 - total;
@@ -135,9 +158,14 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         }
     }
     ui.end_scroll();
-    if let Some(id) = open {
-        app.open_plan(&id);
-        return;
+    match ui.menu_pick("pw-menu") {
+        Some(0) => app.export_plan(&app.pw_sel.clone()),
+        Some(_) => {
+            let id = app.pw_sel.clone();
+            app.open_plan(&id);
+            return;
+        }
+        None => {}
     }
     if warn {
         let msg = "Sua Economia de energia mantém a CPU em 100% mínimo, então quase não economiza.";

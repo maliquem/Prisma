@@ -6,6 +6,7 @@ mod capture;
 mod energy;
 mod fullscreen;
 mod hdr;
+mod meter;
 mod monitor;
 mod optimize;
 pub mod picker;
@@ -26,6 +27,7 @@ use crate::ui::Ui;
 #[derive(Clone, Copy, PartialEq)]
 pub enum Page {
     Monitor,
+    Meter,
     Storage,
     Analyze,
     Startup,
@@ -67,6 +69,11 @@ const ICON_HDR: Icon = &[
     &[(5.6, 18.4), (7., 17.)],
     &[(17., 7.), (18.4, 5.6)],
     &[(12., 8.), (15., 9.), (16., 12.), (15., 15.), (12., 16.), (9., 15.), (8., 12.), (9., 9.), (12., 8.)],
+];
+const ICON_METER: Icon = &[
+    &[(4., 17.), (5., 12.), (8., 8.), (12., 6.), (16., 8.), (19., 12.), (20., 17.)],
+    &[(12., 16.), (16., 10.)],
+    &[(9., 18.), (15., 18.)],
 ];
 const ICON_VOL: Icon = &[
     &[(4., 9.), (4., 15.), (8., 15.), (13., 19.), (13., 5.), (8., 9.), (4., 9.)],
@@ -126,6 +133,7 @@ const ICON_SVC: Icon = &[
 
 const NAV: &[(Page, &str, Icon)] = &[
     (Page::Monitor, "Monitor", ICON_MON),
+    (Page::Meter, "Medidor", ICON_METER),
     (Page::Storage, "Discos e redes", ICON_DISK),
     (Page::Analyze, "Espaço em disco", ICON_MAP),
     (Page::Startup, "Inicialização", ICON_BOOT),
@@ -191,6 +199,7 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
     let area = rect(SIDE_W, 0.0, full.w - SIDE_W, full.h);
     match app.page {
         Page::Monitor => monitor::draw(&mut ui, app, area),
+        Page::Meter => meter::draw(&mut ui, app, area),
         Page::Storage => storage::draw(&mut ui, app, area),
         Page::Analyze => analyze::draw(&mut ui, app, area),
         Page::Startup => startup::draw(&mut ui, app, area),

@@ -21,6 +21,8 @@ pub struct Layered {
     canvas: Option<Canvas>,
     dc_rt: Option<ID2D1DCRenderTarget>,
     pub scale: f32,
+    #[cfg(debug_assertions)]
+    bits: *mut u8,
 }
 
 impl Layered {
@@ -35,6 +37,8 @@ impl Layered {
             canvas: None,
             dc_rt: None,
             scale: 1.0,
+            #[cfg(debug_assertions)]
+            bits: std::ptr::null_mut(),
         }
     }
 
@@ -62,6 +66,10 @@ impl Layered {
             let mut bits = std::ptr::null_mut();
             self.dib = CreateDIBSection(None, &bi, DIB_RGB_COLORS, &mut bits, None, 0)
                 .expect("bitmap do widget");
+            #[cfg(debug_assertions)]
+            {
+                self.bits = bits as *mut u8;
+            }
             self.old = SelectObject(self.mem, self.dib.into());
             self.size = (w, h);
             let dpi = 96.0 * self.scale;
@@ -100,6 +108,11 @@ impl Layered {
                 self.dc_rt = None;
                 self.canvas = None;
                 return;
+            }
+            #[cfg(debug_assertions)]
+            if let Ok(dir) = std::env::var("PRISMA_LAYER_DUMP") {
+                let px = std::slice::from_raw_parts(self.bits, (pw * ph * 4) as usize);
+                let _ = crate::capture::save_png(&format!("{dir}\\camada_{}.png", pw), pw as u32, ph as u32, px);
             }
             let pos = POINT { x, y };
             let size = SIZE { cx: pw, cy: ph };

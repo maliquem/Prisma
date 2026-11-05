@@ -6,6 +6,7 @@ mod config;
 mod crash;
 mod i18n;
 mod optimizer;
+mod meter;
 mod overlays;
 mod pages;
 #[cfg(debug_assertions)]

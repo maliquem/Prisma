@@ -67,9 +67,6 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         app.close_plan();
         return;
     }
-    if ui.button("pw-out", rect(a.right() - 232.0, 30.0, 100.0, 36.0), "Exportar", false) {
-        app.export_plan();
-    }
     let x = a.x + 28.0;
     let w = a.w - 56.0;
     let t = rect(x, 88.0, w, a.h - 108.0);

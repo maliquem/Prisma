@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0
+
+- New Meter page: compact bar and full panel over the game, with FPS, 1% and 0.1% lows, frame time, CPU, GPU, VRAM and RAM. Nothing runs inside the game. / Nova aba Medidor: barra compacta e painel completo sobre o jogo, com FPS, 1% e 0,1% low, frame time, CPU, GPU, VRAM e RAM. Nada roda dentro do jogo.
+- FPS limit per game through the NVIDIA driver, manual or automatic after 5 minutes of play. It applies the next time the game opens. / Limite de FPS por jogo pelo driver NVIDIA, manual ou automático depois de 5 minutos de jogo. Vale na próxima abertura do jogo.
+- DLSS profile per game, upscaler and frame generation detection, Reflex detection, automatic HDR per game. / Perfil de DLSS por jogo, detecção de upscaler, geração de quadros e Reflex, e HDR automático por jogo.
+- Keep the sound awake on the Sound page, against the cut at the start of sounds on HDMI and Dolby. / Manter o som acordado na aba Som, contra o corte no começo do som em HDMI e Dolby.
+- Power plans: select a plan, then Import, Export or Edit, or right-click it. / Planos de energia: selecione um plano e use Importar, Exportar ou Editar, ou clique com o botão direito.
+
 ## 0.4.1
 
 - Power plans can be edited with every option Windows registers, including hidden ones, and imported or exported as .pow files. The first edit keeps a copy of the original plan. / Planos de energia editáveis com todas as opções que o Windows registra, inclusive as ocultas, e importação e exportação em arquivos .pow. A primeira edição guarda uma cópia do plano original.
