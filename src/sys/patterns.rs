@@ -18,9 +18,8 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 
 use crate::ui::gfx::{rect, rgb, Align, Canvas, Weight};
 
-/// Diferença entre o fundo e a forma: some quando os dois passam do corte da tela.
-const GAP: i32 = 6;
-const TOP: i32 = 1023 - GAP;
+/// Fundo no máximo do sinal: a tela corta nele, e o quadrado some ao chegar nesse corte.
+const TOP: i32 = 1023;
 const PANEL_H: u32 = 130;
 const SETTLE_MS: u32 = 1200;
 const TIMER: usize = 1;
@@ -55,12 +54,26 @@ pub fn nits(code: i32) -> f32 {
     10000.0 * ((e - c1).max(0.0) / (c2 - c3 * e)).powf(1.0 / m1)
 }
 
+/// Valor na tela, com casas só onde um passo mudaria menos que uma unidade.
+fn shown(v: f32) -> String {
+    let s = if v >= 100.0 {
+        format!("{v:.0}")
+    } else if v >= 10.0 {
+        format!("{v:.1}")
+    } else if v >= 0.1 {
+        format!("{v:.2}")
+    } else {
+        format!("{v:.4}")
+    };
+    s.replace('.', crate::i18n::comma())
+}
+
 fn code_of(v: f32) -> i32 {
     (0..=1023).find(|c| nits(*c) >= v).unwrap_or(1023)
 }
 
 fn steps() -> Vec<Step> {
-    let start = code_of(400.0);
+    let start = code_of(300.0);
     let mut list = vec![Step { kind: Kind::Black, code: code_of(0.4) }];
     list.extend([1, 0, 2, 3, 4].map(|i| Step { kind: Kind::Window(i), code: start }));
     list.extend((0..3).map(|c| Step { kind: Kind::Channel(c), code: start }));
@@ -125,9 +138,9 @@ impl Run {
             }
             Kind::Window(i) => {
                 let r = window(WINDOWS[i]);
-                out.push((r, [step.code; 3]));
+                out.push((r, [TOP; 3]));
                 let size = ((r.right - r.left).min(r.bottom - r.top) / 3).min(h / 4);
-                out.push((centered(size, size, cx, cy), [step.code + GAP; 3]));
+                out.push((centered(size, size, cx, cy), [step.code; 3]));
             }
             Kind::Channel(c) => {
                 let paint = |v: i32| {
@@ -136,9 +149,9 @@ impl Run {
                     p
                 };
                 let r = window(10);
-                out.push((r, paint(step.code)));
+                out.push((r, paint(TOP)));
                 let size = (r.bottom - r.top) / 3;
-                out.push((centered(size, size, cx, cy), paint(step.code + GAP)));
+                out.push((centered(size, size, cx, cy), paint(step.code)));
             }
         }
         out
@@ -152,17 +165,17 @@ impl Run {
         match step.kind {
             Kind::Black => (
                 format!("Passo {n} de {total}: preto"),
-                format!("Abaixe até as formas sumirem e pare no primeiro valor em que somem. Agora: {:.4} nits. S liga ou desliga a moldura.", nits(step.code)),
+                format!("Abaixe até as formas sumirem e pare no primeiro valor em que somem. Agora: {} nits. S liga ou desliga a moldura.", shown(nits(step.code))),
                 keys.to_string(),
             ),
             Kind::Window(i) => (
                 format!("Passo {n} de {total}: pico em janela de {}%", WINDOWS[i]),
-                format!("Aumente até o quadrado do centro sumir e pare no primeiro valor em que some. Agora: {:.0} nits.", nits(step.code)),
+                format!("Aumente até o quadrado escuro do centro sumir no fundo claro e pare no primeiro valor em que some. Agora: {} nits.", shown(nits(step.code))),
                 keys.to_string(),
             ),
             Kind::Channel(c) => (
                 format!("Passo {n} de {total}: canal {}", ["vermelho", "verde", "azul"][c]),
-                format!("Aumente até o quadrado do centro sumir e pare no primeiro valor em que some. Agora: {:.0} nits.", nits(step.code)),
+                format!("Aumente até o quadrado escuro do centro sumir no fundo claro e pare no primeiro valor em que some. Agora: {} nits.", shown(nits(step.code))),
                 keys.to_string(),
             ),
         }
@@ -211,8 +224,7 @@ impl Run {
 
     fn nudge(&mut self, by: i32) {
         let step = &mut self.steps[self.now];
-        let delta = if matches!(step.kind, Kind::Black) { by } else { by * 2 };
-        step.code = (step.code + delta).clamp(0, TOP);
+        step.code = (step.code + by).clamp(0, TOP);
     }
 
     fn settle(&mut self, hwnd: HWND) {
@@ -229,11 +241,13 @@ impl Run {
             VK_ESCAPE => self.done = Some(false),
             VK_RETURN if self.now + 1 == self.steps.len() => self.done = Some(true),
             VK_RETURN => {
-                // Continua de onde parou, perto do corte que a tela acabou de mostrar.
-                let start = (self.steps[self.now].code - 40).max(0);
+                // Recomeça abaixo do corte que a tela acabou de mostrar, com o quadrado à vista.
+                let start = (self.steps[self.now].code - 60).max(0);
+                let first_channel = matches!(self.steps[self.now + 1].kind, Kind::Channel(0));
+                let reference = self.steps.iter().find(|s| matches!(s.kind, Kind::Window(1))).map_or(start, |s| s.code - 60);
                 self.now += 1;
                 if !matches!(self.steps[self.now - 1].kind, Kind::Black) {
-                    self.steps[self.now].code = start;
+                    self.steps[self.now].code = if first_channel { reference } else { start };
                 }
                 self.settle(hwnd);
             }
@@ -269,7 +283,12 @@ unsafe extern "system" fn proc(h: HWND, msg: u32, w: WPARAM, l: LPARAM) -> LRESU
         RUN.with(|r| {
             if let Some(run) = r.borrow_mut().as_mut() {
                 f(run);
-                let _ = run.draw();
+                // Com a tecla presa, desenha só o último valor em vez de acumular atraso.
+                let mut next = MSG::default();
+                let waiting = PeekMessageW(&mut next, Some(h), WM_KEYDOWN, WM_KEYDOWN, PM_NOREMOVE).as_bool();
+                if !waiting {
+                    let _ = run.draw();
+                }
             }
         });
     };
@@ -280,7 +299,7 @@ unsafe extern "system" fn proc(h: HWND, msg: u32, w: WPARAM, l: LPARAM) -> LRESU
         }
         WM_MOUSEWHEEL => {
             let up = ((w.0 >> 16) & 0xffff) as i16 > 0;
-            act(&mut |run| run.nudge(if up { 1 } else { -1 }));
+            act(&mut |run| run.nudge(if up { 3 } else { -3 }));
             LRESULT(0)
         }
         WM_TIMER => {

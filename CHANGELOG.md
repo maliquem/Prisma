@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.7
+
+- Fixed the peak patterns: the dark square now sits on a full-signal background, so it vanishes at the point where the display clips. / Corrigidos os padrões de pico: o quadrado escuro agora fica sobre um fundo no máximo do sinal e some no ponto em que a tela corta.
+- The nits counter changes on every step, without getting stuck. / O contador de nits muda a cada passo, sem travar.
+
 ## 0.3.6
 
 - HDR calibration of your own: exact HDR test patterns for black, peak at five window sizes and each color channel, then a profile with the display's real primaries, saved per TV picture mode. / Calibração própria de HDR: padrões exatos para preto, pico em cinco tamanhos de janela e cada canal de cor, e um perfil com as primárias reais da tela, salvo por modo de imagem da TV.
