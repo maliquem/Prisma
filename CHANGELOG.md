@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.1
+
+- Power plans can be edited with every option Windows registers, including hidden ones, and imported or exported as .pow files. The first edit keeps a copy of the original plan. / Planos de energia editáveis com todas as opções que o Windows registra, inclusive as ocultas, e importação e exportação em arquivos .pow. A primeira edição guarda uma cópia do plano original.
+- New shortcut for a photo of the focused window, opening the editor with the window selected. / Novo atalho para foto da janela em foco, abrindo o editor com a janela selecionada.
+- Record Window and Record Screen are now separate buttons and shortcuts. / Gravar Janela e Gravar Tela agora são botões e atalhos separados.
+- The photo editor shows what each button does and its key, Ctrl + C copies, each tool has a key, and the cursor is a cross. / O editor de foto mostra o que cada botão faz e a tecla, Ctrl + C copia, cada ferramenta tem uma tecla e o cursor é uma cruz.
+- Fixed scrolling in the Auto HDR add list. / Corrigida a rolagem da lista de adicionar do Auto HDR.
+
 ## 0.4.0
 
 - Auto HDR per game on the HDR page: force it, turn it off or leave it to Windows, for DX11 and DX12 games, with nothing injected into the game. / Auto HDR por jogo na aba HDR: forçar, desligar ou deixar com o Windows, em jogos DX11 e DX12, sem injetar nada no jogo.

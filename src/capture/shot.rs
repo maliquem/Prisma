@@ -43,6 +43,22 @@ const TOOLS: &[(Tool, &str, &[&[(f32, f32)]])] = &[
 
 const COLORS: [Color; 4] = [rgb(0xff8a4c), ACCENT, WHITE, rgb(0x14161c)];
 
+/// O que cada botão faz, com a tecla entre parênteses, na ordem da barra.
+const TOOL_HELP: [&str; 9] = [
+    "Seta: aponta para algo (A)",
+    "Retângulo: destaca uma área (R)",
+    "Elipse: circula algo (E)",
+    "Linha: traça uma reta (L)",
+    "Caneta: desenha à mão livre (P)",
+    "Marcador: grifa por cima (M)",
+    "Texto: escreve na imagem (T)",
+    "Número: marca passos em ordem (N)",
+    "Pixelar: esconde uma parte (B)",
+];
+const TOOL_KEYS: [u8; 9] = [b'A', b'R', b'E', b'L', b'P', b'M', b'T', b'N', b'B'];
+const COLOR_HELP: [&str; 4] = ["Laranja (1)", "Azul (2)", "Branco (3)", "Preto (4)"];
+const ACTION_HELP: [&str; 3] = ["Fixar a imagem flutuando na tela (F)", "Salvar na pasta (Ctrl+S)", "Copiar para a área de transferência (Ctrl+C)"];
+
 #[derive(Clone)]
 enum Mark {
     Arrow(f32, f32, f32, f32, Color),
@@ -291,6 +307,58 @@ impl Overlay {
                 c.round(r, 8.0, LINE);
             }
             c.icon(r.x + 10.0, r.y + 10.0, 20.0, icon, TEXT);
+        }
+        if let Some(text) = self.hover_help(b) {
+            let (tw, _) = measure(text, 13.0, Weight::Regular, None);
+            let w = tw + 24.0;
+            let x = (self.mouse.0 - w / 2.0).clamp(8.0, (self.w - w - 8.0).max(8.0));
+            let y = if b.y >= 44.0 { b.y - 40.0 } else { b.bottom() + 8.0 };
+            let r = rect(x, y, w, 32.0);
+            c.round(r, 8.0, rgb(0x14161c).alpha(0.96));
+            c.round_line(r, 8.0, BORDER, 1.0);
+            c.text(r, text, 13.0, TEXT, Align::Center, Weight::Regular);
+        }
+    }
+
+    /// Texto do botão sob o mouse, nas mesmas posições que `bar_click` usa.
+    fn hover_help(&self, b: Rect) -> Option<&'static str> {
+        let (mx, my) = self.mouse;
+        if !b.contains(mx, my) {
+            return None;
+        }
+        let mut x = b.x + 6.0;
+        for help in TOOL_HELP {
+            if rect(x, b.y + 6.0, 44.0, 44.0).contains(mx, my) {
+                return Some(help);
+            }
+            x += 46.0;
+        }
+        x += 6.0;
+        for help in COLOR_HELP {
+            if rect(x, b.y + 6.0, 24.0, 44.0).contains(mx, my) {
+                return Some(help);
+            }
+            x += 24.0;
+        }
+        x += 6.0;
+        (0..3).find(|i| rect(x + *i as f32 * 42.0, b.y + 8.0, 40.0, 40.0).contains(mx, my)).map(|i| ACTION_HELP[i])
+    }
+
+    fn over_bar(&self) -> bool {
+        self.sel.is_some_and(|s| bar_rect(s, self.w, self.h).contains(self.mouse.0, self.mouse.1))
+    }
+
+    /// Atalhos de letra e número. Não valem enquanto a pessoa digita um texto.
+    fn key(&mut self, vk: u32) {
+        if self.typing.is_some() {
+            return;
+        }
+        if let Some(i) = TOOL_KEYS.iter().position(|k| *k as u32 == vk) {
+            self.tool = TOOLS[i].0;
+        } else if (0x31..=0x34).contains(&vk) {
+            self.color = (vk - 0x31) as usize;
+        } else if vk == 0x46 {
+            self.finish(Output::Pin);
         }
     }
 
@@ -620,6 +688,12 @@ unsafe extern "system" fn proc_(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESUL
                 0x53 if ctrl => {
                     with(|o| o.finish(Output::Save));
                 }
+                0x43 if ctrl => {
+                    with(|o| {
+                        o.commit_text();
+                        o.finish(Output::Copy);
+                    });
+                }
                 0x5A if ctrl => {
                     with(|o| {
                         if matches!(o.marks.pop(), Some(Mark::Number(..))) {
@@ -627,8 +701,17 @@ unsafe extern "system" fn proc_(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESUL
                         }
                     });
                 }
+                vk if !ctrl => {
+                    with(|o| o.key(vk));
+                }
                 _ => {}
             }
+        }
+        WM_SETCURSOR => {
+            // Cruz para mirar, e seta normal só em cima da barra de botões.
+            let cursor = if with(|o| o.over_bar()) == Some(true) { IDC_ARROW } else { IDC_CROSS };
+            SetCursor(LoadCursorW(None, cursor).ok());
+            return LRESULT(1);
         }
         _ => return DefWindowProcW(h, m, w, l),
     }
@@ -641,7 +724,8 @@ unsafe extern "system" fn proc_(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESUL
 }
 
 /// Abre a sobreposição no monitor do cursor com o quadro já capturado.
-pub fn open(frame: Frame, mon: HMONITOR, dir: String, hdr_file: bool) {
+/// `area`: retângulo já escolhido, em pixels da área de trabalho, como o de uma janela.
+pub fn open(frame: Frame, mon: HMONITOR, dir: String, hdr_file: bool, area: Option<RECT>) {
     if is_open() {
         return;
     }
@@ -684,6 +768,13 @@ pub fn open(frame: Frame, mon: HMONITOR, dir: String, hdr_file: bool) {
             return;
         };
         let scale = dpi / 96.0;
+        let sel = area.map(|a| {
+            let (x0, y0) = (a.left.max(r.left) - r.left, a.top.max(r.top) - r.top);
+            let (x1, y1) = (a.right.min(r.right) - r.left, a.bottom.min(r.bottom) - r.top);
+            rect(x0 as f32 / scale, y0 as f32 / scale, (x1 - x0).max(1) as f32 / scale, (y1 - y0).max(1) as f32 / scale)
+        });
+        #[cfg(debug_assertions)]
+        let sel = if std::env::var("PRISMA_SHOT_SEL").is_ok() { Some(rect(300.0, 120.0, 680.0, 400.0)) } else { sel };
         let ov = Overlay {
             hwnd: h,
             rt,
@@ -693,7 +784,7 @@ pub fn open(frame: Frame, mon: HMONITOR, dir: String, hdr_file: bool) {
             w: pw as f32 / scale,
             h: ph as f32 / scale,
             frame,
-            sel: None,
+            sel,
             drag: Drag::None,
             anchor: (0.0, 0.0),
             orig: Rect::default(),

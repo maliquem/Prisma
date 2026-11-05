@@ -358,6 +358,38 @@ pub fn choose_folder(owner: HWND) -> Option<String> {
 }
 
 /// Janela do Windows para escolher um programa.
+pub fn choose_file(owner: HWND, kind: &str, spec: PCWSTR) -> Option<String> {
+    use windows::Win32::UI::Shell::Common::COMDLG_FILTERSPEC;
+    use windows::Win32::UI::Shell::*;
+    unsafe {
+        let d: IFileOpenDialog = CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER).ok()?;
+        let name = HSTRING::from(crate::i18n::tr(kind).as_ref());
+        d.SetFileTypes(&[COMDLG_FILTERSPEC { pszName: PCWSTR(name.as_ptr()), pszSpec: spec }]).ok()?;
+        d.Show(Some(owner)).ok()?;
+        let p = d.GetResult().ok()?.GetDisplayName(SIGDN_FILESYSPATH).ok()?;
+        let s = p.to_string().ok();
+        CoTaskMemFree(Some(p.0 as *const _));
+        s
+    }
+}
+
+pub fn save_file(owner: HWND, kind: &str, spec: PCWSTR, file: &str) -> Option<String> {
+    use windows::Win32::UI::Shell::Common::COMDLG_FILTERSPEC;
+    use windows::Win32::UI::Shell::*;
+    unsafe {
+        let d: IFileSaveDialog = CoCreateInstance(&FileSaveDialog, None, CLSCTX_INPROC_SERVER).ok()?;
+        let name = HSTRING::from(crate::i18n::tr(kind).as_ref());
+        d.SetFileTypes(&[COMDLG_FILTERSPEC { pszName: PCWSTR(name.as_ptr()), pszSpec: spec }]).ok()?;
+        d.SetDefaultExtension(w!("pow")).ok()?;
+        d.SetFileName(&HSTRING::from(file)).ok()?;
+        d.Show(Some(owner)).ok()?;
+        let p = d.GetResult().ok()?.GetDisplayName(SIGDN_FILESYSPATH).ok()?;
+        let s = p.to_string().ok();
+        CoTaskMemFree(Some(p.0 as *const _));
+        s
+    }
+}
+
 pub fn choose_exe(owner: HWND) -> Option<String> {
     use windows::Win32::UI::Shell::Common::COMDLG_FILTERSPEC;
     use windows::Win32::UI::Shell::*;

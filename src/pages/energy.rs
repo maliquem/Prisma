@@ -23,6 +23,9 @@ fn load_row(ui: &mut Ui, key: &str, r: Rect, pct: &mut u32, secs: &mut u32) -> b
 }
 
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
+    if app.pw_edit.is_some() {
+        return plan_edit::draw(ui, app, a);
+    }
     let sub = match app.detector.mode {
         Mode::Rest => "Em repouso".to_string(),
         Mode::Load => format!("Carga alta há {} min", app.detector.since.elapsed().as_secs() / 60),
@@ -84,8 +87,11 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let t = rect(x, by, w - rules_w - 12.0, bh);
     ui.card(t);
     ui.title(rect(t.x + 16.0, t.y + 10.0, 300.0, 22.0), "Seus planos na tomada");
+    if ui.button("pw-in", rect(t.right() - 116.0, t.y + 8.0, 100.0, 36.0), "Importar", false) {
+        app.import_plan();
+    }
     let has_prisma = app.plans.iter().any(|p| p.name == power::NAME_REST);
-    if !has_prisma && ui.button("mk", rect(t.right() - 186.0, t.y + 8.0, 170.0, 36.0), "Criar planos Prisma", true) {
+    if !has_prisma && ui.button("mk", rect(t.right() - 294.0, t.y + 8.0, 170.0, 36.0), "Criar planos Prisma", true) {
         let (rest, game) = power::ensure_prisma_plans();
         if let Some(r) = rest {
             app.cfg.plan_rest = r;
@@ -107,12 +113,16 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let warn = app.plan_values.iter().enumerate().any(|(i, v)| bad_plan(i, v.min as u32));
     let list = rect(t.x + 8.0, hy + 24.0, t.w - 16.0, t.bottom() - hy - 24.0 - if warn { 34.0 } else { 8.0 });
     ui.begin_scroll("plans", list, app.plan_values.len() as f32 * 32.0);
+    let mut open = None;
     for (i, v) in app.plan_values.iter().enumerate() {
         let y = list.y + i as f32 * 32.0;
         let r = rect(list.x, y, list.w, 32.0);
         let current = app.plans[i].id == app.active_plan;
-        if current {
+        if current || ui.is_hover(r) {
             ui.c.round(r, 6.0, CARD2);
+        }
+        if ui.hit(&format!("pl{i}"), r) {
+            open = Some(app.plans[i].id.clone());
         }
         ui.c.text(rect(r.x + 16.0, y, r.w - total - 28.0, 32.0), &v.name, 14.0, TEXT, Align::Left, Weight::Regular);
         let bad = bad_plan(i, v.min as u32);
@@ -125,6 +135,10 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         }
     }
     ui.end_scroll();
+    if let Some(id) = open {
+        app.open_plan(&id);
+        return;
+    }
     if warn {
         let msg = "Sua Economia de energia mantém a CPU em 100% mínimo, então quase não economiza.";
         ui.c.text(rect(t.x + 16.0, t.bottom() - 28.0, t.w - 32.0, 20.0), msg, 13.0, WARN, Align::Left, Weight::Regular);

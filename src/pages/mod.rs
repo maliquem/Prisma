@@ -9,6 +9,7 @@ mod hdr;
 mod monitor;
 mod optimize;
 pub mod picker;
+mod plan_edit;
 mod services;
 mod startup;
 mod storage;

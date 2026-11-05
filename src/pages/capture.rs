@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::{native_fps, ACT_RECORD, ACT_SHOT};
+use crate::app::{native_fps, ACT_RECORD, ACT_RECORD_FULL, ACT_SHOT};
 use crate::capture;
 use crate::capture::engine::bitrate;
 use crate::capture::mux::Codec;
@@ -8,13 +8,21 @@ const GAP: f32 = 12.0;
 
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     header(ui, a, "Captura", "Tudo fica no seu PC. Nada é enviado.");
-    if ui.button("shot", rect(a.right() - 268.0, 24.0, 120.0, 44.0), "Tirar foto", false) {
+    if ui.button("shot", rect(a.right() - 428.0, 24.0, 112.0, 44.0), "Tirar foto", false) {
         app.post_action(ACT_SHOT);
     }
-    defaults_button(ui, app, a.right() - 372.0, crate::config::Defaults::Capture, "Volta atalhos, pasta, formatos, som e replay ao padrão.");
-    let label = if app.is_recording() { "Parar" } else { "Gravar" };
-    if ui.button("rec", rect(a.right() - 140.0, 24.0, 112.0, 44.0), label, true) {
-        app.post_action(ACT_RECORD);
+    defaults_button(ui, app, a.right() - 532.0, crate::config::Defaults::Capture, "Volta atalhos, pasta, formatos, som e replay ao padrão.");
+    if app.is_recording() {
+        if ui.button("rec", rect(a.right() - 308.0, 24.0, 280.0, 44.0), "Parar", true) {
+            app.post_action(ACT_RECORD);
+        }
+    } else {
+        if ui.button("rec", rect(a.right() - 308.0, 24.0, 144.0, 44.0), "Gravar Janela", true) {
+            app.post_action(ACT_RECORD);
+        }
+        if ui.button("rec-full", rect(a.right() - 156.0, 24.0, 128.0, 44.0), "Gravar Tela", true) {
+            app.post_action(ACT_RECORD_FULL);
+        }
     }
 
     let mon = capture::cursor_monitor();
@@ -33,7 +41,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let col = |i: usize| l.x + 16.0 + i as f32 * (fw + 12.0);
     let y0 = l.y + 42.0;
     let y1 = y0 + 76.0;
-    ui.label(rect(col(0), y0, fw, 18.0), "Tela", TEXT2);
+    ui.label(rect(col(0), y0, fw, 18.0), "O replay grava", TEXT2);
     ui.label(rect(col(1), y0, fw, 18.0), "Resolução e FPS", TEXT2);
     ui.label(rect(col(0), y1, fw, 18.0), "Cor com HDR ligado na tela", TEXT2);
     ui.label(rect(col(1), y1, fw, 18.0), "Codec", TEXT2);
@@ -47,10 +55,8 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     y += 44.0;
     let sound = if c.cap_sys_audio {
         "Som do sistema ligado: grava todos os sons do PC."
-    } else if c.cap_target == 1 {
-        "Som do sistema desligado: grava só o som da janela capturada."
     } else {
-        "Som do sistema desligado: não grava o som do PC. Para gravar um programa só, escolha Janela em foco."
+        "Som do sistema desligado: Gravar Janela grava só o som da janela, e Gravar Tela não grava o som do PC."
     };
     ui.c.text_wrap(rect(col(0), y, l.w - 32.0, 22.0), sound, 13.0, TEXT2, Weight::Regular);
     y += 30.0;
@@ -89,41 +95,46 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let r = rect(l.right() + GAP, top, rw, h);
     ui.card(r);
     ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Atalhos e pasta");
-    let items: [(&str, &str, u8); 4] = [
+    let items: [(&str, &str, u8); 6] = [
         ("hk1", "Foto da área", 0),
         ("hk2", "Foto da tela inteira", 1),
-        ("hk3", "Gravar e parar", 2),
+        ("hk5", "Foto da janela em foco", 4),
+        ("hk3", "Gravar Janela e parar", 2),
+        ("hk6", "Gravar Tela e parar", 5),
         ("hk4", "Salvar replay", 3),
     ];
+    const STEP: f32 = 66.0;
     let mut hk_changed = false;
     for (i, (key, name, which)) in items.iter().enumerate() {
-        let y = r.y + 42.0 + i as f32 * 76.0;
+        let y = r.y + 40.0 + i as f32 * STEP;
         ui.label(rect(r.x + 16.0, y, r.w - 32.0, 18.0), name, TEXT2);
         let hk = match which {
             0 => &mut app.cfg.hk_shot,
             1 => &mut app.cfg.hk_shot_full,
             2 => &mut app.cfg.hk_record,
+            4 => &mut app.cfg.hk_shot_win,
+            5 => &mut app.cfg.hk_record_full,
             _ => &mut app.cfg.hk_replay,
         };
-        hk_changed |= ui.hotkey(key, rect(r.x + 16.0, y + 22.0, r.w - 32.0, 44.0), hk);
+        hk_changed |= ui.hotkey(key, rect(r.x + 16.0, y + 20.0, r.w - 32.0, 40.0), hk);
     }
-    let py = r.y + 42.0 + 4.0 * 76.0;
+    let py = r.y + 40.0 + 6.0 * STEP;
     ui.label(rect(r.x + 16.0, py, r.w - 32.0, 18.0), "Pasta", TEXT2);
-    let pr = rect(r.x + 16.0, py + 22.0, r.w - 32.0, 44.0);
+    let pr = rect(r.x + 16.0, py + 20.0, r.w - 32.0, 40.0);
     ui.c.round(pr, 8.0, SIDE);
     ui.c.round_line(pr, 8.0, if ui.is_hover(pr) { BORDER2 } else { BORDER }, 1.0);
     ui.c.text(pr.inset_xy(10.0, 0.0), &app.cfg.cap_dir, 14.0, TEXT, Align::Left, Weight::Regular);
     if ui.hit("dir", pr) {
         app.pick_folder();
     }
-    let fy = py + 76.0;
+    let fy = py + STEP;
     ui.label(rect(r.x + 16.0, fy, r.w - 32.0, 18.0), "Formato de foto", TEXT2);
 
     // Listas por último, para abrirem por cima do resto.
     let opt = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
     let c = &mut app.cfg;
     let mut s = c.shot_hdr as usize;
-    if ui.select("fmt", rect(r.x + 16.0, fy + 22.0, r.w - 32.0, 44.0), &opt(&["PNG em SDR", "PNG e JPEG XR em HDR"]), &mut s) {
+    if ui.select("fmt", rect(r.x + 16.0, fy + 20.0, r.w - 32.0, 40.0), &opt(&["PNG em SDR", "PNG e JPEG XR em HDR"]), &mut s) {
         c.shot_hdr = s == 1;
         changed = true;
     }

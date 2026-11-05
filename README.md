@@ -36,13 +36,13 @@ Prisma checks this page when it opens and once a day. When there is a new versio
 - **Windows tweaks:** first a read-only audit, then layered Gaming, Development and Privacy profiles with documented effects only. The Left out tab explains what was excluded and why. Each change records the previous value, and Undo only restores what nobody touched afterwards. No profile touches updates, antivirus, UAC, Memory Integrity or virtualization. **Show log** displays every change, before and after.
 - **Tools:** Windows repair (DISM, then SFC), crash history, Windows Update reset, disk check, network, DNS, cleanup, winget, diagnostics and advanced restart. On a suspect disk, modes that write are blocked. Each tool keeps its own step-by-step log, with the exact command, its output, errors and the time of each step.
 - **Optimize:** suggests what to close and always asks. The never-close list is respected, the always-close list closes those programs, and automatic detection suggests names for both.
-- **Power:** detects a game or high load and switches the power plan, going back to rest after 60 s without load. You choose the percentage and time that count as load for CPU and GPU.
+- **Power:** detects a game or high load and switches the power plan, going back to rest after 60 s without load. You choose the percentage and time that count as load for CPU and GPU. You can edit each plan with every option Windows registers, including hidden ones, and import or export .pow files. The first edit keeps a copy of the original plan.
 - **Per-game profile:** remembers the volume of each program.
 - **Fullscreenizer:** turns the focused window into borderless fullscreen. Programs you use it on join a saved list, where you can add them from the program list or by their .exe, remove them and mark Automatic to apply it whenever they open.
 - **Sound:** volume per program, and the keyboard volume keys, with a modifier, change only the focused program. Choose the output and input device of each program, including programs added by hand from the program list or by their .exe. The list has what the Start menu shows, Microsoft Store apps, installed programs and whatever is open. This uses an internal Windows feature, and some programs only switch device after they reopen.
 - **Widget:** CPU, GPU, RAM and VRAM over everything, in four styles.
 - **HDR:** a read-only panel with the display mode, the active calibration profile and its real saturation, the brightness each source declares, what Windows tells games, the declared Dolby Vision support and the accepted sound formats. It warns when something does not match. Reading the display's own data directly works only on NVIDIA cards. Your own calibration opens full screen test patterns for black, peak at five window sizes and each color channel, and saves one profile per TV picture mode with the display's real primaries. Windows may keep reporting the old values to games for a while after activation. The profile does not change what the TV does. The Auto HDR list forces it, turns it off or leaves it to Windows per game, for DX11 and DX12 games, with nothing injected into the game. The sound delay test plays a click with a flash, to compare the delay with and without spatial sound.
-- **Capture:** photos with annotations and video in AV1, HEVC or H.264. When the display is in HDR, it records in SDR or HDR10. With System sound on, it records all PC sounds. With it off and Focused window selected, it records only the sound of that window.
+- **Capture:** photos with annotations and video in AV1, HEVC or H.264. When the display is in HDR, it records in SDR or HDR10. Record Window records the focused window, and Record Screen records the whole screen. With System sound on, it records all PC sounds. With it off, Record Window records only the sound of that window.
 - **Replay:** in game mode, keeps the last seconds in memory.
 - **Crash report:** if Prisma crashes, it saves a report in its data folder and tells you the next time it opens. The report stays on your PC.
 
@@ -62,10 +62,12 @@ All of them can be changed in the program.
 | Optimize | Ctrl + Alt + O |
 | Area photo | Ctrl + Alt + P (Print Screen works too, if you set it) |
 | Full screen photo | Ctrl + Alt + A |
-| Record and stop | Ctrl + Alt + R |
+| Focused window photo | Ctrl + Alt + J |
+| Record Window and stop | Ctrl + Alt + R |
+| Record Screen and stop | Ctrl + Alt + T |
 | Save replay | Ctrl + Alt + B |
 
-On a photo: Enter copies, Ctrl + S saves, Ctrl + Z undoes and Esc cancels. Pinned photo: drag to move, right-click closes.
+On a photo: Enter or Ctrl + C copies, Ctrl + S saves, Ctrl + Z undoes and Esc cancels. Hover a button to see what it does and its key. Pinned photo: drag to move, right-click closes.
 
 ## Limits
 

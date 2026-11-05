@@ -138,7 +138,9 @@ pub struct Config {
     pub hk_force: Hotkey,
     pub hk_shot: Hotkey,
     pub hk_shot_full: Hotkey,
+    pub hk_shot_win: Hotkey,
     pub hk_record: Hotkey,
+    pub hk_record_full: Hotkey,
     pub hk_replay: Hotkey,
     pub fs_remember: bool,
     pub vol_mods: u32,
@@ -197,7 +199,9 @@ impl Default for Config {
             hk_force: Hotkey::new(MOD_ALT, 0x73),
             hk_shot: Hotkey::new(MOD_CTRL | MOD_ALT, b'P' as u32),
             hk_shot_full: Hotkey::new(MOD_CTRL | MOD_ALT, b'A' as u32),
+            hk_shot_win: Hotkey::new(MOD_CTRL | MOD_ALT, b'J' as u32),
             hk_record: Hotkey::new(MOD_CTRL | MOD_ALT, b'R' as u32),
+            hk_record_full: Hotkey::new(MOD_CTRL | MOD_ALT, b'T' as u32),
             hk_replay: Hotkey::new(MOD_CTRL | MOD_ALT, b'B' as u32),
             fs_remember: true,
             vol_mods: MOD_CTRL,
@@ -284,6 +288,8 @@ impl Config {
                 "hk_force" => c.hk_force = Hotkey::parse(v),
                 "hk_shot" => c.hk_shot = Hotkey::parse(v),
                 "hk_shot_full" => c.hk_shot_full = Hotkey::parse(v),
+                "hk_shot_win" => c.hk_shot_win = Hotkey::parse(v),
+                "hk_record_full" => c.hk_record_full = Hotkey::parse(v),
                 "hk_record" => c.hk_record = Hotkey::parse(v),
                 "hk_replay" => c.hk_replay = Hotkey::parse(v),
                 "fs_remember" => c.fs_remember = b,
@@ -386,6 +392,8 @@ impl Config {
         hk(&mut s, "hk_force", self.hk_force);
         hk(&mut s, "hk_shot", self.hk_shot);
         hk(&mut s, "hk_shot_full", self.hk_shot_full);
+        hk(&mut s, "hk_shot_win", self.hk_shot_win);
+        hk(&mut s, "hk_record_full", self.hk_record_full);
         hk(&mut s, "hk_record", self.hk_record);
         hk(&mut s, "hk_replay", self.hk_replay);
         let b = |v: bool| if v { 1 } else { 0 };
@@ -493,7 +501,9 @@ impl Config {
             Defaults::Capture => {
                 self.hk_shot = d.hk_shot;
                 self.hk_shot_full = d.hk_shot_full;
+                self.hk_shot_win = d.hk_shot_win;
                 self.hk_record = d.hk_record;
+                self.hk_record_full = d.hk_record_full;
                 self.hk_replay = d.hk_replay;
                 self.cap_dir = d.cap_dir;
                 self.cap_target = d.cap_target;

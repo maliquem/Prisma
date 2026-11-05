@@ -328,10 +328,6 @@ fn saved_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen, list: &[HdrProfil
 
 fn games_card(ui: &mut Ui, app: &mut App, r: Rect) {
     ui.card(r);
-    if app.pick_for == Some(Pick::HdrGame) {
-        picker::draw(ui, app, r);
-        return;
-    }
     ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 150.0, 22.0), "Auto HDR por jogo");
     picker::add_button(ui, app, rect(r.right() - 124.0, r.y + 8.0, 108.0, 32.0), Pick::HdrGame);
     let (text, color) = if autohdr::global_on() {
@@ -434,9 +430,15 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let saved: Vec<HdrProfile> = app.cfg.hdr_profiles.iter().filter(|p| p.screen == s.name).cloned().collect();
     let shown = previous.is_empty() || s.profile.as_ref().is_some_and(|p| p.name.eq_ignore_ascii_case(&previous));
     let saved_h = if saved.is_empty() && shown { 0.0 } else { 54.0 + (saved.len() + !shown as usize) as f32 * 38.0 + 12.0 };
-    let games_h = if app.pick_for == Some(Pick::HdrGame) { 440.0 } else { 80.0 + app.cfg.hdr_games.len() as f32 * GAME_ROW };
+    let games_h = 80.0 + app.cfg.hdr_games.len() as f32 * GAME_ROW;
     let total = cal_h + 12.0 + saved_h + games_h + 12.0 + note_h + h1 + h2 + h3 + 24.0;
     let view = rect(x, top, w, a.h - top - 20.0);
+    if app.pick_for == Some(Pick::HdrGame) {
+        // A lista tem rolagem própria e não pode ficar dentro da rolagem da página.
+        ui.card(view);
+        picker::draw(ui, app, view);
+        return;
+    }
     ui.begin_scroll("hdr", view, total);
     let mut y = top;
     let r = rect(x, y, w, cal_h);

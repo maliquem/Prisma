@@ -44,6 +44,8 @@ const WM_UPDATED: u32 = WM_APP + 77;
 const WM_PICK_FS: u32 = WM_APP + 78;
 const WM_PICK_SND: u32 = WM_APP + 79;
 const WM_PICK_GAME: u32 = WM_APP + 80;
+const WM_POW_IN: u32 = WM_APP + 81;
+const WM_POW_OUT: u32 = WM_APP + 82;
 
 static FORCE_VK: AtomicU32 = AtomicU32::new(0);
 static FORCE_MODS: AtomicU32 = AtomicU32::new(0);
@@ -93,6 +95,7 @@ unsafe extern "system" fn key_hook(code: i32, w: WPARAM, l: LPARAM) -> LRESULT {
 }
 pub const ACT_SHOT: i32 = HK_SHOT;
 pub const ACT_RECORD: i32 = HK_REC;
+pub const ACT_RECORD_FULL: i32 = HK_REC_FULL;
 
 const HK_FULL: i32 = 1;
 const HK_WIDGET: i32 = 2;
@@ -102,6 +105,8 @@ const HK_SHOT_FULL: i32 = 5;
 const HK_REC: i32 = 6;
 const HK_REPLAY: i32 = 7;
 const HK_FORCE: i32 = 8;
+const HK_SHOT_WIN: i32 = 9;
+const HK_REC_FULL: i32 = 13;
 const HK_VOL_UP: i32 = 10;
 const HK_VOL_DOWN: i32 = 11;
 const HK_MUTE: i32 = 12;
@@ -175,6 +180,12 @@ pub struct App {
     upd_told: bool,
     tm_check: Option<Instant>,
     force_hook: Option<HHOOK>,
+    pub rec_window: bool,
+    pub pw_edit: Option<String>,
+    pub pw_search: String,
+    pub pw_hidden: bool,
+    pub pw_battery: bool,
+    pub pw_list: crate::sys::powerplan::Shared,
     pub hdr: crate::sys::hdr::Shared,
     pub hdr_screen: usize,
     pub hdr_mode: usize,
@@ -330,6 +341,12 @@ pub fn start(background: bool) {
             upd_told: false,
             tm_check: None,
             force_hook: None,
+            rec_window: true,
+            pw_edit: None,
+            pw_search: String::new(),
+            pw_hidden: false,
+            pw_battery: false,
+            pw_list: Default::default(),
             hdr: Default::default(),
             hdr_screen: 0,
             hdr_mode: 0,
@@ -511,6 +528,24 @@ pub fn start(background: bool) {
                 println!("{ok}");
                 std::process::exit(0);
             }
+            if let Some(v) = a.strip_prefix("--test-plan=") {
+                use crate::sys::powerplan as pp;
+                let (path, id) = v.split_once('|').unwrap();
+                let g = power::parse_guid(id).unwrap();
+                let t = Instant::now();
+                let list = pp::read(&g);
+                let mut out = format!("{} opcoes em {} ms, {} ocultas, bateria {}\n", list.len(), t.elapsed().as_millis(), list.iter().filter(|s| s.hidden).count(), pp::has_battery());
+                for s in &list {
+                    out += &format!("{} | {} | ac {} dc {} | oculta {} | {:?}\n", s.group, s.name, s.ac, s.dc, s.hidden, s.kind);
+                }
+                if let Some(s) = list.iter().find(|s| matches!(s.kind, pp::Kind::Range { max, .. } if max >= 100 && max < 1000) && s.ac < 50) {
+                    let wrote = pp::write(&g, s, false, s.ac + 1, false);
+                    let again = pp::read(&g);
+                    out += &format!("escrevi {} de {} para {}: {wrote}, leitura {:?}\n", s.name, s.ac, s.ac + 1, again.iter().find(|x| x.id == s.id).map(|x| x.ac));
+                }
+                let _ = std::fs::write(path, out);
+                std::process::exit(0);
+            }
             if let Some(path) = a.strip_prefix("--test-catalog=") {
                 let t = Instant::now();
                 let list = crate::sys::catalog::list(Vec::new());
@@ -632,7 +667,7 @@ pub fn start(background: bool) {
             if let Some(path) = a.strip_prefix("--test-overlay=") {
                 let mon = capture::cursor_monitor();
                 if let Ok(f) = capture::grab(mon) {
-                    capture::shot::open(f, mon, String::new(), false);
+                    capture::shot::open(f, mon, String::new(), false, None);
                     capture::shot::debug_setup(path);
                 }
             }
@@ -670,7 +705,7 @@ pub fn start(background: bool) {
 pub fn shutdown() {
     with(|a| {
         if a.rec_start.is_some() {
-            a.toggle_record();
+            a.toggle_record(true);
         }
         a.stop_engine();
         a.cfg.save();
@@ -732,7 +767,7 @@ impl App {
     pub fn register_hotkeys(&mut self) {
         self.unhook_force_key();
         unsafe {
-            for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_REC, HK_REPLAY, HK_FORCE, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE] {
+            for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_REPLAY, HK_FORCE, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE] {
                 let _ = UnregisterHotKey(Some(self.hub), id);
             }
         }
@@ -744,7 +779,9 @@ impl App {
             (HK_OPT, c.hk_optimize, "Otimizar", true),
             (HK_SHOT, c.hk_shot, "Foto da área", true),
             (HK_SHOT_FULL, c.hk_shot_full, "Foto da tela inteira", true),
-            (HK_REC, c.hk_record, "Gravar", true),
+            (HK_SHOT_WIN, c.hk_shot_win, "Foto da janela", true),
+            (HK_REC, c.hk_record, "Gravar janela", true),
+            (HK_REC_FULL, c.hk_record_full, "Gravar tela", true),
             (HK_REPLAY, c.hk_replay, "Replay", true),
             (HK_FORCE, c.hk_force, "Fechar à força", true),
             (HK_VOL_UP, Hotkey::new(c.vol_mods, VK_VOL_UP), "Aumentar volume", false),
@@ -788,7 +825,7 @@ impl App {
         if on {
             self.unhook_force_key();
             unsafe {
-                for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_REC, HK_REPLAY, HK_FORCE] {
+                for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_REPLAY, HK_FORCE] {
                     let _ = UnregisterHotKey(Some(self.hub), id);
                 }
             }
@@ -816,7 +853,9 @@ impl App {
             HK_OPT => self.optimize_prompt(true),
             HK_SHOT => self.take_shot(),
             HK_SHOT_FULL => self.take_full_shot(),
-            HK_REC => self.toggle_record(),
+            HK_SHOT_WIN => self.take_window_shot(),
+            HK_REC => self.toggle_record(true),
+            HK_REC_FULL => self.toggle_record(false),
             HK_REPLAY => self.save_replay(),
             HK_FORCE => self.force_close(),
             HK_VOL_UP => self.volume(audio::Change::Step(self.cfg.vol_step as i32)),
@@ -888,10 +927,9 @@ impl App {
     fn capture_settings(&self, replay: bool) -> Settings {
         let fg = unsafe { GetForegroundWindow() };
         let mon = unsafe { MonitorFromWindow(fg, MONITOR_DEFAULTTOPRIMARY) };
-        let target = match self.cfg.cap_target {
-            1 if !fg.is_invalid() => Target::Window(fg.0 as isize),
-            _ => Target::Monitor(mon.0 as isize),
-        };
+        // O replay segue a escolha da tela Captura; a gravação, o botão usado.
+        let window = !fg.is_invalid() && if replay { self.cfg.cap_target == 1 } else { self.rec_window };
+        let target = if window { Target::Window(fg.0 as isize) } else { Target::Monitor(mon.0 as isize) };
         let (out_h, fps) = match self.cfg.cap_mode {
             1 => (2160, 60),
             2 => (1440, 60),
@@ -910,7 +948,7 @@ impl App {
             cursor: self.cfg.cap_cursor,
             sys_audio: self.cfg.cap_sys_audio,
             // Sem o som do sistema, a janela capturada grava só o som dela.
-            audio_pid: if !self.cfg.cap_sys_audio && self.cfg.cap_target == 1 && !fg.is_invalid() { procs::window_pid(fg) } else { 0 },
+            audio_pid: if !self.cfg.cap_sys_audio && window { procs::window_pid(fg) } else { 0 },
             mic: self.cfg.cap_mic,
             hdr10: self.cfg.cap_hdr,
             replay_secs: if replay { self.cfg.replay_secs } else { 0 },
@@ -938,7 +976,8 @@ impl App {
         }
     }
 
-    fn toggle_record(&mut self) {
+    /// Com gravação em andamento, qualquer um dos dois atalhos para.
+    fn toggle_record(&mut self, window: bool) {
         if self.rec_start.is_some() {
             if let Some(e) = &self.engine {
                 e.send(Cmd::StopRecord);
@@ -950,6 +989,7 @@ impl App {
             self.toast.info(&format!("Gravação salva em {}", self.cfg.cap_dir));
             return;
         }
+        self.rec_window = window;
         self.start_engine(false);
         let path = capture::new_path(&self.cfg.cap_dir, "mp4");
         if let Some(e) = &self.engine {
@@ -993,7 +1033,7 @@ impl App {
 
     pub fn hud_stop(&mut self) {
         if self.rec_start.is_some() {
-            self.toggle_record();
+            self.toggle_record(true);
         }
     }
 
@@ -1203,7 +1243,24 @@ impl App {
     fn take_shot(&mut self) {
         let mon = capture::cursor_monitor();
         match capture::grab(mon) {
-            Ok(f) => capture::shot::open(f, mon, self.cfg.cap_dir.clone(), self.cfg.shot_hdr),
+            Ok(f) => capture::shot::open(f, mon, self.cfg.cap_dir.clone(), self.cfg.shot_hdr, None),
+            Err(_) => self.toast.info("Não consegui capturar a tela"),
+        }
+    }
+
+    /// Abre o editor de foto com a janela em foco já selecionada.
+    fn take_window_shot(&mut self) {
+        use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_EXTENDED_FRAME_BOUNDS};
+        let fg = unsafe { GetForegroundWindow() };
+        let mut r = RECT::default();
+        let size = std::mem::size_of::<RECT>() as u32;
+        let found = !fg.is_invalid() && unsafe { DwmGetWindowAttribute(fg, DWMWA_EXTENDED_FRAME_BOUNDS, &mut r as *mut RECT as *mut _, size) }.is_ok();
+        if !found {
+            return self.take_shot();
+        }
+        let mon = unsafe { MonitorFromWindow(fg, MONITOR_DEFAULTTONEAREST) };
+        match capture::grab(mon) {
+            Ok(f) => capture::shot::open(f, mon, self.cfg.cap_dir.clone(), self.cfg.shot_hdr, Some(r)),
             Err(_) => self.toast.info("Não consegui capturar a tela"),
         }
     }
@@ -1309,6 +1366,51 @@ impl App {
         self.pick_search.clear();
         *self.pick_list.lock().unwrap() = None;
         crate::sys::catalog::load(self.pick_list.clone(), open, self.main.as_ref().map_or(0, |m| m.hwnd.0 as isize));
+    }
+
+    /// Abre o editor. O plano é lido em segundo plano, porque são centenas de opções.
+    pub fn open_plan(&mut self, id: &str) {
+        let Some(guid) = power::parse_guid(id) else { return };
+        self.pw_edit = Some(id.to_string());
+        self.pw_search.clear();
+        self.pw_battery = crate::sys::powerplan::has_battery();
+        crate::sys::powerplan::load(self.pw_list.clone(), guid, self.main.as_ref().map_or(0, |m| m.hwnd.0 as isize));
+    }
+
+    pub fn close_plan(&mut self) {
+        self.pw_edit = None;
+        *self.pw_list.lock().unwrap() = None;
+        self.refresh_plans();
+    }
+
+    pub fn set_plan_value(&mut self, plan: &Plan, index: usize, dc: bool, value: u32) {
+        use crate::sys::powerplan;
+        let Some(s) = self.pw_list.lock().unwrap().as_ref().and_then(|l| l.get(index).cloned()) else { return };
+        powerplan::backup(&crate::config::data_dir().join("planos"), &plan.id);
+        if !powerplan::write(&plan.guid, &s, dc, value, plan.id == self.active_plan) {
+            let hint = if self.elevated { "O Windows não aceitou esse valor" } else { "Precisa do Prisma como administrador" };
+            return self.toast.info(hint);
+        }
+        if let Some(item) = self.pw_list.lock().unwrap().as_mut().and_then(|l| l.get_mut(index)) {
+            if dc {
+                item.dc = value;
+            } else {
+                item.ac = value;
+            }
+        }
+        self.log(&format!("plano {}: {} = {value}{}", plan.name, s.name, if dc { " na bateria" } else { "" }));
+    }
+
+    pub fn import_plan(&self) {
+        unsafe {
+            let _ = PostMessageW(Some(self.hub), WM_POW_IN, WPARAM(0), LPARAM(0));
+        }
+    }
+
+    pub fn export_plan(&self) {
+        unsafe {
+            let _ = PostMessageW(Some(self.hub), WM_POW_OUT, WPARAM(0), LPARAM(0));
+        }
     }
 
     pub fn load_hdr(&self) {
@@ -1842,6 +1944,30 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                     a.cfg.save();
                     a.invalidate();
                 });
+            }
+            LRESULT(0)
+        }
+        WM_POW_IN => {
+            if let Some(path) = capture::choose_file(h, "Planos de energia", w!("*.pow")) {
+                with(|a| {
+                    let done = crate::sys::powerplan::import(&path).is_some();
+                    a.refresh_plans();
+                    a.toast.info(if done { "Plano importado" } else { "Não consegui importar esse arquivo" });
+                    a.invalidate();
+                });
+            }
+            LRESULT(0)
+        }
+        WM_POW_OUT => {
+            let plan = APP.with(|a| a.borrow().as_ref().and_then(|a| a.pw_edit.as_ref().and_then(|id| a.plans.iter().find(|p| p.id == *id).cloned())));
+            if let Some(plan) = plan {
+                if let Some(path) = capture::save_file(h, "Planos de energia", w!("*.pow"), &plan.name) {
+                    let done = crate::sys::powerplan::export(&path, &plan.id);
+                    with(|a| {
+                        let failed = if a.elevated { "Não consegui exportar o plano" } else { "Precisa do Prisma como administrador" };
+                        a.toast.info(if done { "Plano exportado" } else { failed });
+                    });
+                }
             }
             LRESULT(0)
         }

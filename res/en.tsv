@@ -940,3 +940,44 @@ O Auto HDR está desligado nas configurações do Windows. Ligue lá para valer.
 Forçar Auto HDR	Force Auto HDR
 Desligar Auto HDR	Turn off Auto HDR
 Não consegui gravar a escolha.	Could not save the choice.
+Seta: aponta para algo (A)	Arrow: points at something (A)
+Retângulo: destaca uma área (R)	Rectangle: highlights an area (R)
+Elipse: circula algo (E)	Ellipse: circles something (E)
+Linha: traça uma reta (L)	Line: draws a straight line (L)
+Caneta: desenha à mão livre (P)	Pen: draws freehand (P)
+Marcador: grifa por cima (M)	Marker: highlights over it (M)
+Texto: escreve na imagem (T)	Text: writes on the image (T)
+Número: marca passos em ordem (N)	Number: marks steps in order (N)
+Pixelar: esconde uma parte (B)	Pixelate: hides a part (B)
+Laranja (1)	Orange (1)
+Azul (2)	Blue (2)
+Branco (3)	White (3)
+Preto (4)	Black (4)
+Fixar a imagem flutuando na tela (F)	Pin the image on the screen (F)
+Salvar na pasta (Ctrl+S)	Save to the folder (Ctrl+S)
+Copiar para a área de transferência (Ctrl+C)	Copy to the clipboard (Ctrl+C)
+Foto da janela	Window photo
+Foto da janela em foco	Photo of the focused window
+Gravar janela	Record window
+Gravar tela	Record screen
+Gravar Janela	Record Window
+Gravar Tela	Record Screen
+Gravar Janela e parar	Record Window and stop
+Gravar Tela e parar	Record Screen and stop
+O replay grava	Replay records
+Som do sistema desligado: Gravar Janela grava só o som da janela, e Gravar Tela não grava o som do PC.	System sound off: Record Window records only that window, and Record Screen records no PC sound.
+Editar plano	Edit plan
+Exportar	Export
+Importar	Import
+Mostrar ocultas	Show hidden
+Na tomada	Plugged in
+Na bateria	On battery
+Lendo o plano…	Reading the plan…
+Nenhuma opção encontrada.	No options found.
+O Windows não aceitou esse valor	Windows did not accept this value
+Planos de energia	Power plans
+Plano importado	Plan imported
+Não consegui importar esse arquivo	Could not import this file
+Plano exportado	Plan exported
+Não consegui exportar o plano	Could not export the plan
+Geral	General

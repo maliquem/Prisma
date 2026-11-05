@@ -36,13 +36,13 @@ O Prisma procura nesta página ao abrir e uma vez por dia. Quando há versão no
 - **Ajustes do Windows:** primeiro uma auditoria que só lê o PC. Depois os perfis Jogo, Desenvolvimento e Privacidade, em camadas, só com ajustes de efeito documentado. A aba Fora da lista explica o que ficou de fora e por quê. Cada mudança guarda o valor anterior, e Desfazer só restaura o que ninguém mexeu depois. Nenhum perfil toca em atualizações, antivírus, UAC, Integridade da Memória ou virtualização. **Ver log** mostra cada mudança, com o antes e o depois.
 - **Ferramentas:** reparo do Windows (DISM e depois SFC), histórico de falhas, Windows Update, verificação de disco, rede, DNS, limpeza, winget, diagnóstico e reinício avançado. Em disco suspeito, os modos que escrevem ficam bloqueados. Cada ferramenta guarda o próprio passo a passo, com o comando exato, a saída, os erros e o tempo de cada etapa.
 - **Otimizar:** sugere o que fechar e sempre pergunta. Blacklist nunca fecha, whitelist sempre fecha. A detecção automática sugere nomes para as duas listas.
-- **Energia:** detecta jogo ou carga alta e troca o plano. Volta ao repouso depois de 60 s sem carga. Você escolhe a porcentagem e o tempo que contam como carga na CPU e na GPU.
+- **Energia:** detecta jogo ou carga alta e troca o plano. Volta ao repouso depois de 60 s sem carga. Você escolhe a porcentagem e o tempo que contam como carga na CPU e na GPU. Dá para editar cada plano com todas as opções que o Windows registra, inclusive as ocultas, e importar ou exportar em arquivos .pow. A primeira edição guarda uma cópia do plano original.
 - **Perfil por jogo:** lembra o volume de cada programa.
 - **Fullscreenizer:** deixa a janela em foco em tela cheia sem bordas. Quem usa uma vez entra numa lista salva, onde dá para adicionar pela lista de programas ou pelo .exe, remover e marcar Automático para aplicar sempre que o programa abrir.
 - **Som:** volume por programa, e as teclas de volume do teclado, com um modificador, mudam só o programa em foco. Você escolhe o aparelho de saída e o de entrada de cada programa, inclusive os adicionados à mão pela lista de programas ou pelo .exe. A lista traz o que o menu Iniciar mostra, aplicativos da Microsoft Store, os programas instalados e o que está aberto. Isso usa um recurso interno do Windows, e alguns programas só trocam de aparelho ao reabrir.
 - **Widget:** CPU, GPU, RAM e VRAM por cima de tudo, em quatro estilos.
 - **HDR:** painel de leitura que mostra o modo da tela, o perfil de calibração ativo com a saturação real, o brilho que cada fonte declara, o que o Windows informa aos jogos, o Dolby Vision declarado e os formatos de som aceitos. Avisa quando algo não confere. A leitura direta da ficha da tela existe só em placas NVIDIA. A calibração própria abre padrões de teste em tela cheia, com o preto, o pico em cinco tamanhos de janela e cada canal de cor, e grava um perfil por modo de imagem da TV, com as primárias reais da tela. O Windows pode continuar informando os valores antigos aos jogos por um tempo depois de ativar. O perfil não muda o que a TV faz. A lista de Auto HDR por jogo força, desliga ou deixa com o Windows, em jogos DX11 e DX12, sem injetar nada no jogo. O teste de atraso do som toca um clique junto de um clarão, para comparar o atraso com e sem som espacial.
-- **Captura:** foto com anotações e vídeo em AV1, HEVC ou H.264. Com a tela em HDR, grava em SDR ou HDR10. Com Som do sistema ligado, grava todos os sons do PC. Desligado e com Janela em foco, grava só o som daquela janela.
+- **Captura:** foto com anotações e vídeo em AV1, HEVC ou H.264. Com a tela em HDR, grava em SDR ou HDR10. Gravar Janela grava a janela em foco, e Gravar Tela grava a tela inteira. Com Som do sistema ligado, grava todos os sons do PC. Desligado, Gravar Janela grava só o som daquela janela.
 - **Replay:** em modo jogo, guarda os últimos segundos na memória.
 - **Relatório de falha:** se o Prisma cair, ele guarda um relatório na pasta de dados e avisa na próxima abertura. O relatório fica só no seu PC.
 
@@ -62,10 +62,12 @@ Todos podem ser trocados no programa.
 | Otimizar | Ctrl + Alt + O |
 | Foto da área | Ctrl + Alt + P (também aceita Print Screen, se você configurar) |
 | Foto da tela inteira | Ctrl + Alt + A |
-| Gravar e parar | Ctrl + Alt + R |
+| Foto da janela em foco | Ctrl + Alt + J |
+| Gravar Janela e parar | Ctrl + Alt + R |
+| Gravar Tela e parar | Ctrl + Alt + T |
 | Salvar replay | Ctrl + Alt + B |
 
-Na foto: Enter copia, Ctrl + S salva, Ctrl + Z desfaz e Esc cancela. Foto fixada: arraste para mover, botão direito fecha.
+Na foto: Enter ou Ctrl + C copia, Ctrl + S salva, Ctrl + Z desfaz e Esc cancela. Passe o mouse num botão para ver o que ele faz e a tecla. Foto fixada: arraste para mover, botão direito fecha.
 
 ## Limites
 
