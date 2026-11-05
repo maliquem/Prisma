@@ -21,7 +21,7 @@ The interface comes in English and Brazilian Portuguese. Prisma starts in your W
 
 ## Updates
 
-Prisma checks this page when it opens and once a day. When there is a new version it tells you, and nothing is installed until you click **Install** in **Settings**. It downloads the file from this page, checks its SHA-256 hash, swaps the program and restarts. The check sends no data of yours, and you can turn it off. The installed version needs Prisma running as administrator to update.
+Prisma checks this page when it opens and once a day. When there is a new version it tells you, and nothing is installed until you click **Install** in **Settings**. It downloads the file from this page in parts, checks its SHA-256 hash, swaps the program and restarts. The check sends no data of yours, and you can turn it off. The installed version needs Prisma running as administrator to update.
 
 ## Features
 
@@ -38,8 +38,8 @@ Prisma checks this page when it opens and once a day. When there is a new versio
 - **Optimize:** suggests what to close and always asks. The never-close list is respected, the always-close list closes those programs, and automatic detection suggests names for both.
 - **Power:** detects a game or high load and switches the power plan, going back to rest after 60 s without load. You choose the percentage and time that count as load for CPU and GPU.
 - **Per-game profile:** remembers the volume of each program.
-- **Fullscreenizer:** turns the focused window into borderless fullscreen. Programs you use it on join a saved list, where you can add or remove them and mark Automatic to apply it whenever they open.
-- **Sound:** volume per program, and the keyboard volume keys, with a modifier, change only the focused program. Choose the output and input device of each program, including programs added by hand from the Windows list or by their .exe. This uses an internal Windows feature, and some programs only switch device after they reopen.
+- **Fullscreenizer:** turns the focused window into borderless fullscreen. Programs you use it on join a saved list, where you can add them from the program list or by their .exe, remove them and mark Automatic to apply it whenever they open.
+- **Sound:** volume per program, and the keyboard volume keys, with a modifier, change only the focused program. Choose the output and input device of each program, including programs added by hand from the program list or by their .exe. The list has what the Start menu shows, Microsoft Store apps, installed programs and whatever is open. This uses an internal Windows feature, and some programs only switch device after they reopen.
 - **Widget:** CPU, GPU, RAM and VRAM over everything, in four styles.
 - **Capture:** photos with annotations and video in AV1, HEVC or H.264. When the display is in HDR, it records in SDR or HDR10. With System sound on, it records all PC sounds. With it off and Focused window selected, it records only the sound of that window.
 - **Replay:** in game mode, keeps the last seconds in memory.

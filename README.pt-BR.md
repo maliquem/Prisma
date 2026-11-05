@@ -21,7 +21,7 @@ A interface vem em português do Brasil e inglês. O Prisma começa no idioma do
 
 ## Atualizações
 
-O Prisma procura nesta página ao abrir e uma vez por dia. Quando há versão nova, ele avisa, e nada é instalado até você clicar em **Instalar** em **Configurações**. Ele baixa o arquivo daqui, confere o hash SHA-256, troca o programa e reinicia. A busca não envia dados seus e pode ser desligada. A versão instalada precisa do Prisma como administrador para atualizar.
+O Prisma procura nesta página ao abrir e uma vez por dia. Quando há versão nova, ele avisa, e nada é instalado até você clicar em **Instalar** em **Configurações**. Ele baixa o arquivo daqui em partes, confere o hash SHA-256, troca o programa e reinicia. A busca não envia dados seus e pode ser desligada. A versão instalada precisa do Prisma como administrador para atualizar.
 
 ## Funções
 
@@ -38,8 +38,8 @@ O Prisma procura nesta página ao abrir e uma vez por dia. Quando há versão no
 - **Otimizar:** sugere o que fechar e sempre pergunta. Blacklist nunca fecha, whitelist sempre fecha. A detecção automática sugere nomes para as duas listas.
 - **Energia:** detecta jogo ou carga alta e troca o plano. Volta ao repouso depois de 60 s sem carga. Você escolhe a porcentagem e o tempo que contam como carga na CPU e na GPU.
 - **Perfil por jogo:** lembra o volume de cada programa.
-- **Fullscreenizer:** deixa a janela em foco em tela cheia sem bordas. Quem usa uma vez entra numa lista salva, onde dá para adicionar, remover e marcar Automático para aplicar sempre que o programa abrir.
-- **Som:** volume por programa, e as teclas de volume do teclado, com um modificador, mudam só o programa em foco. Você escolhe o aparelho de saída e o de entrada de cada programa, inclusive os adicionados à mão pela lista do Windows ou pelo .exe. Isso usa um recurso interno do Windows, e alguns programas só trocam de aparelho ao reabrir.
+- **Fullscreenizer:** deixa a janela em foco em tela cheia sem bordas. Quem usa uma vez entra numa lista salva, onde dá para adicionar pela lista de programas ou pelo .exe, remover e marcar Automático para aplicar sempre que o programa abrir.
+- **Som:** volume por programa, e as teclas de volume do teclado, com um modificador, mudam só o programa em foco. Você escolhe o aparelho de saída e o de entrada de cada programa, inclusive os adicionados à mão pela lista de programas ou pelo .exe. A lista traz o que o menu Iniciar mostra, aplicativos da Microsoft Store, os programas instalados e o que está aberto. Isso usa um recurso interno do Windows, e alguns programas só trocam de aparelho ao reabrir.
 - **Widget:** CPU, GPU, RAM e VRAM por cima de tudo, em quatro estilos.
 - **Captura:** foto com anotações e vídeo em AV1, HEVC ou H.264. Com a tela em HDR, grava em SDR ou HDR10. Com Som do sistema ligado, grava todos os sons do PC. Desligado e com Janela em foco, grava só o som daquela janela.
 - **Replay:** em modo jogo, guarda os últimos segundos na memória.

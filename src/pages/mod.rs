@@ -7,6 +7,7 @@ mod energy;
 mod fullscreen;
 mod monitor;
 mod optimize;
+pub mod picker;
 mod services;
 mod startup;
 mod storage;

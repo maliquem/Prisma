@@ -1,8 +1,9 @@
 use std::collections::BTreeMap;
 
+use super::picker::{self, Target};
 use super::*;
 use crate::config::{MOD_ALT, MOD_CTRL, MOD_SHIFT};
-use crate::sys::{audio, procs, uninstall};
+use crate::sys::audio;
 
 struct Row {
     exe: String,
@@ -24,20 +25,7 @@ fn device_select(ui: &mut Ui, key: &str, r: Rect, list: &[audio::Device], cur: &
 
 fn draw_list(ui: &mut Ui, app: &mut App, t: Rect) {
     ui.title(rect(t.x + 16.0, t.y + 12.0, 300.0, 22.0), "Programas");
-    if ui.button("snd-add", rect(t.right() - 124.0, t.y + 8.0, 108.0, 32.0), "Adicionar", false) {
-        ui.menu("snd-menu", &[("Da lista de programas", true), ("Escolher arquivo .exe", true)]);
-    }
-    if let Some(i) = ui.menu_pick("snd-menu") {
-        if i == 0 {
-            if app.programs.is_empty() {
-                app.programs = uninstall::list();
-            }
-            app.snd_search.clear();
-            app.snd_picker = true;
-            return;
-        }
-        app.pick_sound_app();
-    }
+    picker::add_button(ui, app, rect(t.right() - 124.0, t.y + 8.0, 108.0, 32.0), Target::Sound);
 
     let mut groups: BTreeMap<String, Vec<usize>> = BTreeMap::new();
     for (i, s) in app.sessions.iter().enumerate() {
@@ -160,53 +148,6 @@ fn draw_list(ui: &mut Ui, app: &mut App, t: Rect) {
     }
 }
 
-/// Executável de um programa da lista do Windows, quando ele informa um.
-fn program_exe(p: &uninstall::Program) -> Option<String> {
-    let path = p.icon.split(',').next()?.trim().trim_matches('"').to_string();
-    path.to_ascii_lowercase().ends_with(".exe").then_some(path)
-}
-
-fn draw_picker(ui: &mut Ui, app: &mut App, t: Rect) {
-    ui.title(rect(t.x + 16.0, t.y + 12.0, 220.0, 22.0), "Adicionar programa");
-    if ui.button("snd-back", rect(t.right() - 124.0, t.y + 8.0, 108.0, 32.0), "Voltar", false) {
-        app.snd_picker = false;
-        return;
-    }
-    let mut q = std::mem::take(&mut app.snd_search);
-    ui.search("snd-q", rect(t.x + 240.0, t.y + 8.0, t.w - 384.0, 32.0), &mut q, "Buscar");
-    app.snd_search = q;
-    let needle = app.snd_search.to_lowercase();
-    let rows: Vec<(String, String)> = app
-        .programs
-        .iter()
-        .filter(|p| needle.is_empty() || p.name.to_lowercase().contains(&needle))
-        .filter_map(|p| program_exe(p).map(|e| (p.name.clone(), e)))
-        .collect();
-    let list = rect(t.x + 8.0, t.y + 46.0, t.w - 16.0, t.h - 54.0);
-    ui.begin_scroll("snd-pick", list, rows.len() as f32 * 44.0);
-    let first = (ui.scroll_y() / 44.0) as usize;
-    let last = first + (list.h / 44.0) as usize + 2;
-    let mut pick = None;
-    for (i, (name, path)) in rows.iter().enumerate().take(last).skip(first) {
-        let y = list.y + i as f32 * 44.0;
-        let r = rect(list.x, y, list.w, 42.0);
-        if ui.is_hover(r) {
-            ui.c.round(r, 6.0, CARD2);
-        }
-        ui.file_icon(path, name, rect(r.x + 10.0, y + 9.0, 24.0, 24.0));
-        ui.c.text(rect(r.x + 44.0, y, r.w - 60.0, 42.0), name, 14.0, TEXT, Align::Left, Weight::Regular);
-        if ui.hit(&format!("sp{i}"), r) {
-            pick = Some(path.clone());
-        }
-    }
-    ui.end_scroll();
-    if let Some(path) = pick {
-        app.cfg.snd_entry(&procs::exe_name(&path), &path);
-        app.cfg.save();
-        app.snd_picker = false;
-    }
-}
-
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     header(ui, a, "Som", "Volume e aparelhos de saída e de entrada de cada programa.");
     defaults_button(ui, app, a.right() - 124.0, crate::config::Defaults::Volume, "Volta o modificador, o passo e o aviso na tela ao padrão.");
@@ -252,8 +193,8 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
 
     let t = rect(x, top + 144.0, w, a.h - top - 164.0);
     ui.card(t);
-    if app.snd_picker {
-        draw_picker(ui, app, t);
+    if app.pick_for == Some(Target::Sound) {
+        picker::draw(ui, app, t);
     } else {
         draw_list(ui, app, t);
     }

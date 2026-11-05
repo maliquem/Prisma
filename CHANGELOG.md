@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.4
+
+- Fullscreenizer adds programs from the list or by .exe, like Sound. / Fullscreenizer adiciona programas pela lista ou pelo .exe, igual ao Som.
+- The program list now has the Start menu, Microsoft Store apps and whatever is open. / A lista de programas agora traz o menu Iniciar, aplicativos da Microsoft Store e o que está aberto.
+- Updates download in parts, about three times faster. / As atualizações baixam em partes, cerca de três vezes mais rápido.
+- Monitor no longer shows cut names such as Spotify8FileV. / O Monitor não mostra mais nomes cortados como Spotify8FileV.
+
 ## 0.3.3
 
 - Monitor sorts by name. / Monitor ordena por nome.

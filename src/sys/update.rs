@@ -3,6 +3,7 @@
 
 use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use windows::core::{w, HSTRING, PCWSTR};
@@ -15,6 +16,7 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 const REPO: &str = "maliquem/Prisma";
 const ASSET: &str = "Prisma.exe";
 const MAX_SIZE: usize = 64 << 20;
+const PARTS: usize = 8;
 
 #[derive(Clone, Default, PartialEq, Debug)]
 pub enum Phase {
@@ -33,6 +35,7 @@ pub struct State {
     pub phase: Phase,
     pub version: String,
     pub notes: String,
+    pub size: usize,
 }
 
 pub type Shared = Arc<Mutex<State>>;
@@ -63,8 +66,17 @@ impl Drop for Handle {
     }
 }
 
-/// Baixa por HTTPS. O WinHTTP segue os redirecionamentos e recusa voltar para HTTP.
-fn get(url: &str, mut progress: impl FnMut(usize, usize)) -> Result<(u32, Vec<u8>), ()> {
+/// Pedido respondido. Os campos fecham na ordem em que aparecem.
+struct Reply {
+    req: Handle,
+    _conn: Handle,
+    _session: Handle,
+    status: u32,
+    total: u32,
+}
+
+/// Pede por HTTPS. O WinHTTP segue os redirecionamentos e recusa voltar para HTTP.
+fn send(url: &str, headers: &str, follow: bool) -> Result<Reply, ()> {
     let (host, path) = wide_host(url).ok_or(())?;
     let agent = HSTRING::from(format!("Prisma/{}", env!("CARGO_PKG_VERSION")));
     unsafe {
@@ -80,8 +92,13 @@ fn get(url: &str, mut progress: impl FnMut(usize, usize)) -> Result<(u32, Vec<u8
         if req.0.is_null() {
             return Err(());
         }
-        let accept: Vec<u16> = "Accept: application/vnd.github+json\r\n".encode_utf16().collect();
-        WinHttpAddRequestHeaders(req.0, &accept, WINHTTP_ADDREQ_FLAG_ADD).map_err(|_| ())?;
+        if !follow {
+            WinHttpSetOption(Some(req.0), WINHTTP_OPTION_REDIRECT_POLICY, Some(&WINHTTP_OPTION_REDIRECT_POLICY_NEVER.to_ne_bytes())).map_err(|_| ())?;
+        }
+        if !headers.is_empty() {
+            let list: Vec<u16> = headers.encode_utf16().collect();
+            WinHttpAddRequestHeaders(req.0, &list, WINHTTP_ADDREQ_FLAG_ADD).map_err(|_| ())?;
+        }
         WinHttpSendRequest(req.0, None, None, 0, 0, 0).map_err(|_| ())?;
         WinHttpReceiveResponse(req.0, std::ptr::null_mut()).map_err(|_| ())?;
         let (mut status, mut total) = (0u32, 0u32);
@@ -90,22 +107,125 @@ fn get(url: &str, mut progress: impl FnMut(usize, usize)) -> Result<(u32, Vec<u8
         WinHttpQueryHeaders(req.0, WINHTTP_QUERY_STATUS_CODE | flag, PCWSTR::null(), Some(&mut status as *mut u32 as *mut _), &mut size, std::ptr::null_mut()).map_err(|_| ())?;
         let mut size = 4u32;
         let _ = WinHttpQueryHeaders(req.0, WINHTTP_QUERY_CONTENT_LENGTH | flag, PCWSTR::null(), Some(&mut total as *mut u32 as *mut _), &mut size, std::ptr::null_mut());
-        let mut body = Vec::with_capacity(total as usize);
-        let mut buf = vec![0u8; 64 << 10];
-        loop {
-            let mut read = 0u32;
-            WinHttpReadData(req.0, buf.as_mut_ptr() as *mut _, buf.len() as u32, &mut read).map_err(|_| ())?;
-            if read == 0 {
-                break;
-            }
-            body.extend_from_slice(&buf[..read as usize]);
-            if body.len() > MAX_SIZE {
-                return Err(());
-            }
-            progress(body.len(), total as usize);
-        }
-        Ok((status, body))
+        Ok(Reply { req, _conn: conn, _session: session, status, total })
     }
+}
+
+fn read(r: &Reply, mut chunk: impl FnMut(&[u8])) -> Result<(), ()> {
+    let mut buf = vec![0u8; 64 << 10];
+    loop {
+        let mut got = 0u32;
+        unsafe { WinHttpReadData(r.req.0, buf.as_mut_ptr() as *mut _, buf.len() as u32, &mut got) }.map_err(|_| ())?;
+        if got == 0 {
+            return Ok(());
+        }
+        chunk(&buf[..got as usize]);
+    }
+}
+
+/// Uma conexão só, para a API, o hash e quando as partes falham.
+fn get(url: &str, mut progress: impl FnMut(usize, usize)) -> Result<(u32, Vec<u8>), ()> {
+    let r = send(url, "Accept: application/vnd.github+json\r\n", true)?;
+    let mut body = Vec::with_capacity(r.total as usize);
+    let mut big = false;
+    read(&r, |c| {
+        body.extend_from_slice(c);
+        big |= body.len() > MAX_SIZE;
+        progress(body.len(), r.total as usize);
+    })?;
+    if big {
+        return Err(());
+    }
+    Ok((r.status, body))
+}
+
+/// Endereço final do arquivo: cada conexão vai direto a ele e evita mais um passo pelo github.com.
+fn final_url(url: &str) -> Option<String> {
+    let r = send(url, "", false).ok()?;
+    if r.status / 100 != 3 {
+        return None;
+    }
+    let mut buf = [0u16; 4096];
+    let mut size = (buf.len() * 2) as u32;
+    unsafe { WinHttpQueryHeaders(r.req.0, WINHTTP_QUERY_LOCATION, PCWSTR::null(), Some(buf.as_mut_ptr() as *mut _), &mut size, std::ptr::null_mut()) }.ok()?;
+    let s = String::from_utf16_lossy(&buf[..size as usize / 2]);
+    s.starts_with("https://").then_some(s)
+}
+
+fn range(url: &str, from: usize, to: usize, got: &AtomicUsize, progress: &(impl Fn(usize) + Sync)) -> Result<Vec<u8>, ()> {
+    let r = send(url, &format!("Range: bytes={from}-{}\r\n", to - 1), true)?;
+    if r.status != 206 {
+        return Err(());
+    }
+    let mut body = Vec::with_capacity(to - from);
+    read(&r, |c| {
+        body.extend_from_slice(c);
+        progress(got.fetch_add(c.len(), Ordering::Relaxed) + c.len());
+    })?;
+    if body.len() == to - from {
+        Ok(body)
+    } else {
+        Err(())
+    }
+}
+
+/// O GitHub limita cada conexão, então o arquivo vem em partes ao mesmo tempo.
+/// Oito conexões levaram 2,7 s contra 7,6 s de uma só. Quem chama ainda confere o hash.
+fn get_parts(url: &str, total: usize, progress: impl Fn(usize) + Sync) -> Result<Vec<u8>, ()> {
+    if total == 0 || total > MAX_SIZE {
+        return Err(());
+    }
+    let target = final_url(url).ok_or(())?;
+    let step = (total / PARTS).max(1);
+    let got = AtomicUsize::new(0);
+    let parts: Vec<Result<Vec<u8>, ()>> = std::thread::scope(|s| {
+        let tasks: Vec<_> = (0..PARTS)
+            .filter(|i| i * step < total)
+            .map(|i| {
+                let (target, got, progress) = (&target, &got, &progress);
+                let to = if i == PARTS - 1 { total } else { ((i + 1) * step).min(total) };
+                s.spawn(move || range(target, i * step, to, got, progress))
+            })
+            .collect();
+        tasks.into_iter().map(|t| t.join().unwrap_or(Err(()))).collect()
+    });
+    let mut body = Vec::with_capacity(total);
+    for p in parts {
+        body.extend_from_slice(&p?);
+    }
+    Ok(body)
+}
+
+/// Tamanho do arquivo, na descrição da versão que a API devolve.
+fn asset_size(json: &str) -> Option<usize> {
+    let rest = &json[json.find(&format!("\"name\":\"{ASSET}\""))?..];
+    let rest = &rest[rest.find("\"size\":")? + 7..];
+    rest[..rest.find(|c: char| !c.is_ascii_digit())?].parse().ok()
+}
+
+/// Teste: compara uma conexão com as partes, no arquivo publicado de verdade.
+#[cfg(debug_assertions)]
+pub fn speed_test() -> String {
+    let (json, mut out) = (get(&format!("https://api.github.com/repos/{REPO}/releases/latest"), |_, _| {}).unwrap_or_default().1, String::new());
+    let json = String::from_utf8_lossy(&json);
+    let tag = json_text(&json, "tag_name").unwrap_or_default();
+    let size = asset_size(&json).unwrap_or(0);
+    let base = format!("https://github.com/{REPO}/releases/download/{tag}/{ASSET}");
+    let want = get(&format!("{base}.sha256"), |_, _| {}).map(|r| String::from_utf8_lossy(&r.1).split_whitespace().next().unwrap_or_default().to_string()).unwrap_or_default();
+    out += &format!("{tag} tamanho {size}\n");
+    for round in 0..4 {
+        let t = std::time::Instant::now();
+        let url = final_url(&base);
+        out += &format!("rodada {round}: endereco final {} ms, ", t.elapsed().as_millis());
+        drop(url);
+        let t = std::time::Instant::now();
+        let parts = get_parts(&base, size, |_| {}).unwrap_or_default();
+        out += &format!("partes {} ms hash {}, ", t.elapsed().as_millis(), sha256(&parts).as_deref() == Some(want.as_str()));
+        let t = std::time::Instant::now();
+        let one = get(&base, |_, _| {}).map(|r| r.1).unwrap_or_default();
+        out += &format!("uma conexao {} ms hash {}\n", t.elapsed().as_millis(), sha256(&one).as_deref() == Some(want.as_str()));
+    }
+    out
 }
 
 /// Lê um texto do JSON da API. A resposta é conhecida: não vale carregar um analisador por isso.
@@ -166,6 +286,7 @@ pub fn check(shared: Shared) {
                     let mut s = shared.lock().unwrap();
                     s.version = tag.trim_start_matches('v').to_string();
                     s.notes = json_text(&json, "body").unwrap_or_default();
+                    s.size = asset_size(&json).unwrap_or(0);
                     Phase::Available
                 } else {
                     Phase::Latest
@@ -214,24 +335,35 @@ fn replace(data: &[u8]) -> Result<(), &'static str> {
 
 /// Baixa, confere e troca. Se der certo, fecha este processo pela mensagem `quit` em `hub`.
 pub fn install(shared: Shared, hub: isize, quit: u32) {
-    let tag = format!("v{}", shared.lock().unwrap().version);
+    let (tag, size) = {
+        let s = shared.lock().unwrap();
+        (format!("v{}", s.version), s.size)
+    };
     set(&shared, Phase::Downloading(0));
     let _ = std::thread::Builder::new().name("atualizacao".into()).spawn(move || {
         let base = format!("https://github.com/{REPO}/releases/download/{tag}/{ASSET}");
         const BAD: &str = "O arquivo baixado não confere. Nada foi alterado.";
         const OFFLINE: &str = "Não consegui acessar o GitHub.";
-        let want = match get(&format!("{base}.sha256"), |_, _| {}) {
+        let show = |got: usize, total: usize| {
+            if total > 0 {
+                set(&shared, Phase::Downloading((got * 100 / total).min(100) as u32));
+            }
+        };
+        let (hash, parts) = std::thread::scope(|s| {
+            let hash = s.spawn(|| get(&format!("{base}.sha256"), |_, _| {}));
+            let parts = get_parts(&base, size, |got| show(got, size));
+            (hash.join().unwrap_or(Err(())), parts)
+        });
+        let want = match hash {
             Ok((200, b)) => String::from_utf8_lossy(&b).split_whitespace().next().unwrap_or_default().to_ascii_lowercase(),
             _ => return set(&shared, Phase::Failed(OFFLINE)),
         };
-        let show = shared.clone();
-        let data = match get(&base, move |got, total| {
-            if total > 0 {
-                set(&show, Phase::Downloading((got * 100 / total) as u32));
-            }
-        }) {
-            Ok((200, b)) => b,
-            _ => return set(&shared, Phase::Failed(OFFLINE)),
+        let data = match parts {
+            Ok(b) => b,
+            Err(()) => match get(&base, show) {
+                Ok((200, b)) => b,
+                _ => return set(&shared, Phase::Failed(OFFLINE)),
+            },
         };
         if want.len() != 64 || sha256(&data).as_deref() != Some(want.as_str()) || !data.starts_with(b"MZ") {
             return set(&shared, Phase::Failed(BAD));

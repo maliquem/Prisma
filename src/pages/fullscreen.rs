@@ -1,3 +1,4 @@
+use super::picker::{self, Target};
 use super::*;
 use crate::config::Defaults;
 
@@ -49,10 +50,12 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
 
     let s = rect(t.right() + 12.0, t.y, cw, h);
     ui.card(s);
-    ui.title(rect(s.x + 16.0, s.y + 12.0, s.w - 150.0, 22.0), "Programas salvos");
-    if ui.button("fs-add", rect(s.right() - 124.0, s.y + 8.0, 108.0, 32.0), "Adicionar", false) {
-        app.pick_fullscreen_app();
+    if app.pick_for == Some(Target::Fullscreen) {
+        picker::draw(ui, app, s);
+        return;
     }
+    ui.title(rect(s.x + 16.0, s.y + 12.0, s.w - 150.0, 22.0), "Programas salvos");
+    picker::add_button(ui, app, rect(s.right() - 124.0, s.y + 8.0, 108.0, 32.0), Target::Fullscreen);
     let list = rect(s.x + 8.0, s.y + 46.0, s.w - 16.0, s.h - 54.0);
     if app.cfg.fs_apps.is_empty() {
         ui.c.text_wrap(rect(list.x + 8.0, list.y + 4.0, list.w - 16.0, 44.0), "Nenhum programa ainda. Use o Fullscreenizer em uma janela ou clique em Adicionar.", 13.0, MUTED, Weight::Regular);

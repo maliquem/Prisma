@@ -174,8 +174,9 @@ pub struct App {
     upd_told: bool,
     tm_check: Option<Instant>,
     force_hook: Option<HHOOK>,
-    pub snd_picker: bool,
-    pub snd_search: String,
+    pub pick_for: Option<crate::pages::picker::Target>,
+    pub pick_search: String,
+    pub pick_list: crate::sys::catalog::Shared,
     snd_seen: std::collections::HashSet<u32>,
     upd_last: Option<Instant>,
     started: Instant,
@@ -322,8 +323,9 @@ pub fn start(background: bool) {
             upd_told: false,
             tm_check: None,
             force_hook: None,
-            snd_picker: false,
-            snd_search: String::new(),
+            pick_for: None,
+            pick_search: String::new(),
+            pick_list: Default::default(),
             snd_seen: std::collections::HashSet::new(),
             upd_last: None,
             started: Instant::now(),
@@ -462,6 +464,20 @@ pub fn start(background: bool) {
             }
             if a == "--test-panic" {
                 panic!("teste do relatório");
+            }
+            if let Some(path) = a.strip_prefix("--test-catalog=") {
+                let t = Instant::now();
+                let list = crate::sys::catalog::list(Vec::new());
+                let mut out = format!("{} programas em {} ms\n", list.len(), t.elapsed().as_millis());
+                for e in &list {
+                    out += &format!("{} | {}\n", e.name, e.path);
+                }
+                let _ = std::fs::write(path, out);
+                std::process::exit(0);
+            }
+            if let Some(path) = a.strip_prefix("--test-update=") {
+                let _ = std::fs::write(path, crate::sys::update::speed_test());
+                std::process::exit(0);
             }
             if let Some(v) = a.strip_prefix("--test-scan=") {
                 let (name, path) = v.split_once('|').unwrap_or((v, "scan.txt"));
@@ -1231,6 +1247,26 @@ impl App {
                 }
             }
         }
+    }
+
+    /// Monta a lista em segundo plano. Quem está aberto entra também, mesmo sem atalho no Iniciar.
+    pub fn open_picker(&mut self, target: crate::pages::picker::Target) {
+        let mut open: Vec<(String, String)> = self.windows.iter().map(|w| (w.exe.clone(), w.path.clone())).collect();
+        let sessions: Vec<(String, u32)> = self.sessions.iter().map(|s| (s.exe.clone(), s.pid)).collect();
+        for (exe, pid) in sessions {
+            if let Some(path) = self.path_of(&exe, pid) {
+                open.push((exe, path));
+            }
+        }
+        self.pick_for = Some(target);
+        self.pick_search.clear();
+        *self.pick_list.lock().unwrap() = None;
+        crate::sys::catalog::load(self.pick_list.clone(), open, self.main.as_ref().map_or(0, |m| m.hwnd.0 as isize));
+    }
+
+    pub fn close_picker(&mut self) {
+        self.pick_for = None;
+        *self.pick_list.lock().unwrap() = None;
     }
 
     pub fn pick_sound_app(&self) {

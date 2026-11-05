@@ -28,7 +28,8 @@ pub fn description(path: &str) -> Option<String> {
             return None;
         }
         let s = String::from_utf16_lossy(std::slice::from_raw_parts(p as *const u16, n as usize));
-        let s = s.trim_end_matches('\0').trim().to_string();
+        // Alguns programas informam um tamanho maior que o texto: vale só até o primeiro zero.
+        let s = s.split('\0').next().unwrap_or_default().trim().to_string();
         (!s.is_empty()).then_some(s)
     }
 }

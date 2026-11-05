@@ -1,6 +1,7 @@
 pub mod audio;
 pub mod audit;
 pub mod autostart;
+pub mod catalog;
 pub mod disks;
 pub mod etw;
 pub mod events;
