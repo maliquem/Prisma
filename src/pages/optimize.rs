@@ -1,7 +1,7 @@
 use super::*;
 use crate::optimizer::Suggestion;
 
-fn list_card(ui: &mut Ui, r: Rect, title: &str, sub: &str, key: &str, items: &mut Vec<String>) -> bool {
+fn list_card(ui: &mut Ui, r: Rect, title: &str, sub: &str, key: &str, items: &mut Vec<String>, paths: &[String]) -> bool {
     ui.card(r);
     ui.title(rect(r.x + 16.0, r.y + 10.0, r.w - 32.0, 22.0), title);
     ui.label(rect(r.x + 16.0, r.y + 32.0, r.w - 32.0, 18.0), sub, MUTED);
@@ -11,7 +11,8 @@ fn list_card(ui: &mut Ui, r: Rect, title: &str, sub: &str, key: &str, items: &mu
     for (i, v) in items.iter().enumerate() {
         let y = list.y + i as f32 * 32.0;
         ui.c.line(list.x + 8.0, y, list.right() - 8.0, y, LINE, 1.0);
-        ui.c.text(rect(list.x + 8.0, y, list.w - 44.0, 32.0), app_name(v), 14.0, TEXT, Align::Left, Weight::Regular);
+        ui.file_icon(paths.get(i).map_or("", String::as_str), v, rect(list.x + 8.0, y + 7.0, 18.0, 18.0));
+        ui.c.text(rect(list.x + 34.0, y, list.w - 70.0, 32.0), app_name(v), 14.0, TEXT, Align::Left, Weight::Regular);
         let b = rect(list.right() - 34.0, y + 4.0, 24.0, 24.0);
         if ui.is_hover(b) {
             ui.c.round(b, 6.0, BORDER);
@@ -49,6 +50,13 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
 
     let footer = 120.0 + if app.stubborn.is_empty() { 0.0 } else { 56.0 };
     let list = rect(l.x + 8.0, l.y + 42.0, l.w - 16.0, l.h - 42.0 - footer);
+    let targets: Vec<(String, u32)> = app.cands.iter().map(|c| (c.exe.clone(), c.pids.first().copied().unwrap_or(0))).collect();
+    let mut paths = std::collections::HashMap::new();
+    for (exe, pid) in targets {
+        if let Some(p) = app.path_of(&exe, pid) {
+            paths.insert(exe.to_ascii_lowercase(), p);
+        }
+    }
     ui.begin_scroll("cands", list, app.cands.len() as f32 * 56.0);
     let mut to_black = None;
     let mut to_white = None;
@@ -70,9 +78,11 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
                 app.unchecked.insert(c.exe.clone());
             }
         }
-        let tw = row.w - 300.0;
-        ui.c.text(rect(row.x + 44.0, y + 7.0, tw, 20.0), app_name(&c.exe), 14.0, TEXT, Align::Left, Weight::Regular);
-        ui.c.text(rect(row.x + 44.0, y + 28.0, tw, 18.0), &c.why, 12.0, MUTED, Align::Left, Weight::Regular);
+        let tw = row.w - 332.0;
+        let path = paths.get(&c.exe.to_ascii_lowercase()).cloned().unwrap_or_default();
+        ui.file_icon(&path, &c.exe, rect(row.x + 42.0, y + 15.0, 24.0, 24.0));
+        ui.c.text(rect(row.x + 76.0, y + 7.0, tw, 20.0), app_name(&c.exe), 14.0, TEXT, Align::Left, Weight::Regular);
+        ui.c.text(rect(row.x + 76.0, y + 28.0, tw, 18.0), &c.why, 12.0, MUTED, Align::Left, Weight::Regular);
         let ramx = row.right() - 250.0;
         let mut more = fmt_pct(c.cpu) + " CPU";
         if c.vram > 0 {
@@ -121,8 +131,10 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let detect_h = 132.0;
     let lh = (h - detect_h - 24.0) / 2.0;
     let mut changed = false;
-    changed |= list_card(ui, rect(r.x, top, rw, lh), "Blacklist", "Nunca fechar", "black", &mut app.cfg.black);
-    changed |= list_card(ui, rect(r.x, top + lh + 12.0, rw, lh), "Whitelist", "Sempre fechar ao otimizar", "white", &mut app.cfg.white);
+    let black: Vec<String> = app.cfg.black.clone().iter().map(|e| app.path_by_name(e)).collect();
+    let white: Vec<String> = app.cfg.white.clone().iter().map(|e| app.path_by_name(e)).collect();
+    changed |= list_card(ui, rect(r.x, top, rw, lh), "Blacklist", "Nunca fechar", "black", &mut app.cfg.black, &black);
+    changed |= list_card(ui, rect(r.x, top + lh + 12.0, rw, lh), "Whitelist", "Sempre fechar ao otimizar", "white", &mut app.cfg.white, &white);
     if changed {
         app.cfg.save();
     }

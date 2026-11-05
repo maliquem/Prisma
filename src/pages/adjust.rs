@@ -3,7 +3,7 @@ use crate::config::Defaults;
 
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     header(ui, a, "Configurações", "Início com o Windows, permissões e atalhos gerais.");
-    defaults_button(ui, app, a.right() - 124.0, Defaults::Settings, "Volta o atalho de Otimizar, o idioma e a busca de atualização ao padrão.");
+    defaults_button(ui, app, a.right() - 124.0, Defaults::Settings, "Volta os atalhos de Otimizar e de Fechar à força, o idioma e a busca de atualização ao padrão.");
     let x = a.x + 28.0;
     let w = a.w - 56.0;
     let top = 88.0;
@@ -60,8 +60,17 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         app.set_taskmgr(false);
     }
 
+    let rf = rect(x, top + 250.0, w, 76.0);
+    ui.card(rf);
+    ui.c.text(rect(rf.x + 16.0, rf.y + 10.0, rf.w - 290.0, 26.0), "Fechar à força", 15.0, TEXT, Align::Left, Weight::Semibold);
+    ui.c.text(rect(rf.x + 16.0, rf.y + 38.0, rf.w - 290.0, 22.0), "Encerra na hora o programa em foco, mesmo travado. O que não foi salvo é perdido.", 13.0, MUTED, Align::Left, Weight::Regular);
+    if ui.hotkey("hk-force", rect(rf.right() - 256.0, rf.y + 16.0, 240.0, 44.0), &mut app.cfg.hk_force) {
+        app.cfg.save();
+        app.register_hotkeys();
+    }
+
     let half = (w - 12.0) / 2.0;
-    let r1 = rect(x, top + 250.0, half, 92.0);
+    let r1 = rect(x, top + 338.0, half, 92.0);
     ui.card(r1);
     ui.label(rect(r1.x + 16.0, r1.y + 10.0, r1.w - 32.0, 18.0), "Atalho de Otimizar", TEXT2);
     if ui.hotkey("hk-opt", rect(r1.x + 16.0, r1.y + 34.0, 240.0, 44.0), &mut app.cfg.hk_optimize) {
@@ -73,11 +82,11 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     ui.card(rl);
     ui.label(rect(rl.x + 16.0, rl.y + 10.0, rl.w - 32.0, 18.0), "Idioma", TEXT2);
 
-    let ru = rect(x, top + 354.0, w, 112.0);
+    let ru = rect(x, top + 442.0, w, 112.0);
     draw_update(ui, app, ru);
 
     if !app.hk_errors.is_empty() {
-        let r2 = rect(x, top + 478.0, w, 40.0 + app.hk_errors.len() as f32 * 22.0);
+        let r2 = rect(x, top + 566.0, w, 40.0 + app.hk_errors.len() as f32 * 22.0);
         ui.card(r2);
         ui.c.text(rect(r2.x + 16.0, r2.y + 8.0, r2.w - 32.0, 22.0), "Atalhos que não funcionaram", 14.0, WARN, Align::Left, Weight::Semibold);
         for (i, e) in app.hk_errors.iter().enumerate() {

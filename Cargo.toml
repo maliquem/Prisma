@@ -1,6 +1,6 @@
 [package]
 name = "prisma"
-version = "0.3.2"
+version = "0.3.3"
 edition = "2021"
 license-file = "LICENSE"
 description = "Utilitário leve para Windows: fullscreen, volume por programa, monitor, energia e captura"
@@ -20,6 +20,7 @@ features = [
     "Wdk_Graphics",
     "Wdk_Graphics_Direct3D",
     "Win32_Devices_Display",
+    "Win32_Devices_FunctionDiscovery",
     "Win32_Foundation",
     "Win32_Globalization",
     "Win32_Graphics_Direct2D",

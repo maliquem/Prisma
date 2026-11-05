@@ -31,6 +31,7 @@ Prisma checks this page when it opens and once a day. When there is a new versio
 - **Startup:** turns on, turns off, adds and removes what opens with Windows, and shows who signed each program. Sorts by name, enabled or disabled.
 - **Services:** description, start, stop and restart. Right-click a service for start, stop, restart and properties, which opens its own Windows properties window.
 - **Uninstall:** removes in batches, creates a restore point and looks for leftovers, then tells you what was deleted. Sorts by name, date or size. Only exact name matches come selected, similar names appear for you to review, folders go to the Recycle Bin and the registry gets a backup first.
+- **Force close:** a configurable shortcut, Alt+F4 by default, ends the focused program by PID at once, even when it is frozen in fullscreen. Unsaved work is lost. The desktop, the taskbar and Windows processes keep the normal Alt+F4 behavior.
 - **Replace Task Manager:** a button in Settings makes Ctrl+Shift+Esc open Prisma, and another gives it back. Uninstalling also gives Task Manager back.
 - **Windows tweaks:** first a read-only audit, then layered Gaming, Development and Privacy profiles with documented effects only. The Left out tab explains what was excluded and why. Each change records the previous value, and Undo only restores what nobody touched afterwards. No profile touches updates, antivirus, UAC, Memory Integrity or virtualization. **Show log** displays every change, before and after.
 - **Tools:** Windows repair (DISM, then SFC), crash history, Windows Update reset, disk check, network, DNS, cleanup, winget, diagnostics and advanced restart. On a suspect disk, modes that write are blocked. Each tool keeps its own step-by-step log, with the exact command, its output, errors and the time of each step.
@@ -38,7 +39,7 @@ Prisma checks this page when it opens and once a day. When there is a new versio
 - **Power:** detects a game or high load and switches the power plan, going back to rest after 60 s without load. You choose the percentage and time that count as load for CPU and GPU.
 - **Per-game profile:** remembers the volume of each program.
 - **Fullscreenizer:** turns the focused window into borderless fullscreen. Programs you use it on join a saved list, where you can add or remove them and mark Automatic to apply it whenever they open.
-- **Per-program volume:** the keyboard volume keys, with a modifier, change only the focused program.
+- **Sound:** volume per program, and the keyboard volume keys, with a modifier, change only the focused program. Choose the output and input device of each program, including programs added by hand from the Windows list or by their .exe. This uses an internal Windows feature, and some programs only switch device after they reopen.
 - **Widget:** CPU, GPU, RAM and VRAM over everything, in four styles.
 - **Capture:** photos with annotations and video in AV1, HEVC or H.264. When the display is in HDR, it records in SDR or HDR10. With System sound on, it records all PC sounds. With it off and Focused window selected, it records only the sound of that window.
 - **Replay:** in game mode, keeps the last seconds in memory.

@@ -2,9 +2,213 @@ use std::collections::BTreeMap;
 
 use super::*;
 use crate::config::{MOD_ALT, MOD_CTRL, MOD_SHIFT};
+use crate::sys::{audio, procs, uninstall};
+
+struct Row {
+    exe: String,
+    name: String,
+    path: String,
+    idx: Vec<usize>,
+    saved: bool,
+}
+
+fn device_select(ui: &mut Ui, key: &str, r: Rect, list: &[audio::Device], cur: &str) -> Option<String> {
+    let mut opts = vec!["Padrão do Windows".to_string()];
+    opts.extend(list.iter().map(|d| d.name.clone()));
+    let mut sel = list.iter().position(|d| d.id == cur).map_or(0, |i| i + 1);
+    if ui.select(key, r, &opts, &mut sel) {
+        return Some(if sel == 0 { String::new() } else { list[sel - 1].id.clone() });
+    }
+    None
+}
+
+fn draw_list(ui: &mut Ui, app: &mut App, t: Rect) {
+    ui.title(rect(t.x + 16.0, t.y + 12.0, 300.0, 22.0), "Programas");
+    if ui.button("snd-add", rect(t.right() - 124.0, t.y + 8.0, 108.0, 32.0), "Adicionar", false) {
+        ui.menu("snd-menu", &[("Da lista de programas", true), ("Escolher arquivo .exe", true)]);
+    }
+    if let Some(i) = ui.menu_pick("snd-menu") {
+        if i == 0 {
+            if app.programs.is_empty() {
+                app.programs = uninstall::list();
+            }
+            app.snd_search.clear();
+            app.snd_picker = true;
+            return;
+        }
+        app.pick_sound_app();
+    }
+
+    let mut groups: BTreeMap<String, Vec<usize>> = BTreeMap::new();
+    for (i, s) in app.sessions.iter().enumerate() {
+        groups.entry(s.exe.to_ascii_lowercase()).or_default().push(i);
+    }
+    let mut rows: Vec<Row> = Vec::new();
+    for idx in groups.values() {
+        let (exe, pid, name) = {
+            let s = &app.sessions[idx[0]];
+            (s.exe.clone(), s.pid, s.name.clone())
+        };
+        let path = app.path_of(&exe, pid).unwrap_or_default();
+        rows.push(Row { saved: app.cfg.snd_apps.iter().any(|a| a.exe.eq_ignore_ascii_case(&exe)), exe, name, path, idx: idx.clone() });
+    }
+    for a in &app.cfg.snd_apps {
+        if !rows.iter().any(|r| r.exe.eq_ignore_ascii_case(&a.exe)) {
+            rows.push(Row { exe: a.exe.clone(), name: app_name(&a.exe).to_string(), path: a.path.clone(), idx: Vec::new(), saved: true });
+        }
+    }
+    rows.sort_by_key(|r| r.name.to_lowercase());
+    if rows.is_empty() {
+        ui.c.text(rect(t.x + 24.0, t.y + 48.0, t.w - 48.0, 24.0), "Nenhum programa com som agora.", 14.0, MUTED, Align::Left, Weight::Regular);
+    }
+    let outputs = audio::devices(false);
+    let inputs = audio::devices(true);
+    let list = rect(t.x + 8.0, t.y + 46.0, t.w - 16.0, t.h - 54.0);
+    let row_h = 98.0;
+    ui.begin_scroll("snd", list, rows.len() as f32 * row_h);
+    let mut remove = None;
+    let mut changed = None;
+    for (i, r) in rows.iter().enumerate() {
+        let y = list.y + i as f32 * row_h;
+        let focused = r.exe.eq_ignore_ascii_case(&app.fg_exe);
+        if focused {
+            ui.c.round(rect(list.x, y, list.w, row_h - 4.0), 8.0, CARD2);
+        }
+        ui.file_icon(&r.path, &r.name, rect(list.x + 12.0, y + 12.0, 26.0, 26.0));
+        let running = !r.idx.is_empty();
+        let muted = running && r.idx.iter().all(|i| app.sessions[*i].muted);
+        let active = r.idx.iter().any(|i| app.sessions[*i].active);
+        let state = if !running {
+            "Sem som agora"
+        } else if focused {
+            "Em foco"
+        } else if muted {
+            "Silenciado"
+        } else if active {
+            "Tocando"
+        } else {
+            "Parado"
+        };
+        ui.c.text(rect(list.x + 48.0, y + 6.0, 214.0, 20.0), &r.name, 14.0, TEXT, Align::Left, Weight::Regular);
+        ui.c.text(rect(list.x + 48.0, y + 27.0, 214.0, 18.0), state, 12.0, MUTED, Align::Left, Weight::Regular);
+        if running {
+            let sx = list.x + 270.0;
+            let sw = list.w - 270.0 - 130.0;
+            let mut v = app.sessions[r.idx[0]].volume;
+            if ui.slider(&format!("s{}", r.exe), rect(sx, y + 14.0, sw, 24.0), &mut v) {
+                for j in &r.idx {
+                    app.sessions[*j].set_volume(v);
+                    app.sessions[*j].volume = v;
+                }
+            }
+            let t = format!("{:.0}%", v * 100.0);
+            ui.c.text(rect(sx + sw + 8.0, y, 48.0, 52.0), &t, 14.0, TEXT, Align::Right, Weight::Regular);
+            let b = rect(list.right() - 58.0, y + 4.0, 44.0, 44.0);
+            ui.c.round(b, 8.0, if muted { WARN } else { CARD });
+            ui.c.round_line(b, 8.0, BORDER, 1.0);
+            let ic = if muted { rgb(0x1f1508) } else { TEXT };
+            ui.c.icon(b.x + 12.0, b.y + 12.0, 20.0, &[&[(4., 9.), (4., 15.), (8., 15.), (13., 19.), (13., 5.), (8., 9.), (4., 9.)], &[(17., 9.5), (21., 14.5)], &[(21., 9.5), (17., 14.5)]], ic);
+            if ui.hit(&format!("m{}", r.exe), b) {
+                for j in &r.idx {
+                    app.sessions[*j].set_mute(!muted);
+                    app.sessions[*j].muted = !muted;
+                }
+            }
+        }
+        let saved = app.cfg.snd_apps.iter().find(|a| a.exe.eq_ignore_ascii_case(&r.exe)).cloned().unwrap_or_default();
+        let fw = (list.w - 200.0) / 2.0;
+        let fy = y + 54.0;
+        ui.c.text(rect(list.x + 12.0, fy, 44.0, 34.0), "Saída", 12.0, MUTED, Align::Left, Weight::Regular);
+        if let Some(id) = device_select(ui, &format!("o{}", r.exe), rect(list.x + 56.0, fy, fw, 34.0), &outputs, &saved.output) {
+            changed = Some((r.exe.clone(), r.path.clone(), false, id));
+        }
+        let ix = list.x + 56.0 + fw + 16.0;
+        ui.c.text(rect(ix, fy, 56.0, 34.0), "Entrada", 12.0, MUTED, Align::Left, Weight::Regular);
+        if let Some(id) = device_select(ui, &format!("i{}", r.exe), rect(ix + 58.0, fy, fw, 34.0), &inputs, &saved.input) {
+            changed = Some((r.exe.clone(), r.path.clone(), true, id));
+        }
+        if r.saved {
+            let b = rect(list.right() - 46.0, fy + 5.0, 24.0, 24.0);
+            if ui.is_hover(b) {
+                ui.c.round(b, 6.0, BORDER);
+            }
+            ui.c.icon(b.x + 4.0, b.y + 4.0, 16.0, &[&[(6., 6.), (18., 18.)], &[(18., 6.), (6., 18.)]], MUTED);
+            if ui.hit(&format!("sx{}", r.exe), b) {
+                remove = Some(r.exe.clone());
+            }
+        }
+    }
+    ui.end_scroll();
+    if let Some((exe, path, input, id)) = changed {
+        let e = app.cfg.snd_entry(&exe, &path);
+        if input {
+            e.input = id;
+        } else {
+            e.output = id;
+        }
+        app.cfg.save();
+        app.route_app(&exe);
+    }
+    if let Some(exe) = remove {
+        // Tira da lista e devolve o programa ao padrão do Windows.
+        let e = app.cfg.snd_entry(&exe, "");
+        e.output.clear();
+        e.input.clear();
+        app.route_app(&exe);
+        app.cfg.snd_apps.retain(|a| !a.exe.eq_ignore_ascii_case(&exe));
+        app.cfg.save();
+    }
+}
+
+/// Executável de um programa da lista do Windows, quando ele informa um.
+fn program_exe(p: &uninstall::Program) -> Option<String> {
+    let path = p.icon.split(',').next()?.trim().trim_matches('"').to_string();
+    path.to_ascii_lowercase().ends_with(".exe").then_some(path)
+}
+
+fn draw_picker(ui: &mut Ui, app: &mut App, t: Rect) {
+    ui.title(rect(t.x + 16.0, t.y + 12.0, 220.0, 22.0), "Adicionar programa");
+    if ui.button("snd-back", rect(t.right() - 124.0, t.y + 8.0, 108.0, 32.0), "Voltar", false) {
+        app.snd_picker = false;
+        return;
+    }
+    let mut q = std::mem::take(&mut app.snd_search);
+    ui.search("snd-q", rect(t.x + 240.0, t.y + 8.0, t.w - 384.0, 32.0), &mut q, "Buscar");
+    app.snd_search = q;
+    let needle = app.snd_search.to_lowercase();
+    let rows: Vec<(String, String)> = app
+        .programs
+        .iter()
+        .filter(|p| needle.is_empty() || p.name.to_lowercase().contains(&needle))
+        .filter_map(|p| program_exe(p).map(|e| (p.name.clone(), e)))
+        .collect();
+    let list = rect(t.x + 8.0, t.y + 46.0, t.w - 16.0, t.h - 54.0);
+    ui.begin_scroll("snd-pick", list, rows.len() as f32 * 44.0);
+    let first = (ui.scroll_y() / 44.0) as usize;
+    let last = first + (list.h / 44.0) as usize + 2;
+    let mut pick = None;
+    for (i, (name, path)) in rows.iter().enumerate().take(last).skip(first) {
+        let y = list.y + i as f32 * 44.0;
+        let r = rect(list.x, y, list.w, 42.0);
+        if ui.is_hover(r) {
+            ui.c.round(r, 6.0, CARD2);
+        }
+        ui.file_icon(path, name, rect(r.x + 10.0, y + 9.0, 24.0, 24.0));
+        ui.c.text(rect(r.x + 44.0, y, r.w - 60.0, 42.0), name, 14.0, TEXT, Align::Left, Weight::Regular);
+        if ui.hit(&format!("sp{i}"), r) {
+            pick = Some(path.clone());
+        }
+    }
+    ui.end_scroll();
+    if let Some(path) = pick {
+        app.cfg.snd_entry(&procs::exe_name(&path), &path);
+        app.cfg.save();
+        app.snd_picker = false;
+    }
+}
 
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
-    header(ui, a, "Volume por programa", "As teclas de volume do teclado, com o modificador, mudam só o programa em foco.");
+    header(ui, a, "Som", "Volume e aparelhos de saída e de entrada de cada programa.");
     defaults_button(ui, app, a.right() - 124.0, crate::config::Defaults::Volume, "Volta o modificador, o passo e o aviso na tela ao padrão.");
     let x = a.x + 28.0;
     let w = a.w - 56.0;
@@ -48,61 +252,10 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
 
     let t = rect(x, top + 144.0, w, a.h - top - 164.0);
     ui.card(t);
-    ui.title(rect(t.x + 16.0, t.y + 12.0, 300.0, 22.0), "Programas com som");
-
-    let mut groups: BTreeMap<String, Vec<usize>> = BTreeMap::new();
-    for (i, s) in app.sessions.iter().enumerate() {
-        groups.entry(s.exe.to_ascii_lowercase()).or_default().push(i);
-    }
-    let list = rect(t.x + 8.0, t.y + 42.0, t.w - 16.0, t.h - 50.0);
-    ui.begin_scroll("snd", list, groups.len() as f32 * 54.0);
-    for (i, (_, idx)) in groups.iter().enumerate() {
-        let y = list.y + i as f32 * 54.0;
-        let first = &app.sessions[idx[0]];
-        let focused = first.exe.eq_ignore_ascii_case(&app.fg_exe);
-        if focused {
-            ui.c.round(rect(list.x, y, list.w, 52.0), 8.0, CARD2);
-        }
-        let name = first.name.clone();
-        let muted = idx.iter().all(|i| app.sessions[*i].muted);
-        let active = idx.iter().any(|i| app.sessions[*i].active);
-        let state = if focused {
-            "Em foco"
-        } else if muted {
-            "Silenciado"
-        } else if active {
-            "Tocando"
-        } else {
-            "Parado"
-        };
-        ui.c.text(rect(list.x + 16.0, y + 6.0, 240.0, 20.0), &name, 14.0, TEXT, Align::Left, Weight::Regular);
-        ui.c.text(rect(list.x + 16.0, y + 27.0, 240.0, 18.0), state, 12.0, MUTED, Align::Left, Weight::Regular);
-        let sx = list.x + 270.0;
-        let sw = list.w - 270.0 - 124.0;
-        let mut v = first.volume;
-        if ui.slider(&format!("s{name}"), rect(sx, y + 14.0, sw, 24.0), &mut v) {
-            for j in idx {
-                app.sessions[*j].set_volume(v);
-                app.sessions[*j].volume = v;
-            }
-        }
-        let t = format!("{:.0}%", v * 100.0);
-        ui.c.text(rect(sx + sw + 8.0, y, 48.0, 52.0), &t, 14.0, TEXT, Align::Right, Weight::Regular);
-        let b = rect(list.right() - 52.0, y + 4.0, 44.0, 44.0);
-        ui.c.round(b, 8.0, if muted { WARN } else { CARD });
-        ui.c.round_line(b, 8.0, BORDER, 1.0);
-        let ic = if muted { rgb(0x1f1508) } else { TEXT };
-        ui.c.icon(b.x + 12.0, b.y + 12.0, 20.0, &[&[(4., 9.), (4., 15.), (8., 15.), (13., 19.), (13., 5.), (8., 9.), (4., 9.)], &[(17., 9.5), (21., 14.5)], &[(21., 9.5), (17., 14.5)]], ic);
-        if ui.hit(&format!("m{name}"), b) {
-            for j in idx {
-                app.sessions[*j].set_mute(!muted);
-                app.sessions[*j].muted = !muted;
-            }
-        }
-    }
-    ui.end_scroll();
-    if groups.is_empty() {
-        ui.c.text(rect(t.x + 24.0, t.y + 48.0, t.w - 48.0, 24.0), "Nenhum programa com som agora.", 14.0, MUTED, Align::Left, Weight::Regular);
+    if app.snd_picker {
+        draw_picker(ui, app, t);
+    } else {
+        draw_list(ui, app, t);
     }
 
     let opts = ["2% por toque".to_string(), "5% por toque".to_string(), "10% por toque".to_string()];

@@ -33,10 +33,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         if on {
             ui.c.round(rect(list.x, y, list.w, 52.0), 8.0, CARD2);
         }
-        let ic = rect(list.x + 8.0, y + 15.0, 22.0, 22.0);
-        ui.c.round(ic, 6.0, LINE);
-        let letter: String = wi.exe.chars().next().map(|c| c.to_uppercase().to_string()).unwrap_or_default();
-        ui.c.text(ic, &letter, 11.0, TEXT2, Align::Center, Weight::Semibold);
+        ui.file_icon(&wi.path, &wi.exe, rect(list.x + 8.0, y + 15.0, 22.0, 22.0));
         ui.c.text(rect(list.x + 42.0, y + 6.0, list.w - 170.0, 20.0), &wi.title, 14.0, TEXT, Align::Left, Weight::Regular);
         let st = format!("{} · {} × {}", if on { "Sem bordas" } else { "Janela" }, wi.size.0, wi.size.1);
         ui.c.text(rect(list.x + 42.0, y + 27.0, list.w - 170.0, 18.0), &st, 12.0, MUTED, Align::Left, Weight::Regular);

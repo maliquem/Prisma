@@ -74,6 +74,15 @@ pub struct FsApp {
     pub auto: bool,
 }
 
+/// Programa com aparelho de som escolhido. Vazio usa o padrão do Windows.
+#[derive(Clone, Default, Debug)]
+pub struct SndApp {
+    pub exe: String,
+    pub path: String,
+    pub output: String,
+    pub input: String,
+}
+
 /// Tela cujas opções voltam ao padrão.
 #[derive(Clone, Copy, PartialEq)]
 pub enum Defaults {
@@ -107,6 +116,7 @@ pub struct Config {
     pub hk_fullscreen: Hotkey,
     pub hk_widget: Hotkey,
     pub hk_optimize: Hotkey,
+    pub hk_force: Hotkey,
     pub hk_shot: Hotkey,
     pub hk_shot_full: Hotkey,
     pub hk_record: Hotkey,
@@ -133,6 +143,7 @@ pub struct Config {
     pub load_cpu_pct: u32,
     pub load_cpu_secs: u32,
     pub fs_apps: Vec<FsApp>,
+    pub snd_apps: Vec<SndApp>,
     pub black: Vec<String>,
     pub white: Vec<String>,
     pub ignored: Vec<String>,
@@ -162,6 +173,7 @@ impl Default for Config {
             hk_fullscreen: Hotkey::new(MOD_CTRL | MOD_ALT, b'F' as u32),
             hk_widget: Hotkey::new(MOD_CTRL | MOD_ALT, b'W' as u32),
             hk_optimize: Hotkey::new(MOD_CTRL | MOD_ALT, b'O' as u32),
+            hk_force: Hotkey::new(MOD_ALT, 0x73),
             hk_shot: Hotkey::new(MOD_CTRL | MOD_ALT, b'P' as u32),
             hk_shot_full: Hotkey::new(MOD_CTRL | MOD_ALT, b'A' as u32),
             hk_record: Hotkey::new(MOD_CTRL | MOD_ALT, b'R' as u32),
@@ -187,6 +199,7 @@ impl Default for Config {
             load_cpu_pct: 35,
             load_cpu_secs: 20,
             fs_apps: Vec::new(),
+            snd_apps: Vec::new(),
             black: Vec::new(),
             white: Vec::new(),
             ignored: Vec::new(),
@@ -245,6 +258,7 @@ impl Config {
                 "hk_fullscreen" => c.hk_fullscreen = Hotkey::parse(v),
                 "hk_widget" => c.hk_widget = Hotkey::parse(v),
                 "hk_optimize" => c.hk_optimize = Hotkey::parse(v),
+                "hk_force" => c.hk_force = Hotkey::parse(v),
                 "hk_shot" => c.hk_shot = Hotkey::parse(v),
                 "hk_shot_full" => c.hk_shot_full = Hotkey::parse(v),
                 "hk_record" => c.hk_record = Hotkey::parse(v),
@@ -272,6 +286,12 @@ impl Config {
                 "load_gpu_secs" => c.load_gpu_secs = v.parse().unwrap_or(5),
                 "load_cpu_pct" => c.load_cpu_pct = v.parse().unwrap_or(35),
                 "load_cpu_secs" => c.load_cpu_secs = v.parse().unwrap_or(20),
+                "snd_app" => {
+                    let p: Vec<&str> = v.splitn(4, '|').collect();
+                    if p.len() == 4 {
+                        c.snd_apps.push(SndApp { exe: p[0].into(), output: p[1].into(), input: p[2].into(), path: p[3].into() });
+                    }
+                }
                 "fs_app" => {
                     let p: Vec<&str> = v.splitn(3, '|').collect();
                     if p.len() == 3 {
@@ -327,6 +347,7 @@ impl Config {
         hk(&mut s, "hk_fullscreen", self.hk_fullscreen);
         hk(&mut s, "hk_widget", self.hk_widget);
         hk(&mut s, "hk_optimize", self.hk_optimize);
+        hk(&mut s, "hk_force", self.hk_force);
         hk(&mut s, "hk_shot", self.hk_shot);
         hk(&mut s, "hk_shot_full", self.hk_shot_full);
         hk(&mut s, "hk_record", self.hk_record);
@@ -386,6 +407,9 @@ impl Config {
         let _ = writeln!(s, "load_gpu_secs={}", self.load_gpu_secs);
         let _ = writeln!(s, "load_cpu_pct={}", self.load_cpu_pct);
         let _ = writeln!(s, "load_cpu_secs={}", self.load_cpu_secs);
+        for a in &self.snd_apps {
+            let _ = writeln!(s, "snd_app={}|{}|{}|{}", a.exe, a.output, a.input, a.path);
+        }
         for a in &self.fs_apps {
             let _ = writeln!(s, "fs_app={}|{}|{}", a.exe, b(a.auto), a.path);
         }
@@ -394,6 +418,18 @@ impl Config {
         let path = config_path();
         let _ = std::fs::create_dir_all(path.parent().unwrap());
         let _ = std::fs::write(path, s);
+    }
+
+    /// Entrada do programa na lista de som, criada se ainda não existir.
+    pub fn snd_entry(&mut self, exe: &str, path: &str) -> &mut SndApp {
+        if let Some(i) = self.snd_apps.iter().position(|a| a.exe.eq_ignore_ascii_case(exe)) {
+            if self.snd_apps[i].path.is_empty() {
+                self.snd_apps[i].path = path.to_string();
+            }
+            return &mut self.snd_apps[i];
+        }
+        self.snd_apps.push(SndApp { exe: exe.to_string(), path: path.to_string(), ..Default::default() });
+        self.snd_apps.last_mut().unwrap()
     }
 
     pub fn fs_auto(&self, exe: &str) -> bool {
@@ -468,6 +504,7 @@ impl Config {
             }
             Defaults::Settings => {
                 self.hk_optimize = d.hk_optimize;
+                self.hk_force = d.hk_force;
                 self.update_auto = d.update_auto;
                 self.lang_en = d.lang_en;
             }

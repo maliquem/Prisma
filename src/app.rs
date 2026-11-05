@@ -2,7 +2,7 @@
 
 use std::cell::RefCell;
 use std::collections::HashSet;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -42,6 +42,54 @@ const WM_PICK: u32 = WM_APP + 4;
 const TIMER_HUD: usize = 7;
 const WM_UPDATED: u32 = WM_APP + 77;
 const WM_PICK_FS: u32 = WM_APP + 78;
+const WM_PICK_SND: u32 = WM_APP + 79;
+
+static FORCE_VK: AtomicU32 = AtomicU32::new(0);
+static FORCE_MODS: AtomicU32 = AtomicU32::new(0);
+static FORCE_HUB: AtomicIsize = AtomicIsize::new(0);
+static FORCE_HELD: AtomicBool = AtomicBool::new(false);
+
+fn apply_route(pid: u32, a: &crate::config::SndApp) -> bool {
+    audio::set_route(pid, false, &a.output) && audio::set_route(pid, true, &a.input)
+}
+
+fn held_mods() -> u32 {
+    let down = |k: VIRTUAL_KEY| unsafe { GetAsyncKeyState(k.0 as i32) as u16 & 0x8000 != 0 };
+    let mut m = 0;
+    if down(VK_CONTROL) {
+        m |= MOD_CTRL;
+    }
+    if down(VK_MENU) {
+        m |= MOD_ALT;
+    }
+    if down(VK_SHIFT) {
+        m |= MOD_SHIFT;
+    }
+    if down(VK_LWIN) || down(VK_RWIN) {
+        m |= MOD_WIN;
+    }
+    m
+}
+
+/// Roda a cada tecla do sistema: precisa ser curto.
+unsafe extern "system" fn key_hook(code: i32, w: WPARAM, l: LPARAM) -> LRESULT {
+    if code == 0 {
+        let vk = (*(l.0 as *const KBDLLHOOKSTRUCT)).vkCode;
+        if vk == FORCE_VK.load(Ordering::Relaxed) {
+            let press = w.0 as u32 == WM_KEYDOWN || w.0 as u32 == WM_SYSKEYDOWN;
+            if !press {
+                FORCE_HELD.store(false, Ordering::Relaxed);
+            } else if held_mods() == FORCE_MODS.load(Ordering::Relaxed) {
+                if !FORCE_HELD.swap(true, Ordering::Relaxed) {
+                    let hub = HWND(FORCE_HUB.load(Ordering::Relaxed) as *mut _);
+                    let _ = PostMessageW(Some(hub), WM_HOTKEY, WPARAM(HK_FORCE as usize), LPARAM(0));
+                }
+                return LRESULT(1);
+            }
+        }
+    }
+    CallNextHookEx(None, code, w, l)
+}
 pub const ACT_SHOT: i32 = HK_SHOT;
 pub const ACT_RECORD: i32 = HK_REC;
 
@@ -52,6 +100,7 @@ const HK_SHOT: i32 = 4;
 const HK_SHOT_FULL: i32 = 5;
 const HK_REC: i32 = 6;
 const HK_REPLAY: i32 = 7;
+const HK_FORCE: i32 = 8;
 const HK_VOL_UP: i32 = 10;
 const HK_VOL_DOWN: i32 = 11;
 const HK_MUTE: i32 = 12;
@@ -80,6 +129,7 @@ pub struct WinInfo {
     pub hwnd: HWND,
     pub title: String,
     pub exe: String,
+    pub path: String,
     pub size: (i32, i32),
 }
 
@@ -123,6 +173,10 @@ pub struct App {
     pub upd: crate::sys::update::Shared,
     upd_told: bool,
     tm_check: Option<Instant>,
+    force_hook: Option<HHOOK>,
+    pub snd_picker: bool,
+    pub snd_search: String,
+    snd_seen: std::collections::HashSet<u32>,
     upd_last: Option<Instant>,
     started: Instant,
     pub audit: audit::Shared,
@@ -267,6 +321,10 @@ pub fn start(background: bool) {
             upd: Default::default(),
             upd_told: false,
             tm_check: None,
+            force_hook: None,
+            snd_picker: false,
+            snd_search: String::new(),
+            snd_seen: std::collections::HashSet::new(),
             upd_last: None,
             started: Instant::now(),
             audit: Default::default(),
@@ -408,6 +466,33 @@ pub fn start(background: bool) {
             if let Some(v) = a.strip_prefix("--test-scan=") {
                 let (name, path) = v.split_once('|').unwrap_or((v, "scan.txt"));
                 let _ = std::fs::write(path, crate::sys::uninstall::scan_preview(name));
+                std::process::exit(0);
+            }
+            if let Some(v) = a.strip_prefix("--test-force=") {
+                let (h, path) = v.split_once('|').unwrap_or((v, "forca.txt"));
+                let hwnd = HWND(h.parse::<isize>().unwrap_or(0) as *mut _);
+                let text = match procs::force_close(hwnd) {
+                    procs::Forced::Killed(n) => format!("encerrou {n}"),
+                    procs::Forced::Closed => "fechamento normal".to_string(),
+                    procs::Forced::Denied(n) => format!("recusado {n}"),
+                    procs::Forced::Nothing => "nada".to_string(),
+                };
+                let _ = std::fs::write(path, text);
+                std::process::exit(0);
+            }
+            if let Some(v) = a.strip_prefix("--test-route=") {
+                let (pid, path) = v.split_once('|').unwrap_or((v, "rota.txt"));
+                let pid: u32 = pid.parse().unwrap_or(0);
+                let mut out = String::new();
+                for (capture, name) in [(false, "saida"), (true, "entrada")] {
+                    for d in audio::devices(capture) {
+                        let on = audio::set_route(pid, capture, &d.id);
+                        let read = audio::route_of(pid, capture).unwrap_or_default();
+                        out += &format!("{name} {}: {on} leitura confere {}\n", d.name, read.contains(&d.id));
+                    }
+                    out += &format!("  padrao: {} vazio {}\n", audio::set_route(pid, capture, ""), audio::route_of(pid, capture).is_some_and(|r| r.is_empty()));
+                }
+                let _ = std::fs::write(path, out);
                 std::process::exit(0);
             }
             if let Some(v) = a.strip_prefix("--test-proc-audio=") {
@@ -582,8 +667,9 @@ impl App {
     }
 
     pub fn register_hotkeys(&mut self) {
+        self.unhook_force_key();
         unsafe {
-            for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_REC, HK_REPLAY, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE] {
+            for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_REC, HK_REPLAY, HK_FORCE, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE] {
                 let _ = UnregisterHotKey(Some(self.hub), id);
             }
         }
@@ -597,13 +683,20 @@ impl App {
             (HK_SHOT_FULL, c.hk_shot_full, "Foto da tela inteira", true),
             (HK_REC, c.hk_record, "Gravar", true),
             (HK_REPLAY, c.hk_replay, "Replay", true),
+            (HK_FORCE, c.hk_force, "Fechar à força", true),
             (HK_VOL_UP, Hotkey::new(c.vol_mods, VK_VOL_UP), "Aumentar volume", false),
             (HK_VOL_DOWN, Hotkey::new(c.vol_mods, VK_VOL_DOWN), "Diminuir volume", false),
             (HK_MUTE, Hotkey::new(c.vol_mods, VK_MUTE), "Mudo", true),
         ];
         let mut errors = Vec::new();
+        let mut force_hook = None;
         for (id, hk, name, norepeat) in list {
             if hk.vk == 0 {
+                continue;
+            }
+            // A versão de teste não pega o Alt+F4 do PC: ela roda junto com programas de verdade.
+            #[cfg(debug_assertions)]
+            if id == HK_FORCE && !std::env::args().any(|a| a.starts_with("--test-force-key=")) {
                 continue;
             }
             let mut m = HOT_KEY_MODIFIERS(hk.mods);
@@ -611,10 +704,17 @@ impl App {
                 m |= MOD_NOREPEAT;
             }
             if unsafe { RegisterHotKey(Some(self.hub), id, m, hk.vk) }.is_err() {
-                errors.push(format!("{name}: {} já está em uso", hk.label()));
+                if id == HK_FORCE {
+                    force_hook = Some(hk);
+                } else {
+                    errors.push(format!("{name}: {} já está em uso", hk.label()));
+                }
             }
         }
         self.hk_errors = errors;
+        if let Some(hk) = force_hook {
+            self.hook_force_key(hk);
+        }
     }
 
     fn pause_hotkeys(&mut self, on: bool) {
@@ -623,8 +723,9 @@ impl App {
         }
         self.capturing_keys = on;
         if on {
+            self.unhook_force_key();
             unsafe {
-                for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_REC, HK_REPLAY] {
+                for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_REC, HK_REPLAY, HK_FORCE] {
                     let _ = UnregisterHotKey(Some(self.hub), id);
                 }
             }
@@ -654,9 +755,52 @@ impl App {
             HK_SHOT_FULL => self.take_full_shot(),
             HK_REC => self.toggle_record(),
             HK_REPLAY => self.save_replay(),
+            HK_FORCE => self.force_close(),
             HK_VOL_UP => self.volume(audio::Change::Step(self.cfg.vol_step as i32)),
             HK_VOL_DOWN => self.volume(audio::Change::Step(-(self.cfg.vol_step as i32))),
             HK_MUTE => self.volume(audio::Change::ToggleMute),
+            _ => {}
+        }
+    }
+
+    /// Outro programa já registrou a combinação: o gancho recebe a tecla antes de todos.
+    fn hook_force_key(&mut self, hk: Hotkey) {
+        FORCE_VK.store(hk.vk, Ordering::Relaxed);
+        FORCE_MODS.store(hk.mods, Ordering::Relaxed);
+        FORCE_HUB.store(self.hub.0 as isize, Ordering::Relaxed);
+        if self.force_hook.is_none() {
+            let inst = unsafe { GetModuleHandleW(None) }.unwrap_or_default();
+            self.force_hook = unsafe { SetWindowsHookExW(WH_KEYBOARD_LL, Some(key_hook), Some(inst.into()), 0) }.ok();
+        }
+    }
+
+    fn unhook_force_key(&mut self) {
+        if let Some(h) = self.force_hook.take() {
+            unsafe {
+                let _ = UnhookWindowsHookEx(h);
+            }
+        }
+    }
+
+    fn force_close(&mut self) {
+        let h = unsafe { GetForegroundWindow() };
+        // No teste, só a janela descartável pode ser fechada.
+        #[cfg(debug_assertions)]
+        {
+            let allowed = std::env::args().find_map(|a| a.strip_prefix("--test-force-key=").and_then(|p| p.parse::<u32>().ok()));
+            if allowed != Some(procs::window_pid(h)) {
+                return;
+            }
+        }
+        match procs::force_close(h) {
+            procs::Forced::Killed(name) => {
+                self.log(&format!("fechou à força {name}"));
+                self.toast.info(&format!("{name} fechado à força"));
+            }
+            procs::Forced::Denied(name) => {
+                let hint = if self.elevated { "O Windows protegeu {}" } else { "Precisa do Prisma como administrador" };
+                self.toast.info(&hint.replace("{}", &name));
+            }
             _ => {}
         }
     }
@@ -793,6 +937,15 @@ impl App {
     /// Caminho do executável, lembrado por nome para não abrir o processo a cada quadro.
     pub fn path_of(&mut self, exe: &str, pid: u32) -> Option<String> {
         self.exe_paths.entry(exe.to_ascii_lowercase()).or_insert_with(|| procs::image_path(pid)).clone()
+    }
+
+    /// Caminho de um programa da lista, se ele estiver aberto ou já tiver sido visto.
+    pub fn path_by_name(&mut self, exe: &str) -> String {
+        let pid = self.snap.groups.iter().find(|g| g.exe.eq_ignore_ascii_case(exe)).and_then(|g| g.pids.first().copied());
+        match pid {
+            Some(pid) => self.path_of(exe, pid).unwrap_or_default(),
+            None => self.exe_paths.get(&exe.to_ascii_lowercase()).cloned().flatten().unwrap_or_default(),
+        }
     }
 
     fn load_disks(&mut self) {
@@ -1047,6 +1200,45 @@ impl App {
         }
     }
 
+    /// Programas com rota escolhida recebem ela assim que abrem.
+    fn sound_tick(&mut self) {
+        if !self.cfg.snd_apps.iter().any(|a| !a.output.is_empty() || !a.input.is_empty()) {
+            return;
+        }
+        if self.snd_seen.len() > 4096 {
+            self.snd_seen.clear();
+        }
+        // O Windows só aceita depois que o processo abre o áudio: quem falhou tenta de novo.
+        for g in &self.snap.groups {
+            let Some(a) = self.cfg.snd_apps.iter().find(|a| a.exe.eq_ignore_ascii_case(&g.exe)) else { continue };
+            for pid in &g.pids {
+                if !self.snd_seen.contains(pid) && apply_route(*pid, a) {
+                    self.snd_seen.insert(*pid);
+                }
+            }
+        }
+    }
+
+    /// Aplica agora a rota em tudo que está aberto desse programa.
+    pub fn route_app(&mut self, exe: &str) {
+        let Some(a) = self.cfg.snd_apps.iter().find(|a| a.exe.eq_ignore_ascii_case(exe)).cloned() else { return };
+        for g in self.snap.groups.iter().filter(|g| g.exe.eq_ignore_ascii_case(exe)) {
+            for pid in &g.pids {
+                if apply_route(*pid, &a) {
+                    self.snd_seen.insert(*pid);
+                } else {
+                    self.snd_seen.remove(pid);
+                }
+            }
+        }
+    }
+
+    pub fn pick_sound_app(&self) {
+        unsafe {
+            let _ = PostMessageW(Some(self.hub), WM_PICK_SND, WPARAM(0), LPARAM(0));
+        }
+    }
+
     pub fn pick_fullscreen_app(&self) {
         unsafe {
             let _ = PostMessageW(Some(self.hub), WM_PICK_FS, WPARAM(0), LPARAM(0));
@@ -1240,6 +1432,7 @@ impl App {
         self.widget.update(&self.cfg, &self.snap);
         self.full.sweep();
         self.update_tick();
+        self.sound_tick();
         if let Some(t) = self.tm_check {
             self.replaces_tm = crate::startup::replaces_taskmgr();
             if t.elapsed().as_secs() > 6 {
@@ -1342,12 +1535,13 @@ impl App {
             .into_iter()
             .filter(|h| Some(*h) != own)
             .map(|h| {
-                let exe = procs::image_path(procs::window_pid(h)).map(|p| procs::exe_name(&p)).unwrap_or_default();
+                let path = procs::image_path(procs::window_pid(h)).unwrap_or_default();
+                let exe = Some(path.clone()).filter(|p| !p.is_empty()).map(|p| procs::exe_name(&p)).unwrap_or_default();
                 let mut r = RECT::default();
                 unsafe {
                     let _ = GetClientRect(h, &mut r);
                 }
-                WinInfo { hwnd: h, title: procs::window_title(h), exe, size: (r.right, r.bottom) }
+                WinInfo { hwnd: h, title: procs::window_title(h), exe, path, size: (r.right, r.bottom) }
             })
             .collect();
     }
@@ -1551,6 +1745,16 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
         }
         WM_TIMER => {
             with(|a| a.hud_update());
+            LRESULT(0)
+        }
+        WM_PICK_SND => {
+            if let Some(path) = capture::choose_exe(h) {
+                with(|a| {
+                    a.cfg.snd_entry(&procs::exe_name(&path), &path);
+                    a.cfg.save();
+                    a.invalidate();
+                });
+            }
             LRESULT(0)
         }
         WM_PICK_FS => {

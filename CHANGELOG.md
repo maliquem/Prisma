@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.3
+
+- Monitor sorts by name. / Monitor ordena por nome.
+- Force close shortcut for the focused program, Alt+F4 by default. / Atalho para fechar à força o programa em foco, Alt+F4 por padrão.
+- Sound page: choose output and input devices per program, and add programs by hand. / Aba Som: aparelhos de saída e de entrada por programa, com programas adicionados à mão.
+- Program icons on Sound, Optimize and Fullscreenizer. / Ícones de programas em Som, Otimizar e Fullscreenizer.
+- Scroll bar no longer touches list items. / A barra de rolagem não encosta mais nos itens.
+
 ## 0.3.2
 
 - Installing now turns on starting with Windows, and it can be turned off in Settings. / Instalar agora liga o início com o Windows, que pode ser desligado em Configurações.

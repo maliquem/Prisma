@@ -1,6 +1,9 @@
 use super::*;
 use crate::sys::procs;
 
+/// Ordem por nome, depois das colunas numéricas.
+const NAME: u8 = 6;
+
 /// Uma linha da lista, seja o programa inteiro ou um processo só.
 struct Row {
     exe: String,
@@ -88,7 +91,12 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let total: f32 = cols.iter().map(|c| c.1 + 6.0).sum();
     let hy = t.y + 44.0;
     let mut cx = t.right() - 22.0 - total;
-    ui.label(rect(t.x + 24.0, hy, 160.0, 22.0), if details { "Nome" } else { "Programa" }, MUTED);
+    let by_name = app.sort == NAME;
+    let name_head = rect(t.x + 24.0, hy, 160.0, 22.0);
+    ui.c.text(name_head, if details { "Nome" } else { "Programa" }, 12.0, if by_name { ACCENT } else { MUTED }, Align::Left, if by_name { Weight::Semibold } else { Weight::Regular });
+    if ui.hit("sort-name", name_head) {
+        app.sort = NAME;
+    }
     if details {
         ui.c.text(rect(cx - 66.0, hy, 60.0, 22.0), "PID", 12.0, MUTED, Align::Right, Weight::Regular);
     }
@@ -117,6 +125,8 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         3 => rows.sort_by(|a, b| b.vram.cmp(&a.vram)),
         4 => rows.sort_by(|a, b| b.disk.cmp(&a.disk)),
         5 => rows.sort_by(|a, b| b.net.cmp(&a.net)),
+        NAME if details => rows.sort_by_cached_key(|r| r.exe.to_lowercase()),
+        NAME => rows.sort_by_cached_key(|r| app.name_of(&r.exe, r.pids.first().copied().unwrap_or(0)).to_lowercase()),
         _ => rows.sort_by(|a, b| b.cpu.partial_cmp(&a.cpu).unwrap()),
     }
     let list = rect(t.x + 8.0, hy + 24.0, t.w - 16.0, t.bottom() - hy - 32.0);

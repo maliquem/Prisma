@@ -162,3 +162,98 @@ pub fn search_online(exe: &str) {
         ShellExecuteW(None, w!("open"), &HSTRING::from(url), None, None, SW_SHOWNORMAL);
     }
 }
+
+pub enum Forced {
+    /// Processo encerrado: nome do programa.
+    Killed(String),
+    /// Janela do sistema: recebeu o fechamento normal, como o Alt+F4 do Windows.
+    Closed,
+    /// O Windows recusou encerrar: nome do programa.
+    Denied(String),
+    Nothing,
+}
+
+fn class_of(h: HWND) -> String {
+    let mut b = [0u16; 64];
+    let n = unsafe { GetClassNameW(h, &mut b) };
+    String::from_utf16_lossy(&b[..n.max(0) as usize])
+}
+
+/// Janela congelada vira um fantasma do Windows: o que interessa é a janela real por trás.
+fn real_window(h: HWND) -> HWND {
+    use windows::core::{s, w};
+    use windows::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress};
+    if class_of(h) != "Ghost" {
+        return h;
+    }
+    type Ghost = unsafe extern "system" fn(HWND) -> HWND;
+    unsafe {
+        let Ok(user) = GetModuleHandleW(w!("user32.dll")) else { return h };
+        let Some(f) = GetProcAddress(user, s!("HungWindowFromGhostWindow")) else { return h };
+        let f: Ghost = std::mem::transmute(f);
+        let real = f(h);
+        if real.is_invalid() {
+            h
+        } else {
+            real
+        }
+    }
+}
+
+/// Apps da Loja rodam dentro do ApplicationFrameHost: encerrar ele fecharia todos.
+fn app_pid(h: HWND, host: u32) -> u32 {
+    unsafe extern "system" fn found(c: HWND, l: LPARAM) -> windows::core::BOOL {
+        let (host, out) = &mut *(l.0 as *mut (u32, u32));
+        let pid = window_pid(c);
+        if pid != *host {
+            *out = pid;
+            return false.into();
+        }
+        true.into()
+    }
+    let mut state = (host, host);
+    unsafe {
+        let _ = EnumChildWindows(Some(h), Some(found), LPARAM(&mut state as *mut _ as isize));
+    }
+    state.1
+}
+
+/// Encerra o programa da janela pelo PID, sem pedir a ele: funciona mesmo travado.
+pub fn force_close(h: HWND) -> Forced {
+    use windows::Win32::Foundation::*;
+    use windows::Win32::System::Threading::*;
+    if h.is_invalid() {
+        return Forced::Nothing;
+    }
+    let w = real_window(h);
+    if matches!(class_of(w).as_str(), "Progman" | "WorkerW" | "Shell_TrayWnd" | "Shell_SecondaryTrayWnd") {
+        // Na área de trabalho, o Alt+F4 normal abre a caixa de desligar.
+        unsafe {
+            let _ = PostMessageW(Some(GetShellWindow()), WM_CLOSE, WPARAM(0), LPARAM(0));
+        }
+        return Forced::Closed;
+    }
+    let mut pid = window_pid(w);
+    let host = image_path(pid).map(|p| exe_name(&p)).unwrap_or_default();
+    if host.eq_ignore_ascii_case("ApplicationFrameHost.exe") {
+        pid = app_pid(w, pid);
+    }
+    let exe = image_path(pid).map(|p| exe_name(&p)).unwrap_or_default();
+    if pid == std::process::id() || crate::optimizer::is_system(&exe) {
+        unsafe {
+            let _ = PostMessageW(Some(w), WM_CLOSE, WPARAM(0), LPARAM(0));
+        }
+        return Forced::Closed;
+    }
+    let name = if exe.is_empty() { format!("PID {pid}") } else { exe };
+    unsafe {
+        let Ok(p) = OpenProcess(PROCESS_TERMINATE, false, pid) else { return Forced::Denied(name) };
+        let done = TerminateProcess(p, 1).is_ok();
+        let _ = CloseHandle(p);
+        if done {
+            Forced::Killed(name)
+        } else {
+            Forced::Denied(name)
+        }
+    }
+}

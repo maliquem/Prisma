@@ -798,7 +798,21 @@ Volta os planos, a troca automática e o que conta como carga ao padrão.	Resets
 Volta o atalho ao padrão e desliga o modo automático de todos os programas. A lista continua salva.	Resets the shortcut to default and turns off automatic mode for all programs. The list stays saved.
 Volta as opções de ponto de restauração e de desinstalar sem janela ao padrão.	Resets the restore point and windowless uninstall options to default.
 Volta as opções Ver log e Restauração ao padrão. Os ajustes aplicados continuam como estão: para reverter, use Desfazer.	Resets the Show log and Restore point options to default. Applied tweaks stay as they are: use Undo to revert them.
-Volta o atalho de Otimizar, o idioma e a busca de atualização ao padrão.	Resets the Optimize shortcut, language and update check to default.
 Esvazia as listas de nunca fechar e sempre fechar, e as sugestões recusadas. Essa ação não fecha nenhum programa.	Empties the never-close and always-close lists and the declined suggestions. This does not close any program.
 Volta o modificador, o passo e o aviso na tela ao padrão.	Resets the modifier, step and on-screen notice to default.
 Volta o atalho, o estilo e a posição do widget ao padrão, e esconde o widget.	Resets the widget shortcut, style and position to default, and hides the widget.
+Volta os atalhos de Otimizar e de Fechar à força, o idioma e a busca de atualização ao padrão.	Resets the Optimize and Force close shortcuts, language and update check to default.
+Fechar à força	Force close
+Encerra na hora o programa em foco, mesmo travado. O que não foi salvo é perdido.	Ends the focused program at once, even if frozen. Anything unsaved is lost.
+{} fechado à força	{} force-closed
+O Windows protegeu {}	Windows protected {}
+Som	Sound
+Volume e aparelhos de saída e de entrada de cada programa.	Volume and output and input devices for each program.
+Padrão do Windows	Windows default
+Saída	Output
+Entrada	Input
+Sem som agora	No sound right now
+Da lista de programas	From the program list
+Escolher arquivo .exe	Choose .exe file
+Adicionar programa	Add program
+Voltar	Back

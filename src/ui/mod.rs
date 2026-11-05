@@ -11,7 +11,9 @@ use std::hash::{Hash, Hasher};
 use crate::config::Hotkey;
 use gfx::*;
 
-const BAR_W: f32 = 12.0;
+/// Faixa da barra de rolagem, na margem à direita da lista.
+const BAR_GAP: f32 = 2.0;
+const BAR_W: f32 = 8.0;
 
 fn hash_id(key: &str) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
@@ -118,10 +120,6 @@ impl<'a> Ui<'a> {
                 return false;
             }
         }
-        // A barra de rolagem fica por cima da lista: o clique nela não seleciona a linha.
-        if self.bar.as_ref().is_some_and(|b| self.s.mx >= b.r.right() - BAR_W) {
-            return false;
-        }
         r.contains(self.s.mx, self.s.my + self.dy)
     }
 
@@ -162,7 +160,7 @@ impl<'a> Ui<'a> {
             let h = (r.h * r.h / content_h).max(32.0);
             let span = r.h - h;
             let top = r.y + span * (v.clamp(0.0, max) / max);
-            let over = self.s.mx >= r.right() - BAR_W && self.s.mx <= r.right() && self.s.my >= r.y && self.s.my <= r.bottom();
+            let over = self.s.mx >= r.right() && self.s.mx <= r.right() + BAR_W + 2.0 && self.s.my >= r.y && self.s.my <= r.bottom();
             if !self.blocked && over && self.s.pressed {
                 self.s.active = bar_id;
                 // Clicar fora do trilho claro leva a barra até ali.
@@ -194,10 +192,14 @@ impl<'a> Ui<'a> {
         self.clip = None;
         if let Some(b) = self.bar.take() {
             let hot = self.s.active == b.id;
-            let near = !self.blocked && b.r.contains(self.s.mx, self.s.my) && self.s.mx >= b.r.right() - BAR_W;
+            let near = !self.blocked
+                && self.s.mx >= b.r.right()
+                && self.s.mx <= b.r.right() + BAR_W + 2.0
+                && self.s.my >= b.r.y
+                && self.s.my <= b.r.bottom();
             let color = if hot { ACCENT } else if near { TEXT2 } else { BORDER2 };
-            let w = if hot || near { 8.0 } else { 6.0 };
-            self.c.round(rect(b.r.right() - w - 1.0, b.y, w, b.h), w / 2.0, color);
+            let w = if hot || near { 5.0 } else { 3.0 };
+            self.c.round(rect(b.r.right() + BAR_GAP, b.y, w, b.h), w / 2.0, color);
         }
     }
 

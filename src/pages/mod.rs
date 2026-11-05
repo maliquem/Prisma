@@ -121,7 +121,7 @@ const NAV: &[(Page, &str, Icon)] = &[
     (Page::Optimize, "Otimizar", ICON_OPT),
     (Page::Energy, "Energia", ICON_POW),
     (Page::Fullscreen, "Fullscreenizer", ICON_WIN),
-    (Page::Volume, "Volume", ICON_VOL),
+    (Page::Volume, "Som", ICON_VOL),
     (Page::Capture, "Captura", ICON_CAP),
     (Page::Widget, "Widget", ICON_WID),
     (Page::Adjust, "Configurações", ICON_ADJ),
