@@ -189,6 +189,59 @@ unsafe fn release(this: *mut core::ffi::c_void) {
     f(this);
 }
 
+/// A saída padrão do Windows e o formato em que ela está agora.
+#[derive(Clone, Default, Debug)]
+pub struct Output {
+    pub name: String,
+    pub channels: u16,
+    pub rate: u32,
+    pub spatial_support: bool,
+    /// Nome do formato de som espacial ativo. Vazio: desligado.
+    pub spatial: String,
+}
+
+fn spatial_name(guid: &str) -> String {
+    match guid.trim_matches(|c| c == '{' || c == '}').to_ascii_uppercase().as_str() {
+        "" | "00000000-0000-0000-0000-000000000000" => "",
+        "A289735D-FA3E-4E35-9D7D-B6F896ACB2E7" => "Dolby Atmos for Home Theater",
+        "1459AC38-3875-49BF-BB59-0FE80F4D395D" => "Dolby Atmos for Headphones",
+        "4C81E564-C8EF-4AD9-9F2C-9EF995533790" => "Dolby Atmos for Speakers",
+        "B53D940C-B846-4831-9F76-D102B9B725A0" => "Windows Sonic",
+        "10201B4A-3322-4967-BF40-2CAA9BAFCA44" => "DTS:X",
+        _ => "Outro formato",
+    }
+    .to_string()
+}
+
+pub fn default_output() -> Option<Output> {
+    use windows::Media::Audio::SpatialAudioDeviceConfiguration;
+    unsafe {
+        let en: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
+        let dev = en.GetDefaultAudioEndpoint(eRender, eConsole).ok()?;
+        let raw = dev.GetId().ok()?;
+        let id = raw.to_string().unwrap_or_default();
+        CoTaskMemFree(Some(raw.0 as *const _));
+        let mut out = Output::default();
+        if let Ok(store) = dev.OpenPropertyStore(STGM_READ) {
+            if let Ok(v) = store.GetValue(&PKEY_Device_FriendlyName) {
+                out.name = v.to_string();
+            }
+        }
+        if let Ok(client) = dev.Activate::<IAudioClient>(CLSCTX_ALL, None) {
+            if let Ok(f) = client.GetMixFormat() {
+                out.channels = (*f).nChannels;
+                out.rate = (*f).nSamplesPerSec;
+                CoTaskMemFree(Some(f as *const _));
+            }
+        }
+        if let Ok(c) = SpatialAudioDeviceConfiguration::GetForDeviceId(&HSTRING::from(endpoint_path(&id, false))) {
+            out.spatial_support = c.IsSpatialAudioSupported().unwrap_or(false);
+            out.spatial = spatial_name(&c.ActiveSpatialAudioFormat().unwrap_or_default().to_string());
+        }
+        Some(out)
+    }
+}
+
 fn endpoint_path(id: &str, capture: bool) -> String {
     let kind = if capture { "{2eef81be-33fa-4800-9670-1cd474972c3f}" } else { "{e6327cad-dcec-4949-ae8a-991e976a79d2}" };
     format!("\\\\?\\SWD#MMDEVAPI#{id}#{kind}")

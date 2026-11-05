@@ -818,3 +818,72 @@ Adicionar programa	Add program
 Voltar	Back
 Procurando programas…	Looking for programs…
 Nenhum programa encontrado.	No programs found.
+HDR ligado	HDR on
+HDR desligado, cor ampla	HDR off, wide color
+HDR desligado	HDR off
+Sem suporte a HDR	No HDR support
+Modo	Mode
+Imagem	Picture
+Profundidade	Depth
+{} bits	{} bits
+Brilho do SDR	SDR brightness
+{} nits	{} nits
+Perfil de calibração	Calibration profile
+Nenhum perfil de calibração ativo nesta tela.	No calibration profile is active on this display.
+Neutra	Neutral
+Reforço de {}%	{}% boost
+Matriz própria	Custom matrix
+Saturação	Saturation
+Curva	Curve
+Corrigida	Corrected
+Conferem com a tela	Match the display
+Não conferem com a tela	Do not match the display
+Sem ficha para comparar	No display data to compare
+Cores primárias	Primaries
+Brilho declarado, em nits	Declared brightness, in nits
+Pico	Peak
+Preto	Black
+Ficha enviada pela tela	Data sent by the display
+Sem leitura direta nesta placa	No direct reading on this graphics card
+Override de EDID em uso	EDID override in use
+Ficha em uso no Windows	Data in use by Windows
+Não informado	Not reported
+Sem perfil	No profile
+Bloco Dolby Vision	Dolby Vision block
+Não declarado	Not declared
+O que o Windows informa aos jogos agora	What Windows tells games now
+A tela declara	Display declares
+Guiado pela tela	Display-led
+Baixa latência 4:2:2	Low latency 4:2:2
+Guiado pela tela e baixa latência 4:2:2	Display-led and low latency 4:2:2
+Guiado pela tela e baixa latência 4:4:4	Display-led and low latency 4:4:4
+Modos	Modes
+Outro valor	Other value
+Sem valor salvo	No saved value
+HDR salvo no Windows	HDR saved in Windows
+Extensão da Store	Store extension
+Instalada	Installed
+Não instalada	Not installed
+Saída padrão	Default output
+Sem suporte	Not supported
+Outro formato	Other format
+Som espacial	Spatial sound
+{} canais · {} kHz	{} channels · {} kHz
+Mistura do Windows	Windows mix
+Não encontrada	Not found
+App Dolby Access	Dolby Access app
+Instalado	Installed
+Não instalado	Not installed
+Canais aceitos	Accepted channels
+O perfil reforça a saturação em {}% e isso vale para todo o conteúdo HDR, inclusive jogos com HDR próprio.	The profile boosts saturation by {}%, and that applies to all HDR content, including games with their own HDR.
+As cores primárias do perfil não são as desta tela. Isso costuma vir de um perfil feito em outra tela, e os programas que leem esses dados recebem a informação errada.	The profile primaries are not those of this display. This usually comes from a profile made on another display, and programs that read this data get the wrong information.
+O HDR está desligado. O perfil e o valor informado aos jogos mudam quando ele liga, então confira de novo com o HDR ligado.	HDR is off. The profile and the value reported to games change when it turns on, so check again with HDR on.
+Há um override de EDID nesta tela. O Windows usa os valores dele, não os que a tela envia.	This display has an EDID override. Windows uses its values, not the ones the display sends.
+Há um override de EDID nesta tela, e esta placa não permite ler a ficha original.	This display has an EDID override, and this graphics card cannot read the original data.
+A tela declara Dolby Vision, mas não o modo 4:4:4 de baixa latência. Segundo relatos, é isso que faz o Windows não mostrar a certificação Dolby Vision.	The display declares Dolby Vision, but not the low latency 4:4:4 mode. According to user reports, that is why Windows does not show the Dolby Vision certification.
+A tela só aceita PCM de 2 canais. Com o som espacial desligado, todo o som do PC sai em estéreo.	The display only accepts 2-channel PCM. With spatial sound off, all PC audio comes out in stereo.
+O que a tela, o perfil e o Windows estão informando. Nada aqui muda o PC.	What the display, the profile and Windows are reporting. Nothing here changes your PC.
+Lendo…	Reading…
+Ler de novo	Read again
+Lendo a tela e o perfil…	Reading the display and the profile…
+Não consegui ler as telas.	Could not read the displays.

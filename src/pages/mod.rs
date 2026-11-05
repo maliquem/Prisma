@@ -5,6 +5,7 @@ mod analyze;
 mod capture;
 mod energy;
 mod fullscreen;
+mod hdr;
 mod monitor;
 mod optimize;
 pub mod picker;
@@ -35,6 +36,7 @@ pub enum Page {
     Energy,
     Fullscreen,
     Volume,
+    Hdr,
     Capture,
     Widget,
     Adjust,
@@ -53,6 +55,17 @@ const ICON_WIN: Icon = &[
     &[(20., 9.), (20., 4.), (15., 4.)],
     &[(4., 15.), (4., 20.), (9., 20.)],
     &[(20., 15.), (20., 20.), (15., 20.)],
+];
+const ICON_HDR: Icon = &[
+    &[(12., 3.), (12., 5.)],
+    &[(12., 19.), (12., 21.)],
+    &[(3., 12.), (5., 12.)],
+    &[(19., 12.), (21., 12.)],
+    &[(5.6, 5.6), (7., 7.)],
+    &[(17., 17.), (18.4, 18.4)],
+    &[(5.6, 18.4), (7., 17.)],
+    &[(17., 7.), (18.4, 5.6)],
+    &[(12., 8.), (15., 9.), (16., 12.), (15., 15.), (12., 16.), (9., 15.), (8., 12.), (9., 9.), (12., 8.)],
 ];
 const ICON_VOL: Icon = &[
     &[(4., 9.), (4., 15.), (8., 15.), (13., 19.), (13., 5.), (8., 9.), (4., 9.)],
@@ -123,6 +136,7 @@ const NAV: &[(Page, &str, Icon)] = &[
     (Page::Energy, "Energia", ICON_POW),
     (Page::Fullscreen, "Fullscreenizer", ICON_WIN),
     (Page::Volume, "Som", ICON_VOL),
+    (Page::Hdr, "HDR", ICON_HDR),
     (Page::Capture, "Captura", ICON_CAP),
     (Page::Widget, "Widget", ICON_WID),
     (Page::Adjust, "Configurações", ICON_ADJ),
@@ -187,6 +201,7 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
         Page::Energy => energy::draw(&mut ui, app, area),
         Page::Fullscreen => fullscreen::draw(&mut ui, app, area),
         Page::Volume => volume::draw(&mut ui, app, area),
+        Page::Hdr => hdr::draw(&mut ui, app, area),
         Page::Capture => capture::draw(&mut ui, app, area),
         Page::Widget => widget::draw(&mut ui, app, area),
         Page::Adjust => adjust::draw(&mut ui, app, area),

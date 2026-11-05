@@ -7,6 +7,7 @@ pub mod etw;
 pub mod events;
 pub mod fileinfo;
 pub mod fullscreen;
+pub mod hdr;
 pub mod kmt;
 pub mod mft;
 pub mod monitor;

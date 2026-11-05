@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.5
+
+- New HDR page: reads the display, the calibration profile, declared brightness, Dolby Vision and sound, and warns in plain words. It changes nothing on the PC. / Nova aba HDR: lê a tela, o perfil de calibração, o brilho declarado, o Dolby Vision e o som, e avisa em palavras simples. Ela não muda nada no PC.
+
 ## 0.3.4
 
 - Fullscreenizer adds programs from the list or by .exe, like Sound. / Fullscreenizer adiciona programas pela lista ou pelo .exe, igual ao Som.

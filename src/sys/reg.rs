@@ -121,6 +121,44 @@ pub fn exists(h: Hive, key: &str) -> bool {
     }
 }
 
+pub fn subkeys(h: Hive, key: &str) -> Vec<String> {
+    let mut list = Vec::new();
+    unsafe {
+        let k = wide(key);
+        let mut out = HKEY::default();
+        if RegOpenKeyExW(h.key(), PCWSTR(k.as_ptr()), None, KEY_READ, &mut out).is_err() {
+            return list;
+        }
+        let mut i = 0;
+        loop {
+            let mut name = [0u16; 256];
+            let mut len = name.len() as u32;
+            if RegEnumKeyExW(out, i, Some(PWSTR(name.as_mut_ptr())), &mut len, None, None, None, None).is_err() {
+                break;
+            }
+            list.push(String::from_utf16_lossy(&name[..len as usize]));
+            i += 1;
+        }
+        let _ = RegCloseKey(out);
+    }
+    list
+}
+
+/// Quando a chave foi escrita pela última vez.
+pub fn written(h: Hive, key: &str) -> u64 {
+    unsafe {
+        let k = wide(key);
+        let mut out = HKEY::default();
+        if RegOpenKeyExW(h.key(), PCWSTR(k.as_ptr()), None, KEY_READ, &mut out).is_err() {
+            return 0;
+        }
+        let mut t = FILETIME::default();
+        let _ = RegQueryInfoKeyW(out, None, None, None, None, None, None, None, None, None, None, Some(&mut t));
+        let _ = RegCloseKey(out);
+        ((t.dwHighDateTime as u64) << 32) | t.dwLowDateTime as u64
+    }
+}
+
 pub fn subkey_count(h: Hive, key: &str) -> u32 {
     unsafe {
         let k = wide(key);

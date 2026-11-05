@@ -174,6 +174,8 @@ pub struct App {
     upd_told: bool,
     tm_check: Option<Instant>,
     force_hook: Option<HHOOK>,
+    pub hdr: crate::sys::hdr::Shared,
+    pub hdr_screen: usize,
     pub pick_for: Option<crate::pages::picker::Target>,
     pub pick_search: String,
     pub pick_list: crate::sys::catalog::Shared,
@@ -323,6 +325,8 @@ pub fn start(background: bool) {
             upd_told: false,
             tm_check: None,
             force_hook: None,
+            hdr: Default::default(),
+            hdr_screen: 0,
             pick_for: None,
             pick_search: String::new(),
             pick_list: Default::default(),
@@ -465,6 +469,10 @@ pub fn start(background: bool) {
             if a == "--test-panic" {
                 panic!("teste do relatório");
             }
+            if let Some(path) = a.strip_prefix("--test-hdr=") {
+                let _ = std::fs::write(path, format!("{:#?}", crate::sys::hdr::read()));
+                std::process::exit(0);
+            }
             if let Some(path) = a.strip_prefix("--test-catalog=") {
                 let t = Instant::now();
                 let list = crate::sys::catalog::list(Vec::new());
@@ -602,6 +610,7 @@ pub fn start(background: bool) {
                 "--page=energy" => Page::Energy,
                 "--page=full" => Page::Fullscreen,
                 "--page=volume" => Page::Volume,
+                "--page=hdr" => Page::Hdr,
                 "--page=capture" => Page::Capture,
                 "--page=widget" => Page::Widget,
                 "--page=adjust" => Page::Adjust,
@@ -1264,6 +1273,10 @@ impl App {
         crate::sys::catalog::load(self.pick_list.clone(), open, self.main.as_ref().map_or(0, |m| m.hwnd.0 as isize));
     }
 
+    pub fn load_hdr(&self) {
+        crate::sys::hdr::load(self.hdr.clone(), self.main.as_ref().map_or(0, |m| m.hwnd.0 as isize));
+    }
+
     pub fn close_picker(&mut self) {
         self.pick_for = None;
         *self.pick_list.lock().unwrap() = None;
@@ -1514,6 +1527,7 @@ impl App {
     pub fn refresh_page(&mut self) {
         match self.page {
             Page::Volume => self.sessions = audio::sessions(),
+            Page::Hdr => self.load_hdr(),
             Page::Optimize => self.refresh_candidates(),
             Page::Fullscreen => self.refresh_windows(),
             Page::Energy => self.active_plan = power::active().unwrap_or_default(),
