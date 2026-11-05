@@ -203,6 +203,7 @@ pub fn uninstall() {
     if replaces_taskmgr() {
         set_replace_taskmgr(false);
     }
+    crate::sys::autohdr::clear_all();
     let _ = std::fs::remove_file(shortcut());
     let _ = Command::new("reg").args(["delete", UNINSTALL_KEY, "/f"]).creation_flags(NO_WINDOW).output();
     // O arquivo em uso só pode sair depois que este processo fechar.

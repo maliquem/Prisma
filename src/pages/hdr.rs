@@ -1,10 +1,13 @@
 use super::*;
+use super::picker::{self, Target as Pick};
 use crate::config::HdrProfile;
+use crate::sys::autohdr;
 use crate::sys::hdr::{Edid, Info, Light, Profile, Screen};
 use crate::sys::hdrcal::{self, Phase, Spec, Start, Target};
 use crate::sys::patterns::{Measured, WINDOWS};
 
 const ROW: f32 = 28.0;
+const GAME_ROW: f32 = 44.0;
 
 fn nits(v: f32) -> String {
     if v <= 0.0 {
@@ -323,6 +326,55 @@ fn saved_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen, list: &[HdrProfil
     }
 }
 
+fn games_card(ui: &mut Ui, app: &mut App, r: Rect) {
+    ui.card(r);
+    if app.pick_for == Some(Pick::HdrGame) {
+        picker::draw(ui, app, r);
+        return;
+    }
+    ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 150.0, 22.0), "Auto HDR por jogo");
+    picker::add_button(ui, app, rect(r.right() - 124.0, r.y + 8.0, 108.0, 32.0), Pick::HdrGame);
+    let (text, color) = if autohdr::global_on() {
+        ("Só para jogos DX11 e DX12 sem HDR próprio. Vale a partir da próxima vez que o jogo abrir.", TEXT2)
+    } else {
+        ("O Auto HDR está desligado nas configurações do Windows. Ligue lá para valer.", WARN)
+    };
+    ui.c.text(rect(r.x + 16.0, r.y + 44.0, r.w - 32.0, 22.0), text, 13.0, color, Align::Left, Weight::Regular);
+    let options = ["Padrão do Windows".to_string(), "Forçar Auto HDR".to_string(), "Desligar Auto HDR".to_string()];
+    let (mut change, mut remove) = (None, None);
+    for (i, g) in app.cfg.hdr_games.iter().enumerate() {
+        let y = r.y + 72.0 + i as f32 * GAME_ROW;
+        ui.file_icon(&g.path, &g.exe, rect(r.x + 16.0, y + 9.0, 26.0, 26.0));
+        ui.c.text(rect(r.x + 52.0, y, r.w - 370.0, GAME_ROW), app_name(&g.exe), 14.0, TEXT, Align::Left, Weight::Regular);
+        let mut sel = g.mode as usize;
+        if ui.select(&format!("hdr-g{i}"), rect(r.right() - 300.0, y + 4.0, 240.0, 36.0), &options, &mut sel) {
+            change = Some((i, sel as u8));
+        }
+        let b = rect(r.right() - 44.0, y + 10.0, 24.0, 24.0);
+        if ui.is_hover(b) {
+            ui.c.round(b, 6.0, BORDER);
+        }
+        ui.c.icon(b.x + 4.0, b.y + 4.0, 16.0, &[&[(6., 6.), (18., 18.)], &[(18., 6.), (6., 18.)]], MUTED);
+        if ui.hit(&format!("hdr-gx{i}"), b) {
+            remove = Some(i);
+        }
+    }
+    if let Some((i, mode)) = change {
+        let g = &mut app.cfg.hdr_games[i];
+        if autohdr::apply(&g.exe, mode) {
+            g.mode = mode;
+        } else {
+            app.toast.info("Não consegui gravar a escolha.");
+        }
+        app.cfg.save();
+    }
+    if let Some(i) = remove {
+        let g = app.cfg.hdr_games.remove(i);
+        autohdr::apply(&g.exe, 0);
+        app.cfg.save();
+    }
+}
+
 fn cal_height(phase: &Phase) -> f32 {
     match phase {
         Phase::Review(_) => 270.0,
@@ -382,7 +434,8 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let saved: Vec<HdrProfile> = app.cfg.hdr_profiles.iter().filter(|p| p.screen == s.name).cloned().collect();
     let shown = previous.is_empty() || s.profile.as_ref().is_some_and(|p| p.name.eq_ignore_ascii_case(&previous));
     let saved_h = if saved.is_empty() && shown { 0.0 } else { 54.0 + (saved.len() + !shown as usize) as f32 * 38.0 + 12.0 };
-    let total = cal_h + 12.0 + saved_h + note_h + h1 + h2 + h3 + 24.0;
+    let games_h = if app.pick_for == Some(Pick::HdrGame) { 440.0 } else { 80.0 + app.cfg.hdr_games.len() as f32 * GAME_ROW };
+    let total = cal_h + 12.0 + saved_h + games_h + 12.0 + note_h + h1 + h2 + h3 + 24.0;
     let view = rect(x, top, w, a.h - top - 20.0);
     ui.begin_scroll("hdr", view, total);
     let mut y = top;
@@ -410,6 +463,8 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         saved_card(ui, app, rect(x, y, w, saved_h - 12.0), s, &saved, &previous);
         y += saved_h;
     }
+    games_card(ui, app, rect(x, y, w, games_h));
+    y += games_h + 12.0;
     if !notes.is_empty() {
         let r = rect(x, y, w, note_h - 12.0);
         ui.card(r);

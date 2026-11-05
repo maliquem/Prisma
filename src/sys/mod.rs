@@ -1,5 +1,6 @@
 pub mod audio;
 pub mod audit;
+pub mod autohdr;
 pub mod autostart;
 pub mod avsync;
 pub mod catalog;

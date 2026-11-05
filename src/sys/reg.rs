@@ -109,6 +109,14 @@ pub fn delete(h: Hive, key: &str, name: &str) -> bool {
     }
 }
 
+pub fn delete_key(h: Hive, key: &str) -> bool {
+    unsafe {
+        let k = wide(key);
+        let r = RegDeleteKeyW(h.key(), PCWSTR(k.as_ptr()));
+        r == ERROR_SUCCESS || r == ERROR_FILE_NOT_FOUND
+    }
+}
+
 pub fn exists(h: Hive, key: &str) -> bool {
     unsafe {
         let k = wide(key);

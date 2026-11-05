@@ -43,6 +43,7 @@ const TIMER_HUD: usize = 7;
 const WM_UPDATED: u32 = WM_APP + 77;
 const WM_PICK_FS: u32 = WM_APP + 78;
 const WM_PICK_SND: u32 = WM_APP + 79;
+const WM_PICK_GAME: u32 = WM_APP + 80;
 
 static FORCE_VK: AtomicU32 = AtomicU32::new(0);
 static FORCE_MODS: AtomicU32 = AtomicU32::new(0);
@@ -502,6 +503,12 @@ pub fn start(background: bool) {
             }
             if let Some(path) = a.strip_prefix("--test-hdr=") {
                 let _ = std::fs::write(path, format!("{:#?}", crate::sys::hdr::read()));
+                std::process::exit(0);
+            }
+            if let Some(v) = a.strip_prefix("--test-autohdr=") {
+                let (exe, mode) = v.split_once('|').unwrap();
+                let ok = crate::sys::autohdr::apply(exe, mode.parse().unwrap());
+                println!("{ok}");
                 std::process::exit(0);
             }
             if let Some(path) = a.strip_prefix("--test-catalog=") {
@@ -1313,15 +1320,15 @@ impl App {
         *self.pick_list.lock().unwrap() = None;
     }
 
-    pub fn pick_sound_app(&self) {
+    pub fn pick_exe_for(&self, target: crate::pages::picker::Target) {
+        use crate::pages::picker::Target;
+        let msg = match target {
+            Target::Sound => WM_PICK_SND,
+            Target::Fullscreen => WM_PICK_FS,
+            Target::HdrGame => WM_PICK_GAME,
+        };
         unsafe {
-            let _ = PostMessageW(Some(self.hub), WM_PICK_SND, WPARAM(0), LPARAM(0));
-        }
-    }
-
-    pub fn pick_fullscreen_app(&self) {
-        unsafe {
-            let _ = PostMessageW(Some(self.hub), WM_PICK_FS, WPARAM(0), LPARAM(0));
+            let _ = PostMessageW(Some(self.hub), msg, WPARAM(0), LPARAM(0));
         }
     }
 
@@ -1832,6 +1839,19 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
             if let Some(path) = capture::choose_exe(h) {
                 with(|a| {
                     a.cfg.snd_entry(&procs::exe_name(&path), &path);
+                    a.cfg.save();
+                    a.invalidate();
+                });
+            }
+            LRESULT(0)
+        }
+        WM_PICK_GAME => {
+            if let Some(path) = capture::choose_exe(h) {
+                with(|a| {
+                    let exe = procs::exe_name(&path);
+                    if !a.cfg.hdr_games.iter().any(|g| g.exe.eq_ignore_ascii_case(&exe)) {
+                        a.cfg.hdr_games.push(crate::config::HdrGame { exe, path, mode: 0 });
+                    }
                     a.cfg.save();
                     a.invalidate();
                 });

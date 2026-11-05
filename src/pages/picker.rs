@@ -7,17 +7,21 @@ use crate::sys::{catalog, procs};
 pub enum Target {
     Sound,
     Fullscreen,
+    HdrGame,
 }
 
 pub fn add_button(ui: &mut Ui, app: &mut App, r: Rect, target: Target) {
-    let (key, menu) = if target == Target::Sound { ("add-sound", "add-sound-menu") } else { ("add-full", "add-full-menu") };
+    let (key, menu) = match target {
+        Target::Sound => ("add-sound", "add-sound-menu"),
+        Target::Fullscreen => ("add-full", "add-full-menu"),
+        Target::HdrGame => ("add-game", "add-game-menu"),
+    };
     if ui.button(key, r, "Adicionar", false) {
         ui.menu(menu, &[("Da lista de programas", true), ("Escolher arquivo .exe", true)]);
     }
     match ui.menu_pick(menu) {
         Some(0) => app.open_picker(target),
-        Some(_) if target == Target::Sound => app.pick_sound_app(),
-        Some(_) => app.pick_fullscreen_app(),
+        Some(_) => app.pick_exe_for(target),
         None => {}
     }
 }
@@ -29,6 +33,11 @@ fn add(app: &mut App, target: Target, path: &str) {
             app.cfg.snd_entry(&exe, path);
         }
         Target::Fullscreen => app.cfg.fs_note(&exe, path),
+        Target::HdrGame => {
+            if !app.cfg.hdr_games.iter().any(|g| g.exe.eq_ignore_ascii_case(&exe)) {
+                app.cfg.hdr_games.push(crate::config::HdrGame { exe, path: path.to_string(), mode: 0 });
+            }
+        }
     }
     app.cfg.save();
     app.close_picker();

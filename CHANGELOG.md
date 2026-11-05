@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.0
+
+- Auto HDR per game on the HDR page: force it, turn it off or leave it to Windows, for DX11 and DX12 games, with nothing injected into the game. / Auto HDR por jogo na aba HDR: forçar, desligar ou deixar com o Windows, em jogos DX11 e DX12, sem injetar nada no jogo.
+
 ## 0.3.9
 
 - Sound delay test on the HDR page: a flash and a click in fixed cycles, to compare the delay with and without spatial sound. / Teste de atraso do som na aba HDR: clarão e clique em ciclos fixos, para comparar o atraso com e sem som espacial.

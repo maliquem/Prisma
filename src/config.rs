@@ -8,6 +8,14 @@ pub const MOD_CTRL: u32 = 2;
 pub const MOD_SHIFT: u32 = 4;
 pub const MOD_WIN: u32 = 8;
 
+/// Escolha de Auto HDR de um jogo: 0 Windows decide, 1 força, 2 desliga.
+#[derive(Clone, Default, Debug)]
+pub struct HdrGame {
+    pub exe: String,
+    pub path: String,
+    pub mode: u8,
+}
+
 /// Perfil feito pela calibração do Prisma, um por modo de imagem da TV.
 #[derive(Clone, Default, Debug)]
 pub struct HdrProfile {
@@ -155,6 +163,7 @@ pub struct Config {
     pub load_cpu_secs: u32,
     pub fs_apps: Vec<FsApp>,
     pub hdr_profiles: Vec<HdrProfile>,
+    pub hdr_games: Vec<HdrGame>,
     pub snd_apps: Vec<SndApp>,
     pub black: Vec<String>,
     pub white: Vec<String>,
@@ -212,6 +221,7 @@ impl Default for Config {
             load_cpu_secs: 20,
             fs_apps: Vec::new(),
             hdr_profiles: Vec::new(),
+            hdr_games: Vec::new(),
             snd_apps: Vec::new(),
             black: Vec::new(),
             white: Vec::new(),
@@ -303,6 +313,12 @@ impl Config {
                     let p: Vec<&str> = v.splitn(4, '|').collect();
                     if p.len() == 4 {
                         c.snd_apps.push(SndApp { exe: p[0].into(), output: p[1].into(), input: p[2].into(), path: p[3].into() });
+                    }
+                }
+                "hdr_game" => {
+                    let p: Vec<&str> = v.split('|').collect();
+                    if p.len() == 3 {
+                        c.hdr_games.push(HdrGame { exe: p[0].into(), mode: p[1].parse().unwrap_or(0), path: p[2].into() });
                     }
                 }
                 "hdr_profile" => {
@@ -429,6 +445,9 @@ impl Config {
         let _ = writeln!(s, "load_cpu_secs={}", self.load_cpu_secs);
         for a in &self.snd_apps {
             let _ = writeln!(s, "snd_app={}|{}|{}|{}", a.exe, a.output, a.input, a.path);
+        }
+        for g in &self.hdr_games {
+            let _ = writeln!(s, "hdr_game={}|{}|{}", g.exe, g.mode, g.path);
         }
         for p in &self.hdr_profiles {
             let _ = writeln!(s, "hdr_profile={}|{}|{}|{}|{}|{}", p.screen, p.mode, p.file, p.peak, p.full, p.black);
