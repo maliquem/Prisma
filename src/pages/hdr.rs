@@ -133,9 +133,24 @@ fn formats(e: &Edid) -> String {
     e.audio.iter().map(|(name, ch)| format!("{name} {ch}")).collect::<Vec<_>>().join(" · ")
 }
 
-fn sound_card(ui: &Ui, r: Rect, info: &Info, s: &Screen) {
+fn sound_card(ui: &mut Ui, app: &App, r: Rect, info: &Info, s: &Screen) {
     ui.card(r);
-    ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Som");
+    ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 180.0, 22.0), "Som");
+    let (running, failed, measured) = {
+        let st = app.sync.lock().unwrap();
+        (st.running, st.failed, st.results.clone())
+    };
+    if failed {
+        ui.c.text(rect(r.x + 70.0, r.y + 12.0, r.w - 240.0, 22.0), "Não consegui abrir o teste.", 13.0, WARN, Align::Right, Weight::Regular);
+    }
+    let label = if running { "Medindo…" } else { "Medir atraso" };
+    if ui.button("hdr-sync", rect(r.right() - 156.0, r.y + 8.0, 140.0, 32.0), label, false) && !running {
+        let format = match info.sound.as_ref().map(|o| o.spatial.as_str()) {
+            Some("") | None => "Sem som espacial".to_string(),
+            Some(v) => v.to_string(),
+        };
+        crate::sys::avsync::run(app.sync.clone(), s.gdi.clone(), format, s.hz, app.main.as_ref().map_or(0, |m| m.hwnd.0 as isize));
+    }
     let y = r.y + 42.0;
     match &info.sound {
         Some(o) => {
@@ -156,6 +171,9 @@ fn sound_card(ui: &Ui, r: Rect, info: &Info, s: &Screen) {
     ui.c.text(rect(r.x + 16.0, y + ROW * 4.0, 150.0, ROW), "Canais aceitos", 13.0, MUTED, Align::Left, Weight::Regular);
     let text = if list.is_empty() { "Não informado" } else { list.as_str() };
     ui.c.text_wrap(rect(r.x + 170.0, y + ROW * 4.0 + 6.0, r.w - 186.0, 38.0), text, 13.0, TEXT, Weight::Regular);
+    for (i, (format, ms)) in measured.iter().enumerate() {
+        row(ui, r, y + ROW * 5.5 + i as f32 * ROW, "Atraso medido", &format!("{format}: {ms} ms"), ACCENT);
+    }
 }
 
 fn profile_alerts(out: &mut Vec<String>, p: &Profile, e: Option<&Edid>) {
@@ -344,7 +362,8 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let notes = alerts(&info, s);
     let cw = (w - 12.0) / 2.0;
     let note_h = if notes.is_empty() { 0.0 } else { 54.0 + notes.len() as f32 * 44.0 };
-    let (h1, h2, h3) = (190.0, 186.0, 200.0);
+    let tests = app.sync.lock().unwrap().results.len();
+    let (h1, h2, h3) = (190.0, 186.0, 200.0 + if tests > 0 { 12.0 + tests as f32 * ROW } else { 0.0 });
     let (phase, previous) = {
         let st = app.cal.lock().unwrap();
         (st.phase.clone(), st.previous.clone())
@@ -406,6 +425,6 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     light_card(ui, rect(x, y, w, h2), s);
     y += h2 + 12.0;
     dv_card(ui, rect(x, y, cw, h3), &info, s);
-    sound_card(ui, rect(x + cw + 12.0, y, cw, h3), &info, s);
+    sound_card(ui, app, rect(x + cw + 12.0, y, cw, h3), &info, s);
     ui.end_scroll();
 }

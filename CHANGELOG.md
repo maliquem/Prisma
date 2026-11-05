@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.9
+
+- Sound delay test on the HDR page: a flash and a click in fixed cycles, to compare the delay with and without spatial sound. / Teste de atraso do som na aba HDR: clarão e clique em ciclos fixos, para comparar o atraso com e sem som espacial.
+
 ## 0.3.8
 
 - Calibration patterns now go through Windows composition, like the Windows calibration app. The T key switches to the direct path to compare. / Os padrões da calibração agora passam pela composição do Windows, como no app de calibração. A tecla T troca para o caminho direto, para comparar.

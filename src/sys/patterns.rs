@@ -336,7 +336,7 @@ unsafe extern "system" fn proc(h: HWND, msg: u32, w: WPARAM, l: LPARAM) -> LRESU
 }
 
 /// Área da saída na área de trabalho, e a saída em si.
-unsafe fn find_output(gdi: &str) -> Result<(IDXGIAdapter1, RECT)> {
+pub unsafe fn find_output(gdi: &str) -> Result<(IDXGIAdapter1, RECT)> {
     let factory: IDXGIFactory2 = CreateDXGIFactory1()?;
     let mut a = 0;
     while let Ok(adapter) = factory.EnumAdapters1(a) {

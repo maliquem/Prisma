@@ -925,3 +925,12 @@ Aumente até o quadrado escuro do centro sumir no fundo claro e pare no primeiro
 ← → ajustam · ↑ ↓ ajustam mais rápido · Enter confirma · Backspace volta · H esconde este texto · T troca o caminho (agora pelo Windows) · Esc sai	← → adjust · ↑ ↓ adjust faster · Enter confirms · Backspace goes back · H hides this text · T switches the path (now through Windows) · Esc exits
 ← → ajustam · ↑ ↓ ajustam mais rápido · Enter confirma · Backspace volta · H esconde este texto · T troca o caminho (agora direto) · Esc sai	← → adjust · ↑ ↓ adjust faster · Enter confirms · Backspace goes back · H hides this text · T switches the path (now direct) · Esc exits
 Perfil ativado. O Windows ainda informa os valores antigos aos jogos.	Profile activated. Windows still reports the old values to games.
+Medir atraso	Measure delay
+Medindo…	Measuring…
+Sem som espacial	No spatial sound
+Atraso medido	Measured delay
+{}: {} ms	{}: {} ms
+Atraso do som: {} ms	Sound delay: {} ms
+Ajuste até o clarão e o clique parecerem um só. Para medir com mais precisão, filme com o celular e deixe em 0 ms.	Adjust until the flash and the click feel like one. For a more precise reading, film it with your phone and leave it at 0 ms.
+← → mudam 5 ms · ↑ ↓ mudam 25 ms · Enter ou Esc guarda e sai	← → change 5 ms · ↑ ↓ change 25 ms · Enter or Esc saves and exits
+Não consegui abrir o teste.	Could not open the test.
