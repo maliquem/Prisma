@@ -6,6 +6,8 @@ Utilitário leve para Windows 11, todo em Rust, sem framework de interface. Fica
 
 **[Baixar a versão mais recente](https://github.com/maliquem/Prisma/releases/latest)**
 
+[![Buy Me a Coffee at ko-fi.com](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/maliquem)
+
 ![Estilos do widget do Prisma](docs/widget.png)
 
 ## Primeiros passos
