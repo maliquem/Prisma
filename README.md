@@ -2,7 +2,7 @@
 
 **English** · [Português (Brasil)](README.pt-BR.md)
 
-A lightweight utility for Windows 11, written entirely in Rust with no UI framework. It sits in the tray, loads only what is in use and fits in a single 1.3 MB file. It replaces Task Manager and brings together the small tools a PC gamer usually collects one by one.
+A lightweight utility for Windows 11, written entirely in Rust with no UI framework. It sits in the tray, loads only what is in use and fits in a single 2 MB file. It replaces Task Manager and brings together the small tools a PC gamer usually collects one by one.
 
 **[Download the latest version](https://github.com/maliquem/Prisma/releases/latest)**
 
@@ -38,7 +38,7 @@ Prisma checks this page when it opens and once a day. When there is a new versio
 - **Windows tweaks:** first a read-only audit, then layered Gaming, Development and Privacy profiles with documented effects only. The Left out tab explains what was excluded and why. Each change records the previous value, and Undo only restores what nobody touched afterwards. No profile touches updates, antivirus, UAC, Memory Integrity or virtualization. **Show log** displays every change, before and after.
 - **Tools:** Windows repair (DISM, then SFC), crash history, Windows Update reset, disk check, network, DNS, cleanup, winget, diagnostics and advanced restart. On a suspect disk, modes that write are blocked. Each tool keeps its own step-by-step log, with the exact command, its output, errors and the time of each step.
 - **Optimize:** suggests what to close and always asks. The never-close list is respected, the always-close list closes those programs, and automatic detection suggests names for both.
-- **Meter:** compact bar and full panel over the game, with FPS, 1% and 0.1% lows, frame time, CPU, GPU, VRAM and RAM. Nothing runs inside the game: Prisma reads Windows events. FPS limit per game through the NVIDIA driver, manual or automatic after 5 minutes of play, which applies the next time the game opens. It also picks the DLSS profile, shows the loaded upscaler, frame generation and Reflex, and turns on HDR per game. Needs Prisma running as administrator. In exclusive fullscreen the bar may not appear.
+- **Meter:** compact bar and full panel over the game, with FPS, 1% and 0.1% lows, frame time, CPU, GPU, VRAM and RAM. The readings come from Windows events, with nothing inside the game. FPS limit per game, manual or automatic after 5 minutes of play. By default a small Prisma module enters the game when the limiter is on, so the limit changes right away in DirectX 10, 11 and 12. If it fails, the game crashes or an anti-cheat is detected, the limit moves to the NVIDIA driver and applies the next time the game opens. The buttons are in the full panel: Ctrl + Alt + 5 unlocks mouse and arrow keys for them. It also picks the DLSS profile, shows the loaded upscaler, frame generation and Reflex, and turns on HDR per game. Needs Prisma running as administrator. In exclusive fullscreen the bar may not appear.
 - **Data log:** an optional recording for studying performance, started from the Meter page or with a shortcut during the game. It saves every frame, every second and the CPU of each game thread in `Documents\Prisma\Logs`, with a summary at the end. Choose 1, 5 or 10 minutes of game time, or no limit. It runs only if you turn it on, and thread reading stays off in games with a detected anti-cheat.
 - **Power:** detects a game or high load and switches the power plan, going back to rest after 60 s without load. You choose the percentage and time that count as load for CPU and GPU. Select a plan to edit it with every option Windows registers, including hidden ones, or to import and export .pow files. Right-clicking a plan also offers Export and Edit. The first edit keeps a copy of the original plan.
 - **Per-game profile:** remembers the volume of each program.
@@ -69,6 +69,7 @@ All of them can be changed in the program.
 | Show compact meter | Ctrl + Alt + 1 |
 | Show full meter | Ctrl + Alt + 2 |
 | Hide meter | Ctrl + Alt + 0 |
+| Meter controls | Ctrl + Alt + 5 |
 | Limiter on or off | Ctrl + Alt + 3 |
 | Raise or lower the limit | Ctrl + Alt + ↑ or ↓ |
 | Start or stop the data log | Ctrl + Alt + 4 |
@@ -83,6 +84,8 @@ On a photo: Enter or Ctrl + C copies, Ctrl + S saves, Ctrl + Z undoes and Esc ca
 ## Limits
 
 - A game in exclusive fullscreen must be in windowed mode before using Fullscreenizer.
+- Do not use injection in online games. Anti-cheat detection recognizes known files and titles, and finding nothing does not prove a game has none. You can choose Driver as the method for any game in the Meter page.
+- DirectX 9 and Vulkan games use the driver limit, which applies on reopening.
 - No CPU temperature or power reading, since they need a kernel driver.
 - Profiles do not promise FPS. The value is privacy and less noise.
 - Removed apps come back through the Store, and that can fail.

@@ -165,6 +165,8 @@ const NAV: &[(Page, &str, Icon)] = &[
 ];
 
 const SIDE_W: f32 = 216.0;
+const KOFI_URL: &str = "https://ko-fi.com/maliquem";
+const KOFI_ICON: &[u8] = include_bytes!("../../res/kofi.bgra");
 
 pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
     let side = rect(0.0, 0.0, SIDE_W, full.h);
@@ -175,7 +177,7 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
 
     let mut y = 58.0;
     // Em janela baixa as linhas apertam para não entrar no cartão de energia.
-    let step = ((full.h - 96.0 - y) / NAV.len() as f32).min(33.0).floor();
+    let step = ((full.h - 140.0 - y) / NAV.len() as f32).min(33.0).floor();
     for (page, label, icon) in NAV {
         let r = rect(12.0, y, SIDE_W - 24.0, step - 1.0);
         let current = app.page == *page;
@@ -197,6 +199,14 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
             ui.s.needs_redraw = true;
         }
         y += step;
+    }
+
+    let coffee = rect(12.0, full.h - 128.0, SIDE_W - 24.0, 34.0);
+    ui.c.round(coffee, 8.0, if ui.is_hover(coffee) { CARD2 } else { CARD });
+    ui.image("kofi", 64, KOFI_ICON, rect(coffee.x + 10.0, coffee.y + 6.0, 22.0, 22.0));
+    ui.c.text(rect(coffee.x + 42.0, coffee.y, coffee.w - 48.0, coffee.h), "Buy me a coffee", 14.0, TEXT, Align::Left, Weight::Regular);
+    if ui.hit("kofi", coffee) {
+        crate::report::open_url(KOFI_URL);
     }
 
     let chip = rect(12.0, full.h - 88.0, SIDE_W - 24.0, 76.0);

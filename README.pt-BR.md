@@ -2,7 +2,7 @@
 
 [English](README.md) · **Português (Brasil)**
 
-Utilitário leve para Windows 11, todo em Rust, sem framework de interface. Fica na bandeja, só carrega o que está em uso e cabe em um único arquivo de 1,3 MB. Substitui o Gerenciador de Tarefas e reúne as pequenas ferramentas que quem joga no PC costuma juntar uma a uma.
+Utilitário leve para Windows 11, todo em Rust, sem framework de interface. Fica na bandeja, só carrega o que está em uso e cabe em um único arquivo de 2 MB. Substitui o Gerenciador de Tarefas e reúne as pequenas ferramentas que quem joga no PC costuma juntar uma a uma.
 
 **[Baixar a versão mais recente](https://github.com/maliquem/Prisma/releases/latest)**
 
@@ -38,7 +38,7 @@ O Prisma procura nesta página ao abrir e uma vez por dia. Quando há versão no
 - **Ajustes do Windows:** primeiro uma auditoria que só lê o PC. Depois os perfis Jogo, Desenvolvimento e Privacidade, em camadas, só com ajustes de efeito documentado. A aba Fora da lista explica o que ficou de fora e por quê. Cada mudança guarda o valor anterior, e Desfazer só restaura o que ninguém mexeu depois. Nenhum perfil toca em atualizações, antivírus, UAC, Integridade da Memória ou virtualização. **Ver log** mostra cada mudança, com o antes e o depois.
 - **Ferramentas:** reparo do Windows (DISM e depois SFC), histórico de falhas, Windows Update, verificação de disco, rede, DNS, limpeza, winget, diagnóstico e reinício avançado. Em disco suspeito, os modos que escrevem ficam bloqueados. Cada ferramenta guarda o próprio passo a passo, com o comando exato, a saída, os erros e o tempo de cada etapa.
 - **Otimizar:** sugere o que fechar e sempre pergunta. Blacklist nunca fecha, whitelist sempre fecha. A detecção automática sugere nomes para as duas listas.
-- **Medidor:** barra compacta e painel completo sobre o jogo, com FPS, 1% e 0,1% low, frame time, CPU, GPU, VRAM e RAM. Nada roda dentro do jogo: o Prisma lê os eventos do Windows. Limite de FPS por jogo pelo driver NVIDIA, manual ou automático depois de 5 minutos de jogo, que vale na próxima abertura. Também escolhe o perfil de DLSS, mostra upscaler, geração de quadros e Reflex carregados, e liga o HDR por jogo. Precisa do Prisma como administrador. Em tela cheia exclusiva, a barra pode não aparecer.
+- **Medidor:** barra compacta e painel completo sobre o jogo, com FPS, 1% e 0,1% low, frame time, CPU, GPU, VRAM e RAM. As leituras vêm dos eventos do Windows, sem nada dentro do jogo. Limite de FPS por jogo, manual ou automático depois de 5 minutos de jogo. Por padrão, um pequeno módulo do Prisma entra no jogo quando o limitador está ligado, e o limite muda na hora em DirectX 10, 11 e 12. Se falhar, o jogo cair ou houver anti-cheat detectado, o limite passa para o driver NVIDIA e vale na próxima abertura. Os botões ficam no painel completo: Ctrl + Alt + 5 libera mouse e setas para eles. Também escolhe o perfil de DLSS, mostra upscaler, geração de quadros e Reflex carregados, e liga o HDR por jogo. Precisa do Prisma como administrador. Em tela cheia exclusiva, a barra pode não aparecer.
 - **Registro de dados:** gravação opcional para estudar desempenho, ligada na aba Medidor ou por atalho durante o jogo. Guarda cada quadro, cada segundo e a CPU de cada thread do jogo em `Documentos\Prisma\Logs`, com um resumo no final. Escolha 1, 5 ou 10 minutos de jogo, ou sem limite. Só roda se você ligar, e a leitura de threads fica desligada em jogos com anti-cheat detectado.
 - **Energia:** detecta jogo ou carga alta e troca o plano. Volta ao repouso depois de 60 s sem carga. Você escolhe a porcentagem e o tempo que contam como carga na CPU e na GPU. Selecione um plano para editar com todas as opções que o Windows registra, inclusive as ocultas, ou importar e exportar em arquivos .pow. O botão direito no plano também oferece Exportar e Editar. A primeira edição guarda uma cópia do plano original.
 - **Perfil por jogo:** lembra o volume de cada programa.
@@ -69,6 +69,7 @@ Todos podem ser trocados no programa.
 | Mostrar medidor compacto | Ctrl + Alt + 1 |
 | Mostrar medidor completo | Ctrl + Alt + 2 |
 | Esconder medidor | Ctrl + Alt + 0 |
+| Controles do medidor | Ctrl + Alt + 5 |
 | Ligar ou desligar o limitador | Ctrl + Alt + 3 |
 | Aumentar ou diminuir o limite | Ctrl + Alt + ↑ ou ↓ |
 | Ligar ou desligar o registro de dados | Ctrl + Alt + 4 |
@@ -82,6 +83,8 @@ Na foto: Enter ou Ctrl + C copia, Ctrl + S salva, Ctrl + Z desfaz e Esc cancela.
 
 ## Limites
 
+- Não use injeção em jogos online. A detecção de anti-cheat reconhece arquivos e títulos conhecidos, e não achar nada não prova que o jogo não tem. Em qualquer jogo, dá para escolher Driver como método na aba Medidor.
+- Jogos em DirectX 9 e Vulkan usam o limite do driver, que vale ao reabrir.
 - Jogo em tela cheia exclusiva precisa estar em modo janela antes do Fullscreenizer.
 - Sem temperatura e consumo da CPU, porque exigem driver de kernel.
 - Os perfis não prometem FPS. O valor é privacidade e menos ruído.

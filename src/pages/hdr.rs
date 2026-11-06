@@ -433,12 +433,6 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let games_h = 80.0 + app.cfg.hdr_games.len() as f32 * GAME_ROW;
     let total = cal_h + 12.0 + saved_h + games_h + 12.0 + note_h + h1 + h2 + h3 + 24.0;
     let view = rect(x, top, w, a.h - top - 20.0);
-    if app.pick_for == Some(Pick::HdrGame) {
-        // A lista tem rolagem própria e não pode ficar dentro da rolagem da página.
-        ui.card(view);
-        picker::draw(ui, app, view);
-        return;
-    }
     ui.begin_scroll("hdr", view, total);
     let mut y = top;
     let r = rect(x, y, w, cal_h);

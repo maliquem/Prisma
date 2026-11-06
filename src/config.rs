@@ -25,6 +25,10 @@ pub struct MeterGame {
     pub hdr: u8,
     /// 0 do jogo, 1 recomendado, 2 K, 3 L, 4 M.
     pub preset: u8,
+    /// Limita de dentro do jogo em vez de pelo driver.
+    pub inject: bool,
+    /// A injeção caiu, não carregou ou encontrou anti-cheat: fica no driver até a pessoa religar.
+    pub inject_off: bool,
 }
 
 /// Escolha de Auto HDR de um jogo: 0 Windows decide, 1 força, 2 desliga.
@@ -199,10 +203,15 @@ pub struct Config {
     pub hk_meter_compact: Hotkey,
     pub hk_meter_full: Hotkey,
     pub hk_meter_off: Hotkey,
+    /// 0 superior esquerdo, 1 superior centro, 2 superior direito.
+    pub meter_pos_compact: u8,
+    /// 0 lado direito, 1 lado esquerdo.
+    pub meter_pos_full: u8,
     pub hk_log: Hotkey,
     /// 0 um minuto, 1 cinco, 2 dez, 3 sem limite.
     pub meter_log_time: u8,
     pub meter_log_auto: bool,
+    pub hk_meter_keys: Hotkey,
     pub hk_limit_toggle: Hotkey,
     pub hk_limit_up: Hotkey,
     pub hk_limit_down: Hotkey,
@@ -276,9 +285,12 @@ impl Default for Config {
             hk_meter_compact: Hotkey::new(MOD_CTRL | MOD_ALT, b'1' as u32),
             hk_meter_full: Hotkey::new(MOD_CTRL | MOD_ALT, b'2' as u32),
             hk_meter_off: Hotkey::new(MOD_CTRL | MOD_ALT, b'0' as u32),
+            meter_pos_compact: 1,
+            meter_pos_full: 0,
             hk_log: Hotkey::new(MOD_CTRL | MOD_ALT, b'4' as u32),
             meter_log_time: 1,
             meter_log_auto: false,
+            hk_meter_keys: Hotkey::new(MOD_CTRL | MOD_ALT, b'5' as u32),
             hk_limit_toggle: Hotkey::new(MOD_CTRL | MOD_ALT, b'3' as u32),
             hk_limit_up: Hotkey::new(MOD_CTRL | MOD_ALT, 0x26),
             hk_limit_down: Hotkey::new(MOD_CTRL | MOD_ALT, 0x28),
@@ -396,17 +408,21 @@ impl Config {
                 "hk_meter_compact" => c.hk_meter_compact = Hotkey::parse(v),
                 "hk_meter_full" => c.hk_meter_full = Hotkey::parse(v),
                 "hk_meter_off" => c.hk_meter_off = Hotkey::parse(v),
+                "meter_pos_compact" => c.meter_pos_compact = v.parse().unwrap_or(1),
+                "meter_pos_full" => c.meter_pos_full = v.parse().unwrap_or(0),
                 "hk_log" => c.hk_log = Hotkey::parse(v),
                 "meter_log_time" => c.meter_log_time = v.parse().unwrap_or(1),
                 "meter_log_auto" => c.meter_log_auto = v == "1",
+                "hk_meter_keys" => c.hk_meter_keys = Hotkey::parse(v),
                 "hk_limit_toggle" => c.hk_limit_toggle = Hotkey::parse(v),
                 "hk_limit_up" => c.hk_limit_up = Hotkey::parse(v),
                 "hk_limit_down" => c.hk_limit_down = Hotkey::parse(v),
                 "meter_game" => {
                     let p: Vec<&str> = v.split('|').collect();
-                    if p.len() == 9 {
+                    if p.len() >= 9 {
                         let n = |s: &str| s.parse().unwrap_or(0);
-                        c.meter_games.push(MeterGame { exe: p[0].into(), view: n(p[1]), limit_mode: n(p[2]), limit_fps: p[3].parse().unwrap_or(0), limit_real: p[4] == "1", measured: p[5] == "1", hdr: n(p[6]), preset: n(p[7]), path: p[8].into() });
+                        let flag = |i: usize| p.get(i).is_some_and(|v| *v == "1");
+                        c.meter_games.push(MeterGame { exe: p[0].into(), view: n(p[1]), limit_mode: n(p[2]), limit_fps: p[3].parse().unwrap_or(0), limit_real: p[4] == "1", measured: p[5] == "1", hdr: n(p[6]), preset: n(p[7]), path: p[8].into(), inject: p.get(9).map_or(true, |v| *v == "1"), inject_off: flag(10) });
                     }
                 }
                 "hdr_game" => {
@@ -551,13 +567,15 @@ impl Config {
         hk(&mut s, "hk_meter_compact", self.hk_meter_compact);
         hk(&mut s, "hk_meter_full", self.hk_meter_full);
         hk(&mut s, "hk_meter_off", self.hk_meter_off);
+        s.push_str(&format!("meter_pos_compact={}\nmeter_pos_full={}\n", self.meter_pos_compact, self.meter_pos_full));
         hk(&mut s, "hk_log", self.hk_log);
         s.push_str(&format!("meter_log_time={}\nmeter_log_auto={}\n", self.meter_log_time, self.meter_log_auto as u8));
+        hk(&mut s, "hk_meter_keys", self.hk_meter_keys);
         hk(&mut s, "hk_limit_toggle", self.hk_limit_toggle);
         hk(&mut s, "hk_limit_up", self.hk_limit_up);
         hk(&mut s, "hk_limit_down", self.hk_limit_down);
         for g in &self.meter_games {
-            let _ = writeln!(s, "meter_game={}|{}|{}|{}|{}|{}|{}|{}|{}", g.exe, g.view, g.limit_mode, g.limit_fps, b(g.limit_real), b(g.measured), g.hdr, g.preset, g.path);
+            let _ = writeln!(s, "meter_game={}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}", g.exe, g.view, g.limit_mode, g.limit_fps, b(g.limit_real), b(g.measured), g.hdr, g.preset, g.path, b(g.inject), b(g.inject_off));
         }
         for g in &self.hdr_games {
             let _ = writeln!(s, "hdr_game={}|{}|{}", g.exe, g.mode, g.path);
@@ -651,9 +669,12 @@ impl Config {
                 self.hk_meter_compact = d.hk_meter_compact;
                 self.hk_meter_full = d.hk_meter_full;
                 self.hk_meter_off = d.hk_meter_off;
+                self.meter_pos_compact = d.meter_pos_compact;
+                self.meter_pos_full = d.meter_pos_full;
                 self.hk_log = d.hk_log;
                 self.meter_log_time = d.meter_log_time;
                 self.meter_log_auto = d.meter_log_auto;
+                self.hk_meter_keys = d.hk_meter_keys;
                 self.hk_limit_toggle = d.hk_limit_toggle;
                 self.hk_limit_up = d.hk_limit_up;
                 self.hk_limit_down = d.hk_limit_down;

@@ -1,0 +1,18 @@
+[package]
+name = "prisma_hook"
+version = "0.1.0"
+edition = "2021"
+license-file = "../LICENSE"
+description = "Limitador de FPS do Prisma, carregado no jogo só quando a pessoa pede"
+
+[lib]
+crate-type = ["cdylib"]
+
+[workspace]
+
+[profile.release]
+opt-level = "s"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true

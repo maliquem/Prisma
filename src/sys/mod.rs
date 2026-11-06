@@ -12,6 +12,7 @@ pub mod fileinfo;
 pub mod frames;
 pub mod fullscreen;
 pub mod gamelog;
+pub mod inject;
 pub mod hdr;
 pub mod hdrcal;
 pub mod keepalive;

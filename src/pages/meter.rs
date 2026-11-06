@@ -4,6 +4,10 @@ use crate::config::Defaults;
 use crate::meter;
 
 const ROW: f32 = 56.0;
+const ROW_NARROW: f32 = 112.0;
+/// Largura dos controles de cada jogo e o mínimo que sobra para o nome ao lado deles.
+const CONTROLS_W: f32 = 760.0;
+const NAME_MIN: f32 = 250.0;
 const ITEMS: [(&str, u32); 15] = [
     ("FPS e médias", meter::ITEM_FPS),
     ("Frame time", meter::ITEM_FRAME),
@@ -63,6 +67,18 @@ fn general(ui: &mut Ui, app: &mut App, r: Rect) {
     changed |= ui.stepper("mt-o1", rect(ox, r.y + 34.0, w, 36.0), &mut app.cfg.meter_op_compact, (20, 100), 4, "%");
     ui.label(rect(ox, r.y + 86.0, w, 18.0), "Opacidade do completo", TEXT2);
     changed |= ui.stepper("mt-o2", rect(ox, r.y + 108.0, w, 36.0), &mut app.cfg.meter_op_full, (20, 100), 4, "%");
+    ui.label(rect(x, r.y + 196.0, w, 18.0), "Posição do compacto", TEXT2);
+    let mut s = app.cfg.meter_pos_compact as usize;
+    if ui.select("mt-pc", rect(x, r.y + 218.0, w, 40.0), &opts(&["Superior esquerdo", "Superior centro", "Superior direito"]), &mut s) {
+        app.cfg.meter_pos_compact = s as u8;
+        changed = true;
+    }
+    ui.label(rect(kx, r.y + 196.0, w, 18.0), "Posição do completo", TEXT2);
+    let mut s = app.cfg.meter_pos_full as usize;
+    if ui.select("mt-pf", rect(kx, r.y + 218.0, w, 40.0), &opts(&["Lado direito", "Lado esquerdo"]), &mut s) {
+        app.cfg.meter_pos_full = s as u8;
+        changed = true;
+    }
     if changed || hk {
         app.cfg.save();
     }
@@ -94,8 +110,8 @@ fn limiter(ui: &mut Ui, app: &mut App, r: Rect) {
     ui.card(r);
     ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Limitador durante o jogo");
     ui.label(rect(r.x + 16.0, r.y + 36.0, r.w - 32.0, 18.0), "Com o jogo aberto, estes atalhos mudam o limite dele, e o medidor completo mostra o resultado.", MUTED);
-    let (x, w) = (r.x + 16.0, (r.w - 56.0) / 3.0);
-    let keys: [(&str, &str, u8); 3] = [("mt-k4", "Ligar ou desligar", 0), ("mt-k5", "Aumentar o limite", 1), ("mt-k6", "Diminuir o limite", 2)];
+    let (x, w) = (r.x + 16.0, (r.w - 68.0) / 4.0);
+    let keys: [(&str, &str, u8); 4] = [("mt-k8", "Controles no medidor", 3), ("mt-k4", "Ligar ou desligar", 0), ("mt-k5", "Aumentar o limite", 1), ("mt-k6", "Diminuir o limite", 2)];
     let mut hk = false;
     for (i, (key, name, which)) in keys.iter().enumerate() {
         let kx = x + i as f32 * (w + 12.0);
@@ -103,11 +119,12 @@ fn limiter(ui: &mut Ui, app: &mut App, r: Rect) {
         let target = match which {
             0 => &mut app.cfg.hk_limit_toggle,
             1 => &mut app.cfg.hk_limit_up,
-            _ => &mut app.cfg.hk_limit_down,
+            2 => &mut app.cfg.hk_limit_down,
+            _ => &mut app.cfg.hk_meter_keys,
         };
         hk |= ui.hotkey(key, rect(kx, r.y + 82.0, w, 36.0), target);
     }
-    ui.label(rect(r.x + 16.0, r.y + 126.0, r.w - 32.0, 18.0), "O driver NVIDIA só lê o limite quando o jogo abre, então a mudança vale ao reabrir o jogo.", MUTED);
+    ui.label(rect(r.x + 16.0, r.y + 126.0, r.w - 32.0, 18.0), "A injeção muda o limite na hora. Se falhar ou houver anti-cheat, ele vai para o driver e vale ao reabrir o jogo.", MUTED);
     if hk {
         app.cfg.save();
         app.register_hotkeys();
@@ -152,30 +169,53 @@ fn log(ui: &mut Ui, app: &mut App, r: Rect) {
     }
 }
 
+/// Em janela estreita, o nome vai para cima dos controles.
+fn is_narrow(w: f32) -> bool {
+    w - CONTROLS_W < NAME_MIN
+}
+
 fn games(ui: &mut Ui, app: &mut App, r: Rect) {
     ui.card(r);
     ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 150.0, 22.0), "Jogos");
     picker::add_button(ui, app, rect(r.right() - 124.0, r.y + 8.0, 108.0, 32.0), Target::MeterGame);
-    let (view_x, limit_x, fps_x, unit_x, hdr_x, preset_x) = (r.right() - 656.0, r.right() - 556.0, r.right() - 442.0, r.right() - 336.0, r.right() - 226.0, r.right() - 136.0);
+    let (view_x, limit_x, fps_x, how_x, unit_x, hdr_x, preset_x) = (r.right() - CONTROLS_W, r.right() - 660.0, r.right() - 546.0, r.right() - 440.0, r.right() - 336.0, r.right() - 226.0, r.right() - 136.0);
     let y = r.y + 46.0;
-    for (x, name) in [(view_x, "Abrir em"), (limit_x, "Limitador"), (fps_x, "FPS"), (unit_x, "Limitando"), (hdr_x, "HDR"), (preset_x, "Perfil DLSS")] {
-        ui.c.text(rect(x, y, 104.0, 18.0), name, 12.0, MUTED, Align::Left, Weight::Regular);
+    let narrow = is_narrow(r.w);
+    let row_h = if narrow { ROW_NARROW } else { ROW };
+    let heads = |ui: &mut Ui, y: f32| {
+        for (x, name) in [(view_x, "Abrir em"), (limit_x, "Limitador"), (fps_x, "FPS"), (how_x, "Método"), (unit_x, "Limitando"), (hdr_x, "HDR"), (preset_x, "Perfil DLSS")] {
+            ui.c.text(rect(x, y, 104.0, 18.0), name, 12.0, MUTED, Align::Left, Weight::Regular);
+        }
+    };
+    if !narrow {
+        heads(ui, y);
     }
     let cap = crate::meter::first_limit(app.refresh_hz());
-    let (mut remove, mut limit, mut preset, mut changed) = (None, None, None, false);
+    let (mut remove, mut limit, mut preset, mut changed, mut blocked) = (None, None, None, false, false);
     let count = app.cfg.meter_games.len();
     if count == 0 {
         ui.c.text(rect(r.x + 16.0, y + 24.0, r.w - 32.0, 22.0), "Nenhum jogo ainda. Use Adicionar.", 13.0, MUTED, Align::Left, Weight::Regular);
     }
     for i in 0..count {
-        let top = y + 24.0 + i as f32 * ROW;
+        let top = y + 24.0 + i as f32 * row_h;
         let g = &mut app.cfg.meter_games[i];
         ui.file_icon(&g.path, &g.exe, rect(r.x + 16.0, top + 13.0, 26.0, 26.0));
-        let room = view_x - r.x - 64.0;
+        let room = if narrow { r.w - 68.0 } else { view_x - r.x - 64.0 };
         ui.c.text(rect(r.x + 52.0, top + 6.0, room, 22.0), app_name(&g.exe), 14.0, TEXT, Align::Left, Weight::Regular);
-        let note = if crate::meter::anti_cheat(&g.path) { "Anti-cheat detectado" } else { "Nenhum anti-cheat detectado" };
+        let protected = crate::meter::anti_cheat(&g.path);
+        let note = if protected {
+            "Anti-cheat detectado"
+        } else if g.inject_off {
+            "Limite pelo driver: a injeção falhou"
+        } else {
+            "Nenhum anti-cheat detectado"
+        };
         ui.c.text(rect(r.x + 52.0, top + 28.0, room, 18.0), note, 12.0, MUTED, Align::Left, Weight::Regular);
-        let row = |x: f32, w: f32| rect(x, top + 8.0, w, 36.0);
+        if narrow {
+            heads(ui, top + 50.0);
+        }
+        let controls = if narrow { top + 68.0 } else { top + 8.0 };
+        let row = |x: f32, w: f32| rect(x, controls, w, 36.0);
         let mut s = g.view as usize;
         if ui.select(&format!("mt-v{i}"), row(view_x, 96.0), &opts(&["Compacto", "Completo", "Nenhum"]), &mut s) {
             g.view = s as u8;
@@ -199,6 +239,22 @@ fn games(ui: &mut Ui, app: &mut App, r: Rect) {
         } else if g.limit_mode == 1 {
             ui.c.text(row(fps_x, 102.0), &g.limit_fps.to_string(), 13.0, TEXT, Align::Left, Weight::Regular);
         }
+        let mut s = crate::meter::uses_injection(g) as usize;
+        if ui.select(&format!("mt-m{i}"), row(how_x, 96.0), &opts(&["Driver", "Injeção"]), &mut s) {
+            if s == 0 {
+                g.inject = false;
+                g.inject_off = false;
+                limit = Some(i);
+                changed = true;
+            } else if protected {
+                blocked = true;
+            } else {
+                g.inject = true;
+                g.inject_off = false;
+                limit = Some(i);
+                changed = true;
+            }
+        }
         let mut s = g.limit_real as usize;
         if ui.select(&format!("mt-u{i}"), row(unit_x, 106.0), &opts(&["Com geração", "FPS real"]), &mut s) {
             g.limit_real = s == 1;
@@ -216,7 +272,7 @@ fn games(ui: &mut Ui, app: &mut App, r: Rect) {
             preset = Some(i);
             changed = true;
         }
-        let b = rect(r.right() - 38.0, top + 14.0, 24.0, 24.0);
+        let b = rect(r.right() - 38.0, controls + 6.0, 24.0, 24.0);
         if ui.is_hover(b) {
             ui.c.round(b, 6.0, BORDER);
         }
@@ -225,12 +281,17 @@ fn games(ui: &mut Ui, app: &mut App, r: Rect) {
             remove = Some(i);
         }
     }
+    if blocked {
+        app.toast.info("Injeção bloqueada: anti-cheat detectado.");
+    }
     if let Some(i) = limit {
         let g = app.cfg.meter_games[i].clone();
-        if crate::meter::write_limit(&g) {
-            app.toast.info("Limite gravado. Vale na próxima abertura do jogo.");
-        } else {
+        if !crate::meter::write_limit(&g) {
             app.toast.info("Não consegui gravar no driver NVIDIA.");
+        } else if crate::meter::uses_injection(&g) {
+            app.toast.info("Com injeção, o limite muda na hora.");
+        } else {
+            app.toast.info("Limite gravado. Vale na próxima abertura do jogo.");
         }
     }
     if let Some(i) = preset {
@@ -256,14 +317,8 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let w = a.w - 56.0;
     let top = 88.0;
     let view = rect(x, top, w, a.h - top - 20.0);
-    if app.pick_for == Some(Target::MeterGame) {
-        // A lista tem rolagem própria e não pode ficar dentro da rolagem da página.
-        ui.card(view);
-        picker::draw(ui, app, view);
-        return;
-    }
-    let (h1, h2, hl, hr) = (200.0, 212.0, 154.0, 172.0);
-    let h3 = 88.0 + app.cfg.meter_games.len().max(1) as f32 * ROW;
+    let (h1, h2, hl, hr) = (272.0, 212.0, 154.0, 172.0);
+    let h3 = 88.0 + app.cfg.meter_games.len().max(1) as f32 * if is_narrow(w) { ROW_NARROW } else { ROW };
     ui.begin_scroll("meter", view, h1 + h2 + hl + hr + h3 + 48.0);
     // Listas por último, para abrirem por cima do resto.
     games(ui, app, rect(x, top + h1 + h2 + hl + hr + 48.0, w, h3));

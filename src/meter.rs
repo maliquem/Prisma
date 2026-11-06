@@ -1,6 +1,7 @@
 //! Medidor sobre o jogo: janela própria, sem nada dentro do processo do jogo.
 
 use std::collections::VecDeque;
+use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -8,6 +9,7 @@ use windows::core::*;
 use windows::Win32::Foundation::*;
 use windows::Win32::System::Diagnostics::ToolHelp::*;
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
+use windows::Win32::UI::Input::KeyboardAndMouse::SetFocus;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
 use crate::config::{Config, MeterGame};
@@ -15,6 +17,7 @@ use crate::i18n::comma;
 use crate::overlays::{focus_monitor, register};
 use crate::sys::frames::{self, Stats, Tracker};
 use crate::sys::gamelog::{self, Log};
+use crate::sys::inject::{self, Limiter, Status};
 use crate::sys::{drs, fileinfo, hdr, monitor};
 use crate::ui::gfx::*;
 use crate::ui::layered::{create_overlay, Layered};
@@ -47,7 +50,15 @@ pub const AUTO_MINUTES: usize = 5;
 const STEPS: [u32; 9] = [240, 165, 144, 120, 100, 90, 75, 60, 45];
 const COMPACT_W: f32 = 760.0;
 const COMPACT_H: f32 = 40.0;
+const COMPACT_TOP: f32 = 7.0;
 const FULL_W: f32 = 340.0;
+const EDGE: f32 = 24.0;
+/// A linha do tempo de quadro. Abaixo disto é ruído de quando o jogo chama a apresentação, e ela fica parada.
+const STRIP_QUIET: f32 = 1.0;
+/// Variação em ms que enche meia altura, igual em qualquer FPS.
+const STRIP_RANGE: f32 = 12.0;
+/// Espera depois de abrir o jogo: carregar cedo é a causa mais comum de queda.
+const INJECT_AFTER: u64 = 8;
 const VRAM_NEAR: f32 = 90.0;
 const WARN_RED: Color = REC;
 /// Segundos com o jogo em foco e nenhum programa apresentando antes de religar o rastreamento.
@@ -71,6 +82,10 @@ pub struct Session {
     pub anti_cheat: bool,
     /// Limite com que o jogo abriu: o driver só lê nessa hora.
     pub opened: Option<u32>,
+    opened_preset: u8,
+    inject_tried: bool,
+    /// Por que a injeção não está valendo neste jogo agora.
+    inject_note: Option<&'static str>,
     pub measured: VecDeque<f32>,
 }
 
@@ -98,12 +113,69 @@ pub struct Meter {
     pub log: Option<Log>,
     /// Pasta do registro que acabou de fechar, para avisar.
     pub saved: Option<std::path::PathBuf>,
+    /// Largura do completo, que dobra com duas colunas.
+    full_w: f32,
+    limiter: Option<Limiter>,
+    limiter_exe: String,
+    /// Janela que estava em foco antes de abrir os controles.
+    back: HWND,
+    /// Linha escolhida pelo teclado.
+    row: usize,
+    rows: Vec<Row>,
+    hover: Option<(Row, usize)>,
+    hits: Vec<(Rect, Row, usize)>,
+    /// Opção marcada em cada linha.
+    chosen: Vec<(Row, usize)>,
+}
+
+/// Controles abertos: só aí o medidor recebe mouse e teclado.
+static CONTROLS: AtomicBool = AtomicBool::new(false);
+
+/// O que o medidor recebeu com os controles abertos.
+pub enum Input {
+    Move(f32, f32),
+    Click(f32, f32),
+    Key(u32),
+    Lost,
+}
+
+/// Uma linha de controles do medidor completo.
+#[derive(Clone, Copy, PartialEq)]
+pub enum Row {
+    Mode,
+    Fps,
+    Real,
+    Method,
+    Preset,
 }
 
 unsafe extern "system" fn meter_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT {
+    let open = CONTROLS.load(Relaxed);
+    let point = || {
+        let scale = GetDpiForWindow(h) as f32 / 96.0;
+        ((l.0 & 0xffff) as i16 as f32 / scale, ((l.0 >> 16) & 0xffff) as i16 as f32 / scale)
+    };
     match m {
-        WM_NCHITTEST => LRESULT(HTTRANSPARENT as isize),
-        WM_MOUSEACTIVATE => LRESULT(MA_NOACTIVATE as isize),
+        WM_NCHITTEST => LRESULT(if open { HTCLIENT as isize } else { HTTRANSPARENT as isize }),
+        WM_MOUSEACTIVATE => LRESULT(if open { MA_ACTIVATE as isize } else { MA_NOACTIVATE as isize }),
+        WM_MOUSEMOVE if open => {
+            let (x, y) = point();
+            crate::app::with(|a| a.meter_input(Input::Move(x, y)));
+            LRESULT(0)
+        }
+        WM_LBUTTONUP if open => {
+            let (x, y) = point();
+            crate::app::with(|a| a.meter_input(Input::Click(x, y)));
+            LRESULT(0)
+        }
+        WM_KEYDOWN if open => {
+            crate::app::with(|a| a.meter_input(Input::Key(w.0 as u32)));
+            LRESULT(0)
+        }
+        WM_ACTIVATE if open && w.0 & 0xffff == 0 => {
+            crate::app::with(|a| a.meter_input(Input::Lost));
+            LRESULT(0)
+        }
         _ => DefWindowProcW(h, m, w, l),
     }
 }
@@ -185,11 +257,18 @@ fn child_of(pid: u32, parent: u32) -> bool {
 /// Sinais de anti-cheat na pasta do jogo. Achar nada não prova que não tem.
 pub fn anti_cheat(path: &str) -> bool {
     let Some(dir) = std::path::Path::new(path).parent() else { return false };
-    const NAMES: [&str; 6] = ["easyanticheat", "battleye", "start_protected_game.exe", "beclient", "vgc", "eac"];
+    const NAMES: [&str; 13] = ["easyanticheat", "battleye", "start_protected_game.exe", "beclient", "vgc", "eac", "xigncode", "gameguard", "nprotect", "punkbuster", "pnkbstr", "equ8", "mhyprot"];
+    const ANYWHERE: [&str; 2] = ["anticheat", "anti-cheat"];
+    // O VAC e outros não deixam arquivo próprio: esses jogos só dá para reconhecer pela pasta.
+    const TITLES: [&str; 16] = ["counter-strike", "dota 2", "team fortress", "left 4 dead", "apex legends", "call of duty", "destiny 2", "pubgbattlegrounds", "rainbow six", "overwatch", "the finals", "delta force", "marvel rivals", "war thunder", "escape from tarkov", "dead by daylight"];
+    let low = path.to_ascii_lowercase();
+    if TITLES.iter().any(|t| low.contains(t)) {
+        return true;
+    }
     let check = |d: &std::path::Path| {
         std::fs::read_dir(d).is_ok_and(|rd| rd.flatten().any(|e| {
             let n = e.file_name().to_string_lossy().to_ascii_lowercase();
-            NAMES.iter().any(|k| n.starts_with(k))
+            NAMES.iter().any(|k| n.starts_with(k)) || ANYWHERE.iter().any(|k| n.contains(k))
         }))
     };
     check(dir) || dir.parent().is_some_and(check)
@@ -203,9 +282,14 @@ fn entry<'a>(cfg: &'a Config, exe: &str) -> Option<&'a MeterGame> {
 pub fn driver_limit(g: &MeterGame, multiplier: u32) -> Option<u32> {
     let value = match g.limit_mode {
         0 => return None,
+        _ if uses_injection(g) => return None,
         _ => g.limit_fps,
     };
     Some(if g.limit_real { value } else { value / multiplier.max(1) })
+}
+
+pub fn uses_injection(g: &MeterGame) -> bool {
+    g.inject && !g.inject_off
 }
 
 /// Grava no perfil do jogo. O driver lê ao abrir o jogo, então vale na próxima abertura.
@@ -247,6 +331,15 @@ impl Meter {
             limit_write: None,
             log: None,
             saved: None,
+            full_w: FULL_W,
+            limiter: None,
+            limiter_exe: String::new(),
+            back: HWND::default(),
+            row: 0,
+            rows: Vec::new(),
+            hover: None,
+            hits: Vec::new(),
+            chosen: Vec::new(),
         }
     }
 
@@ -345,8 +438,120 @@ impl Meter {
 
     /// Atalhos: mostrar um esconde o outro.
     pub fn show(&mut self, view: u8) {
+        self.set_controls(false);
         self.hidden = view == VIEW_OFF;
         self.apply_view(view);
+    }
+
+    pub fn interacting(&self) -> bool {
+        CONTROLS.load(Relaxed)
+    }
+
+    /// Abre ou fecha os controles. Aberto, o painel fica em foco para o jogo soltar o mouse.
+    pub fn set_controls(&mut self, on: bool) {
+        if on == self.interacting() {
+            return;
+        }
+        CONTROLS.store(on, Relaxed);
+        let h = self.full.hwnd;
+        unsafe {
+            let ex = GetWindowLongPtrW(h, GWL_EXSTYLE);
+            let free = (WS_EX_TRANSPARENT.0 | WS_EX_NOACTIVATE.0) as isize;
+            if on {
+                self.back = GetForegroundWindow();
+                self.row = 0;
+                SetWindowLongPtrW(h, GWL_EXSTYLE, ex & !free);
+                let _ = SetForegroundWindow(h);
+                let _ = SetFocus(Some(h));
+            } else {
+                self.hover = None;
+                SetWindowLongPtrW(h, GWL_EXSTYLE, ex | free);
+                if !self.back.is_invalid() {
+                    let _ = SetForegroundWindow(self.back);
+                }
+            }
+        }
+    }
+
+    /// Devolve a opção que deve ser aplicada, se houver.
+    pub fn input(&mut self, input: Input) -> Option<(Row, usize)> {
+        let at = |list: &[(Rect, Row, usize)], x: f32, y: f32| list.iter().find(|h| x >= h.0.x && x < h.0.right() && y >= h.0.y && y < h.0.bottom()).map(|h| (h.1, h.2));
+        match input {
+            Input::Lost => self.set_controls(false),
+            Input::Move(x, y) => self.hover = at(&self.hits, x, y),
+            Input::Click(x, y) => return at(&self.hits, x, y),
+            Input::Key(key) => return self.key(key),
+        }
+        None
+    }
+
+    fn key(&mut self, key: u32) -> Option<(Row, usize)> {
+        const ESC: u32 = 0x1B;
+        const ENTER: u32 = 0x0D;
+        const LEFT: u32 = 0x25;
+        const UP: u32 = 0x26;
+        const RIGHT: u32 = 0x27;
+        const DOWN: u32 = 0x28;
+        let last = self.rows.len().saturating_sub(1);
+        match key {
+            ESC | ENTER => self.set_controls(false),
+            UP => self.row = self.row.saturating_sub(1),
+            DOWN => self.row = (self.row + 1).min(last),
+            LEFT | RIGHT => {
+                let row = *self.rows.get(self.row)?;
+                let forward = key == RIGHT;
+                if row == Row::Fps {
+                    return Some((row, forward as usize));
+                }
+                let (selected, count) = self.selected(row)?;
+                let next = if forward { (selected + 1).min(count - 1) } else { selected.saturating_sub(1) };
+                return (next != selected).then_some((row, next));
+            }
+            _ => {}
+        }
+        None
+    }
+
+    fn selected(&self, row: Row) -> Option<(usize, usize)> {
+        let count = self.hits.iter().filter(|h| h.1 == row).count();
+        Some((self.chosen.iter().find(|c| c.0 == row)?.1, count))
+    }
+
+    /// Aplica uma opção dos controles ao jogo aberto.
+    pub fn act(&mut self, cfg: &mut Config, row: Row, option: usize) {
+        if row == Row::Fps {
+            self.change_limit(cfg, if option == 0 { -1 } else { 1 });
+            return;
+        }
+        let protected = self.session.anti_cheat;
+        let Some(g) = cfg.meter_games.iter_mut().find(|g| g.exe.eq_ignore_ascii_case(&self.session.exe)) else { return };
+        match row {
+            Row::Mode => {
+                g.limit_mode = [1, 2, 0][option];
+                if g.limit_mode == 1 {
+                    g.measured = false;
+                }
+            }
+            Row::Real => g.limit_real = option == 0,
+            Row::Method => {
+                g.inject = option == 0 && !protected;
+                g.inject_off = false;
+                self.session.inject_tried = false;
+                self.session.inject_note = (option == 0 && protected).then_some("Injeção bloqueada: anti-cheat detectado.");
+            }
+            Row::Preset => g.preset = option as u8,
+            Row::Fps => {}
+        }
+        self.limit_write = Some((g.exe.clone(), Instant::now()));
+    }
+
+    /// Quanto outra janela no canto superior direito precisa recuar para não cobrir o medidor.
+    pub fn corner_gap(&self, cfg: &Config) -> (f32, f32) {
+        match self.view {
+            VIEW_COMPACT if cfg.meter_pos_compact == 2 => (EDGE, COMPACT_TOP + COMPACT_H + 10.0),
+            VIEW_FULL if cfg.meter_pos_full == 0 => (EDGE + self.full_w + 12.0, EDGE),
+            _ => (EDGE, EDGE),
+        }
     }
 
     fn set_tag(&mut self, text: String) {
@@ -365,7 +570,53 @@ impl Meter {
         let text = if g.limit_mode == 0 { "Sem limite".to_string() } else { format!("Limite {}", g.limit_fps) };
         self.limit_write = Some((g.exe.clone(), Instant::now()));
         self.set_tag(text.clone());
+        let value = if g.limit_mode == 0 { 0 } else { g.limit_fps };
+        if let Some(l) = &mut self.limiter {
+            l.update(value);
+        }
         text
+    }
+
+    /// Carrega o limitador no jogo quando é seguro, passa o limite e vigia quedas.
+    fn keep_limiter(&mut self, cfg: &mut Config, focused: bool, live: bool) {
+        let code = self.limiter.as_ref().and_then(|l| l.exit_code());
+        if let Some(code) = code {
+            self.limiter = None;
+            self.session.inject_tried = false;
+            if inject::is_crash(code) {
+                self.fall_back(cfg, "O jogo caiu. Limite vale ao reabrir.", &format!("o jogo caiu com {code:#x}"));
+            }
+        }
+        let Some(g) = entry(cfg, &self.session.exe).cloned() else { return };
+        if !uses_injection(&g) {
+            self.limiter = None;
+            return;
+        }
+        // O gancho vê cada quadro que vai à tela, gerado ou não.
+        let screen = if g.limit_real { self.multiplier().unwrap_or(1) } else { 1 };
+        let value = if g.limit_mode == 0 { 0 } else { g.limit_fps * screen };
+        if self.session.anti_cheat {
+            self.fall_back(cfg, "Anti-cheat: limite vale ao reabrir.", "anti-cheat detectado");
+            return;
+        }
+        if self.limiter.is_none() && !self.session.inject_tried && focused && live && self.session.started.is_some_and(|t| t.elapsed().as_secs() >= INJECT_AFTER) && value > 0 {
+            self.session.inject_tried = true;
+            crate::config::log("medidor: carregando o limitador no jogo");
+            self.limiter = Limiter::attach(self.target);
+            self.limiter_exe = self.session.exe.clone();
+            if self.limiter.is_none() {
+                self.fall_back(cfg, "Injeção falhou. Limite vale ao reabrir.", "o módulo não carregou");
+                return;
+            }
+        }
+        if let Some(l) = &mut self.limiter {
+            l.update(value);
+            if l.status == Status::Failed {
+                self.fall_back(cfg, "Injeção falhou. Limite vale ao reabrir.", "o limitador não engatou");
+            } else if l.status == Status::Ready {
+                self.session.inject_note = None;
+            }
+        }
     }
 
     fn save_limit(&mut self, cfg: &Config) {
@@ -375,9 +626,24 @@ impl Meter {
         }
         let Some((exe, _)) = self.limit_write.take() else { return };
         cfg.save();
-        if entry(cfg, &exe).is_some_and(|g| !write_limit(g)) {
+        if entry(cfg, &exe).is_some_and(|g| !write_limit(g) || !write_preset(g)) {
             self.set_tag("Sem driver NVIDIA".to_string());
         }
+    }
+
+    /// Sem injeção neste jogo: o limite passa para o driver, que vale na próxima abertura.
+    fn fall_back(&mut self, cfg: &mut Config, note: &'static str, why: &str) {
+        self.limiter = None;
+        // Depois de uma queda, a sessão já pode ser de outro programa.
+        let exe = if self.limiter_exe.is_empty() { self.session.exe.clone() } else { std::mem::take(&mut self.limiter_exe) };
+        self.session.inject_note = Some(note);
+        crate::config::log(&format!("medidor: limite passou para o driver, {why}"));
+        if let Some(g) = cfg.meter_games.iter_mut().find(|g| g.exe.eq_ignore_ascii_case(&exe)) {
+            g.inject_off = true;
+            write_limit(g);
+        }
+        cfg.save();
+        self.set_tag("Limite pelo driver".to_string());
     }
 
     /// Chamado uma vez por segundo. Liga, desliga e mede conforme o jogo em foco.
@@ -393,6 +659,8 @@ impl Meter {
         let focused = self.session.pid != 0 && fg_pid == self.session.pid;
         let (top, own) = self.tracker.as_ref().map_or((None, 0), |t| t.presenters(self.session.pid));
         self.keep_tracking(focused && top.is_none());
+        let live = self.stats.frames > 0;
+        self.keep_limiter(cfg, focused, live);
         let Some(t) = &mut self.tracker else { return };
         if self.view == VIEW_OFF {
             self.stats = t.stats();
@@ -405,7 +673,6 @@ impl Meter {
                 self.stop_log(cfg);
             }
         }
-        let live = self.stats.frames > 0;
         if self.stats.by_flip && !self.by_flip {
             crate::config::log("medidor: contando pela troca de imagem");
         }
@@ -479,6 +746,7 @@ impl Meter {
         self.hidden = false;
         let listed = entry(cfg, &exe).cloned();
         self.session.opened = listed.as_ref().and_then(|g| driver_limit(g, 1));
+        self.session.opened_preset = listed.as_ref().map_or(0, |g| g.preset);
         let hdr_wanted = match listed.as_ref().map_or(0, |g| g.hdr) {
             1 => true,
             2 => false,
@@ -516,8 +784,11 @@ impl Meter {
     }
 
     /// Fim do jogo, ou do Prisma: devolve o HDR e fecha o rastreamento.
-    pub fn leave(&mut self, cfg: &Config) {
+    pub fn leave(&mut self, cfg: &mut Config) {
+        self.set_controls(false);
         self.stop_log(cfg);
+        self.keep_limiter(cfg, false, false);
+        self.limiter = None;
         if self.hdr_before.take() == Some(false) {
             if let Some((adapter, output, _)) = hdr::hdr_output() {
                 hdr::set_hdr(adapter, output, false);
@@ -572,8 +843,12 @@ impl Meter {
         let scale = unsafe { GetDpiForWindow(hwnd) } as f32 / 96.0;
         let tag = self.tag.as_ref().map(|t| t.0.clone()).or_else(|| self.log.as_ref().map(|l| format!("Registro {}", clock(l.seen)))).or_else(|| self.limit_tag(cfg));
         let w = if tag.is_some() { COMPACT_W + 104.0 } else { COMPACT_W };
-        let x = mon.left + ((mon.right - mon.left) as f32 - w * scale) as i32 / 2;
-        let y = mon.top + (14.0 * scale) as i32;
+        let x = match cfg.meter_pos_compact {
+            0 => mon.left + (EDGE * scale) as i32,
+            2 => mon.right - ((w + EDGE) * scale) as i32,
+            _ => mon.left + ((mon.right - mon.left) as f32 - w * scale) as i32 / 2,
+        };
+        let y = mon.top + (COMPACT_TOP * scale) as i32;
         let alpha = cfg.meter_op_compact as f32 / 100.0;
         let generated = self.multiplier().is_some();
         let vram = snap.vram_pct();
@@ -680,40 +955,54 @@ impl Meter {
             let text = s.latency.map_or("Só em jogos com Reflex".to_string(), |v| format!("{v:.0} ms"));
             out.push(Line::Pair("Latência do PC".into(), text, TEXT));
         }
-        if on(ITEM_LIMIT) || self.limit_write.is_some() {
+        // Os botões ficam sempre à vista. O atalho só libera o mouse e o teclado para eles.
+        let open = self.interacting();
+        let playing = !self.session.exe.is_empty();
+        if on(ITEM_LIMIT) || open || self.limit_write.is_some() {
             out.push(Line::Head("Limitador".into()));
-            let (kind, value) = match game.map_or(0, |g| g.limit_mode) {
-                1 => ("Automático", game.map_or(0, |g| g.limit_fps)),
-                2 => ("Manual", game.map_or(0, |g| g.limit_fps)),
-                _ => ("Desligado", 0),
-            };
-            out.push(Line::Pair("Modo".into(), kind.to_string(), TEXT));
-            if value > 0 {
-                let unit = if game.is_some_and(|g| g.limit_real) { "FPS real" } else { "Com geração" };
-                out.push(Line::Pair("Limite".into(), format!("{value} · {unit}"), TEXT));
-                out.push(Line::Pair("Método".into(), "Limite do driver".to_string(), TEXT));
+            if playing {
+                out.push(Line::Choice("Modo".into(), Row::Mode, ["Automático", "Manual", "Desligado"].iter().map(|s| s.to_string()).collect(), [2, 0, 1][game.map_or(0, |g| g.limit_mode.min(2)) as usize]));
+                out.push(Line::Stepper("Limite".into(), Row::Fps, game.map_or(0, |g| g.limit_fps)));
+                out.push(Line::Choice("Limitando".into(), Row::Real, vec!["FPS real".into(), "Com geração".into()], !game.map_or(true, |g| g.limit_real) as usize));
+                out.push(Line::Choice("Método".into(), Row::Method, vec!["Injeção".into(), "Driver".into()], !game.map_or(true, uses_injection) as usize));
+                if let Some(g) = game.filter(|g| g.limit_mode != 0) {
+                    let now = if self.limiter.as_ref().is_some_and(|l| l.status == Status::Ready) {
+                        format!("{} FPS · injeção", g.limit_fps)
+                    } else if uses_injection(g) {
+                        "Injeção, aguardando".to_string()
+                    } else {
+                        self.session.opened.map_or("Sem limite".to_string(), |v| format!("{v} FPS"))
+                    };
+                    out.push(Line::Pair("Ativo agora".into(), now, TEXT));
+                }
+            } else {
+                out.push(Line::Pair("Modo".into(), "Desligado".to_string(), TEXT));
+            }
+            if let Some(note) = self.session.inject_note {
+                out.push(Line::Note(note.to_string(), WARN));
             }
             if game.is_some_and(|g| g.limit_mode == 1 && !g.measured) {
                 out.push(Line::Note(format!("Medindo há {} min de {AUTO_MINUTES}.", self.session.measured.len() / 60), TEXT2));
             }
-            if game.and_then(|g| driver_limit(g, 1)) != self.session.opened && !self.session.exe.is_empty() {
-                let now = self.session.opened.map_or("Sem limite".to_string(), |v| format!("{v} FPS"));
-                out.push(Line::Pair("Ativo agora".into(), now, TEXT));
+            if playing && !game.is_some_and(uses_injection) && game.and_then(|g| driver_limit(g, 1)) != self.session.opened {
                 out.push(Line::Note("O novo limite vale ao reabrir o jogo.".into(), ACCENT));
             }
-            out.push(Line::Note(format!("Ligar: {}", cfg.hk_limit_toggle.label()), TEXT2));
-            out.push(Line::Note(format!("Ajustar: {} · {}", cfg.hk_limit_up.label(), cfg.hk_limit_down.label()), TEXT2));
+            let hint = if open { "Setas ou mouse mudam. Esc fecha.".to_string() } else { format!("Controles: {}", cfg.hk_meter_keys.label()) };
+            out.push(Line::Note(hint, TEXT2));
         }
-        if on(ITEM_UPSCALE) {
+        if on(ITEM_UPSCALE) || open {
             out.push(Line::Head("Upscaling".into()));
             if found.upscaler.is_empty() {
                 out.push(Line::Note("Nenhum carregado".into(), TEXT2));
             } else {
                 out.push(Line::Pair(found.upscaler.clone(), format!("{} · carregado", found.version), TEXT));
             }
-            let forced = game.map_or(0, |g| g.preset);
-            if forced > 0 {
-                out.push(Line::Pair("Perfil".into(), ["", "Recomendado", "Preset K", "Preset L", "Preset M"][forced as usize].to_string(), TEXT));
+            if playing {
+                let preset = game.map_or(0, |g| g.preset);
+                out.push(Line::Choice("Perfil DLSS".into(), Row::Preset, ["Do jogo", "Recomendado", "K", "L", "M"].iter().map(|s| s.to_string()).collect(), preset as usize));
+                if preset != self.session.opened_preset {
+                    out.push(Line::Note("O novo perfil vale ao reabrir o jogo.".into(), ACCENT));
+                }
             }
         }
         if on(ITEM_GEN) {
@@ -790,12 +1079,17 @@ impl Meter {
         let hwnd = self.full.hwnd;
         let scale = unsafe { GetDpiForWindow(hwnd) } as f32 / 96.0;
         let room = (mon.bottom - mon.top) as f32 / scale - 48.0;
+        self.rows = lines.iter().filter_map(Line::row).collect();
+        self.chosen = lines.iter().filter_map(Line::chosen).collect();
         let inner: f32 = lines.iter().map(Line::height).sum::<f32>() + 28.0;
         let two = inner > room;
         let (w, h) = if two { (FULL_W * 2.0 + 12.0, (inner / 2.0 + 60.0).min(room)) } else { (FULL_W, inner) };
-        let x = mon.right - ((w + 24.0) * scale) as i32;
-        let y = mon.top + (24.0 * scale) as i32;
-        let alpha = cfg.meter_op_full as f32 / 100.0;
+        self.full_w = w;
+        let x = if cfg.meter_pos_full == 1 { mon.left + (EDGE * scale) as i32 } else { mon.right - ((w + EDGE) * scale) as i32 };
+        let y = mon.top + (EDGE * scale) as i32;
+        let alpha = if self.interacting() { 0.97 } else { cfg.meter_op_full as f32 / 100.0 };
+        let mut hits = Vec::new();
+        let (focus, hover) = (self.interacting().then(|| self.rows.get(self.row).copied()).flatten(), self.hover);
         self.full.paint(x, y, w, h, |c, r| {
             c.round(r, 14.0, rgb(0x17191d).alpha(alpha));
             c.round_line(r, 14.0, rgb(0x5a6170).alpha(0.55), 1.0);
@@ -807,9 +1101,11 @@ impl Meter {
                     cy = 14.0;
                 }
                 l.draw(c, cx, cy, width, &s);
+                l.controls(c, cx, cy, width, focus, hover, &mut hits);
                 cy += l.height();
             }
         });
+        self.hits = hits;
         show_topmost(hwnd);
     }
 }
@@ -830,7 +1126,10 @@ fn strip(c: &Canvas, r: Rect, s: &Stats) {
     }
     let color = if s.spike { WARN } else { ACCENT };
     let step = r.w / (s.strip.len() - 1) as f32;
-    let y = |v: f32| (mid - (v - s.ms) / s.ms * r.h).clamp(r.y, r.bottom());
+    let y = |v: f32| {
+        let d = v - s.ms;
+        (mid - d.signum() * (d.abs() - STRIP_QUIET).max(0.0) / STRIP_RANGE * r.h / 2.0).clamp(r.y, r.bottom())
+    };
     for (i, pair) in s.strip.windows(2).enumerate() {
         let x = r.x + i as f32 * step;
         c.line(x, y(pair[0]), x + step, y(pair[1]), color, 1.5);
@@ -847,6 +1146,8 @@ enum Line {
     Strip,
     Cores(Vec<f32>),
     Bar(String, String, f32),
+    Choice(String, Row, Vec<String>, usize),
+    Stepper(String, Row, u32),
 }
 
 impl Line {
@@ -861,6 +1162,57 @@ impl Line {
             Line::Strip => 46.0,
             Line::Cores(_) => 44.0,
             Line::Bar(..) => 34.0,
+            Line::Choice(..) => 54.0,
+            Line::Stepper(..) => 36.0,
+        }
+    }
+
+    fn row(&self) -> Option<Row> {
+        match self {
+            Line::Choice(_, row, ..) | Line::Stepper(_, row, _) => Some(*row),
+            _ => None,
+        }
+    }
+
+    fn chosen(&self) -> Option<(Row, usize)> {
+        match self {
+            Line::Choice(_, row, _, selected) => Some((*row, *selected)),
+            _ => None,
+        }
+    }
+
+    /// Botões da linha. Cada um guarda onde está, para o clique achar a opção.
+    fn controls(&self, c: &Canvas, x: f32, y: f32, w: f32, focus: Option<Row>, hover: Option<(Row, usize)>, hits: &mut Vec<(Rect, Row, usize)>) {
+        let chip = |c: &Canvas, r: Rect, text: &str, on: bool, row: Row, i: usize, hits: &mut Vec<(Rect, Row, usize)>| {
+            let hot = hover == Some((row, i));
+            c.round(r, 6.0, if on { ACCENT } else if hot { CARD2 } else { rgb(0x1b1d22) });
+            if !on {
+                c.round_line(r, 6.0, rgb(0x5a6170), 1.0);
+            }
+            c.text(r, text, 12.0, if on { rgb(0x10202c) } else { TEXT }, Align::Center, if on { Weight::Semibold } else { Weight::Regular });
+            hits.push((r, row, i));
+        };
+        match self {
+            Line::Choice(name, row, options, selected) => {
+                c.text(rect(x, y, w, 20.0), name, 12.0, if focus == Some(*row) { ACCENT } else { TEXT2 }, Align::Left, Weight::Regular);
+                let sizes: Vec<f32> = options.iter().map(|o| measure(o, 12.0, Weight::Semibold, None).0 + 16.0).collect();
+                let extra = (w - sizes.iter().sum::<f32>() - 4.0 * (sizes.len() - 1) as f32).max(0.0) / sizes.len() as f32;
+                let mut cx = x;
+                for (i, o) in options.iter().enumerate() {
+                    let r = rect(cx, y + 21.0, sizes[i] + extra, 26.0);
+                    chip(c, r, o, i == *selected, *row, i, hits);
+                    cx = r.right() + 4.0;
+                }
+            }
+            Line::Stepper(name, row, value) => {
+                c.text(rect(x, y + 3.0, w * 0.4, 24.0), name, 12.0, if focus == Some(*row) { ACCENT } else { TEXT2 }, Align::Left, Weight::Regular);
+                let right = x + w;
+                chip(c, rect(right - 148.0, y + 3.0, 34.0, 26.0), "−", false, *row, 0, hits);
+                let shown = if *value > 0 { value.to_string() } else { "—".to_string() };
+                c.text(rect(right - 110.0, y + 3.0, 72.0, 26.0), &shown, 15.0, WHITE, Align::Center, Weight::Semibold);
+                chip(c, rect(right - 34.0, y + 3.0, 34.0, 26.0), "+", false, *row, 1, hits);
+            }
+            _ => {}
         }
     }
 
@@ -905,6 +1257,7 @@ impl Line {
                     c.round(rect(bx, y + 38.0 - h, bw, h), 2.0, if *v >= 90.0 { WARN } else { ACCENT });
                 }
             }
+            Line::Choice(..) | Line::Stepper(..) => {}
             Line::Bar(name, value, pct) => {
                 let hot = *pct >= VRAM_NEAR && name == "VRAM";
                 c.text(rect(x, y, w * 0.4, 18.0), name, 12.0, if hot { WARN_RED } else { TEXT2 }, Align::Left, if hot { Weight::Semibold } else { Weight::Regular });

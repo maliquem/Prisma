@@ -267,6 +267,8 @@ pub struct Prompt {
     ui: UiState,
     title: String,
     body: String,
+    /// Distância do canto superior direito, para não cobrir o medidor.
+    gap: (f32, f32),
     pub open: bool,
 }
 
@@ -276,7 +278,8 @@ pub enum PromptAnswer {
     Dismiss,
 }
 
-const PROMPT_SIZE: (f32, f32) = (360.0, 150.0);
+const PROMPT_SIZE: (f32, f32) = (300.0, 110.0);
+const PROMPT_MS: u32 = 10_000;
 
 unsafe extern "system" fn prompt_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT {
     let pt = || {
@@ -305,17 +308,18 @@ impl Prompt {
         register(w!("PrismaPrompt"), prompt_proc);
         let hwnd = create_overlay(w!("PrismaPrompt"), false);
         crate::capture::hide_from_capture(hwnd);
-        Self { surface: Layered::new(hwnd), ui: UiState::default(), title: String::new(), body: String::new(), open: false }
+        Self { surface: Layered::new(hwnd), ui: UiState::default(), title: String::new(), body: String::new(), gap: (24.0, 24.0), open: false }
     }
 
-    pub fn ask(&mut self, title: String, body: String) {
+    pub fn ask(&mut self, title: String, body: String, gap: (f32, f32)) {
         self.title = title;
         self.body = body;
+        self.gap = gap;
         self.open = true;
         self.redraw();
         unsafe {
             let _ = ShowWindow(self.surface.hwnd, SW_SHOWNOACTIVATE);
-            SetTimer(Some(self.surface.hwnd), 1, 20000, None);
+            SetTimer(Some(self.surface.hwnd), 1, PROMPT_MS, None);
         }
     }
 
@@ -350,24 +354,31 @@ impl Prompt {
     fn redraw(&mut self) -> Option<PromptAnswer> {
         let mon = focus_monitor();
         let scale = unsafe { windows::Win32::UI::HiDpi::GetDpiForWindow(self.surface.hwnd) } as f32 / 96.0;
-        let (x, y) = (mon.left + (24.0 * scale) as i32, mon.top + (96.0 * scale) as i32);
         let (w, h) = PROMPT_SIZE;
+        let (x, y) = (mon.right - ((w + self.gap.0) * scale) as i32, mon.top + (self.gap.1 * scale) as i32);
         let mut answer = None;
         let (title, body) = (self.title.clone(), self.body.clone());
         let ui = &mut self.ui;
         self.surface.paint(x, y, w, h, |c, r| {
             c.round(r, 14.0, rgb(0x14161c).alpha(0.96));
             let mut u = Ui::begin(c, ui);
-            c.text(rect(16.0, 12.0, 328.0, 24.0), &title, 16.0, WHITE, Align::Left, Weight::Semibold);
-            c.text_wrap(rect(16.0, 40.0, 328.0, 44.0), &body, 14.0, rgb(0xd3d7df), Weight::Regular);
-            let bw = 104.0;
-            if u.button("pclose", rect(16.0, 92.0, bw, 44.0), "Fechar", true) {
+            let room = r.w - 28.0;
+            let mut title = crate::i18n::tr(&title).into_owned();
+            while measure(&title, 14.0, Weight::Semibold, None).0 > room && title.chars().count() > 1 {
+                title.pop();
+                title.pop();
+                title.push('…');
+            }
+            c.text(rect(14.0, 10.0, room, 22.0), &title, 14.0, WHITE, Align::Left, Weight::Semibold);
+            c.text(rect(14.0, 32.0, room, 20.0), &body, 13.0, rgb(0xd3d7df), Align::Left, Weight::Regular);
+            let bw = 84.0;
+            if u.button("pclose", rect(14.0, 64.0, bw, 34.0), "Fechar", true) {
                 answer = Some(PromptAnswer::Close);
             }
-            if u.button("plist", rect(128.0, 92.0, bw, 44.0), "Ver lista", false) {
+            if u.button("plist", rect(108.0, 64.0, bw, 34.0), "Ver lista", false) {
                 answer = Some(PromptAnswer::List);
             }
-            if u.button("pnot", rect(240.0, 92.0, bw, 44.0), "Agora não", false) {
+            if u.button("pnot", rect(202.0, 64.0, bw, 34.0), "Agora não", false) {
                 answer = Some(PromptAnswer::Dismiss);
             }
             u.end();

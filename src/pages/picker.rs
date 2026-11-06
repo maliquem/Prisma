@@ -1,7 +1,9 @@
-//! Adicionar programa: o mesmo botão e a mesma lista em todas as telas que usam.
+//! Adicionar programa: o mesmo botão em todas as telas que usam, com a lista em janela própria.
 
 use super::*;
 use crate::sys::{catalog, procs};
+
+pub const SEARCH: &str = "pick-q";
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Target {
@@ -48,15 +50,10 @@ fn add(app: &mut App, target: Target, path: &str) {
 
 pub fn draw(ui: &mut Ui, app: &mut App, t: Rect) {
     let Some(target) = app.pick_for else { return };
-    ui.title(rect(t.x + 16.0, t.y + 12.0, t.w - 150.0, 22.0), "Adicionar programa");
-    if ui.button("pick-back", rect(t.right() - 124.0, t.y + 8.0, 108.0, 32.0), "Voltar", false) {
-        app.close_picker();
-        return;
-    }
     let mut q = std::mem::take(&mut app.pick_search);
-    ui.search("pick-q", rect(t.x + 16.0, t.y + 46.0, t.w - 32.0, 32.0), &mut q, "Buscar");
+    ui.search(SEARCH, rect(t.x + 16.0, t.y + 14.0, t.w - 32.0, 34.0), &mut q, "Buscar");
     app.pick_search = q;
-    let list = rect(t.x + 8.0, t.y + 86.0, t.w - 16.0, t.h - 94.0);
+    let list = rect(t.x + 8.0, t.y + 58.0, t.w - 16.0, t.h - 66.0);
     let needle = app.pick_search.to_lowercase();
     let rows: Option<Vec<catalog::Entry>> = app.pick_list.lock().unwrap().as_ref().map(|all| all.iter().filter(|e| needle.is_empty() || e.name.to_lowercase().contains(&needle)).cloned().collect());
     let Some(rows) = rows else {

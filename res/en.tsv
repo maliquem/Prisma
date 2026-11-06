@@ -1176,3 +1176,36 @@ Limite ativo	Active limit
 Leitura: GPU cheia na maior parte do tempo, então o limite parece ser a GPU.	Reading: GPU full most of the time, so the limit looks like the GPU.
 Leitura: uma thread perto de um núcleo inteiro com a GPU sobrando, então o limite parece ser a CPU.	Reading: one thread near a full core with GPU to spare, so the limit looks like the CPU.
 Leitura: nem GPU nem uma thread sozinha ficaram cheias. Veja os trechos em segundos.csv.	Reading: neither the GPU nor a single thread was full. Check the stretches in segundos.csv.
+Fechar {} {} e liberar {} GB?	Close {} {} and free {3} GB?
+Posição do compacto	Compact position
+Posição do completo	Full position
+Superior esquerdo	Top left
+Superior centro	Top center
+Superior direito	Top right
+Lado direito	Right side
+Lado esquerdo	Left side
+Injeção	Injection
+Driver	Driver
+Injeção, aguardando	Injection, waiting
+Injeção desligada	Injection off
+Injeção desligada: o jogo caiu com ela.	Injection off: the game crashed with it.
+Injeção desligada: o jogo caiu	Injection off: the game crashed
+Injeção bloqueada: anti-cheat detectado.	Injection blocked: anti-cheat detected.
+Injeção parada: geração de quadros carregada.	Injection stopped: frame generation loaded.
+A injeção não carregou neste jogo.	Injection did not load in this game.
+Usar injeção neste jogo?	Use injection in this game?
+O limite passa a mudar na hora, mas um módulo do Prisma entra no jogo, e isso pode derrubá-lo. Não use em jogo online: um anti-cheat pode punir mesmo sem ter sido detectado aqui. Se o jogo cair, a injeção desliga sozinha.	The limit changes right away, but a Prisma module enters the game, which can crash it. Do not use it online: an anti-cheat can punish you even if none was detected here. If the game crashes, injection turns itself off.
+Com injeção, o limite muda na hora.	With injection, the limit changes right away.
+Pelo driver NVIDIA, a mudança vale ao reabrir o jogo. Com o método Injeção, ela vale na hora.	Through the NVIDIA driver, the change applies when the game reopens. With the Injection method, it applies right away.
+Controles do medidor	Meter controls
+Controles no medidor	Controls in the meter
+Controles: {}	Controls: {}
+Setas ou mouse mudam. Esc fecha.	Arrows or mouse change it. Esc closes.
+Limite pelo driver	Limit by driver
+Limite pelo driver: a injeção falhou	Limit by driver: injection failed
+O jogo caiu. Limite vale ao reabrir.	The game crashed. Limit applies on reopen.
+Anti-cheat: limite vale ao reabrir.	Anti-cheat: limit applies on reopen.
+Injeção falhou. Limite vale ao reabrir.	Injection failed. Limit applies on reopen.
+O novo perfil vale ao reabrir o jogo.	The new profile applies when the game reopens.
+A injeção muda o limite na hora. Se falhar ou houver anti-cheat, ele vai para o driver e vale ao reabrir o jogo.	Injection changes the limit right away. If it fails or finds an anti-cheat, the driver takes over when the game reopens.
+{} FPS · injeção	{} FPS · injection

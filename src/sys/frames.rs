@@ -12,8 +12,15 @@ use windows::Win32::System::Performance::{QueryPerformanceCounter, QueryPerforma
 const DXGKRNL: GUID = GUID::from_u128(0x802ec45a_1e99_4b83_9920_87c98277ba9d);
 /// Marcadores de latência que jogos com Reflex publicam.
 const PCL: GUID = GUID::from_u128(0x0d216f06_82a6_4d49_bc4f_8f38ae56efab);
+// A versão de teste roda junto com a de verdade: sessão com o mesmo nome derrubaria a outra.
+#[cfg(not(debug_assertions))]
 const SESSION: GUID = GUID::from_u128(0x7c1e4d52_9b3a_4f61_8e2d_5a6f0c3b9d11);
+#[cfg(not(debug_assertions))]
 const NAME: PCWSTR = w!("PrismaFrames");
+#[cfg(debug_assertions)]
+const SESSION: GUID = GUID::from_u128(0x7c1e4d52_9b3a_4f61_8e2d_5a6f0c3b9d12);
+#[cfg(debug_assertions)]
+const NAME: PCWSTR = w!("PrismaFramesDev");
 
 const KEYWORD_BASE: u64 = 0x1;
 const KEYWORD_PRESENT: u64 = 0x800_0000;

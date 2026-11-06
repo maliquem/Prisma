@@ -50,6 +50,9 @@ const WM_PICK_METER: u32 = WM_APP + 83;
 const WM_POW_OUT: u32 = WM_APP + 82;
 const WM_REPORT_PHOTO: u32 = WM_APP + 84;
 const WM_REPORT_DONE: u32 = WM_APP + 85;
+const WM_PICK_WIN: u32 = WM_APP + 86;
+const PICKER_SIZE: (f32, f32) = (540.0, 680.0);
+const PICKER_MIN: (f32, f32) = (420.0, 400.0);
 
 static FORCE_VK: AtomicU32 = AtomicU32::new(0);
 static FORCE_MODS: AtomicU32 = AtomicU32::new(0);
@@ -118,6 +121,7 @@ const HK_LIMIT_T: i32 = 17;
 const HK_LIMIT_UP: i32 = 18;
 const HK_LIMIT_DOWN: i32 = 19;
 const HK_LOG: i32 = 20;
+const HK_METER_KEYS: i32 = 21;
 const HK_VOL_UP: i32 = 10;
 const HK_VOL_DOWN: i32 = 11;
 const HK_MUTE: i32 = 12;
@@ -156,6 +160,7 @@ pub struct App {
     shared: Arc<Mutex<Snapshot>>,
     pub snap: Snapshot,
     pub main: Option<MainWin>,
+    pick_win: Option<MainWin>,
     pub page: Page,
     pub full: Fullscreenizer,
     pub detector: Detector,
@@ -298,6 +303,8 @@ pub fn start(background: bool) {
             ..Default::default()
         };
         RegisterClassW(&main);
+        let picker = WNDCLASSW { lpfnWndProc: Some(picker_proc), lpszClassName: w!("PrismaPicker"), ..main };
+        RegisterClassW(&picker);
         let hub = CreateWindowExW(
             WINDOW_EX_STYLE(0),
             w!("PrismaHub"),
@@ -374,6 +381,7 @@ pub fn start(background: bool) {
             cal: Default::default(),
             sync: Default::default(),
             pick_for: None,
+            pick_win: None,
             pick_search: String::new(),
             pick_list: Default::default(),
             snd_seen: std::collections::HashSet::new(),
@@ -579,6 +587,11 @@ pub fn start(background: bool) {
                 let _ = std::fs::write(p[0], crate::sys::frames::measure(p[1].parse().unwrap(), p[2].parse().unwrap()));
                 std::process::exit(0);
             }
+            if let Some(v) = a.strip_prefix("--test-inject=") {
+                let p: Vec<&str> = v.split('|').collect();
+                let _ = std::fs::write(p[0], crate::sys::inject::test(p[1].parse().unwrap(), p[2].parse().unwrap(), p[3].parse().unwrap()));
+                std::process::exit(0);
+            }
             if let Some(v) = a.strip_prefix("--test-drs=") {
                 let p: Vec<&str> = v.split('|').collect();
                 let r = match p[2] {
@@ -749,10 +762,7 @@ pub fn start(background: bool) {
 }
 
 pub fn shutdown() {
-    with(|a| {
-        let cfg = a.cfg.clone();
-        a.meter.leave(&cfg);
-    });
+    with(|a| a.meter.leave(&mut a.cfg));
     with(|a| {
         if a.rec_start.is_some() {
             a.toggle_record(true);
@@ -817,7 +827,7 @@ impl App {
     pub fn register_hotkeys(&mut self) {
         self.unhook_force_key();
         unsafe {
-            for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_REPLAY, HK_FORCE, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE] {
+            for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE] {
                 let _ = UnregisterHotKey(Some(self.hub), id);
             }
         }
@@ -836,6 +846,7 @@ impl App {
             (HK_METER_F, c.hk_meter_full, "Medidor completo", true),
             (HK_METER_O, c.hk_meter_off, "Esconder medidor", true),
             (HK_LOG, c.hk_log, "Registro de dados", true),
+            (HK_METER_KEYS, c.hk_meter_keys, "Controles do medidor", true),
             (HK_LIMIT_T, c.hk_limit_toggle, "Ligar o limitador", true),
             (HK_LIMIT_UP, c.hk_limit_up, "Aumentar o limite", false),
             (HK_LIMIT_DOWN, c.hk_limit_down, "Diminuir o limite", false),
@@ -882,7 +893,7 @@ impl App {
         if on {
             self.unhook_force_key();
             unsafe {
-                for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_REPLAY, HK_FORCE] {
+                for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE] {
                     let _ = UnregisterHotKey(Some(self.hub), id);
                 }
             }
@@ -915,6 +926,7 @@ impl App {
             HK_METER_F => self.meter_view(crate::meter::VIEW_FULL),
             HK_METER_O => self.meter_view(crate::meter::VIEW_OFF),
             HK_LOG => self.meter_log(),
+            HK_METER_KEYS => self.meter_controls(),
             HK_LIMIT_T => self.meter_limit(0),
             HK_LIMIT_UP => self.meter_limit(1),
             HK_LIMIT_DOWN => self.meter_limit(-1),
@@ -1412,8 +1424,27 @@ impl App {
         }
     }
 
-    /// Monta a lista em segundo plano. Quem está aberto entra também, mesmo sem atalho no Iniciar.
+    /// Quem chama está desenhando a janela principal: a janela nova abre logo depois.
     pub fn open_picker(&mut self, target: crate::pages::picker::Target) {
+        self.pick_for = Some(target);
+        self.pick_search.clear();
+        unsafe {
+            let _ = PostMessageW(Some(self.hub), WM_PICK_WIN, WPARAM(0), LPARAM(0));
+        }
+    }
+
+    /// Janela da lista, presa à principal. Quem está aberto entra também, mesmo sem atalho no Iniciar.
+    fn show_picker(&mut self) {
+        if let Some(p) = &self.pick_win {
+            unsafe {
+                let _ = ShowWindow(p.hwnd, SW_RESTORE);
+                let _ = SetForegroundWindow(p.hwnd);
+                let _ = InvalidateRect(Some(p.hwnd), None, false);
+            }
+            return;
+        }
+        let owner = self.main.as_ref().map(|m| m.hwnd);
+        let Some(hwnd) = owner else { return };
         let mut open: Vec<(String, String)> = self.windows.iter().map(|w| (w.exe.clone(), w.path.clone())).collect();
         let sessions: Vec<(String, u32)> = self.sessions.iter().map(|s| (s.exe.clone(), s.pid)).collect();
         for (exe, pid) in sessions {
@@ -1421,10 +1452,79 @@ impl App {
                 open.push((exe, path));
             }
         }
-        self.pick_for = Some(target);
-        self.pick_search.clear();
         *self.pick_list.lock().unwrap() = None;
-        crate::sys::catalog::load(self.pick_list.clone(), open, self.main.as_ref().map_or(0, |m| m.hwnd.0 as isize));
+        unsafe {
+            let inst = GetModuleHandleW(None).unwrap_or_default();
+            let title = HSTRING::from(crate::i18n::tr("Adicionar programa").as_ref());
+            let Ok(h) = CreateWindowExW(WINDOW_EX_STYLE(0), w!("PrismaPicker"), &title, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 100, 100, Some(hwnd), None, Some(inst.into()), None) else { return };
+            dark_caption(h);
+            let dpi = GetDpiForWindow(h);
+            let scale = dpi as f32 / 96.0;
+            let mut r = RECT { left: 0, top: 0, right: (PICKER_SIZE.0 * scale) as i32, bottom: (PICKER_SIZE.1 * scale) as i32 };
+            let _ = AdjustWindowRectExForDpi(&mut r, WS_OVERLAPPEDWINDOW, false, WINDOW_EX_STYLE(0), dpi);
+            let (w, h_px) = (r.right - r.left, r.bottom - r.top);
+            let mut main = RECT::default();
+            let _ = GetWindowRect(hwnd, &mut main);
+            let (x, y) = (main.left + (main.right - main.left - w) / 2, main.top + (main.bottom - main.top - h_px) / 2);
+            let _ = SetWindowPos(h, None, x, y, w, h_px, SWP_NOZORDER);
+            let mut c = RECT::default();
+            let _ = GetClientRect(h, &mut c);
+            let Ok(rt) = hwnd_target(h, c.right as u32, c.bottom as u32, dpi as f32) else {
+                let _ = DestroyWindow(h);
+                return;
+            };
+            let base: ID2D1RenderTarget = rt.cast().unwrap();
+            let mut ui = UiState::default();
+            crate::ui::focus_on(&mut ui, crate::pages::picker::SEARCH);
+            self.pick_win = Some(MainWin { hwnd: h, rt, canvas: Canvas::new(base), ui, scale, w: c.right as f32 / scale, h: c.bottom as f32 / scale });
+            crate::sys::catalog::load(self.pick_list.clone(), open, h.0 as isize);
+            let _ = ShowWindow(h, SW_SHOW);
+            let _ = SetForegroundWindow(h);
+        }
+    }
+
+    fn invalidate_picker(&self) {
+        if let Some(p) = &self.pick_win {
+            unsafe {
+                let _ = InvalidateRect(Some(p.hwnd), None, false);
+            }
+        }
+    }
+
+    fn paint_picker(&mut self) {
+        let Some(mut m) = self.pick_win.take() else { return };
+        let (w, h) = (m.w, m.h);
+        let lost = unsafe {
+            m.rt.BeginDraw();
+            m.ui.view_h = h;
+            m.ui.view_w = w;
+            let mut ui = crate::ui::Ui::begin(&m.canvas, &mut m.ui);
+            m.canvas.clear(BG);
+            pages::picker::draw(&mut ui, self, rect(0.0, 0.0, w, h));
+            ui.end();
+            m.rt.EndDraw(None, None).is_err()
+        };
+        if lost {
+            let px = (m.w * m.scale, m.h * m.scale);
+            if let Ok(rt) = hwnd_target(m.hwnd, px.0 as u32, px.1 as u32, 96.0 * m.scale) {
+                let base: ID2D1RenderTarget = rt.cast().unwrap();
+                m.canvas = Canvas::new(base);
+                m.rt = rt;
+            }
+        }
+        let hwnd = m.hwnd;
+        if self.pick_for.is_none() {
+            drop(m);
+            unsafe {
+                let _ = DestroyWindow(hwnd);
+            }
+            return;
+        }
+        let again = std::mem::take(&mut m.ui.needs_redraw);
+        self.pick_win = Some(m);
+        if again {
+            self.invalidate_picker();
+        }
     }
 
     /// Abre o editor. O plano é lido em segundo plano, porque são centenas de opções.
@@ -1553,6 +1653,34 @@ impl App {
         }
     }
 
+    /// Abre ou fecha os controles dentro do medidor completo.
+    fn meter_controls(&mut self) {
+        if self.meter.interacting() {
+            self.meter.set_controls(false);
+            return;
+        }
+        self.meter.show(crate::meter::VIEW_FULL);
+        self.meter_timer();
+        self.load_hdr();
+        self.meter_paint();
+        self.meter.set_controls(true);
+        self.meter_paint();
+    }
+
+    pub fn meter_input(&mut self, input: crate::meter::Input) {
+        let (exe, pid) = (self.meter.session.exe.clone(), self.meter.session.pid);
+        let act = self.meter.input(input);
+        if let Some((row, option)) = act {
+            if exe.is_empty() {
+                self.toast.info("Abra um jogo para usar o limitador.");
+            } else {
+                self.add_meter_game(&exe, &procs::image_path(pid).unwrap_or_default());
+                self.meter.act(&mut self.cfg, row, option);
+            }
+        }
+        self.meter_paint();
+    }
+
     /// Atalhos do limitador: valem para o jogo aberto, mesmo fora da lista.
     fn meter_limit(&mut self, change: i32) {
         let (exe, pid) = (self.meter.session.exe.clone(), self.meter.session.pid);
@@ -1585,11 +1713,12 @@ impl App {
             (exe, pid, path)
         });
         #[cfg(debug_assertions)]
-        let game = game.or_else(|| {
+        let game = (|| {
             let pid: u32 = std::env::var("PRISMA_METER_GAME").ok()?.parse().ok()?;
             let path = procs::image_path(pid)?;
             Some((procs::exe_name(&path), pid, path))
-        });
+        })()
+        .or(game);
         let was = self.meter.view;
         #[cfg(debug_assertions)]
         let pid = std::env::var("PRISMA_METER_PID").ok().and_then(|v| v.parse().ok()).unwrap_or(self.fg_pid);
@@ -1615,7 +1744,7 @@ impl App {
 
     pub fn add_meter_game(&mut self, exe: &str, path: &str) {
         if !self.cfg.meter_games.iter().any(|g| g.exe.eq_ignore_ascii_case(exe)) {
-            self.cfg.meter_games.push(crate::config::MeterGame { exe: exe.to_string(), path: path.to_string(), limit_fps: crate::meter::first_limit(self.refresh_hz()), limit_real: true, ..Default::default() });
+            self.cfg.meter_games.push(crate::config::MeterGame { exe: exe.to_string(), path: path.to_string(), limit_fps: crate::meter::first_limit(self.refresh_hz()), limit_real: true, inject: true, ..Default::default() });
         }
     }
 
@@ -1626,6 +1755,7 @@ impl App {
     pub fn close_picker(&mut self) {
         self.pick_for = None;
         *self.pick_list.lock().unwrap() = None;
+        self.invalidate();
     }
 
     pub fn pick_exe_for(&self, target: crate::pages::picker::Target) {
@@ -1729,7 +1859,8 @@ impl App {
             format!("{} detectado", self.detector.game_exe.trim_end_matches(".exe"))
         };
         let plural = if n == 1 { "programa" } else { "programas" };
-        self.prompt.ask(title, format!("Fechar {n} {plural} para liberar {gb} GB de RAM?"));
+        let gap = self.meter.corner_gap(&self.cfg);
+        self.prompt.ask(title, format!("Fechar {n} {plural} e liberar {gb} GB?"), gap);
     }
 
     pub fn prompt_mouse(&mut self, msg: u32, x: f32, y: f32) {
@@ -1969,10 +2100,7 @@ impl App {
                 None,
             )
             .expect("janela principal");
-            let dark: BOOL = true.into();
-            let _ = DwmSetWindowAttribute(h, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark as *const _ as _, 4);
-            let cap: u32 = 0x00221d1b;
-            let _ = DwmSetWindowAttribute(h, DWMWA_CAPTION_COLOR, &cap as *const _ as _, 4);
+            dark_caption(h);
             let dpi = GetDpiForWindow(h);
             let scale = dpi as f32 / 96.0;
             let mut r = RECT { left: 0, top: 0, right: (1280.0 * scale) as i32, bottom: (820.0 * scale) as i32 };
@@ -2202,6 +2330,10 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
             }
             LRESULT(0)
         }
+        WM_PICK_WIN => {
+            with(|a| a.show_picker());
+            LRESULT(0)
+        }
         WM_PICK_METER => {
             if let Some(path) = capture::choose_exe(h) {
                 with(|a| {
@@ -2292,6 +2424,113 @@ fn mouse_xy(a: &mut App, l: LPARAM) {
         let (x, y) = ((l.0 & 0xffff) as i16 as f32, ((l.0 >> 16) & 0xffff) as i16 as f32);
         mw.ui.mx = x / mw.scale;
         mw.ui.my = y / mw.scale;
+    }
+}
+
+unsafe fn dark_caption(h: HWND) {
+    let dark: BOOL = true.into();
+    let _ = DwmSetWindowAttribute(h, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark as *const _ as _, 4);
+    let cap: u32 = 0x00221d1b;
+    let _ = DwmSetWindowAttribute(h, DWMWA_CAPTION_COLOR, &cap as *const _ as _, 4);
+}
+
+fn picker_mouse(a: &mut App, l: LPARAM) {
+    if let Some(p) = &mut a.pick_win {
+        p.ui.mx = (l.0 & 0xffff) as i16 as f32 / p.scale;
+        p.ui.my = ((l.0 >> 16) & 0xffff) as i16 as f32 / p.scale;
+    }
+}
+
+unsafe extern "system" fn picker_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT {
+    let r = with(|a| {
+        match m {
+            WM_PAINT => {
+                let mut ps = PAINTSTRUCT::default();
+                BeginPaint(h, &mut ps);
+                a.paint_picker();
+                let _ = EndPaint(h, &ps);
+                Some(0)
+            }
+            WM_ERASEBKGND => Some(1),
+            WM_SIZE => {
+                if let Some(p) = &mut a.pick_win {
+                    let (pw, ph) = ((l.0 & 0xffff) as u32, ((l.0 >> 16) & 0xffff) as u32);
+                    if pw > 0 && ph > 0 {
+                        let _ = p.rt.Resize(&D2D_SIZE_U { width: pw, height: ph });
+                        p.w = pw as f32 / p.scale;
+                        p.h = ph as f32 / p.scale;
+                    }
+                }
+                Some(0)
+            }
+            WM_DPICHANGED => {
+                let dpi = (w.0 & 0xffff) as u32;
+                let rc = &*(l.0 as *const RECT);
+                if let Some(p) = &mut a.pick_win {
+                    p.scale = dpi as f32 / 96.0;
+                    p.rt.SetDpi(dpi as f32, dpi as f32);
+                }
+                let _ = SetWindowPos(h, None, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top, SWP_NOZORDER | SWP_NOACTIVATE);
+                Some(0)
+            }
+            WM_GETMINMAXINFO => {
+                let mi = &mut *(l.0 as *mut MINMAXINFO);
+                let s = GetDpiForWindow(h) as f32 / 96.0;
+                mi.ptMinTrackSize.x = (PICKER_MIN.0 * s) as i32;
+                mi.ptMinTrackSize.y = (PICKER_MIN.1 * s) as i32;
+                Some(0)
+            }
+            WM_MOUSEMOVE | WM_LBUTTONDOWN | WM_LBUTTONUP => {
+                picker_mouse(a, l);
+                if let Some(p) = &mut a.pick_win {
+                    if m == WM_LBUTTONDOWN {
+                        p.ui.down = true;
+                        p.ui.pressed = true;
+                        SetCapture(h);
+                    } else if m == WM_LBUTTONUP {
+                        p.ui.down = false;
+                        p.ui.released = true;
+                        let _ = ReleaseCapture();
+                    }
+                }
+                a.invalidate_picker();
+                Some(0)
+            }
+            WM_MOUSEWHEEL => {
+                if let Some(p) = &mut a.pick_win {
+                    p.ui.wheel += ((w.0 >> 16) & 0xffff) as i16 as f32 / 120.0;
+                }
+                a.invalidate_picker();
+                Some(0)
+            }
+            WM_KEYDOWN if w.0 == 0x1B => {
+                let _ = PostMessageW(Some(h), WM_CLOSE, WPARAM(0), LPARAM(0));
+                Some(0)
+            }
+            WM_CHAR => {
+                if let Some(p) = &mut a.pick_win {
+                    if p.ui.focus != 0 {
+                        match w.0 as u32 {
+                            8 => p.ui.backspace += 1,
+                            c if c >= 32 => p.ui.typed.extend(char::from_u32(c)),
+                            _ => {}
+                        }
+                    }
+                }
+                a.invalidate_picker();
+                Some(0)
+            }
+            WM_DESTROY => {
+                a.pick_win = None;
+                a.close_picker();
+                Some(0)
+            }
+            _ => None,
+        }
+    });
+    match r.flatten() {
+        Some(v) => LRESULT(v),
+        None => DefWindowProcW(h, m, w, l),
     }
 }
 

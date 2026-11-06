@@ -199,11 +199,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
 
     let t = rect(x, top + 144.0, w, a.h - top - 164.0);
     ui.card(t);
-    if app.pick_for == Some(Target::Sound) {
-        picker::draw(ui, app, t);
-    } else {
-        draw_list(ui, app, t);
-    }
+    draw_list(ui, app, t);
 
     let keep = ["Desligado".to_string(), "Silêncio puro".to_string(), "Sinal inaudível".to_string()];
     let mut s = app.cfg.snd_keep as usize;

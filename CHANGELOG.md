@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0
+
+- The limit now changes right away: by default a small Prisma module enters the game when the limiter is on, in DirectX 10, 11 and 12. It does not enter games with a detected anti-cheat. If it fails or the game crashes, the limit moves to the NVIDIA driver and applies on reopening. Do not use it online. / O limite agora muda na hora: por padrão, um pequeno módulo do Prisma entra no jogo quando o limitador está ligado, em DirectX 10, 11 e 12. Ele não entra em jogos com anti-cheat detectado. Se falhar ou o jogo cair, o limite passa para o driver NVIDIA e vale ao reabrir. Não use em jogos online.
+- Buttons in the full meter for mode, limit, unit, method and DLSS profile. Ctrl + Alt + 5 unlocks mouse and arrow keys for them. / Botões no medidor completo para modo, limite, unidade, método e perfil de DLSS. Ctrl + Alt + 5 libera mouse e setas para eles.
+- Anti-cheat detection recognizes more files and online titles. / A detecção de anti-cheat reconhece mais arquivos e títulos online.
+- Choose where the compact and full meters sit, and the compact bar is closer to the top edge. / Escolha onde ficam o medidor compacto e o completo, e a barra compacta está mais perto da borda de cima.
+- The frame time line has a fixed scale and ignores variations up to 1 ms. / A linha de frame time tem escala fixa e ignora variações de até 1 ms.
+- The Optimize question is smaller, sits in the top right corner and leaves after 10 seconds. / A pergunta de otimizar é menor, fica no canto superior direito e some em 10 segundos.
+- The add program list opens in its own window. / A lista de adicionar programas abre em janela própria.
+- Buy me a coffee button in the side menu. / Botão Buy me a coffee no menu lateral.
+
 ## 0.5.2
 
 - Fixed the Meter freezing on an old FPS number. With no new frames it now shows a dash and comes back by itself, and it restarts its reading if Windows stops it. / Corrigido o Medidor preso em um número antigo de FPS. Sem quadros novos ele mostra um traço e volta sozinho, e religa a leitura se o Windows a interromper.

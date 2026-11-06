@@ -16,6 +16,11 @@ use gfx::*;
 const BAR_GAP: f32 = 2.0;
 const BAR_W: f32 = 8.0;
 
+/// Deixa um campo pronto para digitar.
+pub fn focus_on(s: &mut UiState, key: &str) {
+    s.focus = hash_id(key);
+}
+
 fn hash_id(key: &str) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
     key.hash(&mut h);
@@ -458,6 +463,17 @@ impl<'a> Ui<'a> {
     }
 
     /// Ícone do programa em `path`. Sem ícone, desenha a inicial de `name`.
+    /// Imagem embutida no programa, em pixels prontos para a tela.
+    pub fn image(&mut self, key: &str, size: u32, px: &[u8], r: Rect) {
+        if !self.s.icons.contains_key(key) {
+            let b = self.c.bitmap(size, size, px);
+            self.s.icons.insert(key.to_string(), b);
+        }
+        if let Some(b) = self.s.icons.get(key).and_then(|b| b.as_ref()) {
+            self.c.draw_bitmap(b, r);
+        }
+    }
+
     pub fn file_icon(&mut self, path: &str, name: &str, r: Rect) {
         let key = path.to_ascii_lowercase();
         if !self.s.icons.contains_key(&key) {
