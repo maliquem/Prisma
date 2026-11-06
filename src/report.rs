@@ -268,7 +268,7 @@ pub fn machine(snap: &Snapshot, scale: f32) -> String {
 }
 
 /// Só linhas do registro de ações que dizem algo do Prisma, nunca nomes de arquivos ou programas.
-const SAFE_LINES: [&str; 9] = ["erro interno", "o Prisma tinha caído", "plano ", "aplicou ajustes", "desfez ajustes", "desligou a hibernação", "ligou a hibernação", "resetou", "refez"];
+const SAFE_LINES: [&str; 10] = ["erro interno", "o Prisma tinha caído", "plano ", "aplicou ajustes", "desfez ajustes", "desligou a hibernação", "ligou a hibernação", "resetou", "refez", "medidor:"];
 
 pub fn recent_log() -> Vec<String> {
     let mut out = Vec::new();

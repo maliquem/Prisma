@@ -37,6 +37,7 @@ Prisma checks this page when it opens and once a day. When there is a new versio
 - **Tools:** Windows repair (DISM, then SFC), crash history, Windows Update reset, disk check, network, DNS, cleanup, winget, diagnostics and advanced restart. On a suspect disk, modes that write are blocked. Each tool keeps its own step-by-step log, with the exact command, its output, errors and the time of each step.
 - **Optimize:** suggests what to close and always asks. The never-close list is respected, the always-close list closes those programs, and automatic detection suggests names for both.
 - **Meter:** compact bar and full panel over the game, with FPS, 1% and 0.1% lows, frame time, CPU, GPU, VRAM and RAM. Nothing runs inside the game: Prisma reads Windows events. FPS limit per game through the NVIDIA driver, manual or automatic after 5 minutes of play, which applies the next time the game opens. It also picks the DLSS profile, shows the loaded upscaler, frame generation and Reflex, and turns on HDR per game. Needs Prisma running as administrator. In exclusive fullscreen the bar may not appear.
+- **Data log:** an optional recording for studying performance, started from the Meter page or with a shortcut during the game. It saves every frame, every second and the CPU of each game thread in `Documents\Prisma\Logs`, with a summary at the end. Choose 1, 5 or 10 minutes of game time, or no limit. It runs only if you turn it on, and thread reading stays off in games with a detected anti-cheat.
 - **Power:** detects a game or high load and switches the power plan, going back to rest after 60 s without load. You choose the percentage and time that count as load for CPU and GPU. Select a plan to edit it with every option Windows registers, including hidden ones, or to import and export .pow files. Right-clicking a plan also offers Export and Edit. The first edit keeps a copy of the original plan.
 - **Per-game profile:** remembers the volume of each program.
 - **Fullscreenizer:** turns the focused window into borderless fullscreen. Programs you use it on join a saved list, where you can add them from the program list or by their .exe, remove them and mark Automatic to apply it whenever they open.
@@ -66,6 +67,9 @@ All of them can be changed in the program.
 | Show compact meter | Ctrl + Alt + 1 |
 | Show full meter | Ctrl + Alt + 2 |
 | Hide meter | Ctrl + Alt + 0 |
+| Limiter on or off | Ctrl + Alt + 3 |
+| Raise or lower the limit | Ctrl + Alt + ↑ or ↓ |
+| Start or stop the data log | Ctrl + Alt + 4 |
 | Full screen photo | Ctrl + Alt + A |
 | Focused window photo | Ctrl + Alt + J |
 | Record Window and stop | Ctrl + Alt + R |

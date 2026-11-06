@@ -4,7 +4,7 @@ use crate::config::Defaults;
 use crate::meter;
 
 const ROW: f32 = 56.0;
-const ITEMS: [(&str, u32); 14] = [
+const ITEMS: [(&str, u32); 15] = [
     ("FPS e médias", meter::ITEM_FPS),
     ("Frame time", meter::ITEM_FRAME),
     ("Latência do PC", meter::ITEM_LATENCY),
@@ -19,6 +19,7 @@ const ITEMS: [(&str, u32); 14] = [
     ("Disco e rede", meter::ITEM_IO),
     ("Modo de exibição", meter::ITEM_MODE),
     ("Tempo de jogo", meter::ITEM_TIME),
+    ("Registro", meter::ITEM_LOG),
 ];
 
 fn opts(v: &[&str]) -> Vec<String> {
@@ -86,6 +87,68 @@ fn items(ui: &mut Ui, app: &mut App, r: Rect) {
     }
     if changed {
         app.cfg.save();
+    }
+}
+
+fn limiter(ui: &mut Ui, app: &mut App, r: Rect) {
+    ui.card(r);
+    ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Limitador durante o jogo");
+    ui.label(rect(r.x + 16.0, r.y + 36.0, r.w - 32.0, 18.0), "Com o jogo aberto, estes atalhos mudam o limite dele, e o medidor completo mostra o resultado.", MUTED);
+    let (x, w) = (r.x + 16.0, (r.w - 56.0) / 3.0);
+    let keys: [(&str, &str, u8); 3] = [("mt-k4", "Ligar ou desligar", 0), ("mt-k5", "Aumentar o limite", 1), ("mt-k6", "Diminuir o limite", 2)];
+    let mut hk = false;
+    for (i, (key, name, which)) in keys.iter().enumerate() {
+        let kx = x + i as f32 * (w + 12.0);
+        ui.label(rect(kx, r.y + 62.0, w, 18.0), name, TEXT2);
+        let target = match which {
+            0 => &mut app.cfg.hk_limit_toggle,
+            1 => &mut app.cfg.hk_limit_up,
+            _ => &mut app.cfg.hk_limit_down,
+        };
+        hk |= ui.hotkey(key, rect(kx, r.y + 82.0, w, 36.0), target);
+    }
+    ui.label(rect(r.x + 16.0, r.y + 126.0, r.w - 32.0, 18.0), "O driver NVIDIA só lê o limite quando o jogo abre, então a mudança vale ao reabrir o jogo.", MUTED);
+    if hk {
+        app.cfg.save();
+        app.register_hotkeys();
+    }
+}
+
+fn log(ui: &mut Ui, app: &mut App, r: Rect) {
+    ui.card(r);
+    ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Registro de dados");
+    ui.label(rect(r.x + 16.0, r.y + 36.0, r.w - 32.0, 18.0), "Grava cada quadro, cada segundo e a CPU de cada thread do jogo, para estudar desempenho. Só roda se você ligar.", MUTED);
+    let (x, w) = (r.x + 16.0, (r.w - 56.0) / 3.0);
+    let mut changed = false;
+    ui.label(rect(x, r.y + 62.0, w, 18.0), "Tempo de jogo gravado", TEXT2);
+    let mut s = app.cfg.meter_log_time as usize;
+    if ui.select("mt-ltime", rect(x, r.y + 82.0, w, 36.0), &opts(&["1 minuto", "5 minutos", "10 minutos", "Sem limite"]), &mut s) {
+        app.cfg.meter_log_time = s as u8;
+        changed = true;
+    }
+    let kx = x + w + 12.0;
+    ui.label(rect(kx, r.y + 62.0, w, 18.0), "Ligar e desligar", TEXT2);
+    let hk = ui.hotkey("mt-k7", rect(kx, r.y + 82.0, w, 36.0), &mut app.cfg.hk_log);
+    let bx = kx + w + 12.0;
+    let bw = (w - 8.0) / 2.0;
+    let recording = app.meter.log.is_some();
+    let game = !app.meter.session.exe.is_empty();
+    if ui.button_ex("mt-lgo", rect(bx, r.y + 82.0, bw, 36.0), if recording { "Parar" } else { "Iniciar" }, true, game || recording) {
+        app.meter_log();
+    }
+    if ui.button("mt-lopen", rect(bx + bw + 8.0, r.y + 82.0, bw, 36.0), "Abrir pasta", false) {
+        let dir = crate::sys::gamelog::root();
+        let _ = std::fs::create_dir_all(&dir);
+        let _ = std::process::Command::new("explorer").arg(&dir).spawn();
+    }
+    changed |= ui.check("mt-lauto", rect(x, r.y + 126.0, w * 2.0, 32.0), "Começar sozinho quando um jogo abrir", &mut app.cfg.meter_log_auto);
+    let status = if recording { "Gravando" } else if game { "Pronto para gravar" } else { "Abra um jogo para iniciar" };
+    ui.c.text(rect(bx, r.y + 130.0, w, 22.0), status, 12.0, if recording { ACCENT } else { MUTED }, Align::Left, Weight::Regular);
+    if changed || hk {
+        app.cfg.save();
+    }
+    if hk {
+        app.register_hotkeys();
     }
 }
 
@@ -199,11 +262,13 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         picker::draw(ui, app, view);
         return;
     }
-    let (h1, h2) = (200.0, 212.0);
+    let (h1, h2, hl, hr) = (200.0, 212.0, 154.0, 172.0);
     let h3 = 88.0 + app.cfg.meter_games.len().max(1) as f32 * ROW;
-    ui.begin_scroll("meter", view, h1 + h2 + h3 + 24.0);
+    ui.begin_scroll("meter", view, h1 + h2 + hl + hr + h3 + 48.0);
     // Listas por último, para abrirem por cima do resto.
-    games(ui, app, rect(x, top + h1 + h2 + 24.0, w, h3));
+    games(ui, app, rect(x, top + h1 + h2 + hl + hr + 48.0, w, h3));
+    limiter(ui, app, rect(x, top + h1 + h2 + 24.0, w, hl));
+    log(ui, app, rect(x, top + h1 + h2 + hl + 36.0, w, hr));
     items(ui, app, rect(x, top + h1 + 12.0, w, h2));
     general(ui, app, rect(x, top, w, h1));
     ui.end_scroll();

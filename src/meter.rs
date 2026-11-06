@@ -14,6 +14,7 @@ use crate::config::{Config, MeterGame};
 use crate::i18n::comma;
 use crate::overlays::{focus_monitor, register};
 use crate::sys::frames::{self, Stats, Tracker};
+use crate::sys::gamelog::{self, Log};
 use crate::sys::{drs, fileinfo, hdr, monitor};
 use crate::ui::gfx::*;
 use crate::ui::layered::{create_overlay, Layered};
@@ -36,7 +37,10 @@ pub const ITEM_MEM: u32 = 1 << 10;
 pub const ITEM_IO: u32 = 1 << 11;
 pub const ITEM_MODE: u32 = 1 << 12;
 pub const ITEM_TIME: u32 = 1 << 13;
-pub const ITEMS_DEFAULT: u32 = ITEM_FPS | ITEM_FRAME | ITEM_LATENCY | ITEM_LIMIT | ITEM_UPSCALE | ITEM_GEN | ITEM_CPU | ITEM_GPU | ITEM_MEM;
+pub const ITEM_LOG: u32 = 1 << 14;
+pub const ITEMS_DEFAULT: u32 = ITEM_FPS | ITEM_FRAME | ITEM_LATENCY | ITEM_LIMIT | ITEM_UPSCALE | ITEM_GEN | ITEM_CPU | ITEM_GPU | ITEM_MEM | ITEM_LOG;
+/// Durações do registro em segundos. A última opção da tela é sem limite.
+const LOG_SECS: [u32; 3] = [60, 300, 600];
 
 /// Minutos de jogo que o limitador automático mede antes de decidir.
 pub const AUTO_MINUTES: usize = 5;
@@ -46,6 +50,9 @@ const COMPACT_H: f32 = 40.0;
 const FULL_W: f32 = 340.0;
 const VRAM_NEAR: f32 = 90.0;
 const WARN_RED: Color = REC;
+/// Segundos com o jogo em foco e nenhum programa apresentando antes de religar o rastreamento.
+const SILENT_SECS: u32 = 6;
+const RETRY_SECS: u64 = 5;
 
 /// O que o jogo carregou. Carregado não prova que está ligado, e a tela diz isso.
 #[derive(Clone, Default, Debug)]
@@ -62,8 +69,8 @@ pub struct Session {
     pub pid: u32,
     pub started: Option<Instant>,
     pub anti_cheat: bool,
-    /// Limite gravado para a próxima abertura, depois de medir nesta.
-    pub pending: Option<u32>,
+    /// Limite com que o jogo abriu: o driver só lê nessa hora.
+    pub opened: Option<u32>,
     pub measured: VecDeque<f32>,
 }
 
@@ -81,6 +88,16 @@ pub struct Meter {
     tag: Option<(String, Instant)>,
     target: u32,
     scanned: Option<Instant>,
+    /// Havia quadros na última olhada: a mudança vai para o registro uma vez só.
+    live: bool,
+    by_flip: bool,
+    silent: u32,
+    restarted: Option<Instant>,
+    /// Jogo com limite trocado pelos atalhos, gravado quando as teclas param.
+    limit_write: Option<(String, Instant)>,
+    pub log: Option<Log>,
+    /// Pasta do registro que acabou de fechar, para avisar.
+    pub saved: Option<std::path::PathBuf>,
 }
 
 unsafe extern "system" fn meter_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT {
@@ -103,6 +120,10 @@ fn num(v: f32, digits: usize) -> String {
 
 fn gb(b: u64) -> f32 {
     b as f32 / (1u64 << 30) as f32
+}
+
+fn clock(secs: u32) -> String {
+    format!("{}:{:02}", secs / 60, secs % 60)
 }
 
 /// Limite seguro para taxa variável: abaixo da taxa da tela, onde o limite do Reflex fica.
@@ -142,6 +163,23 @@ fn scan(pid: u32) -> Option<Found> {
         let _ = CloseHandle(snap);
     }
     Some(out)
+}
+
+/// `pid` foi aberto por `parent`? Só um filho do jogo pode responder pelos quadros dele:
+/// qualquer outro programa desenhando na tela daria um número que parece certo.
+fn child_of(pid: u32, parent: u32) -> bool {
+    unsafe {
+        let Ok(snap) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else { return false };
+        let mut e = PROCESSENTRY32W { dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32, ..Default::default() };
+        let mut more = Process32FirstW(snap, &mut e).is_ok();
+        let mut found = false;
+        while more && !found {
+            found = e.th32ProcessID == pid && e.th32ParentProcessID == parent;
+            more = Process32NextW(snap, &mut e).is_ok();
+        }
+        let _ = CloseHandle(snap);
+        found
+    }
 }
 
 /// Sinais de anti-cheat na pasta do jogo. Achar nada não prova que não tem.
@@ -202,6 +240,13 @@ impl Meter {
             tag: None,
             target: 0,
             scanned: None,
+            live: false,
+            by_flip: false,
+            silent: 0,
+            restarted: None,
+            limit_write: None,
+            log: None,
+            saved: None,
         }
     }
 
@@ -216,6 +261,12 @@ impl Meter {
         self.view = view;
         if view == VIEW_OFF {
             self.hide_all();
+            // Esconder recomeça a medição: FPS, médias e 1% low voltam do zero.
+            self.stats = Stats::default();
+            self.live = false;
+            if let Some(t) = &mut self.tracker {
+                t.reset();
+            }
             if self.session.exe.is_empty() {
                 self.tracker = None;
                 monitor::METER.store(false, std::sync::atomic::Ordering::Relaxed);
@@ -223,10 +274,73 @@ impl Meter {
             return;
         }
         monitor::METER.store(true, std::sync::atomic::Ordering::Relaxed);
+        self.restart_if_none();
+    }
+
+    fn restart_if_none(&mut self) {
         if self.tracker.is_none() {
             self.tracker = Tracker::start();
+            self.restarted = Some(Instant::now());
             self.target = 0;
+            self.silent = 0;
         }
+    }
+
+    /// A sessão de eventos caiu, ou não entrega nada com o jogo em foco: religa em vez de deixar o número parado.
+    fn keep_tracking(&mut self, silent: bool) {
+        let dead = self.tracker.as_ref().is_some_and(|t| !t.alive());
+        self.silent = if silent { self.silent + 1 } else { 0 };
+        if dead || self.silent >= SILENT_SECS {
+            crate::config::log(&format!("medidor: religou o rastreamento, sessão {}", if dead { "encerrada" } else { "sem eventos" }));
+            self.tracker = None;
+            self.stats = Stats::default();
+            self.silent = 0;
+        }
+        let waited = self.restarted.map_or(true, |t| t.elapsed().as_secs() >= RETRY_SECS);
+        if (self.view != VIEW_OFF || self.log.is_some()) && waited {
+            self.restart_if_none();
+        }
+    }
+
+    /// Liga ou desliga. Devolve true quando começou a gravar.
+    pub fn toggle_log(&mut self, cfg: &Config, snap: &monitor::Snapshot) -> bool {
+        if self.log.is_some() {
+            self.stop_log(cfg);
+            return false;
+        }
+        self.start_log(cfg, snap)
+    }
+
+    fn start_log(&mut self, cfg: &Config, snap: &monitor::Snapshot) -> bool {
+        let head = format!("{}\n{}\n{}\n", self.session.exe, crate::sys::tools::now_stamp(), crate::report::machine(snap, 1.0));
+        let limit = LOG_SECS.get(cfg.meter_log_time as usize).copied();
+        self.log = Log::start(&self.session.exe, head, !self.session.anti_cheat, limit);
+        if self.log.is_none() {
+            return false;
+        }
+        monitor::METER.store(true, std::sync::atomic::Ordering::Relaxed);
+        self.restart_if_none();
+        self.set_tag("Registro ligado".to_string());
+        true
+    }
+
+    /// O que só se sabe depois de o jogo rodar um pouco vai para o fim do resumo.
+    fn stop_log(&mut self, cfg: &Config) {
+        let Some(log) = self.log.take() else { return };
+        if let Some(t) = &mut self.tracker {
+            t.set_recording(false);
+        }
+        let found = self.found.lock().unwrap().clone();
+        let game = entry(cfg, &self.session.exe);
+        let limit = self.session.opened.map_or("—".to_string(), |v| format!("{v} FPS"));
+        let mut tail = format!("{}: {limit}\n", crate::i18n::tr("Limite ativo"));
+        tail += &format!("Upscaling: {} {}\n", found.upscaler, found.version);
+        tail += &format!("{}: {}\n", crate::i18n::tr("Geração de quadros"), found.frame_gen);
+        tail += &format!("Reflex: {}\n", found.reflex);
+        tail += &format!("{}: {}\n", crate::i18n::tr("Perfil DLSS"), game.map_or(0, |g| g.preset));
+        tail += &format!("Anti-cheat: {}\n", self.session.anti_cheat);
+        self.saved = Some(log.finish(tail));
+        self.set_tag("Registro salvo".to_string());
     }
 
     /// Atalhos: mostrar um esconde o outro.
@@ -239,23 +353,75 @@ impl Meter {
         self.tag = Some((text, Instant::now()));
     }
 
-    /// Chamado uma vez por segundo. Liga, desliga e mede conforme o jogo em foco.
-    pub fn tick(&mut self, cfg: &mut Config, game: Option<(String, u32, String)>, fg_pid: u32) {
-        match game {
-            Some((exe, pid, path)) if self.session.exe != exe => self.enter(cfg, exe, pid, path),
-            None if !self.session.exe.is_empty() => self.leave(),
-            _ => {}
+    /// Atalhos do limitador. Cada tecla só muda o valor: o driver é gravado depois, de uma vez.
+    pub fn change_limit(&mut self, cfg: &mut Config, change: i32) -> String {
+        let Some(g) = cfg.meter_games.iter_mut().find(|g| g.exe.eq_ignore_ascii_case(&self.session.exe)) else { return String::new() };
+        if change == 0 {
+            g.limit_mode = if g.limit_mode == 0 { 2 } else { 0 };
+        } else {
+            g.limit_mode = 2;
+            g.limit_fps = (g.limit_fps as i32 + change).clamp(20, 1023) as u32;
         }
-        if self.tracker.is_none() {
+        let text = if g.limit_mode == 0 { "Sem limite".to_string() } else { format!("Limite {}", g.limit_fps) };
+        self.limit_write = Some((g.exe.clone(), Instant::now()));
+        self.set_tag(text.clone());
+        text
+    }
+
+    fn save_limit(&mut self, cfg: &Config) {
+        let ready = self.limit_write.as_ref().is_some_and(|w| w.1.elapsed().as_millis() >= 700);
+        if !ready {
             return;
         }
-        let want = if self.session.pid != 0 { self.session.pid } else { fg_pid };
-        let top = self.tracker.as_ref().and_then(|t| t.top_presenter());
+        let Some((exe, _)) = self.limit_write.take() else { return };
+        cfg.save();
+        if entry(cfg, &exe).is_some_and(|g| !write_limit(g)) {
+            self.set_tag("Sem driver NVIDIA".to_string());
+        }
+    }
+
+    /// Chamado uma vez por segundo. Liga, desliga e mede conforme o jogo em foco.
+    pub fn tick(&mut self, cfg: &mut Config, game: Option<(String, u32, String)>, fg_pid: u32, snap: &monitor::Snapshot) {
+        self.save_limit(cfg);
+        match game {
+            Some((exe, pid, path)) if self.session.exe != exe => self.enter(cfg, exe, pid, path, snap),
+            // Mesmo jogo reaberto: é outro processo, e o antigo nunca mais manda quadros.
+            Some((_, pid, _)) => self.session.pid = pid,
+            None if !self.session.exe.is_empty() => self.leave(cfg),
+            _ => {}
+        }
+        let focused = self.session.pid != 0 && fg_pid == self.session.pid;
+        let (top, own) = self.tracker.as_ref().map_or((None, 0), |t| t.presenters(self.session.pid));
+        self.keep_tracking(focused && top.is_none());
+        let Some(t) = &mut self.tracker else { return };
+        if self.view == VIEW_OFF {
+            self.stats = t.stats();
+        }
+        if let Some(log) = &mut self.log {
+            t.set_recording(true);
+            log.second(gamelog::Second { stats: self.stats.clone(), snap: snap.clone(), frames: t.take_frames(), pid: self.target });
+            log.seen += (self.stats.frames > 0) as u32;
+            if log.limit.is_some_and(|l| log.seen >= l) {
+                self.stop_log(cfg);
+            }
+        }
+        let live = self.stats.frames > 0;
+        if self.stats.by_flip && !self.by_flip {
+            crate::config::log("medidor: contando pela troca de imagem");
+        }
+        self.by_flip |= self.stats.by_flip;
+        if self.live && !live && focused {
+            crate::config::log(&format!("medidor: quadros pararam, alvo {} jogo {} maior {top:?}", self.target, self.session.pid));
+        }
+        self.live = live;
+        let game = self.session.pid;
         // Alguns jogos desenham num processo filho: vale quem está mandando quadros.
         let pid = match top {
-            Some((p, n)) if n > 15 && self.stats.frames == 0 && self.session.pid != 0 => p,
-            _ if self.target == 0 || self.stats.frames > 0 || self.session.pid == 0 => want,
-            _ => self.target,
+            _ if game == 0 => fg_pid,
+            _ if own > 0 => game,
+            _ if live => self.target,
+            Some((p, n)) if n > 15 && focused && child_of(p, game) => p,
+            _ => game,
         };
         if pid != self.target {
             self.target = pid;
@@ -300,18 +466,19 @@ impl Meter {
         let value = if sustained >= cap as f32 * 0.95 { cap } else { STEPS.iter().copied().find(|s| (*s as f32) <= sustained).unwrap_or(30).min(cap) };
         g.limit_fps = value;
         g.measured = true;
-        let done = write_limit(g);
-        self.session.pending = done.then_some(value);
+        write_limit(g);
         cfg.save();
         self.set_tag(format!("Limite {value}"));
     }
 
-    fn enter(&mut self, cfg: &mut Config, exe: String, pid: u32, path: String) {
+    fn enter(&mut self, cfg: &mut Config, exe: String, pid: u32, path: String, snap: &monitor::Snapshot) {
+        self.stop_log(cfg);
         self.session = Session { exe: exe.clone(), pid, anti_cheat: anti_cheat(&path), started: Some(Instant::now()), ..Default::default() };
         *self.found.lock().unwrap() = Found::default();
         self.scanned = None;
         self.hidden = false;
         let listed = entry(cfg, &exe).cloned();
+        self.session.opened = listed.as_ref().and_then(|g| driver_limit(g, 1));
         let hdr_wanted = match listed.as_ref().map_or(0, |g| g.hdr) {
             1 => true,
             2 => false,
@@ -343,10 +510,14 @@ impl Meter {
                 self.target = 0;
             }
         }
+        if cfg.meter_log_auto {
+            self.start_log(cfg, snap);
+        }
     }
 
     /// Fim do jogo, ou do Prisma: devolve o HDR e fecha o rastreamento.
-    pub fn leave(&mut self) {
+    pub fn leave(&mut self, cfg: &Config) {
+        self.stop_log(cfg);
         if self.hdr_before.take() == Some(false) {
             if let Some((adapter, output, _)) = hdr::hdr_output() {
                 hdr::set_hdr(adapter, output, false);
@@ -357,6 +528,8 @@ impl Meter {
         self.apply_view(VIEW_OFF);
         self.tracker = None;
         self.target = 0;
+        self.live = false;
+        self.by_flip = false;
         monitor::METER.store(false, std::sync::atomic::Ordering::Relaxed);
     }
 
@@ -397,7 +570,7 @@ impl Meter {
         let mon = focus_monitor();
         let hwnd = self.compact.hwnd;
         let scale = unsafe { GetDpiForWindow(hwnd) } as f32 / 96.0;
-        let tag = self.tag.as_ref().map(|t| t.0.clone()).or_else(|| self.limit_tag(cfg));
+        let tag = self.tag.as_ref().map(|t| t.0.clone()).or_else(|| self.log.as_ref().map(|l| format!("Registro {}", clock(l.seen)))).or_else(|| self.limit_tag(cfg));
         let w = if tag.is_some() { COMPACT_W + 104.0 } else { COMPACT_W };
         let x = mon.left + ((mon.right - mon.left) as f32 - w * scale) as i32 / 2;
         let y = mon.top + (14.0 * scale) as i32;
@@ -417,6 +590,7 @@ impl Meter {
                 x += 20.0;
             }
             let fps_text = if s.frames > 0 { format!("{:.0}", s.fps) } else { "—".to_string() };
+            let ms_text = if s.frames > 0 { format!("{} ms", num(s.ms, 1)) } else { "— ms".to_string() };
             c.text(at(x, 44.0), &fps_text, 20.0, if s.spike { WARN } else { WHITE }, Align::Left, Weight::Semibold);
             c.text(at(x + 44.0, 28.0), "FPS", 12.0, TEXT2, Align::Left, Weight::Regular);
             x += 84.0;
@@ -425,7 +599,7 @@ impl Meter {
             strip(c, rect(x, 8.0, 120.0, 24.0), &s);
             x += 128.0;
             let ms_color = if s.spike { WARN } else { TEXT };
-            c.text(at(x, 60.0), &format!("{} ms", num(s.ms, 1)), 13.0, ms_color, Align::Left, Weight::Regular);
+            c.text(at(x, 60.0), &ms_text, 13.0, ms_color, Align::Left, Weight::Regular);
             x += 66.0;
             c.line(x, 10.0, x, 30.0, rgb(0x3a3f49), 1.0);
             x += 12.0;
@@ -494,17 +668,19 @@ impl Meter {
                 format!("{real:.0} reais + {:.0} gerados", s.fps - real)
             });
             out.push(Line::Big(s.fps, self.multiplier().is_some(), split.unwrap_or_default()));
-            out.push(Line::Three([("Média", format!("{:.0}", s.avg)), ("1% low", format!("{:.0}", s.low1)), ("0,1% low", format!("{:.0}", s.low01))]));
+            let whole = |v: f32| if s.frames > 0 { format!("{v:.0}") } else { "—".to_string() };
+            out.push(Line::Three([("Média", whole(s.avg)), ("1% low", whole(s.low1)), ("0,1% low", whole(s.low01))]));
         }
         if on(ITEM_FRAME) {
-            out.push(Line::Pair("Frame time".into(), format!("{} ms · variação {} ms", num(s.ms, 1), num(s.dev, 1)), if s.spike { WARN } else { TEXT }));
+            let text = if s.frames > 0 { format!("{} ms · variação {} ms", num(s.ms, 1), num(s.dev, 1)) } else { "Sem quadros agora".to_string() };
+            out.push(Line::Pair("Frame time".into(), text, if s.spike { WARN } else { TEXT }));
             out.push(Line::Strip);
         }
         if on(ITEM_LATENCY) {
             let text = s.latency.map_or("Só em jogos com Reflex".to_string(), |v| format!("{v:.0} ms"));
             out.push(Line::Pair("Latência do PC".into(), text, TEXT));
         }
-        if on(ITEM_LIMIT) {
+        if on(ITEM_LIMIT) || self.limit_write.is_some() {
             out.push(Line::Head("Limitador".into()));
             let (kind, value) = match game.map_or(0, |g| g.limit_mode) {
                 1 => ("Automático", game.map_or(0, |g| g.limit_fps)),
@@ -520,9 +696,13 @@ impl Meter {
             if game.is_some_and(|g| g.limit_mode == 1 && !g.measured) {
                 out.push(Line::Note(format!("Medindo há {} min de {AUTO_MINUTES}.", self.session.measured.len() / 60), TEXT2));
             }
-            if let Some(v) = self.session.pending {
-                out.push(Line::Note(format!("Limite {v} vale na próxima abertura do jogo."), ACCENT));
+            if game.and_then(|g| driver_limit(g, 1)) != self.session.opened && !self.session.exe.is_empty() {
+                let now = self.session.opened.map_or("Sem limite".to_string(), |v| format!("{v} FPS"));
+                out.push(Line::Pair("Ativo agora".into(), now, TEXT));
+                out.push(Line::Note("O novo limite vale ao reabrir o jogo.".into(), ACCENT));
             }
+            out.push(Line::Note(format!("Ligar: {}", cfg.hk_limit_toggle.label()), TEXT2));
+            out.push(Line::Note(format!("Ajustar: {} · {}", cfg.hk_limit_up.label(), cfg.hk_limit_down.label()), TEXT2));
         }
         if on(ITEM_UPSCALE) {
             out.push(Line::Head("Upscaling".into()));
@@ -559,6 +739,20 @@ impl Meter {
                 }
                 _ => out.push(Line::Pair("Tela".into(), "HDR desligado".into(), TEXT)),
             }
+        }
+        if on(ITEM_LOG) || self.log.is_some() {
+            out.push(Line::Head("Registro".into()));
+            match &self.log {
+                Some(l) => {
+                    let time = l.limit.map_or(clock(l.seen), |v| format!("{} / {}", clock(l.seen), clock(v)));
+                    out.push(Line::Pair("Gravando".into(), time, ACCENT));
+                }
+                None => {
+                    let time = LOG_SECS.get(cfg.meter_log_time as usize).map_or("Sem limite".to_string(), |v| format!("{} min", v / 60));
+                    out.push(Line::Pair("Duração".into(), time, TEXT));
+                }
+            }
+            out.push(Line::Note(format!("Ligar e desligar: {}", cfg.hk_log.label()), TEXT2));
         }
         if on(ITEM_CPU) {
             out.push(Line::Head(format!("CPU {:.0}%", snap.cpu)));
@@ -688,7 +882,8 @@ impl Line {
                     c.text(rect(tx, y, 32.0, 56.0), "G", 44.0, ACCENT, Align::Left, Weight::Semibold);
                     tx += 36.0;
                 }
-                c.text(rect(tx, y, 110.0, 56.0), &format!("{fps:.0}"), 44.0, WHITE, Align::Left, Weight::Semibold);
+                let shown = if *fps > 0.0 { format!("{fps:.0}") } else { "—".to_string() };
+                c.text(rect(tx, y, 110.0, 56.0), &shown, 44.0, WHITE, Align::Left, Weight::Semibold);
                 c.text(rect(tx + 104.0, y + 8.0, 40.0, 44.0), "FPS", 13.0, TEXT2, Align::Left, Weight::Regular);
                 c.text(rect(tx + 140.0, y + 8.0, w - (tx - x) - 140.0, 44.0), split, 12.0, TEXT2, Align::Right, Weight::Regular);
             }

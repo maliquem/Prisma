@@ -37,6 +37,7 @@ O Prisma procura nesta página ao abrir e uma vez por dia. Quando há versão no
 - **Ferramentas:** reparo do Windows (DISM e depois SFC), histórico de falhas, Windows Update, verificação de disco, rede, DNS, limpeza, winget, diagnóstico e reinício avançado. Em disco suspeito, os modos que escrevem ficam bloqueados. Cada ferramenta guarda o próprio passo a passo, com o comando exato, a saída, os erros e o tempo de cada etapa.
 - **Otimizar:** sugere o que fechar e sempre pergunta. Blacklist nunca fecha, whitelist sempre fecha. A detecção automática sugere nomes para as duas listas.
 - **Medidor:** barra compacta e painel completo sobre o jogo, com FPS, 1% e 0,1% low, frame time, CPU, GPU, VRAM e RAM. Nada roda dentro do jogo: o Prisma lê os eventos do Windows. Limite de FPS por jogo pelo driver NVIDIA, manual ou automático depois de 5 minutos de jogo, que vale na próxima abertura. Também escolhe o perfil de DLSS, mostra upscaler, geração de quadros e Reflex carregados, e liga o HDR por jogo. Precisa do Prisma como administrador. Em tela cheia exclusiva, a barra pode não aparecer.
+- **Registro de dados:** gravação opcional para estudar desempenho, ligada na aba Medidor ou por atalho durante o jogo. Guarda cada quadro, cada segundo e a CPU de cada thread do jogo em `Documentos\Prisma\Logs`, com um resumo no final. Escolha 1, 5 ou 10 minutos de jogo, ou sem limite. Só roda se você ligar, e a leitura de threads fica desligada em jogos com anti-cheat detectado.
 - **Energia:** detecta jogo ou carga alta e troca o plano. Volta ao repouso depois de 60 s sem carga. Você escolhe a porcentagem e o tempo que contam como carga na CPU e na GPU. Selecione um plano para editar com todas as opções que o Windows registra, inclusive as ocultas, ou importar e exportar em arquivos .pow. O botão direito no plano também oferece Exportar e Editar. A primeira edição guarda uma cópia do plano original.
 - **Perfil por jogo:** lembra o volume de cada programa.
 - **Fullscreenizer:** deixa a janela em foco em tela cheia sem bordas. Quem usa uma vez entra numa lista salva, onde dá para adicionar pela lista de programas ou pelo .exe, remover e marcar Automático para aplicar sempre que o programa abrir.
@@ -66,6 +67,9 @@ Todos podem ser trocados no programa.
 | Mostrar medidor compacto | Ctrl + Alt + 1 |
 | Mostrar medidor completo | Ctrl + Alt + 2 |
 | Esconder medidor | Ctrl + Alt + 0 |
+| Ligar ou desligar o limitador | Ctrl + Alt + 3 |
+| Aumentar ou diminuir o limite | Ctrl + Alt + ↑ ou ↓ |
+| Ligar ou desligar o registro de dados | Ctrl + Alt + 4 |
 | Foto da tela inteira | Ctrl + Alt + A |
 | Foto da janela em foco | Ctrl + Alt + J |
 | Gravar Janela e parar | Ctrl + Alt + R |

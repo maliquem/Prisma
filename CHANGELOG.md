@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.2
+
+- Fixed the Meter freezing on an old FPS number. With no new frames it now shows a dash and comes back by itself, and it restarts its reading if Windows stops it. / Corrigido o Medidor preso em um número antigo de FPS. Sem quadros novos ele mostra um traço e volta sozinho, e religa a leitura se o Windows a interromper.
+- Hiding the meter with the shortcut clears the measurements, so FPS, averages and lows start over. / Esconder o medidor pelo atalho zera as medições, e FPS, médias e lows recomeçam.
+- Limiter shortcuts during the game, for any open game: Ctrl + Alt + 3 turns it on or off, Ctrl + Alt + ↑ and ↓ change the limit. The full meter shows the new value and the one active now. The driver reads the limit when the game opens, so changes apply when it reopens. / Atalhos do limitador durante o jogo, para qualquer jogo aberto: Ctrl + Alt + 3 liga ou desliga, Ctrl + Alt + ↑ e ↓ mudam o limite. O medidor completo mostra o novo valor e o ativo agora. O driver lê o limite quando o jogo abre, então a mudança vale ao reabrir.
+- New optional data log: every frame, every second and the CPU of each game thread saved in Documents\Prisma\Logs, with a summary at the end. Choose 1, 5 or 10 minutes of game time, or no limit, and start it from the Meter page or with Ctrl + Alt + 4. / Novo registro de dados opcional: cada quadro, cada segundo e a CPU de cada thread do jogo salvos em Documentos\Prisma\Logs, com um resumo no final. Escolha 1, 5 ou 10 minutos de jogo, ou sem limite, e ligue na aba Medidor ou com Ctrl + Alt + 4.
+- Frame timing no longer depends on the PC's clock frequency. / A medição de quadros não depende mais da frequência do relógio do PC.
+
 ## 0.5.1
 
 - New Report a bug page: choose the feature and severity, describe the problem, add a picture, and your browser opens GitHub with everything written. You confirm before anything is published. / Nova aba Reportar bug: escolha a função e a gravidade, descreva o problema, junte uma foto, e o navegador abre o GitHub com tudo escrito. Nada é publicado antes de você confirmar.

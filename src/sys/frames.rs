@@ -7,7 +7,7 @@ use std::sync::Mutex;
 use windows::core::*;
 use windows::Win32::Foundation::*;
 use windows::Win32::System::Diagnostics::Etw::*;
-use windows::Win32::System::Performance::QueryPerformanceFrequency;
+use windows::Win32::System::Performance::{QueryPerformanceCounter, QueryPerformanceFrequency};
 
 const DXGKRNL: GUID = GUID::from_u128(0x802ec45a_1e99_4b83_9920_87c98277ba9d);
 /// Marcadores de latência que jogos com Reflex publicam.
@@ -27,10 +27,19 @@ const MARKER_PRESENT_END: u32 = 5;
 /// Cerca de um minuto a 120 FPS.
 const KEEP: usize = 7200;
 const STRIP: usize = 120;
+/// Sem quadro novo por este tempo, o número deixa de valer. O Windows entrega os eventos a cada segundo.
+const STALE_MS: f32 = 3000.0;
 
 #[derive(Default)]
 struct State {
     target: u32,
+    /// Um quarto de segundo em unidades do relógio.
+    quiet: i64,
+    last_present: i64,
+    /// Quadros contados pela troca de imagem desde a última leitura.
+    by_flip: u32,
+    /// Todos os quadros, só enquanto o registro em arquivo está ligado.
+    rec: Option<Vec<i64>>,
     times: VecDeque<i64>,
     /// Apresentações por processo desde a última leitura.
     presents: HashMap<u32, u32>,
@@ -39,6 +48,13 @@ struct State {
     /// Início de cada quadro, para somar a latência quando ele termina.
     open: HashMap<u64, i64>,
     latency: VecDeque<f32>,
+}
+
+impl State {
+    /// História limpa, sem perder o que não é história.
+    fn fresh(&mut self, target: u32) -> Self {
+        Self { target, quiet: self.quiet, rec: self.rec.take(), presents: std::mem::take(&mut self.presents), ..Default::default() }
+    }
 }
 
 static STATE: Mutex<Option<State>> = Mutex::new(None);
@@ -61,6 +77,8 @@ pub struct Stats {
     pub direct: bool,
     /// Pior intervalo do último segundo, para descartar carregamentos.
     pub worst: f32,
+    /// O jogo parou de avisar a apresentação, e os quadros saem da troca de imagem.
+    pub by_flip: bool,
 }
 
 unsafe extern "system" fn on_event(r: *mut EVENT_RECORD) {
@@ -69,18 +87,30 @@ unsafe extern "system" fn on_event(r: *mut EVENT_RECORD) {
     let Ok(mut guard) = STATE.lock() else { return };
     let Some(s) = guard.as_mut() else { return };
     if h.ProviderId == DXGKRNL {
-        match h.EventDescriptor.Id {
-            PRESENT_INFO => {
-                *s.presents.entry(h.ProcessId).or_default() += 1;
-                if h.ProcessId == s.target {
-                    if s.times.len() >= KEEP {
-                        s.times.pop_front();
-                    }
-                    s.times.push_back(h.TimeStamp);
+        let id = h.EventDescriptor.Id;
+        if !matches!(id, PRESENT_INFO | FLIP_INFO | FLIP_MPO_INFO) {
+            return;
+        }
+        *s.presents.entry(h.ProcessId).or_default() += 1;
+        if h.ProcessId == s.target {
+            let flip = id != PRESENT_INFO;
+            let counted = if flip {
+                s.flips += 1;
+                h.TimeStamp - s.last_present > s.quiet
+            } else {
+                s.last_present = h.TimeStamp;
+                true
+            };
+            if counted {
+                s.by_flip += flip as u32;
+                if s.times.len() >= KEEP {
+                    s.times.pop_front();
+                }
+                s.times.push_back(h.TimeStamp);
+                if let Some(rec) = &mut s.rec {
+                    rec.push(h.TimeStamp);
                 }
             }
-            FLIP_INFO | FLIP_MPO_INFO if h.ProcessId == s.target => s.flips += 1,
-            _ => {}
         }
     } else if h.ProviderId == PCL && h.ProcessId == s.target && r.UserDataLength >= 12 && !r.UserData.is_null() {
         let d = std::slice::from_raw_parts(r.UserData as *const u8, 12);
@@ -166,10 +196,12 @@ impl Tracker {
             if StartTraceW(&mut handle, NAME, &mut p.p).is_err() || !enable_filtered(handle) {
                 return None;
             }
-            *STATE.lock().unwrap() = Some(State::default());
+            let mut f = 0i64;
+            let _ = QueryPerformanceFrequency(&mut f);
+            *STATE.lock().unwrap() = Some(State { quiet: f / 4, ..Default::default() });
             let mut log = EVENT_TRACE_LOGFILEW::default();
             log.LoggerName = PWSTR(NAME.as_ptr() as *mut u16);
-            log.Anonymous1.ProcessTraceMode = PROCESS_TRACE_MODE_REAL_TIME | PROCESS_TRACE_MODE_EVENT_RECORD;
+            log.Anonymous1.ProcessTraceMode = PROCESS_TRACE_MODE_REAL_TIME | PROCESS_TRACE_MODE_EVENT_RECORD | PROCESS_TRACE_MODE_RAW_TIMESTAMP;
             log.Anonymous2.EventRecordCallback = Some(on_event);
             let consumer = OpenTraceW(&mut log);
             if consumer.Value == u64::MAX {
@@ -184,8 +216,6 @@ impl Tracker {
                     let _ = ProcessTrace(&[PROCESSTRACE_HANDLE { Value: c }], None, None);
                 })
                 .ok();
-            let mut f = 0i64;
-            let _ = QueryPerformanceFrequency(&mut f);
             Some(Self { handle, consumer, thread, frequency: f as f32, pcl: false })
         }
     }
@@ -194,9 +224,37 @@ impl Tracker {
     pub fn set_target(&mut self, pid: u32) {
         if let Some(s) = STATE.lock().unwrap().as_mut() {
             if s.target != pid {
-                *s = State { target: pid, ..Default::default() };
+                *s = s.fresh(pid);
             }
         }
+    }
+
+    /// Apaga a história sem trocar de processo.
+    pub fn reset(&mut self) {
+        if let Some(s) = STATE.lock().unwrap().as_mut() {
+            *s = s.fresh(s.target);
+        }
+    }
+
+    /// Liga a cópia de cada quadro para o registro em arquivo.
+    pub fn set_recording(&mut self, on: bool) {
+        if let Some(s) = STATE.lock().unwrap().as_mut() {
+            if !on {
+                s.rec = None;
+            } else if s.rec.is_none() {
+                s.rec = Some(Vec::new());
+            }
+        }
+    }
+
+    /// Quadros desde a última chamada, com o relógio do Windows.
+    pub fn take_frames(&mut self) -> Vec<i64> {
+        STATE.lock().unwrap().as_mut().and_then(|s| s.rec.as_mut().map(std::mem::take)).unwrap_or_default()
+    }
+
+    /// A sessão do Windows ainda entrega eventos? Parar de fora encerra a linha que lê.
+    pub fn alive(&self) -> bool {
+        self.thread.as_ref().is_some_and(|t| !t.is_finished())
     }
 
     /// Ligar os marcadores faz o jogo enviar pings e teclas sintéticas: só com o medidor aberto.
@@ -210,13 +268,14 @@ impl Tracker {
         }
     }
 
-    /// Processo que mais apresentou quadros desde a última chamada.
-    pub fn top_presenter(&self) -> Option<(u32, u32)> {
+    /// Quem mais apresentou quadros desde a última chamada, e quantos foram os de `pid`.
+    pub fn presenters(&self, pid: u32) -> (Option<(u32, u32)>, u32) {
         let mut g = STATE.lock().unwrap();
-        let s = g.as_mut()?;
+        let Some(s) = g.as_mut() else { return (None, 0) };
         let top = s.presents.iter().max_by_key(|p| *p.1).map(|(p, n)| (*p, *n));
+        let own = s.presents.get(&pid).copied().unwrap_or(0);
         s.presents.clear();
-        top
+        (top, own)
     }
 
     pub fn stats(&self) -> Stats {
@@ -224,10 +283,21 @@ impl Tracker {
         let mut g = STATE.lock().unwrap();
         let Some(s) = g.as_mut() else { return out };
         let tick = 1000.0 / self.frequency;
+        let mut now = 0i64;
+        unsafe {
+            let _ = QueryPerformanceCounter(&mut now);
+        }
+        if s.times.back().is_some_and(|last| (now - last) as f32 * tick > STALE_MS) {
+            // Número antigo parece medição: sem quadro novo, a história sai inteira.
+            *s = s.fresh(s.target);
+            return out;
+        }
         let ms: Vec<f32> = s.times.iter().zip(s.times.iter().skip(1)).map(|(a, b)| (b - a) as f32 * tick).filter(|v| *v > 0.0).collect();
         out.frames = ms.len();
         out.direct = s.flips > 0;
+        out.by_flip = s.by_flip > 0;
         s.flips = 0;
+        s.by_flip = 0;
         let last = *s.times.back().unwrap_or(&0);
         let since = |list: &VecDeque<i64>, t: f32| list.iter().rev().take_while(|v| (last - **v) as f32 * tick < t).count();
         if !s.latency.is_empty() {
@@ -313,7 +383,7 @@ pub fn measure(pid: u32, secs: u64) -> String {
     for _ in 0..secs {
         std::thread::sleep(std::time::Duration::from_secs(1));
         let s = t.stats();
-        out += &format!("fps {:.1} avg {:.1} low1 {:.1} low01 {:.1} ms {:.2} dev {:.2} direto {} top {:?}\n", s.fps, s.avg, s.low1, s.low01, s.ms, s.dev, s.direct, t.top_presenter());
+        out += &format!("fps {:.1} avg {:.1} low1 {:.1} low01 {:.1} ms {:.2} dev {:.2} direto {} troca {} top {:?}\n", s.fps, s.avg, s.low1, s.low01, s.ms, s.dev, s.direct, s.by_flip, t.presenters(pid).0);
     }
     out
 }

@@ -1119,3 +1119,60 @@ Não consegui abrir o navegador	Could not open the browser
 Não consegui abrir essa imagem	Could not open this image
 Imagens	Images
 O Prisma fechou sozinho da última vez. Se puder, conte em Reportar bug.	Prisma closed unexpectedly last time. If you can, tell us in Report a bug.
+Abra um jogo para usar o limitador.	Open a game to use the limiter.
+Abra um jogo para gravar o registro.	Open a game to record the log.
+Registro iniciado	Log started
+Não consegui criar a pasta do registro	Could not create the log folder
+Registro salvo em Documentos\Prisma\Logs	Log saved in Documents\Prisma\Logs
+Sem limite	No limit
+Limite {}	Limit {}
+Sem driver NVIDIA	No NVIDIA driver
+Ativo agora	Active now
+{} FPS	{} FPS
+O novo limite vale ao reabrir o jogo.	The new limit applies when the game reopens.
+Ligar: {}	Turn on: {}
+Ajustar: {} · {}	Adjust: {} · {}
+Gravando	Recording
+Duração	Duration
+Ligar e desligar: {}	Start and stop: {}
+Ligar e desligar	Start and stop
+Registro ligado	Log started
+Registro salvo	Log saved
+Registro {}	Log {}
+Sem quadros agora	No frames right now
+Limitador durante o jogo	Limiter during the game
+Com o jogo aberto, estes atalhos mudam o limite dele, e o medidor completo mostra o resultado.	With the game open, these shortcuts change its limit, and the full meter shows the result.
+O driver NVIDIA só lê o limite quando o jogo abre, então a mudança vale ao reabrir o jogo.	The NVIDIA driver only reads the limit when the game opens, so the change applies when the game reopens.
+Ligar ou desligar	Turn on or off
+Aumentar o limite	Raise the limit
+Diminuir o limite	Lower the limit
+Ligar o limitador	Turn on the limiter
+Registro de dados	Data log
+Grava cada quadro, cada segundo e a CPU de cada thread do jogo, para estudar desempenho. Só roda se você ligar.	Records every frame, every second and the CPU of each game thread, to study performance. Runs only if you turn it on.
+Tempo de jogo gravado	Game time recorded
+5 minutos	5 minutes
+10 minutos	10 minutes
+Abrir pasta	Open folder
+Começar sozinho quando um jogo abrir	Start by itself when a game opens
+Pronto para gravar	Ready to record
+Abra um jogo para iniciar	Open a game to start
+Quadros	Frames
+FPS médio	Average FPS
+Frame time mediano	Median frame time
+Frame time p95	Frame time p95
+Frame time p99	Frame time p99
+Frame time p99,9	Frame time p99.9
+Pior quadro	Worst frame
+Engasgos	Stutters
+CPU média	Average CPU
+Núcleo lógico mais usado	Busiest logical core
+GPU média	Average GPU
+Pico de VRAM	VRAM peak
+Pico de RAM	RAM peak
+Threads mais ocupadas, em % de um núcleo	Busiest threads, in % of one core
+média	average
+pico	peak
+Limite ativo	Active limit
+Leitura: GPU cheia na maior parte do tempo, então o limite parece ser a GPU.	Reading: GPU full most of the time, so the limit looks like the GPU.
+Leitura: uma thread perto de um núcleo inteiro com a GPU sobrando, então o limite parece ser a CPU.	Reading: one thread near a full core with GPU to spare, so the limit looks like the CPU.
+Leitura: nem GPU nem uma thread sozinha ficaram cheias. Veja os trechos em segundos.csv.	Reading: neither the GPU nor a single thread was full. Check the stretches in segundos.csv.

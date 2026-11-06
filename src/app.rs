@@ -114,6 +114,10 @@ const HK_REC_FULL: i32 = 13;
 const HK_METER_C: i32 = 14;
 const HK_METER_F: i32 = 15;
 const HK_METER_O: i32 = 16;
+const HK_LIMIT_T: i32 = 17;
+const HK_LIMIT_UP: i32 = 18;
+const HK_LIMIT_DOWN: i32 = 19;
+const HK_LOG: i32 = 20;
 const HK_VOL_UP: i32 = 10;
 const HK_VOL_DOWN: i32 = 11;
 const HK_MUTE: i32 = 12;
@@ -745,7 +749,10 @@ pub fn start(background: bool) {
 }
 
 pub fn shutdown() {
-    with(|a| a.meter.leave());
+    with(|a| {
+        let cfg = a.cfg.clone();
+        a.meter.leave(&cfg);
+    });
     with(|a| {
         if a.rec_start.is_some() {
             a.toggle_record(true);
@@ -810,7 +817,7 @@ impl App {
     pub fn register_hotkeys(&mut self) {
         self.unhook_force_key();
         unsafe {
-            for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_REPLAY, HK_FORCE, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE] {
+            for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_REPLAY, HK_FORCE, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE] {
                 let _ = UnregisterHotKey(Some(self.hub), id);
             }
         }
@@ -828,6 +835,10 @@ impl App {
             (HK_METER_C, c.hk_meter_compact, "Medidor compacto", true),
             (HK_METER_F, c.hk_meter_full, "Medidor completo", true),
             (HK_METER_O, c.hk_meter_off, "Esconder medidor", true),
+            (HK_LOG, c.hk_log, "Registro de dados", true),
+            (HK_LIMIT_T, c.hk_limit_toggle, "Ligar o limitador", true),
+            (HK_LIMIT_UP, c.hk_limit_up, "Aumentar o limite", false),
+            (HK_LIMIT_DOWN, c.hk_limit_down, "Diminuir o limite", false),
             (HK_REPLAY, c.hk_replay, "Replay", true),
             (HK_FORCE, c.hk_force, "Fechar à força", true),
             (HK_VOL_UP, Hotkey::new(c.vol_mods, VK_VOL_UP), "Aumentar volume", false),
@@ -871,7 +882,7 @@ impl App {
         if on {
             self.unhook_force_key();
             unsafe {
-                for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_REPLAY, HK_FORCE] {
+                for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_REPLAY, HK_FORCE] {
                     let _ = UnregisterHotKey(Some(self.hub), id);
                 }
             }
@@ -903,6 +914,10 @@ impl App {
             HK_METER_C => self.meter_view(crate::meter::VIEW_COMPACT),
             HK_METER_F => self.meter_view(crate::meter::VIEW_FULL),
             HK_METER_O => self.meter_view(crate::meter::VIEW_OFF),
+            HK_LOG => self.meter_log(),
+            HK_LIMIT_T => self.meter_limit(0),
+            HK_LIMIT_UP => self.meter_limit(1),
+            HK_LIMIT_DOWN => self.meter_limit(-1),
             HK_REC => self.toggle_record(true),
             HK_REC_FULL => self.toggle_record(false),
             HK_REPLAY => self.save_replay(),
@@ -1281,12 +1296,7 @@ impl App {
 
     /// Registro simples de tudo que o Prisma mudou no sistema, para consultar e desfazer.
     pub fn log(&self, line: &str) {
-        use std::io::Write;
-        let t = unsafe { windows::Win32::System::SystemInformation::GetLocalTime() };
-        let path = crate::config::data_dir().join("acoes.log");
-        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
-            let _ = writeln!(f, "{:04}-{:02}-{:02} {:02}:{:02}:{:02} {line}", t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond);
-        }
+        crate::config::log(line);
     }
 
     fn take_shot(&mut self) {
@@ -1521,6 +1531,42 @@ impl App {
         }
     }
 
+    /// Liga ou desliga o registro em arquivo do jogo aberto.
+    pub fn meter_log(&mut self) {
+        if self.meter.session.exe.is_empty() {
+            self.toast.info("Abra um jogo para gravar o registro.");
+            return;
+        }
+        if self.meter.toggle_log(&self.cfg, &self.snap) {
+            if self.meter.view == crate::meter::VIEW_OFF {
+                self.toast.info("Registro iniciado");
+            }
+        } else if self.meter.log.is_none() && self.meter.saved.is_none() {
+            self.toast.info("Não consegui criar a pasta do registro");
+        }
+        self.show_saved_log();
+    }
+
+    fn show_saved_log(&mut self) {
+        if self.meter.saved.take().is_some() {
+            self.toast.info("Registro salvo em Documentos\\Prisma\\Logs");
+        }
+    }
+
+    /// Atalhos do limitador: valem para o jogo aberto, mesmo fora da lista.
+    fn meter_limit(&mut self, change: i32) {
+        let (exe, pid) = (self.meter.session.exe.clone(), self.meter.session.pid);
+        if exe.is_empty() {
+            self.toast.info("Abra um jogo para usar o limitador.");
+            return;
+        }
+        self.add_meter_game(&exe, &procs::image_path(pid).unwrap_or_default());
+        let text = self.meter.change_limit(&mut self.cfg, change);
+        if self.meter.view == crate::meter::VIEW_OFF {
+            self.toast.info(&text);
+        }
+    }
+
     fn meter_timer(&self) {
         unsafe {
             if self.meter.view != crate::meter::VIEW_OFF {
@@ -1549,7 +1595,8 @@ impl App {
         let pid = std::env::var("PRISMA_METER_PID").ok().and_then(|v| v.parse().ok()).unwrap_or(self.fg_pid);
         #[cfg(not(debug_assertions))]
         let pid = self.fg_pid;
-        self.meter.tick(&mut self.cfg, game, pid);
+        self.meter.tick(&mut self.cfg, game, pid, &self.snap);
+        self.show_saved_log();
         if was != self.meter.view {
             self.meter_timer();
         }

@@ -98,6 +98,10 @@ pub fn vk_name(vk: u32) -> String {
         0x21 => "Page Up".into(),
         0x22 => "Page Down".into(),
         0x20 => "Espaço".into(),
+        0x25 => "←".into(),
+        0x26 => "↑".into(),
+        0x27 => "→".into(),
+        0x28 => "↓".into(),
         0x60..=0x69 => format!("Num {}", vk - 0x60),
         _ => format!("Tecla {vk}"),
     }
@@ -195,6 +199,13 @@ pub struct Config {
     pub hk_meter_compact: Hotkey,
     pub hk_meter_full: Hotkey,
     pub hk_meter_off: Hotkey,
+    pub hk_log: Hotkey,
+    /// 0 um minuto, 1 cinco, 2 dez, 3 sem limite.
+    pub meter_log_time: u8,
+    pub meter_log_auto: bool,
+    pub hk_limit_toggle: Hotkey,
+    pub hk_limit_up: Hotkey,
+    pub hk_limit_down: Hotkey,
     pub snd_keep: u8,
     pub snd_apps: Vec<SndApp>,
     pub black: Vec<String>,
@@ -265,6 +276,12 @@ impl Default for Config {
             hk_meter_compact: Hotkey::new(MOD_CTRL | MOD_ALT, b'1' as u32),
             hk_meter_full: Hotkey::new(MOD_CTRL | MOD_ALT, b'2' as u32),
             hk_meter_off: Hotkey::new(MOD_CTRL | MOD_ALT, b'0' as u32),
+            hk_log: Hotkey::new(MOD_CTRL | MOD_ALT, b'4' as u32),
+            meter_log_time: 1,
+            meter_log_auto: false,
+            hk_limit_toggle: Hotkey::new(MOD_CTRL | MOD_ALT, b'3' as u32),
+            hk_limit_up: Hotkey::new(MOD_CTRL | MOD_ALT, 0x26),
+            hk_limit_down: Hotkey::new(MOD_CTRL | MOD_ALT, 0x28),
             snd_keep: 0,
             snd_apps: Vec::new(),
             black: Vec::new(),
@@ -304,6 +321,15 @@ pub fn data_dir() -> PathBuf {
     } else {
         let exe = std::env::current_exe().unwrap_or_default();
         exe.parent().map(|p| p.join("PrismaData")).unwrap_or_else(|| PathBuf::from("PrismaData"))
+    }
+}
+
+/// Acrescenta uma linha ao registro de ações.
+pub fn log(line: &str) {
+    use std::io::Write;
+    let t = unsafe { windows::Win32::System::SystemInformation::GetLocalTime() };
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(data_dir().join("acoes.log")) {
+        let _ = writeln!(f, "{:04}-{:02}-{:02} {:02}:{:02}:{:02} {line}", t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond);
     }
 }
 
@@ -370,6 +396,12 @@ impl Config {
                 "hk_meter_compact" => c.hk_meter_compact = Hotkey::parse(v),
                 "hk_meter_full" => c.hk_meter_full = Hotkey::parse(v),
                 "hk_meter_off" => c.hk_meter_off = Hotkey::parse(v),
+                "hk_log" => c.hk_log = Hotkey::parse(v),
+                "meter_log_time" => c.meter_log_time = v.parse().unwrap_or(1),
+                "meter_log_auto" => c.meter_log_auto = v == "1",
+                "hk_limit_toggle" => c.hk_limit_toggle = Hotkey::parse(v),
+                "hk_limit_up" => c.hk_limit_up = Hotkey::parse(v),
+                "hk_limit_down" => c.hk_limit_down = Hotkey::parse(v),
                 "meter_game" => {
                     let p: Vec<&str> = v.split('|').collect();
                     if p.len() == 9 {
@@ -519,6 +551,11 @@ impl Config {
         hk(&mut s, "hk_meter_compact", self.hk_meter_compact);
         hk(&mut s, "hk_meter_full", self.hk_meter_full);
         hk(&mut s, "hk_meter_off", self.hk_meter_off);
+        hk(&mut s, "hk_log", self.hk_log);
+        s.push_str(&format!("meter_log_time={}\nmeter_log_auto={}\n", self.meter_log_time, self.meter_log_auto as u8));
+        hk(&mut s, "hk_limit_toggle", self.hk_limit_toggle);
+        hk(&mut s, "hk_limit_up", self.hk_limit_up);
+        hk(&mut s, "hk_limit_down", self.hk_limit_down);
         for g in &self.meter_games {
             let _ = writeln!(s, "meter_game={}|{}|{}|{}|{}|{}|{}|{}|{}", g.exe, g.view, g.limit_mode, g.limit_fps, b(g.limit_real), b(g.measured), g.hdr, g.preset, g.path);
         }
@@ -614,6 +651,12 @@ impl Config {
                 self.hk_meter_compact = d.hk_meter_compact;
                 self.hk_meter_full = d.hk_meter_full;
                 self.hk_meter_off = d.hk_meter_off;
+                self.hk_log = d.hk_log;
+                self.meter_log_time = d.meter_log_time;
+                self.meter_log_auto = d.meter_log_auto;
+                self.hk_limit_toggle = d.hk_limit_toggle;
+                self.hk_limit_up = d.hk_limit_up;
+                self.hk_limit_down = d.hk_limit_down;
             }
             Defaults::Volume => {
                 self.vol_mods = d.vol_mods;
