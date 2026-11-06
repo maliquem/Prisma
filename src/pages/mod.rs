@@ -5,6 +5,7 @@ mod analyze;
 mod capture;
 mod energy;
 mod fullscreen;
+pub mod guide;
 mod hdr;
 mod meter;
 mod monitor;
@@ -19,6 +20,7 @@ mod tools;
 mod tweaks;
 mod uninstall;
 mod volume;
+pub mod welcome;
 mod widget;
 
 use crate::app::App;
@@ -45,6 +47,7 @@ pub enum Page {
     Widget,
     Adjust,
     Report,
+    Guide,
 }
 
 type Icon = &'static [&'static [(f32, f32)]];
@@ -70,6 +73,11 @@ const ICON_BUG: Icon = &[
     &[(17., 13.), (21., 12.)],
     &[(7.5, 17.), (4., 19.)],
     &[(16.5, 17.), (20., 19.)],
+];
+const ICON_HELP: Icon = &[
+    &[(12., 3.), (16.5, 4.2), (19.8, 7.5), (21., 12.), (19.8, 16.5), (16.5, 19.8), (12., 21.), (7.5, 19.8), (4.2, 16.5), (3., 12.), (4.2, 7.5), (7.5, 4.2), (12., 3.)],
+    &[(9.5, 9.5), (10., 8.), (12., 7.2), (14., 8.), (14.5, 10.), (13., 11.5), (12., 12.5), (12., 14.)],
+    &[(12., 16.6), (12., 17.)],
 ];
 const ICON_HDR: Icon = &[
     &[(12., 3.), (12., 5.)],
@@ -161,19 +169,45 @@ const NAV: &[(Page, &str, Icon)] = &[
     (Page::Capture, "Captura", ICON_CAP),
     (Page::Widget, "Widget", ICON_WID),
     (Page::Adjust, "Configurações", ICON_ADJ),
-    (Page::Report, "Reportar bug", ICON_BUG),
 ];
+
+/// Ajuda fora da lista de funções: ao lado do nome, sempre à vista.
+const HELP: &[(Page, &str, Icon)] = &[(Page::Guide, "Guia e tutorial", ICON_HELP), (Page::Report, "Reportar bug", ICON_BUG)];
 
 const SIDE_W: f32 = 216.0;
 const KOFI_URL: &str = "https://ko-fi.com/maliquem";
 const KOFI_ICON: &[u8] = include_bytes!("../../res/kofi.bgra");
 
 pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
+    // O guia abre por cima das boas-vindas, que continuam esperando a resposta.
+    if app.welcome.is_some() && app.page != Page::Guide {
+        if let Some(t) = &mut app.report.text {
+            t.hide();
+        }
+        welcome::draw(&mut ui, app, full);
+        ui.end();
+        return;
+    }
     let side = rect(0.0, 0.0, SIDE_W, full.h);
     ui.c.fill(side, SIDE);
     let c = ui.c;
     c.icon(24.0, 20.0, 22.0, &[&[(12., 3.), (3., 20.), (21., 20.), (12., 3.)], &[(12., 3.), (12., 20.)]], ACCENT);
-    c.text(rect(56.0, 18.0, 150.0, 26.0), "Prisma", 16.0, TEXT, Align::Left, Weight::Semibold);
+    c.text(rect(56.0, 18.0, 70.0, 26.0), "Prisma", 16.0, TEXT, Align::Left, Weight::Semibold);
+    for (i, (page, tip, icon)) in HELP.iter().enumerate() {
+        let r = rect(SIDE_W - 84.0 + i as f32 * 36.0, 16.0, 30.0, 30.0);
+        let current = app.page == *page;
+        ui.c.round(r, 8.0, if current { ACCENT } else if ui.is_hover(r) { CARD2 } else { CARD });
+        ui.c.icon(r.x + 6.0, r.y + 6.0, 18.0, icon, if current { ON_ACCENT } else { ACCENT });
+        ui.tip(r, tip);
+        if ui.hit(tip, r) && !current {
+            if *page == Page::Report {
+                app.report.area = report::area_of(app.page);
+            }
+            app.page = *page;
+            app.refresh_page();
+            ui.s.needs_redraw = true;
+        }
+    }
 
     let mut y = 58.0;
     // Em janela baixa as linhas apertam para não entrar no cartão de energia.
@@ -189,11 +223,7 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
         ui.c.icon(r.x + 12.0, r.y + (r.h - 18.0) / 2.0, 18.0, icon, color);
         ui.c.text(rect(r.x + 42.0, r.y, r.w - 48.0, r.h), label, 14.0, color, Align::Left, Weight::Regular);
         if ui.hit(label, r) && !current {
-            if *page == Page::Report {
-                app.report.area = report::area_of(app.page);
-            } else {
-                crate::report::note(&format!("page: {label}"));
-            }
+            crate::report::note(&format!("page: {label}"));
             app.page = *page;
             app.refresh_page();
             ui.s.needs_redraw = true;
@@ -251,8 +281,29 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
         Page::Widget => widget::draw(&mut ui, app, area),
         Page::Adjust => adjust::draw(&mut ui, app, area),
         Page::Report => report::draw(&mut ui, app, area),
+        Page::Guide => guide::draw(&mut ui, app, area),
     }
+    update_prompt(&mut ui, app);
     ui.end();
+}
+
+/// Só chega aqui com a janela aberta: é a única hora em que o programa pergunta.
+fn update_prompt(ui: &mut Ui, app: &mut App) {
+    if app.upd_ask && !ui.s.covered() {
+        app.upd_ask = false;
+        let v = app.upd.lock().unwrap().version.clone();
+        ui.ask_check("upd-new", "Nova atualização disponível", &format!("A versão {v} está pronta. Quer atualizar agora?"), "Não mostrar de novo");
+    }
+    if ui.ask_mark("upd-new") == Some(true) {
+        app.cfg.update_auto = false;
+        app.cfg.save();
+    }
+    if ui.answered("upd-new") {
+        // O andamento aparece em Configurações.
+        app.page = Page::Adjust;
+        app.update_now();
+        ui.s.needs_redraw = true;
+    }
 }
 
 /// Botão Padrão: pergunta antes e volta só as opções daquela tela.

@@ -18,11 +18,12 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     ui.c.text(rect(r0.x + 16.0, r0.y + 34.0, r0.w - 32.0, 20.0), hint, 13.0, MUTED, Align::Left, Weight::Regular);
     if app.installed {
         let mut on = app.autostart;
-        if ui.check("auto", rect(r0.x + 16.0, r0.y + 58.0, r0.w - 32.0, 44.0), "Iniciar com o Windows, como administrador", &mut on) && crate::startup::set_enabled(on) {
+        if ui.check("auto", rect(r0.x + 16.0, r0.y + 58.0, 330.0, 44.0), "Iniciar com o Windows", &mut on) && crate::startup::set_enabled(on, app.cfg.always_admin) {
             app.autostart = on;
         }
+        admin_check(ui, app, rect(r0.x + 356.0, r0.y + 58.0, r0.w - 372.0, 44.0));
         if !app.elevated && ui.button("elev", rect(r0.x + 16.0, r0.y + 102.0, 240.0, 40.0), "Reabrir como administrador", true) {
-            crate::startup::relaunch_elevated();
+            crate::startup::relaunch_elevated("");
         }
     } else {
         let t = "Instalar libera o início com o Windows e a troca do Gerenciador de Tarefas.";
@@ -34,8 +35,9 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
             app.install_now();
         }
         if !app.elevated && ui.button("elev", rect(r0.x + 224.0, r0.y + 94.0, 240.0, 44.0), "Reabrir como administrador", false) {
-            crate::startup::relaunch_elevated();
+            crate::startup::relaunch_elevated("");
         }
+        admin_check(ui, app, rect(r0.x + 480.0, r0.y + 94.0, r0.w - 496.0, 44.0));
     }
 
     let rt = rect(x, top + 162.0, w, 76.0);
@@ -104,6 +106,13 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     }
 }
 
+fn admin_check(ui: &mut Ui, app: &mut App, r: Rect) {
+    let mut on = app.cfg.always_admin;
+    if ui.check("admin", r, "Sempre abrir como administrador", &mut on) {
+        app.set_admin(on);
+    }
+}
+
 fn draw_update(ui: &mut Ui, app: &mut App, r: Rect) {
     use crate::sys::update::{self, Phase};
     ui.card(r);
@@ -133,8 +142,13 @@ fn draw_update(ui: &mut Ui, app: &mut App, r: Rect) {
         update::check(app.upd.clone());
     }
     let mut auto = app.cfg.update_auto;
-    if ui.check("upd-auto", rect(r.x + 16.0, r.y + 60.0, 320.0, 44.0), "Procurar ao abrir o programa", &mut auto) {
+    if ui.check("upd-auto", rect(r.x + 16.0, r.y + 60.0, 400.0, 44.0), "Procurar atualizações sozinho, uma vez por dia", &mut auto) {
         app.cfg.update_auto = auto;
+        app.cfg.save();
+    }
+    let mut hello = app.cfg.welcome;
+    if ui.check("welcome", rect(r.x + 430.0, r.y + 60.0, r.w - 446.0, 44.0), "Mostrar as boas-vindas ao abrir", &mut hello) {
+        app.cfg.welcome = hello;
         app.cfg.save();
     }
 }

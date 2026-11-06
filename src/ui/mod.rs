@@ -43,6 +43,8 @@ struct Ask {
     body: String,
     /// Só avisa: mostra OK em vez de Sim e Não.
     notice: bool,
+    /// Caixa de marcar abaixo do texto: rótulo e estado.
+    check: Option<(String, bool)>,
 }
 
 struct Bar {
@@ -70,6 +72,8 @@ pub struct UiState {
     ask: Option<Ask>,
     ask_new: bool,
     answer: Option<u64>,
+    /// Estado da caixa da pergunta que acabou de fechar.
+    ask_mark: Option<(u64, bool)>,
     grab: f32,
     popup_pick: Option<(u64, usize)>,
     pub capturing: u64,
@@ -114,12 +118,13 @@ pub struct Ui<'a> {
     blocked: bool,
     clip: Option<Rect>,
     bar: Option<Bar>,
+    tip: Option<(Rect, String)>,
 }
 
 impl<'a> Ui<'a> {
     pub fn begin(c: &'a Canvas, s: &'a mut UiState) -> Self {
         let blocked = s.popup.is_some() || s.ask.is_some();
-        Self { c, s, dy: 0.0, blocked, clip: None, bar: None }
+        Self { c, s, dy: 0.0, blocked, clip: None, bar: None, tip: None }
     }
 
     fn hover(&self, r: Rect) -> bool {
@@ -226,6 +231,19 @@ impl<'a> Ui<'a> {
     /// Volta uma lista ao topo, ao trocar de pasta ou de aba.
     pub fn reset_scroll(&mut self, key: &str) {
         self.s.scroll.remove(&hash_id(key));
+    }
+
+    /// Leva uma lista direto a um ponto do conteúdo.
+    pub fn set_scroll(&mut self, key: &str, y: f32) {
+        self.s.scroll.insert(hash_id(key), y);
+        self.s.needs_redraw = true;
+    }
+
+    /// Dica que aparece com o mouse em cima, por cima de tudo.
+    pub fn tip(&mut self, r: Rect, text: &str) {
+        if self.hover(r) {
+            self.tip = Some((r, text.to_string()));
+        }
     }
 
     pub fn scroll_y(&self) -> f32 {
@@ -371,14 +389,33 @@ impl<'a> Ui<'a> {
 
     /// Pergunta Sim ou Não. A resposta chega depois por `answered`, com a mesma chave.
     pub fn ask(&mut self, key: &str, title: &str, body: &str) {
-        self.s.ask = Some(Ask { id: hash_id(key), title: title.to_string(), body: body.to_string(), notice: false });
+        self.s.ask = Some(Ask { id: hash_id(key), title: title.to_string(), body: body.to_string(), notice: false, check: None });
         self.s.ask_new = true;
         self.s.needs_redraw = true;
     }
 
+    /// Pergunta com uma caixa de marcar. O estado dela chega por `ask_mark`, com qualquer resposta.
+    pub fn ask_check(&mut self, key: &str, title: &str, body: &str, label: &str) {
+        self.ask(key, title, body);
+        if let Some(a) = &mut self.s.ask {
+            a.check = Some((label.to_string(), false));
+        }
+    }
+
+    pub fn ask_mark(&mut self, key: &str) -> Option<bool> {
+        let id = hash_id(key);
+        match self.s.ask_mark {
+            Some((i, v)) if i == id => {
+                self.s.ask_mark = None;
+                Some(v)
+            }
+            _ => None,
+        }
+    }
+
     /// Aviso com um botão só.
     pub fn notice(&mut self, title: &str, body: &str) {
-        self.s.ask = Some(Ask { id: 0, title: title.to_string(), body: body.to_string(), notice: true });
+        self.s.ask = Some(Ask { id: 0, title: title.to_string(), body: body.to_string(), notice: true, check: None });
         self.s.ask_new = true;
         self.s.needs_redraw = true;
     }
@@ -467,6 +504,17 @@ impl<'a> Ui<'a> {
     pub fn image(&mut self, key: &str, size: u32, px: &[u8], r: Rect) {
         if !self.s.icons.contains_key(key) {
             let b = self.c.bitmap(size, size, px);
+            self.s.icons.insert(key.to_string(), b);
+        }
+        if let Some(b) = self.s.icons.get(key).and_then(|b| b.as_ref()) {
+            self.c.draw_bitmap(b, r);
+        }
+    }
+
+    /// PNG embutido. Só abre quando aparece, e sai da memória ao fechar a janela.
+    pub fn png(&mut self, key: &str, data: &[u8], r: Rect) {
+        if !self.s.icons.contains_key(key) {
+            let b = icons::decode_png(data).and_then(|(w, h, px)| self.c.bitmap(w, h, &px));
             self.s.icons.insert(key.to_string(), b);
         }
         if let Some(b) = self.s.icons.get(key).and_then(|b| b.as_ref()) {
@@ -570,6 +618,13 @@ impl<'a> Ui<'a> {
             self.s.popup_pick = pick;
             self.s.needs_redraw = true;
         }
+        if let Some((r, text)) = self.tip.take() {
+            let w = measure(&text, 13.0, Weight::Regular, None).0 + 20.0;
+            let b = rect(r.x.min(self.s.view_w - w - 8.0), r.bottom() + 6.0, w, 30.0);
+            self.c.round(b, 8.0, CARD2);
+            self.c.round_line(b, 8.0, BORDER2, 1.0);
+            self.c.text(b, &text, 13.0, TEXT, Align::Center, Weight::Regular);
+        }
         self.draw_ask();
         self.blocked = false;
         self.s.end_frame();
@@ -581,7 +636,7 @@ impl<'a> Ui<'a> {
         self.c.fill(rect(0.0, 0.0, vw, vh), rgb(0x000000).alpha(0.6));
         let w = 460.0f32.min(vw - 48.0);
         let body_h = measure(&a.body, 14.0, Weight::Regular, Some(w - 48.0)).1;
-        let h = 76.0 + body_h + 76.0;
+        let h = 76.0 + body_h + 76.0 + if a.check.is_some() { 40.0 } else { 0.0 };
         let b = rect((vw - w) / 2.0, (vh - h) / 2.0, w, h);
         self.c.round(b, 14.0, CARD2);
         self.c.round_line(b, 14.0, BORDER2, 1.0);
@@ -591,6 +646,19 @@ impl<'a> Ui<'a> {
         let yes = rect(b.right() - 24.0 - 112.0, by, 112.0, 40.0);
         let no = rect(yes.x - 120.0, by, 112.0, 40.0);
         let (mx, my) = (self.s.mx, self.s.my);
+        let mut toggle = false;
+        if let Some((label, on)) = &a.check {
+            let row = rect(b.x + 24.0, by - 38.0, b.w - 48.0, 28.0);
+            let bx = rect(row.x, row.y + 5.0, 18.0, 18.0);
+            if *on {
+                self.c.round(bx, 4.0, ACCENT);
+                self.c.icon(bx.x, bx.y, 18.0, &[&[(6.0, 12.5), (10.0, 16.5), (18.0, 7.5)]], ON_ACCENT);
+            } else {
+                self.c.round_line(bx, 4.0, BORDER2, 1.0);
+            }
+            self.c.text(rect(row.x + 28.0, row.y, row.w - 28.0, row.h), label, 14.0, TEXT, Align::Left, Weight::Regular);
+            toggle = self.s.released && !self.s.ask_new && row.contains(mx, my);
+        }
         let bg = if yes.contains(mx, my) { rgb(0xa9d9ff) } else { ACCENT };
         self.c.round(yes, 8.0, bg);
         self.c.text(yes, if a.notice { "OK" } else { "Sim" }, 14.0, ON_ACCENT, Align::Center, Weight::Semibold);
@@ -604,15 +672,23 @@ impl<'a> Ui<'a> {
         if self.s.released && !self.s.ask_new {
             let id = a.id;
             let notice = a.notice;
+            let mark = a.check.as_ref().map(|c| (id, c.1));
             if yes.contains(mx, my) {
                 self.s.ask = None;
+                self.s.ask_mark = mark;
                 if !notice {
                     self.s.answer = Some(id);
                 }
                 self.s.needs_redraw = true;
             } else if !notice && no.contains(mx, my) {
                 self.s.ask = None;
+                self.s.ask_mark = mark;
                 self.s.needs_redraw = true;
+            }
+        }
+        if toggle {
+            if let Some((_, on)) = self.s.ask.as_mut().and_then(|a| a.check.as_mut()) {
+                *on = !*on;
             }
         }
         self.s.ask_new = false;

@@ -9,12 +9,12 @@ const MEANING: [&str; 3] = ["Incomoda, mas dá para usar.", "Atrapalha o uso, ma
 
 /// Nomes das funções, na ordem da barra lateral. Termina em Outra coisa.
 pub fn areas() -> Vec<&'static str> {
-    NAV.iter().filter(|n| n.0 != Page::Report).map(|n| n.1).chain(["Outra coisa"]).collect()
+    NAV.iter().map(|n| n.1).chain(["Outra coisa"]).collect()
 }
 
 /// Começa em quem chamou: quase sempre é a função com o problema.
 pub fn area_of(page: Page) -> usize {
-    NAV.iter().filter(|n| n.0 != Page::Report).position(|n| n.0 == page).unwrap_or(0)
+    NAV.iter().position(|n| n.0 == page).unwrap_or(0)
 }
 
 fn photo_card(ui: &mut Ui, app: &mut App, r: Rect) {

@@ -62,3 +62,23 @@ unsafe fn rasterize(icon: HICON) -> Option<(u32, u32, Vec<u8>)> {
     }
     Some((SIZE as u32, SIZE as u32, px))
 }
+
+/// Abre um PNG embutido, em BGRA pré-multiplicado.
+pub fn decode_png(data: &[u8]) -> Option<(u32, u32, Vec<u8>)> {
+    use windows::Win32::Graphics::Imaging::*;
+    use windows::Win32::System::Com::*;
+    unsafe {
+        let wic: IWICImagingFactory = CoCreateInstance(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER).ok()?;
+        let stream = wic.CreateStream().ok()?;
+        stream.InitializeFromMemory(data).ok()?;
+        let dec = wic.CreateDecoderFromStream(&stream, std::ptr::null(), WICDecodeMetadataCacheOnDemand).ok()?;
+        let frame = dec.GetFrame(0).ok()?;
+        let conv = wic.CreateFormatConverter().ok()?;
+        conv.Initialize(&frame, &GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, None, 0.0, WICBitmapPaletteTypeCustom).ok()?;
+        let (mut w, mut h) = (0, 0);
+        conv.GetSize(&mut w, &mut h).ok()?;
+        let mut px = vec![0u8; w as usize * h as usize * 4];
+        conv.CopyPixels(std::ptr::null(), w * 4, &mut px).ok()?;
+        Some((w, h, px))
+    }
+}

@@ -51,6 +51,7 @@ const WM_POW_OUT: u32 = WM_APP + 82;
 const WM_REPORT_PHOTO: u32 = WM_APP + 84;
 const WM_REPORT_DONE: u32 = WM_APP + 85;
 const WM_PICK_WIN: u32 = WM_APP + 86;
+const WM_SETUP_DONE: u32 = WM_APP + 87;
 const PICKER_SIZE: (f32, f32) = (540.0, 680.0);
 const PICKER_MIN: (f32, f32) = (420.0, 400.0);
 
@@ -193,7 +194,17 @@ pub struct App {
     tw_apps_slot: std::sync::Arc<Mutex<Option<Vec<String>>>>,
     pub tw_run: tweaks::Shared,
     pub upd: crate::sys::update::Shared,
-    upd_told: bool,
+    /// Janela aberta e já perguntou nesta abertura.
+    upd_opened: bool,
+    /// Falta mostrar a pergunta de atualizar.
+    pub upd_ask: bool,
+    /// Busca automática em andamento, para guardar o resultado.
+    upd_wait: bool,
+    /// Veio de `--update`: atualizar assim que achar a versão.
+    upd_go: bool,
+    pub welcome: Option<crate::pages::welcome::Choices>,
+    pub guide: Option<crate::pages::guide::Layout>,
+    setup_plan: Option<crate::startup::Plan>,
     tm_check: Option<Instant>,
     force_hook: Option<HHOOK>,
     pub meter: crate::meter::Meter,
@@ -361,7 +372,13 @@ pub fn start(background: bool) {
             tw_apps_slot: Default::default(),
             tw_run: Default::default(),
             upd: Default::default(),
-            upd_told: false,
+            upd_opened: false,
+            upd_ask: false,
+            upd_wait: false,
+            upd_go: std::env::args().any(|a| a == "--update"),
+            welcome: cfg.welcome.then(crate::pages::welcome::Choices::new),
+            guide: None,
+            setup_plan: None,
             tm_check: None,
             force_hook: None,
             meter: crate::meter::Meter::new(),
@@ -720,12 +737,23 @@ pub fn start(background: bool) {
                 }
                 std::process::exit(0);
             }
+            if let Some(name) = a.strip_prefix("--test-task=") {
+                let exe = std::path::PathBuf::from(std::env::var("ComSpec").unwrap_or_default());
+                let mine = std::env::current_exe().unwrap_or_default().with_file_name("cmd.exe");
+                let _ = std::fs::copy(&exe, &mine);
+                eprintln!("criou: {}", crate::startup::create_task(name, &mine, "/c exit", true, false));
+                std::process::exit(0);
+            }
             if let Some(path) = a.strip_prefix("--test-overlay=") {
                 let mon = capture::cursor_monitor();
                 if let Ok(f) = capture::grab(mon) {
                     capture::shot::open(f, mon, String::new(), false, None);
                     capture::shot::debug_setup(path);
                 }
+            }
+            // Imagens do guia: como um PC que ainda não escolheu nada.
+            if a == "--shot-clean" {
+                app.replaces_tm = false;
             }
             app.page = match a.as_str() {
                 "--page=storage" => Page::Storage,
@@ -745,6 +773,7 @@ pub fn start(background: bool) {
                 "--page=widget" => Page::Widget,
                 "--page=adjust" => Page::Adjust,
                 "--page=report" => Page::Report,
+                "--page=guide" => Page::Guide,
                 _ => app.page,
             };
         }
@@ -1207,25 +1236,47 @@ impl App {
         n
     }
 
-    /// Procura uma vez logo depois de abrir e depois a cada dia.
+    /// Procura uma vez por dia, mesmo reabrindo. A pergunta espera a janela aberta:
+    /// minimizado ou na bandeja, o programa nunca interrompe.
     fn update_tick(&mut self) {
         use crate::sys::update::{self, Phase};
-        if !self.cfg.update_auto {
+        let s = self.upd.lock().unwrap().clone();
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        if self.upd_wait && !matches!(s.phase, Phase::Checking) {
+            self.upd_wait = false;
+            if !matches!(s.phase, Phase::Failed(_)) {
+                self.cfg.upd_checked = now;
+                self.cfg.upd_found = if s.phase == Phase::Available { s.version.clone() } else { String::new() };
+                self.cfg.save();
+            }
+        }
+        if self.upd_go && s.phase == Phase::Available {
+            self.upd_go = false;
+            self.page = Page::Adjust;
+            self.update_now();
             return;
         }
+        if !self.cfg.update_auto && !self.upd_go {
+            return;
+        }
+        let failed = matches!(s.phase, Phase::Failed(_));
         let due = match self.upd_last {
-            Some(t) => t.elapsed().as_secs() > 86_400,
-            None => self.started.elapsed().as_secs() > 8,
+            // Sem internet, tenta de novo em uma hora em vez de esperar o dia seguinte.
+            Some(t) => t.elapsed().as_secs() > if failed { 3_600 } else { 86_400 },
+            None => self.started.elapsed().as_secs() > 8 && (self.upd_go || update::is_newer(&self.cfg.upd_found, &update::current()) || now.saturating_sub(self.cfg.upd_checked) >= 86_400),
         };
-        let idle = matches!(self.upd.lock().unwrap().phase, Phase::Idle | Phase::Latest | Phase::Failed(_));
-        if due && idle {
+        if due && matches!(s.phase, Phase::Idle | Phase::Latest | Phase::Failed(_)) {
             self.upd_last = Some(Instant::now());
+            self.upd_wait = true;
             update::check(self.upd.clone());
         }
-        let s = self.upd.lock().unwrap().clone();
-        if s.phase == Phase::Available && !self.upd_told {
-            self.upd_told = true;
-            self.toast.info(&format!("Nova versão {} disponível em Configurações", s.version));
+        let open = self.main.as_ref().is_some_and(|m| unsafe { !IsIconic(m.hwnd).as_bool() });
+        if !open {
+            self.upd_opened = false;
+        } else if s.phase == Phase::Available && !self.upd_opened {
+            self.upd_opened = true;
+            self.upd_ask = true;
+            self.invalidate();
         }
     }
 
@@ -1242,6 +1293,11 @@ impl App {
         let busy = self.tw_run.lock().unwrap().running || self.tool_busy() || self.un_job.lock().unwrap().running || self.rec_start.is_some();
         if busy {
             self.toast.info("Espere a tarefa em andamento terminar.");
+        } else if self.installed && !self.elevated {
+            // Em Arquivos de Programas só administrador troca o arquivo: a cópia nova continua daqui.
+            if !crate::startup::relaunch_elevated("--update") {
+                self.toast.info("A atualização precisa da permissão de administrador");
+            }
         } else {
             crate::sys::update::install(self.upd.clone(), self.hub.0 as isize, WM_UPDATED);
         }
@@ -1277,13 +1333,60 @@ impl App {
         self.svc_sel = Some(name);
     }
 
-    /// A cópia nova abre sozinha; esta precisa sair para liberar o nome.
-    /// Se a pessoa recusar a permissão do Windows, nada muda e o programa continua aberto.
+    /// Instala com a escolha de administrador que já está em Configurações.
     pub fn install_now(&mut self) {
-        if crate::startup::run_elevated(&format!("--install={}", std::process::id())) {
+        let admin = self.cfg.always_admin;
+        self.run_setup(crate::startup::Plan { install: true, admin, taskmgr: false, restart: admin });
+    }
+
+    /// Faz tudo numa cópia de administrador, para o Windows perguntar uma vez só.
+    /// Se a pessoa recusar, nada muda e o programa continua aberto.
+    pub fn run_setup(&mut self, plan: crate::startup::Plan) {
+        let (args, hub) = (plan.args(), self.hub.0 as isize);
+        // Teste sem a confirmação do Windows: guarda o que seria feito.
+        #[cfg(debug_assertions)]
+        if let Ok(path) = std::env::var("PRISMA_SETUP_OUT") {
+            let _ = std::fs::write(path, &args);
+            return;
+        }
+        self.setup_plan = Some(plan);
+        let _ = std::thread::Builder::new().name("instalacao".into()).spawn(move || unsafe {
+            use windows::Win32::System::Com::*;
+            let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+            let code = crate::startup::run_elevated_wait(&args).map_or(0, |c| c as usize + 1);
+            let _ = PostMessageW(Some(HWND(hub as *mut _)), WM_SETUP_DONE, WPARAM(code), LPARAM(0));
+        });
+    }
+
+    fn setup_done(&mut self, code: usize) {
+        use crate::startup::{self, SETUP_NO_INSTALL};
+        let Some(plan) = self.setup_plan.take() else { return };
+        match code {
+            0 => return self.toast.info("Essas escolhas precisam da permissão de administrador"),
+            1 => {}
+            c if c as u32 - 1 == SETUP_NO_INSTALL => return self.toast.info("Não consegui instalar o Prisma."),
+            _ => return self.toast.info("Não consegui substituir o Gerenciador de Tarefas."),
+        }
+        self.cfg.always_admin = plan.admin;
+        self.cfg.save();
+        self.tm_check = Some(Instant::now());
+        self.log(&format!("escolhas aplicadas: instalar {}, administrador {}, gerenciador {}", plan.install, plan.admin, plan.taskmgr));
+        // A cópia nova já foi aberta pela de administrador, ou abre agora sem a permissão.
+        if plan.restart || (plan.install && startup::open_installed()) {
             unsafe { PostQuitMessage(0) };
-        } else {
-            self.toast.info("A instalação precisa da permissão de administrador");
+        }
+    }
+
+    /// Sempre abrir como administrador. Na versão portátil, é só uma escolha para a próxima abertura.
+    pub fn set_admin(&mut self, on: bool) {
+        if !self.installed {
+            self.cfg.always_admin = on;
+            self.cfg.save();
+        } else if !self.elevated {
+            self.run_setup(crate::startup::Plan { admin: on, ..Default::default() });
+        } else if crate::startup::sync_admin(on) {
+            self.cfg.always_admin = on;
+            self.cfg.save();
         }
     }
 
@@ -2266,6 +2369,10 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
             });
             LRESULT(0)
         }
+        WM_SETUP_DONE => {
+            with(|a| a.setup_done(w.0));
+            LRESULT(0)
+        }
         WM_UPDATED => {
             PostQuitMessage(0);
             LRESULT(0)
@@ -2673,6 +2780,7 @@ unsafe extern "system" fn main_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
                     a.programs = Vec::new();
                 }
                 a.exe_names.clear();
+                a.guide = None;
                 monitor::FAST.store(false, Ordering::Relaxed);
                 monitor::DETAIL.store(false, Ordering::Relaxed);
                 a.cfg.save();

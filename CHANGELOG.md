@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.0
+
+- Welcome screen on the first open: install, give administrator permission and replace Task Manager, all checked, with one Windows prompt for everything. It shows once unless you uncheck Don't show again. / Tela de boas-vindas na primeira abertura: instalar, dar permissão de administrador e substituir o Gerenciador de Tarefas, tudo marcado, com uma permissão do Windows para tudo. Ela aparece uma vez, a não ser que você desmarque Não mostrar novamente.
+- Guide in Portuguese and English, with images: what each feature does, and what it can and can't do. / Guia em português e inglês, com imagens: o que cada função faz, o que dá e o que não dá para fazer.
+- The Guide and Report a bug buttons moved next to the Prisma name, with a tip on hover. / Os botões Guia e Reportar bug foram para o lado do nome Prisma, com dica ao passar o mouse.
+- Updates are checked once a day, and Prisma asks when you open the window, never from the tray. Don't show again turns the search off, and the option is in Settings. / A busca de atualização roda uma vez por dia, e o Prisma pergunta quando você abre a janela, nunca pela bandeja. Não mostrar de novo desliga a busca, e a opção fica em Configurações.
+- Type the FPS limit in the full meter, and bigger CPU and GPU percentages. The welcome screen also lets you choose the language. / Digite o limite de FPS no medidor completo, e as porcentagens de CPU e GPU estão maiores. A tela de boas-vindas também deixa escolher o idioma.
+- Always open as administrator in Settings. Installed, it no longer asks each time. / Sempre abrir como administrador em Configurações. Instalado, não pergunta mais a cada abertura.
+- Starting with Windows now works on battery, stays open past 72 hours and runs at normal priority. / O início com o Windows agora funciona na bateria, passa de 72 horas aberto e roda em prioridade normal.
+
 ## 0.6.0
 
 - The limit now changes right away: by default a small Prisma module enters the game when the limiter is on, in DirectX 10, 11 and 12. It does not enter games with a detected anti-cheat. If it fails or the game crashes, the limit moves to the NVIDIA driver and applies on reopening. Do not use it online. / O limite agora muda na hora: por padrão, um pequeno módulo do Prisma entra no jogo quando o limitador está ligado, em DirectX 10, 11 e 12. Ele não entra em jogos com anti-cheat detectado. Se falhar ou o jogo cair, o limite passa para o driver NVIDIA e vale ao reabrir. Não use em jogos online.

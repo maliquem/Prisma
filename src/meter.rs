@@ -126,7 +126,12 @@ pub struct Meter {
     hits: Vec<(Rect, Row, usize)>,
     /// Opção marcada em cada linha.
     chosen: Vec<(Row, usize)>,
+    /// Número sendo digitado para o limite.
+    typing: Option<String>,
 }
+
+/// Opção do campo do limite. Valores acima dela são o número digitado.
+const TYPE_LIMIT: usize = 2;
 
 /// Controles abertos: só aí o medidor recebe mouse e teclado.
 static CONTROLS: AtomicBool = AtomicBool::new(false);
@@ -340,6 +345,7 @@ impl Meter {
             hover: None,
             hits: Vec::new(),
             chosen: Vec::new(),
+            typing: None,
         }
     }
 
@@ -453,6 +459,7 @@ impl Meter {
             return;
         }
         CONTROLS.store(on, Relaxed);
+        self.typing = None;
         let h = self.full.hwnd;
         unsafe {
             let ex = GetWindowLongPtrW(h, GWL_EXSTYLE);
@@ -479,19 +486,65 @@ impl Meter {
         match input {
             Input::Lost => self.set_controls(false),
             Input::Move(x, y) => self.hover = at(&self.hits, x, y),
-            Input::Click(x, y) => return at(&self.hits, x, y),
+            Input::Click(x, y) => {
+                self.typing = None;
+                let hit = at(&self.hits, x, y);
+                if hit == Some((Row::Fps, TYPE_LIMIT)) {
+                    self.start_typing();
+                    return None;
+                }
+                return hit;
+            }
             Input::Key(key) => return self.key(key),
         }
         None
     }
 
+    fn start_typing(&mut self) {
+        if let Some(i) = self.rows.iter().position(|r| *r == Row::Fps) {
+            self.row = i;
+            self.typing.get_or_insert_with(String::new);
+        }
+    }
+
     fn key(&mut self, key: u32) -> Option<(Row, usize)> {
+        const BACK: u32 = 0x08;
         const ESC: u32 = 0x1B;
         const ENTER: u32 = 0x0D;
         const LEFT: u32 = 0x25;
         const UP: u32 = 0x26;
         const RIGHT: u32 = 0x27;
         const DOWN: u32 = 0x28;
+        // Números do teclado de cima e do teclado numérico.
+        let digit = match key {
+            0x30..=0x39 => Some(key - 0x30),
+            0x60..=0x69 => Some(key - 0x60),
+            _ => None,
+        };
+        if let Some(d) = digit {
+            self.start_typing();
+            if let Some(t) = self.typing.as_mut().filter(|t| t.len() < 4) {
+                t.push(char::from_digit(d, 10)?);
+            }
+            return None;
+        }
+        if self.typing.is_some() {
+            match key {
+                BACK => {
+                    self.typing.as_mut()?.pop();
+                    return None;
+                }
+                ESC => {
+                    self.typing = None;
+                    return None;
+                }
+                ENTER => {
+                    let v: usize = self.typing.take()?.parse().ok()?;
+                    return Some((Row::Fps, v.max(TYPE_LIMIT + 1)));
+                }
+                _ => self.typing = None,
+            }
+        }
         let last = self.rows.len().saturating_sub(1);
         match key {
             ESC | ENTER => self.set_controls(false),
@@ -520,7 +573,11 @@ impl Meter {
     /// Aplica uma opção dos controles ao jogo aberto.
     pub fn act(&mut self, cfg: &mut Config, row: Row, option: usize) {
         if row == Row::Fps {
-            self.change_limit(cfg, if option == 0 { -1 } else { 1 });
+            if option > TYPE_LIMIT {
+                self.set_limit(cfg, option as u32);
+            } else {
+                self.change_limit(cfg, if option == 0 { -1 } else { 1 });
+            }
             return;
         }
         let protected = self.session.anti_cheat;
@@ -560,13 +617,27 @@ impl Meter {
 
     /// Atalhos do limitador. Cada tecla só muda o valor: o driver é gravado depois, de uma vez.
     pub fn change_limit(&mut self, cfg: &mut Config, change: i32) -> String {
-        let Some(g) = cfg.meter_games.iter_mut().find(|g| g.exe.eq_ignore_ascii_case(&self.session.exe)) else { return String::new() };
-        if change == 0 {
-            g.limit_mode = if g.limit_mode == 0 { 2 } else { 0 };
-        } else {
+        self.apply_limit(cfg, |g| {
+            if change == 0 {
+                g.limit_mode = if g.limit_mode == 0 { 2 } else { 0 };
+            } else {
+                g.limit_mode = 2;
+                g.limit_fps = (g.limit_fps as i32 + change).clamp(20, 1023) as u32;
+            }
+        })
+    }
+
+    /// Limite digitado no medidor completo.
+    fn set_limit(&mut self, cfg: &mut Config, fps: u32) {
+        self.apply_limit(cfg, |g| {
             g.limit_mode = 2;
-            g.limit_fps = (g.limit_fps as i32 + change).clamp(20, 1023) as u32;
-        }
+            g.limit_fps = fps.clamp(20, 1023);
+        });
+    }
+
+    fn apply_limit(&mut self, cfg: &mut Config, change: impl FnOnce(&mut MeterGame)) -> String {
+        let Some(g) = cfg.meter_games.iter_mut().find(|g| g.exe.eq_ignore_ascii_case(&self.session.exe)) else { return String::new() };
+        change(g);
         let text = if g.limit_mode == 0 { "Sem limite".to_string() } else { format!("Limite {}", g.limit_fps) };
         self.limit_write = Some((g.exe.clone(), Instant::now()));
         self.set_tag(text.clone());
@@ -962,7 +1033,7 @@ impl Meter {
             out.push(Line::Head("Limitador".into()));
             if playing {
                 out.push(Line::Choice("Modo".into(), Row::Mode, ["Automático", "Manual", "Desligado"].iter().map(|s| s.to_string()).collect(), [2, 0, 1][game.map_or(0, |g| g.limit_mode.min(2)) as usize]));
-                out.push(Line::Stepper("Limite".into(), Row::Fps, game.map_or(0, |g| g.limit_fps)));
+                out.push(Line::Stepper("Limite".into(), Row::Fps, game.map_or(0, |g| g.limit_fps), self.typing.clone()));
                 out.push(Line::Choice("Limitando".into(), Row::Real, vec!["FPS real".into(), "Com geração".into()], !game.map_or(true, |g| g.limit_real) as usize));
                 out.push(Line::Choice("Método".into(), Row::Method, vec!["Injeção".into(), "Driver".into()], !game.map_or(true, uses_injection) as usize));
                 if let Some(g) = game.filter(|g| g.limit_mode != 0) {
@@ -987,7 +1058,13 @@ impl Meter {
             if playing && !game.is_some_and(uses_injection) && game.and_then(|g| driver_limit(g, 1)) != self.session.opened {
                 out.push(Line::Note("O novo limite vale ao reabrir o jogo.".into(), ACCENT));
             }
-            let hint = if open { "Setas ou mouse mudam. Esc fecha.".to_string() } else { format!("Controles: {}", cfg.hk_meter_keys.label()) };
+            let hint = if self.typing.is_some() {
+                "Enter aplica. Esc cancela.".to_string()
+            } else if open {
+                "Setas, mouse ou números. Esc fecha.".to_string()
+            } else {
+                format!("Controles: {}", cfg.hk_meter_keys.label())
+            };
             out.push(Line::Note(hint, TEXT2));
         }
         if on(ITEM_UPSCALE) || open {
@@ -1044,13 +1121,13 @@ impl Meter {
             out.push(Line::Note(format!("Ligar e desligar: {}", cfg.hk_log.label()), TEXT2));
         }
         if on(ITEM_CPU) {
-            out.push(Line::Head(format!("CPU {:.0}%", snap.cpu)));
+            out.push(Line::Usage("CPU", snap.cpu));
             out.push(Line::Pair("Frequência".into(), format!("{} GHz", num(snap.ghz, 2)), TEXT));
             out.push(Line::Cores(snap.threads.clone()));
         }
         if on(ITEM_GPU) {
             let g = &snap.gpu;
-            out.push(Line::Head(format!("GPU {:.0}%", g.util)));
+            out.push(Line::Usage("GPU", g.util as f32));
             out.push(Line::Pair("Núcleo".into(), format!("{} MHz · {} °C · {:.0} W", g.mhz, g.temp, g.watts), TEXT));
             out.push(Line::Pair("Memória".into(), format!("{} MHz · ventoinha {}%", g.mem_mhz, g.fan), TEXT));
         }
@@ -1147,7 +1224,9 @@ enum Line {
     Cores(Vec<f32>),
     Bar(String, String, f32),
     Choice(String, Row, Vec<String>, usize),
-    Stepper(String, Row, u32),
+    Stepper(String, Row, u32, Option<String>),
+    /// Uso da CPU ou da GPU, em número grande para ler de longe.
+    Usage(&'static str, f32),
 }
 
 impl Line {
@@ -1164,12 +1243,13 @@ impl Line {
             Line::Bar(..) => 34.0,
             Line::Choice(..) => 54.0,
             Line::Stepper(..) => 36.0,
+            Line::Usage(..) => 48.0,
         }
     }
 
     fn row(&self) -> Option<Row> {
         match self {
-            Line::Choice(_, row, ..) | Line::Stepper(_, row, _) => Some(*row),
+            Line::Choice(_, row, ..) | Line::Stepper(_, row, ..) => Some(*row),
             _ => None,
         }
     }
@@ -1204,12 +1284,21 @@ impl Line {
                     cx = r.right() + 4.0;
                 }
             }
-            Line::Stepper(name, row, value) => {
+            Line::Stepper(name, row, value, typing) => {
                 c.text(rect(x, y + 3.0, w * 0.4, 24.0), name, 12.0, if focus == Some(*row) { ACCENT } else { TEXT2 }, Align::Left, Weight::Regular);
                 let right = x + w;
                 chip(c, rect(right - 148.0, y + 3.0, 34.0, 26.0), "−", false, *row, 0, hits);
-                let shown = if *value > 0 { value.to_string() } else { "—".to_string() };
-                c.text(rect(right - 110.0, y + 3.0, 72.0, 26.0), &shown, 15.0, WHITE, Align::Center, Weight::Semibold);
+                let field = rect(right - 110.0, y + 3.0, 72.0, 26.0);
+                let shown = match typing {
+                    Some(t) => format!("{t}|"),
+                    None if *value > 0 => value.to_string(),
+                    None => "—".to_string(),
+                };
+                let hot = typing.is_some() || hover == Some((*row, TYPE_LIMIT));
+                c.round(field, 6.0, rgb(0x1b1d22));
+                c.round_line(field, 6.0, if hot { ACCENT } else { rgb(0x3a3f49) }, 1.0);
+                c.text(field, &shown, 15.0, if typing.is_some() { ACCENT } else { WHITE }, Align::Center, Weight::Semibold);
+                hits.push((field, *row, TYPE_LIMIT));
                 chip(c, rect(right - 34.0, y + 3.0, 34.0, 26.0), "+", false, *row, 1, hits);
             }
             _ => {}
@@ -1258,6 +1347,11 @@ impl Line {
                 }
             }
             Line::Choice(..) | Line::Stepper(..) => {}
+            Line::Usage(name, pct) => {
+                c.line(x, y + 6.0, x + w, y + 6.0, rgb(0x3a3f49), 1.0);
+                c.text(rect(x, y + 10.0, w * 0.5, 36.0), name, 30.0, WHITE, Align::Left, Weight::Semibold);
+                c.text(rect(x + w * 0.5, y + 10.0, w * 0.5, 36.0), &format!("{pct:.0}%"), 30.0, WHITE, Align::Right, Weight::Semibold);
+            }
             Line::Bar(name, value, pct) => {
                 let hot = *pct >= VRAM_NEAR && name == "VRAM";
                 c.text(rect(x, y, w * 0.4, 18.0), name, 12.0, if hot { WARN_RED } else { TEXT2 }, Align::Left, if hot { Weight::Semibold } else { Weight::Regular });

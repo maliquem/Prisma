@@ -4,7 +4,7 @@
 
 A lightweight utility for Windows 11, written entirely in Rust with no UI framework. It sits in the tray, loads only what is in use and fits in a single 2 MB file. It replaces Task Manager and brings together the small tools a PC gamer usually collects one by one.
 
-**[Download the latest version](https://github.com/maliquem/Prisma/releases/latest)**
+**[Download the latest version](https://github.com/maliquem/Prisma/releases/latest)** · **[Guide: every feature explained](docs/guide/GUIDE.md)**
 
 [![Buy Me a Coffee at ko-fi.com](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/maliquem)
 
@@ -12,18 +12,22 @@ A lightweight utility for Windows 11, written entirely in Rust with no UI framew
 
 ## Getting started
 
-Prisma is one file, `Prisma.exe`, with nothing else to install. Windows may warn about an unknown publisher the first time, because the file is not code-signed.
+Prisma is one file, `Prisma.exe`. Windows may warn about an unknown publisher the first time, because the file is not code-signed.
 
-- **Portable:** run it from any folder. Settings stay in `PrismaData`, next to the program, and nothing is registered in Windows.
-- **Installed:** open **Settings** and click **Install on this PC**. Prisma moves to Program Files, gets a Start menu shortcut and appears in the Windows program list.
+On the first open, the welcome screen asks if you want to install, give administrator permission and replace Task Manager. All three come checked, and Windows asks for permission once. The screen also opens the guide, which explains each feature and what it can and can't do. It appears only once, unless you uncheck **Don't show again**.
+
+- **Portable:** run it from any folder. Settings stay in `PrismaData`, next to the program, and nothing is registered in Windows. With administrator, Windows asks every time it opens.
+- **Installed:** Prisma moves to Program Files, gets a Start menu shortcut and appears in the Windows program list. With administrator, it opens without asking. You can also install later, in **Settings**.
 
 The installed version starts with Windows by default, and you can turn that off in **Settings**. The portable version does not start with Windows. Task Manager can be replaced in both, but on the portable version the shortcut stops working if you move or delete the file.
+
+The guide and **Report a bug** are two buttons next to the Prisma name, at the top of the window. Hover over them to see what each one does.
 
 The interface comes in English and Brazilian Portuguese. Prisma starts in your Windows language, and you can change it in **Settings**. Text that comes from Windows itself, such as service descriptions and command output, stays in the Windows language.
 
 ## Updates
 
-Prisma checks this page when it opens and once a day. When there is a new version it tells you, and nothing is installed until you click **Install** in **Settings**. It downloads the file from this page in parts, checks its SHA-256 hash, swaps the program and restarts. The check sends no data of yours, and you can turn it off. The installed version needs Prisma running as administrator to update.
+Prisma checks this page once a day. When there is a new version and you open the window, it asks if you want to update. Minimized or in the tray, it does not interrupt you. If you answer Yes, it downloads the file from this page in parts, checks its SHA-256 hash, swaps the program and restarts. The check sends no data of yours. Check **Don't show again** in the question, or turn it off in **Settings**, to stop it. In the installed version, Windows asks for permission if Prisma is not running as administrator.
 
 ## Features
 
@@ -38,7 +42,7 @@ Prisma checks this page when it opens and once a day. When there is a new versio
 - **Windows tweaks:** first a read-only audit, then layered Gaming, Development and Privacy profiles with documented effects only. The Left out tab explains what was excluded and why. Each change records the previous value, and Undo only restores what nobody touched afterwards. No profile touches updates, antivirus, UAC, Memory Integrity or virtualization. **Show log** displays every change, before and after.
 - **Tools:** Windows repair (DISM, then SFC), crash history, Windows Update reset, disk check, network, DNS, cleanup, winget, diagnostics and advanced restart. On a suspect disk, modes that write are blocked. Each tool keeps its own step-by-step log, with the exact command, its output, errors and the time of each step.
 - **Optimize:** suggests what to close and always asks. The never-close list is respected, the always-close list closes those programs, and automatic detection suggests names for both.
-- **Meter:** compact bar and full panel over the game, with FPS, 1% and 0.1% lows, frame time, CPU, GPU, VRAM and RAM. The readings come from Windows events, with nothing inside the game. FPS limit per game, manual or automatic after 5 minutes of play. By default a small Prisma module enters the game when the limiter is on, so the limit changes right away in DirectX 10, 11 and 12. If it fails, the game crashes or an anti-cheat is detected, the limit moves to the NVIDIA driver and applies the next time the game opens. The buttons are in the full panel: Ctrl + Alt + 5 unlocks mouse and arrow keys for them. It also picks the DLSS profile, shows the loaded upscaler, frame generation and Reflex, and turns on HDR per game. Needs Prisma running as administrator. In exclusive fullscreen the bar may not appear.
+- **Meter:** compact bar and full panel over the game, with FPS, 1% and 0.1% lows, frame time, CPU, GPU, VRAM and RAM. The readings come from Windows events, with nothing inside the game. FPS limit per game, manual or automatic after 5 minutes of play. By default a small Prisma module enters the game when the limiter is on, so the limit changes right away in DirectX 10, 11 and 12. If it fails, the game crashes or an anti-cheat is detected, the limit moves to the NVIDIA driver and applies the next time the game opens. The buttons are in the full panel: Ctrl + Alt + 5 unlocks mouse and keyboard for them, and you can type the limit. It also picks the DLSS profile, shows the loaded upscaler, frame generation and Reflex, and turns on HDR per game. Needs Prisma running as administrator. In exclusive fullscreen the bar may not appear.
 - **Data log:** an optional recording for studying performance, started from the Meter page or with a shortcut during the game. It saves every frame, every second and the CPU of each game thread in `Documents\Prisma\Logs`, with a summary at the end. Choose 1, 5 or 10 minutes of game time, or no limit. It runs only if you turn it on, and thread reading stays off in games with a detected anti-cheat.
 - **Power:** detects a game or high load and switches the power plan, going back to rest after 60 s without load. You choose the percentage and time that count as load for CPU and GPU. Select a plan to edit it with every option Windows registers, including hidden ones, or to import and export .pow files. Right-clicking a plan also offers Export and Edit. The first edit keeps a copy of the original plan.
 - **Per-game profile:** remembers the volume of each program.
@@ -48,7 +52,7 @@ Prisma checks this page when it opens and once a day. When there is a new versio
 - **HDR:** a read-only panel with the display mode, the active calibration profile and its real saturation, the brightness each source declares, what Windows tells games, the declared Dolby Vision support and the accepted sound formats. It warns when something does not match. Reading the display's own data directly works only on NVIDIA cards. Your own calibration opens full screen test patterns for black, peak at five window sizes and each color channel, and saves one profile per TV picture mode with the display's real primaries. Windows may keep reporting the old values to games for a while after activation. The profile does not change what the TV does. The Auto HDR list forces it, turns it off or leaves it to Windows per game, for DX11 and DX12 games, with nothing injected into the game. The sound delay test plays a click with a flash, to compare the delay with and without spatial sound.
 - **Capture:** photos with annotations and video in AV1, HEVC or H.264. When the display is in HDR, it records in SDR or HDR10. Record Window records the focused window, and Record Screen records the whole screen. With System sound on, it records all PC sounds. With it off, Record Window records only the sound of that window.
 - **Replay:** in game mode, keeps the last seconds in memory.
-- **Report a bug:** choose the feature and severity, describe what happened and add a picture if you want. Your browser opens GitHub with everything written and you only confirm. The picture goes to the clipboard: just paste it with Ctrl+V. You can include PC data and a short log, with no user name, PC name or file paths. GitHub pages are public, and you see everything before sending.
+- **Report a bug:** click the bug button at the top of the window. Choose the feature and severity, describe what happened and add a picture if you want. Your browser opens GitHub with everything written and you only confirm. The picture goes to the clipboard: just paste it with Ctrl+V. You can include PC data and a short log, with no user name, PC name or file paths. GitHub pages are public, and you see everything before sending.
 - **Crash report:** if Prisma crashes, it saves a report in its data folder and tells you the next time it opens. The file stays on your PC. In **Report a bug**, only a summary of the error can go along, and only if you send it.
 
 ![Windows tweaks profiles](docs/profiles.png)
@@ -116,7 +120,7 @@ Needs Rust and the Visual Studio Build Tools.
 
 ## Publishing a version
 
-1. Update `version` in `Cargo.toml`, add the section to `CHANGELOG.md` and update both READMEs.
+1. Update `version` in `Cargo.toml`, add the section to `CHANGELOG.md` and update both READMEs and both guides in `docs/guide`. The program uses those same files.
 2. Commit and push a tag such as `v0.3.0`.
 
 GitHub then builds `Prisma.exe` and publishes the release with its hash, and every copy of Prisma offers the update.

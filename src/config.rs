@@ -234,6 +234,12 @@ pub struct Config {
     pub replay_secs: u32,
     pub lang_en: bool,
     pub update_auto: bool,
+    /// Dia da última busca, para o programa procurar uma vez por dia mesmo reabrindo.
+    pub upd_checked: u64,
+    /// Versão achada na última busca. Com ela, abrir de novo busca os detalhes para perguntar.
+    pub upd_found: String,
+    pub welcome: bool,
+    pub always_admin: bool,
     pub un_restore: bool,
     pub tw_log: bool,
     pub un_silent: bool,
@@ -313,6 +319,10 @@ impl Default for Config {
             replay_secs: 30,
             lang_en: !crate::i18n::system_is_portuguese(),
             update_auto: true,
+            upd_checked: 0,
+            upd_found: String::new(),
+            welcome: true,
+            always_admin: false,
             un_restore: true,
             tw_log: false,
             un_silent: true,
@@ -356,6 +366,9 @@ impl Config {
             return c;
         };
         c.first_run = false;
+        // Quem já usa não vê as boas-vindas, e a versão instalada sempre abriu como administrador.
+        c.welcome = false;
+        c.always_admin = crate::startup::is_installed();
         for line in text.lines() {
             let Some((k, v)) = line.split_once('=') else { continue };
             let b = v == "1";
@@ -469,6 +482,10 @@ impl Config {
                 "replay_secs" => c.replay_secs = v.parse().unwrap_or(30),
                 "lang_en" => c.lang_en = b,
                 "update_auto" => c.update_auto = b,
+                "upd_checked" => c.upd_checked = v.parse().unwrap_or(0),
+                "upd_found" => c.upd_found = v.to_string(),
+                "welcome" => c.welcome = b,
+                "always_admin" => c.always_admin = b,
                 "un_restore" => c.un_restore = b,
                 "tw_log" => c.tw_log = b,
                 "un_silent" => c.un_silent = b,
@@ -550,6 +567,10 @@ impl Config {
         let _ = writeln!(s, "replay_secs={}", self.replay_secs);
         let _ = writeln!(s, "lang_en={}", b(self.lang_en));
         let _ = writeln!(s, "update_auto={}", b(self.update_auto));
+        let _ = writeln!(s, "upd_checked={}", self.upd_checked);
+        let _ = writeln!(s, "upd_found={}", self.upd_found);
+        let _ = writeln!(s, "welcome={}", b(self.welcome));
+        let _ = writeln!(s, "always_admin={}", b(self.always_admin));
         let _ = writeln!(s, "un_restore={}", b(self.un_restore));
         let _ = writeln!(s, "load_gpu_pct={}", self.load_gpu_pct);
         let _ = writeln!(s, "load_gpu_secs={}", self.load_gpu_secs);

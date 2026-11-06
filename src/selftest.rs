@@ -11,7 +11,7 @@ pub fn run(path: &str, _shared: std::sync::Arc<std::sync::Mutex<crate::sys::moni
     let key = "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Prisma";
     let reg = |k: &str| std::process::Command::new("reg").args(["query", k]).output().map(|o| o.status.success()).unwrap_or(false);
     let _ = writeln!(s, "admin {} antes: exe {} atalho {} registro {}", crate::startup::is_elevated(), Path::new(&exe).exists(), Path::new(&lnk).exists(), reg(key));
-    let _ = writeln!(s, "instalou: {}", crate::startup::install(false, None));
+    let _ = writeln!(s, "instalou: {}", crate::startup::install(true));
     let _ = writeln!(s, "depois: exe {} atalho {} registro {}", Path::new(&exe).exists(), Path::new(&lnk).exists(), reg(key));
     crate::startup::uninstall();
     std::thread::sleep(std::time::Duration::from_secs(6));

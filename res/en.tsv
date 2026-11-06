@@ -1209,3 +1209,31 @@ Injeção falhou. Limite vale ao reabrir.	Injection failed. Limit applies on reo
 O novo perfil vale ao reabrir o jogo.	The new profile applies when the game reopens.
 A injeção muda o limite na hora. Se falhar ou houver anti-cheat, ele vai para o driver e vale ao reabrir o jogo.	Injection changes the limit right away. If it fails or finds an anti-cheat, the driver takes over when the game reopens.
 {} FPS · injeção	{} FPS · injection
+Boas-vindas ao Prisma	Welcome to Prisma
+Escolha como ele vai ficar neste PC. Tudo isso muda depois em Configurações.	Choose how it stays on this PC. All of this can change later in Settings.
+Vai para Arquivos de Programas, ganha atalho no menu Iniciar e abre com o Windows. Sem isso, roda daqui mesmo, como portátil.	Goes to Program Files, gets a Start menu shortcut and opens with Windows. Without this, it runs from here as the portable version.
+Dar permissão de administrador	Give administrator permission
+Libera o Medidor, a rede por programa, a saúde dos discos e a leitura rápida do NTFS. Abre sem perguntar.	Unlocks the Meter, network per program, disk health and the fast NTFS scan. Opens without asking.
+Libera o Medidor, a rede por programa, a saúde dos discos e a leitura rápida do NTFS. Sem instalar, o Windows pede permissão a cada abertura.	Unlocks the Meter, network per program, disk health and the fast NTFS scan. Without installing, Windows asks every time it opens.
+Ctrl+Shift+Esc passa a abrir o Prisma. O Gerenciador do Windows volta quando você quiser.	Ctrl+Shift+Esc opens Prisma. The Windows Task Manager comes back whenever you want.
+Ctrl+Shift+Esc passa a abrir este arquivo. Sem instalar, mover ou apagar o arquivo deixa o atalho sem abrir nada.	Ctrl+Shift+Esc opens this file. Without installing, moving or deleting the file leaves the shortcut opening nothing.
+Não mostrar novamente	Don't show again
+Não mostrar de novo	Don't show again
+Abrir o guia	Open the guide
+Continuar	Continue
+Já feito	Already done
+Guia e tutorial	Guide and tutorial
+Guia	Guide
+O que cada função faz, o que dá e o que não dá para fazer.	What each feature does, and what it can and can't do.
+Iniciar com o Windows	Start with Windows
+Sempre abrir como administrador	Always open as administrator
+Procurar atualizações sozinho, uma vez por dia	Look for updates on its own, once a day
+Mostrar as boas-vindas ao abrir	Show the welcome screen on open
+Nova atualização disponível	New update available
+A versão {} está pronta. Quer atualizar agora?	Version {} is ready. Update now?
+Essas escolhas precisam da permissão de administrador	These choices need administrator permission
+Não consegui substituir o Gerenciador de Tarefas.	Could not replace Task Manager.
+A atualização precisa da permissão de administrador	The update needs administrator permission
+Enter aplica. Esc cancela.	Enter applies. Esc cancels.
+Setas, mouse ou números. Esc fecha.	Arrows, mouse or numbers. Esc closes.
+0,1% low	0.1% low

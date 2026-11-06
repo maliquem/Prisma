@@ -4,7 +4,7 @@
 
 Utilitário leve para Windows 11, todo em Rust, sem framework de interface. Fica na bandeja, só carrega o que está em uso e cabe em um único arquivo de 2 MB. Substitui o Gerenciador de Tarefas e reúne as pequenas ferramentas que quem joga no PC costuma juntar uma a uma.
 
-**[Baixar a versão mais recente](https://github.com/maliquem/Prisma/releases/latest)**
+**[Baixar a versão mais recente](https://github.com/maliquem/Prisma/releases/latest)** · **[Guia: todas as funções explicadas](docs/guide/GUIA.md)**
 
 [![Buy Me a Coffee at ko-fi.com](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/maliquem)
 
@@ -12,18 +12,22 @@ Utilitário leve para Windows 11, todo em Rust, sem framework de interface. Fica
 
 ## Primeiros passos
 
-O Prisma é um único arquivo, `Prisma.exe`, sem mais nada para instalar. O Windows pode avisar sobre editor desconhecido na primeira vez, porque o arquivo não tem assinatura digital.
+O Prisma é um único arquivo, `Prisma.exe`. O Windows pode avisar sobre editor desconhecido na primeira vez, porque o arquivo não tem assinatura digital.
 
-- **Portátil:** rode de qualquer pasta. As configurações ficam em `PrismaData`, ao lado do programa, e nada é registrado no Windows.
-- **Instalado:** abra **Configurações** e clique em **Instalar no PC**. O Prisma vai para Arquivos de Programas, ganha atalho no menu Iniciar e aparece na lista de programas do Windows.
+Ao abrir pela primeira vez, a tela de boas-vindas pergunta se você quer instalar, dar permissão de administrador e substituir o Gerenciador de Tarefas. As três vêm marcadas, e o Windows pede a permissão uma vez só. A tela também abre o guia, que explica cada função, o que dá e o que não dá para fazer. Ela só aparece uma vez, a não ser que você desmarque **Não mostrar novamente**.
+
+- **Portátil:** rode de qualquer pasta. As configurações ficam em `PrismaData`, ao lado do programa, e nada é registrado no Windows. Com administrador, o Windows pergunta a cada abertura.
+- **Instalado:** o Prisma vai para Arquivos de Programas, ganha atalho no menu Iniciar e aparece na lista de programas do Windows. Com administrador, abre sem perguntar. Também dá para instalar depois, em **Configurações**.
 
 A versão instalada inicia com o Windows por padrão, e você desliga isso em **Configurações**. A portátil não inicia com o Windows. O Gerenciador de Tarefas pode ser substituído nas duas, mas na portátil o atalho para de funcionar se você mover ou apagar o arquivo.
+
+O guia e o **Reportar bug** ficam em dois botões ao lado do nome Prisma, no alto da janela. Passe o mouse em cima para ver o que cada um faz.
 
 A interface vem em português do Brasil e inglês. O Prisma começa no idioma do Windows, e você troca em **Configurações**. Textos que vêm do próprio Windows, como descrições de serviços e saída de comandos, ficam no idioma do Windows.
 
 ## Atualizações
 
-O Prisma procura nesta página ao abrir e uma vez por dia. Quando há versão nova, ele avisa, e nada é instalado até você clicar em **Instalar** em **Configurações**. Ele baixa o arquivo daqui em partes, confere o hash SHA-256, troca o programa e reinicia. A busca não envia dados seus e pode ser desligada. A versão instalada precisa do Prisma como administrador para atualizar.
+O Prisma procura nesta página uma vez por dia. Quando há versão nova e você abre a janela, ele pergunta se quer atualizar. Minimizado ou na bandeja, ele não interrompe. Se você responder Sim, ele baixa o arquivo daqui em partes, confere o hash SHA-256, troca o programa e reinicia. A busca não envia dados seus. Marque **Não mostrar de novo** na pergunta, ou desligue em **Configurações**, para parar. Na versão instalada, o Windows pede permissão se o Prisma não estiver como administrador.
 
 ## Funções
 
@@ -38,7 +42,7 @@ O Prisma procura nesta página ao abrir e uma vez por dia. Quando há versão no
 - **Ajustes do Windows:** primeiro uma auditoria que só lê o PC. Depois os perfis Jogo, Desenvolvimento e Privacidade, em camadas, só com ajustes de efeito documentado. A aba Fora da lista explica o que ficou de fora e por quê. Cada mudança guarda o valor anterior, e Desfazer só restaura o que ninguém mexeu depois. Nenhum perfil toca em atualizações, antivírus, UAC, Integridade da Memória ou virtualização. **Ver log** mostra cada mudança, com o antes e o depois.
 - **Ferramentas:** reparo do Windows (DISM e depois SFC), histórico de falhas, Windows Update, verificação de disco, rede, DNS, limpeza, winget, diagnóstico e reinício avançado. Em disco suspeito, os modos que escrevem ficam bloqueados. Cada ferramenta guarda o próprio passo a passo, com o comando exato, a saída, os erros e o tempo de cada etapa.
 - **Otimizar:** sugere o que fechar e sempre pergunta. Blacklist nunca fecha, whitelist sempre fecha. A detecção automática sugere nomes para as duas listas.
-- **Medidor:** barra compacta e painel completo sobre o jogo, com FPS, 1% e 0,1% low, frame time, CPU, GPU, VRAM e RAM. As leituras vêm dos eventos do Windows, sem nada dentro do jogo. Limite de FPS por jogo, manual ou automático depois de 5 minutos de jogo. Por padrão, um pequeno módulo do Prisma entra no jogo quando o limitador está ligado, e o limite muda na hora em DirectX 10, 11 e 12. Se falhar, o jogo cair ou houver anti-cheat detectado, o limite passa para o driver NVIDIA e vale na próxima abertura. Os botões ficam no painel completo: Ctrl + Alt + 5 libera mouse e setas para eles. Também escolhe o perfil de DLSS, mostra upscaler, geração de quadros e Reflex carregados, e liga o HDR por jogo. Precisa do Prisma como administrador. Em tela cheia exclusiva, a barra pode não aparecer.
+- **Medidor:** barra compacta e painel completo sobre o jogo, com FPS, 1% e 0,1% low, frame time, CPU, GPU, VRAM e RAM. As leituras vêm dos eventos do Windows, sem nada dentro do jogo. Limite de FPS por jogo, manual ou automático depois de 5 minutos de jogo. Por padrão, um pequeno módulo do Prisma entra no jogo quando o limitador está ligado, e o limite muda na hora em DirectX 10, 11 e 12. Se falhar, o jogo cair ou houver anti-cheat detectado, o limite passa para o driver NVIDIA e vale na próxima abertura. Os botões ficam no painel completo: Ctrl + Alt + 5 libera mouse e teclado para eles, e dá para digitar o limite. Também escolhe o perfil de DLSS, mostra upscaler, geração de quadros e Reflex carregados, e liga o HDR por jogo. Precisa do Prisma como administrador. Em tela cheia exclusiva, a barra pode não aparecer.
 - **Registro de dados:** gravação opcional para estudar desempenho, ligada na aba Medidor ou por atalho durante o jogo. Guarda cada quadro, cada segundo e a CPU de cada thread do jogo em `Documentos\Prisma\Logs`, com um resumo no final. Escolha 1, 5 ou 10 minutos de jogo, ou sem limite. Só roda se você ligar, e a leitura de threads fica desligada em jogos com anti-cheat detectado.
 - **Energia:** detecta jogo ou carga alta e troca o plano. Volta ao repouso depois de 60 s sem carga. Você escolhe a porcentagem e o tempo que contam como carga na CPU e na GPU. Selecione um plano para editar com todas as opções que o Windows registra, inclusive as ocultas, ou importar e exportar em arquivos .pow. O botão direito no plano também oferece Exportar e Editar. A primeira edição guarda uma cópia do plano original.
 - **Perfil por jogo:** lembra o volume de cada programa.
@@ -48,7 +52,7 @@ O Prisma procura nesta página ao abrir e uma vez por dia. Quando há versão no
 - **HDR:** painel de leitura que mostra o modo da tela, o perfil de calibração ativo com a saturação real, o brilho que cada fonte declara, o que o Windows informa aos jogos, o Dolby Vision declarado e os formatos de som aceitos. Avisa quando algo não confere. A leitura direta da ficha da tela existe só em placas NVIDIA. A calibração própria abre padrões de teste em tela cheia, com o preto, o pico em cinco tamanhos de janela e cada canal de cor, e grava um perfil por modo de imagem da TV, com as primárias reais da tela. O Windows pode continuar informando os valores antigos aos jogos por um tempo depois de ativar. O perfil não muda o que a TV faz. A lista de Auto HDR por jogo força, desliga ou deixa com o Windows, em jogos DX11 e DX12, sem injetar nada no jogo. O teste de atraso do som toca um clique junto de um clarão, para comparar o atraso com e sem som espacial.
 - **Captura:** foto com anotações e vídeo em AV1, HEVC ou H.264. Com a tela em HDR, grava em SDR ou HDR10. Gravar Janela grava a janela em foco, e Gravar Tela grava a tela inteira. Com Som do sistema ligado, grava todos os sons do PC. Desligado, Gravar Janela grava só o som daquela janela.
 - **Replay:** em modo jogo, guarda os últimos segundos na memória.
-- **Reportar bug:** escolha a função, a gravidade, descreva o que aconteceu e junte uma foto, se quiser. O navegador abre o GitHub com tudo escrito e você só confirma. A foto vai copiada: é só colar com Ctrl+V. Dá para incluir dados do PC e um registro curto, sem nome de usuário, nome do PC ou caminhos de arquivo. A página do GitHub é pública, e você vê tudo antes de enviar.
+- **Reportar bug:** clique no botão do inseto, no alto da janela. Escolha a função, a gravidade, descreva o que aconteceu e junte uma foto, se quiser. O navegador abre o GitHub com tudo escrito e você só confirma. A foto vai copiada: é só colar com Ctrl+V. Dá para incluir dados do PC e um registro curto, sem nome de usuário, nome do PC ou caminhos de arquivo. A página do GitHub é pública, e você vê tudo antes de enviar.
 - **Relatório de falha:** se o Prisma cair, ele guarda um relatório na pasta de dados e avisa na próxima abertura. O arquivo fica só no seu PC. Em **Reportar bug**, só um resumo do erro pode ir junto, e só se você enviar.
 
 ![Perfis dos Ajustes do Windows](docs/profiles.png)
@@ -116,7 +120,7 @@ Precisa do Rust e das Build Tools do Visual Studio.
 
 ## Publicar uma versão
 
-1. Atualize `version` no `Cargo.toml`, acrescente a seção no `CHANGELOG.md` e atualize os dois READMEs.
+1. Atualize `version` no `Cargo.toml`, acrescente a seção no `CHANGELOG.md` e atualize os dois READMEs e os dois guias em `docs/guide`. O programa usa esses mesmos arquivos.
 2. Faça o commit e envie uma etiqueta como `v0.3.0`.
 
 O GitHub compila o `Prisma.exe` e publica a versão com o hash, e todas as cópias do Prisma oferecem a atualização.

@@ -24,7 +24,8 @@ use windows::Win32::UI::HiDpi::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
 fn main() {
-    i18n::set_english(config::Config::load().lang_en);
+    let cfg = config::Config::load();
+    i18n::set_english(cfg.lang_en);
     let background = std::env::args().any(|a| a == "--background");
     if std::env::args().any(|a| a == "--uninstall") {
         unsafe {
@@ -35,15 +36,8 @@ fn main() {
         }
         return;
     }
-    if let Some(arg) = std::env::args().find(|a| a.starts_with("--install")) {
-        let parent = arg.strip_prefix("--install=").and_then(|p| p.parse::<u32>().ok());
-        if !startup::install(true, parent) {
-            unsafe {
-                let msg = HSTRING::from(i18n::tr("Não consegui instalar o Prisma.").as_ref());
-                MessageBoxW(None, &msg, w!("Prisma"), MB_OK | MB_ICONERROR);
-            }
-        }
-        return;
+    if let Some(arg) = std::env::args().find_map(|a| a.strip_prefix("--setup=").map(str::to_string)) {
+        std::process::exit(startup::setup(&arg) as i32);
     }
     let pid_arg = |name: &str| std::env::args().find_map(|a| a.strip_prefix(name).and_then(|p| p.parse::<u32>().ok()));
     let updated = pid_arg("--updated=");
@@ -58,6 +52,11 @@ fn main() {
         return;
     }
     unsafe {
+        // Antes do nome único: a cópia de administrador precisa encontrar o nome livre.
+        let want_admin = cfg.always_admin && !background && updated.is_none() && !cfg!(debug_assertions);
+        if want_admin && !startup::is_elevated() && FindWindowW(w!("PrismaHub"), None).is_err() && startup::open_as_admin() {
+            return;
+        }
         // A versão de desenvolvimento roda ao lado da que está em uso.
         let name = if cfg!(debug_assertions) { w!("Local\\PrismaAppDev") } else { w!("Local\\PrismaApp") };
         let _mutex = CreateMutexW(None, true, name);
@@ -77,7 +76,7 @@ fn main() {
             app::with(|a| {
                 let text = format!("Atualizado para a versão {}", sys::update::current());
                 a.toast.info(&text);
-                startup::refresh_version();
+                startup::refresh_version(a.cfg.always_admin);
             });
         }
         if crash::pending() {

@@ -187,6 +187,35 @@ pub fn measure(text: &str, size: f32, weight: Weight, max_w: Option<f32>) -> (f3
     })
 }
 
+/// Texto longo do guia: já vem no idioma certo e `**` marca negrito.
+/// Fica guardado pronto, para a rolagem não refazer tudo a cada quadro.
+pub fn rich_layout(text: &str, size: f32, max_w: f32) -> Option<IDWriteTextLayout> {
+    let (mut plain, mut bold) = (Vec::new(), Vec::new());
+    for (i, part) in text.split("**").enumerate() {
+        let start = plain.len() as u32;
+        plain.extend(part.encode_utf16());
+        if i % 2 == 1 {
+            bold.push(DWRITE_TEXT_RANGE { startPosition: start, length: plain.len() as u32 - start });
+        }
+    }
+    let f = format(size, Weight::Regular, true);
+    shared(|s| unsafe {
+        let l = s.dw.CreateTextLayout(&plain, &f, max_w, 100000.0).ok()?;
+        let _ = l.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+        let _ = l.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+        for r in bold {
+            let _ = l.SetFontWeight(DWRITE_FONT_WEIGHT_SEMI_BOLD, r);
+        }
+        Some(l)
+    })
+}
+
+pub fn layout_height(l: &IDWriteTextLayout) -> f32 {
+    let mut m = DWRITE_TEXT_METRICS::default();
+    let _ = unsafe { l.GetMetrics(&mut m) };
+    m.height
+}
+
 pub struct Canvas {
     pub rt: ID2D1RenderTarget,
     brush: ID2D1SolidColorBrush,
@@ -366,6 +395,12 @@ impl Canvas {
                 D2D1_DRAW_TEXT_OPTIONS_NONE,
                 DWRITE_MEASURING_MODE_NATURAL,
             );
+        }
+    }
+
+    pub fn draw_layout(&self, l: &IDWriteTextLayout, x: f32, y: f32, c: Color) {
+        unsafe {
+            self.rt.DrawTextLayout(windows_numerics::Vector2 { X: x, Y: y }, l, self.b(c), D2D1_DRAW_TEXT_OPTIONS_NONE);
         }
     }
 
