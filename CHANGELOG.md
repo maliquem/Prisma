@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.1
 
 - The question to optimize when a game opens now comes off, and can be turned on in Power. / A pergunta para otimizar quando um jogo abre agora vem desligada, e dá para ligar em Energia.
 - The meter only shows up when you ask: by shortcut, or on its own for the games in its list. / O medidor só aparece quando você pede: pelo atalho, ou sozinho nos jogos da lista dele.
