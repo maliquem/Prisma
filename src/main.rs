@@ -52,8 +52,7 @@ fn main() {
         sys::update::wait_exit(pid);
     }
     if let Some(v) = std::env::args().find_map(|a| a.strip_prefix("--set-taskmgr=").map(|v| v == "1")) {
-        startup::set_replace_taskmgr(v);
-        return;
+        std::process::exit(if startup::set_replace_taskmgr(v) { 0 } else { 3 });
     }
     unsafe {
         // Antes do nome único: a cópia de administrador precisa encontrar o nome livre.

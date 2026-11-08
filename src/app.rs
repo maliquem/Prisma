@@ -53,6 +53,7 @@ const WM_REPORT_DONE: u32 = WM_APP + 85;
 const WM_PICK_WIN: u32 = WM_APP + 86;
 const WM_SETUP_DONE: u32 = WM_APP + 87;
 const WM_EXPLORER_DONE: u32 = WM_APP + 88;
+const WM_TM_DONE: u32 = WM_APP + 89;
 const PICKER_SIZE: (f32, f32) = (540.0, 680.0);
 const PICKER_MIN: (f32, f32) = (420.0, 400.0);
 
@@ -60,6 +61,9 @@ static FORCE_VK: AtomicU32 = AtomicU32::new(0);
 static FORCE_MODS: AtomicU32 = AtomicU32::new(0);
 static FORCE_HUB: AtomicIsize = AtomicIsize::new(0);
 static FORCE_HELD: AtomicBool = AtomicBool::new(false);
+/// Ctrl+Shift+Esc pelo gancho, quando o Windows não deixa trocar o Gerenciador no registro.
+static TM_HOOK: AtomicBool = AtomicBool::new(false);
+static TM_HELD: AtomicBool = AtomicBool::new(false);
 
 fn apply_route(pid: u32, a: &crate::config::SndApp) -> bool {
     audio::set_route(pid, false, &a.output) && audio::set_route(pid, true, &a.input)
@@ -87,6 +91,18 @@ fn held_mods() -> u32 {
 unsafe extern "system" fn key_hook(code: i32, w: WPARAM, l: LPARAM) -> LRESULT {
     if code == 0 {
         let vk = (*(l.0 as *const KBDLLHOOKSTRUCT)).vkCode;
+        if vk == VK_ESCAPE.0 as u32 && TM_HOOK.load(Ordering::Relaxed) {
+            let press = w.0 as u32 == WM_KEYDOWN || w.0 as u32 == WM_SYSKEYDOWN;
+            if !press {
+                TM_HELD.store(false, Ordering::Relaxed);
+            } else if held_mods() == MOD_CTRL | MOD_SHIFT {
+                if !TM_HELD.swap(true, Ordering::Relaxed) {
+                    let hub = HWND(FORCE_HUB.load(Ordering::Relaxed) as *mut _);
+                    let _ = PostMessageW(Some(hub), WM_SHOW, WPARAM(1), LPARAM(0));
+                }
+                return LRESULT(1);
+            }
+        }
         if vk == FORCE_VK.load(Ordering::Relaxed) {
             let press = w.0 as u32 == WM_KEYDOWN || w.0 as u32 == WM_SYSKEYDOWN;
             if !press {
@@ -783,6 +799,7 @@ pub fn start(background: bool) {
             // Imagens do guia: como um PC que ainda não escolheu nada.
             if a == "--shot-clean" {
                 app.replaces_tm = false;
+                app.cfg.tm_hook = false;
             }
             app.page = match a.as_str() {
                 "--page=storage" => Page::Storage,
@@ -1021,17 +1038,34 @@ impl App {
     fn hook_force_key(&mut self, hk: Hotkey) {
         FORCE_VK.store(hk.vk, Ordering::Relaxed);
         FORCE_MODS.store(hk.mods, Ordering::Relaxed);
-        FORCE_HUB.store(self.hub.0 as isize, Ordering::Relaxed);
-        if self.force_hook.is_none() {
-            let inst = unsafe { GetModuleHandleW(None) }.unwrap_or_default();
-            self.force_hook = unsafe { SetWindowsHookExW(WH_KEYBOARD_LL, Some(key_hook), Some(inst.into()), 0) }.ok();
-        }
+        self.sync_hook();
     }
 
     fn unhook_force_key(&mut self) {
-        if let Some(h) = self.force_hook.take() {
-            unsafe {
-                let _ = UnhookWindowsHookEx(h);
+        FORCE_VK.store(0, Ordering::Relaxed);
+        self.sync_hook();
+    }
+
+    /// Um gancho só para as duas teclas: Fechar à força quando outro programa tem a combinação,
+    /// e Ctrl+Shift+Esc quando o Windows recusou a troca do Gerenciador.
+    pub fn sync_hook(&mut self) {
+        FORCE_HUB.store(self.hub.0 as isize, Ordering::Relaxed);
+        // A versão de teste só pega o Ctrl+Shift+Esc quando o teste pede: o PC continua em uso.
+        let tm = if cfg!(debug_assertions) {
+            std::env::args().any(|a| a == "--try-tm-hook")
+        } else {
+            self.cfg.tm_hook && !self.replaces_tm
+        };
+        TM_HOOK.store(tm, Ordering::Relaxed);
+        let want = tm || FORCE_VK.load(Ordering::Relaxed) != 0;
+        if want && self.force_hook.is_none() {
+            let inst = unsafe { GetModuleHandleW(None) }.unwrap_or_default();
+            self.force_hook = unsafe { SetWindowsHookExW(WH_KEYBOARD_LL, Some(key_hook), Some(inst.into()), 0) }.ok();
+        } else if !want {
+            if let Some(h) = self.force_hook.take() {
+                unsafe {
+                    let _ = UnhookWindowsHookEx(h);
+                }
             }
         }
     }
@@ -1436,10 +1470,16 @@ impl App {
             0 => return self.toast.info("Essas escolhas precisam da permissão de administrador"),
             1 => {}
             c if c as u32 - 1 == SETUP_NO_INSTALL => return self.toast.info("Não consegui instalar o Prisma."),
-            _ => return self.toast.info("Não consegui substituir o Gerenciador de Tarefas."),
+            // O resto foi feito: o Prisma pega o atalho ele mesmo.
+            _ => {
+                self.log("o Windows recusou a troca do Gerenciador de Tarefas; o Prisma passou a pegar o Ctrl+Shift+Esc");
+                self.cfg.tm_hook = true;
+                self.tm_refused = true;
+            }
         }
         self.cfg.always_admin = plan.admin;
         self.cfg.save();
+        self.sync_hook();
         self.tm_check = Some(Instant::now());
         self.log(&format!("escolhas aplicadas: instalar {}, administrador {}, gerenciador {}", plan.install, plan.admin, plan.taskmgr));
         // A cópia nova já foi aberta pela de administrador, ou abre agora sem a permissão.
@@ -1463,18 +1503,55 @@ impl App {
 
     /// Liga ou desliga Ctrl+Shift+Esc. Sem administrador, uma cópia elevada faz a troca.
     pub fn set_taskmgr(&mut self, on: bool) {
-        if self.elevated {
-            if crate::startup::set_replace_taskmgr(on) {
-                self.replaces_tm = on;
-                self.log(if on { "passou a substituir o Gerenciador de Tarefas" } else { "devolveu o Gerenciador de Tarefas" });
-            } else {
-                self.log("o Windows recusou a troca do Gerenciador de Tarefas");
-                self.tm_refused = true;
+        if !on && self.cfg.tm_hook {
+            self.cfg.tm_hook = false;
+            self.cfg.save();
+            self.sync_hook();
+            self.log("parou de pegar o Ctrl+Shift+Esc");
+            if !self.replaces_tm {
+                return;
             }
-        } else if crate::startup::run_elevated(&format!("--set-taskmgr={}", on as u8)) {
-            self.log(if on { "passou a substituir o Gerenciador de Tarefas" } else { "devolveu o Gerenciador de Tarefas" });
-            self.tm_check = Some(Instant::now());
         }
+        if self.elevated {
+            let done = crate::startup::set_replace_taskmgr(on);
+            self.taskmgr_done(on, if done { 1 } else { 2 });
+            return;
+        }
+        let hub = self.hub.0 as isize;
+        let _ = std::thread::Builder::new().name("gerenciador".into()).spawn(move || {
+            let code = match crate::startup::run_elevated_wait(&format!("--set-taskmgr={}", on as u8)) {
+                None => 0,
+                Some(0) => 1,
+                Some(_) => 2,
+            };
+            unsafe {
+                let _ = PostMessageW(Some(HWND(hub as *mut _)), WM_TM_DONE, WPARAM(code), LPARAM(on as isize));
+            }
+        });
+    }
+
+    /// 0: a pessoa recusou a permissão; 1: trocou; 2: o Windows recusou a gravação.
+    fn taskmgr_done(&mut self, on: bool, code: usize) {
+        match code {
+            1 => {
+                self.replaces_tm = crate::startup::replaces_taskmgr();
+                self.log(if on { "passou a substituir o Gerenciador de Tarefas" } else { "devolveu o Gerenciador de Tarefas" });
+                self.sync_hook();
+            }
+            2 if on => self.taskmgr_refused(),
+            2 => self.log("o Windows recusou devolver o Gerenciador de Tarefas"),
+            _ => {}
+        }
+    }
+
+    /// Algumas versões do Windows protegem a chave do Gerenciador até de administrador. Aí o
+    /// Prisma pega o Ctrl+Shift+Esc com o mesmo gancho do Fechar à força, enquanto estiver aberto.
+    fn taskmgr_refused(&mut self) {
+        self.log("o Windows recusou a troca do Gerenciador de Tarefas; o Prisma passou a pegar o Ctrl+Shift+Esc");
+        self.cfg.tm_hook = true;
+        self.cfg.save();
+        self.sync_hook();
+        self.tm_refused = true;
     }
 
     pub fn pick_exe(&self) {
@@ -2445,6 +2522,10 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
         }
         WM_SETUP_DONE => {
             with(|a| a.setup_done(w.0));
+            LRESULT(0)
+        }
+        WM_TM_DONE => {
+            with(|a| a.taskmgr_done(l.0 != 0, w.0));
             LRESULT(0)
         }
         WM_EXPLORER_DONE => {

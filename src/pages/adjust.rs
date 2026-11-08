@@ -43,19 +43,22 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let rt = rect(x, top + 162.0, w, 76.0);
     ui.card(rt);
     ui.c.text(rect(rt.x + 16.0, rt.y + 10.0, rt.w - 260.0, 26.0), "Substituir o Gerenciador de Tarefas", 15.0, TEXT, Align::Left, Weight::Semibold);
+    let tm_on = app.replaces_tm || app.cfg.tm_hook;
     let state = if app.replaces_tm {
         "Ligado: Ctrl+Shift+Esc abre o Prisma."
+    } else if app.cfg.tm_hook {
+        "Ligado pelo atalho: Ctrl+Shift+Esc abre o Prisma."
     } else if app.installed {
         "Desligado: Ctrl+Shift+Esc abre o Gerenciador de Tarefas do Windows."
     } else {
         "Desligado. Só na versão instalada, por segurança."
     };
-    ui.c.text(rect(rt.x + 16.0, rt.y + 38.0, rt.w - 260.0, 22.0), state, 13.0, if app.replaces_tm { ACCENT } else { MUTED }, Align::Left, Weight::Regular);
-    let tm_label = if app.replaces_tm { "Desativar" } else { "Ativar" };
+    ui.c.text(rect(rt.x + 16.0, rt.y + 38.0, rt.w - 260.0, 22.0), state, 13.0, if tm_on { ACCENT } else { MUTED }, Align::Left, Weight::Regular);
+    let tm_label = if tm_on { "Desativar" } else { "Ativar" };
     // Na portátil só dá para desligar: ligar apontaria o atalho para um arquivo que qualquer programa troca.
-    let tm_usable = app.replaces_tm || app.installed;
-    if ui.button_ex("tm", rect(rt.right() - 236.0, rt.y + 18.0, 220.0, 40.0), tm_label, !app.replaces_tm, tm_usable) {
-        if app.replaces_tm {
+    let tm_usable = tm_on || app.installed;
+    if ui.button_ex("tm", rect(rt.right() - 236.0, rt.y + 18.0, 220.0, 40.0), tm_label, !tm_on, tm_usable) {
+        if tm_on {
             ui.ask("tm-off", "Devolver o Gerenciador de Tarefas?", "Ctrl+Shift+Esc volta a abrir o Gerenciador de Tarefas do Windows.");
         } else {
             ui.ask("tm-on", "Substituir o Gerenciador de Tarefas?", "Ctrl+Shift+Esc passa a abrir o Prisma. Dá para desfazer aqui a qualquer momento.");
@@ -69,8 +72,8 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     }
     if std::mem::take(&mut app.tm_refused) {
         ui.notice(
-            "O Windows não aceitou a troca",
-            "A gravação foi recusada ou desfeita logo depois. Costuma ser o antivírus, que vigia essa chave porque vírus também a usam. Libere o Prisma no antivírus e tente de novo.",
+            "O Windows não deixou trocar o Gerenciador",
+            "Algumas versões do Windows protegem essa troca até de administrador. O Prisma passou a pegar o Ctrl+Shift+Esc ele mesmo, enquanto estiver aberto. O Ctrl+Alt+Del e o menu da barra de tarefas ainda abrem o Gerenciador do Windows.",
         );
     }
 

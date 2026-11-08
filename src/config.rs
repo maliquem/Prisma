@@ -246,6 +246,8 @@ pub struct Config {
     pub un_restore: bool,
     pub tw_log: bool,
     pub un_silent: bool,
+    /// O Windows recusou a troca do Gerenciador: o Prisma pega o Ctrl+Shift+Esc ele mesmo.
+    pub tm_hook: bool,
 }
 
 impl Default for Config {
@@ -331,6 +333,7 @@ impl Default for Config {
             un_restore: true,
             tw_log: false,
             un_silent: true,
+            tm_hook: false,
         }
     }
 }
@@ -495,6 +498,7 @@ impl Config {
                 "un_restore" => c.un_restore = b,
                 "tw_log" => c.tw_log = b,
                 "un_silent" => c.un_silent = b,
+                "tm_hook" => c.tm_hook = b,
                 _ => {}
             }
         }
@@ -617,6 +621,7 @@ impl Config {
         }
         let _ = writeln!(s, "tw_log={}", b(self.tw_log));
         let _ = writeln!(s, "un_silent={}", b(self.un_silent));
+        let _ = writeln!(s, "tm_hook={}", b(self.tm_hook));
         let path = config_path();
         let _ = std::fs::create_dir_all(path.parent().unwrap());
         let _ = std::fs::write(path, s);

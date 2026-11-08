@@ -1253,5 +1253,6 @@ Novidades	What's new
 O que mudou da versão {} para a {}	What changed from version {} to {}
 O que mudou em cada versão	What changed in each version
 Ver todas as versões	See all versions
-O Windows não aceitou a troca	Windows did not accept the change
-A gravação foi recusada ou desfeita logo depois. Costuma ser o antivírus, que vigia essa chave porque vírus também a usam. Libere o Prisma no antivírus e tente de novo.	The change was refused or undone right after. It is usually the antivirus, which watches that setting because viruses use it too. Allow Prisma in your antivirus and try again.
+O Windows não deixou trocar o Gerenciador	Windows would not let Prisma replace Task Manager
+Algumas versões do Windows protegem essa troca até de administrador. O Prisma passou a pegar o Ctrl+Shift+Esc ele mesmo, enquanto estiver aberto. O Ctrl+Alt+Del e o menu da barra de tarefas ainda abrem o Gerenciador do Windows.	Some Windows versions protect this change even from administrators. Prisma now catches Ctrl+Shift+Esc itself while it is open. Ctrl+Alt+Del and the taskbar menu still open the Windows Task Manager.
+Ligado pelo atalho: Ctrl+Shift+Esc abre o Prisma.	On through the shortcut: Ctrl+Shift+Esc opens Prisma.

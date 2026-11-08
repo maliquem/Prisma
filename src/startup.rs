@@ -349,13 +349,12 @@ pub fn setup(arg: &str) -> u32 {
     } else if is_installed() {
         sync_admin(plan.admin);
     }
-    if plan.taskmgr && !replace_taskmgr_with(&exe, true) {
-        return SETUP_NO_TASKMGR;
-    }
+    // Recusada a troca, o resto continua: o Prisma pega o atalho ele mesmo.
+    let tm_ok = !plan.taskmgr || replace_taskmgr_with(&exe, true);
     if plan.restart {
         let _ = Command::new(&exe).arg(format!("--wait={pid}")).spawn();
     }
-    0
+    if tm_ok { 0 } else { SETUP_NO_TASKMGR }
 }
 
 /// A cópia comum abre a instalada, sem a permissão de administrador. Ela espera esta fechar.

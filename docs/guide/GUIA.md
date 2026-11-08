@@ -173,7 +173,7 @@ Mostra CPU, GPU, RAM e VRAM por cima de tudo, em quatro estilos. Arraste para mu
 ## Configurações
 
 - **Início com o Windows e administrador:** ligue ou desligue quando quiser. Mudar isso na versão instalada pede a permissão do Windows.
-- **Substituir o Gerenciador de Tarefas:** ativa ou devolve. A desinstalação também devolve. Se o antivírus bloquear a troca, o Prisma avisa em vez de ficar parado. Na versão portátil só dá para desativar.
+- **Substituir o Gerenciador de Tarefas:** ativa ou devolve. A desinstalação também devolve. Algumas versões do Windows protegem essa troca até de administrador. Nesse caso o Prisma avisa e passa a pegar o Ctrl+Shift+Esc ele mesmo, enquanto estiver aberto, e o cartão mostra "Ligado pelo atalho". O Ctrl+Alt+Del e o menu da barra de tarefas continuam abrindo o Gerenciador do Windows. Na versão portátil só dá para desativar.
 - **Fechar à força:** um atalho, Alt + F4 por padrão, encerra na hora o programa em foco, mesmo travado em tela cheia. O que não foi salvo é perdido. A área de trabalho, a barra de tarefas e os processos do Windows continuam com o Alt + F4 normal.
 - **Reiniciar o Explorer:** escolha um atalho, que vem sem nenhum. Como ele fecha a barra de tarefas, é preciso apertar duas vezes em até 4 segundos: o primeiro toque só avisa. O botão ao lado do nome reinicia na hora, depois de perguntar.
 - **Idioma:** português do Brasil ou inglês.

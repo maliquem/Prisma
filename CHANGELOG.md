@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Replace Task Manager writes the setting straight through Windows and checks it stuck. If it is refused, for example by the antivirus, Prisma now says so. / Substituir o Gerenciador de Tarefas grava direto pelo Windows e confere se ficou. Se for recusado, por exemplo pelo antivírus, o Prisma agora avisa.
+- Replace Task Manager works again where Windows protects the change even from administrators, as in recent test builds: Prisma tells you and catches Ctrl+Shift+Esc itself while it is open. Ctrl+Alt+Del and the taskbar menu still open the Windows one. / Substituir o Gerenciador de Tarefas volta a funcionar onde o Windows protege a troca até de administrador, como nas versões de teste recentes: o Prisma avisa e pega o Ctrl+Shift+Esc ele mesmo, enquanto estiver aberto. O Ctrl+Alt+Del e o menu da barra de tarefas ainda abrem o do Windows.
 
 ## 0.8.0
 
