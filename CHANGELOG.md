@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.0
 
 - Search in the Monitor process list, by name or PID, and a PID column in the Programs tab too. / Busca na lista de processos do Monitor, por nome ou PID, e coluna PID também na aba Programas.
 - Restart Explorer button in the Monitor, for when the taskbar or desktop freezes, with an optional shortcut in Settings that you press twice to confirm. / Botão Reiniciar o Explorer no Monitor, para quando a barra de tarefas ou a área de trabalho travam, com um atalho opcional em Configurações que se aperta duas vezes para confirmar.
