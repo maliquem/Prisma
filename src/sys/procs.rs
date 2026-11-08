@@ -275,14 +275,57 @@ pub fn shell_pid() -> Option<u32> {
     path.eq_ignore_ascii_case(&want.to_string_lossy()).then_some(pid)
 }
 
-/// Fecha o Explorer da barra de tarefas, mesmo travado, e espera o Windows abrir outro.
-/// Se ele não voltar sozinho, abre. Bloqueia por alguns segundos: chame fora da janela.
+/// Cópia da permissão do Explorer em uso. Com ela, o Prisma como administrador abre o novo
+/// Explorer como o antigo era, sem administrador.
+fn shell_token(pid: u32) -> Option<HANDLE> {
+    use windows::Win32::Security::*;
+    unsafe {
+        let p = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
+        let mut t = HANDLE::default();
+        let opened = OpenProcessToken(p, TOKEN_DUPLICATE | TOKEN_QUERY, &mut t);
+        let _ = CloseHandle(p);
+        opened.ok()?;
+        let mut dup = HANDLE::default();
+        let access = TOKEN_ASSIGN_PRIMARY | TOKEN_DUPLICATE | TOKEN_QUERY | TOKEN_ADJUST_DEFAULT | TOKEN_ADJUST_SESSIONID;
+        let made = DuplicateTokenEx(t, access, None, SecurityImpersonation, TokenPrimary, &mut dup);
+        let _ = CloseHandle(t);
+        made.ok()?;
+        Some(dup)
+    }
+}
+
+/// Abre o Explorer na pasta do Windows, para ele não prender a pasta do Prisma.
+fn start_explorer(token: Option<HANDLE>) -> bool {
+    let exe = crate::sys::system_tool("explorer");
+    let dir = crate::sys::windows_dir();
+    if let Some(t) = token {
+        let app = windows::core::HSTRING::from(exe.as_os_str());
+        let cwd = windows::core::HSTRING::from(dir.as_os_str());
+        let si = STARTUPINFOW { cb: std::mem::size_of::<STARTUPINFOW>() as u32, ..Default::default() };
+        let mut pi = PROCESS_INFORMATION::default();
+        // Só funciona como administrador: sem isso, o Prisma já tem a permissão do Explorer.
+        let ok = unsafe { CreateProcessWithTokenW(t, CREATE_PROCESS_LOGON_FLAGS(0), &app, None, PROCESS_CREATION_FLAGS(0), None, &cwd, &si, &mut pi) }.is_ok();
+        unsafe {
+            let _ = CloseHandle(t);
+            if ok {
+                let _ = CloseHandle(pi.hThread);
+                let _ = CloseHandle(pi.hProcess);
+                return true;
+            }
+        }
+    }
+    std::process::Command::new(exe).current_dir(dir).spawn().is_ok()
+}
+
+/// Fecha o Explorer da barra de tarefas, mesmo travado, e abre outro.
+/// Bloqueia por alguns segundos: chame fora da janela.
 pub fn restart_explorer() -> bool {
     let running = tray_pid() != 0 || !unsafe { GetShellWindow() }.is_invalid();
     let old = shell_pid();
     if running && old.is_none() {
         return false;
     }
+    let token = old.and_then(shell_token);
     if let Some(pid) = old {
         unsafe {
             let Ok(p) = OpenProcess(PROCESS_TERMINATE | PROCESS_SYNCHRONIZE, false, pid) else { return false };
@@ -292,17 +335,26 @@ pub fn restart_explorer() -> bool {
             }
             let _ = CloseHandle(p);
             if !done {
+                if let Some(t) = token {
+                    let _ = CloseHandle(t);
+                }
                 return false;
             }
         }
     }
-    // Abrir um segundo por cima do que o Windows já reabriu viraria uma janela de pasta.
-    for _ in 0..80 {
+    // Com o reinício automático do Windows ligado, a barra volta sozinha; abrir um segundo
+    // Explorer por cima viraria uma janela de pasta. Fechado assim ele costuma não voltar: 2 s bastam.
+    for _ in 0..20 {
         let now = tray_pid();
         if now != 0 && Some(now) != old {
+            if let Some(t) = token {
+                unsafe {
+                    let _ = CloseHandle(t);
+                }
+            }
             return true;
         }
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
-    std::process::Command::new(crate::sys::system_tool("explorer")).spawn().is_ok()
+    start_explorer(token)
 }
