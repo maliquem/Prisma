@@ -257,3 +257,52 @@ pub fn force_close(h: HWND) -> Forced {
         }
     }
 }
+
+fn tray_pid() -> u32 {
+    use windows::core::w;
+    unsafe { FindWindowW(w!("Shell_TrayWnd"), None) }.map(window_pid).unwrap_or(0)
+}
+
+/// PID do Explorer que desenha a barra de tarefas e a área de trabalho, conferido pelo arquivo:
+/// tem de ser o explorer.exe da pasta do Windows, e não outro programa com o mesmo nome.
+pub fn shell_pid() -> Option<u32> {
+    let pid = match unsafe { GetShellWindow() } {
+        h if !h.is_invalid() => window_pid(h),
+        _ => tray_pid(),
+    };
+    let want = crate::sys::system_tool("explorer");
+    let path = image_path(pid)?;
+    path.eq_ignore_ascii_case(&want.to_string_lossy()).then_some(pid)
+}
+
+/// Fecha o Explorer da barra de tarefas, mesmo travado, e espera o Windows abrir outro.
+/// Se ele não voltar sozinho, abre. Bloqueia por alguns segundos: chame fora da janela.
+pub fn restart_explorer() -> bool {
+    let running = tray_pid() != 0 || !unsafe { GetShellWindow() }.is_invalid();
+    let old = shell_pid();
+    if running && old.is_none() {
+        return false;
+    }
+    if let Some(pid) = old {
+        unsafe {
+            let Ok(p) = OpenProcess(PROCESS_TERMINATE | PROCESS_SYNCHRONIZE, false, pid) else { return false };
+            let done = TerminateProcess(p, 1).is_ok();
+            if done {
+                let _ = WaitForSingleObject(p, 5_000);
+            }
+            let _ = CloseHandle(p);
+            if !done {
+                return false;
+            }
+        }
+    }
+    // Abrir um segundo por cima do que o Windows já reabriu viraria uma janela de pasta.
+    for _ in 0..80 {
+        let now = tray_pid();
+        if now != 0 && Some(now) != old {
+            return true;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    std::process::Command::new(crate::sys::system_tool("explorer")).spawn().is_ok()
+}

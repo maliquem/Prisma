@@ -22,6 +22,15 @@ fn ask_end(ui: &mut Ui, app: &App) {
     ui.ask("proc-end", "Finalizar tarefa?", &format!("{what} será fechado à força. O que não foi salvo nesse programa será perdido."));
 }
 
+/// Também usada em Configurações, ao lado do atalho.
+pub fn ask_explorer(ui: &mut Ui) {
+    ui.ask(
+        "explorer",
+        "Reiniciar o Explorer?",
+        "A barra de tarefas e a área de trabalho somem por alguns segundos e voltam sozinhas. As janelas de pasta abertas fecham.",
+    );
+}
+
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let s = app.snap.clone();
     let sub = format!(
@@ -30,11 +39,17 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         if s.gpu_name.is_empty() { "GPU" } else { &s.gpu_name },
         fmt_gb(s.ram_total)
     );
-    header(ui, a, "Monitor", &sub);
+    header_room(ui, a, "Monitor", &sub, 384.0);
     if ui.button("opt-now", rect(a.right() - 168.0, 24.0, 140.0, 44.0), "Otimizar agora", true) {
         app.page = Page::Optimize;
         app.refresh_page();
         ui.s.needs_redraw = true;
+    }
+    if ui.button("explorer", rect(a.right() - 364.0, 24.0, 184.0, 44.0), "Reiniciar o Explorer", false) {
+        ask_explorer(ui);
+    }
+    if ui.answered("explorer") {
+        app.restart_explorer();
     }
 
     let x = a.x + 28.0;
@@ -73,9 +88,17 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         }
     }
     let details = app.mon_tab == 1;
+    let find = rect(t.x + 226.0, t.y + 8.0, (t.w - 406.0).min(280.0), 32.0);
+    let mut q = std::mem::take(&mut app.mon_search);
+    if ui.search("mon-q", find, &mut q, "Buscar por nome ou PID") {
+        ui.reset_scroll("procs");
+        ui.reset_scroll("procs-d");
+    }
+    app.mon_search = q;
     if let Some(f) = &app.mon_filter {
         let text = format!("Mostrando {}", app_name(f));
-        ui.c.text(rect(t.x + 226.0, t.y + 8.0, t.w - 396.0, 32.0), &text, 13.0, MUTED, Align::Left, Weight::Regular);
+        let fx = find.right() + 12.0;
+        ui.c.text(rect(fx, t.y + 8.0, t.right() - 168.0 - fx, 32.0), &text, 13.0, MUTED, Align::Left, Weight::Regular);
     }
     let target: Option<(String, Vec<u32>)> = if details {
         app.sel_pid.and_then(|pid| s.procs.iter().find(|p| p.pid == pid)).map(|p| (p.exe.clone(), vec![p.pid]))
@@ -119,6 +142,16 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     } else {
         s.groups.iter().map(|g| Row { exe: g.exe.clone(), pids: g.pids.clone(), cpu: g.cpu, ram: g.ram, gpu: g.gpu, vram: g.vram, disk: g.disk, net: g.net }).collect()
     };
+    // Número procura o começo do PID; texto procura o arquivo e, em Programas, o nome mostrado.
+    let needle = app.mon_search.trim().to_lowercase();
+    if !needle.is_empty() {
+        let by_pid = needle.bytes().all(|b| b.is_ascii_digit());
+        rows.retain(|r| {
+            r.exe.to_lowercase().contains(&needle)
+                || (by_pid && r.pids.iter().any(|p| p.to_string().starts_with(&needle)))
+                || (!details && app.name_of(&r.exe, r.pids.first().copied().unwrap_or(0)).to_lowercase().contains(&needle))
+        });
+    }
     match app.sort {
         1 => rows.sort_by(|a, b| b.ram.cmp(&a.ram)),
         2 => rows.sort_by(|a, b| b.gpu.partial_cmp(&a.gpu).unwrap()),
@@ -131,6 +164,9 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     }
     let list = rect(t.x + 8.0, hy + 24.0, t.w - 16.0, t.bottom() - hy - 32.0);
     let key = if details { "procs-d" } else { "procs" };
+    if rows.is_empty() && !needle.is_empty() {
+        ui.c.text(rect(list.x + 16.0, list.y + 8.0, list.w - 32.0, 34.0), "Nenhum processo com esse nome ou PID", 14.0, MUTED, Align::Left, Weight::Regular);
+    }
     ui.begin_scroll(key, list, rows.len() as f32 * 34.0);
     let first = (ui.scroll_y() / 34.0) as usize;
     let last = first + (list.h / 34.0) as usize + 2;

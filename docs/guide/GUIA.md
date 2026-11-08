@@ -28,6 +28,8 @@ Os dois ficam ao lado do nome Prisma, no alto da janela, sempre à vista. Passe 
 Mostra o que está usando o PC agora: CPU por núcleo, GPU, RAM e VRAM, e o uso de CPU, RAM, GPU, VRAM, disco e rede de cada programa.
 
 - **Dá para:** finalizar uma tarefa, ver os detalhes, abrir o local do arquivo, pesquisar online e ver as propriedades com o botão direito. A aba Detalhes lista cada processo com o PID.
+- **Buscar:** o campo ao lado das abas filtra a lista pelo nome do programa ou do arquivo. Digite só números para achar pelo PID.
+- **Reiniciar o Explorer:** quando a barra de tarefas, o menu Iniciar ou a área de trabalho travam. O Prisma pergunta antes, fecha o Explorer pelo PID e ele volta sozinho em alguns segundos. As janelas de pasta abertas fecham.
 - **Não dá para:** ver temperatura e consumo da CPU, porque isso exige um driver de kernel. A coluna de rede exige o Prisma como administrador. A temperatura da GPU depende do driver da NVIDIA.
 
 ## Medidor
@@ -173,6 +175,7 @@ Mostra CPU, GPU, RAM e VRAM por cima de tudo, em quatro estilos. Arraste para mu
 - **Início com o Windows e administrador:** ligue ou desligue quando quiser. Mudar isso na versão instalada pede a permissão do Windows.
 - **Substituir o Gerenciador de Tarefas:** ativa ou devolve. A desinstalação também devolve. Na versão portátil só dá para desativar.
 - **Fechar à força:** um atalho, Alt + F4 por padrão, encerra na hora o programa em foco, mesmo travado em tela cheia. O que não foi salvo é perdido. A área de trabalho, a barra de tarefas e os processos do Windows continuam com o Alt + F4 normal.
+- **Reiniciar o Explorer:** escolha um atalho, que vem sem nenhum. Como ele fecha a barra de tarefas, é preciso apertar duas vezes em até 4 segundos: o primeiro toque só avisa. O botão ao lado do nome reinicia na hora, depois de perguntar.
 - **Idioma:** português do Brasil ou inglês.
 - **Atualizações:** veja a seção abaixo.
 - **Mostrar as boas-vindas ao abrir:** traz a tela inicial de volta.
@@ -186,6 +189,7 @@ Com a busca automática ligada, o Prisma procura uma versão nova uma vez por di
 - **Sim:** baixa, confere o arquivo, troca o programa e reinicia, com as suas configurações. A versão instalada pede a permissão do Windows se não estiver como administrador.
 - **Não:** ele pergunta de novo na próxima vez que a janela abrir.
 - **Não mostrar de novo:** desliga a busca automática. Para religar, marque a opção em Configurações, onde também há **Procurar agora**.
+- **Novidades:** depois de atualizar, o Prisma abre com o que mudou em cada versão desde a que você usava, mesmo pulando várias. Para ver de novo, clique em **Novidades** ao lado da versão, em Configurações.
 
 ## Reportar bug
 

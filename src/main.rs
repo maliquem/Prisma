@@ -47,9 +47,7 @@ fn main() {
     }
     let pid_arg = |name: &str| std::env::args().find_map(|a| a.strip_prefix(name).and_then(|p| p.parse::<u32>().ok()));
     let updated = pid_arg("--updated=");
-    if let Some(pid) = updated {
-        sys::update::after_update(pid);
-    }
+    let before = updated.and_then(sys::update::after_update);
     if let Some(pid) = pid_arg("--wait=") {
         sys::update::wait_exit(pid);
     }
@@ -78,6 +76,7 @@ fn main() {
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
         app::start(background);
+        app::with(|a| a.check_news(before));
         if updated.is_some() {
             app::with(|a| {
                 let text = format!("Atualizado para a versão {}", sys::update::current());

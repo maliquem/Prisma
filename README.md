@@ -31,7 +31,7 @@ Prisma checks this page once a day. When there is a new version and you open the
 
 ## Features
 
-- **Monitor:** per-core CPU, GPU, RAM, VRAM, disk and network for each program, with icons. Right-click a program to end the task, go to details, open the file location, search online or see its properties. The Details tab lists every process with its PID.
+- **Monitor:** per-core CPU, GPU, RAM, VRAM, disk and network for each program, with icons. Right-click a program to end the task, go to details, open the file location, search online or see its properties. The Details tab lists every process with its PID. Search by name or PID, and restart Explorer when the taskbar freezes.
 - **Disks and networks:** speed, active time and free space for each disk, plus a health grade (Good, Warning, At risk) from SMART, including USB drives. Each network shows speed, address and total transferred.
 - **Disk space:** analyzes a whole disk by reading the NTFS table, with folders, largest files, file types and a visual map. Opens in Explorer and, as administrator, sends files to the Recycle Bin.
 - **Startup:** turns on, turns off, adds and removes what opens with Windows, and shows who signed each program. Sorts by name, enabled or disabled.

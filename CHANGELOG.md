@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Search in the Monitor process list, by name or PID. / Busca na lista de processos do Monitor, por nome ou PID.
+- Restart Explorer button in the Monitor, for when the taskbar or desktop freezes, with an optional shortcut in Settings that you press twice to confirm. / Botão Reiniciar o Explorer no Monitor, para quando a barra de tarefas ou a área de trabalho travam, com um atalho opcional em Configurações que se aperta duas vezes para confirmar.
+- What's new screen after an update, with every version since the one you had. It is also in Settings, next to the version. / Tela de Novidades depois de atualizar, com todas as versões desde a que você usava. Ela também fica em Configurações, ao lado da versão.
 - Safer portable copy: Prisma loads Windows DLLs and runs Windows tools only from the Windows folder, never from its own folder. A file with the same name downloaded next to it no longer runs in its place, not even as administrator. / Versão portátil mais segura: o Prisma carrega as DLLs e roda as ferramentas do Windows só da pasta do Windows, nunca da própria pasta. Um arquivo com o mesmo nome baixado ao lado dele não roda mais no lugar, nem como administrador.
 - Replace Task Manager is now for the installed version only. In an ordinary folder, any program could swap the file Ctrl+Shift+Esc opens, for every account on the PC. / Substituir o Gerenciador de Tarefas agora é só da versão instalada. Numa pasta comum, qualquer programa poderia trocar o arquivo que o Ctrl+Shift+Esc abre, para todas as contas do PC.
 - Updates are now signed. Prisma checks the signature before replacing itself and refuses a file without it, so someone who gets into the GitHub account cannot ship a fake version. / As atualizações agora são assinadas. O Prisma confere a assinatura antes de se trocar e recusa arquivo sem ela, então quem entrar na conta do GitHub não consegue publicar uma versão falsa.

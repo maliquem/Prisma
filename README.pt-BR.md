@@ -31,7 +31,7 @@ O Prisma procura nesta página uma vez por dia. Quando há versão nova e você 
 
 ## Funções
 
-- **Monitor:** CPU por núcleo, GPU, RAM, VRAM, disco e rede de cada programa, com ícones. O botão direito finaliza a tarefa, vai para os detalhes, abre o local do arquivo, pesquisa online e mostra as propriedades. A aba Detalhes lista cada processo com o PID.
+- **Monitor:** CPU por núcleo, GPU, RAM, VRAM, disco e rede de cada programa, com ícones. O botão direito finaliza a tarefa, vai para os detalhes, abre o local do arquivo, pesquisa online e mostra as propriedades. A aba Detalhes lista cada processo com o PID. Busca por nome ou PID, e reinicia o Explorer quando a barra de tarefas trava.
 - **Discos e redes:** velocidade, tempo ativo e espaço de cada disco, e nota de saúde (Bom, Atenção, Risco) pelo SMART, inclusive em HDs USB. Cada rede mostra velocidade, endereço e total transferido.
 - **Espaço em disco:** analisa um disco inteiro lendo a tabela do NTFS, com pastas, maiores arquivos, tipos e mapa visual. Abre no Explorador e, como administrador, manda para a Lixeira.
 - **Inicialização:** liga, desliga, adiciona e remove o que abre com o Windows, e mostra quem assinou cada programa. Ordena por nome, ativados ou desativados.

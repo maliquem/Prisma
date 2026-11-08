@@ -801,7 +801,7 @@ Volta as opções Ver log e Restauração ao padrão. Os ajustes aplicados conti
 Esvazia as listas de nunca fechar e sempre fechar, e as sugestões recusadas. Essa ação não fecha nenhum programa.	Empties the never-close and always-close lists and the declined suggestions. This does not close any program.
 Volta o modificador, o passo e o aviso na tela ao padrão.	Resets the modifier, step and on-screen notice to default.
 Volta o atalho, o estilo e a posição do widget ao padrão, e esconde o widget.	Resets the widget shortcut, style and position to default, and hides the widget.
-Volta os atalhos de Otimizar e de Fechar à força, o idioma e a busca de atualização ao padrão.	Resets the Optimize and Force close shortcuts, language and update check to default.
+Volta os atalhos de Otimizar, Fechar à força e Reiniciar o Explorer, o idioma e a busca de atualização ao padrão.	Resets the Optimize, Force close and Restart Explorer shortcuts, language and update check to default.
 Fechar à força	Force close
 Encerra na hora o programa em foco, mesmo travado. O que não foi salvo é perdido.	Ends the focused program at once, even if frozen. Anything unsaved is lost.
 {} fechado à força	{} force-closed
@@ -1239,3 +1239,17 @@ A atualização precisa da permissão de administrador	The update needs administ
 Enter aplica. Esc cancela.	Enter applies. Esc cancels.
 Setas, mouse ou números. Esc fecha.	Arrows, mouse or numbers. Esc closes.
 0,1% low	0.1% low
+Buscar por nome ou PID	Search by name or PID
+Nenhum processo com esse nome ou PID	No process with that name or PID
+Reiniciar o Explorer	Restart Explorer
+Reiniciar o Explorer?	Restart Explorer?
+A barra de tarefas e a área de trabalho somem por alguns segundos e voltam sozinhas. As janelas de pasta abertas fecham.	The taskbar and desktop disappear for a few seconds and come back on their own. Open folder windows close.
+Aperte {} de novo para reiniciar o Explorer	Press {} again to restart Explorer
+Reiniciando o Explorer…	Restarting Explorer…
+Explorer reiniciado	Explorer restarted
+O Windows não deixou fechar o Explorer	Windows did not let Prisma close Explorer
+Reiniciar agora	Restart now
+Novidades	What's new
+O que mudou da versão {} para a {}	What changed from version {} to {}
+O que mudou em cada versão	What changed in each version
+Ver todas as versões	See all versions

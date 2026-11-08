@@ -3,7 +3,7 @@ use crate::config::Defaults;
 
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     header(ui, a, "Configurações", "Início com o Windows, permissões e atalhos gerais.");
-    defaults_button(ui, app, a.right() - 124.0, Defaults::Settings, "Volta os atalhos de Otimizar e de Fechar à força, o idioma e a busca de atualização ao padrão.");
+    defaults_button(ui, app, a.right() - 124.0, Defaults::Settings, "Volta os atalhos de Otimizar, Fechar à força e Reiniciar o Explorer, o idioma e a busca de atualização ao padrão.");
     let x = a.x + 28.0;
     let w = a.w - 56.0;
     let top = 88.0;
@@ -77,16 +77,36 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         app.register_hotkeys();
     }
 
-    let half = (w - 12.0) / 2.0;
-    let r1 = rect(x, top + 338.0, half, 92.0);
+    let third = (w - 24.0) / 3.0;
+    let field = (third - 32.0).min(240.0);
+    let r1 = rect(x, top + 338.0, third, 92.0);
     ui.card(r1);
     ui.label(rect(r1.x + 16.0, r1.y + 10.0, r1.w - 32.0, 18.0), "Atalho de Otimizar", TEXT2);
-    if ui.hotkey("hk-opt", rect(r1.x + 16.0, r1.y + 34.0, 240.0, 44.0), &mut app.cfg.hk_optimize) {
+    if ui.hotkey("hk-opt", rect(r1.x + 16.0, r1.y + 34.0, field, 44.0), &mut app.cfg.hk_optimize) {
         app.cfg.save();
         app.register_hotkeys();
     }
 
-    let rl = rect(r1.right() + 12.0, r1.y, half, 92.0);
+    // O atalho fecha a barra de tarefas: pede dois toques, e o botão pergunta antes.
+    let re = rect(r1.right() + 12.0, r1.y, third, 92.0);
+    ui.card(re);
+    ui.label(rect(re.x + 16.0, re.y + 10.0, re.w - 72.0, 18.0), "Reiniciar o Explorer", TEXT2);
+    let go = rect(re.right() - 52.0, re.y + 6.0, 40.0, 24.0);
+    ui.c.round(go, 6.0, if ui.is_hover(go) { CARD2 } else { SIDE });
+    ui.c.icon(go.x + 10.0, go.y + 2.0, 20.0, &[&[(18., 8.), (16., 5.5), (12., 4.), (8., 5.), (5., 8.), (4., 12.), (5., 16.), (8., 19.), (12., 20.), (16., 19.), (19., 16.)], &[(18., 3.), (18., 8.), (13., 8.)]], ACCENT);
+    ui.tip(go, "Reiniciar agora");
+    if ui.hit("explorer-now", go) {
+        super::monitor::ask_explorer(ui);
+    }
+    if ui.answered("explorer") {
+        app.restart_explorer();
+    }
+    if ui.hotkey("hk-explorer", rect(re.x + 16.0, re.y + 34.0, field, 44.0), &mut app.cfg.hk_explorer) {
+        app.cfg.save();
+        app.register_hotkeys();
+    }
+
+    let rl = rect(re.right() + 12.0, r1.y, third, 92.0);
     ui.card(rl);
     ui.label(rect(rl.x + 16.0, rl.y + 10.0, rl.w - 32.0, 18.0), "Idioma", TEXT2);
 
@@ -105,7 +125,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     // Lista por último, para abrir por cima do resto.
     let opts = vec!["Português (Brasil)".to_string(), "English".to_string()];
     let mut v = app.cfg.lang_en as usize;
-    if ui.select("lang", rect(rl.x + 16.0, rl.y + 34.0, 240.0, 44.0), &opts, &mut v) {
+    if ui.select("lang", rect(rl.x + 16.0, rl.y + 34.0, field, 44.0), &opts, &mut v) {
         app.cfg.lang_en = v == 1;
         app.cfg.save();
         crate::i18n::set_english(app.cfg.lang_en);
@@ -124,7 +144,17 @@ fn draw_update(ui: &mut Ui, app: &mut App, r: Rect) {
     ui.card(r);
     let s = app.upd.lock().unwrap().clone();
     ui.title(rect(r.x + 16.0, r.y + 10.0, 260.0, 22.0), "Atualizações");
-    ui.label(rect(r.x + 16.0, r.y + 32.0, 260.0, 18.0), &format!("Versão {}", update::current()), MUTED);
+    let version = format!("Versão {}", update::current());
+    ui.label(rect(r.x + 16.0, r.y + 32.0, 260.0, 18.0), &version, MUTED);
+    let vw = measure(&version, 13.0, Weight::Regular, None).0;
+    let news = rect(r.x + 28.0 + vw, r.y + 30.0, (248.0 - vw - 12.0).max(0.0), 22.0);
+    let hover = ui.is_hover(news);
+    ui.c.text(news, "Novidades", 13.0, if hover { TEXT } else { ACCENT }, Align::Left, Weight::Semibold);
+    if ui.hit("news", news) {
+        app.news_from = None;
+        app.page = Page::News;
+        ui.s.needs_redraw = true;
+    }
     let (text, color) = match &s.phase {
         Phase::Idle => ("Busca só o GitHub do Prisma, sem enviar dados seus.".to_string(), TEXT2),
         Phase::Checking => ("Procurando…".to_string(), TEXT2),

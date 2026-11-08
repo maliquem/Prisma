@@ -28,6 +28,8 @@ Both sit next to the Prisma name, at the top of the window, always in view. Hove
 Shows what is using your PC right now: CPU per core, GPU, RAM and VRAM, plus the CPU, RAM, GPU, VRAM, disk and network use of each program.
 
 - **You can:** end a task, go to details, open the file location, search online and see properties with the right mouse button. The Details tab lists each process with its PID.
+- **Search:** the field next to the tabs filters the list by program or file name. Type only numbers to find a PID.
+- **Restart Explorer:** for when the taskbar, the Start menu or the desktop freezes. Prisma asks first, ends Explorer by its PID and it comes back on its own in a few seconds. Open folder windows close.
 - **You can't:** see CPU temperature and power, because they require a kernel driver. The network column requires Prisma as administrator. GPU temperature depends on the NVIDIA driver.
 
 ## Meter
@@ -173,6 +175,7 @@ Shows CPU, GPU, RAM and VRAM on top of everything, in four styles. Drag it to mo
 - **Start with Windows and administrator:** turn them on or off whenever you want. Changing this in the installed version asks for Windows permission.
 - **Replace Task Manager:** turns it on or gives it back. Uninstalling also gives it back. In the portable version you can only turn it off.
 - **Force close:** a shortcut, Alt + F4 by default, ends the program in focus right away, even frozen in fullscreen. Anything unsaved is lost. The desktop, the taskbar and Windows processes keep the normal Alt + F4.
+- **Restart Explorer:** choose a shortcut; there is none by default. Since it closes the taskbar, you press it twice within 4 seconds: the first press only warns you. The button next to the name restarts it right away, after asking.
 - **Language:** Brazilian Portuguese or English.
 - **Updates:** see the section below.
 - **Show the welcome screen on open:** brings the first screen back.
@@ -186,6 +189,7 @@ With automatic search on, Prisma looks for a new version once a day on GitHub, w
 - **Yes:** downloads, checks the file, replaces the program and restarts, with your settings. The installed version asks for Windows permission if it is not running as administrator.
 - **No:** it asks again the next time the window opens.
 - **Don't show again:** turns automatic search off. To turn it back on, check the option in Settings, which also has **Check now**.
+- **What's new:** after an update, Prisma opens with what changed in each version since the one you had, even if you skipped several. To see it again, click **What's new** next to the version in Settings.
 
 ## Report a bug
 

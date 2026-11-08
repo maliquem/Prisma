@@ -9,6 +9,7 @@ pub mod guide;
 mod hdr;
 mod meter;
 mod monitor;
+pub mod news;
 mod optimize;
 pub mod picker;
 mod plan_edit;
@@ -48,6 +49,7 @@ pub enum Page {
     Adjust,
     Report,
     Guide,
+    News,
 }
 
 type Icon = &'static [&'static [(f32, f32)]];
@@ -282,6 +284,7 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
         Page::Adjust => adjust::draw(&mut ui, app, area),
         Page::Report => report::draw(&mut ui, app, area),
         Page::Guide => guide::draw(&mut ui, app, area),
+        Page::News => news::draw(&mut ui, app, area),
     }
     update_prompt(&mut ui, app);
     ui.end();
@@ -317,9 +320,14 @@ pub fn defaults_button(ui: &mut Ui, app: &mut App, x: f32, page: crate::config::
 }
 
 pub fn header(ui: &Ui, a: Rect, title: &str, sub: &str) {
+    header_room(ui, a, title, sub, 240.0);
+}
+
+/// Cabeçalho que deixa `room` livre à direita, para os botões da página.
+pub fn header_room(ui: &Ui, a: Rect, title: &str, sub: &str, room: f32) {
     let x = a.x + 28.0;
-    ui.c.text(rect(x, 22.0, a.w - 56.0, 32.0), title, 24.0, TEXT, Align::Left, Weight::Semibold);
-    ui.c.text(rect(x, 54.0, a.w - 240.0, 20.0), sub, 14.0, MUTED, Align::Left, Weight::Regular);
+    ui.c.text(rect(x, 22.0, a.w - room - 28.0, 32.0), title, 24.0, TEXT, Align::Left, Weight::Semibold);
+    ui.c.text(rect(x, 54.0, a.w - room - 28.0, 20.0), sub, 14.0, MUTED, Align::Left, Weight::Regular);
 }
 
 pub fn fmt_gb(b: u64) -> String {

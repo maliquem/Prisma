@@ -164,6 +164,7 @@ pub struct Config {
     pub hk_widget: Hotkey,
     pub hk_optimize: Hotkey,
     pub hk_force: Hotkey,
+    pub hk_explorer: Hotkey,
     pub hk_shot: Hotkey,
     pub hk_shot_full: Hotkey,
     pub hk_shot_win: Hotkey,
@@ -238,6 +239,8 @@ pub struct Config {
     pub upd_checked: u64,
     /// Versão achada na última busca. Com ela, abrir de novo busca os detalhes para perguntar.
     pub upd_found: String,
+    /// Última versão aberta neste PC. Abrir uma mais nova mostra as novidades desde ela.
+    pub seen_version: String,
     pub welcome: bool,
     pub always_admin: bool,
     pub un_restore: bool,
@@ -253,6 +256,7 @@ impl Default for Config {
             hk_widget: Hotkey::new(MOD_CTRL | MOD_ALT, b'W' as u32),
             hk_optimize: Hotkey::new(MOD_CTRL | MOD_ALT, b'O' as u32),
             hk_force: Hotkey::new(MOD_ALT, 0x73),
+            hk_explorer: Hotkey::new(0, 0),
             hk_shot: Hotkey::new(MOD_CTRL | MOD_ALT, b'P' as u32),
             hk_shot_full: Hotkey::new(MOD_CTRL | MOD_ALT, b'A' as u32),
             hk_shot_win: Hotkey::new(MOD_CTRL | MOD_ALT, b'J' as u32),
@@ -321,6 +325,7 @@ impl Default for Config {
             update_auto: true,
             upd_checked: 0,
             upd_found: String::new(),
+            seen_version: String::new(),
             welcome: true,
             always_admin: false,
             un_restore: true,
@@ -376,6 +381,7 @@ impl Config {
                 "hk_widget" => c.hk_widget = Hotkey::parse(v),
                 "hk_optimize" => c.hk_optimize = Hotkey::parse(v),
                 "hk_force" => c.hk_force = Hotkey::parse(v),
+                "hk_explorer" => c.hk_explorer = Hotkey::parse(v),
                 "hk_shot" => c.hk_shot = Hotkey::parse(v),
                 "hk_shot_full" => c.hk_shot_full = Hotkey::parse(v),
                 "hk_shot_win" => c.hk_shot_win = Hotkey::parse(v),
@@ -483,6 +489,7 @@ impl Config {
                 "update_auto" => c.update_auto = b,
                 "upd_checked" => c.upd_checked = v.parse().unwrap_or(0),
                 "upd_found" => c.upd_found = v.to_string(),
+                "seen_version" => c.seen_version = v.to_string(),
                 "welcome" => c.welcome = b,
                 "always_admin" => c.always_admin = b,
                 "un_restore" => c.un_restore = b,
@@ -510,6 +517,7 @@ impl Config {
         hk(&mut s, "hk_widget", self.hk_widget);
         hk(&mut s, "hk_optimize", self.hk_optimize);
         hk(&mut s, "hk_force", self.hk_force);
+        hk(&mut s, "hk_explorer", self.hk_explorer);
         hk(&mut s, "hk_shot", self.hk_shot);
         hk(&mut s, "hk_shot_full", self.hk_shot_full);
         hk(&mut s, "hk_shot_win", self.hk_shot_win);
@@ -568,6 +576,7 @@ impl Config {
         let _ = writeln!(s, "update_auto={}", b(self.update_auto));
         let _ = writeln!(s, "upd_checked={}", self.upd_checked);
         let _ = writeln!(s, "upd_found={}", self.upd_found);
+        let _ = writeln!(s, "seen_version={}", self.seen_version);
         let _ = writeln!(s, "welcome={}", b(self.welcome));
         let _ = writeln!(s, "always_admin={}", b(self.always_admin));
         let _ = writeln!(s, "un_restore={}", b(self.un_restore));
@@ -719,6 +728,7 @@ impl Config {
             Defaults::Settings => {
                 self.hk_optimize = d.hk_optimize;
                 self.hk_force = d.hk_force;
+                self.hk_explorer = d.hk_explorer;
                 self.update_auto = d.update_auto;
                 self.lang_en = d.lang_en;
             }

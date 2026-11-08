@@ -462,14 +462,37 @@ pub fn wait_exit(pid: u32) {
 }
 
 /// A nova versão espera a antiga sair antes de assumir, e depois apaga o arquivo velho.
-pub fn after_update(pid: u32) {
+/// Devolve a versão gravada nele, para as novidades saberem de onde a pessoa veio.
+pub fn after_update(pid: u32) -> Option<String> {
     wait_exit(pid);
-    if let Some((_, old, _)) = side_paths() {
-        for _ in 0..20 {
-            if std::fs::remove_file(&old).is_ok() || !old.exists() {
-                break;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(100));
+    let (_, old, _) = side_paths()?;
+    let version = file_version(&old);
+    for _ in 0..20 {
+        if std::fs::remove_file(&old).is_ok() || !old.exists() {
+            break;
         }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    version
+}
+
+/// Versão do produto gravada no executável, como "0.7.0".
+pub fn file_version(path: &std::path::Path) -> Option<String> {
+    use windows::Win32::Storage::FileSystem::*;
+    let name = windows::core::HSTRING::from(path.as_os_str());
+    unsafe {
+        let size = GetFileVersionInfoSizeW(&name, None);
+        if size == 0 {
+            return None;
+        }
+        let mut buf = vec![0u8; size as usize];
+        GetFileVersionInfoW(&name, None, size, buf.as_mut_ptr().cast()).ok()?;
+        let mut info = std::ptr::null_mut();
+        let mut len = 0u32;
+        if !VerQueryValueW(buf.as_ptr().cast(), windows::core::w!("\\"), &mut info, &mut len).as_bool() || len == 0 {
+            return None;
+        }
+        let f = &*(info as *const VS_FIXEDFILEINFO);
+        Some(format!("{}.{}.{}", f.dwProductVersionMS >> 16, f.dwProductVersionMS & 0xffff, f.dwProductVersionLS >> 16))
     }
 }

@@ -52,6 +52,7 @@ const WM_REPORT_PHOTO: u32 = WM_APP + 84;
 const WM_REPORT_DONE: u32 = WM_APP + 85;
 const WM_PICK_WIN: u32 = WM_APP + 86;
 const WM_SETUP_DONE: u32 = WM_APP + 87;
+const WM_EXPLORER_DONE: u32 = WM_APP + 88;
 const PICKER_SIZE: (f32, f32) = (540.0, 680.0);
 const PICKER_MIN: (f32, f32) = (420.0, 400.0);
 
@@ -123,6 +124,7 @@ const HK_LIMIT_UP: i32 = 18;
 const HK_LIMIT_DOWN: i32 = 19;
 const HK_LOG: i32 = 20;
 const HK_METER_KEYS: i32 = 21;
+const HK_EXPLORER: i32 = 22;
 const HK_VOL_UP: i32 = 10;
 const HK_VOL_DOWN: i32 = 11;
 const HK_MUTE: i32 = 12;
@@ -204,6 +206,9 @@ pub struct App {
     upd_go: bool,
     pub welcome: Option<crate::pages::welcome::Choices>,
     pub guide: Option<crate::pages::guide::Layout>,
+    pub news: Option<crate::pages::news::Layout>,
+    /// Versão de antes da atualização. Sem ela, Novidades mostra todas as versões.
+    pub news_from: Option<String>,
     setup_plan: Option<crate::startup::Plan>,
     tm_check: Option<Instant>,
     force_hook: Option<HHOOK>,
@@ -265,6 +270,9 @@ pub struct App {
     pub selected: Option<String>,
     pub mon_tab: u8,
     pub mon_filter: Option<String>,
+    pub mon_search: String,
+    /// Primeiro toque no atalho de reiniciar o Explorer: o segundo, logo depois, confirma.
+    explorer_armed: Option<Instant>,
     pub sel_pid: Option<u32>,
     /// Alvo do menu aberto no Monitor: programa, processos e o primeiro PID.
     pub mon_target: Option<(String, Vec<u32>)>,
@@ -378,6 +386,8 @@ pub fn start(background: bool) {
             upd_go: std::env::args().any(|a| a == "--update"),
             welcome: cfg.welcome.then(crate::pages::welcome::Choices::new),
             guide: None,
+            news: None,
+            news_from: None,
             setup_plan: None,
             tm_check: None,
             force_hook: None,
@@ -439,6 +449,8 @@ pub fn start(background: bool) {
             selected: None,
             mon_tab: 0,
             mon_filter: None,
+            mon_search: String::new(),
+            explorer_armed: None,
             sel_pid: None,
             mon_target: None,
             svc_target: None,
@@ -536,6 +548,14 @@ pub fn start(background: bool) {
             }
             if a == "--test-crash" {
                 windows::Win32::System::Diagnostics::Debug::RaiseException(0xE000_0001, 0, None);
+            }
+            // Só diz qual Explorer fecharia, sem fechar.
+            if let Some(path) = a.strip_prefix("--test-explorer=") {
+                let pid = procs::shell_pid();
+                let file = pid.and_then(procs::image_path).unwrap_or_default();
+                let before = crate::sys::update::file_version(std::path::Path::new(&std::env::current_exe().unwrap_or_default()));
+                let _ = std::fs::write(path, format!("pid={pid:?}\nfile={file}\nversion={before:?}\n"));
+                std::process::exit(0);
             }
             if let Some(path) = a.strip_prefix("--test-report=") {
                 crate::report::self_test(path, &Snapshot::default());
@@ -780,6 +800,7 @@ pub fn start(background: bool) {
                 "--page=adjust" => Page::Adjust,
                 "--page=report" => Page::Report,
                 "--page=guide" => Page::Guide,
+                "--page=news" => Page::News,
                 _ => app.page,
             };
         }
@@ -853,6 +874,21 @@ impl App {
         self.cfg.save();
     }
 
+    /// Abrir uma versão mais nova que a última aberta mostra o que mudou desde ela. `before` é a
+    /// versão do arquivo trocado na atualização, para quem veio de uma versão que não anotava.
+    pub fn check_news(&mut self, before: Option<String>) {
+        let cur = crate::sys::update::current();
+        let from = if self.cfg.seen_version.is_empty() { before } else { Some(self.cfg.seen_version.clone()) };
+        if let Some(f) = from.filter(|f| crate::sys::update::is_newer(&cur, f) && crate::pages::news::has_news(f)) {
+            self.news_from = Some(f);
+            self.page = Page::News;
+        }
+        if self.cfg.seen_version != cur {
+            self.cfg.seen_version = cur;
+            self.cfg.save();
+        }
+    }
+
     pub fn refresh_plans(&mut self) {
         self.plans = power::list();
         self.plan_values = self.plans.iter().map(power::values).collect();
@@ -862,7 +898,7 @@ impl App {
     pub fn register_hotkeys(&mut self) {
         self.unhook_force_key();
         unsafe {
-            for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE] {
+            for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE] {
                 let _ = UnregisterHotKey(Some(self.hub), id);
             }
         }
@@ -887,6 +923,7 @@ impl App {
             (HK_LIMIT_DOWN, c.hk_limit_down, "Diminuir o limite", false),
             (HK_REPLAY, c.hk_replay, "Replay", true),
             (HK_FORCE, c.hk_force, "Fechar à força", true),
+            (HK_EXPLORER, c.hk_explorer, "Reiniciar o Explorer", true),
             (HK_VOL_UP, Hotkey::new(c.vol_mods, VK_VOL_UP), "Aumentar volume", false),
             (HK_VOL_DOWN, Hotkey::new(c.vol_mods, VK_VOL_DOWN), "Diminuir volume", false),
             (HK_MUTE, Hotkey::new(c.vol_mods, VK_MUTE), "Mudo", true),
@@ -928,7 +965,7 @@ impl App {
         if on {
             self.unhook_force_key();
             unsafe {
-                for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE] {
+                for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER] {
                     let _ = UnregisterHotKey(Some(self.hub), id);
                 }
             }
@@ -969,6 +1006,7 @@ impl App {
             HK_REC_FULL => self.toggle_record(false),
             HK_REPLAY => self.save_replay(),
             HK_FORCE => self.force_close(),
+            HK_EXPLORER => self.explorer_key(),
             HK_VOL_UP => self.volume(audio::Change::Step(self.cfg.vol_step as i32)),
             HK_VOL_DOWN => self.volume(audio::Change::Step(-(self.cfg.vol_step as i32))),
             HK_MUTE => self.volume(audio::Change::ToggleMute),
@@ -1016,6 +1054,30 @@ impl App {
             }
             _ => {}
         }
+    }
+
+    /// O atalho fecha a barra de tarefas: o primeiro toque só avisa, o segundo em 4 segundos reinicia.
+    fn explorer_key(&mut self) {
+        if self.explorer_armed.is_some_and(|t| t.elapsed() < std::time::Duration::from_secs(4)) {
+            self.explorer_armed = None;
+            self.restart_explorer();
+        } else {
+            self.explorer_armed = Some(Instant::now());
+            let key = self.cfg.hk_explorer.label();
+            self.toast.info(&format!("Aperte {key} de novo para reiniciar o Explorer"));
+        }
+    }
+
+    pub fn restart_explorer(&mut self) {
+        self.log("reiniciando o Explorer");
+        self.toast.info("Reiniciando o Explorer…");
+        let hub = self.hub.0 as isize;
+        let _ = std::thread::Builder::new().name("explorer".into()).spawn(move || {
+            let ok = procs::restart_explorer();
+            unsafe {
+                let _ = PostMessageW(Some(HWND(hub as *mut _)), WM_EXPLORER_DONE, WPARAM(ok as usize), LPARAM(0));
+            }
+        });
     }
 
     /// Pede uma ação de um botão pela fila, fora do desenho da tela.
@@ -2377,6 +2439,18 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
         }
         WM_SETUP_DONE => {
             with(|a| a.setup_done(w.0));
+            LRESULT(0)
+        }
+        WM_EXPLORER_DONE => {
+            with(|a| {
+                if w.0 == 1 {
+                    a.toast.info("Explorer reiniciado");
+                } else {
+                    let hint = if a.elevated { "O Windows não deixou fechar o Explorer" } else { "Precisa do Prisma como administrador" };
+                    a.toast.info(hint);
+                    a.log("não consegui reiniciar o Explorer");
+                }
+            });
             LRESULT(0)
         }
         WM_UPDATED => {
