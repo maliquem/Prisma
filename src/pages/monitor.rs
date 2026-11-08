@@ -120,9 +120,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     if ui.hit("sort-name", name_head) {
         app.sort = NAME;
     }
-    if details {
-        ui.c.text(rect(cx - 66.0, hy, 60.0, 22.0), "PID", 12.0, MUTED, Align::Right, Weight::Regular);
-    }
+    ui.c.text(rect(cx - 66.0, hy, 60.0, 22.0), "PID", 12.0, MUTED, Align::Right, Weight::Regular);
     for (i, (name, cw)) in cols.iter().enumerate() {
         let r = rect(cx, hy, *cw, 22.0);
         let sel = app.sort == i as u8;
@@ -192,14 +190,14 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
             let base = app.name_of(&p.exe, pid);
             if p.pids.len() > 1 { format!("{base} ({})", p.pids.len()) } else { base }
         };
-        let nw = list.w - total - 46.0 - if details { 66.0 } else { 0.0 };
+        let nw = list.w - total - 46.0 - 66.0;
         ui.c.text(rect(r.x + 36.0, y, nw, 34.0), &name, 14.0, TEXT, Align::Left, Weight::Regular);
         let net = if s.net_ok { fmt_rate(p.net) } else { "—".to_string() };
         let vals = [fmt_pct(p.cpu), fmt_mem(p.ram), fmt_pct(p.gpu.min(100.0)), fmt_mem(p.vram), fmt_rate(p.disk), net];
         let mut cx = t.right() - 22.0 - total;
-        if details {
-            ui.c.text(rect(cx - 66.0, y, 60.0, 34.0), &pid.to_string(), 13.0, MUTED, Align::Right, Weight::Regular);
-        }
+        // Programa com vários processos não tem um PID só: Ir para detalhes mostra cada um.
+        let pid_text = if p.pids.len() == 1 { pid.to_string() } else { "—".to_string() };
+        ui.c.text(rect(cx - 66.0, y, 60.0, 34.0), &pid_text, 13.0, MUTED, Align::Right, Weight::Regular);
         for (j, v) in vals.iter().enumerate() {
             let cw = cols[j].1;
             ui.c.text(rect(cx, y, cw, 34.0), v, 13.0, TEXT, Align::Right, Weight::Regular);

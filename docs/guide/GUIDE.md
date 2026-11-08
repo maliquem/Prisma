@@ -27,7 +27,7 @@ Both sit next to the Prisma name, at the top of the window, always in view. Hove
 
 Shows what is using your PC right now: CPU per core, GPU, RAM and VRAM, plus the CPU, RAM, GPU, VRAM, disk and network use of each program.
 
-- **You can:** end a task, go to details, open the file location, search online and see properties with the right mouse button. The Details tab lists each process with its PID.
+- **You can:** end a task, go to details, open the file location, search online and see properties with the right mouse button. The PID column shows each program's number; a program with several processes shows a dash, and the Details tab lists each process with its own PID.
 - **Search:** the field next to the tabs filters the list by program or file name. Type only numbers to find a PID.
 - **Restart Explorer:** for when the taskbar, the Start menu or the desktop freezes. Prisma asks first, ends Explorer by its PID and it comes back on its own in a few seconds. Open folder windows close.
 - **You can't:** see CPU temperature and power, because they require a kernel driver. The network column requires Prisma as administrator. GPU temperature depends on the NVIDIA driver.
