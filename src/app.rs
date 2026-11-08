@@ -211,6 +211,8 @@ pub struct App {
     pub news_from: Option<String>,
     setup_plan: Option<crate::startup::Plan>,
     tm_check: Option<Instant>,
+    /// A troca do Gerenciador foi recusada: Configurações avisa uma vez.
+    pub tm_refused: bool,
     force_hook: Option<HHOOK>,
     pub meter: crate::meter::Meter,
     pub rec_window: bool,
@@ -390,6 +392,7 @@ pub fn start(background: bool) {
             news_from: None,
             setup_plan: None,
             tm_check: None,
+            tm_refused: false,
             force_hook: None,
             meter: crate::meter::Meter::new(),
             rec_window: true,
@@ -1464,6 +1467,9 @@ impl App {
             if crate::startup::set_replace_taskmgr(on) {
                 self.replaces_tm = on;
                 self.log(if on { "passou a substituir o Gerenciador de Tarefas" } else { "devolveu o Gerenciador de Tarefas" });
+            } else {
+                self.log("o Windows recusou a troca do Gerenciador de Tarefas");
+                self.tm_refused = true;
             }
         } else if crate::startup::run_elevated(&format!("--set-taskmgr={}", on as u8)) {
             self.log(if on { "passou a substituir o Gerenciador de Tarefas" } else { "devolveu o Gerenciador de Tarefas" });

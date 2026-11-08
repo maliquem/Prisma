@@ -173,7 +173,7 @@ Shows CPU, GPU, RAM and VRAM on top of everything, in four styles. Drag it to mo
 ## Settings
 
 - **Start with Windows and administrator:** turn them on or off whenever you want. Changing this in the installed version asks for Windows permission.
-- **Replace Task Manager:** turns it on or gives it back. Uninstalling also gives it back. In the portable version you can only turn it off.
+- **Replace Task Manager:** turns it on or gives it back. Uninstalling also gives it back. If the antivirus blocks the change, Prisma tells you instead of doing nothing. In the portable version you can only turn it off.
 - **Force close:** a shortcut, Alt + F4 by default, ends the program in focus right away, even frozen in fullscreen. Anything unsaved is lost. The desktop, the taskbar and Windows processes keep the normal Alt + F4.
 - **Restart Explorer:** choose a shortcut; there is none by default. Since it closes the taskbar, you press it twice within 4 seconds: the first press only warns you. The button next to the name restarts it right away, after asking.
 - **Language:** Brazilian Portuguese or English.

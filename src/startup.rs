@@ -184,16 +184,12 @@ pub fn relaunch_elevated(extra: &str) -> bool {
     }
     ok
 }
-const IFEO: &str = "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\taskmgr.exe";
+const IFEO: &str = "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\taskmgr.exe";
 
 /// True quando Ctrl+Shift+Esc já abre o Prisma.
 pub fn replaces_taskmgr() -> bool {
-    Command::new(crate::sys::system_tool("reg"))
-        .args(["query", IFEO, "/v", "Debugger"])
-        .creation_flags(NO_WINDOW)
-        .output()
-        .map(|o| o.status.success() && String::from_utf8_lossy(&o.stdout).to_ascii_lowercase().contains("prisma"))
-        .unwrap_or(false)
+    use crate::sys::reg;
+    reg::text(reg::Hive::Machine, IFEO, "Debugger").is_some_and(|v| v.to_ascii_lowercase().contains("prisma"))
 }
 
 /// Mesmo mecanismo do Process Explorer. Desligar devolve o Gerenciador de Tarefas.
@@ -207,14 +203,18 @@ fn replace_taskmgr_with(exe: &std::path::Path, on: bool) -> bool {
     if on && !in_install_dir(exe) {
         return false;
     }
-    let mut cmd = Command::new(crate::sys::system_tool("reg"));
-    if on {
+    use crate::sys::reg;
+    // Direto pela API do Windows: um reg.exe gravando Debugger nessa chave é o que antivírus
+    // procuram, e a recusa vinha sem aviso nenhum.
+    let done = if on {
         let run = format!("\"{}\" --taskmgr", exe.display());
-        cmd.args(["add", IFEO, "/v", "Debugger", "/t", "REG_SZ", "/d", &run, "/f"]);
+        let data: Vec<u8> = run.encode_utf16().chain(std::iter::once(0)).flat_map(u16::to_le_bytes).collect();
+        reg::write(reg::Hive::Machine, IFEO, "Debugger", windows::Win32::System::Registry::REG_SZ.0, &data)
     } else {
-        cmd.args(["delete", IFEO, "/v", "Debugger", "/f"]);
-    }
-    cmd.creation_flags(NO_WINDOW).output().map(|o| o.status.success()).unwrap_or(false)
+        reg::delete(reg::Hive::Machine, IFEO, "Debugger")
+    };
+    // Confere lendo de volta: um antivírus pode aceitar a gravação e desfazer logo depois.
+    done && replaces_taskmgr() == on
 }
 
 const UNINSTALL_KEY: &str = "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Prisma";

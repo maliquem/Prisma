@@ -1253,3 +1253,5 @@ Novidades	What's new
 O que mudou da versão {} para a {}	What changed from version {} to {}
 O que mudou em cada versão	What changed in each version
 Ver todas as versões	See all versions
+O Windows não aceitou a troca	Windows did not accept the change
+A gravação foi recusada ou desfeita logo depois. Costuma ser o antivírus, que vigia essa chave porque vírus também a usam. Libere o Prisma no antivírus e tente de novo.	The change was refused or undone right after. It is usually the antivirus, which watches that setting because viruses use it too. Allow Prisma in your antivirus and try again.

@@ -67,6 +67,12 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     if ui.answered("tm-off") {
         app.set_taskmgr(false);
     }
+    if std::mem::take(&mut app.tm_refused) {
+        ui.notice(
+            "O Windows não aceitou a troca",
+            "A gravação foi recusada ou desfeita logo depois. Costuma ser o antivírus, que vigia essa chave porque vírus também a usam. Libere o Prisma no antivírus e tente de novo.",
+        );
+    }
 
     let rf = rect(x, top + 250.0, w, 76.0);
     ui.card(rf);

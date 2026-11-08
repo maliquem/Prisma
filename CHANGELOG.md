@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Replace Task Manager writes the setting straight through Windows and checks it stuck. If it is refused, for example by the antivirus, Prisma now says so. / Substituir o Gerenciador de Tarefas grava direto pelo Windows e confere se ficou. Se for recusado, por exemplo pelo antivírus, o Prisma agora avisa.
+
 ## 0.8.0
 
 - Search in the Monitor process list, by name or PID, and a PID column in the Programs tab too. / Busca na lista de processos do Monitor, por nome ou PID, e coluna PID também na aba Programas.
