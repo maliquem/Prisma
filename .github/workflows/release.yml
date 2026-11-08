@@ -1,4 +1,5 @@
-# Uma etiqueta vX.Y.Z compila o Prisma e publica a versão que o programa oferece como atualização.
+# Uma etiqueta vX.Y.Z compila o Prisma e cria a versão em rascunho. Ela só sai do rascunho com
+# tools/publish.ps1, que compila de novo no PC dela e assina: sem a assinatura, o Prisma recusa a atualização.
 name: Release
 
 on:
@@ -38,4 +39,4 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create $env:GITHUB_REF_NAME Prisma.exe Prisma.exe.sha256 --title "Prisma $($env:GITHUB_REF_NAME)" --notes-file notes.md
+        run: gh release create $env:GITHUB_REF_NAME Prisma.exe Prisma.exe.sha256 --title "Prisma $($env:GITHUB_REF_NAME)" --notes-file notes.md --draft

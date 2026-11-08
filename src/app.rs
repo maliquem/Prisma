@@ -633,6 +633,12 @@ pub fn start(background: bool) {
                 let _ = std::fs::write(path, crate::sys::update::speed_test());
                 std::process::exit(0);
             }
+            // Arquivo assinado por tools/update-key.ps1, a versão usada e onde gravar o resultado.
+            if let Some(arg) = a.strip_prefix("--test-sign=") {
+                let p: Vec<&str> = arg.split('|').collect();
+                let _ = std::fs::write(p[2], crate::sys::update::sign_test(p[0], p[1]));
+                std::process::exit(0);
+            }
             if let Some(v) = a.strip_prefix("--test-scan=") {
                 let (name, path) = v.split_once('|').unwrap_or((v, "scan.txt"));
                 let _ = std::fs::write(path, crate::sys::uninstall::scan_preview(name));

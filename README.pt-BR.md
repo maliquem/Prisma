@@ -123,4 +123,8 @@ Precisa do Rust e das Build Tools do Visual Studio.
 1. Atualize `version` no `Cargo.toml`, acrescente a seção no `CHANGELOG.md` e atualize os dois READMEs e os dois guias em `docs/guide`. O programa usa esses mesmos arquivos.
 2. Faça o commit e envie uma etiqueta como `v0.3.0`.
 
-O GitHub compila o `Prisma.exe` e publica a versão com o hash, e todas as cópias do Prisma oferecem a atualização.
+O GitHub compila o `Prisma.exe` e cria a versão em rascunho.
+
+3. No PC que guarda a chave de atualização, faça checkout da etiqueta e rode `tools/publish.ps1 -Version 0.3.0`. Ele compila de novo, assina o `Prisma.exe` com a chave de `tools/update-key.ps1`, troca os arquivos do rascunho e publica. Aí todas as cópias do Prisma oferecem a atualização.
+
+O Prisma recusa atualização sem essa assinatura, então o acesso à conta do GitHub sozinho não publica uma versão. A chave secreta nunca vai para o git nem para o GitHub: fica em `%LOCALAPPDATA%\PrismaRelease`, cifrada pelo Windows para aquela conta. Guarde uma cópia feita com `tools/update-key.ps1 -Backup`; sem a chave, as cópias instaladas não conseguem mais se atualizar sozinhas.

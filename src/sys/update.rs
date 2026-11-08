@@ -17,6 +17,9 @@ const REPO: &str = "maliquem/Prisma";
 const ASSET: &str = "Prisma.exe";
 const MAX_SIZE: usize = 64 << 20;
 const PARTS: usize = 8;
+/// Parte pública da chave de `tools/update-key.ps1`, X e Y da curva P-256. A secreta só existe no
+/// PC de quem publica: entrar na conta do GitHub não basta para publicar uma versão aceita.
+const UPDATE_KEY: &[u8; 64] = include_bytes!("../../res/update-key.pub");
 
 #[derive(Clone, Default, PartialEq, Debug)]
 pub enum Phase {
@@ -241,6 +244,32 @@ pub fn speed_test() -> String {
     out
 }
 
+/// Teste: a assinatura passa só com o arquivo, a versão e a assinatura certos.
+#[cfg(debug_assertions)]
+pub fn sign_test(file: &str, version: &str) -> String {
+    let data = std::fs::read(file).unwrap_or_default();
+    let sig = std::fs::read(format!("{file}.sig")).unwrap_or_default();
+    let hash = sha256(&data).unwrap_or_default();
+    let mut other = data.clone();
+    if let Some(b) = other.last_mut() {
+        *b ^= 1;
+    }
+    let other = sha256(&other).unwrap_or_default();
+    let mut bent = sig.clone();
+    if let Some(b) = bent.first_mut() {
+        *b ^= 1;
+    }
+    format!(
+        "certa {}\nversao errada {}\narquivo trocado {}\nassinatura alterada {}\nassinatura curta {}\nsem assinatura {}\n",
+        signed(version, &hash, &sig),
+        signed("9.9.9", &hash, &sig),
+        signed(version, &other, &sig),
+        signed(version, &hash, &bent),
+        signed(version, &hash, &sig[..sig.len().min(63)]),
+        signed(version, &hash, &[]),
+    )
+}
+
 /// Lê um texto do JSON da API. A resposta é conhecida: não vale carregar um analisador por isso.
 pub fn json_text(json: &str, key: &str) -> Option<String> {
     let start = json.find(&format!("\"{key}\":"))? + key.len() + 3;
@@ -274,10 +303,33 @@ pub fn is_newer(found: &str, have: &str) -> bool {
     matches!((parts(found), parts(have)), (Some(a), Some(b)) if a > b)
 }
 
-fn sha256(data: &[u8]) -> Option<String> {
+fn sha256_raw(data: &[u8]) -> Option<[u8; 32]> {
     let mut out = [0u8; 32];
     unsafe { BCryptHash(BCRYPT_SHA256_ALG_HANDLE, None, data, &mut out) }.ok().ok()?;
-    Some(out.iter().map(|b| format!("{b:02x}")).collect())
+    Some(out)
+}
+
+fn sha256(data: &[u8]) -> Option<String> {
+    Some(sha256_raw(data)?.iter().map(|b| format!("{b:02x}")).collect())
+}
+
+/// Confere a assinatura de `tools/update-key.ps1`. O texto assinado junta versão e hash: uma versão
+/// antiga assinada não passa por nova, e um arquivo trocado não passa por nenhuma.
+pub fn signed(version: &str, hash: &str, sig: &[u8]) -> bool {
+    let Some(digest) = sha256_raw(format!("Prisma {version}\n{hash}").as_bytes()) else { return false };
+    let mut blob = Vec::with_capacity(72);
+    blob.extend_from_slice(&BCRYPT_ECDSA_PUBLIC_P256_MAGIC.to_le_bytes());
+    blob.extend_from_slice(&32u32.to_le_bytes());
+    blob.extend_from_slice(UPDATE_KEY);
+    unsafe {
+        let mut key = BCRYPT_KEY_HANDLE::default();
+        if BCryptImportKeyPair(BCRYPT_ECDSA_P256_ALG_HANDLE, None, BCRYPT_ECCPUBLIC_BLOB, &mut key, &blob, 0).is_err() {
+            return false;
+        }
+        let ok = sig.len() == 64 && BCryptVerifySignature(key, None, &digest, sig, BCRYPT_FLAGS(0)).is_ok();
+        let _ = BCryptDestroyKey(key);
+        ok
+    }
 }
 
 fn set(s: &Shared, phase: Phase) {
@@ -356,16 +408,18 @@ pub fn install(shared: Shared, hub: isize, quit: u32) {
     let _ = std::thread::Builder::new().name("atualizacao".into()).spawn(move || {
         let base = format!("https://github.com/{REPO}/releases/download/{tag}/{ASSET}");
         const BAD: &str = "O arquivo baixado não confere. Nada foi alterado.";
+        const UNSIGNED: &str = "A atualização não tem a assinatura do Prisma. Nada foi alterado.";
         const OFFLINE: &str = "Não consegui acessar o GitHub.";
         let show = |got: usize, total: usize| {
             if total > 0 {
                 set(&shared, Phase::Downloading((got * 100 / total).min(100) as u32));
             }
         };
-        let (hash, parts) = std::thread::scope(|s| {
+        let (hash, sig, parts) = std::thread::scope(|s| {
             let hash = s.spawn(|| get(&format!("{base}.sha256"), |_, _| {}));
+            let sig = s.spawn(|| get(&format!("{base}.sig"), |_, _| {}));
             let parts = get_parts(&base, size, |got| show(got, size));
-            (hash.join().unwrap_or(Err(())), parts)
+            (hash.join().unwrap_or(Err(())), sig.join().unwrap_or(Err(())), parts)
         });
         let want = match hash {
             Ok((200, b)) => String::from_utf8_lossy(&b).split_whitespace().next().unwrap_or_default().to_ascii_lowercase(),
@@ -380,6 +434,12 @@ pub fn install(shared: Shared, hub: isize, quit: u32) {
         };
         if want.len() != 64 || sha256(&data).as_deref() != Some(want.as_str()) || !data.starts_with(b"MZ") {
             return set(&shared, Phase::Failed(BAD));
+        }
+        let version = tag.trim_start_matches('v');
+        match sig {
+            Ok((200, s)) if signed(version, &want, &s) => {}
+            Ok((404, _)) | Ok((200, _)) => return set(&shared, Phase::Failed(UNSIGNED)),
+            _ => return set(&shared, Phase::Failed(OFFLINE)),
         }
         set(&shared, Phase::Installing);
         match replace(&data) {

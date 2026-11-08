@@ -721,6 +721,7 @@ Instalando…	Installing…
 Não consegui acessar o GitHub.	Could not reach GitHub.
 Ainda não há versão publicada.	No version has been published yet.
 O arquivo baixado não confere. Nada foi alterado.	The downloaded file does not match. Nothing was changed.
+A atualização não tem a assinatura do Prisma. Nada foi alterado.	The update does not carry the Prisma signature. Nothing was changed.
 Sem permissão nesta pasta. Reabra como administrador.	No permission in this folder. Reopen as administrator.
 Não consegui trocar o programa. Nada foi alterado.	Could not replace the program. Nothing was changed.
 Espere a tarefa em andamento terminar.	Wait for the running task to finish.
