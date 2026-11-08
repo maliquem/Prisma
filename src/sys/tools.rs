@@ -112,7 +112,7 @@ fn pump(mut o: impl Read, enc: Enc, out: &Shared) {
 }
 
 fn run_cmd(exe: &str, args: &[String], enc: Enc, out: &Shared) -> Option<i32> {
-    let mut c = Command::new(exe)
+    let mut c = Command::new(super::system_tool(exe))
         .args(args)
         .creation_flags(0x0800_0000)
         .stdout(Stdio::piped())
@@ -252,7 +252,7 @@ pub fn sfc_verdict(since: &str, log: &str) -> (Level, String) {
 }
 
 pub fn read_cbs() -> String {
-    let path = std::env::var("windir").unwrap_or_else(|_| "C:\\Windows".into()) + "\\Logs\\CBS\\CBS.log";
+    let path = super::windows_dir().join("Logs\\CBS\\CBS.log");
     std::fs::read(path).map(|b| String::from_utf8_lossy(&b).to_string()).unwrap_or_default()
 }
 

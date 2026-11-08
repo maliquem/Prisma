@@ -24,6 +24,12 @@ use windows::Win32::UI::HiDpi::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
 fn main() {
+    // Antes de tudo: as DLLs carregadas depois da abertura também vêm só da System32,
+    // e não da pasta do programa. O link cuida das que carregam na abertura.
+    unsafe {
+        use windows::Win32::System::LibraryLoader::*;
+        let _ = SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32);
+    }
     let cfg = config::Config::load();
     i18n::set_english(cfg.lang_en);
     let background = std::env::args().any(|a| a == "--background");

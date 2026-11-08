@@ -284,7 +284,7 @@ pub fn restore_point(desc: &str) -> bool {
     let key = "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\SystemRestore";
     let count = || {
         use std::os::windows::process::CommandExt;
-        std::process::Command::new("powershell")
+        std::process::Command::new(crate::sys::system_tool("powershell"))
             .args(["-NoProfile", "-Command", "(Get-ComputerRestorePoint | Measure-Object).Count"])
             .creation_flags(0x0800_0000)
             .output()
@@ -644,7 +644,7 @@ pub fn remove(l: &Leftover, backups: &Path) -> bool {
             let _ = std::fs::create_dir_all(backups);
             let safe: String = l.label.chars().map(|c| if c.is_alphanumeric() { c } else { '_' }).take(80).collect();
             let file = backups.join(format!("{safe}.reg"));
-            let done = std::process::Command::new("reg")
+            let done = std::process::Command::new(crate::sys::system_tool("reg"))
                 .args(["export", &l.label, &file.display().to_string(), "/y"])
                 .output()
                 .map(|o| o.status.success())

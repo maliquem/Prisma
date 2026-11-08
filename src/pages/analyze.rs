@@ -64,7 +64,7 @@ fn squarify(items: &[(u32, f64)], r: Rect, out: &mut Vec<(u32, Rect)>) {
 
 fn open_in_explorer(path: &str, select: bool) {
     let arg = if select { format!("/select,\"{path}\"") } else { format!("\"{path}\"") };
-    let _ = std::process::Command::new("explorer").raw_arg(arg).spawn();
+    let _ = std::process::Command::new(crate::sys::system_tool("explorer")).raw_arg(arg).spawn();
 }
 
 trait RawArg {

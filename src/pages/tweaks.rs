@@ -70,7 +70,7 @@ fn draw_audit(ui: &mut Ui, app: &mut App, r: Rect) {
     ui.end_scroll();
     match go {
         Some(Fix::CoreIsolation) => {
-            let _ = std::process::Command::new("explorer").arg("windowsdefender://coreisolation").spawn();
+            let _ = std::process::Command::new(crate::sys::system_tool("explorer")).arg("windowsdefender://coreisolation").spawn();
         }
         Some(Fix::Disks) => app.go(Page::Storage),
         Some(Fix::Tools) => app.go(Page::Tools),

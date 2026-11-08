@@ -170,7 +170,8 @@ pub fn open_native() {
     use windows::Win32::UI::Shell::ShellExecuteW;
     use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
     unsafe {
-        let _ = ShellExecuteW(None, w!("open"), w!("services.msc"), None, None, SW_SHOWNORMAL);
+        let msc = windows::core::HSTRING::from(crate::sys::system_tool("services.msc").as_os_str());
+        let _ = ShellExecuteW(None, w!("open"), &msc, None, None, SW_SHOWNORMAL);
     }
 }
 
@@ -267,7 +268,7 @@ mod props {
             std::thread::sleep(Duration::from_millis(50));
         }
         let before = frames();
-        std::process::Command::new("mmc").arg("services.msc").spawn().map_err(|_| "não abriu a janela Serviços")?;
+        std::process::Command::new(crate::sys::system_tool("mmc")).arg(crate::sys::system_tool("services.msc")).spawn().map_err(|_| "não abriu a janela Serviços")?;
         let t0 = Instant::now();
         let frame = loop {
             if t0.elapsed() > Duration::from_secs(15) {

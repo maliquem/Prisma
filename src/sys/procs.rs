@@ -122,7 +122,7 @@ pub fn all_windows() -> Vec<HWND> {
 /// Mostra o arquivo selecionado no Explorador.
 pub fn reveal(path: &str) {
     use std::os::windows::process::CommandExt;
-    let _ = std::process::Command::new("explorer").raw_arg(format!("/select,\"{path}\"")).spawn();
+    let _ = std::process::Command::new(crate::sys::system_tool("explorer")).raw_arg(format!("/select,\"{path}\"")).spawn();
 }
 
 /// Abre a janela de propriedades do próprio Windows para o arquivo.

@@ -135,7 +135,7 @@ fn plan(id: Id, app: &mut App, letter: char) -> Option<(Vec<Step>, tools::Verdic
         ),
         Id::WuReset => {
             let stamp = tools::now_stamp().replace([' ', ':', '-'], "");
-            let win = std::env::var("windir").unwrap_or_else(|_| "C:\\Windows".into());
+            let win = crate::sys::windows_dir().display().to_string();
             let services = ["wuauserv", "bits", "cryptsvc"];
             let mut s: Vec<Step> = services.iter().map(|n| cmd(&format!("Parar {n}"), "net", &["stop", n, "/y"], Enc::Oem)).collect();
             s.push(native("Renomear as pastas de cache", move |l| {
@@ -215,7 +215,7 @@ fn plan(id: Id, app: &mut App, letter: char) -> Option<(Vec<Step>, tools::Verdic
             (
                 vec![
                     native("Salvando a configuração atual", move |l| {
-                        let o = std::process::Command::new("ipconfig").arg("/all").output();
+                        let o = std::process::Command::new(crate::sys::system_tool("ipconfig")).arg("/all").output();
                         let _ = std::fs::create_dir_all(&dir);
                         let p = dir.join("rede_antes.txt");
                         let ok = o.is_ok_and(|o| std::fs::write(&p, o.stdout).is_ok());
@@ -317,7 +317,7 @@ fn plan(id: Id, app: &mut App, letter: char) -> Option<(Vec<Step>, tools::Verdic
             )
         }
         Id::Memory => {
-            let _ = std::process::Command::new("mdsched.exe").spawn();
+            let _ = std::process::Command::new(crate::sys::system_tool("mdsched.exe")).spawn();
             return None;
         }
         Id::Memresult => (
@@ -465,9 +465,11 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
             let c = (i % 3) as f32;
             let row = (i / 3) as f32;
             if ui.button(name, rect(px + c * (bw + 8.0), y + row * 52.0, bw, 44.0), name, false) {
-                let mut cmd = std::process::Command::new(if exe.ends_with(".msc") { "mmc" } else { exe });
+                // O console também vai com o caminho completo: um .msc falso na pasta roda comandos.
+                let tool = |n: &str| crate::sys::system_tool(n);
+                let mut cmd = std::process::Command::new(if exe.ends_with(".msc") { tool("mmc") } else { tool(exe) });
                 if exe.ends_with(".msc") {
-                    cmd.arg(exe);
+                    cmd.arg(tool(exe));
                 }
                 if !arg.is_empty() {
                     cmd.arg(arg);

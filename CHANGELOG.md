@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Safer portable copy: Prisma loads Windows DLLs and runs Windows tools only from the Windows folder, never from its own folder. A file with the same name downloaded next to it no longer runs in its place, not even as administrator. / Versão portátil mais segura: o Prisma carrega as DLLs e roda as ferramentas do Windows só da pasta do Windows, nunca da própria pasta. Um arquivo com o mesmo nome baixado ao lado dele não roda mais no lugar, nem como administrador.
+
 ## 0.7.0
 
 - Welcome screen on the first open: install, give administrator permission and replace Task Manager, all checked, with one Windows prompt for everything. It shows once unless you uncheck Don't show again. / Tela de boas-vindas na primeira abertura: instalar, dar permissão de administrador e substituir o Gerenciador de Tarefas, tudo marcado, com uma permissão do Windows para tudo. Ela aparece uma vez, a não ser que você desmarque Não mostrar novamente.

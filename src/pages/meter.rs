@@ -156,7 +156,7 @@ fn log(ui: &mut Ui, app: &mut App, r: Rect) {
     if ui.button("mt-lopen", rect(bx + bw + 8.0, r.y + 82.0, bw, 36.0), "Abrir pasta", false) {
         let dir = crate::sys::gamelog::root();
         let _ = std::fs::create_dir_all(&dir);
-        let _ = std::process::Command::new("explorer").arg(&dir).spawn();
+        let _ = std::process::Command::new(crate::sys::system_tool("explorer")).arg(&dir).spawn();
     }
     changed |= ui.check("mt-lauto", rect(x, r.y + 126.0, w * 2.0, 32.0), "Começar sozinho quando um jogo abrir", &mut app.cfg.meter_log_auto);
     let status = if recording { "Gravando" } else if game { "Pronto para gravar" } else { "Abra um jogo para iniciar" };

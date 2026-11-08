@@ -1,7 +1,6 @@
 //! Edição completa de um plano de energia: tudo o que o Windows registra, inclusive o oculto.
 
 use std::os::windows::process::CommandExt;
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use windows::core::GUID;
@@ -166,7 +165,7 @@ pub fn has_battery() -> bool {
 }
 
 fn powercfg(args: &[&str]) -> Option<String> {
-    let tool = PathBuf::from(std::env::var("SystemRoot").unwrap_or_default()).join("System32\\powercfg.exe");
+    let tool = super::system_tool("powercfg");
     let out = std::process::Command::new(tool).args(args).creation_flags(NO_WINDOW).output().ok()?;
     out.status.success().then(|| String::from_utf8_lossy(&out.stdout).to_string())
 }

@@ -12,6 +12,9 @@ fn main() {
         println!("cargo:rustc-link-arg=/DELAYLOAD:{dll}");
     }
     println!("cargo:rustc-link-arg=delayimp.lib");
+    // As DLLs da abertura vêm só da System32: na versão portátil, um version.dll baixado para a
+    // mesma pasta rodaria dentro do Prisma. As carregadas depois ficam com o `main`.
+    println!("cargo:rustc-link-arg=/DEPENDENTLOADFLAG:0x800");
     build_hook();
 }
 

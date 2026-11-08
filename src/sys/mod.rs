@@ -31,3 +31,46 @@ pub mod tools;
 pub mod tweaks;
 pub mod update;
 pub mod uninstall;
+
+use std::path::PathBuf;
+
+fn folder(get: unsafe fn(Option<&mut [u16]>) -> u32) -> PathBuf {
+    let mut buf = [0u16; 260];
+    let n = unsafe { get(Some(&mut buf)) } as usize;
+    PathBuf::from(String::from_utf16_lossy(&buf[..n.min(buf.len())]))
+}
+
+/// System32 pelo Windows, e não por `%SystemRoot%`, que qualquer programa troca para o usuário.
+pub fn system_dir() -> PathBuf {
+    folder(windows::Win32::System::SystemInformation::GetSystemDirectoryW)
+}
+
+pub fn windows_dir() -> PathBuf {
+    folder(windows::Win32::System::SystemInformation::GetWindowsDirectoryW)
+}
+
+/// Caminho completo de um programa ou console do Windows. Só pelo nome, o Rust procura antes na
+/// pasta do Prisma, e na versão portátil qualquer download pode deixar lá um `reg.exe` falso.
+pub fn system_tool(name: &str) -> PathBuf {
+    let file = if name.contains('.') { name.to_string() } else { format!("{name}.exe") };
+    match file.to_ascii_lowercase().as_str() {
+        "explorer.exe" => windows_dir().join(file),
+        "powershell.exe" => system_dir().join("WindowsPowerShell\\v1.0").join(file),
+        "winget.exe" => apps_alias().join(file),
+        _ => system_dir().join(file),
+    }
+}
+
+/// Pasta dos atalhos de aplicativos da Loja, onde fica o winget.
+fn apps_alias() -> PathBuf {
+    use windows::Win32::System::Com::CoTaskMemFree;
+    use windows::Win32::UI::Shell::*;
+    let base = unsafe {
+        SHGetKnownFolderPath(&FOLDERID_LocalAppData, KF_FLAG_DEFAULT, None).ok().and_then(|p| {
+            let text = p.to_string().ok();
+            CoTaskMemFree(Some(p.0 as *const _));
+            text
+        })
+    };
+    PathBuf::from(base.unwrap_or_default()).join("Microsoft\\WindowsApps")
+}

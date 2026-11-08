@@ -231,7 +231,7 @@ pub fn remove(t: Target, file: &str) {
 /// O Windows só repassa o perfil à tela quando esta tarefa roda, e ela exige administrador.
 fn reload() -> bool {
     use std::os::windows::process::CommandExt;
-    let tool = std::path::PathBuf::from(std::env::var("SystemRoot").unwrap_or_default()).join("System32\\schtasks.exe");
+    let tool = crate::sys::system_tool("schtasks");
     let task = std::process::Command::new(tool).args(["/Run", "/TN", "\\Microsoft\\Windows\\WindowsColorSystem\\Calibration Loader"]).creation_flags(0x0800_0000).output();
     task.is_ok_and(|o| o.status.success())
 }

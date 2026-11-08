@@ -9,7 +9,7 @@ const TASK: &str = "Prisma";
 const TASK_OPEN: &str = "PrismaOpen";
 
 pub fn is_enabled() -> bool {
-    Command::new("schtasks")
+    Command::new(crate::sys::system_tool("schtasks"))
         .args(["/Query", "/TN", TASK])
         .creation_flags(NO_WINDOW)
         .output()
@@ -26,7 +26,7 @@ pub fn set_enabled(on: bool, admin: bool) -> bool {
 }
 
 fn delete_task(name: &str) -> bool {
-    let cmd = Command::new("schtasks").args(["/Delete", "/F", "/TN", name]).creation_flags(NO_WINDOW).output();
+    let cmd = Command::new(crate::sys::system_tool("schtasks")).args(["/Delete", "/F", "/TN", name]).creation_flags(NO_WINDOW).output();
     cmd.map(|o| o.status.success()).unwrap_or(false)
 }
 
@@ -60,7 +60,7 @@ pub fn create_task(name: &str, exe: &std::path::Path, args: &str, logon: bool, a
     if std::fs::write(&file, bytes).is_err() {
         return false;
     }
-    let cmd = Command::new("schtasks").args(["/Create", "/F", "/TN", name, "/XML"]).arg(&file).creation_flags(NO_WINDOW).output();
+    let cmd = Command::new(crate::sys::system_tool("schtasks")).args(["/Create", "/F", "/TN", name, "/XML"]).arg(&file).creation_flags(NO_WINDOW).output();
     let _ = std::fs::remove_file(&file);
     cmd.map(|o| o.status.success()).unwrap_or(false)
 }
@@ -85,7 +85,7 @@ pub fn sync_admin(on: bool) -> bool {
 /// Arquivos de Programas.
 pub fn open_as_admin() -> bool {
     if is_installed() {
-        let run = Command::new("schtasks").args(["/Run", "/TN", TASK_OPEN]).creation_flags(NO_WINDOW).output();
+        let run = Command::new(crate::sys::system_tool("schtasks")).args(["/Run", "/TN", TASK_OPEN]).creation_flags(NO_WINDOW).output();
         if run.map(|o| o.status.success()).unwrap_or(false) {
             return true;
         }
@@ -168,7 +168,7 @@ const IFEO: &str = "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image
 
 /// True quando Ctrl+Shift+Esc já abre o Prisma.
 pub fn replaces_taskmgr() -> bool {
-    Command::new("reg")
+    Command::new(crate::sys::system_tool("reg"))
         .args(["query", IFEO, "/v", "Debugger"])
         .creation_flags(NO_WINDOW)
         .output()
@@ -182,7 +182,7 @@ pub fn set_replace_taskmgr(on: bool) -> bool {
 }
 
 fn replace_taskmgr_with(exe: &std::path::Path, on: bool) -> bool {
-    let mut cmd = Command::new("reg");
+    let mut cmd = Command::new(crate::sys::system_tool("reg"));
     if on {
         let run = format!("\"{}\" --taskmgr", exe.display());
         cmd.args(["add", IFEO, "/v", "Debugger", "/t", "REG_SZ", "/d", &run, "/f"]);
@@ -226,7 +226,7 @@ fn make_shortcut(target: &str, lnk: &str) -> bool {
 }
 
 fn reg_add(name: &str, ty: &str, value: &str) {
-    let _ = Command::new("reg")
+    let _ = Command::new(crate::sys::system_tool("reg"))
         .args(["add", UNINSTALL_KEY, "/v", name, "/t", ty, "/d", value, "/f"])
         .creation_flags(NO_WINDOW)
         .output();
@@ -341,10 +341,10 @@ pub fn uninstall() {
     }
     crate::sys::autohdr::clear_all();
     let _ = std::fs::remove_file(shortcut());
-    let _ = Command::new("reg").args(["delete", UNINSTALL_KEY, "/f"]).creation_flags(NO_WINDOW).output();
+    let _ = Command::new(crate::sys::system_tool("reg")).args(["delete", UNINSTALL_KEY, "/f"]).creation_flags(NO_WINDOW).output();
     // O arquivo em uso só pode sair depois que este processo fechar.
     let line = format!("/c ping -n 3 127.0.0.1 >nul & rmdir /s /q \"{}\"", install_dir().display());
-    let _ = Command::new("cmd").raw_arg(line).creation_flags(NO_WINDOW).spawn();
+    let _ = Command::new(crate::sys::system_tool("cmd")).raw_arg(line).creation_flags(NO_WINDOW).spawn();
 }
 
 /// Depois de atualizar: a lista de programas mostra a versão nova e o atalho volta se faltar.

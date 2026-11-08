@@ -382,7 +382,7 @@ fn set_service(name: &str, start: u32, delayed: bool) -> bool {
 
 fn powershell(cmd: &str) -> Option<String> {
     use std::os::windows::process::CommandExt;
-    let o = std::process::Command::new("powershell")
+    let o = std::process::Command::new(crate::sys::system_tool("powershell"))
         .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", cmd])
         .creation_flags(0x0800_0000)
         .output()

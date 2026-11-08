@@ -341,7 +341,7 @@ pub fn default_profile(adapter: LUID, source: u32) -> Option<String> {
 
 fn active_profile(adapter: LUID, source: u32) -> Option<Profile> {
     let file = default_profile(adapter, source)?;
-    let dir = std::path::PathBuf::from(std::env::var("SystemRoot").unwrap_or_default()).join("System32\\spool\\drivers\\color");
+    let dir = crate::sys::system_dir().join("spool\\drivers\\color");
     let path = dir.join(&file);
     let mut p = parse_profile(&std::fs::read(&path).ok()?)?;
     p.date = file_date(&path);
