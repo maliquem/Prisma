@@ -22,7 +22,8 @@ impl Choices {
 }
 
 /// Uma escolha já feita não se desfaz aqui: fica marcada e o caminho é Configurações.
-fn row(ui: &mut Ui, key: &str, r: Rect, title: &str, body: &str, val: &mut bool, done: bool) {
+/// Travada é a que depende de outra: aparece apagada e não marca.
+fn row(ui: &mut Ui, key: &str, r: Rect, title: &str, body: &str, val: &mut bool, done: bool, locked: bool) {
     ui.card(r);
     let line = rect(r.x + 16.0, r.y + 10.0, r.w - 32.0, 26.0);
     if done {
@@ -31,6 +32,11 @@ fn row(ui: &mut Ui, key: &str, r: Rect, title: &str, body: &str, val: &mut bool,
         ui.c.icon(bx.x, bx.y, 18.0, &[&[(6.0, 12.5), (10.0, 16.5), (18.0, 7.5)]], TEXT);
         ui.c.text(rect(line.x + 28.0, line.y, line.w - 128.0, line.h), title, 14.0, TEXT, Align::Left, Weight::Regular);
         ui.c.text(rect(line.right() - 100.0, line.y, 100.0, line.h), "Já feito", 13.0, ACCENT, Align::Right, Weight::Regular);
+    } else if locked {
+        let bx = rect(line.x, line.y + 4.0, 18.0, 18.0);
+        ui.c.round_line(bx, 4.0, BORDER, 1.0);
+        ui.c.text(rect(line.x + 28.0, line.y, line.w - 168.0, line.h), title, 14.0, MUTED, Align::Left, Weight::Regular);
+        ui.c.text(rect(line.right() - 140.0, line.y, 140.0, line.h), "Precisa instalar", 13.0, MUTED, Align::Right, Weight::Regular);
     } else {
         ui.check(key, line, title, val);
     }
@@ -42,7 +48,8 @@ fn finish(ui: &mut Ui, app: &mut App, c: Choices) {
     app.cfg.welcome = !c.hide;
     app.cfg.save();
     let install = c.install && !app.installed;
-    let taskmgr = c.taskmgr && !app.replaces_tm;
+    // A troca só aponta para a cópia instalada: veja `startup::replace_taskmgr_with`.
+    let taskmgr = c.taskmgr && !app.replaces_tm && (install || app.installed);
     let admin = c.admin || app.cfg.always_admin;
     if install || taskmgr || admin != app.cfg.always_admin {
         let restart = admin && (install || !app.elevated);
@@ -78,15 +85,16 @@ pub fn draw(ui: &mut Ui, app: &mut App, full: Rect) {
     } else {
         "Libera o Medidor, a rede por programa, a saúde dos discos e a leitura rápida do NTFS. Sem instalar, o Windows pede permissão a cada abertura."
     };
-    let tm_note = if install || app.installed {
-        "Ctrl+Shift+Esc passa a abrir o Prisma. O Gerenciador do Windows volta quando você quiser."
+    let tm_locked = !install && !app.installed;
+    let tm_note = if tm_locked {
+        "Só na versão instalada. Em outra pasta, qualquer programa pode trocar o arquivo que o atalho abre."
     } else {
-        "Ctrl+Shift+Esc passa a abrir este arquivo. Sem instalar, mover ou apagar o arquivo deixa o atalho sem abrir nada."
+        "Ctrl+Shift+Esc passa a abrir o Prisma. O Gerenciador do Windows volta quando você quiser."
     };
     let step = ROW + 10.0;
-    row(ui, "w-install", rect(x, y, w, ROW), "Instalar no PC", "Vai para Arquivos de Programas, ganha atalho no menu Iniciar e abre com o Windows. Sem isso, roda daqui mesmo, como portátil.", &mut c.install, app.installed);
-    row(ui, "w-admin", rect(x, y + step, w, ROW), "Dar permissão de administrador", admin_note, &mut c.admin, app.cfg.always_admin);
-    row(ui, "w-tm", rect(x, y + step * 2.0, w, ROW), "Substituir o Gerenciador de Tarefas", tm_note, &mut c.taskmgr, app.replaces_tm);
+    row(ui, "w-install", rect(x, y, w, ROW), "Instalar no PC", "Vai para Arquivos de Programas, ganha atalho no menu Iniciar e abre com o Windows. Sem isso, roda daqui mesmo, como portátil.", &mut c.install, app.installed, false);
+    row(ui, "w-admin", rect(x, y + step, w, ROW), "Dar permissão de administrador", admin_note, &mut c.admin, app.cfg.always_admin, false);
+    row(ui, "w-tm", rect(x, y + step * 2.0, w, ROW), "Substituir o Gerenciador de Tarefas", tm_note, &mut c.taskmgr, app.replaces_tm, tm_locked);
     y += step * 3.0 + 4.0;
 
     ui.check("w-hide", rect(x, y, 220.0, 44.0), "Não mostrar novamente", &mut c.hide);

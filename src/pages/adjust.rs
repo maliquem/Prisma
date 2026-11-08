@@ -43,16 +43,22 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let rt = rect(x, top + 162.0, w, 76.0);
     ui.card(rt);
     ui.c.text(rect(rt.x + 16.0, rt.y + 10.0, rt.w - 260.0, 26.0), "Substituir o Gerenciador de Tarefas", 15.0, TEXT, Align::Left, Weight::Semibold);
-    let state = if app.replaces_tm { "Ligado: Ctrl+Shift+Esc abre o Prisma." } else { "Desligado: Ctrl+Shift+Esc abre o Gerenciador de Tarefas do Windows." };
+    let state = if app.replaces_tm {
+        "Ligado: Ctrl+Shift+Esc abre o Prisma."
+    } else if app.installed {
+        "Desligado: Ctrl+Shift+Esc abre o Gerenciador de Tarefas do Windows."
+    } else {
+        "Desligado. Só na versão instalada, por segurança."
+    };
     ui.c.text(rect(rt.x + 16.0, rt.y + 38.0, rt.w - 260.0, 22.0), state, 13.0, if app.replaces_tm { ACCENT } else { MUTED }, Align::Left, Weight::Regular);
     let tm_label = if app.replaces_tm { "Desativar" } else { "Ativar" };
-    if ui.button("tm", rect(rt.right() - 236.0, rt.y + 18.0, 220.0, 40.0), tm_label, !app.replaces_tm) {
+    // Na portátil só dá para desligar: ligar apontaria o atalho para um arquivo que qualquer programa troca.
+    let tm_usable = app.replaces_tm || app.installed;
+    if ui.button_ex("tm", rect(rt.right() - 236.0, rt.y + 18.0, 220.0, 40.0), tm_label, !app.replaces_tm, tm_usable) {
         if app.replaces_tm {
             ui.ask("tm-off", "Devolver o Gerenciador de Tarefas?", "Ctrl+Shift+Esc volta a abrir o Gerenciador de Tarefas do Windows.");
-        } else if app.installed {
-            ui.ask("tm-on", "Substituir o Gerenciador de Tarefas?", "Ctrl+Shift+Esc passa a abrir o Prisma. Dá para desfazer aqui a qualquer momento.");
         } else {
-            ui.ask("tm-on", "Substituir o Gerenciador de Tarefas?", "Ctrl+Shift+Esc passa a abrir este arquivo do Prisma. Se você mover ou apagar o arquivo, o atalho deixa de abrir qualquer coisa até desativar aqui. A versão instalada não tem esse risco.");
+            ui.ask("tm-on", "Substituir o Gerenciador de Tarefas?", "Ctrl+Shift+Esc passa a abrir o Prisma. Dá para desfazer aqui a qualquer momento.");
         }
     }
     if ui.answered("tm-on") {

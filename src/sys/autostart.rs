@@ -135,13 +135,15 @@ fn state(source: Source, name: &str) -> bool {
     }
 }
 
+/// Pelo Windows, e não por `%APPDATA%`: remover apaga um arquivo desta pasta.
 fn folder(source: Source) -> Option<PathBuf> {
-    let base = match source {
-        Source::UserFolder => std::env::var("APPDATA").ok()?,
-        Source::CommonFolder => std::env::var("PROGRAMDATA").ok()?,
+    use windows::Win32::UI::Shell::*;
+    let dir = match source {
+        Source::UserFolder => super::known_folder(&FOLDERID_Startup),
+        Source::CommonFolder => super::known_folder(&FOLDERID_CommonStartup),
         _ => return None,
     };
-    Some(PathBuf::from(base).join("Microsoft\\Windows\\Start Menu\\Programs\\Startup"))
+    (!dir.as_os_str().is_empty()).then_some(dir)
 }
 
 pub fn list() -> Vec<Item> {

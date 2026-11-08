@@ -56,21 +56,23 @@ pub fn system_tool(name: &str) -> PathBuf {
     match file.to_ascii_lowercase().as_str() {
         "explorer.exe" => windows_dir().join(file),
         "powershell.exe" => system_dir().join("WindowsPowerShell\\v1.0").join(file),
-        "winget.exe" => apps_alias().join(file),
+        // Atalho dos aplicativos da Loja, onde fica o winget.
+        "winget.exe" => known_folder(&windows::Win32::UI::Shell::FOLDERID_LocalAppData).join("Microsoft\\WindowsApps").join(file),
         _ => system_dir().join(file),
     }
 }
 
-/// Pasta dos atalhos de aplicativos da Loja, onde fica o winget.
-fn apps_alias() -> PathBuf {
+/// Pasta do Windows pelo próprio Windows. `%ProgramFiles%` e `%APPDATA%` são texto que qualquer
+/// programa troca para o usuário, e a cópia de administrador herda a troca.
+pub fn known_folder(id: &windows::core::GUID) -> PathBuf {
     use windows::Win32::System::Com::CoTaskMemFree;
     use windows::Win32::UI::Shell::*;
-    let base = unsafe {
-        SHGetKnownFolderPath(&FOLDERID_LocalAppData, KF_FLAG_DEFAULT, None).ok().and_then(|p| {
+    let path = unsafe {
+        SHGetKnownFolderPath(id, KF_FLAG_DEFAULT, None).ok().and_then(|p| {
             let text = p.to_string().ok();
             CoTaskMemFree(Some(p.0 as *const _));
             text
         })
     };
-    PathBuf::from(base.unwrap_or_default()).join("Microsoft\\WindowsApps")
+    PathBuf::from(path.unwrap_or_default())
 }

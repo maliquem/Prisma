@@ -10,7 +10,7 @@ Prisma is a single file, Prisma.exe. The first time you open it, the welcome scr
 
 - **Install on this PC:** copies Prisma to Program Files, creates a Start menu shortcut, adds it to the Windows program list and makes it start with Windows. Without this, it runs from its current folder as the portable version, and settings stay in PrismaData, next to the file.
 - **Give administrator permission:** the Meter, the network column, disk health and the fast NTFS scan need it. Installed, Prisma opens as administrator without asking. Portable, Windows asks every time, because a file outside Program Files can be replaced by another program.
-- **Replace Task Manager:** Ctrl+Shift+Esc opens Prisma. In the portable version, moving or deleting the file leaves the shortcut opening nothing until you turn the replacement off.
+- **Replace Task Manager:** Ctrl+Shift+Esc opens Prisma. It works only in the installed version: in an ordinary folder, any program could swap the file the shortcut opens, and the shortcut applies to every account on the PC. Without Install on this PC checked, this option is grayed out.
 - **Don't show again:** checked by default, so the screen appears once. Unchecked, it appears every time the program opens again. You can change this in Settings.
 
 The screen also has the language selector. Prisma starts in the Windows language: Portuguese on Windows in Portuguese and English on all others.
@@ -171,7 +171,7 @@ Shows CPU, GPU, RAM and VRAM on top of everything, in four styles. Drag it to mo
 ## Settings
 
 - **Start with Windows and administrator:** turn them on or off whenever you want. Changing this in the installed version asks for Windows permission.
-- **Replace Task Manager:** turns it on or gives it back. Uninstalling also gives it back.
+- **Replace Task Manager:** turns it on or gives it back. Uninstalling also gives it back. In the portable version you can only turn it off.
 - **Force close:** a shortcut, Alt + F4 by default, ends the program in focus right away, even frozen in fullscreen. Anything unsaved is lost. The desktop, the taskbar and Windows processes keep the normal Alt + F4.
 - **Language:** Brazilian Portuguese or English.
 - **Updates:** see the section below.

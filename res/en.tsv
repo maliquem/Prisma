@@ -786,7 +786,7 @@ Devolver o Gerenciador de Tarefas?	Give back Task Manager?
 Ctrl+Shift+Esc volta a abrir o Gerenciador de Tarefas do Windows.	Ctrl+Shift+Esc goes back to opening Windows Task Manager.
 Substituir o Gerenciador de Tarefas?	Replace Task Manager?
 Ctrl+Shift+Esc passa a abrir o Prisma. Dá para desfazer aqui a qualquer momento.	Ctrl+Shift+Esc will open Prisma. You can undo this here at any time.
-Ctrl+Shift+Esc passa a abrir este arquivo do Prisma. Se você mover ou apagar o arquivo, o atalho deixa de abrir qualquer coisa até desativar aqui. A versão instalada não tem esse risco.	Ctrl+Shift+Esc will open this Prisma file. If you move or delete the file, the shortcut opens nothing until you turn this off here. The installed version does not have this risk.
+Desligado. Só na versão instalada, por segurança.	Off. Installed version only, for safety.
 Instalar a atualização?	Install the update?
 O Prisma vai baixar a versão {}, reiniciar e continuar com as suas configurações.	Prisma will download version {}, restart and keep your settings.
 Padrão	Default
@@ -1216,7 +1216,8 @@ Dar permissão de administrador	Give administrator permission
 Libera o Medidor, a rede por programa, a saúde dos discos e a leitura rápida do NTFS. Abre sem perguntar.	Unlocks the Meter, network per program, disk health and the fast NTFS scan. Opens without asking.
 Libera o Medidor, a rede por programa, a saúde dos discos e a leitura rápida do NTFS. Sem instalar, o Windows pede permissão a cada abertura.	Unlocks the Meter, network per program, disk health and the fast NTFS scan. Without installing, Windows asks every time it opens.
 Ctrl+Shift+Esc passa a abrir o Prisma. O Gerenciador do Windows volta quando você quiser.	Ctrl+Shift+Esc opens Prisma. The Windows Task Manager comes back whenever you want.
-Ctrl+Shift+Esc passa a abrir este arquivo. Sem instalar, mover ou apagar o arquivo deixa o atalho sem abrir nada.	Ctrl+Shift+Esc opens this file. Without installing, moving or deleting the file leaves the shortcut opening nothing.
+Só na versão instalada. Em outra pasta, qualquer programa pode trocar o arquivo que o atalho abre.	Installed version only. In any other folder, any program can swap the file the shortcut opens.
+Precisa instalar	Needs install
 Não mostrar novamente	Don't show again
 Não mostrar de novo	Don't show again
 Abrir o guia	Open the guide

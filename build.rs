@@ -7,8 +7,8 @@ fn main() {
     res.set_manifest_file("res/prisma.manifest");
     res.compile().expect("falha ao compilar recursos");
     // Windows N não traz o Media Foundation: só a gravação fica de fora, o resto abre.
-    // O dbghelp só é preciso se o programa cair, o WinHTTP ao procurar atualização e o mscms na aba HDR.
-    for dll in ["mfplat.dll", "mf.dll", "mfreadwrite.dll", "dbghelp.dll", "winhttp.dll", "mscms.dll"] {
+    // O dbghelp só é preciso se o programa cair, o WinHTTP ao procurar atualização, o mscms na aba HDR e o secur32 ao criar tarefas.
+    for dll in ["mfplat.dll", "mf.dll", "mfreadwrite.dll", "dbghelp.dll", "winhttp.dll", "mscms.dll", "secur32.dll"] {
         println!("cargo:rustc-link-arg=/DELAYLOAD:{dll}");
     }
     println!("cargo:rustc-link-arg=delayimp.lib");

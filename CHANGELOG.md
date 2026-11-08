@@ -3,6 +3,8 @@
 ## Unreleased
 
 - Safer portable copy: Prisma loads Windows DLLs and runs Windows tools only from the Windows folder, never from its own folder. A file with the same name downloaded next to it no longer runs in its place, not even as administrator. / Versão portátil mais segura: o Prisma carrega as DLLs e roda as ferramentas do Windows só da pasta do Windows, nunca da própria pasta. Um arquivo com o mesmo nome baixado ao lado dele não roda mais no lugar, nem como administrador.
+- Replace Task Manager is now for the installed version only. In an ordinary folder, any program could swap the file Ctrl+Shift+Esc opens, for every account on the PC. / Substituir o Gerenciador de Tarefas agora é só da versão instalada. Numa pasta comum, qualquer programa poderia trocar o arquivo que o Ctrl+Shift+Esc abre, para todas as contas do PC.
+- Program Files, AppData, the Startup folders and the account name now come from Windows itself, not from environment variables that any program can change. Tasks that open as administrator are only created for the installed copy. / Arquivos de Programas, AppData, as pastas Inicializar e o nome da conta agora vêm do próprio Windows, e não de variáveis de ambiente que qualquer programa muda. Tarefas que abrem como administrador só são criadas para a cópia instalada.
 
 ## 0.7.0
 

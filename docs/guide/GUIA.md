@@ -10,7 +10,7 @@ O Prisma é um único arquivo, Prisma.exe. Na primeira vez que você abre, ele m
 
 - **Instalar no PC:** copia o Prisma para Arquivos de Programas, cria o atalho no menu Iniciar, coloca o programa na lista de programas do Windows e faz ele abrir com o Windows. Sem isso, ele roda da pasta onde está, como versão portátil, e as configurações ficam em PrismaData, ao lado do arquivo.
 - **Dar permissão de administrador:** o Medidor, a coluna de rede, a saúde dos discos e a leitura rápida do NTFS precisam dela. Instalado, o Prisma abre como administrador sem perguntar. Portátil, o Windows pergunta a cada abertura, porque um arquivo fora de Arquivos de Programas pode ser trocado por outro programa.
-- **Substituir o Gerenciador de Tarefas:** Ctrl+Shift+Esc passa a abrir o Prisma. Na versão portátil, mover ou apagar o arquivo deixa o atalho sem abrir nada até você desativar a troca.
+- **Substituir o Gerenciador de Tarefas:** Ctrl+Shift+Esc passa a abrir o Prisma. Só funciona na versão instalada: numa pasta comum, qualquer programa poderia trocar o arquivo que o atalho abre, e o atalho vale para todas as contas do PC. Sem marcar Instalar no PC, essa opção fica apagada.
 - **Não mostrar novamente:** vem marcado, então a tela aparece uma vez. Desmarcado, ela aparece toda vez que o programa abrir de novo. Dá para mudar em Configurações.
 
 A tela também tem o seletor de idioma. O Prisma começa no idioma do Windows: português no Windows em português e inglês nos demais.
@@ -171,7 +171,7 @@ Mostra CPU, GPU, RAM e VRAM por cima de tudo, em quatro estilos. Arraste para mu
 ## Configurações
 
 - **Início com o Windows e administrador:** ligue ou desligue quando quiser. Mudar isso na versão instalada pede a permissão do Windows.
-- **Substituir o Gerenciador de Tarefas:** ativa ou devolve. A desinstalação também devolve.
+- **Substituir o Gerenciador de Tarefas:** ativa ou devolve. A desinstalação também devolve. Na versão portátil só dá para desativar.
 - **Fechar à força:** um atalho, Alt + F4 por padrão, encerra na hora o programa em foco, mesmo travado em tela cheia. O que não foi salvo é perdido. A área de trabalho, a barra de tarefas e os processos do Windows continuam com o Alt + F4 normal.
 - **Idioma:** português do Brasil ou inglês.
 - **Atualizações:** veja a seção abaixo.

@@ -338,8 +338,7 @@ fn default_capture_dir() -> String {
 /// Instalado guarda em %APPDATA%; portátil guarda ao lado do programa.
 pub fn data_dir() -> PathBuf {
     if crate::startup::is_installed() {
-        let base = std::env::var("APPDATA").unwrap_or_else(|_| ".".into());
-        PathBuf::from(base).join("Prisma")
+        crate::sys::known_folder(&windows::Win32::UI::Shell::FOLDERID_RoamingAppData).join("Prisma")
     } else {
         let exe = std::env::current_exe().unwrap_or_default();
         exe.parent().map(|p| p.join("PrismaData")).unwrap_or_else(|| PathBuf::from("PrismaData"))

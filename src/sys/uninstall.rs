@@ -387,13 +387,12 @@ fn folder_size(p: &Path) -> u64 {
 
 fn roots() -> Vec<PathBuf> {
     let mut v = Vec::new();
-    for k in ["ProgramFiles", "ProgramFiles(x86)", "ProgramData", "APPDATA", "LOCALAPPDATA"] {
-        if let Ok(p) = std::env::var(k) {
-            v.push(PathBuf::from(p));
+    // Pelo Windows, e não pelas variáveis: o que aparece aqui pode ir para a Lixeira.
+    for id in [FOLDERID_ProgramFiles, FOLDERID_ProgramFilesX86, FOLDERID_ProgramData, FOLDERID_RoamingAppData, FOLDERID_LocalAppData, FOLDERID_UserProgramFiles] {
+        let p = super::known_folder(&id);
+        if !p.as_os_str().is_empty() {
+            v.push(p);
         }
-    }
-    if let Ok(p) = std::env::var("LOCALAPPDATA") {
-        v.push(PathBuf::from(p).join("Programs"));
     }
     v
 }
@@ -434,8 +433,8 @@ fn stem_of(cmd: &str) -> Option<String> {
 /// Lugares onde programas costumam deixar pasta com o próprio nome.
 fn deep_roots() -> Vec<PathBuf> {
     let mut v = roots();
-    if let Ok(h) = std::env::var("USERPROFILE") {
-        let h = PathBuf::from(h);
+    let h = super::known_folder(&FOLDERID_Profile);
+    if !h.as_os_str().is_empty() {
         for s in ["AppData\\LocalLow", "Documents", "Documents\\My Games", "Saved Games", ""] {
             v.push(h.join(s));
         }

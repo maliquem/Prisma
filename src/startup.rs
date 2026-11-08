@@ -18,6 +18,7 @@ pub fn is_enabled() -> bool {
 }
 
 /// Precisa rodar como administrador. Devolve false quando o Windows recusa.
+/// Só a versão instalada ganha a tarefa: veja `create_task`.
 pub fn set_enabled(on: bool, admin: bool) -> bool {
     if on {
         return create_task(TASK, &std::env::current_exe().unwrap_or_default(), "--background", true, admin);
@@ -37,7 +38,7 @@ fn xml_escape(s: &str) -> String {
 /// O padrão do Windows para tarefas não serve aqui: não abre na bateria, fecha o programa
 /// depois de 72 horas e o deixa com prioridade baixa. Só o XML troca essas três coisas.
 fn task_xml(exe: &std::path::Path, args: &str, logon: bool, admin: bool) -> String {
-    let user = xml_escape(&format!("{}\\{}", std::env::var("USERDOMAIN").unwrap_or_default(), std::env::var("USERNAME").unwrap_or_default()));
+    let user = xml_escape(&user_name());
     let trigger = if logon { format!("<LogonTrigger><UserId>{user}</UserId></LogonTrigger>") } else { String::new() };
     let level = if admin { "HighestAvailable" } else { "LeastPrivilege" };
     let command = xml_escape(&exe.display().to_string());
@@ -52,8 +53,27 @@ fn task_xml(exe: &std::path::Path, args: &str, logon: bool, admin: bool) -> Stri
     )
 }
 
-/// O arquivo fica na pasta do programa: em Arquivos de Programas, só administrador mexe nele.
+/// Conta pelo Windows, como `PC\nome`. `%USERNAME%` é texto que qualquer programa troca.
+fn user_name() -> String {
+    use windows::Win32::Security::Authentication::Identity::*;
+    let mut buf = [0u16; 512];
+    let mut len = buf.len() as u32;
+    if unsafe { GetUserNameExW(NameSamCompatible, Some(windows::core::PWSTR(buf.as_mut_ptr())), &mut len) } {
+        String::from_utf16_lossy(&buf[..len as usize])
+    } else {
+        String::new()
+    }
+}
+
+/// Só para a cópia em Arquivos de Programas. Em qualquer outra pasta, um programa comum troca o
+/// arquivo, ou o XML entre gravar e o Windows ler, e a tarefa passaria a abrir o que ele quiser.
+/// O XML fica ao lado do programa, onde só administrador escreve.
 pub fn create_task(name: &str, exe: &std::path::Path, args: &str, logon: bool, admin: bool) -> bool {
+    // A versão de desenvolvimento testa tarefas comuns a partir da própria pasta.
+    if !in_install_dir(exe) && !cfg!(debug_assertions) {
+        return false;
+    }
+    let admin = admin && in_install_dir(exe);
     let file = exe.with_file_name(format!("{name}.xml"));
     let mut bytes = vec![0xff, 0xfe];
     bytes.extend(task_xml(exe, args, logon, admin).encode_utf16().flat_map(u16::to_le_bytes));
@@ -181,7 +201,12 @@ pub fn set_replace_taskmgr(on: bool) -> bool {
     replace_taskmgr_with(&std::env::current_exe().unwrap_or_default(), on)
 }
 
+/// Ligar só aponta para a cópia instalada. A chave vale para todos os usuários do PC, e um arquivo
+/// fora de Arquivos de Programas qualquer programa troca antes de alguém apertar o atalho.
 fn replace_taskmgr_with(exe: &std::path::Path, on: bool) -> bool {
+    if on && !in_install_dir(exe) {
+        return false;
+    }
     let mut cmd = Command::new(crate::sys::system_tool("reg"));
     if on {
         let run = format!("\"{}\" --taskmgr", exe.display());
@@ -194,20 +219,26 @@ fn replace_taskmgr_with(exe: &std::path::Path, on: bool) -> bool {
 
 const UNINSTALL_KEY: &str = "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Prisma";
 
+/// Pela pasta conhecida do Windows: com `%ProgramFiles%` trocado, uma pasta comum passaria por
+/// instalada e ganharia a tarefa que abre como administrador sem perguntar.
 fn install_dir() -> std::path::PathBuf {
-    let base = std::env::var("ProgramFiles").unwrap_or_else(|_| "C:\\Program Files".into());
-    std::path::PathBuf::from(base).join("Prisma")
+    let base = crate::sys::known_folder(&windows::Win32::UI::Shell::FOLDERID_ProgramFiles);
+    let base = if base.as_os_str().is_empty() { std::path::PathBuf::from("C:\\Program Files") } else { base };
+    base.join("Prisma")
 }
 
 fn shortcut() -> std::path::PathBuf {
-    let base = std::env::var("ProgramData").unwrap_or_else(|_| "C:\\ProgramData".into());
-    std::path::PathBuf::from(base).join("Microsoft\\Windows\\Start Menu\\Programs\\Prisma.lnk")
+    crate::sys::known_folder(&windows::Win32::UI::Shell::FOLDERID_CommonPrograms).join("Prisma.lnk")
+}
+
+fn in_install_dir(exe: &std::path::Path) -> bool {
+    let exe = exe.display().to_string().to_ascii_lowercase();
+    exe.starts_with(&format!("{}\\", install_dir().display().to_string().to_ascii_lowercase()))
 }
 
 /// Rodando de Arquivos de Programas é a versão instalada; de qualquer outro lugar, portátil.
 pub fn is_installed() -> bool {
-    let exe = std::env::current_exe().unwrap_or_default().display().to_string().to_ascii_lowercase();
-    exe.starts_with(&format!("{}\\", install_dir().display().to_string().to_ascii_lowercase()))
+    in_install_dir(&std::env::current_exe().unwrap_or_default())
 }
 
 fn make_shortcut(target: &str, lnk: &str) -> bool {
@@ -265,7 +296,7 @@ pub fn install(admin: bool) -> bool {
     reg_add("EstimatedSize", "REG_DWORD", &size.to_string());
 
     let portable = exe.parent().map(|p| p.join("PrismaData"));
-    let target = std::path::PathBuf::from(std::env::var("APPDATA").unwrap_or_default()).join("Prisma");
+    let target = crate::sys::known_folder(&windows::Win32::UI::Shell::FOLDERID_RoamingAppData).join("Prisma");
     if let Some(p) = portable {
         if p.is_dir() && !target.join("config.ini").exists() {
             let _ = std::fs::create_dir_all(&target);
