@@ -36,6 +36,8 @@ Mostra o que está usando o PC agora: CPU por núcleo, GPU, RAM e VRAM, e o uso 
 
 Mostra o desempenho por cima do jogo e limita o FPS. As leituras vêm dos eventos do Windows, sem nada dentro do jogo. Precisa do Prisma como administrador.
 
+Ele só aparece quando você pede: pelos atalhos, ou sozinho nos jogos que você adicionar à lista da aba Medidor. Para ele aparecer em todo jogo, escolha Em todos, menos os da lista em Quando o medidor liga.
+
 ### Barra compacta
 
 Fica no alto da tela e mostra o FPS, a linha de frame time, a latência, CPU, GPU e VRAM. Escolha se ela fica à esquerda, no centro ou à direita. Atalho: Ctrl + Alt + 1.
@@ -125,11 +127,13 @@ Reúne reparo do Windows (DISM e depois SFC), histórico de falhas, Windows Upda
 
 Sugere o que fechar antes de jogar e sempre pergunta. Blacklist nunca fecha, Whitelist sempre fecha, e a detecção automática sugere nomes para as duas listas. Atalho: Ctrl + Alt + O.
 
-Quando um jogo abre, uma pergunta pequena pode aparecer no canto superior direito. Ela some em 10 segundos.
+Se você quiser, uma pergunta pequena aparece no canto superior direito quando um jogo abre, e some em 10 segundos. Ela vem desligada: ligue em Energia, no quadro Ao entrar em modo jogo, com Perguntar se quero otimizar.
 
 ## Energia
 
 Detecta jogo ou carga alta e troca o plano de energia. Volta ao repouso depois de 60 segundos sem carga. Você escolhe a porcentagem e o tempo que contam como carga.
+
+Conta como jogo o programa em foco que cobre a tela e usa a GPU ele mesmo, ou que mora na pasta de jogos da Steam, Epic, GOG ou Xbox. Navegadores, players de vídeo, acesso remoto como o Parsec, Discord, OBS e lançadores nunca contam, mesmo em tela cheia.
 
 - **Dá para:** editar um plano com todas as opções que o Windows registra, inclusive as ocultas, e importar ou exportar arquivos .pow. A primeira edição guarda uma cópia do plano original.
 - **Limite:** os planos do Prisma são criados só na versão instalada.

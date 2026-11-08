@@ -89,6 +89,9 @@ impl Snapshot {
 }
 
 pub static DETAIL: AtomicBool = AtomicBool::new(false);
+/// A detecção de jogo precisa da GPU de cada programa mesmo com a janela fechada, mas só
+/// enquanto há um candidato em foco: ler todos os contadores da GPU custa.
+pub static GPU_WANTED: AtomicBool = AtomicBool::new(false);
 /// O medidor sobre o jogo também precisa das leituras completas.
 pub static METER: AtomicBool = AtomicBool::new(false);
 /// Atualiza a cada segundo, sem as leituras caras do modo detalhado.
@@ -401,7 +404,7 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
         let mut groups: HashMap<String, Group> = HashMap::with_capacity(procs.len());
         let mut times = HashMap::with_capacity(procs.len());
         let (mut pgpu, mut pvram, mut perf) = (HashMap::new(), HashMap::new(), 0.0);
-        if detail {
+        if detail || GPU_WANTED.load(Ordering::Relaxed) {
             if counters.is_none() {
                 counters = GpuCounters::new();
             }

@@ -835,7 +835,7 @@ impl Meter {
             }
         }
         let shown = match cfg.meter_rule {
-            0 => listed.is_some(),
+            0 => listed.as_ref().is_some_and(|g| g.view != 2),
             _ => listed.is_none() || listed.as_ref().is_some_and(|g| g.view != 2),
         };
         if shown {

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- The question to optimize when a game opens now comes off, and can be turned on in Power. / A pergunta para otimizar quando um jogo abre agora vem desligada, e dá para ligar em Energia.
+- The meter only shows up when you ask: by shortcut, or on its own for the games in its list. / O medidor só aparece quando você pede: pelo atalho, ou sozinho nos jogos da lista dele.
+- Fewer programs mistaken for games: the program in focus has to use the GPU itself, and browsers, video players, Parsec, Discord, OBS and launchers never count. / Menos programas confundidos com jogo: o programa em foco precisa usar a GPU ele mesmo, e navegadores, players de vídeo, Parsec, Discord, OBS e lançadores nunca contam.
 - Replace Task Manager works again where Windows protects the change even from administrators, as in recent test builds: Prisma tells you and catches Ctrl+Shift+Esc itself while it is open. Ctrl+Alt+Del and the taskbar menu still open the Windows one. / Substituir o Gerenciador de Tarefas volta a funcionar onde o Windows protege a troca até de administrador, como nas versões de teste recentes: o Prisma avisa e pega o Ctrl+Shift+Esc ele mesmo, enquanto estiver aberto. O Ctrl+Alt+Del e o menu da barra de tarefas ainda abrem o do Windows.
 
 ## 0.8.0

@@ -196,7 +196,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
 
     // Por último, porque a lista aberta fica por cima do resto.
     let mut on = app.cfg.on_game as usize;
-    let opts = ["Perguntar se quero otimizar".to_string(), "Otimizar sem perguntar".to_string(), "Só trocar o plano".to_string()];
+    let opts = ["Perguntar se quero otimizar".to_string(), "Otimizar sem perguntar".to_string(), "Não perguntar".to_string()];
     if ui.select("ongame", rect(r2.x + 16.0, r2.y + 34.0, r2.w - 32.0, 44.0), &opts, &mut on) {
         app.cfg.on_game = on as u8;
         changed = true;

@@ -216,6 +216,17 @@ const LIBRARIES: &[&str] = &[
     "\\ea games\\",
 ];
 
+/// Usam a GPU em tela cheia sem ser jogo: navegador, vídeo, acesso remoto, gravação, edição e
+/// os próprios lançadores. Também os programas de ferramenta que moram na pasta da Steam.
+const NOT_GAMES: &[&str] = &[
+    "chrome.exe", "msedge.exe", "firefox.exe", "zen.exe", "brave.exe", "opera.exe", "vivaldi.exe", "arc.exe", "librewolf.exe", "floorp.exe", "waterfox.exe",
+    "vlc.exe", "mpc-hc64.exe", "mpc-hc.exe", "mpc-be64.exe", "mpv.exe", "potplayermini64.exe", "potplayermini.exe", "kodi.exe", "plex.exe", "stremio.exe", "photos.exe", "applicationframehost.exe",
+    "parsecd.exe", "moonlight.exe", "anydesk.exe", "teamviewer.exe", "mstsc.exe", "msrdc.exe", "rustdesk.exe",
+    "discord.exe", "obs64.exe", "spotify.exe", "powerpnt.exe", "resolve.exe", "blender.exe", "photoshop.exe", "afterfx.exe", "adobe premiere pro.exe",
+    "steam.exe", "steamwebhelper.exe", "epicgameslauncher.exe", "galaxyclient.exe", "eadesktop.exe", "upc.exe", "battle.net.exe", "xboxpcapp.exe", "gamebar.exe", "playnite.fullscreenapp.exe", "playnite.desktopapp.exe",
+    "losslessscaling.exe", "wallpaper64.exe", "wallpaper32.exe", "nvidia overlay.exe", "explorer.exe", "prisma.exe",
+];
+
 fn in_library(path: &str) -> bool {
     let low = path.to_ascii_lowercase();
     LIBRARIES.iter().any(|l| low.contains(l))
@@ -255,7 +266,8 @@ impl Detector {
         self.since = now;
     }
 
-    pub fn tick(&mut self, cfg: &Config, cpu: f32, gpu: f32) -> Event {
+    /// `groups` traz a GPU de cada programa: jogo é quem desenha, não quem divide a tela com ele.
+    pub fn tick(&mut self, cfg: &Config, cpu: f32, gpu: f32, groups: &[crate::sys::monitor::Group]) -> Event {
         let now = Instant::now();
         let gpu_on = cfg.rule_gpu && gpu > cfg.load_gpu_pct as f32;
         let cpu_on = cfg.rule_cpu && cpu > cfg.load_cpu_pct as f32;
@@ -264,16 +276,20 @@ impl Detector {
         let gpu_load = self.gpu_since.is_some_and(|t| now - t >= Duration::from_secs(cfg.load_gpu_secs as u64));
         let cpu_load = self.cpu_since.is_some_and(|t| now - t >= Duration::from_secs(cfg.load_cpu_secs as u64));
 
+        crate::sys::monitor::GPU_WANTED.store(self.mode == Mode::Game, std::sync::atomic::Ordering::Relaxed);
         let fg = unsafe { GetForegroundWindow() };
         let mut game: Option<(String, u32)> = None;
         if !fg.is_invalid() && fg != unsafe { GetShellWindow() } {
             let pid = procs::window_pid(fg);
             if let Some(path) = procs::image_path(pid) {
                 let exe = procs::exe_name(&path);
-                let fs = cfg.rule_fullscreen && fullscreen::covers_monitor(fg) && gpu > 15.0;
+                let known = NOT_GAMES.iter().any(|n| exe.eq_ignore_ascii_case(n));
+                let cover = cfg.rule_fullscreen && fullscreen::covers_monitor(fg);
                 let lib = cfg.rule_library && in_library(&path);
-                let shell = exe.eq_ignore_ascii_case("explorer.exe");
-                if !shell && (fs || lib) {
+                let candidate = !known && (cover || lib);
+                crate::sys::monitor::GPU_WANTED.store(candidate || self.mode == Mode::Game, std::sync::atomic::Ordering::Relaxed);
+                let own = groups.iter().find(|g| g.pids.contains(&pid)).map_or(0.0, |g| g.gpu);
+                if candidate && ((cover && own >= 10.0) || (lib && own >= 3.0)) {
                     game = Some((exe, pid));
                 }
             }

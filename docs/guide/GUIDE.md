@@ -36,6 +36,8 @@ Shows what is using your PC right now: CPU per core, GPU, RAM and VRAM, plus the
 
 Shows performance over the game and limits FPS. Readings come from Windows events, with nothing inside the game. It needs Prisma as administrator.
 
+It only shows up when you ask: through the shortcuts, or on its own for the games you add to the list in the Meter tab. To have it on every game, pick All except listed games under When the meter turns on.
+
 ### Compact bar
 
 Sits at the top of the screen and shows FPS, the frame time line, latency, CPU, GPU and VRAM. Choose left, center or right. Shortcut: Ctrl + Alt + 1.
@@ -125,11 +127,13 @@ Brings together Windows repair (DISM then SFC), crash history, Windows Update, d
 
 Suggests what to close before playing and always asks. Blacklist never closes, Whitelist always closes, and automatic detection suggests names for both lists. Shortcut: Ctrl + Alt + O.
 
-When a game opens, a small question may appear in the top right corner. It leaves after 10 seconds.
+If you want, a small question appears in the top right corner when a game opens, and leaves after 10 seconds. It comes off: turn it on in Power, in the When entering game mode box, with Ask whether to optimize.
 
 ## Power
 
 Detects a game or high load and switches the power plan. It goes back to rest after 60 seconds without load. You choose the percentage and time that count as load.
+
+A game is the program in focus that covers the screen and uses the GPU itself, or that lives in the Steam, Epic, GOG or Xbox game folders. Browsers, video players, remote access like Parsec, Discord, OBS and launchers never count, even in full screen.
 
 - **You can:** edit a plan with every option Windows registers, including hidden ones, and import or export .pow files. The first edit keeps a copy of the original plan.
 - **Limit:** Prisma's plans are created only in the installed version.

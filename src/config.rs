@@ -276,7 +276,7 @@ impl Default for Config {
             power_auto: true,
             plan_game: "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c".into(),
             plan_rest: "381b4222-f694-41f0-9685-ff5bb260df2e".into(),
-            on_game: 0,
+            on_game: 2,
             rule_fullscreen: true,
             rule_gpu: true,
             rule_cpu: true,
@@ -289,7 +289,7 @@ impl Default for Config {
             hdr_profiles: Vec::new(),
             hdr_games: Vec::new(),
             meter_games: Vec::new(),
-            meter_rule: 1,
+            meter_rule: 0,
             meter_hdr: 0,
             meter_items: crate::meter::ITEMS_DEFAULT,
             meter_op_compact: 84,
@@ -402,7 +402,9 @@ impl Config {
                 "power_auto" => c.power_auto = b,
                 "plan_game" => c.plan_game = v.into(),
                 "plan_rest" => c.plan_rest = v.into(),
-                "on_game" => c.on_game = v.parse().unwrap_or(0),
+                // Antes perguntava por padrão. Só quem escolheu otimizar sem perguntar continua assim.
+                "on_game" => c.on_game = if v == "1" { 1 } else { 2 },
+                "game_action" => c.on_game = v.parse().unwrap_or(2),
                 "rule_fullscreen" => c.rule_fullscreen = b,
                 "rule_gpu" => c.rule_gpu = b,
                 "rule_cpu" => c.rule_cpu = b,
@@ -421,7 +423,9 @@ impl Config {
                     }
                 }
                 "snd_keep" => c.snd_keep = v.parse().unwrap_or(0),
-                "meter_rule" => c.meter_rule = v.parse().unwrap_or(1),
+                // Antes o medidor aparecia em todo jogo por padrão: agora só nos da lista.
+                "meter_rule" => c.meter_rule = 0,
+                "meter_show" => c.meter_rule = v.parse().unwrap_or(0),
                 "meter_hdr" => c.meter_hdr = v.parse().unwrap_or(0),
                 "meter_items" => c.meter_items = v.parse().unwrap_or(crate::meter::ITEMS_DEFAULT),
                 "meter_op_compact" => c.meter_op_compact = v.parse().unwrap_or(84),
@@ -540,7 +544,7 @@ impl Config {
         let _ = writeln!(s, "power_auto={}", b(self.power_auto));
         let _ = writeln!(s, "plan_game={}", self.plan_game);
         let _ = writeln!(s, "plan_rest={}", self.plan_rest);
-        let _ = writeln!(s, "on_game={}", self.on_game);
+        let _ = writeln!(s, "game_action={}", self.on_game);
         let _ = writeln!(s, "rule_fullscreen={}", b(self.rule_fullscreen));
         let _ = writeln!(s, "rule_gpu={}", b(self.rule_gpu));
         let _ = writeln!(s, "rule_cpu={}", b(self.rule_cpu));
@@ -592,7 +596,7 @@ impl Config {
             let _ = writeln!(s, "snd_app={}|{}|{}|{}", a.exe, a.output, a.input, a.path);
         }
         let _ = writeln!(s, "snd_keep={}", self.snd_keep);
-        let _ = writeln!(s, "meter_rule={}", self.meter_rule);
+        let _ = writeln!(s, "meter_show={}", self.meter_rule);
         let _ = writeln!(s, "meter_hdr={}", self.meter_hdr);
         let _ = writeln!(s, "meter_items={}", self.meter_items);
         let _ = writeln!(s, "meter_op_compact={}", self.meter_op_compact);

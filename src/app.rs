@@ -2158,7 +2158,7 @@ impl App {
         let fg_exe = self.fg_exe.clone();
         self.usage.note(&self.snap.groups, &fg_exe, secs);
 
-        let ev = self.detector.tick(&self.cfg, self.snap.cpu, self.snap.gpu.util);
+        let ev = self.detector.tick(&self.cfg, self.snap.cpu, self.snap.gpu.util, &self.snap.groups);
         match ev {
             Event::Enter { game } => {
                 if game.is_some() && self.cfg.replay_on {
