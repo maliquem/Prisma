@@ -561,6 +561,10 @@ pub fn start(background: bool) {
                 h.stop();
                 std::process::exit(0);
             }
+            if let Some(v) = a.strip_prefix("--test-stream=") {
+                capture::live::bench(v);
+                std::process::exit(0);
+            }
             if let Some(path) = a.strip_prefix("--selftest=") {
                 crate::selftest::run(path, app.shared.clone());
                 std::process::exit(0);

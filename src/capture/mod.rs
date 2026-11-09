@@ -3,6 +3,8 @@
 pub mod encoder;
 pub mod engine;
 pub mod hdr;
+#[cfg(debug_assertions)]
+pub mod live;
 pub mod mux;
 pub mod shot;
 pub mod sound;

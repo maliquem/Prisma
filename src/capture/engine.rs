@@ -144,7 +144,7 @@ impl Ring {
     }
 }
 
-struct Converter {
+pub(super) struct Converter {
     vd: ID3D11VideoDevice,
     vc: ID3D11VideoContext1,
     en: ID3D11VideoProcessorEnumerator,
@@ -154,7 +154,7 @@ struct Converter {
 }
 
 impl Converter {
-    unsafe fn new(dev: &ID3D11Device, ctx: &ID3D11DeviceContext, in_w: u32, in_h: u32, w: u32, h: u32, fps: u32, ten: bool) -> Result<Self> {
+    pub(super) unsafe fn new(dev: &ID3D11Device, ctx: &ID3D11DeviceContext, in_w: u32, in_h: u32, w: u32, h: u32, fps: u32, ten: bool) -> Result<Self> {
         let vd: ID3D11VideoDevice = dev.cast()?;
         let vc: ID3D11VideoContext1 = ctx.cast()?;
         let desc = D3D11_VIDEO_PROCESSOR_CONTENT_DESC {
@@ -210,7 +210,7 @@ impl Converter {
         Ok(Self { vd, vc, en, vp, outputs, next: 0 })
     }
 
-    unsafe fn input_view(&self, tex: &ID3D11Texture2D) -> Result<ID3D11VideoProcessorInputView> {
+    pub(super) unsafe fn input_view(&self, tex: &ID3D11Texture2D) -> Result<ID3D11VideoProcessorInputView> {
         let d = D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC {
             FourCC: 0,
             ViewDimension: D3D11_VPIV_DIMENSION_TEXTURE2D,
@@ -223,7 +223,7 @@ impl Converter {
         Ok(v.unwrap())
     }
 
-    unsafe fn convert(&mut self, view: &ID3D11VideoProcessorInputView) -> Result<ID3D11Texture2D> {
+    pub(super) unsafe fn convert(&mut self, view: &ID3D11VideoProcessorInputView) -> Result<ID3D11Texture2D> {
         let (tex, out) = &self.outputs[self.next];
         self.next = (self.next + 1) % self.outputs.len();
         let stream = D3D11_VIDEO_PROCESSOR_STREAM {
@@ -240,11 +240,11 @@ impl Converter {
     }
 }
 
-fn even(v: u32) -> u32 {
+pub(super) fn even(v: u32) -> u32 {
     (v & !1).max(2)
 }
 
-unsafe fn bgra_texture(dev: &ID3D11Device, w: u32, h: u32, fmt: DXGI_FORMAT) -> Result<ID3D11Texture2D> {
+pub(super) unsafe fn bgra_texture(dev: &ID3D11Device, w: u32, h: u32, fmt: DXGI_FORMAT) -> Result<ID3D11Texture2D> {
     let d = D3D11_TEXTURE2D_DESC {
         Width: w,
         Height: h,

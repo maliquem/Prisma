@@ -15,6 +15,12 @@ pub struct Encoder {
     api: Option<ICodecAPI>,
     pub need: u32,
     fps: u32,
+    /// Nome do codificador, como o Windows o registra.
+    #[cfg_attr(not(debug_assertions), allow(dead_code))]
+    pub name: String,
+    /// Ajustes que o codificador recusou.
+    #[cfg_attr(not(debug_assertions), allow(dead_code))]
+    pub refused: Vec<&'static str>,
 }
 
 fn packed(a: u32, b: u32) -> u64 {
@@ -29,7 +35,7 @@ fn subtype(c: Codec) -> GUID {
     }
 }
 
-unsafe fn find(c: Codec, input: GUID) -> Result<IMFTransform> {
+unsafe fn find(c: Codec, input: GUID) -> Result<(IMFTransform, String)> {
     let i = MFT_REGISTER_TYPE_INFO { guidMajorType: MFMediaType_Video, guidSubtype: input };
     let o = MFT_REGISTER_TYPE_INFO { guidMajorType: MFMediaType_Video, guidSubtype: subtype(c) };
     let mut list = std::ptr::null_mut();
@@ -46,16 +52,42 @@ unsafe fn find(c: Codec, input: GUID) -> Result<IMFTransform> {
         return Err(Error::new(E_FAIL, "sem codificador de hardware"));
     }
     let items = std::slice::from_raw_parts(list, n as usize);
-    let r = items[0].as_ref().unwrap().ActivateObject::<IMFTransform>();
+    let act = items[0].as_ref().unwrap();
+    let name = friendly(act);
+    let r = act.ActivateObject::<IMFTransform>();
     CoTaskMemFree(Some(list as *const _));
-    r
+    r.map(|t| (t, name))
+}
+
+pub(super) unsafe fn friendly(act: &IMFActivate) -> String {
+    let mut p = PWSTR::null();
+    let mut len = 0;
+    if act.GetAllocatedString(&MFT_FRIENDLY_NAME_Attribute, &mut p, &mut len).is_ok() && !p.is_null() {
+        let s = p.to_string().unwrap_or_default();
+        CoTaskMemFree(Some(p.0 as *const _));
+        s
+    } else {
+        String::new()
+    }
 }
 
 impl Encoder {
     pub fn new(dev: &ID3D11Device, codec: Codec, w: u32, h: u32, fps: u32, bitrate: u32, ten_bit: bool) -> Result<Self> {
+        Self::make(dev, codec, w, h, fps, bitrate, ten_bit, false)
+    }
+
+    /// Para transmitir: taxa constante, sem quadros B, quadro-chave só quando pedido
+    /// e memória de um quadro, para nenhum quadro esperar outro.
+    #[cfg_attr(not(debug_assertions), allow(dead_code))]
+    pub fn live(dev: &ID3D11Device, codec: Codec, w: u32, h: u32, fps: u32, bitrate: u32) -> Result<Self> {
+        Self::make(dev, codec, w, h, fps, bitrate, false, true)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn make(dev: &ID3D11Device, codec: Codec, w: u32, h: u32, fps: u32, bitrate: u32, ten_bit: bool, live: bool) -> Result<Self> {
         unsafe {
             let input = if ten_bit { MFVideoFormat_P010 } else { MFVideoFormat_NV12 };
-            let mft = find(codec, input)?;
+            let (mft, name) = find(codec, input)?;
             let attrs = mft.GetAttributes()?;
             attrs.SetUINT32(&MF_TRANSFORM_ASYNC_UNLOCK, 1)?;
             let _ = attrs.SetUINT32(&MF_LOW_LATENCY, 1);
@@ -103,17 +135,47 @@ impl Encoder {
             }
 
             let api: Option<ICodecAPI> = mft.cast().ok();
+            let mut refused = Vec::new();
             if let Some(a) = &api {
-                let _ = a.SetValue(&CODECAPI_AVEncCommonRateControlMode, &VARIANT::from(eAVEncCommonRateControlMode_UnconstrainedVBR.0 as u32));
-                let _ = a.SetValue(&CODECAPI_AVEncCommonMeanBitRate, &VARIANT::from(bitrate));
-                let _ = a.SetValue(&CODECAPI_AVEncCommonLowLatency, &VARIANT::from(true));
-                let _ = a.SetValue(&CODECAPI_AVEncMPVGOPSize, &VARIANT::from(fps * 2));
+                if live {
+                    let mut set = |name: &'static str, key: &GUID, v: VARIANT| {
+                        if a.SetValue(key, &v).is_err() {
+                            refused.push(name);
+                        }
+                    };
+                    set("taxa constante", &CODECAPI_AVEncCommonRateControlMode, VARIANT::from(eAVEncCommonRateControlMode_CBR.0 as u32));
+                    set("taxa", &CODECAPI_AVEncCommonMeanBitRate, VARIANT::from(bitrate));
+                    // Memória de um quadro e meio: um quadro grande não espera os seguintes.
+                    set("memória", &CODECAPI_AVEncCommonBufferSize, VARIANT::from(bitrate / fps * 3 / 2));
+                    set("baixa latência", &CODECAPI_AVEncCommonLowLatency, VARIANT::from(true));
+                    set("sem quadros B", &CODECAPI_AVEncMPVDefaultBPictureCount, VARIANT::from(0u32));
+                    // Um quadro-chave a cada minuto; quem recebe pede outro quando perde algo.
+                    set("intervalo de quadro-chave", &CODECAPI_AVEncMPVGOPSize, VARIANT::from(fps * 60));
+                    set("rapidez", &CODECAPI_AVEncCommonQualityVsSpeed, VARIANT::from(33u32));
+                } else {
+                    let _ = a.SetValue(&CODECAPI_AVEncCommonRateControlMode, &VARIANT::from(eAVEncCommonRateControlMode_UnconstrainedVBR.0 as u32));
+                    let _ = a.SetValue(&CODECAPI_AVEncCommonMeanBitRate, &VARIANT::from(bitrate));
+                    let _ = a.SetValue(&CODECAPI_AVEncCommonLowLatency, &VARIANT::from(true));
+                    let _ = a.SetValue(&CODECAPI_AVEncMPVGOPSize, &VARIANT::from(fps * 2));
+                }
             }
             mft.ProcessMessage(MFT_MESSAGE_COMMAND_FLUSH, 0)?;
             mft.ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, 0)?;
             mft.ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, 0)?;
             let events: IMFMediaEventGenerator = mft.cast()?;
-            Ok(Self { mft, events, api, need: 0, fps })
+            Ok(Self { mft, events, api, need: 0, fps, name, refused })
+        }
+    }
+
+    /// Cabeçalho do vídeo (SPS e PPS), quando o codificador o entrega à parte.
+    #[cfg_attr(not(debug_assertions), allow(dead_code))]
+    pub fn header(&self) -> Option<Vec<u8>> {
+        unsafe {
+            let t = self.mft.GetOutputCurrentType(0).ok()?;
+            let n = t.GetBlobSize(&MF_MT_MPEG_SEQUENCE_HEADER).ok()?;
+            let mut v = vec![0u8; n as usize];
+            t.GetBlob(&MF_MT_MPEG_SEQUENCE_HEADER, &mut v, None).ok()?;
+            Some(v)
         }
     }
 
