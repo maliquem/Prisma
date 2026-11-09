@@ -91,7 +91,7 @@ pub struct UiState {
     /// Ctrl+Backspace: apaga a última palavra.
     pub kill_word: u32,
     /// Setas, Enter, Esc e Ctrl+C com um campo de texto em foco: (tecla, Ctrl apertado).
-    pub nav: Vec<(u32, bool)>,
+    pub nav: Vec<(u32, u8)>,
 }
 
 impl UiState {

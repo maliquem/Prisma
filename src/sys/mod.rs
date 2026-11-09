@@ -26,6 +26,8 @@ pub mod patterns;
 pub mod power;
 pub mod powerplan;
 pub mod procs;
+pub mod quick;
+pub mod cmds;
 pub mod reg;
 pub mod services;
 pub mod tools;

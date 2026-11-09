@@ -277,7 +277,7 @@ pub fn shell_pid() -> Option<u32> {
 
 /// Cópia da permissão do Explorer em uso. Com ela, o Prisma como administrador abre o novo
 /// Explorer como o antigo era, sem administrador.
-fn shell_token(pid: u32) -> Option<HANDLE> {
+pub(crate) fn shell_token(pid: u32) -> Option<HANDLE> {
     use windows::Win32::Security::*;
     unsafe {
         let p = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;

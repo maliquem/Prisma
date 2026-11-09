@@ -89,6 +89,51 @@ fn start_menu(out: &mut Vec<Entry>) {
     }
 }
 
+/// Um item do menu Iniciar, para abrir pela pesquisa.
+#[derive(Clone)]
+pub struct StartApp {
+    pub name: String,
+    /// Executável, quando se sabe. Vazio em itens como o Painel de Controle.
+    pub path: String,
+    /// Nome do item na pasta de aplicativos: abre com `shell:AppsFolder\<id>`.
+    pub id: String,
+}
+
+/// Tudo o que o menu Iniciar mostra, menos desinstaladores e documentos.
+pub fn start_apps() -> Vec<StartApp> {
+    let mut out = Vec::new();
+    unsafe {
+        let Ok(folder) = SHGetKnownFolderItem::<IShellItem>(&FOLDERID_AppsFolder, KF_FLAG_DEFAULT, None) else { return out };
+        let Ok(items) = folder.BindToHandler::<_, IEnumShellItems>(None, &BHID_EnumItems) else { return out };
+        loop {
+            let mut one = [None];
+            let mut got = 0;
+            if items.Next(&mut one, Some(&mut got)).is_err() || got == 0 {
+                break;
+            }
+            let Some(item) = one[0].take() else { break };
+            let Ok(item) = item.cast::<IShellItem2>() else { continue };
+            let Ok(name) = item.GetDisplayName(SIGDN_NORMALDISPLAY).map(|p| taken(p)) else { continue };
+            let Ok(id) = item.GetDisplayName(SIGDN_PARENTRELATIVEPARSING).map(|p| taken(p)) else { continue };
+            let mut path = item.GetString(&LINK_TARGET).map(|p| taken(p)).unwrap_or_default();
+            if path.is_empty() {
+                let dir = item.GetString(&PACKAGE_PATH).map(|p| taken(p)).unwrap_or_default();
+                let app = item.GetString(&APP_ID).map(|p| taken(p)).unwrap_or_default();
+                path = package_exe(&dir, &app, &name).unwrap_or_default();
+            }
+            let title = name.to_lowercase();
+            let low = path.to_ascii_lowercase();
+            let file = low.rsplit('\\').next().unwrap_or_default();
+            let doc = [".txt", ".pdf", ".chm", ".htm", ".html", ".url", ".rtf", ".md", ".ini", ".log"].iter().any(|e| low.ends_with(e) || id.to_ascii_lowercase().ends_with(e));
+            if title.contains("uninstall") || title.contains("desinstal") || file.starts_with("unins") || file.contains("uninstall") || doc || id.is_empty() {
+                continue;
+            }
+            out.push(StartApp { name, path, id });
+        }
+    }
+    out
+}
+
 /// `open` traz nome do executável e caminho do que está aberto agora.
 pub fn list(open: Vec<(String, String)>) -> Vec<Entry> {
     let mut all = Vec::new();

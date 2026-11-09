@@ -1297,3 +1297,39 @@ Lendo o disco {}: {}%	Reading disk {}: {}%
 Lendo o disco {}: {} itens	Reading disk {}: {} items
 Ctrl + Alt + Espaço	Ctrl + Alt + Space
 {} + Espaço	{} + Space
+Programa instalado	Installed program
+Pesquisar no {}	Search on {}
+Perguntar ao {}	Ask {}
+Copia a pergunta	Copies the question
+Rodar no PowerShell	Run in PowerShell
+Rodar no CMD	Run in CMD
+Cmdlet do PowerShell	PowerShell cmdlet
+Função do PowerShell	PowerShell function
+Atalho para {}	Alias for {}
+Parâmetro de {}	Parameter of {}
+Do histórico	From history
+Pergunta copiada: cole com Ctrl+V	Question copied: paste with Ctrl+V
+O comando não abriu como administrador	The command didn't open as administrator
+Não deu para abrir o terminal	Couldn't open the terminal
+Texto copiado	Text copied
+Com o aplicativo instalado, a IA abre nele. Quando não dá para levar a pergunta pronta, ela vai copiada: cole com Ctrl+V.	With the app installed, the AI opens in it. When the question can't be sent ready, it is copied: paste it with Ctrl+V.
+Na pesquisa também	Also in search
+Programas instalados primeiro	Installed programs first
+Programas do menu Iniciar que combinam com o texto aparecem no topo. Enter abre, Ctrl+Shift+Enter abre como administrador.	Start menu programs that match the text appear at the top. Enter opens, Ctrl+Shift+Enter opens as administrator.
+Pesquisar na internet e perguntar a IAs	Search the web and ask AIs
+O texto vira pesquisa no navegador padrão ou pergunta a uma IA. Perguntas vêm no topo; o resto, depois dos primeiros arquivos.	The text becomes a search in the default browser or a question to an AI. Questions come at the top; anything else, after the first files.
+Comandos com > (PowerShell e CMD)	Commands with > (PowerShell and CMD)
+Comece com > para rodar um comando. Enter roda sem administrador, Ctrl+Shift+Enter como administrador, Tab completa.	Start with > to run a command. Enter runs without administrator, Ctrl+Shift+Enter as administrator, Tab completes.
+Completar como o terminal	Complete like the terminal
+Mantém um PowerShell escondido enquanto você digita um comando, para completar caminhos, parâmetros e o histórico como o terminal. Ele fecha sozinho depois de 2 minutos parado.	Keeps a hidden PowerShell while you type a command, to complete paths, parameters and history like the terminal. It closes by itself after 2 idle minutes.
+Lista de comandos: {}	Command list: {}
+Lendo a lista de comandos…	Reading the command list…
+Buscadores e IAs	Search engines and AIs
+Aplicativo instalado: abre nele	Installed app: opens in it
+Digite um comando do PowerShell ou do CMD.	Type a PowerShell or CMD command.
+Digite parte do nome. Dicas: ext:pdf só PDFs · pasta: só pastas · *.mp4 com curinga · !palavra tira · docs\nota procura no caminho · > roda um comando	Type part of the name. Tips: ext:pdf only PDFs · folder: only folders · *.mp4 wildcard · !word excludes · docs\note searches the path · > runs a command
+> roda um comando · ext:pdf só PDFs · pasta: só pastas · *.mp4 curinga	> runs a command · ext:pdf only PDFs · folder: only folders · *.mp4 wildcard
+Enter abre · Ctrl+Shift+Enter como administrador · Ctrl+Enter mostra na pasta	Enter opens · Ctrl+Shift+Enter as administrator · Ctrl+Enter shows in folder
+Enter abre · Ctrl+C copia o texto	Enter opens · Ctrl+C copies the text
+Enter roda · Ctrl+Shift+Enter como administrador · Tab completa	Enter runs · Ctrl+Shift+Enter as administrator · Tab completes
+Enter ou Tab completa · Esc fecha	Enter or Tab completes · Esc closes

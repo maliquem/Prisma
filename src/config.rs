@@ -170,6 +170,16 @@ pub struct Config {
     pub search_on: bool,
     /// Letras dos discos da pesquisa. Vazio: todos, menos os com problema de saúde.
     pub search_drives: String,
+    /// Programas do menu Iniciar no topo da pesquisa.
+    pub search_apps: bool,
+    /// Pesquisar na internet e perguntar a IAs pela pesquisa.
+    pub search_web: bool,
+    /// Buscadores e IAs escolhidos, pela chave. Vazio: o Google e as IAs instaladas. "-": nenhum.
+    pub search_engines: String,
+    /// Comandos do PowerShell e do CMD depois de `>`.
+    pub search_cmds: bool,
+    /// Completar comandos com um PowerShell escondido, como o terminal.
+    pub search_term: bool,
     pub hk_shot: Hotkey,
     pub hk_shot_full: Hotkey,
     pub hk_shot_win: Hotkey,
@@ -267,6 +277,11 @@ impl Default for Config {
             hk_find: Hotkey::new(MOD_CTRL | MOD_ALT, 0x20),
             search_on: false,
             search_drives: String::new(),
+            search_apps: true,
+            search_web: true,
+            search_engines: String::new(),
+            search_cmds: false,
+            search_term: false,
             hk_shot: Hotkey::new(MOD_CTRL | MOD_ALT, b'P' as u32),
             hk_shot_full: Hotkey::new(MOD_CTRL | MOD_ALT, b'A' as u32),
             hk_shot_win: Hotkey::new(MOD_CTRL | MOD_ALT, b'J' as u32),
@@ -395,7 +410,12 @@ impl Config {
                 "hk_explorer" => c.hk_explorer = Hotkey::parse(v),
                 "hk_find" => c.hk_find = Hotkey::parse(v),
                 "search_on" => c.search_on = v == "1",
-                "search_drives" => c.search_drives = v.chars().filter(|c| c.is_ascii_uppercase()).collect(),
+                "search_drives" => c.search_drives = v.chars().filter(|c| c.is_ascii_uppercase() || *c == '-').collect(),
+                "search_apps" => c.search_apps = v == "1",
+                "search_web" => c.search_web = v == "1",
+                "search_engines" => c.search_engines = v.chars().filter(|c| c.is_ascii_lowercase() || *c == ',' || *c == '-').collect(),
+                "search_cmds" => c.search_cmds = v == "1",
+                "search_term" => c.search_term = v == "1",
                 "hk_shot" => c.hk_shot = Hotkey::parse(v),
                 "hk_shot_full" => c.hk_shot_full = Hotkey::parse(v),
                 "hk_shot_win" => c.hk_shot_win = Hotkey::parse(v),
@@ -540,6 +560,11 @@ impl Config {
         hk(&mut s, "hk_find", self.hk_find);
         let _ = writeln!(s, "search_on={}", self.search_on as u8);
         let _ = writeln!(s, "search_drives={}", self.search_drives);
+        let _ = writeln!(s, "search_apps={}", self.search_apps as u8);
+        let _ = writeln!(s, "search_web={}", self.search_web as u8);
+        let _ = writeln!(s, "search_engines={}", self.search_engines);
+        let _ = writeln!(s, "search_cmds={}", self.search_cmds as u8);
+        let _ = writeln!(s, "search_term={}", self.search_term as u8);
         hk(&mut s, "hk_shot", self.hk_shot);
         hk(&mut s, "hk_shot_full", self.hk_shot_full);
         hk(&mut s, "hk_shot_win", self.hk_shot_win);

@@ -879,6 +879,7 @@ pub fn shutdown() {
         a.cfg.save();
         a.usage.save();
         crate::sys::index::flush();
+        crate::sys::cmds::term_stop();
         tray_remove(a.hub);
     });
 }
@@ -2247,6 +2248,20 @@ impl App {
         use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
         use windows::Win32::Graphics::Imaging::*;
         use windows::Win32::System::Com::*;
+        // Programas, comandos e o PowerShell escondido chegam em segundo plano: espera por eles.
+        let warm: u64 = std::env::args().find_map(|a| a.strip_prefix("--test-warm=").and_then(|v| v.parse().ok())).unwrap_or(3);
+        let hub = self.hub.0 as isize;
+        for _ in 0..warm {
+            self.pop.extras(&self.cfg, hub);
+            self.pop.send(hub, 1);
+            self.find.extras(&self.cfg, hub);
+            self.find.send(hub, 0);
+            std::thread::sleep(std::time::Duration::from_millis(1000));
+            self.pop.take();
+            self.find.take();
+        }
+        self.pop.extras(&self.cfg, hub);
+        self.find.extras(&self.cfg, hub);
         unsafe {
             let (w, h) = if popup { (crate::pages::search::POP_W, crate::pages::search::pop_height(self)) } else { (1180.0, 780.0) };
             let Ok(wic) = CoCreateInstance::<_, IWICImagingFactory>(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER) else { return };
@@ -2438,6 +2453,7 @@ impl App {
         self.snap = self.shared.lock().unwrap().clone();
         #[cfg(debug_assertions)]
         self.test_shot_tick();
+        crate::sys::cmds::term_tick();
         if self.cfg.search_on {
             self.sync_index();
             let hub = self.hub.0 as isize;
@@ -3025,10 +3041,12 @@ fn mouse_xy(a: &mut App, l: LPARAM) {
 }
 
 /// Tecla que as listas com campo de busca usam. Devolve true se guardou.
+/// Guarda a tecla com Ctrl (1) e Shift (2).
 fn nav_key(ui: &mut UiState, vk: u32) -> bool {
     let ctrl = unsafe { GetKeyState(VK_CONTROL.0 as i32) } < 0;
-    if matches!(vk, 0x26 | 0x28 | 0x21 | 0x22 | 0x0D | 0x1B) || (vk == 0x43 && ctrl) {
-        ui.nav.push((vk, ctrl));
+    let shift = unsafe { GetKeyState(VK_SHIFT.0 as i32) } < 0;
+    if matches!(vk, 0x26 | 0x28 | 0x21 | 0x22 | 0x0D | 0x1B | 0x09) || (vk == 0x43 && ctrl) {
+        ui.nav.push((vk, ctrl as u8 | (shift as u8) << 1));
         return true;
     }
     false

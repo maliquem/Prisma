@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Search shows installed programs first (on by default; Ctrl+Shift+Enter opens as administrator). / A pesquisa mostra os programas instalados primeiro (vem ligado; Ctrl+Shift+Enter abre como administrador).
+- Search can send the text to the default browser or to an AI: Google, Bing, DuckDuckGo, Brave Search, Claude, ChatGPT, Gemini, Copilot, Perplexity, Grok and DeepSeek, chosen in Options. Questions come at the top; installed AIs open in their app. On by default with Google and the installed AIs. / A pesquisa leva o texto ao navegador padrão ou a uma IA: Google, Bing, DuckDuckGo, Brave Search, Claude, ChatGPT, Gemini, Copilot, Perplexity, Grok e DeepSeek, escolhidos em Opções. Perguntas vêm no topo; IAs instaladas abrem no aplicativo. Vem ligado com o Google e as IAs instaladas.
+- Commands: start with > to run in PowerShell or CMD, without administrator or, with Ctrl+Shift+Enter, as administrator, with suggestions from the Windows command list and Tab to complete. Optional "Complete like the terminal" uses a hidden PowerShell for paths and history. Off by default. / Comandos: comece com > para rodar no PowerShell ou no CMD, sem administrador ou, com Ctrl+Shift+Enter, como administrador, com sugestões da lista de comandos do Windows e Tab para completar. O opcional "Completar como o terminal" usa um PowerShell escondido para caminhos e histórico. Vem desligado.
+- Fixed: choosing no disk in search was lost when Prisma restarted. / Corrigido: escolher nenhum disco na pesquisa se perdia ao reiniciar o Prisma.
+
 ## 0.9.0
 
 - New Search tab: finds files and folders by name on all disks as you type, with a pop-up on Ctrl + Alt + Space over any program. As administrator, the index is read from the NTFS table in seconds and follows changes live; disks with health problems stay out unless you include them. Off by default. / Nova aba Pesquisar: acha arquivos e pastas pelo nome em todos os discos enquanto você digita, com uma janelinha no Ctrl + Alt + Espaço por cima de qualquer programa. Como administrador, o índice sai da tabela do NTFS em segundos e acompanha as mudanças na hora; discos com problema de saúde ficam de fora, a não ser que você inclua. Vem desligada.
