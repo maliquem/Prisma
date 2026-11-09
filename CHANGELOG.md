@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.10.0
 
 - Search shows installed programs first (on by default; Ctrl+Shift+Enter opens as administrator). / A pesquisa mostra os programas instalados primeiro (vem ligado; Ctrl+Shift+Enter abre como administrador).
 - Search can send the text to the default browser or to an AI: Google, Bing, DuckDuckGo, Brave Search, Claude, ChatGPT, Gemini, Copilot, Perplexity, Grok and DeepSeek, chosen in Options. Questions come at the top; installed AIs open in their app. On by default with Google and the installed AIs. / A pesquisa leva o texto ao navegador padrão ou a uma IA: Google, Bing, DuckDuckGo, Brave Search, Claude, ChatGPT, Gemini, Copilot, Perplexity, Grok e DeepSeek, escolhidos em Opções. Perguntas vêm no topo; IAs instaladas abrem no aplicativo. Vem ligado com o Google e as IAs instaladas.
