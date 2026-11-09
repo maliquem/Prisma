@@ -21,23 +21,23 @@ const ROOT: u32 = 5;
 #[derive(Clone, Copy, Default)]
 pub struct Node {
     pub parent: u32,
-    name_off: u32,
-    name_len: u16,
-    flags: u8,
+    pub(crate) name_off: u32,
+    pub(crate) name_len: u16,
+    pub(crate) flags: u8,
     pub size: u64,
     pub alloc: u64,
     pub files: u32,
 }
 
-const USED: u8 = 1;
-const DIR: u8 = 2;
+pub(crate) const USED: u8 = 1;
+pub(crate) const DIR: u8 = 2;
 const DOS_NAME: u8 = 4;
 
 impl Node {
     pub fn is_dir(&self) -> bool {
         self.flags & DIR != 0
     }
-    fn used(&self) -> bool {
+    pub(crate) fn used(&self) -> bool {
         self.flags & USED != 0
     }
 }
@@ -369,6 +369,13 @@ fn decode_runs(a: &[u8], out: &mut Vec<(i64, u64)>) {
 struct Parser {
     nodes: Vec<Node>,
     names: Vec<u8>,
+    /// Data de modificação em segundos desde 1970, só quando quem pediu precisa.
+    times: Vec<u32>,
+}
+
+/// FILETIME em segundos desde 1970.
+pub(crate) fn unix_secs(ft: u64) -> u32 {
+    (ft / 10_000_000).saturating_sub(11_644_473_600).min(u32::MAX as u64) as u32
 }
 
 impl Parser {
@@ -392,6 +399,12 @@ impl Parser {
         for (t, o, len) in attrs(r) {
             let a = &r[o..o + len];
             match t {
+                0x10 if a[8] == 0 && !self.times.is_empty() => {
+                    let v = u16_at(a, 20);
+                    if v + 16 <= a.len() {
+                        self.times[id] = unix_secs(u64_at(a, v + 8));
+                    }
+                }
                 0x30 if a[8] == 0 => {
                     let v = u16_at(a, 20);
                     let vl = u32_at(a, 16) as usize;
@@ -447,8 +460,37 @@ pub struct Progress {
     pub cancel: AtomicBool,
 }
 
+/// A tabela crua do volume, sem as somas da análise.
+pub(crate) struct Table {
+    pub nodes: Vec<Node>,
+    pub names: Vec<u8>,
+    pub times: Vec<u32>,
+}
+
 fn scan_mft(drive: char, p: &Progress) -> Option<Scan> {
     let t0 = Instant::now();
+    let t = read_table(drive, p, false)?;
+    let mut s = Scan {
+        drive,
+        nodes: t.nodes,
+        root: ROOT,
+        names: t.names,
+        first: Vec::new(),
+        list: Vec::new(),
+        types: Vec::new(),
+        files: 0,
+        elapsed: Duration::ZERO,
+        used_mft: true,
+        largest: Vec::new(),
+    };
+    s.nodes[ROOT as usize].flags |= USED | DIR;
+    s.nodes[ROOT as usize].parent = ROOT;
+    s.finish();
+    s.elapsed = t0.elapsed();
+    Some(s)
+}
+
+pub(crate) fn read_table(drive: char, p: &Progress, with_times: bool) -> Option<Table> {
     unsafe {
         let vol = Raw { h: open_raw(&format!("\\\\.\\{drive}:"))?, base: 0 };
         let mut info = [0u8; 128];
@@ -534,7 +576,8 @@ fn scan_mft(drive: char, p: &Progress) -> Option<Scan> {
 
         let total = (mft_len / rec as u64) as usize;
         p.total.store(total as u64, Ordering::Relaxed);
-        let mut parser = Parser { nodes: vec![Node::default(); total + 1], names: Vec::with_capacity(total * 24) };
+        let times = if with_times { vec![0u32; total + 1] } else { Vec::new() };
+        let mut parser = Parser { nodes: vec![Node::default(); total + 1], names: Vec::with_capacity(total * 24), times };
         let mut idx = 0u32;
         let step = (CHUNK / rec) * rec;
         for (lcn, clusters) in &runs {
@@ -566,24 +609,7 @@ fn scan_mft(drive: char, p: &Progress) -> Option<Scan> {
                 p.done.store(idx as u64, Ordering::Relaxed);
             }
         }
-        let mut s = Scan {
-            drive,
-            nodes: parser.nodes,
-            root: ROOT,
-            names: parser.names,
-            first: Vec::new(),
-            list: Vec::new(),
-            types: Vec::new(),
-            files: 0,
-            elapsed: Duration::ZERO,
-            used_mft: true,
-            largest: Vec::new(),
-        };
-        s.nodes[ROOT as usize].flags |= USED | DIR;
-        s.nodes[ROOT as usize].parent = ROOT;
-        s.finish();
-        s.elapsed = t0.elapsed();
-        Some(s)
+        Some(Table { nodes: parser.nodes, names: parser.names, times: parser.times })
     }
 }
 

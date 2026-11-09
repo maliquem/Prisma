@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- New Search tab: finds files and folders by name on all disks as you type, with a pop-up on Ctrl + Alt + Space over any program. As administrator, the index is read from the NTFS table in seconds and follows changes live; disks with health problems stay out unless you include them. Off by default. / Nova aba Pesquisar: acha arquivos e pastas pelo nome em todos os discos enquanto você digita, com uma janelinha no Ctrl + Alt + Espaço por cima de qualquer programa. Como administrador, o índice sai da tabela do NTFS em segundos e acompanha as mudanças na hora; discos com problema de saúde ficam de fora, a não ser que você inclua. Vem desligada.
+- Ctrl+V and Ctrl+Backspace work in search boxes. / Ctrl+V e Ctrl+Backspace funcionam nas caixas de busca.
+
 ## 0.8.1
 
 - The question to optimize when a game opens now comes off, and can be turned on in Power. / A pergunta para otimizar quando um jogo abre agora vem desligada, e dá para ligar em Energia.

@@ -14,6 +14,7 @@ mod optimize;
 pub mod picker;
 mod plan_edit;
 pub mod report;
+pub mod search;
 mod services;
 mod startup;
 mod storage;
@@ -34,6 +35,7 @@ pub enum Page {
     Meter,
     Storage,
     Analyze,
+    Search,
     Startup,
     Services,
     Uninstall,
@@ -127,6 +129,10 @@ const ICON_DISK: Icon = &[
     &[(16., 9.), (17., 9.)],
 ];
 
+const ICON_FIND: Icon = &[
+    &[(17., 10.5), (16.1, 13.8), (13.8, 16.1), (10.5, 17.), (7.2, 16.1), (4.9, 13.8), (4., 10.5), (4.9, 7.2), (7.2, 4.9), (10.5, 4.), (13.8, 4.9), (16.1, 7.2), (17., 10.5)],
+    &[(15.2, 15.2), (20., 20.)],
+];
 const ICON_MAP: Icon = &[
     &[(4., 4.), (20., 4.), (20., 20.), (4., 20.), (4., 4.)],
     &[(12., 4.), (12., 20.)],
@@ -158,6 +164,7 @@ const NAV: &[(Page, &str, Icon)] = &[
     (Page::Meter, "Medidor", ICON_METER),
     (Page::Storage, "Discos e redes", ICON_DISK),
     (Page::Analyze, "Espaço em disco", ICON_MAP),
+    (Page::Search, "Pesquisar", ICON_FIND),
     (Page::Startup, "Inicialização", ICON_BOOT),
     (Page::Services, "Serviços", ICON_SVC),
     (Page::Uninstall, "Desinstalar", ICON_DEL),
@@ -269,6 +276,7 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
         Page::Meter => meter::draw(&mut ui, app, area),
         Page::Storage => storage::draw(&mut ui, app, area),
         Page::Analyze => analyze::draw(&mut ui, app, area),
+        Page::Search => search::draw(&mut ui, app, area),
         Page::Startup => startup::draw(&mut ui, app, area),
         Page::Services => services::draw(&mut ui, app, area),
         Page::Uninstall => uninstall::draw(&mut ui, app, area),

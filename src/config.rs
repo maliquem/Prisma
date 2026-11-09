@@ -165,6 +165,11 @@ pub struct Config {
     pub hk_optimize: Hotkey,
     pub hk_force: Hotkey,
     pub hk_explorer: Hotkey,
+    pub hk_find: Hotkey,
+    /// Pesquisa de arquivos ligada: o índice fica na memória.
+    pub search_on: bool,
+    /// Letras dos discos da pesquisa. Vazio: todos, menos os com problema de saúde.
+    pub search_drives: String,
     pub hk_shot: Hotkey,
     pub hk_shot_full: Hotkey,
     pub hk_shot_win: Hotkey,
@@ -259,6 +264,9 @@ impl Default for Config {
             hk_optimize: Hotkey::new(MOD_CTRL | MOD_ALT, b'O' as u32),
             hk_force: Hotkey::new(MOD_ALT, 0x73),
             hk_explorer: Hotkey::new(0, 0),
+            hk_find: Hotkey::new(MOD_CTRL | MOD_ALT, 0x20),
+            search_on: false,
+            search_drives: String::new(),
             hk_shot: Hotkey::new(MOD_CTRL | MOD_ALT, b'P' as u32),
             hk_shot_full: Hotkey::new(MOD_CTRL | MOD_ALT, b'A' as u32),
             hk_shot_win: Hotkey::new(MOD_CTRL | MOD_ALT, b'J' as u32),
@@ -385,6 +393,9 @@ impl Config {
                 "hk_optimize" => c.hk_optimize = Hotkey::parse(v),
                 "hk_force" => c.hk_force = Hotkey::parse(v),
                 "hk_explorer" => c.hk_explorer = Hotkey::parse(v),
+                "hk_find" => c.hk_find = Hotkey::parse(v),
+                "search_on" => c.search_on = v == "1",
+                "search_drives" => c.search_drives = v.chars().filter(|c| c.is_ascii_uppercase()).collect(),
                 "hk_shot" => c.hk_shot = Hotkey::parse(v),
                 "hk_shot_full" => c.hk_shot_full = Hotkey::parse(v),
                 "hk_shot_win" => c.hk_shot_win = Hotkey::parse(v),
@@ -526,6 +537,9 @@ impl Config {
         hk(&mut s, "hk_optimize", self.hk_optimize);
         hk(&mut s, "hk_force", self.hk_force);
         hk(&mut s, "hk_explorer", self.hk_explorer);
+        hk(&mut s, "hk_find", self.hk_find);
+        let _ = writeln!(s, "search_on={}", self.search_on as u8);
+        let _ = writeln!(s, "search_drives={}", self.search_drives);
         hk(&mut s, "hk_shot", self.hk_shot);
         hk(&mut s, "hk_shot_full", self.hk_shot_full);
         hk(&mut s, "hk_shot_win", self.hk_shot_win);

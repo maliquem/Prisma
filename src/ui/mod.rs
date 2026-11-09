@@ -88,6 +88,10 @@ pub struct UiState {
     pub focus: u64,
     pub typed: String,
     pub backspace: u32,
+    /// Ctrl+Backspace: apaga a última palavra.
+    pub kill_word: u32,
+    /// Setas, Enter, Esc e Ctrl+C com um campo de texto em foco: (tecla, Ctrl apertado).
+    pub nav: Vec<(u32, bool)>,
 }
 
 impl UiState {
@@ -108,6 +112,7 @@ impl UiState {
         self.wheel = 0.0;
         self.key_event = None;
         self.key_cancel = false;
+        self.nav.clear();
     }
 }
 
@@ -244,6 +249,11 @@ impl<'a> Ui<'a> {
         if self.hover(r) {
             self.tip = Some((r, text.to_string()));
         }
+    }
+
+    /// Rolagem guardada de uma lista, antes de desenhar.
+    pub fn scroll_y_of(&self, key: &str) -> f32 {
+        self.s.scroll.get(&hash_id(key)).copied().unwrap_or(0.0)
     }
 
     pub fn scroll_y(&self) -> f32 {
@@ -538,6 +548,24 @@ impl<'a> Ui<'a> {
         }
     }
 
+    /// Ícone pelo tipo do arquivo. Programas e atalhos usam o ícone deles mesmos.
+    pub fn kind_icon(&mut self, path: &str, name: &str, dir: bool, r: Rect) {
+        let ext = name.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase()).unwrap_or_default();
+        if !dir && matches!(ext.as_str(), "exe" | "lnk" | "ico" | "url" | "msc" | "cpl" | "scr") {
+            return self.file_icon(path, name, r);
+        }
+        let key = if dir { "<pasta>".to_string() } else { format!("<tipo>.{ext}") };
+        if !self.s.icons.contains_key(&key) {
+            let probe = if dir { "pasta".to_string() } else { format!("arquivo.{ext}") };
+            let b = icons::load_kind(&probe, dir).and_then(|(w, h, px)| self.c.bitmap(w, h, &px));
+            self.s.icons.insert(key.clone(), b);
+        }
+        match self.s.icons.get(&key).and_then(|b| b.as_ref()) {
+            Some(b) => self.c.draw_bitmap(b, r),
+            None => self.c.round(r, 4.0, LINE),
+        }
+    }
+
     /// Campo de busca. Clique dá o foco; digitação chega pela janela.
     pub fn search(&mut self, key: &str, r: Rect, text: &mut String, hint: &str) -> bool {
         let id = hash_id(key);
@@ -558,6 +586,16 @@ impl<'a> Ui<'a> {
                 changed |= text.pop().is_some();
             }
             self.s.backspace = 0;
+            for _ in 0..self.s.kill_word {
+                while text.ends_with(' ') {
+                    text.pop();
+                }
+                while text.chars().last().is_some_and(|c| c != ' ') {
+                    text.pop();
+                }
+                changed = true;
+            }
+            self.s.kill_word = 0;
         }
         self.c.round(r, 8.0, SIDE);
         self.c.round_line(r, 8.0, if on { ACCENT } else { BORDER }, 1.0);

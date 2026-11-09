@@ -1257,3 +1257,43 @@ Ver todas as versões	See all versions
 O Windows não deixou trocar o Gerenciador	Windows would not let Prisma replace Task Manager
 Algumas versões do Windows protegem essa troca até de administrador. O Prisma passou a pegar o Ctrl+Shift+Esc ele mesmo, enquanto estiver aberto. O Ctrl+Alt+Del e o menu da barra de tarefas ainda abrem o Gerenciador do Windows.	Some Windows versions protect this change even from administrators. Prisma now catches Ctrl+Shift+Esc itself while it is open. Ctrl+Alt+Del and the taskbar menu still open the Windows Task Manager.
 Ligado pelo atalho: Ctrl+Shift+Esc abre o Prisma.	On through the shortcut: Ctrl+Shift+Esc opens Prisma.
+Pesquisar	Search
+Pesquisar arquivos	Search files
+Acha arquivos e pastas pelo nome em todos os discos, enquanto você digita.	Finds files and folders by name on all your disks, as you type.
+Ligar a pesquisa	Turn on search
+O Prisma guarda os nomes de todos os arquivos dos seus discos num índice, e a pesquisa responde enquanto você digita. O índice usa memória: cerca de 60 MB a cada milhão de arquivos.	Prisma keeps the names of every file on your disks in an index, and search answers as you type. The index uses memory: about 60 MB per million files.
+Com o Prisma como administrador, o índice fica pronto em segundos e se atualiza na hora em que um arquivo muda.	With Prisma as administrator, the index is ready in seconds and updates the moment a file changes.
+Sem administrador, o Prisma percorre as pastas, o que demora mais, e atualiza o índice a cada 15 minutos.	Without administrator, Prisma walks through the folders, which takes longer, and updates the index every 15 minutes.
+Discos com problema de saúde ficam de fora, para não forçar o disco. Dá para incluir em Opções.	Disks with health problems stay out, so the disk isn't strained. You can include them in Options.
+Atalho: {} abre a pesquisa por cima de qualquer programa.	Shortcut: {} opens search on top of any program.
+Opções	Options
+Atalho da janelinha	Pop-up shortcut
+Ler os discos de novo	Read the disks again
+Desligar	Turn off
+Desligar a pesquisa?	Turn off search?
+O índice sai da memória e do disco. Ao ligar de novo, os discos são lidos outra vez.	The index leaves memory and disk. When you turn it back on, the disks are read again.
+Disco com problema de saúde: ler ele inteiro força o disco	Disk with health problems: reading all of it strains the disk
+Nome do arquivo ou da pasta	File or folder name
+Pesquisar arquivos e pastas	Search files and folders
+Modificado	Modified
+Abrir	Open
+Mostrar na pasta	Show in folder
+Copiar caminho	Copy path
+Caminho copiado	Path copied
+Apagado ou movido	Deleted or moved
+Nada encontrado.	Nothing found.
+O índice ainda está sendo preparado.	The index is still being prepared.
+Preparando o índice…	Preparing the index…
+Conferindo a saúde dos discos…	Checking disk health…
+Digite parte do nome. Dicas: ext:pdf só PDFs · pasta: só pastas · *.mp4 com curinga · !palavra tira · docs\nota procura no caminho	Type part of the name. Tips: ext:pdf only PDFs · folder: only folders · *.mp4 wildcard · !word excludes · docs\note searches the path
+Enter abre · Ctrl+Enter mostra na pasta · Ctrl+C copia o caminho	Enter opens · Ctrl+Enter shows in folder · Ctrl+C copies the path
+ext:pdf só PDFs · pasta: só pastas · *.mp4 curinga · !palavra tira	ext:pdf only PDFs · folder: only folders · *.mp4 wildcard · !word excludes
+atualiza na hora	updates instantly
+atualiza a cada 15 minutos	updates every 15 minutes
+{} itens em {} · {} de memória · {}	{} items on {} · {} of memory · {}
+{} encontrados · {} ms	{} found · {} ms
+{} encontrados, mostrando {} · {} ms	{} found, showing {} · {} ms
+Lendo o disco {}: {}%	Reading disk {}: {}%
+Lendo o disco {}: {} itens	Reading disk {}: {} items
+Ctrl + Alt + Espaço	Ctrl + Alt + Space
+{} + Espaço	{} + Space

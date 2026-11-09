@@ -15,6 +15,7 @@ pub mod gamelog;
 pub mod inject;
 pub mod hdr;
 pub mod hdrcal;
+pub mod index;
 pub mod keepalive;
 pub mod kmt;
 pub mod mft;

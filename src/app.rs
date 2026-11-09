@@ -54,6 +54,8 @@ const WM_PICK_WIN: u32 = WM_APP + 86;
 const WM_SETUP_DONE: u32 = WM_APP + 87;
 const WM_EXPLORER_DONE: u32 = WM_APP + 88;
 const WM_TM_DONE: u32 = WM_APP + 89;
+/// Resultado da pesquisa de arquivos: 0 é a página, 1 é a janelinha.
+pub const WM_FIND_DONE: u32 = WM_APP + 90;
 const PICKER_SIZE: (f32, f32) = (540.0, 680.0);
 const PICKER_MIN: (f32, f32) = (420.0, 400.0);
 
@@ -141,6 +143,7 @@ const HK_LIMIT_DOWN: i32 = 19;
 const HK_LOG: i32 = 20;
 const HK_METER_KEYS: i32 = 21;
 const HK_EXPLORER: i32 = 22;
+const HK_FIND: i32 = 23;
 const HK_VOL_UP: i32 = 10;
 const HK_VOL_DOWN: i32 = 11;
 const HK_MUTE: i32 = 12;
@@ -249,6 +252,15 @@ pub struct App {
     pub sync: crate::sys::avsync::Shared,
     pub pick_for: Option<crate::pages::picker::Target>,
     pub pick_search: String,
+    /// Pesquisa de arquivos: a da página, a da janelinha do atalho e a janelinha.
+    pub find: crate::pages::search::Find,
+    pub pop: crate::pages::search::Find,
+    find_win: Option<MainWin>,
+    /// Pedido de fechar a janelinha no meio do desenho dela.
+    find_close: bool,
+    pub find_opts: bool,
+    /// Discos que podem entrar na pesquisa.
+    pub find_drives: Vec<char>,
     pub pick_list: crate::sys::catalog::Shared,
     snd_seen: std::collections::HashSet<u32>,
     upd_last: Option<Instant>,
@@ -342,6 +354,8 @@ pub fn start(background: bool) {
         RegisterClassW(&main);
         let picker = WNDCLASSW { lpfnWndProc: Some(picker_proc), lpszClassName: w!("PrismaPicker"), ..main };
         RegisterClassW(&picker);
+        let find = WNDCLASSW { lpfnWndProc: Some(find_proc), lpszClassName: w!("PrismaFind"), ..main };
+        RegisterClassW(&find);
         let hub = CreateWindowExW(
             WINDOW_EX_STYLE(0),
             w!("PrismaHub"),
@@ -429,6 +443,12 @@ pub fn start(background: bool) {
             pick_for: None,
             pick_win: None,
             pick_search: String::new(),
+            find: Default::default(),
+            pop: Default::default(),
+            find_win: None,
+            find_close: false,
+            find_opts: false,
+            find_drives: Vec::new(),
             pick_list: Default::default(),
             snd_seen: std::collections::HashSet::new(),
             upd_last: None,
@@ -668,6 +688,14 @@ pub fn start(background: bool) {
                 let _ = std::fs::write(path, out);
                 std::process::exit(0);
             }
+            // Disco, pasta para o arquivo de teste e onde gravar: --test-index=C|pasta|saida.txt
+            #[cfg(debug_assertions)]
+            if let Some(v) = a.strip_prefix("--test-index=") {
+                let p: Vec<&str> = v.split('|').collect();
+                let letter = p[0].chars().next().unwrap_or('C').to_ascii_uppercase();
+                let _ = std::fs::write(p[2], crate::sys::index::self_test(letter, p[1]));
+                std::process::exit(0);
+            }
             if let Some(path) = a.strip_prefix("--test-update=") {
                 let _ = std::fs::write(path, crate::sys::update::speed_test());
                 std::process::exit(0);
@@ -808,6 +836,7 @@ pub fn start(background: bool) {
                 "--page=tools" => Page::Tools,
                 "--page=uninstall" => Page::Uninstall,
                 "--page=analyze" => Page::Analyze,
+                "--page=search" => Page::Search,
                 "--page=services" => Page::Services,
                 "--page=optimize" => Page::Optimize,
                 "--page=energy" => Page::Energy,
@@ -825,6 +854,9 @@ pub fn start(background: bool) {
             };
         }
         app.refresh_plans();
+        if app.cfg.search_on {
+            app.load_disks();
+        }
         app.register_hotkeys();
         crate::sys::keepalive::set(app.cfg.snd_keep);
         app.widget.set_visible(app.cfg.widget_on);
@@ -846,6 +878,7 @@ pub fn shutdown() {
         a.stop_engine();
         a.cfg.save();
         a.usage.save();
+        crate::sys::index::flush();
         tray_remove(a.hub);
     });
 }
@@ -918,7 +951,7 @@ impl App {
     pub fn register_hotkeys(&mut self) {
         self.unhook_force_key();
         unsafe {
-            for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE] {
+            for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER, HK_FIND, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE] {
                 let _ = UnregisterHotKey(Some(self.hub), id);
             }
         }
@@ -944,6 +977,7 @@ impl App {
             (HK_REPLAY, c.hk_replay, "Replay", true),
             (HK_FORCE, c.hk_force, "Fechar à força", true),
             (HK_EXPLORER, c.hk_explorer, "Reiniciar o Explorer", true),
+            (HK_FIND, if c.search_on { c.hk_find } else { Hotkey::new(0, 0) }, "Pesquisar arquivos", true),
             (HK_VOL_UP, Hotkey::new(c.vol_mods, VK_VOL_UP), "Aumentar volume", false),
             (HK_VOL_DOWN, Hotkey::new(c.vol_mods, VK_VOL_DOWN), "Diminuir volume", false),
             (HK_MUTE, Hotkey::new(c.vol_mods, VK_MUTE), "Mudo", true),
@@ -985,7 +1019,7 @@ impl App {
         if on {
             self.unhook_force_key();
             unsafe {
-                for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER] {
+                for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER, HK_FIND] {
                     let _ = UnregisterHotKey(Some(self.hub), id);
                 }
             }
@@ -1027,6 +1061,7 @@ impl App {
             HK_REPLAY => self.save_replay(),
             HK_FORCE => self.force_close(),
             HK_EXPLORER => self.explorer_key(),
+            HK_FIND => self.toggle_find(),
             HK_VOL_UP => self.volume(audio::Change::Step(self.cfg.vol_step as i32)),
             HK_VOL_DOWN => self.volume(audio::Change::Step(-(self.cfg.vol_step as i32))),
             HK_MUTE => self.volume(audio::Change::ToggleMute),
@@ -2006,6 +2041,262 @@ impl App {
         crate::sys::hdr::load(self.hdr.clone(), self.main.as_ref().map_or(0, |m| m.hwnd.0 as isize));
     }
 
+    /// Liga ou desliga a pesquisa de arquivos. Desligar tira o índice da memória e do disco.
+    pub fn set_search(&mut self, on: bool) {
+        self.cfg.search_on = on;
+        self.cfg.save();
+        if on {
+            self.load_disks();
+            self.find_drives = mft::drives();
+            self.sync_index();
+        } else {
+            crate::sys::index::turn_off();
+            self.find.clear();
+            self.pop.clear();
+            self.close_find();
+        }
+        self.register_hotkeys();
+        self.invalidate();
+    }
+
+    /// Discos marcados na pesquisa. Sem escolha, todos menos os com problema de saúde.
+    pub fn search_letters(&self) -> Vec<char> {
+        match self.cfg.search_drives.as_str() {
+            "" => {
+                let bad = self.suspect_letters();
+                mft::drives().into_iter().filter(|l| !bad.contains(l)).collect()
+            }
+            s => s.chars().filter(|c| c.is_ascii_uppercase()).collect(),
+        }
+    }
+
+    /// Passa ao índice o que ler. Na escolha automática, espera a saúde dos discos: um disco
+    /// com problema não pode ser lido inteiro antes de se saber disso.
+    fn sync_index(&mut self) {
+        if !self.cfg.search_on {
+            return;
+        }
+        if self.cfg.search_drives.is_empty() && self.health.lock().unwrap().len() < self.disks.len() {
+            return;
+        }
+        crate::sys::index::set(true, self.search_letters());
+    }
+
+    fn toggle_find(&mut self) {
+        if self.find_win.is_some() {
+            self.close_find();
+        } else {
+            self.show_find();
+        }
+    }
+
+    /// Janelinha de pesquisa no monitor do mouse, um pouco acima do meio.
+    fn show_find(&mut self) {
+        use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
+        use crate::pages::search::{pop_height, POP_SEARCH, POP_W};
+        if !self.cfg.search_on {
+            return;
+        }
+        self.pop.clear();
+        self.find_close = false;
+        unsafe {
+            let mut pt = POINT::default();
+            let _ = GetCursorPos(&mut pt);
+            let mon = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
+            let mut mi = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
+            let _ = GetMonitorInfoW(mon, &mut mi);
+            let (mut dx, mut dy) = (96u32, 96u32);
+            let _ = GetDpiForMonitor(mon, MDT_EFFECTIVE_DPI, &mut dx, &mut dy);
+            let scale = dx as f32 / 96.0;
+            let wa = mi.rcWork;
+            let w = ((POP_W * scale) as i32).min(wa.right - wa.left - 32);
+            let h = (pop_height(self) * scale).round() as i32;
+            let x = wa.left + (wa.right - wa.left - w) / 2;
+            let y = wa.top + (wa.bottom - wa.top) / 5;
+            let inst = GetModuleHandleW(None).unwrap_or_default();
+            let Ok(hw) = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, w!("PrismaFind"), w!("Prisma"), WS_POPUP, x, y, w, h, None, None, Some(inst.into()), None) else { return };
+            let round: u32 = 2;
+            let _ = DwmSetWindowAttribute(hw, DWMWA_WINDOW_CORNER_PREFERENCE, &round as *const _ as _, 4);
+            let border: u32 = 0x0048403b;
+            let _ = DwmSetWindowAttribute(hw, DWMWA_BORDER_COLOR, &border as *const _ as _, 4);
+            dark_caption(hw);
+            let mut c = RECT::default();
+            let _ = GetClientRect(hw, &mut c);
+            let dpi = GetDpiForWindow(hw);
+            let Ok(rt) = hwnd_target(hw, c.right as u32, c.bottom as u32, dpi as f32) else {
+                let _ = DestroyWindow(hw);
+                return;
+            };
+            let s = dpi as f32 / 96.0;
+            let base: ID2D1RenderTarget = rt.cast().unwrap();
+            let mut ui = UiState::default();
+            crate::ui::focus_on(&mut ui, POP_SEARCH);
+            self.find_win = Some(MainWin { hwnd: hw, rt, canvas: Canvas::new(base), ui, scale: s, w: c.right as f32 / s, h: c.bottom as f32 / s });
+            let _ = ShowWindow(hw, SW_SHOW);
+            let _ = SetForegroundWindow(hw);
+        }
+    }
+
+    /// Fecha a janelinha. No meio do desenho dela, fecha logo depois.
+    pub fn close_find(&mut self) {
+        self.find_close = true;
+        if let Some(f) = self.find_win.take() {
+            self.find_close = false;
+            let h = f.hwnd;
+            drop(f);
+            unsafe {
+                let _ = DestroyWindow(h);
+            }
+        }
+    }
+
+    /// Ajusta a altura da janelinha ao que ela mostra. O alvo de desenho muda junto, porque
+    /// o aviso de tamanho chega enquanto o app está ocupado aqui.
+    fn fit_find(&mut self) {
+        self.pop.take();
+        let want = crate::pages::search::pop_height(self);
+        let Some(f) = &mut self.find_win else { return };
+        unsafe {
+            let px = (want * f.scale).round() as i32;
+            if px != (f.h * f.scale).round() as i32 {
+                let mut r = RECT::default();
+                let _ = GetWindowRect(f.hwnd, &mut r);
+                let _ = SetWindowPos(f.hwnd, None, 0, 0, r.right - r.left, px, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+                let mut c = RECT::default();
+                let _ = GetClientRect(f.hwnd, &mut c);
+                let _ = f.rt.Resize(&D2D_SIZE_U { width: c.right as u32, height: c.bottom as u32 });
+                f.w = c.right as f32 / f.scale;
+                f.h = c.bottom as f32 / f.scale;
+            }
+            let _ = InvalidateRect(Some(f.hwnd), None, false);
+        }
+    }
+
+    fn paint_find(&mut self) {
+        let Some(mut m) = self.find_win.take() else { return };
+        let (w, h) = (m.w, m.h);
+        let lost = unsafe {
+            m.rt.BeginDraw();
+            m.ui.view_h = h;
+            m.ui.view_w = w;
+            let mut ui = crate::ui::Ui::begin(&m.canvas, &mut m.ui);
+            m.canvas.clear(BG);
+            pages::search::draw_popup(&mut ui, self, rect(0.0, 0.0, w, h));
+            ui.end();
+            m.rt.EndDraw(None, None).is_err()
+        };
+        if lost {
+            let px = (m.w * m.scale, m.h * m.scale);
+            if let Ok(rt) = hwnd_target(m.hwnd, px.0 as u32, px.1 as u32, 96.0 * m.scale) {
+                let base: ID2D1RenderTarget = rt.cast().unwrap();
+                m.canvas = Canvas::new(base);
+                m.rt = rt;
+            }
+        }
+        let hwnd = m.hwnd;
+        if std::mem::take(&mut self.find_close) {
+            drop(m);
+            unsafe {
+                let _ = DestroyWindow(hwnd);
+            }
+            return;
+        }
+        let want = (pages::search::pop_height(self) * m.scale).round() as i32;
+        let again = std::mem::take(&mut m.ui.needs_redraw);
+        let resize = want != (m.h * m.scale).round() as i32;
+        self.find_win = Some(m);
+        unsafe {
+            if resize {
+                let _ = PostMessageW(Some(self.hub), WM_FIND_DONE, WPARAM(1), LPARAM(0));
+            } else if again {
+                let _ = InvalidateRect(Some(hwnd), None, false);
+            }
+        }
+    }
+
+    /// Teste: desenha a página (ou a janelinha) fora da tela e grava em PNG, sem precisar do monitor.
+    /// `--test-shot=saida.png`, `--test-query=texto`, `--test-delay=segundos`, `--test-popup`.
+    #[cfg(debug_assertions)]
+    fn test_shot_tick(&mut self) {
+        let args: Vec<String> = std::env::args().collect();
+        let arg = |p: &str| args.iter().find_map(|a| a.strip_prefix(p).map(str::to_string));
+        let Some(out) = arg("--test-shot=") else { return };
+        let delay: u64 = arg("--test-delay=").and_then(|v| v.parse().ok()).unwrap_or(5);
+        let popup = args.iter().any(|a| a == "--test-popup");
+        if args.iter().any(|a| a == "--test-opts") {
+            self.find_opts = true;
+        }
+        let el = self.started.elapsed().as_secs();
+        if el + 2 >= delay {
+            if let Some(q) = arg("--test-query=") {
+                if self.find.q.is_empty() {
+                    self.find.q = q.clone();
+                    self.pop.q = q;
+                }
+            }
+        }
+        if el >= delay {
+            self.render_test(&out, popup);
+            unsafe { PostQuitMessage(0) };
+        }
+    }
+
+    #[cfg(debug_assertions)]
+    fn render_test(&mut self, out: &str, popup: bool) {
+        use windows::Win32::Graphics::Direct2D::Common::*;
+        use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
+        use windows::Win32::Graphics::Imaging::*;
+        use windows::Win32::System::Com::*;
+        unsafe {
+            let (w, h) = if popup { (crate::pages::search::POP_W, crate::pages::search::pop_height(self)) } else { (1180.0, 780.0) };
+            let Ok(wic) = CoCreateInstance::<_, IWICImagingFactory>(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER) else { return };
+            let Ok(bmp) = wic.CreateBitmap(w as u32, h as u32, &GUID_WICPixelFormat32bppPBGRA, WICBitmapCacheOnLoad) else { return };
+            let props = D2D1_RENDER_TARGET_PROPERTIES {
+                pixelFormat: D2D1_PIXEL_FORMAT { format: DXGI_FORMAT_B8G8R8A8_UNORM, alphaMode: D2D1_ALPHA_MODE_PREMULTIPLIED },
+                dpiX: 96.0,
+                dpiY: 96.0,
+                ..Default::default()
+            };
+            let Ok(rt) = crate::ui::gfx::factory().CreateWicBitmapRenderTarget(&bmp, &props) else { return };
+            let canvas = Canvas::new(rt.clone());
+            let mut st = UiState::default();
+            st.view_w = w;
+            st.view_h = h;
+            // Três passes: a pesquisa sai no primeiro e o resultado chega antes do último.
+            for pass in 0..3 {
+                if pass > 0 {
+                    std::thread::sleep(std::time::Duration::from_millis(1500));
+                    self.find.take();
+                    self.pop.take();
+                }
+                rt.BeginDraw();
+                canvas.clear(BG);
+                let mut ui = crate::ui::Ui::begin(&canvas, &mut st);
+                if popup {
+                    pages::search::draw_popup(&mut ui, self, rect(0.0, 0.0, w, h));
+                    ui.end();
+                } else {
+                    pages::draw(ui, self, rect(0.0, 0.0, w, h));
+                }
+                let _ = rt.EndDraw(None, None);
+            }
+            let r = WICRect { X: 0, Y: 0, Width: w as i32, Height: h as i32 };
+            let Ok(lock) = bmp.Lock(&r, WICBitmapLockRead.0 as u32) else { return };
+            let mut size = 0u32;
+            let mut ptr = std::ptr::null_mut();
+            if lock.GetDataPointer(&mut size, &mut ptr).is_err() {
+                return;
+            }
+            let stride = lock.GetStride().unwrap_or(w as u32 * 4) as usize;
+            let mut px = Vec::with_capacity(w as usize * h as usize * 4);
+            for y in 0..h as usize {
+                px.extend_from_slice(std::slice::from_raw_parts(ptr.add(y * stride), w as usize * 4));
+            }
+            drop(lock);
+            let _ = crate::capture::save_png(out, w as u32, h as u32, &px);
+        }
+    }
+
     pub fn close_picker(&mut self) {
         self.pick_for = None;
         *self.pick_list.lock().unwrap() = None;
@@ -2145,6 +2436,21 @@ impl App {
 
     fn on_tick(&mut self) {
         self.snap = self.shared.lock().unwrap().clone();
+        #[cfg(debug_assertions)]
+        self.test_shot_tick();
+        if self.cfg.search_on {
+            self.sync_index();
+            let hub = self.hub.0 as isize;
+            if self.page == Page::Search && self.main.is_some() {
+                self.find.stale(hub, 0);
+                if crate::sys::index::status().iter().any(|d| d.state != crate::sys::index::State::Ready) {
+                    self.invalidate();
+                }
+            }
+            if self.find_win.is_some() {
+                self.pop.stale(hub, 1);
+            }
+        }
         let secs = self.last_tick.elapsed().as_secs().max(1);
         self.last_tick = Instant::now();
 
@@ -2283,6 +2589,10 @@ impl App {
             }
             Page::Tools => {
                 self.load_disks();
+            }
+            Page::Search => {
+                self.load_disks();
+                self.find_drives = crate::sys::mft::drives();
             }
             Page::Uninstall => {
                 if self.programs.is_empty() {
@@ -2439,6 +2749,9 @@ impl App {
             return;
         }
         if m.ui.capturing == 0 {
+            if m.ui.focus != 0 && nav_key(&mut m.ui, vk) {
+                self.invalidate();
+            }
             return;
         }
         let down = |k: VIRTUAL_KEY| unsafe { GetAsyncKeyState(k.0 as i32) as u16 & 0x8000 != 0 };
@@ -2526,6 +2839,16 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
         }
         WM_TM_DONE => {
             with(|a| a.taskmgr_done(l.0 != 0, w.0));
+            LRESULT(0)
+        }
+        WM_FIND_DONE => {
+            with(|a| {
+                if w.0 == 1 {
+                    a.fit_find();
+                } else if a.page == Page::Search {
+                    a.invalidate();
+                }
+            });
             LRESULT(0)
         }
         WM_EXPLORER_DONE => {
@@ -2701,11 +3024,125 @@ fn mouse_xy(a: &mut App, l: LPARAM) {
     }
 }
 
+/// Tecla que as listas com campo de busca usam. Devolve true se guardou.
+fn nav_key(ui: &mut UiState, vk: u32) -> bool {
+    let ctrl = unsafe { GetKeyState(VK_CONTROL.0 as i32) } < 0;
+    if matches!(vk, 0x26 | 0x28 | 0x21 | 0x22 | 0x0D | 0x1B) || (vk == 0x43 && ctrl) {
+        ui.nav.push((vk, ctrl));
+        return true;
+    }
+    false
+}
+
+/// Caractere digitado num campo de texto: Backspace, Ctrl+Backspace e Ctrl+V incluídos.
+fn typed_char(ui: &mut UiState, owner: HWND, c: u32) {
+    match c {
+        8 => ui.backspace += 1,
+        127 => ui.kill_word += 1,
+        22 => {
+            if let Some(t) = crate::capture::clipboard_text(owner) {
+                ui.typed.push_str(&t);
+            }
+        }
+        c if c >= 32 => ui.typed.extend(char::from_u32(c)),
+        _ => {}
+    }
+}
+
 unsafe fn dark_caption(h: HWND) {
     let dark: BOOL = true.into();
     let _ = DwmSetWindowAttribute(h, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark as *const _ as _, 4);
     let cap: u32 = 0x00221d1b;
     let _ = DwmSetWindowAttribute(h, DWMWA_CAPTION_COLOR, &cap as *const _ as _, 4);
+}
+
+fn find_mouse(a: &mut App, l: LPARAM) {
+    if let Some(p) = &mut a.find_win {
+        p.ui.mx = (l.0 & 0xffff) as i16 as f32 / p.scale;
+        p.ui.my = ((l.0 >> 16) & 0xffff) as i16 as f32 / p.scale;
+    }
+}
+
+/// Janelinha de pesquisa: some ao perder o foco ou com Esc.
+unsafe extern "system" fn find_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT {
+    let r = with(|a| {
+        let inval = |a: &App| {
+            if let Some(f) = &a.find_win {
+                let _ = InvalidateRect(Some(f.hwnd), None, false);
+            }
+        };
+        match m {
+            WM_PAINT => {
+                let mut ps = PAINTSTRUCT::default();
+                BeginPaint(h, &mut ps);
+                a.paint_find();
+                let _ = EndPaint(h, &ps);
+                Some(0)
+            }
+            WM_ERASEBKGND => Some(1),
+            WM_MOUSEMOVE | WM_LBUTTONDOWN | WM_LBUTTONUP | WM_RBUTTONUP => {
+                find_mouse(a, l);
+                if let Some(p) = &mut a.find_win {
+                    match m {
+                        WM_LBUTTONDOWN => {
+                            p.ui.down = true;
+                            p.ui.pressed = true;
+                            SetCapture(h);
+                        }
+                        WM_LBUTTONUP => {
+                            p.ui.down = false;
+                            p.ui.released = true;
+                            let _ = ReleaseCapture();
+                        }
+                        WM_RBUTTONUP => p.ui.right_released = true,
+                        _ => {}
+                    }
+                }
+                inval(a);
+                Some(0)
+            }
+            WM_MOUSEWHEEL => {
+                if let Some(p) = &mut a.find_win {
+                    p.ui.wheel += ((w.0 >> 16) & 0xffff) as i16 as f32 / 120.0;
+                }
+                inval(a);
+                Some(0)
+            }
+            WM_KEYDOWN if w.0 == 0x1B => {
+                a.close_find();
+                Some(0)
+            }
+            WM_KEYDOWN => {
+                if let Some(p) = &mut a.find_win {
+                    if nav_key(&mut p.ui, w.0 as u32) {
+                        inval(a);
+                    }
+                }
+                Some(0)
+            }
+            WM_CHAR => {
+                if let Some(p) = &mut a.find_win {
+                    typed_char(&mut p.ui, h, w.0 as u32);
+                }
+                inval(a);
+                Some(0)
+            }
+            WM_ACTIVATE if (w.0 & 0xffff) == 0 => {
+                let _ = PostMessageW(Some(h), WM_CLOSE, WPARAM(0), LPARAM(0));
+                Some(0)
+            }
+            WM_CLOSE => {
+                a.close_find();
+                Some(0)
+            }
+            _ => None,
+        }
+    })
+    .flatten();
+    match r {
+        Some(v) => LRESULT(v),
+        None => DefWindowProcW(h, m, w, l),
+    }
 }
 
 fn picker_mouse(a: &mut App, l: LPARAM) {
@@ -2784,11 +3221,7 @@ unsafe extern "system" fn picker_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> 
             WM_CHAR => {
                 if let Some(p) = &mut a.pick_win {
                     if p.ui.focus != 0 {
-                        match w.0 as u32 {
-                            8 => p.ui.backspace += 1,
-                            c if c >= 32 => p.ui.typed.extend(char::from_u32(c)),
-                            _ => {}
-                        }
+                        typed_char(&mut p.ui, h, w.0 as u32);
                     }
                 }
                 a.invalidate_picker();
@@ -2912,15 +3345,7 @@ unsafe extern "system" fn main_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
             WM_CHAR => {
                 if let Some(mw) = &mut a.main {
                     if mw.ui.focus != 0 {
-                        match w.0 as u32 {
-                            8 => mw.ui.backspace += 1,
-                            c if c >= 32 => {
-                                if let Some(c) = char::from_u32(c) {
-                                    mw.ui.typed.push(c);
-                                }
-                            }
-                            _ => {}
-                        }
+                        typed_char(&mut mw.ui, h, w.0 as u32);
                     }
                 }
                 a.invalidate();

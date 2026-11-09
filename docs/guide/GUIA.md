@@ -96,6 +96,19 @@ Analisa um disco inteiro e mostra pastas, maiores arquivos, tipos e um mapa visu
 - **Dá para:** abrir no Explorador e, como administrador, mandar para a Lixeira.
 - **Não dá para:** usar a leitura rápida sem administrador ou em disco que não seja NTFS.
 
+## Pesquisar
+
+Acha arquivos e pastas pelo nome em todos os discos, enquanto você digita. Vem desligada: aperte **Ligar** na aba Pesquisar.
+
+O Prisma guarda os nomes de todos os arquivos num índice, na memória e no disco, para responder na hora e já estar pronto ao abrir. O índice usa cerca de 60 MB a cada milhão de arquivos. Com o Prisma como administrador, ele lê a tabela do NTFS em segundos e se atualiza no momento em que um arquivo é criado, renomeado ou apagado. Sem administrador, ou em disco que não seja NTFS, ele percorre as pastas, o que demora mais, e atualiza a cada 15 minutos.
+
+- **Janelinha:** Ctrl + Alt + Espaço abre uma caixa de pesquisa por cima de qualquer programa, com até oito resultados. Enter abre, Ctrl + Enter mostra na pasta, Ctrl + C copia o caminho e Esc fecha. As setas andam pela lista.
+- **Na aba:** a lista completa, com nome, pasta, tamanho e data. Clique no título de uma coluna para ordenar, de novo para inverter e uma terceira vez para voltar à relevância. Clique duas vezes para abrir. O botão direito abre, mostra na pasta ou copia o caminho.
+- **Como pesquisar:** maiúsculas e acentos não contam, então "relatorio" acha "Relatório". Várias palavras precisam aparecer todas. Use aspas para um trecho com espaço, `ext:pdf;docx` para tipos, `pasta:` só para pastas, `arquivo:` só para arquivos, `*` e `?` como curinga no nome inteiro, `!palavra` para tirar e uma barra, como `fotos\2024`, para procurar no caminho.
+- **Opções:** escolha os discos e o atalho, leia os discos de novo ou desligue. Desligar tira o índice da memória e do disco.
+- **Disco com problema:** discos com nota abaixo de Bom em Discos e redes ficam de fora, para o índice não forçar um disco que está falhando. Dá para incluir clicando nele em Opções.
+- **Abrir:** os arquivos abrem pelo Explorador, com o programa padrão e sem herdar o administrador do Prisma.
+
 ## Inicialização
 
 Liga, desliga, adiciona e remove o que abre com o Windows, e mostra quem assinou cada programa. Ordena por nome, ativados ou desativados.
@@ -210,6 +223,7 @@ Todos podem ser trocados no programa.
 - **Ctrl + teclas de volume e mudo:** volume do programa em foco
 - **Ctrl + Alt + W:** Widget
 - **Ctrl + Alt + O:** Otimizar
+- **Ctrl + Alt + Espaço:** pesquisar arquivos, com a pesquisa ligada
 - **Alt + F4:** Fechar à força
 - **Ctrl + Alt + 1:** medidor compacto
 - **Ctrl + Alt + 2:** medidor completo

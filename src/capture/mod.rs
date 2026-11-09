@@ -365,6 +365,32 @@ pub fn copy_text(owner: HWND, text: &str) -> bool {
     }
 }
 
+/// Texto copiado, numa linha só.
+pub fn clipboard_text(owner: HWND) -> Option<String> {
+    use windows::Win32::System::DataExchange::*;
+    use windows::Win32::System::Memory::*;
+    const CF_UNICODETEXT: u32 = 13;
+    unsafe {
+        OpenClipboard(Some(owner)).ok()?;
+        let out = (|| {
+            let h = GetClipboardData(CF_UNICODETEXT).ok()?;
+            let p = GlobalLock(HGLOBAL(h.0)) as *const u16;
+            if p.is_null() {
+                return None;
+            }
+            let mut n = 0;
+            while *p.add(n) != 0 && n < 4096 {
+                n += 1;
+            }
+            let s = String::from_utf16_lossy(std::slice::from_raw_parts(p, n));
+            let _ = GlobalUnlock(HGLOBAL(h.0));
+            Some(s.split(['\r', '\n']).next().unwrap_or("").to_string())
+        })();
+        let _ = CloseClipboard();
+        out
+    }
+}
+
 /// Lê a imagem copiada, em BGRA de cima para baixo.
 pub fn clipboard_image() -> Option<(u32, u32, Vec<u8>)> {
     use windows::Win32::System::DataExchange::*;

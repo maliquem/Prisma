@@ -366,16 +366,21 @@ impl Canvas {
     }
 
     pub fn text(&self, r: Rect, s: &str, size: f32, c: Color, align: Align, weight: Weight) {
+        self.text_ex(r, &crate::i18n::tr(s), size, c, align, weight, false)
+    }
+
+    /// Texto que não passa pela tradução: nomes de arquivos e pastas.
+    pub fn text_raw(&self, r: Rect, s: &str, size: f32, c: Color, align: Align, weight: Weight) {
         self.text_ex(r, s, size, c, align, weight, false)
     }
 
     pub fn text_wrap(&self, r: Rect, s: &str, size: f32, c: Color, weight: Weight) {
-        self.text_ex(r, s, size, c, Align::Left, weight, true)
+        self.text_ex(r, &crate::i18n::tr(s), size, c, Align::Left, weight, true)
     }
 
     fn text_ex(&self, r: Rect, s: &str, size: f32, c: Color, a: Align, wt: Weight, wrap: bool) {
         let f = format(size, wt, wrap);
-        let t = wide(&crate::i18n::tr(s));
+        let t = wide(s);
         unsafe {
             let _ = f.SetTextAlignment(match a {
                 Align::Left => DWRITE_TEXT_ALIGNMENT_LEADING,

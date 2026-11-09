@@ -96,6 +96,19 @@ Scans a whole disk and shows folders, largest files, types and a visual map.
 - **You can:** open items in Explorer and, as administrator, send them to the Recycle Bin.
 - **You can't:** use the fast scan without administrator or on a disk that is not NTFS.
 
+## Search
+
+Finds files and folders by name on all your disks, as you type. It comes off: press **Turn on** in the Search tab.
+
+Prisma keeps the names of every file in an index, in memory and on disk, so it answers instantly and is ready as soon as it opens. The index uses about 60 MB per million files. With Prisma as administrator, it reads the NTFS table in seconds and updates the moment a file is created, renamed or deleted. Without administrator, or on a disk that is not NTFS, it walks through the folders, which takes longer, and updates every 15 minutes.
+
+- **Pop-up:** Ctrl + Alt + Space opens a search box on top of any program, with up to eight results. Enter opens, Ctrl + Enter shows in folder, Ctrl + C copies the path and Esc closes. The arrows move through the list.
+- **In the tab:** the full list, with name, folder, size and date. Click a column title to sort, again to reverse and a third time to go back to relevance. Double-click to open. Right-click opens, shows in folder or copies the path.
+- **How to search:** case and accents don't matter, so "relatorio" finds "Relatório". Several words must all appear. Use quotes for a phrase with spaces, `ext:pdf;docx` for types, `folder:` for folders only, `file:` for files only, `*` and `?` as wildcards on the whole name, `!word` to exclude and a backslash, like `photos\2024`, to search the path.
+- **Options:** choose the disks and the shortcut, read the disks again or turn it off. Turning off removes the index from memory and disk.
+- **Disk with problems:** disks rated below Good in Disks and networks stay out, so the index doesn't strain a failing disk. You can include one by clicking it in Options.
+- **Opening:** files open through Explorer, with the default program and without inheriting Prisma's administrator rights.
+
 ## Startup
 
 Turns on, turns off, adds and removes what opens with Windows, and shows who signed each program. Sorts by name, enabled or disabled.
@@ -210,6 +223,7 @@ All of them can be changed in the program.
 - **Ctrl + volume and mute keys:** volume of the program in focus
 - **Ctrl + Alt + W:** Widget
 - **Ctrl + Alt + O:** Optimize
+- **Ctrl + Alt + Space:** search files, with search turned on
 - **Alt + F4:** Force close
 - **Ctrl + Alt + 1:** compact meter
 - **Ctrl + Alt + 2:** full meter

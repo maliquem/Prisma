@@ -29,6 +29,23 @@ pub fn load(path: &str) -> Option<(u32, u32, Vec<u8>)> {
     }
 }
 
+/// Ícone do tipo de arquivo, ou de pasta, sem tocar no disco.
+pub fn load_kind(name: &str, dir: bool) -> Option<(u32, u32, Vec<u8>)> {
+    use windows::Win32::Storage::FileSystem::{FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_NORMAL};
+    unsafe {
+        let mut info = SHFILEINFOW::default();
+        let wide = HSTRING::from(name);
+        let attr = if dir { FILE_ATTRIBUTE_DIRECTORY } else { FILE_ATTRIBUTE_NORMAL };
+        let r = SHGetFileInfoW(&wide, attr, Some(&mut info), std::mem::size_of::<SHFILEINFOW>() as u32, SHGFI_ICON | SHGFI_LARGEICON | SHGFI_USEFILEATTRIBUTES);
+        if r == 0 || info.hIcon.is_invalid() {
+            return None;
+        }
+        let out = rasterize(info.hIcon);
+        let _ = DestroyIcon(info.hIcon);
+        out
+    }
+}
+
 unsafe fn rasterize(icon: HICON) -> Option<(u32, u32, Vec<u8>)> {
     let bi = BITMAPINFO {
         bmiHeader: BITMAPINFOHEADER {
