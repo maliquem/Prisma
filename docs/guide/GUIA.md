@@ -100,7 +100,7 @@ Analisa um disco inteiro e mostra pastas, maiores arquivos, tipos e um mapa visu
 
 Acha arquivos e pastas pelo nome em todos os discos, enquanto você digita. Vem desligada: aperte **Ligar** na aba Pesquisar.
 
-O Prisma guarda os nomes de todos os arquivos num índice, na memória e no disco, para responder na hora e já estar pronto ao abrir. O índice usa cerca de 60 MB a cada milhão de arquivos. Com o Prisma como administrador, ele lê a tabela do NTFS em segundos e se atualiza no momento em que um arquivo é criado, renomeado ou apagado. Sem administrador, ou em disco que não seja NTFS, ele percorre as pastas, o que demora mais, e atualiza a cada 15 minutos.
+O Prisma guarda os nomes de todos os arquivos num índice, na memória e no disco, para responder na hora e já estar pronto ao abrir. O índice usa cerca de 70 MB a cada milhão de arquivos: um disco de sistema com 2 milhões de arquivos fica perto de 140 MB. Com o Prisma como administrador, ele lê a tabela do NTFS em segundos e se atualiza no momento em que um arquivo é criado, renomeado ou apagado. Sem administrador, ou em disco que não seja NTFS, ele percorre as pastas, o que demora mais, e atualiza a cada 15 minutos.
 
 - **Janelinha:** Ctrl + Alt + Espaço abre uma caixa de pesquisa por cima de qualquer programa, com até oito resultados. Enter abre, Ctrl + Enter mostra na pasta, Ctrl + C copia o caminho e Esc fecha. As setas andam pela lista.
 - **Na aba:** a lista completa, com nome, pasta, tamanho e data. Clique no título de uma coluna para ordenar, de novo para inverter e uma terceira vez para voltar à relevância. Clique duas vezes para abrir. O botão direito abre, mostra na pasta ou copia o caminho.

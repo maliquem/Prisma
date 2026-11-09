@@ -100,7 +100,7 @@ Scans a whole disk and shows folders, largest files, types and a visual map.
 
 Finds files and folders by name on all your disks, as you type. It comes off: press **Turn on** in the Search tab.
 
-Prisma keeps the names of every file in an index, in memory and on disk, so it answers instantly and is ready as soon as it opens. The index uses about 60 MB per million files. With Prisma as administrator, it reads the NTFS table in seconds and updates the moment a file is created, renamed or deleted. Without administrator, or on a disk that is not NTFS, it walks through the folders, which takes longer, and updates every 15 minutes.
+Prisma keeps the names of every file in an index, in memory and on disk, so it answers instantly and is ready as soon as it opens. The index uses about 70 MB per million files: a system disk with 2 million files comes to about 140 MB. With Prisma as administrator, it reads the NTFS table in seconds and updates the moment a file is created, renamed or deleted. Without administrator, or on a disk that is not NTFS, it walks through the folders, which takes longer, and updates every 15 minutes.
 
 - **Pop-up:** Ctrl + Alt + Space opens a search box on top of any program, with up to eight results. Enter opens, Ctrl + Enter shows in folder, Ctrl + C copies the path and Esc closes. The arrows move through the list.
 - **In the tab:** the full list, with name, folder, size and date. Click a column title to sort, again to reverse and a third time to go back to relevance. Double-click to open. Right-click opens, shows in folder or copies the path.

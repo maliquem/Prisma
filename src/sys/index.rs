@@ -39,7 +39,8 @@ const R_CLOSE: u32 = 0x8000_0000;
 
 /// Sem o diário, o índice do disco é refeito nesse intervalo.
 const RESCAN: Duration = Duration::from_secs(15 * 60);
-const SAVE_EVERY: Duration = Duration::from_secs(30 * 60);
+/// Gravar o índice inteiro custa escrita no SSD: ao sair já grava, e o diário cobre o resto.
+const SAVE_EVERY: Duration = Duration::from_secs(6 * 3600);
 const POLL: Duration = Duration::from_secs(2);
 /// Resultados guardados por pesquisa. O total encontrado continua contado.
 pub const CAP: usize = 200_000;
@@ -133,6 +134,17 @@ impl Vol {
         self.garbage = 0;
     }
 
+    /// Tira as sobras de nomes (o nome curto 8.3 que o longo substituiu, renomeados, apagados)
+    /// e devolve a folga das listas.
+    fn tidy(&mut self) {
+        let live: usize = self.entries.iter().filter(|e| e.flags & USED != 0).map(|e| e.name_len as usize).sum();
+        if self.names.len() > live + live / 10 {
+            self.compact();
+        }
+        self.entries.shrink_to_fit();
+        self.names.shrink_to_fit();
+    }
+
     fn memory(&self) -> usize {
         self.entries.capacity() * std::mem::size_of::<Entry>() + self.names.capacity()
     }
@@ -208,7 +220,7 @@ fn from_table(letter: char, t: mft::Table, serial: u32, journal: u64, next_usn: 
     }
     prune(&mut entries, NTFS_ROOT);
     let files = entries.iter().filter(|e| e.flags & USED != 0).count() as u32;
-    Vol {
+    let mut v = Vol {
         letter,
         ntfs: true,
         entries,
@@ -222,7 +234,9 @@ fn from_table(letter: char, t: mft::Table, serial: u32, journal: u64, next_usn: 
         dirty: true,
         files,
         live: journal != 0,
-    }
+    };
+    v.tidy();
+    v
 }
 
 fn mtime_of(m: &std::fs::Metadata) -> u32 {
@@ -259,7 +273,9 @@ fn walk(letter: char, serial: u32, p: &mft::Progress) -> Option<Vol> {
         }
     }
     let files = entries.len() as u32 - 1;
-    Some(Vol { letter, ntfs: false, entries, names, root: 0, serial, journal: 0, next_usn: 0, built: now_secs(), garbage: 0, dirty: true, files, live: false })
+    let mut v = Vol { letter, ntfs: false, entries, names, root: 0, serial, journal: 0, next_usn: 0, built: now_secs(), garbage: 0, dirty: true, files, live: false };
+    v.tidy();
+    Some(v)
 }
 
 struct Handle(HANDLE);
@@ -673,6 +689,7 @@ fn restore(letter: char) -> Option<Vol> {
     if v.serial != serial {
         return None;
     }
+    v.tidy();
     if v.ntfs && crate::startup::is_elevated() {
         let h = open_volume(letter)?;
         let (id, _) = query_journal(&h)?;
@@ -758,9 +775,7 @@ fn save_dirty() {
     let mut vols = IX.vols.write().unwrap();
     for v in vols.iter_mut() {
         if v.dirty {
-            if v.garbage > v.names.len() / 4 {
-                v.compact();
-            }
+            v.tidy();
             if save(v) {
                 v.dirty = false;
             }

@@ -224,7 +224,7 @@ fn status_line(app: &App) -> (String, bool) {
 }
 
 fn intro(ui: &mut Ui, app: &mut App, x: f32, w: f32) {
-    let body = "O Prisma guarda os nomes de todos os arquivos dos seus discos num índice, e a pesquisa responde enquanto você digita. O índice usa memória: cerca de 60 MB a cada milhão de arquivos.";
+    let body = "O Prisma guarda os nomes de todos os arquivos dos seus discos num índice, e a pesquisa responde enquanto você digita. O índice usa memória: cerca de 70 MB a cada milhão de arquivos.";
     let admin = if app.elevated {
         "Com o Prisma como administrador, o índice fica pronto em segundos e se atualiza na hora em que um arquivo muda."
     } else {

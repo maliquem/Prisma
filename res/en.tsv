@@ -1261,7 +1261,7 @@ Pesquisar	Search
 Pesquisar arquivos	Search files
 Acha arquivos e pastas pelo nome em todos os discos, enquanto você digita.	Finds files and folders by name on all your disks, as you type.
 Ligar a pesquisa	Turn on search
-O Prisma guarda os nomes de todos os arquivos dos seus discos num índice, e a pesquisa responde enquanto você digita. O índice usa memória: cerca de 60 MB a cada milhão de arquivos.	Prisma keeps the names of every file on your disks in an index, and search answers as you type. The index uses memory: about 60 MB per million files.
+O Prisma guarda os nomes de todos os arquivos dos seus discos num índice, e a pesquisa responde enquanto você digita. O índice usa memória: cerca de 70 MB a cada milhão de arquivos.	Prisma keeps the names of every file on your disks in an index, and search answers as you type. The index uses memory: about 70 MB per million files.
 Com o Prisma como administrador, o índice fica pronto em segundos e se atualiza na hora em que um arquivo muda.	With Prisma as administrator, the index is ready in seconds and updates the moment a file changes.
 Sem administrador, o Prisma percorre as pastas, o que demora mais, e atualiza o índice a cada 15 minutos.	Without administrator, Prisma walks through the folders, which takes longer, and updates the index every 15 minutes.
 Discos com problema de saúde ficam de fora, para não forçar o disco. Dá para incluir em Opções.	Disks with health problems stay out, so the disk isn't strained. You can include them in Options.
