@@ -2,11 +2,12 @@
 //! quanto cada etapa leva, da composição da tela até o quadro decodificado pronto na GPU,
 //! com o codificador ajustado para transmitir. Só existe na versão de teste.
 //!
-//! `--test-stream=saida.txt|segundos|codecs|altura|mbps|fps`, com codecs `all` ou uma lista
+//! `--test-stream=saida.txt|segundos|codecs|altura|mbps|fps|quadrado|captura`, com codecs `all` ou uma lista
 //! como `h264,hevc,av1`. Um quadrado colorido pisca no canto da tela principal enquanto mede,
 //! para a tela ter o que mandar; com `0` no sétimo campo ele não aparece e mede o que estiver na tela.
 //! `PRISMA_POOL` (quadros na fila da captura) e `PRISMA_MININT` (intervalo mínimo, em 100 ns) servem
 //! para testar a captura; nenhum dos dois mudou o teto de cerca de 64 quadros por segundo.
+//! A captura é `wgc` (Windows.Graphics.Capture, a da gravação) ou `dd` (Desktop Duplication).
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -20,6 +21,7 @@ use windows::Graphics::DirectX::DirectXPixelFormat;
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Direct3D11::*;
 use windows::Win32::Graphics::Dwm::DwmFlush;
+use windows::Win32::Graphics::Dxgi::*;
 use windows::Win32::Graphics::Dxgi::Common::*;
 use windows::Win32::Graphics::Gdi::*;
 use windows::Win32::Media::MediaFoundation::*;
@@ -27,6 +29,7 @@ use windows::Win32::Media::{timeBeginPeriod, timeEndPeriod};
 use windows::Win32::System::Com::*;
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Performance::{QueryPerformanceCounter, QueryPerformanceFrequency};
+use windows::Win32::System::Power::{SetThreadExecutionState, ES_CONTINUOUS, ES_DISPLAY_REQUIRED};
 use windows::Win32::System::Threading::*;
 use windows::Win32::System::WinRT::Direct3D11::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
@@ -343,6 +346,106 @@ struct Run {
     out_h: u32,
     mbps: u32,
     fps: u32,
+    dd: bool,
+}
+
+/// De onde vêm os quadros da tela.
+enum Source {
+    Wgc { pool: Direct3D11CaptureFramePool, session: GraphicsCaptureSession, event: HANDLE, token: i64 },
+    Dd { dup: IDXGIOutputDuplication, merged: u32, mouse_only: u32 },
+}
+
+enum Held {
+    Wgc(Direct3D11CaptureFrame),
+    Dd,
+}
+
+fn qpc_100ns(c: i64) -> i64 {
+    let mut f = 0i64;
+    unsafe {
+        let _ = QueryPerformanceFrequency(&mut f);
+    }
+    (c as i128 * 10_000_000 / f.max(1) as i128) as i64
+}
+
+/// Desktop Duplication da saída de vídeo onde está o monitor, no mesmo formato que a tela usa.
+unsafe fn duplicate(d: &D3d, mon: HMONITOR, hdr: bool) -> Result<IDXGIOutputDuplication> {
+    let ad = d.dev.cast::<IDXGIDevice>()?.GetAdapter()?;
+    let mut i = 0;
+    loop {
+        let o = ad.EnumOutputs(i)?;
+        if o.GetDesc()?.Monitor == mon {
+            let fmts = [if hdr { DXGI_FORMAT_R16G16B16A16_FLOAT } else { DXGI_FORMAT_B8G8R8A8_UNORM }];
+            if let Ok(o5) = o.cast::<IDXGIOutput5>() {
+                return o5.DuplicateOutput1(&d.dev, 0, &fmts);
+            }
+            return o.cast::<IDXGIOutput1>()?.DuplicateOutput(&d.dev);
+        }
+        i += 1;
+    }
+}
+
+impl Source {
+    /// Espera até 1 ms e entrega os quadros novos: textura, hora do quadro e hora em que chegou.
+    unsafe fn grab(&mut self, out: &mut Vec<(ID3D11Texture2D, i64, i64, Held)>) -> Result<()> {
+        match self {
+            Source::Wgc { pool, event, .. } => {
+                let _ = WaitForSingleObject(*event, 1);
+                while let Ok(f) = pool.TryGetNextFrame() {
+                    let got = now();
+                    let pts = f.SystemRelativeTime()?.Duration;
+                    let access: IDirect3DDxgiInterfaceAccess = f.Surface()?.cast()?;
+                    out.push((access.GetInterface()?, pts, got, Held::Wgc(f)));
+                }
+            }
+            Source::Dd { dup, merged, mouse_only } => {
+                let mut info = DXGI_OUTDUPL_FRAME_INFO::default();
+                let mut res = None;
+                match dup.AcquireNextFrame(1, &mut info, &mut res) {
+                    Ok(()) => {}
+                    Err(e) if e.code() == DXGI_ERROR_WAIT_TIMEOUT => return Ok(()),
+                    Err(e) => return Err(e),
+                }
+                let got = now();
+                // Só o mouse mexeu: a imagem é a mesma.
+                if info.LastPresentTime == 0 {
+                    *mouse_only += 1;
+                    dup.ReleaseFrame()?;
+                    return Ok(());
+                }
+                *merged += info.AccumulatedFrames.saturating_sub(1);
+                let tex: ID3D11Texture2D = res.unwrap().cast()?;
+                out.push((tex, qpc_100ns(info.LastPresentTime), got, Held::Dd));
+            }
+        }
+        Ok(())
+    }
+
+    unsafe fn release(&self, h: Held) {
+        match (self, h) {
+            (_, Held::Wgc(f)) => {
+                let _ = f.Close();
+            }
+            (Source::Dd { dup, .. }, Held::Dd) => {
+                let _ = dup.ReleaseFrame();
+            }
+            _ => {}
+        }
+    }
+
+    fn stop(&self) {
+        if let Source::Wgc { session, .. } = self {
+            let _ = session.Close();
+        }
+    }
+
+    unsafe fn finish(self) {
+        if let Source::Wgc { pool, event, token, .. } = self {
+            let _ = pool.RemoveFrameArrived(token);
+            let _ = pool.Close();
+            let _ = CloseHandle(event);
+        }
+    }
 }
 
 unsafe fn one(d: &D3d, mon: HMONITOR, codec: Codec, r: &Run) -> Result<String> {
@@ -354,19 +457,25 @@ unsafe fn one(d: &D3d, mon: HMONITOR, codec: Codec, r: &Run) -> Result<String> {
     let out_w = even((src_w as u64 * out_h as u64 / src_h as u64) as u32);
     let bits = r.mbps * 1_000_000;
 
-    let fmt = if color.hdr { DirectXPixelFormat::R16G16B16A16Float } else { DirectXPixelFormat::B8G8R8A8UIntNormalized };
-    let pool = Direct3D11CaptureFramePool::CreateFreeThreaded(&d.rt, fmt, std::env::var("PRISMA_POOL").ok().and_then(|v| v.parse().ok()).unwrap_or(2), size)?;
-    let event = CreateEventW(None, false, false, None)?;
-    let ev = event.0 as isize;
-    let token = pool.FrameArrived(&TypedEventHandler::new(move |_, _| {
-        let _ = SetEvent(HANDLE(ev as *mut _));
-        Ok(())
-    }))?;
-    let session = pool.CreateCaptureSession(&item)?;
-    let _ = session.SetIsCursorCaptureEnabled(false);
-    let _ = session.SetIsBorderRequired(false);
-    let min = std::env::var("PRISMA_MININT").ok().and_then(|v| v.parse().ok()).unwrap_or(10_000_000 / r.fps as i64);
-    let _ = session.SetMinUpdateInterval(windows::Foundation::TimeSpan { Duration: min }).is_ok();
+    let mut src = if r.dd {
+        Source::Dd { dup: duplicate(d, mon, color.hdr)?, merged: 0, mouse_only: 0 }
+    } else {
+        let fmt = if color.hdr { DirectXPixelFormat::R16G16B16A16Float } else { DirectXPixelFormat::B8G8R8A8UIntNormalized };
+        let pool = Direct3D11CaptureFramePool::CreateFreeThreaded(&d.rt, fmt, std::env::var("PRISMA_POOL").ok().and_then(|v| v.parse().ok()).unwrap_or(2), size)?;
+        let event = CreateEventW(None, false, false, None)?;
+        let ev = event.0 as isize;
+        let token = pool.FrameArrived(&TypedEventHandler::new(move |_, _| {
+            let _ = SetEvent(HANDLE(ev as *mut _));
+            Ok(())
+        }))?;
+        let session = pool.CreateCaptureSession(&item)?;
+        let _ = session.SetIsCursorCaptureEnabled(false);
+        let _ = session.SetIsBorderRequired(false);
+        let min = std::env::var("PRISMA_MININT").ok().and_then(|v| v.parse().ok()).unwrap_or(10_000_000 / r.fps as i64);
+        let _ = session.SetMinUpdateInterval(windows::Foundation::TimeSpan { Duration: min });
+        session.StartCapture()?;
+        Source::Wgc { pool, session, event, token }
+    };
 
     let mid = bgra_texture(&d.dev, src_w, src_h, DXGI_FORMAT_B8G8R8A8_UNORM)?;
     // Tela em HDR vira SDR antes de codificar (a opção A do estudo).
@@ -393,7 +502,7 @@ unsafe fn one(d: &D3d, mon: HMONITOR, codec: Codec, r: &Run) -> Result<String> {
     let (mut frames, mut dropped, mut skipped) = (0u32, 0u32, 0u32);
     let interval = 10_000_000i64 / r.fps as i64;
     let mut last_fed = i64::MIN / 2;
-    session.StartCapture()?;
+    let mut got_frames: Vec<(ID3D11Texture2D, i64, i64, Held)> = Vec::new();
     let start = Instant::now();
     // O primeiro segundo aquece e não conta.
     let count_from = now() + 10_000_000;
@@ -401,7 +510,41 @@ unsafe fn one(d: &D3d, mon: HMONITOR, codec: Codec, r: &Run) -> Result<String> {
     let mut tail = None;
 
     loop {
-        let _ = WaitForSingleObject(event, 1);
+        if tail.is_none() {
+            src.grab(&mut got_frames)?;
+            for (tex, pts, got, held) in got_frames.drain(..) {
+                if pts - last_fed < interval * 9 / 10 {
+                    skipped += 1;
+                    src.release(held);
+                    continue;
+                }
+                if enc.need == 0 {
+                    dropped += 1;
+                    src.release(held);
+                    continue;
+                }
+                if let Some(t) = &tone {
+                    t.draw(&d.ctx, &d.dev, &tex, src_w, src_h)?;
+                } else {
+                    let bx = D3D11_BOX { left: 0, top: 0, front: 0, right: src_w, bottom: src_h, back: 1 };
+                    d.ctx.CopySubresourceRegion(&mid, 0, 0, 0, 0, &tex, 0, Some(&bx));
+                }
+                let t = conv.convert(&in_view)?;
+                src.release(held);
+                enc.feed(&t, pts)?;
+                last_fed = pts;
+                if pts >= count_from {
+                    frames += 1;
+                    times.insert(pts, Times { comp: pts, got, fed: now(), ..Default::default() });
+                }
+            }
+            if start.elapsed() >= total {
+                src.stop();
+                tail = Some(Instant::now());
+            }
+        } else if tail.is_some_and(|t| t.elapsed() > Duration::from_millis(300)) {
+            break;
+        }
         enc.pump(&mut pkts)?;
         let t_enc = now();
         for p in pkts.drain(..) {
@@ -429,49 +572,14 @@ unsafe fn one(d: &D3d, mon: HMONITOR, codec: Codec, r: &Run) -> Result<String> {
                 mark(d, &q, &decoded, &mut times);
             }
         }
-        if tail.is_none() {
-            while let Ok(frame) = pool.TryGetNextFrame() {
-                let got = now();
-                let pts = frame.SystemRelativeTime()?.Duration;
-                if pts - last_fed < interval * 9 / 10 {
-                    skipped += 1;
-                    let _ = frame.Close();
-                    continue;
-                }
-                if enc.need == 0 {
-                    dropped += 1;
-                    let _ = frame.Close();
-                    continue;
-                }
-                let surf = frame.Surface()?;
-                let access: IDirect3DDxgiInterfaceAccess = surf.cast()?;
-                let tex: ID3D11Texture2D = access.GetInterface()?;
-                if let Some(t) = &tone {
-                    t.draw(&d.ctx, &d.dev, &tex, src_w, src_h)?;
-                } else {
-                    let bx = D3D11_BOX { left: 0, top: 0, front: 0, right: src_w, bottom: src_h, back: 1 };
-                    d.ctx.CopySubresourceRegion(&mid, 0, 0, 0, 0, &tex, 0, Some(&bx));
-                }
-                let t = conv.convert(&in_view)?;
-                let _ = frame.Close();
-                enc.feed(&t, pts)?;
-                last_fed = pts;
-                if pts >= count_from {
-                    frames += 1;
-                    times.insert(pts, Times { comp: pts, got, fed: now(), ..Default::default() });
-                }
-            }
-            if start.elapsed() >= total {
-                let _ = session.Close();
-                tail = Some(Instant::now());
-            }
-        } else if tail.is_some_and(|t| t.elapsed() > Duration::from_millis(300)) {
-            break;
-        }
     }
-    pool.RemoveFrameArrived(token)?;
-    let _ = pool.Close();
-    let _ = CloseHandle(event);
+    let dd_note = match &src {
+        Source::Dd { merged, mouse_only, .. } => {
+            format!("  captura: Desktop Duplication, {merged} quadros juntados em outro, {mouse_only} só com o mouse\n")
+        }
+        Source::Wgc { .. } => "  captura: Windows.Graphics.Capture\n".to_string(),
+    };
+    src.finish();
 
     let mut v: Vec<Times> = times.into_values().filter(|t| t.enc > 0).collect();
     v.sort_by_key(|t| t.comp);
@@ -482,6 +590,7 @@ unsafe fn one(d: &D3d, mon: HMONITOR, codec: Codec, r: &Run) -> Result<String> {
     let decoded_n = v.iter().filter(|t| t.dec > 0).count();
     let mut s = String::new();
     s += &format!("== {} ==\n", label(codec));
+    s += &dd_note;
     s += &format!("  codificador: {}\n", enc.name);
     if !enc.refused.is_empty() {
         s += &format!("  ajustes recusados: {}\n", enc.refused.join(", "));
@@ -569,7 +678,8 @@ pub fn bench(arg: &str) {
     let fps = p.next().and_then(|v| v.parse().ok()).unwrap_or(120u32).clamp(10, 240);
     // Sem o quadrado, mede o que estiver na tela, como um jogo ou um vídeo.
     let square = p.next() != Some("0");
-    let run = Run { secs, out_h, mbps, fps };
+    let dd = p.next() == Some("dd");
+    let run = Run { secs, out_h, mbps, fps, dd };
 
     let mut s = String::from("Bancada da transmissão (fase 0)\n");
     s += "Etapas: captura = do momento em que a tela do PC mostra o quadro (o relógio da captura) até ele chegar ao Prisma, e negativo quer dizer que chegou antes de aparecer; preparo = conversão de cor e escala na GPU até entregar ao codificador; codificação = até o pacote sair; decodificação = até o quadro sair do decodificador; GPU pronta = até a GPU terminar o quadro decodificado; total = do quadro na tela do PC até o quadro decodificado pronto, sem a rede e sem mostrar na outra tela.\n";
@@ -577,6 +687,9 @@ pub fn bench(arg: &str) {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
         let _ = MFStartup(MF_VERSION, MFSTARTUP_LITE);
         let _ = timeBeginPeriod(1);
+        // Tela apagada por ociosidade muda tudo: a composição desacelera e a Desktop Duplication
+        // não entrega nada. Mantém a tela acesa enquanto mede e dá tempo de ela acordar.
+        let _ = SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED);
         let mon = MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY);
         let mut mi = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
         let _ = GetMonitorInfoW(mon, &mut mi);
@@ -590,6 +703,30 @@ pub fn bench(arg: &str) {
         s += "\n";
         let stop = Arc::new(AtomicBool::new(false));
         let anim = square.then(|| animate(stop.clone(), mi.rcMonitor.left + 40, mi.rcMonitor.top + 40));
+        // Quantas vezes por segundo o Windows de fato atualizou e compôs a tela.
+        {
+            use windows::Win32::Graphics::Dwm::{DwmGetCompositionTimingInfo, DWM_TIMING_INFO};
+            let mut a = DWM_TIMING_INFO { cbSize: std::mem::size_of::<DWM_TIMING_INFO>() as u32, ..Default::default() };
+            let mut b = a;
+            let ok = DwmGetCompositionTimingInfo(HWND::default(), &mut a).is_ok();
+            std::thread::sleep(Duration::from_secs(2));
+            if ok && DwmGetCompositionTimingInfo(HWND::default(), &mut b).is_ok() {
+                let hz = { b.rateRefresh }.uiNumerator as f64 / { b.rateRefresh }.uiDenominator.max(1) as f64;
+                if (({ b.cRefresh } - { a.cRefresh }) as f64 / 2.0) < hz / 2.0 {
+                    s += "ATENÇÃO: a tela está apagada (o Windows quase não atualiza o monitor). A captura sai de um relógio interno, então os números de captura não valem; os de codificação e decodificação valem.
+";
+                }
+                s += &format!(
+                    "Composição do Windows: {:.1} atualizações e {:.1} quadros compostos por segundo (taxa informada {}/{})
+
+",
+                    ({ b.cRefresh } - { a.cRefresh }) as f64 / 2.0,
+                    ({ b.cFrame } - { a.cFrame }) as f64 / 2.0,
+                    { let r = b.rateRefresh; r.uiNumerator },
+                    { let r = b.rateRefresh; r.uiDenominator }
+                );
+            }
+        }
         match d3d() {
             Ok(d) => {
                 if let Ok(mt) = d.ctx.cast::<ID3D11Multithread>() {
@@ -621,6 +758,7 @@ pub fn bench(arg: &str) {
         if let Some(a) = anim {
             s += &format!("O quadrado de teste mudou {:.1} vezes por segundo.\n", a.join().unwrap_or(0.0));
         }
+        let _ = SetThreadExecutionState(ES_CONTINUOUS);
         let _ = timeEndPeriod(1);
         let _ = MFShutdown();
     }
