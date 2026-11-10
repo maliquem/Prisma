@@ -10,6 +10,7 @@ pub mod host;
 mod link;
 #[cfg(feature = "stream")]
 mod net;
+mod pads;
 pub mod view;
 
 pub use link::*;
@@ -36,6 +37,107 @@ pub enum Kind {
     Audio = 8,
     Input = 9,
     Nack = 10,
+    Pad = 11,
+    Rumble = 12,
+    PadInfo = 13,
+}
+
+// ---------- Permissões de quem assiste ----------
+// Ver o vídeo vale sempre; o resto é por aparelho. Os bits livres ficam para o que vier
+// (área de transferência, controle do host), e o "Acesso total" já os inclui.
+
+pub const SOUND: u8 = 1;
+pub const PAD: u8 = 2;
+pub const KEYBOARD: u8 = 4;
+pub const MOUSE: u8 = 8;
+pub const TOTAL: u8 = 0xFF;
+
+/// Predefinições: nome no arquivo e na linha de comando, nome na tela, permissões.
+pub const PRESETS: [(&str, &str, u8); 4] = [
+    ("total", "Acesso total", TOTAL),
+    ("jogar", "Ver e usar controle", SOUND | PAD),
+    ("teclado-mouse", "Ver, controle, teclado e mouse", SOUND | PAD | KEYBOARD | MOUSE),
+    ("ver", "Só ver", SOUND),
+];
+const PERM_NAMES: [(&str, &str, u8); 4] = [("som", "som", SOUND), ("controle", "controle de jogo", PAD), ("teclado", "teclado", KEYBOARD), ("mouse", "mouse", MOUSE)];
+
+/// Lê uma predefinição ou uma lista como `som,controle`. `video` é só o vídeo, sem nada mais.
+/// Aceita os nomes antigos do arquivo: `controlar` (tudo) e `ver`.
+#[cfg_attr(not(feature = "stream"), allow(dead_code))]
+pub fn parse_perms(s: &str) -> Option<u8> {
+    let s = s.trim().to_lowercase();
+    match s.as_str() {
+        "controlar" | "control" => return Some(TOTAL),
+        "video" | "vídeo" => return Some(0),
+        _ => {}
+    }
+    if let Some(p) = PRESETS.iter().find(|p| p.0 == s) {
+        return Some(p.2);
+    }
+    let mut bits = 0;
+    for part in s.split([',', '+', ' ']).filter(|p| !p.is_empty()) {
+        bits |= PERM_NAMES.iter().find(|n| n.0 == part)?.2;
+    }
+    (bits != 0).then_some(bits)
+}
+
+/// Como as permissões vão para o arquivo: a predefinição, ou a lista.
+#[cfg_attr(not(feature = "stream"), allow(dead_code))]
+pub fn perms_key(p: u8) -> String {
+    if let Some(x) = PRESETS.iter().find(|x| x.2 == p) {
+        return x.0.to_string();
+    }
+    let list: Vec<&str> = PERM_NAMES.iter().filter(|n| p & n.2 != 0).map(|n| n.0).collect();
+    if list.is_empty() {
+        "video".to_string()
+    } else {
+        list.join(",")
+    }
+}
+
+/// Como as permissões aparecem para ela.
+pub fn perms_text(p: u8) -> String {
+    if let Some(x) = PRESETS.iter().find(|x| x.2 == p) {
+        return x.1.to_string();
+    }
+    let mut list = vec!["ver"];
+    list.extend(PERM_NAMES.iter().filter(|n| p & n.2 != 0).map(|n| n.1));
+    list.join(", ")
+}
+
+// ---------- Controles ----------
+
+/// Estado de um controle tipo Xbox, igual ao do XInput.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct PadState {
+    pub buttons: u16,
+    pub lt: u8,
+    pub rt: u8,
+    pub lx: i16,
+    pub ly: i16,
+    pub rx: i16,
+    pub ry: i16,
+}
+
+/// Até quatro controles de cada lado, como no XInput. O número 4 é o teclado virando controle.
+pub const PADS: usize = 5;
+/// `PadInfo.why`: por que o controle não entrou.
+pub const PAD_OK: u8 = 0;
+pub const PAD_NO_PERMISSION: u8 = 1;
+pub const PAD_NO_DRIVER: u8 = 2;
+pub const PAD_FULL: u8 = 3;
+pub const PAD_ANTI_CHEAT: u8 = 4;
+pub const PAD_LOOP: u8 = 5;
+
+pub fn pad_why(why: u8) -> &'static str {
+    match why {
+        PAD_NO_PERMISSION => "sem permissão de controle",
+        PAD_NO_DRIVER => "o host não tem a ponte de controles",
+        PAD_FULL => "as quatro vagas estão ocupadas",
+        PAD_ANTI_CHEAT => "o jogo aberto no host tem anti-cheat",
+        PAD_LOOP => "é um controle virtual do próprio host",
+        _ => "",
+    }
 }
 
 /// Som: 48 kHz, dois canais, 16 bits, em blocos de 5 ms.
@@ -96,10 +198,10 @@ pub const DECODES_444: u8 = 2;
 pub enum Msg<'a> {
     Video { key: bool, idx: u16, count: u16, frame: u32, pts: i64, data: &'a [u8] },
     /// Como o vídeo está saindo: codec, tamanho e quadros por segundo.
-    /// `control` diz se o host aceita mouse e teclado; `recover`, se ele se recupera de um quadro
+    /// `perms` são as permissões de quem assiste ([`SOUND`], [`PAD`], [`KEYBOARD`], [`MOUSE`]); `recover`, se ele se recupera de um quadro
     /// perdido sem quadro-chave (quem assiste avisa com `Nack` e segue mostrando). `hdr10`: 10 bits,
     /// BT.2020 com PQ. `yuv444`: HEVC com a cor inteira em cada pixel.
-    Info { codec: Codec, w: u32, h: u32, fps: u32, control: bool, recover: bool, hdr10: bool, yuv444: bool },
+    Info { codec: Codec, w: u32, h: u32, fps: u32, perms: u8, recover: bool, hdr10: bool, yuv444: bool },
     /// Quem assiste chegou: tamanho e Hz da tela dele, codecs que ele decodifica (bits 0 H.264,
     /// 1 HEVC, 2 AV1) e o número do processo, para o host tirar o som dele quando os dois estão no mesmo PC.
     /// `flags`: [`SEES_HDR`] e [`DECODES_444`].
@@ -115,6 +217,14 @@ pub enum Msg<'a> {
     Input { first: u32, events: &'a [u8] },
     /// Quem assiste perdeu este quadro (e talvez os seguintes até agora).
     Nack { frame: u32 },
+    /// Um controle de quem assiste: o número dele lá (0 a 3, 4 é o teclado), a sequência (só vale a
+    /// mais nova) e o estado. `on` falso: o controle saiu.
+    Pad { pad: u8, seq: u16, on: bool, state: PadState },
+    /// Vibração do controle virtual, de 0 a 255 nos dois motores.
+    Rumble { pad: u8, low: u8, high: u8 },
+    /// O que o host fez com o controle: jogador 1 a 4, a vaga do XInput lá (255 sem saber), ou
+    /// jogador 0 e o motivo em `why`.
+    PadInfo { pad: u8, player: u8, slot: u8, why: u8 },
 }
 
 pub fn codec_bit(c: Codec) -> u8 {
@@ -170,13 +280,13 @@ pub fn write(out: &mut Vec<u8>, m: &Msg) {
             out.extend_from_slice(&pts.to_le_bytes());
             out.extend_from_slice(data);
         }
-        Msg::Info { codec, w, h, fps, control, recover, hdr10, yuv444 } => {
+        Msg::Info { codec, w, h, fps, perms, recover, hdr10, yuv444 } => {
             head(out, Kind::Info);
             out.push(codec_id(codec));
             out.extend_from_slice(&w.to_le_bytes());
             out.extend_from_slice(&h.to_le_bytes());
             out.extend_from_slice(&fps.to_le_bytes());
-            out.push(control as u8);
+            out.push(perms);
             out.push(recover as u8);
             out.push(hdr10 as u8);
             out.push(yuv444 as u8);
@@ -216,6 +326,26 @@ pub fn write(out: &mut Vec<u8>, m: &Msg) {
             head(out, Kind::Nack);
             out.extend_from_slice(&frame.to_le_bytes());
         }
+        Msg::Pad { pad, seq, on, state: s } => {
+            head(out, Kind::Pad);
+            out.push(pad);
+            out.push(on as u8);
+            out.extend_from_slice(&seq.to_le_bytes());
+            out.extend_from_slice(&s.buttons.to_le_bytes());
+            out.push(s.lt);
+            out.push(s.rt);
+            for v in [s.lx, s.ly, s.rx, s.ry] {
+                out.extend_from_slice(&v.to_le_bytes());
+            }
+        }
+        Msg::Rumble { pad, low, high } => {
+            head(out, Kind::Rumble);
+            out.extend_from_slice(&[pad, low, high]);
+        }
+        Msg::PadInfo { pad, player, slot, why } => {
+            head(out, Kind::PadInfo);
+            out.extend_from_slice(&[pad, player, slot, why]);
+        }
     }
 }
 
@@ -252,7 +382,7 @@ pub fn read(b: &[u8]) -> Option<Msg<'_>> {
             pts: i64_at(b, 16)?,
             data: b.get(VIDEO_HEAD..)?,
         },
-        2 => Msg::Info { codec: codec_of(*b.get(4)?)?, w: u32_at(b, 5)?, h: u32_at(b, 9)?, fps: u32_at(b, 13)?, control: *b.get(17)? != 0, recover: *b.get(18)? != 0, hdr10: *b.get(19)? != 0, yuv444: *b.get(20)? != 0 },
+        2 => Msg::Info { codec: codec_of(*b.get(4)?)?, w: u32_at(b, 5)?, h: u32_at(b, 9)?, fps: u32_at(b, 13)?, perms: *b.get(17)?, recover: *b.get(18)? != 0, hdr10: *b.get(19)? != 0, yuv444: *b.get(20)? != 0 },
         3 => Msg::Hello { w: u32_at(b, 4)?, h: u32_at(b, 8)?, hz: u32_at(b, 12)?, codecs: *b.get(16)?, pid: u32_at(b, 17)?, flags: *b.get(21)? },
         4 => Msg::KeyReq,
         5 => Msg::Ping { t: i64_at(b, 4)? },
@@ -267,6 +397,22 @@ pub fn read(b: &[u8]) -> Option<Msg<'_>> {
             Msg::Input { first: u32_at(b, 4)?, events }
         }
         10 => Msg::Nack { frame: u32_at(b, 4)? },
+        11 => Msg::Pad {
+            pad: *b.get(4)?,
+            on: *b.get(5)? != 0,
+            seq: u16_at(b, 6)?,
+            state: PadState {
+                buttons: u16_at(b, 8)?,
+                lt: *b.get(10)?,
+                rt: *b.get(11)?,
+                lx: u16_at(b, 12)? as i16,
+                ly: u16_at(b, 14)? as i16,
+                rx: u16_at(b, 16)? as i16,
+                ry: u16_at(b, 18)? as i16,
+            },
+        },
+        12 => Msg::Rumble { pad: *b.get(4)?, low: *b.get(5)?, high: *b.get(6)? },
+        13 => Msg::PadInfo { pad: *b.get(4)?, player: *b.get(5)?, slot: *b.get(6)?, why: *b.get(7)? },
         _ => return None,
     })
 }
@@ -314,8 +460,21 @@ pub fn run_args() -> bool {
         }
         #[cfg(feature = "stream")]
         {
-            if a == "--stream-net" || a == "--stream-net=control" {
-                net::host(a.ends_with("=control"));
+            // Sem valor: quem parear agora só vê. `--stream-net=jogar`, `=total` e outros dão mais.
+            if a == "--stream-net" || a.starts_with("--stream-net=") {
+                let v = a.strip_prefix("--stream-net=").unwrap_or("ver");
+                match parse_perms(v) {
+                    Some(p) => net::host(p),
+                    None => eprintln!("permissão desconhecida: «{v}» (use total, jogar, teclado-mouse, ver, video, ou uma lista de som, controle, teclado, mouse)"),
+                }
+                return true;
+            }
+            if let Some(v) = a.strip_prefix("--stream-allow=") {
+                net::allow(v);
+                return true;
+            }
+            if let Some(v) = a.strip_prefix("--test-pads=") {
+                pads::bench(v);
                 return true;
             }
             if let Some(v) = a.strip_prefix("--stream-pair=") {
@@ -352,7 +511,11 @@ mod tests {
     #[test]
     fn packets_round_trip() {
         round(Msg::Video { key: true, idx: 3, count: 9, frame: 77, pts: -5, data: &[1, 2, 3] });
-        round(Msg::Info { codec: Codec::Av1, w: 1920, h: 1080, fps: 60, control: true, recover: true, hdr10: true, yuv444: false });
+        round(Msg::Info { codec: Codec::Av1, w: 1920, h: 1080, fps: 60, perms: SOUND | PAD, recover: true, hdr10: true, yuv444: false });
+        round(Msg::Pad { pad: 4, seq: 65535, on: true, state: PadState { buttons: 0xF00F, lt: 255, rt: 1, lx: -32768, ly: 32767, rx: -1, ry: 0 } });
+        round(Msg::Pad { pad: 0, seq: 0, on: false, state: PadState::default() });
+        round(Msg::Rumble { pad: 2, low: 200, high: 7 });
+        round(Msg::PadInfo { pad: 1, player: 3, slot: 2, why: PAD_OK });
         round(Msg::Nack { frame: 77 });
         round(Msg::Hello { w: 3840, h: 2160, hz: 119, codecs: 7, pid: 4321, flags: SEES_HDR | DECODES_444 });
         round(Msg::Audio { seq: 9, pts: 10, data: &[0, 1, 2, 3] });
@@ -376,6 +539,26 @@ mod tests {
         assert_eq!(first, 41);
         let back: Vec<Input> = events.chunks(INPUT_SIZE).filter_map(Input::get).collect();
         assert_eq!(back, evs);
+    }
+
+    #[test]
+    fn perms_presets_and_lists() {
+        assert_eq!(parse_perms("total"), Some(TOTAL));
+        assert_eq!(parse_perms("controlar"), Some(TOTAL));
+        assert_eq!(parse_perms("Ver"), Some(SOUND));
+        assert_eq!(parse_perms("jogar"), Some(SOUND | PAD));
+        assert_eq!(parse_perms("controle"), Some(PAD));
+        assert_eq!(parse_perms("som,controle,teclado,mouse"), Some(SOUND | PAD | KEYBOARD | MOUSE));
+        assert_eq!(parse_perms("teclado mouse"), Some(KEYBOARD | MOUSE));
+        assert_eq!(parse_perms("video"), Some(0));
+        assert_eq!(parse_perms("voar"), None);
+        assert_eq!(parse_perms(""), None);
+        // Ida e volta pelo arquivo.
+        for p in [0, SOUND, PAD, SOUND | PAD, PAD | MOUSE, KEYBOARD | MOUSE, SOUND | PAD | KEYBOARD | MOUSE, TOTAL] {
+            assert_eq!(parse_perms(&perms_key(p)), Some(p), "{p}");
+        }
+        assert_eq!(perms_text(SOUND | PAD), "Ver e usar controle");
+        assert_eq!(perms_text(PAD | MOUSE), "ver, controle de jogo, mouse");
     }
 
     #[test]

@@ -1,11 +1,13 @@
 //! Quem assiste: recebe o vídeo e o som, decodifica na GPU e mostra numa janela.
-//! Com o host em modo de controle, o mouse e o teclado da janela vão para o host.
-//! Ctrl+Alt+Shift+F alterna tela cheia sem borda (F11 também, quando só assiste).
+//! Com a permissão, o mouse e o teclado da janela vão para o host, e os controles daqui viram
+//! controles virtuais lá (só com a janela em primeiro plano; `PRISMA_PAD_BACKGROUND=1` manda sempre).
+//! `PRISMA_PAD_KEYS=1` faz o teclado virar um controle (veja `KEY_PAD`).
+//! Ctrl+Alt+Shift+F alterna tela cheia sem borda (F11 também, sem a permissão de teclado).
 //! Fechar a janela avisa o host. `PRISMA_MUTE=1` não toca o som.
 
 use std::collections::VecDeque;
 use std::net::{ToSocketAddrs, UdpSocket};
-use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU32, AtomicU64, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -23,6 +25,7 @@ use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::*;
 use windows::Win32::UI::HiDpi::*;
 use windows::Win32::UI::Input::KeyboardAndMouse::*;
+use windows::Win32::UI::Input::XboxController::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
 use super::*;
@@ -37,9 +40,19 @@ struct Frame {
 }
 
 enum Event {
-    Info { codec: Codec, w: u32, h: u32, fps: u32, control: bool, hdr10: bool, yuv444: bool },
+    Info { codec: Codec, w: u32, h: u32, fps: u32, perms: u8, hdr10: bool, yuv444: bool },
     Frame(Frame),
 }
+
+/// O que o host disse de um controle daqui: jogador (0 sem vaga), vaga do XInput lá e motivo.
+#[derive(Clone, Copy, PartialEq)]
+struct PadView {
+    player: u8,
+    slot: u8,
+    why: u8,
+}
+
+const NO_PAD: PadView = PadView { player: 0, slot: 255, why: PAD_OK };
 
 /// O que a linha de recepção divide com a janela.
 struct Shared {
@@ -68,6 +81,9 @@ struct Shared {
     underruns: AtomicU32,
     /// Som no buffer na hora de tocar, em quadros, para saber a latência do som.
     audio_fill: AtomicU32,
+    /// Permissões que o host deu, do último Info.
+    perms: AtomicU8,
+    pads: Mutex<[PadView; PADS]>,
 }
 
 /// Junta os pedaços de um quadro.
@@ -137,10 +153,31 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
         };
         sh.bytes.fetch_add(n as u64, Ordering::Relaxed);
         match read(&buf[..n]) {
-            Some(Msg::Info { codec, w, h, fps, control, recover: r, hdr10, yuv444 }) => {
+            Some(Msg::Info { codec, w, h, fps, perms, recover: r, hdr10, yuv444 }) => {
                 recover = r;
                 sh.got_info.store(true, Ordering::Relaxed);
-                push(Event::Info { codec, w, h, fps, control, hdr10, yuv444 });
+                sh.perms.store(perms, Ordering::Relaxed);
+                push(Event::Info { codec, w, h, fps, perms, hdr10, yuv444 });
+            }
+            Some(Msg::Rumble { pad, low, high }) => {
+                if pad < 4 {
+                    let v = XINPUT_VIBRATION { wLeftMotorSpeed: low as u16 * 257, wRightMotorSpeed: high as u16 * 257 };
+                    unsafe {
+                        XInputSetState(pad as u32, &v);
+                    }
+                }
+            }
+            Some(Msg::PadInfo { pad, player, slot, why }) => {
+                if let Some(p) = sh.pads.lock().unwrap().get_mut(pad as usize) {
+                    let new = PadView { player, slot, why };
+                    if *p != new {
+                        match player {
+                            0 => eprintln!("controle {}: {}", pad + 1, pad_why(why)),
+                            n => eprintln!("controle {}: jogador {n} no host", pad + 1),
+                        }
+                        *p = new;
+                    }
+                }
             }
             Some(Msg::Audio { seq, data, .. }) => {
                 sh.audio_blocks.fetch_add(1, Ordering::Relaxed);
@@ -305,14 +342,17 @@ unsafe fn play_loop(sh: &Shared) -> Result<()> {
 
 /// Mouse e teclado da janela, guardados pela função da janela até a próxima volta.
 struct Keys {
-    control: bool,
+    keyboard: bool,
+    mouse: bool,
+    /// O teclado vira controle: as teclas do mapa não vão como teclado.
+    pad_keys: bool,
     video: (u32, u32),
     pending: Vec<Input>,
     held: Vec<(u16, bool)>,
     buttons: [bool; 5],
 }
 
-static KEYS: Mutex<Keys> = Mutex::new(Keys { control: false, video: (0, 0), pending: Vec::new(), held: Vec::new(), buttons: [false; 5] });
+static KEYS: Mutex<Keys> = Mutex::new(Keys { keyboard: false, mouse: false, pad_keys: false, video: (0, 0), pending: Vec::new(), held: Vec::new(), buttons: [false; 5] });
 
 /// Área da janela onde está a imagem, com as faixas pretas de fora.
 fn video_rect(iw: u32, ih: u32, ow: u32, oh: u32) -> RECT {
@@ -331,15 +371,18 @@ unsafe fn key_event(h: HWND, k: &mut Keys, m: u32, w: WPARAM, l: LPARAM) -> bool
         toggle_full(h);
         return true;
     }
-    if !k.control {
+    let scan = ((l.0 >> 16) & 0xFF) as u16;
+    let extended = (l.0 >> 24) & 1 != 0;
+    if k.pad_keys && KEY_PAD.iter().any(|m| (m.0, m.1) == (scan, extended)) {
+        return true;
+    }
+    if !k.keyboard {
         if down && w.0 as u16 == VK_F11.0 {
             toggle_full(h);
             return true;
         }
         return false;
     }
-    let scan = ((l.0 >> 16) & 0xFF) as u16;
-    let extended = (l.0 >> 24) & 1 != 0;
     if down {
         if !k.held.contains(&(scan, extended)) {
             k.held.push((scan, extended));
@@ -475,7 +518,7 @@ unsafe extern "system" fn wndproc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRES
         WM_MOUSEMOVE | WM_LBUTTONDOWN | WM_LBUTTONUP | WM_RBUTTONDOWN | WM_RBUTTONUP | WM_MBUTTONDOWN | WM_MBUTTONUP | WM_XBUTTONDOWN | WM_XBUTTONUP
         | WM_MOUSEWHEEL | WM_MOUSEHWHEEL => {
             let mut k = KEYS.lock().unwrap();
-            if !k.control {
+            if !k.mouse {
                 return DefWindowProcW(h, m, w, l);
             }
             let hi = (w.0 >> 16) as u16;
@@ -521,7 +564,7 @@ unsafe extern "system" fn wndproc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRES
             DefWindowProcW(h, m, w, l)
         }
         // O cursor do host já vem na imagem: o daqui some em cima dela.
-        WM_SETCURSOR if (l.0 & 0xFFFF) as u32 == HTCLIENT && KEYS.lock().unwrap().control => {
+        WM_SETCURSOR if (l.0 & 0xFFFF) as u32 == HTCLIENT && KEYS.lock().unwrap().mouse => {
             SetCursor(None);
             LRESULT(1)
         }
@@ -535,6 +578,148 @@ unsafe extern "system" fn wndproc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRES
             LRESULT(0)
         }
         _ => DefWindowProcW(h, m, w, l),
+    }
+}
+
+// ---------- Controles ----------
+
+/// Teclado virando controle, por código de varredura (a posição da tecla, não a letra):
+/// WASD analógico esquerdo, setas direcional, J A, K B, U X, I Y, Q LB, E RB, Z LT, C RT,
+/// F e H os cliques dos analógicos, Enter Start, Backspace Back.
+const KEY_PAD: [(u16, bool, u16); 20] = [
+    (0x11, false, 0), // W
+    (0x1E, false, 0), // A
+    (0x1F, false, 0), // S
+    (0x20, false, 0), // D
+    (0x48, true, XINPUT_GAMEPAD_DPAD_UP.0),
+    (0x50, true, XINPUT_GAMEPAD_DPAD_DOWN.0),
+    (0x4B, true, XINPUT_GAMEPAD_DPAD_LEFT.0),
+    (0x4D, true, XINPUT_GAMEPAD_DPAD_RIGHT.0),
+    (0x24, false, XINPUT_GAMEPAD_A.0),
+    (0x25, false, XINPUT_GAMEPAD_B.0),
+    (0x16, false, XINPUT_GAMEPAD_X.0),
+    (0x17, false, XINPUT_GAMEPAD_Y.0),
+    (0x10, false, XINPUT_GAMEPAD_LEFT_SHOULDER.0),
+    (0x12, false, XINPUT_GAMEPAD_RIGHT_SHOULDER.0),
+    (0x2C, false, 0), // Z: gatilho esquerdo
+    (0x2E, false, 0), // C: gatilho direito
+    (0x21, false, XINPUT_GAMEPAD_LEFT_THUMB.0),
+    (0x23, false, XINPUT_GAMEPAD_RIGHT_THUMB.0),
+    (0x1C, false, XINPUT_GAMEPAD_START.0),
+    (0x0E, false, XINPUT_GAMEPAD_BACK.0),
+];
+
+/// Estado do controle feito pelo teclado agora.
+fn keyboard_pad() -> PadState {
+    let held = |scan: u16, ext: bool| unsafe {
+        let vk = if ext {
+            match scan {
+                0x48 => VK_UP.0 as u32,
+                0x50 => VK_DOWN.0 as u32,
+                0x4B => VK_LEFT.0 as u32,
+                _ => VK_RIGHT.0 as u32,
+            }
+        } else {
+            MapVirtualKeyW(scan as u32, MAPVK_VSC_TO_VK_EX)
+        };
+        vk != 0 && GetAsyncKeyState(vk as i32) < 0
+    };
+    let mut s = PadState::default();
+    for &(scan, ext, bit) in &KEY_PAD {
+        if bit != 0 && held(scan, ext) {
+            s.buttons |= bit;
+        }
+    }
+    let axis = |neg: bool, pos: bool| match (neg, pos) {
+        (true, false) => -32768,
+        (false, true) => 32767,
+        _ => 0,
+    };
+    s.lx = axis(held(0x1E, false), held(0x20, false));
+    s.ly = axis(held(0x1F, false), held(0x11, false));
+    s.lt = if held(0x2C, false) { 255 } else { 0 };
+    s.rt = if held(0x2E, false) { 255 } else { 0 };
+    s
+}
+
+/// Lê os controles daqui e manda para o host: na hora quando mudam, e a cada 100 ms para o host saber
+/// que continuam ali. Vagas vazias do XInput são conferidas uma vez por segundo, porque perguntar a
+/// uma vaga vazia demora.
+fn pads(link: Arc<dyn Link>, sh: Arc<Shared>, hwnd: isize) {
+    let background = std::env::var("PRISMA_PAD_BACKGROUND").as_deref() == Ok("1");
+    let keys = std::env::var("PRISMA_PAD_KEYS").as_deref() == Ok("1");
+    let mut last: [Option<PadState>; PADS] = [None; PADS];
+    let mut seq = [0u16; PADS];
+    let mut sent = [Instant::now(); PADS];
+    let mut look = [Instant::now(); 4];
+    // Quantas vezes ainda repetir o aviso de controle que saiu, contra perda.
+    let mut off = [0u8; PADS];
+    let mut out = Vec::with_capacity(32);
+    while !sh.quit.load(Ordering::Relaxed) {
+        std::thread::sleep(Duration::from_millis(4));
+        if sh.perms.load(Ordering::Relaxed) & PAD == 0 {
+            continue;
+        }
+        let focused = background || unsafe { GetForegroundWindow() }.0 as isize == hwnd;
+        // No mesmo PC, os controles virtuais do host aparecem aqui também: esses não voltam.
+        let theirs = if link.same_pc() { sh.pads.lock().unwrap().iter().filter(|p| p.player != 0 && p.slot < 4).fold(0u8, |m, p| m | 1 << p.slot) } else { 0 };
+        for i in 0..PADS {
+            let mut cur = if i == 4 {
+                keys.then(keyboard_pad)
+            } else if theirs & (1 << i) != 0 || (last[i].is_none() && Instant::now() < look[i]) {
+                None
+            } else {
+                let mut st = XINPUT_STATE::default();
+                if unsafe { XInputGetState(i as u32, &mut st) } == 0 {
+                    let g = st.Gamepad;
+                    Some(PadState { buttons: g.wButtons.0, lt: g.bLeftTrigger, rt: g.bRightTrigger, lx: g.sThumbLX, ly: g.sThumbLY, rx: g.sThumbRX, ry: g.sThumbRY })
+                } else {
+                    look[i] = Instant::now() + Duration::from_secs(1);
+                    None
+                }
+            };
+            // Fora da janela, o controle fica solto no host.
+            if !focused {
+                cur = cur.map(|_| PadState::default());
+            }
+            if cur.is_none() && last[i].is_some() {
+                off[i] = 3;
+            }
+            let due = sent[i].elapsed() > Duration::from_millis(100);
+            let send = match cur {
+                Some(s) => last[i] != Some(s) || due,
+                None => off[i] > 0 && (last[i].is_some() || due),
+            };
+            if send {
+                seq[i] = seq[i].wrapping_add(1);
+                if cur.is_none() {
+                    off[i] -= 1;
+                }
+                write(&mut out, &Msg::Pad { pad: i as u8, seq: seq[i], on: cur.is_some(), state: cur.unwrap_or_default() });
+                link.send(&out);
+                sent[i] = Instant::now();
+            }
+            last[i] = cur;
+        }
+    }
+}
+
+/// Como os controles daqui estão no host, para o título.
+fn pads_text(sh: &Shared) -> String {
+    let p = *sh.pads.lock().unwrap();
+    let mut parts = Vec::new();
+    for (i, v) in p.iter().enumerate() {
+        let who = if i == 4 { "teclado".to_string() } else { format!("controle {}", i + 1) };
+        match (v.player, v.why) {
+            (0, PAD_OK) => {}
+            (0, why) => parts.push(format!("{who}: {}", pad_why(why))),
+            (n, _) => parts.push(format!("{who}: jogador {n}")),
+        }
+    }
+    if parts.is_empty() {
+        String::new()
+    } else {
+        format!(" · {}", parts.join(", "))
     }
 }
 
@@ -709,6 +894,8 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         audio_blocks: AtomicU32::new(0),
         underruns: AtomicU32::new(0),
         audio_fill: AtomicU32::new(0),
+        perms: AtomicU8::new(0),
+        pads: Mutex::new([NO_PAD; PADS]),
     });
     let player = if sh.mute {
         None
@@ -719,6 +906,10 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     let rx = {
         let (l2, sh2, hello2) = (link.clone(), sh.clone(), hello.clone());
         std::thread::Builder::new().name("assistir-rede".into()).spawn(move || receive(l2, hello2, sh2)).unwrap()
+    };
+    let pad_thread = {
+        let (l2, sh2, h) = (link.clone(), sh.clone(), hwnd.0 as isize);
+        std::thread::Builder::new().name("assistir-controles".into()).spawn(move || pads(l2, sh2, h)).ok()
     };
 
     let mut dec: Option<Decoder> = None;
@@ -770,10 +961,12 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         let mut last: Option<Decoded> = None;
         for e in events {
             match e {
-                Event::Info { codec, w, h, fps, control, hdr10, yuv444 } => {
+                Event::Info { codec, w, h, fps, perms, hdr10, yuv444 } => {
                     {
                         let mut k = KEYS.lock().unwrap();
-                        k.control = control;
+                        k.keyboard = perms & KEYBOARD != 0;
+                        k.mouse = perms & MOUSE != 0;
+                        k.pad_keys = perms & PAD != 0 && std::env::var("PRISMA_PAD_KEYS").as_deref() == Ok("1");
                         k.video = (w, h);
                     }
                     if info != Some((codec, w, h, fps)) || vfmt != (hdr10, yuv444) {
@@ -913,7 +1106,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
             };
             let title = match info {
                 Some((c, w, h, _)) => format!(
-                    "Prisma · {}x{} {}{} · {:.0} q/s · {:.1} Mbit/s · rede {:.1} ms · ponta a ponta {:.1} ms · perdidos {} · {}",
+                    "Prisma · {}x{} {}{} · {:.0} q/s · {:.1} Mbit/s · rede {:.1} ms · ponta a ponta {:.1} ms · perdidos {} · {}{}",
                     w,
                     h,
                     codec_name(c),
@@ -923,7 +1116,8 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                     rtt as f64 / 10_000.0,
                     pct(&mut second.e2e.clone(), 0.5),
                     sh.lost.load(Ordering::Relaxed),
-                    link.route()
+                    link.route(),
+                    pads_text(&sh)
                 ),
                 None => format!("Prisma · conectando ({})", link.route()),
             };
@@ -947,6 +1141,9 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     write(&mut bye, &Msg::Bye);
     link.send(&bye);
     let _ = rx.join();
+    if let Some(t) = pad_thread {
+        let _ = t.join();
+    }
     let _ = CloseHandle(wake);
 
     if let Some(path) = out_file {

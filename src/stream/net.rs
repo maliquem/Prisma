@@ -3,7 +3,10 @@
 //! (ZeroTier, Tailscale) e por último os relés públicos da n0. Tudo vai criptografado de ponta a
 //! ponta; o relé só repassa pacotes que não consegue ler.
 //!
-//! - `--stream-net[=control]`: compartilha para os aparelhos pareados e mostra um convite de 10 min.
+//! - `--stream-net[=permissões]`: compartilha para os aparelhos pareados e mostra um convite de 10 min.
+//!   As permissões valem para quem parear com esse convite (padrão `ver`; veja `parse_perms`).
+//!   Várias pessoas assistem juntas, cada uma com as permissões do aparelho dela.
+//! - `--stream-allow=nome|permissões`: muda as permissões de um aparelho pareado.
 //! - `--stream-pair=CONVITE`: pareia com o PC que mostrou o convite.
 //! - `--stream-connect=nome|saida.txt|segundos`: assiste a um PC pareado (nome ou começo do id).
 //! - `--stream-devices`: mostra o id deste PC e os aparelhos pareados.
@@ -23,7 +26,7 @@ use windows::Win32::Foundation::*;
 use windows::Win32::Security::Cryptography::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
-use super::host::{self, Hello};
+use super::host::{self, Hello, Joiner};
 use super::*;
 
 const ALPN_STREAM: &[u8] = b"prisma/stream/1";
@@ -130,8 +133,9 @@ struct Device {
     role: Role,
     id: EndpointId,
     name: String,
-    /// Pode usar mouse e teclado (só vale para quem assiste a este PC).
-    control: bool,
+    /// O que pode fazer além de ver (só vale para quem assiste a este PC): bits de `SOUND`, `PAD`,
+    /// `KEYBOARD` e `MOUSE`.
+    perms: u8,
     /// Pergunta antes de cada conexão.
     ask: bool,
 }
@@ -161,10 +165,10 @@ fn load() -> Vec<Device> {
                 _ => return None,
             };
             let id = id_from_hex(f.next()?)?;
-            let control = f.next()? == "controlar";
+            let perms = parse_perms(f.next()?).unwrap_or(SOUND);
             let ask = f.next()? == "perguntar";
             let name = clean_name(f.next()?);
-            Some(Device { role, id, name, control, ask })
+            Some(Device { role, id, name, perms, ask })
         })
         .collect()
 }
@@ -176,7 +180,7 @@ fn save(list: &[Device]) -> io::Result<()> {
             "{}\t{}\t{}\t{}\t{}\n",
             if d.role == Role::Viewer { "assiste" } else { "host" },
             hex(&d.id),
-            if d.control { "controlar" } else { "ver" },
+            perms_key(d.perms),
             if d.ask { "perguntar" } else { "confiar" },
             d.name
         );
@@ -384,10 +388,10 @@ fn message(text: &str, flags: MESSAGEBOX_STYLE) -> MESSAGEBOX_RESULT {
 }
 
 /// Pergunta se pareia. Devolve se deve perguntar a cada conexão, ou None se recusou.
-fn approve_pair(name: &str, code: &str, control: bool) -> Option<bool> {
-    let what = if control { "assistir a este PC e usar o mouse e o teclado dele" } else { "assistir a este PC" };
+fn approve_pair(name: &str, code: &str, perms: u8) -> Option<bool> {
     let text = format!(
-        "«{name}» quer parear para {what}.\n\nCódigo de confirmação: {code}\nConfira se o outro PC mostra o mesmo código. Se não mostrar, clique em Cancelar.\n\nSim: confiar neste aparelho.\nNão: parear, mas perguntar a cada conexão.\nCancelar: recusar."
+        "«{name}» quer parear com este PC.\nPermissões: {}.\n\nCódigo de confirmação: {code}\nConfira se o outro PC mostra o mesmo código. Se não mostrar, clique em Cancelar.\n\nSim: confiar neste aparelho.\nNão: parear, mas perguntar a cada conexão.\nCancelar: recusar.",
+        perms_text(perms)
     );
     match message(&text, MB_YESNOCANCEL | MB_ICONQUESTION | MB_DEFBUTTON3) {
         IDYES => Some(false),
@@ -396,13 +400,13 @@ fn approve_pair(name: &str, code: &str, control: bool) -> Option<bool> {
     }
 }
 
-fn approve_connect(name: &str) -> bool {
-    message(&format!("«{name}» quer se conectar a este PC. Permitir?"), MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2) == IDYES
+fn approve_connect(name: &str, perms: u8) -> bool {
+    message(&format!("«{name}» quer se conectar a este PC.\nPermissões: {}.\n\nPermitir?", perms_text(perms)), MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2) == IDYES
 }
 
 // ---------- Host ----------
 
-async fn pair_host(conn: Connection, me: EndpointId, invite: Arc<Mutex<Invite>>, control: bool) {
+async fn pair_host(conn: Connection, me: EndpointId, invite: Arc<Mutex<Invite>>, perms: u8) {
     let who = conn.remote_id();
     let run = async {
         let (mut send, mut recv) = conn.accept_bi().await.ok()?;
@@ -421,11 +425,11 @@ async fn pair_host(conn: Connection, me: EndpointId, invite: Arc<Mutex<Invite>>,
         let code = sas(&me, &who, secret);
         eprintln!("«{name}» quer parear. Código de confirmação: {code}");
         let n2 = name.clone();
-        let answer = tokio::task::spawn_blocking(move || approve_pair(&n2, &code, control)).await.ok()?;
+        let answer = tokio::task::spawn_blocking(move || approve_pair(&n2, &code, perms)).await.ok()?;
         let mut reply = vec![answer.is_some() as u8];
         if let Some(ask) = answer {
             invite.lock().unwrap().used = true;
-            match remember(Device { role: Role::Viewer, id: who, name: name.clone(), control, ask }) {
+            match remember(Device { role: Role::Viewer, id: who, name: name.clone(), perms, ask }) {
                 Ok(()) => eprintln!("pareado com «{name}»"),
                 Err(e) => eprintln!("pareou, mas não deu para guardar: {e}"),
             }
@@ -442,7 +446,7 @@ async fn pair_host(conn: Connection, me: EndpointId, invite: Arc<Mutex<Invite>>,
     let _ = run.await;
 }
 
-async fn accept_loop(ep: Endpoint, invite: Arc<Mutex<Invite>>, tx: mpsc::Sender<(Connection, Device)>, control: bool) {
+async fn accept_loop(ep: Endpoint, invite: Arc<Mutex<Invite>>, tx: mpsc::Sender<(Connection, Device)>, perms: u8) {
     let me = ep.id();
     while let Some(incoming) = ep.accept().await {
         let (invite, tx) = (invite.clone(), tx.clone());
@@ -451,7 +455,7 @@ async fn accept_loop(ep: Endpoint, invite: Arc<Mutex<Invite>>, tx: mpsc::Sender<
             let Ok(conn) = accepting.await else { return };
             let who = conn.remote_id();
             if conn.alpn() == ALPN_PAIR {
-                pair_host(conn, me, invite, control).await;
+                pair_host(conn, me, invite, perms).await;
             } else if conn.alpn() == ALPN_STREAM {
                 let Some(dev) = load().into_iter().find(|d| d.role == Role::Viewer && d.id == who) else {
                     eprintln!("conexão recusada: {} não está pareado", who.fmt_short());
@@ -459,8 +463,8 @@ async fn accept_loop(ep: Endpoint, invite: Arc<Mutex<Invite>>, tx: mpsc::Sender<
                     return;
                 };
                 if dev.ask {
-                    let name = dev.name.clone();
-                    if !tokio::task::spawn_blocking(move || approve_connect(&name)).await.unwrap_or(false) {
+                    let (name, p) = (dev.name.clone(), dev.perms);
+                    if !tokio::task::spawn_blocking(move || approve_connect(&name, p)).await.unwrap_or(false) {
                         eprintln!("conexão de «{}» recusada", dev.name);
                         conn.close(2u32.into(), b"recusado");
                         return;
@@ -474,7 +478,7 @@ async fn accept_loop(ep: Endpoint, invite: Arc<Mutex<Invite>>, tx: mpsc::Sender<
     }
 }
 
-pub fn host(control: bool) {
+pub fn host(perms: u8) {
     eprintln!("{NOTICE}");
     let sk = match identity() {
         Ok(k) => k,
@@ -489,37 +493,51 @@ pub fn host(control: bool) {
     }
     let secret = random::<16>();
     let invite = Arc::new(Mutex::new(Invite { secret, made: Instant::now(), tries: 0, used: false }));
-    let mode = if control { "com mouse e teclado de quem assiste" } else { "só para ver" };
-    eprintln!("Prisma compartilhando pela internet ({mode}). Este PC: «{}», id {}", my_name(), ep.id().fmt_short());
+    eprintln!("Prisma compartilhando pela internet. Quem parear agora: {}. Este PC: «{}», id {}", perms_text(perms), my_name(), ep.id().fmt_short());
     eprintln!("Convite para parear outro PC (vale 10 minutos e uma vez):\n\n{}\n", invite_text(&ep.id(), &secret));
     let (tx, rx) = mpsc::channel();
-    rt().spawn(accept_loop(ep.clone(), invite, tx, control));
+    rt().spawn(accept_loop(ep.clone(), invite, tx, perms));
+
+    // Cada conexão espera a tela de quem assiste numa linha própria e entra na sala pronta.
+    let (jtx, jrx) = mpsc::channel::<Joiner>();
+    std::thread::Builder::new()
+        .name("compartilhar-chegadas".into())
+        .spawn(move || {
+            while let Ok((conn, dev)) = rx.recv() {
+                let jtx = jtx.clone();
+                std::thread::spawn(move || {
+                    eprintln!("«{}» conectou", dev.name);
+                    let link = Net::new(conn);
+                    let mut buf = vec![0u8; 2048];
+                    let t = Instant::now();
+                    let hello = loop {
+                        if t.elapsed() > Duration::from_secs(10) {
+                            break None;
+                        }
+                        match link.recv(&mut buf, Duration::from_millis(200)) {
+                            Poll::Got(n) => {
+                                if let Some(h) = read(&buf[..n]).as_ref().and_then(Hello::from_msg) {
+                                    break Some(h);
+                                }
+                            }
+                            Poll::Closed => break None,
+                            _ => {}
+                        }
+                    };
+                    match hello {
+                        Some(hello) => {
+                            let _ = jtx.send(Joiner { link, hello, perms: dev.perms, name: dev.name });
+                        }
+                        None => eprintln!("«{}» não mandou a tela dele a tempo", dev.name),
+                    }
+                });
+            }
+        })
+        .ok();
 
     let Some(d) = host::prepare() else { return };
-    let mut buf = vec![0u8; 2048];
-    while let Ok((conn, dev)) = rx.recv() {
-        eprintln!("«{}» conectou", dev.name);
-        let link = Net::new(conn);
-        let t = Instant::now();
-        let hello = loop {
-            if t.elapsed() > Duration::from_secs(10) {
-                break None;
-            }
-            match link.recv(&mut buf, Duration::from_millis(200)) {
-                Poll::Got(n) => {
-                    if let Some(h) = read(&buf[..n]).as_ref().and_then(Hello::from_msg) {
-                        break Some(h);
-                    }
-                }
-                Poll::Closed => break None,
-                _ => {}
-            }
-        };
-        let Some(hello) = hello else {
-            eprintln!("«{}» não mandou a tela dele a tempo", dev.name);
-            continue;
-        };
-        host::serve(&d, link, hello, control && dev.control);
+    while let Ok(first) = jrx.recv() {
+        host::serve(&d, first, Some(&jrx));
     }
 }
 
@@ -560,7 +578,7 @@ pub fn pair(text: &str) {
         let r = ask_pair(&ep, host_id.into(), &secret).await;
         ep.close().await;
         let name = r?;
-        remember(Device { role: Role::Host, id: host_id, name: name.clone(), control: false, ask: false }).map_err(|e| e.to_string())?;
+        remember(Device { role: Role::Host, id: host_id, name: name.clone(), perms: 0, ask: false }).map_err(|e| e.to_string())?;
         Ok(name)
     });
     match r {
@@ -611,10 +629,29 @@ pub fn devices() {
     }
     for d in list {
         let role = match d.role {
-            Role::Viewer => format!("pode assistir a este PC ({}, {})", if d.control { "com mouse e teclado" } else { "só ver" }, if d.ask { "pergunta a cada conexão" } else { "confiável" }),
+            Role::Viewer => format!("pode assistir a este PC ({}; {})", perms_text(d.perms), if d.ask { "pergunta a cada conexão" } else { "confiável" }),
             Role::Host => "este PC assiste a ele".into(),
         };
         eprintln!("«{}» {}: {role}", d.name, &hex(&d.id)[..10]);
+    }
+}
+
+/// `nome|permissões`: muda o que um aparelho que assiste a este PC pode fazer.
+pub fn allow(arg: &str) {
+    let (key, value) = arg.split_once('|').unwrap_or((arg, ""));
+    let Some(perms) = parse_perms(value) else {
+        return eprintln!("permissão desconhecida: «{value}» (use total, jogar, teclado-mouse, ver, video, ou uma lista de som, controle, teclado, mouse)");
+    };
+    let mut list = load();
+    let Some(dev) = find(&list, Role::Viewer, key) else {
+        return eprintln!("nenhum aparelho que assiste com o nome «{key}» (veja --stream-devices)");
+    };
+    for d in list.iter_mut().filter(|d| d.role == Role::Viewer && d.id == dev.id) {
+        d.perms = perms;
+    }
+    match save(&list) {
+        Ok(()) => eprintln!("«{}» agora: {} (vale na próxima conexão)", dev.name, perms_text(perms)),
+        Err(e) => eprintln!("não deu para salvar: {e}"),
     }
 }
 
@@ -726,7 +763,7 @@ mod tests {
             let (a2, inv2) = (a.clone(), invite.clone());
             let host = tokio::spawn(async move {
                 let conn = a2.accept().await.unwrap().accept().unwrap().await.unwrap();
-                pair_host(conn, a2.id(), inv2, false).await;
+                pair_host(conn, a2.id(), inv2, SOUND).await;
             });
             let r = ask_pair(&b, a.addr(), &[2; 16]).await;
             let _ = host.await;

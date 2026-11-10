@@ -1,10 +1,11 @@
 //! Quem compartilha: captura a tela principal e o som, codifica e manda para quem assiste.
-//! No modo de controle, aplica o mouse e o teclado de quem assiste.
+//! Várias pessoas podem assistir juntas (co-op): cada uma com as permissões do aparelho dela,
+//! o mouse e o teclado aplicados aqui e os controles dela virando controles virtuais.
 
 use std::collections::{HashSet, VecDeque};
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use windows::core::*;
@@ -24,6 +25,7 @@ use windows::Win32::System::WinRT::Direct3D11::*;
 use windows::Win32::UI::Input::KeyboardAndMouse::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
+use super::pads::{Bridge, VirtualPad};
 use super::*;
 use crate::capture::live_enc::{LiveEncoder, VideoFmt};
 use crate::capture::engine::{bgra_texture, bitrate, even, ConvOut, Prep};
@@ -32,8 +34,12 @@ use crate::capture::mux::{Codec, Pkt};
 use crate::capture::sound;
 use crate::capture::{d3d, monitor_color, monitor_item, D3d};
 
-/// Sem notícia de quem assiste por este tempo, a sessão acaba.
+/// Sem notícia de quem assiste por este tempo, ela sai da sessão.
 const SILENCE: Duration = Duration::from_secs(5);
+/// Controle sem notícia por este tempo fica parado (solto), sem sair.
+const PAD_STALE: Duration = Duration::from_secs(1);
+/// Vagas do XInput: quatro controles no Windows, contando os de verdade do host.
+const MAX_PADS: usize = 4;
 
 #[derive(Clone, Copy)]
 pub(super) struct Hello {
@@ -54,10 +60,109 @@ impl Hello {
     }
 }
 
+/// Quem chegou e vai entrar na sessão.
+pub(super) struct Joiner {
+    pub link: Arc<dyn Link>,
+    pub hello: Hello,
+    pub perms: u8,
+    pub name: String,
+}
+
+/// Um controle de quem assiste, ligado aqui.
+struct Slot {
+    dev: Box<dyn VirtualPad>,
+    seq: u16,
+    heard: Instant,
+    /// Parado por falta de notícia.
+    idle: bool,
+    rumble: (u8, u8),
+    rumble_sent: Instant,
+}
+
+impl Slot {
+    fn player(&self, fallback: usize) -> u8 {
+        self.dev.slot().map_or(fallback as u8 + 1, |s| s + 1)
+    }
+}
+
+/// Uma pessoa assistindo.
+struct Guest {
+    link: Arc<dyn Link>,
+    hello: Hello,
+    perms: u8,
+    name: String,
+    input: Option<Injector>,
+    pads: [Option<Slot>; PADS],
+    /// Último motivo de recusa avisado para cada controle, para não repetir a cada pacote.
+    refused: [u8; PADS],
+    heard: Instant,
+    gone: bool,
+}
+
+impl Guest {
+    fn new(j: Joiner) -> Self {
+        Guest { link: j.link, hello: j.hello, perms: j.perms, name: j.name, input: None, pads: Default::default(), refused: [PAD_OK; PADS], heard: Instant::now(), gone: false }
+    }
+
+    fn send(&self, m: &Msg, out: &mut Vec<u8>) {
+        write(out, m);
+        self.link.send(out);
+    }
+}
+
+/// Quem está na sala e a ponte dos controles. Vive entre uma sessão e outra, para os controles não
+/// caírem quando o vídeo recomeça.
+struct Room {
+    guests: Vec<Guest>,
+    bridge: Option<Bridge>,
+    /// Por que a ponte não abriu, e quando tentar de novo.
+    bridge_err: Option<(String, Instant)>,
+    /// O jogo em primeiro plano tem anti-cheat: os controles virtuais saem.
+    anti_cheat: bool,
+    checked: Instant,
+}
+
+impl Room {
+    fn pads(&self) -> usize {
+        self.guests.iter().map(|g| g.pads.iter().flatten().count()).sum()
+    }
+
+    /// Vagas do XInput dos controles virtuais daqui.
+    fn virtual_slots(&self) -> u8 {
+        self.guests.iter().flat_map(|g| g.pads.iter().flatten()).filter_map(|s| s.dev.slot()).fold(0, |m, s| m | 1 << s)
+    }
+
+    fn bridge(&mut self) -> std::result::Result<&Bridge, String> {
+        if self.bridge.is_none() {
+            if let Some((e, t)) = &self.bridge_err {
+                if t.elapsed() < Duration::from_secs(10) {
+                    return Err(e.clone());
+                }
+            }
+            match Bridge::open() {
+                Ok(b) => {
+                    eprintln!("controles: ponte {} aberta", b.name);
+                    self.bridge = Some(b);
+                    self.bridge_err = None;
+                }
+                Err(e) => {
+                    eprintln!("controles: {e}");
+                    self.bridge_err = Some((e.clone(), Instant::now()));
+                    return Err(e);
+                }
+            }
+        }
+        Ok(self.bridge.as_ref().unwrap())
+    }
+}
+
 pub(super) enum End {
+    /// Todo mundo saiu.
     Gone,
-    /// Quem assiste reabriu (mesmo canal) ou alguém chegou de outro endereço (só no UDP).
-    Again(Hello, Option<SocketAddr>),
+    /// Recomeça com quem está na sala (alguém reabriu, ou chegou alguém que pede outro vídeo).
+    Again,
+    /// Outro chegou pelo UDP (só na rede local, uma pessoa por vez).
+    Stranger(Hello, SocketAddr),
 }
 
 /// Prepara o Windows e o Direct3D para compartilhar.
@@ -82,18 +187,25 @@ pub(super) fn prepare() -> Option<D3d> {
     Some(d)
 }
 
-/// Uma sessão com quem assiste, repetida enquanto ele reabrir no mesmo canal.
+/// Quantas pessoas assistem juntas: `PRISMA_GUESTS`, padrão 3.
+fn max_guests() -> usize {
+    std::env::var("PRISMA_GUESTS").ok().and_then(|v| v.parse().ok()).unwrap_or(3).clamp(1, 8)
+}
+
+/// Uma sala, do primeiro que chega até o último sair. Quem chega pelo `joins` entra junto.
 /// Devolve o endereço de alguém novo que chegou pelo UDP, se for o caso.
-pub(super) fn serve(d: &D3d, link: Arc<dyn Link>, mut hello: Hello, control: bool) -> Option<(Hello, SocketAddr)> {
+pub(super) fn serve(d: &D3d, first: Joiner, joins: Option<&mpsc::Receiver<Joiner>>) -> Option<(Hello, SocketAddr)> {
+    let mut room = Room { guests: vec![Guest::new(first)], bridge: None, bridge_err: None, anti_cheat: false, checked: Instant::now() - Duration::from_secs(10) };
+    let g = &room.guests[0];
+    eprintln!("chegou «{}»: tela {}x{} a {} Hz, {} ({})", g.name, g.hello.w, g.hello.h, g.hello.hz, perms_text(g.perms), g.link.route());
     loop {
-        eprintln!("chegou quem assiste: tela {}x{} a {} Hz ({})", hello.w, hello.h, hello.hz, link.route());
-        match unsafe { session(d, &link, hello, control) } {
+        match unsafe { session(d, &mut room, joins) } {
             Ok(End::Gone) => {
-                eprintln!("quem assistia saiu");
+                eprintln!("todo mundo saiu");
                 return None;
             }
-            Ok(End::Again(h, None)) => hello = h,
-            Ok(End::Again(h, Some(from))) => return Some((h, from)),
+            Ok(End::Again) => {}
+            Ok(End::Stranger(h, from)) => return Some((h, from)),
             Err(e) => {
                 eprintln!("a sessão parou: {e:?}");
                 return None;
@@ -111,7 +223,7 @@ pub fn run(port: u16, control: bool) {
         }
     };
     let Some(d) = prepare() else { return };
-    let mode = if control { "com mouse e teclado de quem assiste" } else { "só para ver" };
+    let mode = if control { "com mouse, teclado e controles de quem assiste" } else { "só para ver" };
     eprintln!("Prisma compartilhando ({mode}): esperando quem assiste na porta UDP {port}");
     let mut buf = vec![0u8; 2048];
     let mut next: Option<(Hello, SocketAddr)> = None;
@@ -129,13 +241,14 @@ pub fn run(port: u16, control: bool) {
             }
         };
         let Ok(s) = sock.try_clone() else { continue };
-        next = serve(&d, Arc::new(Udp::new(s, from)), hello, control);
+        let j = Joiner { link: Arc::new(Udp::new(s, from)), hello, perms: if control { TOTAL } else { SOUND }, name: from.to_string() };
+        next = serve(&d, j, None);
     }
 }
 
-/// Som do PC em blocos de 5 ms. Com os dois lados no mesmo PC, tira o som de quem assiste,
-/// senão ele voltaria em eco.
-fn audio(link: Arc<dyn Link>, exclude: Option<u32>, stop: Arc<AtomicBool>) {
+/// Som do PC em blocos de 5 ms, para quem tem a permissão de som. Com quem assiste no mesmo PC,
+/// tira o som da janela dele, senão ele voltaria em eco.
+fn audio(links: Arc<Mutex<Vec<Arc<dyn Link>>>>, exclude: Option<u32>, stop: Arc<AtomicBool>) {
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
         let src = match exclude {
@@ -162,7 +275,9 @@ fn audio(link: Arc<dyn Link>, exclude: Option<u32>, stop: Arc<AtomicBool>) {
                     block.extend_from_slice(&((v.clamp(-1.0, 1.0) * 32767.0) as i16).to_le_bytes());
                 }
                 write(&mut out, &Msg::Audio { seq, pts: now(), data: &block });
-                link.send(&out);
+                for l in links.lock().unwrap().iter() {
+                    l.send(&out);
+                }
                 seq = seq.wrapping_add(1);
             }
         }
@@ -170,18 +285,19 @@ fn audio(link: Arc<dyn Link>, exclude: Option<u32>, stop: Arc<AtomicBool>) {
     }
 }
 
-/// Aplica no PC o mouse e o teclado de quem assiste.
+/// Aplica no PC o mouse e o teclado de quem assiste, só o que as permissões dela deixam.
 struct Injector {
     /// Monitor transmitido e área de todos os monitores, em pixels.
     mon: RECT,
     virt: RECT,
+    perms: u8,
     next: Option<u32>,
     keys: HashSet<(u16, bool)>,
     buttons: [bool; 5],
 }
 
 impl Injector {
-    fn new(mon: HMONITOR) -> Self {
+    fn new(mon: HMONITOR, perms: u8) -> Self {
         let mut mi = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
         unsafe {
             let _ = GetMonitorInfoW(mon, &mut mi);
@@ -190,7 +306,7 @@ impl Injector {
             let (x, y) = (GetSystemMetrics(SM_XVIRTUALSCREEN), GetSystemMetrics(SM_YVIRTUALSCREEN));
             RECT { left: x, top: y, right: x + GetSystemMetrics(SM_CXVIRTUALSCREEN), bottom: y + GetSystemMetrics(SM_CYVIRTUALSCREEN) }
         };
-        Self { mon: mi.rcMonitor, virt, next: None, keys: HashSet::new(), buttons: [false; 5] }
+        Self { mon: mi.rcMonitor, virt, perms, next: None, keys: HashSet::new(), buttons: [false; 5] }
     }
 
     fn mouse(flags: MOUSE_EVENT_FLAGS, dx: i32, dy: i32, data: i32) -> INPUT {
@@ -232,6 +348,13 @@ impl Injector {
     }
 
     fn one(&mut self, e: Input) -> Option<INPUT> {
+        let allowed = match e {
+            Input::Key { .. } => self.perms & KEYBOARD != 0,
+            _ => self.perms & MOUSE != 0,
+        };
+        if !allowed {
+            return None;
+        }
         Some(match e {
             Input::Move { x, y } => {
                 // Da imagem para o monitor, e do monitor para a escala de 0 a 65535 da área toda.
@@ -301,17 +424,166 @@ impl Injector {
     }
 }
 
-unsafe fn session(d: &D3d, link: &Arc<dyn Link>, hello: Hello, control: bool) -> Result<End> {
+/// O programa em primeiro plano tem sinal de anti-cheat. `PRISMA_PADS_ANTICHEAT=1` ignora (por conta dela).
+fn foreground_anti_cheat() -> bool {
+    if std::env::var("PRISMA_PADS_ANTICHEAT").as_deref() == Ok("1") {
+        return false;
+    }
+    let pid = crate::sys::procs::window_pid(unsafe { GetForegroundWindow() });
+    pid != 0 && pid != std::process::id() && crate::sys::procs::image_path(pid).is_some_and(|p| crate::meter::anti_cheat(&p))
+}
+
+/// O que um controle de quem assiste mandou.
+struct PadMsg {
+    guest: usize,
+    pad: u8,
+    seq: u16,
+    on: bool,
+    state: PadState,
+}
+
+/// Liga, atualiza ou solta o controle virtual de um controle de quem assiste.
+fn pad_msg(room: &mut Room, m: PadMsg, out: &mut Vec<u8>) {
+    let i = m.pad as usize;
+    if i >= PADS {
+        return;
+    }
+    let refuse = |room: &mut Room, why: u8, out: &mut Vec<u8>| {
+        let g = &mut room.guests[m.guest];
+        g.pads[i] = None;
+        if g.refused[i] != why {
+            g.refused[i] = why;
+            eprintln!("controle {} de «{}» recusado: {}", i + 1, g.name, pad_why(why));
+            g.send(&Msg::PadInfo { pad: m.pad, player: 0, slot: 255, why }, out);
+        }
+    };
+    if !m.on {
+        let g = &mut room.guests[m.guest];
+        if g.pads[i].take().is_some() {
+            eprintln!("controle {} de «{}» saiu", i + 1, g.name);
+        }
+        g.refused[i] = PAD_OK;
+        return;
+    }
+    if room.guests[m.guest].perms & PAD == 0 {
+        return refuse(room, PAD_NO_PERMISSION, out);
+    }
+    if room.anti_cheat {
+        return refuse(room, PAD_ANTI_CHEAT, out);
+    }
+    // No mesmo PC, quem assiste também enxerga os controles virtuais daqui: um deles voltando
+    // viraria outro controle, sem fim.
+    if room.guests[m.guest].link.same_pc() && i < 4 && room.virtual_slots() & (1 << i) != 0 {
+        return refuse(room, PAD_LOOP, out);
+    }
+    if let Some(s) = &mut room.guests[m.guest].pads[i] {
+        if (m.seq.wrapping_sub(s.seq) as i16) > 0 || s.idle {
+            s.seq = m.seq;
+            s.heard = Instant::now();
+            s.idle = false;
+            if !s.dev.update(&m.state) {
+                room.guests[m.guest].pads[i] = None;
+            }
+        }
+        return;
+    }
+    if room.pads() >= MAX_PADS {
+        return refuse(room, PAD_FULL, out);
+    }
+    let dev = match room.bridge().and_then(|b| b.plug()) {
+        Ok(d) => d,
+        Err(e) => {
+            if room.guests[m.guest].refused[i] != PAD_NO_DRIVER {
+                eprintln!("controles: {e}");
+            }
+            return refuse(room, PAD_NO_DRIVER, out);
+        }
+    };
+    let count = room.pads();
+    let g = &mut room.guests[m.guest];
+    let mut s = Slot { dev, seq: m.seq, heard: Instant::now(), idle: false, rumble: (0, 0), rumble_sent: Instant::now() };
+    s.dev.update(&m.state);
+    let player = s.player(count);
+    eprintln!("controle {} de «{}» ligado: jogador {player}", i + 1, g.name);
+    g.refused[i] = PAD_OK;
+    g.send(&Msg::PadInfo { pad: m.pad, player, slot: s.dev.slot().unwrap_or(255), why: PAD_OK }, out);
+    g.pads[i] = Some(s);
+}
+
+/// Vibração, controles parados e o aviso de vaga repetido de tempos em tempos.
+fn pads_tick(room: &mut Room, out: &mut Vec<u8>, repeat_info: bool) {
+    // Jogo com anti-cheat em primeiro plano: os controles virtuais saem do Windows.
+    if room.checked.elapsed() > Duration::from_secs(2) {
+        room.checked = Instant::now();
+        let ac = room.guests.iter().any(|g| g.perms & PAD != 0) && foreground_anti_cheat();
+        if ac != room.anti_cheat {
+            room.anti_cheat = ac;
+            if ac {
+                eprintln!("controles: o jogo em primeiro plano tem anti-cheat; os controles virtuais saíram");
+                for g in &mut room.guests {
+                    for (i, p) in g.pads.iter_mut().enumerate() {
+                        if p.take().is_some() {
+                            g.refused[i] = PAD_ANTI_CHEAT;
+                            write(out, &Msg::PadInfo { pad: i as u8, player: 0, slot: 255, why: PAD_ANTI_CHEAT });
+                            g.link.send(out);
+                        }
+                    }
+                }
+            } else {
+                eprintln!("controles: anti-cheat fora do primeiro plano; os controles voltam no próximo toque");
+                for g in &mut room.guests {
+                    g.refused = [PAD_OK; PADS];
+                }
+            }
+        }
+    }
+    let mut n = 0;
+    for g in &mut room.guests {
+        for (i, p) in g.pads.iter_mut().enumerate() {
+            let Some(s) = p else { continue };
+            n += 1;
+            if !s.idle && s.heard.elapsed() > PAD_STALE {
+                s.idle = true;
+                s.dev.update(&PadState::default());
+            }
+            let r = s.dev.rumble();
+            if r != s.rumble || (r != (0, 0) && s.rumble_sent.elapsed() > Duration::from_millis(250)) {
+                s.rumble = r;
+                s.rumble_sent = Instant::now();
+                write(out, &Msg::Rumble { pad: i as u8, low: r.0, high: r.1 });
+                g.link.send(out);
+            }
+            if repeat_info {
+                write(out, &Msg::PadInfo { pad: i as u8, player: s.player(n - 1), slot: s.dev.slot().unwrap_or(255), why: PAD_OK });
+                g.link.send(out);
+            }
+        }
+    }
+}
+
+/// O vídeo que já está saindo serve para quem chegou?
+fn fits(hello: &Hello, codec: Codec, vf: VideoFmt) -> bool {
+    if vf.yuv444 {
+        return hello.flags & DECODES_444 != 0;
+    }
+    hello.codecs & codec_bit(codec) != 0 && (!vf.hdr10 || hello.flags & SEES_HDR != 0)
+}
+
+unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner>>) -> Result<End> {
     let mon = MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY);
     let item = monitor_item(mon)?;
     let color = monitor_color(mon);
     let size = item.Size()?;
     let (src_w, src_h) = (even(size.Width as u32), even(size.Height as u32));
+    // O tamanho e os Hz seguem quem chegou primeiro; os codecs e formatos, o que todos aceitam.
+    let lead = room.guests[0].hello;
+    let codecs = room.guests.iter().fold(0xFF, |m, g| m & g.hello.codecs);
+    let flags = room.guests.iter().fold(0xFF, |m, g| m & g.hello.flags);
     // Automático: a altura da tela de quem assiste, sem passar da daqui.
-    let out_h = if hello.h == 0 || hello.h >= src_h { src_h } else { even(hello.h) };
+    let out_h = if lead.h == 0 || lead.h >= src_h { src_h } else { even(lead.h) };
     let out_w = even((src_w as u64 * out_h as u64 / src_h as u64) as u32);
     // Automático: o menor entre os Hz dos dois lados.
-    let fps = monitor_hz(mon).min(if hello.hz > 1 { hello.hz } else { 60 }).clamp(10, 240);
+    let fps = monitor_hz(mon).min(if lead.hz > 1 { lead.hz } else { 60 }).clamp(10, 240);
 
     let wanted: Option<Codec> = match std::env::var("PRISMA_CODEC").as_deref() {
         Ok("h264") => Some(Codec::H264),
@@ -319,10 +591,10 @@ unsafe fn session(d: &D3d, link: &Arc<dyn Link>, hello: Hello, control: bool) ->
         Ok("av1") => Some(Codec::Av1),
         _ => None,
     };
-    // Formato do vídeo, do melhor ao comum. HDR10 quando as duas telas estão em HDR; 4:4:4 quando quem
+    // Formato do vídeo, do melhor ao comum. HDR10 quando as telas estão em HDR; 4:4:4 quando quem
     // assiste pede, porque gasta mais rede. Se o NVENC daqui não fizer, cai para o próximo.
-    let want444 = hello.flags & DECODES_444 != 0;
-    let want_hdr = color.hdr && hello.flags & SEES_HDR != 0 && std::env::var("PRISMA_HDR10").as_deref() != Ok("0");
+    let want444 = flags & DECODES_444 != 0;
+    let want_hdr = color.hdr && flags & SEES_HDR != 0 && std::env::var("PRISMA_HDR10").as_deref() != Ok("0");
     let full = VideoFmt { hdr10: false, yuv444: true };
     let ten = VideoFmt { hdr10: true, yuv444: false };
     let mut tries: Vec<(Codec, VideoFmt)> = Vec::new();
@@ -336,7 +608,7 @@ unsafe fn session(d: &D3d, link: &Arc<dyn Link>, hello: Hello, control: bool) ->
     let mut made = None;
     for (c, vf) in tries {
         // O 4:4:4 vai para o NVDEC de quem assiste, não para o Media Foundation da lista de codecs.
-        if (!vf.yuv444 && hello.codecs & codec_bit(c) == 0) || wanted.is_some_and(|w| w != c) {
+        if (!vf.yuv444 && codecs & codec_bit(c) == 0) || wanted.is_some_and(|w| w != c) {
             continue;
         }
         let bits = match std::env::var("PRISMA_MBPS").ok().and_then(|v| v.parse::<u32>().ok()) {
@@ -390,88 +662,154 @@ unsafe fn session(d: &D3d, link: &Arc<dyn Link>, hello: Hello, control: bool) ->
     let _ = capture.SetMinUpdateInterval(windows::Foundation::TimeSpan { Duration: 10_000_000 / fps as i64 });
     capture.StartCapture()?;
 
+    // Som para quem tem a permissão. Mesmo PC: tira o som da janela que assiste.
+    let hearing = |guests: &[Guest]| -> Vec<Arc<dyn Link>> { guests.iter().filter(|g| g.perms & SOUND != 0).map(|g| g.link.clone()).collect() };
+    let audio_links = Arc::new(Mutex::new(hearing(&room.guests)));
+    let exclude = room.guests.iter().find(|g| g.link.same_pc() && g.hello.pid != 0).map(|g| g.hello.pid);
     let stop_audio = Arc::new(AtomicBool::new(false));
     let audio_thread = {
-        // Mesmo PC: tira o som da janela que assiste.
-        let exclude = (link.same_pc() && hello.pid != 0).then_some(hello.pid);
-        let (l, stop) = (link.clone(), stop_audio.clone());
+        let (l, stop) = (audio_links.clone(), stop_audio.clone());
         std::thread::Builder::new().name("compartilhar-som".into()).spawn(move || audio(l, exclude, stop)).ok()
     };
-    let mut input = control.then(|| Injector::new(mon));
+    for g in &mut room.guests {
+        g.input = (g.perms & (KEYBOARD | MOUSE) != 0).then(|| Injector::new(mon, g.perms));
+        g.heard = Instant::now();
+    }
 
     let mut out = Vec::with_capacity(MTU);
     let mut buf = vec![0u8; 2048];
-    let info = Msg::Info { codec, w: out_w, h: out_h, fps, control, recover: enc.recovers(), hdr10: vf.hdr10, yuv444: vf.yuv444 };
+    let info = |perms: u8| Msg::Info { codec, w: out_w, h: out_h, fps, perms, recover: enc.recovers(), hdr10: vf.hdr10, yuv444: vf.yuv444 };
+    let infos: Vec<Vec<u8>> = (0..=255u8).map(|p| {
+        let mut b = Vec::new();
+        write(&mut b, &info(p));
+        b
+    }).collect();
     // Quadros enviados há pouco, com a hora de cada um, para invalidar os que se perderam.
     let mut sent: VecDeque<(u32, i64)> = VecDeque::new();
-    write(&mut out, &info);
-    link.send(&out);
+    for g in &room.guests {
+        g.link.send(&infos[g.perms as usize]);
+    }
 
     let interval = 10_000_000i64 / fps as i64;
     let mut last_fed = i64::MIN / 2;
     let mut pending: Option<i64> = None;
     let mut pkts: Vec<Pkt> = Vec::new();
     let mut frame_id = 0u32;
-    let mut heard = Instant::now();
     let mut result = End::Gone;
     let mut failed = None;
+    let mut pad_msgs: Vec<PadMsg> = Vec::new();
+    let mut info_tick = Instant::now();
 
     'run: loop {
         let _ = WaitForSingleObject(event, 1);
-        // O que quem assiste mandou.
-        loop {
-            match link.recv(&mut buf, Duration::ZERO) {
-                Poll::Got(n) => {
-                    let Some(m) = read(&buf[..n]) else { continue };
-                    if let Some(h) = Hello::from_msg(&m) {
-                        // Quem assiste reabriu: recomeça com a tela dele.
-                        result = End::Again(h, None);
-                        break 'run;
-                    }
-                    heard = Instant::now();
-                    match m {
-                        Msg::Ping { t } => {
-                            write(&mut out, &Msg::Pong { t, host: now() });
-                            link.send(&out);
-                        }
-                        Msg::KeyReq => enc.force_key(),
-                        Msg::Nack { frame } => {
-                            // Para de usar o quadro perdido e os enviados depois dele, que dependiam dele.
-                            let mut ok = false;
-                            let mut gone = 0;
-                            for &(id, pts) in sent.iter() {
-                                if id == frame || (id.wrapping_sub(frame) as i32) > 0 {
-                                    gone += 1;
-                                    ok = enc.invalidate(pts) || ok;
-                                }
-                            }
-                            // Sem como invalidar, ou perda antiga demais: quadro-chave.
-                            if !ok || gone == 0 || gone > 16 {
-                                enc.force_key();
-                            }
-                        }
-                        Msg::Input { first, events } => {
-                            if let Some(inj) = &mut input {
-                                inj.apply(first, events);
-                            }
-                        }
-                        Msg::Bye => break 'run,
-                        _ => {}
-                    }
+        // Quem chegou entra; se o vídeo atual não serve para ela, recomeça com todo mundo.
+        if let Some(rx) = joins {
+            while let Ok(j) = rx.try_recv() {
+                if room.guests.len() >= max_guests() {
+                    eprintln!("«{}» não entrou: a sala já tem {} pessoas (PRISMA_GUESTS)", j.name, room.guests.len());
+                    write(&mut out, &Msg::Bye);
+                    j.link.send(&out);
+                    continue;
                 }
-                Poll::Stranger(n, from) => {
-                    // Outro chegou pelo UDP: passa a vez para ele.
-                    if let Some(h) = read(&buf[..n]).as_ref().and_then(Hello::from_msg) {
-                        result = End::Again(h, Some(from));
-                        break 'run;
-                    }
+                eprintln!("chegou «{}»: tela {}x{} a {} Hz, {} ({})", j.name, j.hello.w, j.hello.h, j.hello.hz, perms_text(j.perms), j.link.route());
+                let echo = j.link.same_pc() && exclude.is_none() && j.perms & SOUND != 0;
+                let ok = fits(&j.hello, codec, vf) && !echo;
+                let mut g = Guest::new(j);
+                if ok {
+                    g.input = (g.perms & (KEYBOARD | MOUSE) != 0).then(|| Injector::new(mon, g.perms));
+                    g.link.send(&infos[g.perms as usize]);
+                    enc.force_key();
+                    room.guests.push(g);
+                    *audio_links.lock().unwrap() = hearing(&room.guests);
+                } else {
+                    room.guests.push(g);
+                    result = End::Again;
+                    break 'run;
                 }
-                Poll::Empty => break,
-                Poll::Closed => break 'run,
             }
         }
-        if heard.elapsed() > SILENCE {
-            break;
+        // O que cada pessoa mandou.
+        for (gi, g) in room.guests.iter_mut().enumerate() {
+            loop {
+                match g.link.recv(&mut buf, Duration::ZERO) {
+                    Poll::Got(n) => {
+                        let Some(m) = read(&buf[..n]) else { continue };
+                        if let Some(h) = Hello::from_msg(&m) {
+                            // Reabriu: recomeça com a tela nova dela.
+                            g.hello = h;
+                            result = End::Again;
+                            break 'run;
+                        }
+                        g.heard = Instant::now();
+                        match m {
+                            Msg::Ping { t } => g.send(&Msg::Pong { t, host: now() }, &mut out),
+                            Msg::KeyReq => enc.force_key(),
+                            Msg::Nack { frame } => {
+                                // Para de usar o quadro perdido e os enviados depois dele, que dependiam dele.
+                                let mut ok = false;
+                                let mut gone = 0;
+                                for &(id, pts) in sent.iter() {
+                                    if id == frame || (id.wrapping_sub(frame) as i32) > 0 {
+                                        gone += 1;
+                                        ok = enc.invalidate(pts) || ok;
+                                    }
+                                }
+                                // Sem como invalidar, ou perda antiga demais: quadro-chave.
+                                if !ok || gone == 0 || gone > 16 {
+                                    enc.force_key();
+                                }
+                            }
+                            Msg::Input { first, events } => {
+                                if let Some(inj) = &mut g.input {
+                                    inj.apply(first, events);
+                                }
+                            }
+                            Msg::Pad { pad, seq, on, state } => pad_msgs.push(PadMsg { guest: gi, pad, seq, on, state }),
+                            Msg::Bye => {
+                                g.gone = true;
+                                break;
+                            }
+                            _ => {}
+                        }
+                    }
+                    Poll::Stranger(n, from) => {
+                        // Outro chegou pelo UDP: passa a vez para ele.
+                        if let Some(h) = read(&buf[..n]).as_ref().and_then(Hello::from_msg) {
+                            result = End::Stranger(h, from);
+                            break 'run;
+                        }
+                    }
+                    Poll::Empty => break,
+                    Poll::Closed => {
+                        g.gone = true;
+                        break;
+                    }
+                }
+            }
+            if g.heard.elapsed() > SILENCE {
+                g.gone = true;
+            }
+        }
+        for m in pad_msgs.drain(..) {
+            pad_msg(room, m, &mut out);
+        }
+        let repeat = info_tick.elapsed() > Duration::from_secs(2);
+        if repeat {
+            info_tick = Instant::now();
+        }
+        pads_tick(room, &mut out, repeat);
+        if room.guests.iter().any(|g| g.gone) {
+            for g in room.guests.iter_mut().filter(|g| g.gone) {
+                if let Some(inj) = &mut g.input {
+                    inj.release();
+                }
+                eprintln!("«{}» saiu", g.name);
+            }
+            room.guests.retain(|g| !g.gone);
+            *audio_links.lock().unwrap() = hearing(&room.guests);
+            if room.guests.is_empty() {
+                break;
+            }
         }
 
         let step = (|| -> Result<()> {
@@ -506,20 +844,25 @@ unsafe fn session(d: &D3d, link: &Arc<dyn Link>, hello: Hello, control: bool) ->
             failed = Some(e);
             break;
         }
+        // O mesmo vídeo para todo mundo, em pedaços que cabem no caminho mais estreito.
+        let room_mtu = room.guests.iter().map(|g| g.link.mtu()).min().unwrap_or(MTU);
         for p in pkts.drain(..) {
             if p.key {
                 // Repete a descrição com cada quadro-chave, caso a primeira tenha se perdido.
-                write(&mut out, &info);
-                link.send(&out);
+                for g in &room.guests {
+                    g.link.send(&infos[g.perms as usize]);
+                }
             }
-            let room = link.mtu() - VIDEO_HEAD;
-            let count = p.data.len().div_ceil(room).max(1);
+            let space = room_mtu - VIDEO_HEAD;
+            let count = p.data.len().div_ceil(space).max(1);
             if count > u16::MAX as usize {
                 continue;
             }
-            for (idx, chunk) in p.data.chunks(room).enumerate() {
+            for (idx, chunk) in p.data.chunks(space).enumerate() {
                 write(&mut out, &Msg::Video { key: p.key, idx: idx as u16, count: count as u16, frame: frame_id, pts: p.pts, data: chunk });
-                link.send(&out);
+                for g in &room.guests {
+                    g.link.send(&out);
+                }
             }
             sent.push_back((frame_id, p.pts));
             if sent.len() > 32 {
@@ -528,8 +871,11 @@ unsafe fn session(d: &D3d, link: &Arc<dyn Link>, hello: Hello, control: bool) ->
             frame_id = frame_id.wrapping_add(1);
         }
     }
-    if let Some(inj) = &mut input {
-        inj.release();
+    for g in &mut room.guests {
+        if let Some(inj) = &mut g.input {
+            inj.release();
+        }
+        g.input = None;
     }
     stop_audio.store(true, Ordering::Relaxed);
     if let Some(t) = audio_thread {
@@ -542,5 +888,123 @@ unsafe fn session(d: &D3d, link: &Arc<dyn Link>, hello: Hello, control: bool) ->
     match failed {
         Some(e) => Err(e),
         None => Ok(result),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct FakeLink {
+        sent: Mutex<Vec<Vec<u8>>>,
+        local: bool,
+    }
+
+    impl Link for FakeLink {
+        fn send(&self, b: &[u8]) {
+            self.sent.lock().unwrap().push(b.to_vec());
+        }
+        fn recv(&self, _: &mut [u8], _: Duration) -> Poll {
+            Poll::Empty
+        }
+        fn same_pc(&self) -> bool {
+            self.local
+        }
+    }
+
+    fn guest(perms: u8, local: bool) -> (Guest, Arc<FakeLink>) {
+        let link = Arc::new(FakeLink { sent: Mutex::new(Vec::new()), local });
+        let hello = Hello { w: 1920, h: 1080, hz: 60, codecs: 7, pid: 0, flags: 0 };
+        (Guest::new(Joiner { link: link.clone(), hello, perms, name: "teste".into() }), link)
+    }
+
+    /// Os avisos de controle que a pessoa recebeu: (controle, jogador, motivo).
+    fn infos(l: &FakeLink) -> Vec<(u8, u8, u8)> {
+        l.sent.lock().unwrap().iter().filter_map(|b| match read(b) {
+            Some(Msg::PadInfo { pad, player, why, .. }) => Some((pad, player, why)),
+            _ => None,
+        }).collect()
+    }
+
+    fn room(guests: Vec<Guest>) -> (Room, super::super::pads::FakeLog) {
+        let log = Arc::new(Mutex::new(Vec::new()));
+        let r = Room { guests, bridge: Some(Bridge::fake(log.clone())), bridge_err: None, anti_cheat: false, checked: Instant::now() };
+        (r, log)
+    }
+
+    fn msg(guest: usize, pad: u8, seq: u16, buttons: u16) -> PadMsg {
+        PadMsg { guest, pad, seq, on: true, state: PadState { buttons, ..Default::default() } }
+    }
+
+    #[test]
+    fn pads_need_permission() {
+        let (g, l) = guest(SOUND | KEYBOARD | MOUSE, false);
+        let (mut r, _) = room(vec![g]);
+        let mut out = Vec::new();
+        pad_msg(&mut r, msg(0, 0, 1, 1), &mut out);
+        pad_msg(&mut r, msg(0, 0, 2, 1), &mut out);
+        assert_eq!(r.pads(), 0);
+        // Um aviso só, não um por pacote.
+        assert_eq!(infos(&l), vec![(0, 0, PAD_NO_PERMISSION)]);
+    }
+
+    #[test]
+    fn pads_plug_in_order_and_ignore_old_packets() {
+        let (g, l) = guest(SOUND | PAD, false);
+        let (mut r, log) = room(vec![g]);
+        let mut out = Vec::new();
+        pad_msg(&mut r, msg(0, 2, 10, 0x1000), &mut out);
+        assert_eq!(infos(&l), vec![(2, 1, PAD_OK)]);
+        pad_msg(&mut r, msg(0, 2, 9, 0x2000), &mut out);
+        pad_msg(&mut r, msg(0, 2, 11, 0x4000), &mut out);
+        let seen: Vec<u16> = log.lock().unwrap().iter().map(|x| x.1.buttons).filter(|&b| b != 0xFFFF).collect();
+        assert_eq!(seen, vec![0x1000, 0x4000]);
+        // A sequência dá a volta sem confundir o mais novo.
+        r.guests[0].pads[2].as_mut().unwrap().seq = 65535;
+        pad_msg(&mut r, msg(0, 2, 0, 0x8000), &mut out);
+        assert_eq!(log.lock().unwrap().last().unwrap().1.buttons, 0x8000);
+        // Controle que saiu solta a vaga.
+        pad_msg(&mut r, PadMsg { guest: 0, pad: 2, seq: 1, on: false, state: PadState::default() }, &mut out);
+        assert_eq!(r.pads(), 0);
+    }
+
+    #[test]
+    fn four_pads_at_most() {
+        let (a, _) = guest(PAD, false);
+        let (b, lb) = guest(PAD, false);
+        let (mut r, _) = room(vec![a, b]);
+        let mut out = Vec::new();
+        for p in 0..3 {
+            pad_msg(&mut r, msg(0, p, 1, 0), &mut out);
+        }
+        pad_msg(&mut r, msg(1, 0, 1, 0), &mut out);
+        pad_msg(&mut r, msg(1, 1, 1, 0), &mut out);
+        assert_eq!(r.pads(), 4);
+        assert_eq!(infos(&lb), vec![(0, 4, PAD_OK), (1, 0, PAD_FULL)]);
+    }
+
+    #[test]
+    fn same_pc_does_not_loop() {
+        let (g, l) = guest(PAD, true);
+        let (mut r, _) = room(vec![g]);
+        let mut out = Vec::new();
+        // O controle de verdade (vaga 1 lá) vira o virtual da vaga 0; o virtual, visto como
+        // controle 0 por quem assiste, não pode virar outro.
+        pad_msg(&mut r, msg(0, 1, 1, 0), &mut out);
+        pad_msg(&mut r, msg(0, 0, 1, 0), &mut out);
+        assert_eq!(r.pads(), 1);
+        assert_eq!(infos(&l), vec![(1, 1, PAD_OK), (0, 0, PAD_LOOP)]);
+    }
+
+    #[test]
+    fn joiner_fits_current_video() {
+        let h = |codecs, flags| Hello { w: 0, h: 0, hz: 0, codecs, pid: 0, flags };
+        let plain = VideoFmt::default();
+        assert!(fits(&h(2, 0), Codec::Hevc, plain));
+        assert!(!fits(&h(1, 0), Codec::Hevc, plain));
+        assert!(!fits(&h(7, 0), Codec::Av1, VideoFmt { hdr10: true, yuv444: false }));
+        assert!(fits(&h(7, SEES_HDR), Codec::Av1, VideoFmt { hdr10: true, yuv444: false }));
+        assert!(!fits(&h(7, SEES_HDR), Codec::Hevc, VideoFmt { hdr10: false, yuv444: true }));
+        assert!(fits(&h(0, DECODES_444), Codec::Hevc, VideoFmt { hdr10: false, yuv444: true }));
     }
 }

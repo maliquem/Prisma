@@ -16,9 +16,12 @@ data-encoding = { version = "2.2", optional = true }
 # NVENC direto (a DLL vem com o driver da NVIDIA; nada do SDK é redistribuído).
 mini-nvcodec = { version = "0.1", optional = true }
 mini-cuda = { version = "0.1", optional = true }
+# Controles virtuais do co-op: ViGEmBus (Nefarius) ou o servidor VIIPER, os dois clientes com licença MIT.
+vigem-client = { version = "0.1", optional = true, features = ["unstable_xtarget_notification"] }
+viiper-client = { version = "0.9", optional = true }
 
 [features]
-stream = ["dep:iroh", "dep:tokio", "dep:blake3", "dep:data-encoding", "dep:mini-nvcodec", "dep:mini-cuda"]
+stream = ["dep:iroh", "dep:tokio", "dep:blake3", "dep:data-encoding", "dep:mini-nvcodec", "dep:mini-cuda", "dep:vigem-client", "dep:viiper-client"]
 
 [dependencies.windows]
 version = "0.62"
@@ -92,6 +95,7 @@ features = [
     "Win32_UI_ColorSystem",
     "Win32_UI_HiDpi",
     "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Input_XboxController",
     "Win32_UI_Shell",
     "Win32_UI_Shell_Common",
     "Win32_UI_Shell_PropertiesSystem",
