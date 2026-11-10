@@ -21,7 +21,7 @@ const CLSID_AAC_ENCODER: GUID = GUID::from_u128(0x93af0c51_2275_45d2_a35b_f2ba21
 const RATE: u32 = 48000;
 const FRAME: usize = 1024;
 
-fn format() -> WAVEFORMATEXTENSIBLE {
+pub(crate) fn format() -> WAVEFORMATEXTENSIBLE {
     WAVEFORMATEXTENSIBLE {
         Format: WAVEFORMATEX {
             wFormatTag: WAVE_FORMAT_EXTENSIBLE as u16,
@@ -38,12 +38,12 @@ fn format() -> WAVEFORMATEXTENSIBLE {
     }
 }
 
-struct Source {
-    client: IAudioClient,
+pub(crate) struct Source {
+    pub(crate) client: IAudioClient,
     capture: IAudioCaptureClient,
 }
 
-unsafe fn open(flow: EDataFlow, loopback: bool) -> Result<Source> {
+pub(crate) unsafe fn open(flow: EDataFlow, loopback: bool) -> Result<Source> {
     let en: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
     let dev = en.GetDefaultAudioEndpoint(flow, eConsole)?;
     let client: IAudioClient = dev.Activate(CLSCTX_ALL, None)?;
@@ -80,13 +80,22 @@ struct Blob {
 
 /// Grava só um programa e os processos filhos dele. Existe desde o Windows 10 2004.
 unsafe fn open_process(pid: u32) -> Result<Source> {
+    open_process_mode(pid, false)
+}
+
+/// Som de um programa e dos filhos dele, ou, com `exclude`, de todos menos eles.
+pub(crate) unsafe fn open_process_mode(pid: u32, exclude: bool) -> Result<Source> {
     const VT_BLOB: u16 = 65;
     let params = AUDIOCLIENT_ACTIVATION_PARAMS {
         ActivationType: AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK,
         Anonymous: AUDIOCLIENT_ACTIVATION_PARAMS_0 {
             ProcessLoopbackParams: AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS {
                 TargetProcessId: pid,
-                ProcessLoopbackMode: PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE,
+                ProcessLoopbackMode: if exclude {
+                    PROCESS_LOOPBACK_MODE_EXCLUDE_TARGET_PROCESS_TREE
+                } else {
+                    PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE
+                },
             },
         },
     };
@@ -118,7 +127,7 @@ unsafe fn open_process(pid: u32) -> Result<Source> {
     Ok(Source { client, capture })
 }
 
-unsafe fn read(s: &Source, out: &mut Vec<f32>) {
+pub(crate) unsafe fn read(s: &Source, out: &mut Vec<f32>) {
     while s.capture.GetNextPacketSize().unwrap_or(0) > 0 {
         let mut data = std::ptr::null_mut();
         let mut frames = 0;

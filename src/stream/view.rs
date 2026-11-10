@@ -1,5 +1,7 @@
-//! Quem assiste: recebe o vídeo, decodifica na GPU e mostra numa janela.
-//! F11 alterna tela cheia sem borda. Fechar a janela avisa o host.
+//! Quem assiste: recebe o vídeo e o som, decodifica na GPU e mostra numa janela.
+//! Com o host em modo de controle, o mouse e o teclado da janela vão para o host.
+//! Ctrl+Alt+Shift+F alterna tela cheia sem borda (F11 também, quando só assiste).
+//! Fechar a janela avisa o host. `PRISMA_MUTE=1` não toca o som.
 
 use std::collections::VecDeque;
 use std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
@@ -14,18 +16,19 @@ use windows::Win32::Graphics::Dxgi::Common::*;
 use windows::Win32::Graphics::Dxgi::*;
 use windows::Win32::Graphics::Gdi::*;
 use windows::Win32::Media::timeBeginPeriod;
+use windows::Win32::Media::Audio::*;
 use windows::Win32::Media::MediaFoundation::*;
 use windows::Win32::System::Com::*;
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::*;
 use windows::Win32::UI::HiDpi::*;
-use windows::Win32::UI::Input::KeyboardAndMouse::VK_F11;
+use windows::Win32::UI::Input::KeyboardAndMouse::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
 use super::*;
 use crate::capture::decoder::{can_decode, Decoded, Decoder};
 use crate::capture::mux::{Codec, Pkt};
-use crate::capture::{d3d, D3d};
+use crate::capture::{d3d, sound, D3d};
 
 struct Frame {
     key: bool,
@@ -34,7 +37,7 @@ struct Frame {
 }
 
 enum Event {
-    Info { codec: Codec, w: u32, h: u32, fps: u32 },
+    Info { codec: Codec, w: u32, h: u32, fps: u32, control: bool },
     Frame(Frame),
 }
 
@@ -50,6 +53,15 @@ struct Shared {
     offset: AtomicI64,
     lost: AtomicU32,
     bytes: AtomicU64,
+    /// Som recebido esperando para tocar, em amostras de 16 bits intercaladas.
+    audio: Mutex<VecDeque<i16>>,
+    mute: bool,
+    audio_lost: AtomicU32,
+    audio_blocks: AtomicU32,
+    /// Vezes que o som acabou antes do próximo bloco chegar.
+    underruns: AtomicU32,
+    /// Som no buffer na hora de tocar, em quadros, para saber a latência do som.
+    audio_fill: AtomicU32,
 }
 
 /// Junta os pedaços de um quadro.
@@ -78,6 +90,7 @@ fn receive(sock: UdpSocket, host: SocketAddr, hello: Vec<u8>, sh: Arc<Shared>) {
     let mut last_hello = Instant::now() - Duration::from_secs(2);
     // Medidas recentes de ida e volta, com a diferença de relógio de cada uma.
     let mut samples: VecDeque<(i64, i64)> = VecDeque::new();
+    let mut audio_next: Option<u32> = None;
 
     let push = |e: Event| {
         sh.queue.lock().unwrap().push_back(e);
@@ -107,9 +120,23 @@ fn receive(sock: UdpSocket, host: SocketAddr, hello: Vec<u8>, sh: Arc<Shared>) {
         };
         sh.bytes.fetch_add(n as u64, Ordering::Relaxed);
         match read(&buf[..n]) {
-            Some(Msg::Info { codec, w, h, fps }) => {
+            Some(Msg::Info { codec, w, h, fps, control }) => {
                 sh.got_info.store(true, Ordering::Relaxed);
-                push(Event::Info { codec, w, h, fps });
+                push(Event::Info { codec, w, h, fps, control });
+            }
+            Some(Msg::Audio { seq, data, .. }) => {
+                sh.audio_blocks.fetch_add(1, Ordering::Relaxed);
+                if let Some(n) = audio_next {
+                    let gap = seq.wrapping_sub(n);
+                    if gap > 0 && gap < 1000 {
+                        sh.audio_lost.fetch_add(gap, Ordering::Relaxed);
+                    }
+                }
+                audio_next = Some(seq.wrapping_add(1));
+                if !sh.mute {
+                    let mut q = sh.audio.lock().unwrap();
+                    q.extend(data.chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])));
+                }
             }
             Some(Msg::Pong { t, host }) => {
                 let back = now();
@@ -165,6 +192,144 @@ fn receive(sock: UdpSocket, host: SocketAddr, hello: Vec<u8>, sh: Arc<Shared>) {
                 }
             }
             _ => {}
+        }
+    }
+}
+
+/// Som que fica esperando antes de tocar: 15 ms. Pouco o bastante para não atrasar,
+/// e o bastante para a rede variar um pouco sem o som falhar.
+const AUDIO_TARGET: usize = 720;
+
+/// Toca o som recebido na saída padrão, com o menor período que o Windows deixa.
+fn play(sh: Arc<Shared>) {
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        if let Err(e) = play_loop(&sh) {
+            eprintln!("som: {e:?}");
+        }
+    }
+}
+
+unsafe fn play_loop(sh: &Shared) -> Result<()> {
+    let en: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
+    let dev = en.GetDefaultAudioEndpoint(eRender, eConsole)?;
+    let f = sound::format();
+    let mut client: IAudioClient = dev.Activate(CLSCTX_ALL, None)?;
+    let mut low = false;
+    if let Ok(c3) = client.cast::<IAudioClient3>() {
+        let (mut def, mut fund, mut min, mut max) = (0, 0, 0, 0);
+        if c3.GetSharedModeEnginePeriod(&f.Format, &mut def, &mut fund, &mut min, &mut max).is_ok() {
+            low = c3.InitializeSharedAudioStream(AUDCLNT_STREAMFLAGS_EVENTCALLBACK, min, &f.Format, None).is_ok();
+        }
+    }
+    if !low {
+        client = dev.Activate(CLSCTX_ALL, None)?;
+        let flags = AUDCLNT_STREAMFLAGS_EVENTCALLBACK | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY;
+        client.Initialize(AUDCLNT_SHAREMODE_SHARED, flags, 100_000, 0, &f.Format, None)?;
+    }
+    let ev = CreateEventW(None, false, false, None)?;
+    client.SetEventHandle(ev)?;
+    let size = client.GetBufferSize()?;
+    let render: IAudioRenderClient = client.GetService()?;
+    client.Start()?;
+    let mut priming = true;
+    while !sh.quit.load(Ordering::Relaxed) {
+        let _ = WaitForSingleObject(ev, 100);
+        let pad = client.GetCurrentPadding()?;
+        let free = size.saturating_sub(pad);
+        if free == 0 {
+            continue;
+        }
+        let ptr = render.GetBuffer(free)? as *mut f32;
+        let out = std::slice::from_raw_parts_mut(ptr, free as usize * 2);
+        let mut q = sh.audio.lock().unwrap();
+        let have = q.len() / 2;
+        sh.audio_fill.store((have as u32).wrapping_add(pad), Ordering::Relaxed);
+        if priming && have >= AUDIO_TARGET {
+            priming = false;
+        }
+        // Atrasou demais (o relógio do outro PC anda um pouco mais rápido): descarta o excesso.
+        if have > AUDIO_TARGET + 2400 {
+            q.drain(..(have - AUDIO_TARGET) * 2);
+        }
+        let mut i = 0;
+        if !priming {
+            while i < out.len() {
+                let Some(v) = q.pop_front() else { break };
+                out[i] = v as f32 / 32768.0;
+                i += 1;
+            }
+            if i < out.len() {
+                priming = true;
+                sh.underruns.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+        drop(q);
+        out[i..].fill(0.0);
+        render.ReleaseBuffer(free, 0)?;
+    }
+    let _ = client.Stop();
+    let _ = CloseHandle(ev);
+    Ok(())
+}
+
+/// Mouse e teclado da janela, guardados pela função da janela até a próxima volta.
+struct Keys {
+    control: bool,
+    video: (u32, u32),
+    pending: Vec<Input>,
+    held: Vec<(u16, bool)>,
+    buttons: [bool; 5],
+}
+
+static KEYS: Mutex<Keys> = Mutex::new(Keys { control: false, video: (0, 0), pending: Vec::new(), held: Vec::new(), buttons: [false; 5] });
+
+/// Área da janela onde está a imagem, com as faixas pretas de fora.
+fn video_rect(iw: u32, ih: u32, ow: u32, oh: u32) -> RECT {
+    let scale = (ow as f64 / iw.max(1) as f64).min(oh as f64 / ih.max(1) as f64);
+    let (dw, dh) = ((iw as f64 * scale).round() as i32, (ih as f64 * scale).round() as i32);
+    let (x, y) = ((ow as i32 - dw) / 2, (oh as i32 - dh) / 2);
+    RECT { left: x, top: y, right: x + dw, bottom: y + dh }
+}
+
+unsafe fn key_event(h: HWND, k: &mut Keys, m: u32, w: WPARAM, l: LPARAM) -> bool {
+    let down = m == WM_KEYDOWN || m == WM_SYSKEYDOWN;
+    let ctrl = GetKeyState(VK_CONTROL.0 as i32) < 0;
+    let alt = GetKeyState(VK_MENU.0 as i32) < 0;
+    let shift = GetKeyState(VK_SHIFT.0 as i32) < 0;
+    if down && w.0 as u16 == b'F' as u16 && ctrl && alt && shift {
+        toggle_full(h);
+        return true;
+    }
+    if !k.control {
+        if down && w.0 as u16 == VK_F11.0 {
+            toggle_full(h);
+            return true;
+        }
+        return false;
+    }
+    let scan = ((l.0 >> 16) & 0xFF) as u16;
+    let extended = (l.0 >> 24) & 1 != 0;
+    if down {
+        if !k.held.contains(&(scan, extended)) {
+            k.held.push((scan, extended));
+        }
+    } else {
+        k.held.retain(|x| *x != (scan, extended));
+    }
+    k.pending.push(Input::Key { scan, extended, down });
+    true
+}
+
+/// Solta no host tudo que está apertado aqui, quando a janela perde o foco.
+fn release_all(k: &mut Keys) {
+    let held: Vec<(u16, bool)> = std::mem::take(&mut k.held);
+    for (scan, extended) in held {
+        k.pending.push(Input::Key { scan, extended, down: false });
+    }
+    for b in 0..5 {
+        if std::mem::take(&mut k.buttons[b]) {
+            k.pending.push(Input::Button { button: b as u8, down: false });
         }
     }
 }
@@ -261,15 +426,73 @@ unsafe fn toggle_full(h: HWND) {
 
 unsafe extern "system" fn wndproc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT {
     match m {
+        WM_KEYDOWN | WM_SYSKEYDOWN | WM_KEYUP | WM_SYSKEYUP => {
+            let used = key_event(h, &mut KEYS.lock().unwrap(), m, w, l);
+            // Teclas com Alt não abrem o menu da janela nem fecham com Alt+F4: vão para o host.
+            if used {
+                LRESULT(0)
+            } else {
+                DefWindowProcW(h, m, w, l)
+            }
+        }
+        WM_MOUSEMOVE | WM_LBUTTONDOWN | WM_LBUTTONUP | WM_RBUTTONDOWN | WM_RBUTTONUP | WM_MBUTTONDOWN | WM_MBUTTONUP | WM_XBUTTONDOWN | WM_XBUTTONUP
+        | WM_MOUSEWHEEL | WM_MOUSEHWHEEL => {
+            let mut k = KEYS.lock().unwrap();
+            if !k.control {
+                return DefWindowProcW(h, m, w, l);
+            }
+            let hi = (w.0 >> 16) as u16;
+            match m {
+                WM_MOUSEMOVE => {
+                    let (x, y) = ((l.0 & 0xFFFF) as i16 as i32, ((l.0 >> 16) & 0xFFFF) as i16 as i32);
+                    let (ow, oh) = client_size(h);
+                    let r = video_rect(k.video.0, k.video.1, ow, oh);
+                    let nx = ((x - r.left) as i64 * 65535 / (r.right - r.left - 1).max(1) as i64).clamp(0, 65535) as u16;
+                    let ny = ((y - r.top) as i64 * 65535 / (r.bottom - r.top - 1).max(1) as i64).clamp(0, 65535) as u16;
+                    // Só a posição mais nova importa.
+                    if let Some(Input::Move { .. }) = k.pending.last() {
+                        k.pending.pop();
+                    }
+                    k.pending.push(Input::Move { x: nx, y: ny });
+                }
+                WM_MOUSEWHEEL | WM_MOUSEHWHEEL => k.pending.push(Input::Wheel { delta: hi as i16, horizontal: m == WM_MOUSEHWHEEL }),
+                _ => {
+                    let (button, down) = match m {
+                        WM_LBUTTONDOWN => (0, true),
+                        WM_LBUTTONUP => (0, false),
+                        WM_RBUTTONDOWN => (1, true),
+                        WM_RBUTTONUP => (1, false),
+                        WM_MBUTTONDOWN => (2, true),
+                        WM_MBUTTONUP => (2, false),
+                        WM_XBUTTONDOWN => (if hi == 1 { 3 } else { 4 }, true),
+                        _ => (if hi == 1 { 3 } else { 4 }, false),
+                    };
+                    k.buttons[button as usize] = down;
+                    k.pending.push(Input::Button { button, down });
+                    // Segura o mouse na janela enquanto um botão está apertado.
+                    if down {
+                        SetCapture(h);
+                    } else if !k.buttons.iter().any(|b| *b) {
+                        let _ = ReleaseCapture();
+                    }
+                }
+            }
+            LRESULT(if m == WM_XBUTTONDOWN || m == WM_XBUTTONUP { 1 } else { 0 })
+        }
+        WM_KILLFOCUS => {
+            release_all(&mut KEYS.lock().unwrap());
+            DefWindowProcW(h, m, w, l)
+        }
+        // O cursor do host já vem na imagem: o daqui some em cima dela.
+        WM_SETCURSOR if (l.0 & 0xFFFF) as u32 == HTCLIENT && KEYS.lock().unwrap().control => {
+            SetCursor(None);
+            LRESULT(1)
+        }
         WM_SIZE => {
             RESIZED.store(true, Ordering::Relaxed);
             LRESULT(0)
         }
         WM_ERASEBKGND => LRESULT(1),
-        WM_KEYDOWN if w.0 as u16 == VK_F11.0 => {
-            toggle_full(h);
-            LRESULT(0)
-        }
         WM_DESTROY => {
             PostQuitMessage(0);
             LRESULT(0)
@@ -403,7 +626,7 @@ unsafe fn watch(host: SocketAddr, out_file: Option<&str>, secs: Option<u64>) -> 
         }
     }
     let mut hello = Vec::new();
-    write(&mut hello, &Msg::Hello { w: screen_w, h: screen_h, hz, codecs });
+    write(&mut hello, &Msg::Hello { w: screen_w, h: screen_h, hz, codecs, pid: std::process::id() });
     let sock = UdpSocket::bind(("0.0.0.0", 0)).map_err(|e| Error::new(E_FAIL, e.to_string()))?;
     let wake = CreateEventW(None, false, false, None)?;
     let sh = Arc::new(Shared {
@@ -415,7 +638,19 @@ unsafe fn watch(host: SocketAddr, out_file: Option<&str>, secs: Option<u64>) -> 
         offset: AtomicI64::new(0),
         lost: AtomicU32::new(0),
         bytes: AtomicU64::new(0),
+        audio: Mutex::new(VecDeque::new()),
+        mute: std::env::var("PRISMA_MUTE").is_ok_and(|v| v == "1"),
+        audio_lost: AtomicU32::new(0),
+        audio_blocks: AtomicU32::new(0),
+        underruns: AtomicU32::new(0),
+        audio_fill: AtomicU32::new(0),
     });
+    let player = if sh.mute {
+        None
+    } else {
+        let sh2 = sh.clone();
+        std::thread::Builder::new().name("assistir-som".into()).spawn(move || play(sh2)).ok()
+    };
     let rx = {
         let (s2, sh2, hello2) = (sock.try_clone().map_err(|e| Error::new(E_FAIL, e.to_string()))?, sh.clone(), hello.clone());
         std::thread::Builder::new().name("assistir-rede".into()).spawn(move || receive(s2, host, hello2, sh2)).unwrap()
@@ -423,6 +658,13 @@ unsafe fn watch(host: SocketAddr, out_file: Option<&str>, secs: Option<u64>) -> 
 
     let mut dec: Option<Decoder> = None;
     let mut info: Option<(Codec, u32, u32, u32)> = None;
+    // Eventos de entrada recentes, repetidos em cada pacote: o primeiro tem o número `input_first`.
+    let mut history: VecDeque<Input> = VecDeque::new();
+    let mut input_first = 0u32;
+    let mut last_input = Instant::now() - Duration::from_secs(10);
+    let mut last_send = Instant::now();
+    let mut input_pkt = Vec::with_capacity(256);
+    let mut fill: Vec<i64> = Vec::new();
     let mut scaler: Option<Scaler> = None;
     let mut decoded: Vec<Decoded> = Vec::new();
     let start = Instant::now();
@@ -455,7 +697,12 @@ unsafe fn watch(host: SocketAddr, out_file: Option<&str>, secs: Option<u64>) -> 
         let mut last: Option<Decoded> = None;
         for e in events {
             match e {
-                Event::Info { codec, w, h, fps } => {
+                Event::Info { codec, w, h, fps, control } => {
+                    {
+                        let mut k = KEYS.lock().unwrap();
+                        k.control = control;
+                        k.video = (w, h);
+                    }
                     if info != Some((codec, w, h, fps)) {
                         info = Some((codec, w, h, fps));
                         scaler = None;
@@ -484,6 +731,25 @@ unsafe fn watch(host: SocketAddr, out_file: Option<&str>, secs: Option<u64>) -> 
                 }
             }
         }
+        // Mouse e teclado novos vão na hora; os recentes se repetem por um tempo, contra perda.
+        let fresh: Vec<Input> = std::mem::take(&mut KEYS.lock().unwrap().pending);
+        if !fresh.is_empty() {
+            for e in fresh {
+                history.push_back(e);
+                if history.len() > INPUT_KEEP {
+                    history.pop_front();
+                    input_first = input_first.wrapping_add(1);
+                }
+            }
+            last_input = Instant::now();
+        }
+        if !history.is_empty() && (last_input > last_send || (last_input.elapsed() < Duration::from_millis(300) && last_send.elapsed() > Duration::from_millis(30))) {
+            let list: Vec<Input> = history.iter().copied().collect();
+            write_input(&mut input_pkt, input_first, &list);
+            let _ = sock.send_to(&input_pkt, host);
+            last_send = Instant::now();
+        }
+
         if let (Some(f), Some((_, w, h, fps))) = (last, info) {
             if let Some((tex, slice)) = f.texture() {
                 let (ow, oh) = client_size(hwnd);
@@ -507,6 +773,9 @@ unsafe fn watch(host: SocketAddr, out_file: Option<&str>, secs: Option<u64>) -> 
             bytes_mark = bytes;
             let rtt = sh.rtt.load(Ordering::Relaxed);
             second.rtt.push(rtt);
+            if start.elapsed() > warm && !sh.mute {
+                fill.push(sh.audio_fill.load(Ordering::Relaxed) as i64);
+            }
             let fps_now = second.shown as f64 / tick.elapsed().as_secs_f64();
             let title = match info {
                 Some((c, w, h, _)) => format!(
@@ -535,6 +804,9 @@ unsafe fn watch(host: SocketAddr, out_file: Option<&str>, secs: Option<u64>) -> 
     }
 
     sh.quit.store(true, Ordering::Relaxed);
+    if let Some(p) = player {
+        let _ = p.join();
+    }
     let mut bye = Vec::new();
     write(&mut bye, &Msg::Bye);
     let _ = sock.send_to(&bye, host);
@@ -558,6 +830,19 @@ unsafe fn watch(host: SocketAddr, out_file: Option<&str>, secs: Option<u64>) -> 
             pct(&mut total.e2e, 0.95),
             pct(&mut total.e2e, 1.0)
         );
+        let blocks = sh.audio_blocks.load(Ordering::Relaxed);
+        if sh.mute {
+            s += &format!("som: {blocks} blocos de 5 ms recebidos, {} perdidos, sem tocar\n", sh.audio_lost.load(Ordering::Relaxed));
+        } else {
+            fill.sort_unstable();
+            let med = fill.get(fill.len() / 2).copied().unwrap_or(0) as f64 * 1000.0 / AUDIO_RATE as f64;
+            s += &format!(
+                "som: {blocks} blocos de 5 ms recebidos, {} perdidos, {} vezes acabou antes do próximo, espera na saída {:.1} ms (mediana)\n",
+                sh.audio_lost.load(Ordering::Relaxed),
+                sh.underruns.load(Ordering::Relaxed),
+                med
+            );
+        }
         let _ = std::fs::write(path, s);
     }
     Ok(())

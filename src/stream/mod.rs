@@ -1,8 +1,9 @@
 //! Compartilhamento de tela, fase 1: ver a tela de outro PC na rede local.
 //!
 //! Ainda sem pareamento nem criptografia, então só existe na versão de teste.
-//! `--stream-host[=porta]` espera quem assiste; `--stream-view=endereço[:porta]|saida.txt|segundos`
-//! abre a janela que assiste (saída e segundos são opcionais, para medir sem ninguém olhando).
+//! `--stream-host[=porta]` espera quem assiste; `--stream-control[=porta]` faz o mesmo e aceita mouse
+//! e teclado de quem assiste. `--stream-view=endereço[:porta]|saida.txt|segundos` abre a janela que
+//! assiste (saída e segundos são opcionais, para medir sem ninguém olhando).
 
 pub mod host;
 pub mod view;
@@ -26,6 +27,55 @@ pub enum Kind {
     Ping = 5,
     Pong = 6,
     Bye = 7,
+    Audio = 8,
+    Input = 9,
+}
+
+/// Som: 48 kHz, dois canais, 16 bits, em blocos de 5 ms.
+pub const AUDIO_RATE: u32 = 48_000;
+pub const AUDIO_BLOCK: usize = 240;
+
+/// Um evento de mouse ou teclado de quem assiste.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Input {
+    /// Posição na imagem, de 0 a 65535 nos dois eixos.
+    Move { x: u16, y: u16 },
+    /// 0 esquerdo, 1 direito, 2 meio, 3 e 4 laterais.
+    Button { button: u8, down: bool },
+    Wheel { delta: i16, horizontal: bool },
+    /// Código de varredura do teclado, que não depende do idioma do teclado.
+    Key { scan: u16, extended: bool, down: bool },
+}
+
+pub const INPUT_SIZE: usize = 8;
+/// Quantos eventos recentes vão em cada pacote, para um pacote perdido não perder uma tecla.
+pub const INPUT_KEEP: usize = 16;
+
+impl Input {
+    fn put(&self, out: &mut Vec<u8>) {
+        let (k, f, a, b): (u8, u8, u16, u16) = match *self {
+            Input::Move { x, y } => (1, 0, x, y),
+            Input::Button { button, down } => (2, down as u8, button as u16, 0),
+            Input::Wheel { delta, horizontal } => (3, horizontal as u8, delta as u16, 0),
+            Input::Key { scan, extended, down } => (4, down as u8 | (extended as u8) << 1, scan, 0),
+        };
+        out.push(k);
+        out.push(f);
+        out.extend_from_slice(&a.to_le_bytes());
+        out.extend_from_slice(&b.to_le_bytes());
+        out.extend_from_slice(&[0, 0]);
+    }
+
+    pub fn get(b: &[u8]) -> Option<Self> {
+        let (k, f, a, c) = (*b.first()?, *b.get(1)?, u16_at(b, 2)?, u16_at(b, 4)?);
+        Some(match k {
+            1 => Input::Move { x: a, y: c },
+            2 => Input::Button { button: a as u8, down: f & 1 != 0 },
+            3 => Input::Wheel { delta: a as i16, horizontal: f & 1 != 0 },
+            4 => Input::Key { scan: a, extended: f & 2 != 0, down: f & 1 != 0 },
+            _ => return None,
+        })
+    }
 }
 
 /// O que um pacote diz.
@@ -33,14 +83,20 @@ pub enum Kind {
 pub enum Msg<'a> {
     Video { key: bool, idx: u16, count: u16, frame: u32, pts: i64, data: &'a [u8] },
     /// Como o vídeo está saindo: codec, tamanho e quadros por segundo.
-    Info { codec: Codec, w: u32, h: u32, fps: u32 },
-    /// Quem assiste chegou: tamanho e Hz da tela dele e codecs que ele decodifica (bits 0 H.264, 1 HEVC, 2 AV1).
-    Hello { w: u32, h: u32, hz: u32, codecs: u8 },
+    /// `control` diz se o host aceita mouse e teclado.
+    Info { codec: Codec, w: u32, h: u32, fps: u32, control: bool },
+    /// Quem assiste chegou: tamanho e Hz da tela dele, codecs que ele decodifica (bits 0 H.264,
+    /// 1 HEVC, 2 AV1) e o número do processo, para o host tirar o som dele quando os dois estão no mesmo PC.
+    Hello { w: u32, h: u32, hz: u32, codecs: u8, pid: u32 },
     KeyReq,
     Ping { t: i64 },
     /// Resposta ao Ping, com a hora do host para acertar os relógios.
     Pong { t: i64, host: i64 },
     Bye,
+    /// Bloco de som, com número de sequência.
+    Audio { seq: u32, pts: i64, data: &'a [u8] },
+    /// Os eventos mais recentes; o primeiro tem o número `first` e os seguintes vêm em ordem.
+    Input { first: u32, events: &'a [u8] },
 }
 
 pub fn codec_bit(c: Codec) -> u8 {
@@ -96,19 +152,21 @@ pub fn write(out: &mut Vec<u8>, m: &Msg) {
             out.extend_from_slice(&pts.to_le_bytes());
             out.extend_from_slice(data);
         }
-        Msg::Info { codec, w, h, fps } => {
+        Msg::Info { codec, w, h, fps, control } => {
             head(out, Kind::Info);
             out.push(codec_id(codec));
             out.extend_from_slice(&w.to_le_bytes());
             out.extend_from_slice(&h.to_le_bytes());
             out.extend_from_slice(&fps.to_le_bytes());
+            out.push(control as u8);
         }
-        Msg::Hello { w, h, hz, codecs } => {
+        Msg::Hello { w, h, hz, codecs, pid } => {
             head(out, Kind::Hello);
             out.extend_from_slice(&w.to_le_bytes());
             out.extend_from_slice(&h.to_le_bytes());
             out.extend_from_slice(&hz.to_le_bytes());
             out.push(codecs);
+            out.extend_from_slice(&pid.to_le_bytes());
         }
         Msg::KeyReq => head(out, Kind::KeyReq),
         Msg::Ping { t } => {
@@ -121,7 +179,27 @@ pub fn write(out: &mut Vec<u8>, m: &Msg) {
             out.extend_from_slice(&host.to_le_bytes());
         }
         Msg::Bye => head(out, Kind::Bye),
+        Msg::Audio { seq, pts, data } => {
+            head(out, Kind::Audio);
+            out.extend_from_slice(&seq.to_le_bytes());
+            out.extend_from_slice(&pts.to_le_bytes());
+            out.extend_from_slice(data);
+        }
+        Msg::Input { first, events } => {
+            head(out, Kind::Input);
+            out.extend_from_slice(&first.to_le_bytes());
+            out.extend_from_slice(events);
+        }
     }
+}
+
+/// Monta o pacote de entrada com os eventos guardados (o mais antigo tem o número `first`).
+pub fn write_input(out: &mut Vec<u8>, first: u32, events: &[Input]) {
+    let mut ev = Vec::with_capacity(events.len() * INPUT_SIZE);
+    for e in events {
+        e.put(&mut ev);
+    }
+    write(out, &Msg::Input { first, events: &ev });
 }
 
 fn u16_at(b: &[u8], i: usize) -> Option<u16> {
@@ -148,12 +226,20 @@ pub fn read(b: &[u8]) -> Option<Msg<'_>> {
             pts: i64_at(b, 16)?,
             data: b.get(VIDEO_HEAD..)?,
         },
-        2 => Msg::Info { codec: codec_of(*b.get(4)?)?, w: u32_at(b, 5)?, h: u32_at(b, 9)?, fps: u32_at(b, 13)? },
-        3 => Msg::Hello { w: u32_at(b, 4)?, h: u32_at(b, 8)?, hz: u32_at(b, 12)?, codecs: *b.get(16)? },
+        2 => Msg::Info { codec: codec_of(*b.get(4)?)?, w: u32_at(b, 5)?, h: u32_at(b, 9)?, fps: u32_at(b, 13)?, control: *b.get(17)? != 0 },
+        3 => Msg::Hello { w: u32_at(b, 4)?, h: u32_at(b, 8)?, hz: u32_at(b, 12)?, codecs: *b.get(16)?, pid: u32_at(b, 17)? },
         4 => Msg::KeyReq,
         5 => Msg::Ping { t: i64_at(b, 4)? },
         6 => Msg::Pong { t: i64_at(b, 4)?, host: i64_at(b, 12)? },
         7 => Msg::Bye,
+        8 => Msg::Audio { seq: u32_at(b, 4)?, pts: i64_at(b, 8)?, data: b.get(16..)? },
+        9 => {
+            let events = b.get(8..)?;
+            if events.len() % INPUT_SIZE != 0 {
+                return None;
+            }
+            Msg::Input { first: u32_at(b, 4)?, events }
+        }
         _ => return None,
     })
 }
@@ -188,10 +274,12 @@ pub fn monitor_hz(mon: windows::Win32::Graphics::Gdi::HMONITOR) -> u32 {
 /// Trata os argumentos da transmissão. Devolve verdadeiro quando um deles rodou.
 pub fn run_args() -> bool {
     for a in std::env::args() {
-        if a == "--stream-host" || a.starts_with("--stream-host=") {
-            let port = a.strip_prefix("--stream-host=").and_then(|p| p.parse().ok()).unwrap_or(PORT);
-            host::run(port);
-            return true;
+        for (name, control) in [("--stream-host", false), ("--stream-control", true)] {
+            if a == name || a.strip_prefix(name).is_some_and(|r| r.starts_with('=')) {
+                let port = a.strip_prefix(name).and_then(|r| r.strip_prefix('=')).and_then(|p| p.parse().ok()).unwrap_or(PORT);
+                host::run(port, control);
+                return true;
+            }
         }
         if let Some(v) = a.strip_prefix("--stream-view=") {
             view::run(v);
@@ -214,12 +302,29 @@ mod tests {
     #[test]
     fn packets_round_trip() {
         round(Msg::Video { key: true, idx: 3, count: 9, frame: 77, pts: -5, data: &[1, 2, 3] });
-        round(Msg::Info { codec: Codec::Av1, w: 1920, h: 1080, fps: 60 });
-        round(Msg::Hello { w: 3840, h: 2160, hz: 119, codecs: 7 });
+        round(Msg::Info { codec: Codec::Av1, w: 1920, h: 1080, fps: 60, control: true });
+        round(Msg::Hello { w: 3840, h: 2160, hz: 119, codecs: 7, pid: 4321 });
+        round(Msg::Audio { seq: 9, pts: 10, data: &[0, 1, 2, 3] });
         round(Msg::KeyReq);
         round(Msg::Ping { t: 123 });
         round(Msg::Pong { t: 1, host: 2 });
         round(Msg::Bye);
+    }
+
+    #[test]
+    fn input_round_trip() {
+        let evs = [
+            Input::Move { x: 65535, y: 12 },
+            Input::Button { button: 4, down: true },
+            Input::Wheel { delta: -120, horizontal: true },
+            Input::Key { scan: 0x1D, extended: true, down: false },
+        ];
+        let mut b = Vec::new();
+        write_input(&mut b, 41, &evs);
+        let Some(Msg::Input { first, events }) = read(&b) else { panic!() };
+        assert_eq!(first, 41);
+        let back: Vec<Input> = events.chunks(INPUT_SIZE).filter_map(Input::get).collect();
+        assert_eq!(back, evs);
     }
 
     #[test]
