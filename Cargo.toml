@@ -1,6 +1,6 @@
 [package]
 name = "prisma"
-version = "0.11.0"
+version = "0.12.0"
 edition = "2021"
 license-file = "LICENSE"
 description = "Utilitário leve para Windows: fullscreen, volume por programa, monitor, energia e captura"
@@ -13,6 +13,9 @@ iroh = { version = "1.4.1", optional = true, default-features = false, features 
 tokio = { version = "1.44", optional = true, features = ["rt-multi-thread", "macros", "time", "sync"] }
 blake3 = { version = "1.8.3", optional = true }
 data-encoding = { version = "2.2", optional = true }
+# Convite curto: o registro assinado vai para os relés pkarr pelo cliente que o próprio iroh usa.
+iroh-dns = { version = "1.4.1", optional = true, default-features = false }
+url = { version = "2.5", optional = true }
 # NVENC direto (a DLL vem com o driver da NVIDIA; nada do SDK é redistribuído).
 mini-nvcodec = { version = "0.1", optional = true }
 mini-cuda = { version = "0.1", optional = true }
@@ -22,11 +25,12 @@ viiper-client = { version = "0.9", optional = true }
 
 [features]
 default = ["stream"]
-stream = ["dep:iroh", "dep:tokio", "dep:blake3", "dep:data-encoding", "dep:mini-nvcodec", "dep:mini-cuda", "dep:vigem-client", "dep:viiper-client"]
+stream = ["dep:iroh", "dep:tokio", "dep:blake3", "dep:data-encoding", "dep:iroh-dns", "dep:url", "dep:mini-nvcodec", "dep:mini-cuda", "dep:vigem-client", "dep:viiper-client"]
 
 [dependencies.windows]
 version = "0.62"
 features = [
+    "ApplicationModel_DataTransfer",
     "Foundation",
     "Media_Audio",
     "Graphics_Capture",

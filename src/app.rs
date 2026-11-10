@@ -38,6 +38,8 @@ use crate::ui::UiState;
 pub const WM_TICK: u32 = WM_APP + 1;
 pub const WM_TRAY: u32 = WM_APP + 2;
 pub const WM_SHOW: u32 = WM_APP + 3;
+/// WPARAM do WM_SHOW: abrir em Compartilhar tela (chegou um link de convite).
+pub const SHOW_SHARE: usize = 2;
 const WM_PICK: u32 = WM_APP + 4;
 const TIMER_HUD: usize = 7;
 const TIMER_METER: usize = 77;
@@ -868,7 +870,15 @@ pub fn start(background: bool) {
         crate::sys::keepalive::set(app.cfg.snd_keep);
         app.widget.set_visible(app.cfg.widget_on);
         tray_add(hub, true);
-        let open = !background && !std::env::args().any(|a| a.starts_with("--test-"));
+        let testing = std::env::args().any(|a| a.starts_with("--test-"));
+        let open = !background && !testing;
+        #[cfg(feature = "stream")]
+        if !testing {
+            if crate::stream::weblink::has_pending() {
+                app.page = Page::Share;
+            }
+            std::thread::spawn(crate::stream::weblink::register);
+        }
         APP.with(|a| *a.borrow_mut() = Some(app));
         if open {
             let _ = PostMessageW(Some(hub), WM_SHOW, WPARAM(0), LPARAM(0));
@@ -2252,6 +2262,12 @@ impl App {
             if args.iter().any(|a| a == "--test-en") {
                 crate::i18n::set_english(true);
             }
+            // Uma foto só: refazer a cada aviso do relógio deixava a fila sempre cheia, e o
+            // pedido de saída nunca chegava.
+            static DONE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+            if DONE.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                return;
+            }
             self.render_test(&out, popup);
             unsafe { PostQuitMessage(0) };
         }
@@ -2865,6 +2881,9 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                 if w.0 == 1 {
                     a.page = Page::Monitor;
                 }
+                if w.0 == SHOW_SHARE {
+                    a.page = Page::Share;
+                }
                 a.show_main();
             });
             LRESULT(0)
@@ -2909,6 +2928,7 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                     a.meter_paint();
                 } else if w.0 == TIMER_SHARE {
                     if a.page == Page::Share && a.main.is_some() {
+                        crate::pages::share::tick(a);
                         a.invalidate();
                     } else {
                         let _ = KillTimer(Some(a.hub), TIMER_SHARE);

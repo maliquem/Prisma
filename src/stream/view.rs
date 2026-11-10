@@ -1,13 +1,14 @@
 //! Quem assiste: recebe o vídeo e o som, decodifica na GPU e mostra numa janela.
 //! Com a permissão, o mouse e o teclado da janela vão para o host, e os controles daqui viram
-//! controles virtuais lá (só com a janela em primeiro plano; `PRISMA_PAD_BACKGROUND=1` manda sempre).
-//! `PRISMA_PAD_KEYS=1` faz o teclado virar um controle (veja `KEY_PAD`).
-//! Ctrl+Alt+Shift+F alterna tela cheia sem borda (F11 também, sem a permissão de teclado).
-//! Fechar a janela avisa o host. `PRISMA_MUTE=1` não toca o som.
+//! controles virtuais lá (só com a janela em primeiro plano, a não ser pela opção).
+//! As opções vêm de `cliente.txt` (página Compartilhar tela, aba Cliente); as variáveis
+//! `PRISMA_PAD_BACKGROUND`, `PRISMA_PAD_KEYS`, `PRISMA_MUTE` e `PRISMA_444` ainda valem por cima.
+//! Atalhos padrão: Ctrl+Alt+Shift+F tela cheia (F11 também, sem a permissão de teclado),
+//! Ctrl+Alt+Shift+P o menu da conexão, Ctrl+Alt+End o Ctrl+Alt+Del. Fechar a janela avisa o host.
 
 use std::collections::VecDeque;
 use std::net::{ToSocketAddrs, UdpSocket};
-use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU32, AtomicU64, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicIsize, AtomicU32, AtomicU64, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -75,6 +76,8 @@ struct Shared {
     /// Som recebido esperando para tocar, em amostras de 16 bits intercaladas.
     audio: Mutex<VecDeque<i16>>,
     mute: bool,
+    /// Calado pelo menu ou pela opção: o som chega e é jogado fora.
+    silenced: AtomicBool,
     audio_lost: AtomicU32,
     audio_blocks: AtomicU32,
     /// Vezes que o som acabou antes do próximo bloco chegar.
@@ -340,6 +343,10 @@ unsafe fn play_loop(sh: &Shared) -> Result<()> {
         if have > AUDIO_TARGET + 2400 {
             q.drain(..(have - AUDIO_TARGET) * 2);
         }
+        if sh.silenced.load(Ordering::Relaxed) {
+            q.clear();
+            priming = true;
+        }
         let mut i = 0;
         if !priming {
             while i < out.len() {
@@ -373,9 +380,64 @@ struct Keys {
     buttons: [bool; 5],
     /// Ctrl+Alt+End aqui pede Ctrl+Alt+Del lá (o Windows não deixa a janela ver o Ctrl+Alt+Del).
     sas: bool,
+    /// O atalho do menu foi apertado.
+    menu: bool,
+    key_menu: opts::Keys,
+    key_full: opts::Keys,
+    key_cad: opts::Keys,
+    /// Modo imersivo: bit 1 o mouse fica na janela, bit 2 o Alt+Tab e a tecla Windows vão ao host.
+    immersive: u8,
 }
 
-static KEYS: Mutex<Keys> = Mutex::new(Keys { keyboard: false, mouse: false, pad_keys: false, video: (0, 0), pending: Vec::new(), held: Vec::new(), buttons: [false; 5], sas: false });
+static KEYS: Mutex<Keys> = Mutex::new(Keys {
+    keyboard: false,
+    mouse: false,
+    pad_keys: false,
+    video: (0, 0),
+    pending: Vec::new(),
+    held: Vec::new(),
+    buttons: [false; 5],
+    sas: false,
+    menu: false,
+    key_menu: (0, 0),
+    key_full: (0, 0),
+    key_cad: (0, 0),
+    immersive: 0,
+});
+
+/// A janela de quem assiste, para o gancho do teclado.
+static VIEW_HWND: AtomicIsize = AtomicIsize::new(0);
+
+/// Modo imersivo: com a janela em primeiro plano, a tecla Windows, o Alt+Tab, o Alt+Esc e o
+/// Ctrl+Esc vão para o host em vez de agir aqui. O Ctrl+Alt+Del o Windows não deixa pegar.
+unsafe extern "system" fn immersive_hook(code: i32, w: WPARAM, l: LPARAM) -> LRESULT {
+    if code >= 0 {
+        let k = &*(l.0 as *const KBDLLHOOKSTRUCT);
+        let mine = GetForegroundWindow().0 as isize == VIEW_HWND.load(Ordering::Relaxed);
+        let alt = k.flags.0 & LLKHF_ALTDOWN.0 != 0;
+        let ctrl = GetAsyncKeyState(VK_CONTROL.0 as i32) < 0;
+        let vk = VIRTUAL_KEY(k.vkCode as u16);
+        let grab = matches!(vk, VK_LWIN | VK_RWIN) || (vk == VK_TAB && alt) || (vk == VK_ESCAPE && (alt || ctrl));
+        if mine && grab && k.flags.0 & LLKHF_INJECTED.0 == 0 {
+            if let Ok(mut keys) = KEYS.try_lock() {
+                if keys.keyboard && keys.immersive & 2 != 0 {
+                    let down = !matches!(w.0 as u32, WM_KEYUP | WM_SYSKEYUP);
+                    let (scan, extended) = (k.scanCode as u16, k.flags.0 & LLKHF_EXTENDED.0 != 0);
+                    if down {
+                        if !keys.held.contains(&(scan, extended)) {
+                            keys.held.push((scan, extended));
+                        }
+                    } else {
+                        keys.held.retain(|x| *x != (scan, extended));
+                    }
+                    keys.pending.push(Input::Key { scan, extended, down });
+                    return LRESULT(1);
+                }
+            }
+        }
+    }
+    CallNextHookEx(None, code, w, l)
+}
 
 /// Área da janela onde está a imagem, com as faixas pretas de fora.
 fn video_rect(iw: u32, ih: u32, ow: u32, oh: u32) -> RECT {
@@ -390,11 +452,20 @@ unsafe fn key_event(h: HWND, k: &mut Keys, m: u32, w: WPARAM, l: LPARAM) -> bool
     let ctrl = GetKeyState(VK_CONTROL.0 as i32) < 0;
     let alt = GetKeyState(VK_MENU.0 as i32) < 0;
     let shift = GetKeyState(VK_SHIFT.0 as i32) < 0;
-    if down && w.0 as u16 == b'F' as u16 && ctrl && alt && shift {
-        toggle_full(h);
+    let combo = (opts::mods_now(ctrl, alt, shift), w.0 as u32);
+    if combo == k.key_full {
+        if down {
+            toggle_full(h);
+        }
         return true;
     }
-    if k.keyboard && w.0 as u16 == VK_END.0 && ctrl && alt {
+    if combo == k.key_menu {
+        if down {
+            k.menu = true;
+        }
+        return true;
+    }
+    if k.keyboard && combo == k.key_cad {
         if down {
             k.sas = true;
         }
@@ -675,8 +746,9 @@ fn keyboard_pad() -> PadState {
 /// que continuam ali. Vagas vazias do XInput são conferidas uma vez por segundo, porque perguntar a
 /// uma vaga vazia demora.
 fn pads(link: Arc<dyn Link>, sh: Arc<Shared>, hwnd: isize) {
-    let background = std::env::var("PRISMA_PAD_BACKGROUND").as_deref() == Ok("1");
-    let keys = std::env::var("PRISMA_PAD_KEYS").as_deref() == Ok("1");
+    let co = ClientOpts::load();
+    let background = std::env::var("PRISMA_PAD_BACKGROUND").map(|v| v == "1").unwrap_or(co.pad_background);
+    let keys = std::env::var("PRISMA_PAD_KEYS").map(|v| v == "1").unwrap_or(co.pad_keys);
     let mut last: [Option<PadState>; PADS] = [None; PADS];
     let mut seq = [0u16; PADS];
     let mut sent = [Instant::now(); PADS];
@@ -811,6 +883,14 @@ pub(super) fn open(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64
 }
 
 unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) -> Result<()> {
+    let mut co = ClientOpts::load();
+    {
+        let mut k = KEYS.lock().unwrap();
+        k.key_menu = co.key_menu;
+        k.key_full = co.key_full;
+        k.key_cad = co.key_cad;
+        k.immersive = co.immersive;
+    }
     let d = d3d()?;
     if let Ok(mt) = d.ctx.cast::<ID3D11Multithread>() {
         let _ = mt.SetMultithreadProtected(true);
@@ -855,6 +935,14 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         Some(inst),
         None,
     )?;
+    VIEW_HWND.store(hwnd.0 as isize, Ordering::Relaxed);
+    // Medições sem ninguém olhando abrem em janela, como sempre.
+    if co.fullscreen && out_file.is_none() {
+        toggle_full(hwnd);
+    }
+    let hook = (co.immersive & 2 != 0).then(|| SetWindowsHookExW(WH_KEYBOARD_LL, Some(immersive_hook), None, 0).ok()).flatten();
+    let mut hud = hud::Hud::new(hwnd);
+    let mut clipped = false;
 
     // Cadeia de troca com tearing permitido: mostra o quadro assim que ele fica pronto.
     let factory: IDXGIFactory2 = d.dev.cast::<IDXGIDevice>()?.GetAdapter()?.GetParent()?;
@@ -880,7 +968,9 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     };
     let swap = factory.CreateSwapChainForHwnd(&d.dev, hwnd, &desc, None, None)?;
     let _ = factory.MakeWindowAssociation(hwnd, DXGI_MWA_NO_ALT_ENTER);
-    let present_flags = if tearing { DXGI_PRESENT_ALLOW_TEARING } else { DXGI_PRESENT(0) };
+    // VSync ligado espera a atualização da tela: sem rasgos, um pouco mais de atraso.
+    let present_flags = if tearing && !co.vsync { DXGI_PRESENT_ALLOW_TEARING } else { DXGI_PRESENT(0) };
+    let sync = co.vsync as u32;
 
     let mut codecs = 0u8;
     for c in [Codec::H264, Codec::Hevc, Codec::Av1] {
@@ -895,7 +985,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         flags |= SEES_HDR;
     }
     #[cfg(feature = "stream")]
-    if std::env::var("PRISMA_444").as_deref() == Ok("1") {
+    if std::env::var("PRISMA_444").map(|v| v == "1").unwrap_or(co.ask444) {
         if crate::capture::nvdec::can_444() {
             flags |= DECODES_444;
         } else {
@@ -919,6 +1009,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         bytes: AtomicU64::new(0),
         audio: Mutex::new(VecDeque::new()),
         mute: std::env::var("PRISMA_MUTE").is_ok_and(|v| v == "1"),
+        silenced: AtomicBool::new(co.mute),
         audio_lost: AtomicU32::new(0),
         audio_blocks: AtomicU32::new(0),
         underruns: AtomicU32::new(0),
@@ -968,6 +1059,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     let mut second = Stats::default();
     let mut tick = Instant::now();
     let mut bytes_mark = 0u64;
+    let mut lost_mark = 0u32;
     let mut msg = MSG::default();
 
     'ui: loop {
@@ -986,6 +1078,58 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         if RESIZED.swap(false, Ordering::Relaxed) {
             scaler = None;
             let _ = swap.ResizeBuffers(0, 0, 0, DXGI_FORMAT_UNKNOWN, DXGI_SWAP_CHAIN_FLAG(flags as i32));
+            if let Some(h) = &mut hud {
+                h.update(hwnd, co.meter, co.warn, None);
+            }
+        }
+        // Modo imersivo: em tela cheia, com a janela na frente, o mouse não sai dela.
+        let want_clip = co.immersive & 1 != 0 && SAVED.lock().unwrap().is_some() && GetForegroundWindow() == hwnd && KEYS.lock().unwrap().mouse;
+        if want_clip != clipped {
+            let mut r = RECT::default();
+            let _ = GetWindowRect(hwnd, &mut r);
+            let _ = ClipCursor(want_clip.then_some(&r as *const RECT));
+            clipped = want_clip;
+        }
+        if std::mem::take(&mut KEYS.lock().unwrap().menu) {
+            if clipped {
+                let _ = ClipCursor(None);
+                clipped = false;
+            }
+            let extra = match vfmt {
+                (true, _) => " HDR10",
+                (_, true) => " 4:4:4",
+                _ => "",
+            };
+            let st = hud::MenuState {
+                fullscreen: SAVED.lock().unwrap().is_some(),
+                meter: co.meter,
+                warn: co.warn,
+                sound: !sh.silenced.load(Ordering::Relaxed),
+                keyboard: KEYS.lock().unwrap().keyboard,
+                video: info.map(|(c, w, h, fps)| format!("{w}x{h} {}{extra} · {fps} q/s · {}", codec_name(c), link.route())).unwrap_or_default(),
+            };
+            match hud::menu(hwnd, &st) {
+                Some(hud::Pick::Fullscreen) => toggle_full(hwnd),
+                Some(hud::Pick::Meter(m)) => {
+                    co.meter = m;
+                    let _ = co.save();
+                }
+                Some(hud::Pick::Warn) => {
+                    co.warn = !co.warn;
+                    let _ = co.save();
+                }
+                Some(hud::Pick::Sound) => {
+                    sh.silenced.fetch_xor(true, Ordering::Relaxed);
+                }
+                Some(hud::Pick::CtrlAltDel) => KEYS.lock().unwrap().sas = true,
+                Some(hud::Pick::Disconnect) => {
+                    let _ = DestroyWindow(hwnd);
+                }
+                None => {}
+            }
+            if let Some(h) = &mut hud {
+                h.update(hwnd, co.meter, co.warn, None);
+            }
         }
 
         let events: Vec<Event> = sh.queue.lock().unwrap().drain(..).collect();
@@ -997,7 +1141,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                         let mut k = KEYS.lock().unwrap();
                         k.keyboard = perms & KEYBOARD != 0;
                         k.mouse = perms & MOUSE != 0;
-                        k.pad_keys = perms & PAD != 0 && std::env::var("PRISMA_PAD_KEYS").as_deref() == Ok("1");
+                        k.pad_keys = perms & PAD != 0 && std::env::var("PRISMA_PAD_KEYS").map(|v| v == "1").unwrap_or(co.pad_keys);
                         k.video = (w, h);
                     }
                     if info != Some((codec, w, h, fps)) || vfmt != (hdr10, yuv444) {
@@ -1107,7 +1251,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         if let (Some(pts), Some((n, draw))) = (nv_pts.take(), &nv) {
             let (ow, oh) = client_size(hwnd);
             let bb: ID3D11Texture2D = swap.GetBuffer(0)?;
-            if draw.draw(&d.dev, &d.ctx, n, &bb, ow, oh).is_ok() && swap.Present(0, present_flags).is_ok() {
+            if draw.draw(&d.dev, &d.ctx, n, &bb, ow, oh).is_ok() && swap.Present(sync, present_flags).is_ok() {
                 let shown = now();
                 second.shown += 1;
                 second.e2e.push(shown + sh.offset.load(Ordering::Relaxed) - pts);
@@ -1121,7 +1265,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                 }
                 if let Some(s) = &scaler {
                     let bb: ID3D11Texture2D = swap.GetBuffer(0)?;
-                    if s.blt(&tex, slice, &bb).is_ok() && swap.Present(0, present_flags).is_ok() {
+                    if s.blt(&tex, slice, &bb).is_ok() && swap.Present(sync, present_flags).is_ok() {
                         let shown = now();
                         second.shown += 1;
                         second.e2e.push(shown + sh.offset.load(Ordering::Relaxed) - f.pts);
@@ -1140,6 +1284,23 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                 fill.push(sh.audio_fill.load(Ordering::Relaxed) as i64);
             }
             let fps_now = second.shown as f64 / tick.elapsed().as_secs_f64();
+            let lost_total = sh.lost.load(Ordering::Relaxed);
+            if let Some(h) = &mut hud {
+                let sample = hud::Sample {
+                    rtt_ms: rtt as f64 / 10_000.0,
+                    e2e_ms: pct(&mut second.e2e.clone(), 0.5),
+                    decode_ms: pct(&mut second.decode.clone(), 0.5),
+                    fps: fps_now,
+                    mbps,
+                    lost: lost_total.saturating_sub(lost_mark),
+                    lost_total,
+                    shown: second.shown,
+                    video: info.map(|(c, w, h, _)| format!("{w}x{h} {}", codec_name(c))).unwrap_or_default(),
+                    route: link.route(),
+                };
+                h.update(hwnd, co.meter, co.warn, info.is_some().then_some(&sample));
+            }
+            lost_mark = lost_total;
             let extra = match vfmt {
                 (true, _) => " HDR10",
                 (_, true) => " 4:4:4",
@@ -1175,6 +1336,13 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     }
 
     sh.quit.store(true, Ordering::Relaxed);
+    if clipped {
+        let _ = ClipCursor(None);
+    }
+    if let Some(h) = hook {
+        let _ = UnhookWindowsHookEx(h);
+    }
+    drop(hud);
     if let Some(p) = player {
         let _ = p.join();
     }

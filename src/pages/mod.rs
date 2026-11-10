@@ -28,6 +28,8 @@ pub mod share {
     }
 
     pub fn shutdown() {}
+
+    pub fn tick(_app: &mut App) {}
 }
 mod startup;
 mod storage;

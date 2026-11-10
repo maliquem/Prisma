@@ -59,6 +59,11 @@ fn main() {
     if stream::run_args() {
         return;
     }
+    // Um link de convite (prisma://parear/...): a página Compartilhar tela pergunta se pareia.
+    #[cfg(feature = "stream")]
+    let link = stream::weblink::take_arg();
+    #[cfg(not(feature = "stream"))]
+    let link = false;
     // Uma sessão que caiu com o HDR desligado (opção do compartilhamento): liga de volta.
     std::thread::spawn(stream::host::restore_hdr);
     unsafe {
@@ -74,7 +79,8 @@ fn main() {
         if matches!(GetLastError(), ERROR_ALREADY_EXISTS | ERROR_ACCESS_DENIED) {
             if let Ok(h) = FindWindowW(w!("PrismaHub"), None) {
                 let monitor = std::env::args().any(|a| a == "--taskmgr") as usize;
-                let _ = PostMessageW(Some(h), app::WM_SHOW, WPARAM(monitor), LPARAM(0));
+                let show = if link { app::SHOW_SHARE } else { monitor };
+                let _ = PostMessageW(Some(h), app::WM_SHOW, WPARAM(show), LPARAM(0));
             }
             return;
         }

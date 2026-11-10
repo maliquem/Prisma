@@ -4,7 +4,7 @@
 
 use std::collections::{HashSet, VecDeque};
 use std::net::{SocketAddr, UdpSocket};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -246,6 +246,14 @@ pub fn room_path() -> std::path::PathBuf {
 
 fn write_room(names: &str) {
     let _ = std::fs::write(room_path(), names);
+    if names.is_empty() {
+        let _ = std::fs::write(pads_path(), "");
+    }
+}
+
+/// Os controles virtuais ligados agora, para a aba Controles: pessoa, controle dela, jogador, parado.
+pub fn pads_path() -> std::path::PathBuf {
+    super::dir().join("controles.txt")
 }
 
 /// Tecla de emergência do host: Ctrl+Alt+Shift+Q desconecta todo mundo na hora, fechando o
@@ -256,8 +264,10 @@ pub fn emergency_key() {
         .name("compartilhar-emergencia".into())
         .spawn(|| unsafe {
             use windows::Win32::UI::Input::KeyboardAndMouse::*;
-            if RegisterHotKey(None, 1, MOD_CONTROL | MOD_ALT | MOD_SHIFT | MOD_NOREPEAT, b'Q' as u32).is_err() {
-                eprintln!("a tecla de emergência (Ctrl+Alt+Shift+Q) já está em uso por outro programa");
+            let (mods, vk) = Opts::load().key_panic;
+            let label = crate::config::Hotkey::new(mods, vk).label();
+            if RegisterHotKey(None, 1, HOT_KEY_MODIFIERS(mods) | MOD_NOREPEAT, vk).is_err() {
+                eprintln!("a tecla de emergência ({label}) já está em uso por outro programa");
                 return;
             }
             let mut msg = MSG::default();
@@ -345,14 +355,73 @@ pub fn run(port: u16, control: bool) {
     }
 }
 
-/// Som do PC em blocos de 5 ms, para quem tem a permissão de som. Com quem assiste no mesmo PC,
-/// tira o som da janela dele, senão ele voltaria em eco.
-fn audio(links: Arc<Mutex<Vec<Arc<dyn Link>>>>, exclude: Option<u32>, stop: Arc<AtomicBool>) {
+/// Programas de chamada: o som deles sai do que vai para quem assiste, se a opção estiver ligada.
+const CALL_APPS: [&str; 10] = ["discord.exe", "ms-teams.exe", "teams.exe", "zoom.exe", "whatsapp.exe", "whatsapp.root.exe", "skype.exe", "telegram.exe", "slack.exe", "signal.exe"];
+
+/// Processos pelo nome do exe, só os de cima da árvore (a captura por processo leva a árvore toda).
+fn top_pids(names: &[&str]) -> Vec<(u32, String)> {
+    use windows::Win32::System::Diagnostics::ToolHelp::*;
+    let mut all: Vec<(u32, u32, String)> = Vec::new();
+    unsafe {
+        let Ok(snap) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else { return Vec::new() };
+        let mut e = PROCESSENTRY32W { dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32, ..Default::default() };
+        if Process32FirstW(snap, &mut e).is_ok() {
+            loop {
+                let n = e.szExeFile.iter().position(|&c| c == 0).unwrap_or(e.szExeFile.len());
+                all.push((e.th32ProcessID, e.th32ParentProcessID, String::from_utf16_lossy(&e.szExeFile[..n]).to_lowercase()));
+                if Process32NextW(snap, &mut e).is_err() {
+                    break;
+                }
+            }
+        }
+        let _ = CloseHandle(snap);
+    }
+    let wanted = |s: &str| names.iter().any(|n| n.eq_ignore_ascii_case(s));
+    all.iter()
+        .filter(|(_, parent, name)| wanted(name) && !all.iter().any(|(p, _, pn)| p == parent && pn == name))
+        .map(|(pid, _, name)| (*pid, name.clone()))
+        .collect()
+}
+
+/// De onde vem o som: o PC todo, só um programa, ou o PC sem um programa.
+#[derive(Clone, Copy)]
+enum SoundFrom {
+    All,
+    Only(u32),
+    Without(u32),
+}
+
+fn sound_from(opts: &Opts, viewer_here: Option<u32>) -> SoundFrom {
+    if !opts.sound_app.is_empty() {
+        match top_pids(&[opts.sound_app.as_str()]).first() {
+            Some((pid, _)) => {
+                eprintln!("som: só de {}", opts.sound_app);
+                return SoundFrom::Only(*pid);
+            }
+            None => eprintln!("som: {} não está aberto; vai o som do PC", opts.sound_app),
+        }
+    }
+    // Quem assiste no mesmo PC: o som da janela dele voltaria em eco.
+    if let Some(pid) = viewer_here {
+        return SoundFrom::Without(pid);
+    }
+    if opts.no_calls {
+        if let Some((pid, name)) = top_pids(&CALL_APPS).into_iter().next() {
+            eprintln!("som: sem {name} (programa de chamada)");
+            return SoundFrom::Without(pid);
+        }
+    }
+    SoundFrom::All
+}
+
+/// Som do PC em blocos de 5 ms, para quem tem a permissão de som.
+fn audio(links: Arc<Mutex<Vec<Arc<dyn Link>>>>, from: SoundFrom, stop: Arc<AtomicBool>) {
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-        let src = match exclude {
-            Some(pid) => sound::open_process_mode(pid, true),
-            None => sound::open(eRender, true),
+        let src = match from {
+            SoundFrom::Only(pid) => sound::open_process_mode(pid, false),
+            SoundFrom::Without(pid) => sound::open_process_mode(pid, true),
+            SoundFrom::All => sound::open(eRender, true),
         };
         let src = match src {
             Ok(s) => s,
@@ -384,6 +453,51 @@ fn audio(links: Arc<Mutex<Vec<Arc<dyn Link>>>>, exclude: Option<u32>, stop: Arc<
     }
 }
 
+/// Hora (ms desde o início do processo) do último mouse ou teclado de verdade deste PC.
+static HOST_INPUT_MS: AtomicI64 = AtomicI64::new(i64::MIN / 2);
+/// Quem está no mouse e no teclado agora, quando é um por vez: (injetor, ms).
+static INPUT_OWNER: Mutex<Option<(u64, i64)>> = Mutex::new(None);
+static INJECTORS: AtomicU64 = AtomicU64::new(1);
+/// Os visitantes param por este tempo depois do mouse ou teclado daqui.
+const HOST_FIRST_MS: i64 = 1000;
+/// Um visitante parado por este tempo libera a vez.
+const OWNER_IDLE_MS: i64 = 2000;
+
+fn ms_now() -> i64 {
+    static START: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
+    START.get_or_init(Instant::now).elapsed().as_millis() as i64
+}
+
+/// Vigia o mouse e o teclado de verdade (o Windows marca o que foi injetado), numa linha própria.
+fn watch_host_input() {
+    static STARTED: AtomicBool = AtomicBool::new(false);
+    if STARTED.swap(true, Ordering::Relaxed) {
+        return;
+    }
+    ms_now();
+    unsafe extern "system" fn kb(code: i32, w: WPARAM, l: LPARAM) -> LRESULT {
+        if code >= 0 && (*(l.0 as *const KBDLLHOOKSTRUCT)).flags.0 & LLKHF_INJECTED.0 == 0 {
+            HOST_INPUT_MS.store(ms_now(), Ordering::Relaxed);
+        }
+        CallNextHookEx(None, code, w, l)
+    }
+    unsafe extern "system" fn mouse(code: i32, w: WPARAM, l: LPARAM) -> LRESULT {
+        if code >= 0 && (*(l.0 as *const MSLLHOOKSTRUCT)).flags & LLMHF_INJECTED == 0 {
+            HOST_INPUT_MS.store(ms_now(), Ordering::Relaxed);
+        }
+        CallNextHookEx(None, code, w, l)
+    }
+    let _ = std::thread::Builder::new().name("compartilhar-host-primeiro".into()).spawn(|| unsafe {
+        let a = SetWindowsHookExW(WH_KEYBOARD_LL, Some(kb), None, 0);
+        let b = SetWindowsHookExW(WH_MOUSE_LL, Some(mouse), None, 0);
+        if a.is_err() || b.is_err() {
+            eprintln!("não deu para vigiar o mouse e o teclado daqui: o host não tem prioridade");
+        }
+        let mut msg = MSG::default();
+        while GetMessageW(&mut msg, None, 0, 0).as_bool() {}
+    });
+}
+
 /// Aplica no PC o mouse e o teclado de quem assiste, só o que as permissões dela deixam.
 struct Injector {
     /// Monitor transmitido e área de todos os monitores, em pixels.
@@ -393,6 +507,9 @@ struct Injector {
     next: Option<u32>,
     keys: HashSet<(u16, bool)>,
     buttons: [bool; 5],
+    id: u64,
+    one_at_a_time: bool,
+    host_first: bool,
 }
 
 impl Injector {
@@ -405,7 +522,12 @@ impl Injector {
             let (x, y) = (GetSystemMetrics(SM_XVIRTUALSCREEN), GetSystemMetrics(SM_YVIRTUALSCREEN));
             RECT { left: x, top: y, right: x + GetSystemMetrics(SM_CXVIRTUALSCREEN), bottom: y + GetSystemMetrics(SM_CYVIRTUALSCREEN) }
         };
-        Self { mon: mi.rcMonitor, virt, perms, next: None, keys: HashSet::new(), buttons: [false; 5] }
+        let o = Opts::load();
+        if o.host_first {
+            watch_host_input();
+        }
+        let id = INJECTORS.fetch_add(1, Ordering::Relaxed);
+        Self { mon: mi.rcMonitor, virt, perms, next: None, keys: HashSet::new(), buttons: [false; 5], id, one_at_a_time: o.one_at_a_time, host_first: o.host_first }
     }
 
     fn mouse(flags: MOUSE_EVENT_FLAGS, dx: i32, dy: i32, data: i32) -> INPUT {
@@ -485,8 +607,34 @@ impl Injector {
         })
     }
 
+    /// Pode mexer agora? O host mexeu há pouco, ou outro visitante está com a vez.
+    fn may_act(&mut self) -> bool {
+        let now = ms_now();
+        if self.host_first && now - HOST_INPUT_MS.load(Ordering::Relaxed) < HOST_FIRST_MS {
+            return false;
+        }
+        if self.one_at_a_time {
+            let mut owner = INPUT_OWNER.lock().unwrap();
+            match *owner {
+                Some((id, at)) if id != self.id && now - at < OWNER_IDLE_MS => return false,
+                _ => *owner = Some((self.id, now)),
+            }
+        }
+        true
+    }
+
     /// Aplica só os eventos novos do pacote: os repetidos de pacotes anteriores são pulados.
     fn apply(&mut self, first: u32, events: &[u8]) {
+        let fresh = events.chunks(INPUT_SIZE).enumerate().any(|(i, _)| self.next.is_none_or(|n| (first.wrapping_add(i as u32).wrapping_sub(n) as i32) >= 0));
+        if fresh && !self.may_act() {
+            // Pula a vez, sem deixar nada apertado no host.
+            self.release();
+            let n = (events.len() / INPUT_SIZE) as u32;
+            if n > 0 {
+                self.next = Some(first.wrapping_add(n));
+            }
+            return;
+        }
         let mut list = Vec::new();
         for (i, chunk) in events.chunks(INPUT_SIZE).enumerate() {
             let seq = first.wrapping_add(i as u32);
@@ -658,6 +806,20 @@ fn pads_tick(room: &mut Room, out: &mut Vec<u8>, repeat_info: bool) {
             }
         }
     }
+    if repeat_info {
+        let mut list = String::new();
+        let mut k = 0;
+        for g in &room.guests {
+            for (i, p) in g.pads.iter().enumerate() {
+                if let Some(s) = p {
+                    list += &format!("{}	{}	{}	{}
+", g.name, i + 1, s.player(k), s.idle as u8);
+                    k += 1;
+                }
+            }
+        }
+        let _ = std::fs::write(pads_path(), list);
+    }
 }
 
 /// O vídeo que já está saindo serve para quem chegou?
@@ -694,8 +856,31 @@ unsafe fn output_size(d: &D3d, mon: HMONITOR) -> Result<(u32, u32)> {
     }
 }
 
+/// Os monitores, na ordem do Windows.
+pub fn monitors() -> Vec<HMONITOR> {
+    unsafe extern "system" fn add(m: HMONITOR, _: HDC, _: *mut RECT, l: LPARAM) -> BOOL {
+        (*(l.0 as *mut Vec<HMONITOR>)).push(m);
+        TRUE
+    }
+    let mut list: Vec<HMONITOR> = Vec::new();
+    unsafe {
+        let _ = EnumDisplayMonitors(None, None, Some(add), LPARAM(&mut list as *mut _ as isize));
+    }
+    list
+}
+
+/// O monitor das opções: 0 é o principal; 1, 2... a ordem do Windows.
+fn pick_monitor(n: u32) -> HMONITOR {
+    let primary = unsafe { MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY) };
+    if n == 0 {
+        return primary;
+    }
+    monitors().get(n as usize - 1).copied().unwrap_or(primary)
+}
+
 unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner>>) -> Result<End> {
-    let mon = MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY);
+    let opts = Opts::load();
+    let mon = pick_monitor(opts.monitor);
     let color = monitor_color(mon);
     let mut cap = if use_dda() {
         None
@@ -716,22 +901,26 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     let lead = room.guests[0].hello;
     let codecs = room.guests.iter().fold(0xFF, |m, g| m & g.hello.codecs);
     let flags = room.guests.iter().fold(0xFF, |m, g| m & g.hello.flags);
-    // Automático: a altura da tela de quem assiste, sem passar da daqui.
-    let out_h = if lead.h == 0 || lead.h >= src_h { src_h } else { even(lead.h) };
+    // Automático: a altura da tela de quem assiste, sem passar da daqui nem do limite das opções.
+    let want_h = if lead.h == 0 { src_h } else { lead.h };
+    let want_h = if opts.res > 0 { want_h.min(opts.res) } else { want_h };
+    let out_h = if want_h >= src_h { src_h } else { even(want_h.max(240)) };
     let out_w = even((src_w as u64 * out_h as u64 / src_h as u64) as u32);
-    // Automático: o menor entre os Hz dos dois lados.
-    let fps = monitor_hz(mon).min(if lead.hz > 1 { lead.hz } else { 60 }).clamp(10, 240);
+    // Automático: o menor entre os Hz dos dois lados. Um número fixo não passa dos Hz daqui.
+    let fps = if opts.fps > 0 { opts.fps.min(monitor_hz(mon)) } else { monitor_hz(mon).min(if lead.hz > 1 { lead.hz } else { 60 }) }.clamp(10, 240);
 
-    let wanted: Option<Codec> = match std::env::var("PRISMA_CODEC").as_deref() {
-        Ok("h264") => Some(Codec::H264),
-        Ok("hevc") => Some(Codec::Hevc),
-        Ok("av1") => Some(Codec::Av1),
+    let codec_opt = std::env::var("PRISMA_CODEC").unwrap_or_else(|_| opts.codec.clone());
+    let wanted: Option<Codec> = match codec_opt.as_str() {
+        "h264" => Some(Codec::H264),
+        "hevc" => Some(Codec::Hevc),
+        "av1" => Some(Codec::Av1),
         _ => None,
     };
     // Formato do vídeo, do melhor ao comum. HDR10 quando as telas estão em HDR; 4:4:4 quando quem
     // assiste pede, porque gasta mais rede. Se o NVENC daqui não fizer, cai para o próximo.
-    let want444 = flags & DECODES_444 != 0;
-    let want_hdr = color.hdr && flags & SEES_HDR != 0 && std::env::var("PRISMA_HDR10").as_deref() != Ok("0");
+    let want444 = flags & DECODES_444 != 0 && opts.allow444;
+    let ten_bit = std::env::var("PRISMA_HDR10").map(|v| v != "0").unwrap_or(opts.ten_bit);
+    let want_hdr = color.hdr && flags & SEES_HDR != 0 && ten_bit;
     let full = VideoFmt { hdr10: false, yuv444: true };
     let ten = VideoFmt { hdr10: true, yuv444: false };
     let mut tries: Vec<(Codec, VideoFmt)> = Vec::new();
@@ -748,9 +937,16 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
         if (!vf.yuv444 && codecs & codec_bit(c) == 0) || wanted.is_some_and(|w| w != c) {
             continue;
         }
-        let bits = match std::env::var("PRISMA_MBPS").ok().and_then(|v| v.parse::<u32>().ok()) {
+        // Prioridade: menor atraso usa menos banda (quadros menores chegam antes); qualidade, mais.
+        let factor: u64 = match opts.priority {
+            0 => 3,
+            2 => 6,
+            _ => 4,
+        };
+        let mbps = std::env::var("PRISMA_MBPS").ok().and_then(|v| v.parse::<u32>().ok()).or((opts.mbps > 0).then_some(opts.mbps));
+        let bits = match mbps {
             Some(m) => m * 1_000_000,
-            None => (bitrate(out_w, out_h, fps, c) as u64 * 2).min(150_000_000) as u32,
+            None => (bitrate(out_w, out_h, fps, c) as u64 * factor / 2).min(150_000_000) as u32,
         };
         // O 4:4:4 leva cerca de metade a mais de dados pela mesma nitidez.
         let bits = if vf.yuv444 { (bits as u64 * 3 / 2).min(150_000_000) as u32 } else { bits };
@@ -816,10 +1012,11 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     let hearing = |guests: &[Guest]| -> Vec<Arc<dyn Link>> { guests.iter().filter(|g| g.perms & SOUND != 0).map(|g| g.link.clone()).collect() };
     let audio_links = Arc::new(Mutex::new(hearing(&room.guests)));
     let exclude = room.guests.iter().find(|g| g.link.same_pc() && g.hello.pid != 0).map(|g| g.hello.pid);
+    let from = sound_from(&opts, exclude);
     let stop_audio = Arc::new(AtomicBool::new(false));
     let audio_thread = {
         let (l, stop) = (audio_links.clone(), stop_audio.clone());
-        std::thread::Builder::new().name("compartilhar-som".into()).spawn(move || audio(l, exclude, stop)).ok()
+        std::thread::Builder::new().name("compartilhar-som".into()).spawn(move || audio(l, from, stop)).ok()
     };
     for g in &mut room.guests {
         g.input = (g.perms & (KEYBOARD | MOUSE) != 0).then(|| Injector::new(mon, g.perms));
@@ -1054,6 +1251,10 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
             }
             enc.pump(&mut pkts)?;
             if enc.ready() {
+                // Ritmo constante: a tela parada repete o último quadro, no ritmo de sempre.
+                if pending.is_none() && opts.constant && last_fed > i64::MIN / 2 && now() - last_fed >= interval {
+                    pending = Some(now());
+                }
                 if let Some(pts) = pending.take() {
                     let t = conv.convert(&d.ctx)?;
                     enc.feed(&t, pts)?;

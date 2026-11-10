@@ -370,6 +370,8 @@ pub fn uninstall() {
         set_replace_taskmgr(false);
     }
     crate::sys::autohdr::clear_all();
+    #[cfg(feature = "stream")]
+    crate::stream::weblink::unregister();
     let _ = std::fs::remove_file(shortcut());
     let _ = Command::new(crate::sys::system_tool("reg")).args(["delete", UNINSTALL_KEY, "/f"]).creation_flags(NO_WINDOW).output();
     // O arquivo em uso só pode sair depois que este processo fechar.

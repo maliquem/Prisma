@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex">
+<title>Convite do Prisma</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #ffffff; --text: #1b1e23; --muted: #5b6270;
+    --accent: #2f7de1; --accent-text: #ffffff; --line: #dde1e7; --warn: #b4690e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16181c; --card: #22262d; --text: #e9ecf1; --muted: #a1a8b5;
+      --accent: #7fc0ff; --accent-text: #0d1b2a; --line: #353b45; --warn: #f0b860;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background: var(--bg); color: var(--text); padding: 16px;
+    font: 16px/1.5 "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  }
+  main {
+    width: 100%; max-width: 520px; background: var(--card); border: 1px solid var(--line);
+    border-radius: 14px; padding: 28px 24px;
+  }
+  h1 { margin: 0 0 6px; font-size: 22px; font-weight: 600; }
+  p { margin: 0 0 14px; color: var(--muted); overflow-wrap: anywhere; }
+  .code {
+    margin: 18px 0; text-align: center; font-size: 40px; font-weight: 600; letter-spacing: 2px;
+    color: var(--accent); font-family: "Cascadia Mono", Consolas, monospace; overflow-wrap: anywhere;
+  }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0; }
+  a.button, button {
+    flex: 1 1 180px; display: inline-flex; align-items: center; justify-content: center;
+    min-height: 42px; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--line);
+    background: transparent; color: var(--text); font: inherit; text-decoration: none; cursor: pointer;
+  }
+  a.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
+  ol { margin: 0; padding-left: 20px; color: var(--muted); }
+  li { margin-bottom: 6px; }
+  .bad { color: var(--warn); }
+  footer { margin-top: 18px; font-size: 13px; color: var(--muted); }
+  footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1 id="title"></h1>
+  <p id="lead"></p>
+  <div class="code" id="code"></div>
+  <div class="row" id="actions">
+    <a class="button primary" id="open" href="#"></a>
+    <button type="button" id="copy"></button>
+  </div>
+  <p id="valid"></p>
+  <ol id="steps"></ol>
+  <footer id="foot"></footer>
+</main>
+<script>
+(function () {
+  var en = !/^pt\b/i.test(navigator.language || "");
+  var T = en ? {
+    doc: "Prisma invite",
+    title: "Prisma invite",
+    lead: "Someone invited you to pair with their PC in Prisma. Opening Prisma pairs the two PCs after asking you first.",
+    open: "Open in Prisma",
+    copy: "Copy code",
+    copied: "Copied",
+    valid: "The code is valid for 10 minutes and only once. If it expired, ask for a new one.",
+    steps: [
+      "If the browser asks to open Prisma, allow it. Prisma asks before pairing.",
+      "Both PCs show a six-digit confirmation code: check that they match before accepting on the other PC.",
+      "Nothing happened? Open Prisma, go to Share screen, and type the code in Pair with another PC."
+    ],
+    bad: "This link has no valid Prisma code. Ask for the link again, or type the code in Prisma: Share screen, Pair with another PC.",
+    foot: "Don't have Prisma? <a href=\"https://github.com/maliquem/Prisma/releases/latest\">Download it on GitHub</a>. This page doesn't send the code anywhere: it only hands it to Prisma on this PC."
+  } : {
+    doc: "Convite do Prisma",
+    title: "Convite do Prisma",
+    lead: "Alguém convidou você para parear com o PC dessa pessoa no Prisma. Abrir o Prisma pareia os dois PCs depois de perguntar.",
+    open: "Abrir no Prisma",
+    copy: "Copiar código",
+    copied: "Copiado",
+    valid: "O código vale 10 minutos e uma vez só. Se venceu, peça um novo.",
+    steps: [
+      "Se o navegador perguntar se pode abrir o Prisma, deixe. O Prisma pergunta antes de parear.",
+      "Os dois PCs mostram um código de confirmação de seis dígitos: confira se são iguais antes de aceitar no outro PC.",
+      "Não aconteceu nada? Abra o Prisma, vá em Compartilhar tela e digite o código em Parear com outro PC."
+    ],
+    bad: "Este link não tem um código válido do Prisma. Peça o link de novo, ou digite o código no Prisma: Compartilhar tela, Parear com outro PC.",
+    foot: "Não tem o Prisma? <a href=\"https://github.com/maliquem/Prisma/releases/latest\">Baixe no GitHub</a>. Esta página não manda o código para lugar nenhum: só o entrega ao Prisma deste PC."
+  };
+  document.documentElement.lang = en ? "en" : "pt-BR";
+  document.title = T.doc;
+  var $ = function (id) { return document.getElementById(id); };
+  $("title").textContent = T.title;
+  $("foot").innerHTML = T.foot;
+
+  // Mesmas regras do Prisma: base32 de Crockford, 8 letras, O vira 0 e I/L viram 1.
+  var raw = decodeURIComponent((location.hash || "").slice(1)).toUpperCase()
+    .replace(/[\s-]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1");
+  var ok = /^[0-9A-HJKMNP-TV-Z]{8}$/.test(raw);
+  if (!ok) {
+    $("lead").textContent = T.bad;
+    $("lead").className = "bad";
+    $("actions").style.display = "none";
+    $("valid").style.display = "none";
+    $("steps").style.display = "none";
+    return;
+  }
+  var shown = raw.slice(0, 4) + "-" + raw.slice(4);
+  var target = "prisma://parear/" + shown;
+  $("lead").textContent = T.lead;
+  $("code").textContent = shown;
+  $("open").textContent = T.open;
+  $("open").href = target;
+  $("copy").textContent = T.copy;
+  $("valid").textContent = T.valid;
+  T.steps.forEach(function (s) {
+    var li = document.createElement("li");
+    li.textContent = s;
+    $("steps").appendChild(li);
+  });
+  $("copy").addEventListener("click", function () {
+    var done = function () { $("copy").textContent = T.copied; };
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(shown).then(done, function () {});
+    }
+  });
+  // Tenta abrir uma vez sozinho; o botão fica para quando o navegador pede um clique.
+  setTimeout(function () { location.href = target; }, 400);
+})();
+</script>
+</body>
+</html>

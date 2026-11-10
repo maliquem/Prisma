@@ -28,6 +28,7 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 
 use super::host::{self, Hello, Joiner};
 use super::*;
+use super::code;
 
 const ALPN_STREAM: &[u8] = b"prisma/stream/1";
 const ALPN_PAIR: &[u8] = b"prisma/pair/1";
@@ -54,8 +55,15 @@ fn rt() -> &'static tokio::runtime::Runtime {
 
 use super::{dir, user_dir};
 
+/// O nome das opções, ou o do PC no Windows.
 fn my_name() -> String {
-    clean_name(&std::env::var("COMPUTERNAME").unwrap_or_else(|_| "PC".into()))
+    let o = Opts::load().name;
+    clean_name(&if o.is_empty() { std::env::var("COMPUTERNAME").unwrap_or_else(|_| "PC".into()) } else { o })
+}
+
+/// Este PC está assistindo a outro agora (a janela de quem assiste está aberta).
+fn viewing_now() -> bool {
+    unsafe { FindWindowW(w!("PrismaAssistir"), None).is_ok() }
 }
 
 /// Nome de aparelho sem tabulação nem quebra de linha, até 40 letras.
@@ -110,7 +118,7 @@ fn identity() -> io::Result<SecretKey> {
     Ok(sk)
 }
 
-fn random<const N: usize>() -> [u8; N] {
+pub(super) fn random<const N: usize>() -> [u8; N] {
     let mut b = [0u8; N];
     unsafe {
         let st = BCryptGenRandom(None, &mut b, BCRYPT_USE_SYSTEM_PREFERRED_RNG);
@@ -225,7 +233,7 @@ fn invite_path() -> PathBuf {
     dir().join("convite.tsv")
 }
 
-fn unix_now() -> u64 {
+pub(super) fn unix_now() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs())
 }
 
@@ -239,22 +247,27 @@ fn load_invite_file() -> Option<Invite> {
     Some(Invite { secret, made, tries: 0, used: false, perms })
 }
 
-/// `--stream-invite`: com o serviço instalado, o convite vai para o arquivo que ele lê.
-pub fn service_invite(perms: u8) {
-    if !super::service::installed() {
-        return eprintln!("o serviço não está instalado: o convite sai no próprio --stream-net");
-    }
+/// `--stream-invite`: um convite novo vai para o arquivo que o host lê no pedido de pareamento (o
+/// do serviço, ou o da página na pasta deste usuário), e o código curto vai para os relés.
+pub fn make_invite(perms: u8) {
     let sk = match identity() {
         Ok(k) => k,
         Err(e) => return eprintln!("{e}"),
     };
-    let secret = random::<16>();
-    let line = format!("{}\t{}\t{}\n", data_encoding::HEXLOWER.encode(&secret), perms_key(perms), unix_now() + INVITE_TTL.as_secs());
+    let shown = code::new_code();
+    let raw = code::normalize(&shown).unwrap_or_default();
+    let secret = code::secret(&raw);
+    let until = unix_now() + INVITE_TTL.as_secs();
+    let line = format!("{}\t{}\t{}\n", data_encoding::HEXLOWER.encode(&secret), perms_key(perms), until);
     if let Err(e) = std::fs::write(invite_path(), line) {
         return eprintln!("não deu para gravar o convite: {e}");
     }
-    eprintln!("Convite do serviço ({}; vale 10 minutos e uma vez):\n\n{}\n", perms_text(perms), invite_text(&sk.public(), &secret));
+    eprintln!("Convite novo ({}; vale 10 minutos e uma vez).", perms_text(perms));
+    eprintln!("{CODE_LINE}{shown}");
+    eprintln!("Convite longo, se o código não for achado:\n\n{}\n", invite_text(&sk.public(), &secret));
     eprintln!("A pergunta de confirmação aparece na tela deste PC.");
+    let n = rt().block_on(code::publish(&raw, &sk.public(), until));
+    published(n);
 }
 
 /// Leva a identidade e os aparelhos pareados para a pasta do serviço (na instalação).
@@ -306,6 +319,20 @@ impl Invite {
     }
 }
 
+/// A linha do log de onde a página tira o código curto.
+pub const CODE_LINE: &str = "Código do convite: ";
+/// A linha que diz se o código foi publicado.
+pub const CODE_OK: &str = "código publicado";
+pub const CODE_FAIL: &str = "o código não foi publicado";
+
+fn published(n: usize) {
+    if n > 0 {
+        eprintln!("{CODE_OK} ({n} de 3 relés)");
+    } else {
+        eprintln!("{CODE_FAIL}: mande o convite longo");
+    }
+}
+
 fn invite_text(id: &EndpointId, secret: &[u8; 16]) -> String {
     let mut b = id.as_bytes().to_vec();
     b.extend_from_slice(secret);
@@ -335,14 +362,34 @@ fn sas(host: &EndpointId, viewer: &EndpointId, secret: &[u8]) -> String {
 
 // ---------- Canal ----------
 
-async fn endpoint(sk: SecretKey, alpns: Vec<Vec<u8>>) -> std::result::Result<Endpoint, String> {
+/// `host`: usa a porta fixa das opções. O UPnP vale para os dois lados.
+async fn endpoint(sk: SecretKey, alpns: Vec<Vec<u8>>, host: bool) -> std::result::Result<Endpoint, String> {
+    let o = Opts::load();
     // Um quadro-chave em 4K passa de 600 KB: os buffers de datagramas precisam caber nele.
     let cfg = QuicTransportConfig::builder()
         .datagram_send_buffer_size(8 << 20)
         .datagram_receive_buffer_size(Some(8 << 20))
         .keep_alive_interval(Duration::from_secs(1))
         .build();
-    Endpoint::builder(presets::N0).secret_key(sk).alpns(alpns).transport_config(cfg).bind().await.map_err(|e| e.to_string())
+    let make = |v6: bool| -> std::result::Result<iroh::endpoint::Builder, String> {
+        let mut b = Endpoint::builder(presets::N0).secret_key(sk.clone()).alpns(alpns.clone()).transport_config(cfg.clone());
+        if !o.upnp {
+            b = b.portmapper_config(iroh::endpoint::PortmapperConfig::Disabled);
+        }
+        if host && o.port != 0 {
+            b = b.clear_ip_transports().bind_addr(std::net::SocketAddr::from(([0, 0, 0, 0], o.port))).map_err(|e| e.to_string())?;
+            if v6 {
+                b = b.bind_addr(std::net::SocketAddr::from((std::net::Ipv6Addr::UNSPECIFIED, o.port))).map_err(|e| e.to_string())?;
+            }
+        }
+        Ok(b)
+    };
+    match make(true)?.bind().await {
+        Ok(ep) => Ok(ep),
+        // Porta fixa num PC sem IPv6: fica só o IPv4.
+        Err(_) if host && o.port != 0 => make(false)?.bind().await.map_err(|e| e.to_string()),
+        Err(e) => Err(e.to_string()),
+    }
 }
 
 /// Datagramas do iroh, com a leitura num canal comum para o resto do código não precisar de async.
@@ -527,7 +574,7 @@ async fn pair_host(conn: Connection, me: EndpointId, invite: Arc<Mutex<Invite>>)
     let _ = run.await;
 }
 
-async fn accept_loop(ep: Endpoint, invite: Arc<Mutex<Invite>>, tx: mpsc::Sender<(Connection, Device)>, service: bool) {
+async fn accept_loop(ep: Endpoint, invite: Arc<Mutex<Invite>>, tx: mpsc::Sender<(Connection, Device)>) {
     let me = ep.id();
     while let Some(incoming) = ep.accept().await {
         let (invite, tx) = (invite.clone(), tx.clone());
@@ -536,13 +583,11 @@ async fn accept_loop(ep: Endpoint, invite: Arc<Mutex<Invite>>, tx: mpsc::Sender<
             let Ok(conn) = accepting.await else { return };
             let who = conn.remote_id();
             if conn.alpn() == ALPN_PAIR {
-                // No serviço, o convite vem do arquivo que o --stream-invite grava.
-                if service {
-                    if let Some(i) = load_invite_file() {
-                        let mut cur = invite.lock().unwrap();
-                        if cur.secret != i.secret {
-                            *cur = i;
-                        }
+                // O convite mais novo vem do arquivo que o --stream-invite grava.
+                if let Some(i) = load_invite_file() {
+                    let mut cur = invite.lock().unwrap();
+                    if cur.secret != i.secret {
+                        *cur = i;
                     }
                 }
                 pair_host(conn, me, invite).await;
@@ -552,6 +597,11 @@ async fn accept_loop(ep: Endpoint, invite: Arc<Mutex<Invite>>, tx: mpsc::Sender<
                     conn.close(1u32.into(), b"nao pareado");
                     return;
                 };
+                if Opts::load().no_chain && viewing_now() {
+                    eprintln!("conexão de «{}» recusada: este PC está assistindo a outro agora", dev.name);
+                    conn.close(4u32.into(), b"em cadeia");
+                    return;
+                }
                 if dev.ask {
                     let (name, p) = (dev.name.clone(), dev.perms);
                     if !tokio::task::spawn_blocking(move || approve_connect(&name, p)).await.unwrap_or(false) {
@@ -573,7 +623,7 @@ pub fn host(perms: u8) {
         eprintln!("o serviço do Prisma está instalado e já compartilha este PC (--stream-service-status).");
         return eprintln!("para parear um aparelho novo: --stream-invite=permissões");
     }
-    host_with(Some(perms));
+    host_with(Some(perms), false);
 }
 
 /// Espera o relé responder. O prazo é criado dentro do runtime: fora dele, o tokio derruba o
@@ -584,11 +634,16 @@ fn wait_online(ep: &Endpoint, limit: Duration) -> bool {
 
 /// O ajudante do serviço: o convite vem de arquivo, e ninguém lê o terminal.
 pub fn host_service() {
-    host_with(None);
+    host_with(None, true);
 }
 
-/// `invite`: permissões do convite que aparece no terminal; None no serviço.
-fn host_with(invite_perms: Option<u8>) {
+/// A página: como o serviço, sem convite na partida.
+pub fn host_quiet() {
+    host_with(None, false);
+}
+
+/// `invite`: permissões do convite que aparece no terminal; None sem convite na partida.
+fn host_with(invite_perms: Option<u8>, service: bool) {
     eprintln!("{NOTICE}");
     host::emergency_key();
     let _ = std::fs::write(host::room_path(), "");
@@ -596,26 +651,33 @@ fn host_with(invite_perms: Option<u8>) {
         Ok(k) => k,
         Err(e) => return eprintln!("{e}"),
     };
-    let ep = match rt().block_on(endpoint(sk, vec![ALPN_STREAM.to_vec(), ALPN_PAIR.to_vec()])) {
+    let ep = match rt().block_on(endpoint(sk, vec![ALPN_STREAM.to_vec(), ALPN_PAIR.to_vec()], true)) {
         Ok(e) => e,
         Err(e) => return eprintln!("não deu para abrir a conexão: {e}"),
     };
     if !wait_online(&ep, Duration::from_secs(10)) {
         eprintln!("sem resposta do relé da n0 em 10 s: só a rede local e a VPN vão funcionar por enquanto");
     }
-    let secret = random::<16>();
-    let service = invite_perms.is_none();
-    // No serviço, o convite começa usado: só vale o do arquivo.
-    let invite = Arc::new(Mutex::new(Invite { secret, made: Instant::now(), tries: 0, used: service, perms: invite_perms.unwrap_or(SOUND) }));
+    let shown = code::new_code();
+    let raw = code::normalize(&shown).unwrap_or_default();
+    let secret = if invite_perms.is_some() { code::secret(&raw) } else { random::<16>() };
+    // Sem convite na partida, ele começa usado: só vale o do arquivo.
+    let invite = Arc::new(Mutex::new(Invite { secret, made: Instant::now(), tries: 0, used: invite_perms.is_none(), perms: invite_perms.unwrap_or(SOUND) }));
     match invite_perms {
         Some(perms) => {
             eprintln!("Prisma compartilhando pela internet. Quem parear agora: {}. Este PC: «{}», id {}", perms_text(perms), my_name(), ep.id().fmt_short());
-            eprintln!("Convite para parear outro PC (vale 10 minutos e uma vez):\n\n{}\n", invite_text(&ep.id(), &secret));
+            eprintln!("Convite para parear outro PC (vale 10 minutos e uma vez).");
+            eprintln!("{CODE_LINE}{shown}");
+            eprintln!("Convite longo, se o código não for achado:\n\n{}\n", invite_text(&ep.id(), &secret));
+            let id = ep.id();
+            let until = unix_now() + INVITE_TTL.as_secs();
+            rt().spawn(async move { published(code::publish(&raw, &id, until).await) });
         }
-        None => eprintln!("serviço compartilhando pela internet. Este PC: «{}», id {}", my_name(), ep.id().fmt_short()),
+        None if service => eprintln!("serviço compartilhando pela internet. Este PC: «{}», id {}", my_name(), ep.id().fmt_short()),
+        None => eprintln!("compartilhando pela internet. Este PC: «{}», id {}", my_name(), ep.id().fmt_short()),
     }
     let (tx, rx) = mpsc::channel();
-    rt().spawn(accept_loop(ep.clone(), invite, tx, service));
+    rt().spawn(accept_loop(ep.clone(), invite, tx));
 
     // Cada conexão espera a tela de quem assiste numa linha própria e entra na sala pronta.
     let (jtx, jrx) = mpsc::channel::<Joiner>();
@@ -685,7 +747,15 @@ async fn ask_pair(ep: &Endpoint, addr: EndpointAddr, secret: &[u8; 16]) -> std::
 
 pub fn pair(text: &str) {
     eprintln!("{NOTICE}");
-    let Some((host_id, secret)) = parse_invite(text) else {
+    let (host_id, secret) = if let Some(raw) = code::normalize(text) {
+        eprintln!("procurando o código {}", code::show(&raw));
+        match rt().block_on(code::resolve(&raw)) {
+            Ok(id) => (id, code::secret(&raw)),
+            Err(e) => return eprintln!("não achei o código ({e}): confira o código, ou peça o convite longo"),
+        }
+    } else if let Some(x) = parse_invite(text) {
+        x
+    } else {
         return eprintln!("convite inválido");
     };
     let sk = match identity() {
@@ -693,7 +763,7 @@ pub fn pair(text: &str) {
         Err(e) => return eprintln!("{e}"),
     };
     let r: std::result::Result<String, String> = rt().block_on(async {
-        let ep = endpoint(sk, Vec::new()).await?;
+        let ep = endpoint(sk, Vec::new(), false).await?;
         let r = ask_pair(&ep, host_id.into(), &secret).await;
         ep.close().await;
         let name = r?;
@@ -719,7 +789,7 @@ pub fn connect(arg: &str) {
         Ok(k) => k,
         Err(e) => return eprintln!("{e}"),
     };
-    let ep = match rt().block_on(endpoint(sk, Vec::new())) {
+    let ep = match rt().block_on(endpoint(sk, Vec::new(), false)) {
         Ok(e) => e,
         Err(e) => return eprintln!("não deu para abrir a conexão: {e}"),
     };

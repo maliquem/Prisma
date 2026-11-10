@@ -1410,3 +1410,117 @@ Cancelar: recusar.	Cancel: refuse.
 Permitir?	Allow?
 Conectados agora:	Connected now:
 Ctrl+Alt+Shift+Q, neste PC, desconecta todo mundo na hora.	Ctrl+Alt+Shift+Q, on this PC, disconnects everyone at once.
+Compartilhar	Share
+Host	Host
+Cliente	Viewer
+Atalhos	Shortcuts
+Controles	Controllers
+Parear com este convite?	Pair with this invite?
+Chegou o convite {}. Os dois PCs vão mostrar um código de confirmação de seis dígitos: confira antes de aceitar no outro PC.	Invite {} arrived. Both PCs will show a six-digit confirmation code: check it before accepting on the other PC.
+Não deu para salvar as opções de quem assiste.	Could not save the viewer options.
+Convite criado	Invite created
+Publicando o código nos relés...	Publishing the code to the relays...
+Pronto. Vale 10 minutos e uma vez.	Ready. Valid for 10 minutes and one use.
+Os relés não responderam: mande o convite longo.	The relays did not answer: send the long invite.
+No outro PC, digite o código em Parear com outro PC, ou mande o link: ele abre o Prisma e pareia depois de perguntar.	On the other PC, type the code in Pair with another PC, or send the link: it opens Prisma and pairs after asking.
+Copiar código	Copy code
+Código copiado. Vale 10 minutos e uma vez.	Code copied. Valid for 10 minutes and one use.
+Copiar link	Copy link
+Link copiado. Vale 10 minutos e uma vez.	Link copied. Valid for 10 minutes and one use.
+Convite do Prisma para ver este PC:	Prisma invite to view this PC:
+Convite do Prisma	Prisma invite
+Copiar convite longo	Copy long invite
+Ligado pelo serviço do Windows.	Running through the Windows service.
+Último convite:	Last invite:
+Mostrar	Show
+Os aparelhos pareados conectam quando o compartilhamento está ligado.	Paired devices connect while sharing is on.
+Código ou convite do outro PC	Code or invite from the other PC
+Isso não parece um código do Prisma	That does not look like a Prisma code
+Conexão pela internet	Connection over the internet
+Nenhum aparelho pareado. Crie um convite neste PC e digite o código no outro, ou o contrário.	No paired devices. Create an invite on this PC and type the code on the other one, or the other way around.
+Nome deste PC	This PC's name
+Monitor	Monitor
+Principal	Main
+Resolução máxima	Maximum resolution
+Quadros por segundo	Frames per second
+Ritmo dos quadros	Frame pacing
+Só quando a tela muda	When the screen changes
+Constante	Constant
+Prioridade	Priority
+Menor atraso	Lowest delay
+Equilíbrio	Balanced
+Qualidade	Quality
+Codec	Codec
+Limite de banda	Bandwidth limit
+HDR10 de 10 bits quando as duas telas estão em HDR	10-bit HDR10 when both screens are in HDR
+Aceitar 4:4:4 quando quem assiste pede	Accept 4:4:4 when the viewer asks
+Os automáticos seguem quem assiste: a altura da tela, o menor entre os Hz dos dois lados e o melhor codec que os dois têm. O 4:4:4 e o HDR10 caem sozinhos se o outro lado não tiver.	The automatic values follow the viewer: the screen height, the lower refresh rate of the two sides and the best codec both have. 4:4:4 and HDR10 drop on their own if the other side lacks them.
+Som, mouse e teclado	Sound, mouse and keyboard
+Som que vai	Sound that is sent
+Todo o PC	The whole PC
+Só	Only
+Tirar do som o programa de chamada	Leave the call app out of the sound
+Uma pessoa por vez no mouse e no teclado	One person at a time on the mouse and keyboard
+O mouse e o teclado deste PC têm prioridade	This PC's mouse and keyboard come first
+Recusar conexões enquanto este PC assiste a outro	Refuse connections while this PC is viewing another
+Com prioridade, quem assiste para por 1 segundo sempre que alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. Programas de chamada: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack e Signal; sai do som o primeiro que estiver aberto.	With priority, the viewer pauses for 1 second whenever someone here moves the mouse or types. One person at a time: the turn passes after 2 seconds without input. Call apps: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack and Signal; the first one that is open is left out of the sound.
+Janela de quem assiste	Viewer window
+Abrir em tela cheia sem borda	Open in borderless fullscreen
+VSync: sem rasgos na imagem, com um pouco mais de atraso	VSync: no tearing, with a little more delay
+Modo imersivo	Immersive mode
+Só o mouse	Mouse only
+Só o teclado	Keyboard only
+Mouse e teclado	Mouse and keyboard
+Pedir 4:4:4 (texto mais nítido; precisa de NVIDIA ou Intel)	Ask for 4:4:4 (sharper text; needs NVIDIA or Intel)
+Começar sem o som do outro PC	Start without the other PC's sound
+No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. O atalho do menu sempre funciona aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga.	In immersive mode, in fullscreen, the mouse stays inside the window, and the Windows key and Alt+Tab go to the other PC. The menu shortcut always works here. On a G-SYNC or FreeSync screen, leave VSync off: the picture does not tear.
+Medidor e avisos	Meter and warnings
+Medidor de latência	Latency meter
+Simples	Simple
+Detalhado	Detailed
+Avisar quando a conexão piorar	Warn when the connection gets worse
+O simples mostra o atraso de ponta a ponta e uma bolinha verde, amarela ou vermelha. O detalhado mostra também a rede, o vídeo, os quadros por segundo, a banda, a decodificação, os quadros perdidos e o caminho. O aviso aparece quando a rede perde mais de 2% dos quadros, quando a latência varia mais de 10 ms ou sobe por 3 segundos seguidos. Os dois mudam também pelo menu da conexão.	Simple shows the end-to-end delay and a green, yellow or red dot. Detailed also shows the network, the video, frames per second, bandwidth, decoding, lost frames and the route. The warning appears when the network loses more than 2% of frames, when latency varies by more than 10 ms or rises for 3 seconds in a row. Both can also be changed from the connection menu.
+Portas	Ports
+Porta UDP do host	Host UDP port
+Automática	Automatic
+Use um número de 1024 a 65535.	Use a number from 1024 to 65535.
+Pedir ao roteador para abrir a porta (UPnP, NAT-PMP, PCP)	Ask the router to open the port (UPnP, NAT-PMP, PCP)
+Automática serve para quase todo mundo: o Prisma fura o NAT sem porta fixa. A porta fixa é para quem redireciona a porta no roteador. Ela vale na próxima vez que o compartilhamento ligar. O pedido ao roteador some sozinho quando a conexão acaba.	Automatic works for almost everyone: Prisma gets through NAT without a fixed port. A fixed port is for people who forward the port on the router. It takes effect the next time sharing starts. The router request goes away on its own when the connection ends.
+Como a conexão passa	How the connection travels
+Última conexão:	Last connection:
+Atalhos da conexão	Connection shortcuts
+Na janela de quem assiste	In the viewer window
+Menu da conexão	Connection menu
+Ctrl+Alt+Del no outro PC	Ctrl+Alt+Del on the other PC
+No PC que compartilha	On the sharing PC
+Desconectar todo mundo	Disconnect everyone
+Dois atalhos iguais: só o primeiro da lista funciona.	Two identical shortcuts: only the first one in the list works.
+Clique num atalho e aperte a combinação nova; Esc cancela. Os atalhos de quem assiste ficam com a janela e não vão para o outro PC. Use combinações com Ctrl, Alt ou Shift, para não roubar teclas do jogo. Os novos valem na próxima conexão.	Click a shortcut and press the new combination; Esc cancels. Viewer shortcuts stay with the window and are not sent to the other PC. Use combinations with Ctrl, Alt or Shift so they do not take keys from the game. New ones take effect on the next connection.
+com fio	wired
+bateria cheia	battery full
+bateria média	battery medium
+bateria baixa	battery low
+bateria acabando	battery almost empty
+Controles virtuais no host	Virtual controllers on the host
+Mandar o controle com a janela em segundo plano	Send the controller while the window is in the background
+Usar o teclado como controle	Use the keyboard as a controller
+No host, cada controle de quem assiste vira um controle de Xbox virtual, pelo ViGEmBus ou pelo VIIPER (o Prisma não instala nenhum dos dois). Eles saem sozinhos quando o jogo da frente tem anti-cheat. Teclado como controle: WASD é o analógico esquerdo, as setas são o direcional, J é A, K é B, U é X, I é Y, Q e E são LB e RB, Z e C os gatilhos, Enter é Start e Backspace é Back.	On the host, each viewer controller becomes a virtual Xbox controller, through ViGEmBus or VIIPER (Prisma installs neither). They are removed on their own when the game in front has anti-cheat. Keyboard as controller: WASD is the left stick, the arrows are the D-pad, J is A, K is B, U is X, I is Y, Q and E are LB and RB, Z and C the triggers, Enter is Start and Backspace is Back.
+Ligados agora	Connected now
+Neste PC	On this PC
+Nenhum controle ligado.	No controllers connected.
+Virtuais de quem assiste a este PC	Virtual ones from viewers of this PC
+controle	controller
+jogador	player
+parado	idle
+Nenhum agora.	None right now.
+O Windows não abriu a janela de compartilhar: o convite foi copiado.	Windows did not open the share window: the invite was copied.
+Conexão instável: a rede está perdendo quadros	Unstable connection: the network is losing frames
+Conexão instável: a latência está variando	Unstable connection: latency is jumping around
+Conexão piorando: a latência está subindo	Connection getting worse: latency is rising
+ponta a ponta	end to end
+rede	network
+q/s	fps
+decodificação	decoding
+perdidos	lost
+Mandar Ctrl+Alt+Del	Send Ctrl+Alt+Del
+Desconectar	Disconnect

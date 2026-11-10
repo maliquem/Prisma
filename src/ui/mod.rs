@@ -397,6 +397,29 @@ impl<'a> Ui<'a> {
         }
     }
 
+    /// Janela própria de uma página. Enquanto ela estiver aberta, a página chama `block` antes de
+    /// desenhar o resto (que deixa de receber cliques) e `sheet` no fim, para desenhar o fundo dela;
+    /// os controles desenhados depois de `sheet` voltam a responder.
+    #[cfg_attr(not(feature = "stream"), allow(dead_code))]
+    pub fn block(&mut self) {
+        self.blocked = true;
+    }
+
+    #[cfg_attr(not(feature = "stream"), allow(dead_code))]
+    pub fn sheet(&mut self, w: f32, h: f32) -> Rect {
+        let (vw, vh) = (self.s.view_w, self.s.view_h);
+        self.c.translate(0.0, 0.0);
+        self.dy = 0.0;
+        self.clip = None;
+        self.c.fill(rect(0.0, 0.0, vw, vh), rgb(0x000000).alpha(0.6));
+        let w = w.min(vw - 48.0);
+        let b = rect(((vw - w) / 2.0).floor(), ((vh - h) / 2.0).floor(), w, h);
+        self.c.round(b, 14.0, CARD2);
+        self.c.round_line(b, 14.0, BORDER2, 1.0);
+        self.blocked = self.s.popup.is_some() || self.s.ask.is_some();
+        b
+    }
+
     /// Pergunta Sim ou Não. A resposta chega depois por `answered`, com a mesma chave.
     pub fn ask(&mut self, key: &str, title: &str, body: &str) {
         self.s.ask = Some(Ask { id: hash_id(key), title: title.to_string(), body: body.to_string(), notice: false, check: None });

@@ -2290,14 +2290,16 @@ dependencies = [
 
 [[package]]
 name = "prisma"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "blake3",
  "data-encoding",
  "iroh",
+ "iroh-dns",
  "mini-cuda",
  "mini-nvcodec",
  "tokio",
+ "url",
  "vigem-client",
  "viiper-client",
  "windows",

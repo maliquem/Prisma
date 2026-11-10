@@ -7,19 +7,26 @@
 //! Internet, com pareamento e criptografia (compilado com `--features stream`): veja `net.rs`.
 
 mod clip;
+mod hud;
+#[cfg(feature = "stream")]
+pub mod code;
 pub mod host;
 mod link;
 #[cfg(feature = "stream")]
 mod net;
 #[cfg(feature = "stream")]
-pub use net::{device_rows, forget_device, me, set_device};
+pub use net::{device_rows, forget_device, me, set_device, CODE_FAIL, CODE_LINE, CODE_OK};
 mod pads;
 mod screen;
 #[cfg(feature = "stream")]
 pub mod service;
 pub mod view;
+#[cfg(feature = "stream")]
+pub mod weblink;
 
 pub use link::*;
+mod opts;
+pub use opts::*;
 
 use crate::capture::mux::Codec;
 
@@ -42,65 +49,6 @@ pub fn user_dir() -> std::path::PathBuf {
 
 pub fn service_dir() -> std::path::PathBuf {
     crate::sys::known_folder(&windows::Win32::UI::Shell::FOLDERID_ProgramData).join("Prisma").join("compartilhar")
-}
-
-/// Opções do host, em `opcoes.txt` na pasta do compartilhamento (o serviço lê a mesma). As
-/// variáveis de ambiente de teste ainda valem por cima.
-#[derive(Clone, PartialEq, Debug)]
-pub struct Opts {
-    /// HDR do host numa tela sem HDR: 0 converte, 1 desliga o HDR do Windows enquanto alguém assiste.
-    pub hdr_off: bool,
-    /// Quantas pessoas assistem juntas.
-    pub guests: usize,
-    /// Ponte dos controles: auto, vigem ou viiper.
-    pub pads: String,
-    /// Permissões do convite que a página cria.
-    pub invite: u8,
-}
-
-impl Default for Opts {
-    fn default() -> Self {
-        Opts { hdr_off: false, guests: 3, pads: "auto".into(), invite: SOUND }
-    }
-}
-
-impl Opts {
-    pub fn path() -> std::path::PathBuf {
-        dir().join("opcoes.txt")
-    }
-
-    pub fn parse(text: &str) -> Self {
-        let mut o = Opts::default();
-        for line in text.lines() {
-            let Some((k, v)) = line.trim().split_once('=') else { continue };
-            match k {
-                "hdr_desligar" => o.hdr_off = v == "1",
-                "pessoas" => o.guests = v.parse().unwrap_or(3usize).clamp(1, 8),
-                "controles" if matches!(v, "auto" | "vigem" | "viiper") => o.pads = v.into(),
-                "convite" => o.invite = parse_perms(v).unwrap_or(SOUND),
-                _ => {}
-            }
-        }
-        o
-    }
-
-    #[cfg_attr(not(feature = "stream"), allow(dead_code))]
-    pub fn text(&self) -> String {
-        format!("hdr_desligar={}\npessoas={}\ncontroles={}\nconvite={}\n", self.hdr_off as u8, self.guests, self.pads, perms_key(self.invite))
-    }
-
-    pub fn load() -> Self {
-        Self::parse(&std::fs::read_to_string(Self::path()).unwrap_or_default())
-    }
-
-    #[cfg_attr(not(feature = "stream"), allow(dead_code))]
-    pub fn save(&self) -> std::io::Result<()> {
-        let p = Self::path();
-        if let Some(d) = p.parent() {
-            std::fs::create_dir_all(d)?;
-        }
-        std::fs::write(p, self.text())
-    }
 }
 
 /// Este processo é o ajudante do serviço (SYSTEM, na sessão de quem usa o PC).
@@ -586,6 +534,11 @@ pub fn run_args() -> bool {
                 }
                 return true;
             }
+            // A página: compartilha sem convite; os convites vêm de --stream-invite.
+            if a == "--stream-share" {
+                net::host_quiet();
+                return true;
+            }
             if let Some(v) = a.strip_prefix("--stream-allow=") {
                 net::allow(v);
                 return true;
@@ -678,9 +631,6 @@ mod tests {
         // Ida e volta pelo arquivo.
         assert_eq!(parse_perms("teclado,mouse,sistema"), Some(KEYBOARD | MOUSE | SYSTEM));
         assert_eq!(parse_perms("copiar"), Some(COPY));
-        let o = Opts { hdr_off: true, guests: 2, pads: "vigem".into(), invite: SOUND | COPY };
-        assert_eq!(Opts::parse(&o.text()), o);
-        assert_eq!(Opts::parse("pessoas=99\ncontroles=outro"), Opts { guests: 8, ..Opts::default() });
         for p in [0, SOUND, PAD, SOUND | PAD, PAD | MOUSE, KEYBOARD | MOUSE, SOUND | PAD | KEYBOARD | MOUSE, SYSTEM | MOUSE, TOTAL] {
             assert_eq!(parse_perms(&perms_key(p)), Some(p), "{p}");
         }

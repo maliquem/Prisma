@@ -8,7 +8,8 @@
 //! - `--stream-service-remove`: desliga, apaga o serviço e as duas pastas, devolve os aparelhos
 //!   pareados e a política do Ctrl+Alt+Del como estavam.
 //! - `--stream-service-status`: mostra se está instalado e rodando.
-//! - `--stream-invite[=permissões]`: com o serviço instalado, cria o convite de pareamento que ele usa.
+//! - `--stream-invite[=permissões]`: cria um convite (código curto) para o host que estiver rodando,
+//!   o do serviço ou o da página.
 //!
 //! Como funciona: o serviço (sessão 0, sem tela) mantém um ajudante na sessão de quem está no PC,
 //! com o mesmo poder de SYSTEM. O ajudante é o host de sempre, capturando pela Desktop Duplication,
@@ -51,7 +52,7 @@ pub fn run_args(a: &str) -> bool {
             if a == "--stream-invite" || a.starts_with("--stream-invite=") {
                 let v = a.strip_prefix("--stream-invite=").unwrap_or("ver");
                 match super::parse_perms(v) {
-                    Some(p) => super::net::service_invite(p),
+                    Some(p) => super::net::make_invite(p),
                     None => eprintln!("permissão desconhecida: «{v}»"),
                 }
                 return true;
