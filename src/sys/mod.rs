@@ -4,6 +4,7 @@ pub mod autohdr;
 pub mod autostart;
 pub mod avsync;
 pub mod catalog;
+pub mod stores;
 pub mod disks;
 pub mod drs;
 pub mod etw;

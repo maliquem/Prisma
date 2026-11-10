@@ -30,6 +30,8 @@ pub mod share {
     pub fn shutdown() {}
 
     pub fn tick(_app: &mut App) {}
+
+    pub fn open_room() {}
 }
 mod startup;
 mod storage;

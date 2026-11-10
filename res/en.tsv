@@ -1479,7 +1479,7 @@ Medidor de latência	Latency meter
 Simples	Simple
 Detalhado	Detailed
 Avisar quando a conexão piorar	Warn when the connection gets worse
-O simples mostra o atraso de ponta a ponta e uma bolinha verde, amarela ou vermelha. O detalhado mostra também a rede, o vídeo, os quadros por segundo, a banda, a decodificação, os quadros perdidos e o caminho. O aviso aparece quando a rede perde mais de 2% dos quadros, quando a latência varia mais de 10 ms ou sobe por 3 segundos seguidos. Os dois mudam também pelo menu da conexão.	Simple shows the end-to-end delay and a green, yellow or red dot. Detailed also shows the network, the video, frames per second, bandwidth, decoding, lost frames and the route. The warning appears when the network loses more than 2% of frames, when latency varies by more than 10 ms or rises for 3 seconds in a row. Both can also be changed from the connection menu.
+O simples mostra o atraso de ponta a ponta e uma bolinha verde, amarela ou vermelha. O detalhado mostra também a rede, o vídeo, os quadros por segundo, a banda, a decodificação, os quadros perdidos e o caminho. O aviso aparece quando a rede perde mais de 2% dos quadros, quando a latência varia mais de 10 ms ou sobe por 3 segundos seguidos. Os quadros por segundo pedidos não passam dos Hz desta tela; o automático usa os Hz dela. Tudo isso muda também pelo menu da conexão.	Simple shows the end-to-end delay and a green, yellow or red dot. Detailed also shows the network, the video, frames per second, bandwidth, decoding, lost frames and the route. The warning appears when the network loses more than 2% of frames, when latency varies by more than 10 ms or rises for 3 seconds in a row. The requested frames per second never go above this screen's Hz; Automatic uses its Hz. All of this can also be changed from the connection menu.
 Portas	Ports
 Porta UDP do host	Host UDP port
 Automática	Automatic
@@ -1495,7 +1495,7 @@ Ctrl+Alt+Del no outro PC	Ctrl+Alt+Del on the other PC
 No PC que compartilha	On the sharing PC
 Desconectar todo mundo	Disconnect everyone
 Dois atalhos iguais: só o primeiro da lista funciona.	Two identical shortcuts: only the first one in the list works.
-Clique num atalho e aperte a combinação nova; Esc cancela. Os atalhos de quem assiste ficam com a janela e não vão para o outro PC. Use combinações com Ctrl, Alt ou Shift, para não roubar teclas do jogo. Os novos valem na próxima conexão.	Click a shortcut and press the new combination; Esc cancels. Viewer shortcuts stay with the window and are not sent to the other PC. Use combinations with Ctrl, Alt or Shift so they do not take keys from the game. New ones take effect on the next connection.
+Clique num atalho e aperte a combinação nova; Esc cancela. Os atalhos de quem assiste ficam com a janela e não vão para o outro PC. Use combinações com Ctrl, Alt ou Shift, para não roubar teclas do jogo. Os novos valem na próxima conexão. O atalho do modo imersivo liga e desliga só na conexão aberta; o modo que fica é o da aba Cliente.	Click a shortcut and press the new combination; Esc cancels. Viewer shortcuts stay with the window and are not sent to the other PC. Use combinations with Ctrl, Alt or Shift so they do not take keys from the game. New ones take effect on the next connection. The immersive mode shortcut turns it on and off only for the open connection; the mode that stays is the one on the Viewer tab.
 com fio	wired
 bateria cheia	battery full
 bateria média	battery medium
@@ -1525,3 +1525,24 @@ perdidos	lost
 Mandar Ctrl+Alt+Del	Send Ctrl+Alt+Del
 Desconectar	Disconnect
 O serviço está caindo: reabra o Prisma como administrador.	The service keeps crashing: reopen Prisma as administrator.
+Conexão	Connection
+Mouse	Mouse
+Os dois	Both
+Ligar e desligar o modo imersivo	Turn immersive mode on and off
+Trocar o medidor de latência	Switch the latency meter
+Ligar e desligar o som	Turn sound on and off
+Conectados	Connected
+Conectados agora	Connected now
+Banir	Ban
+Personalizado	Custom
+Pela VPN	Through the VPN
+Direto na rede local	Direct on the local network
+Direto pela internet	Direct over the internet
+Pelo relé da n0	Through the n0 relay
+UDP direto	Direct UDP
+Conectando	Connecting
+O acesso muda na hora e fica salvo para as próximas conexões. Desconectar derruba só esta conexão: o aparelho continua pareado. Banir derruba e esquece o aparelho, que só volta com um convite novo.	Access changes right away and is saved for the next connections. Disconnect drops only this connection: the device stays paired. Ban drops and forgets the device, which can only come back with a new invite.
+Banir este aparelho?	Ban this device?
+«{}» sai agora e vai precisar de um convite novo para conectar.	“{}” leaves now and will need a new invite to connect.
+«{}» conectou a este PC	“{}” connected to this PC
+«{}» saiu	“{}” left

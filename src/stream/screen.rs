@@ -157,7 +157,7 @@ impl Dda {
     }
 
     /// Espera até 1 ms por novidade e, se houver, deixa a imagem com o cursor em `mid`.
-    pub unsafe fn poll(&mut self, mid: &ID3D11Texture2D) -> Result<Got> {
+    pub unsafe fn poll(&mut self, _mid: &ID3D11Texture2D) -> Result<Got> {
         let Some(dup) = self.dup.clone() else {
             // Sem acesso (troca de área, tela segura sem SYSTEM): tenta de novo a cada 100 ms.
             if self.retry.elapsed() < Duration::from_millis(100) {
@@ -191,11 +191,11 @@ impl Dda {
         let mut pts = crate::stream::now();
         if info.LastPresentTime != 0 {
             if let Some(r) = res.as_ref().and_then(|r| r.cast::<ID3D11Texture2D>().ok()) {
-                match (&self.raw, &self.tone) {
-                    (Some(raw), Some(tone)) => {
-                        self.ctx.CopyResource(raw, &r);
-                        tone.draw(&self.ctx, &self.dev, raw, self.size.0, self.size.1)?;
-                    }
+                // Só a cópia que não pode esperar (a imagem da Desktop Duplication vale até o
+                // ReleaseFrame). A conversão do HDR e o cursor ficam para `compose`, uma vez por
+                // quadro que vai para o vídeo, e não a cada atualização da tela.
+                match &self.raw {
+                    Some(raw) if self.tone.is_some() => self.ctx.CopyResource(raw, &r),
                     _ => self.ctx.CopyResource(&self.base, &r),
                 }
                 pts = qpc_100ns(info.LastPresentTime);
@@ -227,9 +227,16 @@ impl Dda {
         if !changed {
             return Ok(Got::Nothing);
         }
-        self.ctx.CopyResource(mid, &self.base);
-        self.cursor.draw(&self.ctx, self.size)?;
         Ok(Got::Frame(pts))
+    }
+
+    /// Monta em `mid` a imagem mais nova, com o HDR convertido e o cursor por cima.
+    pub unsafe fn compose(&mut self, mid: &ID3D11Texture2D) -> Result<()> {
+        if let (Some(raw), Some(tone)) = (&self.raw, &self.tone) {
+            tone.draw(&self.ctx, &self.dev, raw, self.size.0, self.size.1)?;
+        }
+        self.ctx.CopyResource(mid, &self.base);
+        self.cursor.draw(&self.ctx, self.size)
     }
 }
 
@@ -475,6 +482,7 @@ pub fn bench(arg: &str) {
                 let p = Instant::now();
                 match dda.poll(&mid)? {
                     Got::Frame(_) => {
+                        dda.compose(&mid)?;
                         poll_ms.push(p.elapsed().as_secs_f64() * 1000.0);
                         frames += 1;
                         gaps.push(last.elapsed().as_secs_f64() * 1000.0);

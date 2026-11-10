@@ -220,10 +220,19 @@ pub struct ClientOpts {
     pub pad_background: bool,
     /// O teclado vira controle (WASD, setas, J, K, U, I...).
     pub pad_keys: bool,
+    /// Quadros por segundo pedidos ao host; 0 é o automático (os Hz desta tela).
+    pub fps: u32,
     pub key_menu: Keys,
     pub key_full: Keys,
     pub key_cad: Keys,
+    pub key_disc: Keys,
+    pub key_imm: Keys,
+    pub key_meter: Keys,
+    pub key_sound: Keys,
 }
+
+/// Quadros por segundo que dá para pedir pelo menu e pela aba Cliente (0: automático).
+pub const CLIENT_FPS: [u32; 6] = [0, 30, 60, 90, 120, 144];
 
 impl Default for ClientOpts {
     fn default() -> Self {
@@ -239,7 +248,12 @@ impl Default for ClientOpts {
             pad_keys: false,
             key_menu: (MOD_CTRL | MOD_ALT | MOD_SHIFT, b'P' as u32),
             key_full: (MOD_CTRL | MOD_ALT | MOD_SHIFT, b'F' as u32),
+            fps: 0,
             key_cad: (MOD_CTRL | MOD_ALT, VK_END),
+            key_disc: (MOD_CTRL | MOD_ALT | MOD_SHIFT, b'D' as u32),
+            key_imm: (MOD_CTRL | MOD_ALT | MOD_SHIFT, b'I' as u32),
+            key_meter: (MOD_CTRL | MOD_ALT | MOD_SHIFT, b'M' as u32),
+            key_sound: (MOD_CTRL | MOD_ALT | MOD_SHIFT, b'S' as u32),
         }
     }
 }
@@ -267,6 +281,11 @@ impl ClientOpts {
                 "atalho_menu" => o.key_menu = keys_parse(v, o.key_menu),
                 "atalho_tela_cheia" => o.key_full = keys_parse(v, o.key_full),
                 "atalho_ctrl_alt_del" => o.key_cad = keys_parse(v, o.key_cad),
+                "atalho_desconectar" => o.key_disc = keys_parse(v, o.key_disc),
+                "atalho_imersivo" => o.key_imm = keys_parse(v, o.key_imm),
+                "atalho_medidor" => o.key_meter = keys_parse(v, o.key_meter),
+                "atalho_som" => o.key_sound = keys_parse(v, o.key_sound),
+                "quadros" => o.fps = v.parse::<u32>().ok().filter(|f| CLIENT_FPS.contains(f)).unwrap_or(0),
                 _ => {}
             }
         }
@@ -278,7 +297,7 @@ impl ClientOpts {
         let b = |x: bool| x as u8;
         format!(
             "tela_cheia={}\nvsync={}\nimersivo={}\nmedidor={}\naviso={}\nmudo={}\npedir_444={}\ncontrole_fundo={}\nteclado_controle={}\n\
-atalho_menu={}\natalho_tela_cheia={}\natalho_ctrl_alt_del={}\n",
+quadros={}\natalho_menu={}\natalho_tela_cheia={}\natalho_ctrl_alt_del={}\natalho_desconectar={}\natalho_imersivo={}\natalho_medidor={}\natalho_som={}\n",
             b(self.fullscreen),
             b(self.vsync),
             self.immersive,
@@ -288,9 +307,14 @@ atalho_menu={}\natalho_tela_cheia={}\natalho_ctrl_alt_del={}\n",
             b(self.ask444),
             b(self.pad_background),
             b(self.pad_keys),
+            self.fps,
             keys_text(self.key_menu),
             keys_text(self.key_full),
             keys_text(self.key_cad),
+            keys_text(self.key_disc),
+            keys_text(self.key_imm),
+            keys_text(self.key_meter),
+            keys_text(self.key_sound),
         )
     }
 
@@ -342,8 +366,8 @@ mod tests {
         assert_eq!(Opts::parse("pessoas=99\ncontroles=outro\ncodec=mp3\nnome=a\tb"), Opts { guests: 8, name: "ab".into(), ..Opts::default() });
         // Arquivo da 0.11.0: o resto fica no padrão.
         assert_eq!(Opts::parse("hdr_desligar=1\npessoas=2\ncontroles=auto\nconvite=total\n"), Opts { hdr_off: true, guests: 2, invite: TOTAL, ..Opts::default() });
-        let c = ClientOpts { fullscreen: false, vsync: true, immersive: 1, meter: 2, warn: false, mute: true, ask444: true, pad_background: true, pad_keys: true, key_menu: (MOD_ALT, 0x70), ..ClientOpts::default() };
+        let c = ClientOpts { fullscreen: false, vsync: true, immersive: 1, meter: 2, warn: false, mute: true, ask444: true, pad_background: true, pad_keys: true, fps: 60, key_menu: (MOD_ALT, 0x70), key_sound: (MOD_CTRL, b'M' as u32), ..ClientOpts::default() };
         assert_eq!(ClientOpts::parse(&c.text()), c);
-        assert_eq!(ClientOpts::parse("atalho_menu=2,0\nmedidor=9"), ClientOpts { meter: 2, ..ClientOpts::default() });
+        assert_eq!(ClientOpts::parse("atalho_menu=2,0\nmedidor=9\nquadros=75"), ClientOpts { meter: 2, ..ClientOpts::default() });
     }
 }

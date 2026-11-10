@@ -707,7 +707,7 @@ fn host_with(invite_perms: Option<u8>, service: bool) {
                     };
                     match hello {
                         Some(hello) => {
-                            let _ = jtx.send(Joiner { link, hello, perms: dev.perms, name: dev.name });
+                            let _ = jtx.send(Joiner { link, hello, perms: dev.perms, name: dev.name, id: hex(&dev.id) });
                         }
                         None => eprintln!("«{}» não mandou a tela dele a tempo", dev.name),
                     }

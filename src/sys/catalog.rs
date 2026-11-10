@@ -1,5 +1,5 @@
 //! Programas para escolher: tudo o que o menu Iniciar mostra, inclusive os da Microsoft Store,
-//! mais os que estão na lista de instalados e os que estão abertos agora.
+//! mais os que estão na lista de instalados, os jogos da Steam e da Epic e os que estão abertos agora.
 
 use std::collections::HashSet;
 use std::path::Path;
@@ -141,6 +141,8 @@ pub fn list(open: Vec<(String, String)>) -> Vec<Entry> {
     for p in crate::sys::uninstall::list() {
         all.push(Entry { name: p.name, path: p.icon });
     }
+    // Os jogos da Steam e da Epic, cujos atalhos abrem o iniciador e não o jogo.
+    all.extend(crate::sys::stores::games());
     for (exe, path) in open {
         all.push(Entry { name: crate::pages::app_name(&exe).to_string(), path });
     }

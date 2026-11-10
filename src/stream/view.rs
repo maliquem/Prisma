@@ -172,6 +172,15 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
         };
         sh.bytes.fetch_add(n as u64, Ordering::Relaxed);
         match read(&buf[..n]) {
+            // O host desconectou esta pessoa (pela página dele, ou banida).
+            Some(Msg::Bye) => {
+                eprintln!("o outro PC encerrou a conexão");
+                sh.closed.store(true, Ordering::Relaxed);
+                unsafe {
+                    let _ = SetEvent(HANDLE(sh.wake as *mut _));
+                }
+                break;
+            }
             Some(Msg::Info { codec, w, h, fps, perms, recover: r, hdr10, yuv444 }) => {
                 recover = r;
                 sh.got_info.store(true, Ordering::Relaxed);
@@ -385,6 +394,12 @@ struct Keys {
     key_menu: opts::Keys,
     key_full: opts::Keys,
     key_cad: opts::Keys,
+    key_disc: opts::Keys,
+    key_imm: opts::Keys,
+    key_meter: opts::Keys,
+    key_sound: opts::Keys,
+    /// Atalhos apertados que a volta da janela ainda vai fazer.
+    acts: Vec<hud::Pick>,
     /// Modo imersivo: bit 1 o mouse fica na janela, bit 2 o Alt+Tab e a tecla Windows vão ao host.
     immersive: u8,
 }
@@ -402,6 +417,11 @@ static KEYS: Mutex<Keys> = Mutex::new(Keys {
     key_menu: (0, 0),
     key_full: (0, 0),
     key_cad: (0, 0),
+    key_disc: (0, 0),
+    key_imm: (0, 0),
+    key_meter: (0, 0),
+    key_sound: (0, 0),
+    acts: Vec::new(),
     immersive: 0,
 });
 
@@ -464,6 +484,15 @@ unsafe fn key_event(h: HWND, k: &mut Keys, m: u32, w: WPARAM, l: LPARAM) -> bool
             k.menu = true;
         }
         return true;
+    }
+    // Os atalhos de quem assiste ficam aqui e não vão para o host.
+    for (keys, act) in [(k.key_disc, hud::Pick::Disconnect), (k.key_imm, hud::Pick::ImmersiveToggle), (k.key_meter, hud::Pick::MeterCycle), (k.key_sound, hud::Pick::Sound)] {
+        if keys.1 != 0 && combo == keys {
+            if down && l.0 & (1 << 30) == 0 {
+                k.acts.push(act);
+            }
+            return true;
+        }
     }
     if k.keyboard && combo == k.key_cad {
         if down {
@@ -889,6 +918,11 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         k.key_menu = co.key_menu;
         k.key_full = co.key_full;
         k.key_cad = co.key_cad;
+        k.key_disc = co.key_disc;
+        k.key_imm = co.key_imm;
+        k.key_meter = co.key_meter;
+        k.key_sound = co.key_sound;
+        k.acts.clear();
         k.immersive = co.immersive;
     }
     let d = d3d()?;
@@ -940,7 +974,19 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     if co.fullscreen && out_file.is_none() {
         toggle_full(hwnd);
     }
-    let hook = (co.immersive & 2 != 0).then(|| SetWindowsHookExW(WH_KEYBOARD_LL, Some(immersive_hook), None, 0).ok()).flatten();
+    // O modo imersivo muda durante a conexão (menu e atalho); o gancho do teclado só existe com ele.
+    let mut immersive = co.immersive;
+    let hook_for = |imm: u8, hook: Option<HHOOK>| -> Option<HHOOK> {
+        match (imm & 2 != 0, hook) {
+            (true, None) => SetWindowsHookExW(WH_KEYBOARD_LL, Some(immersive_hook), None, 0).ok(),
+            (false, Some(h)) => {
+                let _ = UnhookWindowsHookEx(h);
+                None
+            }
+            (_, h) => h,
+        }
+    };
+    let mut hook = hook_for(immersive, None);
     let mut hud = hud::Hud::new(hwnd);
     let mut clipped = false;
 
@@ -993,7 +1039,9 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         }
     }
     let mut hello = Vec::new();
-    write(&mut hello, &Msg::Hello { w: screen_w, h: screen_h, hz, codecs, pid: std::process::id(), flags });
+    // Quadros por segundo pedidos: o automático manda os Hz desta tela.
+    let ask_hz = |fps: u32| if fps > 0 { fps.min(hz.max(30)) } else { hz };
+    write(&mut hello, &Msg::Hello { w: screen_w, h: screen_h, hz: ask_hz(co.fps), codecs, pid: std::process::id(), flags });
     let wake = CreateEventW(None, false, false, None)?;
     let sh = Arc::new(Shared {
         queue: Mutex::new(VecDeque::new()),
@@ -1083,13 +1131,14 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
             }
         }
         // Modo imersivo: em tela cheia, com a janela na frente, o mouse não sai dela.
-        let want_clip = co.immersive & 1 != 0 && SAVED.lock().unwrap().is_some() && GetForegroundWindow() == hwnd && KEYS.lock().unwrap().mouse;
+        let want_clip = immersive & 1 != 0 && SAVED.lock().unwrap().is_some() && GetForegroundWindow() == hwnd && KEYS.lock().unwrap().mouse;
         if want_clip != clipped {
             let mut r = RECT::default();
             let _ = GetWindowRect(hwnd, &mut r);
             let _ = ClipCursor(want_clip.then_some(&r as *const RECT));
             clipped = want_clip;
         }
+        let mut picks: Vec<hud::Pick> = std::mem::take(&mut KEYS.lock().unwrap().acts);
         if std::mem::take(&mut KEYS.lock().unwrap().menu) {
             if clipped {
                 let _ = ClipCursor(None);
@@ -1100,36 +1149,74 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                 (_, true) => " 4:4:4",
                 _ => "",
             };
+            let label = |k: opts::Keys| if k.1 == 0 { String::new() } else { crate::config::Hotkey::new(k.0, k.1).label() };
             let st = hud::MenuState {
                 fullscreen: SAVED.lock().unwrap().is_some(),
+                immersive,
+                fps: co.fps,
+                max_hz: hz,
                 meter: co.meter,
                 warn: co.warn,
                 sound: !sh.silenced.load(Ordering::Relaxed),
                 keyboard: KEYS.lock().unwrap().keyboard,
-                video: info.map(|(c, w, h, fps)| format!("{w}x{h} {}{extra} · {fps} q/s · {}", codec_name(c), link.route())).unwrap_or_default(),
+                video: info.map(|(c, w, h, fps)| format!("{w}x{h} {}{extra} · {fps} {} · {}", codec_name(c), crate::i18n::tr("q/s"), link.route())).unwrap_or_default(),
+                keys: [label(co.key_menu), label(co.key_full), label(co.key_imm), label(co.key_meter), label(co.key_sound), label(co.key_cad), label(co.key_disc)],
             };
-            match hud::menu(hwnd, &st) {
-                Some(hud::Pick::Fullscreen) => toggle_full(hwnd),
-                Some(hud::Pick::Meter(m)) => {
-                    co.meter = m;
-                    let _ = co.save();
-                }
-                Some(hud::Pick::Warn) => {
-                    co.warn = !co.warn;
-                    let _ = co.save();
-                }
-                Some(hud::Pick::Sound) => {
-                    sh.silenced.fetch_xor(true, Ordering::Relaxed);
-                }
-                Some(hud::Pick::CtrlAltDel) => KEYS.lock().unwrap().sas = true,
-                Some(hud::Pick::Disconnect) => {
-                    let _ = DestroyWindow(hwnd);
-                }
-                None => {}
+            if let Some(p) = hud::menu(hwnd, st) {
+                picks.push(p);
             }
             if let Some(h) = &mut hud {
                 h.update(hwnd, co.meter, co.warn, None);
             }
+        }
+        for p in picks {
+            match p {
+                hud::Pick::Fullscreen => toggle_full(hwnd),
+                hud::Pick::Immersive(m) => {
+                    immersive = m;
+                    co.immersive = m;
+                    let _ = co.save();
+                }
+                // O atalho liga e desliga só nesta conexão; ligar volta ao modo escolhido nas opções.
+                hud::Pick::ImmersiveToggle => immersive = if immersive != 0 { 0 } else if co.immersive != 0 { co.immersive } else { 3 },
+                hud::Pick::Fps(f) => {
+                    if f != co.fps {
+                        co.fps = f;
+                        let _ = co.save();
+                        // A descrição nova da tela faz o host recomeçar o vídeo nos quadros pedidos.
+                        let mut again = Vec::new();
+                        write(&mut again, &Msg::Hello { w: screen_w, h: screen_h, hz: ask_hz(f), codecs, pid: std::process::id(), flags });
+                        link.send(&again);
+                        link.send(&again);
+                    }
+                }
+                hud::Pick::Meter(m) => {
+                    co.meter = m;
+                    let _ = co.save();
+                }
+                hud::Pick::MeterCycle => {
+                    co.meter = (co.meter + 1) % 3;
+                    let _ = co.save();
+                }
+                hud::Pick::Warn => {
+                    co.warn = !co.warn;
+                    let _ = co.save();
+                }
+                hud::Pick::Sound => {
+                    sh.silenced.fetch_xor(true, Ordering::Relaxed);
+                }
+                hud::Pick::CtrlAltDel => KEYS.lock().unwrap().sas = true,
+                hud::Pick::Disconnect => {
+                    let _ = DestroyWindow(hwnd);
+                }
+            }
+            if let Some(h) = &mut hud {
+                h.update(hwnd, co.meter, co.warn, None);
+            }
+        }
+        if KEYS.lock().unwrap().immersive != immersive {
+            KEYS.lock().unwrap().immersive = immersive;
+            hook = hook_for(immersive, hook);
         }
 
         let events: Vec<Event> = sh.queue.lock().unwrap().drain(..).collect();

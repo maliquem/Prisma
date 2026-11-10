@@ -66,6 +66,8 @@ pub(super) struct Joiner {
     pub hello: Hello,
     pub perms: u8,
     pub name: String,
+    /// Id do aparelho pareado (vazio pelo UDP direto, que não tem pareamento).
+    pub id: String,
 }
 
 /// Um controle de quem assiste, ligado aqui.
@@ -91,6 +93,7 @@ struct Guest {
     hello: Hello,
     perms: u8,
     name: String,
+    id: String,
     input: Option<Injector>,
     pads: [Option<Slot>; PADS],
     /// Último motivo de recusa avisado para cada controle, para não repetir a cada pacote.
@@ -102,12 +105,21 @@ struct Guest {
 
 impl Guest {
     fn new(j: Joiner) -> Self {
-        Guest { link: j.link, hello: j.hello, perms: j.perms, name: j.name, input: None, pads: Default::default(), refused: [PAD_OK; PADS], heard: Instant::now(), gone: false, clip_in: Default::default() }
+        Guest { link: j.link, hello: j.hello, perms: j.perms, name: j.name, id: j.id, input: None, pads: Default::default(), refused: [PAD_OK; PADS], heard: Instant::now(), gone: false, clip_in: Default::default() }
     }
 
     fn send(&self, m: &Msg, out: &mut Vec<u8>) {
         write(out, m);
         self.link.send(out);
+    }
+
+    /// Como a página Compartilhar tela acha esta pessoa: o id do aparelho, ou o endereço pelo UDP.
+    fn key(&self) -> &str {
+        if self.id.is_empty() {
+            &self.name
+        } else {
+            &self.id
+        }
     }
 }
 
@@ -239,9 +251,71 @@ impl Drop for HdrOff {
     }
 }
 
-/// Quem está conectado agora, para a página Compartilhar tela (um nome por linha; vazio: ninguém).
+/// Quem está conectado agora, para a página Compartilhar tela (vazio: ninguém). Uma pessoa por
+/// linha: chave (id do aparelho), permissões, caminho e nome, separados por tabulação.
 pub fn room_path() -> std::path::PathBuf {
     super::dir().join("sala.txt")
+}
+
+/// Uma pessoa da sala, lida pela página.
+#[derive(Clone, PartialEq, Debug)]
+pub struct Present {
+    pub key: String,
+    pub perms: u8,
+    pub route: String,
+    pub name: String,
+}
+
+pub fn room() -> Vec<Present> {
+    parse_room(&std::fs::read_to_string(room_path()).unwrap_or_default())
+}
+
+fn parse_room(s: &str) -> Vec<Present> {
+    s.lines()
+        .filter(|l| !l.is_empty())
+        .map(|l| {
+            let f: Vec<&str> = l.splitn(4, '\t').collect();
+            match f[..] {
+                [key, perms, route, name] => Present { key: key.into(), perms: perms.parse().unwrap_or(0), route: route.into(), name: name.into() },
+                // Formato antigo: só o nome.
+                _ => Present { key: l.into(), perms: 0, route: String::new(), name: l.into() },
+            }
+        })
+        .collect()
+}
+
+/// Pedidos da página para a sala aberta: `desconectar <chave>` e `acesso <chave> <permissões>`.
+pub fn commands_path() -> std::path::PathBuf {
+    super::dir().join("comandos.txt")
+}
+
+/// A página pede: o host lê o arquivo em até um segundo.
+#[cfg_attr(not(feature = "stream"), allow(dead_code))]
+pub fn ask_room(line: &str) -> std::io::Result<()> {
+    use std::io::Write;
+    let mut f = std::fs::OpenOptions::new().create(true).append(true).open(commands_path())?;
+    writeln!(f, "{line}")
+}
+
+/// Lê e apaga os pedidos (renomeia antes, para não perder um que chegue no meio).
+fn take_commands() -> Vec<(String, String, Option<u8>)> {
+    let path = commands_path();
+    if !path.exists() {
+        return Vec::new();
+    }
+    let read = path.with_extension("lendo");
+    if std::fs::rename(&path, &read).is_err() {
+        return Vec::new();
+    }
+    let s = std::fs::read_to_string(&read).unwrap_or_default();
+    let _ = std::fs::remove_file(&read);
+    s.lines()
+        .filter_map(|l| {
+            let mut w = l.split_whitespace();
+            let (cmd, key) = (w.next()?, w.next()?);
+            Some((cmd.to_string(), key.to_string(), w.next().and_then(|p| p.parse().ok())))
+        })
+        .collect()
 }
 
 fn write_room(names: &str) {
@@ -350,7 +424,7 @@ pub fn run(port: u16, control: bool) {
             }
         };
         let Ok(s) = sock.try_clone() else { continue };
-        let j = Joiner { link: Arc::new(Udp::new(s, from)), hello, perms: if control { TOTAL } else { SOUND }, name: from.to_string() };
+        let j = Joiner { link: Arc::new(Udp::new(s, from)), hello, perms: if control { TOTAL } else { SOUND }, name: from.to_string(), id: String::new() };
         next = serve(&d, j, None);
     }
 }
@@ -906,8 +980,10 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     let want_h = if opts.res > 0 { want_h.min(opts.res) } else { want_h };
     let out_h = if want_h >= src_h { src_h } else { even(want_h.max(240)) };
     let out_w = even((src_w as u64 * out_h as u64 / src_h as u64) as u32);
-    // Automático: o menor entre os Hz dos dois lados. Um número fixo não passa dos Hz daqui.
-    let fps = if opts.fps > 0 { opts.fps.min(monitor_hz(mon)) } else { monitor_hz(mon).min(if lead.hz > 1 { lead.hz } else { 60 }) }.clamp(10, 240);
+    // Automático: o menor entre os Hz daqui e os de quem assiste (que também pode pedir menos pelo
+    // menu da conexão). Um número fixo não passa dos Hz daqui nem do que quem assiste pediu.
+    let guest_hz = room.guests.iter().map(|g| g.hello.hz).filter(|&z| z > 1).min().unwrap_or(60);
+    let fps = if opts.fps > 0 { opts.fps.min(monitor_hz(mon)).min(guest_hz) } else { monitor_hz(mon).min(guest_hz) }.clamp(10, 240);
 
     let codec_opt = std::env::var("PRISMA_CODEC").unwrap_or_else(|_| opts.codec.clone());
     let wanted: Option<Codec> = match codec_opt.as_str() {
@@ -1048,11 +1124,45 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     let mut info_tick = Instant::now();
 
     let mut room_names = String::from("\u{0}");
+    let mut room_at = Instant::now() - Duration::from_secs(10);
+    let mut room_count = usize::MAX;
+    let _ = std::fs::remove_file(commands_path());
     'run: loop {
-        let names: String = room.guests.iter().map(|g| format!("{}\n", g.name)).collect();
-        if names != room_names {
-            write_room(&names);
-            room_names = names;
+        // A lista da sala, para a página: na hora quando alguém entra ou sai, e a cada segundo
+        // pelo caminho, que muda (relé, direto) e custa uma consulta à conexão.
+        if room.guests.len() != room_count || room_at.elapsed() > Duration::from_secs(1) {
+            room_at = Instant::now();
+            room_count = room.guests.len();
+            let names: String = room.guests.iter().map(|g| format!("{}\t{}\t{}\t{}\n", g.key(), g.perms, g.link.route(), g.name)).collect();
+            if names != room_names {
+                write_room(&names);
+                room_names = names;
+            }
+            // O que a página pediu: desconectar alguém ou mudar o acesso na hora.
+            for (cmd, key, perms) in take_commands() {
+                let Some(g) = room.guests.iter_mut().find(|g| g.key() == key) else { continue };
+                match (cmd.as_str(), perms) {
+                    ("desconectar", _) => {
+                        eprintln!("«{}» desconectado por este PC", g.name);
+                        write(&mut out, &Msg::Bye);
+                        g.link.send(&out);
+                        g.link.send(&out);
+                        g.gone = true;
+                    }
+                    ("acesso", Some(p)) if p != g.perms => {
+                        eprintln!("«{}» agora: {}", g.name, perms_text(p));
+                        g.perms = p;
+                        if let Some(inj) = &mut g.input {
+                            inj.release();
+                        }
+                        g.input = (p & (KEYBOARD | MOUSE) != 0).then(|| Injector::new(mon, p));
+                        g.link.send(&infos[p as usize]);
+                        *audio_links.lock().unwrap() = hearing(&room.guests);
+                        room_count = usize::MAX;
+                    }
+                    _ => {}
+                }
+            }
         }
         let secure = match &cap {
             Cap::Wgc { pool, .. } => {
@@ -1115,7 +1225,15 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                     Poll::Got(n) => {
                         let Some(m) = read(&buf[..n]) else { continue };
                         if let Some(h) = Hello::from_msg(&m) {
-                            // Reabriu: recomeça com a tela nova dela.
+                            // Reabriu, ou pediu outros quadros por segundo: recomeça com a tela nova
+                            // dela. A mesma descrição repetida (contra perda) não recomeça de novo.
+                            let same = (h.w, h.h, h.hz, h.codecs, h.flags, h.pid) == (g.hello.w, g.hello.h, g.hello.hz, g.hello.codecs, g.hello.flags, g.hello.pid);
+                            g.heard = Instant::now();
+                            if same {
+                                // Talvez a descrição do vídeo não tenha chegado: vai de novo.
+                                g.link.send(&infos[g.perms as usize]);
+                                continue;
+                            }
                             g.hello = h;
                             result = End::Again;
                             break 'run;
@@ -1223,6 +1341,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                     // A Desktop Duplication entrega cada mudança (o mouse também): o ritmo fica aqui.
                     if enc.ready() && fed_at.elapsed() >= Duration::from_nanos(interval as u64 * 90) {
                         if let Some(pts) = pending.take() {
+                            x.compose(&mid)?;
                             let t = conv.convert(&d.ctx)?;
                             enc.feed(&t, pts)?;
                             last_fed = pts;
@@ -1232,12 +1351,21 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                     return Ok(());
                 }
             };
+            // Numa mudança grande (Alt+Tab, minimizar), chegam vários quadros de uma vez: só o
+            // mais novo é copiado (ou convertido do HDR). Antes, cada um passava pela GPU e o
+            // anterior era jogado fora.
+            let mut newest = None;
             while let Ok(f) = pool.TryGetNextFrame() {
                 let pts = f.SystemRelativeTime()?.Duration;
                 if pts - last_fed < interval * 9 / 10 {
                     let _ = f.Close();
                     continue;
                 }
+                if let Some((old, _)) = newest.replace((f, pts)) {
+                    let _ = old.Close();
+                }
+            }
+            if let Some((f, pts)) = newest {
                 let access: IDirect3DDxgiInterfaceAccess = f.Surface()?.cast()?;
                 let tex: ID3D11Texture2D = access.GetInterface()?;
                 if let Some(t) = &tone {
@@ -1346,7 +1474,7 @@ mod tests {
     fn guest(perms: u8, local: bool) -> (Guest, Arc<FakeLink>) {
         let link = Arc::new(FakeLink { sent: Mutex::new(Vec::new()), local });
         let hello = Hello { w: 1920, h: 1080, hz: 60, codecs: 7, pid: 0, flags: 0 };
-        (Guest::new(Joiner { link: link.clone(), hello, perms, name: "teste".into() }), link)
+        (Guest::new(Joiner { link: link.clone(), hello, perms, name: "teste".into(), id: String::new() }), link)
     }
 
     /// Os avisos de controle que a pessoa recebeu: (controle, jogador, motivo).
@@ -1355,6 +1483,15 @@ mod tests {
             Some(Msg::PadInfo { pad, player, why, .. }) => Some((pad, player, why)),
             _ => None,
         }).collect()
+    }
+
+    #[test]
+    fn room_file() {
+        let r = parse_room("a1b2\t3\tdireto pela internet, 1.2.3.4:5, 9 ms\tNotebook da sala\nvelho\n\n");
+        assert_eq!(r.len(), 2);
+        assert_eq!((r[0].key.as_str(), r[0].perms, r[0].name.as_str()), ("a1b2", 3, "Notebook da sala"));
+        assert!(r[0].route.ends_with("9 ms"));
+        assert_eq!((r[1].key.as_str(), r[1].name.as_str()), ("velho", "velho"));
     }
 
     fn room(guests: Vec<Guest>) -> (Room, super::super::pads::FakeLog) {

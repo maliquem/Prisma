@@ -63,6 +63,8 @@ struct State {
     sound_apps: (Vec<String>, Option<Instant>),
     /// Fotos de teste: um convite de exemplo.
     test_invite: Option<Shown>,
+    /// Fotos de teste: pessoas conectadas de exemplo.
+    test_room: Option<Vec<stream::host::Present>>,
 }
 
 /// Fotos de teste: `--test-tab=N` abre numa aba e `--test-invite` mostra a janela do convite.
@@ -72,6 +74,14 @@ fn test_setup() -> State {
         for a in std::env::args() {
             if let Some(n) = a.strip_prefix("--test-tab=").and_then(|n| n.parse().ok()) {
                 s.tab = n;
+            }
+            if a == "--test-room" {
+                use stream::host::Present;
+                s.test_room = Some(vec![
+                    Present { key: "a1b2".into(), perms: SOUND | PAD, route: "direto pela internet, 203.0.113.7:4500, 14 ms".into(), name: "Notebook da sala".into() },
+                    Present { key: "c3d4".into(), perms: crate::stream::TOTAL, route: "pelo relé da n0 (https://use1-1.relay.n0.iroh.link./), 48 ms".into(), name: "PC do escritório".into() },
+                    Present { key: "e5f6".into(), perms: SOUND | KEYBOARD, route: "direto na rede local, 192.168.0.20:51000, 2 ms".into(), name: "Tablet".into() },
+                ]);
             }
             if a == "--test-invite" {
                 s.test_invite = Some(Shown { code: "K7M2-QX9P".into(), long: Some("PRISMA-EXEMPLO".into()), published: Some(true) });
@@ -173,21 +183,137 @@ fn row(ui: &mut Ui, x: f32, y: f32, w: f32, label: &str, ctl_w: f32) -> Rect {
     rect(x + w - ctl_w, y, ctl_w, 36.0)
 }
 
-/// Linha de abas sob o título.
-fn tabs(ui: &mut Ui, x: f32, y: f32, sel: &mut usize) {
+/// Linha de abas sob o título. Com alguém conectado, aparece a aba Conectados, com quantos são.
+fn tabs(ui: &mut Ui, x: f32, y: f32, sel: &mut usize, present: usize) {
+    let mut names: Vec<String> = TABS.iter().map(|n| crate::i18n::tr(n).into_owned()).collect();
+    if present > 0 {
+        names.push(format!("{} ({present})", crate::i18n::tr("Conectados")));
+    }
+    if *sel >= names.len() {
+        *sel = 0;
+    }
     let mut cx = x;
-    for (i, name) in TABS.iter().enumerate() {
-        let w = crate::ui::gfx::measure(&crate::i18n::tr(name), 14.0, Weight::Semibold, None).0 + 28.0;
+    for (i, name) in names.iter().enumerate() {
+        let w = crate::ui::gfx::measure(name, 14.0, Weight::Semibold, None).0 + 28.0;
         let r = rect(cx, y, w, 34.0);
         let on = *sel == i;
+        let room_tab = i == TABS.len();
         if on {
             ui.c.round(r, 8.0, CARD2);
         }
         if ui.hit(&format!("sh-tab{i}"), r) {
             *sel = i;
         }
-        ui.c.text(r, name, 14.0, if on { TEXT } else { MUTED }, Align::Center, if on { Weight::Semibold } else { Weight::Regular });
+        let color = if room_tab { WARN } else if on { TEXT } else { MUTED };
+        ui.c.text_raw(r, name, 14.0, color, Align::Center, if on { Weight::Semibold } else { Weight::Regular });
         cx += w + 4.0;
+    }
+}
+
+/// O caminho que o host grava, curto e traduzido: o tipo e a latência.
+fn route_text(route: &str) -> String {
+    let kind = if route.starts_with("pela VPN") {
+        "Pela VPN"
+    } else if route.starts_with("direto na rede local") {
+        "Direto na rede local"
+    } else if route.starts_with("direto pela internet") {
+        "Direto pela internet"
+    } else if route.starts_with("pelo relé") {
+        "Pelo relé da n0"
+    } else if route.starts_with("UDP") {
+        "UDP direto"
+    } else {
+        "Conectando"
+    };
+    let kind = crate::i18n::tr(kind).into_owned();
+    match route.rsplit(", ").next().filter(|t| t.ends_with(" ms")) {
+        Some(ms) => format!("{kind} · {ms}"),
+        None => kind,
+    }
+}
+
+/// Aba Conectados: cada pessoa na sala, com o acesso que muda na hora, desconectar e banir.
+#[allow(clippy::too_many_arguments)]
+fn room_tab(ui: &mut Ui, app: &mut App, present: &[stream::host::Present], x: f32, top: f32, w: f32, h: f32) {
+    let c = rect(x, top, w, h);
+    ui.card(c);
+    let ix = c.x + 16.0;
+    let iw = c.w - 32.0;
+    ui.title(rect(ix, c.y + 12.0, iw, 22.0), "Conectados agora");
+    let mut y = c.y + 44.0;
+    let devices = stream::device_rows();
+    const ROW: f32 = 64.0;
+    let note_h = 52.0;
+    let content = (present.len() as f32 * ROW).max(1.0);
+    let list = rect(ix, y, iw, content.min((c.bottom() - y - note_h - 12.0).max(ROW)));
+    let names: Vec<String> = PRESETS.iter().map(|p| crate::i18n::tr(p.1).into_owned()).chain([crate::i18n::tr("Personalizado").into_owned()]).collect();
+    let btn = 112.0;
+    let sel_w = 260.0f32.min(iw * 0.34);
+    let mut picks: Vec<(usize, Rect)> = Vec::new();
+    let mut kick: Option<usize> = None;
+    let mut ban: Option<usize> = None;
+    ui.begin_scroll("sh-room", list, content);
+    for (i, p) in present.iter().enumerate() {
+        let row = rect(ix, y, iw, ROW - 8.0);
+        ui.c.round(row, 8.0, CARD2);
+        let px = row.x + 12.0;
+        let right = row.right() - 12.0;
+        let ban_r = rect(right - btn, row.y + 12.0, btn, 32.0);
+        let kick_r = rect(ban_r.x - 8.0 - btn, row.y + 12.0, btn, 32.0);
+        let sel_r = rect(kick_r.x - 12.0 - sel_w, row.y + 10.0, sel_w, 36.0);
+        let tw = (sel_r.x - 12.0 - px).max(40.0);
+        ui.c.text_raw(rect(px, row.y + 8.0, tw, 20.0), &p.name, 14.0, TEXT, Align::Left, Weight::Semibold);
+        ui.c.text_raw(rect(px, row.y + 30.0, tw, 18.0), &route_text(&p.route), 12.0, MUTED, Align::Left, Weight::Regular);
+        if ui.button(&format!("sh-kick{i}"), kick_r, "Desconectar", false) {
+            kick = Some(i);
+        }
+        let paired = devices.iter().any(|d| d.viewer && d.id == p.key);
+        if ui.button_ex(&format!("sh-ban{i}"), ban_r, "Banir", false, paired) {
+            ban = Some(i);
+        }
+        picks.push((i, sel_r));
+        y += ROW;
+    }
+    ui.end_scroll();
+    ui.c.text_wrap(
+        rect(ix, list.bottom() + 4.0, iw, note_h),
+        "O acesso muda na hora e fica salvo para as próximas conexões. Desconectar derruba só esta conexão: o aparelho continua pareado. Banir derruba e esquece o aparelho, que só volta com um convite novo.",
+        12.0,
+        MUTED,
+        Weight::Regular,
+    );
+    // Listas por último, para abrirem por cima das linhas de baixo.
+    for (i, r) in picks {
+        let p = &present[i];
+        let mut s = PRESETS.iter().position(|q| q.2 == p.perms).unwrap_or(PRESETS.len());
+        if ui.select(&format!("sh-acc{i}"), r, &names, &mut s) && s < PRESETS.len() {
+            let perms = PRESETS[s].2;
+            let mut ok = stream::host::ask_room(&format!("acesso {} {perms}", p.key)).is_ok();
+            if let Some(d) = devices.iter().find(|d| d.viewer && d.id == p.key) {
+                ok &= stream::set_device(&d.id, perms, d.ask).is_ok();
+            }
+            if !ok {
+                app.toast.info("Não deu para salvar. Com o serviço, abra o Prisma como administrador.");
+            }
+        }
+    }
+    if let Some(i) = kick {
+        if stream::host::ask_room(&format!("desconectar {}", present[i].key)).is_err() {
+            app.toast.info("Não deu para salvar. Com o serviço, abra o Prisma como administrador.");
+        }
+    }
+    if let Some(i) = ban {
+        let p = &present[i];
+        ui.ask(&format!("sh-ban-{}", p.key), "Banir este aparelho?", &format!("«{}» sai agora e vai precisar de um convite novo para conectar.", p.name));
+    }
+    for p in present {
+        if ui.answered(&format!("sh-ban-{}", p.key)) {
+            let a = stream::host::ask_room(&format!("desconectar {}", p.key));
+            let b = stream::forget_device(true, &p.key);
+            if a.is_err() || b.is_err() {
+                app.toast.info("Não deu para salvar. Com o serviço, abra o Prisma como administrador.");
+            }
+        }
     }
 }
 
@@ -231,10 +357,19 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     header(ui, a, "Compartilhar tela", "Acesso remoto e co-op pela internet, sem conta. Em teste.");
     let x = a.x + 28.0;
     let w = a.w - 56.0;
-    tabs(ui, x, 84.0, &mut st.tab);
+    // Quem está conectado: o host grava a lista a cada mudança.
+    let service = stream::service::installed();
+    let hosting = st.host.as_mut().is_some_and(Proc::alive);
+    let present = match &st.test_room {
+        Some(r) => r.clone(),
+        None if service || hosting => stream::host::room(),
+        None => Vec::new(),
+    };
+    tabs(ui, x, 84.0, &mut st.tab, present.len());
     let top = 128.0;
     let h = a.h - top - 20.0;
     match st.tab {
+        6 => room_tab(ui, app, &present, x, top, w, h),
         1 => host_tab(ui, st, &mut new_opts, x, top, w, h),
         2 => client_tab(ui, &mut new_client, x, top, w, h),
         3 => net_tab(ui, app, st, &mut new_opts, x, top, w, h),
@@ -337,10 +472,10 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
         "Desligado."
     };
     // Quem está conectado: o host grava a lista a cada mudança.
-    let room: Vec<String> = if service || hosting {
-        std::fs::read_to_string(stream::host::room_path()).unwrap_or_default().lines().filter(|l| !l.is_empty()).map(str::to_string).collect()
-    } else {
-        Vec::new()
+    let room: Vec<String> = match &st.test_room {
+        Some(r) => r.iter().map(|p| p.name.clone()).collect(),
+        None if service || hosting => stream::host::room().into_iter().map(|p| p.name).collect(),
+        None => Vec::new(),
     };
     let failing = service && stream::service::failing();
     let state = if failing && room.is_empty() {
@@ -708,12 +843,14 @@ fn client_tab(ui: &mut Ui, c: &mut ClientOpts, x: f32, top: f32, w: f32, h: f32)
     let mut y = r.y + 44.0;
     let rctl = 240.0f32.min(rw * 0.55);
     let meter_r = row(ui, rx, y, rw, "Medidor de latência", rctl);
+    y += 44.0;
+    let cfps_r = row(ui, rx, y, rw, "Quadros por segundo", rctl);
     y += 46.0;
     ui.check("sh-warn", rect(rx, y, rw, 30.0), "Avisar quando a conexão piorar", &mut c.warn);
     y += 40.0;
     ui.c.text_wrap(
         rect(rx, y, rw, (r.bottom() - y - 12.0).max(0.0)),
-        "O simples mostra o atraso de ponta a ponta e uma bolinha verde, amarela ou vermelha. O detalhado mostra também a rede, o vídeo, os quadros por segundo, a banda, a decodificação, os quadros perdidos e o caminho. O aviso aparece quando a rede perde mais de 2% dos quadros, quando a latência varia mais de 10 ms ou sobe por 3 segundos seguidos. Os dois mudam também pelo menu da conexão.",
+        "O simples mostra o atraso de ponta a ponta e uma bolinha verde, amarela ou vermelha. O detalhado mostra também a rede, o vídeo, os quadros por segundo, a banda, a decodificação, os quadros perdidos e o caminho. O aviso aparece quando a rede perde mais de 2% dos quadros, quando a latência varia mais de 10 ms ou sobe por 3 segundos seguidos. Os quadros por segundo pedidos não passam dos Hz desta tela; o automático usa os Hz dela. Tudo isso muda também pelo menu da conexão.",
         12.0,
         MUTED,
         Weight::Regular,
@@ -721,6 +858,9 @@ fn client_tab(ui: &mut Ui, c: &mut ClientOpts, x: f32, top: f32, w: f32, h: f32)
 
     pick(ui, "sh-imm", imm_r, &[0u8, 1, 2, 3], opt(&["Desligado", "Só o mouse", "Só o teclado", "Mouse e teclado"]), &mut c.immersive);
     pick(ui, "sh-meter", meter_r, &[0u8, 1, 2], opt(&["Desligado", "Simples", "Detalhado"]), &mut c.meter);
+    let cfps = crate::stream::CLIENT_FPS;
+    let cfps_names: Vec<String> = cfps.iter().map(|&f| if f == 0 { crate::i18n::tr("Automático").into_owned() } else { f.to_string() }).collect();
+    pick(ui, "sh-cfps", cfps_r, &cfps, cfps_names, &mut c.fps);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -794,20 +934,28 @@ fn keys_tab(ui: &mut Ui, app: &mut App, o: &mut Opts, c: &mut ClientOpts, x: f32
     y += 44.0;
     hotkey_row(ui, "sh-k-full", ix, y, iw, "Tela cheia", &mut c.key_full);
     y += 44.0;
+    hotkey_row(ui, "sh-k-imm", ix, y, iw, "Ligar e desligar o modo imersivo", &mut c.key_imm);
+    y += 44.0;
+    hotkey_row(ui, "sh-k-meter", ix, y, iw, "Trocar o medidor de latência", &mut c.key_meter);
+    y += 44.0;
+    hotkey_row(ui, "sh-k-sound", ix, y, iw, "Ligar e desligar o som", &mut c.key_sound);
+    y += 44.0;
     hotkey_row(ui, "sh-k-cad", ix, y, iw, "Ctrl+Alt+Del no outro PC", &mut c.key_cad);
+    y += 44.0;
+    hotkey_row(ui, "sh-k-disc", ix, y, iw, "Desconectar", &mut c.key_disc);
     y += 52.0;
     ui.label(rect(ix, y, iw, 18.0), "No PC que compartilha", MUTED);
     y += 24.0;
     hotkey_row(ui, "sh-k-panic", ix, y, iw, "Desconectar todo mundo", &mut o.key_panic);
     y += 52.0;
-    let keys = [c.key_menu, c.key_full, c.key_cad];
+    let keys = [c.key_menu, c.key_full, c.key_imm, c.key_meter, c.key_sound, c.key_cad, c.key_disc];
     if keys.iter().enumerate().any(|(i, k)| keys.iter().skip(i + 1).any(|j| j == k)) {
         ui.c.text(rect(ix, y, iw, 20.0), "Dois atalhos iguais: só o primeiro da lista funciona.", 13.0, WARN, Align::Left, Weight::Regular);
         y += 26.0;
     }
     ui.c.text_wrap(
         rect(ix, y, iw, (card.bottom() - y - 12.0).max(0.0)),
-        "Clique num atalho e aperte a combinação nova; Esc cancela. Os atalhos de quem assiste ficam com a janela e não vão para o outro PC. Use combinações com Ctrl, Alt ou Shift, para não roubar teclas do jogo. Os novos valem na próxima conexão.",
+        "Clique num atalho e aperte a combinação nova; Esc cancela. Os atalhos de quem assiste ficam com a janela e não vão para o outro PC. Use combinações com Ctrl, Alt ou Shift, para não roubar teclas do jogo. Os novos valem na próxima conexão. O atalho do modo imersivo liga e desliga só na conexão aberta; o modo que fica é o da aba Cliente.",
         12.0,
         MUTED,
         Weight::Regular,
@@ -923,6 +1071,12 @@ pub fn tick(app: &mut App) {
         crate::capture::copy_text(app.hub, &text);
         app.toast.info("O Windows não abriu a janela de compartilhar: o convite foi copiado.");
     }
+}
+
+/// A notificação de quem conectou foi clicada: a página abre na aba Conectados.
+pub fn open_room() {
+    let mut guard = STATE.lock().unwrap();
+    guard.get_or_insert_with(test_setup).tab = TABS.len();
 }
 
 /// Fecha o que a página abriu (o trabalho também fecha tudo quando o Prisma sai).

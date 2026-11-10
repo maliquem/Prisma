@@ -508,6 +508,12 @@ pub fn monitor_hz(mon: windows::Win32::Graphics::Gdi::HMONITOR) -> u32 {
 /// Trata os argumentos da transmissão. Devolve verdadeiro quando um deles rodou.
 pub fn run_args() -> bool {
     for a in std::env::args() {
+        // Teste: desenha o menu da conexão em `pasta\menu_*.png`, sem conectar.
+        #[cfg(debug_assertions)]
+        if let Some(dir) = a.strip_prefix("--test-stream-menu=") {
+            hud::test_menu(dir);
+            return true;
+        }
         for (name, control) in [("--stream-host", false), ("--stream-control", true)] {
             if a == name || a.strip_prefix(name).is_some_and(|r| r.starts_with('=')) {
                 let port = a.strip_prefix(name).and_then(|r| r.strip_prefix('=')).and_then(|p| p.parse().ok()).unwrap_or(PORT);

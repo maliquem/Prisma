@@ -36,7 +36,7 @@ Mostra o que está usando o PC agora: CPU por núcleo, GPU, RAM e VRAM, e o uso 
 
 Mostra o desempenho por cima do jogo e limita o FPS. As leituras vêm dos eventos do Windows, sem nada dentro do jogo. Precisa do Prisma como administrador.
 
-Ele só aparece quando você pede: pelos atalhos, ou sozinho nos jogos que você adicionar à lista da aba Medidor. Para ele aparecer em todo jogo, escolha Em todos, menos os da lista em Quando o medidor liga.
+Ele só aparece quando você pede: pelos atalhos, ou sozinho nos jogos que você adicionar à lista da aba Medidor. Ligar pelo atalho num jogo já coloca esse jogo na lista, com a barra ou o painel que você chamou; apertar o mesmo atalho de novo esconde o medidor, e o jogo continua na lista. Para ele aparecer em todo jogo, escolha Em todos, menos os da lista em Quando o medidor liga. **Adicionar da lista de programas** também traz os jogos instalados pela Steam e pela Epic.
 
 ### Barra compacta
 
@@ -189,22 +189,24 @@ Tira foto com anotações e grava vídeo em AV1, HEVC ou H.264. Com a tela em HD
 
 ## Compartilhar tela
 
-Em teste. Mostra e controla outro PC pela internet, para acesso remoto ou para jogar co-op local à distância, sem conta e sem servidor do Prisma. A imagem sai da placa de vídeo com pouco atraso, e o som do PC vai junto. A página tem seis abas: **Compartilhar**, **Host**, **Cliente**, **Rede**, **Atalhos** e **Controles**.
+Em teste. Mostra e controla outro PC pela internet, para acesso remoto ou para jogar co-op local à distância, sem conta e sem servidor do Prisma. A imagem sai da placa de vídeo com pouco atraso, e o som do PC vai junto. A página tem seis abas: **Compartilhar**, **Host**, **Cliente**, **Rede**, **Atalhos** e **Controles**. Com alguém conectado a este PC, aparece a sétima, **Conectados**.
 
 - **Parear, uma vez:** no PC que vai ser visto, escolha o que quem parear pode fazer e clique em **Criar convite**. Aparece uma janela com um código curto, como `K7M2-QX9P`, que vale 10 minutos e uma vez. Nela, **Copiar código** copia o código, **Copiar link** copia um link e **Compartilhar** abre a janela de compartilhar do Windows, para mandar por e-mail, Discord, WhatsApp e outros. Quem abre o link num PC com o Prisma vê o Prisma abrir na página certa e perguntar se quer parear. No outro PC, também dá para digitar o código em **Parear com outro PC** e clicar em **Parear**. Os dois mostram o mesmo código de confirmação de seis dígitos: confira antes de aceitar. Na hora de aceitar, **Sim** confia no aparelho, e **Não** pareia mas pergunta a cada conexão.
 - **Código e convite longo:** o código fica guardado por 10 minutos em três relés públicos de nomes (o mesmo sistema que o iroh usa para achar os PCs), assinado e sem nada que identifique você. Se nenhum relé responder, a janela avisa, e **Copiar convite longo** copia o convite completo, que funciona sem relé nenhum.
 - **Conectar:** com o compartilhamento ligado no host, clique em **Assistir** no aparelho da lista. A conexão tenta primeiro o caminho direto, depois a sua VPN (Tailscale, ZeroTier) e, se nada passar, os relés públicos do iroh. Tudo vai criptografado de ponta a ponta.
 - **Permissões por aparelho:** som, controle, teclado, mouse, copiar e colar (texto, nos dois sentidos) e tela segura. Marque e desmarque na lista; vale na próxima conexão. Sem nenhuma, o aparelho só vê.
 - **Aba Host:** o nome deste PC para os outros, o monitor, a resolução máxima, os quadros por segundo, o ritmo dos quadros (só quando a tela muda, ou constante, para quem prefere um ritmo fixo), a prioridade (menor atraso, equilíbrio ou qualidade), o codec (AV1, HEVC ou H.264), o limite de banda, HDR10 de 10 bits e 4:4:4. Os automáticos seguem quem assiste. Também escolhe o som que vai (o PC todo ou só um programa), tira do som o programa de chamada, limita quantas pessoas entram, deixa uma pessoa por vez no mouse e no teclado, dá prioridade ao mouse e ao teclado do host e recusa conexões enquanto este PC assiste a outro.
-- **Aba Cliente:** abrir em tela cheia sem borda, VSync, modo imersivo (o mouse fica preso na janela, e a tecla Windows e o Alt + Tab vão para o outro PC), pedir 4:4:4, começar sem som, o medidor de latência (desligado, simples ou detalhado) e o aviso de conexão piorando.
+- **Aba Cliente:** abrir em tela cheia sem borda, VSync, modo imersivo (o mouse fica preso na janela, e a tecla Windows e o Alt + Tab vão para o outro PC), pedir 4:4:4, começar sem som, o medidor de latência (desligado, simples ou detalhado), os quadros por segundo pedidos ao host (automático segue os Hz desta tela) e o aviso de conexão piorando.
 - **Medidor e aviso:** o simples mostra o atraso de ponta a ponta com uma bolinha verde, amarela ou vermelha. O detalhado mostra também a rede, o vídeo, os quadros por segundo, a banda, a decodificação, os quadros perdidos e o caminho. O aviso aparece por alguns segundos quando a rede perde mais de 2% dos quadros, quando a latência varia mais de 10 ms ou sobe por 3 segundos seguidos.
-- **Menu da conexão:** Ctrl + Alt + Shift + P, na janela de quem assiste, abre um menu com tela cheia, medidor, aviso, som, Ctrl + Alt + Del, o vídeo da conexão e **Desconectar**.
+- **Menu da conexão:** Ctrl + Alt + Shift + P, na janela de quem assiste, abre o menu com o vídeo da conexão, tela cheia, modo imersivo (desligado, mouse, teclado ou os dois), quadros por segundo, medidor, aviso, som, Ctrl + Alt + Del e **Desconectar**, cada um com o atalho ao lado. O mouse e as setas, Tab, Enter e Esc funcionam. Mudar os quadros por segundo recomeça o vídeo na hora.
 - **Aba Rede:** porta UDP fixa, para quem redireciona a porta no roteador (vazia é automática), e o pedido ao roteador para abrir a porta sozinho (UPnP, NAT-PMP, PCP). Mostra também por onde passou a última conexão.
-- **Aba Atalhos:** troca os atalhos do menu, da tela cheia, do Ctrl + Alt + Del e da tecla de emergência. Clique no atalho e aperte a combinação nova; Esc cancela.
+- **Aba Atalhos:** troca os atalhos do menu, da tela cheia, do modo imersivo, do medidor, do som, do Ctrl + Alt + Del, de desconectar e da tecla de emergência. Clique no atalho e aperte a combinação nova; Esc cancela. O atalho do modo imersivo liga e desliga só na conexão aberta; o modo que fica é o da aba Cliente.
 - **Co-op e aba Controles:** até 4 pessoas ao mesmo tempo. O controle de cada uma vira um controle de Xbox virtual no host. Isso precisa do ViGEmBus (Nefarius) ou do VIIPER instalado no host; o Prisma não instala nenhum dos dois. Os controles saem sozinhos quando o jogo em primeiro plano tem anti-cheat. A aba mostra os controles ligados aqui, com a bateria, e os virtuais de quem assiste. Ela também deixa mandar o controle com a janela em segundo plano e usar o teclado como controle.
 - **HDR:** o host converte a imagem HDR para quem não tem tela HDR. Se preferir, marque **Desligar o HDR quando quem assiste não tem HDR**: o HDR volta quando a sala esvazia, ou no próximo início do Prisma, se algo cair no meio.
 - **Serviço do Windows:** opcional. Com ele, quem tem a permissão **Tela segura** vê e usa o aviso do UAC, a tela de bloqueio e a do PIN, inclusive depois de o PC reiniciar sozinho. **Instalar** pede administrador e mostra o que muda antes de instalar. **Remover** desfaz tudo. O serviço roda uma cópia do Prisma, que é trocada pela versão nova quando o Prisma atualizado abre como administrador. Se o serviço ficar caindo, a página avisa.
-- **Segurança:** Ctrl + Alt + Shift + Q, no host, desconecta todo mundo na hora. A página mostra quem está conectado. **Esquecer** tira um aparelho, que só volta com convite novo.
+- **Aba Conectados:** mostra cada aparelho conectado a este PC, com o caminho e a latência. O tipo de acesso muda na hora e fica salvo para as próximas conexões. **Desconectar** derruba só aquela conexão. **Banir** pergunta antes, derruba e esquece o aparelho, que só volta com um convite novo.
+- **Avisos:** o Windows mostra uma notificação do Prisma quando alguém conecta a este PC ou sai. Clicar nela abre a aba Conectados.
+- **Segurança:** Ctrl + Alt + Shift + Q, no host, desconecta todo mundo na hora. **Esquecer** tira um aparelho, que só volta com convite novo.
 - **Não dá para:** usar sem o Prisma aberto no host (a não ser com o serviço); capturar conteúdo protegido, que sai preto; ouvir o microfone de quem assiste.
 
 ## Widget
@@ -260,7 +262,7 @@ Todos podem ser trocados no programa.
 - **Ctrl + Alt + R e T:** gravar janela e gravar tela
 - **Ctrl + Alt + B:** salvar replay
 
-Os atalhos de Compartilhar tela mudam na aba Atalhos da página: Ctrl + Alt + Shift + Q no host desconecta todo mundo; na janela de quem assiste, Ctrl + Alt + Shift + P abre o menu da conexão, Ctrl + Alt + Shift + F alterna tela cheia e Ctrl + Alt + End manda Ctrl + Alt + Del.
+Os atalhos de Compartilhar tela mudam na aba Atalhos da página: Ctrl + Alt + Shift + Q no host desconecta todo mundo; na janela de quem assiste, Ctrl + Alt + Shift + P abre o menu da conexão, Ctrl + Alt + Shift + F alterna tela cheia, Ctrl + Alt + Shift + I liga e desliga o modo imersivo, Ctrl + Alt + Shift + M troca o medidor, Ctrl + Alt + Shift + S liga e desliga o som, Ctrl + Alt + End manda Ctrl + Alt + Del e Ctrl + Alt + Shift + D desconecta.
 
 ## Limites gerais
 

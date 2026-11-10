@@ -45,6 +45,8 @@ const TIMER_HUD: usize = 7;
 const TIMER_METER: usize = 77;
 /// A página Compartilhar tela se atualiza enquanto está aberta.
 const TIMER_SHARE: usize = 78;
+/// Quem entra e sai da sala do compartilhamento, para avisar.
+const TIMER_ROOM: usize = 79;
 const WM_UPDATED: u32 = WM_APP + 77;
 const WM_PICK_FS: u32 = WM_APP + 78;
 const WM_PICK_SND: u32 = WM_APP + 79;
@@ -192,6 +194,8 @@ pub struct App {
     pub detector: Detector,
     pub widget: Widget,
     pub toast: Toast,
+    /// Quem estava na sala do compartilhamento na última olhada (chave, nome).
+    room_seen: Option<Vec<(String, String)>>,
     pub prompt: Prompt,
     pub usage: Usage,
     pub hk_errors: Vec<String>,
@@ -389,6 +393,7 @@ pub fn start(background: bool) {
             detector: Detector::new(),
             widget: Widget::new(),
             toast: Toast::new(),
+            room_seen: None,
             prompt: Prompt::new(),
             usage: Usage::load(),
             hk_errors: Vec::new(),
@@ -871,6 +876,9 @@ pub fn start(background: bool) {
         app.widget.set_visible(app.cfg.widget_on);
         tray_add(hub, true);
         let testing = std::env::args().any(|a| a.starts_with("--test-"));
+        if !testing {
+            SetTimer(Some(hub), TIMER_ROOM, 1000, None);
+        }
         let open = !background && !testing;
         #[cfg(feature = "stream")]
         if !testing {
@@ -921,6 +929,23 @@ unsafe fn tray_add(hub: HWND, add: bool) {
     let tip: Vec<u16> = "Prisma".encode_utf16().collect();
     nid.szTip[..tip.len()].copy_from_slice(&tip);
     let _ = Shell_NotifyIconW(if add { NIM_ADD } else { NIM_MODIFY }, &nid);
+}
+
+/// Notificação do Windows pelo ícone da bandeja (clicar abre a aba Conectados).
+unsafe fn tray_notify(hub: HWND, title: &str, text: &str) {
+    let mut nid = NOTIFYICONDATAW {
+        cbSize: std::mem::size_of::<NOTIFYICONDATAW>() as u32,
+        hWnd: hub,
+        uID: 1,
+        uFlags: NIF_INFO,
+        dwInfoFlags: NIIF_INFO,
+        ..Default::default()
+    };
+    let t: Vec<u16> = title.encode_utf16().take(nid.szInfoTitle.len() - 1).collect();
+    nid.szInfoTitle[..t.len()].copy_from_slice(&t);
+    let b: Vec<u16> = text.encode_utf16().take(nid.szInfo.len() - 1).collect();
+    nid.szInfo[..b.len()].copy_from_slice(&b);
+    let _ = Shell_NotifyIconW(NIM_MODIFY, &nid);
 }
 
 fn tray_remove(hub: HWND) {
@@ -1334,6 +1359,29 @@ impl App {
         self.page = page;
         self.refresh_page();
         self.invalidate();
+    }
+
+    /// A cada segundo: avisa quem conectou a este PC e quem saiu. A primeira olhada só anota.
+    fn room_watch(&mut self) {
+        let now: Vec<(String, String)> = crate::stream::host::room().into_iter().map(|p| (p.key, p.name)).collect();
+        let Some(before) = self.room_seen.replace(now.clone()) else { return };
+        let title = crate::i18n::tr("Compartilhar tela").into_owned();
+        let came = now.iter().filter(|n| !before.iter().any(|b| b.0 == n.0));
+        let left = before.iter().filter(|b| !now.iter().any(|n| n.0 == b.0));
+        let msgs: Vec<String> = came
+            .map(|n| crate::i18n::tr("«{}» conectou a este PC").replace("{}", &n.1))
+            .chain(left.map(|b| crate::i18n::tr("«{}» saiu").replace("{}", &b.1)))
+            .collect();
+        if msgs.is_empty() {
+            return;
+        }
+        let text = msgs.join("\n");
+        unsafe {
+            tray_notify(self.hub, &title, &text);
+        }
+        if self.page == Page::Share {
+            self.invalidate();
+        }
     }
 
     /// Letras em discos com nota abaixo de Bom.
@@ -1937,6 +1985,17 @@ impl App {
     }
 
     fn meter_view(&mut self, view: u8) {
+        // O mesmo atalho de novo esconde o medidor.
+        let view = if view != crate::meter::VIEW_OFF && self.meter.view == view { crate::meter::VIEW_OFF } else { view };
+        // O jogo aberto entra na lista, já com este medidor: da próxima vez, ele aparece sozinho.
+        if view != crate::meter::VIEW_OFF && !self.meter.session.exe.is_empty() {
+            let (exe, pid) = (self.meter.session.exe.clone(), self.meter.session.pid);
+            self.add_meter_game(&exe, &procs::image_path(pid).unwrap_or_default());
+            if let Some(g) = self.cfg.meter_games.iter_mut().find(|g| g.exe.eq_ignore_ascii_case(&exe)) {
+                g.view = if view == crate::meter::VIEW_FULL { 1 } else { 0 };
+            }
+            self.cfg.save();
+        }
         self.meter.show(view);
         self.meter_timer();
         if view != crate::meter::VIEW_OFF {
@@ -2931,6 +2990,8 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
             with(|a| {
                 if w.0 == TIMER_METER {
                     a.meter_paint();
+                } else if w.0 == TIMER_ROOM {
+                    a.room_watch();
                 } else if w.0 == TIMER_SHARE {
                     if a.page == Page::Share && a.main.is_some() {
                         crate::pages::share::tick(a);
@@ -3074,6 +3135,14 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                 }
                 WM_RBUTTONUP => {
                     with(|a| a.tray_menu());
+                }
+                // Clicou na notificação de quem conectou: abre a aba Conectados.
+                x if x == NIN_BALLOONUSERCLICK => {
+                    with(|a| {
+                        crate::pages::share::open_room();
+                        a.show_main();
+                        a.go(Page::Share);
+                    });
                 }
                 _ => {}
             }
