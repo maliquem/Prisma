@@ -576,6 +576,12 @@ pub fn host(perms: u8) {
     host_with(Some(perms));
 }
 
+/// Espera o relé responder. O prazo é criado dentro do runtime: fora dele, o tokio derruba o
+/// processo ("no reactor running"), que foi o erro da 0.11.0.
+fn wait_online(ep: &Endpoint, limit: Duration) -> bool {
+    rt().block_on(async { tokio::time::timeout(limit, ep.online()).await.is_ok() })
+}
+
 /// O ajudante do serviço: o convite vem de arquivo, e ninguém lê o terminal.
 pub fn host_service() {
     host_with(None);
@@ -594,7 +600,7 @@ fn host_with(invite_perms: Option<u8>) {
         Ok(e) => e,
         Err(e) => return eprintln!("não deu para abrir a conexão: {e}"),
     };
-    if rt().block_on(tokio::time::timeout(Duration::from_secs(10), ep.online())).is_err() {
+    if !wait_online(&ep, Duration::from_secs(10)) {
         eprintln!("sem resposta do relé da n0 em 10 s: só a rede local e a VPN vão funcionar por enquanto");
     }
     let secret = random::<16>();
@@ -904,6 +910,17 @@ mod tests {
     }
 
     /// Convite errado: o host recusa sem abrir janela, e o convite certo continua valendo.
+    /// O começo do host, fora de qualquer runtime, como no processo de verdade: sem relé, só espera
+    /// o prazo e segue.
+    #[test]
+    fn host_start_outside_runtime() {
+        let ep = rt().block_on(Endpoint::builder(presets::Minimal).relay_mode(iroh::RelayMode::Disabled).bind()).unwrap();
+        let t = Instant::now();
+        let _ = wait_online(&ep, Duration::from_millis(300));
+        assert!(t.elapsed() < Duration::from_secs(5));
+        rt().block_on(ep.close());
+    }
+
     #[test]
     fn wrong_invite_is_refused() {
         let r = rt().block_on(async {
