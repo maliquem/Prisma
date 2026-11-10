@@ -878,6 +878,11 @@ pub fn start(background: bool) {
                 app.page = Page::Share;
             }
             std::thread::spawn(crate::stream::weblink::register);
+            std::thread::spawn(|| {
+                if let Some(line) = crate::stream::service::refresh_copy() {
+                    crate::config::log(&format!("compartilhar: {line}"));
+                }
+            });
         }
         APP.with(|a| *a.borrow_mut() = Some(app));
         if open {

@@ -373,6 +373,87 @@ unsafe fn report(state: SERVICE_STATUS_CURRENT_STATE, exit: u32) {
     let _ = SetServiceStatus(*std::ptr::addr_of!(STATUS), &st);
 }
 
+/// O ajudante do serviço caiu da última vez que abriu (pelo fim do `servico.log`).
+pub fn failing() -> bool {
+    use std::io::{Read, Seek, SeekFrom};
+    thread_local! {
+        static LAST: std::cell::Cell<Option<(Instant, bool)>> = const { std::cell::Cell::new(None) };
+    }
+    if let Some((t, v)) = LAST.get() {
+        if t.elapsed() < Duration::from_secs(2) {
+            return v;
+        }
+    }
+    let read = || -> Option<bool> {
+        let mut f = std::fs::File::open(data_dir().join("servico.log")).ok()?;
+        let len = f.metadata().ok()?.len();
+        f.seek(SeekFrom::Start(len.saturating_sub(4096))).ok()?;
+        let mut b = Vec::new();
+        f.read_to_end(&mut b).ok()?;
+        let text = String::from_utf8_lossy(&b);
+        let last = text.lines().rev().find(|l| l.contains(" serviço: "))?;
+        Some(last.contains("o ajudante saiu"))
+    };
+    let v = read().unwrap_or(false);
+    LAST.set(Some((Instant::now(), v)));
+    v
+}
+
+/// A cópia do serviço é da versão anterior: troca pela deste Prisma.
+///
+/// Atualizar o Prisma troca só o programa instalado; a cópia em `PrismaServico` ficava na versão
+/// velha, e foi assim que a 0.12.0 continuou com o host da 0.11.0, que caía. Só a cópia instalada
+/// faz a troca (uma cópia portátil, talvez mais velha, nunca rebaixa o serviço), e só como
+/// administrador. Devolve o que aconteceu, para o log.
+pub fn refresh_copy() -> Option<String> {
+    if !installed() || !crate::startup::is_installed() {
+        return None;
+    }
+    let exe = std::env::current_exe().ok()?;
+    let dst = program_dir().join("prisma.exe");
+    if exe == dst {
+        return None;
+    }
+    let mine = std::fs::read(&exe).ok()?;
+    if std::fs::read(&dst).is_ok_and(|theirs| theirs == mine) {
+        return None;
+    }
+    if !crate::startup::is_elevated() {
+        return Some("a cópia do serviço é de outra versão, e trocar pede administrador".into());
+    }
+    let r = unsafe { swap_copy(&dst, &mine) };
+    let line = match &r {
+        Ok(()) => format!("programa trocado pela versão {}", env!("CARGO_PKG_VERSION")),
+        Err(e) => format!("não deu para trocar o programa pela versão {}: {e}", env!("CARGO_PKG_VERSION")),
+    };
+    log(&line);
+    Some(line)
+}
+
+unsafe fn swap_copy(dst: &std::path::Path, bytes: &[u8]) -> std::result::Result<(), String> {
+    let scm = OpenSCManagerW(None, None, SC_MANAGER_ALL_ACCESS).map_err(|e| format!("gerenciador de serviços: {}", e.message()))?;
+    let svc = OpenServiceW(scm, NAME, SERVICE_ALL_ACCESS);
+    if let Ok(s) = svc {
+        stop_service(s);
+    }
+    // O ajudante sai logo depois do serviço; enquanto isso, o arquivo pode estar preso.
+    let t = Instant::now();
+    let copied = loop {
+        match std::fs::write(dst, bytes) {
+            Ok(()) => break Ok(()),
+            Err(e) if t.elapsed() > Duration::from_secs(15) => break Err(format!("copiar para {}: {e}", dst.display())),
+            Err(_) => std::thread::sleep(Duration::from_millis(300)),
+        }
+    };
+    // Liga de novo mesmo se a cópia falhou: o serviço volta como estava.
+    if let Ok(s) = svc {
+        let _ = StartServiceW(s, None);
+        let _ = CloseServiceHandle(s);
+    }
+    let _ = CloseServiceHandle(scm);
+    copied
+}
+
 fn scm_main() {
     unsafe {
         let mut name = wide("PrismaCompartilhar");

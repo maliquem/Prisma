@@ -342,12 +342,15 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
     } else {
         Vec::new()
     };
-    let state = if room.is_empty() {
+    let failing = service && stream::service::failing();
+    let state = if failing && room.is_empty() {
+        crate::i18n::tr("O serviço está caindo: reabra o Prisma como administrador.").into_owned()
+    } else if room.is_empty() {
         crate::i18n::tr(state).into_owned()
     } else {
         format!("{} {}", crate::i18n::tr("Conectados agora:"), room.join(", "))
     };
-    ui.c.text_raw(rect(ix, y, iw, 20.0), &state, 13.0, if !room.is_empty() { WARN } else if service || hosting { ACCENT } else { MUTED }, Align::Left, Weight::Regular);
+    ui.c.text_raw(rect(ix, y, iw, 20.0), &state, 13.0, if !room.is_empty() || failing { WARN } else if service || hosting { ACCENT } else { MUTED }, Align::Left, Weight::Regular);
     y += 26.0;
     ui.label(rect(ix, y, iw, 18.0), "Quem parear agora pode", TEXT2);
     let sel_y = y + 20.0;

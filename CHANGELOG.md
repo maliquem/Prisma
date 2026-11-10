@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.12.1
+
+- Fixed: updating Prisma did not update the copy that the Windows service runs, so with the service installed, sharing kept the 0.11.0 error and stopped as soon as it started. Prisma now swaps that copy by itself when it opens as administrator. / Corrigido: atualizar o Prisma não atualizava a cópia que o serviço do Windows roda, então, com o serviço instalado, o compartilhamento continuava com o erro da 0.11.0 e parava logo ao ligar. Agora o Prisma troca essa cópia sozinho quando abre como administrador.
+- The Share screen page warns when the service keeps crashing. / A página Compartilhar tela avisa quando o serviço fica caindo.
+
 ## 0.12.0
 
 - Fixed: in 0.11.0, sharing stopped right after it started, so pairing never got to ask for permission. / Corrigido: na 0.11.0, o compartilhamento parava logo depois de ligar, e o pareamento nem chegava a pedir permissão.
