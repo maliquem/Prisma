@@ -8,6 +8,8 @@
 //! `PRISMA_POOL` (quadros na fila da captura) e `PRISMA_MININT` (intervalo mínimo, em 100 ns) servem
 //! para testar a captura; nenhum dos dois mudou o teto de cerca de 64 quadros por segundo.
 //! A captura é `wgc` (Windows.Graphics.Capture, a da gravação) ou `dd` (Desktop Duplication).
+//! `PRISMA_ENC=mf` ou `nvenc` escolhe o codificador (o NVENC direto só com `--features stream`), e
+//! `PRISMA_NO_WAKE=1` não mantém a tela acesa.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -35,7 +37,7 @@ use windows::Win32::System::WinRT::Direct3D11::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
 use super::decoder::{Decoded, Decoder};
-use super::encoder::Encoder;
+use super::live_enc::LiveEncoder;
 use super::engine::{bgra_texture, even, Converter};
 use super::hdr::ToneMap;
 use super::mux::{Codec, Pkt};
@@ -296,7 +298,7 @@ unsafe fn one(d: &D3d, mon: HMONITOR, codec: Codec, r: &Run) -> Result<String> {
     let tone = if color.hdr { Some(ToneMap::new(&d.dev, &mid, false, color.white_nits)?) } else { None };
     let mut conv = Converter::new(&d.dev, &d.ctx, src_w, src_h, out_w, out_h, r.fps, false)?;
     let in_view = conv.input_view(&mid)?;
-    let mut enc = Encoder::live(&d.dev, codec, out_w, out_h, r.fps, bits)?;
+    let mut enc = LiveEncoder::open(&d.dev, codec, out_w, out_h, r.fps, bits)?;
     let mut dec_err = None;
     let mut dec = match Decoder::new(&d.dev, codec, out_w, out_h, r.fps, enc.header().as_deref()) {
         Ok(x) => Some(x),
@@ -314,6 +316,13 @@ unsafe fn one(d: &D3d, mon: HMONITOR, codec: Codec, r: &Run) -> Result<String> {
     let mut pkts: Vec<Pkt> = Vec::new();
     let mut decoded: Vec<Decoded> = Vec::new();
     let (mut frames, mut dropped, mut skipped) = (0u32, 0u32, 0u32);
+    // Perda simulada: `PRISMA_DROP=N` joga fora um pacote a cada N, e o codificador só fica sabendo
+    // `PRISMA_DROP_LATE` pacotes depois (como a ida e volta da rede), invalidando os que dependiam dele.
+    let drop_every: u32 = std::env::var("PRISMA_DROP").ok().and_then(|v| v.parse().ok()).unwrap_or(0);
+    let drop_late: usize = std::env::var("PRISMA_DROP_LATE").ok().and_then(|v| v.parse().ok()).unwrap_or(3);
+    let (mut pkt_n, mut lost_n, mut keys_asked, mut dec_errors) = (0u32, 0u32, 0u32, 0u32);
+    // Hora dos pacotes perdidos ainda não avisados, com os que vieram depois deles.
+    let mut since_loss: Option<Vec<i64>> = None;
     let interval = 10_000_000i64 / r.fps as i64;
     let mut last_fed = i64::MIN / 2;
     let mut got_frames: Vec<(ID3D11Texture2D, i64, i64, Held)> = Vec::new();
@@ -355,7 +364,7 @@ unsafe fn one(d: &D3d, mon: HMONITOR, codec: Codec, r: &Run) -> Result<String> {
             break;
         }
         enc.pump(&mut pkts)?;
-        if enc.need > 0 {
+        if enc.ready() {
             if let Some((pts, got)) = pending.take() {
                 let t = conv.convert(&in_view)?;
                 enc.feed(&t, pts)?;
@@ -368,6 +377,25 @@ unsafe fn one(d: &D3d, mon: HMONITOR, codec: Codec, r: &Run) -> Result<String> {
         }
         let t_enc = now();
         for p in pkts.drain(..) {
+            pkt_n += 1;
+            if let Some(v) = &mut since_loss {
+                v.push(p.pts);
+                if v.len() > drop_late {
+                    // O aviso "chegou" ao host: invalida o perdido e os que vieram depois.
+                    let ok = v.iter().fold(false, |a, &t| enc.invalidate(t) || a);
+                    if !ok {
+                        enc.force_key();
+                        keys_asked += 1;
+                    }
+                    since_loss = None;
+                }
+            }
+            if drop_every > 0 && pkt_n % drop_every == 0 && !p.key && since_loss.is_none() && pkt_n > 10 {
+                lost_n += 1;
+                since_loss = Some(vec![p.pts]);
+                times.remove(&p.pts);
+                continue;
+            }
             if let Some(t) = times.get_mut(&p.pts) {
                 t.enc = t_enc;
                 t.size = p.data.len();
@@ -376,6 +404,13 @@ unsafe fn one(d: &D3d, mon: HMONITOR, codec: Codec, r: &Run) -> Result<String> {
             if let Some(dc) = &mut dec {
                 decoded.clear();
                 if let Err(e) = dc.decode(Some(&p), &mut decoded) {
+                    if drop_every > 0 {
+                        // Com perda simulada, um erro pede quadro-chave em vez de parar.
+                        dec_errors += 1;
+                        enc.force_key();
+                        keys_asked += 1;
+                        continue;
+                    }
                     dec_err = Some(format!("{e:?}"));
                     dec = None;
                     continue;
@@ -411,9 +446,9 @@ unsafe fn one(d: &D3d, mon: HMONITOR, codec: Codec, r: &Run) -> Result<String> {
     let mut s = String::new();
     s += &format!("== {} ==\n", label(codec));
     s += &dd_note;
-    s += &format!("  codificador: {}\n", enc.name);
-    if !enc.refused.is_empty() {
-        s += &format!("  ajustes recusados: {}\n", enc.refused.join(", "));
+    s += &format!("  codificador: {}\n", enc.name());
+    if !enc.refused().is_empty() {
+        s += &format!("  ajustes recusados: {}\n", enc.refused().join(", "));
     }
     match &dec_err {
         Some(e) if dec_name.is_empty() => s += &format!("  decodificador: nenhum ({e})\n"),
@@ -443,6 +478,13 @@ unsafe fn one(d: &D3d, mon: HMONITOR, codec: Codec, r: &Run) -> Result<String> {
         biggest as f64 / 1024.0,
         bytes as f64 * 8.0 / secs / 1e6
     );
+    if drop_every > 0 {
+        s += &format!(
+            "  perda simulada: {lost_n} pacotes jogados fora (1 a cada {drop_every}), aviso {drop_late} pacotes depois; {} quadros-chave pedidos, {dec_errors} erros do decodificador
+",
+            keys_asked
+        );
+    }
     s += &stat("captura", v.iter().map(|t| t.got - t.comp).collect());
     s += &stat("preparo", v.iter().map(|t| t.fed - t.got).collect());
     s += &stat("codificação", v.iter().map(|t| t.enc - t.fed).collect());
@@ -509,7 +551,11 @@ pub fn bench(arg: &str) {
         let _ = timeBeginPeriod(1);
         // Tela apagada por ociosidade muda tudo: a composição desacelera e a Desktop Duplication
         // não entrega nada. Mantém a tela acesa enquanto mede e dá tempo de ela acordar.
-        let _ = SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED);
+        // `PRISMA_NO_WAKE=1` não mexe na tela (para medir só a codificação sem acender a tela de ninguém).
+        let wake = std::env::var("PRISMA_NO_WAKE").as_deref() != Ok("1");
+        if wake {
+            let _ = SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED);
+        }
         let mon = MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY);
         let mut mi = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
         let _ = GetMonitorInfoW(mon, &mut mi);

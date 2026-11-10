@@ -13,9 +13,11 @@ iroh = { version = "1.4.1", optional = true, default-features = false, features 
 tokio = { version = "1.44", optional = true, features = ["rt-multi-thread", "macros", "time", "sync"] }
 blake3 = { version = "1.8.3", optional = true }
 data-encoding = { version = "2.2", optional = true }
+# NVENC direto (a DLL vem com o driver da NVIDIA; nada do SDK é redistribuído).
+mini-nvcodec = { version = "0.1", optional = true }
 
 [features]
-stream = ["dep:iroh", "dep:tokio", "dep:blake3", "dep:data-encoding"]
+stream = ["dep:iroh", "dep:tokio", "dep:blake3", "dep:data-encoding", "dep:mini-nvcodec"]
 
 [dependencies.windows]
 version = "0.62"

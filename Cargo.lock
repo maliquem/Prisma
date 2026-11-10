@@ -1431,6 +1431,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "65cd87c9a6d60536580b316ad985726104730a5151c99845f2490428ef91240a"
 
 [[package]]
+name = "libloading"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "754ca22de805bb5744484a5b151a9e1a8e837d5dc232c2d7d8c2e3492edc8b60"
+dependencies = [
+ "cfg-if",
+ "windows-link 0.2.1",
+]
+
+[[package]]
 name = "litemap"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1490,6 +1500,30 @@ name = "memchr"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
+
+[[package]]
+name = "mini-cuda"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21cb6faf1bbca050b34a3459c233c8dfef509587e60b4367e111cb8b51b5e1a2"
+dependencies = [
+ "libloading",
+ "log",
+ "smallvec",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "mini-nvcodec"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "358bc0f8e8e6f75a500e0f9eae3df6dd9a8230405eb4d69d44df7e1cd7e75c2d"
+dependencies = [
+ "libloading",
+ "log",
+ "mini-cuda",
+ "thiserror 2.0.21",
+]
 
 [[package]]
 name = "mio"
@@ -2163,6 +2197,7 @@ dependencies = [
  "blake3",
  "data-encoding",
  "iroh",
+ "mini-nvcodec",
  "tokio",
  "windows",
  "windows-core 0.62.2",

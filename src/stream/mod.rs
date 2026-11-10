@@ -35,6 +35,7 @@ pub enum Kind {
     Bye = 7,
     Audio = 8,
     Input = 9,
+    Nack = 10,
 }
 
 /// Som: 48 kHz, dois canais, 16 bits, em blocos de 5 ms.
@@ -89,8 +90,9 @@ impl Input {
 pub enum Msg<'a> {
     Video { key: bool, idx: u16, count: u16, frame: u32, pts: i64, data: &'a [u8] },
     /// Como o vídeo está saindo: codec, tamanho e quadros por segundo.
-    /// `control` diz se o host aceita mouse e teclado.
-    Info { codec: Codec, w: u32, h: u32, fps: u32, control: bool },
+    /// `control` diz se o host aceita mouse e teclado; `recover`, se ele se recupera de um quadro
+    /// perdido sem quadro-chave (quem assiste avisa com `Nack` e segue mostrando).
+    Info { codec: Codec, w: u32, h: u32, fps: u32, control: bool, recover: bool },
     /// Quem assiste chegou: tamanho e Hz da tela dele, codecs que ele decodifica (bits 0 H.264,
     /// 1 HEVC, 2 AV1) e o número do processo, para o host tirar o som dele quando os dois estão no mesmo PC.
     Hello { w: u32, h: u32, hz: u32, codecs: u8, pid: u32 },
@@ -103,6 +105,8 @@ pub enum Msg<'a> {
     Audio { seq: u32, pts: i64, data: &'a [u8] },
     /// Os eventos mais recentes; o primeiro tem o número `first` e os seguintes vêm em ordem.
     Input { first: u32, events: &'a [u8] },
+    /// Quem assiste perdeu este quadro (e talvez os seguintes até agora).
+    Nack { frame: u32 },
 }
 
 pub fn codec_bit(c: Codec) -> u8 {
@@ -158,13 +162,14 @@ pub fn write(out: &mut Vec<u8>, m: &Msg) {
             out.extend_from_slice(&pts.to_le_bytes());
             out.extend_from_slice(data);
         }
-        Msg::Info { codec, w, h, fps, control } => {
+        Msg::Info { codec, w, h, fps, control, recover } => {
             head(out, Kind::Info);
             out.push(codec_id(codec));
             out.extend_from_slice(&w.to_le_bytes());
             out.extend_from_slice(&h.to_le_bytes());
             out.extend_from_slice(&fps.to_le_bytes());
             out.push(control as u8);
+            out.push(recover as u8);
         }
         Msg::Hello { w, h, hz, codecs, pid } => {
             head(out, Kind::Hello);
@@ -195,6 +200,10 @@ pub fn write(out: &mut Vec<u8>, m: &Msg) {
             head(out, Kind::Input);
             out.extend_from_slice(&first.to_le_bytes());
             out.extend_from_slice(events);
+        }
+        Msg::Nack { frame } => {
+            head(out, Kind::Nack);
+            out.extend_from_slice(&frame.to_le_bytes());
         }
     }
 }
@@ -232,7 +241,7 @@ pub fn read(b: &[u8]) -> Option<Msg<'_>> {
             pts: i64_at(b, 16)?,
             data: b.get(VIDEO_HEAD..)?,
         },
-        2 => Msg::Info { codec: codec_of(*b.get(4)?)?, w: u32_at(b, 5)?, h: u32_at(b, 9)?, fps: u32_at(b, 13)?, control: *b.get(17)? != 0 },
+        2 => Msg::Info { codec: codec_of(*b.get(4)?)?, w: u32_at(b, 5)?, h: u32_at(b, 9)?, fps: u32_at(b, 13)?, control: *b.get(17)? != 0, recover: *b.get(18)? != 0 },
         3 => Msg::Hello { w: u32_at(b, 4)?, h: u32_at(b, 8)?, hz: u32_at(b, 12)?, codecs: *b.get(16)?, pid: u32_at(b, 17)? },
         4 => Msg::KeyReq,
         5 => Msg::Ping { t: i64_at(b, 4)? },
@@ -246,6 +255,7 @@ pub fn read(b: &[u8]) -> Option<Msg<'_>> {
             }
             Msg::Input { first: u32_at(b, 4)?, events }
         }
+        10 => Msg::Nack { frame: u32_at(b, 4)? },
         _ => return None,
     })
 }
@@ -331,7 +341,8 @@ mod tests {
     #[test]
     fn packets_round_trip() {
         round(Msg::Video { key: true, idx: 3, count: 9, frame: 77, pts: -5, data: &[1, 2, 3] });
-        round(Msg::Info { codec: Codec::Av1, w: 1920, h: 1080, fps: 60, control: true });
+        round(Msg::Info { codec: Codec::Av1, w: 1920, h: 1080, fps: 60, control: true, recover: true });
+        round(Msg::Nack { frame: 77 });
         round(Msg::Hello { w: 3840, h: 2160, hz: 119, codecs: 7, pid: 4321 });
         round(Msg::Audio { seq: 9, pts: 10, data: &[0, 1, 2, 3] });
         round(Msg::KeyReq);

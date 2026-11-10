@@ -1,7 +1,7 @@
 //! Quem compartilha: captura a tela principal e o som, codifica e manda para quem assiste.
 //! No modo de controle, aplica o mouse e o teclado de quem assiste.
 
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -25,7 +25,7 @@ use windows::Win32::UI::Input::KeyboardAndMouse::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
 use super::*;
-use crate::capture::encoder::Encoder;
+use crate::capture::live_enc::LiveEncoder;
 use crate::capture::engine::{bgra_texture, bitrate, even, Converter};
 use crate::capture::hdr::ToneMap;
 use crate::capture::mux::{Codec, Pkt};
@@ -332,8 +332,8 @@ unsafe fn session(d: &D3d, link: &Arc<dyn Link>, hello: Hello, control: bool) ->
             Some(m) => m * 1_000_000,
             None => (bitrate(out_w, out_h, fps, c) as u64 * 2).min(150_000_000) as u32,
         };
-        if let Ok(e) = Encoder::live(&d.dev, c, out_w, out_h, fps, bits) {
-            eprintln!("vídeo: {}x{} a {} quadros/s, {}, {:.1} Mbit/s ({})", out_w, out_h, fps, codec_name(c), bits as f64 / 1e6, e.name);
+        if let Ok(e) = LiveEncoder::open(&d.dev, c, out_w, out_h, fps, bits) {
+            eprintln!("vídeo: {}x{} a {} quadros/s, {}, {:.1} Mbit/s ({})", out_w, out_h, fps, codec_name(c), bits as f64 / 1e6, e.name());
             made = Some((e, c));
             break;
         }
@@ -367,7 +367,9 @@ unsafe fn session(d: &D3d, link: &Arc<dyn Link>, hello: Hello, control: bool) ->
 
     let mut out = Vec::with_capacity(MTU);
     let mut buf = vec![0u8; 2048];
-    let info = Msg::Info { codec, w: out_w, h: out_h, fps, control };
+    let info = Msg::Info { codec, w: out_w, h: out_h, fps, control, recover: enc.recovers() };
+    // Quadros enviados há pouco, com a hora de cada um, para invalidar os que se perderam.
+    let mut sent: VecDeque<(u32, i64)> = VecDeque::new();
     write(&mut out, &info);
     link.send(&out);
 
@@ -399,6 +401,21 @@ unsafe fn session(d: &D3d, link: &Arc<dyn Link>, hello: Hello, control: bool) ->
                             link.send(&out);
                         }
                         Msg::KeyReq => enc.force_key(),
+                        Msg::Nack { frame } => {
+                            // Para de usar o quadro perdido e os enviados depois dele, que dependiam dele.
+                            let mut ok = false;
+                            let mut gone = 0;
+                            for &(id, pts) in sent.iter() {
+                                if id == frame || (id.wrapping_sub(frame) as i32) > 0 {
+                                    gone += 1;
+                                    ok = enc.invalidate(pts) || ok;
+                                }
+                            }
+                            // Sem como invalidar, ou perda antiga demais: quadro-chave.
+                            if !ok || gone == 0 || gone > 16 {
+                                enc.force_key();
+                            }
+                        }
                         Msg::Input { first, events } => {
                             if let Some(inj) = &mut input {
                                 inj.apply(first, events);
@@ -442,7 +459,7 @@ unsafe fn session(d: &D3d, link: &Arc<dyn Link>, hello: Hello, control: bool) ->
                 pending = Some(pts);
             }
             enc.pump(&mut pkts)?;
-            if enc.need > 0 {
+            if enc.ready() {
                 if let Some(pts) = pending.take() {
                     let t = conv.convert(&in_view)?;
                     enc.feed(&t, pts)?;
@@ -469,6 +486,10 @@ unsafe fn session(d: &D3d, link: &Arc<dyn Link>, hello: Hello, control: bool) ->
             for (idx, chunk) in p.data.chunks(room).enumerate() {
                 write(&mut out, &Msg::Video { key: p.key, idx: idx as u16, count: count as u16, frame: frame_id, pts: p.pts, data: chunk });
                 link.send(&out);
+            }
+            sent.push_back((frame_id, p.pts));
+            if sent.len() > 32 {
+                sent.pop_front();
             }
             frame_id = frame_id.wrapping_add(1);
         }

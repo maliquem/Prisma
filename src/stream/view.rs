@@ -48,6 +48,10 @@ struct Shared {
     quit: AtomicBool,
     /// O canal fechou do outro lado (só na internet).
     closed: AtomicBool,
+    /// O decodificador falhou: espera um quadro-chave.
+    want_key: AtomicBool,
+    /// Quadros perdidos que o host consertou sem quadro-chave.
+    recovered: AtomicU32,
     got_info: AtomicBool,
     /// Ida e volta da rede, em 100 ns, da melhor medida recente.
     rtt: AtomicI64,
@@ -92,6 +96,8 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
     // Medidas recentes de ida e volta, com a diferença de relógio de cada uma.
     let mut samples: VecDeque<(i64, i64)> = VecDeque::new();
     let mut audio_next: Option<u32> = None;
+    // O host se recupera de perda sem quadro-chave (NVENC direto).
+    let mut recover = false;
 
     let push = |e: Event| {
         sh.queue.lock().unwrap().push_back(e);
@@ -109,6 +115,9 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
             write(&mut out, &Msg::Ping { t: now() });
             link.send(&out);
             last_ping = Instant::now();
+        }
+        if sh.want_key.swap(false, Ordering::Relaxed) {
+            waiting_key = true;
         }
         if waiting_key && sh.got_info.load(Ordering::Relaxed) && last_req.elapsed() > Duration::from_millis(150) {
             write(&mut out, &Msg::KeyReq);
@@ -128,7 +137,8 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
         };
         sh.bytes.fetch_add(n as u64, Ordering::Relaxed);
         match read(&buf[..n]) {
-            Some(Msg::Info { codec, w, h, fps, control }) => {
+            Some(Msg::Info { codec, w, h, fps, control, recover: r }) => {
+                recover = r;
                 sh.got_info.store(true, Ordering::Relaxed);
                 push(Event::Info { codec, w, h, fps, control });
             }
@@ -169,7 +179,13 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
                         }
                         // Chegou pedaço de um quadro mais novo com este incompleto: perdeu-se algo.
                         sh.lost.fetch_add(1, Ordering::Relaxed);
-                        waiting_key = true;
+                        if recover && !waiting_key {
+                            write(&mut out, &Msg::Nack { frame: a.frame });
+                            link.send(&out);
+                            sh.recovered.fetch_add(1, Ordering::Relaxed);
+                        } else {
+                            waiting_key = true;
+                        }
                         cur = None;
                     }
                 }
@@ -184,10 +200,16 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
                 }
                 if a.got == a.count {
                     let a = cur.take().unwrap();
-                    if expect.is_some_and(|e| e != a.frame) {
+                    if let Some(e) = expect.filter(|&e| e != a.frame) {
                         // Um quadro inteiro sumiu no caminho.
                         sh.lost.fetch_add(1, Ordering::Relaxed);
-                        waiting_key = true;
+                        if recover && !waiting_key {
+                            write(&mut out, &Msg::Nack { frame: e });
+                            link.send(&out);
+                            sh.recovered.fetch_add(1, Ordering::Relaxed);
+                        } else {
+                            waiting_key = true;
+                        }
                     }
                     expect = Some(a.frame.wrapping_add(1));
                     if a.key {
@@ -653,6 +675,8 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         wake: wake.0 as isize,
         quit: AtomicBool::new(false),
         closed: AtomicBool::new(false),
+        want_key: AtomicBool::new(false),
+        recovered: AtomicU32::new(0),
         got_info: AtomicBool::new(false),
         rtt: AtomicI64::new(0),
         offset: AtomicI64::new(0),
@@ -741,6 +765,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                     decoded.clear();
                     let p = Pkt { data: f.data, pts: f.pts, key: f.key };
                     if dc.decode(Some(&p), &mut decoded).is_err() {
+                        sh.want_key.store(true, Ordering::Relaxed);
                         continue;
                     }
                     second.decode.push(now() - t);
@@ -843,7 +868,12 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         s += &format!("caminho: {}
 ", link.route());
         s += &format!("tela daqui: {screen_w}x{screen_h} a {hz} Hz, tearing {}\n", if tearing { "permitido" } else { "não" });
-        s += &format!("quadros mostrados: {:.1}/s, perdidos: {}\n", total.shown as f64 / secs, sh.lost.load(Ordering::Relaxed));
+        s += &format!(
+            "quadros mostrados: {:.1}/s, perdidos: {} ({} consertados sem quadro-chave)\n",
+            total.shown as f64 / secs,
+            sh.lost.load(Ordering::Relaxed),
+            sh.recovered.load(Ordering::Relaxed)
+        );
         s += &format!("recebido: {:.1} Mbit/s em média\n", sh.bytes.load(Ordering::Relaxed) as f64 * 8.0 / start.elapsed().as_secs_f64() / 1e6);
         s += &format!("rede (ida e volta): mediana {:.2} ms\n", pct(&mut total.rtt, 0.5));
         s += &format!("decodificação: mediana {:.2} ms, p95 {:.2} ms\n", pct(&mut total.decode, 0.5), pct(&mut total.decode, 0.95));

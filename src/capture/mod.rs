@@ -7,6 +7,10 @@ pub mod engine;
 pub mod hdr;
 #[cfg(debug_assertions)]
 pub mod live;
+#[cfg(debug_assertions)]
+pub mod live_enc;
+#[cfg(all(debug_assertions, feature = "stream"))]
+pub mod nvenc;
 pub mod mux;
 pub mod shot;
 pub mod sound;
