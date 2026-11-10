@@ -11,6 +11,9 @@ mod link;
 #[cfg(feature = "stream")]
 mod net;
 mod pads;
+mod screen;
+#[cfg(feature = "stream")]
+mod service;
 pub mod view;
 
 pub use link::*;
@@ -18,6 +21,9 @@ pub use link::*;
 use crate::capture::mux::Codec;
 
 pub const PORT: u16 = 47_600;
+
+/// Este processo é o ajudante do serviço (SYSTEM, na sessão de quem usa o PC).
+pub static SERVICE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 /// Tamanho máximo de um pacote: cabe em qualquer rede sem se partir.
 pub const MTU: usize = 1200;
 const MAGIC: [u8; 2] = *b"PR";
@@ -40,6 +46,7 @@ pub enum Kind {
     Pad = 11,
     Rumble = 12,
     PadInfo = 13,
+    Sas = 14,
 }
 
 // ---------- Permissões de quem assiste ----------
@@ -50,6 +57,8 @@ pub const SOUND: u8 = 1;
 pub const PAD: u8 = 2;
 pub const KEYBOARD: u8 = 4;
 pub const MOUSE: u8 = 8;
+/// A tela segura do Windows (UAC, bloqueio, PIN) e o Ctrl+Alt+Del, só com o serviço.
+pub const SYSTEM: u8 = 16;
 pub const TOTAL: u8 = 0xFF;
 
 /// Predefinições: nome no arquivo e na linha de comando, nome na tela, permissões.
@@ -59,7 +68,13 @@ pub const PRESETS: [(&str, &str, u8); 4] = [
     ("teclado-mouse", "Ver, controle, teclado e mouse", SOUND | PAD | KEYBOARD | MOUSE),
     ("ver", "Só ver", SOUND),
 ];
-const PERM_NAMES: [(&str, &str, u8); 4] = [("som", "som", SOUND), ("controle", "controle de jogo", PAD), ("teclado", "teclado", KEYBOARD), ("mouse", "mouse", MOUSE)];
+const PERM_NAMES: [(&str, &str, u8); 5] = [
+    ("som", "som", SOUND),
+    ("controle", "controle de jogo", PAD),
+    ("teclado", "teclado", KEYBOARD),
+    ("mouse", "mouse", MOUSE),
+    ("sistema", "tela segura do Windows", SYSTEM),
+];
 
 /// Lê uma predefinição ou uma lista como `som,controle`. `video` é só o vídeo, sem nada mais.
 /// Aceita os nomes antigos do arquivo: `controlar` (tudo) e `ver`.
@@ -225,6 +240,8 @@ pub enum Msg<'a> {
     /// O que o host fez com o controle: jogador 1 a 4, a vaga do XInput lá (255 sem saber), ou
     /// jogador 0 e o motivo em `why`.
     PadInfo { pad: u8, player: u8, slot: u8, why: u8 },
+    /// Ctrl+Alt+Del no host (só com o serviço e a permissão `SYSTEM`).
+    Sas,
 }
 
 pub fn codec_bit(c: Codec) -> u8 {
@@ -346,6 +363,7 @@ pub fn write(out: &mut Vec<u8>, m: &Msg) {
             head(out, Kind::PadInfo);
             out.extend_from_slice(&[pad, player, slot, why]);
         }
+        Msg::Sas => head(out, Kind::Sas),
     }
 }
 
@@ -413,6 +431,7 @@ pub fn read(b: &[u8]) -> Option<Msg<'_>> {
         },
         12 => Msg::Rumble { pad: *b.get(4)?, low: *b.get(5)?, high: *b.get(6)? },
         13 => Msg::PadInfo { pad: *b.get(4)?, player: *b.get(5)?, slot: *b.get(6)?, why: *b.get(7)? },
+        14 => Msg::Sas,
         _ => return None,
     })
 }
@@ -458,6 +477,10 @@ pub fn run_args() -> bool {
             view::run(v);
             return true;
         }
+        if let Some(v) = a.strip_prefix("--test-dda=") {
+            screen::bench(v);
+            return true;
+        }
         #[cfg(feature = "stream")]
         {
             // Sem valor: quem parear agora só vê. `--stream-net=jogar`, `=total` e outros dão mais.
@@ -475,6 +498,9 @@ pub fn run_args() -> bool {
             }
             if let Some(v) = a.strip_prefix("--test-pads=") {
                 pads::bench(v);
+                return true;
+            }
+            if service::run_args(&a) {
                 return true;
             }
             if let Some(v) = a.strip_prefix("--stream-pair=") {
@@ -516,6 +542,7 @@ mod tests {
         round(Msg::Pad { pad: 0, seq: 0, on: false, state: PadState::default() });
         round(Msg::Rumble { pad: 2, low: 200, high: 7 });
         round(Msg::PadInfo { pad: 1, player: 3, slot: 2, why: PAD_OK });
+        round(Msg::Sas);
         round(Msg::Nack { frame: 77 });
         round(Msg::Hello { w: 3840, h: 2160, hz: 119, codecs: 7, pid: 4321, flags: SEES_HDR | DECODES_444 });
         round(Msg::Audio { seq: 9, pts: 10, data: &[0, 1, 2, 3] });
@@ -554,7 +581,8 @@ mod tests {
         assert_eq!(parse_perms("voar"), None);
         assert_eq!(parse_perms(""), None);
         // Ida e volta pelo arquivo.
-        for p in [0, SOUND, PAD, SOUND | PAD, PAD | MOUSE, KEYBOARD | MOUSE, SOUND | PAD | KEYBOARD | MOUSE, TOTAL] {
+        assert_eq!(parse_perms("teclado,mouse,sistema"), Some(KEYBOARD | MOUSE | SYSTEM));
+        for p in [0, SOUND, PAD, SOUND | PAD, PAD | MOUSE, KEYBOARD | MOUSE, SOUND | PAD | KEYBOARD | MOUSE, SYSTEM | MOUSE, TOTAL] {
             assert_eq!(parse_perms(&perms_key(p)), Some(p), "{p}");
         }
         assert_eq!(perms_text(SOUND | PAD), "Ver e usar controle");

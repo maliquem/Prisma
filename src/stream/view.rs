@@ -350,9 +350,11 @@ struct Keys {
     pending: Vec<Input>,
     held: Vec<(u16, bool)>,
     buttons: [bool; 5],
+    /// Ctrl+Alt+End aqui pede Ctrl+Alt+Del lá (o Windows não deixa a janela ver o Ctrl+Alt+Del).
+    sas: bool,
 }
 
-static KEYS: Mutex<Keys> = Mutex::new(Keys { keyboard: false, mouse: false, pad_keys: false, video: (0, 0), pending: Vec::new(), held: Vec::new(), buttons: [false; 5] });
+static KEYS: Mutex<Keys> = Mutex::new(Keys { keyboard: false, mouse: false, pad_keys: false, video: (0, 0), pending: Vec::new(), held: Vec::new(), buttons: [false; 5], sas: false });
 
 /// Área da janela onde está a imagem, com as faixas pretas de fora.
 fn video_rect(iw: u32, ih: u32, ow: u32, oh: u32) -> RECT {
@@ -369,6 +371,12 @@ unsafe fn key_event(h: HWND, k: &mut Keys, m: u32, w: WPARAM, l: LPARAM) -> bool
     let shift = GetKeyState(VK_SHIFT.0 as i32) < 0;
     if down && w.0 as u16 == b'F' as u16 && ctrl && alt && shift {
         toggle_full(h);
+        return true;
+    }
+    if k.keyboard && w.0 as u16 == VK_END.0 && ctrl && alt {
+        if down {
+            k.sas = true;
+        }
         return true;
     }
     let scan = ((l.0 >> 16) & 0xFF) as u16;
@@ -928,6 +936,8 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     let mut last_input = Instant::now() - Duration::from_secs(10);
     let mut last_send = Instant::now();
     let mut input_pkt = Vec::with_capacity(256);
+    // O pedido de Ctrl+Alt+Del vai 3 vezes, contra perda; o host junta as repetidas.
+    let (mut sas_left, mut sas_at, mut sas_pkt) = (0u8, Instant::now(), Vec::new());
     let mut fill: Vec<i64> = Vec::new();
     let mut scaler: Option<Scaler> = None;
     let mut decoded: Vec<Decoded> = Vec::new();
@@ -1044,6 +1054,16 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
             }
         }
         // Mouse e teclado novos vão na hora; os recentes se repetem por um tempo, contra perda.
+        if std::mem::take(&mut KEYS.lock().unwrap().sas) {
+            eprintln!("Ctrl+Alt+Del pedido ao host");
+            sas_left = 3;
+        }
+        if sas_left > 0 && sas_at.elapsed() >= Duration::from_millis(30) {
+            write(&mut sas_pkt, &Msg::Sas);
+            link.send(&sas_pkt);
+            sas_left -= 1;
+            sas_at = Instant::now();
+        }
         let fresh: Vec<Input> = std::mem::take(&mut KEYS.lock().unwrap().pending);
         if !fresh.is_empty() {
             for e in fresh {

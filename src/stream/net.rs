@@ -52,7 +52,16 @@ fn rt() -> &'static tokio::runtime::Runtime {
     })
 }
 
+/// Com o serviço instalado, a identidade e os aparelhos ficam na pasta dele, que ela também abre.
 fn dir() -> PathBuf {
+    if SERVICE.load(std::sync::atomic::Ordering::Relaxed) || super::service::installed() {
+        super::service::data_dir()
+    } else {
+        user_dir()
+    }
+}
+
+fn user_dir() -> PathBuf {
     crate::config::data_dir().join("compartilhar")
 }
 
@@ -73,14 +82,16 @@ fn clean_name(s: &str) -> String {
 
 // ---------- Identidade ----------
 
-/// Protege (ou abre) dados com a DPAPI: só este usuário do Windows, neste PC, abre de volta.
-unsafe fn dpapi(data: &[u8], protect: bool) -> Option<Vec<u8>> {
+/// Protege (ou abre) dados com a DPAPI: só este usuário do Windows, neste PC, abre de volta. Com
+/// `machine`, qualquer conta deste PC abre (o serviço é SYSTEM); aí quem protege é a pasta.
+unsafe fn dpapi(data: &[u8], protect: bool, machine: bool) -> Option<Vec<u8>> {
     let entropy = b"Prisma compartilhar tela";
     let inp = CRYPT_INTEGER_BLOB { cbData: data.len() as u32, pbData: data.as_ptr() as *mut u8 };
     let ent = CRYPT_INTEGER_BLOB { cbData: entropy.len() as u32, pbData: entropy.as_ptr() as *mut u8 };
     let mut out = CRYPT_INTEGER_BLOB::default();
     let r = if protect {
-        CryptProtectData(&inp, w!("Prisma"), Some(&ent), None, None, CRYPTPROTECT_UI_FORBIDDEN, &mut out)
+        let flags = if machine { CRYPTPROTECT_UI_FORBIDDEN | CRYPTPROTECT_LOCAL_MACHINE } else { CRYPTPROTECT_UI_FORBIDDEN };
+        CryptProtectData(&inp, w!("Prisma"), Some(&ent), None, None, flags, &mut out)
     } else {
         CryptUnprotectData(&inp, None, Some(&ent), None, None, CRYPTPROTECT_UI_FORBIDDEN, &mut out)
     };
@@ -97,13 +108,14 @@ unsafe fn dpapi(data: &[u8], protect: bool) -> Option<Vec<u8>> {
 fn identity() -> io::Result<SecretKey> {
     let p = dir().join("identidade.bin");
     if let Ok(blob) = std::fs::read(&p) {
-        return match unsafe { dpapi(&blob, false) } {
+        return match unsafe { dpapi(&blob, false, false) } {
             Some(b) if b.len() == 32 => Ok(SecretKey::from_bytes(b[..].try_into().unwrap())),
             _ => Err(io::Error::other("a identidade deste PC não abriu (foi criada por outro usuário do Windows?)")),
         };
     }
     let sk = SecretKey::generate();
-    let blob = unsafe { dpapi(&sk.to_bytes(), true) }.ok_or_else(|| io::Error::other("a DPAPI do Windows recusou proteger a chave"))?;
+    let machine = dir() != user_dir();
+    let blob = unsafe { dpapi(&sk.to_bytes(), true, machine) }.ok_or_else(|| io::Error::other("a DPAPI do Windows recusou proteger a chave"))?;
     std::fs::create_dir_all(dir())?;
     std::fs::write(&p, blob)?;
     Ok(sk)
@@ -215,6 +227,82 @@ struct Invite {
     made: Instant,
     tries: u32,
     used: bool,
+    /// Permissões de quem parear com este convite.
+    perms: u8,
+}
+
+/// Convite do serviço, num arquivo: segredo, permissões e validade (segundos desde 1970).
+fn invite_path() -> PathBuf {
+    dir().join("convite.tsv")
+}
+
+fn unix_now() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs())
+}
+
+fn load_invite_file() -> Option<Invite> {
+    let s = std::fs::read_to_string(invite_path()).ok()?;
+    let mut f = s.trim().split('\t');
+    let secret: [u8; 16] = data_encoding::HEXLOWER_PERMISSIVE.decode(f.next()?.as_bytes()).ok()?.try_into().ok()?;
+    let perms = parse_perms(f.next()?)?;
+    let left = f.next()?.parse::<u64>().ok()?.checked_sub(unix_now())?;
+    let made = Instant::now().checked_sub(INVITE_TTL.saturating_sub(Duration::from_secs(left)))?;
+    Some(Invite { secret, made, tries: 0, used: false, perms })
+}
+
+/// `--stream-invite`: com o serviço instalado, o convite vai para o arquivo que ele lê.
+pub fn service_invite(perms: u8) {
+    if !super::service::installed() {
+        return eprintln!("o serviço não está instalado: o convite sai no próprio --stream-net");
+    }
+    let sk = match identity() {
+        Ok(k) => k,
+        Err(e) => return eprintln!("{e}"),
+    };
+    let secret = random::<16>();
+    let line = format!("{}\t{}\t{}\n", data_encoding::HEXLOWER.encode(&secret), perms_key(perms), unix_now() + INVITE_TTL.as_secs());
+    if let Err(e) = std::fs::write(invite_path(), line) {
+        return eprintln!("não deu para gravar o convite: {e}");
+    }
+    eprintln!("Convite do serviço ({}; vale 10 minutos e uma vez):\n\n{}\n", perms_text(perms), invite_text(&sk.public(), &secret));
+    eprintln!("A pergunta de confirmação aparece na tela deste PC.");
+}
+
+/// Leva a identidade e os aparelhos pareados para a pasta do serviço (na instalação).
+pub(super) fn copy_to_service(dst: &std::path::Path) -> std::result::Result<(), String> {
+    let src = user_dir();
+    let sk = match std::fs::read(src.join("identidade.bin")) {
+        Ok(blob) => match unsafe { dpapi(&blob, false, false) } {
+            Some(b) if b.len() == 32 => SecretKey::from_bytes(b[..].try_into().unwrap()),
+            _ => return Err("a identidade deste PC não abriu".into()),
+        },
+        Err(_) => SecretKey::generate(),
+    };
+    let blob = unsafe { dpapi(&sk.to_bytes(), true, true) }.ok_or("a DPAPI recusou proteger a chave")?;
+    std::fs::write(dst.join("identidade.bin"), blob).map_err(|e| e.to_string())?;
+    // Numa reinstalação, a pasta do serviço já tem os aparelhos mais novos.
+    let list = src.join("aparelhos.tsv");
+    if list.exists() && !dst.join("aparelhos.tsv").exists() {
+        std::fs::copy(&list, dst.join("aparelhos.tsv")).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Devolve os aparelhos pareados (e a identidade, se faltar) à pasta de sempre (na remoção).
+pub(super) fn copy_from_service(src: &std::path::Path) -> std::result::Result<(), String> {
+    let dst = user_dir();
+    std::fs::create_dir_all(&dst).map_err(|e| e.to_string())?;
+    if src.join("aparelhos.tsv").exists() {
+        std::fs::copy(src.join("aparelhos.tsv"), dst.join("aparelhos.tsv")).map_err(|e| e.to_string())?;
+    }
+    if !dst.join("identidade.bin").exists() {
+        if let Ok(blob) = std::fs::read(src.join("identidade.bin")) {
+            let key = unsafe { dpapi(&blob, false, true) }.ok_or("a identidade do serviço não abriu")?;
+            let mine = unsafe { dpapi(&key, true, false) }.ok_or("a DPAPI recusou proteger a chave")?;
+            std::fs::write(dst.join("identidade.bin"), mine).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
 }
 
 impl Invite {
@@ -406,7 +494,7 @@ fn approve_connect(name: &str, perms: u8) -> bool {
 
 // ---------- Host ----------
 
-async fn pair_host(conn: Connection, me: EndpointId, invite: Arc<Mutex<Invite>>, perms: u8) {
+async fn pair_host(conn: Connection, me: EndpointId, invite: Arc<Mutex<Invite>>) {
     let who = conn.remote_id();
     let run = async {
         let (mut send, mut recv) = conn.accept_bi().await.ok()?;
@@ -416,6 +504,7 @@ async fn pair_host(conn: Connection, me: EndpointId, invite: Arc<Mutex<Invite>>,
         }
         let (secret, name) = msg.split_at(16);
         let name = clean_name(&String::from_utf8_lossy(name));
+        let perms = invite.lock().unwrap().perms;
         if !invite.lock().unwrap().check(secret) {
             eprintln!("pedido de pareamento de «{name}» recusado: convite errado, usado ou vencido");
             let _ = send.write_all(&[0]).await;
@@ -429,6 +518,8 @@ async fn pair_host(conn: Connection, me: EndpointId, invite: Arc<Mutex<Invite>>,
         let mut reply = vec![answer.is_some() as u8];
         if let Some(ask) = answer {
             invite.lock().unwrap().used = true;
+            // O convite do serviço vale uma vez.
+            let _ = std::fs::remove_file(invite_path());
             match remember(Device { role: Role::Viewer, id: who, name: name.clone(), perms, ask }) {
                 Ok(()) => eprintln!("pareado com «{name}»"),
                 Err(e) => eprintln!("pareou, mas não deu para guardar: {e}"),
@@ -446,7 +537,7 @@ async fn pair_host(conn: Connection, me: EndpointId, invite: Arc<Mutex<Invite>>,
     let _ = run.await;
 }
 
-async fn accept_loop(ep: Endpoint, invite: Arc<Mutex<Invite>>, tx: mpsc::Sender<(Connection, Device)>, perms: u8) {
+async fn accept_loop(ep: Endpoint, invite: Arc<Mutex<Invite>>, tx: mpsc::Sender<(Connection, Device)>, service: bool) {
     let me = ep.id();
     while let Some(incoming) = ep.accept().await {
         let (invite, tx) = (invite.clone(), tx.clone());
@@ -455,7 +546,16 @@ async fn accept_loop(ep: Endpoint, invite: Arc<Mutex<Invite>>, tx: mpsc::Sender<
             let Ok(conn) = accepting.await else { return };
             let who = conn.remote_id();
             if conn.alpn() == ALPN_PAIR {
-                pair_host(conn, me, invite, perms).await;
+                // No serviço, o convite vem do arquivo que o --stream-invite grava.
+                if service {
+                    if let Some(i) = load_invite_file() {
+                        let mut cur = invite.lock().unwrap();
+                        if cur.secret != i.secret {
+                            *cur = i;
+                        }
+                    }
+                }
+                pair_host(conn, me, invite).await;
             } else if conn.alpn() == ALPN_STREAM {
                 let Some(dev) = load().into_iter().find(|d| d.role == Role::Viewer && d.id == who) else {
                     eprintln!("conexão recusada: {} não está pareado", who.fmt_short());
@@ -479,6 +579,20 @@ async fn accept_loop(ep: Endpoint, invite: Arc<Mutex<Invite>>, tx: mpsc::Sender<
 }
 
 pub fn host(perms: u8) {
+    if super::service::installed() {
+        eprintln!("o serviço do Prisma está instalado e já compartilha este PC (--stream-service-status).");
+        return eprintln!("para parear um aparelho novo: --stream-invite=permissões");
+    }
+    host_with(Some(perms));
+}
+
+/// O ajudante do serviço: o convite vem de arquivo, e ninguém lê o terminal.
+pub fn host_service() {
+    host_with(None);
+}
+
+/// `invite`: permissões do convite que aparece no terminal; None no serviço.
+fn host_with(invite_perms: Option<u8>) {
     eprintln!("{NOTICE}");
     let sk = match identity() {
         Ok(k) => k,
@@ -492,11 +606,18 @@ pub fn host(perms: u8) {
         eprintln!("sem resposta do relé da n0 em 10 s: só a rede local e a VPN vão funcionar por enquanto");
     }
     let secret = random::<16>();
-    let invite = Arc::new(Mutex::new(Invite { secret, made: Instant::now(), tries: 0, used: false }));
-    eprintln!("Prisma compartilhando pela internet. Quem parear agora: {}. Este PC: «{}», id {}", perms_text(perms), my_name(), ep.id().fmt_short());
-    eprintln!("Convite para parear outro PC (vale 10 minutos e uma vez):\n\n{}\n", invite_text(&ep.id(), &secret));
+    let service = invite_perms.is_none();
+    // No serviço, o convite começa usado: só vale o do arquivo.
+    let invite = Arc::new(Mutex::new(Invite { secret, made: Instant::now(), tries: 0, used: service, perms: invite_perms.unwrap_or(SOUND) }));
+    match invite_perms {
+        Some(perms) => {
+            eprintln!("Prisma compartilhando pela internet. Quem parear agora: {}. Este PC: «{}», id {}", perms_text(perms), my_name(), ep.id().fmt_short());
+            eprintln!("Convite para parear outro PC (vale 10 minutos e uma vez):\n\n{}\n", invite_text(&ep.id(), &secret));
+        }
+        None => eprintln!("serviço compartilhando pela internet. Este PC: «{}», id {}", my_name(), ep.id().fmt_short()),
+    }
     let (tx, rx) = mpsc::channel();
-    rt().spawn(accept_loop(ep.clone(), invite, tx, perms));
+    rt().spawn(accept_loop(ep.clone(), invite, tx, service));
 
     // Cada conexão espera a tela de quem assiste numa linha própria e entra na sala pronta.
     let (jtx, jrx) = mpsc::channel::<Joiner>();
@@ -698,14 +819,14 @@ mod tests {
 
     #[test]
     fn invite_limits() {
-        let mut inv = Invite { secret: [5; 16], made: Instant::now(), tries: 0, used: false };
+        let mut inv = Invite { secret: [5; 16], made: Instant::now(), tries: 0, used: false, perms: SOUND };
         for _ in 0..4 {
             assert!(!inv.check(&[6; 16]));
         }
         assert!(inv.check(&[5; 16]));
         // Quinta tentativa gasta: nem o certo passa mais.
         assert!(!inv.check(&[5; 16]));
-        let mut old = Invite { secret: [5; 16], made: Instant::now() - INVITE_TTL - Duration::from_secs(1), tries: 0, used: false };
+        let mut old = Invite { secret: [5; 16], made: Instant::now() - INVITE_TTL - Duration::from_secs(1), tries: 0, used: false, perms: SOUND };
         assert!(!old.check(&[5; 16]));
     }
 
@@ -759,11 +880,11 @@ mod tests {
         let r = rt().block_on(async {
             let a = Endpoint::builder(presets::Minimal).relay_mode(iroh::RelayMode::Disabled).alpns(vec![ALPN_PAIR.to_vec()]).bind().await.unwrap();
             let b = Endpoint::builder(presets::Minimal).relay_mode(iroh::RelayMode::Disabled).bind().await.unwrap();
-            let invite = Arc::new(Mutex::new(Invite { secret: [1; 16], made: Instant::now(), tries: 0, used: false }));
+            let invite = Arc::new(Mutex::new(Invite { secret: [1; 16], made: Instant::now(), tries: 0, used: false, perms: SOUND }));
             let (a2, inv2) = (a.clone(), invite.clone());
             let host = tokio::spawn(async move {
                 let conn = a2.accept().await.unwrap().accept().unwrap().await.unwrap();
-                pair_host(conn, a2.id(), inv2, SOUND).await;
+                pair_host(conn, a2.id(), inv2).await;
             });
             let r = ask_pair(&b, a.addr(), &[2; 16]).await;
             let _ = host.await;

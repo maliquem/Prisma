@@ -569,12 +569,50 @@ fn fits(hello: &Hello, codec: Codec, vf: VideoFmt) -> bool {
     hello.codecs & codec_bit(codec) != 0 && (!vf.hdr10 || hello.flags & SEES_HDR != 0)
 }
 
+/// De onde vem a imagem: WGC (com o cursor do Windows) ou Desktop Duplication (no serviço, para
+/// alcançar a tela segura; `PRISMA_CAPTURE=dda` também liga, para teste).
+enum Cap {
+    Wgc { item: GraphicsCaptureItem, pool: Option<(Direct3D11CaptureFramePool, GraphicsCaptureSession, HANDLE, i64)> },
+    Dda(Box<super::screen::Dda>),
+}
+
+fn use_dda() -> bool {
+    SERVICE.load(Ordering::Relaxed) || std::env::var("PRISMA_CAPTURE").as_deref() == Ok("dda")
+}
+
+/// Tamanho da tela principal, pela saída de vídeo (a Desktop Duplication não usa o WGC).
+unsafe fn output_size(d: &D3d, mon: HMONITOR) -> Result<(u32, u32)> {
+    let ad = d.dev.cast::<windows::Win32::Graphics::Dxgi::IDXGIDevice>()?.GetAdapter()?;
+    let mut i = 0;
+    loop {
+        let o = ad.EnumOutputs(i)?;
+        let desc = o.GetDesc()?;
+        if desc.Monitor == mon {
+            let r = desc.DesktopCoordinates;
+            return Ok(((r.right - r.left) as u32, (r.bottom - r.top) as u32));
+        }
+        i += 1;
+    }
+}
+
 unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner>>) -> Result<End> {
     let mon = MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY);
-    let item = monitor_item(mon)?;
     let color = monitor_color(mon);
-    let size = item.Size()?;
-    let (src_w, src_h) = (even(size.Width as u32), even(size.Height as u32));
+    let mut cap = if use_dda() {
+        None
+    } else {
+        Some(monitor_item(mon)?)
+    };
+    let (src_w, src_h) = match &cap {
+        Some(item) => {
+            let s = item.Size()?;
+            (even(s.Width as u32), even(s.Height as u32))
+        }
+        None => {
+            let (w, h) = output_size(d, mon)?;
+            (even(w), even(h))
+        }
+    };
     // O tamanho e os Hz seguem quem chegou primeiro; os codecs e formatos, o que todos aceitam.
     let lead = room.guests[0].hello;
     let codecs = room.guests.iter().fold(0xFF, |m, g| m & g.hello.codecs);
@@ -638,7 +676,8 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
 
     // HDR10 sai em PQ de 10 bits; senão a tela em HDR vira SDR antes de codificar.
     let mid = bgra_texture(&d.dev, src_w, src_h, if vf.hdr10 { DXGI_FORMAT_R10G10B10A2_UNORM } else { DXGI_FORMAT_B8G8R8A8_UNORM })?;
-    let tone = if color.hdr { Some(ToneMap::new(&d.dev, &mid, vf.hdr10, color.white_nits)?) } else { None };
+    // Na Desktop Duplication, a conversão de cor e o cursor ficam com ela.
+    let tone = if color.hdr && cap.is_some() { Some(ToneMap::new(&d.dev, &mid, vf.hdr10, color.white_nits)?) } else { None };
     let out_fmt = if vf.yuv444 {
         ConvOut::Ayuv
     } else if vf.hdr10 {
@@ -648,19 +687,31 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     };
     let mut conv = Prep::new(&d.dev, &d.ctx, &mid, src_w, src_h, out_w, out_h, fps, out_fmt)?;
 
-    let fmt = if color.hdr { DirectXPixelFormat::R16G16B16A16Float } else { DirectXPixelFormat::B8G8R8A8UIntNormalized };
-    let pool = Direct3D11CaptureFramePool::CreateFreeThreaded(&d.rt, fmt, 2, size)?;
-    let event = CreateEventW(None, false, false, None)?;
-    let ev = event.0 as isize;
-    let token = pool.FrameArrived(&TypedEventHandler::new(move |_, _| {
-        let _ = SetEvent(HANDLE(ev as *mut _));
-        Ok(())
-    }))?;
-    let capture = pool.CreateCaptureSession(&item)?;
-    let _ = capture.SetIsCursorCaptureEnabled(true);
-    let _ = capture.SetIsBorderRequired(false);
-    let _ = capture.SetMinUpdateInterval(windows::Foundation::TimeSpan { Duration: 10_000_000 / fps as i64 });
-    capture.StartCapture()?;
+    let mut cap = match cap.take() {
+        Some(item) => {
+            let fmt = if color.hdr { DirectXPixelFormat::R16G16B16A16Float } else { DirectXPixelFormat::B8G8R8A8UIntNormalized };
+            let pool = Direct3D11CaptureFramePool::CreateFreeThreaded(&d.rt, fmt, 2, item.Size()?)?;
+            let event = CreateEventW(None, false, false, None)?;
+            let ev = event.0 as isize;
+            let token = pool.FrameArrived(&TypedEventHandler::new(move |_, _| {
+                let _ = SetEvent(HANDLE(ev as *mut _));
+                Ok(())
+            }))?;
+            let capture = pool.CreateCaptureSession(&item)?;
+            let _ = capture.SetIsCursorCaptureEnabled(true);
+            let _ = capture.SetIsBorderRequired(false);
+            let _ = capture.SetMinUpdateInterval(windows::Foundation::TimeSpan { Duration: 10_000_000 / fps as i64 });
+            capture.StartCapture()?;
+            Cap::Wgc { item, pool: Some((pool, capture, event, token)) }
+        }
+        None => {
+            let x = super::screen::Dda::new(d, mon, color.hdr, color.white_nits, &mid, vf.hdr10, src_w, src_h)?;
+            eprintln!("captura: Desktop Duplication, área de trabalho «{}»", x.desk_name);
+            Cap::Dda(Box::new(x))
+        }
+    };
+    let mut fed_at = Instant::now() - Duration::from_secs(1);
+    let mut was_secure = false;
 
     // Som para quem tem a permissão. Mesmo PC: tira o som da janela que assiste.
     let hearing = |guests: &[Guest]| -> Vec<Arc<dyn Link>> { guests.iter().filter(|g| g.perms & SOUND != 0).map(|g| g.link.clone()).collect() };
@@ -701,7 +752,19 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     let mut info_tick = Instant::now();
 
     'run: loop {
-        let _ = WaitForSingleObject(event, 1);
+        let secure = match &cap {
+            Cap::Wgc { pool, .. } => {
+                if let Some((_, _, event, _)) = pool {
+                    let _ = WaitForSingleObject(*event, 1);
+                }
+                false
+            }
+            Cap::Dda(x) => x.secure,
+        };
+        if secure != was_secure {
+            was_secure = secure;
+            eprintln!("{}", if secure { "tela segura do Windows (UAC, bloqueio ou PIN)" } else { "de volta à área de trabalho" });
+        }
         // Quem chegou entra; se o vídeo atual não serve para ela, recomeça com todo mundo.
         if let Some(rx) = joins {
             while let Ok(j) = rx.try_recv() {
@@ -760,8 +823,19 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                                 }
                             }
                             Msg::Input { first, events } => {
-                                if let Some(inj) = &mut g.input {
+                                // Na tela segura, só quem tem a permissão de sistema.
+                                if let Some(inj) = g.input.as_mut().filter(|_| !secure || g.perms & SYSTEM != 0) {
                                     inj.apply(first, events);
+                                }
+                            }
+                            Msg::Sas => {
+                                if g.perms & SYSTEM == 0 {
+                                    eprintln!("Ctrl+Alt+Del de «{}» recusado: sem a permissão de sistema", g.name);
+                                } else {
+                                    #[cfg(feature = "stream")]
+                                    super::service::request_sas(&g.name);
+                                    #[cfg(not(feature = "stream"))]
+                                    eprintln!("Ctrl+Alt+Del só existe com o serviço");
                                 }
                             }
                             Msg::Pad { pad, seq, on, state } => pad_msgs.push(PadMsg { guest: gi, pad, seq, on, state }),
@@ -812,7 +886,30 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
             }
         }
 
+        let mut changed = false;
         let step = (|| -> Result<()> {
+            let pool = match &mut cap {
+                Cap::Wgc { pool: Some((pool, ..)), .. } => pool,
+                Cap::Wgc { .. } => return Ok(()),
+                Cap::Dda(x) => {
+                    match x.poll(&mid)? {
+                        super::screen::Got::Frame(pts) => pending = Some(pts),
+                        super::screen::Got::Changed => changed = true,
+                        super::screen::Got::Nothing => {}
+                    }
+                    enc.pump(&mut pkts)?;
+                    // A Desktop Duplication entrega cada mudança (o mouse também): o ritmo fica aqui.
+                    if enc.ready() && fed_at.elapsed() >= Duration::from_nanos(interval as u64 * 90) {
+                        if let Some(pts) = pending.take() {
+                            let t = conv.convert(&d.ctx)?;
+                            enc.feed(&t, pts)?;
+                            last_fed = pts;
+                            fed_at = Instant::now();
+                        }
+                    }
+                    return Ok(());
+                }
+            };
             while let Ok(f) = pool.TryGetNextFrame() {
                 let pts = f.SystemRelativeTime()?.Duration;
                 if pts - last_fed < interval * 9 / 10 {
@@ -842,6 +939,11 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
         })();
         if let Err(e) = step {
             failed = Some(e);
+            break;
+        }
+        if changed {
+            eprintln!("a tela mudou de tamanho: recomeçando");
+            result = End::Again;
             break;
         }
         // O mesmo vídeo para todo mundo, em pedaços que cabem no caminho mais estreito.
@@ -881,10 +983,13 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     if let Some(t) = audio_thread {
         let _ = t.join();
     }
-    let _ = pool.RemoveFrameArrived(token);
-    let _ = capture.Close();
-    let _ = pool.Close();
-    let _ = CloseHandle(event);
+    if let Cap::Wgc { item, pool: Some((pool, capture, event, token)) } = cap {
+        let _ = pool.RemoveFrameArrived(token);
+        let _ = capture.Close();
+        let _ = pool.Close();
+        let _ = CloseHandle(event);
+        drop(item);
+    }
     match failed {
         Some(e) => Err(e),
         None => Ok(result),
