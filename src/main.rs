@@ -13,6 +13,8 @@ mod report;
 #[cfg(debug_assertions)]
 mod selftest;
 mod startup;
+#[cfg(debug_assertions)]
+mod stream;
 mod sys;
 mod ui;
 
@@ -53,6 +55,11 @@ fn main() {
     }
     if let Some(v) = std::env::args().find_map(|a| a.strip_prefix("--set-taskmgr=").map(|v| v == "1")) {
         std::process::exit(if startup::set_replace_taskmgr(v) { 0 } else { 3 });
+    }
+    // Transmissão de teste: roda ao lado de outras cópias, sem o nome único.
+    #[cfg(debug_assertions)]
+    if stream::run_args() {
+        return;
     }
     unsafe {
         // Antes do nome único: a cópia de administrador precisa encontrar o nome livre.

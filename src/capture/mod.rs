@@ -1,5 +1,7 @@
 //! Captura com a API do Windows. Foto: um quadro levado para a CPU.
 
+#[cfg(debug_assertions)]
+pub mod decoder;
 pub mod encoder;
 pub mod engine;
 pub mod hdr;
