@@ -75,10 +75,12 @@ pub struct Decoder {
     fps: u32,
     pub name: String,
     pub gpu: bool,
+    /// Saída de 10 bits (P010), para HDR10.
+    ten: bool,
 }
 
 impl Decoder {
-    pub unsafe fn new(dev: &ID3D11Device, codec: Codec, w: u32, h: u32, fps: u32, header: Option<&[u8]>) -> Result<Self> {
+    pub unsafe fn new(dev: &ID3D11Device, codec: Codec, w: u32, h: u32, fps: u32, header: Option<&[u8]>, ten: bool) -> Result<Self> {
         let i = MFT_REGISTER_TYPE_INFO { guidMajorType: MFMediaType_Video, guidSubtype: subtype(codec) };
         let o = MFT_REGISTER_TYPE_INFO { guidMajorType: MFMediaType_Video, guidSubtype: MFVideoFormat_NV12 };
         let mut list = std::ptr::null_mut();
@@ -129,7 +131,7 @@ impl Decoder {
         }
         mft.SetInputType(0, &t, 0)?;
         let events = if is_async { Some(mft.cast::<IMFMediaEventGenerator>()?) } else { None };
-        let mut s = Self { mft, events, need: 0, queue: VecDeque::new(), provides: false, size: 0, fps, name, gpu };
+        let mut s = Self { mft, events, need: 0, queue: VecDeque::new(), provides: false, size: 0, fps, name, gpu, ten };
         // Alguns só dizem a saída depois do primeiro quadro; aí ela vem na troca de formato.
         let _ = s.pick_output();
         s.mft.ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, 0)?;
@@ -138,15 +140,21 @@ impl Decoder {
     }
 
     unsafe fn pick_output(&mut self) -> Result<()> {
-        let mut i = 0;
-        loop {
-            let t = self.mft.GetOutputAvailableType(0, i)?;
-            if t.GetGUID(&MF_MT_SUBTYPE)? == MFVideoFormat_NV12 {
-                self.mft.SetOutputType(0, &t, 0)?;
-                break;
+        // HDR10 sai em P010; se o decodificador não oferecer, fica no NV12.
+        let want = if self.ten { [MFVideoFormat_P010, MFVideoFormat_NV12] } else { [MFVideoFormat_NV12, MFVideoFormat_NV12] };
+        let mut found = None;
+        'pick: for sub in want {
+            let mut i = 0;
+            while let Ok(t) = self.mft.GetOutputAvailableType(0, i) {
+                if t.GetGUID(&MF_MT_SUBTYPE)? == sub {
+                    found = Some(t);
+                    break 'pick;
+                }
+                i += 1;
             }
-            i += 1;
         }
+        let t = found.ok_or_else(|| Error::new(E_FAIL, "o decodificador não oferece NV12 nem P010"))?;
+        self.mft.SetOutputType(0, &t, 0)?;
         let info = self.mft.GetOutputStreamInfo(0)?;
         let own = (MFT_OUTPUT_STREAM_PROVIDES_SAMPLES.0 | MFT_OUTPUT_STREAM_CAN_PROVIDE_SAMPLES.0) as u32;
         self.provides = info.dwFlags & own != 0;

@@ -5,8 +5,10 @@ use windows::core::*;
 use windows::Win32::Graphics::Direct3D::Fxc::*;
 use windows::Win32::Graphics::Direct3D::*;
 use windows::Win32::Graphics::Direct3D11::*;
+#[cfg(debug_assertions)]
+use windows::Win32::Graphics::Dxgi::Common::*;
 
-const VS: &str = r#"
+pub(crate) const VS: &str = r#"
 struct O { float4 p : SV_Position; float2 t : T; };
 O main(uint id : SV_VertexID) {
     O o;
@@ -53,7 +55,7 @@ float4 main(float4 p : SV_Position, float2 t : T) : SV_Target {
 }
 "#;
 
-unsafe fn compile(src: &str, target: PCSTR) -> Result<Vec<u8>> {
+pub(crate) unsafe fn compile(src: &str, target: PCSTR) -> Result<Vec<u8>> {
     let mut blob = None;
     let mut err = None;
     let r = D3DCompile(
@@ -76,6 +78,106 @@ unsafe fn compile(src: &str, target: PCSTR) -> Result<Vec<u8>> {
     r?;
     let b: ID3DBlob = blob.unwrap();
     Ok(std::slice::from_raw_parts(b.GetBufferPointer() as *const u8, b.GetBufferSize()).to_vec())
+}
+
+#[cfg(debug_assertions)]
+/// RGB para YUV 4:4:4 (BT.709, faixa limitada), gravado como AYUV: na memória V, U, Y e A.
+const PS_AYUV: &str = r#"
+Texture2D tex : register(t0);
+SamplerState smp : register(s0);
+float4 main(float4 p : SV_Position, float2 t : T) : SV_Target {
+    float3 c = tex.Sample(smp, t).rgb;
+    float y = dot(c, float3(0.2126, 0.7152, 0.0722));
+    float u = (c.b - y) / 1.8556;
+    float v = (c.r - y) / 1.5748;
+    return float4((128 + 224 * v) / 255, (128 + 224 * u) / 255, (16 + 219 * y) / 255, 1);
+}
+"#;
+
+#[cfg(debug_assertions)]
+/// Prepara o quadro do 4:4:4: escala e converte a cor num shader, porque o processador de vídeo do
+/// Windows não grava AYUV e o NVENC, recebendo RGB, gasta uns 10 ms convertendo um quadro 4K.
+pub struct ToAyuv {
+    vs: ID3D11VertexShader,
+    ps: ID3D11PixelShader,
+    smp: ID3D11SamplerState,
+    srv: ID3D11ShaderResourceView,
+    outs: Vec<(ID3D11Texture2D, ID3D11RenderTargetView)>,
+    next: usize,
+    w: u32,
+    h: u32,
+}
+
+#[cfg(debug_assertions)]
+impl ToAyuv {
+    pub fn new(dev: &ID3D11Device, src: &ID3D11Texture2D, w: u32, h: u32) -> Result<Self> {
+        unsafe {
+            let vb = compile(VS, s!("vs_5_0"))?;
+            let pb = compile(PS_AYUV, s!("ps_5_0"))?;
+            let (mut vs, mut ps) = (None, None);
+            dev.CreateVertexShader(&vb, None, Some(&mut vs))?;
+            dev.CreatePixelShader(&pb, None, Some(&mut ps))?;
+            let sd = D3D11_SAMPLER_DESC {
+                Filter: D3D11_FILTER_MIN_MAG_MIP_LINEAR,
+                AddressU: D3D11_TEXTURE_ADDRESS_CLAMP,
+                AddressV: D3D11_TEXTURE_ADDRESS_CLAMP,
+                AddressW: D3D11_TEXTURE_ADDRESS_CLAMP,
+                MaxLOD: f32::MAX,
+                ..Default::default()
+            };
+            let mut smp = None;
+            dev.CreateSamplerState(&sd, Some(&mut smp))?;
+            let mut srv = None;
+            dev.CreateShaderResourceView(src, None, Some(&mut srv))?;
+            let mut outs = Vec::new();
+            // Vários na roda: o NVENC ainda pode estar lendo o anterior.
+            for _ in 0..16 {
+                let td = D3D11_TEXTURE2D_DESC {
+                    Width: w,
+                    Height: h,
+                    MipLevels: 1,
+                    ArraySize: 1,
+                    Format: DXGI_FORMAT_AYUV,
+                    SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+                    Usage: D3D11_USAGE_DEFAULT,
+                    BindFlags: D3D11_BIND_RENDER_TARGET.0 as u32,
+                    ..Default::default()
+                };
+                let mut t = None;
+                dev.CreateTexture2D(&td, None, Some(&mut t))?;
+                let t = t.unwrap();
+                let rd = D3D11_RENDER_TARGET_VIEW_DESC {
+                    Format: DXGI_FORMAT_R8G8B8A8_UNORM,
+                    ViewDimension: D3D11_RTV_DIMENSION_TEXTURE2D,
+                    Anonymous: D3D11_RENDER_TARGET_VIEW_DESC_0 { Texture2D: D3D11_TEX2D_RTV { MipSlice: 0 } },
+                };
+                let mut rtv = None;
+                dev.CreateRenderTargetView(&t, Some(&rd), Some(&mut rtv))?;
+                outs.push((t, rtv.unwrap()));
+            }
+            Ok(Self { vs: vs.unwrap(), ps: ps.unwrap(), smp: smp.unwrap(), srv: srv.unwrap(), outs, next: 0, w, h })
+        }
+    }
+
+    pub fn convert(&mut self, ctx: &ID3D11DeviceContext) -> Result<ID3D11Texture2D> {
+        let (tex, rtv) = &self.outs[self.next];
+        self.next = (self.next + 1) % self.outs.len();
+        unsafe {
+            ctx.OMSetRenderTargets(Some(&[Some(rtv.clone())]), None);
+            let vp = D3D11_VIEWPORT { Width: self.w as f32, Height: self.h as f32, MaxDepth: 1.0, ..Default::default() };
+            ctx.RSSetViewports(Some(&[vp]));
+            ctx.IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            ctx.IASetInputLayout(None);
+            ctx.VSSetShader(&self.vs, None);
+            ctx.PSSetShader(&self.ps, None);
+            ctx.PSSetShaderResources(0, Some(&[Some(self.srv.clone())]));
+            ctx.PSSetSamplers(0, Some(&[Some(self.smp.clone())]));
+            ctx.Draw(3, 0);
+            ctx.PSSetShaderResources(0, Some(&[None]));
+            ctx.OMSetRenderTargets(None, None);
+        }
+        Ok(tex.clone())
+    }
 }
 
 pub struct ToneMap {

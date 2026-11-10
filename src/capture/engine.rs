@@ -153,8 +153,49 @@ pub(crate) struct Converter {
     next: usize,
 }
 
+/// Saída do conversor: NV12 (comum), P010 (HDR10) ou AYUV (4:4:4, feito num shader, ver [`Prep`]).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum ConvOut {
+    Nv12,
+    P010,
+    #[cfg_attr(not(debug_assertions), allow(dead_code))]
+    Ayuv,
+}
+
+/// Prepara o quadro para o codificador: o processador de vídeo para NV12 e P010, um shader para AYUV.
+#[cfg(debug_assertions)]
+pub(crate) enum Prep {
+    Vp(Converter, ID3D11VideoProcessorInputView),
+    Ayuv(super::hdr::ToAyuv),
+}
+
+#[cfg(debug_assertions)]
+impl Prep {
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn new(dev: &ID3D11Device, ctx: &ID3D11DeviceContext, src: &ID3D11Texture2D, in_w: u32, in_h: u32, w: u32, h: u32, fps: u32, out: ConvOut) -> Result<Self> {
+        if out == ConvOut::Ayuv {
+            return super::hdr::ToAyuv::new(dev, src, w, h).map(Prep::Ayuv);
+        }
+        let c = Converter::with(dev, ctx, in_w, in_h, w, h, fps, out)?;
+        let v = c.input_view(src)?;
+        Ok(Prep::Vp(c, v))
+    }
+
+    pub(crate) unsafe fn convert(&mut self, ctx: &ID3D11DeviceContext) -> Result<ID3D11Texture2D> {
+        match self {
+            Prep::Vp(c, v) => c.convert(v),
+            Prep::Ayuv(a) => a.convert(ctx),
+        }
+    }
+}
+
 impl Converter {
     pub(crate) unsafe fn new(dev: &ID3D11Device, ctx: &ID3D11DeviceContext, in_w: u32, in_h: u32, w: u32, h: u32, fps: u32, ten: bool) -> Result<Self> {
+        Self::with(dev, ctx, in_w, in_h, w, h, fps, if ten { ConvOut::P010 } else { ConvOut::Nv12 })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn with(dev: &ID3D11Device, ctx: &ID3D11DeviceContext, in_w: u32, in_h: u32, w: u32, h: u32, fps: u32, out: ConvOut) -> Result<Self> {
         let vd: ID3D11VideoDevice = dev.cast()?;
         let vc: ID3D11VideoContext1 = ctx.cast()?;
         let desc = D3D11_VIDEO_PROCESSOR_CONTENT_DESC {
@@ -169,15 +210,19 @@ impl Converter {
         };
         let en = vd.CreateVideoProcessorEnumerator(&desc)?;
         let vp = vd.CreateVideoProcessor(&en, 0)?;
-        let (in_cs, out_cs) = if ten {
-            (DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020, DXGI_COLOR_SPACE_YCBCR_STUDIO_G2084_LEFT_P2020)
-        } else {
-            (DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709, DXGI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P709)
+        let (in_cs, out_cs) = match out {
+            ConvOut::P010 => (DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020, DXGI_COLOR_SPACE_YCBCR_STUDIO_G2084_LEFT_P2020),
+            ConvOut::Nv12 => (DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709, DXGI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P709),
+            ConvOut::Ayuv => return Err(Error::new(E_INVALIDARG, "o processador de vídeo não grava AYUV; use Prep")),
         };
         vc.VideoProcessorSetStreamColorSpace1(&vp, 0, in_cs);
         vc.VideoProcessorSetOutputColorSpace1(&vp, out_cs);
         vc.VideoProcessorSetStreamFrameFormat(&vp, 0, D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE);
-        let fmt = if ten { DXGI_FORMAT_P010 } else { DXGI_FORMAT_NV12 };
+        let fmt = match out {
+            ConvOut::Nv12 => DXGI_FORMAT_NV12,
+            ConvOut::P010 => DXGI_FORMAT_P010,
+            ConvOut::Ayuv => DXGI_FORMAT_AYUV,
+        };
         let mut outputs = Vec::new();
         for _ in 0..16 {
             let td = D3D11_TEXTURE2D_DESC {
@@ -188,23 +233,23 @@ impl Converter {
                 Format: fmt,
                 SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
                 Usage: D3D11_USAGE_DEFAULT,
-                BindFlags: if ten {
-                    D3D11_BIND_RENDER_TARGET.0 as u32
-                } else {
+                BindFlags: if out == ConvOut::Nv12 {
                     (D3D11_BIND_RENDER_TARGET.0 | D3D11_BIND_VIDEO_ENCODER.0) as u32
+                } else {
+                    D3D11_BIND_RENDER_TARGET.0 as u32
                 },
                 CPUAccessFlags: 0,
                 MiscFlags: 0,
             };
             let mut t = None;
-            dev.CreateTexture2D(&td, None, Some(&mut t))?;
+            dev.CreateTexture2D(&td, None, Some(&mut t)).map_err(|e| Error::new(e.code(), format!("conversor: criar a textura {fmt:?}: {}", e.message())))?;
             let t = t.unwrap();
             let vd_desc = D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC {
                 ViewDimension: D3D11_VPOV_DIMENSION_TEXTURE2D,
                 Anonymous: D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC_0 { Texture2D: D3D11_TEX2D_VPOV { MipSlice: 0 } },
             };
             let mut v = None;
-            vd.CreateVideoProcessorOutputView(&t, &en, &vd_desc, Some(&mut v))?;
+            vd.CreateVideoProcessorOutputView(&t, &en, &vd_desc, Some(&mut v)).map_err(|e| Error::new(e.code(), format!("conversor: saída em {fmt:?}: {}", e.message())))?;
             outputs.push((t, v.unwrap()));
         }
         Ok(Self { vd, vc, en, vp, outputs, next: 0 })

@@ -11,6 +11,8 @@ pub mod live;
 pub mod live_enc;
 #[cfg(all(debug_assertions, feature = "stream"))]
 pub mod nvenc;
+#[cfg(all(debug_assertions, feature = "stream"))]
+pub mod nvdec;
 pub mod mux;
 pub mod shot;
 pub mod sound;

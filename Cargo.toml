@@ -15,9 +15,10 @@ blake3 = { version = "1.8.3", optional = true }
 data-encoding = { version = "2.2", optional = true }
 # NVENC direto (a DLL vem com o driver da NVIDIA; nada do SDK é redistribuído).
 mini-nvcodec = { version = "0.1", optional = true }
+mini-cuda = { version = "0.1", optional = true }
 
 [features]
-stream = ["dep:iroh", "dep:tokio", "dep:blake3", "dep:data-encoding", "dep:mini-nvcodec"]
+stream = ["dep:iroh", "dep:tokio", "dep:blake3", "dep:data-encoding", "dep:mini-nvcodec", "dep:mini-cuda"]
 
 [dependencies.windows]
 version = "0.62"

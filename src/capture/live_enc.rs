@@ -10,6 +10,15 @@ use super::mux::{Codec, Pkt};
 #[cfg(feature = "stream")]
 use super::nvenc::Nvenc;
 
+/// Formato do vídeo além do comum (4:2:0, 8 bits, SDR). Os dois só existem no NVENC direto.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct VideoFmt {
+    /// 10 bits, BT.2020 com PQ: a tela HDR do host chega HDR em quem assiste.
+    pub hdr10: bool,
+    /// Cor inteira em cada pixel: texto pequeno e linhas finas sem borrão de cor.
+    pub yuv444: bool,
+}
+
 pub enum LiveEncoder {
     Mf(Encoder),
     #[cfg(feature = "stream")]
@@ -17,18 +26,19 @@ pub enum LiveEncoder {
 }
 
 impl LiveEncoder {
-    pub fn open(dev: &ID3D11Device, codec: Codec, w: u32, h: u32, fps: u32, bitrate: u32) -> Result<Self> {
+    pub fn open(dev: &ID3D11Device, codec: Codec, w: u32, h: u32, fps: u32, bitrate: u32, fmt: VideoFmt) -> Result<Self> {
         let pick = std::env::var("PRISMA_ENC").unwrap_or_default();
+        let plain = fmt == VideoFmt::default();
         #[cfg(feature = "stream")]
         if pick != "mf" {
-            match unsafe { Nvenc::new(dev, codec, w, h, fps, bitrate) } {
+            match unsafe { Nvenc::new(dev, codec, w, h, fps, bitrate, fmt) } {
                 Ok(n) => return Ok(LiveEncoder::Nv(n)),
-                Err(e) if pick == "nvenc" => return Err(e),
+                Err(e) if pick == "nvenc" || !plain => return Err(e),
                 Err(_) => {}
             }
         }
-        if pick == "nvenc" {
-            return Err(Error::new(E_FAIL, "NVENC direto só existe compilando com --features stream"));
+        if pick == "nvenc" || !plain {
+            return Err(Error::new(E_FAIL, "NVENC direto (e HDR10 ou 4:4:4) só existe compilando com --features stream"));
         }
         Encoder::live(dev, codec, w, h, fps, bitrate).map(LiveEncoder::Mf)
     }

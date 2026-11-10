@@ -20,7 +20,19 @@ use windows::core::{Error, Interface, Result};
 use windows::Win32::Foundation::E_FAIL;
 use windows::Win32::Graphics::Direct3D11::*;
 
+use super::live_enc::VideoFmt;
 use super::mux::{Codec, Pkt};
+
+/// Liga a descrição de cor no fluxo (H.264 e HEVC).
+fn vui(v: &mut NV_ENC_CONFIG_H264_VUI_PARAMETERS, prim: i32, transfer: i32, matrix: i32) {
+    v.videoSignalTypePresentFlag = 1;
+    v.videoFormat = NV_ENC_VUI_VIDEO_FORMAT(5);
+    v.videoFullRangeFlag = 0;
+    v.colourDescriptionPresentFlag = 1;
+    v.colourPrimaries = NV_ENC_VUI_COLOR_PRIMARIES(prim);
+    v.transferCharacteristics = NV_ENC_VUI_TRANSFER_CHARACTERISTIC(transfer);
+    v.colourMatrix = NV_ENC_VUI_MATRIX_COEFFS(matrix);
+}
 
 pub struct Nvenc {
     api: &'static NvencApi,
@@ -31,6 +43,7 @@ pub struct Nvenc {
     regs: Vec<(usize, NV_ENC_REGISTERED_PTR, ID3D11Texture2D)>,
     w: u32,
     h: u32,
+    fmt: VideoFmt,
     idx: u32,
     force: Cell<bool>,
     ready: Vec<Pkt>,
@@ -54,7 +67,7 @@ fn ok(what: &str, st: NVENCSTATUS) -> Result<()> {
 }
 
 impl Nvenc {
-    pub unsafe fn new(dev: &ID3D11Device, codec: Codec, w: u32, h: u32, fps: u32, bitrate: u32) -> Result<Self> {
+    pub unsafe fn new(dev: &ID3D11Device, codec: Codec, w: u32, h: u32, fps: u32, bitrate: u32, fmt: VideoFmt) -> Result<Self> {
         let api = require_nvenc().map_err(|e| Error::new(E_FAIL, format!("sem NVENC: {e}")))?;
         // Abre a sessão na versão mais nova da API que o driver aceita.
         let mut enc: *mut c_void = std::ptr::null_mut();
@@ -84,6 +97,7 @@ impl Nvenc {
             regs: Vec::new(),
             w,
             h,
+            fmt,
             idx: 0,
             force: Cell::new(false),
             ready: Vec::new(),
@@ -95,7 +109,8 @@ impl Nvenc {
         me.init(codec, fps, bitrate)?;
         let (maj, min) = ver.major_minor();
         me.name = format!(
-            "NVENC direto (API {maj}.{min}{}{})",
+            "NVENC direto (API {maj}.{min}{}{}{})",
+            if fmt.hdr10 { ", HDR10" } else if fmt.yuv444 { ", 4:4:4" } else { "" },
             if me.intra_refresh { ", renovação gradual" } else { "" },
             if me.can_invalidate { ", invalida referência perdida" } else { "" }
         );
@@ -120,6 +135,12 @@ impl Nvenc {
             Codec::Hevc => NV_ENC_CODEC_HEVC_GUID,
             Codec::Av1 => NV_ENC_CODEC_AV1_GUID,
         };
+        if self.fmt.yuv444 && (codec == Codec::Av1 || self.cap(guid, NV_ENC_CAPS::SUPPORT_YUV444_ENCODE) == 0) {
+            return Err(Error::new(E_FAIL, "NVENC: esta placa não codifica 4:4:4 neste codec"));
+        }
+        if self.fmt.hdr10 && self.cap(guid, NV_ENC_CAPS::SUPPORT_10BIT_ENCODE) == 0 {
+            return Err(Error::new(E_FAIL, "NVENC: esta placa não codifica 10 bits neste codec"));
+        }
         self.intra_refresh = self.cap(guid, NV_ENC_CAPS::SUPPORT_INTRA_REFRESH) != 0;
         self.can_invalidate = self.cap(guid, NV_ENC_CAPS::SUPPORT_REF_PIC_INVALIDATION) != 0;
 
@@ -128,7 +149,44 @@ impl Nvenc {
         pc.version = self.ver.preset_config_ver();
         pc.presetCfg.version = self.ver.config_ver();
         ok("ler o preset", (self.api.nvEncGetEncodePresetConfigEx)(self.enc, guid, NV_ENC_PRESET_P1_GUID, tuning, &mut pc))?;
-        let mut cfg = pc.presetCfg;
+
+        let mut ip: NV_ENC_INITIALIZE_PARAMS = std::mem::zeroed();
+        ip.version = self.ver.initialize_params_ver();
+        ip.encodeGUID = guid;
+        ip.presetGUID = NV_ENC_PRESET_P1_GUID;
+        ip.encodeWidth = self.w;
+        ip.encodeHeight = self.h;
+        ip.darWidth = self.w;
+        ip.darHeight = self.h;
+        ip.frameRateNum = fps;
+        ip.frameRateDen = 1;
+        ip.enableEncodeAsync = 0;
+        ip.enablePTD = 1;
+        ip.tuningInfo = tuning;
+        // Alguma placa recusa a renovação gradual com estes ajustes: aí tenta sem ela.
+        for ir in [self.intra_refresh, false] {
+            let mut cfg = self.config(&pc.presetCfg, codec, fps, bitrate, ir);
+            ip.encodeConfig = &mut cfg;
+            let st = (self.api.nvEncInitializeEncoder)(self.enc, &mut ip);
+            if st == NVENCSTATUS::SUCCESS {
+                self.intra_refresh = ir;
+                break;
+            }
+            if !ir {
+                return Err(fail("iniciar o codificador", st));
+            }
+        }
+
+        let mut bb: NV_ENC_CREATE_BITSTREAM_BUFFER = std::mem::zeroed();
+        bb.version = self.ver.create_bitstream_buffer_ver();
+        ok("criar a saída", (self.api.nvEncCreateBitstreamBuffer)(self.enc, &mut bb))?;
+        self.out = bb.bitstreamBuffer;
+        Ok(())
+    }
+
+    /// Ajustes de transmissão em cima do preset.
+    unsafe fn config(&self, preset: &NV_ENC_CONFIG, codec: Codec, fps: u32, bitrate: u32, ir: bool) -> NV_ENC_CONFIG {
+        let mut cfg = *preset;
         cfg.version = self.ver.config_ver();
         cfg.gopLength = NVENC_INFINITE_GOPLENGTH;
         cfg.frameIntervalP = 1;
@@ -146,7 +204,16 @@ impl Nvenc {
         // Uma volta de renovação a cada 2 segundos, espalhada por um quarto de segundo.
         let period = fps * 2;
         let cnt = (fps / 4).max(4);
-        let ir = self.intra_refresh;
+        let (ten, full) = (self.fmt.hdr10, self.fmt.yuv444);
+        // Bit de profundidade em campo próprio desde a API 12.2; antes, num pedaço do campo de bits.
+        let new_depth = self.ver >= NvencApiVersion::V12_2;
+        // Cor: BT.2020 com PQ no HDR10, BT.709 no resto (quem assiste converte de volta com a mesma).
+        let (prim, transfer, matrix) = if ten { (9, 16, 9) } else { (1, 1, 1) };
+        if full {
+            cfg.profileGUID = if codec == Codec::H264 { NV_ENC_H264_PROFILE_HIGH_444_GUID } else { NV_ENC_HEVC_PROFILE_FREXT_GUID };
+        } else if ten && codec == Codec::Hevc {
+            cfg.profileGUID = NV_ENC_HEVC_PROFILE_MAIN10_GUID;
+        }
         match codec {
             Codec::H264 => {
                 let c = &mut cfg.encodeCodecConfig.h264Config;
@@ -157,6 +224,10 @@ impl Nvenc {
                     c.intraRefreshPeriod = period;
                     c.intraRefreshCnt = cnt;
                 }
+                if full {
+                    c.chromaFormatIDC = 3;
+                }
+                vui(&mut c.h264VUIParameters, prim, transfer, matrix);
             }
             Codec::Hevc => {
                 let c = &mut cfg.encodeCodecConfig.hevcConfig;
@@ -167,6 +238,18 @@ impl Nvenc {
                     c.intraRefreshPeriod = period;
                     c.intraRefreshCnt = cnt;
                 }
+                if full {
+                    c.set_chromaFormatIDC(3);
+                }
+                if ten {
+                    if new_depth {
+                        c.inputBitDepth = NV_ENC_BIT_DEPTH::DEPTH_10;
+                        c.outputBitDepth = NV_ENC_BIT_DEPTH::DEPTH_10;
+                    } else {
+                        c.set_pixelBitDepthMinus8(2);
+                    }
+                }
+                vui(&mut c.hevcVUIParameters, prim, transfer, matrix);
             }
             Codec::Av1 => {
                 let c = &mut cfg.encodeCodecConfig.av1Config;
@@ -177,43 +260,33 @@ impl Nvenc {
                     c.intraRefreshPeriod = period;
                     c.intraRefreshCnt = cnt;
                 }
+                if ten {
+                    if new_depth {
+                        c.inputBitDepth = NV_ENC_BIT_DEPTH::DEPTH_10;
+                        c.outputBitDepth = NV_ENC_BIT_DEPTH::DEPTH_10;
+                    } else {
+                        c.set_inputPixelBitDepthMinus8_12x(2);
+                        c.set_pixelBitDepthMinus8_12x(2);
+                    }
+                }
+                c.colorPrimaries = NV_ENC_VUI_COLOR_PRIMARIES(prim);
+                c.transferCharacteristics = NV_ENC_VUI_TRANSFER_CHARACTERISTIC(transfer);
+                c.matrixCoefficients = NV_ENC_VUI_MATRIX_COEFFS(matrix);
+                c.colorRange = 0;
             }
         }
+        cfg
+    }
 
-        let mut ip: NV_ENC_INITIALIZE_PARAMS = std::mem::zeroed();
-        ip.version = self.ver.initialize_params_ver();
-        ip.encodeGUID = guid;
-        ip.presetGUID = NV_ENC_PRESET_P1_GUID;
-        ip.encodeWidth = self.w;
-        ip.encodeHeight = self.h;
-        ip.darWidth = self.w;
-        ip.darHeight = self.h;
-        ip.frameRateNum = fps;
-        ip.frameRateDen = 1;
-        ip.enableEncodeAsync = 0;
-        ip.enablePTD = 1;
-        ip.encodeConfig = &mut cfg;
-        ip.tuningInfo = tuning;
-        let st = (self.api.nvEncInitializeEncoder)(self.enc, &mut ip);
-        if st != NVENCSTATUS::SUCCESS && ir {
-            // Alguma placa recusa a renovação gradual com estes ajustes: tenta sem ela.
-            self.intra_refresh = false;
-            let mut cfg2 = pc.presetCfg;
-            cfg2.version = self.ver.config_ver();
-            cfg2.gopLength = NVENC_INFINITE_GOPLENGTH;
-            cfg2.frameIntervalP = 1;
-            cfg2.rcParams = cfg.rcParams;
-            ip.encodeConfig = &mut cfg2;
-            ok("iniciar o codificador", (self.api.nvEncInitializeEncoder)(self.enc, &mut ip))?;
+    /// Formato da textura que entra: NV12, P010 (HDR10) ou AYUV (4:4:4).
+    fn buffer_format(&self) -> NV_ENC_BUFFER_FORMAT {
+        if self.fmt.yuv444 {
+            NV_ENC_BUFFER_FORMAT::AYUV
+        } else if self.fmt.hdr10 {
+            NV_ENC_BUFFER_FORMAT::YUV420_10BIT
         } else {
-            ok("iniciar o codificador", st)?;
+            NV_ENC_BUFFER_FORMAT::NV12
         }
-
-        let mut bb: NV_ENC_CREATE_BITSTREAM_BUFFER = std::mem::zeroed();
-        bb.version = self.ver.create_bitstream_buffer_ver();
-        ok("criar a saída", (self.api.nvEncCreateBitstreamBuffer)(self.enc, &mut bb))?;
-        self.out = bb.bitstreamBuffer;
-        Ok(())
     }
 
     unsafe fn registered(&mut self, tex: &ID3D11Texture2D) -> Result<NV_ENC_REGISTERED_PTR> {
@@ -227,7 +300,7 @@ impl Nvenc {
         r.width = self.w;
         r.height = self.h;
         r.resourceToRegister = tex.as_raw();
-        r.bufferFormat = NV_ENC_BUFFER_FORMAT::NV12;
+        r.bufferFormat = self.buffer_format();
         r.bufferUsage = NV_ENC_BUFFER_USAGE::INPUT_IMAGE;
         ok("registrar a textura", (self.api.nvEncRegisterResource)(self.enc, &mut r))?;
         // Guarda a textura junto, para ela não sumir enquanto está registrada.
@@ -235,7 +308,7 @@ impl Nvenc {
         Ok(r.registeredResource)
     }
 
-    /// Codifica um quadro NV12 do tamanho combinado. O pacote sai em `pump`.
+    /// Codifica um quadro (NV12, P010 ou AYUV) do tamanho combinado. O pacote sai em `pump`.
     pub unsafe fn feed(&mut self, tex: &ID3D11Texture2D, pts: i64) -> Result<()> {
         let reg = self.registered(tex)?;
         let mut m: NV_ENC_MAP_INPUT_RESOURCE = std::mem::zeroed();

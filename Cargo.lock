@@ -2197,6 +2197,7 @@ dependencies = [
  "blake3",
  "data-encoding",
  "iroh",
+ "mini-cuda",
  "mini-nvcodec",
  "tokio",
  "windows",

@@ -25,8 +25,8 @@ use windows::Win32::UI::Input::KeyboardAndMouse::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
 use super::*;
-use crate::capture::live_enc::LiveEncoder;
-use crate::capture::engine::{bgra_texture, bitrate, even, Converter};
+use crate::capture::live_enc::{LiveEncoder, VideoFmt};
+use crate::capture::engine::{bgra_texture, bitrate, even, ConvOut, Prep};
 use crate::capture::hdr::ToneMap;
 use crate::capture::mux::{Codec, Pkt};
 use crate::capture::sound;
@@ -42,12 +42,13 @@ pub(super) struct Hello {
     hz: u32,
     codecs: u8,
     pid: u32,
+    flags: u8,
 }
 
 impl Hello {
     pub(super) fn from_msg(m: &Msg) -> Option<Self> {
         match *m {
-            Msg::Hello { w, h, hz, codecs, pid } => Some(Hello { w, h, hz, codecs, pid }),
+            Msg::Hello { w, h, hz, codecs, pid, flags } => Some(Hello { w, h, hz, codecs, pid, flags }),
             _ => None,
         }
     }
@@ -312,35 +313,68 @@ unsafe fn session(d: &D3d, link: &Arc<dyn Link>, hello: Hello, control: bool) ->
     // Automático: o menor entre os Hz dos dois lados.
     let fps = monitor_hz(mon).min(if hello.hz > 1 { hello.hz } else { 60 }).clamp(10, 240);
 
-    let mid = bgra_texture(&d.dev, src_w, src_h, DXGI_FORMAT_B8G8R8A8_UNORM)?;
-    let tone = if color.hdr { Some(ToneMap::new(&d.dev, &mid, false, color.white_nits)?) } else { None };
-    let mut conv = Converter::new(&d.dev, &d.ctx, src_w, src_h, out_w, out_h, fps, false)?;
-    let in_view = conv.input_view(&mid)?;
-
     let wanted: Option<Codec> = match std::env::var("PRISMA_CODEC").as_deref() {
         Ok("h264") => Some(Codec::H264),
         Ok("hevc") => Some(Codec::Hevc),
         Ok("av1") => Some(Codec::Av1),
         _ => None,
     };
+    // Formato do vídeo, do melhor ao comum. HDR10 quando as duas telas estão em HDR; 4:4:4 quando quem
+    // assiste pede, porque gasta mais rede. Se o NVENC daqui não fizer, cai para o próximo.
+    let want444 = hello.flags & DECODES_444 != 0;
+    let want_hdr = color.hdr && hello.flags & SEES_HDR != 0 && std::env::var("PRISMA_HDR10").as_deref() != Ok("0");
+    let full = VideoFmt { hdr10: false, yuv444: true };
+    let ten = VideoFmt { hdr10: true, yuv444: false };
+    let mut tries: Vec<(Codec, VideoFmt)> = Vec::new();
+    if want444 {
+        tries.push((Codec::Hevc, full));
+    }
+    if want_hdr {
+        tries.extend([(Codec::Av1, ten), (Codec::Hevc, ten)]);
+    }
+    tries.extend([Codec::Av1, Codec::Hevc, Codec::H264].map(|c| (c, VideoFmt::default())));
     let mut made = None;
-    for c in [Codec::Av1, Codec::Hevc, Codec::H264] {
-        if hello.codecs & codec_bit(c) == 0 || wanted.is_some_and(|w| w != c) {
+    for (c, vf) in tries {
+        // O 4:4:4 vai para o NVDEC de quem assiste, não para o Media Foundation da lista de codecs.
+        if (!vf.yuv444 && hello.codecs & codec_bit(c) == 0) || wanted.is_some_and(|w| w != c) {
             continue;
         }
         let bits = match std::env::var("PRISMA_MBPS").ok().and_then(|v| v.parse::<u32>().ok()) {
             Some(m) => m * 1_000_000,
             None => (bitrate(out_w, out_h, fps, c) as u64 * 2).min(150_000_000) as u32,
         };
-        if let Ok(e) = LiveEncoder::open(&d.dev, c, out_w, out_h, fps, bits) {
-            eprintln!("vídeo: {}x{} a {} quadros/s, {}, {:.1} Mbit/s ({})", out_w, out_h, fps, codec_name(c), bits as f64 / 1e6, e.name());
-            made = Some((e, c));
-            break;
+        // O 4:4:4 leva cerca de metade a mais de dados pela mesma nitidez.
+        let bits = if vf.yuv444 { (bits as u64 * 3 / 2).min(150_000_000) as u32 } else { bits };
+        match LiveEncoder::open(&d.dev, c, out_w, out_h, fps, bits, vf) {
+            Ok(e) => {
+                let extra = match (vf.hdr10, vf.yuv444) {
+                    (true, _) => ", HDR10",
+                    (_, true) => ", 4:4:4",
+                    _ => "",
+                };
+                eprintln!("vídeo: {}x{} a {} quadros/s, {}{}, {:.1} Mbit/s ({})", out_w, out_h, fps, codec_name(c), extra, bits as f64 / 1e6, e.name());
+                made = Some((e, c, vf));
+                break;
+            }
+            Err(e) if vf != VideoFmt::default() => eprintln!("vídeo: {}{} recusado ({}); tentando o próximo", codec_name(c), if vf.hdr10 { " HDR10" } else { " 4:4:4" }, e.message()),
+            Err(_) => {}
         }
     }
-    let Some((mut enc, codec)) = made else {
+    let Some((mut enc, codec, vf)) = made else {
         return Err(Error::new(E_FAIL, "nenhum codec em comum com quem assiste"));
     };
+
+    // HDR10 sai em PQ de 10 bits; senão a tela em HDR vira SDR antes de codificar.
+    let mid = bgra_texture(&d.dev, src_w, src_h, if vf.hdr10 { DXGI_FORMAT_R10G10B10A2_UNORM } else { DXGI_FORMAT_B8G8R8A8_UNORM })?;
+    let tone = if color.hdr { Some(ToneMap::new(&d.dev, &mid, vf.hdr10, color.white_nits)?) } else { None };
+    let out_fmt = if vf.yuv444 {
+        ConvOut::Ayuv
+    } else if vf.hdr10 {
+        ConvOut::P010
+    } else {
+        ConvOut::Nv12
+    };
+    let mut conv = Prep::new(&d.dev, &d.ctx, &mid, src_w, src_h, out_w, out_h, fps, out_fmt)?;
 
     let fmt = if color.hdr { DirectXPixelFormat::R16G16B16A16Float } else { DirectXPixelFormat::B8G8R8A8UIntNormalized };
     let pool = Direct3D11CaptureFramePool::CreateFreeThreaded(&d.rt, fmt, 2, size)?;
@@ -367,7 +401,7 @@ unsafe fn session(d: &D3d, link: &Arc<dyn Link>, hello: Hello, control: bool) ->
 
     let mut out = Vec::with_capacity(MTU);
     let mut buf = vec![0u8; 2048];
-    let info = Msg::Info { codec, w: out_w, h: out_h, fps, control, recover: enc.recovers() };
+    let info = Msg::Info { codec, w: out_w, h: out_h, fps, control, recover: enc.recovers(), hdr10: vf.hdr10, yuv444: vf.yuv444 };
     // Quadros enviados há pouco, com a hora de cada um, para invalidar os que se perderam.
     let mut sent: VecDeque<(u32, i64)> = VecDeque::new();
     write(&mut out, &info);
@@ -461,7 +495,7 @@ unsafe fn session(d: &D3d, link: &Arc<dyn Link>, hello: Hello, control: bool) ->
             enc.pump(&mut pkts)?;
             if enc.ready() {
                 if let Some(pts) = pending.take() {
-                    let t = conv.convert(&in_view)?;
+                    let t = conv.convert(&d.ctx)?;
                     enc.feed(&t, pts)?;
                     last_fed = pts;
                 }

@@ -37,8 +37,9 @@ use windows::Win32::System::WinRT::Direct3D11::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
 use super::decoder::{Decoded, Decoder};
-use super::live_enc::LiveEncoder;
-use super::engine::{bgra_texture, even, Converter};
+use super::engine::ConvOut;
+use super::live_enc::{LiveEncoder, VideoFmt};
+use super::engine::{bgra_texture, even, Prep};
 use super::hdr::ToneMap;
 use super::mux::{Codec, Pkt};
 use super::{d3d, monitor_color, monitor_item, D3d};
@@ -163,6 +164,7 @@ struct Run {
     mbps: u32,
     fps: u32,
     dd: bool,
+    fmt: VideoFmt,
 }
 
 /// De onde vêm os quadros da tela.
@@ -293,21 +295,57 @@ unsafe fn one(d: &D3d, mon: HMONITOR, codec: Codec, r: &Run) -> Result<String> {
         Source::Wgc { pool, session, event, token }
     };
 
-    let mid = bgra_texture(&d.dev, src_w, src_h, DXGI_FORMAT_B8G8R8A8_UNORM)?;
-    // Tela em HDR vira SDR antes de codificar (a opção A do estudo).
-    let tone = if color.hdr { Some(ToneMap::new(&d.dev, &mid, false, color.white_nits)?) } else { None };
-    let mut conv = Converter::new(&d.dev, &d.ctx, src_w, src_h, out_w, out_h, r.fps, false)?;
-    let in_view = conv.input_view(&mid)?;
-    let mut enc = LiveEncoder::open(&d.dev, codec, out_w, out_h, r.fps, bits)?;
+    let hdr10 = r.fmt.hdr10;
+    let mid = bgra_texture(&d.dev, src_w, src_h, if hdr10 { DXGI_FORMAT_R10G10B10A2_UNORM } else { DXGI_FORMAT_B8G8R8A8_UNORM })?;
+    // Tela em HDR vira SDR antes de codificar (a opção A do estudo). Com HDR10 pedido, sai PQ; numa
+    // tela SDR as cores ficam erradas, mas o caminho de 10 bits inteiro é exercitado.
+    let tone = if color.hdr || hdr10 { Some(ToneMap::new(&d.dev, &mid, hdr10, color.white_nits)?) } else { None };
+    let out_fmt = if r.fmt.yuv444 {
+        ConvOut::Ayuv
+    } else if hdr10 {
+        ConvOut::P010
+    } else {
+        ConvOut::Nv12
+    };
+    let mut conv = Prep::new(&d.dev, &d.ctx, &mid, src_w, src_h, out_w, out_h, r.fps, out_fmt)?;
+    let mut enc = LiveEncoder::open(&d.dev, codec, out_w, out_h, r.fps, bits, r.fmt)?;
     let mut dec_err = None;
-    let mut dec = match Decoder::new(&d.dev, codec, out_w, out_h, r.fps, enc.header().as_deref()) {
-        Ok(x) => Some(x),
-        Err(e) => {
-            dec_err = Some(format!("{e:?}"));
-            None
+    // O 4:4:4 vai para o NVDEC (o Media Foundation não decodifica 4:4:4).
+    let mut dec = if r.fmt.yuv444 {
+        None
+    } else {
+        match Decoder::new(&d.dev, codec, out_w, out_h, r.fps, enc.header().as_deref(), r.fmt.hdr10) {
+            Ok(x) => Some(x),
+            Err(e) => {
+                dec_err = Some(format!("{e:?}"));
+                None
+            }
         }
     };
-    let (dec_name, dec_gpu) = dec.as_ref().map(|x| (x.name.clone(), x.gpu)).unwrap_or_default();
+    #[cfg(feature = "stream")]
+    let mut nv = if r.fmt.yuv444 && codec == Codec::Hevc {
+        match super::nvdec::Nvdec::new(&d.dev, out_w, out_h) {
+            Ok(x) => Some(x),
+            Err(e) => {
+                dec_err = Some(format!("{e:?}"));
+                None
+            }
+        }
+    } else {
+        None
+    };
+    if r.fmt.yuv444 && codec != Codec::Hevc {
+        dec_err = Some("o 4:4:4 só se decodifica em HEVC (NVDEC)".into());
+    }
+    let (dec_name, dec_gpu) = match &dec {
+        Some(x) => (x.name.clone(), x.gpu),
+        #[cfg(feature = "stream")]
+        None if nv.is_some() => (
+            format!("NVDEC 4:4:4, {}", if nv.as_ref().is_some_and(|n| n.direct) { "cópia direta na placa" } else { "cópia pela memória" }),
+            true,
+        ),
+        None => Default::default(),
+    };
     let mut q = None;
     d.dev.CreateQuery(&D3D11_QUERY_DESC { Query: D3D11_QUERY_EVENT, MiscFlags: 0 }, Some(&mut q))?;
     let q = q.unwrap();
@@ -366,12 +404,15 @@ unsafe fn one(d: &D3d, mon: HMONITOR, codec: Codec, r: &Run) -> Result<String> {
         enc.pump(&mut pkts)?;
         if enc.ready() {
             if let Some((pts, got)) = pending.take() {
-                let t = conv.convert(&in_view)?;
+                let t = conv.convert(&d.ctx)?;
+                // A hora vem antes de entregar: o NVENC codifica dentro da chamada (e espera a GPU
+                // terminar a conversão), então esse tempo é da codificação, não do preparo.
+                let fed = now();
                 enc.feed(&t, pts)?;
                 last_fed = pts;
                 if pts >= count_from {
                     frames += 1;
-                    times.insert(pts, Times { comp: pts, got, fed: now(), ..Default::default() });
+                    times.insert(pts, Times { comp: pts, got, fed, ..Default::default() });
                 }
             }
         }
@@ -415,7 +456,23 @@ unsafe fn one(d: &D3d, mon: HMONITOR, codec: Codec, r: &Run) -> Result<String> {
                     dec = None;
                     continue;
                 }
-                mark(d, &q, &decoded, &mut times);
+                mark(d, &q, &decoded.iter().map(|f| f.pts).collect::<Vec<_>>(), &mut times);
+            }
+            #[cfg(feature = "stream")]
+            if let Some(n) = &mut nv {
+                match n.decode(&d.ctx, &p.data, p.pts) {
+                    Ok(true) => mark(d, &q, &[p.pts], &mut times),
+                    Ok(false) => {}
+                    Err(_) if drop_every > 0 => {
+                        dec_errors += 1;
+                        enc.force_key();
+                        keys_asked += 1;
+                    }
+                    Err(e) => {
+                        dec_err = Some(format!("{e:?}"));
+                        nv = None;
+                    }
+                }
             }
         }
         if let Some(dc) = &mut dec {
@@ -424,10 +481,19 @@ unsafe fn one(d: &D3d, mon: HMONITOR, codec: Codec, r: &Run) -> Result<String> {
                 dec_err = Some(format!("{e:?}"));
                 dec = None;
             } else {
-                mark(d, &q, &decoded, &mut times);
+                mark(d, &q, &decoded.iter().map(|f| f.pts).collect::<Vec<_>>(), &mut times);
             }
         }
     }
+    // 4:4:4: confere a cor que voltou do NVDEC contra a da tela, em pontos parados da tela.
+    #[cfg(feature = "stream")]
+    let color_note = match &nv {
+        Some(_) if (out_w, out_h) != (src_w, src_h) => "  cor: só se confere sem mudar o tamanho\n".to_string(),
+        Some(n) => probe_444(d, &mid, n, out_w, out_h).unwrap_or_else(|e| format!("  cor: não deu para conferir ({e:?})\n")),
+        None => String::new(),
+    };
+    #[cfg(not(feature = "stream"))]
+    let color_note = String::new();
     let dd_note = match &src {
         Source::Dd { merged, mouse_only, .. } => {
             format!("  captura: Desktop Duplication, {merged} quadros juntados em outro, {mouse_only} só com o mouse\n")
@@ -446,6 +512,7 @@ unsafe fn one(d: &D3d, mon: HMONITOR, codec: Codec, r: &Run) -> Result<String> {
     let mut s = String::new();
     s += &format!("== {} ==\n", label(codec));
     s += &dd_note;
+    s += &color_note;
     s += &format!("  codificador: {}\n", enc.name());
     if !enc.refused().is_empty() {
         s += &format!("  ajustes recusados: {}\n", enc.refused().join(", "));
@@ -496,7 +563,61 @@ unsafe fn one(d: &D3d, mon: HMONITOR, codec: Codec, r: &Run) -> Result<String> {
 }
 
 /// Marca os quadros que saíram do decodificador e espera a GPU terminá-los.
-unsafe fn mark(d: &D3d, q: &ID3D11Query, decoded: &[Decoded], times: &mut HashMap<i64, Times>) {
+/// Cor da tela (RGB) em alguns pontos, o YUV que o BT.709 e o BT.601 dariam e o que o NVDEC devolveu.
+#[cfg(feature = "stream")]
+unsafe fn probe_444(d: &D3d, mid: &ID3D11Texture2D, n: &super::nvdec::Nvdec, w: u32, h: u32) -> Result<String> {
+    let td = D3D11_TEXTURE2D_DESC {
+        Width: 1,
+        Height: 1,
+        MipLevels: 1,
+        ArraySize: 1,
+        Format: DXGI_FORMAT_B8G8R8A8_UNORM,
+        SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+        Usage: D3D11_USAGE_STAGING,
+        BindFlags: 0,
+        CPUAccessFlags: D3D11_CPU_ACCESS_READ.0 as u32,
+        MiscFlags: 0,
+    };
+    let mut st = None;
+    d.dev.CreateTexture2D(&td, None, Some(&mut st))?;
+    let st = st.unwrap();
+    let yuv = |r: f64, g: f64, b: f64, kr: f64, kb: f64| {
+        let y = kr * r + (1.0 - kr - kb) * g + kb * b;
+        let u = (b - y) / (2.0 * (1.0 - kb));
+        let v = (r - y) / (2.0 * (1.0 - kr));
+        [(16.0 + 219.0 * y).round() as i32, (128.0 + 224.0 * u).round() as i32, (128.0 + 224.0 * v).round() as i32]
+    };
+    let mut s = String::new();
+    let (mut e709, mut e601) = (0i32, 0i32);
+    for (fx, fy) in [(1, 1), (3, 1), (1, 3), (3, 3), (2, 2), (5, 7), (7, 5)] {
+        let (x, y) = (w * fx / 8, h * fy / 8);
+        let bx = D3D11_BOX { left: x, top: y, front: 0, right: x + 1, bottom: y + 1, back: 1 };
+        d.ctx.CopySubresourceRegion(&st, 0, 0, 0, 0, mid, 0, Some(&bx));
+        let mut m = D3D11_MAPPED_SUBRESOURCE::default();
+        d.ctx.Map(&st, 0, D3D11_MAP_READ, 0, Some(&mut m))?;
+        let px = std::slice::from_raw_parts(m.pData as *const u8, 4);
+        let (b, g, r) = (px[0] as f64 / 255.0, px[1] as f64 / 255.0, px[2] as f64 / 255.0);
+        d.ctx.Unmap(&st, 0);
+        let got = n.yuv_at(&d.dev, &d.ctx, x, y)?;
+        let (a, c) = (yuv(r, g, b, 0.2126, 0.0722), yuv(r, g, b, 0.299, 0.114));
+        let got = got.map(|v| v as i32);
+        e709 += (0..3).map(|i| (a[i] - got[i]).abs()).sum::<i32>();
+        e601 += (0..3).map(|i| (c[i] - got[i]).abs()).sum::<i32>();
+        s += &format!(
+            "  cor em {x},{y}: RGB {:.0},{:.0},{:.0} · BT.709 daria {:?} · BT.601 daria {:?} · NVDEC deu {:?}\n",
+            r * 255.0,
+            g * 255.0,
+            b * 255.0,
+            a,
+            c,
+            got
+        );
+    }
+    s += &format!("  cor: diferença somada {e709} contra o BT.709 e {e601} contra o BT.601\n");
+    Ok(s)
+}
+
+unsafe fn mark(d: &D3d, q: &ID3D11Query, decoded: &[i64], times: &mut HashMap<i64, Times>) {
     if decoded.is_empty() {
         return;
     }
@@ -511,8 +632,8 @@ unsafe fn mark(d: &D3d, q: &ID3D11Query, decoded: &[Decoded], times: &mut HashMa
         std::hint::spin_loop();
     }
     let t_gpu = now();
-    for f in decoded {
-        if let Some(t) = times.get_mut(&f.pts) {
+    for pts in decoded {
+        if let Some(t) = times.get_mut(pts) {
             t.dec = t_dec;
             t.gpu = t_gpu;
         }
@@ -541,10 +662,16 @@ pub fn bench(arg: &str) {
     // Sem o quadrado, mede o que estiver na tela, como um jogo ou um vídeo.
     let square = p.next() != Some("0");
     let dd = p.next() == Some("dd");
-    let run = Run { secs, out_h, mbps, fps, dd };
+    // `PRISMA_FMT=hdr10` ou `444` mede o vídeo de 10 bits ou o 4:4:4 (só no NVENC direto).
+    let fmt = match std::env::var("PRISMA_FMT").as_deref() {
+        Ok("hdr10") => VideoFmt { hdr10: true, yuv444: false },
+        Ok("444") => VideoFmt { hdr10: false, yuv444: true },
+        _ => VideoFmt::default(),
+    };
+    let run = Run { secs, out_h, mbps, fps, dd, fmt };
 
     let mut s = String::from("Bancada da transmissão (fase 0)\n");
-    s += "Etapas: captura = do momento em que a tela do PC mostra o quadro (o relógio da captura) até ele chegar ao Prisma, e negativo quer dizer que chegou antes de aparecer; preparo = cópia, conversão de cor e escala na GPU até entregar ao codificador, contando a espera pelo codificador; codificação = até o pacote sair; decodificação = até o quadro sair do decodificador; GPU pronta = até a GPU terminar o quadro decodificado; total = do quadro na tela do PC até o quadro decodificado pronto, sem a rede e sem mostrar na outra tela.\n";
+    s += "Etapas: captura = do momento em que a tela do PC mostra o quadro (o relógio da captura) até ele chegar ao Prisma, e negativo quer dizer que chegou antes de aparecer; preparo = cópia, conversão de cor e escala na GPU até entregar ao codificador, contando a espera pelo codificador; codificação = até o pacote sair (no NVENC direto, que codifica dentro da chamada, conta também a GPU terminando a conversão; compare os codificadores por \"até codificado\"); decodificação = até o quadro sair do decodificador; GPU pronta = até a GPU terminar o quadro decodificado; total = do quadro na tela do PC até o quadro decodificado pronto, sem a rede e sem mostrar na outra tela.\n";
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
         let _ = MFStartup(MF_VERSION, MFSTARTUP_LITE);

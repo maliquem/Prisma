@@ -37,7 +37,7 @@ struct Frame {
 }
 
 enum Event {
-    Info { codec: Codec, w: u32, h: u32, fps: u32, control: bool },
+    Info { codec: Codec, w: u32, h: u32, fps: u32, control: bool, hdr10: bool, yuv444: bool },
     Frame(Frame),
 }
 
@@ -137,10 +137,10 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
         };
         sh.bytes.fetch_add(n as u64, Ordering::Relaxed);
         match read(&buf[..n]) {
-            Some(Msg::Info { codec, w, h, fps, control, recover: r }) => {
+            Some(Msg::Info { codec, w, h, fps, control, recover: r, hdr10, yuv444 }) => {
                 recover = r;
                 sh.got_info.store(true, Ordering::Relaxed);
-                push(Event::Info { codec, w, h, fps, control });
+                push(Event::Info { codec, w, h, fps, control, hdr10, yuv444 });
             }
             Some(Msg::Audio { seq, data, .. }) => {
                 sh.audio_blocks.fetch_add(1, Ordering::Relaxed);
@@ -364,17 +364,18 @@ fn release_all(k: &mut Keys) {
     }
 }
 
-/// Converte o quadro decodificado (NV12) para a tela e encaixa com faixas pretas.
+/// Converte o quadro decodificado (NV12, ou P010 no HDR10) para a tela e encaixa com faixas pretas.
 struct Scaler {
     vd: ID3D11VideoDevice,
     vc: ID3D11VideoContext1,
     en: ID3D11VideoProcessorEnumerator,
     vp: ID3D11VideoProcessor,
     size: (u32, u32, u32, u32),
+    hdr: bool,
 }
 
 impl Scaler {
-    unsafe fn new(d: &D3d, iw: u32, ih: u32, ow: u32, oh: u32, fps: u32) -> Result<Self> {
+    unsafe fn new(d: &D3d, iw: u32, ih: u32, ow: u32, oh: u32, fps: u32, hdr: bool) -> Result<Self> {
         let vd: ID3D11VideoDevice = d.dev.cast()?;
         let vc: ID3D11VideoContext1 = d.ctx.cast()?;
         let desc = D3D11_VIDEO_PROCESSOR_CONTENT_DESC {
@@ -389,8 +390,14 @@ impl Scaler {
         };
         let en = vd.CreateVideoProcessorEnumerator(&desc)?;
         let vp = vd.CreateVideoProcessor(&en, 0)?;
-        vc.VideoProcessorSetStreamColorSpace1(&vp, 0, DXGI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P709);
-        vc.VideoProcessorSetOutputColorSpace1(&vp, DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709);
+        // HDR10: o PQ e o BT.2020 passam direto para a janela, que também está em HDR10.
+        let (cin, cout) = if hdr {
+            (DXGI_COLOR_SPACE_YCBCR_STUDIO_G2084_LEFT_P2020, DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020)
+        } else {
+            (DXGI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P709, DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709)
+        };
+        vc.VideoProcessorSetStreamColorSpace1(&vp, 0, cin);
+        vc.VideoProcessorSetOutputColorSpace1(&vp, cout);
         vc.VideoProcessorSetStreamFrameFormat(&vp, 0, D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE);
         vc.VideoProcessorSetStreamAutoProcessingMode(&vp, 0, false);
         let black = D3D11_VIDEO_COLOR { Anonymous: D3D11_VIDEO_COLOR_0 { RGBA: D3D11_VIDEO_COLOR_RGBA { R: 0.0, G: 0.0, B: 0.0, A: 1.0 } } };
@@ -403,7 +410,7 @@ impl Scaler {
         let (x, y) = ((ow as i32 - dw) / 2, (oh as i32 - dh) / 2);
         vc.VideoProcessorSetStreamDestRect(&vp, 0, true, Some(&RECT { left: x, top: y, right: x + dw, bottom: y + dh }));
         vc.VideoProcessorSetOutputTargetRect(&vp, true, Some(&RECT { left: 0, top: 0, right: ow as i32, bottom: oh as i32 }));
-        Ok(Self { vd, vc, en, vp, size: (iw, ih, ow, oh) })
+        Ok(Self { vd, vc, en, vp, size: (iw, ih, ow, oh), hdr })
     }
 
     unsafe fn blt(&self, tex: &ID3D11Texture2D, slice: u32, target: &ID3D11Texture2D) -> Result<()> {
@@ -667,8 +674,22 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
             codecs |= codec_bit(c);
         }
     }
+    // Tela em HDR: o host manda HDR10 se a dele também estiver. 4:4:4 só pedindo, porque abre o
+    // CUDA aqui e gasta mais rede.
+    let mut flags = 0u8;
+    if crate::capture::monitor_color(mon).hdr {
+        flags |= SEES_HDR;
+    }
+    #[cfg(feature = "stream")]
+    if std::env::var("PRISMA_444").as_deref() == Ok("1") {
+        if crate::capture::nvdec::can_444() {
+            flags |= DECODES_444;
+        } else {
+            eprintln!("4:4:4: esta placa não decodifica HEVC 4:4:4; fica o 4:2:0");
+        }
+    }
     let mut hello = Vec::new();
-    write(&mut hello, &Msg::Hello { w: screen_w, h: screen_h, hz, codecs, pid: std::process::id() });
+    write(&mut hello, &Msg::Hello { w: screen_w, h: screen_h, hz, codecs, pid: std::process::id(), flags });
     let wake = CreateEventW(None, false, false, None)?;
     let sh = Arc::new(Shared {
         queue: Mutex::new(VecDeque::new()),
@@ -702,6 +723,14 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
 
     let mut dec: Option<Decoder> = None;
     let mut info: Option<(Codec, u32, u32, u32)> = None;
+    // HDR10 e 4:4:4 do vídeo atual; a janela em HDR10.
+    let mut vfmt = (false, false);
+    let mut hdr_out = false;
+    // 4:4:4: o NVDEC e o desenho, com a hora do último quadro novo.
+    #[cfg(feature = "stream")]
+    let mut nv: Option<(crate::capture::nvdec::Nvdec, crate::capture::nvdec::Draw444)> = None;
+    #[cfg(feature = "stream")]
+    let mut nv_pts: Option<i64> = None;
     // Eventos de entrada recentes, repetidos em cada pacote: o primeiro tem o número `input_first`.
     let mut history: VecDeque<Input> = VecDeque::new();
     let mut input_first = 0u32;
@@ -741,22 +770,67 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         let mut last: Option<Decoded> = None;
         for e in events {
             match e {
-                Event::Info { codec, w, h, fps, control } => {
+                Event::Info { codec, w, h, fps, control, hdr10, yuv444 } => {
                     {
                         let mut k = KEYS.lock().unwrap();
                         k.control = control;
                         k.video = (w, h);
                     }
-                    if info != Some((codec, w, h, fps)) {
+                    if info != Some((codec, w, h, fps)) || vfmt != (hdr10, yuv444) {
                         info = Some((codec, w, h, fps));
+                        vfmt = (hdr10, yuv444);
                         scaler = None;
-                        dec = match Decoder::new(&d.dev, codec, w, h, fps, None) {
-                            Ok(x) => Some(x),
-                            Err(e) => {
-                                eprintln!("sem decodificador para {}: {e:?}", codec_name(codec));
-                                None
+                        dec = None;
+                        #[cfg(feature = "stream")]
+                        {
+                            nv = None;
+                        }
+                        // A janela muda para HDR10 (10 bits, PQ, BT.2020) e volta.
+                        if hdr10 != hdr_out {
+                            let fmt = if hdr10 { DXGI_FORMAT_R10G10B10A2_UNORM } else { DXGI_FORMAT_B8G8R8A8_UNORM };
+                            let cs = if hdr10 { DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 } else { DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709 };
+                            let done = swap.ResizeBuffers(0, 0, 0, fmt, DXGI_SWAP_CHAIN_FLAG(flags as i32)).and_then(|_| swap.cast::<IDXGISwapChain3>()?.SetColorSpace1(cs));
+                            match done {
+                                Ok(()) => hdr_out = hdr10,
+                                Err(e) => eprintln!("janela HDR10: {e:?}"),
                             }
-                        };
+                        }
+                        if yuv444 {
+                            #[cfg(feature = "stream")]
+                            {
+                                use crate::capture::nvdec::{Draw444, Nvdec};
+                                nv = match Nvdec::new(&d.dev, w, h).and_then(|n| Ok((n, Draw444::new(&d.dev, h)?))) {
+                                    Ok(x) => Some(x),
+                                    Err(e) => {
+                                        eprintln!("sem NVDEC para o 4:4:4: {e:?}");
+                                        None
+                                    }
+                                };
+                            }
+                            #[cfg(not(feature = "stream"))]
+                            eprintln!("o 4:4:4 só existe compilando com --features stream");
+                        } else {
+                            dec = match Decoder::new(&d.dev, codec, w, h, fps, None, hdr10) {
+                                Ok(x) => Some(x),
+                                Err(e) => {
+                                    eprintln!("sem decodificador para {}: {e:?}", codec_name(codec));
+                                    None
+                                }
+                            };
+                        }
+                    }
+                }
+                #[cfg(feature = "stream")]
+                Event::Frame(f) if nv.is_some() => {
+                    let Some((n, _)) = &mut nv else { continue };
+                    let t = now();
+                    match n.decode(&d.ctx, &f.data, f.pts) {
+                        Ok(true) => {
+                            second.decode.push(now() - t);
+                            nv_pts = Some(f.pts);
+                        }
+                        Ok(false) => {}
+                        Err(_) => sh.want_key.store(true, Ordering::Relaxed),
                     }
                 }
                 Event::Frame(f) => {
@@ -795,11 +869,21 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
             last_send = Instant::now();
         }
 
+        #[cfg(feature = "stream")]
+        if let (Some(pts), Some((n, draw))) = (nv_pts.take(), &nv) {
+            let (ow, oh) = client_size(hwnd);
+            let bb: ID3D11Texture2D = swap.GetBuffer(0)?;
+            if draw.draw(&d.dev, &d.ctx, n, &bb, ow, oh).is_ok() && swap.Present(0, present_flags).is_ok() {
+                let shown = now();
+                second.shown += 1;
+                second.e2e.push(shown + sh.offset.load(Ordering::Relaxed) - pts);
+            }
+        }
         if let (Some(f), Some((_, w, h, fps))) = (last, info) {
             if let Some((tex, slice)) = f.texture() {
                 let (ow, oh) = client_size(hwnd);
-                if scaler.as_ref().is_none_or(|s| s.size != (w, h, ow, oh)) {
-                    scaler = Scaler::new(&d, w, h, ow, oh, fps).ok();
+                if scaler.as_ref().is_none_or(|s| s.size != (w, h, ow, oh) || s.hdr != hdr_out) {
+                    scaler = Scaler::new(&d, w, h, ow, oh, fps, hdr_out).ok();
                 }
                 if let Some(s) = &scaler {
                     let bb: ID3D11Texture2D = swap.GetBuffer(0)?;
@@ -822,12 +906,18 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                 fill.push(sh.audio_fill.load(Ordering::Relaxed) as i64);
             }
             let fps_now = second.shown as f64 / tick.elapsed().as_secs_f64();
+            let extra = match vfmt {
+                (true, _) => " HDR10",
+                (_, true) => " 4:4:4",
+                _ => "",
+            };
             let title = match info {
                 Some((c, w, h, _)) => format!(
-                    "Prisma · {}x{} {} · {:.0} q/s · {:.1} Mbit/s · rede {:.1} ms · ponta a ponta {:.1} ms · perdidos {} · {}",
+                    "Prisma · {}x{} {}{} · {:.0} q/s · {:.1} Mbit/s · rede {:.1} ms · ponta a ponta {:.1} ms · perdidos {} · {}",
                     w,
                     h,
                     codec_name(c),
+                    extra,
                     fps_now,
                     mbps,
                     rtt as f64 / 10_000.0,
