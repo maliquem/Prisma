@@ -2,7 +2,6 @@
 //! No modo de controle, aplica o mouse e o teclado de quem assiste.
 
 use std::collections::HashSet;
-use std::io::ErrorKind;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -37,8 +36,7 @@ use crate::capture::{d3d, monitor_color, monitor_item, D3d};
 const SILENCE: Duration = Duration::from_secs(5);
 
 #[derive(Clone, Copy)]
-struct Hello {
-    from: SocketAddr,
+pub(super) struct Hello {
     w: u32,
     h: u32,
     hz: u32,
@@ -46,9 +44,61 @@ struct Hello {
     pid: u32,
 }
 
-enum End {
+impl Hello {
+    pub(super) fn from_msg(m: &Msg) -> Option<Self> {
+        match *m {
+            Msg::Hello { w, h, hz, codecs, pid } => Some(Hello { w, h, hz, codecs, pid }),
+            _ => None,
+        }
+    }
+}
+
+pub(super) enum End {
     Gone,
-    Again(Hello),
+    /// Quem assiste reabriu (mesmo canal) ou alguém chegou de outro endereço (só no UDP).
+    Again(Hello, Option<SocketAddr>),
+}
+
+/// Prepara o Windows e o Direct3D para compartilhar.
+pub(super) fn prepare() -> Option<D3d> {
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        let _ = MFStartup(MF_VERSION, MFSTARTUP_LITE);
+        let _ = timeBeginPeriod(1);
+    }
+    let d = match d3d() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("sem Direct3D: {e:?}");
+            return None;
+        }
+    };
+    unsafe {
+        if let Ok(mt) = d.ctx.cast::<ID3D11Multithread>() {
+            let _ = mt.SetMultithreadProtected(true);
+        }
+    }
+    Some(d)
+}
+
+/// Uma sessão com quem assiste, repetida enquanto ele reabrir no mesmo canal.
+/// Devolve o endereço de alguém novo que chegou pelo UDP, se for o caso.
+pub(super) fn serve(d: &D3d, link: Arc<dyn Link>, mut hello: Hello, control: bool) -> Option<(Hello, SocketAddr)> {
+    loop {
+        eprintln!("chegou quem assiste: tela {}x{} a {} Hz ({})", hello.w, hello.h, hello.hz, link.route());
+        match unsafe { session(d, &link, hello, control) } {
+            Ok(End::Gone) => {
+                eprintln!("quem assistia saiu");
+                return None;
+            }
+            Ok(End::Again(h, None)) => hello = h,
+            Ok(End::Again(h, Some(from))) => return Some((h, from)),
+            Err(e) => {
+                eprintln!("a sessão parou: {e:?}");
+                return None;
+            }
+        }
+    }
 }
 
 pub fn run(port: u16, control: bool) {
@@ -59,63 +109,32 @@ pub fn run(port: u16, control: bool) {
             return;
         }
     };
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-        let _ = MFStartup(MF_VERSION, MFSTARTUP_LITE);
-        let _ = timeBeginPeriod(1);
-    }
-    let d = match d3d() {
-        Ok(d) => d,
-        Err(e) => {
-            eprintln!("sem Direct3D: {e:?}");
-            return;
-        }
-    };
-    unsafe {
-        if let Ok(mt) = d.ctx.cast::<ID3D11Multithread>() {
-            let _ = mt.SetMultithreadProtected(true);
-        }
-    }
+    let Some(d) = prepare() else { return };
     let mode = if control { "com mouse e teclado de quem assiste" } else { "só para ver" };
     eprintln!("Prisma compartilhando ({mode}): esperando quem assiste na porta UDP {port}");
     let mut buf = vec![0u8; 2048];
-    let mut next: Option<Hello> = None;
+    let mut next: Option<(Hello, SocketAddr)> = None;
     loop {
-        let hello = match next.take() {
+        let (hello, from) = match next.take() {
             Some(h) => h,
             None => {
                 let _ = sock.set_nonblocking(false);
                 let _ = sock.set_read_timeout(None);
                 let Ok((n, from)) = sock.recv_from(&mut buf) else { continue };
-                match read(&buf[..n]) {
-                    Some(Msg::Hello { w, h, hz, codecs, pid }) => Hello { from, w, h, hz, codecs, pid },
-                    _ => continue,
+                match read(&buf[..n]).as_ref().and_then(Hello::from_msg) {
+                    Some(h) => (h, from),
+                    None => continue,
                 }
             }
         };
-        eprintln!("{} chegou: tela {}x{} a {} Hz", hello.from, hello.w, hello.h, hello.hz);
-        match unsafe { session(&d, &sock, hello, control) } {
-            Ok(End::Gone) => eprintln!("{} saiu", hello.from),
-            Ok(End::Again(h)) => next = Some(h),
-            Err(e) => eprintln!("a sessão parou: {e:?}"),
-        }
-    }
-}
-
-/// Manda um pacote; com a fila do Windows cheia, tenta de novo por um instante.
-fn send(sock: &UdpSocket, to: SocketAddr, b: &[u8]) {
-    let t = Instant::now();
-    loop {
-        match sock.send_to(b, to) {
-            Err(e) if e.kind() == ErrorKind::WouldBlock && t.elapsed() < Duration::from_millis(20) => std::hint::spin_loop(),
-            _ => return,
-        }
+        let Ok(s) = sock.try_clone() else { continue };
+        next = serve(&d, Arc::new(Udp::new(s, from)), hello, control);
     }
 }
 
 /// Som do PC em blocos de 5 ms. Com os dois lados no mesmo PC, tira o som de quem assiste,
 /// senão ele voltaria em eco.
-fn audio(sock: UdpSocket, peer: SocketAddr, exclude: Option<u32>, stop: Arc<AtomicBool>) {
+fn audio(link: Arc<dyn Link>, exclude: Option<u32>, stop: Arc<AtomicBool>) {
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
         let src = match exclude {
@@ -142,7 +161,7 @@ fn audio(sock: UdpSocket, peer: SocketAddr, exclude: Option<u32>, stop: Arc<Atom
                     block.extend_from_slice(&((v.clamp(-1.0, 1.0) * 32767.0) as i16).to_le_bytes());
                 }
                 write(&mut out, &Msg::Audio { seq, pts: now(), data: &block });
-                send(&sock, peer, &out);
+                link.send(&out);
                 seq = seq.wrapping_add(1);
             }
         }
@@ -281,8 +300,7 @@ impl Injector {
     }
 }
 
-unsafe fn session(d: &D3d, sock: &UdpSocket, hello: Hello, control: bool) -> Result<End> {
-    let peer = hello.from;
+unsafe fn session(d: &D3d, link: &Arc<dyn Link>, hello: Hello, control: bool) -> Result<End> {
     let mon = MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY);
     let item = monitor_item(mon)?;
     let color = monitor_color(mon);
@@ -339,23 +357,19 @@ unsafe fn session(d: &D3d, sock: &UdpSocket, hello: Hello, control: bool) -> Res
     capture.StartCapture()?;
 
     let stop_audio = Arc::new(AtomicBool::new(false));
-    let audio_thread = match sock.try_clone() {
-        Ok(s) => {
-            // Mesmo PC: tira o som da janela que assiste.
-            let exclude = (peer.ip().is_loopback() && hello.pid != 0).then_some(hello.pid);
-            let stop = stop_audio.clone();
-            std::thread::Builder::new().name("compartilhar-som".into()).spawn(move || audio(s, peer, exclude, stop)).ok()
-        }
-        Err(_) => None,
+    let audio_thread = {
+        // Mesmo PC: tira o som da janela que assiste.
+        let exclude = (link.same_pc() && hello.pid != 0).then_some(hello.pid);
+        let (l, stop) = (link.clone(), stop_audio.clone());
+        std::thread::Builder::new().name("compartilhar-som".into()).spawn(move || audio(l, exclude, stop)).ok()
     };
     let mut input = control.then(|| Injector::new(mon));
 
-    let _ = sock.set_nonblocking(true);
     let mut out = Vec::with_capacity(MTU);
     let mut buf = vec![0u8; 2048];
     let info = Msg::Info { codec, w: out_w, h: out_h, fps, control };
     write(&mut out, &info);
-    send(sock, peer, &out);
+    link.send(&out);
 
     let interval = 10_000_000i64 / fps as i64;
     let mut last_fed = i64::MIN / 2;
@@ -370,22 +384,19 @@ unsafe fn session(d: &D3d, sock: &UdpSocket, hello: Hello, control: bool) -> Res
         let _ = WaitForSingleObject(event, 1);
         // O que quem assiste mandou.
         loop {
-            match sock.recv_from(&mut buf) {
-                Ok((n, from)) => {
+            match link.recv(&mut buf, Duration::ZERO) {
+                Poll::Got(n) => {
                     let Some(m) = read(&buf[..n]) else { continue };
-                    if let Msg::Hello { w, h, hz, codecs, pid } = m {
-                        // Quem assiste reabriu, ou outro chegou: recomeça com a tela dele.
-                        result = End::Again(Hello { from, w, h, hz, codecs, pid });
+                    if let Some(h) = Hello::from_msg(&m) {
+                        // Quem assiste reabriu: recomeça com a tela dele.
+                        result = End::Again(h, None);
                         break 'run;
-                    }
-                    if from != peer {
-                        continue;
                     }
                     heard = Instant::now();
                     match m {
                         Msg::Ping { t } => {
                             write(&mut out, &Msg::Pong { t, host: now() });
-                            send(sock, peer, &out);
+                            link.send(&out);
                         }
                         Msg::KeyReq => enc.force_key(),
                         Msg::Input { first, events } => {
@@ -397,10 +408,15 @@ unsafe fn session(d: &D3d, sock: &UdpSocket, hello: Hello, control: bool) -> Res
                         _ => {}
                     }
                 }
-                Err(e) if e.kind() == ErrorKind::WouldBlock => break,
-                // Resposta de porta fechada do outro lado: o Windows avisa no próximo recv.
-                Err(e) if e.kind() == ErrorKind::ConnectionReset => continue,
-                Err(_) => break,
+                Poll::Stranger(n, from) => {
+                    // Outro chegou pelo UDP: passa a vez para ele.
+                    if let Some(h) = read(&buf[..n]).as_ref().and_then(Hello::from_msg) {
+                        result = End::Again(h, Some(from));
+                        break 'run;
+                    }
+                }
+                Poll::Empty => break,
+                Poll::Closed => break 'run,
             }
         }
         if heard.elapsed() > SILENCE {
@@ -443,16 +459,16 @@ unsafe fn session(d: &D3d, sock: &UdpSocket, hello: Hello, control: bool) -> Res
             if p.key {
                 // Repete a descrição com cada quadro-chave, caso a primeira tenha se perdido.
                 write(&mut out, &info);
-                send(sock, peer, &out);
+                link.send(&out);
             }
-            let room = MTU - VIDEO_HEAD;
+            let room = link.mtu() - VIDEO_HEAD;
             let count = p.data.len().div_ceil(room).max(1);
             if count > u16::MAX as usize {
                 continue;
             }
             for (idx, chunk) in p.data.chunks(room).enumerate() {
                 write(&mut out, &Msg::Video { key: p.key, idx: idx as u16, count: count as u16, frame: frame_id, pts: p.pts, data: chunk });
-                send(sock, peer, &out);
+                link.send(&out);
             }
             frame_id = frame_id.wrapping_add(1);
         }

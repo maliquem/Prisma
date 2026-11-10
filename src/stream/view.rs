@@ -4,7 +4,7 @@
 //! Fechar a janela avisa o host. `PRISMA_MUTE=1` não toca o som.
 
 use std::collections::VecDeque;
-use std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
+use std::net::{ToSocketAddrs, UdpSocket};
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -46,6 +46,8 @@ struct Shared {
     queue: Mutex<VecDeque<Event>>,
     wake: isize,
     quit: AtomicBool,
+    /// O canal fechou do outro lado (só na internet).
+    closed: AtomicBool,
     got_info: AtomicBool,
     /// Ida e volta da rede, em 100 ns, da melhor medida recente.
     rtt: AtomicI64,
@@ -78,8 +80,7 @@ fn newer(a: u32, b: u32) -> bool {
     (a.wrapping_sub(b) as i32) > 0
 }
 
-fn receive(sock: UdpSocket, host: SocketAddr, hello: Vec<u8>, sh: Arc<Shared>) {
-    let _ = sock.set_read_timeout(Some(Duration::from_millis(20)));
+fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
     let mut buf = vec![0u8; 2048];
     let mut out = Vec::with_capacity(64);
     let mut cur: Option<Asm> = None;
@@ -101,21 +102,28 @@ fn receive(sock: UdpSocket, host: SocketAddr, hello: Vec<u8>, sh: Arc<Shared>) {
 
     while !sh.quit.load(Ordering::Relaxed) {
         if !sh.got_info.load(Ordering::Relaxed) && last_hello.elapsed() > Duration::from_secs(1) {
-            let _ = sock.send_to(&hello, host);
+            link.send(&hello);
             last_hello = Instant::now();
         }
         if last_ping.elapsed() > Duration::from_millis(500) {
             write(&mut out, &Msg::Ping { t: now() });
-            let _ = sock.send_to(&out, host);
+            link.send(&out);
             last_ping = Instant::now();
         }
         if waiting_key && sh.got_info.load(Ordering::Relaxed) && last_req.elapsed() > Duration::from_millis(150) {
             write(&mut out, &Msg::KeyReq);
-            let _ = sock.send_to(&out, host);
+            link.send(&out);
             last_req = Instant::now();
         }
-        let n = match sock.recv_from(&mut buf) {
-            Ok((n, from)) if from == host => n,
+        let n = match link.recv(&mut buf, Duration::from_millis(20)) {
+            Poll::Got(n) => n,
+            Poll::Closed => {
+                sh.closed.store(true, Ordering::Relaxed);
+                unsafe {
+                    let _ = SetEvent(HANDLE(sh.wake as *mut _));
+                }
+                break;
+            }
             _ => continue,
         };
         sh.bytes.fetch_add(n as u64, Ordering::Relaxed);
@@ -535,19 +543,31 @@ pub fn run(arg: &str) {
         eprintln!("endereço inválido: {target}");
         return;
     };
+    let sock = match UdpSocket::bind(("0.0.0.0", 0)) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("sem socket: {e}");
+            return;
+        }
+    };
+    open(Arc::new(Udp::new(sock, host)), out_file.as_deref(), secs);
+}
+
+/// Abre a janela que assiste num canal já aberto.
+pub(super) fn open(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) {
     unsafe {
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
         let _ = MFStartup(MF_VERSION, MFSTARTUP_LITE);
         let _ = timeBeginPeriod(1);
-        if let Err(e) = watch(host, out_file.as_deref(), secs) {
+        if let Err(e) = watch(link, out_file, secs) {
             eprintln!("parou: {e:?}");
         }
         let _ = MFShutdown();
     }
 }
 
-unsafe fn watch(host: SocketAddr, out_file: Option<&str>, secs: Option<u64>) -> Result<()> {
+unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) -> Result<()> {
     let d = d3d()?;
     if let Ok(mt) = d.ctx.cast::<ID3D11Multithread>() {
         let _ = mt.SetMultithreadProtected(true);
@@ -627,12 +647,12 @@ unsafe fn watch(host: SocketAddr, out_file: Option<&str>, secs: Option<u64>) -> 
     }
     let mut hello = Vec::new();
     write(&mut hello, &Msg::Hello { w: screen_w, h: screen_h, hz, codecs, pid: std::process::id() });
-    let sock = UdpSocket::bind(("0.0.0.0", 0)).map_err(|e| Error::new(E_FAIL, e.to_string()))?;
     let wake = CreateEventW(None, false, false, None)?;
     let sh = Arc::new(Shared {
         queue: Mutex::new(VecDeque::new()),
         wake: wake.0 as isize,
         quit: AtomicBool::new(false),
+        closed: AtomicBool::new(false),
         got_info: AtomicBool::new(false),
         rtt: AtomicI64::new(0),
         offset: AtomicI64::new(0),
@@ -652,8 +672,8 @@ unsafe fn watch(host: SocketAddr, out_file: Option<&str>, secs: Option<u64>) -> 
         std::thread::Builder::new().name("assistir-som".into()).spawn(move || play(sh2)).ok()
     };
     let rx = {
-        let (s2, sh2, hello2) = (sock.try_clone().map_err(|e| Error::new(E_FAIL, e.to_string()))?, sh.clone(), hello.clone());
-        std::thread::Builder::new().name("assistir-rede".into()).spawn(move || receive(s2, host, hello2, sh2)).unwrap()
+        let (l2, sh2, hello2) = (link.clone(), sh.clone(), hello.clone());
+        std::thread::Builder::new().name("assistir-rede".into()).spawn(move || receive(l2, hello2, sh2)).unwrap()
     };
 
     let mut dec: Option<Decoder> = None;
@@ -684,7 +704,7 @@ unsafe fn watch(host: SocketAddr, out_file: Option<&str>, secs: Option<u64>) -> 
             let _ = TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }
-        if secs.is_some_and(|s| start.elapsed() > Duration::from_secs(s)) {
+        if sh.closed.load(Ordering::Relaxed) || secs.is_some_and(|s| start.elapsed() > Duration::from_secs(s)) {
             let _ = DestroyWindow(hwnd);
             continue;
         }
@@ -746,7 +766,7 @@ unsafe fn watch(host: SocketAddr, out_file: Option<&str>, secs: Option<u64>) -> 
         if !history.is_empty() && (last_input > last_send || (last_input.elapsed() < Duration::from_millis(300) && last_send.elapsed() > Duration::from_millis(30))) {
             let list: Vec<Input> = history.iter().copied().collect();
             write_input(&mut input_pkt, input_first, &list);
-            let _ = sock.send_to(&input_pkt, host);
+            link.send(&input_pkt);
             last_send = Instant::now();
         }
 
@@ -779,7 +799,7 @@ unsafe fn watch(host: SocketAddr, out_file: Option<&str>, secs: Option<u64>) -> 
             let fps_now = second.shown as f64 / tick.elapsed().as_secs_f64();
             let title = match info {
                 Some((c, w, h, _)) => format!(
-                    "Prisma · {}x{} {} · {:.0} q/s · {:.1} Mbit/s · rede {:.1} ms · ponta a ponta {:.1} ms · perdidos {}",
+                    "Prisma · {}x{} {} · {:.0} q/s · {:.1} Mbit/s · rede {:.1} ms · ponta a ponta {:.1} ms · perdidos {} · {}",
                     w,
                     h,
                     codec_name(c),
@@ -787,9 +807,10 @@ unsafe fn watch(host: SocketAddr, out_file: Option<&str>, secs: Option<u64>) -> 
                     mbps,
                     rtt as f64 / 10_000.0,
                     pct(&mut second.e2e.clone(), 0.5),
-                    sh.lost.load(Ordering::Relaxed)
+                    sh.lost.load(Ordering::Relaxed),
+                    link.route()
                 ),
-                None => format!("Prisma · conectando a {host}"),
+                None => format!("Prisma · conectando ({})", link.route()),
             };
             let _ = SetWindowTextW(hwnd, &HSTRING::from(title));
             if start.elapsed() > warm {
@@ -809,7 +830,7 @@ unsafe fn watch(host: SocketAddr, out_file: Option<&str>, secs: Option<u64>) -> 
     }
     let mut bye = Vec::new();
     write(&mut bye, &Msg::Bye);
-    let _ = sock.send_to(&bye, host);
+    link.send(&bye);
     let _ = rx.join();
     let _ = CloseHandle(wake);
 
@@ -819,6 +840,8 @@ unsafe fn watch(host: SocketAddr, out_file: Option<&str>, secs: Option<u64>) -> 
         if let Some((c, w, h, fps)) = info {
             s += &format!("vídeo: {w}x{h} a {fps} quadros/s, {}\n", codec_name(c));
         }
+        s += &format!("caminho: {}
+", link.route());
         s += &format!("tela daqui: {screen_w}x{screen_h} a {hz} Hz, tearing {}\n", if tearing { "permitido" } else { "não" });
         s += &format!("quadros mostrados: {:.1}/s, perdidos: {}\n", total.shown as f64 / secs, sh.lost.load(Ordering::Relaxed));
         s += &format!("recebido: {:.1} Mbit/s em média\n", sh.bytes.load(Ordering::Relaxed) as f64 * 8.0 / start.elapsed().as_secs_f64() / 1e6);

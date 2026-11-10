@@ -1,12 +1,18 @@
-//! Compartilhamento de tela, fase 1: ver a tela de outro PC na rede local.
+//! Compartilhamento de tela, só na versão de teste por enquanto.
 //!
-//! Ainda sem pareamento nem criptografia, então só existe na versão de teste.
-//! `--stream-host[=porta]` espera quem assiste; `--stream-control[=porta]` faz o mesmo e aceita mouse
+//! Rede local, sem pareamento nem criptografia: `--stream-host[=porta]` espera quem assiste; `--stream-control[=porta]` faz o mesmo e aceita mouse
 //! e teclado de quem assiste. `--stream-view=endereço[:porta]|saida.txt|segundos` abre a janela que
 //! assiste (saída e segundos são opcionais, para medir sem ninguém olhando).
+//!
+//! Internet, com pareamento e criptografia (compilado com `--features stream`): veja `net.rs`.
 
 pub mod host;
+mod link;
+#[cfg(feature = "stream")]
+mod net;
 pub mod view;
+
+pub use link::*;
 
 use crate::capture::mux::Codec;
 
@@ -284,6 +290,29 @@ pub fn run_args() -> bool {
         if let Some(v) = a.strip_prefix("--stream-view=") {
             view::run(v);
             return true;
+        }
+        #[cfg(feature = "stream")]
+        {
+            if a == "--stream-net" || a == "--stream-net=control" {
+                net::host(a.ends_with("=control"));
+                return true;
+            }
+            if let Some(v) = a.strip_prefix("--stream-pair=") {
+                net::pair(v);
+                return true;
+            }
+            if let Some(v) = a.strip_prefix("--stream-connect=") {
+                net::connect(v);
+                return true;
+            }
+            if a == "--stream-devices" {
+                net::devices();
+                return true;
+            }
+            if let Some(v) = a.strip_prefix("--stream-forget=") {
+                net::forget(v);
+                return true;
+            }
         }
     }
     false
