@@ -158,18 +158,18 @@ pub(crate) struct Converter {
 pub(crate) enum ConvOut {
     Nv12,
     P010,
-    #[cfg_attr(not(debug_assertions), allow(dead_code))]
+    #[cfg_attr(not(any(debug_assertions, feature = "stream")), allow(dead_code))]
     Ayuv,
 }
 
 /// Prepara o quadro para o codificador: o processador de vídeo para NV12 e P010, um shader para AYUV.
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "stream"))]
 pub(crate) enum Prep {
     Vp(Converter, ID3D11VideoProcessorInputView),
     Ayuv(super::hdr::ToAyuv),
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "stream"))]
 impl Prep {
     #[allow(clippy::too_many_arguments)]
     pub(crate) unsafe fn new(dev: &ID3D11Device, ctx: &ID3D11DeviceContext, src: &ID3D11Texture2D, in_w: u32, in_h: u32, w: u32, h: u32, fps: u32, out: ConvOut) -> Result<Self> {

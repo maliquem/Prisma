@@ -52,18 +52,7 @@ fn rt() -> &'static tokio::runtime::Runtime {
     })
 }
 
-/// Com o serviço instalado, a identidade e os aparelhos ficam na pasta dele, que ela também abre.
-fn dir() -> PathBuf {
-    if SERVICE.load(std::sync::atomic::Ordering::Relaxed) || super::service::installed() {
-        super::service::data_dir()
-    } else {
-        user_dir()
-    }
-}
-
-fn user_dir() -> PathBuf {
-    crate::config::data_dir().join("compartilhar")
-}
+use super::{dir, user_dir};
 
 fn my_name() -> String {
     clean_name(&std::env::var("COMPUTERNAME").unwrap_or_else(|_| "PC".into()))
@@ -472,7 +461,8 @@ fn vpn_of(ip: IpAddr) -> Option<&'static str> {
 // ---------- Janelas de pergunta ----------
 
 fn message(text: &str, flags: MESSAGEBOX_STYLE) -> MESSAGEBOX_RESULT {
-    unsafe { MessageBoxW(None, &HSTRING::from(text), w!("Prisma: compartilhar tela"), flags | MB_TOPMOST | MB_SETFOREGROUND) }
+    let text: Vec<String> = text.split('\n').map(|l| crate::i18n::tr(l).into_owned()).collect();
+    unsafe { MessageBoxW(None, &HSTRING::from(text.join("\n")), w!("Prisma: compartilhar tela"), flags | MB_TOPMOST | MB_SETFOREGROUND) }
 }
 
 /// Pergunta se pareia. Devolve se deve perguntar a cada conexão, ou None se recusou.
@@ -594,6 +584,8 @@ pub fn host_service() {
 /// `invite`: permissões do convite que aparece no terminal; None no serviço.
 fn host_with(invite_perms: Option<u8>) {
     eprintln!("{NOTICE}");
+    host::emergency_key();
+    let _ = std::fs::write(host::room_path(), "");
     let sk = match identity() {
         Ok(k) => k,
         Err(e) => return eprintln!("{e}"),
@@ -774,6 +766,43 @@ pub fn allow(arg: &str) {
         Ok(()) => eprintln!("«{}» agora: {} (vale na próxima conexão)", dev.name, perms_text(perms)),
         Err(e) => eprintln!("não deu para salvar: {e}"),
     }
+}
+
+/// Um aparelho pareado, como a página Compartilhar tela mostra.
+#[derive(Clone, PartialEq)]
+pub struct DeviceRow {
+    /// Assiste a este PC (senão, é um PC que este assiste).
+    pub viewer: bool,
+    pub id: String,
+    pub name: String,
+    pub perms: u8,
+    pub ask: bool,
+}
+
+pub fn device_rows() -> Vec<DeviceRow> {
+    load().into_iter().map(|d| DeviceRow { viewer: d.role == Role::Viewer, id: hex(&d.id), name: d.name, perms: d.perms, ask: d.ask }).collect()
+}
+
+/// Muda permissões e confiança de um aparelho que assiste a este PC.
+pub fn set_device(id: &str, perms: u8, ask: bool) -> io::Result<()> {
+    let mut list = load();
+    for d in list.iter_mut().filter(|d| d.role == Role::Viewer && hex(&d.id) == id) {
+        d.perms = perms;
+        d.ask = ask;
+    }
+    save(&list)
+}
+
+pub fn forget_device(viewer: bool, id: &str) -> io::Result<()> {
+    let mut list = load();
+    list.retain(|d| !((d.role == Role::Viewer) == viewer && hex(&d.id) == id));
+    save(&list)
+}
+
+/// Nome e id curto deste PC, para a página.
+pub fn me() -> Option<(String, String)> {
+    let k = identity().ok()?;
+    Some((my_name(), k.public().fmt_short().to_string()))
 }
 
 pub fn forget(key: &str) {

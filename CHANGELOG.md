@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.11.0
+
+- New Share screen page (in testing): show and control another PC over the internet, for remote access or local co-op from a distance, with no account and no Prisma server. Pair once with an invite and a confirmation code; after that, the connection goes direct, through your VPN or through iroh's public relays, always end-to-end encrypted. / Nova página Compartilhar tela (em teste): mostre e controle outro PC pela internet, para acesso remoto ou co-op local à distância, sem conta e sem servidor do Prisma. Pareie uma vez com um convite e um código de confirmação; depois, a conexão vai direto, pela sua VPN ou pelos relés públicos do iroh, sempre criptografada de ponta a ponta.
+- Permissions per device: sound, controller, keyboard, mouse, copy and paste (text, both ways) and secure screen, plus trust or ask on every connection. / Permissões por aparelho: som, controle, teclado, mouse, copiar e colar (texto, nos dois sentidos) e tela segura, além de confiar ou perguntar a cada conexão.
+- Co-op for up to 4 people: each viewer's controller becomes a virtual Xbox controller on the host, with vibration, through ViGEmBus or VIIPER installed by you. Virtual controllers leave when the game in front has an anti-cheat. / Co-op para até 4 pessoas: o controle de cada pessoa vira um controle de Xbox virtual no host, com vibração, pelo ViGEmBus ou pelo VIIPER instalado por você. Os controles virtuais saem quando o jogo em primeiro plano tem anti-cheat.
+- HDR on the host is converted for viewers without HDR, or, if you choose, turned off while they watch and turned back on afterwards, even after a crash. / O HDR do host é convertido para quem não tem HDR, ou, se você escolher, desligado enquanto a pessoa assiste e ligado de volta depois, mesmo depois de uma queda.
+- Optional Windows service, only with your consent as administrator, to see and use the UAC prompt, the lock screen and the PIN screen remotely, even after a restart, and to send Ctrl+Alt+Del (Ctrl+Alt+End in the viewer). / Serviço opcional do Windows, só com o seu consentimento como administrador, para ver e usar de longe o aviso do UAC, a tela de bloqueio e a do PIN, mesmo depois de reiniciar, e mandar Ctrl+Alt+Del (Ctrl+Alt+End em quem assiste).
+- Ctrl+Alt+Shift+Q on the host disconnects everyone at once, and the page shows who is connected. / Ctrl+Alt+Shift+Q no host desconecta todo mundo na hora, e a página mostra quem está conectado.
+
 ## 0.10.0
 
 - Search shows installed programs first (on by default; Ctrl+Shift+Enter opens as administrator). / A pesquisa mostra os programas instalados primeiro (vem ligado; Ctrl+Shift+Enter abre como administrador).

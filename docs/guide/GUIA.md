@@ -187,6 +187,20 @@ Tira foto com anotações e grava vídeo em AV1, HEVC ou H.264. Com a tela em HD
 - **Replay:** em modo jogo, guarda os últimos segundos na memória. Ctrl + Alt + B salva.
 - **Não dá para:** capturar conteúdo protegido, como Netflix, que sai preto. H.264 não tem 10 bits: gravar em HDR10 usa HEVC. Gravar exige codificador de vídeo na GPU.
 
+## Compartilhar tela
+
+Em teste. Mostra e controla outro PC pela internet, para acesso remoto ou para jogar co-op local à distância, sem conta e sem servidor do Prisma. A imagem sai da placa de vídeo com pouco atraso, e o som do PC vai junto.
+
+- **Parear, uma vez:** no PC que vai ser visto, escolha o que quem parear pode fazer e clique em **Compartilhar este PC**. Depois clique em **Copiar convite** e mande o convite para o outro PC (ele vale 10 minutos e uma vez). No outro PC, cole o convite em **Parear com outro PC** e clique em **Parear**. Os dois mostram o mesmo código de confirmação: confira antes de aceitar. Na hora de aceitar, **Sim** confia no aparelho, e **Não** pareia mas pergunta a cada conexão.
+- **Conectar:** com o compartilhamento ligado no host, clique em **Assistir** no aparelho da lista. A conexão tenta primeiro o caminho direto, depois a sua VPN (Tailscale, ZeroTier) e, se nada passar, os relés públicos do iroh. Tudo vai criptografado de ponta a ponta.
+- **Permissões por aparelho:** som, controle, teclado, mouse, copiar e colar (texto, nos dois sentidos) e tela segura. Marque e desmarque na lista; vale na próxima conexão. Sem nenhuma, o aparelho só vê.
+- **Co-op:** até 4 pessoas ao mesmo tempo. O controle de cada uma vira um controle de Xbox virtual no host. Isso precisa do ViGEmBus (Nefarius) ou do VIIPER instalado no host; o Prisma não instala nenhum dos dois. Os controles saem sozinhos quando o jogo em primeiro plano tem anti-cheat.
+- **Na janela de quem assiste:** Ctrl + Alt + Shift + F alterna tela cheia (F11 também, quando o teclado não está liberado). Ctrl + Alt + End manda Ctrl + Alt + Del para o host.
+- **HDR:** o host converte a imagem HDR para quem não tem tela HDR. Se preferir, marque **Desligar o HDR quando quem assiste não tem HDR**: o HDR volta quando a sala esvazia, ou no próximo início do Prisma, se algo cair no meio.
+- **Serviço do Windows:** opcional. Com ele, quem tem a permissão **Tela segura** vê e usa o aviso do UAC, a tela de bloqueio e a do PIN, inclusive depois de o PC reiniciar sozinho. **Instalar** pede administrador e mostra o que muda antes de instalar. Com o serviço, **Criar convite** faz o convite. **Remover** desfaz tudo.
+- **Segurança:** Ctrl + Alt + Shift + Q, no host, desconecta todo mundo na hora. A página mostra quem está conectado. **Esquecer** tira um aparelho, que só volta com convite novo.
+- **Não dá para:** usar sem o Prisma aberto no host (a não ser com o serviço); capturar conteúdo protegido, que sai preto; ouvir o microfone de quem assiste.
+
 ## Widget
 
 Mostra CPU, GPU, RAM e VRAM por cima de tudo, em quatro estilos. Arraste para mudar de lugar. Atalho: Ctrl + Alt + W.
@@ -240,6 +254,8 @@ Todos podem ser trocados no programa.
 - **Ctrl + Alt + R e T:** gravar janela e gravar tela
 - **Ctrl + Alt + B:** salvar replay
 
+Os atalhos de Compartilhar tela são fixos: Ctrl + Alt + Shift + Q no host desconecta todo mundo; na janela de quem assiste, Ctrl + Alt + Shift + F alterna tela cheia e Ctrl + Alt + End manda Ctrl + Alt + Del.
+
 ## Limites gerais
 
 - Windows 11 de 64 bits.
@@ -247,3 +263,4 @@ Todos podem ser trocados no programa.
 - Os textos que vêm do próprio Windows, como descrições de serviços, ficam no idioma do Windows.
 - Tudo que o Prisma muda no sistema fica registrado em acoes.log, na pasta de dados.
 - O arquivo não tem assinatura digital, então o Windows pode avisar sobre editor desconhecido.
+- Compartilhar tela ainda está em teste: a conexão pela internet usa o iroh, de terceiros, e passa pelos relés públicos dele quando não há caminho direto.

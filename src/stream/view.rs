@@ -114,6 +114,10 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
     let mut audio_next: Option<u32> = None;
     // O host se recupera de perda sem quadro-chave (NVENC direto).
     let mut recover = false;
+    // Área de transferência, aberta quando o host dá a permissão.
+    let mut clip: Option<super::clip::Clip> = None;
+    let mut clip_in = super::clip::Pieces::default();
+    let mut clip_id = 0u16;
 
     let push = |e: Event| {
         sh.queue.lock().unwrap().push_back(e);
@@ -134,6 +138,18 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
         }
         if sh.want_key.swap(false, Ordering::Relaxed) {
             waiting_key = true;
+        }
+        if clip.is_none() && sh.perms.load(Ordering::Relaxed) & COPY != 0 {
+            clip = Some(super::clip::start());
+        }
+        if let Some(c) = &clip {
+            while let Ok(t) = c.changed.try_recv() {
+                clip_id = clip_id.wrapping_add(1);
+                let pk = super::clip::packets(&t, clip_id);
+                for p in pk.iter().chain(pk.iter()) {
+                    link.send(p);
+                }
+            }
         }
         if waiting_key && sh.got_info.load(Ordering::Relaxed) && last_req.elapsed() > Duration::from_millis(150) {
             write(&mut out, &Msg::KeyReq);
@@ -158,6 +174,11 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
                 sh.got_info.store(true, Ordering::Relaxed);
                 sh.perms.store(perms, Ordering::Relaxed);
                 push(Event::Info { codec, w, h, fps, perms, hdr10, yuv444 });
+            }
+            Some(Msg::Clip { id, part, parts, data }) => {
+                if let (Some(c), Some(t)) = (&clip, clip_in.add(id, part, parts, data)) {
+                    let _ = c.set.send(t);
+                }
             }
             Some(Msg::Rumble { pad, low, high }) => {
                 if pad < 4 {

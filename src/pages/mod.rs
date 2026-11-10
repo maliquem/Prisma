@@ -16,6 +16,19 @@ mod plan_edit;
 pub mod report;
 pub mod search;
 mod services;
+#[cfg(feature = "stream")]
+pub mod share;
+/// Cópia compilada sem o compartilhamento (`--no-default-features`).
+#[cfg(not(feature = "stream"))]
+pub mod share {
+    use super::*;
+
+    pub fn draw(ui: &mut Ui, _app: &mut App, a: Rect) {
+        header(ui, a, "Compartilhar tela", "Esta cópia do Prisma foi compilada sem o compartilhamento.");
+    }
+
+    pub fn shutdown() {}
+}
 mod startup;
 mod storage;
 mod tools;
@@ -47,6 +60,7 @@ pub enum Page {
     Volume,
     Hdr,
     Capture,
+    Share,
     Widget,
     Adjust,
     Report,
@@ -122,6 +136,14 @@ const ICON_ADJ: Icon = &[
     &[(8., 15.), (8., 19.)],
 ];
 
+const ICON_SHARE: Icon = &[
+    &[(3., 5.), (21., 5.), (21., 16.), (3., 16.), (3., 5.)],
+    &[(9., 20.), (15., 20.)],
+    &[(12., 16.), (12., 20.)],
+    &[(9., 12.), (12., 8.5), (15., 12.)],
+    &[(12., 8.5), (12., 13.5)],
+];
+
 const ICON_DISK: Icon = &[
     &[(4., 6.), (20., 6.), (20., 18.), (4., 18.), (4., 6.)],
     &[(4., 12.), (20., 12.)],
@@ -176,6 +198,7 @@ const NAV: &[(Page, &str, Icon)] = &[
     (Page::Volume, "Som", ICON_VOL),
     (Page::Hdr, "HDR", ICON_HDR),
     (Page::Capture, "Captura", ICON_CAP),
+    (Page::Share, "Compartilhar tela", ICON_SHARE),
     (Page::Widget, "Widget", ICON_WID),
     (Page::Adjust, "Configurações", ICON_ADJ),
 ];
@@ -288,6 +311,7 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
         Page::Volume => volume::draw(&mut ui, app, area),
         Page::Hdr => hdr::draw(&mut ui, app, area),
         Page::Capture => capture::draw(&mut ui, app, area),
+        Page::Share => share::draw(&mut ui, app, area),
         Page::Widget => widget::draw(&mut ui, app, area),
         Page::Adjust => adjust::draw(&mut ui, app, area),
         Page::Report => report::draw(&mut ui, app, area),

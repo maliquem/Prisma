@@ -187,6 +187,20 @@ Takes photos with annotations and records video in AV1, HEVC or H.264. With the 
 - **Replay:** in game mode, keeps the last seconds in memory. Ctrl + Alt + B saves.
 - **You can't:** capture protected content, such as Netflix, which comes out black. H.264 has no 10 bits: recording in HDR10 uses HEVC. Recording requires a video encoder on the GPU.
 
+## Share screen
+
+In testing. Shows and controls another PC over the internet, for remote access or to play local co-op from a distance, with no account and no Prisma server. The picture comes from the graphics card with little delay, and the PC's sound comes along.
+
+- **Pair, once:** on the PC that will be seen, choose what whoever pairs can do and click **Share this PC**. Then click **Copy invite** and send the invite to the other PC (it works once, for 10 minutes). On the other PC, paste the invite under **Pair with another PC** and click **Pair**. Both show the same confirmation code: check it before accepting. When accepting, **Yes** trusts the device, and **No** pairs but asks on every connection.
+- **Connect:** with sharing on at the host, click **Watch** on the device in the list. The connection tries the direct path first, then your VPN (Tailscale, ZeroTier) and, if nothing gets through, iroh's public relays. Everything is end-to-end encrypted.
+- **Permissions per device:** sound, controller, keyboard, mouse, copy and paste (text, both ways) and secure screen. Tick and untick them in the list; they apply on the next connection. With none, the device only watches.
+- **Co-op:** up to 4 people at once. Each person's controller becomes a virtual Xbox controller on the host. This needs ViGEmBus (Nefarius) or VIIPER installed on the host; Prisma installs neither. The controllers leave on their own when the game in front has an anti-cheat.
+- **In the viewer window:** Ctrl + Alt + Shift + F toggles fullscreen (F11 too, when the keyboard is not allowed). Ctrl + Alt + End sends Ctrl + Alt + Del to the host.
+- **HDR:** the host converts the HDR picture for viewers without an HDR screen. If you prefer, tick **Turn off HDR when the viewer has no HDR**: HDR comes back when the room empties, or the next time Prisma starts if something fails midway.
+- **Windows service:** optional. With it, whoever has the **Secure screen** permission sees and uses the UAC prompt, the lock screen and the PIN screen, even after the PC restarts on its own. **Install** asks for administrator and shows what changes before installing. With the service, **Create invite** makes the invite. **Remove** undoes everything.
+- **Safety:** Ctrl + Alt + Shift + Q, on the host, disconnects everyone at once. The page shows who is connected. **Forget** removes a device, which only comes back with a new invite.
+- **It cannot:** work without Prisma open on the host (unless you use the service); capture protected content, which comes out black; hear the viewer's microphone.
+
 ## Widget
 
 Shows CPU, GPU, RAM and VRAM on top of everything, in four styles. Drag it to move it. Shortcut: Ctrl + Alt + W.
@@ -240,6 +254,8 @@ All of them can be changed in the program.
 - **Ctrl + Alt + R and T:** record window and record screen
 - **Ctrl + Alt + B:** save replay
 
+Share screen shortcuts are fixed: Ctrl + Alt + Shift + Q on the host disconnects everyone; in the viewer window, Ctrl + Alt + Shift + F toggles fullscreen and Ctrl + Alt + End sends Ctrl + Alt + Del.
+
 ## General limits
 
 - 64-bit Windows 11.
@@ -247,3 +263,4 @@ All of them can be changed in the program.
 - Text that comes from Windows itself, such as service descriptions, stays in the Windows language.
 - Everything Prisma changes on the system is recorded in acoes.log, in the data folder.
 - The file has no digital signature, so Windows may warn about an unknown publisher.
+- Share screen is still in testing: the internet connection uses iroh, a third-party library, and goes through its public relays when there is no direct path.

@@ -64,7 +64,7 @@ pub fn run_args(a: &str) -> bool {
 
 /// Onde o serviço guarda a identidade, os aparelhos e o log.
 pub fn data_dir() -> PathBuf {
-    crate::sys::known_folder(&windows::Win32::UI::Shell::FOLDERID_ProgramData).join("Prisma").join("compartilhar")
+    super::service_dir()
 }
 
 /// Onde fica a cópia do Prisma que o serviço roda.
@@ -94,8 +94,22 @@ fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(Some(0)).collect()
 }
 
+/// O resultado também numa janela: pela página do Prisma, ninguém lê o terminal.
+fn tell(text: &str, ok: bool) {
+    eprintln!("{text}");
+    let icon = if ok { MB_ICONINFORMATION } else { MB_ICONWARNING };
+    unsafe {
+        MessageBoxW(None, &HSTRING::from(lines_tr(text)), w!("Prisma"), MB_OK | icon | MB_TOPMOST | MB_SETFOREGROUND);
+    }
+}
+
+/// Traduz linha por linha (a tabela de tradução tem uma linha por texto).
+fn lines_tr(text: &str) -> String {
+    text.split('\n').map(|l| crate::i18n::tr(l).into_owned()).collect::<Vec<_>>().join("\n")
+}
+
 fn ask(text: &str, flags: MESSAGEBOX_STYLE) -> bool {
-    unsafe { MessageBoxW(None, &HSTRING::from(text), w!("Prisma: serviço de compartilhar tela"), flags | MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2 | MB_TOPMOST | MB_SETFOREGROUND) == IDYES }
+    unsafe { MessageBoxW(None, &HSTRING::from(lines_tr(text)), w!("Prisma: serviço de compartilhar tela"), flags | MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2 | MB_TOPMOST | MB_SETFOREGROUND) == IDYES }
 }
 
 // ---------- Instalar e remover ----------
@@ -176,12 +190,12 @@ fn install() {
         return eprintln!("instalar o serviço pede administrador: abra o terminal como administrador e rode de novo");
     }
     let text = "Instalar o serviço de compartilhar tela do Prisma?\n\n\
-O que ele faz: roda como SYSTEM (o nível mais alto do Windows) e começa junto com o Windows. Com ele, os aparelhos pareados conseguem ver e usar o aviso do UAC, a tela de bloqueio e a do PIN, inclusive depois de o PC reiniciar sozinho. Mexer na tela segura e mandar Ctrl+Alt+Del pede a permissão \"sistema\" (ou Acesso total) no aparelho.\n\n\
+O que ele faz: roda como SYSTEM (o nível mais alto do Windows) e começa junto com o Windows. Com ele, os aparelhos pareados conseguem ver e usar o aviso do UAC, a tela de bloqueio e a do PIN, inclusive depois de o PC reiniciar sozinho. Mexer na tela segura e mandar Ctrl+Alt+Del pede a permissão \"Tela segura\" (ou Acesso total) no aparelho.\n\n\
 O que muda no PC:\n\
 • uma cópia do Prisma em Arquivos de Programas\\PrismaServico;\n\
 • a identidade e os aparelhos pareados passam para ProgramData\\Prisma\\compartilhar, que só o SYSTEM, os administradores e você abrem;\n\
 • o serviço \"Prisma: compartilhar tela\".\n\n\
-Para tirar tudo: prisma.exe --stream-service-remove";
+Para tirar tudo: Remover, na página Compartilhar tela do Prisma.";
     if !ask(text, MESSAGEBOX_STYLE(0)) {
         return eprintln!("instalação cancelada");
     }
@@ -195,12 +209,12 @@ Sem ela, o resto funciona; só o Ctrl+Alt+Del não.",
         );
     match unsafe { do_install(before, want_sas) } {
         Ok(()) => {
-            eprintln!("serviço instalado e ligado.");
             eprintln!("  convite para parear um aparelho novo: --stream-invite=permissões (ex.: --stream-invite=total)");
             eprintln!("  log: {}", data_dir().join("servico.log").display());
             eprintln!("  para tirar: --stream-service-remove");
+            tell("Serviço instalado e ligado. Para parear um aparelho novo, use Criar convite na página Compartilhar tela.", true);
         }
-        Err(e) => eprintln!("não instalou: {e}"),
+        Err(e) => tell(&format!("O serviço não foi instalado: {e}"), false),
     }
 }
 
@@ -301,7 +315,7 @@ fn remove() {
             eprintln!("aviso: não deu para apagar {}", dir.display());
         }
     }
-    eprintln!("serviço removido");
+    tell("Serviço removido.", true);
 }
 
 fn status() {

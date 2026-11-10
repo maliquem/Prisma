@@ -1,6 +1,6 @@
 [package]
 name = "prisma"
-version = "0.10.0"
+version = "0.11.0"
 edition = "2021"
 license-file = "LICENSE"
 description = "Utilitário leve para Windows: fullscreen, volume por programa, monitor, energia e captura"
@@ -8,7 +8,7 @@ description = "Utilitário leve para Windows: fullscreen, volume por programa, m
 [dependencies]
 windows-numerics = "0.3"
 windows-core = "0.62"
-# Compartilhar tela pela internet (fase de testes): só com --features stream, fora da versão publicada.
+# Compartilhar tela pela internet (em teste): ligado por padrão; `--no-default-features` compila sem ele.
 iroh = { version = "1.4.1", optional = true, default-features = false, features = ["tls-ring", "portmapper"] }
 tokio = { version = "1.44", optional = true, features = ["rt-multi-thread", "macros", "time", "sync"] }
 blake3 = { version = "1.8.3", optional = true }
@@ -21,6 +21,7 @@ vigem-client = { version = "0.1", optional = true, features = ["unstable_xtarget
 viiper-client = { version = "0.9", optional = true }
 
 [features]
+default = ["stream"]
 stream = ["dep:iroh", "dep:tokio", "dep:blake3", "dep:data-encoding", "dep:mini-nvcodec", "dep:mini-cuda", "dep:vigem-client", "dep:viiper-client"]
 
 [dependencies.windows]

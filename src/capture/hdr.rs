@@ -5,7 +5,7 @@ use windows::core::*;
 use windows::Win32::Graphics::Direct3D::Fxc::*;
 use windows::Win32::Graphics::Direct3D::*;
 use windows::Win32::Graphics::Direct3D11::*;
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "stream"))]
 use windows::Win32::Graphics::Dxgi::Common::*;
 
 pub(crate) const VS: &str = r#"
@@ -80,7 +80,7 @@ pub(crate) unsafe fn compile(src: &str, target: PCSTR) -> Result<Vec<u8>> {
     Ok(std::slice::from_raw_parts(b.GetBufferPointer() as *const u8, b.GetBufferSize()).to_vec())
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "stream"))]
 /// RGB para YUV 4:4:4 (BT.709, faixa limitada), gravado como AYUV: na memória V, U, Y e A.
 const PS_AYUV: &str = r#"
 Texture2D tex : register(t0);
@@ -94,7 +94,7 @@ float4 main(float4 p : SV_Position, float2 t : T) : SV_Target {
 }
 "#;
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "stream"))]
 /// Prepara o quadro do 4:4:4: escala e converte a cor num shader, porque o processador de vídeo do
 /// Windows não grava AYUV e o NVENC, recebendo RGB, gasta uns 10 ms convertendo um quadro 4K.
 pub struct ToAyuv {
@@ -108,7 +108,7 @@ pub struct ToAyuv {
     h: u32,
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "stream"))]
 impl ToAyuv {
     pub fn new(dev: &ID3D11Device, src: &ID3D11Texture2D, w: u32, h: u32) -> Result<Self> {
         unsafe {

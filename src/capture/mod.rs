@@ -1,17 +1,17 @@
 //! Captura com a API do Windows. Foto: um quadro levado para a CPU.
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "stream"))]
 pub mod decoder;
 pub mod encoder;
 pub mod engine;
 pub mod hdr;
 #[cfg(debug_assertions)]
 pub mod live;
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "stream"))]
 pub mod live_enc;
-#[cfg(all(debug_assertions, feature = "stream"))]
+#[cfg(feature = "stream")]
 pub mod nvenc;
-#[cfg(all(debug_assertions, feature = "stream"))]
+#[cfg(feature = "stream")]
 pub mod nvdec;
 pub mod mux;
 pub mod shot;

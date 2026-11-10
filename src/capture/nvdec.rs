@@ -450,6 +450,7 @@ impl Nvdec {
     }
 
     /// Y, U e V do último quadro neste ponto, lidos de volta da textura (para a bancada conferir a cor).
+    #[cfg_attr(not(debug_assertions), allow(dead_code))]
     pub fn yuv_at(&self, dev: &ID3D11Device, ctx: &ID3D11DeviceContext, x: u32, y: u32) -> Result<[u8; 3]> {
         let tex = &self.texs[if self.direct { self.st.shown } else { 0 }].0;
         unsafe {

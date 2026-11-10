@@ -52,6 +52,7 @@ impl LiveEncoder {
     }
 
     /// Ajustes que o codificador recusou (só o Media Foundation recusa).
+    #[cfg_attr(not(debug_assertions), allow(dead_code))]
     pub fn refused(&self) -> Vec<&'static str> {
         match self {
             LiveEncoder::Mf(e) => e.refused.clone(),
@@ -60,6 +61,7 @@ impl LiveEncoder {
         }
     }
 
+    #[cfg_attr(not(debug_assertions), allow(dead_code))]
     pub fn header(&self) -> Option<Vec<u8>> {
         match self {
             LiveEncoder::Mf(e) => e.header(),

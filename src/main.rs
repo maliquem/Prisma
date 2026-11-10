@@ -13,7 +13,6 @@ mod report;
 #[cfg(debug_assertions)]
 mod selftest;
 mod startup;
-#[cfg(debug_assertions)]
 mod stream;
 mod sys;
 mod ui;
@@ -56,11 +55,12 @@ fn main() {
     if let Some(v) = std::env::args().find_map(|a| a.strip_prefix("--set-taskmgr=").map(|v| v == "1")) {
         std::process::exit(if startup::set_replace_taskmgr(v) { 0 } else { 3 });
     }
-    // Transmissão de teste: roda ao lado de outras cópias, sem o nome único.
-    #[cfg(debug_assertions)]
+    // Compartilhar tela (host, quem assiste, serviço): roda ao lado de outras cópias, sem o nome único.
     if stream::run_args() {
         return;
     }
+    // Uma sessão que caiu com o HDR desligado (opção do compartilhamento): liga de volta.
+    std::thread::spawn(stream::host::restore_hdr);
     unsafe {
         // Antes do nome único: a cópia de administrador precisa encontrar o nome livre.
         let want_admin = cfg.always_admin && !background && updated.is_none() && !cfg!(debug_assertions);

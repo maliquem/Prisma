@@ -41,6 +41,8 @@ pub const WM_SHOW: u32 = WM_APP + 3;
 const WM_PICK: u32 = WM_APP + 4;
 const TIMER_HUD: usize = 7;
 const TIMER_METER: usize = 77;
+/// A página Compartilhar tela se atualiza enquanto está aberta.
+const TIMER_SHARE: usize = 78;
 const WM_UPDATED: u32 = WM_APP + 77;
 const WM_PICK_FS: u32 = WM_APP + 78;
 const WM_PICK_SND: u32 = WM_APP + 79;
@@ -849,6 +851,7 @@ pub fn start(background: bool) {
                 "--page=hdr" => Page::Hdr,
                 "--page=meter" => Page::Meter,
                 "--page=capture" => Page::Capture,
+                "--page=share" => Page::Share,
                 "--page=widget" => Page::Widget,
                 "--page=adjust" => Page::Adjust,
                 "--page=report" => Page::Report,
@@ -874,6 +877,7 @@ pub fn start(background: bool) {
 }
 
 pub fn shutdown() {
+    crate::pages::share::shutdown();
     with(|a| a.meter.leave(&mut a.cfg));
     with(|a| {
         if a.rec_start.is_some() {
@@ -2241,6 +2245,13 @@ impl App {
             }
         }
         if el >= delay {
+            // `--test-page=share`: a página Compartilhar tela por cima das Novidades; `--test-en`: inglês.
+            if arg("--test-page=").as_deref() == Some("share") {
+                self.page = Page::Share;
+            }
+            if args.iter().any(|a| a == "--test-en") {
+                crate::i18n::set_english(true);
+            }
             self.render_test(&out, popup);
             unsafe { PostQuitMessage(0) };
         }
@@ -2584,6 +2595,11 @@ impl App {
     }
 
     pub fn refresh_page(&mut self) {
+        if self.page == Page::Share {
+            unsafe {
+                SetTimer(Some(self.hub), TIMER_SHARE, 500, None);
+            }
+        }
         match self.page {
             Page::Volume => self.sessions = audio::sessions(),
             Page::Hdr => self.load_hdr(),
@@ -2891,6 +2907,12 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
             with(|a| {
                 if w.0 == TIMER_METER {
                     a.meter_paint();
+                } else if w.0 == TIMER_SHARE {
+                    if a.page == Page::Share && a.main.is_some() {
+                        a.invalidate();
+                    } else {
+                        let _ = KillTimer(Some(a.hub), TIMER_SHARE);
+                    }
                 } else {
                     a.hud_update();
                 }

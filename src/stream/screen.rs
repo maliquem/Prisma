@@ -312,7 +312,7 @@ float3 pq(float3 v) {
     float3 p = pow(max(v, 0), m1);
     return pow((c1 + c2 * p) / (1 + c3 * p), m2);
 }
-float3 lin(float3 c) { return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4); }
+float3 lin(float3 c) { return c <= 0.04045 ? c / 12.92 : pow(max((c + 0.055) / 1.055, 0), 2.4); }
 float4 main(float4 p : SV_Position, float2 t : T) : SV_Target {
     float4 c = tex.Sample(smp, t);
     if (pq_on > 0.5) {

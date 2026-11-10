@@ -73,7 +73,9 @@ pub struct Decoder {
     provides: bool,
     size: u32,
     fps: u32,
+    #[cfg_attr(not(debug_assertions), allow(dead_code))]
     pub name: String,
+    #[cfg_attr(not(debug_assertions), allow(dead_code))]
     pub gpu: bool,
     /// Saída de 10 bits (P010), para HDR10.
     ten: bool,

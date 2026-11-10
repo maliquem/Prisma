@@ -1,4 +1,4 @@
-//! Compartilhamento de tela, só na versão de teste por enquanto.
+//! Compartilhar tela: a página Compartilhar tela chama estes modos em processos próprios.
 //!
 //! Rede local, sem pareamento nem criptografia: `--stream-host[=porta]` espera quem assiste; `--stream-control[=porta]` faz o mesmo e aceita mouse
 //! e teclado de quem assiste. `--stream-view=endereço[:porta]|saida.txt|segundos` abre a janela que
@@ -6,14 +6,17 @@
 //!
 //! Internet, com pareamento e criptografia (compilado com `--features stream`): veja `net.rs`.
 
+mod clip;
 pub mod host;
 mod link;
 #[cfg(feature = "stream")]
 mod net;
+#[cfg(feature = "stream")]
+pub use net::{device_rows, forget_device, me, set_device};
 mod pads;
 mod screen;
 #[cfg(feature = "stream")]
-mod service;
+pub mod service;
 pub mod view;
 
 pub use link::*;
@@ -21,6 +24,84 @@ pub use link::*;
 use crate::capture::mux::Codec;
 
 pub const PORT: u16 = 47_600;
+
+/// Pasta dos dados do compartilhamento: a do serviço, quando ele está instalado (ela é a mesma
+/// para o ajudante SYSTEM e para quem usa o PC).
+pub fn dir() -> std::path::PathBuf {
+    let service = service_dir();
+    if SERVICE.load(std::sync::atomic::Ordering::Relaxed) || service.join("servico.tsv").exists() {
+        service
+    } else {
+        user_dir()
+    }
+}
+
+pub fn user_dir() -> std::path::PathBuf {
+    crate::config::data_dir().join("compartilhar")
+}
+
+pub fn service_dir() -> std::path::PathBuf {
+    crate::sys::known_folder(&windows::Win32::UI::Shell::FOLDERID_ProgramData).join("Prisma").join("compartilhar")
+}
+
+/// Opções do host, em `opcoes.txt` na pasta do compartilhamento (o serviço lê a mesma). As
+/// variáveis de ambiente de teste ainda valem por cima.
+#[derive(Clone, PartialEq, Debug)]
+pub struct Opts {
+    /// HDR do host numa tela sem HDR: 0 converte, 1 desliga o HDR do Windows enquanto alguém assiste.
+    pub hdr_off: bool,
+    /// Quantas pessoas assistem juntas.
+    pub guests: usize,
+    /// Ponte dos controles: auto, vigem ou viiper.
+    pub pads: String,
+    /// Permissões do convite que a página cria.
+    pub invite: u8,
+}
+
+impl Default for Opts {
+    fn default() -> Self {
+        Opts { hdr_off: false, guests: 3, pads: "auto".into(), invite: SOUND }
+    }
+}
+
+impl Opts {
+    pub fn path() -> std::path::PathBuf {
+        dir().join("opcoes.txt")
+    }
+
+    pub fn parse(text: &str) -> Self {
+        let mut o = Opts::default();
+        for line in text.lines() {
+            let Some((k, v)) = line.trim().split_once('=') else { continue };
+            match k {
+                "hdr_desligar" => o.hdr_off = v == "1",
+                "pessoas" => o.guests = v.parse().unwrap_or(3usize).clamp(1, 8),
+                "controles" if matches!(v, "auto" | "vigem" | "viiper") => o.pads = v.into(),
+                "convite" => o.invite = parse_perms(v).unwrap_or(SOUND),
+                _ => {}
+            }
+        }
+        o
+    }
+
+    #[cfg_attr(not(feature = "stream"), allow(dead_code))]
+    pub fn text(&self) -> String {
+        format!("hdr_desligar={}\npessoas={}\ncontroles={}\nconvite={}\n", self.hdr_off as u8, self.guests, self.pads, perms_key(self.invite))
+    }
+
+    pub fn load() -> Self {
+        Self::parse(&std::fs::read_to_string(Self::path()).unwrap_or_default())
+    }
+
+    #[cfg_attr(not(feature = "stream"), allow(dead_code))]
+    pub fn save(&self) -> std::io::Result<()> {
+        let p = Self::path();
+        if let Some(d) = p.parent() {
+            std::fs::create_dir_all(d)?;
+        }
+        std::fs::write(p, self.text())
+    }
+}
 
 /// Este processo é o ajudante do serviço (SYSTEM, na sessão de quem usa o PC).
 pub static SERVICE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -47,6 +128,7 @@ pub enum Kind {
     Rumble = 12,
     PadInfo = 13,
     Sas = 14,
+    Clip = 15,
 }
 
 // ---------- Permissões de quem assiste ----------
@@ -59,6 +141,8 @@ pub const KEYBOARD: u8 = 4;
 pub const MOUSE: u8 = 8;
 /// A tela segura do Windows (UAC, bloqueio, PIN) e o Ctrl+Alt+Del, só com o serviço.
 pub const SYSTEM: u8 = 16;
+/// Área de transferência, só texto, nos dois sentidos.
+pub const COPY: u8 = 32;
 pub const TOTAL: u8 = 0xFF;
 
 /// Predefinições: nome no arquivo e na linha de comando, nome na tela, permissões.
@@ -68,12 +152,13 @@ pub const PRESETS: [(&str, &str, u8); 4] = [
     ("teclado-mouse", "Ver, controle, teclado e mouse", SOUND | PAD | KEYBOARD | MOUSE),
     ("ver", "Só ver", SOUND),
 ];
-const PERM_NAMES: [(&str, &str, u8); 5] = [
+pub const PERM_NAMES: [(&str, &str, u8); 6] = [
     ("som", "som", SOUND),
     ("controle", "controle de jogo", PAD),
     ("teclado", "teclado", KEYBOARD),
     ("mouse", "mouse", MOUSE),
     ("sistema", "tela segura do Windows", SYSTEM),
+    ("copiar", "área de transferência", COPY),
 ];
 
 /// Lê uma predefinição ou uma lista como `som,controle`. `video` é só o vídeo, sem nada mais.
@@ -242,6 +327,8 @@ pub enum Msg<'a> {
     PadInfo { pad: u8, player: u8, slot: u8, why: u8 },
     /// Ctrl+Alt+Del no host (só com o serviço e a permissão `SYSTEM`).
     Sas,
+    /// Um pedaço de texto copiado: `part` de `parts`, do texto `id`.
+    Clip { id: u16, part: u8, parts: u8, data: &'a [u8] },
 }
 
 pub fn codec_bit(c: Codec) -> u8 {
@@ -364,6 +451,12 @@ pub fn write(out: &mut Vec<u8>, m: &Msg) {
             out.extend_from_slice(&[pad, player, slot, why]);
         }
         Msg::Sas => head(out, Kind::Sas),
+        Msg::Clip { id, part, parts, data } => {
+            head(out, Kind::Clip);
+            out.extend_from_slice(&id.to_le_bytes());
+            out.extend_from_slice(&[part, parts]);
+            out.extend_from_slice(data);
+        }
     }
 }
 
@@ -432,6 +525,7 @@ pub fn read(b: &[u8]) -> Option<Msg<'_>> {
         12 => Msg::Rumble { pad: *b.get(4)?, low: *b.get(5)?, high: *b.get(6)? },
         13 => Msg::PadInfo { pad: *b.get(4)?, player: *b.get(5)?, slot: *b.get(6)?, why: *b.get(7)? },
         14 => Msg::Sas,
+        15 => Msg::Clip { id: u16_at(b, 4)?, part: *b.get(6)?, parts: *b.get(7)?, data: b.get(8..)? },
         _ => return None,
     })
 }
@@ -543,6 +637,7 @@ mod tests {
         round(Msg::Rumble { pad: 2, low: 200, high: 7 });
         round(Msg::PadInfo { pad: 1, player: 3, slot: 2, why: PAD_OK });
         round(Msg::Sas);
+        round(Msg::Clip { id: 300, part: 1, parts: 3, data: b"texto" });
         round(Msg::Nack { frame: 77 });
         round(Msg::Hello { w: 3840, h: 2160, hz: 119, codecs: 7, pid: 4321, flags: SEES_HDR | DECODES_444 });
         round(Msg::Audio { seq: 9, pts: 10, data: &[0, 1, 2, 3] });
@@ -582,6 +677,10 @@ mod tests {
         assert_eq!(parse_perms(""), None);
         // Ida e volta pelo arquivo.
         assert_eq!(parse_perms("teclado,mouse,sistema"), Some(KEYBOARD | MOUSE | SYSTEM));
+        assert_eq!(parse_perms("copiar"), Some(COPY));
+        let o = Opts { hdr_off: true, guests: 2, pads: "vigem".into(), invite: SOUND | COPY };
+        assert_eq!(Opts::parse(&o.text()), o);
+        assert_eq!(Opts::parse("pessoas=99\ncontroles=outro"), Opts { guests: 8, ..Opts::default() });
         for p in [0, SOUND, PAD, SOUND | PAD, PAD | MOUSE, KEYBOARD | MOUSE, SOUND | PAD | KEYBOARD | MOUSE, SYSTEM | MOUSE, TOTAL] {
             assert_eq!(parse_perms(&perms_key(p)), Some(p), "{p}");
         }

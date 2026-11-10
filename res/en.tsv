@@ -1333,3 +1333,80 @@ Enter abre · Ctrl+Shift+Enter como administrador · Ctrl+Enter mostra na pasta	
 Enter abre · Ctrl+C copia o texto	Enter opens · Ctrl+C copies the text
 Enter roda · Ctrl+Shift+Enter como administrador · Tab completa	Enter runs · Ctrl+Shift+Enter as administrator · Tab completes
 Enter ou Tab completa · Esc fecha	Enter or Tab completes · Esc closes
+Compartilhar tela	Share screen
+Acesso remoto e co-op pela internet, sem conta. Em teste.	Remote access and online co-op, no account. In testing.
+Este PC	This PC
+O serviço do Windows compartilha este PC, inclusive a tela de bloqueio.	The Windows service shares this PC, lock screen included.
+Compartilhando. Os aparelhos pareados já podem conectar.	Sharing. Paired devices can connect now.
+Desligado.	Off.
+Quem parear agora pode	Whoever pairs now can
+Criar convite	Create invite
+Compartilhar este PC	Share this PC
+Copiar convite	Copy invite
+Convite copiado. Vale 10 minutos e uma vez.	Invite copied. It works once, for 10 minutes.
+Nenhum convite ainda	No invite yet
+Convite pronto: mande para o outro PC. Ele vale 10 minutos e uma vez, e a confirmação aparece aqui.	Invite ready: send it to the other PC. It works once, for 10 minutes, and the confirmation shows up here.
+O convite aparece quando o compartilhamento liga.	The invite shows up when sharing starts.
+Desligar o HDR quando quem assiste não tem HDR	Turn off HDR when the viewer has no HDR
+Pessoas ao mesmo tempo	People at once
+Controles virtuais	Virtual controllers
+Serviço do Windows instalado	Windows service installed
+Serviço do Windows	Windows service
+Para usar a tela de bloqueio, o UAC e o Ctrl+Alt+Del de longe. Pede administrador.	To use the lock screen, UAC and Ctrl+Alt+Del remotely. Needs administrator.
+Aguarde	Please wait
+Remover	Remove
+Instalar	Install
+Remover o serviço?	Remove the service?
+O compartilhamento da tela de bloqueio para, e os aparelhos pareados voltam para este usuário.	Lock screen sharing stops, and paired devices go back to this user.
+Instalar o serviço?	Install the service?
+O Prisma vai pedir administrador e mostrar o que muda no Windows antes de instalar. O serviço liga com o PC, mesmo antes do login.	Prisma will ask for administrator and show what changes in Windows before installing. The service starts with the PC, even before sign-in.
+Pela internet, a conexão usa o iroh (n0, licença MIT ou Apache-2.0). Sem caminho direto nem VPN, os pacotes passam pelos relés públicos da n0, sempre criptografados de ponta a ponta.	Over the internet, the connection uses iroh (n0, MIT or Apache-2.0 license). Without a direct path or VPN, packets go through n0's public relays, always end-to-end encrypted.
+Aparelhos pareados	Paired devices
+Parear com outro PC	Pair with another PC
+Convite do outro PC	Invite from the other PC
+Parear	Pair
+Isso não parece um convite do Prisma	That does not look like a Prisma invite
+Nenhum aparelho pareado. Ligue o compartilhamento neste PC e cole o convite no outro, ou o contrário.	No paired devices. Start sharing on this PC and paste the invite on the other one, or the other way around.
+Assiste a este PC	Watches this PC
+Este PC assiste a ele	This PC watches it
+Esquecer	Forget
+Controle	Controller
+Teclado	Keyboard
+Copiar e colar	Copy and paste
+Tela segura	Secure screen
+Perguntar a cada conexão	Ask on every connection
+Assistir	Watch
+Não deu para salvar. Com o serviço, abra o Prisma como administrador.	Could not save. With the service, open Prisma as administrator.
+Esquecer este aparelho?	Forget this device?
+«{}» vai precisar de um convite novo para conectar.	“{}” will need a new invite to connect.
+Só ver	View only
+Ver e usar controle	View and use a controller
+Ver, controle, teclado e mouse	View, controller, keyboard and mouse
+Acesso total	Full access
+Esta cópia do Prisma foi compilada sem o compartilhamento.	This copy of Prisma was built without screen sharing.
+Serviço instalado e ligado. Para parear um aparelho novo, use Criar convite na página Compartilhar tela.	Service installed and running. To pair a new device, use Create invite on the Share screen page.
+O serviço não foi instalado: {}	The service was not installed: {}
+Serviço removido.	Service removed.
+Instalar o serviço de compartilhar tela do Prisma?	Install Prisma's screen sharing service?
+O que ele faz: roda como SYSTEM (o nível mais alto do Windows) e começa junto com o Windows. Com ele, os aparelhos pareados conseguem ver e usar o aviso do UAC, a tela de bloqueio e a do PIN, inclusive depois de o PC reiniciar sozinho. Mexer na tela segura e mandar Ctrl+Alt+Del pede a permissão "Tela segura" (ou Acesso total) no aparelho.	What it does: runs as SYSTEM (the highest level in Windows) and starts with Windows. With it, paired devices can see and use the UAC prompt, the lock screen and the PIN screen, even after the PC restarts on its own. Using the secure screen and sending Ctrl+Alt+Del needs the "Secure screen" permission (or Full access) on the device.
+O que muda no PC:	What changes on the PC:
+• uma cópia do Prisma em Arquivos de Programas\PrismaServico;	• a copy of Prisma in Program Files\PrismaServico;
+• a identidade e os aparelhos pareados passam para ProgramData\Prisma\compartilhar, que só o SYSTEM, os administradores e você abrem;	• the identity and paired devices move to ProgramData\Prisma\compartilhar, which only SYSTEM, administrators and you can open;
+• o serviço "Prisma: compartilhar tela".	• the service "Prisma: compartilhar tela".
+Para tirar tudo: Remover, na página Compartilhar tela do Prisma.	To undo everything: Remove, on Prisma's Share screen page.
+Permitir o Ctrl+Alt+Del de longe?	Allow Ctrl+Alt+Del remotely?
+Para isso, o Windows pede uma política: "SoftwareSASGeneration" igual a 1, que deixa serviços gerarem o Ctrl+Alt+Del. Ela é desfeita quando o serviço for removido.	For that, Windows needs a policy: "SoftwareSASGeneration" set to 1, which lets services generate Ctrl+Alt+Del. It is undone when the service is removed.
+Sem ela, o resto funciona; só o Ctrl+Alt+Del não.	Without it, everything else works; only Ctrl+Alt+Del does not.
+Remover o serviço de compartilhar tela do Prisma?	Remove Prisma's screen sharing service?
+Os aparelhos pareados voltam para a pasta de sempre do Prisma, e a política do Ctrl+Alt+Del volta como estava.	Paired devices go back to Prisma's usual folder, and the Ctrl+Alt+Del policy goes back to how it was.
+«{}» quer parear com este PC.	“{}” wants to pair with this PC.
+Permissões: {}.	Permissions: {}.
+Código de confirmação: {}	Confirmation code: {}
+Confira se o outro PC mostra o mesmo código. Se não mostrar, clique em Cancelar.	Check that the other PC shows the same code. If it does not, click Cancel.
+Sim: confiar neste aparelho.	Yes: trust this device.
+Não: parear, mas perguntar a cada conexão.	No: pair, but ask on every connection.
+Cancelar: recusar.	Cancel: refuse.
+«{}» quer se conectar a este PC.	“{}” wants to connect to this PC.
+Permitir?	Allow?
+Conectados agora:	Connected now:
+Ctrl+Alt+Shift+Q, neste PC, desconecta todo mundo na hora.	Ctrl+Alt+Shift+Q, on this PC, disconnects everyone at once.

@@ -97,11 +97,12 @@ struct Guest {
     refused: [u8; PADS],
     heard: Instant,
     gone: bool,
+    clip_in: super::clip::Pieces,
 }
 
 impl Guest {
     fn new(j: Joiner) -> Self {
-        Guest { link: j.link, hello: j.hello, perms: j.perms, name: j.name, input: None, pads: Default::default(), refused: [PAD_OK; PADS], heard: Instant::now(), gone: false }
+        Guest { link: j.link, hello: j.hello, perms: j.perms, name: j.name, input: None, pads: Default::default(), refused: [PAD_OK; PADS], heard: Instant::now(), gone: false, clip_in: Default::default() }
     }
 
     fn send(&self, m: &Msg, out: &mut Vec<u8>) {
@@ -120,6 +121,9 @@ struct Room {
     /// O jogo em primeiro plano tem anti-cheat: os controles virtuais saem.
     anti_cheat: bool,
     checked: Instant,
+    /// A área de transferência do host, aberta quando entra alguém com a permissão `COPY`.
+    clip: Option<super::clip::Clip>,
+    clip_id: u16,
 }
 
 impl Room {
@@ -187,20 +191,115 @@ pub(super) fn prepare() -> Option<D3d> {
     Some(d)
 }
 
-/// Quantas pessoas assistem juntas: `PRISMA_GUESTS`, padrão 3.
+/// Quantas pessoas assistem juntas: a opção da página (padrão 3), ou `PRISMA_GUESTS` por cima.
 fn max_guests() -> usize {
-    std::env::var("PRISMA_GUESTS").ok().and_then(|v| v.parse().ok()).unwrap_or(3).clamp(1, 8)
+    std::env::var("PRISMA_GUESTS").ok().and_then(|v| v.parse().ok()).unwrap_or_else(|| Opts::load().guests).clamp(1, 8)
+}
+
+/// HDR opção B: com a opção ligada, o HDR do Windows desliga enquanto alguém sem tela HDR assiste,
+/// e volta quando a sala esvazia. A marca no disco faz ele voltar no próximo início do Prisma,
+/// mesmo se o Prisma cair no meio.
+struct HdrOff(Option<(windows::Win32::Foundation::LUID, u32)>);
+
+fn hdr_mark() -> std::path::PathBuf {
+    super::dir().join("hdr_desligado.txt")
+}
+
+impl HdrOff {
+    fn new(first: &Hello) -> Self {
+        let off = std::env::var("PRISMA_HDR").map(|v| v == "desligar").unwrap_or_else(|_| Opts::load().hdr_off);
+        if !off || first.flags & SEES_HDR != 0 {
+            return HdrOff(None);
+        }
+        let Some((adapter, output, true)) = crate::sys::hdr::hdr_output() else { return HdrOff(None) };
+        let mark = format!("{} {} {}\n", adapter.LowPart, adapter.HighPart, output);
+        if std::fs::create_dir_all(super::dir()).and_then(|_| std::fs::write(hdr_mark(), mark)).is_err() {
+            eprintln!("HDR: não deu para gravar a marca de volta; o HDR fica ligado");
+            return HdrOff(None);
+        }
+        if crate::sys::hdr::set_hdr(adapter, output, false) {
+            eprintln!("HDR do Windows desligado enquanto alguém assiste");
+            HdrOff(Some((adapter, output)))
+        } else {
+            let _ = std::fs::remove_file(hdr_mark());
+            eprintln!("HDR: o Windows não desligou; seguindo com a conversão");
+            HdrOff(None)
+        }
+    }
+}
+
+impl Drop for HdrOff {
+    fn drop(&mut self) {
+        if let Some((adapter, output)) = self.0 {
+            if crate::sys::hdr::set_hdr(adapter, output, true) {
+                eprintln!("HDR do Windows ligado de novo");
+            }
+            let _ = std::fs::remove_file(hdr_mark());
+        }
+    }
+}
+
+/// Quem está conectado agora, para a página Compartilhar tela (um nome por linha; vazio: ninguém).
+pub fn room_path() -> std::path::PathBuf {
+    super::dir().join("sala.txt")
+}
+
+fn write_room(names: &str) {
+    let _ = std::fs::write(room_path(), names);
+}
+
+/// Tecla de emergência do host: Ctrl+Alt+Shift+Q desconecta todo mundo na hora, fechando o
+/// processo que compartilha (com o serviço, ele abre outro, sem ninguém conectado).
+#[cfg_attr(not(feature = "stream"), allow(dead_code))]
+pub fn emergency_key() {
+    std::thread::Builder::new()
+        .name("compartilhar-emergencia".into())
+        .spawn(|| unsafe {
+            use windows::Win32::UI::Input::KeyboardAndMouse::*;
+            if RegisterHotKey(None, 1, MOD_CONTROL | MOD_ALT | MOD_SHIFT | MOD_NOREPEAT, b'Q' as u32).is_err() {
+                eprintln!("a tecla de emergência (Ctrl+Alt+Shift+Q) já está em uso por outro programa");
+                return;
+            }
+            let mut msg = MSG::default();
+            while GetMessageW(&mut msg, None, 0, 0).as_bool() {
+                if msg.message == WM_HOTKEY {
+                    eprintln!("tecla de emergência: todo mundo desconectado");
+                    crate::config::log("compartilhar: tecla de emergência apertada, todo mundo desconectado");
+                    write_room("");
+                    restore_hdr();
+                    std::process::exit(0);
+                }
+            }
+        })
+        .ok();
+}
+
+/// No início do Prisma: se uma sessão caiu com o HDR desligado, liga de volta.
+pub fn restore_hdr() {
+    for path in [super::user_dir().join("hdr_desligado.txt"), super::service_dir().join("hdr_desligado.txt")] {
+        let Ok(s) = std::fs::read_to_string(&path) else { continue };
+        let v: Vec<i64> = s.split_whitespace().filter_map(|x| x.parse().ok()).collect();
+        if let [low, high, output] = v[..] {
+            let adapter = windows::Win32::Foundation::LUID { LowPart: low as u32, HighPart: high as i32 };
+            if crate::sys::hdr::set_hdr(adapter, output as u32, true) {
+                crate::config::log("compartilhar: HDR ligado de volta depois de uma sessão interrompida");
+            }
+        }
+        let _ = std::fs::remove_file(&path);
+    }
 }
 
 /// Uma sala, do primeiro que chega até o último sair. Quem chega pelo `joins` entra junto.
 /// Devolve o endereço de alguém novo que chegou pelo UDP, se for o caso.
 pub(super) fn serve(d: &D3d, first: Joiner, joins: Option<&mpsc::Receiver<Joiner>>) -> Option<(Hello, SocketAddr)> {
-    let mut room = Room { guests: vec![Guest::new(first)], bridge: None, bridge_err: None, anti_cheat: false, checked: Instant::now() - Duration::from_secs(10) };
+    let _hdr = HdrOff::new(&first.hello);
+    let mut room = Room { guests: vec![Guest::new(first)], bridge: None, bridge_err: None, anti_cheat: false, checked: Instant::now() - Duration::from_secs(10), clip: None, clip_id: 0 };
     let g = &room.guests[0];
     eprintln!("chegou «{}»: tela {}x{} a {} Hz, {} ({})", g.name, g.hello.w, g.hello.h, g.hello.hz, perms_text(g.perms), g.link.route());
     loop {
         match unsafe { session(d, &mut room, joins) } {
             Ok(End::Gone) => {
+                write_room("");
                 eprintln!("todo mundo saiu");
                 return None;
             }
@@ -751,7 +850,13 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     let mut pad_msgs: Vec<PadMsg> = Vec::new();
     let mut info_tick = Instant::now();
 
+    let mut room_names = String::from("\u{0}");
     'run: loop {
+        let names: String = room.guests.iter().map(|g| format!("{}\n", g.name)).collect();
+        if names != room_names {
+            write_room(&names);
+            room_names = names;
+        }
         let secure = match &cap {
             Cap::Wgc { pool, .. } => {
                 if let Some((_, _, event, _)) = pool {
@@ -791,6 +896,21 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                 }
             }
         }
+        // Texto copiado no host vai para quem tem a permissão (duas vezes, contra perda).
+        if room.clip.is_none() && room.guests.iter().any(|g| g.perms & COPY != 0) {
+            room.clip = Some(super::clip::start());
+        }
+        if let Some(c) = &room.clip {
+            while let Ok(t) = c.changed.try_recv() {
+                room.clip_id = room.clip_id.wrapping_add(1);
+                let pk = super::clip::packets(&t, room.clip_id);
+                for g in room.guests.iter().filter(|g| g.perms & COPY != 0) {
+                    for p in pk.iter().chain(pk.iter()) {
+                        g.link.send(p);
+                    }
+                }
+            }
+        }
         // O que cada pessoa mandou.
         for (gi, g) in room.guests.iter_mut().enumerate() {
             loop {
@@ -826,6 +946,11 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                                 // Na tela segura, só quem tem a permissão de sistema.
                                 if let Some(inj) = g.input.as_mut().filter(|_| !secure || g.perms & SYSTEM != 0) {
                                     inj.apply(first, events);
+                                }
+                            }
+                            Msg::Clip { id, part, parts, data } if g.perms & COPY != 0 => {
+                                if let (Some(c), Some(t)) = (&room.clip, g.clip_in.add(id, part, parts, data)) {
+                                    let _ = c.set.send(t);
                                 }
                             }
                             Msg::Sas => {
@@ -1033,7 +1158,7 @@ mod tests {
 
     fn room(guests: Vec<Guest>) -> (Room, super::super::pads::FakeLog) {
         let log = Arc::new(Mutex::new(Vec::new()));
-        let r = Room { guests, bridge: Some(Bridge::fake(log.clone())), bridge_err: None, anti_cheat: false, checked: Instant::now() };
+        let r = Room { guests, bridge: Some(Bridge::fake(log.clone())), bridge_err: None, anti_cheat: false, checked: Instant::now(), clip: None, clip_id: 0 };
         (r, log)
     }
 

@@ -80,7 +80,7 @@ impl Bridge {
     /// Abre a ponte escolhida. O erro diz o que falta, em português.
     #[cfg(feature = "stream")]
     pub fn open() -> Result<Bridge, String> {
-        let want = std::env::var("PRISMA_PADS").unwrap_or_default().to_lowercase();
+        let want = std::env::var("PRISMA_PADS").map(|v| v.to_lowercase()).unwrap_or_else(|_| super::Opts::load().pads);
         let vigem = || match vigem_client::Client::connect() {
             Ok(c) => Ok(Bridge { inner: Inner::Vigem(std::sync::Arc::new(c)), name: "ViGEmBus" }),
             Err(vigem_client::Error::BusNotFound) => Err("o ViGEmBus não está instalado".to_string()),
