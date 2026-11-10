@@ -263,7 +263,19 @@ impl Drop for Decoder {
     }
 }
 
+/// Estado da tela que o Windows avisa: -1 sem aviso, 0 apagada, 1 acesa, 2 escurecida.
+static DISPLAY: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(-1);
+
 unsafe extern "system" fn wndproc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT {
+    use windows::Win32::System::Power::POWERBROADCAST_SETTING;
+    use windows::Win32::System::SystemServices::GUID_CONSOLE_DISPLAY_STATE;
+    if m == WM_POWERBROADCAST && w.0 as u32 == PBT_POWERSETTINGCHANGE && l.0 != 0 {
+        let ps = &*(l.0 as *const POWERBROADCAST_SETTING);
+        if ps.PowerSetting == GUID_CONSOLE_DISPLAY_STATE {
+            DISPLAY.store(ps.Data[0] as i32, Ordering::Relaxed);
+        }
+        return LRESULT(1);
+    }
     DefWindowProcW(h, m, w, l)
 }
 
@@ -291,6 +303,12 @@ fn animate(stop: Arc<AtomicBool>, x: i32, y: i32) -> std::thread::JoinHandle<f64
         ) else {
             return 0.0;
         };
+        // Ao registrar, o Windows já manda o estado atual da tela.
+        let _ = windows::Win32::System::Power::RegisterPowerSettingNotification(
+            HANDLE(hwnd.0),
+            &windows::Win32::System::SystemServices::GUID_CONSOLE_DISPLAY_STATE,
+            DEVICE_NOTIFY_WINDOW_HANDLE,
+        );
         let began = Instant::now();
         let mut i = 0u32;
         let mut msg = MSG::default();
@@ -503,6 +521,8 @@ unsafe fn one(d: &D3d, mon: HMONITOR, codec: Codec, r: &Run) -> Result<String> {
     let interval = 10_000_000i64 / r.fps as i64;
     let mut last_fed = i64::MIN / 2;
     let mut got_frames: Vec<(ID3D11Texture2D, i64, i64, Held)> = Vec::new();
+    // Quadro mais novo já copiado, esperando o codificador: hora do quadro e hora em que chegou.
+    let mut pending: Option<(i64, i64)> = None;
     let start = Instant::now();
     // O primeiro segundo aquece e não conta.
     let count_from = now() + 10_000_000;
@@ -518,25 +538,18 @@ unsafe fn one(d: &D3d, mon: HMONITOR, codec: Codec, r: &Run) -> Result<String> {
                     src.release(held);
                     continue;
                 }
-                if enc.need == 0 {
-                    dropped += 1;
-                    src.release(held);
-                    continue;
-                }
                 if let Some(t) = &tone {
                     t.draw(&d.ctx, &d.dev, &tex, src_w, src_h)?;
                 } else {
                     let bx = D3D11_BOX { left: 0, top: 0, front: 0, right: src_w, bottom: src_h, back: 1 };
                     d.ctx.CopySubresourceRegion(&mid, 0, 0, 0, 0, &tex, 0, Some(&bx));
                 }
-                let t = conv.convert(&in_view)?;
                 src.release(held);
-                enc.feed(&t, pts)?;
-                last_fed = pts;
-                if pts >= count_from {
-                    frames += 1;
-                    times.insert(pts, Times { comp: pts, got, fed: now(), ..Default::default() });
+                // Um quadro que ainda esperava o codificador dá lugar ao mais novo.
+                if pending.is_some() {
+                    dropped += 1;
                 }
+                pending = Some((pts, got));
             }
             if start.elapsed() >= total {
                 src.stop();
@@ -546,6 +559,17 @@ unsafe fn one(d: &D3d, mon: HMONITOR, codec: Codec, r: &Run) -> Result<String> {
             break;
         }
         enc.pump(&mut pkts)?;
+        if enc.need > 0 {
+            if let Some((pts, got)) = pending.take() {
+                let t = conv.convert(&in_view)?;
+                enc.feed(&t, pts)?;
+                last_fed = pts;
+                if pts >= count_from {
+                    frames += 1;
+                    times.insert(pts, Times { comp: pts, got, fed: now(), ..Default::default() });
+                }
+            }
+        }
         let t_enc = now();
         for p in pkts.drain(..) {
             if let Some(t) = times.get_mut(&p.pts) {
@@ -614,7 +638,7 @@ unsafe fn one(d: &D3d, mon: HMONITOR, codec: Codec, r: &Run) -> Result<String> {
     );
     let secs = r.secs as f64;
     s += &format!(
-        "  quadros: {frames} capturados ({:.1}/s), {n} codificados, {decoded_n} decodificados, {dropped} perdidos com o codificador ocupado, {skipped} pulados por chegarem cedo\n",
+        "  quadros: {frames} capturados ({:.1}/s), {n} codificados, {decoded_n} decodificados, {dropped} trocados por um mais novo com o codificador ocupado, {skipped} pulados por chegarem cedo\n",
         frames as f64 / secs
     );
     s += &format!(
@@ -682,7 +706,7 @@ pub fn bench(arg: &str) {
     let run = Run { secs, out_h, mbps, fps, dd };
 
     let mut s = String::from("Bancada da transmissão (fase 0)\n");
-    s += "Etapas: captura = do momento em que a tela do PC mostra o quadro (o relógio da captura) até ele chegar ao Prisma, e negativo quer dizer que chegou antes de aparecer; preparo = conversão de cor e escala na GPU até entregar ao codificador; codificação = até o pacote sair; decodificação = até o quadro sair do decodificador; GPU pronta = até a GPU terminar o quadro decodificado; total = do quadro na tela do PC até o quadro decodificado pronto, sem a rede e sem mostrar na outra tela.\n";
+    s += "Etapas: captura = do momento em que a tela do PC mostra o quadro (o relógio da captura) até ele chegar ao Prisma, e negativo quer dizer que chegou antes de aparecer; preparo = cópia, conversão de cor e escala na GPU até entregar ao codificador, contando a espera pelo codificador; codificação = até o pacote sair; decodificação = até o quadro sair do decodificador; GPU pronta = até a GPU terminar o quadro decodificado; total = do quadro na tela do PC até o quadro decodificado pronto, sem a rede e sem mostrar na outra tela.\n";
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
         let _ = MFStartup(MF_VERSION, MFSTARTUP_LITE);
@@ -703,29 +727,13 @@ pub fn bench(arg: &str) {
         s += "\n";
         let stop = Arc::new(AtomicBool::new(false));
         let anim = square.then(|| animate(stop.clone(), mi.rcMonitor.left + 40, mi.rcMonitor.top + 40));
-        // Quantas vezes por segundo o Windows de fato atualizou e compôs a tela.
-        {
-            use windows::Win32::Graphics::Dwm::{DwmGetCompositionTimingInfo, DWM_TIMING_INFO};
-            let mut a = DWM_TIMING_INFO { cbSize: std::mem::size_of::<DWM_TIMING_INFO>() as u32, ..Default::default() };
-            let mut b = a;
-            let ok = DwmGetCompositionTimingInfo(HWND::default(), &mut a).is_ok();
-            std::thread::sleep(Duration::from_secs(2));
-            if ok && DwmGetCompositionTimingInfo(HWND::default(), &mut b).is_ok() {
-                let hz = { b.rateRefresh }.uiNumerator as f64 / { b.rateRefresh }.uiDenominator.max(1) as f64;
-                if (({ b.cRefresh } - { a.cRefresh }) as f64 / 2.0) < hz / 2.0 {
-                    s += "ATENÇÃO: a tela está apagada (o Windows quase não atualiza o monitor). A captura sai de um relógio interno, então os números de captura não valem; os de codificação e decodificação valem.
-";
-                }
-                s += &format!(
-                    "Composição do Windows: {:.1} atualizações e {:.1} quadros compostos por segundo (taxa informada {}/{})
-
-",
-                    ({ b.cRefresh } - { a.cRefresh }) as f64 / 2.0,
-                    ({ b.cFrame } - { a.cFrame }) as f64 / 2.0,
-                    { let r = b.rateRefresh; r.uiNumerator },
-                    { let r = b.rateRefresh; r.uiDenominator }
-                );
-            }
+        // Dá tempo de o aviso do estado da tela chegar.
+        std::thread::sleep(Duration::from_millis(500));
+        match DISPLAY.load(Ordering::Relaxed) {
+            0 => s += "ATENÇÃO: a tela está apagada. A captura sai de um relógio interno, então os números de captura não valem; os de codificação e decodificação valem.\n\n",
+            1 => s += "Tela acesa.\n\n",
+            2 => s += "Tela escurecida pela economia de energia.\n\n",
+            _ => {}
         }
         match d3d() {
             Ok(d) => {
