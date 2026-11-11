@@ -85,7 +85,7 @@ Se a injeção falhar, se o jogo cair ou se houver anti-cheat detectado, o Prism
 
 ### Registro de dados
 
-Grava o desempenho para estudar depois. Só roda se você ligar, na aba Medidor ou com Ctrl + Alt + 4. Digite quantos minutos de jogo gravar (5 é o padrão, 0 é sem limite).
+Grava o desempenho para estudar depois. Só roda se você ligar, na aba Medidor ou com Ctrl + Alt + 4. Digite quantos minutos de jogo gravar (5 é o padrão, 0 é sem limite). Enquanto grava, o medidor avisa: o compacto mostra um ponto vermelho com **Gravando** e o tempo no começo da barra, e o completo mostra uma faixa vermelha logo abaixo do nome do jogo.
 
 Os arquivos ficam em Documentos, Prisma, Logs: cada quadro, cada segundo, a CPU de cada thread do jogo e um resumo no final. Em placas NVIDIA, cada segundo traz também a GPU para quem estuda otimização: uso do controlador de memória, energia em relação ao limite, o que segurou o clock (energia, temperatura), o tráfego PCIe e a VRAM total; o começo do arquivo traz o driver, os clocks máximos, o limite de energia e o link PCIe, e o resumo diz se o limite foi energia, temperatura ou VRAM. Em jogos com anti-cheat detectado, a leitura de threads fica desligada.
 

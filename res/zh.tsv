@@ -1128,7 +1128,6 @@ Ligar e desligar: {}	开始和停止：{}
 Ligar e desligar	开始和停止
 Registro ligado	日志已开始
 Registro salvo	日志已保存
-Registro {}	日志 {}
 Sem quadros agora	现在没有帧
 Limitador durante o jogo	游戏中的限制器
 Com o jogo aberto, estes atalhos mudam o limite dele, e o medidor completo mostra o resultado.	游戏打开时，这些快捷键会改变它的限制，完整监视会显示结果。
@@ -1811,3 +1810,4 @@ Mostrar todos	显示全部
 Esconder parados	隐藏未使用的
 Mostrando também os jogos parados.	也显示未使用的游戏。
 Fora da lista por falta de uso: {}. Voltam ao abrir.	因未使用而移出列表：{} 个。打开后会回来。
+Gravando registro de dados	正在记录数据日志

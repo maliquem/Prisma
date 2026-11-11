@@ -1128,7 +1128,6 @@ Ligar e desligar: {}	Старт и стоп: {}
 Ligar e desligar	Старт и стоп
 Registro ligado	Журнал запущен
 Registro salvo	Журнал сохранён
-Registro {}	Журнал {}
 Sem quadros agora	Сейчас нет кадров
 Limitador durante o jogo	Ограничитель во время игры
 Com o jogo aberto, estes atalhos mudam o limite dele, e o medidor completo mostra o resultado.	Когда игра открыта, эти клавиши меняют её ограничение, а полный счётчик показывает результат.
@@ -1811,3 +1810,4 @@ Mostrar todos	Показать все
 Esconder parados	Скрыть неиспользуемые
 Mostrando também os jogos parados.	Показаны и неиспользуемые игры.
 Fora da lista por falta de uso: {}. Voltam ao abrir.	Игр вне списка из-за простоя: {}. Вернутся при запуске.
+Gravando registro de dados	Идёт запись журнала

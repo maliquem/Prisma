@@ -1134,7 +1134,6 @@ Ligar e desligar: {}	Start and stop: {}
 Ligar e desligar	Start and stop
 Registro ligado	Log started
 Registro salvo	Log saved
-Registro {}	Log {}
 Sem quadros agora	No frames right now
 Limitador durante o jogo	Limiter during the game
 Com o jogo aberto, estes atalhos mudam o limite dele, e o medidor completo mostra o resultado.	With the game open, these shortcuts change its limit, and the full meter shows the result.
@@ -1817,3 +1816,4 @@ Mostrar todos	Show all
 Esconder parados	Hide unused
 Mostrando também os jogos parados.	Also showing unused games.
 Fora da lista por falta de uso: {}. Voltam ao abrir.	Out of the list for not being used: {}. They come back when opened.
+Gravando registro de dados	Recording the data log

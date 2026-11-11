@@ -1128,7 +1128,6 @@ Ligar e desligar: {}	Iniciar y detener: {}
 Ligar e desligar	Iniciar y detener
 Registro ligado	Registro iniciado
 Registro salvo	Registro guardado
-Registro {}	Registro {}
 Sem quadros agora	Sin fotogramas ahora
 Limitador durante o jogo	Limitador durante el juego
 Com o jogo aberto, estes atalhos mudam o limite dele, e o medidor completo mostra o resultado.	Con el juego abierto, estos atajos cambian su límite y el medidor completo muestra el resultado.
@@ -1811,3 +1810,4 @@ Mostrar todos	Mostrar todos
 Esconder parados	Ocultar sin uso
 Mostrando também os jogos parados.	Mostrando también los juegos sin uso.
 Fora da lista por falta de uso: {}. Voltam ao abrir.	Fuera de la lista por falta de uso: {}. Vuelven al abrirlos.
+Gravando registro de dados	Grabando el registro de datos

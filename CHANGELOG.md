@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Meter: while the data log records, the compact bar shows a red dot with Recording and the time, and the full panel a red band below the game name; before, it was only a small note that other messages could cover. / Medidor: enquanto o registro de dados grava, a barra compacta mostra um ponto vermelho com Gravando e o tempo, e o painel completo uma faixa vermelha abaixo do nome do jogo; antes era só uma nota pequena, que outras mensagens podiam cobrir.
 - Meter: each game in the list can pick a Windows power plan that turns on when it opens; the previous plan comes back when it closes. / Medidor: cada jogo da lista pode escolher um plano de energia do Windows, que liga quando ele abre; o plano de antes volta quando ele fecha.
 - Meter: new option to take games out of the list after 7 to 90 days without opening, keeping their settings; they come back when opened, and Show all lists them. Off by default. / Medidor: nova opção de tirar da lista os jogos sem abrir há 7 a 90 dias, com as escolhas guardadas; eles voltam ao abrir, e Mostrar todos lista eles. Desligada por padrão.
 - Meter: the power plan in the full panel is now a drop-down list instead of going one by one. / Medidor: o plano de energia no painel completo agora é uma lista suspensa, em vez de passar um por um.

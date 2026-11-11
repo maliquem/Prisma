@@ -1134,8 +1134,12 @@ impl Meter {
         let mon = focus_monitor();
         let hwnd = self.compact.hwnd;
         let scale = unsafe { GetDpiForWindow(hwnd) } as f32 / 96.0;
-        let tag = self.tag.as_ref().map(|t| t.0.clone()).or_else(|| self.log.as_ref().map(|l| format!("Registro {}", clock(l.seen)))).or_else(|| self.limit_tag(cfg));
-        let w = if tag.is_some() { COMPACT_W + 104.0 } else { COMPACT_W };
+        let tag = self.tag.as_ref().map(|t| t.0.clone()).or_else(|| self.limit_tag(cfg));
+        // Gravando o registro de dados: ponto vermelho, a palavra e o tempo, no começo da barra.
+        let rec = self.log.as_ref().map(|l| clock(l.seen));
+        let rec_word = measure("Gravando", 12.0, Weight::Semibold, None).0;
+        let rec_w = if rec.is_some() { 14.0 + rec_word + 6.0 + measure("00:00:00", 12.0, Weight::Regular, None).0 + 14.0 } else { 0.0 };
+        let w = if tag.is_some() { COMPACT_W + 104.0 } else { COMPACT_W } + rec_w;
         let x = match cfg.meter_pos_compact {
             0 => mon.left + (EDGE * scale) as i32,
             2 => mon.right - ((w + EDGE) * scale) as i32,
@@ -1153,6 +1157,14 @@ impl Meter {
             let mid = rect(0.0, 0.0, 0.0, r.h);
             let at = |x: f32, w: f32| rect(x, mid.y, w, mid.h);
             let mut x = 14.0;
+            if let Some(t) = &rec {
+                c.circle(x + 5.0, r.h / 2.0, 5.0, REC);
+                c.text(at(x + 14.0, rec_word + 4.0), "Gravando", 12.0, REC, Align::Left, Weight::Semibold);
+                c.text_raw(at(x + 14.0 + rec_word + 6.0, rec_w - rec_word - 34.0), t, 12.0, TEXT, Align::Left, Weight::Regular);
+                x += rec_w - 4.0;
+                c.line(x, 10.0, x, 30.0, rgb(0x3a3f49), 1.0);
+                x += 12.0;
+            }
             if generated {
                 c.text(at(x, 16.0), "G", 21.0, ACCENT, Align::Left, Weight::Semibold);
                 x += 20.0;
@@ -1229,6 +1241,10 @@ impl Meter {
         }
         if !tags.is_empty() {
             out.push(Line::Note(tags, TEXT2));
+        }
+        if let Some(l) = &self.log {
+            let time = l.limit.map_or(clock(l.seen), |v| format!("{} / {}", clock(l.seen), clock(v)));
+            out.push(Line::Rec(time));
         }
         if on(ITEM_FPS) {
             let split = self.multiplier().map(|_| {
@@ -1458,6 +1474,8 @@ enum Line {
     Drop(String, Row, String, Vec<String>, Option<usize>),
     /// Uso da CPU ou da GPU, em número grande para ler de longe.
     Usage(&'static str, f32),
+    /// O registro de dados está gravando, com o tempo.
+    Rec(String),
 }
 
 impl Line {
@@ -1476,6 +1494,7 @@ impl Line {
             Line::Drop(_, _, _, list, _) => 54.0 + list.len() as f32 * 28.0,
             Line::Stepper(..) => 36.0,
             Line::Usage(..) => 48.0,
+            Line::Rec(_) => 34.0,
         }
     }
 
@@ -1558,6 +1577,15 @@ impl Line {
     fn draw(&self, c: &Canvas, x: f32, y: f32, w: f32, s: &Stats) {
         match self {
             Line::Title(t) => c.text(rect(x, y, w, 24.0), t, 15.0, WHITE, Align::Left, Weight::Semibold),
+            Line::Rec(time) => {
+                let band = rect(x, y + 2.0, w, 26.0);
+                c.round(band, 6.0, REC.alpha(0.18));
+                c.round_line(band, 6.0, REC.alpha(0.7), 1.0);
+                c.circle(band.x + 13.0, band.y + 13.0, 5.0, REC);
+                let tw = measure(time, 12.0, Weight::Regular, None).0 + 12.0;
+                c.text(rect(band.x + 24.0, band.y, band.w - 24.0 - tw, band.h), "Gravando registro de dados", 12.0, WHITE, Align::Left, Weight::Semibold);
+                c.text_raw(rect(band.right() - tw, band.y, tw - 10.0, band.h), time, 12.0, TEXT, Align::Right, Weight::Regular);
+            }
             Line::Note(t, color) => c.text(rect(x, y, w, 18.0), t, 12.0, *color, Align::Left, Weight::Regular),
             Line::Head(t) => {
                 c.line(x, y + 6.0, x + w, y + 6.0, rgb(0x3a3f49), 1.0);

@@ -85,7 +85,7 @@ If injection fails, the game crashes or an anti-cheat is detected, Prisma moves 
 
 ### Data log
 
-Records performance to study later. It only runs if you turn it on, on the Meter page or with Ctrl + Alt + 4. Type how many minutes of play to record (5 is the default, 0 is no limit).
+Records performance to study later. It only runs if you turn it on, on the Meter page or with Ctrl + Alt + 4. Type how many minutes of play to record (5 is the default, 0 is no limit). While it records, the meter says so: the compact bar shows a red dot with **Recording** and the time at its start, and the full panel shows a red band right below the game name.
 
 Files go to Documents, Prisma, Logs: every frame, every second, the CPU of each game thread and a summary at the end. On NVIDIA cards, each second also carries the GPU for optimization work: memory controller use, power against the limit, what held the clock back (power, temperature), PCIe traffic and total VRAM; the top of the file has the driver, the maximum clocks, the power limit and the PCIe link, and the summary says whether the limit was power, temperature or VRAM. In games with a detected anti-cheat, the thread reading stays off.
 
