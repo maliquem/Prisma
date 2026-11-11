@@ -44,6 +44,10 @@ Ele só aparece pelo atalho, e mede o programa em foco quando você aperta. Liga
 
 Fica no alto da tela e mostra o FPS, a linha de frame time, a latência, CPU, GPU e VRAM. Escolha se ela fica à esquerda, no centro ou à direita. Atalho: Ctrl + Alt + 1.
 
+Em **A mais na barra compacta**, na aba Medidor, você acrescenta RAM, temperatura da CPU, temperatura da GPU e o plano de energia. As temperaturas aparecem ao lado do uso de cada uma.
+
+Com um jogo da lista em foco, a barra mostra o modo do limitador: **Sem limite**, **Auto** com o limite (ou **Auto: medindo** nos primeiros 5 minutos) ou **Manual** com o limite. Ele fica aceso quando o limite está agindo, pela injeção ou pelo driver, e apagado quando não está.
+
 ![Barra compacta do medidor](meter-compact-pt.png)
 
 A linha mostra como os quadros variam. Linha reta quer dizer quadros regulares. Variações de até 1 ms são ignoradas, e picos grandes indicam travadas.
@@ -58,6 +62,7 @@ Fica à direita ou à esquerda da tela e mostra tudo em uma coluna. Atalho: Ctrl
 - **Frame time:** o tempo de cada quadro, em milissegundos. Variação baixa é bom.
 - **Latência do PC:** só aparece em jogos com Reflex.
 - **Upscaling, geração de quadros e Reflex:** mostra o que foi carregado pelo jogo.
+- **Temperatura da CPU:** aparece abaixo da CPU. O Windows não entrega essa leitura sozinho, então ela precisa do PawnIO, um driver gratuito, aberto e assinado pela Microsoft, o mesmo tipo de driver que o Steam usa. Na aba Medidor, **Instalar PawnIO** baixa o instalador oficial, confere a assinatura e abre ele para você aceitar. Para tirar depois, use Aplicativos instalados do Windows. Sem ele, a linha diz Precisa do PawnIO.
 - **Plano de energia:** mostra o plano do Windows em uso. Com os controles abertos, clique nele (ou aperte Enter) para abrir a lista e escolher outro; as setas trocam pelo vizinho.
 
 Para usar os botões do painel dentro do jogo, aperte **Ctrl + Alt + 5**. O jogo continua em primeiro plano, e isso libera o mouse e o teclado: as setas andam pelas opções e mudam a escolhida, e o clique também funciona. Para escrever o limite, digite o número e aperte Enter. Aperte o atalho de novo, ou Esc, para voltar ao jogo. Ctrl + Alt + 0 esconde o medidor e zera as medições.
@@ -76,7 +81,7 @@ Com o limitador ligado, cada jogo guarda o próprio limite. Na lista de jogos da
 - **Auto HDR:** a mesma escolha de Auto HDR por jogo da aba HDR (Padrão, Forçar ou Desligar). Mudar aqui muda lá.
 - **Energia:** o plano de energia do Windows que liga quando o jogo abre. Quando ele fecha, volta o plano de antes, se ninguém trocou no meio. **Não mudar** deixa como está, e aí vale a Energia automática.
 - **Tirar da lista sem abrir há:** um jogo parado por 7, 14, 30, 60 ou 90 dias sai da lista, para ela não crescer demais. As escolhas dele ficam guardadas e valem quando ele abrir de novo, e ele volta para a lista. **Mostrar todos** mostra também os parados. O padrão é nunca tirar.
-- **Atalhos:** Ctrl + Alt + 3 liga e desliga. Ctrl + Alt + seta para cima ou para baixo muda o limite. O limite vai de 20 a 1023.
+- **Atalhos:** Ctrl + Alt + 3 troca o modo do jogo em foco: Automático, Manual, Sem limite e de volta ao Automático. O medidor mostra o modo escolhido. Ctrl + Alt + seta para cima ou para baixo muda o limite. O limite vai de 20 a 1023.
 
 Se a injeção falhar, se o jogo cair ou se houver anti-cheat detectado, o Prisma passa sozinho para o driver e avisa. Sem a leitura de quadros do Windows, a injeção entra mesmo assim depois de 8 segundos de jogo em foco, e o motivo de a leitura não abrir vai para o registro de ações.
 
@@ -87,7 +92,7 @@ Se a injeção falhar, se o jogo cair ou se houver anti-cheat detectado, o Prism
 
 Grava o desempenho para estudar depois. Só roda se você ligar, na aba Medidor ou com Ctrl + Alt + 4. Digite quantos minutos de jogo gravar (5 é o padrão, 0 é sem limite). Enquanto grava, o medidor avisa: o compacto mostra um ponto vermelho com **Gravando** e o tempo no começo da barra, e o completo mostra uma faixa vermelha logo abaixo do nome do jogo.
 
-Os arquivos ficam em Documentos, Prisma, Logs: cada quadro, cada segundo, a CPU de cada thread do jogo e um resumo no final. Em placas NVIDIA, cada segundo traz também a GPU para quem estuda otimização: uso do controlador de memória, energia em relação ao limite, o que segurou o clock (energia, temperatura), o tráfego PCIe e a VRAM total; o começo do arquivo traz o driver, os clocks máximos, o limite de energia e o link PCIe, e o resumo diz se o limite foi energia, temperatura ou VRAM. O resumo também diz o limite que estava valendo (pela injeção ou pelo driver) e a geração de quadros: qual o jogo carregou (DLSS, FSR ou XeSS), em quantos segundos ela ficou ligada e em quantas vezes, e se o Lossless Scaling estava aberto. Saber se ela ligou depende dos marcadores do Reflex; sem eles, o resumo diz que ela foi carregada, sem medir. Em jogos com anti-cheat detectado, a leitura de threads fica desligada.
+Os arquivos ficam em Documentos, Prisma, Logs: cada quadro, cada segundo, a CPU de cada thread do jogo e um resumo no final. Em placas NVIDIA, cada segundo traz também a GPU para quem estuda otimização: uso do controlador de memória, energia em relação ao limite, o que segurou o clock (energia, temperatura), o tráfego PCIe e a VRAM total; o começo do arquivo traz o driver, os clocks máximos, o limite de energia e o link PCIe, e o resumo diz se o limite foi energia, temperatura ou VRAM. O resumo também diz o limite que estava valendo (pela injeção ou pelo driver) e a geração de quadros: qual o jogo carregou (DLSS, FSR ou XeSS), em quantos segundos ela ficou ligada e em quantas vezes, e se o Lossless Scaling estava aberto. Com o PawnIO instalado, cada segundo traz também a temperatura da CPU (coluna cpu_c). Saber se ela ligou depende dos marcadores do Reflex; sem eles, o resumo diz que ela foi carregada, sem medir. Em jogos com anti-cheat detectado, a leitura de threads fica desligada.
 
 ## Discos e redes
 
@@ -279,7 +284,7 @@ Todos podem ser trocados no programa.
 - **Ctrl + Alt + 2:** medidor completo
 - **Ctrl + Alt + 0:** esconder o medidor
 - **Ctrl + Alt + 5:** controles do medidor
-- **Ctrl + Alt + 3:** ligar ou desligar o limitador
+- **Ctrl + Alt + 3:** trocar o modo do limitador (Automático, Manual, Sem limite)
 - **Ctrl + Alt + seta para cima ou para baixo:** aumentar ou diminuir o limite
 - **Ctrl + Alt + 4:** registro de dados
 - **Ctrl + Alt + P, A e J:** foto da área, da tela e da janela

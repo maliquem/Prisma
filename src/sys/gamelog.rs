@@ -134,7 +134,7 @@ impl Writer {
         let t = self.begin.elapsed().as_secs_f32();
         if self.rows == 0 {
             let cores: String = (0..s.snap.threads.len()).map(|i| format!(",core{i}_pct")).collect();
-            let _ = writeln!(self.seconds, "t_s,fps,frametime_ms,worst_ms,dev_ms,avg_fps,low1_fps,low01_fps,real_fps,latency_ms,frame_gen_x,direct_flip,counted_by_flip,spike,frames_kept,cpu_pct,cpu_ghz,gpu_pct,gpu_mhz,gpu_mem_mhz,gpu_c,gpu_w,fan_pct,vram_gb,ram_gb,game_cpu_pct,game_ram_gb,game_gpu_pct,game_vram_gb,game_disk_mb_s,game_net_mb_s,gpu_mem_ctrl_pct,gpu_power_limit_w,gpu_power_pct,gpu_clock_limited_by,gpu_max_mhz,pcie_tx_mb_s,pcie_rx_mb_s,vram_total_gb{cores}");
+            let _ = writeln!(self.seconds, "t_s,fps,frametime_ms,worst_ms,dev_ms,avg_fps,low1_fps,low01_fps,real_fps,latency_ms,frame_gen_x,direct_flip,counted_by_flip,spike,frames_kept,cpu_pct,cpu_ghz,gpu_pct,gpu_mhz,gpu_mem_mhz,gpu_c,gpu_w,fan_pct,vram_gb,ram_gb,game_cpu_pct,game_ram_gb,game_gpu_pct,game_vram_gb,game_disk_mb_s,game_net_mb_s,gpu_mem_ctrl_pct,gpu_power_limit_w,gpu_power_pct,gpu_clock_limited_by,gpu_max_mhz,pcie_tx_mb_s,pcie_rx_mb_s,vram_total_gb,cpu_c{cores}");
             let _ = writeln!(self.frames, "t_ms,frametime_ms");
             let _ = writeln!(self.threads, "t_s,tid,name,cpu_pct_of_core,kernel_pct_of_core");
         }
@@ -146,7 +146,7 @@ impl Writer {
         let power_pct = if gp.power_limit > 0.0 { gp.watts / gp.power_limit * 100.0 } else { 0.0 };
         let limited: Vec<&str> = super::nvml::REASONS.iter().filter(|r| gp.reasons & r.0 != 0).map(|r| r.1).collect();
         let extra = format!(
-            ",{},{:.1},{:.1},{},{},{:.1},{:.1},{:.2}",
+            ",{},{:.1},{:.1},{},{},{:.1},{:.1},{:.2},{}",
             gp.mem_util,
             gp.power_limit,
             power_pct,
@@ -154,7 +154,8 @@ impl Writer {
             gp.max_mhz,
             gp.pcie_tx,
             gp.pcie_rx,
-            gb(gp.total)
+            gb(gp.total),
+            sn.cpu_temp.map_or(String::new(), |t| format!("{t:.1}"))
         );
         for (i, r) in super::nvml::REASONS.iter().enumerate() {
             self.reasons[i] += (gp.reasons & r.0 != 0) as u32;

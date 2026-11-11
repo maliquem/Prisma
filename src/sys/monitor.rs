@@ -68,6 +68,8 @@ pub struct Snapshot {
     pub groups: Vec<Group>,
     pub procs: Vec<ProcRow>,
     pub detail: bool,
+    /// Temperatura da CPU pelo PawnIO, só quando o medidor pede.
+    pub cpu_temp: Option<f32>,
     /// False quando falta administrador e a coluna de rede não tem dados.
     pub net_ok: bool,
 }
@@ -350,6 +352,8 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
     let mut pbuf = vec![0u8; 1 << 20];
     let mut cbuf = Vec::new();
     let mut counters: Option<GpuCounters> = None;
+    let mut cpu_temp: Option<super::cputemp::CpuTemp> = None;
+    let mut cpu_temp_at: Option<Instant> = None;
     let mut last = Instant::now();
     let logical = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1) as f32;
     let (mut h_cpu, mut h_gpu, mut h_ram, mut h_vram) =
@@ -377,6 +381,18 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
         } else if !detail {
             nvml = None;
         }
+        // O driver só fica aberto enquanto alguém mostra a temperatura; sem ele, tenta de novo a cada 30 s.
+        if detail && super::cputemp::WANTED.load(Ordering::Relaxed) {
+            if cpu_temp.is_none() && cpu_temp_at.map_or(true, |t| t.elapsed().as_secs() >= 30) {
+                cpu_temp_at = Some(Instant::now());
+                cpu_temp = super::cputemp::CpuTemp::open();
+                super::cputemp::OPEN.store(cpu_temp.is_some(), Ordering::Relaxed);
+            }
+        } else {
+            cpu_temp = None;
+            cpu_temp_at = None;
+        }
+        let cpu_c = cpu_temp.as_ref().and_then(|t| t.read());
         let mut gpu = kmt.as_mut().map(|k| k.read()).unwrap_or_default();
         if let Some(n) = &nvml {
             // Uso e VRAM em uso vêm do Windows; o resto, só a NVIDIA sabe.
@@ -481,6 +497,7 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
             s.ram_used = ram_used;
             s.ram_total = mem.ullTotalPhys;
             s.gpu = gpu;
+            s.cpu_temp = cpu_c;
             s.gpu_name = gpu_name.clone();
             s.gpu_driver = gpu_driver.clone();
             s.hist_cpu = h_cpu.clone();

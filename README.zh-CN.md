@@ -43,7 +43,7 @@ Prisma 每天检查一次本页面。有新版本且你打开窗口时，它会�
 - **Windows 调整：** 先进行只读审核，然后是分层的“游戏”、“开发”和“隐私”配置，只包含有文档记录效果的调整。“未纳入”标签页说明排除了什么以及原因。每项更改都会记录之前的值，“撤销”只恢复之后没人动过的内容。任何配置都不会改动更新、杀毒软件、UAC、内存完整性或虚拟化。**显示日志** 会列出每项更改的前后对比。
 - **工具：** Windows 修复（先 DISM 后 SFC）、崩溃历史、重置 Windows 更新、检查磁盘、网络、DNS、清理、winget、诊断和高级重启。在可疑磁盘上，会写入的模式被阻止。每个工具都保留自己的逐步日志，包括确切的命令、输出、错误和每一步的时间。
 - **优化：** 建议关闭哪些程序，并且总是先询问。会遵守从不关闭列表，始终关闭列表中的程序会被关闭，自动检测会为两个列表推荐名称。游戏打开时的询问默认关闭，可在“电源”中开启。
-- **性能监视：** 游戏上方的紧凑条和完整面板，只通过快捷键显示：快捷键会测量当前程序、把游戏加入列表，再按一次则隐藏。显示 FPS、1% 和 0.1% 低帧、帧时间、CPU、GPU、显存和内存。读数来自 Windows 事件，不在游戏中放任何东西。可按游戏限制 FPS，手动或在游玩 5 分钟后自动设置。默认情况下，限制器开启时一个小的 Prisma 模块会进入游戏，因此在 DirectX 10、11 和 12 中限制会立即改变。如果失败、游戏崩溃或检测到反作弊，限制会转交 NVIDIA 驱动，在下次打开游戏时生效。按钮在完整面板中：Ctrl + Alt + 5 为它们释放鼠标和键盘，也可以直接输入限制值。它还可以选择 DLSS 配置（仅限支持 DLSS 的游戏）、按游戏设置的 Windows 自动 HDR（与 HDR 标签页中的相同）和电源计划（也可为每个游戏设置打开时启用的计划；长期未用的游戏可在若干天后移出列表，设置会保留），显示已加载的超分辨率、帧生成和 Reflex，并为列表中的游戏或所有游戏开启 Windows HDR，不会关闭原本已开启的 HDR。需要以管理员身份运行 Prisma。在独占全屏中，监视条可能不会出现。
+- **性能监视：** 游戏上方的紧凑条和完整面板，只通过快捷键显示：快捷键会测量当前程序、把游戏加入列表，再按一次则隐藏。显示 FPS、1% 和 0.1% 低帧、帧时间、CPU、GPU、显存和内存。紧凑条还可以显示内存、CPU 和 GPU 温度以及电源计划，并显示限制器模式，限制生效时会亮起。CPU 温度需要 PawnIO，一个免费开源的驱动，可在性能监视页由 Prisma 安装。读数来自 Windows 事件，不在游戏中放任何东西。可按游戏限制 FPS，手动或在游玩 5 分钟后自动设置。默认情况下，限制器开启时一个小的 Prisma 模块会进入游戏，因此在 DirectX 10、11 和 12 中限制会立即改变。如果失败、游戏崩溃或检测到反作弊，限制会转交 NVIDIA 驱动，在下次打开游戏时生效。按钮在完整面板中：Ctrl + Alt + 5 为它们释放鼠标和键盘，也可以直接输入限制值。它还可以选择 DLSS 配置（仅限支持 DLSS 的游戏）、按游戏设置的 Windows 自动 HDR（与 HDR 标签页中的相同）和电源计划（也可为每个游戏设置打开时启用的计划；长期未用的游戏可在若干天后移出列表，设置会保留），显示已加载的超分辨率、帧生成和 Reflex，并为列表中的游戏或所有游戏开启 Windows HDR，不会关闭原本已开启的 HDR。需要以管理员身份运行 Prisma。在独占全屏中，监视条可能不会出现。
 - **数据日志：** 可选的录制功能，用于研究性能，可在“性能监视”页面或游戏中用快捷键启动。它把每一帧、每一秒以及游戏每个线程的 CPU 保存到 `文档\Prisma\Logs`，最后附上总结；在 NVIDIA 显卡上还包括 GPU（显存控制器、功耗及其上限、限制频率的原因、PCIe 和显存），便于研究优化模组。输入游戏时长分钟数（默认 5，0 为不限）。只在你开启时运行，在检测到反作弊的游戏中不读取线程。记录期间，监视器会在紧凑条和完整面板中显示红色的记录提示。 摘要还会写明生效的帧率上限和帧生成：游戏加载了哪一种、开启了多久、倍数是多少。
 - **电源：** 检测到游戏或高负载时切换电源计划，无负载 60 秒后回到空闲。你可以选择 CPU 和 GPU 多少百分比、持续多久算作负载。选择一个计划即可用 Windows 注册的所有选项（包括隐藏选项）编辑它，或导入和导出 .pow 文件。右键点击计划也提供“导出”和“编辑”。第一次编辑会保留原始计划的副本。 关闭自动切换时，固定计划会一直生效，直到重新开启。
 - **按游戏配置：** 记住每个程序的音量。
@@ -77,7 +77,7 @@ Prisma 每天检查一次本页面。有新版本且你打开窗口时，它会�
 | 显示完整监视 | Ctrl + Alt + 2 |
 | 隐藏监视 | Ctrl + Alt + 0 |
 | 监视控制 | Ctrl + Alt + 5 |
-| 开关限制器 | Ctrl + Alt + 3 |
+| 限制器模式（自动、手动、不限制） | Ctrl + Alt + 3 |
 | 提高或降低限制 | Ctrl + Alt + ↑ 或 ↓ |
 | 开始或停止数据日志 | Ctrl + Alt + 4 |
 | 全屏截图 | Ctrl + Alt + A |
@@ -125,6 +125,7 @@ cargo build --release
 - [iroh 和 iroh-dns](https://github.com/n0-computer/iroh)（MIT 或 Apache-2.0），负责穿越 NAT，没有直连路径时通过 n0 的公共中继转发连接，始终端到端加密。
 - [attohttpc](https://github.com/sbstp/attohttpc)（MPL-2.0），iroh 用它通过 UPnP 打开路由器端口。源代码见链接。
 - [PyroWave](https://github.com/Themaister/pyrowave)（MIT），用于局域网的实验性编解码器。它的库（连同 Granite、volk 和 Vulkan 头文件，均为 MIT）内置于 Prisma 中，仅在使用该编解码器时才连同许可证写入磁盘。
+- [PawnIO 模块](https://github.com/namazso/PawnIO.Modules)（LGPL-2.1），AMDFamily17 和 IntelMSR，在 PawnIO 驱动内运行以读取 CPU 温度。Prisma 只通过其控制接口与驱动通信；驱动由官方安装程序单独安装。许可证和源码见 `res/pawnio/LEIAME.txt`。
 - [tokio](https://github.com/tokio-rs/tokio)（MIT）、[blake3](https://github.com/BLAKE3-team/BLAKE3)（CC0-1.0 或 Apache-2.0）、[data-encoding](https://github.com/ia0/data-encoding)（MIT）、[mini-nvcodec 和 mini-cuda](https://github.com/AdrianEddy/wgpu-interop)（MIT 或 Apache-2.0）、[vigem-client](https://github.com/CasualX/vigem-client)（MIT）、[viiper-client](https://github.com/Alia5/VIIPER)（MIT）、[url](https://github.com/servo/rust-url)（MIT 或 Apache-2.0）以及 [webpki-roots](https://github.com/rustls/webpki-roots)（CDLA-Permissive-2.0，证书颁发机构列表）。
 
 “NVIDIA 驱动”页面的选项列表参考了 [NVIDIA Profile Inspector](https://github.com/Orbmu2k/nvidiaProfileInspector)（MIT，Orbmu2k 及贡献者）：只用了选项的 ID 和取值，没有使用代码。

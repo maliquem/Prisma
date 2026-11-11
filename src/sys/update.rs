@@ -155,6 +155,24 @@ fn get(url: &str, mut progress: impl FnMut(usize, usize)) -> Result<(u32, Vec<u8
     Ok((r.status, body))
 }
 
+/// Baixa um arquivo público, seguindo os redirecionamentos.
+pub fn download(url: &str) -> Result<Vec<u8>, ()> {
+    let r = send(url, "", true)?;
+    if r.status != 200 {
+        return Err(());
+    }
+    let mut body = Vec::new();
+    let mut big = false;
+    read(&r, |c| {
+        body.extend_from_slice(c);
+        big |= body.len() > MAX_SIZE;
+    })?;
+    if big {
+        return Err(());
+    }
+    Ok(body)
+}
+
 /// Endereço final do arquivo: cada conexão vai direto a ele e evita mais um passo pelo github.com.
 fn final_url(url: &str) -> Option<String> {
     let r = send(url, "", false).ok()?;

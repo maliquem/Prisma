@@ -1817,3 +1817,22 @@ Troca desligada	Без переключения
 Plano fixo	Постоянная схема
 Sem plano fixo	Без постоянной схемы
 Fica ligado até a troca automática voltar, também depois de reiniciar. Sem plano fixo, o Prisma não muda o plano.	Действует, пока не включено автопереключение, и после перезапуска тоже. Без постоянной схемы Prisma не меняет схему.
+Automático: medindo	Авто: измерение
+Auto: medindo	Авто: измерение
+Auto	Авто
+Precisa do PawnIO	Нужен PawnIO
+A mais na barra compacta	Дополнительно в компактной панели
+Temperatura da CPU	Температура CPU
+Temperatura da GPU	Температура GPU
+Trocar o modo	Сменить режим
+Instalar PawnIO	Установить PawnIO
+Instalar o PawnIO?	Установить PawnIO?
+O PawnIO é um driver gratuito e de código aberto, assinado pela Microsoft, que lê sensores do processador. O Prisma baixa o instalador oficial (pawnio.eu), confere a assinatura e abre ele para você aceitar. Para tirar depois, use Aplicativos instalados do Windows.	PawnIO — бесплатный драйвер с открытым кодом, подписанный Microsoft, который читает датчики процессора. Prisma скачивает официальный установщик (pawnio.eu), проверяет подпись и открывает его, чтобы вы приняли условия. Удалить его можно в «Установленных приложениях» Windows.
+Baixando o instalador oficial do PawnIO…	Загрузка официального установщика PawnIO…
+Siga o instalador do PawnIO. O Prisma confere quando ele fechar.	Следуйте установщику PawnIO. Prisma проверит после его закрытия.
+O PawnIO não foi instalado:	PawnIO не установлен:
+Temperatura da CPU pelo PawnIO, um driver gratuito e aberto. Instalado.	Температура CPU через PawnIO, бесплатный открытый драйвер. Установлен.
+A temperatura da CPU precisa do PawnIO, um driver gratuito e aberto, como o do Steam. O Prisma baixa o instalador oficial e confere a assinatura.	Для температуры CPU нужен PawnIO — бесплатный открытый драйвер, как у Steam. Prisma скачивает официальный установщик и проверяет подпись.
+o download falhou	загрузка не удалась
+não deu para salvar o instalador	не удалось сохранить установщик
+a assinatura do instalador não confere	подпись установщика не совпадает

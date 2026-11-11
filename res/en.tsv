@@ -1823,3 +1823,22 @@ Troca desligada	Switching off
 Plano fixo	Fixed plan
 Sem plano fixo	No fixed plan
 Fica ligado até a troca automática voltar, também depois de reiniciar. Sem plano fixo, o Prisma não muda o plano.	Stays on until automatic switching comes back, also after a restart. With no fixed plan, Prisma doesn't change the plan.
+Automático: medindo	Automatic: measuring
+Auto: medindo	Auto: measuring
+Auto	Auto
+Precisa do PawnIO	Needs PawnIO
+A mais na barra compacta	Extra in the compact bar
+Temperatura da CPU	CPU temperature
+Temperatura da GPU	GPU temperature
+Trocar o modo	Change the mode
+Instalar PawnIO	Install PawnIO
+Instalar o PawnIO?	Install PawnIO?
+O PawnIO é um driver gratuito e de código aberto, assinado pela Microsoft, que lê sensores do processador. O Prisma baixa o instalador oficial (pawnio.eu), confere a assinatura e abre ele para você aceitar. Para tirar depois, use Aplicativos instalados do Windows.	PawnIO is a free, open source driver, signed by Microsoft, that reads processor sensors. Prisma downloads the official installer (pawnio.eu), checks its signature and opens it for you to accept. To remove it later, use Windows Installed apps.
+Baixando o instalador oficial do PawnIO…	Downloading the official PawnIO installer…
+Siga o instalador do PawnIO. O Prisma confere quando ele fechar.	Follow the PawnIO installer. Prisma checks when it closes.
+O PawnIO não foi instalado:	PawnIO was not installed:
+Temperatura da CPU pelo PawnIO, um driver gratuito e aberto. Instalado.	CPU temperature through PawnIO, a free and open driver. Installed.
+A temperatura da CPU precisa do PawnIO, um driver gratuito e aberto, como o do Steam. O Prisma baixa o instalador oficial e confere a assinatura.	CPU temperature needs PawnIO, a free and open driver, like Steam's. Prisma downloads the official installer and checks its signature.
+o download falhou	the download failed
+não deu para salvar o instalador	the installer could not be saved
+a assinatura do instalador não confere	the installer's signature doesn't match

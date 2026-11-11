@@ -24,6 +24,13 @@ fn shown(app: &App) -> Vec<usize> {
 /// Minutos do registro sendo digitados.
 static LOG_FIELD: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 
+const COMPACT_ITEMS: [(&str, u32); 4] = [
+    ("RAM", meter::COMPACT_RAM),
+    ("Temperatura da CPU", meter::COMPACT_CPU_TEMP),
+    ("Temperatura da GPU", meter::COMPACT_GPU_TEMP),
+    ("Plano de energia", meter::COMPACT_POWER),
+];
+
 const ITEMS: [(&str, u32); 16] = [
     ("FPS e médias", meter::ITEM_FPS),
     ("Frame time", meter::ITEM_FRAME),
@@ -120,8 +127,54 @@ fn items(ui: &mut Ui, app: &mut App, r: Rect) {
             changed = true;
         }
     }
+    // A mais na barra compacta.
+    let y = r.y + 58.0 + 4.0 * 38.0 + 4.0;
+    ui.label(rect(r.x + 16.0, y, r.w - 32.0, 18.0), "A mais na barra compacta", TEXT2);
+    for (i, (name, bit)) in COMPACT_ITEMS.iter().enumerate() {
+        let on_rect = rect(r.x + 16.0 + i as f32 * w, y + 22.0, w - 8.0, 36.0);
+        let mut on = app.cfg.meter_compact & bit != 0;
+        if ui.check(&format!("mt-c{i}"), on_rect, name, &mut on) {
+            app.cfg.meter_compact = if on { app.cfg.meter_compact | bit } else { app.cfg.meter_compact & !bit };
+            changed = true;
+        }
+    }
+    pawnio_row(ui, rect(r.x + 16.0, y + 66.0, r.w - 32.0, 40.0));
     if changed {
         app.cfg.save();
+    }
+}
+
+/// O PawnIO está instalado? Perguntar abre o dispositivo: no máximo a cada 5 segundos.
+fn pawnio_installed() -> bool {
+    static SEEN: std::sync::Mutex<Option<(std::time::Instant, bool)>> = std::sync::Mutex::new(None);
+    let mut g = SEEN.lock().unwrap();
+    if g.as_ref().map_or(true, |s| s.0.elapsed().as_secs() >= 5) {
+        *g = Some((std::time::Instant::now(), crate::sys::cputemp::installed()));
+    }
+    g.as_ref().is_some_and(|s| s.1)
+}
+
+/// Temperatura da CPU: o driver PawnIO, e o botão que instala ele.
+fn pawnio_row(ui: &mut Ui, r: Rect) {
+    use crate::sys::cputemp::setup::{self, STATE};
+    let state = STATE.load(std::sync::atomic::Ordering::Relaxed);
+    let bw = 180.0;
+    let text = match state {
+        setup::DOWNLOADING => crate::i18n::tr("Baixando o instalador oficial do PawnIO…").into_owned(),
+        setup::RUNNING => crate::i18n::tr("Siga o instalador do PawnIO. O Prisma confere quando ele fechar.").into_owned(),
+        setup::FAILED => format!("{} {}", crate::i18n::tr("O PawnIO não foi instalado:"), crate::i18n::tr(&setup::ERROR.lock().unwrap())),
+        _ if pawnio_installed() => crate::i18n::tr("Temperatura da CPU pelo PawnIO, um driver gratuito e aberto. Instalado.").into_owned(),
+        _ => crate::i18n::tr("A temperatura da CPU precisa do PawnIO, um driver gratuito e aberto, como o do Steam. O Prisma baixa o instalador oficial e confere a assinatura.").into_owned(),
+    };
+    let busy = matches!(state, setup::DOWNLOADING | setup::RUNNING);
+    let offer = !busy && !pawnio_installed();
+    let tw = if offer { r.w - bw - 12.0 } else { r.w };
+    ui.c.text_wrap(rect(r.x, r.y + 2.0, tw, r.h), &text, 12.0, if state == setup::FAILED { WARN } else { MUTED }, Weight::Regular);
+    if offer && ui.button("mt-pawnio", rect(r.right() - bw, r.y, bw, 36.0), "Instalar PawnIO", false) {
+        ui.ask("mt-pawnio", "Instalar o PawnIO?", "O PawnIO é um driver gratuito e de código aberto, assinado pela Microsoft, que lê sensores do processador. O Prisma baixa o instalador oficial (pawnio.eu), confere a assinatura e abre ele para você aceitar. Para tirar depois, use Aplicativos instalados do Windows.");
+    }
+    if ui.answered("mt-pawnio") {
+        setup::start();
     }
 }
 
@@ -130,7 +183,7 @@ fn limiter(ui: &mut Ui, app: &mut App, r: Rect) {
     ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Limitador durante o jogo");
     ui.label(rect(r.x + 16.0, r.y + 36.0, r.w - 32.0, 18.0), "Com o jogo aberto, estes atalhos mudam o limite dele, e o medidor completo mostra o resultado.", MUTED);
     let (x, w) = (r.x + 16.0, (r.w - 68.0) / 4.0);
-    let keys: [(&str, &str, u8); 4] = [("mt-k8", "Controles no medidor", 3), ("mt-k4", "Ligar ou desligar", 0), ("mt-k5", "Aumentar o limite", 1), ("mt-k6", "Diminuir o limite", 2)];
+    let keys: [(&str, &str, u8); 4] = [("mt-k8", "Controles no medidor", 3), ("mt-k4", "Trocar o modo", 0), ("mt-k5", "Aumentar o limite", 1), ("mt-k6", "Diminuir o limite", 2)];
     let mut hk = false;
     for (i, (key, name, which)) in keys.iter().enumerate() {
         let kx = x + i as f32 * (w + 12.0);
@@ -415,7 +468,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let w = a.w - 56.0;
     let top = 88.0;
     let view = rect(x, top, w, a.h - top - 20.0);
-    let (h1, h2, hl, hr) = (272.0, 212.0, 154.0, 172.0);
+    let (h1, h2, hl, hr) = (272.0, 330.0, 154.0, 172.0);
     let n = shown(app).len();
     let note = if app.cfg.meter_games.len() > n || SHOW_IDLE.load(std::sync::atomic::Ordering::Relaxed) { 34.0 } else { 0.0 };
     let h3 = 88.0 + note + n.max(1) as f32 * if is_narrow(w) { ROW_NARROW } else { ROW };

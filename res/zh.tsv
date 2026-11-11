@@ -1817,3 +1817,22 @@ Troca desligada	切换已关闭
 Plano fixo	固定计划
 Sem plano fixo	无固定计划
 Fica ligado até a troca automática voltar, também depois de reiniciar. Sem plano fixo, o Prisma não muda o plano.	在重新开启自动切换之前一直生效，重启后也是。没有固定计划时，Prisma 不会更改计划。
+Automático: medindo	自动：测量中
+Auto: medindo	自动：测量中
+Auto	自动
+Precisa do PawnIO	需要 PawnIO
+A mais na barra compacta	紧凑条中额外显示
+Temperatura da CPU	CPU 温度
+Temperatura da GPU	GPU 温度
+Trocar o modo	切换模式
+Instalar PawnIO	安装 PawnIO
+Instalar o PawnIO?	安装 PawnIO？
+O PawnIO é um driver gratuito e de código aberto, assinado pela Microsoft, que lê sensores do processador. O Prisma baixa o instalador oficial (pawnio.eu), confere a assinatura e abre ele para você aceitar. Para tirar depois, use Aplicativos instalados do Windows.	PawnIO 是一个免费开源、由 Microsoft 签名的驱动，用于读取处理器传感器。Prisma 会下载官方安装程序 (pawnio.eu)、校验签名并打开它，由你确认。之后可在 Windows 的“已安装的应用”中卸载。
+Baixando o instalador oficial do PawnIO…	正在下载 PawnIO 官方安装程序…
+Siga o instalador do PawnIO. O Prisma confere quando ele fechar.	请按 PawnIO 安装程序操作。关闭后 Prisma 会检查。
+O PawnIO não foi instalado:	PawnIO 未安装：
+Temperatura da CPU pelo PawnIO, um driver gratuito e aberto. Instalado.	CPU 温度通过 PawnIO（免费开源驱动）读取。已安装。
+A temperatura da CPU precisa do PawnIO, um driver gratuito e aberto, como o do Steam. O Prisma baixa o instalador oficial e confere a assinatura.	CPU 温度需要 PawnIO，一个免费开源的驱动，类似 Steam 的做法。Prisma 会下载官方安装程序并校验签名。
+o download falhou	下载失败
+não deu para salvar o instalador	无法保存安装程序
+a assinatura do instalador não confere	安装程序签名不符

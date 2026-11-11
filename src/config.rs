@@ -246,6 +246,8 @@ pub struct Config {
     /// HDR do Windows ao abrir o jogo: 0 desligado, 1 só na lista, 2 em todos.
     pub meter_hdr: u8,
     pub meter_items: u32,
+    /// O que aparece a mais na barra compacta (RAM, temperaturas, plano de energia).
+    pub meter_compact: u32,
     pub meter_op_compact: u32,
     pub meter_op_full: u32,
     pub hk_meter_compact: Hotkey,
@@ -354,6 +356,7 @@ impl Default for Config {
             nv_games: Vec::new(),
             meter_hdr: 0,
             meter_items: crate::meter::ITEMS_DEFAULT,
+            meter_compact: 0,
             meter_op_compact: 84,
             meter_op_full: 88,
             hk_meter_compact: Hotkey::new(MOD_CTRL | MOD_ALT, b'1' as u32),
@@ -518,6 +521,7 @@ impl Config {
                 }
                 "meter_hdr" => c.meter_hdr = v.parse().unwrap_or(0),
                 "meter_items" => c.meter_items = v.parse().unwrap_or(crate::meter::ITEMS_DEFAULT),
+                "meter_compact" => c.meter_compact = v.parse().unwrap_or(0),
                 "meter_power" => power_seen = true,
                 "meter_op_compact" => c.meter_op_compact = v.parse().unwrap_or(84),
                 "meter_op_full" => c.meter_op_full = v.parse().unwrap_or(88),
@@ -714,6 +718,7 @@ impl Config {
         let _ = writeln!(s, "snd_keep={}", self.snd_keep);
         let _ = writeln!(s, "meter_hdr={}", self.meter_hdr);
         let _ = writeln!(s, "meter_items={}\nmeter_power=1", self.meter_items);
+        let _ = writeln!(s, "meter_compact={}", self.meter_compact);
         let _ = writeln!(s, "meter_op_compact={}", self.meter_op_compact);
         let _ = writeln!(s, "meter_op_full={}", self.meter_op_full);
         hk(&mut s, "hk_meter_compact", self.hk_meter_compact);
@@ -820,6 +825,7 @@ impl Config {
             Defaults::Meter => {
                 self.meter_hdr = d.meter_hdr;
                 self.meter_items = d.meter_items;
+                self.meter_compact = d.meter_compact;
                 self.meter_op_compact = d.meter_op_compact;
                 self.meter_op_full = d.meter_op_full;
                 self.hk_meter_compact = d.hk_meter_compact;

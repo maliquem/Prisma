@@ -44,6 +44,10 @@ It only shows up through the shortcut, and measures the program in focus when yo
 
 Sits at the top of the screen and shows FPS, the frame time line, latency, CPU, GPU and VRAM. Choose left, center or right. Shortcut: Ctrl + Alt + 1.
 
+In **Extra in the compact bar**, on the Meter page, you add RAM, CPU temperature, GPU temperature and the power plan. Each temperature sits next to its usage.
+
+With a listed game in focus, the bar shows the limiter mode: **No limit**, **Auto** with the limit (or **Auto: measuring** in the first 5 minutes) or **Manual** with the limit. It lights up when the limit is acting, by injection or by the driver, and stays dim when it is not.
+
 ![Compact meter bar](meter-compact-en.png)
 
 The line shows how frames vary. A straight line means even frames. Variations up to 1 ms are ignored, and large spikes point to stutter.
@@ -58,6 +62,7 @@ Sits on the right or left of the screen and shows everything in one column. Shor
 - **Frame time:** the time of each frame, in milliseconds. Low variation is good.
 - **PC latency:** appears only in games with Reflex.
 - **Upscaling, frame generation and Reflex:** shows what the game loaded.
+- **CPU temperature:** appears below the CPU. Windows does not give this reading by itself, so it needs PawnIO, a free, open driver signed by Microsoft, the same kind of driver Steam uses. On the Meter page, **Install PawnIO** downloads the official installer, checks its signature and opens it for you to accept. To remove it later, use Windows Installed apps. Without it, the line says Needs PawnIO.
 - **Power plan:** shows the Windows plan in use. With the controls open, click it (or press Enter) to open the list and pick another; the arrows switch to the next one.
 
 To use the panel buttons inside a game, press **Ctrl + Alt + 5**. The game stays in front, and this unlocks the mouse and keyboard: arrows move through the options and change the chosen one, and clicks work too. To write the limit, type the number and press Enter. Press the shortcut again, or Esc, to go back to the game. Ctrl + Alt + 0 hides the meter and resets the readings.
@@ -76,7 +81,7 @@ With the limiter on, each game keeps its own limit. In the game list on the Mete
 - **Auto HDR:** the same Auto HDR per game choice as the HDR tab (Default, Force or Turn off). Changing it here changes it there.
 - **Power:** the Windows power plan that turns on when the game opens. When it closes, the previous plan comes back, unless someone changed it in between. **Don't change** leaves it as it is, and then automatic Power applies.
 - **Remove from the list after not opening for:** a game unused for 7, 14, 30, 60 or 90 days leaves the list, so it doesn't grow too long. Its choices stay saved and apply when it opens again, and it comes back to the list. **Show all** also shows the unused ones. The default is never.
-- **Shortcuts:** Ctrl + Alt + 3 turns it on and off. Ctrl + Alt + up or down arrow changes the limit. The limit goes from 20 to 1023.
+- **Shortcuts:** Ctrl + Alt + 3 switches the mode of the game in focus: Automatic, Manual, No limit and back to Automatic. The meter shows the chosen mode. Ctrl + Alt + up or down arrow changes the limit. The limit goes from 20 to 1023.
 
 If injection fails, the game crashes or an anti-cheat is detected, Prisma moves to the driver on its own and tells you. Without Windows frame readings, injection still goes in after 8 seconds of the game in focus, and the reason the readings did not open goes to the actions log.
 
@@ -87,7 +92,7 @@ If injection fails, the game crashes or an anti-cheat is detected, Prisma moves 
 
 Records performance to study later. It only runs if you turn it on, on the Meter page or with Ctrl + Alt + 4. Type how many minutes of play to record (5 is the default, 0 is no limit). While it records, the meter says so: the compact bar shows a red dot with **Recording** and the time at its start, and the full panel shows a red band right below the game name.
 
-Files go to Documents, Prisma, Logs: every frame, every second, the CPU of each game thread and a summary at the end. On NVIDIA cards, each second also carries the GPU for optimization work: memory controller use, power against the limit, what held the clock back (power, temperature), PCIe traffic and total VRAM; the top of the file has the driver, the maximum clocks, the power limit and the PCIe link, and the summary says whether the limit was power, temperature or VRAM. The summary also says which limit was in force (by injection or by the driver) and the frame generation: which one the game loaded (DLSS, FSR or XeSS), for how many seconds it was on and by how many times, and whether Lossless Scaling was open. Knowing whether it was on depends on Reflex markers; without them, the summary says it was loaded, without measuring. In games with a detected anti-cheat, the thread reading stays off.
+Files go to Documents, Prisma, Logs: every frame, every second, the CPU of each game thread and a summary at the end. On NVIDIA cards, each second also carries the GPU for optimization work: memory controller use, power against the limit, what held the clock back (power, temperature), PCIe traffic and total VRAM; the top of the file has the driver, the maximum clocks, the power limit and the PCIe link, and the summary says whether the limit was power, temperature or VRAM. The summary also says which limit was in force (by injection or by the driver) and the frame generation: which one the game loaded (DLSS, FSR or XeSS), for how many seconds it was on and by how many times, and whether Lossless Scaling was open. With PawnIO installed, each second also carries the CPU temperature (cpu_c column). Knowing whether it was on depends on Reflex markers; without them, the summary says it was loaded, without measuring. In games with a detected anti-cheat, the thread reading stays off.
 
 ## Disks and networks
 
@@ -279,7 +284,7 @@ All of them can be changed in the program.
 - **Ctrl + Alt + 2:** full meter
 - **Ctrl + Alt + 0:** hide the meter
 - **Ctrl + Alt + 5:** meter controls
-- **Ctrl + Alt + 3:** turn the limiter on or off
+- **Ctrl + Alt + 3:** switch the limiter mode (Automatic, Manual, No limit)
 - **Ctrl + Alt + up or down arrow:** raise or lower the limit
 - **Ctrl + Alt + 4:** data log
 - **Ctrl + Alt + P, A and J:** photo of an area, the screen and the window

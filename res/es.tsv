@@ -1817,3 +1817,22 @@ Troca desligada	Cambio apagado
 Plano fixo	Plan fijo
 Sem plano fixo	Sin plan fijo
 Fica ligado até a troca automática voltar, também depois de reiniciar. Sem plano fixo, o Prisma não muda o plano.	Se mantiene hasta que vuelva el cambio automático, también después de reiniciar. Sin plan fijo, Prisma no cambia el plan.
+Automático: medindo	Automático: midiendo
+Auto: medindo	Auto: midiendo
+Auto	Auto
+Precisa do PawnIO	Necesita PawnIO
+A mais na barra compacta	Además en la barra compacta
+Temperatura da CPU	Temperatura de la CPU
+Temperatura da GPU	Temperatura de la GPU
+Trocar o modo	Cambiar el modo
+Instalar PawnIO	Instalar PawnIO
+Instalar o PawnIO?	¿Instalar PawnIO?
+O PawnIO é um driver gratuito e de código aberto, assinado pela Microsoft, que lê sensores do processador. O Prisma baixa o instalador oficial (pawnio.eu), confere a assinatura e abre ele para você aceitar. Para tirar depois, use Aplicativos instalados do Windows.	PawnIO es un driver gratuito y de código abierto, firmado por Microsoft, que lee sensores del procesador. Prisma descarga el instalador oficial (pawnio.eu), comprueba la firma y lo abre para que lo aceptes. Para quitarlo después, usa Aplicaciones instaladas de Windows.
+Baixando o instalador oficial do PawnIO…	Descargando el instalador oficial de PawnIO…
+Siga o instalador do PawnIO. O Prisma confere quando ele fechar.	Sigue el instalador de PawnIO. Prisma lo comprueba cuando se cierre.
+O PawnIO não foi instalado:	PawnIO no se instaló:
+Temperatura da CPU pelo PawnIO, um driver gratuito e aberto. Instalado.	Temperatura de la CPU con PawnIO, un driver gratuito y abierto. Instalado.
+A temperatura da CPU precisa do PawnIO, um driver gratuito e aberto, como o do Steam. O Prisma baixa o instalador oficial e confere a assinatura.	La temperatura de la CPU necesita PawnIO, un driver gratuito y abierto, como el de Steam. Prisma descarga el instalador oficial y comprueba la firma.
+o download falhou	la descarga falló
+não deu para salvar o instalador	no se pudo guardar el instalador
+a assinatura do instalador não confere	la firma del instalador no coincide

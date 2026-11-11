@@ -42,6 +42,11 @@ pub const ITEM_MODE: u32 = 1 << 12;
 pub const ITEM_TIME: u32 = 1 << 13;
 pub const ITEM_LOG: u32 = 1 << 14;
 pub const ITEM_POWER: u32 = 1 << 15;
+/// Itens a mais da barra compacta.
+pub const COMPACT_RAM: u32 = 1 << 0;
+pub const COMPACT_CPU_TEMP: u32 = 1 << 1;
+pub const COMPACT_GPU_TEMP: u32 = 1 << 2;
+pub const COMPACT_POWER: u32 = 1 << 3;
 pub const ITEMS_DEFAULT: u32 = ITEM_FPS | ITEM_FRAME | ITEM_LATENCY | ITEM_LIMIT | ITEM_UPSCALE | ITEM_GEN | ITEM_CPU | ITEM_GPU | ITEM_MEM | ITEM_LOG | ITEM_POWER;
 
 /// Minutos de jogo que o limitador automático mede antes de decidir.
@@ -832,7 +837,12 @@ impl Meter {
     pub fn change_limit(&mut self, cfg: &mut Config, change: i32) -> String {
         self.apply_limit(cfg, |g| {
             if change == 0 {
-                g.limit_mode = if g.limit_mode == 0 { 2 } else { 0 };
+                // Automático, Manual, Desligado, e de volta ao Automático.
+                g.limit_mode = match g.limit_mode {
+                    1 => 2,
+                    2 => 0,
+                    _ => 1,
+                };
             } else {
                 g.limit_mode = 2;
                 g.limit_fps = (g.limit_fps as i32 + change).clamp(20, 1023) as u32;
@@ -851,7 +861,12 @@ impl Meter {
     fn apply_limit(&mut self, cfg: &mut Config, change: impl FnOnce(&mut MeterGame)) -> String {
         let Some(g) = cfg.meter_games.iter_mut().find(|g| g.exe.eq_ignore_ascii_case(&self.session.exe)) else { return String::new() };
         change(g);
-        let text = if g.limit_mode == 0 { "Sem limite".to_string() } else { format!("Limite {}", g.limit_fps) };
+        let text = match g.limit_mode {
+            0 => crate::i18n::tr("Sem limite").into_owned(),
+            1 if !g.measured => crate::i18n::tr("Automático: medindo").into_owned(),
+            1 => format!("{} {}", crate::i18n::tr("Automático"), g.limit_fps),
+            _ => format!("{} {}", crate::i18n::tr("Manual"), g.limit_fps),
+        };
         self.limit_write = Some((g.exe.clone(), Instant::now()));
         self.set_tag(text.clone());
         let value = if g.limit_mode == 0 { 0 } else { g.limit_fps };
@@ -934,10 +949,13 @@ impl Meter {
     /// Chamado uma vez por segundo. Liga, desliga e mede conforme o jogo em foco.
     pub fn tick(&mut self, cfg: &mut Config, game: Option<(String, u32, String)>, fg_pid: u32, snap: &monitor::Snapshot) {
         self.save_limit(cfg);
+        let want = (self.view == VIEW_COMPACT && cfg.meter_compact & COMPACT_CPU_TEMP != 0) || (self.view == VIEW_FULL && cfg.meter_items & ITEM_CPU != 0) || self.log.is_some();
+        crate::sys::cputemp::WANTED.store(want, Relaxed);
         if self.interacting() && unsafe { GetForegroundWindow() } != self.back {
             self.set_controls(false);
         }
-        if self.plans_at.map_or(true, |t| t.elapsed().as_secs() >= 5) && (self.view == VIEW_FULL || self.plans.is_empty()) {
+        let power_shown = self.view == VIEW_FULL || (self.view == VIEW_COMPACT && cfg.meter_compact & COMPACT_POWER != 0);
+        if self.plans_at.map_or(true, |t| t.elapsed().as_secs() >= 5) && (power_shown || self.plans.is_empty()) {
             self.plans_at = Some(Instant::now());
             self.plans = power::list().into_iter().map(|p| (p.id, p.name)).collect();
             self.plan_active = power::active().unwrap_or_default();
@@ -1182,7 +1200,32 @@ impl Meter {
         let rec = self.rec_clock();
         let rec_word = measure("Gravando", 12.0, Weight::Semibold, None).0;
         let rec_w = rec.as_ref().map_or(0.0, |t| 14.0 + rec_word + 6.0 + measure(t, 12.0, Weight::Regular, None).0 + 18.0);
-        let w = if tag.is_some() { COMPACT_W + 104.0 } else { COMPACT_W } + rec_w;
+        // Limitador: o modo do jogo, aceso quando o limite está agindo (injeção pronta ou driver).
+        let engaged = self.limiter.as_ref().and_then(|l| l.limit()).is_some() || self.session.opened.is_some();
+        let lim = entry(cfg, &self.session.exe).map(|g| match g.limit_mode {
+            0 => (crate::i18n::tr("Sem limite").into_owned(), false),
+            1 if !g.measured => (crate::i18n::tr("Auto: medindo").into_owned(), engaged),
+            1 => (format!("{} {}", crate::i18n::tr("Auto"), g.limit_fps), engaged),
+            _ => (format!("{} {}", crate::i18n::tr("Manual"), g.limit_fps), engaged),
+        });
+        let lim_w = lim.as_ref().map_or(0.0, |l| measure(&l.0, 12.0, Weight::Semibold, None).0 + 30.0 + 12.0);
+        // Itens a mais: a temperatura vai junto do uso, a RAM e o plano depois da VRAM.
+        let extra = cfg.meter_compact;
+        let temp = |on: bool, t: Option<f32>| on.then(|| t.map_or("— °C".to_string(), |v| format!("{v:.0} °C")));
+        let cpu_t = temp(extra & COMPACT_CPU_TEMP != 0, snap.cpu_temp);
+        let gpu_t = temp(extra & COMPACT_GPU_TEMP != 0, (snap.gpu.temp > 0).then_some(snap.gpu.temp as f32));
+        let cpu_v = format!("{:.0}%", snap.cpu);
+        let gpu_v = format!("{:.0}%", snap.gpu.util);
+        let value_w = |v: &str| measure(v, 14.0, Weight::Semibold, None).0;
+        let temp_w = |t: &Option<String>| t.as_ref().map_or(0.0, |t| measure(t, 12.0, Weight::Regular, None).0 + 6.0);
+        let cpu_adv = 30.0 + value_w(&cpu_v).max(32.0) + temp_w(&cpu_t) + 12.0;
+        let gpu_adv = 30.0 + value_w(&gpu_v).max(32.0) + temp_w(&gpu_t) + 12.0;
+        let ram = (extra & COMPACT_RAM != 0).then(|| (num(gb(snap.ram_used), 1), format!("/ {:.0} GB", gb(snap.ram_total))));
+        let ram_w = ram.as_ref().map_or(0.0, |(u, t)| 24.0 + measure("RAM", 12.0, Weight::Regular, None).0 + value_w(u) + measure(t, 12.0, Weight::Regular, None).0 + 10.0);
+        let plan = (extra & COMPACT_POWER != 0).then(|| self.plans.iter().find(|p| p.0.eq_ignore_ascii_case(&self.plan_active)).map_or("—".to_string(), |p| p.1.clone()));
+        let plan_w = plan.as_ref().map_or(0.0, |p| 24.0 + measure(p, 12.0, Weight::Semibold, None).0 + 4.0);
+        let grow = lim_w + (cpu_adv - 70.0) + (gpu_adv - 70.0) + ram_w + plan_w;
+        let w = if tag.is_some() { COMPACT_W + 104.0 } else { COMPACT_W } + rec_w + grow;
         let x = match cfg.meter_pos_compact {
             0 => mon.left + (EDGE * scale) as i32,
             2 => mon.right - ((w + EDGE) * scale) as i32,
@@ -1217,6 +1260,15 @@ impl Meter {
             c.text(at(x, 44.0), &fps_text, 20.0, if s.spike { WARN } else { WHITE }, Align::Left, Weight::Semibold);
             c.text(at(x + 44.0, 28.0), "FPS", 12.0, TEXT2, Align::Left, Weight::Regular);
             x += 84.0;
+            if let Some((text, on)) = &lim {
+                let cw = lim_w - 12.0;
+                let chip = rect(x - 4.0, 9.0, cw, 22.0);
+                c.round(chip, 11.0, if *on { ACCENT.alpha(0.18) } else { CARD2 });
+                c.round_line(chip, 11.0, if *on { ACCENT } else { rgb(0x3a3f49) }, 1.0);
+                c.circle(chip.x + 11.0, chip.y + 11.0, 3.5, if *on { ACCENT } else { TEXT2 });
+                c.text_raw(rect(chip.x + 20.0, chip.y, cw - 26.0, chip.h), text, 12.0, if *on { ACCENT } else { TEXT2 }, Align::Left, Weight::Semibold);
+                x += lim_w;
+            }
             c.line(x, 10.0, x, 30.0, rgb(0x3a3f49), 1.0);
             x += 12.0;
             strip(c, rect(x, 8.0, 120.0, 24.0), &s);
@@ -1233,10 +1285,18 @@ impl Meter {
             let lat = latency.map_or("—".to_string(), |v| format!("{v:.0} ms"));
             pair(x, "Latência", 50.0, &lat);
             x += 104.0;
-            pair(x, "CPU", 26.0, &format!("{:.0}%", snap.cpu));
-            x += 70.0;
-            pair(x, "GPU", 26.0, &format!("{:.0}%", snap.gpu.util));
-            x += 70.0;
+            let usage = |x: f32, name: &str, value: &str, t: &Option<String>| {
+                c.text(at(x, 26.0), name, 12.0, TEXT2, Align::Left, Weight::Regular);
+                let vw = value_w(value).max(32.0);
+                c.text_raw(at(x + 30.0, vw + 2.0), value, 14.0, WHITE, Align::Left, Weight::Semibold);
+                if let Some(t) = t {
+                    c.text_raw(at(x + 30.0 + vw + 6.0, temp_w(&Some(t.clone()))), t, 12.0, TEXT, Align::Left, Weight::Regular);
+                }
+            };
+            usage(x, "CPU", &cpu_v, &cpu_t);
+            x += cpu_adv;
+            usage(x, "GPU", &gpu_v, &gpu_t);
+            x += gpu_adv;
             let hot = vram >= VRAM_NEAR;
             c.text(at(x, 36.0), "VRAM", 12.0, if hot { WARN_RED } else { TEXT2 }, Align::Left, if hot { Weight::Semibold } else { Weight::Regular });
             x += 40.0;
@@ -1247,6 +1307,23 @@ impl Meter {
             c.text(at(x, 34.0), &num(used, 1), 14.0, WHITE, Align::Left, Weight::Semibold);
             x += 32.0;
             c.text(at(x, 50.0), &format!("/ {total:.0} GB"), 12.0, TEXT2, Align::Left, Weight::Regular);
+            x += 50.0;
+            if let Some((used, of)) = &ram {
+                c.line(x, 10.0, x, 30.0, rgb(0x3a3f49), 1.0);
+                x += 12.0;
+                let lw = measure("RAM", 12.0, Weight::Regular, None).0;
+                c.text(at(x, lw + 2.0), "RAM", 12.0, TEXT2, Align::Left, Weight::Regular);
+                x += lw + 6.0;
+                c.text_raw(at(x, value_w(used) + 2.0), used, 14.0, WHITE, Align::Left, Weight::Semibold);
+                x += value_w(used) + 4.0;
+                c.text_raw(at(x, measure(of, 12.0, Weight::Regular, None).0 + 2.0), of, 12.0, TEXT2, Align::Left, Weight::Regular);
+                x += measure(of, 12.0, Weight::Regular, None).0 + 4.0;
+            }
+            if let Some(p) = &plan {
+                c.line(x, 10.0, x, 30.0, rgb(0x3a3f49), 1.0);
+                x += 12.0;
+                c.text_raw(at(x, measure(p, 12.0, Weight::Semibold, None).0 + 4.0), p, 12.0, ACCENT, Align::Left, Weight::Semibold);
+            }
             if let Some(t) = &tag {
                 c.text(rect(r.w - 110.0, 0.0, 98.0, r.h), t, 12.0, ACCENT, Align::Right, Weight::Regular);
             }
@@ -1421,6 +1498,12 @@ impl Meter {
         if on(ITEM_CPU) {
             out.push(Line::Usage("CPU", snap.cpu));
             out.push(Line::Pair("Frequência".into(), format!("{} GHz", num(snap.ghz, 2)), TEXT));
+            match snap.cpu_temp {
+                Some(t) => out.push(Line::Pair("Temperatura".into(), format!("{t:.0} °C"), TEXT)),
+                // Sem o PawnIO não há temperatura: o caminho para instalar fica na aba Medidor.
+                None if !crate::sys::cputemp::OPEN.load(Relaxed) => out.push(Line::Pair("Temperatura".into(), crate::i18n::tr("Precisa do PawnIO").into_owned(), TEXT2)),
+                None => {}
+            }
             out.push(Line::Cores(snap.threads.clone()));
         }
         if on(ITEM_GPU) {

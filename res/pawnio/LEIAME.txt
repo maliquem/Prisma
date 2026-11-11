@@ -1,0 +1,11 @@
+Módulos do PawnIO.Modules 0.2.11 (https://github.com/namazso/PawnIO.Modules), de namazso,
+sob a GNU LGPL 2.1 ou posterior (texto em COPYING). Código-fonte: AMDFamily17.p e IntelMSR.p
+no mesmo repositório, na etiqueta 0.2.11. Eles rodam dentro do driver PawnIO
+(https://pawnio.eu), que a pessoa instala à parte; o Prisma só carrega o módulo e lê a
+temperatura da CPU pela interface de controle do driver.
+
+PawnIO.Modules 0.2.11 modules (https://github.com/namazso/PawnIO.Modules), by namazso,
+under the GNU LGPL 2.1 or later (text in COPYING). Source: AMDFamily17.p and IntelMSR.p in the
+same repository, tag 0.2.11. They run inside the PawnIO driver (https://pawnio.eu), which is
+installed separately; Prisma only loads the module and reads the CPU temperature through the
+driver's control interface.
