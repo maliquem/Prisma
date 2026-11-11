@@ -217,11 +217,15 @@ pub(crate) fn invite_of(lines: &[String]) -> Option<Shown> {
 
 /// Cria um convite como o botão "Criar convite": liga o host se nem o serviço nem o host
 /// estiverem ligados, para o convite anterior e abre o novo. Devolve o registro do convite e o
-/// processo que o escreve.
-pub fn create_invite(_app: &mut App) -> Option<(PathBuf, u32)> {
+/// processo que o escreve. `minutes` troca a validade da página só neste convite (o
+/// `--stream-invite` limita de 1 a 1440).
+pub fn create_invite(_app: &mut App, minutes: Option<u32>) -> Option<(PathBuf, u32)> {
     let mut guard = STATE.lock().unwrap_or_else(|e| e.into_inner());
     let st = guard.get_or_insert_with(test_setup);
-    let opts = st.opts.get_or_insert_with(Opts::load).clone();
+    let mut opts = st.opts.get_or_insert_with(Opts::load).clone();
+    if let Some(m) = minutes {
+        opts.invite_min = m;
+    }
     invite_in(st, &opts)
 }
 

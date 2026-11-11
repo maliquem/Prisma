@@ -120,6 +120,19 @@ pub fn top_windows() -> Vec<HWND> {
     out
 }
 
+/// Janela principal do processo ou de um filho dele (o launcher abre o jogo, que às vezes abre
+/// outro processo): a de cima entre as visíveis.
+pub fn main_window(pid: u32) -> Option<HWND> {
+    if pid == 0 {
+        return None;
+    }
+    let parents = parent_map();
+    top_windows().into_iter().find(|h| {
+        let p = window_pid(*h);
+        p == pid || is_descendant(&parents, p, pid)
+    })
+}
+
 /// Todas as janelas de primeiro nível, inclusive as escondidas.
 pub fn all_windows() -> Vec<HWND> {
     unsafe extern "system" fn cb(h: HWND, l: LPARAM) -> windows::core::BOOL {

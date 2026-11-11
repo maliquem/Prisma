@@ -251,6 +251,8 @@ pub struct App {
     force_hook: Option<HHOOK>,
     pub meter: crate::meter::Meter,
     pub rec_window: bool,
+    /// Janela que a gravação pedida pelo launcher grava; 0 é a janela em primeiro plano.
+    rec_hwnd: isize,
     pub pw_sel: String,
     pub report: crate::report::Form,
     /// Janela e escala durante o desenho, quando `main` está emprestada ao passe.
@@ -448,6 +450,7 @@ pub fn start(background: bool) {
             force_hook: None,
             meter: crate::meter::Meter::new(),
             rec_window: true,
+            rec_hwnd: 0,
             pw_sel: String::new(),
             report: crate::report::Form::default(),
             paint_window: (HWND::default(), 1.0),
@@ -1105,7 +1108,7 @@ impl App {
         }
     }
 
-    fn fg_info(&self) -> Option<(HWND, u32, String)> {
+    pub(crate) fn fg_info(&self) -> Option<(HWND, u32, String)> {
         unsafe {
             let h = GetForegroundWindow();
             if h.is_invalid() {
@@ -1248,7 +1251,10 @@ impl App {
     }
 
     fn capture_settings(&self, replay: bool) -> Settings {
-        let fg = unsafe { GetForegroundWindow() };
+        let fg = match self.rec_hwnd {
+            h if h != 0 && !replay => HWND(h as *mut _),
+            _ => unsafe { GetForegroundWindow() },
+        };
         let mon = unsafe { MonitorFromWindow(fg, MONITOR_DEFAULTTOPRIMARY) };
         // O replay segue a escolha da tela Captura; a gravação, o botão usado.
         let window = !fg.is_invalid() && if replay { self.cfg.cap_target == 1 } else { self.rec_window };
@@ -1301,6 +1307,11 @@ impl App {
 
     /// Com gravação em andamento, qualquer um dos dois atalhos para.
     fn toggle_record(&mut self, window: bool) {
+        self.toggle_record_of(window, None);
+    }
+
+    /// Como o atalho, mas gravando a janela `target` em vez da que está em primeiro plano.
+    pub(crate) fn toggle_record_of(&mut self, window: bool, target: Option<HWND>) {
         if self.rec_start.is_some() {
             if let Some(e) = &self.engine {
                 e.send(Cmd::StopRecord);
@@ -1313,6 +1324,7 @@ impl App {
             return;
         }
         self.rec_window = window;
+        self.rec_hwnd = target.map_or(0, |h| h.0 as isize);
         self.start_engine(false);
         let path = capture::new_path(&self.cfg.cap_dir, "mp4");
         if let Some(e) = &self.engine {
@@ -1738,6 +1750,19 @@ impl App {
         }
     }
 
+    /// Foto só da janela, salva direto na pasta de capturas, sem abrir o editor. Devolve o arquivo.
+    pub(crate) fn save_window_shot(&mut self, h: HWND) -> Option<String> {
+        let f = capture::grab_window(h).ok()?;
+        let path = capture::new_path(&self.cfg.cap_dir, "png");
+        capture::save_png(&path, f.w, f.h, &f.bgra).ok()?;
+        if let (true, Some(half)) = (self.cfg.shot_hdr, &f.half) {
+            let _ = capture::save_jxr(&capture::new_path(&self.cfg.cap_dir, "jxr"), f.w, f.h, half);
+        }
+        self.toast.info("Foto salva e copiada");
+        capture::copy_to_clipboard(self.hub, f.w, f.h, &f.bgra);
+        Some(path)
+    }
+
     fn take_full_shot(&mut self) {
         let Ok(f) = capture::grab(capture::cursor_monitor()) else {
             self.toast.info("Não consegui capturar a tela");
@@ -2082,6 +2107,11 @@ impl App {
     fn meter_view(&mut self, view: u8) {
         // O mesmo atalho de novo esconde o medidor.
         let view = if view != crate::meter::VIEW_OFF && self.meter.view == view { crate::meter::VIEW_OFF } else { view };
+        self.set_meter_view(view);
+    }
+
+    /// Mostra o medidor nesta vista, sem o "de novo esconde" do atalho.
+    pub(crate) fn set_meter_view(&mut self, view: u8) {
         if view != crate::meter::VIEW_OFF {
             self.meter_session();
         }

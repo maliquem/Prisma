@@ -51,6 +51,13 @@ pub fn add_game(app: &mut App, exe: &str) {
     st.snap = None;
 }
 
+/// Outro programa mudou o driver: a tela lê de novo.
+pub fn stale() {
+    if let Some(st) = STATE.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
+        st.snap = None;
+    }
+}
+
 /// Opções que este driver tem e que fazem sentido neste perfil.
 fn shown<'a>(who: &'a Profile, group: &'static [Setting]) -> impl Iterator<Item = &'static Setting> + 'a {
     let ver = drs::driver_version().unwrap_or(0);

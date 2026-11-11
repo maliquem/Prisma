@@ -97,6 +97,8 @@ pub fn for_process(pid: u32) -> Vec<Session> {
 
 pub enum Change {
     Step(i32),
+    /// Volume de 0 a 1.
+    Set(f32),
     ToggleMute,
 }
 
@@ -109,6 +111,14 @@ pub fn change_focused(pid: u32, ch: Change) -> Option<(f32, bool)> {
     match ch {
         Change::Step(step) => {
             vol = (((vol * 100.0).round() + step as f32) / 100.0).clamp(0.0, 1.0);
+            mute = false;
+            for s in &list {
+                s.set_volume(vol);
+                s.set_mute(false);
+            }
+        }
+        Change::Set(v) => {
+            vol = v.clamp(0.0, 1.0);
             mute = false;
             for s in &list {
                 s.set_volume(vol);

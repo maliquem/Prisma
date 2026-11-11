@@ -291,13 +291,21 @@ pub fn cursor_monitor() -> HMONITOR {
 
 /// Tira um quadro do monitor.
 pub fn grab(mon: HMONITOR) -> Result<Frame> {
-    let color = monitor_color(mon);
+    grab_item(&monitor_item(mon)?, monitor_color(mon))
+}
+
+/// Tira um quadro só da janela, mesmo com outra por cima.
+pub fn grab_window(hwnd: HWND) -> Result<Frame> {
+    let mon = unsafe { MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST) };
+    grab_item(&window_item(hwnd)?, monitor_color(mon))
+}
+
+fn grab_item(item: &GraphicsCaptureItem, color: MonitorColor) -> Result<Frame> {
     let d = d3d()?;
-    let item = monitor_item(mon)?;
     let size = item.Size()?;
     let fmt = if color.hdr { DirectXPixelFormat::R16G16B16A16Float } else { DirectXPixelFormat::B8G8R8A8UIntNormalized };
     let pool = Direct3D11CaptureFramePool::CreateFreeThreaded(&d.rt, fmt, 1, size)?;
-    let session = pool.CreateCaptureSession(&item)?;
+    let session = pool.CreateCaptureSession(item)?;
     let _ = session.SetIsCursorCaptureEnabled(false);
     let _ = session.SetIsBorderRequired(false);
     session.StartCapture()?;

@@ -1893,3 +1893,17 @@ mín	最低
 máx	最高
 som	声音
 Convite do Compartilhar tela criado pelo Prisma Launcher	“屏幕共享”邀请由 Prisma Launcher 创建
+O Prisma não respondeu	Prisma 没有响应
+Janela do jogo não encontrada	找不到游戏窗口
+Essa janela não pode ficar sem bordas	此窗口无法设为无边框
+O jogo ainda não tem som aberto	游戏尚未打开声音
+Sem placa NVIDIA	没有 NVIDIA 显卡
+O driver NVIDIA não respondeu	NVIDIA 驱动没有响应
+Não consegui capturar a janela	无法截取窗口
+O Windows não trocou o plano	Windows 没有切换计划
+Esse plano não existe	此计划不存在
+Nenhuma tela aceita HDR	没有支持 HDR 的屏幕
+O Windows não trocou o HDR	Windows 没有切换 HDR
+Nome de executável inválido	可执行文件名称无效
+O Prisma não conhece essa opção	Prisma 不认识此选项
+Valor fora das opções	值不在选项内

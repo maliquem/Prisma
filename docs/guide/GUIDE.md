@@ -246,6 +246,22 @@ In testing. Shows and controls another PC over the internet, for remote access o
 
 Shows CPU, GPU, RAM and VRAM on top of everything, in four styles. Drag it to move it. Shortcut: Ctrl + Alt + W.
 
+## Prisma Launcher
+
+Prisma Launcher, the games launcher, talks to Prisma running on the same PC through a private channel that only your Windows user can open. From the launcher, without opening the Prisma window, you can:
+
+- **Meter:** show the compact bar or the full panel, or hide it.
+- **Power:** see the plans and pick a fixed plan, or go back to automatic switching.
+- **Fullscreenizer:** make the game window borderless and back.
+- **Sound:** raise, lower or set the game volume, or mute it.
+- **HDR:** turn Windows HDR on or off.
+- **NVIDIA driver:** read and change driver options in the game profile or the global one, with the same values as the NVIDIA driver page. The game joins the page list. Only with an NVIDIA card.
+- **Capture:** take a photo of the game window only, even with the launcher on top (it goes straight to the capture folder and the clipboard, without opening the editor), and start or stop recording the game window. Saving the replay works too.
+- **Share screen:** create an invite, lasting what the launcher picks (from 1 minute to 24 hours) or what the page says.
+- **Open a page:** Meter, Power, Fullscreenizer, Sound, HDR, NVIDIA driver, Capture or Share screen.
+
+The game the launcher opens also enters game mode at once, without waiting for detection. Nothing opens over the game: Prisma only shows a notice, as with the shortcuts. With Prisma closed, the launcher reaches none of this.
+
 ## Settings
 
 - **Start with Windows and administrator:** turn them on or off whenever you want. Changing this in the installed version asks for Windows permission.

@@ -1893,3 +1893,17 @@ mín	мин
 máx	макс
 som	звук
 Convite do Compartilhar tela criado pelo Prisma Launcher	Приглашение «Общий экран» создано Prisma Launcher
+O Prisma não respondeu	Prisma не ответил
+Janela do jogo não encontrada	Окно игры не найдено
+Essa janela não pode ficar sem bordas	Это окно нельзя сделать безрамочным
+O jogo ainda não tem som aberto	У игры ещё нет открытого звука
+Sem placa NVIDIA	Нет видеокарты NVIDIA
+O driver NVIDIA não respondeu	Драйвер NVIDIA не ответил
+Não consegui capturar a janela	Не удалось снять окно
+O Windows não trocou o plano	Windows не сменил схему
+Esse plano não existe	Такой схемы нет
+Nenhuma tela aceita HDR	Ни один экран не поддерживает HDR
+O Windows não trocou o HDR	Windows не переключил HDR
+Nome de executável inválido	Недопустимое имя исполняемого файла
+O Prisma não conhece essa opção	Prisma не знает этот параметр
+Valor fora das opções	Значение вне вариантов

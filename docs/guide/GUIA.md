@@ -246,6 +246,22 @@ Em teste. Mostra e controla outro PC pela internet, para acesso remoto ou para j
 
 Mostra CPU, GPU, RAM e VRAM por cima de tudo, em quatro estilos. Arraste para mudar de lugar. Atalho: Ctrl + Alt + W.
 
+## Prisma Launcher
+
+O Prisma Launcher, o lançador de jogos, conversa com o Prisma aberto no mesmo PC por um canal privado, que só o seu usuário do Windows abre. Pelo launcher, sem abrir a janela do Prisma, dá para:
+
+- **Medidor:** mostrar a barra compacta, o painel completo ou esconder.
+- **Energia:** ver os planos e escolher um plano fixo, ou voltar à troca automática.
+- **Fullscreenizer:** deixar a janela do jogo sem bordas e voltar.
+- **Som:** subir, baixar, escolher o volume do jogo ou deixar mudo.
+- **HDR:** ligar ou desligar o HDR do Windows.
+- **Driver NVIDIA:** ler e mudar as opções do driver no perfil do jogo ou no global, com os mesmos valores da tela Driver NVIDIA. O jogo entra na lista da tela. Só com placa NVIDIA.
+- **Captura:** tirar uma foto só da janela do jogo, mesmo com o launcher por cima (vai direto para a pasta de capturas e para a área de transferência, sem abrir o editor), e começar ou parar a gravação da janela do jogo. Salvar o replay também funciona.
+- **Compartilhar tela:** criar um convite, com a validade escolhida no launcher (de 1 minuto a 24 horas) ou a da página.
+- **Abrir uma tela:** Medidor, Energia, Fullscreenizer, Som, HDR, Driver NVIDIA, Captura ou Compartilhar tela.
+
+O jogo aberto pelo launcher também entra no modo jogo na hora, sem esperar a detecção. Nada abre por cima do jogo: o Prisma só mostra um aviso, como nos atalhos. Com o Prisma fechado, o launcher não alcança nada disso.
+
 ## Configurações
 
 - **Início com o Windows e administrador:** ligue ou desligue quando quiser. Mudar isso na versão instalada pede a permissão do Windows.
