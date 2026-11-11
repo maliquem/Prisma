@@ -35,12 +35,52 @@ struct Shown {
     long: Option<String>,
     /// None publicando, Some(true) publicado, Some(false) nenhum relé aceitou.
     published: Option<bool>,
+    /// Até quando vale (segundos desde 1970).
+    until: u64,
+}
+
+impl Shown {
+    /// Segundos que faltam; 0 vencido.
+    fn left(&self) -> u64 {
+        self.until.saturating_sub(stream::unix_now())
+    }
+}
+
+/// A linha de latência vem do registro em português: as palavras dela no idioma do Prisma.
+fn lat_words(l: &str) -> String {
+    let t = |s: &str| crate::i18n::tr(s).into_owned();
+    l.replace(" rede ", &format!(" {} ", t("rede")))
+        .replace("(mín ", &format!("({} ", t("mín")))
+        .replace(", máx ", &format!(", {} ", t("máx")))
+        .replace(" ponta a ponta ", &format!(" {} ", t("ponta a ponta")))
+        .replace(" som ", &format!(" {} ", t("som")))
+}
+
+/// Tempo que falta, como 9:58 ou 23:59:58.
+fn clock(s: u64) -> String {
+    if s >= 3600 {
+        format!("{}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60)
+    } else {
+        format!("{}:{:02}", s / 60, s % 60)
+    }
+}
+
+/// Nomes da lista de validade do convite.
+fn minutes_name(m: u32) -> String {
+    if m >= 60 && m % 60 == 0 {
+        let h = m / 60;
+        crate::i18n::tr(if h == 1 { "1 hora" } else if h == 24 { "24 horas" } else { "{} horas" }).replace("{}", &h.to_string())
+    } else {
+        crate::i18n::tr("{} minutos").replace("{}", &m.to_string())
+    }
 }
 
 #[derive(Default)]
 struct State {
     host: Option<Proc>,
     view: Option<Proc>,
+    /// O PC que a janela de assistir mostra.
+    view_name: String,
     /// Mouse e teclado neste PC pareado (sem vídeo), e o nome dele.
     /// Mouse e teclado ligado, e com quais PCs (pelo id).
     kvm: Option<(Proc, Vec<String>)>,
@@ -59,6 +99,8 @@ struct State {
     popup: bool,
     /// O último código que a janela já mostrou sozinha.
     seen: String,
+    /// O código revogado antes de vencer.
+    revoked: String,
     /// Código que chegou por link, esperando a resposta da pergunta.
     link_code: Option<String>,
     /// Pedido para abrir a janela Compartilhar do Windows (fora do desenho).
@@ -74,6 +116,10 @@ struct State {
     dev_tab: usize,
     /// Aparelho sendo renomeado: id e o texto do campo.
     renaming: Option<(String, String)>,
+    /// Aba Host: as opções de qual aparelho que assiste (None: as de todos).
+    host_for: Option<String>,
+    /// Saídas e entradas de som, lidas a cada 5 s.
+    sound_devs: (Vec<crate::sys::audio::Device>, Vec<crate::sys::audio::Device>, Option<Instant>),
 }
 
 /// Fotos de teste: `--test-tab=N` abre numa aba e `--test-invite` mostra a janela do convite.
@@ -96,7 +142,7 @@ fn test_setup() -> State {
                 ]);
             }
             if a == "--test-invite" {
-                s.test_invite = Some(Shown { code: "K7M2-QX9P".into(), long: Some("PRISMA-EXEMPLO".into()), published: Some(true) });
+                s.test_invite = Some(Shown { code: "K7M2-QX9P".into(), long: Some("PRISMA-EXEMPLO".into()), published: Some(true), until: stream::unix_now() + 598 });
                 s.seen = "K7M2-QX9P".into();
                 s.popup = true;
             }
@@ -157,6 +203,8 @@ fn invite_of(lines: &[String]) -> Option<Shown> {
     let rest = &lines[at..];
     let code = rest[0].trim_start_matches(stream::CODE_LINE).trim().to_string();
     let long = rest.iter().map(|l| l.trim()).find(|l| l.starts_with("PRISMA-")).map(str::to_string);
+    // A validade vem logo antes do código.
+    let until = lines[..at].iter().rev().take(2).find_map(|l| l.strip_prefix(stream::EXPIRES_LINE)).and_then(|v| v.trim().parse().ok()).unwrap_or(0);
     let published = if rest.iter().any(|l| l.starts_with(stream::CODE_OK)) {
         Some(true)
     } else if rest.iter().any(|l| l.starts_with(stream::CODE_FAIL)) {
@@ -164,7 +212,7 @@ fn invite_of(lines: &[String]) -> Option<Shown> {
     } else {
         None
     };
-    Some(Shown { code, long, published })
+    Some(Shown { code, long, published, until })
 }
 
 fn stop(p: &mut Option<Proc>) {
@@ -413,7 +461,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let h = a.h - top - 20.0;
     match st.tab {
         6 => room_tab(ui, app, &present, x, top, w, h),
-        1 => host_tab(ui, st, &mut new_opts, x, top, w, h),
+        1 => host_tab(ui, app, st, &mut new_opts, x, top, w, h),
         2 => client_tab(ui, app, &mut new_client, x, top, w, h),
         3 => net_tab(ui, app, st, &mut new_opts, x, top, w, h),
         4 => keys_tab(ui, app, &mut new_opts, &mut new_client, x, top, w, h),
@@ -450,12 +498,21 @@ fn invite_sheet(ui: &mut Ui, app: &mut App, st: &mut State, s: &Shown) {
     let iw = b.w - 48.0;
     ui.c.text(rect(ix, b.y + 20.0, iw, 28.0), "Convite criado", 17.0, TEXT, Align::Left, Weight::Semibold);
     ui.c.text_raw(rect(ix, b.y + 58.0, iw, 52.0), &s.code, 38.0, ACCENT, Align::Center, Weight::Semibold);
-    let (status, color) = match s.published {
-        None => ("Publicando o código nos relés...", MUTED),
-        Some(true) => ("Pronto. Vale 10 minutos e uma vez.", ACCENT),
-        Some(false) => ("Os relés não responderam: mande o convite longo.", WARN),
+    let left = s.left();
+    let revoked = st.revoked == s.code;
+    let dead = revoked || left == 0;
+    let (status, color) = if revoked {
+        (crate::i18n::tr("Revogado: o código não vale mais.").into_owned(), WARN)
+    } else if left == 0 {
+        (crate::i18n::tr("Vencido. Crie um convite novo.").into_owned(), WARN)
+    } else {
+        match s.published {
+            None => (crate::i18n::tr("Publicando o código nos relés...").into_owned(), MUTED),
+            Some(true) => (crate::i18n::tr("Pronto. Vale uma vez e vence em {}.").replace("{}", &clock(left)), ACCENT),
+            Some(false) => (crate::i18n::tr("Os relés não responderam: mande o convite longo.").into_owned(), WARN),
+        }
     };
-    ui.c.text(rect(ix, b.y + 112.0, iw, 20.0), status, 13.0, color, Align::Center, Weight::Regular);
+    ui.c.text_raw(rect(ix, b.y + 112.0, iw, 20.0), &status, 13.0, color, Align::Center, Weight::Regular);
     ui.c.text_wrap(
         rect(ix, b.y + 142.0, iw, 40.0),
         "No outro PC, digite o código em Parear com outro PC, ou mande o link: ele abre o Prisma e pareia depois de perguntar.",
@@ -466,27 +523,42 @@ fn invite_sheet(ui: &mut Ui, app: &mut App, st: &mut State, s: &Shown) {
     let bw = ((iw - 2.0 * GAP) / 3.0).floor();
     let y = b.y + 196.0;
     let link = weblink::web_link(&s.code);
-    let ready = s.published != Some(false);
+    let ready = s.published != Some(false) && !dead;
+    let note = crate::i18n::tr("Vale uma vez e vence em {}.").replace("{}", &clock(left));
     if ui.button_ex("sh-c-code", rect(ix, y, bw, 40.0), "Copiar código", false, ready) {
         crate::capture::copy_text(app.hub, &s.code);
-        app.toast.info("Código copiado. Vale 10 minutos e uma vez.");
+        app.toast.info(&format!("{} {note}", crate::i18n::tr("Código copiado.")));
     }
     if ui.button_ex("sh-c-link", rect(ix + bw + GAP, y, bw, 40.0), "Copiar link", false, ready) {
         crate::capture::copy_text(app.hub, &link);
-        app.toast.info("Link copiado. Vale 10 minutos e uma vez.");
+        app.toast.info(&format!("{} {note}", crate::i18n::tr("Link copiado.")));
     }
     if ui.button_ex("sh-c-share", rect(ix + 2.0 * (bw + GAP), y, bw, 40.0), "Compartilhar", true, ready) {
         let text = format!("{} {}", crate::i18n::tr("Convite do Prisma para ver este PC:"), s.code);
         st.share_req = Some((crate::i18n::tr("Convite do Prisma").into_owned(), format!("{text}\n{link}"), link.clone()));
     }
     let y2 = b.bottom() - 64.0;
+    let close_w = 112.0;
+    let revoke_w = (crate::ui::gfx::measure("Revogar", 14.0, Weight::Semibold, None).0 + 32.0).max(96.0);
     if let Some(long) = &s.long {
-        if ui.button("sh-c-long", rect(ix, y2, 200.0, 40.0), "Copiar convite longo", false) {
+        let long_w = (iw - close_w - revoke_w - 2.0 * GAP).min(220.0);
+        if ui.button_ex("sh-c-long", rect(ix, y2, long_w, 40.0), "Copiar convite longo", false, !dead) {
             crate::capture::copy_text(app.hub, long);
-            app.toast.info("Convite copiado. Vale 10 minutos e uma vez.");
+            app.toast.info(&format!("{} {note}", crate::i18n::tr("Convite copiado.")));
         }
     }
-    if ui.button("sh-c-close", rect(b.right() - 24.0 - 112.0, y2, 112.0, 40.0), "Fechar", false) {
+    // Revogar: o host passa a recusar o código na hora, antes de vencer.
+    if ui.button_ex("sh-c-revoke", rect(b.right() - 24.0 - close_w - GAP - revoke_w, y2, revoke_w, 40.0), "Revogar", false, !dead && st.test_invite.is_none()) {
+        match stream::revoke_invite() {
+            Ok(()) => {
+                stop(&mut st.invite);
+                st.revoked = s.code.clone();
+                app.toast.info("Convite revogado: o código não vale mais.");
+            }
+            Err(_) => app.toast.info("Não deu para revogar. Com o serviço, abra o Prisma como administrador."),
+        }
+    }
+    if ui.button("sh-c-close", rect(b.right() - 24.0 - close_w, y2, close_w, 40.0), "Fechar", false) {
         st.popup = false;
     }
 }
@@ -530,7 +602,10 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
     };
     ui.c.text_raw(rect(ix, y, iw, 20.0), &state, 13.0, if !room.is_empty() || failing { WARN } else if service || hosting { ACCENT } else { MUTED }, Align::Left, Weight::Regular);
     y += 26.0;
-    ui.label(rect(ix, y, iw, 18.0), "Quem parear agora pode", TEXT2);
+    // Validade do convite ao lado das permissões.
+    let min_w = 150.0;
+    ui.label(rect(ix, y, iw - min_w - GAP, 18.0), "Quem parear agora pode", TEXT2);
+    ui.label(rect(ix + iw - min_w, y, min_w, 18.0), "Convite vale", TEXT2);
     let sel_y = y + 20.0;
     y += 70.0;
     let bw = ((iw - GAP) / 2.0).floor();
@@ -551,12 +626,20 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
             st.host = spawn(st, &["--stream-share".to_string()], "host.log");
         }
         stop(&mut st.invite);
-        st.invite = spawn(st, &[format!("--stream-invite={}", stream::perms_key(opts.invite))], "convite.log");
+        st.invite = spawn(st, &[format!("--stream-invite={},{}", stream::perms_key(opts.invite), opts.invite_min)], "convite.log");
+        st.revoked.clear();
     }
     y += 48.0;
     match shown {
         Some(s) => {
-            let t = format!("{} {}", crate::i18n::tr("Último convite:"), s.code);
+            let when = if st.revoked == s.code {
+                crate::i18n::tr("revogado").into_owned()
+            } else if s.left() == 0 {
+                crate::i18n::tr("vencido").into_owned()
+            } else {
+                crate::i18n::tr("vence em {}").replace("{}", &clock(s.left()))
+            };
+            let t = format!("{} {} ({when})", crate::i18n::tr("Último convite:"), s.code);
             ui.c.text_raw(rect(ix, y, iw - 100.0, 32.0), &t, 13.0, TEXT2, Align::Left, Weight::Regular);
             if ui.button("sh-show", rect(ix + iw - 92.0, y, 92.0, 32.0), "Mostrar", false) {
                 st.popup = true;
@@ -645,6 +728,26 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
     }
     y += 40.0;
 
+    // Latência de cada modo ligado: a última linha de cada um, por PC, e as últimas de todos.
+    let watching = st.view.as_mut().is_some_and(Proc::alive).then(|| st.view_name.clone());
+    let lat_of = |lines: &[String]| -> Vec<String> { lines.iter().filter_map(|l| l.strip_prefix(stream::LAT_LINE)).map(lat_words).collect() };
+    let view_lat = if watching.is_some() { lat_of(&tail(&st.view)) } else { Vec::new() };
+    let kvm_lat = st.kvm.as_ref().map(|k| lat_of(&tail_of(&k.0))).unwrap_or_default();
+    let ear_lat = st.ear.as_ref().map(|k| lat_of(&tail_of(&k.0))).unwrap_or_default();
+    let mut lat_log: Vec<String> = Vec::new();
+    for (mode, lines) in [("Assistir", &view_lat), ("Mouse e teclado", &kvm_lat), ("Só o som", &ear_lat)] {
+        lat_log.extend(lines.iter().map(|l| format!("{} · {}", crate::i18n::tr(mode), l)));
+    }
+    // As linhas começam pela hora: em ordem, as últimas 40.
+    lat_log.sort_by(|a, b| a.split(" · ").nth(1).cmp(&b.split(" · ").nth(1)));
+    let skip = lat_log.len().saturating_sub(40);
+    lat_log.drain(..skip);
+    // Tira a hora e o nome do PC da linha, para mostrar ao lado do nome.
+    let short = |l: &String| {
+        let rest = l.split_once(' ').map_or(l.as_str(), |x| x.1);
+        rest.rsplit("» ").next().unwrap_or(rest).to_string()
+    };
+
     let all = stream::device_rows();
     // Duas abas: os PCs que este assiste e os que assistem a este.
     let mut tx = rx;
@@ -672,7 +775,7 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
     // e Só o som. A largura segue o texto, que em outros idiomas é mais comprido; sem espaço para
     // o nome ao lado, os botões descem para uma linha própria.
     let bw = |s: &str| (crate::ui::gfx::measure(s, 14.0, Weight::Semibold, None).0 + 28.0).max(84.0);
-    let (forget_w, watch_bw, kvm_bw, ear_bw) = (bw("Esquecer"), bw("Assistir"), bw("Mouse e teclado").max(bw("Parar")), bw("Só o som").max(bw("Parar")));
+    let (forget_w, watch_bw, kvm_bw, ear_bw) = (bw("Esquecer"), bw("Assistir"), bw("Mouse e teclado").max(bw("Parar mouse e teclado")), bw("Só o som").max(bw("Parar o som")));
     let rn_max = bw("Renomear").max(bw("Salvar"));
     let extra_bw = kvm_bw + ear_bw + 8.0;
     let all_buttons = forget_w + rn_max + if st.dev_tab == 0 { watch_bw + extra_bw + 16.0 } else { 0.0 } + 16.0;
@@ -682,8 +785,35 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
     let kvm_down = rw - 24.0 < all_buttons;
     let row_v = 132.0 + drop;
     let row_h = 64.0 + drop + if kvm_down { 44.0 } else { 0.0 };
-    let list = rect(rx, y, rw, r.bottom() - y - 12.0);
-    let content: f32 = rows.iter().map(|d| if d.viewer { row_v } else { row_h }).sum::<f32>().max(1.0);
+    // A latência de um PC com modo ligado ganha uma linha no cartão dele.
+    let lat_line = |d: &stream::DeviceRow| -> Option<String> {
+        if d.viewer {
+            return None;
+        }
+        let mut parts: Vec<String> = Vec::new();
+        if watching.as_deref() == Some(d.name.as_str()) {
+            if let Some(l) = view_lat.last() {
+                parts.push(format!("{} {}", crate::i18n::tr("Assistindo:"), short(l)));
+            }
+        }
+        if kvm_on.contains(&d.id) {
+            let mine: Vec<&String> = kvm_lat.iter().filter(|l| l.contains(&format!("«{}»", d.name))).collect();
+            if let Some(l) = mine.last() {
+                parts.push(format!("{} {}", crate::i18n::tr("Mouse e teclado:"), short(l)));
+            }
+        }
+        if ear_on.as_deref() == Some(d.name.as_str()) {
+            if let Some(l) = ear_lat.last() {
+                parts.push(format!("{} {}", crate::i18n::tr("Som:"), short(l)));
+            }
+        }
+        (!parts.is_empty()).then(|| parts.join(" · "))
+    };
+    let height_of = |d: &stream::DeviceRow| if d.viewer { row_v } else { row_h + if lat_line(d).is_some() { 20.0 } else { 0.0 } };
+    // O registro de latência fica embaixo da lista, quando algum modo está ligado.
+    let log_h = if lat_log.is_empty() { 0.0 } else { 132.0 };
+    let list = rect(rx, y, rw, r.bottom() - y - 12.0 - log_h);
+    let content: f32 = rows.iter().map(|d| height_of(d)).sum::<f32>().max(1.0);
     if all.is_empty() {
         ui.c.text_wrap(rect(rx, y, rw, 60.0), "Nenhum aparelho pareado. Crie um convite neste PC e digite o código no outro, ou o contrário.", 13.0, MUTED, Weight::Regular);
     } else if rows.is_empty() {
@@ -699,8 +829,11 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
     ui.begin_scroll("sh-list", list, content);
     let mut yy = list.y;
     for (i, d) in rows.iter().enumerate() {
-        let rh = if d.viewer { row_v } else { row_h };
+        let rh = height_of(d);
         let row = rect(rx, yy, rw, rh - 8.0);
+        if let Some(l) = lat_line(d) {
+            ui.c.text_raw(rect(row.x + 12.0, row.bottom() - 26.0, row.w - 24.0, 18.0), &l, 12.0, ACCENT, Align::Left, Weight::Regular);
+        }
         ui.c.round(row, 8.0, CARD2);
         let px = row.x + 12.0;
         let pw = row.w - 24.0;
@@ -765,17 +898,23 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
                 let kvm_r = rect(rn_r.x - watch_w, by, kvm_bw, 32.0);
                 (kvm_r, rect(kvm_r.right() + 8.0, by, ear_bw, 32.0))
             };
-            if ui.button(&format!("sh-kvm{i}"), kvm_r, if on { "Parar" } else { "Mouse e teclado" }, false) {
+            // Ligado: o botão fica na cor de destaque e diz o que para.
+            if ui.button(&format!("sh-kvm{i}"), kvm_r, if on { "Parar mouse e teclado" } else { "Mouse e teclado" }, on) {
                 kvm = Some((d.id.clone(), !on));
             }
             let hearing = ear_on.as_deref() == Some(d.name.as_str());
-            if ui.button(&format!("sh-ear{i}"), ear_r, if hearing { "Parar" } else { "Só o som" }, false) {
+            if ui.button(&format!("sh-ear{i}"), ear_r, if hearing { "Parar o som" } else { "Só o som" }, hearing) {
                 ear = Some((d.name.clone(), !hearing));
             }
         }
         yy += rh;
     }
     ui.end_scroll();
+    if !lat_log.is_empty() {
+        let ly = list.bottom() + 8.0;
+        ui.label(rect(rx, ly, rw, 18.0), "Latência", TEXT2);
+        log_view(ui, "sh-lat-log", rect(rx, ly + 22.0, rw, log_h - 30.0), &lat_log);
+    }
     // Nome vazio volta ao original.
     if let Some((id, name)) = renamed {
         let name: String = name.chars().filter(|c| !c.is_control() && *c != '|').take(40).collect();
@@ -811,6 +950,7 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
     if let Some(name) = watch {
         stop(&mut st.view);
         st.view = spawn(st, &[format!("--stream-connect={name}")], "assistir.log");
+        st.view_name = name;
     }
     // Um PC entra ou sai do Mouse e teclado: a conexão recomeça com os PCs que ficam.
     if let Some((id, start)) = kvm {
@@ -848,8 +988,13 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
     // Listas por último, para abrirem por cima do resto.
     let names: Vec<&str> = PRESETS.iter().rev().map(|p| p.1).collect();
     let mut s = PRESETS.iter().rev().position(|p| p.2 == opts.invite).unwrap_or(0);
-    if ui.select("sh-preset", rect(ix, sel_y, iw, 40.0), &opt(&names), &mut s) {
+    if ui.select("sh-preset", rect(ix, sel_y, iw - min_w - GAP, 40.0), &opt(&names), &mut s) {
         new_opts.invite = PRESETS.iter().rev().nth(s).map_or(SOUND, |p| p.2);
+    }
+    let mins: Vec<String> = stream::INVITE_MINUTES.iter().map(|m| minutes_name(*m)).collect();
+    let mut m = stream::INVITE_MINUTES.iter().position(|x| *x == opts.invite_min).unwrap_or(1);
+    if ui.select("sh-inv-min", rect(ix + iw - min_w, sel_y, min_w, 40.0), &mins, &mut m) {
+        new_opts.invite_min = stream::INVITE_MINUTES[m];
     }
 }
 
@@ -891,23 +1036,55 @@ fn pick<T: PartialEq + Copy>(ui: &mut Ui, key: &str, r: Rect, values: &[T], name
     }
 }
 
+/// A aba Host: as opções de todos, ou as de um aparelho que assiste. Mexer nas opções de um
+/// aparelho cria a configuração própria dele; desmarcar volta às de todos.
 #[allow(clippy::too_many_arguments)]
-fn host_tab(ui: &mut Ui, st: &mut State, o: &mut Opts, x: f32, top: f32, w: f32, h: f32) {
+fn host_tab(ui: &mut Ui, app: &mut App, st: &mut State, all: &mut Opts, x: f32, top: f32, w: f32, h: f32) {
+    // Os aparelhos que assistem a este PC, com o nome que a pessoa deu.
+    let viewers: Vec<(String, String)> = stream::device_rows()
+        .into_iter()
+        .filter(|d| d.viewer)
+        .map(|d| {
+            let shown = app.cfg.share_names.iter().find(|n| n.0 == d.id).map_or(d.name.clone(), |n| n.1.clone());
+            (d.id, shown)
+        })
+        .collect();
+    if st.host_for.as_ref().is_some_and(|id| !viewers.iter().any(|v| v.0 == *id)) {
+        st.host_for = None;
+    }
+    let target = st.host_for.clone();
+    let own_before = target.as_deref().is_some_and(Opts::has_own);
+    let before = match &target {
+        Some(id) => Opts::load_for(id),
+        None => all.clone(),
+    };
+    let mut edit = before.clone();
+    let mut own = own_before;
+    let o = &mut edit;
+
     let lw = ((w - GAP) / 2.0).floor();
     let l = rect(x, top, lw, h);
     ui.card(l);
     let ix = l.x + 16.0;
     let iw = l.w - 32.0;
-    ui.title(rect(ix, l.y + 12.0, iw, 22.0), "Imagem");
-    let mut y = l.y + 44.0;
     // As listas abrem por cima: guardo onde ficam e desenho no fim.
     let ctl = 240.0f32.min(iw * 0.55);
-    let name_r = row(ui, ix, y, iw, "Nome deste PC", ctl);
-    let field = st.name_field.get_or_insert_with(|| o.name.clone());
-    ui.search("sh-name", name_r, field, &std::env::var("COMPUTERNAME").unwrap_or_default());
-    let clean: String = field.chars().filter(|c| !c.is_control()).take(40).collect();
-    if clean.trim() != o.name {
-        o.name = clean.trim().to_string();
+    ui.title(rect(ix, l.y + 12.0, iw - ctl - 8.0, 22.0), "Imagem");
+    let for_r = rect(ix + iw - ctl, l.y + 6.0, ctl, 34.0);
+    let mut y = l.y + 48.0;
+    match &target {
+        None => {
+            let name_r = row(ui, ix, y, iw, "Nome deste PC", ctl);
+            let field = st.name_field.get_or_insert_with(|| all.name.clone());
+            ui.search("sh-name", name_r, field, &std::env::var("COMPUTERNAME").unwrap_or_default());
+            let clean: String = field.chars().filter(|c| !c.is_control()).take(40).collect();
+            if clean.trim() != all.name {
+                all.name = clean.trim().to_string();
+            }
+        }
+        Some(_) => {
+            ui.check("sh-own", rect(ix, y + 3.0, iw, 30.0), "Configuração própria para este aparelho", &mut own);
+        }
     }
     y += 44.0;
     let mon_r = row(ui, ix, y, iw, "Monitor", ctl);
@@ -949,27 +1126,36 @@ fn host_tab(ui: &mut Ui, st: &mut State, o: &mut Opts, x: f32, top: f32, w: f32,
     let rctl = 240.0f32.min(rw * 0.55);
     let snd_r = row(ui, rx, y, rw, "Som que vai", rctl);
     y += 44.0;
+    let out_r = row(ui, rx, y, rw, "Saída capturada", rctl);
+    y += 44.0;
+    let in_r = row(ui, rx, y, rw, "Entrada junto", rctl);
+    y += 44.0;
     ui.check("sh-calls", rect(rx, y, rw, 30.0), "Tirar do som o programa de chamada", &mut o.no_calls);
     y += 40.0;
-    let mut guests = o.guests as u32;
-    ui.label(rect(rx, y, rw - 160.0, 36.0), "Pessoas ao mesmo tempo", TEXT2);
-    if ui.stepper("sh-guests", rect(rx + rw - 150.0, y, 150.0, 36.0), &mut guests, (1, 4), 1, "") {
-        o.guests = guests as usize;
+    // Pessoas e cadeia valem para todos os aparelhos.
+    if target.is_none() {
+        let mut guests = all.guests as u32;
+        ui.label(rect(rx, y, rw - 160.0, 36.0), "Pessoas ao mesmo tempo", TEXT2);
+        if ui.stepper("sh-guests", rect(rx + rw - 150.0, y, 150.0, 36.0), &mut guests, (1, 4), 1, "") {
+            all.guests = guests as usize;
+        }
+        y += 46.0;
     }
-    y += 46.0;
     ui.check("sh-one", rect(rx, y, rw, 30.0), "Uma pessoa por vez no mouse e no teclado", &mut o.one_at_a_time);
     y += 32.0;
     ui.check("sh-first", rect(rx, y, rw, 30.0), "O mouse e o teclado deste PC têm prioridade", &mut o.host_first);
     y += 32.0;
-    ui.check("sh-chain", rect(rx, y, rw, 30.0), "Recusar conexões enquanto este PC assiste a outro", &mut o.no_chain);
-    y += 38.0;
-    ui.c.text_wrap(
-        rect(rx, y, rw, (r.bottom() - y - 12.0).max(0.0)),
-        "Com prioridade, quem assiste para por 1 segundo sempre que alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. Programas de chamada: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack e Signal. O Windows só deixa tirar um: sai do som o que estiver tocando, e a escolha muda durante a conexão. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante. Num notebook com duas placas, a outra placa codifica com uma cópia a mais da imagem.",
-        12.0,
-        MUTED,
-        Weight::Regular,
-    );
+    if target.is_none() {
+        ui.check("sh-chain", rect(rx, y, rw, 30.0), "Recusar conexões enquanto este PC assiste a outro", &mut all.no_chain);
+        y += 32.0;
+    }
+    y += 6.0;
+    let note = if target.is_some() {
+        "Configuração própria: vale quando este aparelho conecta. Com mais de uma pessoa ao mesmo tempo, vale a de quem conectou primeiro. Nome, pessoas, rede, controles e atalhos são os de todos."
+    } else {
+        "Com prioridade, quem assiste para por 1 segundo quando alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. O Windows só deixa tirar um programa de chamada (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), e só da saída padrão: sai o que estiver tocando. Uma saída escolhida manda o que toca nela. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante."
+    };
+    ui.c.text_wrap(rect(rx, y, rw, (r.bottom() - y - 12.0).max(0.0)), note, 12.0, MUTED, Weight::Regular);
 
     // Listas.
     let mons = stream::host::monitors();
@@ -1028,6 +1214,80 @@ fn host_tab(ui: &mut Ui, st: &mut State, o: &mut Opts, x: f32, top: f32, w: f32,
     let mut s = vals.iter().position(|v| *v == o.sound_app).unwrap_or(0);
     if ui.select("sh-snd", snd_r, &names, &mut s) {
         o.sound_app = vals[s].clone();
+    }
+
+    // Saídas e entradas de som, lidas a cada 5 s (um fone USB pode chegar).
+    if st.sound_devs.2.is_none_or(|t| t.elapsed().as_secs() >= 5) {
+        st.sound_devs = (crate::sys::audio::devices(false), crate::sys::audio::devices(true), Some(Instant::now()));
+    }
+    let mut vals: Vec<String> = vec![String::new()];
+    let mut names = vec![crate::i18n::tr("A padrão do Windows").into_owned()];
+    for d in &st.sound_devs.0 {
+        vals.push(d.id.clone());
+        names.push(d.name.clone());
+    }
+    if !vals.contains(&o.sound_out) {
+        vals.push(o.sound_out.clone());
+        names.push(crate::i18n::tr("Desligada agora").into_owned());
+    }
+    let mut s = vals.iter().position(|v| *v == o.sound_out).unwrap_or(0);
+    if ui.select("sh-out", out_r, &names, &mut s) {
+        o.sound_out = vals[s].clone();
+    }
+    let mut vals: Vec<String> = vec![String::new(), stream::MIC_DEFAULT.to_string()];
+    let mut names = vec![crate::i18n::tr("Nenhuma").into_owned(), crate::i18n::tr("A padrão do Windows").into_owned()];
+    for d in &st.sound_devs.1 {
+        vals.push(d.id.clone());
+        names.push(d.name.clone());
+    }
+    if !vals.contains(&o.sound_in) {
+        vals.push(o.sound_in.clone());
+        names.push(crate::i18n::tr("Desligada agora").into_owned());
+    }
+    let mut s = vals.iter().position(|v| *v == o.sound_in).unwrap_or(0);
+    if ui.select("sh-in", in_r, &names, &mut s) {
+        o.sound_in = vals[s].clone();
+    }
+
+    // Para quem valem as opções.
+    let mut for_names = vec![crate::i18n::tr("Todos os aparelhos").into_owned()];
+    for_names.extend(viewers.iter().map(|v| {
+        let mark = if Opts::has_own(&v.0) { " *" } else { "" };
+        format!("{}{mark}", v.1)
+    }));
+    let mut s = target.as_ref().and_then(|id| viewers.iter().position(|v| v.0 == *id)).map_or(0, |i| i + 1);
+    let picked = ui.select("sh-for", for_r, &for_names, &mut s);
+
+    // Grava o que mudou: nas de todos, ou na configuração própria do aparelho.
+    match &target {
+        None => {
+            if edit != before {
+                let name = all.name.clone();
+                let (guests, chain) = (all.guests, all.no_chain);
+                *all = edit;
+                all.name = name;
+                all.guests = guests;
+                all.no_chain = chain;
+            }
+        }
+        Some(id) => {
+            let result = if own_before && !own {
+                Opts::drop_own(id)
+            } else if own && (!own_before || edit != before) {
+                edit.save_for(id)
+            } else if !own && edit != before {
+                // Mexeu numa opção sem configuração própria: ela nasce agora.
+                edit.save_for(id)
+            } else {
+                Ok(())
+            };
+            if result.is_err() {
+                app.toast.info("Não deu para salvar. Com o serviço, abra o Prisma como administrador.");
+            }
+        }
+    }
+    if picked {
+        st.host_for = (s > 0).then(|| viewers[s - 1].0.clone());
     }
 }
 

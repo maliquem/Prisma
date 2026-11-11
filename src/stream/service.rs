@@ -49,10 +49,15 @@ pub fn run_args(a: &str) -> bool {
         "--stream-service-remove" => remove(),
         "--stream-service-status" => status(),
         _ => {
+            // `--stream-invite=permissões[,minutos]`.
             if a == "--stream-invite" || a.starts_with("--stream-invite=") {
                 let v = a.strip_prefix("--stream-invite=").unwrap_or("ver");
+                let (v, minutes) = match v.split_once(',') {
+                    Some((p, m)) => (p, m.trim().parse().unwrap_or(10)),
+                    None => (v, 10),
+                };
                 match super::parse_perms(v) {
-                    Some(p) => super::net::make_invite(p),
+                    Some(p) => super::net::make_invite(p, minutes),
                     None => eprintln!("permissão desconhecida: «{v}»"),
                 }
                 return true;

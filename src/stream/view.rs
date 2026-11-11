@@ -1183,6 +1183,9 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     // O quadro do PyroWave mais novo ainda não mostrado.
     let mut wave_frame: Option<(i64, Vec<Vec<u8>>)> = None;
     let mut info: Option<(VideoCodec, u32, u32, u32)> = None;
+    let mut lat = super::LatLog::new("ponta a ponta");
+    // O último Info do host, para avisar quando ele muda alguma coisa.
+    let mut seen_info: Option<(VideoCodec, u32, u32, u32, u8, bool, bool, u8)> = None;
     // Prioridade do host (255: versão que não manda).
     let mut host_priority = 255u8;
     // HDR10 e 4:4:4 do vídeo atual; a janela em HDR10.
@@ -1281,17 +1284,28 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
             };
             hud::menu_open(hwnd, st);
         }
+        let tr = |s: &str| crate::i18n::tr(s).into_owned();
+        let on_off = |b: bool| tr(if b { "ligado" } else { "desligado" });
         for p in picks {
+            let mut note: Option<String> = None;
             match p {
-                hud::Pick::Fullscreen => toggle_full(hwnd),
+                hud::Pick::Fullscreen => {
+                    toggle_full(hwnd);
+                    note = Some(tr(if SAVED.lock().unwrap().is_some() { "Tela cheia" } else { "Janela" }));
+                }
                 hud::Pick::Immersive(m) => {
                     immersive = m;
                     co.immersive = m;
                     let _ = co.save();
+                    note = Some(format!("{}: {}", tr("Modo imersivo"), immersive_name(m)));
                 }
                 // O atalho liga e desliga só nesta conexão; ligar volta ao modo escolhido nas opções.
-                hud::Pick::ImmersiveToggle => immersive = if immersive != 0 { 0 } else if co.immersive != 0 { co.immersive } else { 3 },
+                hud::Pick::ImmersiveToggle => {
+                    immersive = if immersive != 0 { 0 } else if co.immersive != 0 { co.immersive } else { 3 };
+                    note = Some(format!("{}: {}", tr("Modo imersivo"), immersive_name(immersive)));
+                }
                 hud::Pick::Fps(f) => {
+                    note = Some(format!("{}: {}", tr("Quadros por segundo"), if f == 0 { tr("Automático") } else { f.to_string() }));
                     if f != co.fps {
                         co.fps = f;
                         let _ = co.save();
@@ -1305,26 +1319,32 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                 hud::Pick::Meter(m) => {
                     co.meter = m;
                     let _ = co.save();
+                    note = Some(format!("{}: {}", tr("Medidor"), meter_name(m)));
                 }
                 hud::Pick::MeterCycle => {
                     co.meter = (co.meter + 1) % 3;
                     let _ = co.save();
+                    note = Some(format!("{}: {}", tr("Medidor"), meter_name(co.meter)));
                 }
                 hud::Pick::Warn => {
                     co.warn = !co.warn;
                     let _ = co.save();
+                    note = Some(format!("{}: {}", tr("Aviso da conexão"), on_off(co.warn)));
                 }
                 hud::Pick::Sound => {
-                    sh.spk.silenced.fetch_xor(true, Ordering::Relaxed);
+                    let silenced = !sh.spk.silenced.fetch_xor(true, Ordering::Relaxed);
+                    note = Some(tr(if silenced { "Som do outro PC: mudo" } else { "Som do outro PC: ligado" }));
                 }
                 hud::Pick::Vsync => {
                     co.vsync = !co.vsync;
                     let _ = co.save();
                     (sync, present_flags) = present_mode(co.vsync);
+                    note = Some(format!("VSync: {}", on_off(co.vsync)));
                 }
                 hud::Pick::Ask444 => {
                     co.ask444 = !co.ask444;
                     let _ = co.save();
+                    note = Some(format!("4:4:4: {}", on_off(co.ask444)));
                     flags = flags & !(ASKS_444 | DECODES_444) | ask(co.ask444);
                     // A descrição nova faz o host recomeçar o vídeo com ou sem o 4:4:4.
                     let mut again = Vec::new();
@@ -1336,19 +1356,28 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                     co.pad_background = !co.pad_background;
                     let _ = co.save();
                     sh.pad_background.store(co.pad_background, Ordering::Relaxed);
+                    note = Some(format!("{}: {}", tr("Controle em segundo plano"), on_off(co.pad_background)));
                 }
                 hud::Pick::PadKeys => {
                     co.pad_keys = !co.pad_keys;
                     let _ = co.save();
                     sh.pad_keys.store(co.pad_keys, Ordering::Relaxed);
                     KEYS.lock().unwrap().pad_keys = co.pad_keys && sh.perms.load(Ordering::Relaxed) & PAD != 0;
+                    note = Some(format!("{}: {}", tr("Teclado como controle"), on_off(co.pad_keys)));
                 }
-                hud::Pick::CtrlAltDel => KEYS.lock().unwrap().sas = true,
+                hud::Pick::CtrlAltDel => {
+                    KEYS.lock().unwrap().sas = true;
+                    note = Some(tr("Ctrl+Alt+Del enviado ao host"));
+                }
                 hud::Pick::Disconnect => {
                     let _ = DestroyWindow(hwnd);
                 }
             }
             if let Some(h) = &mut hud {
+                if let Some(n) = note {
+                    eprintln!("opção: {n}");
+                    h.notice(n);
+                }
                 h.update(hwnd, co.meter, co.warn, None);
             }
         }
@@ -1370,6 +1399,26 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                         k.pad_keys = perms & PAD != 0 && sh.pad_keys.load(Ordering::Relaxed);
                         k.video = (w, h);
                     }
+                    // O host mudou o vídeo ou as permissões no meio da conexão: avisa o que ficou.
+                    let now_seen = (codec, w, h, fps, perms, hdr10, yuv444, priority);
+                    if let (Some(before), Some(hd)) = (seen_info, &mut hud) {
+                        if before != now_seen {
+                            let fmt = match (hdr10, yuv444) {
+                                (true, true) => " 4:4:4 HDR10",
+                                (true, false) => " HDR10",
+                                (false, true) => " 4:4:4",
+                                _ => "",
+                            };
+                            let mut text = format!("{}: {w}x{h} {}{fmt} · {fps} FPS", crate::i18n::tr("Vídeo do host"), codec_name(codec));
+                            if before.4 != perms {
+                                text = format!("{}: {}", crate::i18n::tr("Acesso mudou"), crate::i18n::tr(&perms_text(perms)));
+                            }
+                            eprintln!("host: {text}");
+                            hd.notice(text);
+                            hd.update(hwnd, co.meter, co.warn, None);
+                        }
+                    }
+                    seen_info = Some(now_seen);
                     if info != Some((codec, w, h, fps)) || vfmt != (hdr10, yuv444) {
                         info = Some((codec, w, h, fps));
                         vfmt = (hdr10, yuv444);
@@ -1565,6 +1614,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                     route: link.route(),
                     priority: host_priority,
                 };
+                lat.add(sample.rtt_ms, Some(sample.e2e_ms));
                 h.update(hwnd, co.meter, co.warn, info.is_some().then_some(&sample));
             }
             lost_mark = lost_total;
@@ -1663,4 +1713,14 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         let _ = std::fs::write(path, s);
     }
     Ok(())
+}
+
+/// Nome do modo imersivo para a nota da tela.
+fn immersive_name(m: u8) -> String {
+    crate::i18n::tr(["desligado", "só o mouse", "só o teclado", "mouse e teclado"][m.min(3) as usize]).into_owned()
+}
+
+/// Nome do medidor para a nota da tela.
+fn meter_name(m: u8) -> String {
+    crate::i18n::tr(["desligado", "simples", "detalhado"][m.min(2) as usize]).into_owned()
 }

@@ -1836,3 +1836,59 @@ A temperatura da CPU precisa do PawnIO, um driver gratuito e aberto, como o do S
 o download falhou	загрузка не удалась
 não deu para salvar o instalador	не удалось сохранить установщик
 a assinatura do instalador não confere	подпись установщика не совпадает
+Aplicativos	Приложения
+Em segundo plano	Фоновые процессы
+Processos do Windows	Процессы Windows
+1 hora	1 час
+24 horas	24 часа
+{} horas	{} ч
+{} minutos	{} мин
+Revogado: o código não vale mais.	Отозвано: код больше не действует.
+Vencido. Crie um convite novo.	Истекло. Создайте новое приглашение.
+Pronto. Vale uma vez e vence em {}.	Готово. Действует один раз, истекает через {}.
+Vale uma vez e vence em {}.	Действует один раз, истекает через {}.
+Código copiado.	Код скопирован.
+Link copiado.	Ссылка скопирована.
+Revogar	Отозвать
+Convite copiado.	Приглашение скопировано.
+Convite revogado: o código não vale mais.	Приглашение отозвано: код больше не действует.
+Não deu para revogar. Com o serviço, abra o Prisma como administrador.	Не удалось отозвать. При работе через службу откройте Prisma от имени администратора.
+Convite vale	Срок приглашения
+vence em {}	истекает через {}
+revogado	отозвано
+vencido	истекло
+Parar mouse e teclado	Остановить мышь и клавиатуру
+Parar o som	Остановить звук
+Assistindo:	Просмотр:
+Mouse e teclado:	Мышь и клавиатура:
+Som:	Звук:
+Configuração própria para este aparelho	Свои настройки для этого устройства
+Saída capturada	Захватываемый выход
+Entrada junto	Подмешать вход
+Configuração própria: vale quando este aparelho conecta. Com mais de uma pessoa ao mesmo tempo, vale a de quem conectou primeiro. Nome, pessoas, rede, controles e atalhos são os de todos.	Свои настройки действуют, когда подключается это устройство. Если подключено несколько человек, действуют настройки того, кто подключился первым. Имя, число людей, сеть, контроллеры и сочетания клавиш общие для всех.
+Com prioridade, quem assiste para por 1 segundo quando alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. O Windows só deixa tirar um programa de chamada (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), e só da saída padrão: sai o que estiver tocando. Uma saída escolhida manda o que toca nela. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante.	При приоритете просмотр приостанавливается на 1 секунду, когда кто-то здесь двигает мышь или печатает. По одному: очередь переходит после 2 секунд без ввода. Windows позволяет исключить только одно приложение для звонков (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal) и только с выхода по умолчанию: убирается то, что сейчас звучит. Выбранный выход передаёт то, что на нём играет. Изменения действуют сразу; изменения изображения на мгновение перезапускают видео.
+A padrão do Windows	По умолчанию Windows
+Desligada agora	Сейчас отключено
+Nenhuma	Нет
+Todos os aparelhos	Все устройства
+Tecla de emergência: todo mundo desconectado	Аварийная клавиша: все отключены
+Acesso de «{}» mudou na hora	Доступ «{}» изменён сразу
+Opções do host aplicadas na conexão	Параметры хоста применены к подключению
+«{}» mudou os quadros por segundo	«{}» изменил частоту кадров
+«{}» mudou o pedido de 4:4:4	«{}» изменил запрос 4:4:4
+Mouse travado nesta tela	Мышь закреплена на этом экране
+Mouse destravado	Мышь разблокирована
+Sim: parear e perguntar a cada conexão (recomendado).	Да: сопрячь и спрашивать при каждом подключении (рекомендуется).
+Não: parear e confiar neste aparelho, sem perguntar.	Нет: сопрячь и доверять этому устройству без вопросов.
+Aviso da conexão	Предупреждение о соединении
+Som do outro PC: mudo	Звук другого ПК: выключен
+Som do outro PC: ligado	Звук другого ПК: включён
+Ctrl+Alt+Del enviado ao host	Ctrl+Alt+Del отправлено на хост
+Vídeo do host	Видео хоста
+Acesso mudou	Доступ изменён
+só o mouse	только мышь
+só o teclado	только клавиатура
+mouse e teclado	мышь и клавиатура
+mín	мин
+máx	макс
+som	звук

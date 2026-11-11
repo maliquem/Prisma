@@ -44,8 +44,13 @@ pub(crate) struct Source {
 }
 
 pub(crate) unsafe fn open(flow: EDataFlow, loopback: bool) -> Result<Source> {
+    open_on("", flow, loopback)
+}
+
+/// Como `open`, num aparelho escolhido pelo id do Windows; vazio é o padrão.
+pub(crate) unsafe fn open_on(id: &str, flow: EDataFlow, loopback: bool) -> Result<Source> {
     let en: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
-    let dev = en.GetDefaultAudioEndpoint(flow, eConsole)?;
+    let dev = if id.is_empty() { en.GetDefaultAudioEndpoint(flow, eConsole)? } else { en.GetDevice(&HSTRING::from(id))? };
     let client: IAudioClient = dev.Activate(CLSCTX_ALL, None)?;
     let mut flags = AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY;
     if loopback {

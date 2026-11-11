@@ -70,7 +70,8 @@
     open: "Open in Prisma",
     copy: "Copy code",
     copied: "Copied",
-    valid: "The code is valid for 10 minutes and only once. If it expired, ask for a new one.",
+    valid: "The code works only once and expires after the time the other person chose. If it expired, ask for a new one.",
+    none: "Prisma didn't open on this PC. Taking you to the download page...",
     steps: [
       "If the browser asks to open Prisma, allow it. Prisma asks before pairing.",
       "Both PCs show a six-digit confirmation code: check that they match before accepting on the other PC.",
@@ -85,7 +86,8 @@
     open: "Abrir no Prisma",
     copy: "Copiar código",
     copied: "Copiado",
-    valid: "O código vale 10 minutos e uma vez só. Se venceu, peça um novo.",
+    valid: "O código vale uma vez só e vence no tempo que a outra pessoa escolheu. Se venceu, peça um novo.",
+    none: "O Prisma não abriu neste PC. Indo para a página de download...",
     steps: [
       "Se o navegador perguntar se pode abrir o Prisma, deixe. O Prisma pergunta antes de parear.",
       "Os dois PCs mostram um código de confirmação de seis dígitos: confira se são iguais antes de aceitar no outro PC.",
@@ -132,7 +134,21 @@
     }
   });
   // Tenta abrir uma vez sozinho; o botão fica para quando o navegador pede um clique.
+  // Com o Prisma instalado, o navegador perde o foco (pergunta ou abre o Prisma). Sem ele, nada
+  // acontece: depois de 3 s a página leva aos releases no GitHub.
+  var left = false;
+  var away = function () { left = true; };
+  window.addEventListener("blur", away);
+  window.addEventListener("pagehide", away);
+  document.addEventListener("visibilitychange", function () { if (document.hidden) { away(); } });
   setTimeout(function () { location.href = target; }, 400);
+  setTimeout(function () {
+    if (left || document.hidden) { return; }
+    $("valid").textContent = T.none;
+    setTimeout(function () {
+      if (!left && !document.hidden) { location.href = "https://github.com/maliquem/Prisma/releases/latest"; }
+    }, 1200);
+  }, 3000);
 })();
 </script>
 </body>

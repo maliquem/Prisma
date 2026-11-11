@@ -7,8 +7,10 @@ use windows::Win32::System::Registry::*;
 
 use super::code;
 
-/// A página que leva ao `prisma://` (com o código depois do #, que não vai para o servidor).
-pub const PAGE: &str = "https://maliquem.github.io/Prisma/c/#";
+/// A página que leva ao `prisma://` (com o código depois do #, que não vai para o servidor). Um
+/// endereço curto, numa página do GitHub só para isso; a antiga (`maliquem.github.io/Prisma/c/`)
+/// continua no ar para os links das versões anteriores.
+pub const PAGE: &str = "https://prismashare.github.io/c/#";
 const KEY: PCWSTR = w!("Software\\Classes\\prisma");
 
 pub fn web_link(shown: &str) -> String {

@@ -1836,3 +1836,59 @@ A temperatura da CPU precisa do PawnIO, um driver gratuito e aberto, como o do S
 o download falhou	下载失败
 não deu para salvar o instalador	无法保存安装程序
 a assinatura do instalador não confere	安装程序签名不符
+Aplicativos	应用
+Em segundo plano	后台进程
+Processos do Windows	Windows 进程
+1 hora	1 小时
+24 horas	24 小时
+{} horas	{} 小时
+{} minutos	{} 分钟
+Revogado: o código não vale mais.	已撤销：此代码已失效。
+Vencido. Crie um convite novo.	已过期。请创建新邀请。
+Pronto. Vale uma vez e vence em {}.	已就绪。仅可使用一次，{} 后过期。
+Vale uma vez e vence em {}.	仅可使用一次，{} 后过期。
+Código copiado.	代码已复制。
+Link copiado.	链接已复制。
+Revogar	撤销
+Convite copiado.	邀请已复制。
+Convite revogado: o código não vale mais.	邀请已撤销：此代码已失效。
+Não deu para revogar. Com o serviço, abra o Prisma como administrador.	无法撤销。使用服务时，请以管理员身份打开 Prisma。
+Convite vale	邀请有效期
+vence em {}	{} 后过期
+revogado	已撤销
+vencido	已过期
+Parar mouse e teclado	停止鼠标和键盘
+Parar o som	停止声音
+Assistindo:	观看中：
+Mouse e teclado:	鼠标和键盘：
+Som:	声音：
+Configuração própria para este aparelho	此设备使用单独设置
+Saída capturada	捕获的输出
+Entrada junto	混入输入
+Configuração própria: vale quando este aparelho conecta. Com mais de uma pessoa ao mesmo tempo, vale a de quem conectou primeiro. Nome, pessoas, rede, controles e atalhos são os de todos.	单独设置：此设备连接时生效。多人同时连接时，以最先连接者的设置为准。名称、人数、网络、手柄和快捷键对所有设备通用。
+Com prioridade, quem assiste para por 1 segundo quando alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. O Windows só deixa tirar um programa de chamada (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), e só da saída padrão: sai o que estiver tocando. Uma saída escolhida manda o que toca nela. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante.	开启优先时，每当这里有人移动鼠标或打字，观看方会暂停 1 秒。一次一人：2 秒无输入后轮换。Windows 只允许排除一个通话应用（Discord、Teams、Zoom、WhatsApp、Skype、Telegram、Slack、Signal），且仅限默认输出：正在发声的那个会被排除。选定的输出会发送其中播放的内容。更改会立即生效；画面相关的更改会让视频短暂重新开始。
+A padrão do Windows	Windows 默认
+Desligada agora	当前已关闭
+Nenhuma	无
+Todos os aparelhos	所有设备
+Tecla de emergência: todo mundo desconectado	紧急键：已断开所有人
+Acesso de «{}» mudou na hora	“{}”的权限已立即更改
+Opções do host aplicadas na conexão	主机选项已应用到连接
+«{}» mudou os quadros por segundo	“{}”更改了帧率
+«{}» mudou o pedido de 4:4:4	“{}”更改了 4:4:4 请求
+Mouse travado nesta tela	鼠标已锁定在此屏幕
+Mouse destravado	鼠标已解锁
+Sim: parear e perguntar a cada conexão (recomendado).	是：配对，并在每次连接时询问（推荐）。
+Não: parear e confiar neste aparelho, sem perguntar.	否：配对并信任此设备，不再询问。
+Aviso da conexão	连接警告
+Som do outro PC: mudo	另一台电脑的声音：静音
+Som do outro PC: ligado	另一台电脑的声音：开启
+Ctrl+Alt+Del enviado ao host	已向主机发送 Ctrl+Alt+Del
+Vídeo do host	主机视频
+Acesso mudou	权限已更改
+só o mouse	仅鼠标
+só o teclado	仅键盘
+mouse e teclado	鼠标和键盘
+mín	最低
+máx	最高
+som	声音

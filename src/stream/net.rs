@@ -221,7 +221,8 @@ fn find(list: &[Device], role: Role, key: &str) -> Option<Device> {
 
 struct Invite {
     secret: [u8; 16],
-    made: Instant,
+    /// Até quando vale, em segundos desde 1970. 0: revogado.
+    until: u64,
     tries: u32,
     used: bool,
     /// Permissões de quem parear com este convite.
@@ -233,7 +234,7 @@ fn invite_path() -> PathBuf {
     dir().join("convite.tsv")
 }
 
-pub(super) fn unix_now() -> u64 {
+pub fn unix_now() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs())
 }
 
@@ -242,14 +243,30 @@ fn load_invite_file() -> Option<Invite> {
     let mut f = s.trim().split('\t');
     let secret: [u8; 16] = data_encoding::HEXLOWER_PERMISSIVE.decode(f.next()?.as_bytes()).ok()?.try_into().ok()?;
     let perms = parse_perms(f.next()?)?;
-    let left = f.next()?.parse::<u64>().ok()?.checked_sub(unix_now())?;
-    let made = Instant::now().checked_sub(INVITE_TTL.saturating_sub(Duration::from_secs(left)))?;
-    Some(Invite { secret, made, tries: 0, used: false, perms })
+    let until = f.next()?.parse::<u64>().ok()?;
+    Some(Invite { secret, until, tries: 0, used: false, perms })
+}
+
+/// Quanto um convite da página pode valer, em minutos.
+pub const INVITE_MINUTES: [u32; 5] = [5, 10, 30, 60, 1440];
+
+/// A linha do registro do convite com a hora em que ele vence (segundos desde 1970).
+pub const EXPIRES_LINE: &str = "vence em: ";
+
+/// Revoga o convite que ainda não foi usado: o host passa a recusar o código na hora.
+pub fn revoke_invite() -> std::io::Result<()> {
+    let text = std::fs::read_to_string(invite_path())?;
+    let mut f: Vec<String> = text.trim().split('\t').map(str::to_string).collect();
+    if f.len() < 3 {
+        return Ok(());
+    }
+    f[2] = "0".into();
+    std::fs::write(invite_path(), f.join("\t") + "\n")
 }
 
 /// `--stream-invite`: um convite novo vai para o arquivo que o host lê no pedido de pareamento (o
 /// do serviço, ou o da página na pasta deste usuário), e o código curto vai para os relés.
-pub fn make_invite(perms: u8) {
+pub fn make_invite(perms: u8, minutes: u32) {
     let sk = match identity() {
         Ok(k) => k,
         Err(e) => return eprintln!("{e}"),
@@ -257,12 +274,14 @@ pub fn make_invite(perms: u8) {
     let shown = code::new_code();
     let raw = code::normalize(&shown).unwrap_or_default();
     let secret = code::secret(&raw);
-    let until = unix_now() + INVITE_TTL.as_secs();
+    let minutes = minutes.clamp(1, 1440);
+    let until = unix_now() + minutes as u64 * 60;
     let line = format!("{}\t{}\t{}\n", data_encoding::HEXLOWER.encode(&secret), perms_key(perms), until);
     if let Err(e) = std::fs::write(invite_path(), line) {
         return eprintln!("não deu para gravar o convite: {e}");
     }
-    eprintln!("Convite novo ({}; vale 10 minutos e uma vez).", perms_text(perms));
+    eprintln!("Convite novo ({}; vale {minutes} minutos e uma vez).", perms_text(perms));
+    eprintln!("{EXPIRES_LINE}{until}");
     eprintln!("{CODE_LINE}{shown}");
     eprintln!("Convite longo, se o código não for achado:\n\n{}\n", invite_text(&sk.public(), &secret));
     eprintln!("A pergunta de confirmação aparece na tela deste PC.");
@@ -310,7 +329,7 @@ pub(super) fn copy_from_service(src: &std::path::Path) -> std::result::Result<()
 impl Invite {
     /// Confere o segredo, contando a tentativa. Depois de usado, vencido ou de 5 tentativas, recusa.
     fn check(&mut self, secret: &[u8]) -> bool {
-        if self.used || self.made.elapsed() > INVITE_TTL || self.tries >= INVITE_TRIES {
+        if self.used || unix_now() >= self.until || self.tries >= INVITE_TRIES {
             return false;
         }
         self.tries += 1;
@@ -515,12 +534,12 @@ fn message(text: &str, flags: MESSAGEBOX_STYLE) -> MESSAGEBOX_RESULT {
 /// Pergunta se pareia. Devolve se deve perguntar a cada conexão, ou None se recusou.
 fn approve_pair(name: &str, code: &str, perms: u8) -> Option<bool> {
     let text = format!(
-        "«{name}» quer parear com este PC.\nPermissões: {}.\n\nCódigo de confirmação: {code}\nConfira se o outro PC mostra o mesmo código. Se não mostrar, clique em Cancelar.\n\nSim: confiar neste aparelho.\nNão: parear, mas perguntar a cada conexão.\nCancelar: recusar.",
+        "«{name}» quer parear com este PC.\nPermissões: {}.\n\nCódigo de confirmação: {code}\nConfira se o outro PC mostra o mesmo código. Se não mostrar, clique em Cancelar.\n\nSim: parear e perguntar a cada conexão (recomendado).\nNão: parear e confiar neste aparelho, sem perguntar.\nCancelar: recusar.",
         perms_text(perms)
     );
     match message(&text, MB_YESNOCANCEL | MB_ICONQUESTION | MB_DEFBUTTON3) {
-        IDYES => Some(false),
-        IDNO => Some(true),
+        IDYES => Some(true),
+        IDNO => Some(false),
         _ => None,
     }
 }
@@ -584,9 +603,10 @@ async fn accept_loop(ep: Endpoint, invite: Arc<Mutex<Invite>>, tx: mpsc::Sender<
             let who = conn.remote_id();
             if conn.alpn() == ALPN_PAIR {
                 // O convite mais novo vem do arquivo que o --stream-invite grava.
+                // Um convite revogado chega com a mesma chave e a validade zerada.
                 if let Some(i) = load_invite_file() {
                     let mut cur = invite.lock().unwrap();
-                    if cur.secret != i.secret {
+                    if cur.secret != i.secret || cur.until != i.until {
                         *cur = i;
                     }
                 }
@@ -662,7 +682,7 @@ fn host_with(invite_perms: Option<u8>, service: bool) {
     let raw = code::normalize(&shown).unwrap_or_default();
     let secret = if invite_perms.is_some() { code::secret(&raw) } else { random::<16>() };
     // Sem convite na partida, ele começa usado: só vale o do arquivo.
-    let invite = Arc::new(Mutex::new(Invite { secret, made: Instant::now(), tries: 0, used: invite_perms.is_none(), perms: invite_perms.unwrap_or(SOUND) }));
+    let invite = Arc::new(Mutex::new(Invite { secret, until: unix_now() + INVITE_TTL.as_secs(), tries: 0, used: invite_perms.is_none(), perms: invite_perms.unwrap_or(SOUND) }));
     match invite_perms {
         Some(perms) => {
             eprintln!("Prisma compartilhando pela internet. Quem parear agora: {}. Este PC: «{}», id {}", perms_text(perms), my_name(), ep.id().fmt_short());
@@ -933,15 +953,18 @@ mod tests {
 
     #[test]
     fn invite_limits() {
-        let mut inv = Invite { secret: [5; 16], made: Instant::now(), tries: 0, used: false, perms: SOUND };
+        let mut inv = Invite { secret: [5; 16], until: unix_now() + 600, tries: 0, used: false, perms: SOUND };
         for _ in 0..4 {
             assert!(!inv.check(&[6; 16]));
         }
         assert!(inv.check(&[5; 16]));
         // Quinta tentativa gasta: nem o certo passa mais.
         assert!(!inv.check(&[5; 16]));
-        let mut old = Invite { secret: [5; 16], made: Instant::now() - INVITE_TTL - Duration::from_secs(1), tries: 0, used: false, perms: SOUND };
+        let mut old = Invite { secret: [5; 16], until: unix_now() - 1, tries: 0, used: false, perms: SOUND };
         assert!(!old.check(&[5; 16]));
+        // Revogado: validade zerada.
+        let mut revoked = Invite { secret: [5; 16], until: 0, tries: 0, used: false, perms: SOUND };
+        assert!(!revoked.check(&[5; 16]));
     }
 
     /// Dois pontos do iroh neste PC, sem relé: o canal entrega os pacotes, inclusive uma rajada do
@@ -1005,7 +1028,7 @@ mod tests {
         let r = rt().block_on(async {
             let a = Endpoint::builder(presets::Minimal).relay_mode(iroh::RelayMode::Disabled).alpns(vec![ALPN_PAIR.to_vec()]).bind().await.unwrap();
             let b = Endpoint::builder(presets::Minimal).relay_mode(iroh::RelayMode::Disabled).bind().await.unwrap();
-            let invite = Arc::new(Mutex::new(Invite { secret: [1; 16], made: Instant::now(), tries: 0, used: false, perms: SOUND }));
+            let invite = Arc::new(Mutex::new(Invite { secret: [1; 16], until: unix_now() + 600, tries: 0, used: false, perms: SOUND }));
             let (a2, inv2) = (a.clone(), invite.clone());
             let host = tokio::spawn(async move {
                 let conn = a2.accept().await.unwrap().accept().unwrap().await.unwrap();

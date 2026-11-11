@@ -200,6 +200,8 @@ pub struct App {
     pub toast: Toast,
     /// Quem estava na sala do compartilhamento na última olhada (chave, nome).
     room_seen: Option<Vec<(String, String)>>,
+    /// Até onde os avisos do compartilhamento já foram mostrados (ms desde 1970; 0 antes da primeira olhada).
+    notices_since: u128,
     pub prompt: Prompt,
     pub usage: Usage,
     pub hk_errors: Vec<String>,
@@ -402,6 +404,7 @@ pub fn start(background: bool) {
             widget: Widget::new(),
             toast: Toast::new(),
             room_seen: None,
+            notices_since: 0,
             prompt: Prompt::new(),
             usage: Usage::load(),
             hk_errors: Vec::new(),
@@ -1389,6 +1392,18 @@ impl App {
 
     /// A cada segundo: avisa quem conectou a este PC e quem saiu. A primeira olhada só anota.
     fn room_watch(&mut self) {
+        // Avisos dos processos do compartilhamento (opções trocadas, atalhos): uma nota rápida na tela.
+        let first = self.notices_since == 0;
+        if first {
+            self.notices_since = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis());
+        }
+        // Um Mouse e teclado que caiu com o cursor escondido: o cursor volta.
+        #[cfg(feature = "stream")]
+        crate::stream::cursor::restore_orphan();
+        let notes = crate::stream::take_notices(&mut self.notices_since);
+        if !first && !notes.is_empty() {
+            self.toast.info(&notes.join(" · "));
+        }
         let now: Vec<(String, String)> = crate::stream::host::room().into_iter().map(|p| (p.key, p.name)).collect();
         let Some(before) = self.room_seen.replace(now.clone()) else { return };
         let title = crate::i18n::tr("Compartilhar tela").into_owned();

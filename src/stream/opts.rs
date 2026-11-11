@@ -67,6 +67,8 @@ pub struct Opts {
     pub pads: String,
     /// Permissões do convite que a página cria.
     pub invite: u8,
+    /// Por quantos minutos o convite da página vale.
+    pub invite_min: u32,
     /// Nome que os outros veem; vazio usa o nome do PC no Windows.
     pub name: String,
     /// Altura máxima do vídeo; 0 segue a tela de quem assiste.
@@ -105,7 +107,36 @@ pub struct Opts {
     pub key_panic: Keys,
     /// Placa de vídeo que codifica (nome do Windows); vazio usa a do monitor transmitido.
     pub gpu: String,
+    /// Saída de som capturada (id do Windows); vazio é a saída padrão.
+    pub sound_out: String,
+    /// Entrada que vai junto com o som: vazio nenhuma, [`MIC_DEFAULT`] a padrão, ou o id do Windows.
+    pub sound_in: String,
 }
+
+/// `Opts::sound_in`: a entrada padrão do Windows.
+pub const MIC_DEFAULT: &str = "padrao";
+
+/// As opções do host que cada aparelho que assiste pode ter diferentes (imagem, som e o mouse e o
+/// teclado). Nome, pessoas, rede, controles e atalhos valem para todos.
+pub const PER_CLIENT: [&str; 17] = [
+    "hdr_desligar",
+    "resolucao",
+    "quadros",
+    "banda",
+    "codec",
+    "prioridade",
+    "dez_bits",
+    "permitir_444",
+    "monitor",
+    "ritmo_constante",
+    "som_programa",
+    "sem_chamadas",
+    "um_por_vez",
+    "host_primeiro",
+    "gpu",
+    "som_saida",
+    "som_entrada",
+];
 
 impl Default for Opts {
     fn default() -> Self {
@@ -114,6 +145,7 @@ impl Default for Opts {
             guests: 3,
             pads: "auto".into(),
             invite: SOUND,
+            invite_min: 10,
             name: String::new(),
             res: 0,
             fps: 0,
@@ -133,6 +165,8 @@ impl Default for Opts {
             upnp: true,
             key_panic: (MOD_CTRL | MOD_ALT | MOD_SHIFT, b'Q' as u32),
             gpu: String::new(),
+            sound_out: String::new(),
+            sound_in: String::new(),
         }
     }
 }
@@ -156,6 +190,7 @@ impl Opts {
                 "pessoas" => o.guests = v.parse().unwrap_or(3usize).clamp(1, 8),
                 "controles" if matches!(v, "auto" | "vigem" | "viiper") => o.pads = v.into(),
                 "convite" => o.invite = parse_perms(v).unwrap_or(SOUND),
+                "convite_minutos" => o.invite_min = v.parse::<u32>().unwrap_or(10).clamp(1, 1440),
                 "nome" => o.name = clean(v, 40),
                 "resolucao" => o.res = v.parse().unwrap_or(0),
                 "quadros" => o.fps = v.parse::<u32>().unwrap_or(0).min(480),
@@ -175,6 +210,8 @@ impl Opts {
                 "upnp" => o.upnp = flag(v),
                 "atalho_emergencia" => o.key_panic = keys_parse(v, o.key_panic),
                 "gpu" => o.gpu = clean(v, 128),
+                "som_saida" => o.sound_out = clean(v, 200),
+                "som_entrada" => o.sound_in = clean(v, 200),
                 _ => {}
             }
         }
@@ -187,7 +224,7 @@ impl Opts {
         format!(
             "hdr_desligar={}\npessoas={}\ncontroles={}\nconvite={}\nnome={}\nresolucao={}\nquadros={}\nbanda={}\ncodec={}\nprioridade={}\n\
 dez_bits={}\npermitir_444={}\nmonitor={}\nritmo_constante={}\nsom_programa={}\nsem_chamadas={}\num_por_vez={}\nhost_primeiro={}\n\
-sem_cadeia={}\nporta={}\nupnp={}\natalho_emergencia={}\ngpu={}\n",
+sem_cadeia={}\nporta={}\nupnp={}\natalho_emergencia={}\ngpu={}\nsom_saida={}\nsom_entrada={}\nconvite_minutos={}\n",
             b(self.hdr_off),
             self.guests,
             self.pads,
@@ -211,11 +248,70 @@ sem_cadeia={}\nporta={}\nupnp={}\natalho_emergencia={}\ngpu={}\n",
             b(self.upnp),
             keys_text(self.key_panic),
             self.gpu,
+            self.sound_out,
+            self.sound_in,
+            self.invite_min,
         )
     }
 
     pub fn load() -> Self {
         Self::parse(&std::fs::read_to_string(Self::path()).unwrap_or_default())
+    }
+
+    /// Onde fica a configuração própria de um aparelho que assiste (pelo id).
+    pub fn client_path(id: &str) -> std::path::PathBuf {
+        let id: String = id.chars().filter(|c| c.is_ascii_hexdigit()).take(64).collect();
+        dir().join("opcoes-cliente").join(format!("{id}.txt"))
+    }
+
+    /// O aparelho tem configuração própria?
+    pub fn has_own(id: &str) -> bool {
+        !id.is_empty() && Self::client_path(id).exists()
+    }
+
+    /// As opções que valem para um aparelho: as de todos, com as dele por cima (só as de
+    /// [`PER_CLIENT`]). Sem id, ou sem configuração própria, ficam as de todos.
+    pub fn load_for(id: &str) -> Self {
+        let all = std::fs::read_to_string(Self::path()).unwrap_or_default();
+        if id.is_empty() {
+            return Self::parse(&all);
+        }
+        let own = std::fs::read_to_string(Self::client_path(id)).unwrap_or_default();
+        Self::parse(&Self::merge(&all, &own))
+    }
+
+    /// O texto de todos e, depois, as linhas próprias que podem mudar (a última linha vence).
+    fn merge(all: &str, own: &str) -> String {
+        let mut text = all.to_string();
+        text.push('\n');
+        for line in own.lines() {
+            if line.split_once('=').is_some_and(|(k, _)| PER_CLIENT.contains(&k.trim())) {
+                text.push_str(line);
+                text.push('\n');
+            }
+        }
+        text
+    }
+
+    /// Grava a configuração própria de um aparelho (só as opções de [`PER_CLIENT`]).
+    #[cfg_attr(not(feature = "stream"), allow(dead_code))]
+    pub fn save_for(&self, id: &str) -> std::io::Result<()> {
+        let p = Self::client_path(id);
+        if let Some(d) = p.parent() {
+            std::fs::create_dir_all(d)?;
+        }
+        let text = self.text();
+        let own: Vec<&str> = text.lines().filter(|l| l.split_once('=').is_some_and(|(k, _)| PER_CLIENT.contains(&k))).collect();
+        std::fs::write(p, own.join("\n") + "\n")
+    }
+
+    /// Tira a configuração própria: o aparelho volta a seguir a de todos.
+    #[cfg_attr(not(feature = "stream"), allow(dead_code))]
+    pub fn drop_own(id: &str) -> std::io::Result<()> {
+        match std::fs::remove_file(Self::client_path(id)) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e),
+            _ => Ok(()),
+        }
     }
 
     /// Mudou algo que o vídeo já aberto usa: a transmissão recomeça para valer. O resto (ritmo,
@@ -395,6 +491,7 @@ mod tests {
             guests: 2,
             pads: "vigem".into(),
             invite: SOUND | COPY,
+            invite_min: 60,
             name: "Sala".into(),
             res: 1080,
             fps: 60,
@@ -414,6 +511,8 @@ mod tests {
             upnp: false,
             key_panic: (MOD_CTRL, b'K' as u32),
             gpu: "NVIDIA GeForce RTX 4060 Laptop GPU".into(),
+            sound_out: "{0.0.0.00000000}.{aa-bb}".into(),
+            sound_in: MIC_DEFAULT.into(),
         };
         assert_eq!(Opts::parse(&o.text()), o);
         assert_eq!(Opts::parse("pessoas=99\ncontroles=outro\ncodec=mp3\nnome=a\tb"), Opts { guests: 8, name: "ab".into(), ..Opts::default() });
@@ -429,6 +528,20 @@ mod tests {
         // Lixo e repetidos saem, e este PC sempre tem lugar.
         assert_eq!(ClientOpts::parse("telas=abcdef12,abcdef12,x;y").screens, ["abcdef12".to_string(), "eu".into(), "".into()]);
         assert_eq!(ClientOpts::parse("atalho_menu=2,0\nmedidor=9\nquadros=75"), ClientOpts { meter: 2, ..ClientOpts::default() });
+    }
+
+    #[test]
+    fn own_settings_per_client() {
+        let all = Opts { codec: "av1".into(), guests: 2, name: "Sala".into(), ..Opts::default() };
+        let own = Opts { codec: "pyrowave".into(), guests: 4, name: "Outro".into(), sound_out: "x".into(), ..Opts::default() };
+        // Só as opções por aparelho passam por cima; nome e pessoas ficam os de todos.
+        let own_text: String = own.text().lines().filter(|l| l.split_once('=').is_some_and(|(k, _)| PER_CLIENT.contains(&k))).map(|l| format!("{l}\n")).collect();
+        let got = Opts::parse(&Opts::merge(&all.text(), &own_text));
+        assert_eq!(got.codec, "pyrowave");
+        assert_eq!(got.sound_out, "x");
+        assert_eq!((got.guests, got.name.as_str()), (2, "Sala"));
+        // Linhas de fora da lista são ignoradas.
+        assert_eq!(Opts::parse(&Opts::merge(&all.text(), "pessoas=1\nnome=X\n")), all);
     }
 
     #[test]

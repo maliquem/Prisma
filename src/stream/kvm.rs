@@ -203,9 +203,16 @@ impl State {
     /// direita, entra pela esquerda), na altura relativa `fy`.
     fn enter(&mut self, to: Screen, right: bool, fy: f64) {
         self.release_here();
+        // O PC de onde o mouse sai esconde o cursor de lá.
+        if let Screen::Remote(i) = self.at {
+            if to != self.at {
+                self.pending.push((i, Input::Away));
+            }
+        }
         self.at = to;
         match to {
             Screen::Local => {
+                super::cursor::show();
                 let v = virtual_screen();
                 let x = if right { v.left + 2 } else { v.right - 3 };
                 let m = monitor_at(POINT { x, y: self.park.y });
@@ -213,6 +220,8 @@ impl State {
                 set_cursor(x, y);
             }
             Screen::Remote(i) => {
+                // O cursor daqui fica parado perto da borda: some enquanto o mouse está lá.
+                super::cursor::hide();
                 let (w, h) = self.size(i);
                 self.rx = if right { 0 } else { w - 1 };
                 self.ry = (fy * (h - 1) as f64) as i32;
@@ -335,6 +344,7 @@ impl State {
         self.lock_held = true;
         self.locked = !self.locked;
         eprintln!("{}", if self.locked { "mouse travado nesta tela" } else { "mouse destravado" });
+        super::notice(if self.locked { "Mouse travado nesta tela" } else { "Mouse destravado" }, "");
         true
     }
 
@@ -496,6 +506,7 @@ struct Peer {
     last_ping: Instant,
     heard: Instant,
     perms: u8,
+    lat: super::LatLog,
 }
 
 enum Event {
@@ -637,7 +648,7 @@ fn run(me: u8, targets: Vec<(String, u8)>, lock_key: Keys) {
                     if perms & KEYBOARD == 0 {
                         eprintln!("«{name}» não deu a permissão de teclado: lá só vai o mouse");
                     }
-                    peers[i] = Some(Peer { link, name, done, history: VecDeque::new(), first: 0, last_input: now_, last_send: now_, last_ping: now_ - Duration::from_secs(1), heard: now_, perms });
+                    peers[i] = Some(Peer { lat: super::LatLog::new("").of(&name), link, name, done, history: VecDeque::new(), first: 0, last_input: now_, last_send: now_, last_ping: now_ - Duration::from_secs(1), heard: now_, perms });
                 }
                 Event::Gone(i) => {
                     lines -= 1;
@@ -687,6 +698,7 @@ fn run(me: u8, targets: Vec<(String, u8)>, lock_key: Keys) {
                 Poll::Got(n) => {
                     p.heard = Instant::now();
                     match read(&buf[..n]) {
+                        Some(Msg::Pong { t, .. }) => p.lat.add((now() - t) as f64 / 10_000.0, None),
                         Some(Msg::Bye) => gone.push((i, "encerrou a conexão")),
                         Some(Msg::Info { perms, .. }) => {
                             p.perms = perms;
@@ -714,6 +726,7 @@ fn run(me: u8, targets: Vec<(String, u8)>, lock_key: Keys) {
         }
     }
     *STATE.lock().unwrap() = None;
+    super::cursor::show();
     if let Some(t) = hook_thread {
         while HOOK_THREAD.load(Ordering::SeqCst) == 0 && !t.is_finished() {
             std::thread::sleep(Duration::from_millis(5));
@@ -755,6 +768,9 @@ pub(super) fn serve(link: Arc<dyn Link>, perms: u8, name: String) {
     );
     link.send(&info);
     let mut inj = host::Injector::new(mon, perms);
+    host::watch_host_input();
+    // Desde quando o cursor daqui está escondido (o mouse foi para outro PC).
+    let mut hidden_at: Option<i64> = None;
     eprintln!("«{name}» usa o mouse e o teclado daqui");
     crate::config::log(&format!("compartilhar: «{name}» usa o mouse e o teclado deste PC"));
     let mut clip = (perms & COPY != 0).then(super::clip::start);
@@ -782,7 +798,22 @@ pub(super) fn serve(link: Arc<dyn Link>, perms: u8, name: String) {
                         write(&mut out, &Msg::Pong { t, host: now() });
                         link.send(&out);
                     }
-                    Some(Msg::Input { first, events }) => inj.apply(first, events),
+                    Some(Msg::Input { first, events }) => {
+                        // O evento mais novo diz onde o mouse está: saiu daqui, ou voltou.
+                        match events.chunks(INPUT_SIZE).filter_map(Input::get).last() {
+                            Some(Input::Away) if hidden_at.is_none() => {
+                                super::cursor::hide();
+                                hidden_at = Some(host::ms_now());
+                            }
+                            Some(Input::Away) => {}
+                            Some(_) if hidden_at.is_some() => {
+                                super::cursor::show();
+                                hidden_at = None;
+                            }
+                            _ => {}
+                        }
+                        inj.apply(first, events)
+                    }
                     Some(Msg::Clip { id, part, parts, data }) => {
                         if let (Some(c), Some(t)) = (&clip, clip_in.add(id, part, parts, data)) {
                             let _ = c.set.send(t);
@@ -795,10 +826,16 @@ pub(super) fn serve(link: Arc<dyn Link>, perms: u8, name: String) {
             Poll::Closed => break,
             _ => {}
         }
+        // O mouse daqui se mexeu: o cursor volta para quem está neste PC.
+        if hidden_at.is_some_and(|t| host::HOST_MOUSE_MS.load(Ordering::Relaxed) > t) {
+            super::cursor::show();
+            hidden_at = None;
+        }
         if heard.elapsed() > SILENCE {
             break;
         }
     }
+    super::cursor::show();
     inj.release();
     clip.take();
     eprintln!("«{name}» parou de usar o mouse e o teclado daqui");

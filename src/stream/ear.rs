@@ -66,6 +66,7 @@ fn run(link: Arc<dyn Link>, name: &str) {
     let mut last_ping = Instant::now() - Duration::from_secs(1);
     let mut heard = Instant::now();
     let (mut next, mut lost, mut blocks) = (None::<u32>, 0u64, 0u64);
+    let mut lat = super::LatLog::new("som");
     loop {
         if last_ping.elapsed() > Duration::from_millis(500) {
             write(&mut out, &Msg::Ping { t: now() });
@@ -76,6 +77,12 @@ fn run(link: Arc<dyn Link>, name: &str) {
             Poll::Got(n) => {
                 heard = Instant::now();
                 match read(&buf[..n]) {
+                    Some(Msg::Pong { t, .. }) => {
+                        let rtt = (now() - t) as f64 / 10_000.0;
+                        // Estéreo a 48 kHz: 96 amostras por milissegundo esperando para tocar.
+                        let queued = spk.audio.lock().unwrap().len() as f64 / 96.0;
+                        lat.add(rtt, Some(rtt / 2.0 + queued));
+                    }
                     Some(Msg::Audio { seq, data, .. }) => {
                         blocks += 1;
                         if let Some(n) = next {

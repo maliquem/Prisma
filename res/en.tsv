@@ -1842,3 +1842,59 @@ A temperatura da CPU precisa do PawnIO, um driver gratuito e aberto, como o do S
 o download falhou	the download failed
 não deu para salvar o instalador	the installer could not be saved
 a assinatura do instalador não confere	the installer's signature doesn't match
+Aplicativos	Apps
+Em segundo plano	Background processes
+Processos do Windows	Windows processes
+1 hora	1 hour
+24 horas	24 hours
+{} horas	{} hours
+{} minutos	{} minutes
+Revogado: o código não vale mais.	Revoked: the code no longer works.
+Vencido. Crie um convite novo.	Expired. Create a new invite.
+Pronto. Vale uma vez e vence em {}.	Ready. Works once and expires in {}.
+Vale uma vez e vence em {}.	Works once and expires in {}.
+Código copiado.	Code copied.
+Link copiado.	Link copied.
+Revogar	Revoke
+Convite copiado.	Invite copied.
+Convite revogado: o código não vale mais.	Invite revoked: the code no longer works.
+Não deu para revogar. Com o serviço, abra o Prisma como administrador.	Couldn't revoke. With the service, open Prisma as administrator.
+Convite vale	Invite lasts
+vence em {}	expires in {}
+revogado	revoked
+vencido	expired
+Parar mouse e teclado	Stop mouse and keyboard
+Parar o som	Stop sound
+Assistindo:	Watching:
+Mouse e teclado:	Mouse and keyboard:
+Som:	Sound:
+Configuração própria para este aparelho	Own settings for this device
+Saída capturada	Captured output
+Entrada junto	Mix in input
+Configuração própria: vale quando este aparelho conecta. Com mais de uma pessoa ao mesmo tempo, vale a de quem conectou primeiro. Nome, pessoas, rede, controles e atalhos são os de todos.	Own settings: they apply when this device connects. With more than one person at once, the settings of whoever connected first apply. Name, people, network, controllers and shortcuts are shared by all.
+Com prioridade, quem assiste para por 1 segundo quando alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. O Windows só deixa tirar um programa de chamada (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), e só da saída padrão: sai o que estiver tocando. Uma saída escolhida manda o que toca nela. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante.	With priority, the viewer pauses for 1 second whenever someone here moves the mouse or types. One person at a time: the turn passes after 2 seconds without input. Windows only allows leaving out one call app (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), and only from the default output: the one that is playing is left out. A chosen output sends what plays on it. Changes apply right away; picture changes restart the video for a moment.
+A padrão do Windows	Windows default
+Desligada agora	Off right now
+Nenhuma	None
+Todos os aparelhos	All devices
+Tecla de emergência: todo mundo desconectado	Panic key: everyone disconnected
+Acesso de «{}» mudou na hora	Access for “{}” changed right away
+Opções do host aplicadas na conexão	Host options applied to the connection
+«{}» mudou os quadros por segundo	“{}” changed the frame rate
+«{}» mudou o pedido de 4:4:4	“{}” changed the 4:4:4 request
+Mouse travado nesta tela	Mouse locked to this screen
+Mouse destravado	Mouse unlocked
+Sim: parear e perguntar a cada conexão (recomendado).	Yes: pair and ask on every connection (recommended).
+Não: parear e confiar neste aparelho, sem perguntar.	No: pair and trust this device without asking.
+Aviso da conexão	Connection warning
+Som do outro PC: mudo	Other PC's sound: muted
+Som do outro PC: ligado	Other PC's sound: on
+Ctrl+Alt+Del enviado ao host	Ctrl+Alt+Del sent to the host
+Vídeo do host	Host video
+Acesso mudou	Access changed
+só o mouse	mouse only
+só o teclado	keyboard only
+mouse e teclado	mouse and keyboard
+mín	min
+máx	max
+som	sound

@@ -228,7 +228,7 @@ fn hdr_mark() -> std::path::PathBuf {
 
 impl HdrOff {
     fn new(first: &Hello) -> Self {
-        let off = std::env::var("PRISMA_HDR").map(|v| v == "desligar").unwrap_or_else(|_| Opts::load().hdr_off);
+        let off = std::env::var("PRISMA_HDR").map(|v| v == "desligar").unwrap_or_else(|_| room_opts().hdr_off);
         if !off || first.flags & SEES_HDR != 0 {
             return HdrOff(None);
         }
@@ -357,6 +357,7 @@ pub fn emergency_key() {
             while GetMessageW(&mut msg, None, 0, 0).as_bool() {
                 if msg.message == WM_HOTKEY {
                     eprintln!("tecla de emergência: todo mundo desconectado");
+                    super::notice("Tecla de emergência: todo mundo desconectado", "");
                     crate::config::log("compartilhar: tecla de emergência apertada, todo mundo desconectado");
                     write_room("");
                     restore_hdr();
@@ -385,6 +386,7 @@ pub fn restore_hdr() {
 /// Uma sala, do primeiro que chega até o último sair. Quem chega pelo `joins` entra junto.
 /// Devolve o endereço de alguém novo que chegou pelo UDP, se for o caso.
 pub(super) fn serve(d: &D3d, first: Joiner, joins: Option<&mpsc::Receiver<Joiner>>) -> Option<(Hello, SocketAddr)> {
+    *LEAD.lock().unwrap() = first.id.clone();
     let _hdr = HdrOff::new(&first.hello);
     let mut room = Room { guests: vec![Guest::new(first)], bridge: None, bridge_err: None, anti_cheat: false, checked: Instant::now() - Duration::from_secs(10), clip: None, clip_id: 0, frame_id: 0, wave_failed: false };
     let g = &room.guests[0];
@@ -470,12 +472,27 @@ fn top_pids(names: &[&str]) -> Vec<(u32, String)> {
         .collect()
 }
 
-/// De onde vem o som: o PC todo, só um programa, ou o PC sem um programa.
-#[derive(Clone, Copy, PartialEq, Debug)]
+/// De onde vem o som: o PC todo, só um programa, o PC sem um programa, ou uma saída escolhida.
+#[derive(Clone, PartialEq, Debug)]
 enum SoundFrom {
     All,
     Only(u32),
     Without(u32),
+    /// A saída escolhida nas opções (id do Windows): o que toca nela, sem tirar programa.
+    Device(String),
+}
+
+/// O aparelho que conectou primeiro: as opções próprias dele valem para a sala toda.
+static LEAD: Mutex<String> = Mutex::new(String::new());
+
+/// As opções que valem agora: as do aparelho que lidera a sala, ou as de todos.
+fn room_opts() -> Opts {
+    Opts::load_for(&LEAD.lock().unwrap())
+}
+
+/// O nome de um aparelho de som pelo id, para o registro.
+fn device_name(id: &str, capture: bool) -> String {
+    crate::sys::audio::devices(capture).into_iter().find(|d| d.id == id).map_or_else(|| id.to_string(), |d| d.name)
 }
 
 /// O programa de chamada que sai do som. O Windows só deixa tirar um programa por captura: vale o
@@ -499,6 +516,13 @@ fn call_to_exclude(keep: Option<u32>) -> Option<(u32, String)> {
 
 /// A escolha do som e o texto para o registro. `keep`: o programa que já está fora do som.
 fn sound_from(opts: &Opts, viewer_here: Option<u32>, keep: Option<u32>) -> (SoundFrom, String) {
+    // Uma saída escolhida: o Windows só tira programa do som da saída padrão.
+    if !opts.sound_out.is_empty() {
+        if crate::sys::audio::devices(false).iter().any(|d| d.id == opts.sound_out) {
+            return (SoundFrom::Device(opts.sound_out.clone()), format!("da saída «{}»", device_name(&opts.sound_out, false)));
+        }
+        eprintln!("a saída de som escolhida não está ligada: vai a padrão");
+    }
     // Tirar o programa de chamada vale mais que escolher ele como o som que vai.
     let mut note = String::new();
     if opts.no_calls && is_call_app(&opts.sound_app) {
@@ -525,7 +549,9 @@ fn sound_from(opts: &Opts, viewer_here: Option<u32>, keep: Option<u32>) -> (Soun
 /// programas abertos durante a transmissão: outra linha decide a cada segundo, e esta só troca a
 /// captura quando a decisão muda (procurar processos e sessões de som atrasaria os blocos).
 pub(super) fn audio(links: Arc<Mutex<Vec<Arc<dyn Link>>>>, viewer_here: Option<u32>, stop: Arc<AtomicBool>) {
-    let choice: Arc<Mutex<Option<(SoundFrom, String)>>> = Arc::new(Mutex::new(None));
+    // A origem do som, e a entrada que vai junto (vazio: nenhuma).
+    type Choice = (SoundFrom, String, String);
+    let choice: Arc<Mutex<Option<Choice>>> = Arc::new(Mutex::new(None));
     let chooser = {
         let (choice, stop) = (choice.clone(), stop.clone());
         std::thread::Builder::new().name("compartilhar-som-origem".into()).spawn(move || {
@@ -534,12 +560,13 @@ pub(super) fn audio(links: Arc<Mutex<Vec<Arc<dyn Link>>>>, viewer_here: Option<u
             }
             let mut keep = None;
             while !stop.load(Ordering::Relaxed) {
-                let (from, text) = sound_from(&Opts::load(), viewer_here, keep);
+                let opts = room_opts();
+                let (from, text) = sound_from(&opts, viewer_here, keep);
                 keep = match from {
                     SoundFrom::Without(p) => Some(p),
                     _ => None,
                 };
-                *choice.lock().unwrap() = Some((from, text));
+                *choice.lock().unwrap() = Some((from, text, opts.sound_in.clone()));
                 for _ in 0..10 {
                     if stop.load(Ordering::Relaxed) {
                         break;
@@ -553,24 +580,28 @@ pub(super) fn audio(links: Arc<Mutex<Vec<Arc<dyn Link>>>>, viewer_here: Option<u
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
         let mut src: Option<sound::Source> = None;
         let mut from: Option<SoundFrom> = None;
+        let mut mic: Option<sound::Source> = None;
+        let mut mic_from: Option<String> = None;
+        let (mut a, mut m) = (Vec::<f32>::new(), Vec::<f32>::new());
         let mut pcm: Vec<f32> = Vec::new();
         let mut block = Vec::with_capacity(AUDIO_BLOCK * 4);
         let mut out = Vec::with_capacity(MTU);
         let mut seq = 0u32;
         while !stop.load(Ordering::Relaxed) {
             std::thread::sleep(Duration::from_millis(2));
-            if let Some((want, text)) = choice.lock().unwrap().take() {
-                if from != Some(want) {
+            if let Some((want, text, want_mic)) = choice.lock().unwrap().take() {
+                if from.as_ref() != Some(&want) {
                     if let Some(s) = src.take() {
                         let _ = s.client.Stop();
                     }
-                    from = Some(want);
-                    pcm.clear();
-                    let s = match want {
-                        SoundFrom::Only(pid) => sound::open_process_mode(pid, false),
-                        SoundFrom::Without(pid) => sound::open_process_mode(pid, true),
+                    a.clear();
+                    let s = match &want {
+                        SoundFrom::Only(pid) => sound::open_process_mode(*pid, false),
+                        SoundFrom::Without(pid) => sound::open_process_mode(*pid, true),
                         SoundFrom::All => sound::open(eRender, true),
+                        SoundFrom::Device(id) => sound::open_on(id, eRender, true),
                     };
+                    from = Some(want);
                     match s {
                         Ok(s) => {
                             eprintln!("som: {text}");
@@ -579,9 +610,35 @@ pub(super) fn audio(links: Arc<Mutex<Vec<Arc<dyn Link>>>>, viewer_here: Option<u
                         Err(e) => eprintln!("sem som ({text}): {e:?}"),
                     }
                 }
+                if mic_from.as_ref() != Some(&want_mic) {
+                    if let Some(s) = mic.take() {
+                        let _ = s.client.Stop();
+                    }
+                    m.clear();
+                    if !want_mic.is_empty() {
+                        let id = if want_mic == super::MIC_DEFAULT { "" } else { want_mic.as_str() };
+                        let name = if id.is_empty() { "a entrada padrão".to_string() } else { format!("«{}»", device_name(id, true)) };
+                        match sound::open_on(id, windows::Win32::Media::Audio::eCapture, false) {
+                            Ok(s) => {
+                                eprintln!("entrada junto com o som: {name}");
+                                mic = Some(s);
+                            }
+                            Err(e) => eprintln!("a entrada {name} não abriu: {e:?}"),
+                        }
+                    }
+                    mic_from = Some(want_mic);
+                }
             }
-            let Some(s) = &src else { continue };
-            sound::read(s, &mut pcm);
+            if let Some(s) = &src {
+                sound::read(s, &mut a);
+            }
+            match &mic {
+                Some(s) => {
+                    sound::read(s, &mut m);
+                    mix(&mut a, &mut m, &mut pcm);
+                }
+                None => pcm.append(&mut a),
+            }
             while pcm.len() >= AUDIO_BLOCK * 2 {
                 block.clear();
                 for v in pcm.drain(..AUDIO_BLOCK * 2) {
@@ -603,6 +660,23 @@ pub(super) fn audio(links: Arc<Mutex<Vec<Arc<dyn Link>>>>, viewer_here: Option<u
     }
 }
 
+/// Folga entre o som e a entrada antes de uma seguir sozinha: 40 ms em estéreo a 48 kHz. Sem
+/// nada tocando, o Windows não entrega blocos de som, e a voz não pode esperar por eles.
+const MIX_SLACK: usize = 48 * 40 * 2;
+
+/// Junta o som (`a`) e a entrada (`m`) em `out`, amostra por amostra, no que os dois têm. Quando
+/// um passa da folga sem o outro, ele segue sozinho.
+fn mix(a: &mut Vec<f32>, m: &mut Vec<f32>, out: &mut Vec<f32>) {
+    let n = a.len().min(m.len());
+    out.extend(a.drain(..n).zip(m.drain(..n)).map(|(x, y)| x + y));
+    if a.len() > MIX_SLACK {
+        out.append(a);
+    }
+    if m.len() > MIX_SLACK {
+        out.append(m);
+    }
+}
+
 /// Hora (ms desde o início do processo) do último mouse ou teclado de verdade deste PC.
 static HOST_INPUT_MS: AtomicI64 = AtomicI64::new(i64::MIN / 2);
 /// Quem está no mouse e no teclado agora, quando é um por vez: (injetor, ms).
@@ -618,8 +692,11 @@ pub(super) fn ms_now() -> i64 {
     START.get_or_init(Instant::now).elapsed().as_millis() as i64
 }
 
+/// Hora (ms desde o início do processo) do último movimento do mouse de verdade deste PC.
+pub(super) static HOST_MOUSE_MS: AtomicI64 = AtomicI64::new(i64::MIN / 2);
+
 /// Vigia o mouse e o teclado de verdade (o Windows marca o que foi injetado), numa linha própria.
-fn watch_host_input() {
+pub(super) fn watch_host_input() {
     static STARTED: AtomicBool = AtomicBool::new(false);
     if STARTED.swap(true, Ordering::Relaxed) {
         return;
@@ -634,6 +711,9 @@ fn watch_host_input() {
     unsafe extern "system" fn mouse(code: i32, w: WPARAM, l: LPARAM) -> LRESULT {
         if code >= 0 && (*(l.0 as *const MSLLHOOKSTRUCT)).flags & LLMHF_INJECTED == 0 {
             HOST_INPUT_MS.store(ms_now(), Ordering::Relaxed);
+            if w.0 as u32 == WM_MOUSEMOVE {
+                HOST_MOUSE_MS.store(ms_now(), Ordering::Relaxed);
+            }
         }
         CallNextHookEx(None, code, w, l)
     }
@@ -727,6 +807,7 @@ impl Injector {
 
     fn one(&mut self, e: Input) -> Option<INPUT> {
         let allowed = match e {
+            Input::Away => return None,
             Input::Key { .. } => self.perms & KEYBOARD != 0,
             _ => self.perms & MOUSE != 0,
         };
@@ -761,6 +842,7 @@ impl Injector {
                 }
                 Self::key(scan, extended, down)
             }
+            Input::Away => return None,
         })
     }
 
@@ -1099,7 +1181,8 @@ pub(super) fn pick_monitor(n: u32) -> HMONITOR {
 }
 
 unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner>>) -> Result<End> {
-    let mut opts = Opts::load();
+    *LEAD.lock().unwrap() = room.guests[0].id.clone();
+    let mut opts = room_opts();
     let mon = pick_monitor(opts.monitor);
     let color = monitor_color(mon);
     // A placa que codifica: a das opções, ou a do monitor transmitido. Num notebook com duas, a
@@ -1370,6 +1453,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                     }
                     ("acesso", Some(p)) if p != g.perms => {
                         eprintln!("«{}» agora: {}", g.name, perms_text(p));
+                        super::notice("Acesso de «{}» mudou na hora", &g.name);
                         g.perms = p;
                         if let Some(inj) = &mut g.input {
                             inj.release();
@@ -1384,8 +1468,9 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
             }
             // As opções da página valem na hora: o que o vídeo usa recomeça a transmissão (um
             // quadro-chave); ritmo, mouse e teclado mudam aqui; o som se ajusta sozinho.
-            let fresh = Opts::load();
+            let fresh = room_opts();
             if fresh != opts {
+                super::notice("Opções do host aplicadas na conexão", "");
                 if fresh.video_differs(&opts) {
                     eprintln!("opções do vídeo mudaram: recomeçando");
                     result = End::Again;
@@ -1476,6 +1561,12 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                                 // Talvez a descrição do vídeo não tenha chegado: vai de novo.
                                 g.link.send(&infos[g.perms as usize]);
                                 continue;
+                            }
+                            // Pediu outros quadros por segundo ou o 4:4:4: avisa aqui o que mudou.
+                            if h.hz != g.hello.hz && h.w == g.hello.w && h.h == g.hello.h {
+                                super::notice("«{}» mudou os quadros por segundo", &g.name);
+                            } else if (h.flags ^ g.hello.flags) & ASKS_444 != 0 {
+                                super::notice("«{}» mudou o pedido de 4:4:4", &g.name);
                             }
                             g.hello = h;
                             result = End::Again;

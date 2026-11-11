@@ -7,6 +7,8 @@
 //! Internet, com pareamento e criptografia (compilado com `--features stream`): veja `net.rs`.
 
 mod clip;
+#[cfg(feature = "stream")]
+pub mod cursor;
 mod hud;
 #[cfg(feature = "stream")]
 pub mod code;
@@ -19,7 +21,8 @@ mod link;
 #[cfg(feature = "stream")]
 mod net;
 #[cfg(feature = "stream")]
-pub use net::{device_rows, forget_device, me, set_device, CODE_FAIL, CODE_LINE, CODE_OK};
+pub use net::{device_rows, forget_device, me, revoke_invite, set_device, DeviceRow, CODE_FAIL, CODE_LINE, CODE_OK, EXPIRES_LINE, INVITE_MINUTES};
+pub use net::unix_now;
 mod pads;
 mod screen;
 #[cfg(feature = "stream")]
@@ -50,6 +53,106 @@ pub fn dir() -> std::path::PathBuf {
 
 pub fn user_dir() -> std::path::PathBuf {
     crate::config::data_dir().join("compartilhar")
+}
+
+/// Um aviso para a tela deste PC, de um processo do compartilhamento (o host, o Mouse e teclado):
+/// o Prisma mostra por um instante. `key` é o texto em português, traduzido na hora de mostrar,
+/// com `{}` trocado por `arg`.
+pub fn notice(key: &str, arg: &str) {
+    use std::io::Write;
+    let clean = |s: &str| s.chars().filter(|c| !c.is_control()).collect::<String>();
+    let ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis());
+    let d = dir();
+    let _ = std::fs::create_dir_all(&d);
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(d.join("avisos.txt")) {
+        let _ = writeln!(f, "{ms}\t{}\t{}", clean(key), clean(arg));
+    }
+}
+
+/// Os avisos novos desde `since` (ms desde 1970), dos dois lugares onde podem estar (a pasta
+/// deste usuário e a do serviço), já traduzidos. Atualiza `since`; arquivos grandes recomeçam.
+pub fn take_notices(since: &mut u128) -> Vec<String> {
+    let mut out: Vec<(u128, String)> = Vec::new();
+    let mut newest = *since;
+    for d in [user_dir(), service_dir()] {
+        let p = d.join("avisos.txt");
+        let Ok(text) = std::fs::read_to_string(&p) else { continue };
+        for line in text.lines() {
+            let mut f = line.splitn(3, '\t');
+            let (Some(Ok(ms)), Some(key), arg) = (f.next().map(str::parse::<u128>), f.next(), f.next().unwrap_or("")) else { continue };
+            if ms > *since {
+                out.push((ms, crate::i18n::tr(key).replace("{}", arg)));
+                newest = newest.max(ms);
+            }
+        }
+        if text.len() > 64 * 1024 {
+            let _ = std::fs::write(&p, "");
+        }
+    }
+    *since = newest;
+    out.sort_by_key(|o| o.0);
+    out.into_iter().map(|o| o.1).collect()
+}
+
+/// O começo das linhas de latência que os modos escrevem no registro deles; a página mostra.
+pub const LAT_LINE: &str = "latência: ";
+
+/// Junta as medidas de latência e escreve uma linha no registro a cada 5 segundos: a média, a
+/// menor e a maior da rede (ida e volta) e, quando há, a do que a pessoa sente (`extra`, com nome).
+pub struct LatLog {
+    net: Vec<f64>,
+    extra: Vec<f64>,
+    extra_name: &'static str,
+    /// O PC medido, quando o processo fala com mais de um (Mouse e teclado).
+    who: String,
+    at: std::time::Instant,
+}
+
+impl LatLog {
+    pub fn new(extra_name: &'static str) -> Self {
+        LatLog { net: Vec::new(), extra: Vec::new(), extra_name, who: String::new(), at: std::time::Instant::now() }
+    }
+
+    /// Com o nome do PC na linha.
+    #[cfg_attr(not(feature = "stream"), allow(dead_code))]
+    pub fn of(mut self, who: &str) -> Self {
+        self.who = format!("«{who}» ");
+        self
+    }
+
+    pub fn add(&mut self, net_ms: f64, extra_ms: Option<f64>) {
+        if net_ms > 0.0 {
+            self.net.push(net_ms);
+        }
+        if let Some(e) = extra_ms.filter(|e| *e > 0.0) {
+            self.extra.push(e);
+        }
+        if self.at.elapsed() >= std::time::Duration::from_secs(5) {
+            if let Some(line) = self.line() {
+                let t = unsafe { windows::Win32::System::SystemInformation::GetLocalTime() };
+                eprintln!("{LAT_LINE}{:02}:{:02}:{:02} {}{line}", t.wHour, t.wMinute, t.wSecond, self.who);
+            }
+            self.net.clear();
+            self.extra.clear();
+            self.at = std::time::Instant::now();
+        }
+    }
+
+    fn line(&self) -> Option<String> {
+        let stats = |v: &[f64]| {
+            let avg = v.iter().sum::<f64>() / v.len() as f64;
+            let (lo, hi) = v.iter().fold((f64::MAX, 0.0f64), |(l, h), &x| (l.min(x), h.max(x)));
+            format!("{avg:.0} ms (mín {lo:.0}, máx {hi:.0})")
+        };
+        if self.net.is_empty() {
+            return None;
+        }
+        let mut s = format!("rede {}", stats(&self.net));
+        if !self.extra.is_empty() {
+            s.push_str(&format!(" · {} {}", self.extra_name, stats(&self.extra)));
+        }
+        Some(s)
+    }
 }
 
 pub fn service_dir() -> std::path::PathBuf {
@@ -207,6 +310,9 @@ pub enum Input {
     Wheel { delta: i16, horizontal: bool },
     /// Código de varredura do teclado, que não depende do idioma do teclado.
     Key { scan: u16, extended: bool, down: bool },
+    /// Mouse e teclado: o mouse saiu desta tela para a de outro PC. Quem recebe esconde o cursor
+    /// até o mouse voltar ou o mouse de lá se mexer. Versões antigas ignoram.
+    Away,
 }
 
 pub const INPUT_SIZE: usize = 8;
@@ -220,6 +326,7 @@ impl Input {
             Input::Button { button, down } => (2, down as u8, button as u16, 0),
             Input::Wheel { delta, horizontal } => (3, horizontal as u8, delta as u16, 0),
             Input::Key { scan, extended, down } => (4, down as u8 | (extended as u8) << 1, scan, 0),
+            Input::Away => (5, 0, 0, 0),
         };
         out.push(k);
         out.push(f);
@@ -235,6 +342,7 @@ impl Input {
             2 => Input::Button { button: a as u8, down: f & 1 != 0 },
             3 => Input::Wheel { delta: a as i16, horizontal: f & 1 != 0 },
             4 => Input::Key { scan: a, extended: f & 2 != 0, down: f & 1 != 0 },
+            5 => Input::Away,
             _ => return None,
         })
     }
@@ -668,6 +776,7 @@ mod tests {
             Input::Button { button: 4, down: true },
             Input::Wheel { delta: -120, horizontal: true },
             Input::Key { scan: 0x1D, extended: true, down: false },
+            Input::Away,
         ];
         let mut b = Vec::new();
         write_input(&mut b, 41, &evs);

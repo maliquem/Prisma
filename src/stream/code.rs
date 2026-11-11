@@ -166,6 +166,7 @@ mod tests {
         assert_eq!(normalize("Ol23-4567").as_deref(), Some("01234567"));
         assert_eq!(normalize("prisma://parear/K7M2-QX9P").as_deref(), Some("K7M2QX9P"));
         assert_eq!(normalize("https://maliquem.github.io/Prisma/c/#K7M2-QX9P").as_deref(), Some("K7M2QX9P"));
+        assert_eq!(normalize(&super::super::weblink::web_link("K7M2-QX9P")).as_deref(), Some("K7M2QX9P"));
         assert!(normalize("K7M2-QX9").is_none());
         assert!(normalize("K7M2-QX9U").is_none());
         assert!(normalize("PRISMA-ABCDEFGH").is_none());

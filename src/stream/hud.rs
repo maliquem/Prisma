@@ -14,7 +14,7 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{VIRTUAL_KEY, VK_DOWN, VK_ESCAP
 use windows::Win32::UI::WindowsAndMessaging::*;
 
 use crate::i18n::tr;
-use crate::ui::gfx::{measure, rect, rgb, Align, Weight, MUTED, TEXT, WARN};
+use crate::ui::gfx::{measure, rect, rgb, Align, Weight, ACCENT, MUTED, TEXT, WARN};
 use crate::ui::layered::Layered;
 
 /// O que a janela mediu no último segundo.
@@ -43,11 +43,15 @@ pub fn priority_name(p: u8) -> Option<&'static str> {
 
 /// Quanto tempo o aviso fica na tela.
 const WARN_FOR: Duration = Duration::from_secs(6);
+/// Quanto tempo fica a nota de uma opção trocada.
+pub const NOTICE_FOR: Duration = Duration::from_millis(2500);
 
 pub struct Hud {
     layer: Layered,
     visible: bool,
     warn: Option<(&'static str, Instant)>,
+    /// A última opção trocada, aqui ou no host, já traduzida.
+    notice: Option<(String, Instant)>,
     rtts: VecDeque<f64>,
     rising: u32,
 }
@@ -69,9 +73,15 @@ impl Hud {
             let ex = WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
             // Dona é a janela de quem assiste: a camada fica sempre logo acima dela, e só dela.
             let h = CreateWindowExW(ex, class, w!(""), WS_POPUP, 0, 0, 1, 1, Some(owner), None, Some(inst), None).ok()?;
-            Some(Hud { layer: Layered::new(h), visible: false, warn: None, rtts: VecDeque::new(), rising: 0 })
+            Some(Hud { layer: Layered::new(h), visible: false, warn: None, notice: None, rtts: VecDeque::new(), rising: 0 })
         }
     }
+
+    /// Mostra por um instante uma opção que mudou (pelo menu, por atalho ou pelo host).
+    pub fn notice(&mut self, text: String) {
+        self.notice = Some((text, Instant::now()));
+    }
+
 
     /// Confere a conexão no segundo que passou. Devolve o aviso novo, se houver.
     fn check(&mut self, s: &Sample) -> Option<&'static str> {
@@ -136,6 +146,12 @@ impl Hud {
         }
         if let Some((w, _)) = self.warn {
             lines.push((tr(w).into_owned(), WARN, 14.0, Weight::Semibold));
+        }
+        if self.notice.as_ref().is_some_and(|n| n.1.elapsed() > NOTICE_FOR) {
+            self.notice = None;
+        }
+        if let Some((n, _)) = &self.notice {
+            lines.push((n.clone(), ACCENT, 15.0, Weight::Semibold));
         }
         if lines.is_empty() || iconic {
             if self.visible {

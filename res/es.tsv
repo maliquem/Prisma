@@ -1836,3 +1836,59 @@ A temperatura da CPU precisa do PawnIO, um driver gratuito e aberto, como o do S
 o download falhou	la descarga falló
 não deu para salvar o instalador	no se pudo guardar el instalador
 a assinatura do instalador não confere	la firma del instalador no coincide
+Aplicativos	Aplicaciones
+Em segundo plano	En segundo plano
+Processos do Windows	Procesos de Windows
+1 hora	1 hora
+24 horas	24 horas
+{} horas	{} horas
+{} minutos	{} minutos
+Revogado: o código não vale mais.	Revocado: el código ya no vale.
+Vencido. Crie um convite novo.	Caducado. Crea una invitación nueva.
+Pronto. Vale uma vez e vence em {}.	Listo. Vale una vez y caduca en {}.
+Vale uma vez e vence em {}.	Vale una vez y caduca en {}.
+Código copiado.	Código copiado.
+Link copiado.	Enlace copiado.
+Revogar	Revocar
+Convite copiado.	Invitación copiada.
+Convite revogado: o código não vale mais.	Invitación revocada: el código ya no vale.
+Não deu para revogar. Com o serviço, abra o Prisma como administrador.	No se pudo revocar. Con el servicio, abre Prisma como administrador.
+Convite vale	La invitación dura
+vence em {}	caduca en {}
+revogado	revocado
+vencido	caducado
+Parar mouse e teclado	Detener ratón y teclado
+Parar o som	Detener el sonido
+Assistindo:	Viendo:
+Mouse e teclado:	Ratón y teclado:
+Som:	Sonido:
+Configuração própria para este aparelho	Configuración propia para este dispositivo
+Saída capturada	Salida capturada
+Entrada junto	Mezclar entrada
+Configuração própria: vale quando este aparelho conecta. Com mais de uma pessoa ao mesmo tempo, vale a de quem conectou primeiro. Nome, pessoas, rede, controles e atalhos são os de todos.	Configuración propia: vale cuando este dispositivo se conecta. Con más de una persona a la vez, vale la de quien se conectó primero. Nombre, personas, red, mandos y atajos son los de todos.
+Com prioridade, quem assiste para por 1 segundo quando alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. O Windows só deixa tirar um programa de chamada (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), e só da saída padrão: sai o que estiver tocando. Uma saída escolhida manda o que toca nela. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante.	Con prioridad, el visor se pausa 1 segundo cada vez que alguien aquí mueve el ratón o escribe. Una persona a la vez: el turno pasa tras 2 segundos sin entrada. Windows solo deja quitar una app de llamadas (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), y solo de la salida predeterminada: queda fuera la que esté sonando. Una salida elegida envía lo que suena en ella. Los cambios se aplican al momento; los de la imagen reinician el vídeo un instante.
+A padrão do Windows	La predeterminada de Windows
+Desligada agora	Apagada ahora
+Nenhuma	Ninguna
+Todos os aparelhos	Todos los dispositivos
+Tecla de emergência: todo mundo desconectado	Tecla de emergencia: todos desconectados
+Acesso de «{}» mudou na hora	El acceso de “{}” cambió al instante
+Opções do host aplicadas na conexão	Opciones del host aplicadas a la conexión
+«{}» mudou os quadros por segundo	“{}” cambió los fotogramas por segundo
+«{}» mudou o pedido de 4:4:4	“{}” cambió la solicitud de 4:4:4
+Mouse travado nesta tela	Ratón bloqueado en esta pantalla
+Mouse destravado	Ratón desbloqueado
+Sim: parear e perguntar a cada conexão (recomendado).	Sí: emparejar y preguntar en cada conexión (recomendado).
+Não: parear e confiar neste aparelho, sem perguntar.	No: emparejar y confiar en este dispositivo, sin preguntar.
+Aviso da conexão	Aviso de conexión
+Som do outro PC: mudo	Sonido del otro PC: silenciado
+Som do outro PC: ligado	Sonido del otro PC: activado
+Ctrl+Alt+Del enviado ao host	Ctrl+Alt+Del enviado al host
+Vídeo do host	Vídeo del host
+Acesso mudou	El acceso cambió
+só o mouse	solo el ratón
+só o teclado	solo el teclado
+mouse e teclado	ratón y teclado
+mín	mín
+máx	máx
+som	sonido

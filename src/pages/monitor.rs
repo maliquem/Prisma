@@ -16,6 +16,25 @@ struct Row {
     net: u64,
 }
 
+/// Grupos da ordem por nome em Programas, como no Gerenciador de Tarefas.
+const GROUPS: [&str; 3] = ["Aplicativos", "Em segundo plano", "Processos do Windows"];
+
+/// Os processos com janela de programa visível, lidos de novo a cada segundo.
+fn window_pids() -> std::collections::HashSet<u32> {
+    static CACHE: std::sync::Mutex<(Vec<u32>, Option<std::time::Instant>)> = std::sync::Mutex::new((Vec::new(), None));
+    let mut c = CACHE.lock().unwrap();
+    if c.1.is_none_or(|t| t.elapsed().as_millis() >= 1000) {
+        *c = (procs::top_windows().into_iter().map(procs::window_pid).collect(), Some(std::time::Instant::now()));
+    }
+    c.0.iter().copied().collect()
+}
+
+/// Uma linha da lista: o título de um grupo ou um processo.
+enum Item {
+    Head(usize, usize),
+    Proc(Row),
+}
+
 fn ask_end(ui: &mut Ui, app: &App) {
     let Some((exe, pids)) = &app.mon_target else { return };
     let what = if pids.len() > 1 { format!("{} ({})", app_name(exe), pids.len()) } else { app_name(exe).to_string() };
@@ -160,16 +179,52 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         NAME => rows.sort_by_cached_key(|r| app.name_of(&r.exe, r.pids.first().copied().unwrap_or(0)).to_lowercase()),
         _ => rows.sort_by(|a, b| b.cpu.partial_cmp(&a.cpu).unwrap()),
     }
+    // Por nome, em Programas: os aplicativos (com janela) no topo, depois os de segundo plano e os do
+    // Windows, cada grupo com o título e quantos são.
+    let items: Vec<Item> = if by_name && !details {
+        let wins = window_pids();
+        let group = |r: &Row| {
+            if r.pids.iter().any(|p| wins.contains(p)) {
+                0
+            } else if crate::optimizer::is_system(&r.exe) {
+                2
+            } else {
+                1
+            }
+        };
+        let mut parts: [Vec<Row>; 3] = Default::default();
+        for r in rows {
+            parts[group(&r)].push(r);
+        }
+        let mut out = Vec::new();
+        for (g, part) in parts.into_iter().enumerate() {
+            if !part.is_empty() {
+                out.push(Item::Head(g, part.len()));
+                out.extend(part.into_iter().map(Item::Proc));
+            }
+        }
+        out
+    } else {
+        rows.into_iter().map(Item::Proc).collect()
+    };
     let list = rect(t.x + 8.0, hy + 24.0, t.w - 16.0, t.bottom() - hy - 32.0);
     let key = if details { "procs-d" } else { "procs" };
-    if rows.is_empty() && !needle.is_empty() {
+    if items.is_empty() && !needle.is_empty() {
         ui.c.text(rect(list.x + 16.0, list.y + 8.0, list.w - 32.0, 34.0), "Nenhum processo com esse nome ou PID", 14.0, MUTED, Align::Left, Weight::Regular);
     }
-    ui.begin_scroll(key, list, rows.len() as f32 * 34.0);
+    ui.begin_scroll(key, list, items.len() as f32 * 34.0);
     let first = (ui.scroll_y() / 34.0) as usize;
     let last = first + (list.h / 34.0) as usize + 2;
-    for (i, p) in rows.iter().enumerate().take(last).skip(first) {
+    for (i, item) in items.iter().enumerate().take(last).skip(first) {
         let y = list.y + i as f32 * 34.0;
+        let p = match item {
+            Item::Proc(p) => p,
+            Item::Head(g, n) => {
+                let t = format!("{} ({n})", crate::i18n::tr(GROUPS[*g]));
+                ui.c.text_raw(rect(list.x + 10.0, y + 8.0, list.w - 20.0, 26.0), &t, 13.0, ACCENT, Align::Left, Weight::Semibold);
+                continue;
+            }
+        };
         let r = rect(list.x, y, list.w, 34.0);
         let pid = p.pids.first().copied().unwrap_or(0);
         let sel = if details { app.sel_pid == Some(pid) } else { app.selected.as_deref() == Some(p.exe.as_str()) };
