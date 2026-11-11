@@ -1458,7 +1458,7 @@ Só o teclado	仅键盘
 Mouse e teclado	鼠标和键盘
 Pedir 4:4:4 (texto mais nítido; precisa de NVIDIA ou Intel)	请求 4:4:4（文字更清晰；需要 NVIDIA 或 Intel）
 Começar sem o som do outro PC	开始时不播放另一台电脑的声音
-No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. O atalho do menu sempre funciona aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga.	在沉浸模式下全屏时，鼠标留在窗口内，Windows 键和 Alt+Tab 发往另一台电脑。菜单快捷键在这里始终有效。在 G-SYNC 或 FreeSync 屏幕上请关闭垂直同步：画面不会撕裂。
+No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. O atalho do menu sempre funciona aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga. Tela do outro PC vale para Mouse e teclado, na lista de PCs: o mouse passa por essa borda para o outro PC, sem vídeo, e Scroll Lock traz de volta.	在沉浸模式下全屏时，鼠标留在窗口内，Windows 键和 Alt+Tab 发往另一台电脑。菜单快捷键在这里始终有效。在 G-SYNC 或 FreeSync 屏幕上请关闭垂直同步：画面不会撕裂。 “另一台电脑的屏幕”用于电脑列表中的“鼠标和键盘”：鼠标越过这一边进入另一台电脑，没有视频，按 Scroll Lock 返回。
 Medidor e avisos	监视和警告
 Medidor de latência	延迟监视
 Simples	简单
@@ -1797,3 +1797,8 @@ Vale para todos os jogos, menos o que o perfil de cada jogo troca.	适用于所�
 Perfil no driver: {}	驱动中的配置文件：{}
 Este jogo ainda não tem perfil no driver. O Prisma cria um na primeira mudança.	这个游戏在驱动中还没有配置文件。Prisma 会在第一次更改时创建。
 O driver não aceitou a mudança	驱动未接受此更改
+Tela do outro PC	另一台电脑的屏幕
+À direita	在右边
+À esquerda	在左边
+Acima	在上面
+Abaixo	在下面

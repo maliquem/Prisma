@@ -41,6 +41,8 @@ struct Shown {
 struct State {
     host: Option<Proc>,
     view: Option<Proc>,
+    /// Mouse e teclado neste PC pareado (sem vídeo), e o nome dele.
+    kvm: Option<(Proc, String)>,
     pair: Option<Proc>,
     invite: Option<Proc>,
     field: String,
@@ -137,7 +139,10 @@ fn spawn(st: &mut State, args: &[String], log: &str) -> Option<Proc> {
 
 /// Fim do arquivo de um processo, em linhas.
 fn tail(p: &Option<Proc>) -> Vec<String> {
-    let Some(p) = p else { return Vec::new() };
+    p.as_ref().map(tail_of).unwrap_or_default()
+}
+
+fn tail_of(p: &Proc) -> Vec<String> {
     let Ok(b) = std::fs::read(&p.log) else { return Vec::new() };
     let start = b.len().saturating_sub(16 * 1024);
     String::from_utf8_lossy(&b[start..]).lines().filter(|l| !l.trim().is_empty()).map(str::to_string).collect()
@@ -165,6 +170,11 @@ fn stop(p: &mut Option<Proc>) {
         let _ = x.child.kill();
         let _ = x.child.wait();
     }
+}
+
+fn stop_kvm(st: &mut State) {
+    let mut p = st.kvm.take().map(|k| k.0);
+    stop(&mut p);
 }
 
 fn service_job(arg: &'static str, elevated: bool) {
@@ -602,7 +612,8 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
     }
     y += 48.0;
     // O que o pareamento e quem assiste disseram por último.
-    let side: Vec<String> = tail(&st.pair).into_iter().chain(tail(&st.view)).filter(|l| !l.starts_with("Conexão pela internet")).collect();
+    let kvm_log = st.kvm.as_ref().map(|k| tail_of(&k.0)).unwrap_or_default();
+    let side: Vec<String> = tail(&st.pair).into_iter().chain(tail(&st.view)).chain(kvm_log).filter(|l| !l.starts_with("Conexão pela internet")).collect();
     if let Some(last) = side.last() {
         ui.c.text_wrap(rect(rx, y, rw, 36.0), last, 12.0, TEXT2, Weight::Regular);
     }
@@ -628,17 +639,21 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
     }
     y += 38.0;
     let rows: Vec<_> = all.iter().filter(|d| d.viewer == (st.dev_tab == 1)).collect();
-    // Botões da direita: Esquecer, Renomear e, nos PCs que este assiste, Assistir. A largura
+    // Mouse e teclado ligados (o processo ainda roda) em qual PC.
+    let kvm_on = st.kvm.as_mut().and_then(|k| matches!(k.0.child.try_wait(), Ok(None)).then(|| k.1.clone()));
+    // Botões da direita: Esquecer, Renomear e, nos PCs que este assiste, Assistir e Mouse e teclado. A largura
     // segue o texto, que em outros idiomas é mais comprido; sem espaço para o nome ao lado,
     // os botões descem para uma linha própria.
     let bw = |s: &str| (crate::ui::gfx::measure(s, 14.0, Weight::Semibold, None).0 + 28.0).max(84.0);
-    let (forget_w, watch_bw) = (bw("Esquecer"), bw("Assistir"));
+    let (forget_w, watch_bw, kvm_bw) = (bw("Esquecer"), bw("Assistir"), bw("Mouse e teclado").max(bw("Parar")));
     let rn_max = bw("Renomear").max(bw("Salvar"));
-    let all_buttons = forget_w + rn_max + if st.dev_tab == 0 { watch_bw + 8.0 } else { 0.0 } + 16.0;
+    let all_buttons = forget_w + rn_max + if st.dev_tab == 0 { watch_bw + kvm_bw + 16.0 } else { 0.0 } + 16.0;
     let stack = rw - 24.0 - all_buttons - 8.0 < 160.0;
     let drop = if stack { 44.0 } else { 0.0 };
+    // Nem os botões sozinhos cabem numa linha: Mouse e teclado desce para outra.
+    let kvm_down = rw - 24.0 < all_buttons;
     let row_v = 132.0 + drop;
-    let row_h = 64.0 + drop;
+    let row_h = 64.0 + drop + if kvm_down { 44.0 } else { 0.0 };
     let list = rect(rx, y, rw, r.bottom() - y - 12.0);
     let content: f32 = rows.iter().map(|d| if d.viewer { row_v } else { row_h }).sum::<f32>().max(1.0);
     if all.is_empty() {
@@ -651,6 +666,7 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
     let mut changes: Vec<(String, u8, bool)> = Vec::new();
     let mut forget: Option<(String, String)> = None;
     let mut watch: Option<String> = None;
+    let mut kvm: Option<(String, bool)> = None;
     ui.begin_scroll("sh-list", list, content);
     let mut yy = list.y;
     for (i, d) in rows.iter().enumerate() {
@@ -661,7 +677,13 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
         let pw = row.w - 24.0;
         let editing = st.renaming.as_ref().is_some_and(|e| e.0 == d.id);
         let rn_w = bw(if editing { "Salvar" } else { "Renomear" });
-        let watch_w = if d.viewer { 0.0 } else { watch_bw + 8.0 };
+        let watch_w = if d.viewer {
+            0.0
+        } else if kvm_down {
+            watch_bw + 8.0
+        } else {
+            watch_bw + kvm_bw + 16.0
+        };
         let name_w = if stack { pw } else { (pw - forget_w - rn_w - watch_w - 24.0).max(60.0) };
         let by = row.y + 10.0 + drop;
         let alias = app.cfg.share_names.iter().find(|n| n.0 == d.id).map(|n| n.1.clone());
@@ -702,8 +724,15 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
             if perms != d.perms || changed_ask {
                 changes.push((d.id.clone(), perms, ask));
             }
-        } else if ui.button(&format!("sh-watch{i}"), rect(rn_r.x - watch_w, by, watch_w - 8.0, 32.0), "Assistir", true) {
-            watch = Some(d.name.clone());
+        } else {
+            if ui.button(&format!("sh-watch{i}"), rect(rn_r.x - watch_bw - 8.0, by, watch_bw, 32.0), "Assistir", true) {
+                watch = Some(d.name.clone());
+            }
+            let on = kvm_on.as_deref() == Some(d.name.as_str());
+            let kvm_r = if kvm_down { rect(row.right() - 12.0 - kvm_bw, by + 44.0, kvm_bw, 32.0) } else { rect(rn_r.x - watch_w, by, kvm_bw, 32.0) };
+            if ui.button(&format!("sh-kvm{i}"), kvm_r, if on { "Parar" } else { "Mouse e teclado" }, false) {
+                kvm = Some((d.name.clone(), !on));
+            }
         }
         yy += rh;
     }
@@ -743,6 +772,12 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
     if let Some(name) = watch {
         stop(&mut st.view);
         st.view = spawn(st, &[format!("--stream-connect={name}")], "assistir.log");
+    }
+    if let Some((name, start)) = kvm {
+        stop_kvm(st);
+        if start {
+            st.kvm = spawn(st, &[format!("--stream-mouse={name}")], "mouse-teclado.log").map(|p| (p, name));
+        }
     }
 
     // Listas por último, para abrirem por cima do resto.
@@ -938,10 +973,12 @@ fn client_tab(ui: &mut Ui, c: &mut ClientOpts, x: f32, top: f32, w: f32, h: f32)
     ui.check("sh-ask444", rect(ix, y, iw, 30.0), "Pedir 4:4:4 (texto mais nítido; precisa de NVIDIA ou Intel)", &mut c.ask444);
     y += 34.0;
     ui.check("sh-mute", rect(ix, y, iw, 30.0), "Começar sem o som do outro PC", &mut c.mute);
-    y += 40.0;
+    y += 38.0;
+    let side_r = row(ui, ix, y, iw, "Tela do outro PC", ctl);
+    y += 50.0;
     ui.c.text_wrap(
         rect(ix, y, iw, (l.bottom() - y - 12.0).max(0.0)),
-        "No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. O atalho do menu sempre funciona aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga.",
+        "No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. O atalho do menu sempre funciona aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga. Tela do outro PC vale para Mouse e teclado, na lista de PCs: o mouse passa por essa borda para o outro PC, sem vídeo, e Scroll Lock traz de volta.",
         12.0,
         MUTED,
         Weight::Regular,
@@ -970,6 +1007,7 @@ fn client_tab(ui: &mut Ui, c: &mut ClientOpts, x: f32, top: f32, w: f32, h: f32)
         Weight::Regular,
     );
 
+    pick(ui, "sh-side", side_r, &[0u8, 1, 2, 3], opt(&["À direita", "À esquerda", "Acima", "Abaixo"]), &mut c.mouse_side);
     pick(ui, "sh-imm", imm_r, &[0u8, 1, 2, 3], opt(&["Desligado", "Só o mouse", "Só o teclado", "Mouse e teclado"]), &mut c.immersive);
     pick(ui, "sh-meter", meter_r, &[0u8, 1, 2], opt(&["Desligado", "Simples", "Detalhado"]), &mut c.meter);
     let cfps = crate::stream::CLIENT_FPS;
@@ -1200,6 +1238,7 @@ pub fn shutdown() {
         let had_host = st.host.is_some();
         stop(&mut st.host);
         stop(&mut st.view);
+        stop_kvm(st);
         stop(&mut st.pair);
         stop(&mut st.invite);
         if had_host {

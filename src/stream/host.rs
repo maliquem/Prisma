@@ -48,7 +48,7 @@ pub(super) struct Hello {
     hz: u32,
     codecs: u8,
     pid: u32,
-    flags: u8,
+    pub(super) flags: u8,
 }
 
 impl Hello {
@@ -611,7 +611,7 @@ const HOST_FIRST_MS: i64 = 1000;
 /// Um visitante parado por este tempo libera a vez.
 const OWNER_IDLE_MS: i64 = 2000;
 
-fn ms_now() -> i64 {
+pub(super) fn ms_now() -> i64 {
     static START: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
     START.get_or_init(Instant::now).elapsed().as_millis() as i64
 }
@@ -647,7 +647,7 @@ fn watch_host_input() {
 }
 
 /// Aplica no PC o mouse e o teclado de quem assiste, só o que as permissões dela deixam.
-struct Injector {
+pub(super) struct Injector {
     /// Monitor transmitido e área de todos os monitores, em pixels.
     mon: RECT,
     virt: RECT,
@@ -661,7 +661,7 @@ struct Injector {
 }
 
 impl Injector {
-    fn new(mon: HMONITOR, perms: u8) -> Self {
+    pub(super) fn new(mon: HMONITOR, perms: u8) -> Self {
         let mut mi = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
         unsafe {
             let _ = GetMonitorInfoW(mon, &mut mi);
@@ -779,7 +779,7 @@ impl Injector {
     }
 
     /// Aplica só os eventos novos do pacote: os repetidos de pacotes anteriores são pulados.
-    fn apply(&mut self, first: u32, events: &[u8]) {
+    pub(super) fn apply(&mut self, first: u32, events: &[u8]) {
         let fresh = events.chunks(INPUT_SIZE).enumerate().any(|(i, _)| self.next.is_none_or(|n| (first.wrapping_add(i as u32).wrapping_sub(n) as i32) >= 0));
         if fresh && !self.may_act() {
             // Pula a vez, sem deixar nada apertado no host.
@@ -811,7 +811,7 @@ impl Injector {
     }
 
     /// Solta tudo que ficou apertado, para nenhuma tecla ficar presa quando quem assiste sai.
-    fn release(&mut self) {
+    pub(super) fn release(&mut self) {
         let mut list: Vec<INPUT> = self.keys.drain().map(|(s, e)| Self::key(s, e, false)).collect();
         for (i, down) in self.buttons.iter_mut().enumerate() {
             if std::mem::take(down) {
@@ -1017,7 +1017,7 @@ pub fn monitors() -> Vec<HMONITOR> {
 }
 
 /// O monitor das opções: 0 é o principal; 1, 2... a ordem do Windows.
-fn pick_monitor(n: u32) -> HMONITOR {
+pub(super) fn pick_monitor(n: u32) -> HMONITOR {
     let primary = unsafe { MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY) };
     if n == 0 {
         return primary;

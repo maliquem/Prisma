@@ -11,6 +11,8 @@ mod hud;
 #[cfg(feature = "stream")]
 pub mod code;
 pub mod host;
+#[cfg(feature = "stream")]
+mod kvm;
 mod link;
 #[cfg(feature = "stream")]
 mod net;
@@ -240,6 +242,10 @@ pub const SEES_HDR: u8 = 1;
 /// `Hello.flags`: quem assiste pede 4:4:4 (`PRISMA_444=1`) e decodifica HEVC 4:4:4 (NVDEC numa placa
 /// NVIDIA).
 pub const DECODES_444: u8 = 2;
+/// `Hello.flags`: só mouse, teclado e área de transferência, sem vídeo nem som (o mouse passa
+/// da borda desta tela para a do host). Host de versão anterior manda o vídeo assim mesmo.
+#[cfg_attr(not(feature = "stream"), allow(dead_code))]
+pub const NO_VIDEO: u8 = 4;
 
 /// O que um pacote diz.
 #[derive(Debug, PartialEq)]
@@ -565,6 +571,10 @@ pub fn run_args() -> bool {
             }
             if let Some(v) = a.strip_prefix("--stream-connect=") {
                 net::connect(v);
+                return true;
+            }
+            if let Some(v) = a.strip_prefix("--stream-mouse=") {
+                kvm::control(v);
                 return true;
             }
             if a == "--stream-devices" {

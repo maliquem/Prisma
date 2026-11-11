@@ -236,6 +236,9 @@ pub struct ClientOpts {
     pub fps: u32,
     /// Placa de vídeo que decodifica e mostra (nome do Windows); vazio usa a do Windows.
     pub gpu: String,
+    /// Mouse e teclado entre PCs: de que lado desta tela fica a do outro PC (0 direita,
+    /// 1 esquerda, 2 acima, 3 abaixo).
+    pub mouse_side: u8,
     pub key_menu: Keys,
     pub key_full: Keys,
     pub key_cad: Keys,
@@ -269,6 +272,7 @@ impl Default for ClientOpts {
             key_meter: (MOD_CTRL | MOD_ALT | MOD_SHIFT, b'M' as u32),
             key_sound: (MOD_CTRL | MOD_ALT | MOD_SHIFT, b'S' as u32),
             gpu: String::new(),
+            mouse_side: 0,
         }
     }
 }
@@ -302,6 +306,7 @@ impl ClientOpts {
                 "atalho_som" => o.key_sound = keys_parse(v, o.key_sound),
                 "quadros" => o.fps = v.parse::<u32>().ok().filter(|f| CLIENT_FPS.contains(f)).unwrap_or(0),
                 "gpu" => o.gpu = clean(v, 128),
+                "lado_mouse" => o.mouse_side = v.parse::<u8>().unwrap_or(0).min(3),
                 _ => {}
             }
         }
@@ -313,7 +318,7 @@ impl ClientOpts {
         let b = |x: bool| x as u8;
         format!(
             "tela_cheia={}\nvsync={}\nimersivo={}\nmedidor={}\naviso={}\nmudo={}\npedir_444={}\ncontrole_fundo={}\nteclado_controle={}\n\
-quadros={}\natalho_menu={}\natalho_tela_cheia={}\natalho_ctrl_alt_del={}\natalho_desconectar={}\natalho_imersivo={}\natalho_medidor={}\natalho_som={}\ngpu={}\n",
+quadros={}\natalho_menu={}\natalho_tela_cheia={}\natalho_ctrl_alt_del={}\natalho_desconectar={}\natalho_imersivo={}\natalho_medidor={}\natalho_som={}\ngpu={}\nlado_mouse={}\n",
             b(self.fullscreen),
             b(self.vsync),
             self.immersive,
@@ -332,6 +337,7 @@ quadros={}\natalho_menu={}\natalho_tela_cheia={}\natalho_ctrl_alt_del={}\natalho
             keys_text(self.key_meter),
             keys_text(self.key_sound),
             self.gpu,
+            self.mouse_side,
         )
     }
 

@@ -1464,7 +1464,7 @@ Só o teclado	Keyboard only
 Mouse e teclado	Mouse and keyboard
 Pedir 4:4:4 (texto mais nítido; precisa de NVIDIA ou Intel)	Ask for 4:4:4 (sharper text; needs NVIDIA or Intel)
 Começar sem o som do outro PC	Start without the other PC's sound
-No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. O atalho do menu sempre funciona aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga.	In immersive mode, in fullscreen, the mouse stays inside the window, and the Windows key and Alt+Tab go to the other PC. The menu shortcut always works here. On a G-SYNC or FreeSync screen, leave VSync off: the picture does not tear.
+No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. O atalho do menu sempre funciona aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga. Tela do outro PC vale para Mouse e teclado, na lista de PCs: o mouse passa por essa borda para o outro PC, sem vídeo, e Scroll Lock traz de volta.	In immersive mode, in fullscreen, the mouse stays inside the window, and the Windows key and Alt+Tab go to the other PC. The menu shortcut always works here. On a G-SYNC or FreeSync screen, leave VSync off: the picture does not tear. Other PC's screen is for Mouse and keyboard, in the PC list: the mouse goes past that edge to the other PC, with no video, and Scroll Lock brings it back.
 Medidor e avisos	Meter and warnings
 Medidor de latência	Latency meter
 Simples	Simple
@@ -1803,3 +1803,8 @@ Vale para todos os jogos, menos o que o perfil de cada jogo troca.	Applies to ev
 Perfil no driver: {}	Profile in the driver: {}
 Este jogo ainda não tem perfil no driver. O Prisma cria um na primeira mudança.	This game doesn't have a profile in the driver yet. Prisma creates one on the first change.
 O driver não aceitou a mudança	The driver didn't accept the change
+Tela do outro PC	Other PC's screen
+À direita	To the right
+À esquerda	To the left
+Acima	Above
+Abaixo	Below

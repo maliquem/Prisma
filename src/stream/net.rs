@@ -706,6 +706,8 @@ fn host_with(invite_perms: Option<u8>, service: bool) {
                         }
                     };
                     match hello {
+                        // Só mouse e teclado: fica fora da sala do vídeo, numa linha própria.
+                        Some(hello) if hello.flags & NO_VIDEO != 0 => super::kvm::serve(link, dev.perms, dev.name),
                         Some(hello) => {
                             let _ = jtx.send(Joiner { link, hello, perms: dev.perms, name: dev.name, id: hex(&dev.id) });
                         }
@@ -777,11 +779,16 @@ pub fn pair(text: &str) {
 }
 
 pub fn connect(arg: &str) {
-    eprintln!("{NOTICE}");
     let mut parts = arg.split('|');
     let target = parts.next().unwrap_or("");
     let out_file = parts.next().filter(|s| !s.is_empty()).map(str::to_string);
     let secs: Option<u64> = parts.next().and_then(|s| s.parse().ok());
+    with_host(target, |link, _| view::open(link, out_file.as_deref(), secs));
+}
+
+/// Conecta a um PC pareado (que este assiste), faz o trabalho e fecha.
+pub(super) fn with_host(target: &str, work: impl FnOnce(Arc<dyn Link>, &str)) {
+    eprintln!("{NOTICE}");
     let Some(dev) = find(&load(), Role::Host, target) else {
         return eprintln!("nenhum PC pareado com o nome «{target}» (veja --stream-devices)");
     };
@@ -799,7 +806,7 @@ pub fn connect(arg: &str) {
         Ok(Ok(conn)) => {
             let link = Net::new(conn);
             eprintln!("conectado: {}", link.route());
-            view::open(link, out_file.as_deref(), secs);
+            work(link, &dev.name);
         }
         Ok(Err(e)) => eprintln!("não conectou: {e}"),
         Err(_) => eprintln!("«{}» não respondeu em 30 s (está com o Prisma compartilhando?)", dev.name),

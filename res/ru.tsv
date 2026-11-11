@@ -1458,7 +1458,7 @@ Só o teclado	Только клавиатура
 Mouse e teclado	Мышь и клавиатура
 Pedir 4:4:4 (texto mais nítido; precisa de NVIDIA ou Intel)	Запрашивать 4:4:4 (чётче текст; нужен NVIDIA или Intel)
 Começar sem o som do outro PC	Начинать без звука другого ПК
-No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. O atalho do menu sempre funciona aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga.	В режиме погружения на весь экран мышь остаётся внутри окна, а клавиша Windows и Alt+Tab уходят на другой ПК. Сочетание для меню всегда работает здесь. На экране с G-SYNC или FreeSync оставьте VSync выключенным: изображение не рвётся.
+No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. O atalho do menu sempre funciona aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga. Tela do outro PC vale para Mouse e teclado, na lista de PCs: o mouse passa por essa borda para o outro PC, sem vídeo, e Scroll Lock traz de volta.	В режиме погружения на весь экран мышь остаётся внутри окна, а клавиша Windows и Alt+Tab уходят на другой ПК. Сочетание для меню всегда работает здесь. На экране с G-SYNC или FreeSync оставьте VSync выключенным: изображение не рвётся. «Экран другого ПК» относится к кнопке «Мышь и клавиатура» в списке ПК: мышь уходит за этот край на другой ПК, без видео, а Scroll Lock возвращает её.
 Medidor e avisos	Счётчик и предупреждения
 Medidor de latência	Счётчик задержки
 Simples	Простой
@@ -1797,3 +1797,8 @@ Vale para todos os jogos, menos o que o perfil de cada jogo troca.	Действ�
 Perfil no driver: {}	Профиль в драйвере: {}
 Este jogo ainda não tem perfil no driver. O Prisma cria um na primeira mudança.	У этой игры ещё нет профиля в драйвере. Prisma создаст его при первом изменении.
 O driver não aceitou a mudança	Драйвер не принял изменение
+Tela do outro PC	Экран другого ПК
+À direita	Справа
+À esquerda	Слева
+Acima	Сверху
+Abaixo	Снизу
