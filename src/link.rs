@@ -33,6 +33,8 @@ pub enum Outcome {
     #[cfg_attr(not(feature = "stream"), allow(dead_code))]
     InviteLog { log: PathBuf, pid: u32 },
     Failed(String),
+    /// A pasta de capturas (`cfg.cap_dir`), para as fotos e as gravações.
+    CaptureDirs(String),
 }
 
 /// Cada pedido leva a hora em que entrou: pedido mais velho que `WAIT` já perdeu o cliente.
@@ -44,6 +46,7 @@ static QUEUE: Mutex<VecDeque<Entry>> = Mutex::new(VecDeque::new());
 /// página de perfil por jogo.
 pub fn caps() -> Vec<String> {
     let mut caps = vec![
+        cap::CAPTURE_DIRS,
         cap::GAME_EVENTS,
         cap::PAGE_METER,
         cap::PAGE_SHARE,
@@ -73,21 +76,24 @@ pub fn start(hub: HWND) {
         };
         let res = prisma_link::serve(&name, info, |req| {
             let invite = matches!(req, Request::ShareInvite);
+            let dirs = matches!(req, Request::CaptureDirs);
             let (tx, rx) = sync_channel(1);
             push(req, tx);
             unsafe {
                 let _ = PostMessageW(Some(HWND(hub as *mut _)), WM_LINK, WPARAM(0), LPARAM(0));
             }
-            // Só o convite tem resposta; o resto segue sem esperar a janela.
-            if !invite {
+            // Só o convite e as pastas de captura têm resposta; o resto segue sem esperar a janela.
+            if !invite && !dirs {
                 return None;
             }
             match rx.recv_timeout(WAIT) {
                 Ok(outcome) => reply_for(invite, outcome),
                 // O launcher sempre recebe resposta do convite, mesmo com a janela ocupada.
-                Err(_) => Some(Reply::ShareInviteFailed {
+                Err(_) if invite => Some(Reply::ShareInviteFailed {
                     reason: "o Prisma não respondeu".into(),
                 }),
+                // Sem resposta das pastas: o launcher desiste sozinho.
+                Err(_) => None,
             }
         });
         if let Err(e) = res {
@@ -96,11 +102,12 @@ pub fn start(hub: HWND) {
     });
 }
 
-/// Resposta ao cliente: só o convite responde algo; o resto não tem resposta. Roda na thread
+/// Resposta ao cliente: só o convite e as pastas de captura respondem algo; o resto não tem resposta. Roda na thread
 /// do pipe: esperar o código no registro não trava a janela.
 fn reply_for(invite: bool, outcome: Outcome) -> Option<Reply> {
     match outcome {
         Outcome::Failed(reason) if invite => Some(Reply::ShareInviteFailed { reason }),
+        Outcome::CaptureDirs(dir) => Some(Reply::CaptureDirs { shots: dir.clone(), replays: dir }),
         #[cfg(feature = "stream")]
         Outcome::InviteLog { log, pid } if invite => Some(wait_invite(&log, INVITE_WAIT, || crate::sys::procs::is_alive(pid))),
         #[cfg(not(feature = "stream"))]
@@ -203,6 +210,7 @@ impl App {
             },
             #[cfg(not(feature = "stream"))]
             Request::ShareInvite => Outcome::Failed("indisponível".into()),
+            Request::CaptureDirs => Outcome::CaptureDirs(self.cfg.cap_dir.clone()),
             Request::GameStarted { pid, exe, .. } => {
                 self.detector.hint(pid, &exe);
                 Outcome::Done
@@ -230,6 +238,7 @@ mod tests {
         assert!(has(cap::PAGE_SHARE));
         assert!(has(cap::SAVE_REPLAY));
         assert!(has(cap::GAME_EVENTS));
+        assert!(has(cap::CAPTURE_DIRS));
         assert_eq!(has(cap::SHARE_INVITE), cfg!(feature = "stream"));
         assert!(!has(cap::PAGE_GAME_PROFILE));
     }
@@ -247,6 +256,22 @@ mod tests {
             Outcome::Done
         });
         assert_eq!(rx.recv_timeout(Duration::from_secs(1)), Ok(Outcome::Done));
+    }
+
+    #[test]
+    fn capture_dirs_reply_uses_config_dir() {
+        let _g = QUEUE_TEST.lock().unwrap_or_else(|e| e.into_inner());
+        let (tx, rx) = sync_channel(1);
+        push(Request::CaptureDirs, tx);
+        drain_with(|req| {
+            assert_eq!(req, Request::CaptureDirs);
+            Outcome::CaptureDirs(r"C:\Videos\Prisma".into())
+        });
+        let outcome = rx.recv_timeout(Duration::from_secs(1)).unwrap();
+        assert_eq!(
+            reply_for(false, outcome),
+            Some(Reply::CaptureDirs { shots: r"C:\Videos\Prisma".into(), replays: r"C:\Videos\Prisma".into() })
+        );
     }
 
     #[test]
