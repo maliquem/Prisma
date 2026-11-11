@@ -8,7 +8,7 @@ use std::sync::mpsc::{sync_channel, SyncSender};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use prisma_link::{cap, MeterView, NvidiaKind, NvidiaSetting, NvidiaValue, Page as LinkPage, PowerPlan, Reply, Request, ServerInfo, VolumeChange};
+use prisma_link::{cap, fail as code, MeterView, NvidiaKind, NvidiaSetting, NvidiaValue, Page as LinkPage, PowerPlan, Reply, Request, ServerInfo, VolumeChange};
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_APP};
 
@@ -34,8 +34,8 @@ pub enum Outcome {
     /// O convite está sendo criado pelo processo `pid`; o código aparece neste registro.
     #[cfg_attr(not(feature = "stream"), allow(dead_code))]
     InviteLog { log: PathBuf, pid: u32 },
-    /// O motivo já no idioma do Prisma.
-    Failed(String),
+    /// Código de `prisma_link::fail` e o motivo já no idioma do Prisma.
+    Failed(&'static str, String),
     /// A pasta de capturas (`cfg.cap_dir`), para as fotos e as gravações.
     CaptureDirs(String),
     /// Resposta pronta.
@@ -50,7 +50,7 @@ impl std::fmt::Debug for Outcome {
         match self {
             Outcome::Done => write!(f, "Done"),
             Outcome::InviteLog { log, pid } => write!(f, "InviteLog({log:?}, {pid})"),
-            Outcome::Failed(r) => write!(f, "Failed({r:?})"),
+            Outcome::Failed(c, r) => write!(f, "Failed({c}, {r:?})"),
             Outcome::CaptureDirs(d) => write!(f, "CaptureDirs({d:?})"),
             Outcome::Reply(r) => write!(f, "Reply({r:?})"),
             Outcome::Later(_) => write!(f, "Later"),
@@ -64,16 +64,17 @@ impl PartialEq for Outcome {
         match (self, other) {
             (Outcome::Done, Outcome::Done) => true,
             (Outcome::InviteLog { log: a, pid: p }, Outcome::InviteLog { log: b, pid: q }) => a == b && p == q,
-            (Outcome::Failed(a), Outcome::Failed(b)) | (Outcome::CaptureDirs(a), Outcome::CaptureDirs(b)) => a == b,
+            (Outcome::Failed(c, a), Outcome::Failed(d, b)) => c == d && a == b,
+            (Outcome::CaptureDirs(a), Outcome::CaptureDirs(b)) => a == b,
             (Outcome::Reply(a), Outcome::Reply(b)) => a == b,
             _ => false,
         }
     }
 }
 
-/// Falha com o motivo no idioma do Prisma.
-fn fail(reason: &str) -> Outcome {
-    Outcome::Failed(crate::i18n::tr(reason).into_owned())
+/// Falha com o código e o motivo no idioma do Prisma.
+fn fail(code: &'static str, reason: &str) -> Outcome {
+    Outcome::Failed(code, crate::i18n::tr(reason).into_owned())
 }
 
 /// O que o cliente espera de cada pedido.
@@ -184,7 +185,7 @@ fn timeout_reply(wait: Wait) -> Option<Reply> {
     match wait {
         // O launcher sempre recebe resposta do convite e dos pedidos novos.
         Wait::Invite => Some(Reply::ShareInviteFailed { reason: reason() }),
-        Wait::Answer => Some(Reply::Failed { reason: reason() }),
+        Wait::Answer => Some(Reply::Failed { code: code::BUSY.into(), reason: reason() }),
         // Sem resposta das pastas: o launcher desiste sozinho.
         Wait::Dirs | Wait::Nothing => None,
     }
@@ -199,8 +200,8 @@ fn reply_for(wait: Wait, outcome: Outcome) -> Option<Reply> {
         Outcome::Reply(r) => Some(r),
         Outcome::Later(work) => Some(work()),
         Outcome::Done if answer => Some(Reply::Done),
-        Outcome::Failed(reason) if invite => Some(Reply::ShareInviteFailed { reason }),
-        Outcome::Failed(reason) if answer => Some(Reply::Failed { reason }),
+        Outcome::Failed(_, reason) if invite => Some(Reply::ShareInviteFailed { reason }),
+        Outcome::Failed(c, reason) if answer => Some(Reply::Failed { code: c.into(), reason }),
         Outcome::CaptureDirs(dir) => Some(Reply::CaptureDirs { shots: dir.clone(), replays: dir }),
         #[cfg(feature = "stream")]
         Outcome::InviteLog { log, pid } if invite => Some(wait_invite(&log, INVITE_WAIT, || crate::sys::procs::is_alive(pid))),
@@ -306,10 +307,10 @@ impl App {
                     self.toast.info("Convite do Compartilhar tela criado pelo Prisma Launcher");
                     Outcome::InviteLog { log, pid }
                 }
-                None => Outcome::Failed("não deu para criar o convite".into()),
+                None => Outcome::Failed(code::FAILED, "não deu para criar o convite".into()),
             },
             #[cfg(not(feature = "stream"))]
-            Request::ShareInvite { .. } => Outcome::Failed("indisponível".into()),
+            Request::ShareInvite { .. } => Outcome::Failed(code::NOT_SUPPORTED, "indisponível".into()),
             Request::CaptureDirs => Outcome::CaptureDirs(self.cfg.cap_dir.clone()),
             Request::GameStarted { pid, exe, .. } => {
                 self.detector.hint(pid, &exe);
@@ -335,12 +336,12 @@ impl App {
             }),
             Request::SetPowerPlan { id } => self.link_power(&id),
             Request::Fullscreen { pid } => {
-                let Some((h, exe)) = self.link_window(pid) else { return fail("Janela do jogo não encontrada") };
+                let Some((h, exe)) = self.link_window(pid) else { return fail(code::NO_WINDOW, "Janela do jogo não encontrada") };
                 let before = self.full.is_on(h);
                 self.toggle_window(h, &exe);
                 let on = self.full.is_on(h);
                 if on == before {
-                    return fail("Essa janela não pode ficar sem bordas");
+                    return fail(code::FAILED, "Essa janela não pode ficar sem bordas");
                 }
                 Outcome::Reply(Reply::Toggled { on })
             }
@@ -348,24 +349,24 @@ impl App {
                 let pid = if pid == 0 { self.fg_info().map_or(0, |f| f.1) } else { pid };
                 match audio::change_focused(pid, audio_change(change)) {
                     Some((vol, muted)) => Outcome::Reply(Reply::Volume { level: (vol * 100.0).round() as u32, muted }),
-                    None => fail("O jogo ainda não tem som aberto"),
+                    None => fail(code::NO_AUDIO, "O jogo ainda não tem som aberto"),
                 }
             }
             Request::Hdr { on } => Outcome::Later(Box::new(move || hdr_reply(on))),
             Request::NvidiaCatalog => {
                 if !crate::pages::nvidia::available() {
-                    return fail("Sem placa NVIDIA");
+                    return fail(code::NOT_SUPPORTED, "Sem placa NVIDIA");
                 }
                 let ver = drs::driver_version().unwrap_or(0);
                 Outcome::Reply(Reply::NvidiaCatalog { settings: nv_shown(ver, true).map(|(g, s)| nv_setting(g, s)).collect() })
             }
             Request::NvidiaGet { exe } => {
                 if !crate::pages::nvidia::available() {
-                    return fail("Sem placa NVIDIA");
+                    return fail(code::NOT_SUPPORTED, "Sem placa NVIDIA");
                 }
                 let who = match nv_profile(&exe) {
                     Ok(w) => w,
-                    Err(e) => return fail(e),
+                    Err(e) => return fail(code::INVALID, e),
                 };
                 let ver = drs::driver_version().unwrap_or(0);
                 let ids: Vec<u32> = nv_shown(ver, who == Profile::Global).map(|(_, s)| s.id).collect();
@@ -377,15 +378,15 @@ impl App {
                             .map(|(id, v)| NvidiaValue { id: *id, value: v.filter(|v| v.mine).map(|v| v.now), now: v.map(|v| v.now) })
                             .collect(),
                     }),
-                    None => fail("O driver NVIDIA não respondeu"),
+                    None => fail(code::FAILED, "O driver NVIDIA não respondeu"),
                 }
             }
             Request::NvidiaSet { exe, id, value } => self.link_nvidia_set(&exe, id, value),
             Request::WindowShot { pid } => {
-                let Some((h, _)) = self.link_window(pid) else { return fail("Janela do jogo não encontrada") };
+                let Some((h, _)) = self.link_window(pid) else { return fail(code::NO_WINDOW, "Janela do jogo não encontrada") };
                 match self.save_window_shot(h) {
                     Some(path) => Outcome::Reply(Reply::Shot { path }),
-                    None => fail("Não consegui capturar a janela"),
+                    None => fail(code::FAILED, "Não consegui capturar a janela"),
                 }
             }
             Request::RecordWindow { pid } => {
@@ -394,7 +395,7 @@ impl App {
                     self.toggle_record_of(true, None);
                     return Outcome::Reply(Reply::Toggled { on: false });
                 }
-                let Some((h, _)) = self.link_window(pid) else { return fail("Janela do jogo não encontrada") };
+                let Some((h, _)) = self.link_window(pid) else { return fail(code::NO_WINDOW, "Janela do jogo não encontrada") };
                 self.toggle_record_of(true, Some(h));
                 Outcome::Reply(Reply::Toggled { on: self.is_recording() })
             }
@@ -417,7 +418,7 @@ impl App {
         let plans = power::list();
         let fixed = match fixed_plan(id, &plans) {
             Ok(f) => f,
-            Err(e) => return fail(e),
+            Err(e) => return fail(code::INVALID, e),
         };
         match &fixed {
             None => self.cfg.power_auto = true,
@@ -430,18 +431,18 @@ impl App {
         self.apply_power_choice();
         self.invalidate();
         match fixed {
-            Some(f) if !self.active_plan.eq_ignore_ascii_case(&f) => fail("O Windows não trocou o plano"),
+            Some(f) if !self.active_plan.eq_ignore_ascii_case(&f) => fail(code::FAILED, "O Windows não trocou o plano"),
             _ => Outcome::Done,
         }
     }
 
     fn link_nvidia_set(&mut self, exe: &str, id: u32, value: Option<u32>) -> Outcome {
         if !crate::pages::nvidia::available() {
-            return fail("Sem placa NVIDIA");
+            return fail(code::NOT_SUPPORTED, "Sem placa NVIDIA");
         }
         let who = match nv_profile(exe).and_then(|w| nv_check(drs::driver_version().unwrap_or(0), &w, id, value).map(|_| w)) {
             Ok(w) => w,
-            Err(e) => return fail(e),
+            Err(e) => return fail(code::INVALID, e),
         };
         let ok = drs::write(&who, &[(id, value)]);
         crate::config::log(&format!(
@@ -459,7 +460,7 @@ impl App {
         if ok {
             Outcome::Done
         } else {
-            fail("O driver não aceitou a mudança")
+            fail(code::FAILED, "O driver não aceitou a mudança")
         }
     }
 }
@@ -482,13 +483,13 @@ fn fixed_plan(id: &str, plans: &[power::Plan]) -> Result<Option<String>, &'stati
 
 /// Liga, desliga ou alterna o HDR da tela. Espera a tela trocar (até 10 s).
 fn hdr_reply(on: Option<bool>) -> Reply {
-    let failed = |r: &str| Reply::Failed { reason: crate::i18n::tr(r).into_owned() };
-    let Some((adapter, output, now)) = crate::sys::hdr::hdr_output() else { return failed("Nenhuma tela aceita HDR") };
+    let failed = |c: &str, r: &str| Reply::Failed { code: c.into(), reason: crate::i18n::tr(r).into_owned() };
+    let Some((adapter, output, now)) = crate::sys::hdr::hdr_output() else { return failed(code::NOT_SUPPORTED, "Nenhuma tela aceita HDR") };
     let want = on.unwrap_or(!now);
     if want == now || crate::sys::hdr::set_hdr(adapter, output, want) {
         Reply::Toggled { on: want }
     } else {
-        failed("O Windows não trocou o HDR")
+        failed(code::FAILED, "O Windows não trocou o HDR")
     }
 }
 
@@ -566,6 +567,8 @@ mod tests {
             assert_eq!(has(cap::NVIDIA), nvidia);
             assert_eq!(has(cap::PAGE_NVIDIA), nvidia);
             assert!(!has(cap::PAGE_GAME_PROFILE));
+            // Reservada até a tela Controles existir.
+            assert!(!has(cap::PAGE_CONTROLLERS));
         }
     }
 
@@ -586,7 +589,7 @@ mod tests {
         ];
         for r in &answer {
             assert_eq!(wait_of(r), Wait::Answer, "{r:?}");
-            assert!(matches!(timeout_reply(Wait::Answer), Some(Reply::Failed { .. })));
+            assert!(matches!(timeout_reply(Wait::Answer), Some(Reply::Failed { code, .. }) if code == "busy"));
         }
         assert_eq!(wait_of(&Request::ShareInvite { minutes: Some(5) }), Wait::Invite);
         assert_eq!(wait_of(&Request::CaptureDirs), Wait::Dirs);
@@ -600,8 +603,8 @@ mod tests {
     fn replies_by_kind() {
         assert_eq!(reply_for(Wait::Answer, Outcome::Done), Some(Reply::Done));
         assert_eq!(reply_for(Wait::Nothing, Outcome::Done), None);
-        assert_eq!(reply_for(Wait::Answer, Outcome::Failed("x".into())), Some(Reply::Failed { reason: "x".into() }));
-        assert_eq!(reply_for(Wait::Invite, Outcome::Failed("x".into())), Some(Reply::ShareInviteFailed { reason: "x".into() }));
+        assert_eq!(reply_for(Wait::Answer, Outcome::Failed(code::NO_WINDOW, "x".into())), Some(Reply::Failed { code: "no_window".into(), reason: "x".into() }));
+        assert_eq!(reply_for(Wait::Invite, Outcome::Failed(code::FAILED, "x".into())), Some(Reply::ShareInviteFailed { reason: "x".into() }));
         assert_eq!(reply_for(Wait::Answer, Outcome::Reply(Reply::Toggled { on: true })), Some(Reply::Toggled { on: true }));
         // O trabalho demorado roda na thread do pipe e vira a resposta.
         let later = Outcome::Later(Box::new(|| Reply::Toggled { on: false }));

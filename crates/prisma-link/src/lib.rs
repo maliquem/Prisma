@@ -50,4 +50,23 @@ pub mod cap {
     pub const PAGE_HDR: &str = "page.hdr";
     pub const PAGE_NVIDIA: &str = "page.nvidia";
     pub const PAGE_CAPTURE: &str = "page.capture";
+    /// Reservada: a tela Controles ainda não existe. Nenhum Prisma anuncia esta capacidade até
+    /// ela existir; as ações dos Controles virão com nomes próprios quando forem combinadas.
+    pub const PAGE_CONTROLLERS: &str = "page.controllers";
+}
+
+/// Códigos estáveis de `Reply::Failed`.
+pub mod fail {
+    /// A janela do jogo não foi achada.
+    pub const NO_WINDOW: &str = "no_window";
+    /// O processo não tem sessão de som aberta.
+    pub const NO_AUDIO: &str = "no_audio";
+    /// Este PC não tem o que o pedido usa (placa NVIDIA, tela com HDR).
+    pub const NOT_SUPPORTED: &str = "not_supported";
+    /// O Prisma não atendeu a tempo (janela ocupada, menu aberto).
+    pub const BUSY: &str = "busy";
+    /// Pedido com valor que o Prisma não aceita (exe, id, valor, plano).
+    pub const INVALID: &str = "invalid";
+    /// O Windows ou o driver recusou, ou a captura falhou.
+    pub const FAILED: &str = "failed";
 }

@@ -143,6 +143,8 @@ pub enum Page {
     Hdr,
     Nvidia,
     Capture,
+    /// Reservada para a tela Controles, que ainda não existe no Prisma (`page.controllers`).
+    Controllers,
     #[serde(other)]
     Unknown,
 }
@@ -168,8 +170,11 @@ pub enum Reply {
     },
     /// Pedido atendido, sem mais nada a dizer.
     Done,
-    /// Pedido recusado; o motivo vem no idioma do Prisma.
+    /// Pedido recusado. O cliente decide pelo `code` (um de `crate::fail`); o `reason`, no idioma
+    /// do Prisma, é só para mostrar.
     Failed {
+        #[serde(default)]
+        code: String,
         reason: String,
     },
     PowerPlans {
@@ -341,7 +346,7 @@ mod tests {
     fn new_replies_round_trip() {
         let replies = vec![
             Reply::Done,
-            Reply::Failed { reason: "x".into() },
+            Reply::Failed { code: "no_window".into(), reason: "x".into() },
             Reply::PowerPlans {
                 plans: vec![PowerPlan { id: "a".into(), name: "Equilibrado".into() }],
                 active: "a".into(),
@@ -364,11 +369,15 @@ mod tests {
             assert_eq!(serde_json::from_str::<Reply>(&json).unwrap(), r, "{json}");
         }
         assert_eq!(serde_json::to_string(&Reply::Done).unwrap(), r#"{"type":"done"}"#);
+        assert_eq!(
+            serde_json::to_string(&Reply::Failed { code: "busy".into(), reason: "r".into() }).unwrap(),
+            r#"{"type":"failed","code":"busy","reason":"r"}"#
+        );
     }
 
     #[test]
     fn new_pages_parse() {
-        for (name, page) in [("energy", Page::Energy), ("fullscreen", Page::Fullscreen), ("sound", Page::Sound), ("hdr", Page::Hdr), ("nvidia", Page::Nvidia), ("capture", Page::Capture)] {
+        for (name, page) in [("energy", Page::Energy), ("fullscreen", Page::Fullscreen), ("sound", Page::Sound), ("hdr", Page::Hdr), ("nvidia", Page::Nvidia), ("capture", Page::Capture), ("controllers", Page::Controllers)] {
             let r: Request = serde_json::from_str(&format!(r#"{{"type":"open_page","page":"{name}"}}"#)).unwrap();
             assert_eq!(r, Request::OpenPage { page });
         }
