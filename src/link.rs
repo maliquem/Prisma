@@ -21,11 +21,16 @@ pub const WM_LINK: u32 = WM_APP + 92;
 /// Quanto a thread do pipe espera a thread principal antes de seguir sem responder.
 const WAIT: Duration = Duration::from_secs(5);
 
+/// Quanto a thread do pipe espera o código aparecer no registro do convite. Com `WAIT`, fica
+/// abaixo dos 30 s em que o launcher desiste.
+#[cfg(feature = "stream")]
+const INVITE_WAIT: Duration = Duration::from_secs(20);
+
 #[derive(Debug, PartialEq)]
 pub enum Outcome {
     Done,
     /// O convite está sendo criado; o código aparece neste registro.
-    #[allow(dead_code)]
+    #[cfg_attr(not(feature = "stream"), allow(dead_code))]
     InviteLog(PathBuf),
     Failed(String),
 }
@@ -73,7 +78,14 @@ pub fn start(hub: HWND) {
             unsafe {
                 let _ = PostMessageW(Some(HWND(hub as *mut _)), WM_LINK, WPARAM(0), LPARAM(0));
             }
-            reply_for(invite, rx.recv_timeout(WAIT).ok()?)
+            match rx.recv_timeout(WAIT) {
+                Ok(outcome) => reply_for(invite, outcome),
+                // O launcher sempre recebe resposta do convite, mesmo com a janela ocupada.
+                Err(_) if invite => Some(Reply::ShareInviteFailed {
+                    reason: "o Prisma não respondeu".into(),
+                }),
+                Err(_) => None,
+            }
         });
         if let Err(e) = res {
             crate::config::log(&format!("ponte com o launcher: pipe indisponível ({e})"));
@@ -81,14 +93,49 @@ pub fn start(hub: HWND) {
     });
 }
 
-/// Resposta ao cliente: só o convite responde algo; o resto não tem resposta.
+/// Resposta ao cliente: só o convite responde algo; o resto não tem resposta. Roda na thread
+/// do pipe: esperar o código no registro não trava a janela.
 fn reply_for(invite: bool, outcome: Outcome) -> Option<Reply> {
     match outcome {
         Outcome::Failed(reason) if invite => Some(Reply::ShareInviteFailed { reason }),
+        #[cfg(feature = "stream")]
+        Outcome::InviteLog(log) if invite => Some(wait_invite(&log, INVITE_WAIT)),
+        #[cfg(not(feature = "stream"))]
         Outcome::InviteLog(_) if invite => Some(Reply::ShareInviteFailed {
             reason: "indisponível".into(),
         }),
         _ => None,
+    }
+}
+
+/// Lê o registro do convite a cada 250 ms até o código aparecer, o código não ser publicado ou
+/// o prazo acabar.
+#[cfg(feature = "stream")]
+fn wait_invite(log: &std::path::Path, limit: Duration) -> Reply {
+    use crate::stream::{weblink::web_link, CODE_FAIL};
+    let start = Instant::now();
+    loop {
+        let lines: Vec<String> = std::fs::read(log)
+            .map(|b| String::from_utf8_lossy(&b).lines().filter(|l| !l.trim().is_empty()).map(str::to_string).collect())
+            .unwrap_or_default();
+        match crate::pages::share::invite_of(&lines) {
+            Some(s) if s.published == Some(false) => break,
+            Some(s) => {
+                let link = web_link(&s.code);
+                return Reply::ShareInviteCode { code: s.code, link };
+            }
+            None if lines.iter().any(|l| l.starts_with(CODE_FAIL)) => break,
+            None => {}
+        }
+        if start.elapsed() >= limit {
+            return Reply::ShareInviteFailed {
+                reason: "o convite não ficou pronto a tempo".into(),
+            };
+        }
+        std::thread::sleep(Duration::from_millis(250).min(limit.saturating_sub(start.elapsed())));
+    }
+    Reply::ShareInviteFailed {
+        reason: CODE_FAIL.into(),
     }
 }
 
@@ -140,6 +187,12 @@ impl App {
                 self.save_replay();
                 Outcome::Done
             }
+            #[cfg(feature = "stream")]
+            Request::ShareInvite => match crate::pages::share::create_invite(self) {
+                Some(log) => Outcome::InviteLog(log),
+                None => Outcome::Failed("não deu para criar o convite".into()),
+            },
+            #[cfg(not(feature = "stream"))]
             Request::ShareInvite => Outcome::Failed("indisponível".into()),
             Request::GameStarted { pid, exe, .. } => {
                 self.detector.hint(pid, &exe);
@@ -222,5 +275,50 @@ mod tests {
             Outcome::Done
         });
         assert_eq!(calls, 1);
+    }
+
+    /// Arquivo de registro temporário, um por teste.
+    #[cfg(feature = "stream")]
+    fn temp_log(name: &str, text: &str) -> PathBuf {
+        let p = std::env::temp_dir().join(format!("prisma-link-{}-{name}.log", std::process::id()));
+        std::fs::write(&p, text).unwrap();
+        p
+    }
+
+    #[cfg(feature = "stream")]
+    #[test]
+    fn invite_found_in_log() {
+        use crate::stream::{weblink::web_link, CODE_LINE};
+        let p = temp_log("found", &format!("Convite novo ...\n{CODE_LINE}K7Q-2PX\n"));
+        let r = wait_invite(&p, Duration::from_secs(2));
+        let _ = std::fs::remove_file(&p);
+        assert_eq!(r, Reply::ShareInviteCode { code: "K7Q-2PX".into(), link: web_link("K7Q-2PX") });
+    }
+
+    #[cfg(feature = "stream")]
+    #[test]
+    fn invite_written_late() {
+        use crate::stream::{weblink::web_link, CODE_LINE};
+        let p = temp_log("late", "");
+        let q = p.clone();
+        let w = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(300));
+            std::fs::write(&q, format!("Convite novo ...\n{CODE_LINE}K7Q-2PX\n")).unwrap();
+        });
+        let r = wait_invite(&p, Duration::from_secs(5));
+        w.join().unwrap();
+        let _ = std::fs::remove_file(&p);
+        assert_eq!(r, Reply::ShareInviteCode { code: "K7Q-2PX".into(), link: web_link("K7Q-2PX") });
+    }
+
+    #[cfg(feature = "stream")]
+    #[test]
+    fn invite_times_out() {
+        let p = temp_log("timeout", "Convite novo ...\n");
+        let t = Instant::now();
+        let r = wait_invite(&p, Duration::from_millis(500));
+        let _ = std::fs::remove_file(&p);
+        assert!(matches!(r, Reply::ShareInviteFailed { .. }), "{r:?}");
+        assert!(t.elapsed() < Duration::from_secs(2));
     }
 }

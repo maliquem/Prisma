@@ -30,11 +30,11 @@ impl Proc {
 
 /// O convite que a janela mostra: código, convite longo e se os relés aceitaram.
 #[derive(Clone, Default)]
-struct Shown {
-    code: String,
+pub(crate) struct Shown {
+    pub(crate) code: String,
     long: Option<String>,
     /// None publicando, Some(true) publicado, Some(false) nenhum relé aceitou.
-    published: Option<bool>,
+    pub(crate) published: Option<bool>,
     /// Até quando vale (segundos desde 1970).
     until: u64,
 }
@@ -198,7 +198,7 @@ fn tail_of(p: &Proc) -> Vec<String> {
 }
 
 /// O convite mais novo que o processo do convite escreveu.
-fn invite_of(lines: &[String]) -> Option<Shown> {
+pub(crate) fn invite_of(lines: &[String]) -> Option<Shown> {
     let at = lines.iter().rposition(|l| l.starts_with(stream::CODE_LINE))?;
     let rest = &lines[at..];
     let code = rest[0].trim_start_matches(stream::CODE_LINE).trim().to_string();
@@ -213,6 +213,25 @@ fn invite_of(lines: &[String]) -> Option<Shown> {
         None
     };
     Some(Shown { code, long, published, until })
+}
+
+/// Cria um convite como o botão "Criar convite": liga o host se nem o serviço nem o host
+/// estiverem ligados, para o convite anterior e abre o novo. Devolve o registro do convite.
+pub fn create_invite(_app: &mut App) -> Option<PathBuf> {
+    let mut guard = STATE.lock().unwrap_or_else(|e| e.into_inner());
+    let st = guard.get_or_insert_with(test_setup);
+    let opts = st.opts.get_or_insert_with(Opts::load).clone();
+    invite_in(st, &opts)
+}
+
+fn invite_in(st: &mut State, opts: &Opts) -> Option<PathBuf> {
+    if !stream::service::installed() && !st.host.as_mut().is_some_and(Proc::alive) {
+        st.host = spawn(st, &["--stream-share".to_string()], "host.log");
+    }
+    stop(&mut st.invite);
+    st.invite = spawn(st, &[format!("--stream-invite={},{}", stream::perms_key(opts.invite), opts.invite_min)], "convite.log");
+    st.revoked.clear();
+    st.invite.as_ref().map(|p| p.log.clone())
 }
 
 fn stop(p: &mut Option<Proc>) {
@@ -622,12 +641,7 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
     }
     // O convite vale para o host que estiver ligado; sem host, liga junto.
     if ui.button("sh-inv", rect(ix + bw + GAP, y, bw, 40.0), "Criar convite", true) {
-        if !service && !hosting {
-            st.host = spawn(st, &["--stream-share".to_string()], "host.log");
-        }
-        stop(&mut st.invite);
-        st.invite = spawn(st, &[format!("--stream-invite={},{}", stream::perms_key(opts.invite), opts.invite_min)], "convite.log");
-        st.revoked.clear();
+        invite_in(st, opts);
     }
     y += 48.0;
     match shown {
