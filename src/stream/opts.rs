@@ -12,6 +12,25 @@ use crate::config::{MOD_ALT, MOD_CTRL, MOD_SHIFT};
 pub type Keys = (u32, u32);
 
 const VK_END: u32 = 0x23;
+const VK_SCROLL: u32 = 0x91;
+
+/// As três posições das telas; cada uma com `eu`, um id em hexadecimal ou nada. Sem `eu`,
+/// este PC fica no meio (ou na primeira livre).
+fn screens_parse(v: &str) -> [String; 3] {
+    let mut out: [String; 3] = Default::default();
+    for (k, item) in v.split(',').take(3).enumerate() {
+        let t = item.trim().to_ascii_lowercase();
+        if (t == "eu" || (t.len() >= 6 && t.chars().all(|c| c.is_ascii_hexdigit()))) && !out.contains(&t) {
+            out[k] = t;
+        }
+    }
+    if !out.iter().any(|o| o == "eu") {
+        if let Some(k) = [1, 0, 2].into_iter().find(|&k| out[k].is_empty()) {
+            out[k] = "eu".into();
+        }
+    }
+    out
+}
 
 pub fn keys_text(k: Keys) -> String {
     format!("{},{}", k.0, k.1)
@@ -236,9 +255,9 @@ pub struct ClientOpts {
     pub fps: u32,
     /// Placa de vídeo que decodifica e mostra (nome do Windows); vazio usa a do Windows.
     pub gpu: String,
-    /// Mouse e teclado entre PCs: de que lado desta tela fica a do outro PC (0 direita,
-    /// 1 esquerda, 2 acima, 3 abaixo).
-    pub mouse_side: u8,
+    /// Mouse e teclado entre PCs: quem fica na esquerda, no meio e na direita. `eu` é este PC;
+    /// os outros, pelo id; vazio é posição livre.
+    pub screens: [String; 3],
     pub key_menu: Keys,
     pub key_full: Keys,
     pub key_cad: Keys,
@@ -246,6 +265,8 @@ pub struct ClientOpts {
     pub key_imm: Keys,
     pub key_meter: Keys,
     pub key_sound: Keys,
+    /// Trava o mouse na tela em que ele está (Mouse e teclado).
+    pub key_lock: Keys,
 }
 
 /// Quadros por segundo que dá para pedir pelo menu e pela aba Cliente (0: automático).
@@ -272,7 +293,8 @@ impl Default for ClientOpts {
             key_meter: (MOD_CTRL | MOD_ALT | MOD_SHIFT, b'M' as u32),
             key_sound: (MOD_CTRL | MOD_ALT | MOD_SHIFT, b'S' as u32),
             gpu: String::new(),
-            mouse_side: 0,
+            screens: [String::new(), "eu".into(), String::new()],
+            key_lock: (0, VK_SCROLL),
         }
     }
 }
@@ -306,7 +328,8 @@ impl ClientOpts {
                 "atalho_som" => o.key_sound = keys_parse(v, o.key_sound),
                 "quadros" => o.fps = v.parse::<u32>().ok().filter(|f| CLIENT_FPS.contains(f)).unwrap_or(0),
                 "gpu" => o.gpu = clean(v, 128),
-                "lado_mouse" => o.mouse_side = v.parse::<u8>().unwrap_or(0).min(3),
+                "telas" => o.screens = screens_parse(v),
+                "atalho_travar_mouse" => o.key_lock = keys_parse(v, o.key_lock),
                 _ => {}
             }
         }
@@ -318,7 +341,7 @@ impl ClientOpts {
         let b = |x: bool| x as u8;
         format!(
             "tela_cheia={}\nvsync={}\nimersivo={}\nmedidor={}\naviso={}\nmudo={}\npedir_444={}\ncontrole_fundo={}\nteclado_controle={}\n\
-quadros={}\natalho_menu={}\natalho_tela_cheia={}\natalho_ctrl_alt_del={}\natalho_desconectar={}\natalho_imersivo={}\natalho_medidor={}\natalho_som={}\ngpu={}\nlado_mouse={}\n",
+quadros={}\natalho_menu={}\natalho_tela_cheia={}\natalho_ctrl_alt_del={}\natalho_desconectar={}\natalho_imersivo={}\natalho_medidor={}\natalho_som={}\ngpu={}\ntelas={}\natalho_travar_mouse={}\n",
             b(self.fullscreen),
             b(self.vsync),
             self.immersive,
@@ -337,7 +360,8 @@ quadros={}\natalho_menu={}\natalho_tela_cheia={}\natalho_ctrl_alt_del={}\natalho
             keys_text(self.key_meter),
             keys_text(self.key_sound),
             self.gpu,
-            self.mouse_side,
+            self.screens.join(","),
+            keys_text(self.key_lock),
         )
     }
 
@@ -392,6 +416,10 @@ mod tests {
         assert_eq!(Opts::parse("hdr_desligar=1\npessoas=2\ncontroles=auto\nconvite=total\n"), Opts { hdr_off: true, guests: 2, invite: TOTAL, ..Opts::default() });
         let c = ClientOpts { fullscreen: false, vsync: true, immersive: 1, meter: 2, warn: false, mute: true, ask444: true, pad_background: true, pad_keys: true, fps: 60, gpu: "AMD Radeon(TM) Graphics".into(), key_menu: (MOD_ALT, 0x70), key_sound: (MOD_CTRL, b'M' as u32), ..ClientOpts::default() };
         assert_eq!(ClientOpts::parse(&c.text()), c);
+        let c = ClientOpts { screens: ["eu".into(), "".into(), "31ded57656ab".into()], key_lock: (MOD_CTRL, b'L' as u32), ..ClientOpts::default() };
+        assert_eq!(ClientOpts::parse(&c.text()), c);
+        // Lixo e repetidos saem, e este PC sempre tem lugar.
+        assert_eq!(ClientOpts::parse("telas=abcdef12,abcdef12,x;y").screens, ["abcdef12".to_string(), "eu".into(), "".into()]);
         assert_eq!(ClientOpts::parse("atalho_menu=2,0\nmedidor=9\nquadros=75"), ClientOpts { meter: 2, ..ClientOpts::default() });
     }
 

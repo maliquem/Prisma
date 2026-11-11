@@ -42,7 +42,8 @@ struct State {
     host: Option<Proc>,
     view: Option<Proc>,
     /// Mouse e teclado neste PC pareado (sem vídeo), e o nome dele.
-    kvm: Option<(Proc, String)>,
+    /// Mouse e teclado ligado, e com quais PCs (pelo id).
+    kvm: Option<(Proc, Vec<String>)>,
     /// Só o som ligado, e de qual PC.
     ear: Option<(Proc, String)>,
     pair: Option<Proc>,
@@ -177,6 +178,23 @@ fn stop(p: &mut Option<Proc>) {
 fn stop_kvm(st: &mut State) {
     let mut p = st.kvm.take().map(|k| k.0);
     stop(&mut p);
+}
+
+/// Põe um PC no arranjo das telas, se ele ainda não está: ao lado deste PC, primeiro à
+/// direita. Falso quando não sobra posição.
+fn place(screens: &mut [String; 3], id: &str) -> bool {
+    if screens.iter().any(|s| s == id) {
+        return true;
+    }
+    let me = screens.iter().position(|s| s == "eu").unwrap_or(1) as i32;
+    let free = [me + 1, me - 1, me + 2, me - 2].into_iter().filter(|k| (0..3).contains(k)).map(|k| k as usize).find(|&k| screens[k].is_empty());
+    match free {
+        Some(k) => {
+            screens[k] = id.to_string();
+            true
+        }
+        None => false,
+    }
 }
 
 fn stop_ear(st: &mut State) {
@@ -396,11 +414,11 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     match st.tab {
         6 => room_tab(ui, app, &present, x, top, w, h),
         1 => host_tab(ui, st, &mut new_opts, x, top, w, h),
-        2 => client_tab(ui, &mut new_client, x, top, w, h),
+        2 => client_tab(ui, app, &mut new_client, x, top, w, h),
         3 => net_tab(ui, app, st, &mut new_opts, x, top, w, h),
         4 => keys_tab(ui, app, &mut new_opts, &mut new_client, x, top, w, h),
         5 => pads_tab(ui, &mut new_opts, &mut new_client, x, top, w, h),
-        _ => main_tab(ui, app, st, &opts, &mut new_opts, &shown, x, top, w, h),
+        _ => main_tab(ui, app, st, &opts, &mut new_opts, &mut new_client, &shown, x, top, w, h),
     }
 
     if st.popup {
@@ -474,7 +492,7 @@ fn invite_sheet(ui: &mut Ui, app: &mut App, st: &mut State, s: &Shown) {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &mut Opts, shown: &Option<Shown>, x: f32, top: f32, w: f32, h: f32) {
+fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &mut Opts, client: &mut ClientOpts, shown: &Option<Shown>, x: f32, top: f32, w: f32, h: f32) {
     let service = stream::service::installed();
     let lw = ((w - GAP) / 2.0).floor();
 
@@ -648,7 +666,7 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
     y += 38.0;
     let rows: Vec<_> = all.iter().filter(|d| d.viewer == (st.dev_tab == 1)).collect();
     // Mouse e teclado ligados (o processo ainda roda) em qual PC.
-    let kvm_on = st.kvm.as_mut().and_then(|k| matches!(k.0.child.try_wait(), Ok(None)).then(|| k.1.clone()));
+    let kvm_on: Vec<String> = st.kvm.as_mut().and_then(|k| matches!(k.0.child.try_wait(), Ok(None)).then(|| k.1.clone())).unwrap_or_default();
     let ear_on = st.ear.as_mut().and_then(|k| matches!(k.0.child.try_wait(), Ok(None)).then(|| k.1.clone()));
     // Botões da direita: Esquecer, Renomear e, nos PCs que este assiste, Assistir, Mouse e teclado
     // e Só o som. A largura segue o texto, que em outros idiomas é mais comprido; sem espaço para
@@ -739,7 +757,7 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
             if ui.button(&format!("sh-watch{i}"), rect(rn_r.x - watch_bw - 8.0, by, watch_bw, 32.0), "Assistir", true) {
                 watch = Some(d.name.clone());
             }
-            let on = kvm_on.as_deref() == Some(d.name.as_str());
+            let on = kvm_on.contains(&d.id);
             let (kvm_r, ear_r) = if kvm_down {
                 let ear_r = rect(row.right() - 12.0 - ear_bw, by + 44.0, ear_bw, 32.0);
                 (rect(ear_r.x - 8.0 - kvm_bw, by + 44.0, kvm_bw, 32.0), ear_r)
@@ -748,7 +766,7 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
                 (kvm_r, rect(kvm_r.right() + 8.0, by, ear_bw, 32.0))
             };
             if ui.button(&format!("sh-kvm{i}"), kvm_r, if on { "Parar" } else { "Mouse e teclado" }, false) {
-                kvm = Some((d.name.clone(), !on));
+                kvm = Some((d.id.clone(), !on));
             }
             let hearing = ear_on.as_deref() == Some(d.name.as_str());
             if ui.button(&format!("sh-ear{i}"), ear_r, if hearing { "Parar" } else { "Só o som" }, false) {
@@ -794,10 +812,30 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
         stop(&mut st.view);
         st.view = spawn(st, &[format!("--stream-connect={name}")], "assistir.log");
     }
-    if let Some((name, start)) = kvm {
-        stop_kvm(st);
+    // Um PC entra ou sai do Mouse e teclado: a conexão recomeça com os PCs que ficam.
+    if let Some((id, start)) = kvm {
+        let mut ids = kvm_on.clone();
+        ids.retain(|i| *i != id);
+        let mut ok = true;
         if start {
-            st.kvm = spawn(st, &[format!("--stream-mouse={name}")], "mouse-teclado.log").map(|p| (p, name));
+            ok = place(&mut client.screens, &id);
+            if ok {
+                ids.push(id);
+            } else {
+                app.toast.info("As três posições já têm tela. Mude em Cliente > Telas lado a lado.");
+            }
+        }
+        if ok {
+            stop_kvm(st);
+            if !ids.is_empty() {
+                let mut arg: Vec<String> = Vec::new();
+                for (k, who) in client.screens.iter().enumerate() {
+                    if who == "eu" || ids.contains(who) {
+                        arg.push(format!("{who}|{k}"));
+                    }
+                }
+                st.kvm = spawn(st, &[format!("--stream-mouse={}", arg.join(","))], "mouse-teclado.log").map(|p| (p, ids));
+            }
         }
     }
     if let Some((name, start)) = ear {
@@ -982,7 +1020,8 @@ fn host_tab(ui: &mut Ui, st: &mut State, o: &mut Opts, x: f32, top: f32, w: f32,
     }
 }
 
-fn client_tab(ui: &mut Ui, c: &mut ClientOpts, x: f32, top: f32, w: f32, h: f32) {
+#[allow(clippy::too_many_arguments)]
+fn client_tab(ui: &mut Ui, app: &App, c: &mut ClientOpts, x: f32, top: f32, w: f32, h: f32) {
     let lw = ((w - GAP) / 2.0).floor();
     let l = rect(x, top, lw, h);
     ui.card(l);
@@ -1001,11 +1040,14 @@ fn client_tab(ui: &mut Ui, c: &mut ClientOpts, x: f32, top: f32, w: f32, h: f32)
     y += 34.0;
     ui.check("sh-mute", rect(ix, y, iw, 30.0), "Começar sem o som do outro PC", &mut c.mute);
     y += 38.0;
-    let side_r = row(ui, ix, y, iw, "Tela do outro PC", ctl);
-    y += 50.0;
+    ui.label(rect(ix, y, iw, 18.0), "Telas lado a lado: esquerda, meio e direita", TEXT2);
+    y += 22.0;
+    let sw = ((iw - 16.0) / 3.0).floor();
+    let screen_r: Vec<Rect> = (0..3).map(|k| rect(ix + k as f32 * (sw + 8.0), y, sw, 40.0)).collect();
+    y += 52.0;
     ui.c.text_wrap(
         rect(ix, y, iw, (l.bottom() - y - 12.0).max(0.0)),
-        "No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. O atalho do menu sempre funciona aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga. Tela do outro PC vale para Mouse e teclado, na lista de PCs: o mouse passa por essa borda para o outro PC, sem vídeo, e Scroll Lock traz de volta.",
+        "No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. O atalho do menu sempre funciona aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga. Telas lado a lado valem para Mouse e teclado, na lista de PCs: o mouse passa pela borda de uma tela para a vizinha, sem vídeo. Um PC sem posição vai para a primeira livre ao lado deste.",
         12.0,
         MUTED,
         Weight::Regular,
@@ -1034,7 +1076,34 @@ fn client_tab(ui: &mut Ui, c: &mut ClientOpts, x: f32, top: f32, w: f32, h: f32)
         Weight::Regular,
     );
 
-    pick(ui, "sh-side", side_r, &[0u8, 1, 2, 3], opt(&["À direita", "À esquerda", "Acima", "Abaixo"]), &mut c.mouse_side);
+    // Cada posição: nenhum, este PC ou um PC que este assiste.
+    let mut who: Vec<(String, String)> = vec![(String::new(), crate::i18n::tr("Nenhum").into_owned()), ("eu".into(), crate::i18n::tr("Este PC").into_owned())];
+    for d in stream::device_rows().into_iter().filter(|d| !d.viewer) {
+        let shown = app.cfg.share_names.iter().find(|n| n.0 == d.id).map_or(d.name.clone(), |n| n.1.clone());
+        who.push((d.id, shown));
+    }
+    for (k, r) in screen_r.iter().enumerate() {
+        let mut s = who.iter().position(|w| w.0 == c.screens[k]).unwrap_or(0);
+        let names: Vec<String> = who.iter().map(|w| w.1.clone()).collect();
+        if ui.select(&format!("sh-screen{k}"), *r, &names, &mut s) {
+            let pick = who[s].0.clone();
+            // Quem estava em outra posição sai de lá; este PC nunca fica sem lugar.
+            let old = std::mem::replace(&mut c.screens[k], pick.clone());
+            if !pick.is_empty() {
+                for (j, o) in c.screens.iter_mut().enumerate() {
+                    if j != k && *o == pick {
+                        *o = old.clone();
+                    }
+                }
+            }
+            if !c.screens.iter().any(|o| o == "eu") {
+                c.screens[k] = "eu".into();
+                if let Some(j) = (0..3).find(|&j| j != k && c.screens[j].is_empty()) {
+                    c.screens[j] = pick;
+                }
+            }
+        }
+    }
     pick(ui, "sh-imm", imm_r, &[0u8, 1, 2, 3], opt(&["Desligado", "Só o mouse", "Só o teclado", "Mouse e teclado"]), &mut c.immersive);
     pick(ui, "sh-meter", meter_r, &[0u8, 1, 2], opt(&["Desligado", "Simples", "Detalhado"]), &mut c.meter);
     let cfps = crate::stream::CLIENT_FPS;
@@ -1123,6 +1192,10 @@ fn keys_tab(ui: &mut Ui, app: &mut App, o: &mut Opts, c: &mut ClientOpts, x: f32
     hotkey_row(ui, "sh-k-cad", ix, y, iw, "Ctrl+Alt+Del no outro PC", &mut c.key_cad);
     y += 44.0;
     hotkey_row(ui, "sh-k-disc", ix, y, iw, "Desconectar", &mut c.key_disc);
+    y += 52.0;
+    ui.label(rect(ix, y, iw, 18.0), "Mouse e teclado entre PCs", MUTED);
+    y += 24.0;
+    hotkey_row(ui, "sh-k-lock", ix, y, iw, "Travar o mouse na tela atual", &mut c.key_lock);
     y += 52.0;
     ui.label(rect(ix, y, iw, 18.0), "No PC que compartilha", MUTED);
     y += 24.0;

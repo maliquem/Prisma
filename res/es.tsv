@@ -1458,7 +1458,7 @@ Só o teclado	Solo teclado
 Mouse e teclado	Ratón y teclado
 Pedir 4:4:4 (texto mais nítido; precisa de NVIDIA ou Intel)	Pedir 4:4:4 (texto más nítido; necesita NVIDIA o Intel)
 Começar sem o som do outro PC	Empezar sin el sonido del otro PC
-No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. O atalho do menu sempre funciona aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga. Tela do outro PC vale para Mouse e teclado, na lista de PCs: o mouse passa por essa borda para o outro PC, sem vídeo, e Scroll Lock traz de volta.	En modo inmersivo, a pantalla completa, el ratón se queda dentro de la ventana, y la tecla Windows y Alt+Tab van al otro PC. El atajo del menú siempre funciona aquí. En una pantalla G-SYNC o FreeSync, deja VSync desactivado: la imagen no se corta. Pantalla del otro PC sirve para Ratón y teclado, en la lista de PCs: el ratón pasa por ese borde al otro PC, sin vídeo, y Bloq Despl lo trae de vuelta.
+No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. O atalho do menu sempre funciona aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga. Telas lado a lado valem para Mouse e teclado, na lista de PCs: o mouse passa pela borda de uma tela para a vizinha, sem vídeo. Um PC sem posição vai para a primeira livre ao lado deste.	En el modo inmersivo, en pantalla completa, el ratón se queda dentro de la ventana, y la tecla Windows y Alt+Tab van al otro PC. El atajo del menú siempre funciona aquí. En una pantalla con G-SYNC o FreeSync, deja el VSync desactivado: la imagen no se rasga. Las pantallas lado a lado sirven para Ratón y teclado, en la lista de PC: el ratón pasa por el borde de una pantalla a la de al lado, sin vídeo. Un PC sin posición va a la primera libre junto a este.
 Medidor e avisos	Medidor y avisos
 Medidor de latência	Medidor de latencia
 Simples	Simple
@@ -1797,9 +1797,8 @@ Vale para todos os jogos, menos o que o perfil de cada jogo troca.	Se aplica a t
 Perfil no driver: {}	Perfil en el driver: {}
 Este jogo ainda não tem perfil no driver. O Prisma cria um na primeira mudança.	Este juego todavía no tiene perfil en el driver. Prisma crea uno con el primer cambio.
 O driver não aceitou a mudança	El driver no aceptó el cambio
-Tela do outro PC	Pantalla del otro PC
-À direita	A la derecha
-À esquerda	A la izquierda
-Acima	Arriba
-Abaixo	Abajo
 Só o som	Solo el sonido
+Telas lado a lado: esquerda, meio e direita	Pantallas lado a lado: izquierda, centro y derecha
+Mouse e teclado entre PCs	Ratón y teclado entre PC
+Travar o mouse na tela atual	Bloquear el ratón en la pantalla actual
+As três posições já têm tela. Mude em Cliente > Telas lado a lado.	Las tres posiciones ya tienen pantalla. Cámbialo en Cliente > Pantallas lado a lado.
