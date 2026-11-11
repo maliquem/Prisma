@@ -2,8 +2,8 @@
 //! Feito para a rede local: perto de 200 Mbit/s em 1080p a 60 quadros, poucos milissegundos de
 //! atraso e nenhum quadro dependendo de outro (um pacote perdido só borra um pedaço daquele quadro).
 //!
-//! O Vulkan entra só com este codec: a `libpyrowave-shared-1.dll` é carregada quando ele é escolhido
-//! e cria o próprio Vulkan na placa do D3D11 (pelo LUID). As imagens passam sem cópia: texturas D3D11
+//! O Vulkan entra só com este codec: a `libpyrowave-shared-1.dll` vai dentro do Prisma, sai para o
+//! disco e é carregada quando ele é escolhido, e cria o próprio Vulkan na placa do D3D11 (pelo LUID). As imagens passam sem cópia: texturas D3D11
 //! compartilhadas (NT handle) viram imagens Vulkan, e uma fence D3D11 compartilhada vira um semáforo
 //! timeline que ordena os dois lados na GPU, sem a CPU esperar.
 //!
@@ -27,8 +27,10 @@ use crate::capture::hdr::{compile, VS};
 use crate::capture::live_enc::VideoFmt;
 use crate::capture::D3d;
 
-/// A biblioteca do PyroWave, ao lado do `prisma.exe` (ou onde `PRISMA_PYROWAVE` disser).
-pub const DLL: &str = "libpyrowave-shared-1.dll";
+/// A biblioteca do PyroWave, em `res/pyrowave`, compilada por `tools/build_pyrowave.ps1`. Vai dentro
+/// do exe, e com ela a assinatura da atualização; a licença (MIT) sai junto para o disco.
+static EMBEDDED: &[u8] = include_bytes!("../../res/pyrowave/libpyrowave-shared-1.dll");
+static LICENSE: &str = include_str!("../../res/pyrowave/LICENSE.txt");
 
 /// Bits por pixel por quadro do automático: 1080p a 60 quadros dá 200 Mbit/s, o mínimo que o autor
 /// recomenda para a imagem ficar limpa.
@@ -231,22 +233,48 @@ api! {
 unsafe impl Send for Api {}
 unsafe impl std::marker::Sync for Api {}
 
-fn dll_path() -> std::path::PathBuf {
+/// A DLL a carregar: a de `PRISMA_PYROWAVE` (para testar outra), ou a embutida, gravada em
+/// `%LOCALAPPDATA%\Prisma\pyrowave`. No serviço, essa pasta é a do SYSTEM, que só ele e os
+/// administradores alteram. O nome vem do conteúdo: uma versão nova nunca esbarra na velha ainda
+/// aberta por outro Prisma, e um arquivo diferente do embutido é gravado de novo antes de carregar.
+fn dll_path() -> std::result::Result<std::path::PathBuf, String> {
     if let Ok(p) = std::env::var("PRISMA_PYROWAVE") {
-        return p.into();
+        return Ok(p.into());
     }
-    std::env::current_exe().ok().and_then(|e| e.parent().map(|d| d.join(DLL))).unwrap_or_else(|| DLL.into())
-}
-
-/// A DLL está aqui? Só olha o arquivo: o Vulkan só entra quando o codec for usado de fato.
-pub fn available() -> bool {
-    dll_path().is_file()
+    let local = crate::sys::known_folder(&windows::Win32::UI::Shell::FOLDERID_LocalAppData);
+    if local.as_os_str().is_empty() {
+        return Err("sem a pasta AppData\\Local".into());
+    }
+    let dir = local.join("Prisma").join("pyrowave");
+    // FNV-1a: só para dar nome à versão.
+    let hash = EMBEDDED.iter().fold(0xcbf2_9ce4_8422_2325u64, |h, &b| (h ^ b as u64).wrapping_mul(0x100_0000_01b3));
+    let name = format!("libpyrowave-{hash:016x}.dll");
+    let path = dir.join(&name);
+    if std::fs::read(&path).is_ok_and(|b| b == EMBEDDED) {
+        return Ok(path);
+    }
+    let err = |e: std::io::Error| format!("gravar {}: {e}", path.display());
+    std::fs::create_dir_all(&dir).map_err(err)?;
+    let tmp = dir.join(format!("{name}.{}.tmp", std::process::id()));
+    std::fs::write(&tmp, EMBEDDED).and_then(|_| std::fs::rename(&tmp, &path)).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        err(e)
+    })?;
+    let _ = std::fs::write(dir.join("LICENSE.txt"), LICENSE);
+    // As versões antigas saem; a que outro Prisma ainda tiver aberta fica para a próxima vez.
+    for e in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+        let n = e.file_name().to_string_lossy().into_owned();
+        if n.starts_with("libpyrowave-") && n != name {
+            let _ = std::fs::remove_file(e.path());
+        }
+    }
+    Ok(path)
 }
 
 fn api() -> Result<&'static Api> {
     static API: OnceLock<std::result::Result<Api, String>> = OnceLock::new();
     let r = API.get_or_init(|| unsafe {
-        let path = dll_path();
+        let path = dll_path()?;
         let lib = LoadLibraryW(&HSTRING::from(path.as_os_str())).map_err(|e| format!("{} não abriu: {}", path.display(), e.message()))?;
         let api = Api::load(lib)?;
         let (mut major, mut minor, mut patch) = (0, 0, 0);

@@ -1118,10 +1118,8 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
             codecs |= codec_bit(c);
         }
     }
-    // O PyroWave só é anunciado com a biblioteca aqui; o Vulkan só abre se o host o escolher.
-    if super::wave::available() {
-        codecs |= WAVE;
-    }
+    // O PyroWave vai dentro do Prisma; o Vulkan só abre se o host o escolher.
+    codecs |= WAVE;
     // Tela em HDR: o host manda HDR10 se a dele também estiver. 4:4:4 só pedindo, porque gasta mais
     // rede (e, no HEVC, abre o CUDA aqui). O PyroWave faz 4:4:4 em qualquer placa.
     let mut flags = 0u8;

@@ -124,7 +124,7 @@ cargo build --release
 
 - [iroh 和 iroh-dns](https://github.com/n0-computer/iroh)（MIT 或 Apache-2.0），负责穿越 NAT，没有直连路径时通过 n0 的公共中继转发连接，始终端到端加密。
 - [attohttpc](https://github.com/sbstp/attohttpc)（MPL-2.0），iroh 用它通过 UPnP 打开路由器端口。源代码见链接。
-- [PyroWave](https://github.com/Themaister/pyrowave)（MIT），用于局域网的实验性编解码器，仅当 `libpyrowave-shared-1.dll` 位于 Prisma 旁边时才会加载。Prisma 不附带它。
+- [PyroWave](https://github.com/Themaister/pyrowave)（MIT），用于局域网的实验性编解码器。它的库（连同 Granite、volk 和 Vulkan 头文件，均为 MIT）内置于 Prisma 中，仅在使用该编解码器时才连同许可证写入磁盘。
 - [tokio](https://github.com/tokio-rs/tokio)（MIT）、[blake3](https://github.com/BLAKE3-team/BLAKE3)（CC0-1.0 或 Apache-2.0）、[data-encoding](https://github.com/ia0/data-encoding)（MIT）、[mini-nvcodec 和 mini-cuda](https://github.com/AdrianEddy/wgpu-interop)（MIT 或 Apache-2.0）、[vigem-client](https://github.com/CasualX/vigem-client)（MIT）、[viiper-client](https://github.com/Alia5/VIIPER)（MIT）、[url](https://github.com/servo/rust-url)（MIT 或 Apache-2.0）以及 [webpki-roots](https://github.com/rustls/webpki-roots)（CDLA-Permissive-2.0，证书颁发机构列表）。
 
 “NVIDIA 驱动”页面的选项列表参考了 [NVIDIA Profile Inspector](https://github.com/Orbmu2k/nvidiaProfileInspector)（MIT，Orbmu2k 及贡献者）：只用了选项的 ID 和取值，没有使用代码。

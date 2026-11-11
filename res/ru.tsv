@@ -1439,8 +1439,7 @@ Limite de banda	Ограничение полосы
 HDR10 de 10 bits quando as duas telas estão em HDR	10-битный HDR10, когда оба экрана в HDR
 Aceitar 4:4:4 quando quem assiste pede	Принимать 4:4:4 по запросу зрителя
 Os automáticos seguem quem assiste: a altura da tela, o menor entre os Hz dos dois lados e o melhor codec que os dois têm. O 4:4:4 e o HDR10 caem sozinhos se o outro lado não tiver.	Автоматические значения подстраиваются под зрителя: высота его экрана, меньшая частота из двух сторон и лучший общий кодек. 4:4:4 и HDR10 отключаются сами, если у другой стороны их нет.
-PyroWave: uns 200 Mbit/s em 1080p60 e mais em 4K. Só na rede local ou pela VPN (ZeroTier, Tailscale), nunca pelo relé; fora delas, e se quem assiste não tiver a biblioteca, vale o automático.	PyroWave: около 200 Мбит/с при 1080p60 и больше в 4K. Только в локальной сети или через VPN (ZeroTier, Tailscale), никогда через ретранслятор; вне их, или если у зрителя нет библиотеки, действует автоматический выбор.
-PyroWave: falta a libpyrowave-shared-1.dll ao lado do Prisma, então vale o automático. Com ela, uns 200 Mbit/s em 1080p60, só na rede local ou pela VPN, nunca pelo relé.	PyroWave: рядом с Prisma нет libpyrowave-shared-1.dll, поэтому действует автоматический выбор. С ней — около 200 Мбит/с при 1080p60, только в локальной сети или через VPN, никогда через ретранслятор.
+PyroWave: uns 200 Mbit/s em 1080p60 e mais em 4K. Só na rede local ou pela VPN (ZeroTier, Tailscale), nunca pelo relé; fora delas, e com quem assiste numa versão sem ele, vale o automático.	PyroWave: около 200 Мбит/с при 1080p60 и больше в 4K. Только в локальной сети или через VPN (ZeroTier, Tailscale), никогда через ретранслятор; вне их, или если у зрителя версия без него, действует автоматический выбор.
 Som, mouse e teclado	Звук, мышь и клавиатура
 Som que vai	Передаваемый звук
 Todo o PC	Весь ПК

@@ -1439,8 +1439,7 @@ Limite de banda	带宽限制
 HDR10 de 10 bits quando as duas telas estão em HDR	两块屏幕都处于 HDR 时使用 10 位 HDR10
 Aceitar 4:4:4 quando quem assiste pede	观看方请求时接受 4:4:4
 Os automáticos seguem quem assiste: a altura da tela, o menor entre os Hz dos dois lados e o melhor codec que os dois têm. O 4:4:4 e o HDR10 caem sozinhos se o outro lado não tiver.	自动值跟随观看方：其屏幕高度、两端中较低的刷新率，以及双方都有的最佳编解码器。另一端不支持时，4:4:4 和 HDR10 会自动关闭。
-PyroWave: uns 200 Mbit/s em 1080p60 e mais em 4K. Só na rede local ou pela VPN (ZeroTier, Tailscale), nunca pelo relé; fora delas, e se quem assiste não tiver a biblioteca, vale o automático.	PyroWave：1080p60 约需 200 Mbit/s，4K 更多。仅限局域网或 VPN（ZeroTier、Tailscale），绝不经过中继；在此之外，或观看方没有该库时，使用自动。
-PyroWave: falta a libpyrowave-shared-1.dll ao lado do Prisma, então vale o automático. Com ela, uns 200 Mbit/s em 1080p60, só na rede local ou pela VPN, nunca pelo relé.	PyroWave：Prisma 旁缺少 libpyrowave-shared-1.dll，因此使用自动。有了它，1080p60 约需 200 Mbit/s，仅限局域网或 VPN，绝不经过中继。
+PyroWave: uns 200 Mbit/s em 1080p60 e mais em 4K. Só na rede local ou pela VPN (ZeroTier, Tailscale), nunca pelo relé; fora delas, e com quem assiste numa versão sem ele, vale o automático.	PyroWave：1080p60 约需 200 Mbit/s，4K 更多。仅限局域网或 VPN（ZeroTier、Tailscale），绝不经过中继；在此之外，或观看方的版本没有它时，使用自动。
 Som, mouse e teclado	声音、鼠标和键盘
 Som que vai	发送的声音
 Todo o PC	整台电脑

@@ -1174,14 +1174,14 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     tries.extend([Codec::Av1, Codec::Hevc, Codec::H264].map(|c| (c, VideoFmt::default())));
     let mbps = std::env::var("PRISMA_MBPS").ok().and_then(|v| v.parse::<u32>().ok()).or((opts.mbps > 0).then_some(opts.mbps));
 
-    // PyroWave: só pedido, com todos tendo a biblioteca e todos na rede local ou na VPN (nunca pelo
+    // PyroWave: só pedido, com todos numa versão que o tenha e todos na rede local ou na VPN (nunca pelo
     // relé). HDR10 nas mesmas condições do NVENC; 4:4:4 quando todos pedem e o host aceita, em
     // qualquer placa (o PyroWave não depende do NVDEC).
     let mut wave = None;
     if codec_opt == "pyrowave" && !room.wave_failed {
         let far: Vec<String> = room.guests.iter().filter(|g| !g.link.near()).map(|g| format!("«{}» ({})", g.name, g.link.route())).collect();
         if codecs & WAVE == 0 {
-            eprintln!("PyroWave: quem assiste não tem a biblioteca; fica o automático");
+            eprintln!("PyroWave: quem assiste está numa versão sem ele; fica o automático");
         } else if !far.is_empty() {
             eprintln!("PyroWave só na rede local ou pela VPN, e {} não está: fica o automático", far.join(", "));
         } else {
@@ -1834,7 +1834,7 @@ mod tests {
         assert!(fits(&h(0, DECODES_444), VideoCodec::Std(Codec::Hevc), VideoFmt { hdr10: false, yuv444: true }));
         assert!(fits(&h(WAVE, 0), VideoCodec::Wave, plain));
         assert!(!fits(&h(7, DECODES_444), VideoCodec::Wave, plain));
-        // O PyroWave 4:4:4 serve a quem tem a biblioteca, peça ou não; o HDR10 pede a tela em HDR.
+        // O PyroWave 4:4:4 serve a quem o tem, peça ou não; o HDR10 pede a tela em HDR.
         assert!(fits(&h(WAVE, 0), VideoCodec::Wave, VideoFmt { hdr10: false, yuv444: true }));
         assert!(!fits(&h(WAVE, ASKS_444), VideoCodec::Wave, VideoFmt { hdr10: true, yuv444: true }));
         assert!(fits(&h(WAVE, SEES_HDR), VideoCodec::Wave, VideoFmt { hdr10: true, yuv444: true }));

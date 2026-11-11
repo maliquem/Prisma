@@ -124,7 +124,7 @@ cargo build --release
 
 - [iroh и iroh-dns](https://github.com/n0-computer/iroh) (MIT или Apache-2.0) — проходит NAT и, без прямого пути, передаёт соединение через публичные ретрансляторы n0, всегда со сквозным шифрованием.
 - [attohttpc](https://github.com/sbstp/attohttpc) (MPL-2.0) — используется iroh для открытия портов роутера через UPnP. Исходный код — по ссылке.
-- [PyroWave](https://github.com/Themaister/pyrowave) (MIT) — экспериментальный кодек для локальной сети; загружается, только если `libpyrowave-shared-1.dll` лежит рядом с Prisma. В комплект Prisma не входит.
+- [PyroWave](https://github.com/Themaister/pyrowave) (MIT) — экспериментальный кодек для локальной сети. Его библиотека (вместе с Granite, volk и заголовками Vulkan, все под MIT) встроена в Prisma и записывается на диск вместе с лицензией, только когда кодек используется.
 - [tokio](https://github.com/tokio-rs/tokio) (MIT), [blake3](https://github.com/BLAKE3-team/BLAKE3) (CC0-1.0 или Apache-2.0), [data-encoding](https://github.com/ia0/data-encoding) (MIT), [mini-nvcodec и mini-cuda](https://github.com/AdrianEddy/wgpu-interop) (MIT или Apache-2.0), [vigem-client](https://github.com/CasualX/vigem-client) (MIT), [viiper-client](https://github.com/Alia5/VIIPER) (MIT), [url](https://github.com/servo/rust-url) (MIT или Apache-2.0) и [webpki-roots](https://github.com/rustls/webpki-roots) (CDLA-Permissive-2.0, список удостоверяющих центров).
 
 Список параметров на странице «Драйвер NVIDIA» изучен по [NVIDIA Profile Inspector](https://github.com/Orbmu2k/nvidiaProfileInspector) (MIT, Orbmu2k и участники): только идентификаторы и значения параметров, без кода.

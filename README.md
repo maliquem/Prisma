@@ -124,7 +124,7 @@ Share screen uses open-source libraries, unmodified:
 
 - [iroh and iroh-dns](https://github.com/n0-computer/iroh) (MIT or Apache-2.0), which traverses NAT and, without a direct path, relays the connection through n0's public relays, always end-to-end encrypted.
 - [attohttpc](https://github.com/sbstp/attohttpc) (MPL-2.0), used by iroh to open router ports via UPnP. The source code is at the link.
-- [PyroWave](https://github.com/Themaister/pyrowave) (MIT), an experimental codec for the local network, loaded only when `libpyrowave-shared-1.dll` sits next to Prisma. It does not come with Prisma.
+- [PyroWave](https://github.com/Themaister/pyrowave) (MIT), an experimental codec for the local network. Its library (with Granite, volk and the Vulkan headers, all MIT) comes inside Prisma and is written to disk with its license only when the codec is used.
 - [tokio](https://github.com/tokio-rs/tokio) (MIT), [blake3](https://github.com/BLAKE3-team/BLAKE3) (CC0-1.0 or Apache-2.0), [data-encoding](https://github.com/ia0/data-encoding) (MIT), [mini-nvcodec and mini-cuda](https://github.com/AdrianEddy/wgpu-interop) (MIT or Apache-2.0), [vigem-client](https://github.com/CasualX/vigem-client) (MIT), [viiper-client](https://github.com/Alia5/VIIPER) (MIT), [url](https://github.com/servo/rust-url) (MIT or Apache-2.0) and [webpki-roots](https://github.com/rustls/webpki-roots) (CDLA-Permissive-2.0, the list of certificate authorities).
 
 The list of settings on the NVIDIA driver page was studied from [NVIDIA Profile Inspector](https://github.com/Orbmu2k/nvidiaProfileInspector) (MIT, Orbmu2k and contributors): setting ids and values only, no code.

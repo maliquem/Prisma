@@ -24,7 +24,9 @@ A imagem é a página de boas-vindas, uma faixa de 1920×2160 rolando 7 px por q
 - **Só rede local ou VPN:** `Link::near()`. No UDP direto, IP local ou CGNAT (Tailscale); no iroh, o caminho escolhido tem que ser IP local ou de VPN, nunca relé. O host confere a cada segundo; se alguém deixar de caber (ou passar a caber), a sala recomeça no automático (ou no PyroWave). Quem chega pelo relé faz a sala recomeçar no automático.
 - **Página:** "PyroWave" na lista de codecs da aba Host, com aviso em laranja da banda e do limite de rede, e outro aviso se a DLL falta.
 - **Limite de banda:** com o PyroWave escolhido, a lista vai até 700 Mbit/s (200, 300, 500, 700 a mais); com os outros codecs, continua até 150, e voltar para eles traz o limite para 150. O host também corta em 150 o que vai para o NVENC. Com o limite em automático, o PyroWave usa 200 Mbit/s em 1080p60, proporcional aos pixels por segundo, até 700. Um limite fixo abaixo disso vale também para o PyroWave e baixa a qualidade.
-- **Biblioteca:** `libpyrowave-shared-1.dll`, carregada só quando o codec é usado (`LoadLibraryW`), ao lado do exe ou em `PRISMA_PYROWAVE`. Compilada de `K:\src\_ext\pyrowave` (commit 7fe0e26, MIT, Hans-Kristian Arntzen, com Granite e volk, MIT). Não vai no pacote nem no repositório.
+- **Biblioteca:** `libpyrowave-shared-1.dll` fica em `res/pyrowave` e vai dentro do `Prisma.exe` (`include_bytes!`), coberta pela assinatura da atualização. Na primeira vez que o codec é usado, ela é gravada em `%LOCALAPPDATA%\Prisma\pyrowave` com o `LICENSE.txt` ao lado e carregada por `LoadLibraryW` (ou a de `PRISMA_PYROWAVE`, para testar outra). O nome leva um hash do conteúdo, então uma versão nova não esbarra na velha aberta por outro Prisma. Um arquivo diferente do embutido é gravado de novo antes de carregar. No serviço, a pasta é a do SYSTEM, que só ele e os administradores alteram.
+  - **Licença:** tudo o que entra na DLL é MIT: PyroWave e Granite (Hans-Kristian Arntzen), volk (Arseny Kapoulkine), o cabeçalho do RenderDoc (Baldur Karlsson) e os cabeçalhos do Vulkan (Khronos, Apache-2.0 ou MIT, usados como MIT). Distribuir pede só levar os avisos, que estão em `res/pyrowave/LICENSE.txt` e saem junto com a DLL. Nada de GPL.
+  - **Como foi feita:** `tools/build_pyrowave.ps1` compila sem mudanças o PyroWave 7fe0e26 com o Granite 5309042 (MSVC, runtime embutido, só KERNEL32 e USER32), uns 1,1 MB.
 
 ## Medições
 
@@ -84,8 +86,7 @@ As medianas mudam até 1 ms entre rodadas iguais (a rodada com perda de 1/50 tev
 ## Riscos
 
 - A API C do PyroWave é declarada instável; a DLL é conferida pela versão maior 1 ao abrir.
-- A DLL não vem com o Prisma; distribuir exige compilá-la (CMake, Ninja, Granite) e empacotá-la, ou baixar no Update.
-- Com o serviço do Windows instalado, o host roda a cópia do serviço, em outra pasta; a DLL também precisa estar ao lado dessa cópia, e a troca de cópia na atualização ainda não a leva.
+- A DLL no repositório é binária; atualizar o PyroWave é rodar `tools/build_pyrowave.ps1` com os commits novos e trocar os commits citados no `LICENSE.txt`.
 - O Hello não renegocia: se o caminho do iroh passar de direto para relé no meio, o host percebe em até 1 s e recomeça no automático.
 - O HDR10 passa sem mapear tons: quem assiste vê o PQ como o host mandou, e a tela de quem assiste faz o resto (como no NVENC HDR10).
 - O 4:4:4 a 300 Mbit/s numa rede de 1 Gbit/s deixa menos folga; com o limite de banda fixo abaixo disso, a qualidade cai.

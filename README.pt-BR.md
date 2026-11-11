@@ -124,7 +124,7 @@ Compartilhar tela usa bibliotecas de código aberto, sem mudanças:
 
 - [iroh e iroh-dns](https://github.com/n0-computer/iroh) (MIT ou Apache-2.0), que fura o NAT e, sem caminho direto, passa a conexão pelos relés públicos da n0, sempre criptografada de ponta a ponta.
 - [attohttpc](https://github.com/sbstp/attohttpc) (MPL-2.0), usado pelo iroh para abrir portas no roteador por UPnP. O código-fonte está no link.
-- [PyroWave](https://github.com/Themaister/pyrowave) (MIT), codec experimental para a rede local, carregado só quando a `libpyrowave-shared-1.dll` está ao lado do Prisma. Ele não vem com o Prisma.
+- [PyroWave](https://github.com/Themaister/pyrowave) (MIT), codec experimental para a rede local. A biblioteca dele (com Granite, volk e os cabeçalhos do Vulkan, todos MIT) vem dentro do Prisma e só é gravada no disco, com a licença, quando o codec é usado.
 - [tokio](https://github.com/tokio-rs/tokio) (MIT), [blake3](https://github.com/BLAKE3-team/BLAKE3) (CC0-1.0 ou Apache-2.0), [data-encoding](https://github.com/ia0/data-encoding) (MIT), [mini-nvcodec e mini-cuda](https://github.com/AdrianEddy/wgpu-interop) (MIT ou Apache-2.0), [vigem-client](https://github.com/CasualX/vigem-client) (MIT), [viiper-client](https://github.com/Alia5/VIIPER) (MIT), [url](https://github.com/servo/rust-url) (MIT ou Apache-2.0) e [webpki-roots](https://github.com/rustls/webpki-roots) (CDLA-Permissive-2.0, a lista de autoridades de certificado).
 
 A lista de opções da tela Driver NVIDIA foi estudada no [NVIDIA Profile Inspector](https://github.com/Orbmu2k/nvidiaProfileInspector) (MIT, Orbmu2k e colaboradores): só ids e valores das opções, nenhum código.

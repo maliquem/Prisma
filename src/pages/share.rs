@@ -935,12 +935,7 @@ fn host_tab(ui: &mut Ui, st: &mut State, o: &mut Opts, x: f32, top: f32, w: f32,
     let foot = rect(ix, y, iw, (l.bottom() - y - 12.0).max(0.0));
     if o.codec == "pyrowave" {
         // O PyroWave troca compressão por atraso: só cabe em rede rápida, e o relé nunca leva.
-        let s = if stream::wave::available() {
-            "PyroWave: uns 200 Mbit/s em 1080p60 e mais em 4K. Só na rede local ou pela VPN (ZeroTier, Tailscale), nunca pelo relé; fora delas, e se quem assiste não tiver a biblioteca, vale o automático."
-        } else {
-            "PyroWave: falta a libpyrowave-shared-1.dll ao lado do Prisma, então vale o automático. Com ela, uns 200 Mbit/s em 1080p60, só na rede local ou pela VPN, nunca pelo relé."
-        };
-        ui.c.text_wrap(foot, s, 12.0, WARN, Weight::Regular);
+        ui.c.text_wrap(foot, "PyroWave: uns 200 Mbit/s em 1080p60 e mais em 4K. Só na rede local ou pela VPN (ZeroTier, Tailscale), nunca pelo relé; fora delas, e com quem assiste numa versão sem ele, vale o automático.", 12.0, WARN, Weight::Regular);
     } else {
         ui.c.text_wrap(foot, "Os automáticos seguem quem assiste: a altura da tela, o menor entre os Hz dos dois lados e o melhor codec que os dois têm. O 4:4:4 e o HDR10 caem sozinhos se o outro lado não tiver.", 12.0, MUTED, Weight::Regular);
     }
