@@ -235,7 +235,7 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
         ui.c.round(r, 8.0, if current { ACCENT } else if ui.is_hover(r) { CARD2 } else { CARD });
         ui.c.icon(r.x + 6.0, r.y + 6.0, 18.0, icon, if current { ON_ACCENT } else { ACCENT });
         ui.tip(r, tip);
-        if ui.hit(tip, r) && !current {
+        if ui.hit(&format!("nav-help-{tip}"), r) && !current {
             if *page == Page::Report {
                 app.report.area = report::area_of(app.page);
             }
@@ -258,7 +258,7 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
         let color = if current { WHITE } else { TEXT2 };
         ui.c.icon(r.x + 12.0, r.y + (r.h - 18.0) / 2.0, 18.0, icon, color);
         ui.c.text(rect(r.x + 42.0, r.y, r.w - 48.0, r.h), label, 14.0, color, Align::Left, Weight::Regular);
-        if ui.hit(label, r) && !current {
+        if ui.hit(&format!("nav-{label}"), r) && !current {
             crate::report::note(&format!("page: {label}"));
             app.page = *page;
             app.refresh_page();

@@ -65,6 +65,10 @@ struct State {
     test_invite: Option<Shown>,
     /// Fotos de teste: pessoas conectadas de exemplo.
     test_room: Option<Vec<stream::host::Present>>,
+    /// Aparelhos pareados: 0 são os PCs que este assiste, 1 os que assistem a este.
+    dev_tab: usize,
+    /// Aparelho sendo renomeado: id e o texto do campo.
+    renaming: Option<(String, String)>,
 }
 
 /// Fotos de teste: `--test-tab=N` abre numa aba e `--test-invite` mostra a janela do convite.
@@ -74,6 +78,9 @@ fn test_setup() -> State {
         for a in std::env::args() {
             if let Some(n) = a.strip_prefix("--test-tab=").and_then(|n| n.parse().ok()) {
                 s.tab = n;
+            }
+            if let Some(n) = a.strip_prefix("--test-devtab=").and_then(|n| n.parse().ok()) {
+                s.dev_tab = n;
             }
             if a == "--test-room" {
                 use stream::host::Present;
@@ -262,7 +269,8 @@ fn room_tab(ui: &mut Ui, app: &mut App, present: &[stream::host::Present], x: f3
         let kick_r = rect(ban_r.x - 8.0 - btn, row.y + 12.0, btn, 32.0);
         let sel_r = rect(kick_r.x - 12.0 - sel_w, row.y + 10.0, sel_w, 36.0);
         let tw = (sel_r.x - 12.0 - px).max(40.0);
-        ui.c.text_raw(rect(px, row.y + 8.0, tw, 20.0), &p.name, 14.0, TEXT, Align::Left, Weight::Semibold);
+        let shown = app.cfg.share_names.iter().find(|n| n.0 == p.key).map_or(p.name.as_str(), |n| n.1.as_str());
+        ui.c.text_raw(rect(px, row.y + 8.0, tw, 20.0), shown, 14.0, TEXT, Align::Left, Weight::Semibold);
         ui.c.text_raw(rect(px, row.y + 30.0, tw, 18.0), &route_text(&p.route), 12.0, MUTED, Align::Left, Weight::Regular);
         if ui.button(&format!("sh-kick{i}"), kick_r, "Desconectar", false) {
             kick = Some(i);
@@ -600,14 +608,37 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
     }
     y += 40.0;
 
-    let rows = stream::device_rows();
+    let all = stream::device_rows();
+    // Duas abas: os PCs que este assiste e os que assistem a este.
+    let mut tx = rx;
+    for (k, name) in ["Este PC assiste", "Assistem a este PC"].iter().enumerate() {
+        let label = format!("{} ({})", crate::i18n::tr(name), all.iter().filter(|d| d.viewer == (k == 1)).count());
+        let tw = crate::ui::gfx::measure(&label, 13.0, Weight::Semibold, None).0 + 24.0;
+        let tr_ = rect(tx, y, tw, 30.0);
+        let on = st.dev_tab == k;
+        if on {
+            ui.c.round(tr_, 8.0, CARD2);
+        }
+        if ui.hit(&format!("sh-dtab{k}"), tr_) {
+            st.dev_tab = k;
+            st.renaming = None;
+        }
+        ui.c.text_raw(tr_, &label, 13.0, if on { TEXT } else { MUTED }, Align::Center, if on { Weight::Semibold } else { Weight::Regular });
+        tx += tw + 4.0;
+    }
+    y += 38.0;
+    let rows: Vec<_> = all.iter().filter(|d| d.viewer == (st.dev_tab == 1)).collect();
     const ROW_V: f32 = 132.0;
     const ROW_H: f32 = 64.0;
     let list = rect(rx, y, rw, r.bottom() - y - 12.0);
     let content: f32 = rows.iter().map(|d| if d.viewer { ROW_V } else { ROW_H }).sum::<f32>().max(1.0);
-    if rows.is_empty() {
+    if all.is_empty() {
         ui.c.text_wrap(rect(rx, y, rw, 60.0), "Nenhum aparelho pareado. Crie um convite neste PC e digite o código no outro, ou o contrário.", 13.0, MUTED, Weight::Regular);
+    } else if rows.is_empty() {
+        let empty = if st.dev_tab == 0 { "Nenhum PC para assistir. Digite aqui o código de um convite feito no outro PC." } else { "Nenhum PC assiste a este. Crie um convite e digite o código no outro PC." };
+        ui.c.text_wrap(rect(rx, y, rw, 60.0), empty, 13.0, MUTED, Weight::Regular);
     }
+    let mut renamed: Option<(String, String)> = None;
     let mut changes: Vec<(String, u8, bool)> = Vec::new();
     let mut forget: Option<(String, String)> = None;
     let mut watch: Option<String> = None;
@@ -619,11 +650,31 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
         ui.c.round(row, 8.0, CARD2);
         let px = row.x + 12.0;
         let pw = row.w - 24.0;
-        ui.c.text_raw(rect(px, row.y + 8.0, pw - 100.0, 20.0), &d.name, 14.0, TEXT, Align::Left, Weight::Semibold);
-        let role = if d.viewer { "Assiste a este PC" } else { "Este PC assiste a ele" };
-        ui.c.text(rect(px, row.y + 28.0, pw - 100.0, 18.0), role, 12.0, MUTED, Align::Left, Weight::Regular);
+        // Botões da direita: Esquecer, Renomear e, nos PCs que este assiste, Assistir.
+        let buttons = if d.viewer { 2.0 } else { 3.0 } * 92.0;
+        let name_w = (pw - buttons - 8.0).max(60.0);
+        let alias = app.cfg.share_names.iter().find(|n| n.0 == d.id).map(|n| n.1.clone());
+        let editing = st.renaming.as_ref().is_some_and(|e| e.0 == d.id);
+        if editing {
+            let field = &mut st.renaming.as_mut().unwrap().1;
+            ui.search(&format!("sh-rn{i}"), rect(px, row.y + 6.0, name_w, 36.0), field, &d.name);
+        } else {
+            ui.c.text_raw(rect(px, row.y + 8.0, name_w, 20.0), alias.as_deref().unwrap_or(&d.name), 14.0, TEXT, Align::Left, Weight::Semibold);
+            // Com outro nome, o original fica embaixo, menor e mais claro.
+            if alias.is_some() {
+                ui.c.text_raw(rect(px, row.y + 29.0, name_w, 16.0), &d.name, 11.0, MUTED, Align::Left, Weight::Regular);
+            }
+        }
         if ui.button(&format!("sh-forget{i}"), rect(row.right() - 96.0, row.y + 10.0, 84.0, 32.0), "Esquecer", false) {
             forget = Some((d.id.clone(), d.name.clone()));
+        }
+        let rn_r = rect(row.right() - 188.0, row.y + 10.0, 84.0, 32.0);
+        if editing {
+            if ui.button(&format!("sh-rn-ok{i}"), rn_r, "Salvar", true) {
+                renamed = st.renaming.take();
+            }
+        } else if ui.button(&format!("sh-rn-go{i}"), rn_r, "Renomear", false) {
+            st.renaming = Some((d.id.clone(), alias.clone().unwrap_or_default()));
         }
         if d.viewer {
             let cw = (pw / 3.0).floor();
@@ -641,23 +692,42 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
             if perms != d.perms || changed_ask {
                 changes.push((d.id.clone(), perms, ask));
             }
-        } else if ui.button(&format!("sh-watch{i}"), rect(row.right() - 188.0, row.y + 10.0, 84.0, 32.0), "Assistir", true) {
+        } else if ui.button(&format!("sh-watch{i}"), rect(row.right() - 280.0, row.y + 10.0, 84.0, 32.0), "Assistir", true) {
             watch = Some(d.name.clone());
         }
         yy += rh;
     }
     ui.end_scroll();
+    // Nome vazio volta ao original.
+    if let Some((id, name)) = renamed {
+        let name: String = name.chars().filter(|c| !c.is_control() && *c != '|').take(40).collect();
+        app.cfg.share_names.retain(|n| n.0 != id);
+        if !name.trim().is_empty() {
+            app.cfg.share_names.push((id, name.trim().to_string()));
+        }
+        app.cfg.save();
+    }
     for (id, perms, ask) in changes {
         if stream::set_device(&id, perms, ask).is_err() {
             app.toast.info("Não deu para salvar. Com o serviço, abra o Prisma como administrador.");
+        }
+        // Conectado agora: vale na hora, sem reconectar.
+        if stream::host::room().iter().any(|p| p.key == id) && stream::host::ask_room(&format!("acesso {id} {perms}")).is_err() {
+            app.toast.info("Não deu para mudar na hora. Vale na próxima conexão.");
         }
     }
     if let Some((id, name)) = forget {
         ui.ask(&format!("sh-forget-{id}"), "Esquecer este aparelho?", &format!("«{name}» vai precisar de um convite novo para conectar."));
     }
     for d in &rows {
-        if ui.answered(&format!("sh-forget-{}", d.id)) && stream::forget_device(d.viewer, &d.id).is_err() {
-            app.toast.info("Não deu para salvar. Com o serviço, abra o Prisma como administrador.");
+        if ui.answered(&format!("sh-forget-{}", d.id)) {
+            if stream::forget_device(d.viewer, &d.id).is_err() {
+                app.toast.info("Não deu para salvar. Com o serviço, abra o Prisma como administrador.");
+            } else if !all.iter().any(|o| o.id == d.id && o.viewer != d.viewer) {
+                // O nome dado sai junto, a menos que o mesmo aparelho continue na outra aba.
+                app.cfg.share_names.retain(|n| n.0 != d.id);
+                app.cfg.save();
+            }
         }
     }
     if let Some(name) = watch {
@@ -795,8 +865,12 @@ fn host_tab(ui: &mut Ui, st: &mut State, o: &mut Opts, x: f32, top: f32, w: f32,
         v.dedup();
         st.sound_apps = (v, Some(Instant::now()));
     }
+    // Com os programas de chamada fora do som, eles também saem desta lista.
+    if o.no_calls && stream::host::is_call_app(&o.sound_app) {
+        o.sound_app.clear();
+    }
     let mut vals: Vec<String> = vec![String::new()];
-    vals.extend(st.sound_apps.0.iter().cloned());
+    vals.extend(st.sound_apps.0.iter().filter(|e| !(o.no_calls && stream::host::is_call_app(e))).cloned());
     if !o.sound_app.is_empty() && !vals.contains(&o.sound_app) {
         vals.push(o.sound_app.clone());
     }

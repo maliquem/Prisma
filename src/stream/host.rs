@@ -432,6 +432,10 @@ pub fn run(port: u16, control: bool) {
 /// Programas de chamada: o som deles sai do que vai para quem assiste, se a opção estiver ligada.
 const CALL_APPS: [&str; 10] = ["discord.exe", "ms-teams.exe", "teams.exe", "zoom.exe", "whatsapp.exe", "whatsapp.root.exe", "skype.exe", "telegram.exe", "slack.exe", "signal.exe"];
 
+pub fn is_call_app(exe: &str) -> bool {
+    CALL_APPS.iter().any(|c| c.eq_ignore_ascii_case(exe))
+}
+
 /// Processos pelo nome do exe, só os de cima da árvore (a captura por processo leva a árvore toda).
 fn top_pids(names: &[&str]) -> Vec<(u32, String)> {
     use windows::Win32::System::Diagnostics::ToolHelp::*;
@@ -466,7 +470,10 @@ enum SoundFrom {
 }
 
 fn sound_from(opts: &Opts, viewer_here: Option<u32>) -> SoundFrom {
-    if !opts.sound_app.is_empty() {
+    // Tirar o programa de chamada vale mais que escolher ele como o som que vai.
+    if opts.no_calls && is_call_app(&opts.sound_app) {
+        eprintln!("som: {} é programa de chamada e a opção tira ele do som; vai o resto do PC", opts.sound_app);
+    } else if !opts.sound_app.is_empty() {
         match top_pids(&[opts.sound_app.as_str()]).first() {
             Some((pid, _)) => {
                 eprintln!("som: só de {}", opts.sound_app);

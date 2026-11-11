@@ -19,7 +19,7 @@ All of this can be changed later in **Settings**. Prisma stays in the Windows tr
 
 ## Guide and Report a bug
 
-Both sit next to the Prisma name, at the top of the window, always in view. Hover over a button to see what it does.
+Both sit next to the Prisma name, at the top of the window, always in view. Hover over a button to see what it does. In the guide, clicking a topic on the left jumps straight to it.
 
 ![Guide and Report a bug buttons](help-en.png)
 
@@ -36,7 +36,9 @@ Shows what is using your PC right now: CPU per core, GPU, RAM and VRAM, plus the
 
 Shows performance over the game and limits FPS. Readings come from Windows events, with nothing inside the game. It needs Prisma as administrator.
 
-It only shows up when you ask: through the shortcuts, or on its own for the games you add to the list in the Meter tab. Turning it on by shortcut in a game adds that game to the list, with the bar or panel you called; pressing the same shortcut again hides the meter, and the game stays on the list. To have it on every game, pick All except listed games under When the meter turns on. **Add from the program list** also brings the games installed through Steam and Epic.
+It only shows up through the shortcut, and measures the program in focus when you press it. Turning it on by shortcut in a game adds that game to the list, to keep its limit, HDR and profile; pressing the same shortcut again hides the meter, and the game stays on the list. **Add from the program list** also brings the games installed through Steam and Epic.
+
+- **Automatic HDR:** turns on Windows HDR when the game opens and off when it closes. If HDR was already on, it stays on. **Only for listed games** covers the games on the list; **All** covers every game the Power game mode recognizes, and **Do not turn on**, in the list, leaves a game out.
 
 ### Compact bar
 
@@ -56,8 +58,9 @@ Sits on the right or left of the screen and shows everything in one column. Shor
 - **Frame time:** the time of each frame, in milliseconds. Low variation is good.
 - **PC latency:** appears only in games with Reflex.
 - **Upscaling, frame generation and Reflex:** shows what the game loaded.
+- **Power plan:** shows the Windows plan in use, and the arrows switch to another.
 
-To use the panel buttons inside a game, press **Ctrl + Alt + 5**. This unlocks the mouse and keyboard: arrows move through the options and change the chosen one, and clicks work too. To write the limit, type the number and press Enter. Press the shortcut again, or Esc, to go back to the game. Ctrl + Alt + 0 hides the meter and resets the readings.
+To use the panel buttons inside a game, press **Ctrl + Alt + 5**. The game stays in front, and this unlocks the mouse and keyboard: arrows move through the options and change the chosen one, and clicks work too. To write the limit, type the number and press Enter. Press the shortcut again, or Esc, to go back to the game. Ctrl + Alt + 0 hides the meter and resets the readings.
 
 ### FPS limiter
 
@@ -69,7 +72,8 @@ With the limiter on, each game keeps its own limit. In the game list on the Mete
 - **Injection method:** the default. A small Prisma module enters the game and the limit changes right away, in DirectX 10, 11 and 12.
 - **Driver method:** writes the limit to the NVIDIA driver. It applies only the next time the game opens.
 - **Limiting:** Real FPS counts the frames the game makes. With generation counts the frames that reach the screen.
-- **DLSS profile:** chooses the profile the NVIDIA driver uses for that game. It applies on reopening the game.
+- **DLSS profile:** chooses the profile the NVIDIA driver uses for that game. It applies on reopening the game. It only appears for games that ship DLSS; for the others, the column says No DLSS.
+- **Auto HDR:** the same Auto HDR per game choice as the HDR tab (Default, Force or Turn off). Changing it here changes it there.
 - **Shortcuts:** Ctrl + Alt + 3 turns it on and off. Ctrl + Alt + up or down arrow changes the limit. The limit goes from 20 to 1023.
 
 If injection fails, the game crashes or an anti-cheat is detected, Prisma moves to the driver on its own and tells you.
@@ -79,9 +83,9 @@ If injection fails, the game crashes or an anti-cheat is detected, Prisma moves 
 
 ### Data log
 
-Records performance to study later. It only runs if you turn it on, on the Meter page or with Ctrl + Alt + 4. Choose 1, 5 or 10 minutes of play, or no limit.
+Records performance to study later. It only runs if you turn it on, on the Meter page or with Ctrl + Alt + 4. Type how many minutes of play to record (5 is the default, 0 is no limit).
 
-Files go to Documents, Prisma, Logs: every frame, every second, the CPU of each game thread and a summary at the end. In games with a detected anti-cheat, the thread reading stays off.
+Files go to Documents, Prisma, Logs: every frame, every second, the CPU of each game thread and a summary at the end. On NVIDIA cards, each second also carries the GPU for optimization work: memory controller use, power against the limit, what held the clock back (power, temperature), PCIe traffic and total VRAM; the top of the file has the driver, the maximum clocks, the power limit and the PCIe link, and the summary says whether the limit was power, temperature or VRAM. In games with a detected anti-cheat, the thread reading stays off.
 
 ## Disks and networks
 
@@ -166,6 +170,8 @@ Makes the window in focus borderless fullscreen. Shortcut: Ctrl + Alt + F. Anyth
 Controls the volume of each program. The keyboard volume keys, with a modifier (Ctrl by default), change only the program in focus. Prisma remembers the volume of each program.
 
 - **You can:** choose the output and input device of each program, and add programs by hand.
+- **Pin:** the pin next to the name keeps the program on the list even when closed, saving its volume, output and input. When it opens, it comes back at the saved volume.
+- **Default device shortcuts:** each shortcut switches the Windows default output and input at once, for example Ctrl + Alt + Num 1 for the TV and the headset. **Add** creates a shortcut; pick the output and input (or Do not change) and click the field to record the keys. The X deletes it.
 - **Keep the sound awake:** plays a stream with no audible sound, so HDMI and Dolby don't cut the start of the next sound. It stops on its own after 10 minutes without use.
 - **Limit:** switching devices uses an internal Windows feature, and some programs only switch on reopening.
 
@@ -194,8 +200,9 @@ In testing. Shows and controls another PC over the internet, for remote access o
 - **Pair, once:** on the PC that will be seen, choose what whoever pairs can do and click **Create invite**. A window shows a short code, like `K7M2-QX9P`, that works once, for 10 minutes. In it, **Copy code** copies the code, **Copy link** copies a link and **Share** opens the Windows share window, to send it by email, Discord, WhatsApp and others. Whoever opens the link on a PC with Prisma sees Prisma open on the right page and ask whether to pair. On the other PC, you can also type the code under **Pair with another PC** and click **Pair**. Both show the same six-digit confirmation code: check it before accepting. When accepting, **Yes** trusts the device, and **No** pairs but asks on every connection.
 - **Code and long invite:** the code is kept for 10 minutes on three public name relays (the same system iroh uses to find PCs), signed and with nothing that identifies you. If no relay answers, the window says so, and **Copy long invite** copies the full invite, which works without any relay.
 - **Connect:** with sharing on at the host, click **Watch** on the device in the list. The connection tries the direct path first, then your VPN (Tailscale, ZeroTier) and, if nothing gets through, iroh's public relays. Everything is end-to-end encrypted.
-- **Permissions per device:** sound, controller, keyboard, mouse, copy and paste (text, both ways) and secure screen. Tick and untick them in the list; they apply on the next connection. With none, the device only watches.
-- **Host tab:** this PC's name for others, the monitor, the maximum resolution, frames per second, frame pacing (only when the screen changes, or constant, for a fixed rhythm), priority (lowest delay, balanced or quality), the codec (AV1, HEVC or H.264), the bandwidth limit, 10-bit HDR10 and 4:4:4. The automatic values follow the viewer. It also picks the sound that is sent (the whole PC or a single program), leaves the call app out of the sound, limits how many people can join, keeps one person at a time on the mouse and keyboard, gives the host's mouse and keyboard priority and refuses connections while this PC is viewing another.
+- **Paired devices:** two tabs split the PCs this one watches from the ones watching this one. **Rename** gives the device another name, on this PC only; the original name stays below, smaller. Saving with the field empty goes back to the original.
+- **Permissions per device:** sound, controller, keyboard, mouse, copy and paste (text, both ways) and secure screen. Tick and untick them in the list; if the device is connected, they apply right away. With none, the device only watches.
+- **Host tab:** this PC's name for others, the monitor, the maximum resolution, frames per second, frame pacing (only when the screen changes, or constant, for a fixed rhythm), priority (lowest delay, balanced or quality), the codec (AV1, HEVC or H.264), the bandwidth limit, 10-bit HDR10 and 4:4:4. The automatic values follow the viewer. It also picks the sound that is sent (the whole PC or a single program), leaves the call app out of the sound (it then also leaves the list of sounds to send), limits how many people can join, keeps one person at a time on the mouse and keyboard, gives the host's mouse and keyboard priority and refuses connections while this PC is viewing another.
 - **Viewer tab:** open in borderless fullscreen, VSync, immersive mode (the mouse stays inside the window, and the Windows key and Alt + Tab go to the other PC), ask for 4:4:4, start muted, the latency meter (off, simple or detailed), the frames per second asked of the host (Automatic follows this screen's Hz) and the warning when the connection gets worse.
 - **Meter and warning:** simple shows the end-to-end delay with a green, yellow or red dot. Detailed also shows the network, the video, frames per second, bandwidth, decoding, lost frames and the route. The warning shows for a few seconds when the network loses more than 2% of frames, when latency varies by more than 10 ms or rises for 3 seconds in a row.
 - **Connection menu:** Ctrl + Alt + Shift + P, in the viewer window, opens the menu with the connection's video, fullscreen, immersive mode (off, mouse, keyboard or both), frames per second, meter, warning, sound, Ctrl + Alt + Del and **Disconnect**, each with its shortcut beside it. The mouse and the arrows, Tab, Enter and Esc work. Changing the frames per second restarts the video right away.

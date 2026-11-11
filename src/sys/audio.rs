@@ -281,3 +281,31 @@ pub fn route_of(pid: u32, capture: bool) -> Option<String> {
         Some(h.to_string())
     }
 }
+
+// Aparelho padrão do Windows: a interface que a tela Som do Painel de Controle usa, também
+// sem documentação. `SetDefaultEndpoint` é o 14º método (3 do IUnknown e 10 antes dele).
+const POLICY_CLIENT: GUID = GUID::from_u128(0x870af99c_171d_4f9e_af0d_e63df40c2bc9);
+const POLICY_CONFIG: GUID = GUID::from_u128(0xf8679f50_850a_41cf_9c72_430f290290c8);
+const SET_DEFAULT: usize = 13;
+
+/// Torna `id` o aparelho padrão do Windows (saída ou entrada, para os três usos).
+pub fn set_default(id: &str) -> bool {
+    if id.is_empty() {
+        return false;
+    }
+    unsafe {
+        let Ok(unk) = CoCreateInstance::<_, IUnknown>(&POLICY_CLIENT, None, CLSCTX_ALL) else { return false };
+        let mut p = std::ptr::null_mut();
+        if unk.query(&POLICY_CONFIG, &mut p).is_err() || p.is_null() {
+            return false;
+        }
+        let f: unsafe extern "system" fn(*mut core::ffi::c_void, PCWSTR, i32) -> HRESULT = std::mem::transmute(method(p, SET_DEFAULT));
+        let wide = HSTRING::from(id);
+        let mut ok = true;
+        for role in [eConsole, eMultimedia, eCommunications] {
+            ok &= f(p, PCWSTR(wide.as_ptr()), role.0).is_ok();
+        }
+        release(p);
+        ok
+    }
+}

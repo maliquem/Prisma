@@ -8,7 +8,10 @@ const ROW_NARROW: f32 = 112.0;
 /// Largura dos controles de cada jogo e o mínimo que sobra para o nome ao lado deles.
 const CONTROLS_W: f32 = 760.0;
 const NAME_MIN: f32 = 250.0;
-const ITEMS: [(&str, u32); 15] = [
+/// Minutos do registro sendo digitados.
+static LOG_FIELD: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+const ITEMS: [(&str, u32); 16] = [
     ("FPS e médias", meter::ITEM_FPS),
     ("Frame time", meter::ITEM_FRAME),
     ("Latência do PC", meter::ITEM_LATENCY),
@@ -24,6 +27,7 @@ const ITEMS: [(&str, u32); 15] = [
     ("Modo de exibição", meter::ITEM_MODE),
     ("Tempo de jogo", meter::ITEM_TIME),
     ("Registro", meter::ITEM_LOG),
+    ("Plano de energia", meter::ITEM_POWER),
 ];
 
 fn opts(v: &[&str]) -> Vec<String> {
@@ -34,19 +38,15 @@ fn general(ui: &mut Ui, app: &mut App, r: Rect) {
     ui.card(r);
     let (x, w) = (r.x + 16.0, (r.w - 56.0) / 3.0);
     let mut changed = false;
-    ui.label(rect(x, r.y + 12.0, w, 18.0), "Quando o medidor liga", TEXT2);
-    let mut s = app.cfg.meter_rule as usize;
-    if ui.select("mt-rule", rect(x, r.y + 34.0, w, 40.0), &opts(&["Só nos jogos da lista", "Em todos, menos os da lista"]), &mut s) {
-        app.cfg.meter_rule = s as u8;
-        changed = true;
-    }
-    ui.label(rect(x, r.y + 86.0, w, 18.0), "HDR automático", TEXT2);
-    let mut s = app.cfg.meter_hdr as usize;
-    if ui.select("mt-hdr", rect(x, r.y + 108.0, w, 40.0), &opts(&["Desligado", "Só na lista", "Todos, menos a lista"]), &mut s) {
-        app.cfg.meter_hdr = s as u8;
-        changed = true;
-    }
-    ui.c.text_wrap(rect(x, r.y + 152.0, w, 36.0), "Liga o HDR do Windows quando o jogo abrir e volta quando fechar. É separado do medidor.", 12.0, MUTED, Weight::Regular);
+    ui.label(rect(x, r.y + 12.0, w, 18.0), "HDR automático", TEXT2);
+    let hdr_r = rect(x, r.y + 34.0, w, 40.0);
+    ui.c.text_wrap(
+        rect(x, r.y + 82.0, w, 104.0),
+        "Liga o HDR do Windows quando o jogo abre e desliga quando ele fecha. Se o HDR já estava ligado, ele continua ligado. Em Todos, vale para todo jogo que o modo jogo do Energia reconhece; Não ligar, na lista, tira um jogo. O medidor só aparece pelo atalho.",
+        12.0,
+        MUTED,
+        Weight::Regular,
+    );
 
     let kx = x + w + 12.0;
     let keys: [(&str, &str, u8); 3] = [("mt-k1", "Mostrar compacto", 0), ("mt-k2", "Mostrar completo", 1), ("mt-k3", "Esconder tudo", 2)];
@@ -77,6 +77,12 @@ fn general(ui: &mut Ui, app: &mut App, r: Rect) {
     let mut s = app.cfg.meter_pos_full as usize;
     if ui.select("mt-pf", rect(kx, r.y + 218.0, w, 40.0), &opts(&["Lado direito", "Lado esquerdo"]), &mut s) {
         app.cfg.meter_pos_full = s as u8;
+        changed = true;
+    }
+    // Lista por último, para abrir por cima do resto.
+    let mut s = app.cfg.meter_hdr as usize;
+    if ui.select("mt-hdr", hdr_r, &opts(&["Desligado", "Só na lista", "Todos"]), &mut s) {
+        app.cfg.meter_hdr = s as u8;
         changed = true;
     }
     if changed || hk {
@@ -137,11 +143,18 @@ fn log(ui: &mut Ui, app: &mut App, r: Rect) {
     ui.label(rect(r.x + 16.0, r.y + 36.0, r.w - 32.0, 18.0), "Grava cada quadro, cada segundo e a CPU de cada thread do jogo, para estudar desempenho. Só roda se você ligar.", MUTED);
     let (x, w) = (r.x + 16.0, (r.w - 56.0) / 3.0);
     let mut changed = false;
-    ui.label(rect(x, r.y + 62.0, w, 18.0), "Tempo de jogo gravado", TEXT2);
-    let mut s = app.cfg.meter_log_time as usize;
-    if ui.select("mt-ltime", rect(x, r.y + 82.0, w, 36.0), &opts(&["1 minuto", "5 minutos", "10 minutos", "Sem limite"]), &mut s) {
-        app.cfg.meter_log_time = s as u8;
-        changed = true;
+    ui.label(rect(x, r.y + 62.0, w, 18.0), "Minutos de jogo gravados (0 é sem limite)", TEXT2);
+    {
+        let mut guard = LOG_FIELD.lock().unwrap();
+        let field = guard.get_or_insert_with(|| app.cfg.meter_log_min.to_string());
+        field.retain(|c| c.is_ascii_digit());
+        field.truncate(4);
+        ui.search("mt-ltime", rect(x, r.y + 82.0, w, 36.0), field, "5");
+        let min = if field.is_empty() { 5 } else { field.parse().unwrap_or(5) };
+        if min != app.cfg.meter_log_min {
+            app.cfg.meter_log_min = min;
+            changed = true;
+        }
     }
     let kx = x + w + 12.0;
     ui.label(rect(kx, r.y + 62.0, w, 18.0), "Ligar e desligar", TEXT2);
@@ -183,7 +196,7 @@ fn games(ui: &mut Ui, app: &mut App, r: Rect) {
     let narrow = is_narrow(r.w);
     let row_h = if narrow { ROW_NARROW } else { ROW };
     let heads = |ui: &mut Ui, y: f32| {
-        for (x, name) in [(view_x, "Abrir em"), (limit_x, "Limitador"), (fps_x, "FPS"), (how_x, "Método"), (unit_x, "Limitando"), (hdr_x, "HDR"), (preset_x, "Perfil DLSS")] {
+        for (x, name) in [(view_x, "Auto HDR"), (limit_x, "Limitador"), (fps_x, "FPS"), (how_x, "Método"), (unit_x, "Limitando"), (hdr_x, "HDR"), (preset_x, "Perfil DLSS")] {
             ui.c.text(rect(x, y, 104.0, 18.0), name, 12.0, MUTED, Align::Left, Weight::Regular);
         }
     };
@@ -191,7 +204,7 @@ fn games(ui: &mut Ui, app: &mut App, r: Rect) {
         heads(ui, y);
     }
     let cap = crate::meter::first_limit(app.refresh_hz());
-    let (mut remove, mut limit, mut preset, mut changed, mut blocked) = (None, None, None, false, false);
+    let (mut remove, mut limit, mut preset, mut changed, mut blocked, mut auto_hdr) = (None, None, None, false, false, None);
     let count = app.cfg.meter_games.len();
     if count == 0 {
         ui.c.text(rect(r.x + 16.0, y + 24.0, r.w - 32.0, 22.0), "Nenhum jogo ainda. Use Adicionar.", 13.0, MUTED, Align::Left, Weight::Regular);
@@ -216,11 +229,12 @@ fn games(ui: &mut Ui, app: &mut App, r: Rect) {
         }
         let controls = if narrow { top + 68.0 } else { top + 8.0 };
         let row = |x: f32, w: f32| rect(x, controls, w, 36.0);
-        let mut s = g.view as usize;
-        if ui.select(&format!("mt-v{i}"), row(view_x, 96.0), &opts(&["Compacto", "Completo", "Nenhum"]), &mut s) {
-            g.view = s as u8;
-            changed = true;
+        // A mesma escolha da aba HDR: mudar aqui muda lá.
+        let mut s = app.cfg.hdr_games.iter().find(|h| h.exe.eq_ignore_ascii_case(&g.exe)).map_or(0, |h| h.mode as usize);
+        if ui.select(&format!("mt-v{i}"), row(view_x, 96.0), &opts(&["Padrão", "Forçar", "Desligar"]), &mut s) {
+            auto_hdr = Some((g.exe.clone(), g.path.clone(), s as u8));
         }
+        let g = &mut app.cfg.meter_games[i];
         let mut s = g.limit_mode as usize;
         if ui.select(&format!("mt-l{i}"), row(limit_x, 110.0), &opts(&["Desligado", "Automático", "Manual"]), &mut s) {
             g.limit_mode = s as u8;
@@ -266,11 +280,18 @@ fn games(ui: &mut Ui, app: &mut App, r: Rect) {
             g.hdr = s as u8;
             changed = true;
         }
-        let mut s = g.preset as usize;
-        if ui.select(&format!("mt-p{i}"), row(preset_x, 92.0), &opts(&["Do jogo", "Recomendado", "K", "L", "M"]), &mut s) {
-            g.preset = s as u8;
-            preset = Some(i);
-            changed = true;
+        // O perfil é do DLSS: sem ele no jogo, não há o que escolher.
+        match crate::meter::has_dlss(&g.path) {
+            Some(true) => {
+                let mut s = g.preset as usize;
+                if ui.select(&format!("mt-p{i}"), row(preset_x, 92.0), &opts(&["Do jogo", "Recomendado", "K", "L", "M"]), &mut s) {
+                    g.preset = s as u8;
+                    preset = Some(i);
+                    changed = true;
+                }
+            }
+            Some(false) => ui.c.text(row(preset_x, 92.0), "Sem DLSS", 12.0, MUTED, Align::Left, Weight::Regular),
+            None => ui.c.text(row(preset_x, 92.0), "…", 12.0, MUTED, Align::Left, Weight::Regular),
         }
         let b = rect(r.right() - 38.0, controls + 6.0, 24.0, 24.0);
         if ui.is_hover(b) {
@@ -283,6 +304,17 @@ fn games(ui: &mut Ui, app: &mut App, r: Rect) {
     }
     if blocked {
         app.toast.info("Injeção bloqueada: anti-cheat detectado.");
+    }
+    if let Some((exe, path, mode)) = auto_hdr {
+        if crate::sys::autohdr::apply(&exe, mode) {
+            match app.cfg.hdr_games.iter_mut().find(|h| h.exe.eq_ignore_ascii_case(&exe)) {
+                Some(h) => h.mode = mode,
+                None => app.cfg.hdr_games.push(crate::config::HdrGame { exe, path, mode }),
+            }
+            changed = true;
+        } else {
+            app.toast.info("Não consegui gravar a escolha.");
+        }
     }
     if let Some(i) = limit {
         let g = app.cfg.meter_games[i].clone();

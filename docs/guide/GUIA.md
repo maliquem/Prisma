@@ -19,7 +19,7 @@ Tudo isso pode ser mudado depois em **Configurações**. O Prisma fica na bandej
 
 ## Guia e Reportar bug
 
-Os dois ficam ao lado do nome Prisma, no alto da janela, sempre à vista. Passe o mouse em cima para ver o que cada botão faz.
+Os dois ficam ao lado do nome Prisma, no alto da janela, sempre à vista. Passe o mouse em cima para ver o que cada botão faz. No guia, clicar num tópico à esquerda pula direto para ele.
 
 ![Botões do guia e de reportar bug](help-pt.png)
 
@@ -36,7 +36,9 @@ Mostra o que está usando o PC agora: CPU por núcleo, GPU, RAM e VRAM, e o uso 
 
 Mostra o desempenho por cima do jogo e limita o FPS. As leituras vêm dos eventos do Windows, sem nada dentro do jogo. Precisa do Prisma como administrador.
 
-Ele só aparece quando você pede: pelos atalhos, ou sozinho nos jogos que você adicionar à lista da aba Medidor. Ligar pelo atalho num jogo já coloca esse jogo na lista, com a barra ou o painel que você chamou; apertar o mesmo atalho de novo esconde o medidor, e o jogo continua na lista. Para ele aparecer em todo jogo, escolha Em todos, menos os da lista em Quando o medidor liga. **Adicionar da lista de programas** também traz os jogos instalados pela Steam e pela Epic.
+Ele só aparece pelo atalho, e mede o programa em foco quando você aperta. Ligar pelo atalho num jogo já coloca esse jogo na lista, para guardar o limite, o HDR e o perfil dele; apertar o mesmo atalho de novo esconde o medidor, e o jogo continua na lista. **Adicionar da lista de programas** também traz os jogos instalados pela Steam e pela Epic.
+
+- **HDR automático:** liga o HDR do Windows quando o jogo abre e desliga quando ele fecha. Se o HDR já estava ligado, ele continua ligado. **Só na lista** vale para os jogos da lista; **Todos** vale para todo jogo que o modo jogo do Energia reconhece, e **Não ligar**, na lista, tira um jogo.
 
 ### Barra compacta
 
@@ -56,8 +58,9 @@ Fica à direita ou à esquerda da tela e mostra tudo em uma coluna. Atalho: Ctrl
 - **Frame time:** o tempo de cada quadro, em milissegundos. Variação baixa é bom.
 - **Latência do PC:** só aparece em jogos com Reflex.
 - **Upscaling, geração de quadros e Reflex:** mostra o que foi carregado pelo jogo.
+- **Plano de energia:** mostra o plano do Windows em uso, e as setas trocam por outro.
 
-Para usar os botões do painel dentro do jogo, aperte **Ctrl + Alt + 5**. Isso libera o mouse e o teclado: as setas andam pelas opções e mudam a escolhida, e o clique também funciona. Para escrever o limite, digite o número e aperte Enter. Aperte o atalho de novo, ou Esc, para voltar ao jogo. Ctrl + Alt + 0 esconde o medidor e zera as medições.
+Para usar os botões do painel dentro do jogo, aperte **Ctrl + Alt + 5**. O jogo continua em primeiro plano, e isso libera o mouse e o teclado: as setas andam pelas opções e mudam a escolhida, e o clique também funciona. Para escrever o limite, digite o número e aperte Enter. Aperte o atalho de novo, ou Esc, para voltar ao jogo. Ctrl + Alt + 0 esconde o medidor e zera as medições.
 
 ### Limitador de FPS
 
@@ -69,7 +72,8 @@ Com o limitador ligado, cada jogo guarda o próprio limite. Na lista de jogos da
 - **Método Injeção:** o padrão. Um pequeno módulo do Prisma entra no jogo e o limite muda na hora, em DirectX 10, 11 e 12.
 - **Método Driver:** grava o limite no driver NVIDIA. Só vale a partir da próxima vez que o jogo abrir.
 - **Limitando:** FPS real conta os quadros que o jogo produz. Com geração considera os quadros que vão para a tela.
-- **Perfil DLSS:** escolhe o perfil que o driver NVIDIA usa naquele jogo. Vale ao reabrir o jogo.
+- **Perfil DLSS:** escolhe o perfil que o driver NVIDIA usa naquele jogo. Vale ao reabrir o jogo. Só aparece nos jogos que trazem o DLSS; nos outros, a coluna diz Sem DLSS.
+- **Auto HDR:** a mesma escolha de Auto HDR por jogo da aba HDR (Padrão, Forçar ou Desligar). Mudar aqui muda lá.
 - **Atalhos:** Ctrl + Alt + 3 liga e desliga. Ctrl + Alt + seta para cima ou para baixo muda o limite. O limite vai de 20 a 1023.
 
 Se a injeção falhar, se o jogo cair ou se houver anti-cheat detectado, o Prisma passa sozinho para o driver e avisa.
@@ -79,9 +83,9 @@ Se a injeção falhar, se o jogo cair ou se houver anti-cheat detectado, o Prism
 
 ### Registro de dados
 
-Grava o desempenho para estudar depois. Só roda se você ligar, na aba Medidor ou com Ctrl + Alt + 4. Escolha 1, 5 ou 10 minutos de jogo, ou sem limite.
+Grava o desempenho para estudar depois. Só roda se você ligar, na aba Medidor ou com Ctrl + Alt + 4. Digite quantos minutos de jogo gravar (5 é o padrão, 0 é sem limite).
 
-Os arquivos ficam em Documentos, Prisma, Logs: cada quadro, cada segundo, a CPU de cada thread do jogo e um resumo no final. Em jogos com anti-cheat detectado, a leitura de threads fica desligada.
+Os arquivos ficam em Documentos, Prisma, Logs: cada quadro, cada segundo, a CPU de cada thread do jogo e um resumo no final. Em placas NVIDIA, cada segundo traz também a GPU para quem estuda otimização: uso do controlador de memória, energia em relação ao limite, o que segurou o clock (energia, temperatura), o tráfego PCIe e a VRAM total; o começo do arquivo traz o driver, os clocks máximos, o limite de energia e o link PCIe, e o resumo diz se o limite foi energia, temperatura ou VRAM. Em jogos com anti-cheat detectado, a leitura de threads fica desligada.
 
 ## Discos e redes
 
@@ -166,6 +170,8 @@ Deixa a janela em foco em tela cheia sem bordas. Atalho: Ctrl + Alt + F. Quem us
 Controla o volume de cada programa. As teclas de volume do teclado, com um modificador (Ctrl por padrão), mudam só o programa em foco. O Prisma lembra o volume de cada programa.
 
 - **Dá para:** escolher o aparelho de saída e o de entrada de cada programa, e adicionar programas à mão.
+- **Fixar:** o alfinete ao lado do nome deixa o programa na lista mesmo fechado, guardando o volume, a saída e a entrada. Quando ele abre, volta com o volume guardado.
+- **Atalhos de aparelho padrão:** cada atalho troca a saída e a entrada padrão do Windows de uma vez, por exemplo Ctrl + Alt + Num 1 para a TV e o fone. **Adicionar** cria um atalho; escolha a saída e a entrada (ou Não mudar) e clique no campo para gravar as teclas. O X apaga.
 - **Manter o som acordado:** toca um fluxo sem som audível, para HDMI e Dolby não cortarem o começo do próximo som. Para sozinho depois de 10 minutos sem uso.
 - **Limite:** a troca de aparelho usa um recurso interno do Windows, e alguns programas só trocam ao reabrir.
 
@@ -194,8 +200,9 @@ Em teste. Mostra e controla outro PC pela internet, para acesso remoto ou para j
 - **Parear, uma vez:** no PC que vai ser visto, escolha o que quem parear pode fazer e clique em **Criar convite**. Aparece uma janela com um código curto, como `K7M2-QX9P`, que vale 10 minutos e uma vez. Nela, **Copiar código** copia o código, **Copiar link** copia um link e **Compartilhar** abre a janela de compartilhar do Windows, para mandar por e-mail, Discord, WhatsApp e outros. Quem abre o link num PC com o Prisma vê o Prisma abrir na página certa e perguntar se quer parear. No outro PC, também dá para digitar o código em **Parear com outro PC** e clicar em **Parear**. Os dois mostram o mesmo código de confirmação de seis dígitos: confira antes de aceitar. Na hora de aceitar, **Sim** confia no aparelho, e **Não** pareia mas pergunta a cada conexão.
 - **Código e convite longo:** o código fica guardado por 10 minutos em três relés públicos de nomes (o mesmo sistema que o iroh usa para achar os PCs), assinado e sem nada que identifique você. Se nenhum relé responder, a janela avisa, e **Copiar convite longo** copia o convite completo, que funciona sem relé nenhum.
 - **Conectar:** com o compartilhamento ligado no host, clique em **Assistir** no aparelho da lista. A conexão tenta primeiro o caminho direto, depois a sua VPN (Tailscale, ZeroTier) e, se nada passar, os relés públicos do iroh. Tudo vai criptografado de ponta a ponta.
-- **Permissões por aparelho:** som, controle, teclado, mouse, copiar e colar (texto, nos dois sentidos) e tela segura. Marque e desmarque na lista; vale na próxima conexão. Sem nenhuma, o aparelho só vê.
-- **Aba Host:** o nome deste PC para os outros, o monitor, a resolução máxima, os quadros por segundo, o ritmo dos quadros (só quando a tela muda, ou constante, para quem prefere um ritmo fixo), a prioridade (menor atraso, equilíbrio ou qualidade), o codec (AV1, HEVC ou H.264), o limite de banda, HDR10 de 10 bits e 4:4:4. Os automáticos seguem quem assiste. Também escolhe o som que vai (o PC todo ou só um programa), tira do som o programa de chamada, limita quantas pessoas entram, deixa uma pessoa por vez no mouse e no teclado, dá prioridade ao mouse e ao teclado do host e recusa conexões enquanto este PC assiste a outro.
+- **Aparelhos pareados:** duas abas separam os PCs que este assiste dos que assistem a este. **Renomear** dá outro nome ao aparelho, só neste PC; o nome original fica embaixo, menor. Salvar com o campo vazio volta ao original.
+- **Permissões por aparelho:** som, controle, teclado, mouse, copiar e colar (texto, nos dois sentidos) e tela segura. Marque e desmarque na lista; se o aparelho estiver conectado, vale na hora. Sem nenhuma, o aparelho só vê.
+- **Aba Host:** o nome deste PC para os outros, o monitor, a resolução máxima, os quadros por segundo, o ritmo dos quadros (só quando a tela muda, ou constante, para quem prefere um ritmo fixo), a prioridade (menor atraso, equilíbrio ou qualidade), o codec (AV1, HEVC ou H.264), o limite de banda, HDR10 de 10 bits e 4:4:4. Os automáticos seguem quem assiste. Também escolhe o som que vai (o PC todo ou só um programa), tira do som o programa de chamada (que então também sai da lista do som que vai), limita quantas pessoas entram, deixa uma pessoa por vez no mouse e no teclado, dá prioridade ao mouse e ao teclado do host e recusa conexões enquanto este PC assiste a outro.
 - **Aba Cliente:** abrir em tela cheia sem borda, VSync, modo imersivo (o mouse fica preso na janela, e a tecla Windows e o Alt + Tab vão para o outro PC), pedir 4:4:4, começar sem som, o medidor de latência (desligado, simples ou detalhado), os quadros por segundo pedidos ao host (automático segue os Hz desta tela) e o aviso de conexão piorando.
 - **Medidor e aviso:** o simples mostra o atraso de ponta a ponta com uma bolinha verde, amarela ou vermelha. O detalhado mostra também a rede, o vídeo, os quadros por segundo, a banda, a decodificação, os quadros perdidos e o caminho. O aviso aparece por alguns segundos quando a rede perde mais de 2% dos quadros, quando a latência varia mais de 10 ms ou sobe por 3 segundos seguidos.
 - **Menu da conexão:** Ctrl + Alt + Shift + P, na janela de quem assiste, abre o menu com o vídeo da conexão, tela cheia, modo imersivo (desligado, mouse, teclado ou os dois), quadros por segundo, medidor, aviso, som, Ctrl + Alt + Del e **Desconectar**, cada um com o atalho ao lado. O mouse e as setas, Tab, Enter e Esc funcionam. Mudar os quadros por segundo recomeça o vídeo na hora.

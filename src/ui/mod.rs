@@ -95,6 +95,12 @@ pub struct UiState {
 }
 
 impl UiState {
+    /// Fotos de teste: começa a área rolável `key` já descida.
+    #[cfg(debug_assertions)]
+    pub fn set_scroll(&mut self, key: &str, v: f32) {
+        self.scroll.insert(hash_id(key), v);
+    }
+
     /// Há lista ou pergunta na frente: janelas filhas do Windows ficariam por cima delas.
     pub fn covered(&self) -> bool {
         self.popup.is_some() || self.ask.is_some()

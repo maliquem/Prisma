@@ -127,6 +127,18 @@ pub struct SndApp {
     pub path: String,
     pub output: String,
     pub input: String,
+    /// Fixo: aparece na lista mesmo fechado e volta com o volume guardado.
+    pub pinned: bool,
+    /// Volume guardado, de 0 a 100; -1 é nenhum.
+    pub volume: i32,
+}
+
+/// Atalho que troca a saída e a entrada padrão do Windows. Id vazio não muda aquele lado.
+#[derive(Clone, Default, Debug)]
+pub struct SndKey {
+    pub key: Hotkey,
+    pub output: String,
+    pub input: String,
 }
 
 /// Tela cujas opções voltam ao padrão.
@@ -211,7 +223,7 @@ pub struct Config {
     pub hdr_profiles: Vec<HdrProfile>,
     pub hdr_games: Vec<HdrGame>,
     pub meter_games: Vec<MeterGame>,
-    pub meter_rule: u8,
+    /// HDR do Windows ao abrir o jogo: 0 desligado, 1 só na lista, 2 em todos.
     pub meter_hdr: u8,
     pub meter_items: u32,
     pub meter_op_compact: u32,
@@ -224,8 +236,8 @@ pub struct Config {
     /// 0 lado direito, 1 lado esquerdo.
     pub meter_pos_full: u8,
     pub hk_log: Hotkey,
-    /// 0 um minuto, 1 cinco, 2 dez, 3 sem limite.
-    pub meter_log_time: u8,
+    /// Minutos de jogo gravados no registro; 0 é sem limite.
+    pub meter_log_min: u32,
     pub meter_log_auto: bool,
     pub hk_meter_keys: Hotkey,
     pub hk_limit_toggle: Hotkey,
@@ -233,6 +245,9 @@ pub struct Config {
     pub hk_limit_down: Hotkey,
     pub snd_keep: u8,
     pub snd_apps: Vec<SndApp>,
+    pub snd_keys: Vec<SndKey>,
+    /// Nomes que o usuário deu aos aparelhos pareados: (id do aparelho, nome).
+    pub share_names: Vec<(String, String)>,
     pub black: Vec<String>,
     pub white: Vec<String>,
     pub ignored: Vec<String>,
@@ -312,7 +327,6 @@ impl Default for Config {
             hdr_profiles: Vec::new(),
             hdr_games: Vec::new(),
             meter_games: Vec::new(),
-            meter_rule: 0,
             meter_hdr: 0,
             meter_items: crate::meter::ITEMS_DEFAULT,
             meter_op_compact: 84,
@@ -323,7 +337,7 @@ impl Default for Config {
             meter_pos_compact: 1,
             meter_pos_full: 0,
             hk_log: Hotkey::new(MOD_CTRL | MOD_ALT, b'4' as u32),
-            meter_log_time: 1,
+            meter_log_min: 5,
             meter_log_auto: false,
             hk_meter_keys: Hotkey::new(MOD_CTRL | MOD_ALT, b'5' as u32),
             hk_limit_toggle: Hotkey::new(MOD_CTRL | MOD_ALT, b'3' as u32),
@@ -331,6 +345,8 @@ impl Default for Config {
             hk_limit_down: Hotkey::new(MOD_CTRL | MOD_ALT, 0x28),
             snd_keep: 0,
             snd_apps: Vec::new(),
+            snd_keys: Vec::new(),
+            share_names: Vec::new(),
             black: Vec::new(),
             white: Vec::new(),
             ignored: Vec::new(),
@@ -399,6 +415,7 @@ impl Config {
         // Quem já usa não vê as boas-vindas, e a versão instalada sempre abriu como administrador.
         c.welcome = false;
         c.always_admin = crate::startup::is_installed();
+        let mut power_seen = false;
         for line in text.lines() {
             let Some((k, v)) = line.split_once('=') else { continue };
             let b = v == "1";
@@ -448,17 +465,33 @@ impl Config {
                 "load_cpu_pct" => c.load_cpu_pct = v.parse().unwrap_or(35),
                 "load_cpu_secs" => c.load_cpu_secs = v.parse().unwrap_or(20),
                 "snd_app" => {
-                    let p: Vec<&str> = v.splitn(4, '|').collect();
-                    if p.len() == 4 {
-                        c.snd_apps.push(SndApp { exe: p[0].into(), output: p[1].into(), input: p[2].into(), path: p[3].into() });
+                    // Antes: exe|saída|entrada|caminho. Agora: exe|saída|entrada|fixo|volume|caminho.
+                    let p: Vec<&str> = v.splitn(6, '|').collect();
+                    let new = p.len() == 6 && matches!(p[3], "0" | "1") && p[4].parse::<i32>().is_ok();
+                    if new {
+                        c.snd_apps.push(SndApp { exe: p[0].into(), output: p[1].into(), input: p[2].into(), pinned: p[3] == "1", volume: p[4].parse().unwrap_or(-1), path: p[5].into() });
+                    } else {
+                        let p: Vec<&str> = v.splitn(4, '|').collect();
+                        if p.len() == 4 {
+                            c.snd_apps.push(SndApp { exe: p[0].into(), output: p[1].into(), input: p[2].into(), path: p[3].into(), pinned: false, volume: -1 });
+                        }
+                    }
+                }
+                "snd_key" => {
+                    let p: Vec<&str> = v.splitn(3, '|').collect();
+                    if p.len() == 3 {
+                        c.snd_keys.push(SndKey { key: Hotkey::parse(p[0]), output: p[1].into(), input: p[2].into() });
                     }
                 }
                 "snd_keep" => c.snd_keep = v.parse().unwrap_or(0),
-                // Antes o medidor aparecia em todo jogo por padrão: agora só nos da lista.
-                "meter_rule" => c.meter_rule = 0,
-                "meter_show" => c.meter_rule = v.parse().unwrap_or(0),
+                "share_name" => {
+                    if let Some((id, name)) = v.split_once('|') {
+                        c.share_names.push((id.into(), name.into()));
+                    }
+                }
                 "meter_hdr" => c.meter_hdr = v.parse().unwrap_or(0),
                 "meter_items" => c.meter_items = v.parse().unwrap_or(crate::meter::ITEMS_DEFAULT),
+                "meter_power" => power_seen = true,
                 "meter_op_compact" => c.meter_op_compact = v.parse().unwrap_or(84),
                 "meter_op_full" => c.meter_op_full = v.parse().unwrap_or(88),
                 "hk_meter_compact" => c.hk_meter_compact = Hotkey::parse(v),
@@ -467,7 +500,9 @@ impl Config {
                 "meter_pos_compact" => c.meter_pos_compact = v.parse().unwrap_or(1),
                 "meter_pos_full" => c.meter_pos_full = v.parse().unwrap_or(0),
                 "hk_log" => c.hk_log = Hotkey::parse(v),
-                "meter_log_time" => c.meter_log_time = v.parse().unwrap_or(1),
+                // Antes era uma escolha entre 1, 5, 10 minutos e sem limite.
+                "meter_log_time" => c.meter_log_min = [1, 5, 10, 0].get(v.parse::<usize>().unwrap_or(1)).copied().unwrap_or(5),
+                "meter_log_min" => c.meter_log_min = v.parse().unwrap_or(5),
                 "meter_log_auto" => c.meter_log_auto = v == "1",
                 "hk_meter_keys" => c.hk_meter_keys = Hotkey::parse(v),
                 "hk_limit_toggle" => c.hk_limit_toggle = Hotkey::parse(v),
@@ -536,6 +571,10 @@ impl Config {
                 "tm_hook" => c.tm_hook = b,
                 _ => {}
             }
+        }
+        // O plano de energia entrou no medidor completo depois: aparece uma vez para quem já usava.
+        if !power_seen {
+            c.meter_items |= crate::meter::ITEM_POWER;
         }
         // A lista substitui a lembrança antiga por programa.
         for p in c.profiles.iter_mut().filter(|p| p.borderless) {
@@ -631,13 +670,18 @@ impl Config {
         let _ = writeln!(s, "load_gpu_secs={}", self.load_gpu_secs);
         let _ = writeln!(s, "load_cpu_pct={}", self.load_cpu_pct);
         let _ = writeln!(s, "load_cpu_secs={}", self.load_cpu_secs);
+        for (id, name) in &self.share_names {
+            let _ = writeln!(s, "share_name={id}|{name}");
+        }
         for a in &self.snd_apps {
-            let _ = writeln!(s, "snd_app={}|{}|{}|{}", a.exe, a.output, a.input, a.path);
+            let _ = writeln!(s, "snd_app={}|{}|{}|{}|{}|{}", a.exe, a.output, a.input, b(a.pinned), a.volume, a.path);
+        }
+        for k in &self.snd_keys {
+            let _ = writeln!(s, "snd_key={},{}|{}|{}", k.key.mods, k.key.vk, k.output, k.input);
         }
         let _ = writeln!(s, "snd_keep={}", self.snd_keep);
-        let _ = writeln!(s, "meter_show={}", self.meter_rule);
         let _ = writeln!(s, "meter_hdr={}", self.meter_hdr);
-        let _ = writeln!(s, "meter_items={}", self.meter_items);
+        let _ = writeln!(s, "meter_items={}\nmeter_power=1", self.meter_items);
         let _ = writeln!(s, "meter_op_compact={}", self.meter_op_compact);
         let _ = writeln!(s, "meter_op_full={}", self.meter_op_full);
         hk(&mut s, "hk_meter_compact", self.hk_meter_compact);
@@ -645,7 +689,7 @@ impl Config {
         hk(&mut s, "hk_meter_off", self.hk_meter_off);
         s.push_str(&format!("meter_pos_compact={}\nmeter_pos_full={}\n", self.meter_pos_compact, self.meter_pos_full));
         hk(&mut s, "hk_log", self.hk_log);
-        s.push_str(&format!("meter_log_time={}\nmeter_log_auto={}\n", self.meter_log_time, self.meter_log_auto as u8));
+        s.push_str(&format!("meter_log_min={}\nmeter_log_auto={}\n", self.meter_log_min, self.meter_log_auto as u8));
         hk(&mut s, "hk_meter_keys", self.hk_meter_keys);
         hk(&mut s, "hk_limit_toggle", self.hk_limit_toggle);
         hk(&mut s, "hk_limit_up", self.hk_limit_up);
@@ -678,7 +722,7 @@ impl Config {
             }
             return &mut self.snd_apps[i];
         }
-        self.snd_apps.push(SndApp { exe: exe.to_string(), path: path.to_string(), ..Default::default() });
+        self.snd_apps.push(SndApp { exe: exe.to_string(), path: path.to_string(), volume: -1, ..Default::default() });
         self.snd_apps.last_mut().unwrap()
     }
 
@@ -738,7 +782,6 @@ impl Config {
                 }
             }
             Defaults::Meter => {
-                self.meter_rule = d.meter_rule;
                 self.meter_hdr = d.meter_hdr;
                 self.meter_items = d.meter_items;
                 self.meter_op_compact = d.meter_op_compact;
@@ -749,7 +792,7 @@ impl Config {
                 self.meter_pos_compact = d.meter_pos_compact;
                 self.meter_pos_full = d.meter_pos_full;
                 self.hk_log = d.hk_log;
-                self.meter_log_time = d.meter_log_time;
+                self.meter_log_min = d.meter_log_min;
                 self.meter_log_auto = d.meter_log_auto;
                 self.hk_meter_keys = d.hk_meter_keys;
                 self.hk_limit_toggle = d.hk_limit_toggle;

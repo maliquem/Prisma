@@ -140,7 +140,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
             ui.c.round(r, 6.0, if on { CARD2 } else { CARD });
         }
         ui.c.text(r.inset_xy(10.0, 0.0), title, 13.0, if on { WHITE } else { TEXT2 }, Align::Left, Weight::Regular);
-        if ui.hit(title, r) {
+        if ui.hit(&format!("guide-ix{i}"), r) {
             ui.set_scroll("guide", *y);
         }
     }

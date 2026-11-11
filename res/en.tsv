@@ -991,13 +991,8 @@ Evita o corte no começo do som em HDMI e Dolby. Para sozinho depois de 10 minut
 Medidor	Meter
 Leitor de performance, limitador de FPS e HDR automático por jogo.	Performance reader, FPS limiter and automatic HDR per game.
 Volta atalhos, opacidade, itens e regras ao padrão. A lista de jogos continua salva.	Restores shortcuts, opacity, items and rules. The game list stays saved.
-Quando o medidor liga	When the meter turns on
-Só nos jogos da lista	Only for listed games
-Em todos, menos os da lista	All except listed games
 HDR automático	Automatic HDR
 Só na lista	Listed only
-Todos, menos a lista	All except listed
-Liga o HDR do Windows quando o jogo abrir e volta quando fechar. É separado do medidor.	Turns on Windows HDR when the game opens and back when it closes. Separate from the meter.
 Mostrar compacto	Show compact
 Mostrar completo	Show full
 Esconder tudo	Hide all
@@ -1018,7 +1013,6 @@ Disco e rede	Disk and network
 Modo de exibição	Display mode
 Tempo de jogo	Play time
 Jogos	Games
-Abrir em	Open in
 Limitando	Limiting
 Perfil DLSS	DLSS profile
 Nenhum jogo ainda. Use Adicionar.	No games yet. Use Add.
@@ -1151,7 +1145,6 @@ Diminuir o limite	Lower the limit
 Ligar o limitador	Turn on the limiter
 Registro de dados	Data log
 Grava cada quadro, cada segundo e a CPU de cada thread do jogo, para estudar desempenho. Só roda se você ligar.	Records every frame, every second and the CPU of each game thread, to study performance. Runs only if you turn it on.
-Tempo de jogo gravado	Game time recorded
 5 minutos	5 minutes
 10 minutos	10 minutes
 Abrir pasta	Open folder
@@ -1367,8 +1360,6 @@ Convite do outro PC	Invite from the other PC
 Parear	Pair
 Isso não parece um convite do Prisma	That does not look like a Prisma invite
 Nenhum aparelho pareado. Ligue o compartilhamento neste PC e cole o convite no outro, ou o contrário.	No paired devices. Start sharing on this PC and paste the invite on the other one, or the other way around.
-Assiste a este PC	Watches this PC
-Este PC assiste a ele	This PC watches it
 Esquecer	Forget
 Controle	Controller
 Teclado	Keyboard
@@ -1546,3 +1537,28 @@ Banir este aparelho?	Ban this device?
 «{}» sai agora e vai precisar de um convite novo para conectar.	“{}” leaves now and will need a new invite to connect.
 «{}» conectou a este PC	“{}” connected to this PC
 «{}» saiu	“{}” left
+Auto HDR	Auto HDR
+Sem DLSS	No DLSS
+Plano de energia	Power plan
+Minutos de jogo gravados (0 é sem limite)	Game minutes recorded (0 is no limit)
+Liga o HDR do Windows quando o jogo abre e desliga quando ele fecha. Se o HDR já estava ligado, ele continua ligado. Em Todos, vale para todo jogo que o modo jogo do Energia reconhece; Não ligar, na lista, tira um jogo. O medidor só aparece pelo atalho.	Turns on Windows HDR when the game opens and off when it closes. If HDR was already on, it stays on. With All, it applies to every game the Power game mode recognizes; Do not turn on, in the list, leaves a game out. The meter only appears through the shortcut.
+Controlador de memória da GPU, média	GPU memory controller, average
+Energia da GPU, média do limite	GPU power, average of the limit
+Clock da GPU segurado por	GPU clock held back by
+A VRAM chegou perto do total: texturas e resolução são os primeiros ajustes.	VRAM came close to full: textures and resolution are the first settings to lower.
+A temperatura segurou o clock da GPU em parte do tempo.	Temperature held back the GPU clock part of the time.
+Leitura: GPU cheia e no limite de energia, então o limite é a GPU. Menos carga por quadro (resolução, sombras, efeitos) é o que rende.	Reading: GPU full and at its power limit, so the limit is the GPU. Less work per frame (resolution, shadows, effects) is what pays off.
+Renomear	Rename
+Salvar	Save
+Este PC assiste	This PC watches
+Assistem a este PC	Watching this PC
+Nenhum PC para assistir. Digite aqui o código de um convite feito no outro PC.	No PC to watch. Type here the code of an invite made on the other PC.
+Nenhum PC assiste a este. Crie um convite e digite o código no outro PC.	No PC watches this one. Create an invite and type the code on the other PC.
+Atalhos de aparelho padrão	Default device shortcuts
+Fixo, fechado	Pinned, closed
+Não mudar	Do not change
+Aparelho padrão	Default device
+não deu para trocar	could not switch
+aparelho desligado	device unplugged
+Cada atalho troca a saída e a entrada padrão do Windows de uma vez. Use Adicionar.	Each shortcut switches the Windows default output and input at once. Use Add.
+Não deu para mudar na hora. Vale na próxima conexão.	Could not change it right away. It applies on the next connection.

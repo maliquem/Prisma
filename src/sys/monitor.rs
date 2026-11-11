@@ -60,6 +60,7 @@ pub struct Snapshot {
     pub ram_total: u64,
     pub gpu: GpuReading,
     pub gpu_name: String,
+    pub gpu_driver: String,
     pub hist_cpu: VecDeque<f32>,
     pub hist_gpu: VecDeque<f32>,
     pub hist_ram: VecDeque<f32>,
@@ -338,6 +339,7 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
     let mut kmt = Kmt::new();
     let mut nvml: Option<Nvml> = None;
     let mut gpu_name = String::new();
+    let mut gpu_driver = String::new();
     let mhz = base_mhz();
     let mut prev_cpu = Vec::new();
     let mut threads = Vec::new();
@@ -370,6 +372,7 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
             nvml = Nvml::load();
             if let Some(n) = &nvml {
                 gpu_name = n.name.clone();
+                gpu_driver = n.driver.clone();
             }
         } else if !detail {
             nvml = None;
@@ -483,6 +486,7 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
             s.ram_total = mem.ullTotalPhys;
             s.gpu = gpu;
             s.gpu_name = gpu_name.clone();
+            s.gpu_driver = gpu_driver.clone();
             s.hist_cpu = h_cpu.clone();
             s.hist_gpu = h_gpu.clone();
             s.hist_ram = h_ram.clone();

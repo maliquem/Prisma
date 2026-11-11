@@ -42,9 +42,13 @@ impl Layered {
         }
     }
 
-    fn ensure(&mut self, w: i32, h: i32) {
+    /// Prepara o bitmap. Falha (janela já destruída, tamanho zero) só pula o desenho.
+    fn ensure(&mut self, w: i32, h: i32) -> bool {
+        if w <= 0 || h <= 0 {
+            return false;
+        }
         if self.size == (w, h) && self.dc_rt.is_some() {
-            return;
+            return true;
         }
         unsafe {
             if !self.dib.is_invalid() {
@@ -64,8 +68,15 @@ impl Layered {
                 ..Default::default()
             };
             let mut bits = std::ptr::null_mut();
-            self.dib = CreateDIBSection(None, &bi, DIB_RGB_COLORS, &mut bits, None, 0)
-                .expect("bitmap do widget");
+            self.dc_rt = None;
+            self.canvas = None;
+            self.dib = match CreateDIBSection(None, &bi, DIB_RGB_COLORS, &mut bits, None, 0) {
+                Ok(b) => b,
+                Err(_) => {
+                    self.dib = Default::default();
+                    return false;
+                }
+            };
             #[cfg(debug_assertions)]
             {
                 self.bits = bits as *mut u8;
@@ -83,13 +94,14 @@ impl Layered {
                 dpiY: dpi,
                 ..Default::default()
             };
-            let rt = factory().CreateDCRenderTarget(&props).expect("alvo do widget");
+            let Ok(rt) = factory().CreateDCRenderTarget(&props) else { return false };
             let bounds = RECT { left: 0, top: 0, right: w, bottom: h };
             let _ = rt.BindDC(self.mem, &bounds);
             let base: ID2D1RenderTarget = rt.cast().unwrap();
             self.canvas = Some(Canvas::new(base));
             self.dc_rt = Some(rt);
         }
+        true
     }
 
     /// Desenha `w`×`h` DIPs e publica no canto `x`,`y` da tela, em pixels.
@@ -97,9 +109,12 @@ impl Layered {
         unsafe {
             self.scale = GetDpiForWindow(self.hwnd) as f32 / 96.0;
         }
+        // Janela destruída devolve DPI 0: não há o que desenhar.
         let (pw, ph) = ((w * self.scale).ceil() as i32, (h * self.scale).ceil() as i32);
-        self.ensure(pw, ph);
-        let c = self.canvas.as_ref().unwrap();
+        if !self.ensure(pw, ph) {
+            return;
+        }
+        let Some(c) = self.canvas.as_ref() else { return };
         unsafe {
             c.rt.BeginDraw();
             c.rt.Clear(Some(&D2D1_COLOR_F { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }));

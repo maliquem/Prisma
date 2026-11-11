@@ -1,7 +1,7 @@
 //! Medidor sobre o jogo: janela própria, sem nada dentro do processo do jogo.
 
-use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
+use std::collections::{HashMap, VecDeque};
+use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering::Relaxed};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -9,7 +9,7 @@ use windows::core::*;
 use windows::Win32::Foundation::*;
 use windows::Win32::System::Diagnostics::ToolHelp::*;
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
-use windows::Win32::UI::Input::KeyboardAndMouse::SetFocus;
+use windows::Win32::UI::Input::KeyboardAndMouse::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
 use crate::config::{Config, MeterGame};
@@ -18,7 +18,7 @@ use crate::overlays::{focus_monitor, register};
 use crate::sys::frames::{self, Stats, Tracker};
 use crate::sys::gamelog::{self, Log};
 use crate::sys::inject::{self, Limiter, Status};
-use crate::sys::{drs, fileinfo, hdr, monitor};
+use crate::sys::{drs, fileinfo, hdr, monitor, power};
 use crate::ui::gfx::*;
 use crate::ui::layered::{create_overlay, Layered};
 
@@ -41,9 +41,8 @@ pub const ITEM_IO: u32 = 1 << 11;
 pub const ITEM_MODE: u32 = 1 << 12;
 pub const ITEM_TIME: u32 = 1 << 13;
 pub const ITEM_LOG: u32 = 1 << 14;
-pub const ITEMS_DEFAULT: u32 = ITEM_FPS | ITEM_FRAME | ITEM_LATENCY | ITEM_LIMIT | ITEM_UPSCALE | ITEM_GEN | ITEM_CPU | ITEM_GPU | ITEM_MEM | ITEM_LOG;
-/// Durações do registro em segundos. A última opção da tela é sem limite.
-const LOG_SECS: [u32; 3] = [60, 300, 600];
+pub const ITEM_POWER: u32 = 1 << 15;
+pub const ITEMS_DEFAULT: u32 = ITEM_FPS | ITEM_FRAME | ITEM_LATENCY | ITEM_LIMIT | ITEM_UPSCALE | ITEM_GEN | ITEM_CPU | ITEM_GPU | ITEM_MEM | ITEM_LOG | ITEM_POWER;
 
 /// Minutos de jogo que o limitador automático mede antes de decidir.
 pub const AUTO_MINUTES: usize = 5;
@@ -128,6 +127,10 @@ pub struct Meter {
     chosen: Vec<(Row, usize)>,
     /// Número sendo digitado para o limite.
     typing: Option<String>,
+    /// Planos de energia (id, nome) e o ativo, lidos de tempos em tempos.
+    plans: Vec<(String, String)>,
+    plan_active: String,
+    plans_at: Option<Instant>,
 }
 
 /// Opção do campo do limite. Valores acima dela são o número digitado.
@@ -135,6 +138,100 @@ const TYPE_LIMIT: usize = 2;
 
 /// Controles abertos: só aí o medidor recebe mouse e teclado.
 static CONTROLS: AtomicBool = AtomicBool::new(false);
+/// Janela do completo, para o gancho do teclado mandar as teclas.
+static FULL_HWND: AtomicIsize = AtomicIsize::new(0);
+/// Tecla que o gancho pegou, entregue ao painel.
+const WM_METER_KEY: u32 = WM_APP + 41;
+
+/// Com os controles abertos, as teclas deles vão para o medidor e não para o jogo. O jogo
+/// continua em foco: em tela cheia com outra resolução, tirar o foco dele faria a tela trocar.
+unsafe extern "system" fn controls_hook(code: i32, w: WPARAM, l: LPARAM) -> LRESULT {
+    if code >= 0 && CONTROLS.load(Relaxed) {
+        let k = &*(l.0 as *const KBDLLHOOKSTRUCT);
+        let vk = k.vkCode;
+        let ours = matches!(vk, 0x08 | 0x0D | 0x1B | 0x25..=0x28 | 0x30..=0x39 | 0x60..=0x69);
+        let mods = GetAsyncKeyState(VK_CONTROL.0 as i32) < 0 || GetAsyncKeyState(VK_MENU.0 as i32) < 0;
+        if ours && !mods {
+            if w.0 as u32 == WM_KEYDOWN || w.0 as u32 == WM_SYSKEYDOWN {
+                let h = HWND(FULL_HWND.load(Relaxed) as *mut _);
+                let _ = PostMessageW(Some(h), WM_METER_KEY, WPARAM(vk as usize), LPARAM(0));
+            }
+            return LRESULT(1);
+        }
+    }
+    CallNextHookEx(None, code, w, l)
+}
+
+static HOOK: std::sync::Mutex<Option<isize>> = std::sync::Mutex::new(None);
+
+/// Pastas de jogo já olhadas: tem o DLSS (a escolha do perfil só vale com ele)?
+static DLSS: std::sync::Mutex<Option<HashMap<String, Option<bool>>>> = std::sync::Mutex::new(None);
+
+/// O jogo traz o DLSS? Olha os arquivos da pasta dele uma vez, fora da tela; até saber, None.
+pub fn has_dlss(path: &str) -> Option<bool> {
+    if path.is_empty() {
+        return Some(false);
+    }
+    let mut guard = DLSS.lock().unwrap();
+    let map = guard.get_or_insert_with(HashMap::new);
+    if let Some(v) = map.get(path) {
+        return *v;
+    }
+    map.insert(path.to_string(), None);
+    let key = path.to_string();
+    let _ = std::thread::Builder::new().name("dlss".into()).spawn(move || {
+        let found = dlss_in(&game_root(&key));
+        if let Some(m) = DLSS.lock().unwrap().as_mut() {
+            m.insert(key, Some(found));
+        }
+    });
+    None
+}
+
+/// A pasta do jogo: a da biblioteca da Steam, ou acima das pastas de binários.
+fn game_root(exe: &str) -> std::path::PathBuf {
+    let path = std::path::Path::new(exe);
+    let low = exe.to_ascii_lowercase();
+    if let Some(i) = low.find("\\steamapps\\common\\") {
+        let rest = &exe[i + "\\steamapps\\common\\".len()..];
+        if let Some(name) = rest.split('\\').next() {
+            return std::path::PathBuf::from(&exe[..i + "\\steamapps\\common\\".len()]).join(name);
+        }
+    }
+    let mut dir = path.parent().map(|p| p.to_path_buf()).unwrap_or_default();
+    for _ in 0..4 {
+        let name = dir.file_name().map(|n| n.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+        if !matches!(name.as_str(), "bin" | "binaries" | "win64" | "win32" | "x64" | "x86" | "game" | "retail") {
+            break;
+        }
+        match dir.parent() {
+            Some(p) => dir = p.to_path_buf(),
+            None => break,
+        }
+    }
+    dir
+}
+
+fn dlss_in(root: &std::path::Path) -> bool {
+    let mut stack = vec![(root.to_path_buf(), 0)];
+    let mut seen = 0;
+    while let Some((dir, depth)) = stack.pop() {
+        let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+        for e in rd.flatten() {
+            seen += 1;
+            if seen > 40_000 {
+                return false;
+            }
+            let Ok(t) = e.file_type() else { continue };
+            if t.is_dir() && depth < 7 {
+                stack.push((e.path(), depth + 1));
+            } else if t.is_file() && e.file_name().to_string_lossy().eq_ignore_ascii_case("nvngx_dlss.dll") {
+                return true;
+            }
+        }
+    }
+    false
+}
 
 /// O que o medidor recebeu com os controles abertos.
 pub enum Input {
@@ -152,6 +249,7 @@ pub enum Row {
     Real,
     Method,
     Preset,
+    Power,
 }
 
 unsafe extern "system" fn meter_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT {
@@ -162,7 +260,11 @@ unsafe extern "system" fn meter_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> L
     };
     match m {
         WM_NCHITTEST => LRESULT(if open { HTCLIENT as isize } else { HTTRANSPARENT as isize }),
-        WM_MOUSEACTIVATE => LRESULT(if open { MA_ACTIVATE as isize } else { MA_NOACTIVATE as isize }),
+        WM_MOUSEACTIVATE => LRESULT(MA_NOACTIVATE as isize),
+        WM_METER_KEY if open => {
+            crate::app::with(|a| a.meter_input(Input::Key(w.0 as u32)));
+            LRESULT(0)
+        }
         WM_MOUSEMOVE if open => {
             let (x, y) = point();
             crate::app::with(|a| a.meter_input(Input::Move(x, y)));
@@ -346,6 +448,9 @@ impl Meter {
             hits: Vec::new(),
             chosen: Vec::new(),
             typing: None,
+            plans: Vec::new(),
+            plan_active: String::new(),
+            plans_at: None,
         }
     }
 
@@ -411,13 +516,29 @@ impl Meter {
     }
 
     fn start_log(&mut self, cfg: &Config, snap: &monitor::Snapshot) -> bool {
-        let head = format!("{}\n{}\n{}\n", self.session.exe, crate::sys::tools::now_stamp(), crate::report::machine(snap, 1.0));
-        let limit = LOG_SECS.get(cfg.meter_log_time as usize).copied();
+        let gp = &snap.gpu;
+        let gpu = if gp.total > 0 {
+            format!(
+                "GPU: driver {}, VRAM {:.1} GB, max {} MHz core / {} MHz mem, power limit {:.0} W, PCIe Gen{} x{}\n",
+                snap.gpu_driver,
+                gp.total as f32 / (1u64 << 30) as f32,
+                gp.max_mhz,
+                gp.max_mem_mhz,
+                gp.power_limit,
+                gp.pcie_gen,
+                gp.pcie_width
+            )
+        } else {
+            String::new()
+        };
+        let head = format!("{}\n{}\n{}\n{gpu}", self.session.exe, crate::sys::tools::now_stamp(), crate::report::machine(snap, 1.0));
+        let limit = (cfg.meter_log_min > 0).then(|| cfg.meter_log_min * 60);
         self.log = Log::start(&self.session.exe, head, !self.session.anti_cheat, limit);
         if self.log.is_none() {
             return false;
         }
         monitor::METER.store(true, std::sync::atomic::Ordering::Relaxed);
+        crate::sys::nvml::PCIE_WANTED.store(true, Relaxed);
         self.restart_if_none();
         self.set_tag("Registro ligado".to_string());
         true
@@ -426,6 +547,7 @@ impl Meter {
     /// O que só se sabe depois de o jogo rodar um pouco vai para o fim do resumo.
     fn stop_log(&mut self, cfg: &Config) {
         let Some(log) = self.log.take() else { return };
+        crate::sys::nvml::PCIE_WANTED.store(false, Relaxed);
         if let Some(t) = &mut self.tracker {
             t.set_recording(false);
         }
@@ -453,7 +575,8 @@ impl Meter {
         CONTROLS.load(Relaxed)
     }
 
-    /// Abre ou fecha os controles. Aberto, o painel fica em foco para o jogo soltar o mouse.
+    /// Abre ou fecha os controles. O jogo continua em foco: as teclas dos controles chegam por
+    /// um gancho, e o clique no painel não tira o foco dele.
     pub fn set_controls(&mut self, on: bool) {
         if on == self.interacting() {
             return;
@@ -461,20 +584,22 @@ impl Meter {
         CONTROLS.store(on, Relaxed);
         self.typing = None;
         let h = self.full.hwnd;
+        FULL_HWND.store(h.0 as isize, Relaxed);
         unsafe {
             let ex = GetWindowLongPtrW(h, GWL_EXSTYLE);
-            let free = (WS_EX_TRANSPARENT.0 | WS_EX_NOACTIVATE.0) as isize;
             if on {
                 self.back = GetForegroundWindow();
                 self.row = 0;
-                SetWindowLongPtrW(h, GWL_EXSTYLE, ex & !free);
-                let _ = SetForegroundWindow(h);
-                let _ = SetFocus(Some(h));
+                SetWindowLongPtrW(h, GWL_EXSTYLE, ex & !(WS_EX_TRANSPARENT.0 as isize));
+                let mut hook = HOOK.lock().unwrap();
+                if hook.is_none() {
+                    *hook = SetWindowsHookExW(WH_KEYBOARD_LL, Some(controls_hook), None, 0).ok().map(|h| h.0 as isize);
+                }
             } else {
                 self.hover = None;
-                SetWindowLongPtrW(h, GWL_EXSTYLE, ex | free);
-                if !self.back.is_invalid() {
-                    let _ = SetForegroundWindow(self.back);
+                SetWindowLongPtrW(h, GWL_EXSTYLE, ex | WS_EX_TRANSPARENT.0 as isize);
+                if let Some(hk) = HOOK.lock().unwrap().take() {
+                    let _ = UnhookWindowsHookEx(HHOOK(hk as *mut _));
                 }
             }
         }
@@ -572,6 +697,19 @@ impl Meter {
 
     /// Aplica uma opção dos controles ao jogo aberto.
     pub fn act(&mut self, cfg: &mut Config, row: Row, option: usize) {
+        if row == Row::Power {
+            let n = self.plans.len();
+            if n > 0 {
+                let at = self.plans.iter().position(|p| p.0.eq_ignore_ascii_case(&self.plan_active)).unwrap_or(0);
+                let next = if option == 0 { (at + n - 1) % n } else { (at + 1) % n };
+                let (id, name) = self.plans[next].clone();
+                if power::set_active(&id) {
+                    self.plan_active = id;
+                    crate::config::log(&format!("medidor: plano de energia {name}"));
+                }
+            }
+            return;
+        }
         if row == Row::Fps {
             if option > TYPE_LIMIT {
                 self.set_limit(cfg, option as u32);
@@ -597,7 +735,7 @@ impl Meter {
                 self.session.inject_note = (option == 0 && protected).then_some("Injeção bloqueada: anti-cheat detectado.");
             }
             Row::Preset => g.preset = option as u8,
-            Row::Fps => {}
+            Row::Fps | Row::Power => {}
         }
         self.limit_write = Some((g.exe.clone(), Instant::now()));
     }
@@ -720,6 +858,14 @@ impl Meter {
     /// Chamado uma vez por segundo. Liga, desliga e mede conforme o jogo em foco.
     pub fn tick(&mut self, cfg: &mut Config, game: Option<(String, u32, String)>, fg_pid: u32, snap: &monitor::Snapshot) {
         self.save_limit(cfg);
+        if self.interacting() && unsafe { GetForegroundWindow() } != self.back {
+            self.set_controls(false);
+        }
+        if self.plans_at.map_or(true, |t| t.elapsed().as_secs() >= 5) && (self.view == VIEW_FULL || self.plans.is_empty()) {
+            self.plans_at = Some(Instant::now());
+            self.plans = power::list().into_iter().map(|p| (p.id, p.name)).collect();
+            self.plan_active = power::active().unwrap_or_default();
+        }
         match game {
             Some((exe, pid, path)) if self.session.exe != exe => self.enter(cfg, exe, pid, path, snap),
             // Mesmo jogo reaberto: é outro processo, e o antigo nunca mais manda quadros.
@@ -783,6 +929,15 @@ impl Meter {
         self.measure(cfg);
     }
 
+    /// O atalho chamou o medidor sobre este programa: ele vira o jogo da sessão.
+    pub fn start(&mut self, cfg: &mut Config, exe: String, pid: u32, path: String, snap: &monitor::Snapshot) {
+        if self.session.exe != exe {
+            self.enter(cfg, exe, pid, path, snap);
+        } else {
+            self.session.pid = pid;
+        }
+    }
+
     /// Automático: guarda o FPS de cada segundo jogado e decide depois de 5 minutos.
     fn measure(&mut self, cfg: &mut Config) {
         let Some(g) = cfg.meter_games.iter_mut().find(|g| g.exe.eq_ignore_ascii_case(&self.session.exe)) else { return };
@@ -834,14 +989,8 @@ impl Meter {
                 }
             }
         }
-        let shown = match cfg.meter_rule {
-            0 => listed.as_ref().is_some_and(|g| g.view != 2),
-            _ => listed.is_none() || listed.as_ref().is_some_and(|g| g.view != 2),
-        };
-        if shown {
-            let view = if listed.as_ref().is_some_and(|g| g.view == 1) { VIEW_FULL } else { VIEW_COMPACT };
-            self.apply_view(view);
-        } else if listed.as_ref().is_some_and(|g| g.limit_mode == 1 && !g.measured) {
+        // O medidor só aparece pelo atalho. Medir para o limitador automático não depende dele.
+        if listed.as_ref().is_some_and(|g| g.limit_mode == 1 && !g.measured) {
             // Medir para o limitador não depende de o medidor estar visível.
             monitor::METER.store(true, std::sync::atomic::Ordering::Relaxed);
             if self.tracker.is_none() {
@@ -1074,7 +1223,8 @@ impl Meter {
             } else {
                 out.push(Line::Pair(found.upscaler.clone(), format!("{} · carregado", found.version), TEXT));
             }
-            if playing {
+            let dlss = found.upscaler == "DLSS" || game.is_some_and(|g| has_dlss(&g.path) == Some(true));
+            if playing && dlss {
                 let preset = game.map_or(0, |g| g.preset);
                 out.push(Line::Choice("Perfil DLSS".into(), Row::Preset, ["Do jogo", "Recomendado", "K", "L", "M"].iter().map(|s| s.to_string()).collect(), preset as usize));
                 if preset != self.session.opened_preset {
@@ -1106,6 +1256,10 @@ impl Meter {
                 _ => out.push(Line::Pair("Tela".into(), "HDR desligado".into(), TEXT)),
             }
         }
+        if on(ITEM_POWER) || open {
+            let name = self.plans.iter().find(|p| p.0.eq_ignore_ascii_case(&self.plan_active)).map_or("—".to_string(), |p| p.1.clone());
+            out.push(Line::Cycle("Plano de energia".into(), Row::Power, name));
+        }
         if on(ITEM_LOG) || self.log.is_some() {
             out.push(Line::Head("Registro".into()));
             match &self.log {
@@ -1114,7 +1268,7 @@ impl Meter {
                     out.push(Line::Pair("Gravando".into(), time, ACCENT));
                 }
                 None => {
-                    let time = LOG_SECS.get(cfg.meter_log_time as usize).map_or("Sem limite".to_string(), |v| format!("{} min", v / 60));
+                    let time = if cfg.meter_log_min == 0 { "Sem limite".to_string() } else { format!("{} min", cfg.meter_log_min) };
                     out.push(Line::Pair("Duração".into(), time, TEXT));
                 }
             }
@@ -1225,6 +1379,8 @@ enum Line {
     Bar(String, String, f32),
     Choice(String, Row, Vec<String>, usize),
     Stepper(String, Row, u32, Option<String>),
+    /// Nome e o valor atual entre as setas de anterior e próximo.
+    Cycle(String, Row, String),
     /// Uso da CPU ou da GPU, em número grande para ler de longe.
     Usage(&'static str, f32),
 }
@@ -1241,7 +1397,7 @@ impl Line {
             Line::Strip => 46.0,
             Line::Cores(_) => 44.0,
             Line::Bar(..) => 34.0,
-            Line::Choice(..) => 54.0,
+            Line::Choice(..) | Line::Cycle(..) => 54.0,
             Line::Stepper(..) => 36.0,
             Line::Usage(..) => 48.0,
         }
@@ -1249,7 +1405,7 @@ impl Line {
 
     fn row(&self) -> Option<Row> {
         match self {
-            Line::Choice(_, row, ..) | Line::Stepper(_, row, ..) => Some(*row),
+            Line::Choice(_, row, ..) | Line::Stepper(_, row, ..) | Line::Cycle(_, row, _) => Some(*row),
             _ => None,
         }
     }
@@ -1283,6 +1439,15 @@ impl Line {
                     chip(c, r, o, i == *selected, *row, i, hits);
                     cx = r.right() + 4.0;
                 }
+            }
+            Line::Cycle(name, row, value) => {
+                c.text(rect(x, y, w, 20.0), name, 12.0, if focus == Some(*row) { ACCENT } else { TEXT2 }, Align::Left, Weight::Regular);
+                chip(c, rect(x, y + 21.0, 34.0, 26.0), "‹", false, *row, 0, hits);
+                let field = rect(x + 38.0, y + 21.0, w - 76.0, 26.0);
+                c.round(field, 6.0, rgb(0x1b1d22));
+                c.round_line(field, 6.0, rgb(0x3a3f49), 1.0);
+                c.text_raw(field, value, 12.0, WHITE, Align::Center, Weight::Semibold);
+                chip(c, rect(x + w - 34.0, y + 21.0, 34.0, 26.0), "›", false, *row, 1, hits);
             }
             Line::Stepper(name, row, value, typing) => {
                 c.text(rect(x, y + 3.0, w * 0.4, 24.0), name, 12.0, if focus == Some(*row) { ACCENT } else { TEXT2 }, Align::Left, Weight::Regular);
@@ -1346,7 +1511,7 @@ impl Line {
                     c.round(rect(bx, y + 38.0 - h, bw, h), 2.0, if *v >= 90.0 { WARN } else { ACCENT });
                 }
             }
-            Line::Choice(..) | Line::Stepper(..) => {}
+            Line::Choice(..) | Line::Stepper(..) | Line::Cycle(..) => {}
             Line::Usage(name, pct) => {
                 c.line(x, y + 6.0, x + w, y + 6.0, rgb(0x3a3f49), 1.0);
                 c.text(rect(x, y + 10.0, w * 0.5, 36.0), name, 30.0, WHITE, Align::Left, Weight::Semibold);

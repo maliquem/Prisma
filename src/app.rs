@@ -153,6 +153,9 @@ const HK_FIND: i32 = 23;
 const HK_VOL_UP: i32 = 10;
 const HK_VOL_DOWN: i32 = 11;
 const HK_MUTE: i32 = 12;
+/// Atalhos de aparelho padrão: um id para cada, a partir daqui.
+const HK_SND: i32 = 100;
+pub const SND_KEYS_MAX: usize = 12;
 
 const VK_VOL_UP: u32 = 0xAF;
 const VK_VOL_DOWN: u32 = 0xAE;
@@ -271,6 +274,8 @@ pub struct App {
     pub find_drives: Vec<char>,
     pub pick_list: crate::sys::catalog::Shared,
     snd_seen: std::collections::HashSet<u32>,
+    /// Processos de programas fixos e quantas vezes o volume guardado já foi tentado neles.
+    snd_vol_tries: std::collections::HashMap<u32, u8>,
     upd_last: Option<Instant>,
     started: Instant,
     pub audit: audit::Shared,
@@ -460,6 +465,7 @@ pub fn start(background: bool) {
             find_drives: Vec::new(),
             pick_list: Default::default(),
             snd_seen: std::collections::HashSet::new(),
+            snd_vol_tries: std::collections::HashMap::new(),
             upd_last: None,
             started: Instant::now(),
             audit: Default::default(),
@@ -1003,6 +1009,9 @@ impl App {
             for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER, HK_FIND, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE] {
                 let _ = UnregisterHotKey(Some(self.hub), id);
             }
+            for i in 0..SND_KEYS_MAX as i32 {
+                let _ = UnregisterHotKey(Some(self.hub), HK_SND + i);
+            }
         }
         self.hk_errors.clear();
         let c = &self.cfg;
@@ -1032,6 +1041,11 @@ impl App {
             (HK_MUTE, Hotkey::new(c.vol_mods, VK_MUTE), "Mudo", true),
         ];
         let mut errors = Vec::new();
+        for (i, k) in self.cfg.snd_keys.iter().take(SND_KEYS_MAX).enumerate() {
+            if k.key.vk != 0 && unsafe { RegisterHotKey(Some(self.hub), HK_SND + i as i32, HOT_KEY_MODIFIERS(k.key.mods) | MOD_NOREPEAT, k.key.vk) }.is_err() {
+                errors.push(format!("{}: {} já está em uso", crate::i18n::tr("Aparelho padrão"), k.key.label()));
+            }
+        }
         let mut force_hook = None;
         for (id, hk, name, norepeat) in list {
             if hk.vk == 0 {
@@ -1114,6 +1128,7 @@ impl App {
             HK_VOL_UP => self.volume(audio::Change::Step(self.cfg.vol_step as i32)),
             HK_VOL_DOWN => self.volume(audio::Change::Step(-(self.cfg.vol_step as i32))),
             HK_MUTE => self.volume(audio::Change::ToggleMute),
+            id if (HK_SND..HK_SND + SND_KEYS_MAX as i32).contains(&id) => self.sound_default((id - HK_SND) as usize),
             _ => {}
         }
     }
@@ -1728,6 +1743,26 @@ impl App {
         }
     }
 
+    /// Atalho de aparelho padrão: troca a saída e a entrada do Windows e avisa na tela.
+    fn sound_default(&mut self, i: usize) {
+        let Some(k) = self.cfg.snd_keys.get(i).cloned() else { return };
+        let mut said = Vec::new();
+        for (capture, id, label) in [(false, &k.output, "Saída"), (true, &k.input, "Entrada")] {
+            if id.is_empty() {
+                continue;
+            }
+            let name = audio::devices(capture).into_iter().find(|d| &d.id == id).map(|d| d.name);
+            match name {
+                Some(name) if audio::set_default(id) => said.push(format!("{}: {name}", crate::i18n::tr(label))),
+                Some(_) => said.push(format!("{}: {}", crate::i18n::tr(label), crate::i18n::tr("não deu para trocar"))),
+                None => said.push(format!("{}: {}", crate::i18n::tr(label), crate::i18n::tr("aparelho desligado"))),
+            }
+        }
+        if !said.is_empty() {
+            self.toast.info(&said.join(" · "));
+        }
+    }
+
     fn toggle_fullscreen(&mut self) {
         let Some((h, _, exe)) = self.fg_info() else { return };
         if let Some(on) = self.full.toggle(h) {
@@ -1754,6 +1789,7 @@ impl App {
 
     /// Programas com rota escolhida recebem ela assim que abrem.
     fn sound_tick(&mut self) {
+        self.sound_volumes();
         if !self.cfg.snd_apps.iter().any(|a| !a.output.is_empty() || !a.input.is_empty()) {
             return;
         }
@@ -1767,6 +1803,39 @@ impl App {
                 if !self.snd_seen.contains(pid) && apply_route(*pid, a) {
                     self.snd_seen.insert(*pid);
                 }
+            }
+        }
+    }
+
+    /// Programa fixo que abre volta com o volume guardado. O Windows só mostra a sessão de
+    /// som depois que o processo toca algo: cada processo novo é tentado algumas vezes.
+    fn sound_volumes(&mut self) {
+        let pinned: Vec<(String, f32)> = self.cfg.snd_apps.iter().filter(|a| a.pinned && a.volume >= 0).map(|a| (a.exe.clone(), a.volume as f32 / 100.0)).collect();
+        if pinned.is_empty() {
+            self.snd_vol_tries.clear();
+            return;
+        }
+        let alive: std::collections::HashSet<u32> = self.snap.groups.iter().flat_map(|g| g.pids.iter().copied()).collect();
+        self.snd_vol_tries.retain(|pid, _| alive.contains(pid));
+        let mut want: Vec<(u32, f32)> = Vec::new();
+        for g in &self.snap.groups {
+            let Some((_, v)) = pinned.iter().find(|p| p.0.eq_ignore_ascii_case(&g.exe)) else { continue };
+            for pid in &g.pids {
+                let tries = self.snd_vol_tries.entry(*pid).or_insert(0);
+                if *tries < 20 {
+                    *tries += 1;
+                    want.push((*pid, *v));
+                }
+            }
+        }
+        if want.is_empty() {
+            return;
+        }
+        for s in audio::sessions() {
+            if let Some((_, v)) = want.iter().find(|w| w.0 == s.pid) {
+                s.set_volume(*v);
+                // Feito: não tenta de novo neste processo.
+                self.snd_vol_tries.insert(s.pid, u8::MAX);
             }
         }
     }
@@ -1987,7 +2056,10 @@ impl App {
     fn meter_view(&mut self, view: u8) {
         // O mesmo atalho de novo esconde o medidor.
         let view = if view != crate::meter::VIEW_OFF && self.meter.view == view { crate::meter::VIEW_OFF } else { view };
-        // O jogo aberto entra na lista, já com este medidor: da próxima vez, ele aparece sozinho.
+        if view != crate::meter::VIEW_OFF {
+            self.meter_session();
+        }
+        // O jogo aberto entra na lista, para guardar o limite, o HDR e o perfil dele.
         if view != crate::meter::VIEW_OFF && !self.meter.session.exe.is_empty() {
             let (exe, pid) = (self.meter.session.exe.clone(), self.meter.session.pid);
             self.add_meter_game(&exe, &procs::image_path(pid).unwrap_or_default());
@@ -2030,6 +2102,12 @@ impl App {
         if self.meter.interacting() {
             self.meter.set_controls(false);
             return;
+        }
+        self.meter_session();
+        if !self.meter.session.exe.is_empty() {
+            let (exe, pid) = (self.meter.session.exe.clone(), self.meter.session.pid);
+            self.add_meter_game(&exe, &procs::image_path(pid).unwrap_or_default());
+            self.cfg.save();
         }
         self.meter.show(crate::meter::VIEW_FULL);
         self.meter_timer();
@@ -2077,13 +2155,51 @@ impl App {
         }
     }
 
-    fn meter_tick(&mut self) {
-        let game = (self.detector.mode == Mode::Game && !self.detector.game_exe.is_empty()).then(|| {
-            let exe = self.detector.game_exe.clone();
+    /// O jogo do medidor: o da sessão enquanto ele estiver aberto, um da lista em foco, ou o que
+    /// o modo jogo do Energia achou (para o HDR em todos e o registro automático).
+    fn meter_game(&self) -> Option<(String, u32, String)> {
+        let s = &self.meter.session;
+        if s.pid != 0 {
+            if let Some(path) = procs::image_path(s.pid) {
+                return Some((s.exe.clone(), s.pid, path));
+            }
+        }
+        if let Some(path) = procs::image_path(self.fg_pid) {
+            let exe = procs::exe_name(&path);
+            if self.cfg.meter_games.iter().any(|g| g.exe.eq_ignore_ascii_case(&exe)) {
+                return Some((exe, self.fg_pid, path));
+            }
+        }
+        (self.detector.mode == Mode::Game && !self.detector.game_exe.is_empty()).then(|| {
             let pid = self.detector.game_pid;
-            let path = procs::image_path(pid).unwrap_or_default();
-            (exe, pid, path)
-        });
+            (self.detector.game_exe.clone(), pid, procs::image_path(pid).unwrap_or_default())
+        })
+    }
+
+    /// O programa em foco quando o atalho do medidor foi apertado, se ele puder ser um jogo.
+    fn focused_game(&self) -> Option<(String, u32, String)> {
+        let fg = unsafe { GetForegroundWindow() };
+        let pid = procs::window_pid(fg);
+        if pid == 0 || pid == std::process::id() || fg == unsafe { GetShellWindow() } {
+            return None;
+        }
+        let path = procs::image_path(pid)?;
+        let exe = procs::exe_name(&path);
+        const SHELL: [&str; 7] = ["explorer.exe", "searchhost.exe", "startmenuexperiencehost.exe", "shellexperiencehost.exe", "textinputhost.exe", "lockapp.exe", "prisma.exe"];
+        (!SHELL.iter().any(|s| exe.eq_ignore_ascii_case(s))).then_some((exe, pid, path))
+    }
+
+    /// Sem jogo na sessão, o atalho usa o programa em foco.
+    fn meter_session(&mut self) {
+        if self.meter.session.exe.is_empty() {
+            if let Some((exe, pid, path)) = self.focused_game() {
+                self.meter.start(&mut self.cfg, exe, pid, path, &self.snap);
+            }
+        }
+    }
+
+    fn meter_tick(&mut self) {
+        let game = self.meter_game();
         #[cfg(debug_assertions)]
         let game = (|| {
             let pid: u32 = std::env::var("PRISMA_METER_GAME").ok()?.parse().ok()?;
@@ -2320,8 +2436,12 @@ impl App {
         }
         if el >= delay {
             // `--test-page=share`: a página Compartilhar tela por cima das Novidades; `--test-en`: inglês.
-            if arg("--test-page=").as_deref() == Some("share") {
-                self.page = Page::Share;
+            match arg("--test-page=").as_deref() {
+                Some("share") => self.page = Page::Share,
+                Some("meter") => self.page = Page::Meter,
+                Some("sound") => self.page = Page::Volume,
+                Some("guide") => self.page = Page::Guide,
+                _ => {}
             }
             if args.iter().any(|a| a == "--test-en") {
                 crate::i18n::set_english(true);
@@ -2372,8 +2492,24 @@ impl App {
             let mut st = UiState::default();
             st.view_w = w;
             st.view_h = h;
+            // `--test-scroll=key:px` desce uma área rolável antes da foto.
+            if let Some((key, px)) = std::env::args().find_map(|a| a.strip_prefix("--test-scroll=").and_then(|v| v.split_once(':')).map(|(k, p)| (k.to_string(), p.parse().unwrap_or(0.0)))) {
+                st.set_scroll(&key, px);
+            }
+            // `--test-click=x,y`: aperta no primeiro passe e solta no segundo.
+            let click: Option<(f32, f32)> = std::env::args().find_map(|a| {
+                let (x, y) = a.strip_prefix("--test-click=")?.split_once(',')?;
+                Some((x.parse().ok()?, y.parse().ok()?))
+            });
             // Três passes: a pesquisa sai no primeiro e o resultado chega antes do último.
             for pass in 0..3 {
+                if let Some((x, y)) = click {
+                    st.mx = x;
+                    st.my = y;
+                    st.pressed = pass == 0;
+                    st.down = pass == 0;
+                    st.released = pass == 1;
+                }
                 if pass > 0 {
                     std::thread::sleep(std::time::Duration::from_millis(1500));
                     self.find.take();

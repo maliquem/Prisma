@@ -90,6 +90,12 @@ struct Writer {
     times: HashMap<u32, (u64, u64)>,
     sampled: Option<Instant>,
     totals: HashMap<u32, ThreadTotal>,
+    /// Somas da GPU para o resumo: controlador de memória, energia em % do limite e
+    /// segundos com o clock segurado por cada motivo.
+    mem_util: f32,
+    power_pct: f32,
+    reasons: [u32; super::nvml::REASONS.len()],
+    vram_total: u64,
 }
 
 fn opt(v: Option<f32>) -> String {
@@ -121,7 +127,7 @@ impl Writer {
         let t = self.begin.elapsed().as_secs_f32();
         if self.rows == 0 {
             let cores: String = (0..s.snap.threads.len()).map(|i| format!(",core{i}_pct")).collect();
-            let _ = writeln!(self.seconds, "t_s,fps,frametime_ms,worst_ms,dev_ms,avg_fps,low1_fps,low01_fps,real_fps,latency_ms,direct_flip,counted_by_flip,spike,frames_kept,cpu_pct,cpu_ghz,gpu_pct,gpu_mhz,gpu_mem_mhz,gpu_c,gpu_w,fan_pct,vram_gb,ram_gb,game_cpu_pct,game_ram_gb,game_gpu_pct,game_vram_gb,game_disk_mb_s,game_net_mb_s{cores}");
+            let _ = writeln!(self.seconds, "t_s,fps,frametime_ms,worst_ms,dev_ms,avg_fps,low1_fps,low01_fps,real_fps,latency_ms,direct_flip,counted_by_flip,spike,frames_kept,cpu_pct,cpu_ghz,gpu_pct,gpu_mhz,gpu_mem_mhz,gpu_c,gpu_w,fan_pct,vram_gb,ram_gb,game_cpu_pct,game_ram_gb,game_gpu_pct,game_vram_gb,game_disk_mb_s,game_net_mb_s,gpu_mem_ctrl_pct,gpu_power_limit_w,gpu_power_pct,gpu_clock_limited_by,gpu_max_mhz,pcie_tx_mb_s,pcie_rx_mb_s,vram_total_gb{cores}");
             let _ = writeln!(self.frames, "t_ms,frametime_ms");
             let _ = writeln!(self.threads, "t_s,tid,name,cpu_pct_of_core,kernel_pct_of_core");
         }
@@ -129,9 +135,29 @@ impl Writer {
         let group = sn.groups.iter().find(|g| g.pids.contains(&s.pid));
         let g = group.cloned().unwrap_or_default();
         let cores: String = sn.threads.iter().map(|v| format!(",{v:.1}")).collect();
+        let gp = &sn.gpu;
+        let power_pct = if gp.power_limit > 0.0 { gp.watts / gp.power_limit * 100.0 } else { 0.0 };
+        let limited: Vec<&str> = super::nvml::REASONS.iter().filter(|r| gp.reasons & r.0 != 0).map(|r| r.1).collect();
+        let extra = format!(
+            ",{},{:.1},{:.1},{},{},{:.1},{:.1},{:.2}",
+            gp.mem_util,
+            gp.power_limit,
+            power_pct,
+            limited.join("+"),
+            gp.max_mhz,
+            gp.pcie_tx,
+            gp.pcie_rx,
+            gb(gp.total)
+        );
+        for (i, r) in super::nvml::REASONS.iter().enumerate() {
+            self.reasons[i] += (gp.reasons & r.0 != 0) as u32;
+        }
+        self.mem_util += gp.mem_util as f32;
+        self.power_pct += power_pct;
+        self.vram_total = gp.total;
         let _ = writeln!(
             self.seconds,
-            "{t:.2},{:.2},{:.3},{:.3},{:.3},{:.2},{:.2},{:.2},{},{},{},{},{},{},{:.2},{:.2},{:.2},{},{},{},{:.1},{},{:.3},{:.3},{:.2},{:.3},{:.2},{:.3},{:.2},{:.2}{cores}",
+            "{t:.2},{:.2},{:.3},{:.3},{:.3},{:.2},{:.2},{:.2},{},{},{},{},{},{},{:.2},{:.2},{:.2},{},{},{},{:.1},{},{:.3},{:.3},{:.2},{:.3},{:.2},{:.3},{:.2},{:.2}{extra}{cores}",
             st.fps, st.ms, st.worst, st.dev, st.avg, st.low1, st.low01, opt(st.real_fps), opt(st.latency), st.direct as u8, st.by_flip as u8, st.spike as u8, st.frames,
             sn.cpu, sn.ghz, sn.gpu.util, sn.gpu.mhz, sn.gpu.mem_mhz, sn.gpu.temp, sn.gpu.watts, sn.gpu.fan, gb(sn.gpu.used), gb(sn.ram_used),
             g.cpu, gb(g.ram), g.gpu, gb(g.vram), mb(g.disk), mb(g.net),
@@ -242,7 +268,20 @@ impl Writer {
         let core = self.cores.iter().copied().fold(0.0, f32::max) / rows;
         line(&mut out, "Núcleo lógico mais usado", format!("{core:.1}%"));
         line(&mut out, "GPU média", format!("{top_gpu:.1}%"));
-        line(&mut out, "Pico de VRAM", format!("{:.2} GB", gb(self.vram)));
+        line(&mut out, "Controlador de memória da GPU, média", format!("{:.1}%", self.mem_util / rows));
+        line(&mut out, "Energia da GPU, média do limite", format!("{:.1}%", self.power_pct / rows));
+        let held: Vec<String> = super::nvml::REASONS
+            .iter()
+            .zip(self.reasons)
+            .filter(|(_, n)| *n > 0)
+            .map(|(r, n)| format!("{} {:.0}%", r.1, n as f32 / rows * 100.0))
+            .collect();
+        line(&mut out, "Clock da GPU segurado por", if held.is_empty() { "—".to_string() } else { held.join(", ") });
+        if self.vram_total > 0 {
+            line(&mut out, "Pico de VRAM", format!("{:.2} / {:.2} GB", gb(self.vram), gb(self.vram_total)));
+        } else {
+            line(&mut out, "Pico de VRAM", format!("{:.2} GB", gb(self.vram)));
+        }
         line(&mut out, "Pico de RAM", format!("{:.2} GB", gb(self.ram)));
         let mut list: Vec<(&u32, &ThreadTotal)> = self.totals.iter().filter(|t| t.1.seen > 0 && t.1.sum / t.1.seen as f32 >= 0.1).collect();
         list.sort_by(|a, b| (b.1.sum / b.1.seen as f32).total_cmp(&(a.1.sum / a.1.seen as f32)));
@@ -258,7 +297,18 @@ impl Writer {
         if top_gpu.is_nan() {
             top_gpu = 0.0;
         }
-        let reading = if top_gpu >= BUSY {
+        let power_share = self.reasons[0] as f32 / rows;
+        let thermal_share = (self.reasons[2] + self.reasons[3]) as f32 / rows;
+        let vram_near = self.vram_total > 0 && self.vram as f32 >= self.vram_total as f32 * 0.92;
+        if vram_near {
+            let _ = writeln!(out, "\n{}", tr("A VRAM chegou perto do total: texturas e resolução são os primeiros ajustes."));
+        }
+        if thermal_share >= 0.1 {
+            let _ = writeln!(out, "\n{}", tr("A temperatura segurou o clock da GPU em parte do tempo."));
+        }
+        let reading = if top_gpu >= BUSY && power_share >= 0.5 {
+            "Leitura: GPU cheia e no limite de energia, então o limite é a GPU. Menos carga por quadro (resolução, sombras, efeitos) é o que rende."
+        } else if top_gpu >= BUSY {
             "Leitura: GPU cheia na maior parte do tempo, então o limite parece ser a GPU."
         } else if top_thread >= BUSY {
             "Leitura: uma thread perto de um núcleo inteiro com a GPU sobrando, então o limite parece ser a CPU."
@@ -303,6 +353,10 @@ impl Log {
             times: HashMap::new(),
             sampled: None,
             totals: HashMap::new(),
+            mem_util: 0.0,
+            power_pct: 0.0,
+            reasons: [0; super::nvml::REASONS.len()],
+            vram_total: 0,
         };
         let (tx, rx) = channel();
         let thread = std::thread::Builder::new()

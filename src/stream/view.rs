@@ -612,6 +612,21 @@ impl Scaler {
 }
 
 static RESIZED: AtomicBool = AtomicBool::new(false);
+
+/// O D3D11 solta o buffer antigo só depois de `ClearState` e `Flush`: sem isso o
+/// `ResizeBuffers` falha e o buffer fica do tamanho de antes.
+unsafe fn resize_swap(d: &D3d, swap: &IDXGISwapChain1, fmt: DXGI_FORMAT, flags: u32) -> Result<()> {
+    d.ctx.ClearState();
+    d.ctx.Flush();
+    swap.ResizeBuffers(0, 0, 0, fmt, DXGI_SWAP_CHAIN_FLAG(flags as i32))
+}
+
+/// Tamanho real do buffer de trás: desenhar nele inteiro não deixa sobra de quadro velho.
+unsafe fn buffer_size(bb: &ID3D11Texture2D) -> (u32, u32) {
+    let mut desc = D3D11_TEXTURE2D_DESC::default();
+    bb.GetDesc(&mut desc);
+    (desc.Width, desc.Height)
+}
 static SAVED: Mutex<Option<(isize, RECT)>> = Mutex::new(None);
 
 /// Tela cheia sem borda e volta.
@@ -998,7 +1013,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         .and_then(|f5| f5.CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &mut allow as *mut _ as *mut _, std::mem::size_of::<BOOL>() as u32))
         .is_ok()
         && allow.as_bool();
-    let flags = if tearing { DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING.0 as u32 } else { 0 };
+    let swap_flags = if tearing { DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING.0 as u32 } else { 0 };
     let desc = DXGI_SWAP_CHAIN_DESC1 {
         Width: 0,
         Height: 0,
@@ -1010,7 +1025,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         Scaling: DXGI_SCALING_STRETCH,
         SwapEffect: DXGI_SWAP_EFFECT_FLIP_DISCARD,
         AlphaMode: DXGI_ALPHA_MODE_UNSPECIFIED,
-        Flags: flags,
+        Flags: swap_flags,
     };
     let swap = factory.CreateSwapChainForHwnd(&d.dev, hwnd, &desc, None, None)?;
     let _ = factory.MakeWindowAssociation(hwnd, DXGI_MWA_NO_ALT_ENTER);
@@ -1125,7 +1140,9 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         }
         if RESIZED.swap(false, Ordering::Relaxed) {
             scaler = None;
-            let _ = swap.ResizeBuffers(0, 0, 0, DXGI_FORMAT_UNKNOWN, DXGI_SWAP_CHAIN_FLAG(flags as i32));
+            if let Err(e) = resize_swap(&d, &swap, DXGI_FORMAT_UNKNOWN, swap_flags) {
+                eprintln!("janela: não deu para mudar o tamanho: {e:?}");
+            }
             if let Some(h) = &mut hud {
                 h.update(hwnd, co.meter, co.warn, None);
             }
@@ -1139,7 +1156,14 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
             clipped = want_clip;
         }
         let mut picks: Vec<hud::Pick> = std::mem::take(&mut KEYS.lock().unwrap().acts);
-        if std::mem::take(&mut KEYS.lock().unwrap().menu) {
+        // O menu fechou: a escolha entra com as outras.
+        if let Some(p) = hud::menu_poll(hwnd) {
+            picks.extend(p);
+            if let Some(h) = &mut hud {
+                h.update(hwnd, co.meter, co.warn, None);
+            }
+        }
+        if std::mem::take(&mut KEYS.lock().unwrap().menu) && !hud::menu_is_open() {
             if clipped {
                 let _ = ClipCursor(None);
                 clipped = false;
@@ -1162,12 +1186,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                 video: info.map(|(c, w, h, fps)| format!("{w}x{h} {}{extra} · {fps} {} · {}", codec_name(c), crate::i18n::tr("q/s"), link.route())).unwrap_or_default(),
                 keys: [label(co.key_menu), label(co.key_full), label(co.key_imm), label(co.key_meter), label(co.key_sound), label(co.key_cad), label(co.key_disc)],
             };
-            if let Some(p) = hud::menu(hwnd, st) {
-                picks.push(p);
-            }
-            if let Some(h) = &mut hud {
-                h.update(hwnd, co.meter, co.warn, None);
-            }
+            hud::menu_open(hwnd, st);
         }
         for p in picks {
             match p {
@@ -1244,7 +1263,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                         if hdr10 != hdr_out {
                             let fmt = if hdr10 { DXGI_FORMAT_R10G10B10A2_UNORM } else { DXGI_FORMAT_B8G8R8A8_UNORM };
                             let cs = if hdr10 { DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 } else { DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709 };
-                            let done = swap.ResizeBuffers(0, 0, 0, fmt, DXGI_SWAP_CHAIN_FLAG(flags as i32)).and_then(|_| swap.cast::<IDXGISwapChain3>()?.SetColorSpace1(cs));
+                            let done = resize_swap(&d, &swap, fmt, swap_flags).and_then(|_| swap.cast::<IDXGISwapChain3>()?.SetColorSpace1(cs));
                             match done {
                                 Ok(()) => hdr_out = hdr10,
                                 Err(e) => eprintln!("janela HDR10: {e:?}"),
@@ -1336,8 +1355,8 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
 
         #[cfg(feature = "stream")]
         if let (Some(pts), Some((n, draw))) = (nv_pts.take(), &nv) {
-            let (ow, oh) = client_size(hwnd);
             let bb: ID3D11Texture2D = swap.GetBuffer(0)?;
+            let (ow, oh) = buffer_size(&bb);
             if draw.draw(&d.dev, &d.ctx, n, &bb, ow, oh).is_ok() && swap.Present(sync, present_flags).is_ok() {
                 let shown = now();
                 second.shown += 1;
@@ -1346,12 +1365,12 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         }
         if let (Some(f), Some((_, w, h, fps))) = (last, info) {
             if let Some((tex, slice)) = f.texture() {
-                let (ow, oh) = client_size(hwnd);
+                let bb: ID3D11Texture2D = swap.GetBuffer(0)?;
+                let (ow, oh) = buffer_size(&bb);
                 if scaler.as_ref().is_none_or(|s| s.size != (w, h, ow, oh) || s.hdr != hdr_out) {
                     scaler = Scaler::new(&d, w, h, ow, oh, fps, hdr_out).ok();
                 }
                 if let Some(s) = &scaler {
-                    let bb: ID3D11Texture2D = swap.GetBuffer(0)?;
                     if s.blt(&tex, slice, &bb).is_ok() && swap.Present(sync, present_flags).is_ok() {
                         let shown = now();
                         second.shown += 1;

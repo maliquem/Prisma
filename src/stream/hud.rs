@@ -116,7 +116,9 @@ impl Hud {
                 let c = crate::i18n::comma();
                 let n = |v: f64, d: usize| format!("{v:.d$}").replace('.', c);
                 lines.push((format!("{} ms {} · {} {} ms", n(s.e2e_ms, 1), tr("ponta a ponta"), tr("rede"), n(s.rtt_ms, 1)), TEXT, 14.0, Weight::Semibold));
-                lines.push((format!("{} · {:.0} {} · {} Mbit/s", s.video, s.fps, tr("q/s"), n(s.mbps, 1)), TEXT, 13.0, Weight::Regular));
+                // Quadros por segundo mostrados aqui, em linha própria.
+                lines.push((format!("{:.0} FPS · {} Mbit/s", s.fps, n(s.mbps, 1)), TEXT, 14.0, Weight::Semibold));
+                lines.push((s.video.clone(), TEXT, 13.0, Weight::Regular));
                 lines.push((format!("{} {} ms · {} {}", tr("decodificação"), n(s.decode_ms, 2), tr("perdidos"), s.lost_total), MUTED, 13.0, Weight::Regular));
                 lines.push((s.route.clone(), MUTED, 13.0, Weight::Regular));
             }
@@ -231,6 +233,8 @@ struct Open {
 thread_local! {
     static MENU: std::cell::RefCell<Option<Open>> = const { std::cell::RefCell::new(None) };
     static MENU_STATE: std::cell::RefCell<Option<MenuState>> = const { std::cell::RefCell::new(None) };
+    /// A janela do menu aberto (0: fechado).
+    static MENU_HWND: std::cell::Cell<isize> = const { std::cell::Cell::new(0) };
 }
 
 const MENU_W: f32 = 460.0;
@@ -429,14 +433,20 @@ unsafe extern "system" fn menu_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
 
 /// O menu da conexão, no meio da janela de quem assiste. Fecha com um clique fora, Esc ou uma
 /// escolha; as setas e o Enter também escolhem.
-pub fn menu(owner: HWND, st: MenuState) -> Option<Pick> {
+/// Abre o menu sem parar a janela de quem assiste: o laço dela segue mostrando os quadros
+/// e entrega as mensagens do menu, e `menu_poll` traz a escolha quando ele fecha.
+pub fn menu_open(owner: HWND, st: MenuState) -> bool {
+    if menu_is_open() {
+        return false;
+    }
     unsafe {
-        let inst: HINSTANCE = GetModuleHandleW(None).ok()?.into();
+        let Ok(inst) = GetModuleHandleW(None) else { return false };
+        let inst: HINSTANCE = inst.into();
         let class = w!("PrismaAssistirMenu");
         let wc = WNDCLASSW { lpfnWndProc: Some(menu_proc), hInstance: inst, lpszClassName: class, hCursor: LoadCursorW(None, IDC_ARROW).unwrap_or_default(), ..Default::default() };
         RegisterClassW(&wc);
         let ex = WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST;
-        let h = CreateWindowExW(ex, class, w!(""), WS_POPUP, 0, 0, 1, 1, Some(owner), None, Some(inst), None).ok()?;
+        let Ok(h) = CreateWindowExW(ex, class, w!(""), WS_POPUP, 0, 0, 1, 1, Some(owner), None, Some(inst), None) else { return false };
         let scale = windows::Win32::UI::HiDpi::GetDpiForWindow(owner) as f32 / 96.0;
         let size = (MENU_W, menu_height(&st));
         let mut rc = RECT::default();
@@ -453,25 +463,28 @@ pub fn menu(owner: HWND, st: MenuState) -> Option<Pick> {
         let _ = ShowWindow(h, SW_SHOW);
         let _ = SetForegroundWindow(h);
         let _ = windows::Win32::UI::Input::KeyboardAndMouse::SetFocus(Some(h));
-        let mut msg = MSG::default();
-        loop {
-            if MENU.with(|c| c.borrow().as_ref().is_none_or(|o| o.done)) {
-                break;
-            }
-            let r = GetMessageW(&mut msg, None, 0, 0);
-            if r.0 <= 0 {
-                PostQuitMessage(0);
-                break;
-            }
-            let _ = TranslateMessage(&msg);
-            DispatchMessageW(&msg);
-        }
-        let pick = MENU.with(|c| c.borrow_mut().take()).and_then(|o| o.pick);
-        MENU_STATE.with(|s| *s.borrow_mut() = None);
-        let _ = DestroyWindow(h);
-        let _ = SetForegroundWindow(owner);
-        pick
+        MENU_HWND.with(|c| c.set(h.0 as isize));
+        true
     }
+}
+
+pub fn menu_is_open() -> bool {
+    MENU_HWND.with(|c| c.get()) != 0
+}
+
+/// Menu fechado agora: `Some(escolha)`, uma vez. Aberto ou sem menu: `None`.
+pub fn menu_poll(owner: HWND) -> Option<Option<Pick>> {
+    if !menu_is_open() || !MENU.with(|c| c.borrow().as_ref().is_none_or(|o| o.done)) {
+        return None;
+    }
+    let pick = MENU.with(|c| c.borrow_mut().take()).and_then(|o| o.pick);
+    MENU_STATE.with(|s| *s.borrow_mut() = None);
+    let h = MENU_HWND.with(|c| c.replace(0));
+    unsafe {
+        let _ = DestroyWindow(HWND(h as *mut _));
+        let _ = SetForegroundWindow(owner);
+    }
+    Some(pick)
 }
 
 /// Teste: o menu com valores de exemplo, sem nada sob o mouse e com a terceira área marcada.
