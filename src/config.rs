@@ -225,6 +225,8 @@ pub struct Config {
     pub power_auto: bool,
     pub plan_game: String,
     pub plan_rest: String,
+    /// Plano que fica ligado enquanto a troca automática está desligada (vazio: o Prisma não mexe).
+    pub plan_fixed: String,
     /// 0 pergunta, 1 otimiza sem perguntar, 2 só troca o plano.
     pub on_game: u8,
     pub rule_fullscreen: bool,
@@ -335,6 +337,7 @@ impl Default for Config {
             power_auto: true,
             plan_game: "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c".into(),
             plan_rest: "381b4222-f694-41f0-9685-ff5bb260df2e".into(),
+            plan_fixed: String::new(),
             on_game: 2,
             rule_fullscreen: true,
             rule_gpu: true,
@@ -473,6 +476,7 @@ impl Config {
                 "power_auto" => c.power_auto = b,
                 "plan_game" => c.plan_game = v.into(),
                 "plan_rest" => c.plan_rest = v.into(),
+                "plan_fixed" => c.plan_fixed = v.into(),
                 // Antes perguntava por padrão. Só quem escolheu otimizar sem perguntar continua assim.
                 "on_game" => c.on_game = if v == "1" { 1 } else { 2 },
                 "game_action" => c.on_game = v.parse().unwrap_or(2),
@@ -649,6 +653,7 @@ impl Config {
         let _ = writeln!(s, "power_auto={}", b(self.power_auto));
         let _ = writeln!(s, "plan_game={}", self.plan_game);
         let _ = writeln!(s, "plan_rest={}", self.plan_rest);
+        let _ = writeln!(s, "plan_fixed={}", self.plan_fixed);
         let _ = writeln!(s, "game_action={}", self.on_game);
         let _ = writeln!(s, "rule_fullscreen={}", b(self.rule_fullscreen));
         let _ = writeln!(s, "rule_gpu={}", b(self.rule_gpu));
@@ -795,6 +800,7 @@ impl Config {
                 self.power_auto = d.power_auto;
                 self.plan_game = d.plan_game;
                 self.plan_rest = d.plan_rest;
+                self.plan_fixed = d.plan_fixed;
                 self.on_game = d.on_game;
                 self.rule_fullscreen = d.rule_fullscreen;
                 self.rule_gpu = d.rule_gpu;

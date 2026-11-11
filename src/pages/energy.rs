@@ -40,6 +40,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     if ui.check("auto", rect(a.right() - 200.0, 30.0, 172.0, 34.0), "Troca automática", &mut auto) {
         app.cfg.power_auto = auto;
         app.cfg.save();
+        app.apply_power_choice();
     }
 
     defaults_button(ui, app, a.right() - 304.0, crate::config::Defaults::Energy, "Volta os planos, a troca automática e o que conta como carga ao padrão.");
@@ -53,11 +54,21 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let r0 = rect(x, top, cw, 92.0);
     let r1 = rect(x + cw + 12.0, top, cw, 92.0);
     let r2 = rect(x + 2.0 * (cw + 12.0), top, cw, 92.0);
-    ui.card_on(r0);
-    ui.card(r1);
+    let auto = app.cfg.power_auto;
+    if auto {
+        ui.card_on(r0);
+        ui.card(r1);
+        ui.label(rect(r0.x + 16.0, r0.y + 10.0, r0.w - 32.0, 18.0), "Com jogo ou carga pesada", TEXT2);
+        ui.label(rect(r1.x + 16.0, r1.y + 10.0, r1.w - 32.0, 18.0), "No resto do tempo", TEXT2);
+    } else {
+        // Troca desligada: um plano só, que fica até a troca voltar.
+        let f = rect(x, top, 2.0 * cw + 12.0, 92.0);
+        ui.card_on(f);
+        ui.label(rect(f.x + 16.0, f.y + 10.0, cw - 32.0, 18.0), "Plano fixo", TEXT2);
+        let note = rect(f.x + cw + 12.0, f.y + 30.0, cw - 16.0, 52.0);
+        ui.c.text_wrap(note, "Fica ligado até a troca automática voltar, também depois de reiniciar. Sem plano fixo, o Prisma não muda o plano.", 12.0, MUTED, Weight::Regular);
+    }
     ui.card(r2);
-    ui.label(rect(r0.x + 16.0, r0.y + 10.0, r0.w - 32.0, 18.0), "Com jogo ou carga pesada", TEXT2);
-    ui.label(rect(r1.x + 16.0, r1.y + 10.0, r1.w - 32.0, 18.0), "No resto do tempo", TEXT2);
     ui.label(rect(r2.x + 16.0, r2.y + 10.0, r2.w - 32.0, 18.0), "Ao entrar em modo jogo", TEXT2);
 
     let tl_y = top + 104.0;
@@ -201,8 +212,17 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         app.cfg.on_game = on as u8;
         changed = true;
     }
-    changed |= plan_select(ui, "pgame", rect(r0.x + 16.0, r0.y + 34.0, r0.w - 32.0, 44.0), &names, &ids, &mut app.cfg.plan_game);
-    changed |= plan_select(ui, "prest", rect(r1.x + 16.0, r1.y + 34.0, r1.w - 32.0, 44.0), &names, &ids, &mut app.cfg.plan_rest);
+    if auto {
+        changed |= plan_select(ui, "pgame", rect(r0.x + 16.0, r0.y + 34.0, r0.w - 32.0, 44.0), &names, &ids, &mut app.cfg.plan_game);
+        changed |= plan_select(ui, "prest", rect(r1.x + 16.0, r1.y + 34.0, r1.w - 32.0, 44.0), &names, &ids, &mut app.cfg.plan_rest);
+    } else {
+        let fixed_names: Vec<String> = std::iter::once(crate::i18n::tr("Sem plano fixo").into_owned()).chain(names.iter().cloned()).collect();
+        let fixed_ids: Vec<String> = std::iter::once(String::new()).chain(ids.iter().cloned()).collect();
+        if plan_select(ui, "pfixed", rect(r0.x + 16.0, r0.y + 34.0, r0.w - 32.0, 44.0), &fixed_names, &fixed_ids, &mut app.cfg.plan_fixed) {
+            app.cfg.save();
+            app.apply_power_choice();
+        }
+    }
     if changed {
         app.cfg.save();
     }

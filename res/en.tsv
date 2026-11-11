@@ -1819,3 +1819,7 @@ Gravando registro de dados	Recording the data log
 ligada em {} de {} s, até {}x	on for {} of {} s, up to {}x
 carregada, sem medir se ligou	loaded, without measuring whether it was on
 Lossless Scaling aberto	Lossless Scaling open
+Troca desligada	Switching off
+Plano fixo	Fixed plan
+Sem plano fixo	No fixed plan
+Fica ligado até a troca automática voltar, também depois de reiniciar. Sem plano fixo, o Prisma não muda o plano.	Stays on until automatic switching comes back, also after a restart. With no fixed plan, Prisma doesn't change the plan.

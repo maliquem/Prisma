@@ -292,8 +292,10 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
     let chip = rect(12.0, full.h - 88.0, SIDE_W - 24.0, 76.0);
     ui.c.round(chip, 10.0, CARD);
     let plan = app.plans.iter().find(|p| p.id == app.active_plan).map(|p| p.name.as_str()).unwrap_or("Plano desconhecido");
-    let state = if !app.cfg.power_auto {
-        "Troca automática desligada"
+    let state = if !app.cfg.power_auto && !app.cfg.plan_fixed.is_empty() {
+        "Plano fixo"
+    } else if !app.cfg.power_auto {
+        "Troca desligada"
     } else {
         match app.detector.mode {
             crate::sys::power::Mode::Rest => "Repouso",

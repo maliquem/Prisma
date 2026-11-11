@@ -156,6 +156,8 @@ Se você quiser, uma pergunta pequena aparece no canto superior direito quando u
 
 Detecta jogo ou carga alta e troca o plano de energia. Volta ao repouso depois de 60 segundos sem carga. Você escolhe a porcentagem e o tempo que contam como carga.
 
+Com a **Troca automática** desligada, o quadro **Plano fixo** escolhe um plano que liga na hora e fica até a troca voltar, também depois de reiniciar o Prisma ou o PC. Se um jogo trocar o plano no meio (o plano por jogo do Medidor, por exemplo), o plano fixo volta quando ele fecha. **Sem plano fixo**, o Prisma não muda o plano.
+
 Conta como jogo o programa em foco que cobre a tela e usa a GPU ele mesmo, ou que mora na pasta de jogos da Steam, Epic, GOG ou Xbox. Navegadores, players de vídeo, acesso remoto como o Parsec, Discord, OBS e lançadores nunca contam, mesmo em tela cheia.
 
 - **Dá para:** editar um plano com todas as opções que o Windows registra, inclusive as ocultas, e importar ou exportar arquivos .pow. A primeira edição guarda uma cópia do plano original.

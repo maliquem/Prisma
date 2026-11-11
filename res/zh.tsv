@@ -1813,3 +1813,7 @@ Gravando registro de dados	正在记录数据日志
 ligada em {} de {} s, até {}x	{} / {} 秒开启，最高 {}x
 carregada, sem medir se ligou	已加载，未测量是否开启
 Lossless Scaling aberto	Lossless Scaling 已打开
+Troca desligada	切换已关闭
+Plano fixo	固定计划
+Sem plano fixo	无固定计划
+Fica ligado até a troca automática voltar, também depois de reiniciar. Sem plano fixo, o Prisma não muda o plano.	在重新开启自动切换之前一直生效，重启后也是。没有固定计划时，Prisma 不会更改计划。

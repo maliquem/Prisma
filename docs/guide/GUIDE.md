@@ -156,6 +156,8 @@ If you want, a small question appears in the top right corner when a game opens,
 
 Detects a game or high load and switches the power plan. It goes back to rest after 60 seconds without load. You choose the percentage and time that count as load.
 
+With **Automatic switching** off, the **Fixed plan** box picks a plan that turns on right away and stays until switching comes back, also after restarting Prisma or the PC. If a game changes the plan in between (the Meter's per-game plan, for example), the fixed plan comes back when it closes. With **No fixed plan**, Prisma doesn't change the plan.
+
 A game is the program in focus that covers the screen and uses the GPU itself, or that lives in the Steam, Epic, GOG or Xbox game folders. Browsers, video players, remote access like Parsec, Discord, OBS and launchers never count, even in full screen.
 
 - **You can:** edit a plan with every option Windows registers, including hidden ones, and import or export .pow files. The first edit keeps a copy of the original plan.

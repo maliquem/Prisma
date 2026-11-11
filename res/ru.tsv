@@ -1813,3 +1813,7 @@ Gravando registro de dados	Идёт запись журнала
 ligada em {} de {} s, até {}x	включена {} из {} с, до {}x
 carregada, sem medir se ligou	загружена, включение не измерено
 Lossless Scaling aberto	Lossless Scaling открыт
+Troca desligada	Без переключения
+Plano fixo	Постоянная схема
+Sem plano fixo	Без постоянной схемы
+Fica ligado até a troca automática voltar, também depois de reiniciar. Sem plano fixo, o Prisma não muda o plano.	Действует, пока не включено автопереключение, и после перезапуска тоже. Без постоянной схемы Prisma не меняет схему.

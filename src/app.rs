@@ -881,6 +881,10 @@ pub fn start(background: bool) {
             };
         }
         app.refresh_plans();
+        // Plano fixo vale também depois de reiniciar; com a troca ligada, quem decide é o detector.
+        if !app.cfg.power_auto && !app.cfg.plan_fixed.is_empty() {
+            app.apply_power_choice();
+        }
         if app.cfg.search_on {
             app.load_disks();
         }
@@ -2711,6 +2715,19 @@ impl App {
         self.prompt.hide();
     }
 
+    /// A troca automática manda: o plano do momento (jogo ou repouso). Desligada: o plano fixo, se houver.
+    pub fn apply_power_choice(&mut self) {
+        self.active_plan = power::active().unwrap_or_default();
+        let plan = if !self.cfg.power_auto {
+            self.cfg.plan_fixed.clone()
+        } else if self.detector.mode == Mode::Rest {
+            self.cfg.plan_rest.clone()
+        } else {
+            self.cfg.plan_game.clone()
+        };
+        self.apply_plan(&plan);
+    }
+
     fn apply_plan(&mut self, id: &str) {
         if !id.is_empty() && self.active_plan != id && power::set_active(id) {
             self.active_plan = id.to_string();
@@ -2780,6 +2797,9 @@ impl App {
                 if self.cfg.power_auto {
                     let plan = self.cfg.plan_rest.clone();
                     self.apply_plan(&plan);
+                } else {
+                    // O plano fixo volta se algo trocou durante o jogo (o plano por jogo do Medidor, por exemplo).
+                    self.apply_power_choice();
                 }
             }
             Event::None => {}
