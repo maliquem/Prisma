@@ -227,6 +227,10 @@ fn draw_with(ui: &mut Ui, app: &mut App, a: Rect, st: &mut State) {
     let rows: Vec<&Setting> = shown(&who, group).collect();
     let mut change = None;
     let inner = rect(card.x, card.y + 6.0, card.w, card.h - 12.0);
+    #[cfg(debug_assertions)]
+    if std::env::var("PRISMA_TEST_BOTTOM").is_ok_and(|v| v == "1") {
+        ui.stick_bottom("nv-list");
+    }
     ui.begin_scroll("nv-list", inner, rows.len() as f32 * ROW);
     for (i, s) in rows.iter().enumerate() {
         let v = st.snap.as_ref().and_then(|(_, ids, snap)| ids.iter().position(|id| *id == s.id).and_then(|k| snap.values[k]));

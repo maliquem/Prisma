@@ -135,6 +135,11 @@ pub struct Ui<'a> {
 impl<'a> Ui<'a> {
     pub fn begin(c: &'a Canvas, s: &'a mut UiState) -> Self {
         let blocked = s.popup.is_some() || s.ask.is_some();
+        // Teste: `PRISMA_TEST_MOUSE=x,y` deixa o mouse parado ali, para a foto mostrar a dica.
+        #[cfg(debug_assertions)]
+        if let Some((x, y)) = std::env::var("PRISMA_TEST_MOUSE").ok().and_then(|v| v.split_once(',').and_then(|(a, b)| Some((a.parse().ok()?, b.parse().ok()?)))) {
+            (s.mx, s.my) = (x, y);
+        }
         Self { c, s, dy: 0.0, blocked, clip: None, bar: None, tip: None }
     }
 
@@ -253,7 +258,8 @@ impl<'a> Ui<'a> {
     /// Dica que aparece com o mouse em cima, por cima de tudo.
     pub fn tip(&mut self, r: Rect, text: &str) {
         if self.hover(r) {
-            self.tip = Some((r, text.to_string()));
+            // A dica é desenhada fora da lista: guarda onde a linha está na tela, já com a rolagem.
+            self.tip = Some((rect(r.x, r.y - self.dy, r.w, r.h), text.to_string()));
         }
     }
 
@@ -686,11 +692,21 @@ impl<'a> Ui<'a> {
             self.s.needs_redraw = true;
         }
         if let Some((r, text)) = self.tip.take() {
-            let w = measure(&text, 13.0, Weight::Regular, None).0 + 20.0;
-            let b = rect(r.x.min(self.s.view_w - w - 8.0), r.bottom() + 6.0, w, 30.0);
+            // Texto longo quebra em linhas; sem espaço embaixo da linha, a dica abre em cima.
+            let max = (self.s.view_w - 16.0).min(640.0).max(120.0);
+            let one = measure(&text, 13.0, Weight::Regular, None).0 + 20.0;
+            let w = one.min(max);
+            let h = if one > max { measure(&text, 13.0, Weight::Regular, Some(w - 20.0)).1 + 14.0 } else { 30.0 };
+            let below = r.bottom() + 6.0;
+            let y = if self.s.view_h > 0.0 && below + h > self.s.view_h - 8.0 { (r.y - h - 6.0).max(8.0) } else { below };
+            let b = rect(r.x.min(self.s.view_w - w - 8.0).max(8.0), y, w, h);
             self.c.round(b, 8.0, CARD2);
             self.c.round_line(b, 8.0, BORDER2, 1.0);
-            self.c.text(b, &text, 13.0, TEXT, Align::Center, Weight::Regular);
+            if one > max {
+                self.c.text_wrap(rect(b.x + 10.0, b.y + 7.0, b.w - 20.0, b.h - 14.0), &text, 13.0, TEXT, Weight::Regular);
+            } else {
+                self.c.text(b, &text, 13.0, TEXT, Align::Center, Weight::Regular);
+            }
         }
         self.draw_ask();
         self.blocked = false;
