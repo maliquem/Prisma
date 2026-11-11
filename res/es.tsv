@@ -1810,3 +1810,6 @@ Esconder parados	Ocultar sin uso
 Mostrando também os jogos parados.	Mostrando también los juegos sin uso.
 Fora da lista por falta de uso: {}. Voltam ao abrir.	Fuera de la lista por falta de uso: {}. Vuelven al abrirlos.
 Gravando registro de dados	Grabando el registro de datos
+ligada em {} de {} s, até {}x	activa en {} de {} s, hasta {}x
+carregada, sem medir se ligou	cargada, sin medir si se activó
+Lossless Scaling aberto	Lossless Scaling abierto

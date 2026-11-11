@@ -341,6 +341,8 @@ fn scan(pid: u32) -> Option<Found> {
             }
             if name == "nvngx_dlssg.dll" || name == "sl.dlss_g.dll" {
                 out.frame_gen = "DLSS FG".to_string();
+            } else if name.starts_with("libxess_fg") && out.frame_gen.is_empty() {
+                out.frame_gen = "XeSS FG".to_string();
             } else if name.starts_with("ffx_frameinterpolation") && out.frame_gen.is_empty() {
                 out.frame_gen = "FSR FG".to_string();
             }
@@ -352,6 +354,28 @@ fn scan(pid: u32) -> Option<Found> {
         let _ = CloseHandle(snap);
     }
     Some(out)
+}
+
+/// Linha do resumo: qual geração de quadros o jogo carregou e quanto tempo ela ficou ligada.
+fn frame_gen_line(name: &str, log: &gamelog::Log) -> String {
+    let mut parts = Vec::new();
+    if !name.is_empty() {
+        parts.push(name.to_string());
+    }
+    if log.gen_secs > 0 {
+        parts.push(crate::i18n::tr("ligada em {} de {} s, até {}x").replacen("{}", &log.gen_secs.to_string(), 1).replacen("{}", &log.seen.to_string(), 1).replacen("{}", &log.gen_max.to_string(), 1));
+    } else if !name.is_empty() {
+        // Sem os marcadores do Reflex não dá para contar os quadros gerados.
+        parts.push(crate::i18n::tr("carregada, sem medir se ligou").into_owned());
+    }
+    if log.lossless {
+        parts.push(crate::i18n::tr("Lossless Scaling aberto").into_owned());
+    }
+    if parts.is_empty() {
+        "—".to_string()
+    } else {
+        parts.join(", ")
+    }
 }
 
 /// `pid` foi aberto por `parent`? Só um filho do jogo pode responder pelos quadros dele:
@@ -587,10 +611,17 @@ impl Meter {
         }
         let found = self.found.lock().unwrap().clone();
         let game = entry(cfg, &self.session.exe);
-        let limit = self.session.opened.map_or("—".to_string(), |v| format!("{v} FPS"));
+        // O limitador injetado vale antes do driver: é ele que segura o jogo quando está ligado.
+        let injected = self.limiter.as_ref().and_then(|l| l.limit());
+        let limit = match (injected, self.session.opened) {
+            (Some(v), _) => format!("{v} FPS ({})", crate::i18n::tr("Injeção")),
+            (None, Some(v)) => format!("{v} FPS (Driver)"),
+            _ => "—".to_string(),
+        };
+        let or_dash = |v: String| if v.trim().is_empty() { "—".to_string() } else { v.trim().to_string() };
         let mut tail = format!("{}: {limit}\n", crate::i18n::tr("Limite ativo"));
-        tail += &format!("Upscaling: {} {}\n", found.upscaler, found.version);
-        tail += &format!("{}: {}\n", crate::i18n::tr("Geração de quadros"), found.frame_gen);
+        tail += &format!("Upscaling: {}\n", or_dash(format!("{} {}", found.upscaler, found.version)));
+        tail += &format!("{}: {}\n", crate::i18n::tr("Geração de quadros"), frame_gen_line(&found.frame_gen, &log));
         tail += &format!("Reflex: {}\n", found.reflex);
         tail += &format!("{}: {}\n", crate::i18n::tr("Perfil DLSS"), game.map_or(0, |g| g.preset));
         tail += &format!("Anti-cheat: {}\n", self.session.anti_cheat);
@@ -923,13 +954,18 @@ impl Meter {
         self.keep_tracking(focused && top.is_none());
         let live = self.stats.frames > 0;
         self.keep_limiter(cfg, focused, live);
+        let gen = self.multiplier().unwrap_or(0);
         let Some(t) = &mut self.tracker else { return };
         if self.view == VIEW_OFF {
             self.stats = t.stats();
         }
         if let Some(log) = &mut self.log {
             t.set_recording(true);
-            log.second(gamelog::Second { stats: self.stats.clone(), snap: snap.clone(), frames: t.take_frames(), pid: self.target });
+            log.second(gamelog::Second { stats: self.stats.clone(), snap: snap.clone(), frames: t.take_frames(), pid: self.target, gen });
+            log.gen_secs += (gen > 0) as u32;
+            log.gen_max = log.gen_max.max(gen);
+            // O Lossless Scaling gera quadros por fora do jogo: aberto durante a gravação, fica anotado.
+            log.lossless |= snap.procs.iter().any(|p| p.exe.eq_ignore_ascii_case("LosslessScaling.exe"));
             log.seen += (self.stats.frames > 0) as u32;
             if log.limit.is_some_and(|l| log.seen >= l) {
                 self.stop_log(cfg);

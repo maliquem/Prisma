@@ -144,6 +144,12 @@ impl Limiter {
         }
     }
 
+    /// O limite em vigor no jogo, quando o limitador engatou.
+    pub fn limit(&self) -> Option<u32> {
+        let s = self.shared().filter(|_| self.status == Status::Ready)?;
+        Some(s.fps_milli.load(Relaxed) / 1000).filter(|v| *v > 0)
+    }
+
     /// Código de saída, se o jogo já fechou.
     pub fn exit_code(&self) -> Option<u32> {
         let mut code = 0;

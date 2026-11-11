@@ -379,13 +379,9 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
         }
         let mut gpu = kmt.as_mut().map(|k| k.read()).unwrap_or_default();
         if let Some(n) = &nvml {
-            let extra = n.read();
-            gpu.temp = extra.temp;
-            gpu.mhz = extra.mhz;
-            gpu.mem_mhz = extra.mem_mhz;
-            gpu.fan = extra.fan;
-            gpu.watts = extra.watts;
-            gpu.total = extra.total;
+            // Uso e VRAM em uso vêm do Windows; o resto, só a NVIDIA sabe.
+            let (util, used) = (gpu.util, gpu.used);
+            gpu = super::nvml::GpuReading { util, used, ..n.read() };
         }
 
         if detail && !trace_tried {

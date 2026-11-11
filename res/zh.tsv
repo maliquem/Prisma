@@ -1810,3 +1810,6 @@ Esconder parados	隐藏未使用的
 Mostrando também os jogos parados.	也显示未使用的游戏。
 Fora da lista por falta de uso: {}. Voltam ao abrir.	因未使用而移出列表：{} 个。打开后会回来。
 Gravando registro de dados	正在记录数据日志
+ligada em {} de {} s, até {}x	{} / {} 秒开启，最高 {}x
+carregada, sem medir se ligou	已加载，未测量是否开启
+Lossless Scaling aberto	Lossless Scaling 已打开

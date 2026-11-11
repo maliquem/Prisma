@@ -1816,3 +1816,6 @@ Esconder parados	Hide unused
 Mostrando também os jogos parados.	Also showing unused games.
 Fora da lista por falta de uso: {}. Voltam ao abrir.	Out of the list for not being used: {}. They come back when opened.
 Gravando registro de dados	Recording the data log
+ligada em {} de {} s, até {}x	on for {} of {} s, up to {}x
+carregada, sem medir se ligou	loaded, without measuring whether it was on
+Lossless Scaling aberto	Lossless Scaling open

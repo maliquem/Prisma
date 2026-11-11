@@ -32,6 +32,8 @@ pub struct Second {
     pub snap: Snapshot,
     pub frames: Vec<i64>,
     pub pid: u32,
+    /// Quantas vezes a geração de quadros multiplica o FPS neste segundo (0: desligada ou sem como saber).
+    pub gen: u32,
 }
 
 enum Msg {
@@ -46,6 +48,11 @@ pub struct Log {
     /// Segundos com quadros: é tempo de jogo, não de relógio.
     pub seen: u32,
     pub limit: Option<u32>,
+    /// Segundos com a geração de quadros ligada, e a maior multiplicação vista.
+    pub gen_secs: u32,
+    pub gen_max: u32,
+    /// O Lossless Scaling esteve aberto durante a gravação.
+    pub lossless: bool,
 }
 
 /// Documentos do Windows, que pode estar em outra pasta ou no OneDrive.
@@ -127,7 +134,7 @@ impl Writer {
         let t = self.begin.elapsed().as_secs_f32();
         if self.rows == 0 {
             let cores: String = (0..s.snap.threads.len()).map(|i| format!(",core{i}_pct")).collect();
-            let _ = writeln!(self.seconds, "t_s,fps,frametime_ms,worst_ms,dev_ms,avg_fps,low1_fps,low01_fps,real_fps,latency_ms,direct_flip,counted_by_flip,spike,frames_kept,cpu_pct,cpu_ghz,gpu_pct,gpu_mhz,gpu_mem_mhz,gpu_c,gpu_w,fan_pct,vram_gb,ram_gb,game_cpu_pct,game_ram_gb,game_gpu_pct,game_vram_gb,game_disk_mb_s,game_net_mb_s,gpu_mem_ctrl_pct,gpu_power_limit_w,gpu_power_pct,gpu_clock_limited_by,gpu_max_mhz,pcie_tx_mb_s,pcie_rx_mb_s,vram_total_gb{cores}");
+            let _ = writeln!(self.seconds, "t_s,fps,frametime_ms,worst_ms,dev_ms,avg_fps,low1_fps,low01_fps,real_fps,latency_ms,frame_gen_x,direct_flip,counted_by_flip,spike,frames_kept,cpu_pct,cpu_ghz,gpu_pct,gpu_mhz,gpu_mem_mhz,gpu_c,gpu_w,fan_pct,vram_gb,ram_gb,game_cpu_pct,game_ram_gb,game_gpu_pct,game_vram_gb,game_disk_mb_s,game_net_mb_s,gpu_mem_ctrl_pct,gpu_power_limit_w,gpu_power_pct,gpu_clock_limited_by,gpu_max_mhz,pcie_tx_mb_s,pcie_rx_mb_s,vram_total_gb{cores}");
             let _ = writeln!(self.frames, "t_ms,frametime_ms");
             let _ = writeln!(self.threads, "t_s,tid,name,cpu_pct_of_core,kernel_pct_of_core");
         }
@@ -157,8 +164,8 @@ impl Writer {
         self.vram_total = gp.total;
         let _ = writeln!(
             self.seconds,
-            "{t:.2},{:.2},{:.3},{:.3},{:.3},{:.2},{:.2},{:.2},{},{},{},{},{},{},{:.2},{:.2},{:.2},{},{},{},{:.1},{},{:.3},{:.3},{:.2},{:.3},{:.2},{:.3},{:.2},{:.2}{extra}{cores}",
-            st.fps, st.ms, st.worst, st.dev, st.avg, st.low1, st.low01, opt(st.real_fps), opt(st.latency), st.direct as u8, st.by_flip as u8, st.spike as u8, st.frames,
+            "{t:.2},{:.2},{:.3},{:.3},{:.3},{:.2},{:.2},{:.2},{},{},{},{},{},{},{},{:.2},{:.2},{:.2},{},{},{},{:.1},{},{:.3},{:.3},{:.2},{:.3},{:.2},{:.3},{:.2},{:.2}{extra}{cores}",
+            st.fps, st.ms, st.worst, st.dev, st.avg, st.low1, st.low01, opt(st.real_fps), opt(st.latency), s.gen, st.direct as u8, st.by_flip as u8, st.spike as u8, st.frames,
             sn.cpu, sn.ghz, sn.gpu.util, sn.gpu.mhz, sn.gpu.mem_mhz, sn.gpu.temp, sn.gpu.watts, sn.gpu.fan, gb(sn.gpu.used), gb(sn.ram_used),
             g.cpu, gb(g.ram), g.gpu, gb(g.vram), mb(g.disk), mb(g.net),
         );
@@ -370,7 +377,7 @@ impl Log {
                 }
             })
             .ok()?;
-        Some(Self { tx, thread: Some(thread), dir, seen: 0, limit })
+        Some(Self { tx, thread: Some(thread), dir, seen: 0, limit, gen_secs: 0, gen_max: 0, lossless: false })
     }
 
     pub fn second(&self, s: Second) {

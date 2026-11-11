@@ -1810,3 +1810,6 @@ Esconder parados	Скрыть неиспользуемые
 Mostrando também os jogos parados.	Показаны и неиспользуемые игры.
 Fora da lista por falta de uso: {}. Voltam ao abrir.	Игр вне списка из-за простоя: {}. Вернутся при запуске.
 Gravando registro de dados	Идёт запись журнала
+ligada em {} de {} s, até {}x	включена {} из {} с, до {}x
+carregada, sem medir se ligou	загружена, включение не измерено
+Lossless Scaling aberto	Lossless Scaling открыт
