@@ -1136,9 +1136,9 @@ impl Meter {
         let scale = unsafe { GetDpiForWindow(hwnd) } as f32 / 96.0;
         let tag = self.tag.as_ref().map(|t| t.0.clone()).or_else(|| self.limit_tag(cfg));
         // Gravando o registro de dados: ponto vermelho, a palavra e o tempo, no começo da barra.
-        let rec = self.log.as_ref().map(|l| clock(l.seen));
+        let rec = self.rec_clock();
         let rec_word = measure("Gravando", 12.0, Weight::Semibold, None).0;
-        let rec_w = if rec.is_some() { 14.0 + rec_word + 6.0 + measure("00:00:00", 12.0, Weight::Regular, None).0 + 14.0 } else { 0.0 };
+        let rec_w = rec.as_ref().map_or(0.0, |t| 14.0 + rec_word + 6.0 + measure(t, 12.0, Weight::Regular, None).0 + 18.0);
         let w = if tag.is_some() { COMPACT_W + 104.0 } else { COMPACT_W } + rec_w;
         let x = match cfg.meter_pos_compact {
             0 => mon.left + (EDGE * scale) as i32,
@@ -1211,6 +1211,17 @@ impl Meter {
         show_topmost(hwnd);
     }
 
+    /// Tempo do registro que está gravando, com o limite quando há.
+    fn rec_clock(&self) -> Option<String> {
+        // Teste: `PRISMA_TEST_REC=1` desenha o aviso sem gravar nada.
+        #[cfg(debug_assertions)]
+        if std::env::var("PRISMA_TEST_REC").is_ok_and(|v| v == "1") && self.log.is_none() {
+            return Some(format!("{} / {}", clock(83), clock(300)));
+        }
+        let l = self.log.as_ref()?;
+        Some(l.limit.map_or(clock(l.seen), |v| format!("{} / {}", clock(l.seen), clock(v))))
+    }
+
     fn limit_tag(&self, cfg: &Config) -> Option<String> {
         let g = entry(cfg, &self.session.exe)?;
         (g.limit_mode == 1 && !g.measured).then(|| format!("Medindo {} min", self.session.measured.len() / 60))
@@ -1242,8 +1253,7 @@ impl Meter {
         if !tags.is_empty() {
             out.push(Line::Note(tags, TEXT2));
         }
-        if let Some(l) = &self.log {
-            let time = l.limit.map_or(clock(l.seen), |v| format!("{} / {}", clock(l.seen), clock(v)));
+        if let Some(time) = self.rec_clock() {
             out.push(Line::Rec(time));
         }
         if on(ITEM_FPS) {

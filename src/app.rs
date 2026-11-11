@@ -207,6 +207,8 @@ pub struct App {
     pub plans: Vec<Plan>,
     pub plan_values: Vec<PlanValues>,
     pub active_plan: String,
+    #[cfg(debug_assertions)]
+    test_meter_shown: bool,
     pub cands: Vec<Candidate>,
     pub unchecked: HashSet<String>,
     pub checked: HashSet<String>,
@@ -407,6 +409,8 @@ pub fn start(background: bool) {
             plans: Vec::new(),
             plan_values: Vec::new(),
             active_plan: String::new(),
+            #[cfg(debug_assertions)]
+            test_meter_shown: false,
             cands: Vec::new(),
             unchecked: HashSet::new(),
             checked: HashSet::new(),
@@ -2216,6 +2220,14 @@ impl App {
         #[cfg(not(debug_assertions))]
         let pid = self.fg_pid;
         self.meter.tick(&mut self.cfg, game, pid, &self.snap);
+        // Teste: `PRISMA_TEST_METER=1` (compacto) ou `2` (completo) abre o medidor uma vez, sem atalho.
+        #[cfg(debug_assertions)]
+        if let Some(v) = std::env::var("PRISMA_TEST_METER").ok().and_then(|v| v.parse::<u8>().ok()) {
+            if self.meter.view == crate::meter::VIEW_OFF && self.started.elapsed().as_secs() >= 2 && !self.test_meter_shown {
+                self.test_meter_shown = true;
+                self.meter.show(v);
+            }
+        }
         self.show_saved_log();
         if was != self.meter.view {
             self.meter_timer();
