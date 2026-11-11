@@ -56,6 +56,55 @@ pub(super) struct Dda {
 }
 
 /// Saída de vídeo do monitor.
+/// A tela é de uma placa e o vídeo sai de outra (notebook com duas placas): a imagem pronta passa
+/// pela memória do PC. Custa uns milissegundos por quadro, por isso só quando as placas diferem.
+pub struct CrossCopy {
+    read: ID3D11Texture2D,
+    write: ID3D11Texture2D,
+    rows: u32,
+    row_bytes: usize,
+}
+
+impl CrossCopy {
+    /// Para texturas de 4 bytes por ponto (BGRA ou 10 bits), do tamanho dado.
+    pub unsafe fn new(from: &D3d, to: &D3d, fmt: DXGI_FORMAT, w: u32, h: u32) -> Result<Self> {
+        let desc = |cpu: D3D11_CPU_ACCESS_FLAG| D3D11_TEXTURE2D_DESC {
+            Width: w,
+            Height: h,
+            MipLevels: 1,
+            ArraySize: 1,
+            Format: fmt,
+            SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+            Usage: D3D11_USAGE_STAGING,
+            CPUAccessFlags: cpu.0 as u32,
+            ..Default::default()
+        };
+        let (mut r, mut wr) = (None, None);
+        from.dev.CreateTexture2D(&desc(D3D11_CPU_ACCESS_READ), None, Some(&mut r))?;
+        to.dev.CreateTexture2D(&desc(D3D11_CPU_ACCESS_WRITE), None, Some(&mut wr))?;
+        Ok(Self { read: r.unwrap(), write: wr.unwrap(), rows: h, row_bytes: w as usize * 4 })
+    }
+
+    /// Copia `src` (na placa da tela) para `dst` (na placa que codifica).
+    pub unsafe fn copy(&self, from: &D3d, src: &ID3D11Texture2D, to: &D3d, dst: &ID3D11Texture2D) -> Result<()> {
+        from.ctx.CopyResource(&self.read, src);
+        let mut a = D3D11_MAPPED_SUBRESOURCE::default();
+        from.ctx.Map(&self.read, 0, D3D11_MAP_READ, 0, Some(&mut a))?;
+        let mut b = D3D11_MAPPED_SUBRESOURCE::default();
+        if let Err(e) = to.ctx.Map(&self.write, 0, D3D11_MAP_WRITE, 0, Some(&mut b)) {
+            from.ctx.Unmap(&self.read, 0);
+            return Err(e);
+        }
+        for y in 0..self.rows as usize {
+            std::ptr::copy_nonoverlapping((a.pData as *const u8).add(y * a.RowPitch as usize), (b.pData as *mut u8).add(y * b.RowPitch as usize), self.row_bytes);
+        }
+        to.ctx.Unmap(&self.write, 0);
+        from.ctx.Unmap(&self.read, 0);
+        to.ctx.CopyResource(dst, &self.write);
+        Ok(())
+    }
+}
+
 unsafe fn output_of(d: &D3d, mon: HMONITOR) -> Result<IDXGIOutput1> {
     let ad = d.dev.cast::<IDXGIDevice>()?.GetAdapter()?;
     let mut i = 0;

@@ -41,7 +41,7 @@ struct Frame {
 }
 
 enum Event {
-    Info { codec: Codec, w: u32, h: u32, fps: u32, perms: u8, hdr10: bool, yuv444: bool },
+    Info { codec: Codec, w: u32, h: u32, fps: u32, perms: u8, hdr10: bool, yuv444: bool, priority: u8 },
     Frame(Frame),
 }
 
@@ -87,6 +87,9 @@ struct Shared {
     /// Permissões que o host deu, do último Info.
     perms: AtomicU8,
     pads: Mutex<[PadView; PADS]>,
+    /// Opções dos controles, que o menu muda durante a conexão.
+    pad_background: AtomicBool,
+    pad_keys: AtomicBool,
 }
 
 /// Junta os pedaços de um quadro.
@@ -181,11 +184,11 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
                 }
                 break;
             }
-            Some(Msg::Info { codec, w, h, fps, perms, recover: r, hdr10, yuv444 }) => {
+            Some(Msg::Info { codec, w, h, fps, perms, recover: r, hdr10, yuv444, priority }) => {
                 recover = r;
                 sh.got_info.store(true, Ordering::Relaxed);
                 sh.perms.store(perms, Ordering::Relaxed);
-                push(Event::Info { codec, w, h, fps, perms, hdr10, yuv444 });
+                push(Event::Info { codec, w, h, fps, perms, hdr10, yuv444, priority });
             }
             Some(Msg::Clip { id, part, parts, data }) => {
                 if let (Some(c), Some(t)) = (&clip, clip_in.add(id, part, parts, data)) {
@@ -239,8 +242,19 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
                 }
             }
             Some(Msg::Video { key, idx, count, frame, pts, data }) => {
-                if count == 0 || idx >= count || expect.is_some_and(|e| newer(e, frame)) {
+                if count == 0 || idx >= count {
                     continue;
+                }
+                if let Some(e) = expect.filter(|&e| newer(e, frame)) {
+                    // Quadro-chave muito atrás do esperado: o host recomeçou o vídeo (outros quadros
+                    // por segundo, outra opção) e a contagem voltou. Sem isto, tudo seria descartado
+                    // como atrasado e a imagem pararia. Hosts novos continuam a contagem.
+                    if !(key && e.wrapping_sub(frame) > 64) {
+                        continue;
+                    }
+                    expect = None;
+                    cur = None;
+                    waiting_key = true;
                 }
                 if let Some(a) = &cur {
                     if a.frame != frame {
@@ -790,9 +804,6 @@ fn keyboard_pad() -> PadState {
 /// que continuam ali. Vagas vazias do XInput são conferidas uma vez por segundo, porque perguntar a
 /// uma vaga vazia demora.
 fn pads(link: Arc<dyn Link>, sh: Arc<Shared>, hwnd: isize) {
-    let co = ClientOpts::load();
-    let background = std::env::var("PRISMA_PAD_BACKGROUND").map(|v| v == "1").unwrap_or(co.pad_background);
-    let keys = std::env::var("PRISMA_PAD_KEYS").map(|v| v == "1").unwrap_or(co.pad_keys);
     let mut last: [Option<PadState>; PADS] = [None; PADS];
     let mut seq = [0u16; PADS];
     let mut sent = [Instant::now(); PADS];
@@ -805,7 +816,8 @@ fn pads(link: Arc<dyn Link>, sh: Arc<Shared>, hwnd: isize) {
         if sh.perms.load(Ordering::Relaxed) & PAD == 0 {
             continue;
         }
-        let focused = background || unsafe { GetForegroundWindow() }.0 as isize == hwnd;
+        let keys = sh.pad_keys.load(Ordering::Relaxed);
+        let focused = sh.pad_background.load(Ordering::Relaxed) || unsafe { GetForegroundWindow() }.0 as isize == hwnd;
         // No mesmo PC, os controles virtuais do host aparecem aqui também: esses não voltam.
         let theirs = if link.same_pc() { sh.pads.lock().unwrap().iter().filter(|p| p.player != 0 && p.slot < 4).fold(0u8, |m, p| m | 1 << p.slot) } else { 0 };
         for i in 0..PADS {
@@ -940,7 +952,19 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         k.acts.clear();
         k.immersive = co.immersive;
     }
-    let d = d3d()?;
+    // A placa que decodifica e mostra: a das opções, ou a padrão do Windows.
+    let d = match crate::capture::adapter_named(&co.gpu) {
+        Some(a) => crate::capture::d3d_on(Some(&a)).or_else(|e| {
+            eprintln!("placa de vídeo «{}»: {e:?}; vai a padrão", co.gpu);
+            d3d()
+        })?,
+        None => {
+            if !co.gpu.is_empty() {
+                eprintln!("placa de vídeo «{}» não encontrada: vai a padrão", co.gpu);
+            }
+            d3d()?
+        }
+    };
     if let Ok(mt) = d.ctx.cast::<ID3D11Multithread>() {
         let _ = mt.SetMultithreadProtected(true);
     }
@@ -1030,8 +1054,8 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     let swap = factory.CreateSwapChainForHwnd(&d.dev, hwnd, &desc, None, None)?;
     let _ = factory.MakeWindowAssociation(hwnd, DXGI_MWA_NO_ALT_ENTER);
     // VSync ligado espera a atualização da tela: sem rasgos, um pouco mais de atraso.
-    let present_flags = if tearing && !co.vsync { DXGI_PRESENT_ALLOW_TEARING } else { DXGI_PRESENT(0) };
-    let sync = co.vsync as u32;
+    let present_mode = |vsync: bool| (vsync as u32, if tearing && !vsync { DXGI_PRESENT_ALLOW_TEARING } else { DXGI_PRESENT(0) });
+    let (mut sync, mut present_flags) = present_mode(co.vsync);
 
     let mut codecs = 0u8;
     for c in [Codec::H264, Codec::Hevc, Codec::Av1] {
@@ -1042,12 +1066,16 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     // Tela em HDR: o host manda HDR10 se a dele também estiver. 4:4:4 só pedindo, porque abre o
     // CUDA aqui e gasta mais rede.
     let mut flags = 0u8;
+    #[cfg(feature = "stream")]
+    let can444 = crate::capture::nvdec::can_444();
+    #[cfg(not(feature = "stream"))]
+    let can444 = false;
     if crate::capture::monitor_color(mon).hdr {
         flags |= SEES_HDR;
     }
     #[cfg(feature = "stream")]
     if std::env::var("PRISMA_444").map(|v| v == "1").unwrap_or(co.ask444) {
-        if crate::capture::nvdec::can_444() {
+        if can444 {
             flags |= DECODES_444;
         } else {
             eprintln!("4:4:4: esta placa não decodifica HEVC 4:4:4; fica o 4:2:0");
@@ -1079,6 +1107,8 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         audio_fill: AtomicU32::new(0),
         perms: AtomicU8::new(0),
         pads: Mutex::new([NO_PAD; PADS]),
+        pad_background: AtomicBool::new(std::env::var("PRISMA_PAD_BACKGROUND").map(|v| v == "1").unwrap_or(co.pad_background)),
+        pad_keys: AtomicBool::new(std::env::var("PRISMA_PAD_KEYS").map(|v| v == "1").unwrap_or(co.pad_keys)),
     });
     let player = if sh.mute {
         None
@@ -1097,6 +1127,8 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
 
     let mut dec: Option<Decoder> = None;
     let mut info: Option<(Codec, u32, u32, u32)> = None;
+    // Prioridade do host (255: versão que não manda).
+    let mut host_priority = 255u8;
     // HDR10 e 4:4:4 do vídeo atual; a janela em HDR10.
     let mut vfmt = (false, false);
     let mut hdr_out = false;
@@ -1183,6 +1215,10 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                 warn: co.warn,
                 sound: !sh.silenced.load(Ordering::Relaxed),
                 keyboard: KEYS.lock().unwrap().keyboard,
+                vsync: co.vsync,
+                ask444: can444.then_some(flags & DECODES_444 != 0),
+                pad_background: sh.pad_background.load(Ordering::Relaxed),
+                pad_keys: (sh.perms.load(Ordering::Relaxed) & PAD != 0).then(|| sh.pad_keys.load(Ordering::Relaxed)),
                 video: info.map(|(c, w, h, fps)| format!("{w}x{h} {}{extra} · {fps} {} · {}", codec_name(c), crate::i18n::tr("q/s"), link.route())).unwrap_or_default(),
                 keys: [label(co.key_menu), label(co.key_full), label(co.key_imm), label(co.key_meter), label(co.key_sound), label(co.key_cad), label(co.key_disc)],
             };
@@ -1224,6 +1260,32 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                 hud::Pick::Sound => {
                     sh.silenced.fetch_xor(true, Ordering::Relaxed);
                 }
+                hud::Pick::Vsync => {
+                    co.vsync = !co.vsync;
+                    let _ = co.save();
+                    (sync, present_flags) = present_mode(co.vsync);
+                }
+                hud::Pick::Ask444 => {
+                    co.ask444 = !co.ask444;
+                    let _ = co.save();
+                    flags ^= DECODES_444;
+                    // A descrição nova faz o host recomeçar o vídeo com ou sem o 4:4:4.
+                    let mut again = Vec::new();
+                    write(&mut again, &Msg::Hello { w: screen_w, h: screen_h, hz: ask_hz(co.fps), codecs, pid: std::process::id(), flags });
+                    link.send(&again);
+                    link.send(&again);
+                }
+                hud::Pick::PadBackground => {
+                    co.pad_background = !co.pad_background;
+                    let _ = co.save();
+                    sh.pad_background.store(co.pad_background, Ordering::Relaxed);
+                }
+                hud::Pick::PadKeys => {
+                    co.pad_keys = !co.pad_keys;
+                    let _ = co.save();
+                    sh.pad_keys.store(co.pad_keys, Ordering::Relaxed);
+                    KEYS.lock().unwrap().pad_keys = co.pad_keys && sh.perms.load(Ordering::Relaxed) & PAD != 0;
+                }
                 hud::Pick::CtrlAltDel => KEYS.lock().unwrap().sas = true,
                 hud::Pick::Disconnect => {
                     let _ = DestroyWindow(hwnd);
@@ -1242,12 +1304,13 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         let mut last: Option<Decoded> = None;
         for e in events {
             match e {
-                Event::Info { codec, w, h, fps, perms, hdr10, yuv444 } => {
+                Event::Info { codec, w, h, fps, perms, hdr10, yuv444, priority } => {
+                    host_priority = priority;
                     {
                         let mut k = KEYS.lock().unwrap();
                         k.keyboard = perms & KEYBOARD != 0;
                         k.mouse = perms & MOUSE != 0;
-                        k.pad_keys = perms & PAD != 0 && std::env::var("PRISMA_PAD_KEYS").map(|v| v == "1").unwrap_or(co.pad_keys);
+                        k.pad_keys = perms & PAD != 0 && sh.pad_keys.load(Ordering::Relaxed);
                         k.video = (w, h);
                     }
                     if info != Some((codec, w, h, fps)) || vfmt != (hdr10, yuv444) {
@@ -1403,6 +1466,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                     shown: second.shown,
                     video: info.map(|(c, w, h, _)| format!("{w}x{h} {}", codec_name(c))).unwrap_or_default(),
                     route: link.route(),
+                    priority: host_priority,
                 };
                 h.update(hwnd, co.meter, co.warn, info.is_some().then_some(&sample));
             }

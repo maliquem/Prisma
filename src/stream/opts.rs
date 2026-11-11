@@ -79,6 +79,8 @@ pub struct Opts {
     pub upnp: bool,
     /// Desconecta todo mundo.
     pub key_panic: Keys,
+    /// Placa de vídeo que codifica (nome do Windows); vazio usa a do monitor transmitido.
+    pub gpu: String,
 }
 
 impl Default for Opts {
@@ -106,6 +108,7 @@ impl Default for Opts {
             port: 0,
             upnp: true,
             key_panic: (MOD_CTRL | MOD_ALT | MOD_SHIFT, b'Q' as u32),
+            gpu: String::new(),
         }
     }
 }
@@ -147,6 +150,7 @@ impl Opts {
                 "porta" => o.port = v.parse().unwrap_or(0),
                 "upnp" => o.upnp = flag(v),
                 "atalho_emergencia" => o.key_panic = keys_parse(v, o.key_panic),
+                "gpu" => o.gpu = clean(v, 128),
                 _ => {}
             }
         }
@@ -159,7 +163,7 @@ impl Opts {
         format!(
             "hdr_desligar={}\npessoas={}\ncontroles={}\nconvite={}\nnome={}\nresolucao={}\nquadros={}\nbanda={}\ncodec={}\nprioridade={}\n\
 dez_bits={}\npermitir_444={}\nmonitor={}\nritmo_constante={}\nsom_programa={}\nsem_chamadas={}\num_por_vez={}\nhost_primeiro={}\n\
-sem_cadeia={}\nporta={}\nupnp={}\natalho_emergencia={}\n",
+sem_cadeia={}\nporta={}\nupnp={}\natalho_emergencia={}\ngpu={}\n",
             b(self.hdr_off),
             self.guests,
             self.pads,
@@ -182,11 +186,19 @@ sem_cadeia={}\nporta={}\nupnp={}\natalho_emergencia={}\n",
             self.port,
             b(self.upnp),
             keys_text(self.key_panic),
+            self.gpu,
         )
     }
 
     pub fn load() -> Self {
         Self::parse(&std::fs::read_to_string(Self::path()).unwrap_or_default())
+    }
+
+    /// Mudou algo que o vídeo já aberto usa: a transmissão recomeça para valer. O resto (ritmo,
+    /// som, mouse e teclado, pessoas) muda sem recomeçar.
+    pub fn video_differs(&self, o: &Opts) -> bool {
+        (self.res, self.fps, self.mbps, &self.codec, self.priority, self.ten_bit, self.allow444, self.monitor, &self.gpu)
+            != (o.res, o.fps, o.mbps, &o.codec, o.priority, o.ten_bit, o.allow444, o.monitor, &o.gpu)
     }
 
     #[cfg_attr(not(feature = "stream"), allow(dead_code))]
@@ -222,6 +234,8 @@ pub struct ClientOpts {
     pub pad_keys: bool,
     /// Quadros por segundo pedidos ao host; 0 é o automático (os Hz desta tela).
     pub fps: u32,
+    /// Placa de vídeo que decodifica e mostra (nome do Windows); vazio usa a do Windows.
+    pub gpu: String,
     pub key_menu: Keys,
     pub key_full: Keys,
     pub key_cad: Keys,
@@ -254,6 +268,7 @@ impl Default for ClientOpts {
             key_imm: (MOD_CTRL | MOD_ALT | MOD_SHIFT, b'I' as u32),
             key_meter: (MOD_CTRL | MOD_ALT | MOD_SHIFT, b'M' as u32),
             key_sound: (MOD_CTRL | MOD_ALT | MOD_SHIFT, b'S' as u32),
+            gpu: String::new(),
         }
     }
 }
@@ -286,6 +301,7 @@ impl ClientOpts {
                 "atalho_medidor" => o.key_meter = keys_parse(v, o.key_meter),
                 "atalho_som" => o.key_sound = keys_parse(v, o.key_sound),
                 "quadros" => o.fps = v.parse::<u32>().ok().filter(|f| CLIENT_FPS.contains(f)).unwrap_or(0),
+                "gpu" => o.gpu = clean(v, 128),
                 _ => {}
             }
         }
@@ -297,7 +313,7 @@ impl ClientOpts {
         let b = |x: bool| x as u8;
         format!(
             "tela_cheia={}\nvsync={}\nimersivo={}\nmedidor={}\naviso={}\nmudo={}\npedir_444={}\ncontrole_fundo={}\nteclado_controle={}\n\
-quadros={}\natalho_menu={}\natalho_tela_cheia={}\natalho_ctrl_alt_del={}\natalho_desconectar={}\natalho_imersivo={}\natalho_medidor={}\natalho_som={}\n",
+quadros={}\natalho_menu={}\natalho_tela_cheia={}\natalho_ctrl_alt_del={}\natalho_desconectar={}\natalho_imersivo={}\natalho_medidor={}\natalho_som={}\ngpu={}\n",
             b(self.fullscreen),
             b(self.vsync),
             self.immersive,
@@ -315,6 +331,7 @@ quadros={}\natalho_menu={}\natalho_tela_cheia={}\natalho_ctrl_alt_del={}\natalho
             keys_text(self.key_imm),
             keys_text(self.key_meter),
             keys_text(self.key_sound),
+            self.gpu,
         )
     }
 
@@ -361,13 +378,24 @@ mod tests {
             port: 47610,
             upnp: false,
             key_panic: (MOD_CTRL, b'K' as u32),
+            gpu: "NVIDIA GeForce RTX 4060 Laptop GPU".into(),
         };
         assert_eq!(Opts::parse(&o.text()), o);
         assert_eq!(Opts::parse("pessoas=99\ncontroles=outro\ncodec=mp3\nnome=a\tb"), Opts { guests: 8, name: "ab".into(), ..Opts::default() });
         // Arquivo da 0.11.0: o resto fica no padrão.
         assert_eq!(Opts::parse("hdr_desligar=1\npessoas=2\ncontroles=auto\nconvite=total\n"), Opts { hdr_off: true, guests: 2, invite: TOTAL, ..Opts::default() });
-        let c = ClientOpts { fullscreen: false, vsync: true, immersive: 1, meter: 2, warn: false, mute: true, ask444: true, pad_background: true, pad_keys: true, fps: 60, key_menu: (MOD_ALT, 0x70), key_sound: (MOD_CTRL, b'M' as u32), ..ClientOpts::default() };
+        let c = ClientOpts { fullscreen: false, vsync: true, immersive: 1, meter: 2, warn: false, mute: true, ask444: true, pad_background: true, pad_keys: true, fps: 60, gpu: "AMD Radeon(TM) Graphics".into(), key_menu: (MOD_ALT, 0x70), key_sound: (MOD_CTRL, b'M' as u32), ..ClientOpts::default() };
         assert_eq!(ClientOpts::parse(&c.text()), c);
         assert_eq!(ClientOpts::parse("atalho_menu=2,0\nmedidor=9\nquadros=75"), ClientOpts { meter: 2, ..ClientOpts::default() });
+    }
+
+    #[test]
+    fn what_restarts_the_video() {
+        let o = Opts::default();
+        // Ritmo, som, mouse e teclado mudam sem recomeçar.
+        assert!(!o.video_differs(&Opts { constant: true, no_calls: false, sound_app: "game.exe".into(), one_at_a_time: false, host_first: false, guests: 2, ..Opts::default() }));
+        for v in [Opts { fps: 30, ..Opts::default() }, Opts { mbps: 80, ..Opts::default() }, Opts { priority: 2, ..Opts::default() }, Opts { gpu: "Outra".into(), ..Opts::default() }, Opts { monitor: 1, ..Opts::default() }] {
+            assert!(o.video_differs(&v), "{v:?}");
+        }
     }
 }

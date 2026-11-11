@@ -41,12 +41,18 @@ pub struct D3d {
 }
 
 pub fn d3d() -> Result<D3d> {
+    d3d_on(None)
+}
+
+/// Direct3D numa placa escolhida (`None`: a padrão do Windows).
+pub fn d3d_on(adapter: Option<&IDXGIAdapter1>) -> Result<D3d> {
     unsafe {
         let mut dev = None;
         let mut ctx = None;
+        let adapter: Option<IDXGIAdapter> = adapter.and_then(|a| a.cast().ok());
         D3D11CreateDevice(
-            None,
-            D3D_DRIVER_TYPE_HARDWARE,
+            adapter.as_ref(),
+            if adapter.is_some() { D3D_DRIVER_TYPE_UNKNOWN } else { D3D_DRIVER_TYPE_HARDWARE },
             HMODULE::default(),
             D3D11_CREATE_DEVICE_BGRA_SUPPORT | D3D11_CREATE_DEVICE_VIDEO_SUPPORT,
             None,
@@ -60,6 +66,77 @@ pub fn d3d() -> Result<D3d> {
         let insp = CreateDirect3D11DeviceFromDXGIDevice(&dxgi)?;
         Ok(D3d { dev, ctx: ctx.unwrap(), rt: insp.cast()? })
     }
+}
+
+/// As placas de vídeo de verdade, na ordem do Windows (sem o "Microsoft Basic Render Driver").
+pub fn adapters() -> Vec<(String, IDXGIAdapter1)> {
+    let mut out = Vec::new();
+    unsafe {
+        let Ok(f) = CreateDXGIFactory1::<IDXGIFactory1>() else { return out };
+        let mut i = 0;
+        while let Ok(a) = f.EnumAdapters1(i) {
+            i += 1;
+            let Ok(d) = a.GetDesc1() else { continue };
+            if d.Flags & DXGI_ADAPTER_FLAG_SOFTWARE.0 as u32 != 0 {
+                continue;
+            }
+            let n = d.Description.iter().position(|&c| c == 0).unwrap_or(d.Description.len());
+            let name = String::from_utf16_lossy(&d.Description[..n]).trim().to_string();
+            // Duas placas iguais: a segunda ganha um número, para a escolha ser de uma só.
+            let same = out.iter().filter(|(x, _): &&(String, IDXGIAdapter1)| x == &name || x.starts_with(&format!("{name} #"))).count();
+            out.push((if same == 0 { name } else { format!("{name} #{}", same + 1) }, a));
+        }
+    }
+    out
+}
+
+/// A placa escolhida pelo nome (como em `adapters`); vazio ou ausente: `None`.
+pub fn adapter_named(name: &str) -> Option<IDXGIAdapter1> {
+    if name.is_empty() {
+        return None;
+    }
+    adapters().into_iter().find(|(n, _)| n == name).map(|(_, a)| a)
+}
+
+/// A placa ligada a este monitor, e a saída dele nela.
+pub fn monitor_adapter(mon: HMONITOR) -> Option<(IDXGIAdapter1, IDXGIOutput)> {
+    unsafe {
+        let f = CreateDXGIFactory1::<IDXGIFactory1>().ok()?;
+        let mut a = 0;
+        while let Ok(ad) = f.EnumAdapters1(a) {
+            let mut i = 0;
+            while let Ok(o) = ad.EnumOutputs(i) {
+                if o.GetDesc().is_ok_and(|d| d.Monitor == mon) {
+                    return Some((ad, o));
+                }
+                i += 1;
+            }
+            a += 1;
+        }
+    }
+    None
+}
+
+/// O identificador da placa onde o dispositivo está.
+pub fn device_luid(dev: &ID3D11Device) -> Option<windows::Win32::Foundation::LUID> {
+    unsafe { Some(dev.cast::<IDXGIDevice>().ok()?.GetAdapter().ok()?.GetDesc().ok()?.AdapterLuid) }
+}
+
+pub fn same_adapter(a: &IDXGIAdapter1, dev: &ID3D11Device) -> bool {
+    let l = unsafe { a.GetDesc1().map(|d| d.AdapterLuid) };
+    match (l, device_luid(dev)) {
+        (Ok(x), Some(y)) => (x.LowPart, x.HighPart) == (y.LowPart, y.HighPart),
+        _ => false,
+    }
+}
+
+/// Na lista do Media Foundation, o primeiro codificador ou decodificador da placa do dispositivo
+/// (num notebook com duas placas, o primeiro da lista pode ser da outra). Sem marca: o primeiro.
+pub(crate) unsafe fn mft_for_device(items: &[Option<windows::Win32::Media::MediaFoundation::IMFActivate>], dev: &ID3D11Device) -> usize {
+    use windows::Win32::Media::MediaFoundation::MFT_ENUM_ADAPTER_LUID;
+    let Some(l) = device_luid(dev) else { return 0 };
+    let want = ((l.HighPart as u32 as u64) << 32) | l.LowPart as u64;
+    items.iter().position(|a| a.as_ref().and_then(|a| a.GetUINT64(&MFT_ENUM_ADAPTER_LUID).ok()) == Some(want)).unwrap_or(0)
 }
 
 pub fn monitor_item(mon: HMONITOR) -> Result<GraphicsCaptureItem> {

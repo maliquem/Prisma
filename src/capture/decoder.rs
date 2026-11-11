@@ -99,7 +99,7 @@ impl Decoder {
             return Err(Error::new(E_FAIL, "sem decodificador"));
         }
         let items = std::slice::from_raw_parts(list, n as usize);
-        let act = items[0].as_ref().unwrap();
+        let act = items[super::mft_for_device(items, dev)].as_ref().unwrap();
         let name = friendly(act);
         let mft = act.ActivateObject::<IMFTransform>();
         CoTaskMemFree(Some(list as *const _));

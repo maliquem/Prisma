@@ -32,6 +32,13 @@ pub struct Sample {
     /// Ex.: `1920x1080 AV1 HDR10`.
     pub video: String,
     pub route: String,
+    /// Prioridade do host: 0 menor atraso, 1 equilíbrio, 2 qualidade; outro valor, sem informação.
+    pub priority: u8,
+}
+
+/// A prioridade do host, como a página dele escreve.
+pub fn priority_name(p: u8) -> Option<&'static str> {
+    ["Menor atraso", "Equilíbrio", "Qualidade"].get(p as usize).copied()
 }
 
 /// Quanto tempo o aviso fica na tela.
@@ -118,7 +125,11 @@ impl Hud {
                 lines.push((format!("{} ms {} · {} {} ms", n(s.e2e_ms, 1), tr("ponta a ponta"), tr("rede"), n(s.rtt_ms, 1)), TEXT, 14.0, Weight::Semibold));
                 // Quadros por segundo mostrados aqui, em linha própria.
                 lines.push((format!("{:.0} FPS · {} Mbit/s", s.fps, n(s.mbps, 1)), TEXT, 14.0, Weight::Semibold));
-                lines.push((s.video.clone(), TEXT, 13.0, Weight::Regular));
+                let video = match priority_name(s.priority) {
+                    Some(p) => format!("{} · {}: {}", s.video, tr("Prioridade"), tr(p)),
+                    None => s.video.clone(),
+                };
+                lines.push((video, TEXT, 13.0, Weight::Regular));
                 lines.push((format!("{} {} ms · {} {}", tr("decodificação"), n(s.decode_ms, 2), tr("perdidos"), s.lost_total), MUTED, 13.0, Weight::Regular));
                 lines.push((s.route.clone(), MUTED, 13.0, Weight::Regular));
             }
@@ -193,6 +204,12 @@ pub struct MenuState {
     pub warn: bool,
     pub sound: bool,
     pub keyboard: bool,
+    pub vsync: bool,
+    /// Pedir 4:4:4; `None` quando a placa daqui não decodifica.
+    pub ask444: Option<bool>,
+    pub pad_background: bool,
+    /// Teclado como controle; `None` sem a permissão de controle.
+    pub pad_keys: Option<bool>,
     pub video: String,
     /// Os atalhos, já escritos: menu, tela cheia, modo imersivo, medidor, som, Ctrl+Alt+Del, desconectar.
     pub keys: [String; 7],
@@ -208,6 +225,10 @@ pub enum Pick {
     MeterCycle,
     Warn,
     Sound,
+    Vsync,
+    Ask444,
+    PadBackground,
+    PadKeys,
     CtrlAltDel,
     Disconnect,
 }
@@ -259,7 +280,7 @@ fn segments(st: &MenuState, row: usize) -> Vec<(String, Pick, bool)> {
 fn menu_height(st: &MenuState) -> f32 {
     let head = if st.video.is_empty() { 44.0 } else { 64.0 };
     let segs = 3.0 * (26.0 + SEG + 10.0);
-    head + ROW + segs + 3.0 * ROW + 13.0 + ROW + PAD
+    head + ROW + segs + 7.0 * ROW + 13.0 + ROW + PAD
 }
 
 /// Desenha o menu e devolve as áreas que se clicam.
@@ -280,22 +301,25 @@ fn draw_menu(c: &crate::ui::gfx::Canvas, r: crate::ui::gfx::Rect, st: &MenuState
     y += 6.0;
     let hovered = |hits: &Vec<Hit>| hover == Some(hits.len());
     // Linha que liga e desliga, com a caixa de marcar.
-    let toggle = |hits: &mut Vec<Hit>, y: f32, label: &str, key: &str, on: bool, pick: Pick| {
+    // `on`: `None` mostra a linha apagada, sem clique (a opção não vale nesta conexão).
+    let toggle = |hits: &mut Vec<Hit>, y: f32, label: &str, key: &str, on: Option<bool>, pick: Pick| {
         let row = rr(r.x + 6.0, y, r.w - 12.0, ROW);
-        if hovered(hits) {
+        let enabled = on.is_some();
+        if enabled && hovered(hits) {
             c.round(row, 8.0, CARD2);
         }
         let b = rr(x, y + (ROW - 16.0) / 2.0, 16.0, 16.0);
-        if on {
+        if on == Some(true) {
             c.round(b, 4.0, ACCENT);
             c.line(b.x + 3.5, b.y + 8.5, b.x + 6.5, b.y + 11.5, ON_ACCENT, 2.0);
             c.line(b.x + 6.5, b.y + 11.5, b.x + 12.5, b.y + 4.5, ON_ACCENT, 2.0);
         } else {
-            c.round_line(b, 4.0, BORDER2, 1.5);
+            c.round_line(b, 4.0, if enabled { BORDER2 } else { BORDER }, 1.5);
         }
-        c.text(rr(x + 26.0, y, w - 26.0, ROW), label, 14.0, TEXT, Align::Left, Weight::Regular);
+        let key_w = if key.is_empty() { 0.0 } else { crate::ui::gfx::measure(key, 12.0, Weight::Regular, None).0 + 12.0 };
+        c.text_fit(rr(x + 26.0, y, w - 26.0 - key_w, ROW), label, 14.0, if enabled { TEXT } else { MUTED.alpha(0.6) }, Align::Left, Weight::Regular);
         c.text_raw(rr(x, y, w, ROW), key, 12.0, MUTED, Align::Right, Weight::Regular);
-        hits.push(Hit { r: row, pick, enabled: true });
+        hits.push(Hit { r: row, pick, enabled });
     };
     // Linha de ação, sem caixa.
     let action = |hits: &mut Vec<Hit>, y: f32, label: &str, key: &str, enabled: bool, color: crate::ui::gfx::Color, pick: Pick| {
@@ -309,7 +333,7 @@ fn draw_menu(c: &crate::ui::gfx::Canvas, r: crate::ui::gfx::Rect, st: &MenuState
         hits.push(Hit { r: row, pick, enabled });
     };
 
-    toggle(&mut hits, y, "Tela cheia", &st.keys[1], st.fullscreen, Pick::Fullscreen);
+    toggle(&mut hits, y, "Tela cheia", &st.keys[1], Some(st.fullscreen), Pick::Fullscreen);
     y += ROW;
     for (i, (label, key)) in [("Modo imersivo", st.keys[2].as_str()), ("Quadros por segundo", ""), ("Medidor de latência", st.keys[3].as_str())].iter().enumerate() {
         c.text(rr(x, y + 4.0, w, 22.0), label, 13.0, TEXT2, Align::Left, Weight::Regular);
@@ -338,9 +362,17 @@ fn draw_menu(c: &crate::ui::gfx::Canvas, r: crate::ui::gfx::Rect, st: &MenuState
         }
         y += SEG + 10.0;
     }
-    toggle(&mut hits, y, "Avisar quando a conexão piorar", "", st.warn, Pick::Warn);
+    toggle(&mut hits, y, "Avisar quando a conexão piorar", "", Some(st.warn), Pick::Warn);
     y += ROW;
-    toggle(&mut hits, y, "Som", &st.keys[4], st.sound, Pick::Sound);
+    toggle(&mut hits, y, "Som", &st.keys[4], Some(st.sound), Pick::Sound);
+    y += ROW;
+    toggle(&mut hits, y, "VSync", "", Some(st.vsync), Pick::Vsync);
+    y += ROW;
+    toggle(&mut hits, y, "Pedir 4:4:4", "", st.ask444, Pick::Ask444);
+    y += ROW;
+    toggle(&mut hits, y, "Controle em segundo plano", "", Some(st.pad_background), Pick::PadBackground);
+    y += ROW;
+    toggle(&mut hits, y, "Teclado como controle", "", st.pad_keys, Pick::PadKeys);
     y += ROW;
     action(&mut hits, y, "Mandar Ctrl+Alt+Del", &st.keys[5], st.keyboard, TEXT, Pick::CtrlAltDel);
     y += ROW + 6.0;
@@ -516,6 +548,10 @@ pub fn test_menu(dir: &str) {
                 warn: true,
                 sound: true,
                 keyboard: i != 2,
+                vsync: false,
+                ask444: Some(true),
+                pad_background: false,
+                pad_keys: (i != 2).then_some(false),
                 video: "3840x2160 AV1 HDR10 · 120 q/s · direto pela internet, 12 ms".into(),
                 keys: [key(all, b'P' as u32), key(all, b'F' as u32), key(all, b'I' as u32), key(all, b'M' as u32), key(all, b'S' as u32), key(crate::config::MOD_CTRL | crate::config::MOD_ALT, 0x23), key(all, b'D' as u32)],
             };

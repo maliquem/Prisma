@@ -1448,7 +1448,7 @@ Tirar do som o programa de chamada	Dejar fuera del sonido la app de llamadas
 Uma pessoa por vez no mouse e no teclado	Una persona a la vez en el ratón y el teclado
 O mouse e o teclado deste PC têm prioridade	El ratón y el teclado de este PC tienen prioridad
 Recusar conexões enquanto este PC assiste a outro	Rechazar conexiones mientras este PC ve a otro
-Com prioridade, quem assiste para por 1 segundo sempre que alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. Programas de chamada: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack e Signal; sai do som o primeiro que estiver aberto.	Con prioridad, el visor se pausa 1 segundo cada vez que alguien aquí mueve el ratón o escribe. Una persona a la vez: el turno pasa tras 2 segundos sin entrada. Apps de llamadas: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack y Signal; la primera que esté abierta queda fuera del sonido.
+Com prioridade, quem assiste para por 1 segundo sempre que alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. Programas de chamada: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack e Signal. O Windows só deixa tirar um: sai do som o que estiver tocando, e a escolha muda durante a conexão. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante. Num notebook com duas placas, a outra placa codifica com uma cópia a mais da imagem.	Con prioridad, el visor se pausa 1 segundo cada vez que alguien aquí mueve el ratón o escribe. Una persona a la vez: el turno pasa tras 2 segundos sin entrada. Apps de llamadas: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack y Signal. Windows solo deja quitar una: queda fuera del sonido la que esté sonando, y la elección cambia durante la conexión. Los cambios se aplican al momento; los de la imagen reinician el vídeo un instante. En un portátil con dos tarjetas gráficas, la otra tarjeta codifica con una copia más de la imagen.
 Janela de quem assiste	Ventana del visor
 Abrir em tela cheia sem borda	Abrir en pantalla completa sin bordes
 VSync: sem rasgos na imagem, com um pouco mais de atraso	VSync: sin cortes de imagen, con un poco más de retraso
@@ -1464,7 +1464,7 @@ Medidor de latência	Medidor de latencia
 Simples	Simple
 Detalhado	Detallado
 Avisar quando a conexão piorar	Avisar cuando la conexión empeore
-O simples mostra o atraso de ponta a ponta e uma bolinha verde, amarela ou vermelha. O detalhado mostra também a rede, o vídeo, os quadros por segundo, a banda, a decodificação, os quadros perdidos e o caminho. O aviso aparece quando a rede perde mais de 2% dos quadros, quando a latência varia mais de 10 ms ou sobe por 3 segundos seguidos. Os quadros por segundo pedidos não passam dos Hz desta tela; o automático usa os Hz dela. Tudo isso muda também pelo menu da conexão.	Simple muestra el retraso de extremo a extremo y un punto verde, amarillo o rojo. Detallado también muestra la red, el vídeo, los fotogramas por segundo, el ancho de banda, la decodificación, los fotogramas perdidos y la ruta. El aviso aparece cuando la red pierde más del 2% de los fotogramas, cuando la latencia varía más de 10 ms o sube 3 segundos seguidos. Los fotogramas por segundo pedidos nunca pasan de los Hz de esta pantalla; Automático usa sus Hz. Todo esto también se puede cambiar desde el menú de la conexión.
+O simples mostra o atraso de ponta a ponta e uma bolinha verde, amarela ou vermelha. O detalhado mostra também a rede, o vídeo, os quadros por segundo, a banda, a decodificação, os quadros perdidos e o caminho. O aviso aparece quando a rede perde mais de 2% dos quadros, quando a latência varia mais de 10 ms ou sobe por 3 segundos seguidos. Os quadros por segundo pedidos não passam dos Hz desta tela; o automático usa os Hz dela. Tudo isso muda também pelo menu da conexão. A placa de vídeo vale na próxima conexão.	Simple muestra el retraso de extremo a extremo y un punto verde, amarillo o rojo. Detallado también muestra la red, el vídeo, los fotogramas por segundo, el ancho de banda, la decodificación, los fotogramas perdidos y la ruta. El aviso aparece cuando la red pierde más del 2% de los fotogramas, cuando la latencia varía más de 10 ms o sube 3 segundos seguidos. Los fotogramas por segundo pedidos nunca pasan de los Hz de esta pantalla; Automático usa sus Hz. Todo esto también se puede cambiar desde el menú de la conexión. La tarjeta gráfica se aplica en la próxima conexión.
 Portas	Puertos
 Porta UDP do host	Puerto UDP del anfitrión
 Automática	Automático
@@ -1556,3 +1556,10 @@ não deu para trocar	no se pudo cambiar
 aparelho desligado	dispositivo desconectado
 Cada atalho troca a saída e a entrada padrão do Windows de uma vez. Use Adicionar.	Cada atajo cambia a la vez la salida y la entrada predeterminadas de Windows. Usa Añadir.
 Não deu para mudar na hora. Vale na próxima conexão.	No se pudo cambiar al instante. Se aplica en la próxima conexión.
+Pedir 4:4:4	Pedir 4:4:4
+Controle em segundo plano	Mando en segundo plano
+Teclado como controle	Teclado como mando
+VSync	VSync
+Placa de vídeo	Tarjeta gráfica
+A do monitor	La del monitor
+A do Windows	La de Windows

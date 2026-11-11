@@ -32,7 +32,7 @@ use crate::capture::engine::{bgra_texture, bitrate, even, ConvOut, Prep};
 use crate::capture::hdr::ToneMap;
 use crate::capture::mux::{Codec, Pkt};
 use crate::capture::sound;
-use crate::capture::{d3d, monitor_color, monitor_item, D3d};
+use crate::capture::{monitor_color, monitor_item, D3d};
 
 /// Sem notícia de quem assiste por este tempo, ela sai da sessão.
 const SILENCE: Duration = Duration::from_secs(5);
@@ -136,6 +136,8 @@ struct Room {
     /// A área de transferência do host, aberta quando entra alguém com a permissão `COPY`.
     clip: Option<super::clip::Clip>,
     clip_id: u16,
+    /// Número do próximo quadro de vídeo, contínuo entre as sessões da sala.
+    frame_id: u32,
 }
 
 impl Room {
@@ -188,19 +190,24 @@ pub(super) fn prepare() -> Option<D3d> {
         let _ = MFStartup(MF_VERSION, MFSTARTUP_LITE);
         let _ = timeBeginPeriod(1);
     }
-    let d = match d3d() {
-        Ok(d) => d,
+    match device(None) {
+        Ok(d) => Some(d),
         Err(e) => {
             eprintln!("sem Direct3D: {e:?}");
-            return None;
+            None
         }
-    };
+    }
+}
+
+/// Direct3D para compartilhar, numa placa escolhida ou na padrão.
+fn device(adapter: Option<&windows::Win32::Graphics::Dxgi::IDXGIAdapter1>) -> Result<D3d> {
+    let d = crate::capture::d3d_on(adapter)?;
     unsafe {
         if let Ok(mt) = d.ctx.cast::<ID3D11Multithread>() {
             let _ = mt.SetMultithreadProtected(true);
         }
     }
-    Some(d)
+    Ok(d)
 }
 
 /// Quantas pessoas assistem juntas: a opção da página (padrão 3), ou `PRISMA_GUESTS` por cima.
@@ -377,7 +384,7 @@ pub fn restore_hdr() {
 /// Devolve o endereço de alguém novo que chegou pelo UDP, se for o caso.
 pub(super) fn serve(d: &D3d, first: Joiner, joins: Option<&mpsc::Receiver<Joiner>>) -> Option<(Hello, SocketAddr)> {
     let _hdr = HdrOff::new(&first.hello);
-    let mut room = Room { guests: vec![Guest::new(first)], bridge: None, bridge_err: None, anti_cheat: false, checked: Instant::now() - Duration::from_secs(10), clip: None, clip_id: 0 };
+    let mut room = Room { guests: vec![Guest::new(first)], bridge: None, bridge_err: None, anti_cheat: false, checked: Instant::now() - Duration::from_secs(10), clip: None, clip_id: 0, frame_id: 0 };
     let g = &room.guests[0];
     eprintln!("chegou «{}»: tela {}x{} a {} Hz, {} ({})", g.name, g.hello.w, g.hello.h, g.hello.hz, perms_text(g.perms), g.link.route());
     loop {
@@ -462,62 +469,117 @@ fn top_pids(names: &[&str]) -> Vec<(u32, String)> {
 }
 
 /// De onde vem o som: o PC todo, só um programa, ou o PC sem um programa.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 enum SoundFrom {
     All,
     Only(u32),
     Without(u32),
 }
 
-fn sound_from(opts: &Opts, viewer_here: Option<u32>) -> SoundFrom {
+/// O programa de chamada que sai do som. O Windows só deixa tirar um programa por captura: vale o
+/// que está tocando agora (o Discord numa chamada, e não o Telegram aberto e calado). Se nenhum
+/// toca, fica o que já estava fora; senão, o primeiro da lista (o Discord antes dos outros).
+fn call_to_exclude(keep: Option<u32>) -> Option<(u32, String)> {
+    let mut open = top_pids(&CALL_APPS);
+    open.sort_by_key(|(_, n)| CALL_APPS.iter().position(|c| c == n).unwrap_or(usize::MAX));
+    if open.len() < 2 {
+        return open.pop();
+    }
+    let playing: Vec<String> = crate::sys::audio::sessions().into_iter().filter(|s| s.active).map(|s| s.exe.to_lowercase()).collect();
+    let loud: Vec<&(u32, String)> = open.iter().filter(|(_, n)| playing.contains(n)).collect();
+    if let Some(k) = keep.and_then(|k| open.iter().find(|(p, _)| *p == k)) {
+        if loud.is_empty() || loud.iter().any(|(p, _)| *p == k.0) {
+            return Some(k.clone());
+        }
+    }
+    loud.first().map(|x| (*x).clone()).or_else(|| open.first().cloned())
+}
+
+/// A escolha do som e o texto para o registro. `keep`: o programa que já está fora do som.
+fn sound_from(opts: &Opts, viewer_here: Option<u32>, keep: Option<u32>) -> (SoundFrom, String) {
     // Tirar o programa de chamada vale mais que escolher ele como o som que vai.
+    let mut note = String::new();
     if opts.no_calls && is_call_app(&opts.sound_app) {
-        eprintln!("som: {} é programa de chamada e a opção tira ele do som; vai o resto do PC", opts.sound_app);
+        note = format!(" ({} é programa de chamada e a opção tira ele do som)", opts.sound_app);
     } else if !opts.sound_app.is_empty() {
         match top_pids(&[opts.sound_app.as_str()]).first() {
-            Some((pid, _)) => {
-                eprintln!("som: só de {}", opts.sound_app);
-                return SoundFrom::Only(*pid);
-            }
-            None => eprintln!("som: {} não está aberto; vai o som do PC", opts.sound_app),
+            Some((pid, _)) => return (SoundFrom::Only(*pid), format!("só de {}", opts.sound_app)),
+            None => note = format!(" ({} não está aberto)", opts.sound_app),
         }
     }
     // Quem assiste no mesmo PC: o som da janela dele voltaria em eco.
     if let Some(pid) = viewer_here {
-        return SoundFrom::Without(pid);
+        return (SoundFrom::Without(pid), format!("sem a janela que assiste neste PC{note}"));
     }
     if opts.no_calls {
-        if let Some((pid, name)) = top_pids(&CALL_APPS).into_iter().next() {
-            eprintln!("som: sem {name} (programa de chamada)");
-            return SoundFrom::Without(pid);
+        if let Some((pid, name)) = call_to_exclude(keep) {
+            return (SoundFrom::Without(pid), format!("sem {name} (programa de chamada){note}"));
         }
     }
-    SoundFrom::All
+    (SoundFrom::All, format!("o PC todo{note}"))
 }
 
-/// Som do PC em blocos de 5 ms, para quem tem a permissão de som.
-fn audio(links: Arc<Mutex<Vec<Arc<dyn Link>>>>, from: SoundFrom, stop: Arc<AtomicBool>) {
+/// Som do PC em blocos de 5 ms, para quem tem a permissão de som. A origem segue as opções e os
+/// programas abertos durante a transmissão: outra linha decide a cada segundo, e esta só troca a
+/// captura quando a decisão muda (procurar processos e sessões de som atrasaria os blocos).
+fn audio(links: Arc<Mutex<Vec<Arc<dyn Link>>>>, viewer_here: Option<u32>, stop: Arc<AtomicBool>) {
+    let choice: Arc<Mutex<Option<(SoundFrom, String)>>> = Arc::new(Mutex::new(None));
+    let chooser = {
+        let (choice, stop) = (choice.clone(), stop.clone());
+        std::thread::Builder::new().name("compartilhar-som-origem".into()).spawn(move || {
+            unsafe {
+                let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+            }
+            let mut keep = None;
+            while !stop.load(Ordering::Relaxed) {
+                let (from, text) = sound_from(&Opts::load(), viewer_here, keep);
+                keep = match from {
+                    SoundFrom::Without(p) => Some(p),
+                    _ => None,
+                };
+                *choice.lock().unwrap() = Some((from, text));
+                for _ in 0..10 {
+                    if stop.load(Ordering::Relaxed) {
+                        break;
+                    }
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+            }
+        })
+    };
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-        let src = match from {
-            SoundFrom::Only(pid) => sound::open_process_mode(pid, false),
-            SoundFrom::Without(pid) => sound::open_process_mode(pid, true),
-            SoundFrom::All => sound::open(eRender, true),
-        };
-        let src = match src {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("sem som: {e:?}");
-                return;
-            }
-        };
+        let mut src: Option<sound::Source> = None;
+        let mut from: Option<SoundFrom> = None;
         let mut pcm: Vec<f32> = Vec::new();
         let mut block = Vec::with_capacity(AUDIO_BLOCK * 4);
         let mut out = Vec::with_capacity(MTU);
         let mut seq = 0u32;
         while !stop.load(Ordering::Relaxed) {
             std::thread::sleep(Duration::from_millis(2));
-            sound::read(&src, &mut pcm);
+            if let Some((want, text)) = choice.lock().unwrap().take() {
+                if from != Some(want) {
+                    if let Some(s) = src.take() {
+                        let _ = s.client.Stop();
+                    }
+                    from = Some(want);
+                    pcm.clear();
+                    let s = match want {
+                        SoundFrom::Only(pid) => sound::open_process_mode(pid, false),
+                        SoundFrom::Without(pid) => sound::open_process_mode(pid, true),
+                        SoundFrom::All => sound::open(eRender, true),
+                    };
+                    match s {
+                        Ok(s) => {
+                            eprintln!("som: {text}");
+                            src = Some(s);
+                        }
+                        Err(e) => eprintln!("sem som ({text}): {e:?}"),
+                    }
+                }
+            }
+            let Some(s) = &src else { continue };
+            sound::read(s, &mut pcm);
             while pcm.len() >= AUDIO_BLOCK * 2 {
                 block.clear();
                 for v in pcm.drain(..AUDIO_BLOCK * 2) {
@@ -530,7 +592,12 @@ fn audio(links: Arc<Mutex<Vec<Arc<dyn Link>>>>, from: SoundFrom, stop: Arc<Atomi
                 seq = seq.wrapping_add(1);
             }
         }
-        let _ = src.client.Stop();
+        if let Some(s) = src {
+            let _ = s.client.Stop();
+        }
+    }
+    if let Ok(t) = chooser {
+        let _ = t.join();
     }
 }
 
@@ -603,12 +670,19 @@ impl Injector {
             let (x, y) = (GetSystemMetrics(SM_XVIRTUALSCREEN), GetSystemMetrics(SM_YVIRTUALSCREEN));
             RECT { left: x, top: y, right: x + GetSystemMetrics(SM_CXVIRTUALSCREEN), bottom: y + GetSystemMetrics(SM_CYVIRTUALSCREEN) }
         };
-        let o = Opts::load();
+        let id = INJECTORS.fetch_add(1, Ordering::Relaxed);
+        let mut me = Self { mon: mi.rcMonitor, virt, perms, next: None, keys: HashSet::new(), buttons: [false; 5], id, one_at_a_time: false, host_first: false };
+        me.rules(&Opts::load());
+        me
+    }
+
+    /// As regras da página para o mouse e o teclado (valem na hora quando mudam).
+    fn rules(&mut self, o: &Opts) {
         if o.host_first {
             watch_host_input();
         }
-        let id = INJECTORS.fetch_add(1, Ordering::Relaxed);
-        Self { mon: mi.rcMonitor, virt, perms, next: None, keys: HashSet::new(), buttons: [false; 5], id, one_at_a_time: o.one_at_a_time, host_first: o.host_first }
+        self.one_at_a_time = o.one_at_a_time;
+        self.host_first = o.host_first;
     }
 
     fn mouse(flags: MOUSE_EVENT_FLAGS, dx: i32, dy: i32, data: i32) -> INPUT {
@@ -923,18 +997,10 @@ fn use_dda() -> bool {
 }
 
 /// Tamanho da tela principal, pela saída de vídeo (a Desktop Duplication não usa o WGC).
-unsafe fn output_size(d: &D3d, mon: HMONITOR) -> Result<(u32, u32)> {
-    let ad = d.dev.cast::<windows::Win32::Graphics::Dxgi::IDXGIDevice>()?.GetAdapter()?;
-    let mut i = 0;
-    loop {
-        let o = ad.EnumOutputs(i)?;
-        let desc = o.GetDesc()?;
-        if desc.Monitor == mon {
-            let r = desc.DesktopCoordinates;
-            return Ok(((r.right - r.left) as u32, (r.bottom - r.top) as u32));
-        }
-        i += 1;
-    }
+unsafe fn output_size(mon: HMONITOR) -> Result<(u32, u32)> {
+    let Some((_, o)) = crate::capture::monitor_adapter(mon) else { return Err(Error::new(E_FAIL, "monitor sem placa de vídeo")) };
+    let r = o.GetDesc()?.DesktopCoordinates;
+    Ok(((r.right - r.left) as u32, (r.bottom - r.top) as u32))
 }
 
 /// Os monitores, na ordem do Windows.
@@ -960,9 +1026,28 @@ fn pick_monitor(n: u32) -> HMONITOR {
 }
 
 unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner>>) -> Result<End> {
-    let opts = Opts::load();
+    let mut opts = Opts::load();
     let mon = pick_monitor(opts.monitor);
     let color = monitor_color(mon);
+    // A placa que codifica: a das opções, ou a do monitor transmitido. Num notebook com duas, a
+    // Desktop Duplication só lê a tela pela placa ligada a ela; a imagem passa para a outra.
+    let screen_ad = crate::capture::monitor_adapter(mon).map(|(a, _)| a);
+    let chosen = crate::capture::adapter_named(&opts.gpu);
+    if !opts.gpu.is_empty() && chosen.is_none() {
+        eprintln!("placa de vídeo «{}» não encontrada: vai a do monitor", opts.gpu);
+    }
+    let want = chosen.or_else(|| screen_ad.clone());
+    let own = match &want {
+        Some(a) if !crate::capture::same_adapter(a, &d.dev) => match device(Some(a)) {
+            Ok(x) => Some(x),
+            Err(e) => {
+                eprintln!("não deu para usar a placa escolhida ({e:?}); vai a padrão");
+                None
+            }
+        },
+        _ => None,
+    };
+    let d: &D3d = own.as_ref().unwrap_or(d);
     let mut cap = if use_dda() {
         None
     } else {
@@ -974,7 +1059,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
             (even(s.Width as u32), even(s.Height as u32))
         }
         None => {
-            let (w, h) = output_size(d, mon)?;
+            let (w, h) = output_size(mon)?;
             (even(w), even(h))
         }
     };
@@ -1065,6 +1150,9 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     };
     let mut conv = Prep::new(&d.dev, &d.ctx, &mid, src_w, src_h, out_w, out_h, fps, out_fmt)?;
 
+    let priority = opts.priority;
+    // Desktop Duplication com a tela noutra placa: a captura fica lá, com a sua textura.
+    let mut cross: Option<(D3d, ID3D11Texture2D, super::screen::CrossCopy)> = None;
     let mut cap = match cap.take() {
         Some(item) => {
             let fmt = if color.hdr { DirectXPixelFormat::R16G16B16A16Float } else { DirectXPixelFormat::B8G8R8A8UIntNormalized };
@@ -1083,7 +1171,18 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
             Cap::Wgc { item, pool: Some((pool, capture, event, token)) }
         }
         None => {
-            let x = super::screen::Dda::new(d, mon, color.hdr, color.white_nits, &mid, vf.hdr10, src_w, src_h)?;
+            let fmt = if vf.hdr10 { DXGI_FORMAT_R10G10B10A2_UNORM } else { DXGI_FORMAT_B8G8R8A8_UNORM };
+            if let Some(a) = screen_ad.as_ref().filter(|a| !crate::capture::same_adapter(a, &d.dev)) {
+                let cd = device(Some(a))?;
+                let cm = bgra_texture(&cd.dev, src_w, src_h, fmt)?;
+                let cc = super::screen::CrossCopy::new(&cd, d, fmt, src_w, src_h)?;
+                eprintln!("captura: a tela é de outra placa; a imagem passa pela memória do PC");
+                cross = Some((cd, cm, cc));
+            }
+            let x = match &cross {
+                Some((cd, cm, _)) => super::screen::Dda::new(cd, mon, color.hdr, color.white_nits, cm, vf.hdr10, src_w, src_h)?,
+                None => super::screen::Dda::new(d, mon, color.hdr, color.white_nits, &mid, vf.hdr10, src_w, src_h)?,
+            };
             eprintln!("captura: Desktop Duplication, área de trabalho «{}»", x.desk_name);
             Cap::Dda(Box::new(x))
         }
@@ -1095,11 +1194,10 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     let hearing = |guests: &[Guest]| -> Vec<Arc<dyn Link>> { guests.iter().filter(|g| g.perms & SOUND != 0).map(|g| g.link.clone()).collect() };
     let audio_links = Arc::new(Mutex::new(hearing(&room.guests)));
     let exclude = room.guests.iter().find(|g| g.link.same_pc() && g.hello.pid != 0).map(|g| g.hello.pid);
-    let from = sound_from(&opts, exclude);
     let stop_audio = Arc::new(AtomicBool::new(false));
     let audio_thread = {
         let (l, stop) = (audio_links.clone(), stop_audio.clone());
-        std::thread::Builder::new().name("compartilhar-som".into()).spawn(move || audio(l, from, stop)).ok()
+        std::thread::Builder::new().name("compartilhar-som".into()).spawn(move || audio(l, exclude, stop)).ok()
     };
     for g in &mut room.guests {
         g.input = (g.perms & (KEYBOARD | MOUSE) != 0).then(|| Injector::new(mon, g.perms));
@@ -1108,7 +1206,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
 
     let mut out = Vec::with_capacity(MTU);
     let mut buf = vec![0u8; 2048];
-    let info = |perms: u8| Msg::Info { codec, w: out_w, h: out_h, fps, perms, recover: enc.recovers(), hdr10: vf.hdr10, yuv444: vf.yuv444 };
+    let info = |perms: u8| Msg::Info { codec, w: out_w, h: out_h, fps, perms, recover: enc.recovers(), hdr10: vf.hdr10, yuv444: vf.yuv444, priority };
     let infos: Vec<Vec<u8>> = (0..=255u8).map(|p| {
         let mut b = Vec::new();
         write(&mut b, &info(p));
@@ -1124,7 +1222,8 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     let mut last_fed = i64::MIN / 2;
     let mut pending: Option<i64> = None;
     let mut pkts: Vec<Pkt> = Vec::new();
-    let mut frame_id = 0u32;
+    // A contagem continua de uma sessão para a outra: quem assiste descarta quadro "velho".
+    let mut frame_id = room.frame_id;
     let mut result = End::Gone;
     let mut failed = None;
     let mut pad_msgs: Vec<PadMsg> = Vec::new();
@@ -1169,6 +1268,22 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                     }
                     _ => {}
                 }
+            }
+            // As opções da página valem na hora: o que o vídeo usa recomeça a transmissão (um
+            // quadro-chave); ritmo, mouse e teclado mudam aqui; o som se ajusta sozinho.
+            let fresh = Opts::load();
+            if fresh != opts {
+                if fresh.video_differs(&opts) {
+                    eprintln!("opções do vídeo mudaram: recomeçando");
+                    result = End::Again;
+                    break 'run;
+                }
+                for g in &mut room.guests {
+                    if let Some(inj) = &mut g.input {
+                        inj.rules(&fresh);
+                    }
+                }
+                opts = fresh;
             }
         }
         let secure = match &cap {
@@ -1348,8 +1463,21 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                     // A Desktop Duplication entrega cada mudança (o mouse também): o ritmo fica aqui.
                     if enc.ready() && fed_at.elapsed() >= Duration::from_nanos(interval as u64 * 90) {
                         if let Some(pts) = pending.take() {
-                            x.compose(&mid)?;
+                            match &cross {
+                                Some((cd, cm, cc)) => {
+                                    x.compose(cm)?;
+                                    cc.copy(cd, cm, d, &mid)?;
+                                }
+                                None => x.compose(&mid)?,
+                            }
                             let t = conv.convert(&d.ctx)?;
+                            enc.feed(&t, pts)?;
+                            last_fed = pts;
+                            fed_at = Instant::now();
+                        } else if opts.constant && last_fed > i64::MIN / 2 && fed_at.elapsed() >= Duration::from_nanos(interval as u64 * 100) {
+                            // Ritmo constante: a tela parada repete o último quadro, no ritmo de sempre.
+                            let t = conv.convert(&d.ctx)?;
+                            let pts = now();
                             enc.feed(&t, pts)?;
                             last_fed = pts;
                             fed_at = Instant::now();
@@ -1434,6 +1562,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
             frame_id = frame_id.wrapping_add(1);
         }
     }
+    room.frame_id = frame_id;
     for g in &mut room.guests {
         if let Some(inj) = &mut g.input {
             inj.release();
@@ -1503,7 +1632,7 @@ mod tests {
 
     fn room(guests: Vec<Guest>) -> (Room, super::super::pads::FakeLog) {
         let log = Arc::new(Mutex::new(Vec::new()));
-        let r = Room { guests, bridge: Some(Bridge::fake(log.clone())), bridge_err: None, anti_cheat: false, checked: Instant::now(), clip: None, clip_id: 0 };
+        let r = Room { guests, bridge: Some(Bridge::fake(log.clone())), bridge_err: None, anti_cheat: false, checked: Instant::now(), clip: None, clip_id: 0, frame_id: 0 };
         (r, log)
     }
 

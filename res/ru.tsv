@@ -1448,7 +1448,7 @@ Tirar do som o programa de chamada	Не передавать звук прило
 Uma pessoa por vez no mouse e no teclado	Мышь и клавиатура — по одному человеку
 O mouse e o teclado deste PC têm prioridade	Мышь и клавиатура этого ПК в приоритете
 Recusar conexões enquanto este PC assiste a outro	Отклонять подключения, пока этот ПК смотрит другой
-Com prioridade, quem assiste para por 1 segundo sempre que alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. Programas de chamada: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack e Signal; sai do som o primeiro que estiver aberto.	При приоритете просмотр приостанавливается на 1 секунду, когда кто-то здесь двигает мышь или печатает. По одному: очередь переходит после 2 секунд без ввода. Приложения для звонков: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack и Signal; первое открытое не попадает в звук.
+Com prioridade, quem assiste para por 1 segundo sempre que alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. Programas de chamada: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack e Signal. O Windows só deixa tirar um: sai do som o que estiver tocando, e a escolha muda durante a conexão. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante. Num notebook com duas placas, a outra placa codifica com uma cópia a mais da imagem.	При приоритете просмотр приостанавливается на 1 секунду, когда кто-то здесь двигает мышь или печатает. По одному: очередь переходит после 2 секунд без ввода. Приложения для звонков: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack и Signal. Windows позволяет исключить только одно: из звука убирается то, что сейчас звучит, и выбор меняется во время подключения. Изменения действуют сразу; изменения изображения на мгновение перезапускают видео. На ноутбуке с двумя видеокартами другая видеокарта кодирует с одной лишней копией изображения.
 Janela de quem assiste	Окно просмотра
 Abrir em tela cheia sem borda	Открывать в полноэкранном режиме без рамки
 VSync: sem rasgos na imagem, com um pouco mais de atraso	VSync: без разрывов, с чуть большей задержкой
@@ -1464,7 +1464,7 @@ Medidor de latência	Счётчик задержки
 Simples	Простой
 Detalhado	Подробный
 Avisar quando a conexão piorar	Предупреждать, когда связь ухудшается
-O simples mostra o atraso de ponta a ponta e uma bolinha verde, amarela ou vermelha. O detalhado mostra também a rede, o vídeo, os quadros por segundo, a banda, a decodificação, os quadros perdidos e o caminho. O aviso aparece quando a rede perde mais de 2% dos quadros, quando a latência varia mais de 10 ms ou sobe por 3 segundos seguidos. Os quadros por segundo pedidos não passam dos Hz desta tela; o automático usa os Hz dela. Tudo isso muda também pelo menu da conexão.	Простой показывает сквозную задержку и зелёную, жёлтую или красную точку. Подробный также показывает сеть, видео, кадры в секунду, полосу, декодирование, потерянные кадры и маршрут. Предупреждение появляется, когда сеть теряет больше 2% кадров, когда задержка скачет больше чем на 10 мс или растёт 3 секунды подряд. Запрошенные кадры в секунду не превышают частоту этого экрана; «Авто» использует его частоту. Всё это можно менять и из меню подключения.
+O simples mostra o atraso de ponta a ponta e uma bolinha verde, amarela ou vermelha. O detalhado mostra também a rede, o vídeo, os quadros por segundo, a banda, a decodificação, os quadros perdidos e o caminho. O aviso aparece quando a rede perde mais de 2% dos quadros, quando a latência varia mais de 10 ms ou sobe por 3 segundos seguidos. Os quadros por segundo pedidos não passam dos Hz desta tela; o automático usa os Hz dela. Tudo isso muda também pelo menu da conexão. A placa de vídeo vale na próxima conexão.	Простой показывает сквозную задержку и зелёную, жёлтую или красную точку. Подробный также показывает сеть, видео, кадры в секунду, полосу, декодирование, потерянные кадры и маршрут. Предупреждение появляется, когда сеть теряет больше 2% кадров, когда задержка скачет больше чем на 10 мс или растёт 3 секунды подряд. Запрошенные кадры в секунду не превышают частоту этого экрана; «Авто» использует его частоту. Всё это можно менять и из меню подключения. Видеокарта меняется со следующего подключения.
 Portas	Порты
 Porta UDP do host	UDP-порт хоста
 Automática	Автоматически
@@ -1556,3 +1556,10 @@ não deu para trocar	не удалось переключить
 aparelho desligado	устройство отключено
 Cada atalho troca a saída e a entrada padrão do Windows de uma vez. Use Adicionar.	Каждое сочетание сразу переключает вывод и ввод Windows по умолчанию. Нажмите «Добавить».
 Não deu para mudar na hora. Vale na próxima conexão.	Не удалось изменить сразу. Применится при следующем подключении.
+Pedir 4:4:4	Запрашивать 4:4:4
+Controle em segundo plano	Геймпад в фоне
+Teclado como controle	Клавиатура как геймпад
+VSync	VSync
+Placa de vídeo	Видеокарта
+A do monitor	Как у монитора
+A do Windows	Как в Windows

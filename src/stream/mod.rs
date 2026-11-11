@@ -249,7 +249,9 @@ pub enum Msg<'a> {
     /// `perms` são as permissões de quem assiste ([`SOUND`], [`PAD`], [`KEYBOARD`], [`MOUSE`]); `recover`, se ele se recupera de um quadro
     /// perdido sem quadro-chave (quem assiste avisa com `Nack` e segue mostrando). `hdr10`: 10 bits,
     /// BT.2020 com PQ. `yuv444`: HEVC com a cor inteira em cada pixel.
-    Info { codec: Codec, w: u32, h: u32, fps: u32, perms: u8, recover: bool, hdr10: bool, yuv444: bool },
+    /// `priority`: 0 menor atraso, 1 equilibrado, 2 qualidade; 255 quando o host é de uma versão
+    /// que não manda (o byte veio depois, no fim, e as versões antigas o ignoram).
+    Info { codec: Codec, w: u32, h: u32, fps: u32, perms: u8, recover: bool, hdr10: bool, yuv444: bool, priority: u8 },
     /// Quem assiste chegou: tamanho e Hz da tela dele, codecs que ele decodifica (bits 0 H.264,
     /// 1 HEVC, 2 AV1) e o número do processo, para o host tirar o som dele quando os dois estão no mesmo PC.
     /// `flags`: [`SEES_HDR`] e [`DECODES_444`].
@@ -332,7 +334,7 @@ pub fn write(out: &mut Vec<u8>, m: &Msg) {
             out.extend_from_slice(&pts.to_le_bytes());
             out.extend_from_slice(data);
         }
-        Msg::Info { codec, w, h, fps, perms, recover, hdr10, yuv444 } => {
+        Msg::Info { codec, w, h, fps, perms, recover, hdr10, yuv444, priority } => {
             head(out, Kind::Info);
             out.push(codec_id(codec));
             out.extend_from_slice(&w.to_le_bytes());
@@ -342,6 +344,7 @@ pub fn write(out: &mut Vec<u8>, m: &Msg) {
             out.push(recover as u8);
             out.push(hdr10 as u8);
             out.push(yuv444 as u8);
+            out.push(priority);
         }
         Msg::Hello { w, h, hz, codecs, pid, flags } => {
             head(out, Kind::Hello);
@@ -441,7 +444,7 @@ pub fn read(b: &[u8]) -> Option<Msg<'_>> {
             pts: i64_at(b, 16)?,
             data: b.get(VIDEO_HEAD..)?,
         },
-        2 => Msg::Info { codec: codec_of(*b.get(4)?)?, w: u32_at(b, 5)?, h: u32_at(b, 9)?, fps: u32_at(b, 13)?, perms: *b.get(17)?, recover: *b.get(18)? != 0, hdr10: *b.get(19)? != 0, yuv444: *b.get(20)? != 0 },
+        2 => Msg::Info { codec: codec_of(*b.get(4)?)?, w: u32_at(b, 5)?, h: u32_at(b, 9)?, fps: u32_at(b, 13)?, perms: *b.get(17)?, recover: *b.get(18)? != 0, hdr10: *b.get(19)? != 0, yuv444: *b.get(20)? != 0, priority: b.get(21).copied().unwrap_or(255) },
         3 => Msg::Hello { w: u32_at(b, 4)?, h: u32_at(b, 8)?, hz: u32_at(b, 12)?, codecs: *b.get(16)?, pid: u32_at(b, 17)?, flags: *b.get(21)? },
         4 => Msg::KeyReq,
         5 => Msg::Ping { t: i64_at(b, 4)? },
@@ -590,7 +593,12 @@ mod tests {
     #[test]
     fn packets_round_trip() {
         round(Msg::Video { key: true, idx: 3, count: 9, frame: 77, pts: -5, data: &[1, 2, 3] });
-        round(Msg::Info { codec: Codec::Av1, w: 1920, h: 1080, fps: 60, perms: SOUND | PAD, recover: true, hdr10: true, yuv444: false });
+        round(Msg::Info { codec: Codec::Av1, w: 1920, h: 1080, fps: 60, perms: SOUND | PAD, recover: true, hdr10: true, yuv444: false, priority: 2 });
+        // Host de versão anterior: sem o byte da prioridade, que vira "sem informação".
+        let mut old = Vec::new();
+        write(&mut old, &Msg::Info { codec: Codec::Hevc, w: 1280, h: 720, fps: 30, perms: 0, recover: false, hdr10: false, yuv444: true, priority: 0 });
+        old.pop();
+        assert!(matches!(read(&old), Some(Msg::Info { priority: 255, yuv444: true, fps: 30, .. })));
         round(Msg::Pad { pad: 4, seq: 65535, on: true, state: PadState { buttons: 0xF00F, lt: 255, rt: 1, lx: -32768, ly: 32767, rx: -1, ry: 0 } });
         round(Msg::Pad { pad: 0, seq: 0, on: false, state: PadState::default() });
         round(Msg::Rumble { pad: 2, low: 200, high: 7 });

@@ -1448,7 +1448,7 @@ Tirar do som o programa de chamada	声音中排除通话应用
 Uma pessoa por vez no mouse e no teclado	鼠标和键盘一次一人
 O mouse e o teclado deste PC têm prioridade	此电脑的鼠标和键盘优先
 Recusar conexões enquanto este PC assiste a outro	此电脑正在观看其他电脑时拒绝连接
-Com prioridade, quem assiste para por 1 segundo sempre que alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. Programas de chamada: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack e Signal; sai do som o primeiro que estiver aberto.	开启优先时，每当这里有人移动鼠标或打字，观看方会暂停 1 秒。一次一人：2 秒无输入后轮换。通话应用：Discord、Teams、Zoom、WhatsApp、Skype、Telegram、Slack 和 Signal；第一个打开的会被排除在声音之外。
+Com prioridade, quem assiste para por 1 segundo sempre que alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. Programas de chamada: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack e Signal. O Windows só deixa tirar um: sai do som o que estiver tocando, e a escolha muda durante a conexão. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante. Num notebook com duas placas, a outra placa codifica com uma cópia a mais da imagem.	开启优先时，每当这里有人移动鼠标或打字，观看方会暂停 1 秒。一次一人：2 秒无输入后轮换。通话应用：Discord、Teams、Zoom、WhatsApp、Skype、Telegram、Slack 和 Signal。Windows 只允许排除一个：正在发声的那个会被排除在声音之外，并且在连接期间会随之改变。更改会立即生效；画面相关的更改会让视频短暂重新开始。在有两块显卡的笔记本上，另一块显卡编码时会多复制一次画面。
 Janela de quem assiste	观看窗口
 Abrir em tela cheia sem borda	以无边框全屏打开
 VSync: sem rasgos na imagem, com um pouco mais de atraso	垂直同步：不撕裂，延迟稍高
@@ -1464,7 +1464,7 @@ Medidor de latência	延迟监视
 Simples	简单
 Detalhado	详细
 Avisar quando a conexão piorar	连接变差时警告
-O simples mostra o atraso de ponta a ponta e uma bolinha verde, amarela ou vermelha. O detalhado mostra também a rede, o vídeo, os quadros por segundo, a banda, a decodificação, os quadros perdidos e o caminho. O aviso aparece quando a rede perde mais de 2% dos quadros, quando a latência varia mais de 10 ms ou sobe por 3 segundos seguidos. Os quadros por segundo pedidos não passam dos Hz desta tela; o automático usa os Hz dela. Tudo isso muda também pelo menu da conexão.	简单显示端到端延迟和一个绿、黄或红点。详细还会显示网络、视频、每秒帧数、带宽、解码、丢帧和路由。网络丢帧超过 2%、延迟波动超过 10 毫秒或连续 3 秒上升时会出现警告。请求的每秒帧数不会超过此屏幕的刷新率；“自动”使用其刷新率。这些也都可以在连接菜单中更改。
+O simples mostra o atraso de ponta a ponta e uma bolinha verde, amarela ou vermelha. O detalhado mostra também a rede, o vídeo, os quadros por segundo, a banda, a decodificação, os quadros perdidos e o caminho. O aviso aparece quando a rede perde mais de 2% dos quadros, quando a latência varia mais de 10 ms ou sobe por 3 segundos seguidos. Os quadros por segundo pedidos não passam dos Hz desta tela; o automático usa os Hz dela. Tudo isso muda também pelo menu da conexão. A placa de vídeo vale na próxima conexão.	简单显示端到端延迟和一个绿、黄或红点。详细还会显示网络、视频、每秒帧数、带宽、解码、丢帧和路由。网络丢帧超过 2%、延迟波动超过 10 毫秒或连续 3 秒上升时会出现警告。请求的每秒帧数不会超过此屏幕的刷新率；“自动”使用其刷新率。这些也都可以在连接菜单中更改。显卡在下次连接时生效。
 Portas	端口
 Porta UDP do host	主机 UDP 端口
 Automática	自动
@@ -1556,3 +1556,10 @@ não deu para trocar	无法切换
 aparelho desligado	设备已拔出
 Cada atalho troca a saída e a entrada padrão do Windows de uma vez. Use Adicionar.	每个快捷键会同时切换 Windows 默认输出和输入。请使用“添加”。
 Não deu para mudar na hora. Vale na próxima conexão.	无法立即更改。将在下次连接时生效。
+Pedir 4:4:4	请求 4:4:4
+Controle em segundo plano	后台时也发送手柄
+Teclado como controle	把键盘当作手柄
+VSync	垂直同步
+Placa de vídeo	显卡
+A do monitor	显示器所在的显卡
+A do Windows	Windows 默认

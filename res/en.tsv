@@ -1454,7 +1454,7 @@ Tirar do som o programa de chamada	Leave the call app out of the sound
 Uma pessoa por vez no mouse e no teclado	One person at a time on the mouse and keyboard
 O mouse e o teclado deste PC têm prioridade	This PC's mouse and keyboard come first
 Recusar conexões enquanto este PC assiste a outro	Refuse connections while this PC is viewing another
-Com prioridade, quem assiste para por 1 segundo sempre que alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. Programas de chamada: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack e Signal; sai do som o primeiro que estiver aberto.	With priority, the viewer pauses for 1 second whenever someone here moves the mouse or types. One person at a time: the turn passes after 2 seconds without input. Call apps: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack and Signal; the first one that is open is left out of the sound.
+Com prioridade, quem assiste para por 1 segundo sempre que alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. Programas de chamada: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack e Signal. O Windows só deixa tirar um: sai do som o que estiver tocando, e a escolha muda durante a conexão. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante. Num notebook com duas placas, a outra placa codifica com uma cópia a mais da imagem.	With priority, the viewer pauses for 1 second whenever someone here moves the mouse or types. One person at a time: the turn passes after 2 seconds without input. Call apps: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack and Signal. Windows only allows leaving out one: the one that is playing is left out of the sound, and the choice changes during the connection. Changes apply right away; picture changes restart the video for a moment. On a laptop with two graphics cards, the other card encodes with one extra copy of the picture.
 Janela de quem assiste	Viewer window
 Abrir em tela cheia sem borda	Open in borderless fullscreen
 VSync: sem rasgos na imagem, com um pouco mais de atraso	VSync: no tearing, with a little more delay
@@ -1470,7 +1470,7 @@ Medidor de latência	Latency meter
 Simples	Simple
 Detalhado	Detailed
 Avisar quando a conexão piorar	Warn when the connection gets worse
-O simples mostra o atraso de ponta a ponta e uma bolinha verde, amarela ou vermelha. O detalhado mostra também a rede, o vídeo, os quadros por segundo, a banda, a decodificação, os quadros perdidos e o caminho. O aviso aparece quando a rede perde mais de 2% dos quadros, quando a latência varia mais de 10 ms ou sobe por 3 segundos seguidos. Os quadros por segundo pedidos não passam dos Hz desta tela; o automático usa os Hz dela. Tudo isso muda também pelo menu da conexão.	Simple shows the end-to-end delay and a green, yellow or red dot. Detailed also shows the network, the video, frames per second, bandwidth, decoding, lost frames and the route. The warning appears when the network loses more than 2% of frames, when latency varies by more than 10 ms or rises for 3 seconds in a row. The requested frames per second never go above this screen's Hz; Automatic uses its Hz. All of this can also be changed from the connection menu.
+O simples mostra o atraso de ponta a ponta e uma bolinha verde, amarela ou vermelha. O detalhado mostra também a rede, o vídeo, os quadros por segundo, a banda, a decodificação, os quadros perdidos e o caminho. O aviso aparece quando a rede perde mais de 2% dos quadros, quando a latência varia mais de 10 ms ou sobe por 3 segundos seguidos. Os quadros por segundo pedidos não passam dos Hz desta tela; o automático usa os Hz dela. Tudo isso muda também pelo menu da conexão. A placa de vídeo vale na próxima conexão.	Simple shows the end-to-end delay and a green, yellow or red dot. Detailed also shows the network, the video, frames per second, bandwidth, decoding, lost frames and the route. The warning appears when the network loses more than 2% of frames, when latency varies by more than 10 ms or rises for 3 seconds in a row. The requested frames per second never go above this screen's Hz; Automatic uses its Hz. All of this can also be changed from the connection menu. The graphics card applies on the next connection.
 Portas	Ports
 Porta UDP do host	Host UDP port
 Automática	Automatic
@@ -1562,3 +1562,10 @@ não deu para trocar	could not switch
 aparelho desligado	device unplugged
 Cada atalho troca a saída e a entrada padrão do Windows de uma vez. Use Adicionar.	Each shortcut switches the Windows default output and input at once. Use Add.
 Não deu para mudar na hora. Vale na próxima conexão.	Could not change it right away. It applies on the next connection.
+Pedir 4:4:4	Ask for 4:4:4
+Controle em segundo plano	Controller in the background
+Teclado como controle	Keyboard as controller
+VSync	VSync
+Placa de vídeo	Graphics card
+A do monitor	Same as the monitor
+A do Windows	Windows default

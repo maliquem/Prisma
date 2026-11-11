@@ -758,6 +758,31 @@ const RES: [(u32, &str); 5] = [(0, "Automático"), (720, "720p"), (1080, "1080p"
 const FPS: [u32; 8] = [0, 30, 60, 90, 120, 144, 165, 240];
 const MBPS: [u32; 9] = [0, 5, 10, 20, 30, 50, 80, 120, 150];
 
+/// As placas de vídeo deste PC, lidas de novo a cada 10 s (uma placa externa pode chegar).
+fn gpu_names() -> Vec<String> {
+    static CACHE: std::sync::Mutex<(Vec<String>, Option<Instant>)> = std::sync::Mutex::new((Vec::new(), None));
+    let mut c = CACHE.lock().unwrap();
+    if c.1.is_none_or(|t| t.elapsed().as_secs() >= 10) {
+        *c = (crate::capture::adapters().into_iter().map(|(n, _)| n).collect(), Some(Instant::now()));
+    }
+    c.0.clone()
+}
+
+/// A lista da placa de vídeo: automática e as placas, com a escolhida mesmo se sumiu.
+fn gpu_pick(ui: &mut Ui, key: &str, r: Rect, auto: &str, cur: &mut String) {
+    let mut vals = vec![String::new()];
+    vals.extend(gpu_names());
+    if !vals.contains(cur) {
+        vals.push(cur.clone());
+    }
+    let mut names = vec![crate::i18n::tr(auto).into_owned()];
+    names.extend(vals[1..].iter().cloned());
+    let mut s = vals.iter().position(|v| v == cur).unwrap_or(0);
+    if ui.select(key, r, &names, &mut s) {
+        *cur = vals[s].clone();
+    }
+}
+
 fn pick<T: PartialEq + Copy>(ui: &mut Ui, key: &str, r: Rect, values: &[T], names: Vec<String>, cur: &mut T) {
     let mut s = values.iter().position(|v| v == cur).unwrap_or(0);
     if ui.select(key, r, &names, &mut s) {
@@ -785,6 +810,8 @@ fn host_tab(ui: &mut Ui, st: &mut State, o: &mut Opts, x: f32, top: f32, w: f32,
     }
     y += 44.0;
     let mon_r = row(ui, ix, y, iw, "Monitor", ctl);
+    y += 44.0;
+    let gpu_r = row(ui, ix, y, iw, "Placa de vídeo", ctl);
     y += 44.0;
     let res_r = row(ui, ix, y, iw, "Resolução máxima", ctl);
     y += 44.0;
@@ -831,7 +858,7 @@ fn host_tab(ui: &mut Ui, st: &mut State, o: &mut Opts, x: f32, top: f32, w: f32,
     y += 38.0;
     ui.c.text_wrap(
         rect(rx, y, rw, (r.bottom() - y - 12.0).max(0.0)),
-        "Com prioridade, quem assiste para por 1 segundo sempre que alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. Programas de chamada: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack e Signal; sai do som o primeiro que estiver aberto.",
+        "Com prioridade, quem assiste para por 1 segundo sempre que alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. Programas de chamada: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack e Signal. O Windows só deixa tirar um: sai do som o que estiver tocando, e a escolha muda durante a conexão. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante. Num notebook com duas placas, a outra placa codifica com uma cópia a mais da imagem.",
         12.0,
         MUTED,
         Weight::Regular,
@@ -855,6 +882,7 @@ fn host_tab(ui: &mut Ui, st: &mut State, o: &mut Opts, x: f32, top: f32, w: f32,
         mon_names.push(format!("{} {}", crate::i18n::tr("Monitor"), o.monitor));
     }
     pick(ui, "sh-mon", mon_r, &mon_vals, mon_names, &mut o.monitor);
+    gpu_pick(ui, "sh-gpu", gpu_r, "A do monitor", &mut o.gpu);
     let rv: Vec<u32> = RES.iter().map(|r| r.0).collect();
     pick(ui, "sh-res", res_r, &rv, opt(&RES.map(|r| r.1)), &mut o.res);
     let fps_names: Vec<String> = FPS.iter().map(|&f| if f == 0 { crate::i18n::tr("Automático").into_owned() } else { f.to_string() }).collect();
@@ -929,12 +957,14 @@ fn client_tab(ui: &mut Ui, c: &mut ClientOpts, x: f32, top: f32, w: f32, h: f32)
     let meter_r = row(ui, rx, y, rw, "Medidor de latência", rctl);
     y += 44.0;
     let cfps_r = row(ui, rx, y, rw, "Quadros por segundo", rctl);
+    y += 44.0;
+    let cgpu_r = row(ui, rx, y, rw, "Placa de vídeo", rctl);
     y += 46.0;
     ui.check("sh-warn", rect(rx, y, rw, 30.0), "Avisar quando a conexão piorar", &mut c.warn);
     y += 40.0;
     ui.c.text_wrap(
         rect(rx, y, rw, (r.bottom() - y - 12.0).max(0.0)),
-        "O simples mostra o atraso de ponta a ponta e uma bolinha verde, amarela ou vermelha. O detalhado mostra também a rede, o vídeo, os quadros por segundo, a banda, a decodificação, os quadros perdidos e o caminho. O aviso aparece quando a rede perde mais de 2% dos quadros, quando a latência varia mais de 10 ms ou sobe por 3 segundos seguidos. Os quadros por segundo pedidos não passam dos Hz desta tela; o automático usa os Hz dela. Tudo isso muda também pelo menu da conexão.",
+        "O simples mostra o atraso de ponta a ponta e uma bolinha verde, amarela ou vermelha. O detalhado mostra também a rede, o vídeo, os quadros por segundo, a banda, a decodificação, os quadros perdidos e o caminho. O aviso aparece quando a rede perde mais de 2% dos quadros, quando a latência varia mais de 10 ms ou sobe por 3 segundos seguidos. Os quadros por segundo pedidos não passam dos Hz desta tela; o automático usa os Hz dela. Tudo isso muda também pelo menu da conexão. A placa de vídeo vale na próxima conexão.",
         12.0,
         MUTED,
         Weight::Regular,
@@ -945,6 +975,7 @@ fn client_tab(ui: &mut Ui, c: &mut ClientOpts, x: f32, top: f32, w: f32, h: f32)
     let cfps = crate::stream::CLIENT_FPS;
     let cfps_names: Vec<String> = cfps.iter().map(|&f| if f == 0 { crate::i18n::tr("Automático").into_owned() } else { f.to_string() }).collect();
     pick(ui, "sh-cfps", cfps_r, &cfps, cfps_names, &mut c.fps);
+    gpu_pick(ui, "sh-cgpu", cgpu_r, "A do Windows", &mut c.gpu);
 }
 
 #[allow(clippy::too_many_arguments)]

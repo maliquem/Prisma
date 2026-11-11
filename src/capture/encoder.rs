@@ -35,7 +35,7 @@ fn subtype(c: Codec) -> GUID {
     }
 }
 
-unsafe fn find(c: Codec, input: GUID) -> Result<(IMFTransform, String)> {
+unsafe fn find(c: Codec, input: GUID, dev: &ID3D11Device) -> Result<(IMFTransform, String)> {
     let i = MFT_REGISTER_TYPE_INFO { guidMajorType: MFMediaType_Video, guidSubtype: input };
     let o = MFT_REGISTER_TYPE_INFO { guidMajorType: MFMediaType_Video, guidSubtype: subtype(c) };
     let mut list = std::ptr::null_mut();
@@ -52,7 +52,7 @@ unsafe fn find(c: Codec, input: GUID) -> Result<(IMFTransform, String)> {
         return Err(Error::new(E_FAIL, "sem codificador de hardware"));
     }
     let items = std::slice::from_raw_parts(list, n as usize);
-    let act = items[0].as_ref().unwrap();
+    let act = items[super::mft_for_device(items, dev)].as_ref().unwrap();
     let name = friendly(act);
     let r = act.ActivateObject::<IMFTransform>();
     CoTaskMemFree(Some(list as *const _));
@@ -87,7 +87,7 @@ impl Encoder {
     fn make(dev: &ID3D11Device, codec: Codec, w: u32, h: u32, fps: u32, bitrate: u32, ten_bit: bool, live: bool) -> Result<Self> {
         unsafe {
             let input = if ten_bit { MFVideoFormat_P010 } else { MFVideoFormat_NV12 };
-            let (mft, name) = find(codec, input)?;
+            let (mft, name) = find(codec, input, dev)?;
             let attrs = mft.GetAttributes()?;
             attrs.SetUINT32(&MF_TRANSFORM_ASYNC_UNLOCK, 1)?;
             let _ = attrs.SetUINT32(&MF_LOW_LATENCY, 1);
