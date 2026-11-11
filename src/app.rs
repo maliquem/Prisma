@@ -2978,15 +2978,9 @@ impl App {
             let scale = dpi as f32 / 96.0;
             let mut r = RECT { left: 0, top: 0, right: (1280.0 * scale) as i32, bottom: (820.0 * scale) as i32 };
             let _ = AdjustWindowRectExForDpi(&mut r, WS_OVERLAPPEDWINDOW, false, WINDOW_EX_STYLE(0), dpi);
-            let _ = SetWindowPos(
-                h,
-                None,
-                0,
-                0,
-                r.right - r.left,
-                r.bottom - r.top,
-                SWP_NOMOVE | SWP_NOZORDER,
-            );
+            // No centro da tela onde está o mouse, sem passar da área livre (fora a barra de tarefas).
+            let (x, y, ww, wh) = centered(work_area_at_cursor(), r.right - r.left, r.bottom - r.top, (16.0 * scale) as i32);
+            let _ = SetWindowPos(h, None, x, y, ww, wh, SWP_NOZORDER);
             let mut c = RECT::default();
             let _ = GetClientRect(h, &mut c);
             let rt = hwnd_target(h, c.right as u32, c.bottom as u32, dpi as f32).expect("alvo de desenho");
@@ -3629,8 +3623,10 @@ unsafe extern "system" fn main_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
             WM_GETMINMAXINFO => {
                 let mi = &mut *(l.0 as *mut MINMAXINFO);
                 let s = GetDpiForWindow(h) as f32 / 96.0;
-                mi.ptMinTrackSize.x = (1100.0 * s) as i32;
-                mi.ptMinTrackSize.y = (700.0 * s) as i32;
+                // O mínimo nunca passa da área livre da tela: em telas pequenas a janela ainda cabe.
+                let wa = work_area_of(MonitorFromWindow(h, MONITOR_DEFAULTTONEAREST));
+                mi.ptMinTrackSize.x = ((1100.0 * s) as i32).min(wa.right - wa.left);
+                mi.ptMinTrackSize.y = ((700.0 * s) as i32).min(wa.bottom - wa.top);
                 Some(0)
             }
             WM_MOUSEMOVE => {
@@ -3730,6 +3726,57 @@ unsafe extern "system" fn main_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
     }
 }
 
+
+/// Posição e tamanho da janela no centro da área livre, encolhida para caber com uma margem.
+fn centered(wa: RECT, want_w: i32, want_h: i32, margin: i32) -> (i32, i32, i32, i32) {
+    let (aw, ah) = (wa.right - wa.left, wa.bottom - wa.top);
+    let w = want_w.min(aw - 2 * margin).max(1);
+    let h = want_h.min(ah - 2 * margin).max(1);
+    (wa.left + (aw - w) / 2, wa.top + (ah - h) / 2, w, h)
+}
+
+#[cfg(test)]
+mod window_tests {
+    use super::*;
+
+    /// Resoluções comuns com a barra de tarefas embaixo (48 px a 100%) e escalas usuais.
+    #[test]
+    fn main_window_fits_and_centers() {
+        for (sw, sh, scale) in [(1280, 720, 1.0), (1366, 768, 1.0), (1600, 900, 1.0), (1920, 1080, 1.0), (1920, 1080, 1.25), (1920, 1080, 1.5), (2560, 1080, 1.0), (2560, 1440, 1.0), (2560, 1440, 1.25), (3440, 1440, 1.0), (3840, 2160, 1.5), (3840, 2160, 2.0)] {
+            let bar = (48.0 * scale) as i32;
+            let wa = RECT { left: 0, top: 0, right: sw, bottom: sh - bar };
+            // Tamanho pedido com a moldura do Windows, como no programa.
+            let (want_w, want_h) = ((1280.0 * scale) as i32 + 16, (820.0 * scale) as i32 + 39);
+            let (x, y, w, h) = centered(wa, want_w, want_h, (16.0 * scale) as i32);
+            assert!(x >= wa.left && y >= wa.top && x + w <= wa.right && y + h <= wa.bottom, "{sw}x{sh} a {scale}: {x},{y} {w}x{h}");
+            assert!(((x - wa.left) - (wa.right - x - w)).abs() <= 1 && ((y - wa.top) - (wa.bottom - y - h)).abs() <= 1, "{sw}x{sh} a {scale}: fora do centro");
+        }
+        // Segunda tela à esquerda, com coordenadas negativas.
+        let (x, _, w, _) = centered(RECT { left: -1920, top: 0, right: 0, bottom: 1032 }, 1296, 859, 16);
+        assert!(x >= -1920 && x + w <= 0);
+    }
+}
+
+/// Área livre do monitor, sem a barra de tarefas.
+fn work_area_of(mon: HMONITOR) -> RECT {
+    unsafe {
+        let mut mi = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
+        if GetMonitorInfoW(mon, &mut mi).as_bool() {
+            mi.rcWork
+        } else {
+            RECT { left: 0, top: 0, right: GetSystemMetrics(SM_CXSCREEN), bottom: GetSystemMetrics(SM_CYSCREEN) }
+        }
+    }
+}
+
+/// Área livre da tela onde está o mouse: a janela abre onde a pessoa está olhando.
+fn work_area_at_cursor() -> RECT {
+    unsafe {
+        let mut pt = POINT::default();
+        let _ = GetCursorPos(&mut pt);
+        work_area_of(MonitorFromPoint(pt, MONITOR_DEFAULTTOPRIMARY))
+    }
+}
 
 /// Frequência do monitor arredondada: 119 vira 120 e 59 vira 60.
 pub fn native_fps(mon: HMONITOR) -> u32 {
