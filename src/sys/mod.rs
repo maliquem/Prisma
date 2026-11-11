@@ -7,6 +7,7 @@ pub mod catalog;
 pub mod stores;
 pub mod disks;
 pub mod drs;
+pub mod nvset;
 pub mod etw;
 pub mod events;
 pub mod fileinfo;

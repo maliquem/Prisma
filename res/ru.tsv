@@ -1563,3 +1563,237 @@ VSync	VSync
 Placa de vídeo	Видеокарта
 A do monitor	Как у монитора
 A do Windows	Как в Windows
+Ligado	Вкл.
+Usar o mais novo do driver	Новейшая версия из драйвера
+Desempenho ultra	Ультрапроизводительность
+Desempenho	Производительность
+Equilibrado	Баланс
+Personalizada	Своя
+Só tela cheia	Только полный экран
+Tela cheia e janela	Полный экран и окно
+Limite de FPS	Ограничение FPS
+Limita os quadros por segundo no driver, com ritmo estável. O limitador do Medidor usa esta mesma opção nos jogos dele.	Ограничивает кадры в секунду в драйвере, с ровным темпом. Ограничитель Измерителя использует этот же параметр для своих игр.
+Limite de FPS em segundo plano	Ограничение FPS в фоне
+Limite usado enquanto o jogo não está em primeiro plano, para gastar menos energia.	Ограничение, пока игра не на переднем плане, чтобы тратить меньше энергии.
+Modo de baixa latência	Режим низкой задержки
+O mesmo do Painel de Controle da NVIDIA: menos quadros esperando na fila da placa. Em jogos com Reflex, o Reflex manda.	То же, что в Панели управления NVIDIA: меньше кадров ждёт в очереди видеокарты. В играх с Reflex главный Reflex.
+Baixa latência ultra	Сверхнизкая задержка
+A parte Ultra do modo acima, que acerta o ritmo para a fila ficar vazia. O Painel de Controle liga junto quando o modo é Ultra.	Часть Ultra режима выше: подстраивает темп, чтобы очередь оставалась пустой. Панель управления включает её вместе с режимом Ultra.
+Quadros preparados antes	Заранее подготовленные кадры
+Quantos quadros a CPU prepara antes da placa mostrar. Menos dá menos atraso; mais pode suavizar com CPU fraca.	Сколько кадров процессор готовит до показа видеокартой. Меньше — меньше задержка; больше может сгладить картинку на слабом процессоре.
+O jogo decide	Решает игра
+Sincronia vertical pelo driver. Com G-SYNC, VSync ligado e FPS um pouco abaixo dos Hz evitam cortes na imagem.	Вертикальная синхронизация в драйвере. С G-SYNC включённый VSync и FPS чуть ниже герц убирают разрывы изображения.
+Forçar desligado	Принудительно выкл.
+Forçar ligado	Принудительно вкл.
+Metade dos Hz	Половина герц
+Um terço dos Hz	Треть герц
+Um quarto dos Hz	Четверть герц
+VSync adaptativo	Адаптивный VSync
+Adaptativo desliga a sincronia quando o FPS cai abaixo dos Hz: troca travadas por cortes na imagem.	Адаптивный выключает синхронизацию, когда FPS падает ниже герц: рывки меняются на разрывы.
+Normal	Обычный
+Adaptativo	Адаптивный
+Buffer triplo (OpenGL)	Тройная буферизация (OpenGL)
+Só vale em jogos OpenGL com VSync ligado.	Действует только в играх OpenGL с включённым VSync.
+Taxa de atualização preferida	Предпочтительная частота обновления
+Em tela cheia exclusiva, usa a taxa mais alta da tela mesmo quando o jogo pede outra.	В эксклюзивном полноэкранном режиме использует самую высокую частоту экрана, даже если игра просит другую.
+A mais alta	Самая высокая
+Apresentação Vulkan e OpenGL	Вывод Vulkan и OpenGL
+Pelo DXGI, jogos Vulkan e OpenGL se comportam como DirectX: ganham Auto HDR, sobreposições e janela sem borda com menos atraso.	Через DXGI игры Vulkan и OpenGL ведут себя как DirectX: получают Auto HDR, оверлеи и окно без рамки с меньшей задержкой.
+Nativa	Родной
+Pelo DXGI	Через DXGI
+Liga ou desliga o G-SYNC na placa toda.	Включает или выключает G-SYNC для всей видеокарты.
+Modo do G-SYNC	Режим G-SYNC
+Onde o G-SYNC age: só em tela cheia ou também em janela.	Где работает G-SYNC: только в полноэкранном режиме или и в окне.
+Modo do G-SYNC no jogo	Режим G-SYNC в игре
+Onde o G-SYNC age neste perfil.	Где работает G-SYNC в этом профиле.
+Estado do G-SYNC	Состояние G-SYNC
+Forçar desligado ou taxa fixa servem para jogos que tremem com G-SYNC.	Принудительное выключение или фиксированная частота помогают играм, которые мерцают с G-SYNC.
+Permitir	Разрешить
+Não permitir	Запретить
+Taxa fixa	Фиксированная частота
+DLSS mais novo	Новейший DLSS
+Troca o DLSS que veio com o jogo pelo mais novo que o driver tem. É preciso para escolher o preset.	Заменяет DLSS из игры на новейший из драйвера. Нужно, чтобы выбрать пресет.
+DLSS mais novo pelo Streamline	Новейший DLSS через Streamline
+O mesmo, em jogos que carregam o DLSS pelo Streamline.	То же для игр, которые загружают DLSS через Streamline.
+Escolha do preset	Выбор пресета
+Recomendado deixa a NVIDIA escolher; escolhido aqui usa o preset abaixo.	Рекомендуемый — выбирает NVIDIA; выбранный здесь — пресет ниже.
+Recomendado pela NVIDIA	Рекомендуемый NVIDIA
+Escolhido aqui	Выбранный здесь
+Preset do DLSS	Пресет DLSS
+Modelo do DLSS. Os Transformer (J em diante) dão imagem mais nítida e custam um pouco mais. O Medidor grava esta mesma opção.	Модель DLSS. Transformer (с J и дальше) дают более чёткое изображение и стоят чуть дороже. Измеритель записывает этот же параметр.
+Qualidade do DLSS	Качество DLSS
+Força o modo do DLSS, mesmo que o jogo peça outro. Personalizada usa a escala abaixo.	Принудительно задаёт режим DLSS, даже если игра просит другой. Своя использует масштаб ниже.
+Escala do DLSS	Масштаб DLSS
+Resolução interna em porcentagem da tela, com a qualidade Personalizada. 100% é DLAA.	Внутреннее разрешение в процентах от экрана при качестве «Своя». 100% — это DLAA.
+Desempenho vira Desempenho ultra	Производительность становится ультрапроизводительностью
+Quando o jogo pede Desempenho, o DLSS usa Desempenho ultra.	Когда игра просит производительность, DLSS использует ультрапроизводительность.
+Todo modo vira DLAA	Любой режим становится DLAA
+Qualquer modo do DLSS vira DLAA, na resolução da tela.	Любой режим DLSS становится DLAA в разрешении экрана.
+Ray Reconstruction mais novo	Новейший Ray Reconstruction
+Troca o Ray Reconstruction do jogo pelo mais novo do driver.	Заменяет Ray Reconstruction из игры на новейший из драйвера.
+Preset do Ray Reconstruction	Пресет Ray Reconstruction
+Modelo do Ray Reconstruction. D em diante são Transformer.	Модель Ray Reconstruction. С D и дальше — Transformer.
+Qualidade do Ray Reconstruction	Качество Ray Reconstruction
+Força o modo do Ray Reconstruction. Personalizada usa a escala abaixo.	Принудительно задаёт режим Ray Reconstruction. Своя использует масштаб ниже.
+Escala do Ray Reconstruction	Масштаб Ray Reconstruction
+Resolução interna em porcentagem da tela, com a qualidade Personalizada.	Внутреннее разрешение в процентах от экрана при качестве «Своя».
+Geração de quadros mais nova	Новейшая генерация кадров
+Troca a geração de quadros do jogo pela mais nova do driver.	Заменяет генерацию кадров из игры на новейшую из драйвера.
+Preset da geração de quadros	Пресет генерации кадров
+Modelo da geração de quadros.	Модель генерации кадров.
+O mais novo	Новейший
+Preset A (padrão)	Пресет A (по умолчанию)
+Preset B (interface)	Пресет B (интерфейс)
+Preset C (desempenho)	Пресет C (производительность)
+Modo da geração múltipla	Режим мультигенерации
+Fixo gera sempre o mesmo número de quadros; dinâmico ajusta para chegar ao FPS alvo.	Фиксированный всегда генерирует одинаковое число кадров; динамический подстраивается под целевой FPS.
+Fixo	Фиксированный
+Dinâmico	Динамический
+Quadros gerados (fixo)	Сгенерированные кадры (фикс.)
+Multiplicador no modo fixo. Acima de 2x precisa de RTX 50.	Множитель в фиксированном режиме. Больше 2x требует RTX 50.
+Quadros gerados (dinâmico)	Сгенерированные кадры (динам.)
+Multiplicador máximo no modo dinâmico.	Максимальный множитель в динамическом режиме.
+Até 2x	До 2x
+Até 3x	До 3x
+Até 4x	До 4x
+Até 5x	До 5x
+Até 6x	До 6x
+FPS alvo (dinâmico)	Целевой FPS (динам.)
+O FPS que o modo dinâmico tenta alcançar.	FPS, которого пытается достичь динамический режим.
+Pausar em menus	Пауза в меню
+Para de gerar quadros quando um menu cobre a tela, para o menu não borrar.	Останавливает генерацию кадров, когда меню закрывает экран, чтобы меню не размывалось.
+Geração de quadros do driver para jogos sem DLSS, em DirectX 11, DirectX 12 e Vulkan. RTX 40 e 50.	Генерация кадров драйвером для игр без DLSS, в DirectX 11, DirectX 12 и Vulkan. RTX 40 и 50.
+Smooth Motion em	Smooth Motion в
+Em quais tipos de jogo o Smooth Motion pode agir.	В каких играх может работать Smooth Motion.
+DirectX 11 e 12	DirectX 11 и 12
+DirectX 12 e Vulkan	DirectX 12 и Vulkan
+DirectX 11 e Vulkan	DirectX 11 и Vulkan
+Nitidez	Резкость
+Filtro de nitidez do driver, aplicado na imagem final.	Фильтр резкости драйвера, применяется к итоговому изображению.
+Força da nitidez	Сила резкости
+Quanto o filtro de nitidez realça.	Насколько сильно фильтр повышает резкость.
+Ignorar granulação	Игнорировать зерно
+Quanto o filtro deixa de realçar o ruído e a granulação de filme.	Насколько фильтр не усиливает шум и плёночное зерно.
+Antisserrilhado rápido do driver. Borra um pouco; serve para jogos antigos.	Быстрое сглаживание драйвера. Немного размывает; подходит для старых игр.
+Modo do MSAA	Режим MSAA
+MSAA forçado pelo driver só funciona em jogos DirectX 9 e OpenGL antigos.	MSAA, заданный драйвером, работает только в старых играх DirectX 9 и OpenGL.
+Trocar o do jogo	Заменить игровой
+Melhorar o do jogo	Улучшить игровой
+Nível do antisserrilhado forçado. Os SS e os mistos (S) são supersampling: mais bonitos e bem mais pesados.	Уровень принудительного сглаживания. SS и смешанные (S) — это суперсэмплинг: красивее и намного тяжелее.
+Transparência com multisampling	Прозрачность с мультисэмплингом
+Suaviza as bordas de folhas e grades quando o MSAA está ligado.	Сглаживает края листвы и решёток при включённом MSAA.
+Transparência com supersampling	Прозрачность с суперсэмплингом
+Mais pesado e mais bonito que o multisampling. O esparso (SGSSAA) suaviza a imagem toda.	Тяжелее и красивее мультисэмплинга. Разреженный (SGSSAA) сглаживает всё изображение.
+2x esparso	2x разреженный
+4x esparso	4x разреженный
+8x esparso	8x разреженный
+Correção de gama no antisserrilhado	Гамма-коррекция сглаживания
+Acerta o brilho das bordas suavizadas.	Исправляет яркость сглаженных краёв.
+Modo do anisotrópico	Режим анизотропной фильтрации
+Definido aqui usa o nível abaixo em todas as texturas.	Заданный здесь применяет уровень ниже ко всем текстурам.
+Definido aqui	Задан здесь
+Filtro anisotrópico	Анизотропная фильтрация
+Deixa nítidas as texturas vistas de lado, como o chão. Custa quase nada nas placas atuais.	Делает чёткими текстуры под углом, например пол. На современных видеокартах почти ничего не стоит.
+Qualidade da filtragem	Качество фильтрации
+Alta qualidade desliga os atalhos de filtragem. A diferença de desempenho é pequena hoje.	Высокое качество отключает упрощения фильтрации. Сейчас разница в производительности мала.
+Alta qualidade	Высокое качество
+Alto desempenho	Высокая производительность
+Otimização trilinear	Трилинейная оптимизация
+Atalho de filtragem. Não faz nada em Alta qualidade.	Упрощение фильтрации. Не действует при высоком качестве.
+Ligada	Вкл.
+Desligada	Выкл.
+Otimização do anisotrópico	Оптимизация анизотропной фильтрации
+Atalho que filtra menos algumas camadas de textura.	Упрощение: некоторые слои текстур фильтруются слабее.
+Otimização de amostras do anisotrópico	Оптимизация выборок анизотропной фильтрации
+Atalho que usa menos amostras no anisotrópico.	Упрощение: меньше выборок в анизотропной фильтрации.
+LOD negativo	Отрицательный LOD
+Travar evita texturas tremendo quando o jogo pede nitidez demais.	Ограничение убирает мерцание текстур, когда игра просит слишком много резкости.
+Travar	Ограничить
+Ajuste de LOD (DirectX)	Смещение LOD (DirectX)
+Negativo deixa as texturas mais nítidas e pode tremer; positivo borra. Combina com supersampling.	Отрицательное делает текстуры чётче, но может мерцать; положительное размывает. Хорошо сочетается с суперсэмплингом.
+-1,5	-1,5
+-0,5	-0,5
+-0,25	-0,25
++0,25	+0,25
++0,5	+0,5
+HDR feito pelo driver para jogos SDR. Precisa do HDR do Windows ligado.	HDR от драйвера для игр SDR. Нужен включённый HDR в Windows.
+RTX HDR pelo driver	RTX HDR через драйвер
+Liga o RTX HDR direto no perfil, sem o app da NVIDIA, e escolhe quanto suaviza as faixas de cor.	Включает RTX HDR прямо в профиле, без приложения NVIDIA, и задаёт силу сглаживания цветовых полос.
+Ligado, sem suavizar faixas	Вкл., без сглаживания полос
+Ligado, suavização média	Вкл., среднее сглаживание
+Ligado, suavização máxima	Вкл., максимальное сглаживание
+Máxima e com indicador	Максимальное, с индикатором
+Cores mais vivas, ajustadas pelo driver cena a cena.	Более яркие цвета, драйвер подстраивает их под каждую сцену.
+Saturação extra	Дополнительная насыщенность
+Quanto o Dynamic Vibrance aumenta a saturação.	Насколько Dynamic Vibrance повышает насыщенность.
+Intensidade do Dynamic Vibrance	Интенсивность Dynamic Vibrance
+Quanto o Dynamic Vibrance age na imagem.	Насколько сильно Dynamic Vibrance влияет на изображение.
+Ray tracing (DirectX)	Трассировка лучей (DirectX)
+Desligado esconde o ray tracing do jogo, que passa a achar que a placa não tem.	Выкл. скрывает трассировку лучей от игры, и она считает, что видеокарта её не поддерживает.
+Ray tracing (Vulkan)	Трассировка лучей (Vulkan)
+O mesmo, em jogos Vulkan.	То же для игр Vulkan.
+Sobreposição do app da NVIDIA	Оверлей приложения NVIDIA
+Libera a captura da área de trabalho para este programa ou tira as estatísticas do app.	Разрешает захват рабочего стола для этой программы или убирает статистику приложения.
+Liberar captura da área de trabalho	Разрешить захват рабочего стола
+Sem estatísticas do app	Без статистики приложения
+Indicador do G-SYNC	Индикатор G-SYNC
+Mostra na tela quando o G-SYNC está agindo.	Показывает на экране, когда работает G-SYNC.
+Indicador de suporte ao G-SYNC	Индикатор поддержки G-SYNC
+Mostra na tela se o jogo aceita G-SYNC.	Показывает на экране, поддерживает ли игра G-SYNC.
+Indicador de quadros	Индикатор кадров
+Gráfico do driver com o ritmo dos quadros, bom para conferir o limitador.	График темпа кадров от драйвера, удобно проверять ограничитель.
+Gráfico do FPS	График FPS
+Tudo	Всё
+Indicador de MPO	Индикатор MPO
+Mostra quando a imagem usa planos sobrepostos (MPO), que dão menos atraso em janela.	Показывает, когда изображение использует наложенные плоскости (MPO), которые дают меньшую задержку в окне.
+Gerenciamento de energia	Управление питанием
+Desempenho máximo mantém o clock alto e gasta mais energia, mesmo com o jogo parado num menu.	Максимальная производительность держит высокие частоты и тратит больше энергии, даже когда игра стоит в меню.
+Desempenho ideal	Оптимальная производительность
+Desempenho máximo	Максимальная производительность
+Otimização em vários núcleos	Многопоточная оптимизация
+Divide o trabalho do driver em mais núcleos da CPU. Ajuda em jogos OpenGL e DirectX antigos e atrapalha alguns.	Распределяет работу драйвера по большему числу ядер процессора. Помогает старым играм OpenGL и DirectX, а некоторым мешает.
+Cache de shaders	Кэш шейдеров
+Guarda os shaders compilados para o jogo não compilar de novo a cada abertura.	Хранит скомпилированные шейдеры, чтобы игра не компилировала их при каждом запуске.
+Tamanho do cache de shaders	Размер кэша шейдеров
+Mais espaço guarda os shaders de mais jogos.	Больше места — шейдеры большего числа игр.
+Ilimitado	Без ограничения
+Pré-compilar shaders	Предкомпиляция шейдеров
+Compila shaders antes de o jogo pedir, em segundo plano. Mais compila mais e usa mais a CPU.	Компилирует шейдеры в фоне до того, как их попросит игра. Больше — больше компиляции и нагрузки на процессор.
+Pouco	Мало
+Médio	Средне
+Muito	Много
+Cache de shaders (OpenGL)	Кэш шейдеров (OpenGL)
+O cache de shaders em jogos OpenGL.	Кэш шейдеров в играх OpenGL.
+Deixa a CPU ver a memória da placa toda. Precisa estar ligado na BIOS; a NVIDIA só liga em jogos testados.	Даёт процессору доступ ко всей памяти видеокарты. Должно быть включено в BIOS; NVIDIA включает его только в проверенных играх.
+Resizable BAR (novo)	Resizable BAR (новый)
+A versão nova da mesma opção.	Новая версия того же параметра.
+PhysX de 32 bits na placa	32-битный PhysX на видеокарте
+Volta o PhysX acelerado de jogos antigos nas RTX 50.	Возвращает ускоренный PhysX старых игр на RTX 50.
+CUDA: forçar P2	CUDA: принудительно P2
+Ligado, programas CUDA rodam com a memória num clock mais baixo. Desligado, a memória vai ao clock máximo.	Вкл.: программы CUDA работают с памятью на пониженной частоте. Выкл.: память работает на максимальной частоте.
+CUDA: memória do sistema	CUDA: системная память
+Quando a memória da placa acaba, programas CUDA (como IA local) podem usar a do sistema, mais lenta. Evitar dá erro em vez de lentidão.	Когда память видеокарты заканчивается, программы CUDA (например, локальный ИИ) могут использовать более медленную системную память. «Избегать» даёт ошибку вместо замедления.
+Evitar	Избегать
+Preferir	Предпочитать
+Sincronia e FPS	Синхронизация и FPS
+Antisserrilhado	Сглаживание
+Texturas	Текстуры
+Imagem e indicadores	Изображение и индикаторы
+Padrão ({})	По умолчанию ({})
+Mudar	Изменить
+Driver NVIDIA	Драйвер NVIDIA
+Driver {}. As mudanças valem na próxima vez que o jogo abrir.	Драйвер {}. Изменения вступят в силу при следующем запуске игры.
+Cópias	Копии
+Ainda não há cópias. O Prisma guarda uma antes da primeira mudança.	Копий пока нет. Prisma сохраняет копию перед первым изменением.
+Voltar a esta cópia?	Вернуться к этой копии?
+Os perfis do driver voltam como estavam em {}. O que mudou depois, aqui ou em outro programa, se perde.	Профили драйвера вернутся к состоянию на {}. Всё, что менялось позже, здесь или в другой программе, пропадёт.
+Perfis do driver restaurados	Профили драйвера восстановлены
+O driver não aceitou a cópia	Драйвер не принял копию
+Todos os jogos (global)	Все игры (глобально)
+Tirar da lista	Убрать из списка
+Tirar da lista?	Убрать из списка?
+O jogo sai só desta lista. O que foi gravado no perfil dele continua no driver.	Игра уйдёт только из этого списка. Сохранённое в её профиле останется в драйвере.
+Vale para todos os jogos, menos o que o perfil de cada jogo troca.	Действует для всех игр, кроме того, что меняет профиль каждой игры.
+Perfil no driver: {}	Профиль в драйвере: {}
+Este jogo ainda não tem perfil no driver. O Prisma cria um na primeira mudança.	У этой игры ещё нет профиля в драйвере. Prisma создаст его при первом изменении.
+O driver não aceitou a mudança	Драйвер не принял изменение

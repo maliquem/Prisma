@@ -53,6 +53,7 @@ const WM_PICK_SND: u32 = WM_APP + 79;
 const WM_PICK_GAME: u32 = WM_APP + 80;
 const WM_POW_IN: u32 = WM_APP + 81;
 const WM_PICK_METER: u32 = WM_APP + 83;
+const WM_PICK_NV: u32 = WM_APP + 91;
 const WM_POW_OUT: u32 = WM_APP + 82;
 const WM_REPORT_PHOTO: u32 = WM_APP + 84;
 const WM_REPORT_DONE: u32 = WM_APP + 85;
@@ -692,6 +693,7 @@ pub fn start(background: bool) {
                 let r = match p[2] {
                     "0" => crate::sys::drs::test_clear(p[1]),
                     "read" => format!("{:?}", crate::sys::drs::read(p[1], crate::sys::drs::FRAME_LIMIT)),
+                    "page" => crate::sys::drs::test_page(p[1]),
                     fps => crate::sys::drs::test(p[1], fps.parse().unwrap()),
                 };
                 let _ = std::fs::write(p[0], r);
@@ -862,6 +864,7 @@ pub fn start(background: bool) {
                 "--page=full" => Page::Fullscreen,
                 "--page=volume" => Page::Volume,
                 "--page=hdr" => Page::Hdr,
+                "--page=nvidia" => Page::Nvidia,
                 "--page=meter" => Page::Meter,
                 "--page=capture" => Page::Capture,
                 "--page=share" => Page::Share,
@@ -2453,6 +2456,7 @@ impl App {
                 Some("energy") => self.page = Page::Energy,
                 Some("fullscreen") => self.page = Page::Fullscreen,
                 Some("hdr") => self.page = Page::Hdr,
+                Some("nvidia") => self.page = Page::Nvidia,
                 Some("capture") => self.page = Page::Capture,
                 Some("widget") => self.page = Page::Widget,
                 Some("adjust") => self.page = Page::Adjust,
@@ -2576,6 +2580,7 @@ impl App {
             Target::Fullscreen => WM_PICK_FS,
             Target::HdrGame => WM_PICK_GAME,
             Target::MeterGame => WM_PICK_METER,
+            Target::NvGame => WM_PICK_NV,
         };
         unsafe {
             let _ = PostMessageW(Some(self.hub), msg, WPARAM(0), LPARAM(0));
@@ -3232,6 +3237,16 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                     if !a.cfg.hdr_games.iter().any(|g| g.exe.eq_ignore_ascii_case(&exe)) {
                         a.cfg.hdr_games.push(crate::config::HdrGame { exe, path, mode: 0 });
                     }
+                    a.cfg.save();
+                    a.invalidate();
+                });
+            }
+            LRESULT(0)
+        }
+        WM_PICK_NV => {
+            if let Some(path) = capture::choose_exe(h) {
+                with(|a| {
+                    crate::pages::nvidia::add_game(a, &procs::exe_name(&path));
                     a.cfg.save();
                     a.invalidate();
                 });

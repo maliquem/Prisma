@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- New NVIDIA driver page, only with an NVIDIA card: driver options in the global profile or per game, like NVIDIA Profile Inspector, without SLI, 3D Vision, Ansel, CSAA, MFAA, debug and old OpenGL options. Each option is explained on hover, Default goes back to the value with nothing saved, options that need a newer driver are hidden, and a backup of every driver profile is saved before the first change, with a button to go back to one. / Nova tela Driver NVIDIA, só com placa NVIDIA: opções do driver no perfil global ou por jogo, como o NVIDIA Profile Inspector, sem SLI, 3D Vision, Ansel, CSAA, MFAA, depuração e OpenGL antigo. Cada opção é explicada ao passar o mouse, Padrão volta ao valor sem nada gravado, opções que pedem driver mais novo ficam escondidas, e uma cópia de todos os perfis do driver é guardada antes da primeira mudança, com um botão para voltar a ela.
+- Fixed: removing a game from the Meter deleted the driver profile Prisma had made for it even when it had other settings in it; now the profile only goes away when empty. / Corrigido: tirar um jogo do Medidor apagava o perfil do driver feito pelo Prisma mesmo com outras opções nele; agora o perfil só sai quando está vazio.
+
 ## 0.14.0
 
 - Fixed: the call app was still heard in the sound, because Windows only lets one program be left out and Prisma picked the first call app open (Telegram, open and silent, instead of Discord in a call). Prisma now leaves out the one that is playing and follows the change during the connection. / Corrigido: o programa de chamada continuava no som, porque o Windows só deixa tirar um programa e o Prisma escolhia o primeiro aberto (o Telegram, aberto e calado, em vez do Discord numa chamada). Agora sai o que está tocando, e a escolha acompanha a conexão.

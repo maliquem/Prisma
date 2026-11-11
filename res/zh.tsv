@@ -1563,3 +1563,237 @@ VSync	垂直同步
 Placa de vídeo	显卡
 A do monitor	显示器所在的显卡
 A do Windows	Windows 默认
+Ligado	开
+Usar o mais novo do driver	使用驱动中的最新版本
+Desempenho ultra	超级性能
+Desempenho	性能
+Equilibrado	平衡
+Personalizada	自定义
+Só tela cheia	仅全屏
+Tela cheia e janela	全屏和窗口
+Limite de FPS	帧率上限
+Limita os quadros por segundo no driver, com ritmo estável. O limitador do Medidor usa esta mesma opção nos jogos dele.	在驱动中限制每秒帧数，节奏稳定。测量器的限帧器也在它的游戏中使用这个选项。
+Limite de FPS em segundo plano	后台帧率上限
+Limite usado enquanto o jogo não está em primeiro plano, para gastar menos energia.	游戏不在前台时使用的上限，以减少耗电。
+Modo de baixa latência	低延迟模式
+O mesmo do Painel de Controle da NVIDIA: menos quadros esperando na fila da placa. Em jogos com Reflex, o Reflex manda.	与 NVIDIA 控制面板中的相同：显卡队列中等待的帧更少。在支持 Reflex 的游戏中以 Reflex 为准。
+Baixa latência ultra	超低延迟
+A parte Ultra do modo acima, que acerta o ritmo para a fila ficar vazia. O Painel de Controle liga junto quando o modo é Ultra.	上面模式中的“超高”部分，调整节奏让队列保持为空。控制面板在选择“超高”时会一并开启。
+Quadros preparados antes	预渲染帧数
+Quantos quadros a CPU prepara antes da placa mostrar. Menos dá menos atraso; mais pode suavizar com CPU fraca.	CPU 在显卡显示前预先准备的帧数。越少延迟越低；越多在 CPU 较弱时可能更流畅。
+O jogo decide	由游戏决定
+Sincronia vertical pelo driver. Com G-SYNC, VSync ligado e FPS um pouco abaixo dos Hz evitam cortes na imagem.	由驱动控制的垂直同步。配合 G-SYNC 时，开启垂直同步并把帧率限制在略低于刷新率，可避免画面撕裂。
+Forçar desligado	强制关闭
+Forçar ligado	强制开启
+Metade dos Hz	刷新率的一半
+Um terço dos Hz	刷新率的三分之一
+Um quarto dos Hz	刷新率的四分之一
+VSync adaptativo	自适应垂直同步
+Adaptativo desliga a sincronia quando o FPS cai abaixo dos Hz: troca travadas por cortes na imagem.	自适应会在帧率低于刷新率时关闭同步：用画面撕裂换取不卡顿。
+Normal	标准
+Adaptativo	自适应
+Buffer triplo (OpenGL)	三重缓冲（OpenGL）
+Só vale em jogos OpenGL com VSync ligado.	仅对开启垂直同步的 OpenGL 游戏有效。
+Taxa de atualização preferida	首选刷新率
+Em tela cheia exclusiva, usa a taxa mais alta da tela mesmo quando o jogo pede outra.	在独占全屏下，即使游戏要求其他刷新率，也使用屏幕的最高刷新率。
+A mais alta	最高
+Apresentação Vulkan e OpenGL	Vulkan 和 OpenGL 呈现方式
+Pelo DXGI, jogos Vulkan e OpenGL se comportam como DirectX: ganham Auto HDR, sobreposições e janela sem borda com menos atraso.	通过 DXGI，Vulkan 和 OpenGL 游戏会像 DirectX 一样运行：可用自动 HDR、叠加层，无边框窗口延迟更低。
+Nativa	原生
+Pelo DXGI	通过 DXGI
+Liga ou desliga o G-SYNC na placa toda.	为整块显卡开启或关闭 G-SYNC。
+Modo do G-SYNC	G-SYNC 模式
+Onde o G-SYNC age: só em tela cheia ou também em janela.	G-SYNC 的作用范围：仅全屏，或窗口也包括。
+Modo do G-SYNC no jogo	游戏中的 G-SYNC 模式
+Onde o G-SYNC age neste perfil.	此配置文件中 G-SYNC 的作用范围。
+Estado do G-SYNC	G-SYNC 状态
+Forçar desligado ou taxa fixa servem para jogos que tremem com G-SYNC.	对开启 G-SYNC 时闪烁的游戏，可选择强制关闭或固定刷新率。
+Permitir	允许
+Não permitir	不允许
+Taxa fixa	固定刷新率
+DLSS mais novo	最新 DLSS
+Troca o DLSS que veio com o jogo pelo mais novo que o driver tem. É preciso para escolher o preset.	把游戏自带的 DLSS 换成驱动中最新的版本。选择预设需要开启。
+DLSS mais novo pelo Streamline	通过 Streamline 使用最新 DLSS
+O mesmo, em jogos que carregam o DLSS pelo Streamline.	同上，适用于通过 Streamline 加载 DLSS 的游戏。
+Escolha do preset	预设选择
+Recomendado deixa a NVIDIA escolher; escolhido aqui usa o preset abaixo.	推荐表示由 NVIDIA 选择；在此选择表示使用下方的预设。
+Recomendado pela NVIDIA	NVIDIA 推荐
+Escolhido aqui	在此选择
+Preset do DLSS	DLSS 预设
+Modelo do DLSS. Os Transformer (J em diante) dão imagem mais nítida e custam um pouco mais. O Medidor grava esta mesma opção.	DLSS 模型。Transformer 模型（J 及之后）画面更清晰，开销稍高。测量器也写入这个选项。
+Qualidade do DLSS	DLSS 质量
+Força o modo do DLSS, mesmo que o jogo peça outro. Personalizada usa a escala abaixo.	强制使用指定的 DLSS 模式，即使游戏要求其他模式。自定义使用下方的缩放比例。
+Escala do DLSS	DLSS 缩放比例
+Resolução interna em porcentagem da tela, com a qualidade Personalizada. 100% é DLAA.	内部分辨率占屏幕的百分比，用于自定义质量。100% 即 DLAA。
+Desempenho vira Desempenho ultra	性能改为超级性能
+Quando o jogo pede Desempenho, o DLSS usa Desempenho ultra.	游戏请求“性能”时，DLSS 使用“超级性能”。
+Todo modo vira DLAA	所有模式改为 DLAA
+Qualquer modo do DLSS vira DLAA, na resolução da tela.	任何 DLSS 模式都改为屏幕分辨率下的 DLAA。
+Ray Reconstruction mais novo	最新光线重建
+Troca o Ray Reconstruction do jogo pelo mais novo do driver.	把游戏的光线重建换成驱动中最新的版本。
+Preset do Ray Reconstruction	光线重建预设
+Modelo do Ray Reconstruction. D em diante são Transformer.	光线重建模型。D 及之后为 Transformer。
+Qualidade do Ray Reconstruction	光线重建质量
+Força o modo do Ray Reconstruction. Personalizada usa a escala abaixo.	强制光线重建模式。自定义使用下方的缩放比例。
+Escala do Ray Reconstruction	光线重建缩放比例
+Resolução interna em porcentagem da tela, com a qualidade Personalizada.	内部分辨率占屏幕的百分比，用于自定义质量。
+Geração de quadros mais nova	最新帧生成
+Troca a geração de quadros do jogo pela mais nova do driver.	把游戏的帧生成换成驱动中最新的版本。
+Preset da geração de quadros	帧生成预设
+Modelo da geração de quadros.	帧生成模型。
+O mais novo	最新
+Preset A (padrão)	预设 A（默认）
+Preset B (interface)	预设 B（界面）
+Preset C (desempenho)	预设 C（性能）
+Modo da geração múltipla	多帧生成模式
+Fixo gera sempre o mesmo número de quadros; dinâmico ajusta para chegar ao FPS alvo.	固定模式始终生成相同数量的帧；动态模式会调整以达到目标帧率。
+Fixo	固定
+Dinâmico	动态
+Quadros gerados (fixo)	生成帧数（固定）
+Multiplicador no modo fixo. Acima de 2x precisa de RTX 50.	固定模式下的倍数。高于 2x 需要 RTX 50。
+Quadros gerados (dinâmico)	生成帧数（动态）
+Multiplicador máximo no modo dinâmico.	动态模式下的最大倍数。
+Até 2x	最多 2x
+Até 3x	最多 3x
+Até 4x	最多 4x
+Até 5x	最多 5x
+Até 6x	最多 6x
+FPS alvo (dinâmico)	目标帧率（动态）
+O FPS que o modo dinâmico tenta alcançar.	动态模式尝试达到的帧率。
+Pausar em menus	菜单中暂停
+Para de gerar quadros quando um menu cobre a tela, para o menu não borrar.	当菜单覆盖屏幕时停止生成帧，避免菜单模糊。
+Geração de quadros do driver para jogos sem DLSS, em DirectX 11, DirectX 12 e Vulkan. RTX 40 e 50.	驱动提供的帧生成，适用于没有 DLSS 的 DirectX 11、DirectX 12 和 Vulkan 游戏。RTX 40 和 50。
+Smooth Motion em	Smooth Motion 适用于
+Em quais tipos de jogo o Smooth Motion pode agir.	Smooth Motion 可以作用于哪些类型的游戏。
+DirectX 11 e 12	DirectX 11 和 12
+DirectX 12 e Vulkan	DirectX 12 和 Vulkan
+DirectX 11 e Vulkan	DirectX 11 和 Vulkan
+Nitidez	锐化
+Filtro de nitidez do driver, aplicado na imagem final.	驱动的锐化滤镜，作用于最终画面。
+Força da nitidez	锐化强度
+Quanto o filtro de nitidez realça.	锐化滤镜的增强程度。
+Ignorar granulação	忽略胶片颗粒
+Quanto o filtro deixa de realçar o ruído e a granulação de filme.	滤镜避免增强噪点和胶片颗粒的程度。
+Antisserrilhado rápido do driver. Borra um pouco; serve para jogos antigos.	驱动的快速抗锯齿。会稍微模糊，适合老游戏。
+Modo do MSAA	MSAA 模式
+MSAA forçado pelo driver só funciona em jogos DirectX 9 e OpenGL antigos.	驱动强制的 MSAA 仅对旧的 DirectX 9 和 OpenGL 游戏有效。
+Trocar o do jogo	替换游戏设置
+Melhorar o do jogo	增强游戏设置
+Nível do antisserrilhado forçado. Os SS e os mistos (S) são supersampling: mais bonitos e bem mais pesados.	强制抗锯齿的级别。SS 和混合模式（S）属于超采样：效果更好，开销大很多。
+Transparência com multisampling	透明多重采样
+Suaviza as bordas de folhas e grades quando o MSAA está ligado.	开启 MSAA 时平滑树叶和栅栏的边缘。
+Transparência com supersampling	透明超级采样
+Mais pesado e mais bonito que o multisampling. O esparso (SGSSAA) suaviza a imagem toda.	比多重采样开销更大、效果更好。稀疏网格（SGSSAA）会平滑整个画面。
+2x esparso	2x 稀疏
+4x esparso	4x 稀疏
+8x esparso	8x 稀疏
+Correção de gama no antisserrilhado	抗锯齿伽马校正
+Acerta o brilho das bordas suavizadas.	校正平滑边缘的亮度。
+Modo do anisotrópico	各向异性模式
+Definido aqui usa o nível abaixo em todas as texturas.	在此设定会对所有纹理使用下方的级别。
+Definido aqui	在此设定
+Filtro anisotrópico	各向异性过滤
+Deixa nítidas as texturas vistas de lado, como o chão. Custa quase nada nas placas atuais.	让倾斜视角下的纹理（如地面）保持清晰。在当前显卡上几乎没有开销。
+Qualidade da filtragem	过滤质量
+Alta qualidade desliga os atalhos de filtragem. A diferença de desempenho é pequena hoje.	高质量会关闭过滤上的取巧优化。如今性能差别很小。
+Alta qualidade	高质量
+Alto desempenho	高性能
+Otimização trilinear	三线性优化
+Atalho de filtragem. Não faz nada em Alta qualidade.	一种过滤取巧优化。在高质量下无效。
+Ligada	开
+Desligada	关
+Otimização do anisotrópico	各向异性优化
+Atalho que filtra menos algumas camadas de textura.	对部分纹理层减少过滤的取巧优化。
+Otimização de amostras do anisotrópico	各向异性采样优化
+Atalho que usa menos amostras no anisotrópico.	在各向异性过滤中使用更少采样的取巧优化。
+LOD negativo	负 LOD 偏移
+Travar evita texturas tremendo quando o jogo pede nitidez demais.	钳制可避免游戏要求过度锐利时的纹理闪烁。
+Travar	钳制
+Ajuste de LOD (DirectX)	LOD 偏移（DirectX）
+Negativo deixa as texturas mais nítidas e pode tremer; positivo borra. Combina com supersampling.	负值让纹理更锐利，但可能闪烁；正值会模糊。适合与超级采样搭配。
+-1,5	-1.5
+-0,5	-0.5
+-0,25	-0.25
++0,25	+0.25
++0,5	+0.5
+HDR feito pelo driver para jogos SDR. Precisa do HDR do Windows ligado.	由驱动为 SDR 游戏生成 HDR。需要开启 Windows HDR。
+RTX HDR pelo driver	通过驱动开启 RTX HDR
+Liga o RTX HDR direto no perfil, sem o app da NVIDIA, e escolhe quanto suaviza as faixas de cor.	直接在配置文件中开启 RTX HDR（无需 NVIDIA App），并选择色带平滑的程度。
+Ligado, sem suavizar faixas	开，不平滑色带
+Ligado, suavização média	开，中等平滑
+Ligado, suavização máxima	开，最大平滑
+Máxima e com indicador	最大平滑并显示指示器
+Cores mais vivas, ajustadas pelo driver cena a cena.	更鲜艳的色彩，由驱动逐场景调整。
+Saturação extra	额外饱和度
+Quanto o Dynamic Vibrance aumenta a saturação.	Dynamic Vibrance 提高饱和度的程度。
+Intensidade do Dynamic Vibrance	Dynamic Vibrance 强度
+Quanto o Dynamic Vibrance age na imagem.	Dynamic Vibrance 对画面的作用强度。
+Ray tracing (DirectX)	光线追踪（DirectX）
+Desligado esconde o ray tracing do jogo, que passa a achar que a placa não tem.	关闭会对游戏隐藏光线追踪，游戏会认为显卡不支持。
+Ray tracing (Vulkan)	光线追踪（Vulkan）
+O mesmo, em jogos Vulkan.	同上，适用于 Vulkan 游戏。
+Sobreposição do app da NVIDIA	NVIDIA App 叠加层
+Libera a captura da área de trabalho para este programa ou tira as estatísticas do app.	允许为此程序捕获桌面，或关闭 App 的统计信息。
+Liberar captura da área de trabalho	允许捕获桌面
+Sem estatísticas do app	不显示 App 统计
+Indicador do G-SYNC	G-SYNC 指示器
+Mostra na tela quando o G-SYNC está agindo.	在屏幕上显示 G-SYNC 是否正在工作。
+Indicador de suporte ao G-SYNC	G-SYNC 支持指示器
+Mostra na tela se o jogo aceita G-SYNC.	在屏幕上显示游戏是否支持 G-SYNC。
+Indicador de quadros	帧指示器
+Gráfico do driver com o ritmo dos quadros, bom para conferir o limitador.	驱动的帧节奏图表，方便检查限帧器。
+Gráfico do FPS	帧率图表
+Tudo	全部
+Indicador de MPO	MPO 指示器
+Mostra quando a imagem usa planos sobrepostos (MPO), que dão menos atraso em janela.	显示画面何时使用多平面叠加（MPO），它能降低窗口模式下的延迟。
+Gerenciamento de energia	电源管理
+Desempenho máximo mantém o clock alto e gasta mais energia, mesmo com o jogo parado num menu.	最高性能会保持高频率并更耗电，即使游戏停在菜单中。
+Desempenho ideal	最佳性能
+Desempenho máximo	最高性能
+Otimização em vários núcleos	线程优化
+Divide o trabalho do driver em mais núcleos da CPU. Ajuda em jogos OpenGL e DirectX antigos e atrapalha alguns.	把驱动的工作分到更多 CPU 核心上。对旧的 OpenGL 和 DirectX 游戏有帮助，对少数游戏不利。
+Cache de shaders	着色器缓存
+Guarda os shaders compilados para o jogo não compilar de novo a cada abertura.	保存编译好的着色器，避免游戏每次启动都重新编译。
+Tamanho do cache de shaders	着色器缓存大小
+Mais espaço guarda os shaders de mais jogos.	空间越大，可保存越多游戏的着色器。
+Ilimitado	无限制
+Pré-compilar shaders	预编译着色器
+Compila shaders antes de o jogo pedir, em segundo plano. Mais compila mais e usa mais a CPU.	在后台提前编译游戏需要的着色器。级别越高编译越多，CPU 占用越高。
+Pouco	低
+Médio	中
+Muito	高
+Cache de shaders (OpenGL)	着色器缓存（OpenGL）
+O cache de shaders em jogos OpenGL.	OpenGL 游戏的着色器缓存。
+Deixa a CPU ver a memória da placa toda. Precisa estar ligado na BIOS; a NVIDIA só liga em jogos testados.	让 CPU 能访问显卡的全部显存。需要在 BIOS 中开启；NVIDIA 只在经过测试的游戏中开启。
+Resizable BAR (novo)	Resizable BAR（新版）
+A versão nova da mesma opção.	同一选项的新版本。
+PhysX de 32 bits na placa	在显卡上运行 32 位 PhysX
+Volta o PhysX acelerado de jogos antigos nas RTX 50.	在 RTX 50 上恢复老游戏的硬件加速 PhysX。
+CUDA: forçar P2	CUDA：强制 P2
+Ligado, programas CUDA rodam com a memória num clock mais baixo. Desligado, a memória vai ao clock máximo.	开启时，CUDA 程序以较低的显存频率运行；关闭时，显存运行在最高频率。
+CUDA: memória do sistema	CUDA：系统内存
+Quando a memória da placa acaba, programas CUDA (como IA local) podem usar a do sistema, mais lenta. Evitar dá erro em vez de lentidão.	显存用完时，CUDA 程序（如本地 AI）可以使用较慢的系统内存。选择“避免”会报错而不是变慢。
+Evitar	避免
+Preferir	优先
+Sincronia e FPS	同步与帧率
+Antisserrilhado	抗锯齿
+Texturas	纹理
+Imagem e indicadores	画面与指示器
+Padrão ({})	默认（{}）
+Mudar	更改
+Driver NVIDIA	NVIDIA 驱动
+Driver {}. As mudanças valem na próxima vez que o jogo abrir.	驱动 {}。更改会在游戏下次启动时生效。
+Cópias	备份
+Ainda não há cópias. O Prisma guarda uma antes da primeira mudança.	还没有备份。Prisma 会在第一次更改前保存一份。
+Voltar a esta cópia?	恢复到这份备份？
+Os perfis do driver voltam como estavam em {}. O que mudou depois, aqui ou em outro programa, se perde.	驱动配置文件将恢复到 {} 时的状态。之后在这里或其他程序中做的更改都会丢失。
+Perfis do driver restaurados	驱动配置文件已恢复
+O driver não aceitou a cópia	驱动未接受这份备份
+Todos os jogos (global)	所有游戏（全局）
+Tirar da lista	从列表移除
+Tirar da lista?	从列表移除？
+O jogo sai só desta lista. O que foi gravado no perfil dele continua no driver.	游戏只会从这个列表中移除。其配置文件中保存的内容仍保留在驱动中。
+Vale para todos os jogos, menos o que o perfil de cada jogo troca.	适用于所有游戏，各游戏配置文件中修改的项目除外。
+Perfil no driver: {}	驱动中的配置文件：{}
+Este jogo ainda não tem perfil no driver. O Prisma cria um na primeira mudança.	这个游戏在驱动中还没有配置文件。Prisma 会在第一次更改时创建。
+O driver não aceitou a mudança	驱动未接受此更改

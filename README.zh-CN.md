@@ -51,6 +51,7 @@ Prisma 每天检查一次本页面。有新版本且你打开窗口时，它会�
 - **声音：** 按程序调节音量，键盘音量键配合修饰键时只改变当前程序。可为每个程序选择输出和输入设备，包括从程序列表或按 .exe 手动添加的程序。列表包含开始菜单中的程序、Microsoft Store 应用、已安装的程序、Steam 和 Epic 游戏以及所有已打开的程序。这使用 Windows 的内部功能，有些程序要重新打开后才会切换设备。固定的程序即使关闭也留在列表中，并以保存的音量回来。默认设备快捷键会同时切换 Windows 的输出和输入，每个快捷键使用你选的设备。“保持声音唤醒”会播放听不见的信号，避免 HDMI 和 Dolby 截断下一个声音的开头，空闲 10 分钟后自动停止。
 - **小组件：** 在所有内容上方显示 CPU、GPU、内存和显存，共四种样式。
 - **HDR：** 只读面板，显示显示器模式、启用的校准配置文件及其实际饱和度、各来源声明的亮度、Windows 告诉游戏的值、声明的 Dolby Vision 支持以及支持的声音格式。有不一致时会发出警告。直接读取显示器自身的数据只在 NVIDIA 显卡上可用。自行校准会打开全屏测试图，用于黑色、五种窗口大小的峰值以及各颜色通道，并按电视画面模式各保存一个使用显示器真实原色的配置文件。启用后 Windows 可能在一段时间内仍向游戏报告旧值。配置文件不会改变电视本身的处理。自动 HDR 列表可以按游戏强制开启、关闭或交给 Windows 决定，适用于 DX11 和 DX12 游戏，不向游戏注入任何东西。声音延迟测试会播放带闪光的咔嗒声，用来比较开启和关闭空间音效时的延迟。
+- **NVIDIA 驱动：** 仅限 NVIDIA 显卡。像 NVIDIA Profile Inspector 一样修改全局或单个游戏配置文件中的驱动选项，并去掉已经不起作用的选项（SLI、3D Vision、Ansel、CSAA、MFAA、调试和旧 OpenGL）。包括同步与帧率、DLSS 与帧生成、抗锯齿与锐化、纹理、RTX HDR 与指示器以及系统选项，鼠标悬停可查看说明，可用“默认”恢复。第一次更改前会备份所有驱动配置文件。
 - **捕获：** 带标注的截图，以及 AV1、HEVC 或 H.264 视频。显示器处于 HDR 时，可录制 SDR 或 HDR10。“录制窗口”录制当前窗口，“录制屏幕”录制整个屏幕。开启系统声音时录制电脑的所有声音。关闭时，“录制窗口”只录制该窗口的声音。
 - **回放：** 在游戏模式下，把最后几秒保存在内存中。
 - **屏幕共享（测试中）：** 通过互联网显示并控制另一台电脑，用于远程访问或异地本地合作，无需账号。用一个短代码（如 `K7M2-QX9P`）或一个会打开 Prisma 的链接配对一次，核对确认码，之后即可直连、通过你的 VPN 或通过中继连接，始终端到端加密。每台设备单独设置权限（声音、手柄、键盘、鼠标、复制粘贴、安全桌面），最多 4 人使用虚拟 Xbox 手柄（主机需要 ViGEmBus 或 VIIPER），有人观看时 HDR 会被转换或关闭，另有可选的 Windows 服务用于锁屏、UAC 和 Ctrl+Alt+Del。可设置分辨率、帧率、编解码器、带宽、优先级、声音来源、端口和快捷键，还有沉浸模式、延迟监视、连接变差时的警告，以及每个选项都有快捷键的连接菜单。主机设置在连接期间即时生效，正在发声的通话应用会被排除在声音之外；在有两块显卡的笔记本上，可以选择用哪块编码、哪块解码。已配对的设备分在两个标签页中（此电脑观看的和观看此电脑的），并可重命名；更改已连接设备的权限会立即生效。主机有“已连接”标签页，可当场断开、封禁或更改访问权限，有人连接或离开时会收到通知。在主机上按 Ctrl + Alt + Shift + Q 可断开所有人。
@@ -124,6 +125,8 @@ cargo build --release
 - [iroh 和 iroh-dns](https://github.com/n0-computer/iroh)（MIT 或 Apache-2.0），负责穿越 NAT，没有直连路径时通过 n0 的公共中继转发连接，始终端到端加密。
 - [attohttpc](https://github.com/sbstp/attohttpc)（MPL-2.0），iroh 用它通过 UPnP 打开路由器端口。源代码见链接。
 - [tokio](https://github.com/tokio-rs/tokio)（MIT）、[blake3](https://github.com/BLAKE3-team/BLAKE3)（CC0-1.0 或 Apache-2.0）、[data-encoding](https://github.com/ia0/data-encoding)（MIT）、[mini-nvcodec 和 mini-cuda](https://github.com/AdrianEddy/wgpu-interop)（MIT 或 Apache-2.0）、[vigem-client](https://github.com/CasualX/vigem-client)（MIT）、[viiper-client](https://github.com/Alia5/VIIPER)（MIT）、[url](https://github.com/servo/rust-url)（MIT 或 Apache-2.0）以及 [webpki-roots](https://github.com/rustls/webpki-roots)（CDLA-Permissive-2.0，证书颁发机构列表）。
+
+“NVIDIA 驱动”页面的选项列表参考了 [NVIDIA Profile Inspector](https://github.com/Orbmu2k/nvidiaProfileInspector)（MIT，Orbmu2k 及贡献者）：只用了选项的 ID 和取值，没有使用代码。
 
 ViGEmBus 和 VIIPER 不随 Prisma 提供：需要虚拟手柄的人请自行安装其中之一。
 

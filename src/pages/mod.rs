@@ -10,6 +10,7 @@ mod hdr;
 mod meter;
 mod monitor;
 pub mod news;
+pub mod nvidia;
 mod optimize;
 pub mod picker;
 mod plan_edit;
@@ -63,6 +64,7 @@ pub enum Page {
     Fullscreen,
     Volume,
     Hdr,
+    Nvidia,
     Capture,
     Share,
     Widget,
@@ -140,6 +142,15 @@ const ICON_ADJ: Icon = &[
     &[(8., 15.), (8., 19.)],
 ];
 
+const ICON_GPU: Icon = &[
+    &[(3., 7.), (21., 7.), (21., 17.), (3., 17.), (3., 7.)],
+    &[(9., 9.5), (11.5, 10.), (12.5, 12.), (11.5, 14.), (9., 14.5), (6.5, 14.), (5.5, 12.), (6.5, 10.), (9., 9.5)],
+    &[(15., 10.), (19., 10.)],
+    &[(15., 14.), (19., 14.)],
+    &[(6., 17.), (6., 20.)],
+    &[(10., 17.), (10., 20.)],
+];
+
 const ICON_SHARE: Icon = &[
     &[(3., 5.), (21., 5.), (21., 16.), (3., 16.), (3., 5.)],
     &[(9., 20.), (15., 20.)],
@@ -201,6 +212,7 @@ const NAV: &[(Page, &str, Icon)] = &[
     (Page::Fullscreen, "Fullscreenizer", ICON_WIN),
     (Page::Volume, "Som", ICON_VOL),
     (Page::Hdr, "HDR", ICON_HDR),
+    (Page::Nvidia, "Driver NVIDIA", ICON_GPU),
     (Page::Capture, "Captura", ICON_CAP),
     (Page::Share, "Compartilhar tela", ICON_SHARE),
     (Page::Widget, "Widget", ICON_WID),
@@ -247,8 +259,10 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
 
     let mut y = 58.0;
     // Em janela baixa as linhas apertam para não entrar no cartão de energia.
-    let step = ((full.h - 140.0 - y) / NAV.len() as f32).min(33.0).floor();
-    for (page, label, icon) in NAV {
+    // Driver NVIDIA só aparece com placa NVIDIA.
+    let nav: Vec<_> = NAV.iter().filter(|n| n.0 != Page::Nvidia || nvidia::available()).collect();
+    let step = ((full.h - 140.0 - y) / nav.len() as f32).min(33.0).floor();
+    for (page, label, icon) in nav {
         let r = rect(12.0, y, SIDE_W - 24.0, step - 1.0);
         let current = app.page == *page;
         let hover = ui.is_hover(r);
@@ -314,6 +328,7 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
         Page::Fullscreen => fullscreen::draw(&mut ui, app, area),
         Page::Volume => volume::draw(&mut ui, app, area),
         Page::Hdr => hdr::draw(&mut ui, app, area),
+        Page::Nvidia => nvidia::draw(&mut ui, app, area),
         Page::Capture => capture::draw(&mut ui, app, area),
         Page::Share => share::draw(&mut ui, app, area),
         Page::Widget => widget::draw(&mut ui, app, area),

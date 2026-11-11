@@ -184,6 +184,16 @@ A reading panel with the display mode, the active calibration profile, the brigh
 - **Sound delay test:** plays a click with a flash, to compare with and without spatial sound.
 - **You can't:** change what the TV does: the profile only informs Windows, and Windows may keep telling games the old values for a while. Direct reading of the display data exists only on NVIDIA cards.
 
+## NVIDIA driver
+
+Only shows up with an NVIDIA card. Changes the driver options in the global profile or in a game's profile, like NVIDIA Profile Inspector, with only the options that still do something on today's cards and drivers.
+
+- **Profile:** All games (global) or a game from the list. The list has the Meter's games and the ones you add from the program list or by their .exe. A game with no driver profile gets one on the first change; a game that already has an NVIDIA profile uses that one. **Remove from list** only takes the game off the list: what was saved stays in the driver.
+- **Groups:** Sync and FPS, DLSS, Anti-aliasing, Textures, Picture and indicators, and System. Hover over a name to see what the option does. The blue dot marks what is saved in this profile. **Default** shows the value that applies with nothing saved here and goes back to it.
+- **Backups:** before the first change each time Prisma opens, it saves a copy of all the driver profiles; the 10 newest stay in the data folder, under `nvidia`. **Backups** puts every profile back to one of them, and anything changed since is lost.
+- **Left out:** SLI, 3D Vision, Ansel, CSAA, MFAA, debug options and the old OpenGL-only ones, which do nothing on current cards. Options that need a newer driver than the installed one don't show up.
+- **When it applies:** the next time the game opens. The FPS limit and the DLSS preset are the same options the Meter saves for its games.
+
 ## Capture
 
 Takes photos with annotations and records video in AV1, HEVC or H.264. With the display in HDR, it records in SDR or HDR10. Video goes to the folder you choose.

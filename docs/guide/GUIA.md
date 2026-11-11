@@ -184,6 +184,16 @@ Painel de leitura com o modo da tela, o perfil de calibração ativo, o brilho q
 - **Teste de atraso do som:** toca um clique junto de um clarão, para comparar com e sem som espacial.
 - **Não dá para:** mudar o que a TV faz: o perfil só informa o Windows, e o Windows pode continuar informando os valores antigos aos jogos por um tempo. A leitura direta da ficha da tela existe só em placas NVIDIA.
 
+## Driver NVIDIA
+
+Só aparece com placa NVIDIA. Muda as opções do driver no perfil global ou no perfil de um jogo, como o NVIDIA Profile Inspector, só com as opções que ainda fazem algo nas placas e drivers de hoje.
+
+- **Perfil:** Todos os jogos (global) ou um jogo da lista. A lista tem os jogos do Medidor e os que você adiciona pela lista de programas ou pelo .exe. Jogo sem perfil no driver ganha um na primeira mudança; jogo que já tem perfil da NVIDIA usa o dela. **Tirar da lista** tira o jogo só da lista: o que foi gravado continua no driver.
+- **Grupos:** Sincronia e FPS, DLSS, Antisserrilhado, Texturas, Imagem e indicadores, e Sistema. Passe o mouse no nome para ver o que a opção faz. O ponto azul marca o que está gravado neste perfil. **Padrão** mostra o valor que vale sem nada gravado aqui e volta a ele.
+- **Cópias:** antes da primeira mudança de cada abertura do Prisma, ele guarda uma cópia de todos os perfis do driver; as 10 mais novas ficam na pasta de dados, em `nvidia`. **Cópias** volta todos os perfis a uma delas, e o que mudou depois se perde.
+- **Ficam de fora:** SLI, 3D Vision, Ansel, CSAA, MFAA, opções de depuração e as só de OpenGL antigo, que não fazem nada nas placas atuais. Opções que pedem um driver mais novo que o instalado não aparecem.
+- **Quando vale:** na próxima vez que o jogo abrir. O limite de FPS e o preset do DLSS são as mesmas opções que o Medidor grava nos jogos dele.
+
 ## Captura
 
 Tira foto com anotações e grava vídeo em AV1, HEVC ou H.264. Com a tela em HDR, grava em SDR ou HDR10. O vídeo fica na pasta que você escolher.

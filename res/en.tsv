@@ -1569,3 +1569,237 @@ VSync	VSync
 Placa de vídeo	Graphics card
 A do monitor	Same as the monitor
 A do Windows	Windows default
+Ligado	On
+Usar o mais novo do driver	Use the driver's newest
+Desempenho ultra	Ultra performance
+Desempenho	Performance
+Equilibrado	Balanced
+Personalizada	Custom
+Só tela cheia	Full screen only
+Tela cheia e janela	Full screen and windowed
+Limite de FPS	FPS limit
+Limita os quadros por segundo no driver, com ritmo estável. O limitador do Medidor usa esta mesma opção nos jogos dele.	Caps frames per second in the driver, with steady pacing. The Meter's limiter uses this same option for its games.
+Limite de FPS em segundo plano	FPS limit in the background
+Limite usado enquanto o jogo não está em primeiro plano, para gastar menos energia.	Limit used while the game is not in the foreground, to use less power.
+Modo de baixa latência	Low latency mode
+O mesmo do Painel de Controle da NVIDIA: menos quadros esperando na fila da placa. Em jogos com Reflex, o Reflex manda.	The same as in the NVIDIA Control Panel: fewer frames waiting in the card's queue. In games with Reflex, Reflex takes over.
+Baixa latência ultra	Ultra low latency
+A parte Ultra do modo acima, que acerta o ritmo para a fila ficar vazia. O Painel de Controle liga junto quando o modo é Ultra.	The Ultra part of the mode above, which paces frames so the queue stays empty. The Control Panel turns it on along with Ultra mode.
+Quadros preparados antes	Pre-rendered frames
+Quantos quadros a CPU prepara antes da placa mostrar. Menos dá menos atraso; mais pode suavizar com CPU fraca.	How many frames the CPU prepares before the card shows them. Fewer means less delay; more can smooth things out with a weak CPU.
+O jogo decide	Up to the game
+Sincronia vertical pelo driver. Com G-SYNC, VSync ligado e FPS um pouco abaixo dos Hz evitam cortes na imagem.	Vertical sync from the driver. With G-SYNC, VSync on and FPS a little below the Hz avoid tearing.
+Forçar desligado	Force off
+Forçar ligado	Force on
+Metade dos Hz	Half the Hz
+Um terço dos Hz	A third of the Hz
+Um quarto dos Hz	A quarter of the Hz
+VSync adaptativo	Adaptive VSync
+Adaptativo desliga a sincronia quando o FPS cai abaixo dos Hz: troca travadas por cortes na imagem.	Adaptive turns sync off when FPS drops below the Hz: it trades stutter for tearing.
+Normal	Normal
+Adaptativo	Adaptive
+Buffer triplo (OpenGL)	Triple buffering (OpenGL)
+Só vale em jogos OpenGL com VSync ligado.	Only applies to OpenGL games with VSync on.
+Taxa de atualização preferida	Preferred refresh rate
+Em tela cheia exclusiva, usa a taxa mais alta da tela mesmo quando o jogo pede outra.	In exclusive full screen, uses the screen's highest rate even when the game asks for another.
+A mais alta	The highest
+Apresentação Vulkan e OpenGL	Vulkan and OpenGL present method
+Pelo DXGI, jogos Vulkan e OpenGL se comportam como DirectX: ganham Auto HDR, sobreposições e janela sem borda com menos atraso.	Through DXGI, Vulkan and OpenGL games behave like DirectX: they get Auto HDR, overlays and borderless windows with less delay.
+Nativa	Native
+Pelo DXGI	Through DXGI
+Liga ou desliga o G-SYNC na placa toda.	Turns G-SYNC on or off for the whole card.
+Modo do G-SYNC	G-SYNC mode
+Onde o G-SYNC age: só em tela cheia ou também em janela.	Where G-SYNC works: full screen only or windows too.
+Modo do G-SYNC no jogo	G-SYNC mode in the game
+Onde o G-SYNC age neste perfil.	Where G-SYNC works in this profile.
+Estado do G-SYNC	G-SYNC state
+Forçar desligado ou taxa fixa servem para jogos que tremem com G-SYNC.	Force off or fixed refresh help games that flicker with G-SYNC.
+Permitir	Allow
+Não permitir	Don't allow
+Taxa fixa	Fixed refresh
+DLSS mais novo	Newest DLSS
+Troca o DLSS que veio com o jogo pelo mais novo que o driver tem. É preciso para escolher o preset.	Swaps the DLSS that came with the game for the newest one the driver has. Needed to pick the preset.
+DLSS mais novo pelo Streamline	Newest DLSS through Streamline
+O mesmo, em jogos que carregam o DLSS pelo Streamline.	The same, in games that load DLSS through Streamline.
+Escolha do preset	Preset choice
+Recomendado deixa a NVIDIA escolher; escolhido aqui usa o preset abaixo.	Recommended lets NVIDIA choose; chosen here uses the preset below.
+Recomendado pela NVIDIA	Recommended by NVIDIA
+Escolhido aqui	Chosen here
+Preset do DLSS	DLSS preset
+Modelo do DLSS. Os Transformer (J em diante) dão imagem mais nítida e custam um pouco mais. O Medidor grava esta mesma opção.	The DLSS model. Transformer ones (J onward) give a sharper picture and cost a little more. The Meter writes this same option.
+Qualidade do DLSS	DLSS quality
+Força o modo do DLSS, mesmo que o jogo peça outro. Personalizada usa a escala abaixo.	Forces the DLSS mode, even if the game asks for another. Custom uses the scale below.
+Escala do DLSS	DLSS scale
+Resolução interna em porcentagem da tela, com a qualidade Personalizada. 100% é DLAA.	Internal resolution as a percentage of the screen, with Custom quality. 100% is DLAA.
+Desempenho vira Desempenho ultra	Performance becomes Ultra performance
+Quando o jogo pede Desempenho, o DLSS usa Desempenho ultra.	When the game asks for Performance, DLSS uses Ultra performance.
+Todo modo vira DLAA	Every mode becomes DLAA
+Qualquer modo do DLSS vira DLAA, na resolução da tela.	Any DLSS mode becomes DLAA, at the screen's resolution.
+Ray Reconstruction mais novo	Newest Ray Reconstruction
+Troca o Ray Reconstruction do jogo pelo mais novo do driver.	Swaps the game's Ray Reconstruction for the driver's newest.
+Preset do Ray Reconstruction	Ray Reconstruction preset
+Modelo do Ray Reconstruction. D em diante são Transformer.	The Ray Reconstruction model. D onward are Transformer.
+Qualidade do Ray Reconstruction	Ray Reconstruction quality
+Força o modo do Ray Reconstruction. Personalizada usa a escala abaixo.	Forces the Ray Reconstruction mode. Custom uses the scale below.
+Escala do Ray Reconstruction	Ray Reconstruction scale
+Resolução interna em porcentagem da tela, com a qualidade Personalizada.	Internal resolution as a percentage of the screen, with Custom quality.
+Geração de quadros mais nova	Newest frame generation
+Troca a geração de quadros do jogo pela mais nova do driver.	Swaps the game's frame generation for the driver's newest.
+Preset da geração de quadros	Frame generation preset
+Modelo da geração de quadros.	The frame generation model.
+O mais novo	The newest
+Preset A (padrão)	Preset A (default)
+Preset B (interface)	Preset B (interface)
+Preset C (desempenho)	Preset C (performance)
+Modo da geração múltipla	Multi frame generation mode
+Fixo gera sempre o mesmo número de quadros; dinâmico ajusta para chegar ao FPS alvo.	Fixed always generates the same number of frames; dynamic adjusts to reach the target FPS.
+Fixo	Fixed
+Dinâmico	Dynamic
+Quadros gerados (fixo)	Generated frames (fixed)
+Multiplicador no modo fixo. Acima de 2x precisa de RTX 50.	Multiplier in fixed mode. Above 2x needs an RTX 50.
+Quadros gerados (dinâmico)	Generated frames (dynamic)
+Multiplicador máximo no modo dinâmico.	Maximum multiplier in dynamic mode.
+Até 2x	Up to 2x
+Até 3x	Up to 3x
+Até 4x	Up to 4x
+Até 5x	Up to 5x
+Até 6x	Up to 6x
+FPS alvo (dinâmico)	Target FPS (dynamic)
+O FPS que o modo dinâmico tenta alcançar.	The FPS the dynamic mode tries to reach.
+Pausar em menus	Pause in menus
+Para de gerar quadros quando um menu cobre a tela, para o menu não borrar.	Stops generating frames when a menu covers the screen, so the menu doesn't blur.
+Geração de quadros do driver para jogos sem DLSS, em DirectX 11, DirectX 12 e Vulkan. RTX 40 e 50.	The driver's frame generation for games without DLSS, in DirectX 11, DirectX 12 and Vulkan. RTX 40 and 50.
+Smooth Motion em	Smooth Motion in
+Em quais tipos de jogo o Smooth Motion pode agir.	Which kinds of games Smooth Motion can work in.
+DirectX 11 e 12	DirectX 11 and 12
+DirectX 12 e Vulkan	DirectX 12 and Vulkan
+DirectX 11 e Vulkan	DirectX 11 and Vulkan
+Nitidez	Sharpening
+Filtro de nitidez do driver, aplicado na imagem final.	The driver's sharpening filter, applied to the final picture.
+Força da nitidez	Sharpening strength
+Quanto o filtro de nitidez realça.	How much the sharpening filter enhances.
+Ignorar granulação	Ignore film grain
+Quanto o filtro deixa de realçar o ruído e a granulação de filme.	How much the filter avoids enhancing noise and film grain.
+Antisserrilhado rápido do driver. Borra um pouco; serve para jogos antigos.	The driver's fast anti-aliasing. It blurs a little; good for old games.
+Modo do MSAA	MSAA mode
+MSAA forçado pelo driver só funciona em jogos DirectX 9 e OpenGL antigos.	MSAA forced by the driver only works in old DirectX 9 and OpenGL games.
+Trocar o do jogo	Replace the game's
+Melhorar o do jogo	Enhance the game's
+Nível do antisserrilhado forçado. Os SS e os mistos (S) são supersampling: mais bonitos e bem mais pesados.	Level of forced anti-aliasing. SS and the mixed ones (S) are supersampling: nicer and much heavier.
+Transparência com multisampling	Transparency multisampling
+Suaviza as bordas de folhas e grades quando o MSAA está ligado.	Smooths the edges of leaves and fences when MSAA is on.
+Transparência com supersampling	Transparency supersampling
+Mais pesado e mais bonito que o multisampling. O esparso (SGSSAA) suaviza a imagem toda.	Heavier and nicer than multisampling. Sparse (SGSSAA) smooths the whole picture.
+2x esparso	2x sparse
+4x esparso	4x sparse
+8x esparso	8x sparse
+Correção de gama no antisserrilhado	Anti-aliasing gamma correction
+Acerta o brilho das bordas suavizadas.	Fixes the brightness of smoothed edges.
+Modo do anisotrópico	Anisotropic mode
+Definido aqui usa o nível abaixo em todas as texturas.	Set here uses the level below on every texture.
+Definido aqui	Set here
+Filtro anisotrópico	Anisotropic filtering
+Deixa nítidas as texturas vistas de lado, como o chão. Custa quase nada nas placas atuais.	Keeps textures seen at an angle sharp, like the ground. It costs almost nothing on current cards.
+Qualidade da filtragem	Filtering quality
+Alta qualidade desliga os atalhos de filtragem. A diferença de desempenho é pequena hoje.	High quality turns off filtering shortcuts. The performance difference is small today.
+Alta qualidade	High quality
+Alto desempenho	High performance
+Otimização trilinear	Trilinear optimization
+Atalho de filtragem. Não faz nada em Alta qualidade.	A filtering shortcut. It does nothing in High quality.
+Ligada	On
+Desligada	Off
+Otimização do anisotrópico	Anisotropic optimization
+Atalho que filtra menos algumas camadas de textura.	A shortcut that filters some texture layers less.
+Otimização de amostras do anisotrópico	Anisotropic sample optimization
+Atalho que usa menos amostras no anisotrópico.	A shortcut that uses fewer anisotropic samples.
+LOD negativo	Negative LOD bias
+Travar evita texturas tremendo quando o jogo pede nitidez demais.	Clamp avoids shimmering textures when the game asks for too much sharpness.
+Travar	Clamp
+Ajuste de LOD (DirectX)	LOD bias (DirectX)
+Negativo deixa as texturas mais nítidas e pode tremer; positivo borra. Combina com supersampling.	Negative makes textures sharper and may shimmer; positive blurs. Goes well with supersampling.
+-1,5	-1.5
+-0,5	-0.5
+-0,25	-0.25
++0,25	+0.25
++0,5	+0.5
+HDR feito pelo driver para jogos SDR. Precisa do HDR do Windows ligado.	HDR made by the driver for SDR games. Needs Windows HDR on.
+RTX HDR pelo driver	RTX HDR from the driver
+Liga o RTX HDR direto no perfil, sem o app da NVIDIA, e escolhe quanto suaviza as faixas de cor.	Turns RTX HDR on directly in the profile, without the NVIDIA app, and picks how much it smooths color banding.
+Ligado, sem suavizar faixas	On, no banding smoothing
+Ligado, suavização média	On, medium smoothing
+Ligado, suavização máxima	On, maximum smoothing
+Máxima e com indicador	Maximum, with indicator
+Cores mais vivas, ajustadas pelo driver cena a cena.	More vivid colors, adjusted by the driver scene by scene.
+Saturação extra	Extra saturation
+Quanto o Dynamic Vibrance aumenta a saturação.	How much Dynamic Vibrance raises saturation.
+Intensidade do Dynamic Vibrance	Dynamic Vibrance intensity
+Quanto o Dynamic Vibrance age na imagem.	How strongly Dynamic Vibrance acts on the picture.
+Ray tracing (DirectX)	Ray tracing (DirectX)
+Desligado esconde o ray tracing do jogo, que passa a achar que a placa não tem.	Off hides ray tracing from the game, which then thinks the card doesn't have it.
+Ray tracing (Vulkan)	Ray tracing (Vulkan)
+O mesmo, em jogos Vulkan.	The same, in Vulkan games.
+Sobreposição do app da NVIDIA	NVIDIA app overlay
+Libera a captura da área de trabalho para este programa ou tira as estatísticas do app.	Allows desktop capture for this program or removes the app's statistics.
+Liberar captura da área de trabalho	Allow desktop capture
+Sem estatísticas do app	No app statistics
+Indicador do G-SYNC	G-SYNC indicator
+Mostra na tela quando o G-SYNC está agindo.	Shows on screen when G-SYNC is working.
+Indicador de suporte ao G-SYNC	G-SYNC support indicator
+Mostra na tela se o jogo aceita G-SYNC.	Shows on screen whether the game supports G-SYNC.
+Indicador de quadros	Frame indicator
+Gráfico do driver com o ritmo dos quadros, bom para conferir o limitador.	The driver's frame pacing graph, good for checking the limiter.
+Gráfico do FPS	FPS graph
+Tudo	Everything
+Indicador de MPO	MPO indicator
+Mostra quando a imagem usa planos sobrepostos (MPO), que dão menos atraso em janela.	Shows when the picture uses multi-plane overlays (MPO), which give less delay in a window.
+Gerenciamento de energia	Power management
+Desempenho máximo mantém o clock alto e gasta mais energia, mesmo com o jogo parado num menu.	Maximum performance keeps clocks high and uses more power, even with the game idle in a menu.
+Desempenho ideal	Optimal performance
+Desempenho máximo	Maximum performance
+Otimização em vários núcleos	Threaded optimization
+Divide o trabalho do driver em mais núcleos da CPU. Ajuda em jogos OpenGL e DirectX antigos e atrapalha alguns.	Splits the driver's work across more CPU cores. It helps old OpenGL and DirectX games and hurts a few.
+Cache de shaders	Shader cache
+Guarda os shaders compilados para o jogo não compilar de novo a cada abertura.	Keeps compiled shaders so the game doesn't compile them again on every launch.
+Tamanho do cache de shaders	Shader cache size
+Mais espaço guarda os shaders de mais jogos.	More space keeps the shaders of more games.
+Ilimitado	Unlimited
+Pré-compilar shaders	Pre-compile shaders
+Compila shaders antes de o jogo pedir, em segundo plano. Mais compila mais e usa mais a CPU.	Compiles shaders in the background before the game asks for them. More compiles more and uses more CPU.
+Pouco	Low
+Médio	Medium
+Muito	High
+Cache de shaders (OpenGL)	Shader cache (OpenGL)
+O cache de shaders em jogos OpenGL.	The shader cache in OpenGL games.
+Deixa a CPU ver a memória da placa toda. Precisa estar ligado na BIOS; a NVIDIA só liga em jogos testados.	Lets the CPU see all of the card's memory. It must be on in the BIOS; NVIDIA only turns it on in tested games.
+Resizable BAR (novo)	Resizable BAR (new)
+A versão nova da mesma opção.	The new version of the same option.
+PhysX de 32 bits na placa	32-bit PhysX on the card
+Volta o PhysX acelerado de jogos antigos nas RTX 50.	Brings back accelerated PhysX for old games on RTX 50 cards.
+CUDA: forçar P2	CUDA: force P2
+Ligado, programas CUDA rodam com a memória num clock mais baixo. Desligado, a memória vai ao clock máximo.	On, CUDA programs run with memory at a lower clock. Off, memory goes to its maximum clock.
+CUDA: memória do sistema	CUDA: system memory
+Quando a memória da placa acaba, programas CUDA (como IA local) podem usar a do sistema, mais lenta. Evitar dá erro em vez de lentidão.	When the card's memory runs out, CUDA programs (like local AI) can use system memory, which is slower. Avoid gives an error instead of slowness.
+Evitar	Avoid
+Preferir	Prefer
+Sincronia e FPS	Sync and FPS
+Antisserrilhado	Anti-aliasing
+Texturas	Textures
+Imagem e indicadores	Picture and indicators
+Padrão ({})	Default ({})
+Mudar	Change
+Driver NVIDIA	NVIDIA driver
+Driver {}. As mudanças valem na próxima vez que o jogo abrir.	Driver {}. Changes apply the next time the game opens.
+Cópias	Backups
+Ainda não há cópias. O Prisma guarda uma antes da primeira mudança.	There are no backups yet. Prisma saves one before the first change.
+Voltar a esta cópia?	Go back to this backup?
+Os perfis do driver voltam como estavam em {}. O que mudou depois, aqui ou em outro programa, se perde.	The driver profiles go back to how they were on {}. Anything changed since, here or in another program, is lost.
+Perfis do driver restaurados	Driver profiles restored
+O driver não aceitou a cópia	The driver didn't accept the backup
+Todos os jogos (global)	All games (global)
+Tirar da lista	Remove from list
+Tirar da lista?	Remove from the list?
+O jogo sai só desta lista. O que foi gravado no perfil dele continua no driver.	The game only leaves this list. What was saved in its profile stays in the driver.
+Vale para todos os jogos, menos o que o perfil de cada jogo troca.	Applies to every game, except what each game's profile changes.
+Perfil no driver: {}	Profile in the driver: {}
+Este jogo ainda não tem perfil no driver. O Prisma cria um na primeira mudança.	This game doesn't have a profile in the driver yet. Prisma creates one on the first change.
+O driver não aceitou a mudança	The driver didn't accept the change

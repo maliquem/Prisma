@@ -1563,3 +1563,237 @@ VSync	VSync
 Placa de vídeo	Tarjeta gráfica
 A do monitor	La del monitor
 A do Windows	La de Windows
+Ligado	Activado
+Usar o mais novo do driver	Usar el más reciente del driver
+Desempenho ultra	Rendimiento ultra
+Desempenho	Rendimiento
+Equilibrado	Equilibrado
+Personalizada	Personalizada
+Só tela cheia	Solo pantalla completa
+Tela cheia e janela	Pantalla completa y ventana
+Limite de FPS	Límite de FPS
+Limita os quadros por segundo no driver, com ritmo estável. O limitador do Medidor usa esta mesma opção nos jogos dele.	Limita los fotogramas por segundo en el driver, con ritmo estable. El limitador del Medidor usa esta misma opción en sus juegos.
+Limite de FPS em segundo plano	Límite de FPS en segundo plano
+Limite usado enquanto o jogo não está em primeiro plano, para gastar menos energia.	Límite usado mientras el juego no está en primer plano, para gastar menos energía.
+Modo de baixa latência	Modo de baja latencia
+O mesmo do Painel de Controle da NVIDIA: menos quadros esperando na fila da placa. Em jogos com Reflex, o Reflex manda.	Lo mismo que en el Panel de control de NVIDIA: menos fotogramas esperando en la cola de la tarjeta. En juegos con Reflex, manda Reflex.
+Baixa latência ultra	Baja latencia ultra
+A parte Ultra do modo acima, que acerta o ritmo para a fila ficar vazia. O Painel de Controle liga junto quando o modo é Ultra.	La parte Ultra del modo anterior, que ajusta el ritmo para que la cola quede vacía. El Panel de control la activa junto con el modo Ultra.
+Quadros preparados antes	Fotogramas preparados antes
+Quantos quadros a CPU prepara antes da placa mostrar. Menos dá menos atraso; mais pode suavizar com CPU fraca.	Cuántos fotogramas prepara la CPU antes de que la tarjeta los muestre. Menos da menos retraso; más puede suavizar con una CPU débil.
+O jogo decide	Lo decide el juego
+Sincronia vertical pelo driver. Com G-SYNC, VSync ligado e FPS um pouco abaixo dos Hz evitam cortes na imagem.	Sincronización vertical desde el driver. Con G-SYNC, VSync activado y FPS un poco por debajo de los Hz evitan cortes en la imagen.
+Forçar desligado	Forzar desactivado
+Forçar ligado	Forzar activado
+Metade dos Hz	Mitad de los Hz
+Um terço dos Hz	Un tercio de los Hz
+Um quarto dos Hz	Un cuarto de los Hz
+VSync adaptativo	VSync adaptativo
+Adaptativo desliga a sincronia quando o FPS cai abaixo dos Hz: troca travadas por cortes na imagem.	Adaptativo desactiva la sincronización cuando los FPS caen por debajo de los Hz: cambia tirones por cortes en la imagen.
+Normal	Normal
+Adaptativo	Adaptativo
+Buffer triplo (OpenGL)	Triple búfer (OpenGL)
+Só vale em jogos OpenGL com VSync ligado.	Solo se aplica a juegos OpenGL con VSync activado.
+Taxa de atualização preferida	Frecuencia de actualización preferida
+Em tela cheia exclusiva, usa a taxa mais alta da tela mesmo quando o jogo pede outra.	En pantalla completa exclusiva, usa la frecuencia más alta de la pantalla aunque el juego pida otra.
+A mais alta	La más alta
+Apresentação Vulkan e OpenGL	Presentación Vulkan y OpenGL
+Pelo DXGI, jogos Vulkan e OpenGL se comportam como DirectX: ganham Auto HDR, sobreposições e janela sem borda com menos atraso.	Con DXGI, los juegos Vulkan y OpenGL se comportan como DirectX: ganan Auto HDR, superposiciones y ventana sin bordes con menos retraso.
+Nativa	Nativa
+Pelo DXGI	Por DXGI
+Liga ou desliga o G-SYNC na placa toda.	Activa o desactiva G-SYNC en toda la tarjeta.
+Modo do G-SYNC	Modo de G-SYNC
+Onde o G-SYNC age: só em tela cheia ou também em janela.	Dónde actúa G-SYNC: solo en pantalla completa o también en ventana.
+Modo do G-SYNC no jogo	Modo de G-SYNC en el juego
+Onde o G-SYNC age neste perfil.	Dónde actúa G-SYNC en este perfil.
+Estado do G-SYNC	Estado de G-SYNC
+Forçar desligado ou taxa fixa servem para jogos que tremem com G-SYNC.	Forzar desactivado o frecuencia fija sirven para juegos que parpadean con G-SYNC.
+Permitir	Permitir
+Não permitir	No permitir
+Taxa fixa	Frecuencia fija
+DLSS mais novo	DLSS más reciente
+Troca o DLSS que veio com o jogo pelo mais novo que o driver tem. É preciso para escolher o preset.	Cambia el DLSS que vino con el juego por el más reciente que tiene el driver. Hace falta para elegir el preset.
+DLSS mais novo pelo Streamline	DLSS más reciente por Streamline
+O mesmo, em jogos que carregam o DLSS pelo Streamline.	Lo mismo, en juegos que cargan DLSS con Streamline.
+Escolha do preset	Elección del preset
+Recomendado deixa a NVIDIA escolher; escolhido aqui usa o preset abaixo.	Recomendado deja elegir a NVIDIA; elegido aquí usa el preset de abajo.
+Recomendado pela NVIDIA	Recomendado por NVIDIA
+Escolhido aqui	Elegido aquí
+Preset do DLSS	Preset de DLSS
+Modelo do DLSS. Os Transformer (J em diante) dão imagem mais nítida e custam um pouco mais. O Medidor grava esta mesma opção.	Modelo de DLSS. Los Transformer (de la J en adelante) dan una imagen más nítida y cuestan un poco más. El Medidor guarda esta misma opción.
+Qualidade do DLSS	Calidad de DLSS
+Força o modo do DLSS, mesmo que o jogo peça outro. Personalizada usa a escala abaixo.	Fuerza el modo de DLSS aunque el juego pida otro. Personalizada usa la escala de abajo.
+Escala do DLSS	Escala de DLSS
+Resolução interna em porcentagem da tela, com a qualidade Personalizada. 100% é DLAA.	Resolución interna en porcentaje de la pantalla, con la calidad Personalizada. 100% es DLAA.
+Desempenho vira Desempenho ultra	Rendimiento pasa a Rendimiento ultra
+Quando o jogo pede Desempenho, o DLSS usa Desempenho ultra.	Cuando el juego pide Rendimiento, DLSS usa Rendimiento ultra.
+Todo modo vira DLAA	Todo modo pasa a DLAA
+Qualquer modo do DLSS vira DLAA, na resolução da tela.	Cualquier modo de DLSS pasa a DLAA, a la resolución de la pantalla.
+Ray Reconstruction mais novo	Ray Reconstruction más reciente
+Troca o Ray Reconstruction do jogo pelo mais novo do driver.	Cambia el Ray Reconstruction del juego por el más reciente del driver.
+Preset do Ray Reconstruction	Preset de Ray Reconstruction
+Modelo do Ray Reconstruction. D em diante são Transformer.	Modelo de Ray Reconstruction. De la D en adelante son Transformer.
+Qualidade do Ray Reconstruction	Calidad de Ray Reconstruction
+Força o modo do Ray Reconstruction. Personalizada usa a escala abaixo.	Fuerza el modo de Ray Reconstruction. Personalizada usa la escala de abajo.
+Escala do Ray Reconstruction	Escala de Ray Reconstruction
+Resolução interna em porcentagem da tela, com a qualidade Personalizada.	Resolución interna en porcentaje de la pantalla, con la calidad Personalizada.
+Geração de quadros mais nova	Generación de fotogramas más reciente
+Troca a geração de quadros do jogo pela mais nova do driver.	Cambia la generación de fotogramas del juego por la más reciente del driver.
+Preset da geração de quadros	Preset de generación de fotogramas
+Modelo da geração de quadros.	Modelo de generación de fotogramas.
+O mais novo	El más reciente
+Preset A (padrão)	Preset A (predeterminado)
+Preset B (interface)	Preset B (interfaz)
+Preset C (desempenho)	Preset C (rendimiento)
+Modo da geração múltipla	Modo de generación múltiple
+Fixo gera sempre o mesmo número de quadros; dinâmico ajusta para chegar ao FPS alvo.	Fijo genera siempre el mismo número de fotogramas; dinámico se ajusta para llegar a los FPS objetivo.
+Fixo	Fijo
+Dinâmico	Dinámico
+Quadros gerados (fixo)	Fotogramas generados (fijo)
+Multiplicador no modo fixo. Acima de 2x precisa de RTX 50.	Multiplicador en modo fijo. Más de 2x necesita una RTX 50.
+Quadros gerados (dinâmico)	Fotogramas generados (dinámico)
+Multiplicador máximo no modo dinâmico.	Multiplicador máximo en modo dinámico.
+Até 2x	Hasta 2x
+Até 3x	Hasta 3x
+Até 4x	Hasta 4x
+Até 5x	Hasta 5x
+Até 6x	Hasta 6x
+FPS alvo (dinâmico)	FPS objetivo (dinámico)
+O FPS que o modo dinâmico tenta alcançar.	Los FPS que el modo dinámico intenta alcanzar.
+Pausar em menus	Pausar en menús
+Para de gerar quadros quando um menu cobre a tela, para o menu não borrar.	Deja de generar fotogramas cuando un menú cubre la pantalla, para que el menú no se emborrone.
+Geração de quadros do driver para jogos sem DLSS, em DirectX 11, DirectX 12 e Vulkan. RTX 40 e 50.	Generación de fotogramas del driver para juegos sin DLSS, en DirectX 11, DirectX 12 y Vulkan. RTX 40 y 50.
+Smooth Motion em	Smooth Motion en
+Em quais tipos de jogo o Smooth Motion pode agir.	En qué tipos de juego puede actuar Smooth Motion.
+DirectX 11 e 12	DirectX 11 y 12
+DirectX 12 e Vulkan	DirectX 12 y Vulkan
+DirectX 11 e Vulkan	DirectX 11 y Vulkan
+Nitidez	Nitidez
+Filtro de nitidez do driver, aplicado na imagem final.	Filtro de nitidez del driver, aplicado a la imagen final.
+Força da nitidez	Fuerza de la nitidez
+Quanto o filtro de nitidez realça.	Cuánto realza el filtro de nitidez.
+Ignorar granulação	Ignorar grano
+Quanto o filtro deixa de realçar o ruído e a granulação de filme.	Cuánto evita el filtro realzar el ruido y el grano de película.
+Antisserrilhado rápido do driver. Borra um pouco; serve para jogos antigos.	Antialiasing rápido del driver. Emborrona un poco; sirve para juegos antiguos.
+Modo do MSAA	Modo de MSAA
+MSAA forçado pelo driver só funciona em jogos DirectX 9 e OpenGL antigos.	El MSAA forzado por el driver solo funciona en juegos antiguos DirectX 9 y OpenGL.
+Trocar o do jogo	Reemplazar el del juego
+Melhorar o do jogo	Mejorar el del juego
+Nível do antisserrilhado forçado. Os SS e os mistos (S) são supersampling: mais bonitos e bem mais pesados.	Nivel del antialiasing forzado. Los SS y los mixtos (S) son supersampling: más bonitos y mucho más pesados.
+Transparência com multisampling	Transparencia con multisampling
+Suaviza as bordas de folhas e grades quando o MSAA está ligado.	Suaviza los bordes de hojas y rejas cuando el MSAA está activado.
+Transparência com supersampling	Transparencia con supersampling
+Mais pesado e mais bonito que o multisampling. O esparso (SGSSAA) suaviza a imagem toda.	Más pesado y más bonito que el multisampling. El disperso (SGSSAA) suaviza toda la imagen.
+2x esparso	2x disperso
+4x esparso	4x disperso
+8x esparso	8x disperso
+Correção de gama no antisserrilhado	Corrección de gamma en el antialiasing
+Acerta o brilho das bordas suavizadas.	Ajusta el brillo de los bordes suavizados.
+Modo do anisotrópico	Modo del anisotrópico
+Definido aqui usa o nível abaixo em todas as texturas.	Definido aquí usa el nivel de abajo en todas las texturas.
+Definido aqui	Definido aquí
+Filtro anisotrópico	Filtro anisotrópico
+Deixa nítidas as texturas vistas de lado, como o chão. Custa quase nada nas placas atuais.	Mantiene nítidas las texturas vistas de lado, como el suelo. Casi no cuesta nada en las tarjetas actuales.
+Qualidade da filtragem	Calidad del filtrado
+Alta qualidade desliga os atalhos de filtragem. A diferença de desempenho é pequena hoje.	Alta calidad desactiva los atajos de filtrado. Hoy la diferencia de rendimiento es pequeña.
+Alta qualidade	Alta calidad
+Alto desempenho	Alto rendimiento
+Otimização trilinear	Optimización trilineal
+Atalho de filtragem. Não faz nada em Alta qualidade.	Atajo de filtrado. No hace nada en Alta calidad.
+Ligada	Activada
+Desligada	Desactivada
+Otimização do anisotrópico	Optimización del anisotrópico
+Atalho que filtra menos algumas camadas de textura.	Atajo que filtra menos algunas capas de textura.
+Otimização de amostras do anisotrópico	Optimización de muestras del anisotrópico
+Atalho que usa menos amostras no anisotrópico.	Atajo que usa menos muestras en el anisotrópico.
+LOD negativo	LOD negativo
+Travar evita texturas tremendo quando o jogo pede nitidez demais.	Bloquear evita texturas que tiemblan cuando el juego pide demasiada nitidez.
+Travar	Bloquear
+Ajuste de LOD (DirectX)	Ajuste de LOD (DirectX)
+Negativo deixa as texturas mais nítidas e pode tremer; positivo borra. Combina com supersampling.	Negativo deja las texturas más nítidas y puede temblar; positivo emborrona. Combina con supersampling.
+-1,5	-1,5
+-0,5	-0,5
+-0,25	-0,25
++0,25	+0,25
++0,5	+0,5
+HDR feito pelo driver para jogos SDR. Precisa do HDR do Windows ligado.	HDR hecho por el driver para juegos SDR. Necesita el HDR de Windows activado.
+RTX HDR pelo driver	RTX HDR por el driver
+Liga o RTX HDR direto no perfil, sem o app da NVIDIA, e escolhe quanto suaviza as faixas de cor.	Activa RTX HDR directamente en el perfil, sin la app de NVIDIA, y elige cuánto suaviza las bandas de color.
+Ligado, sem suavizar faixas	Activado, sin suavizar bandas
+Ligado, suavização média	Activado, suavizado medio
+Ligado, suavização máxima	Activado, suavizado máximo
+Máxima e com indicador	Máximo y con indicador
+Cores mais vivas, ajustadas pelo driver cena a cena.	Colores más vivos, ajustados por el driver escena a escena.
+Saturação extra	Saturación extra
+Quanto o Dynamic Vibrance aumenta a saturação.	Cuánto aumenta la saturación Dynamic Vibrance.
+Intensidade do Dynamic Vibrance	Intensidad de Dynamic Vibrance
+Quanto o Dynamic Vibrance age na imagem.	Cuánto actúa Dynamic Vibrance en la imagen.
+Ray tracing (DirectX)	Ray tracing (DirectX)
+Desligado esconde o ray tracing do jogo, que passa a achar que a placa não tem.	Desactivado oculta el ray tracing al juego, que pasa a creer que la tarjeta no lo tiene.
+Ray tracing (Vulkan)	Ray tracing (Vulkan)
+O mesmo, em jogos Vulkan.	Lo mismo, en juegos Vulkan.
+Sobreposição do app da NVIDIA	Superposición de la app de NVIDIA
+Libera a captura da área de trabalho para este programa ou tira as estatísticas do app.	Permite la captura del escritorio para este programa o quita las estadísticas de la app.
+Liberar captura da área de trabalho	Permitir captura del escritorio
+Sem estatísticas do app	Sin estadísticas de la app
+Indicador do G-SYNC	Indicador de G-SYNC
+Mostra na tela quando o G-SYNC está agindo.	Muestra en pantalla cuándo actúa G-SYNC.
+Indicador de suporte ao G-SYNC	Indicador de compatibilidad con G-SYNC
+Mostra na tela se o jogo aceita G-SYNC.	Muestra en pantalla si el juego admite G-SYNC.
+Indicador de quadros	Indicador de fotogramas
+Gráfico do driver com o ritmo dos quadros, bom para conferir o limitador.	Gráfico del driver con el ritmo de los fotogramas, útil para comprobar el limitador.
+Gráfico do FPS	Gráfico de FPS
+Tudo	Todo
+Indicador de MPO	Indicador de MPO
+Mostra quando a imagem usa planos sobrepostos (MPO), que dão menos atraso em janela.	Muestra cuándo la imagen usa planos superpuestos (MPO), que dan menos retraso en ventana.
+Gerenciamento de energia	Administración de energía
+Desempenho máximo mantém o clock alto e gasta mais energia, mesmo com o jogo parado num menu.	Rendimiento máximo mantiene la frecuencia alta y gasta más energía, incluso con el juego parado en un menú.
+Desempenho ideal	Rendimiento óptimo
+Desempenho máximo	Rendimiento máximo
+Otimização em vários núcleos	Optimización en varios núcleos
+Divide o trabalho do driver em mais núcleos da CPU. Ajuda em jogos OpenGL e DirectX antigos e atrapalha alguns.	Reparte el trabajo del driver en más núcleos de la CPU. Ayuda en juegos OpenGL y DirectX antiguos y perjudica a algunos.
+Cache de shaders	Caché de shaders
+Guarda os shaders compilados para o jogo não compilar de novo a cada abertura.	Guarda los shaders compilados para que el juego no los compile de nuevo cada vez que se abre.
+Tamanho do cache de shaders	Tamaño de la caché de shaders
+Mais espaço guarda os shaders de mais jogos.	Más espacio guarda los shaders de más juegos.
+Ilimitado	Ilimitado
+Pré-compilar shaders	Precompilar shaders
+Compila shaders antes de o jogo pedir, em segundo plano. Mais compila mais e usa mais a CPU.	Compila shaders en segundo plano antes de que el juego los pida. Más compila más y usa más la CPU.
+Pouco	Poco
+Médio	Medio
+Muito	Mucho
+Cache de shaders (OpenGL)	Caché de shaders (OpenGL)
+O cache de shaders em jogos OpenGL.	La caché de shaders en juegos OpenGL.
+Deixa a CPU ver a memória da placa toda. Precisa estar ligado na BIOS; a NVIDIA só liga em jogos testados.	Deja que la CPU vea toda la memoria de la tarjeta. Tiene que estar activado en la BIOS; NVIDIA solo lo activa en juegos probados.
+Resizable BAR (novo)	Resizable BAR (nuevo)
+A versão nova da mesma opção.	La versión nueva de la misma opción.
+PhysX de 32 bits na placa	PhysX de 32 bits en la tarjeta
+Volta o PhysX acelerado de jogos antigos nas RTX 50.	Recupera el PhysX acelerado de juegos antiguos en las RTX 50.
+CUDA: forçar P2	CUDA: forzar P2
+Ligado, programas CUDA rodam com a memória num clock mais baixo. Desligado, a memória vai ao clock máximo.	Activado, los programas CUDA usan la memoria a una frecuencia más baja. Desactivado, la memoria va a su frecuencia máxima.
+CUDA: memória do sistema	CUDA: memoria del sistema
+Quando a memória da placa acaba, programas CUDA (como IA local) podem usar a do sistema, mais lenta. Evitar dá erro em vez de lentidão.	Cuando se acaba la memoria de la tarjeta, los programas CUDA (como la IA local) pueden usar la del sistema, más lenta. Evitar da error en lugar de lentitud.
+Evitar	Evitar
+Preferir	Preferir
+Sincronia e FPS	Sincronización y FPS
+Antisserrilhado	Antialiasing
+Texturas	Texturas
+Imagem e indicadores	Imagen e indicadores
+Padrão ({})	Predeterminado ({})
+Mudar	Cambiar
+Driver NVIDIA	Driver NVIDIA
+Driver {}. As mudanças valem na próxima vez que o jogo abrir.	Driver {}. Los cambios se aplican la próxima vez que se abra el juego.
+Cópias	Copias
+Ainda não há cópias. O Prisma guarda uma antes da primeira mudança.	Todavía no hay copias. Prisma guarda una antes del primer cambio.
+Voltar a esta cópia?	¿Volver a esta copia?
+Os perfis do driver voltam como estavam em {}. O que mudou depois, aqui ou em outro programa, se perde.	Los perfiles del driver vuelven a como estaban el {}. Lo que cambió después, aquí o en otro programa, se pierde.
+Perfis do driver restaurados	Perfiles del driver restaurados
+O driver não aceitou a cópia	El driver no aceptó la copia
+Todos os jogos (global)	Todos los juegos (global)
+Tirar da lista	Quitar de la lista
+Tirar da lista?	¿Quitar de la lista?
+O jogo sai só desta lista. O que foi gravado no perfil dele continua no driver.	El juego solo sale de esta lista. Lo guardado en su perfil sigue en el driver.
+Vale para todos os jogos, menos o que o perfil de cada jogo troca.	Se aplica a todos los juegos, menos lo que cambie el perfil de cada juego.
+Perfil no driver: {}	Perfil en el driver: {}
+Este jogo ainda não tem perfil no driver. O Prisma cria um na primeira mudança.	Este juego todavía no tiene perfil en el driver. Prisma crea uno con el primer cambio.
+O driver não aceitou a mudança	El driver no aceptó el cambio

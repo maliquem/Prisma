@@ -223,6 +223,8 @@ pub struct Config {
     pub hdr_profiles: Vec<HdrProfile>,
     pub hdr_games: Vec<HdrGame>,
     pub meter_games: Vec<MeterGame>,
+    /// Jogos na tela Driver NVIDIA, pelo nome do .exe.
+    pub nv_games: Vec<String>,
     /// HDR do Windows ao abrir o jogo: 0 desligado, 1 só na lista, 2 em todos.
     pub meter_hdr: u8,
     pub meter_items: u32,
@@ -328,6 +330,7 @@ impl Default for Config {
             hdr_profiles: Vec::new(),
             hdr_games: Vec::new(),
             meter_games: Vec::new(),
+            nv_games: Vec::new(),
             meter_hdr: 0,
             meter_items: crate::meter::ITEMS_DEFAULT,
             meter_op_compact: 84,
@@ -530,6 +533,7 @@ impl Config {
                         c.hdr_profiles.push(HdrProfile { screen: p[0].into(), mode: p[1].into(), file: p[2].into(), peak: num(p[3]), full: num(p[4]), black: num(p[5]) });
                     }
                 }
+                "nv_game" => c.nv_games.push(v.to_string()),
                 "fs_app" => {
                     let p: Vec<&str> = v.splitn(3, '|').collect();
                     if p.len() == 3 {
@@ -705,6 +709,9 @@ impl Config {
         }
         for p in &self.hdr_profiles {
             let _ = writeln!(s, "hdr_profile={}|{}|{}|{}|{}|{}", p.screen, p.mode, p.file, p.peak, p.full, p.black);
+        }
+        for g in &self.nv_games {
+            let _ = writeln!(s, "nv_game={g}");
         }
         for a in &self.fs_apps {
             let _ = writeln!(s, "fs_app={}|{}|{}", a.exe, b(a.auto), a.path);
