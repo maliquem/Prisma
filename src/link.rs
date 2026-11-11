@@ -78,13 +78,16 @@ pub fn start(hub: HWND) {
             unsafe {
                 let _ = PostMessageW(Some(HWND(hub as *mut _)), WM_LINK, WPARAM(0), LPARAM(0));
             }
+            // Só o convite tem resposta; o resto segue sem esperar a janela.
+            if !invite {
+                return None;
+            }
             match rx.recv_timeout(WAIT) {
                 Ok(outcome) => reply_for(invite, outcome),
                 // O launcher sempre recebe resposta do convite, mesmo com a janela ocupada.
-                Err(_) if invite => Some(Reply::ShareInviteFailed {
+                Err(_) => Some(Reply::ShareInviteFailed {
                     reason: "o Prisma não respondeu".into(),
                 }),
-                Err(_) => None,
             }
         });
         if let Err(e) = res {
@@ -151,7 +154,8 @@ fn push_at(at: Instant, req: Request, tx: SyncSender<Outcome>) {
         .push_back((at, req, tx));
 }
 
-/// Na thread principal, no `WM_LINK`: atende tudo o que está na fila.
+/// Na thread principal, no `WM_LINK` e a cada `WM_TICK` (o `WM_LINK` se perde se chega com a
+/// janela num laço modal, como o menu da bandeja): atende tudo o que está na fila.
 pub fn drain(app: &mut App) {
     drain_with(|req| app.on_link(req));
 }
@@ -190,7 +194,11 @@ impl App {
             }
             #[cfg(feature = "stream")]
             Request::ShareInvite => match crate::pages::share::create_invite(self) {
-                Some((log, pid)) => Outcome::InviteLog { log, pid },
+                Some((log, pid)) => {
+                    // Convite criado por outro programa não passa em silêncio.
+                    self.toast.info("Convite do Compartilhar tela criado pelo Prisma Launcher");
+                    Outcome::InviteLog { log, pid }
+                }
                 None => Outcome::Failed("não deu para criar o convite".into()),
             },
             #[cfg(not(feature = "stream"))]

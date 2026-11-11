@@ -3139,7 +3139,10 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
             LRESULT(0)
         }
         WM_TICK => {
-            with(|a| a.on_tick());
+            with(|a| {
+                a.on_tick();
+                crate::link::drain(a);
+            });
             LRESULT(0)
         }
         WM_SHOW => {
