@@ -5,6 +5,7 @@ mod capture;
 mod config;
 mod crash;
 mod i18n;
+mod link;
 mod optimizer;
 mod meter;
 mod overlays;
@@ -88,6 +89,10 @@ fn main() {
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
         app::start(background);
+        // Só a instância principal chega aqui: a ponte com o Prisma Launcher.
+        if let Some(hub) = app::with(|a| a.hub) {
+            crate::link::start(hub);
+        }
         app::with(|a| a.check_news(before));
         if updated.is_some() {
             app::with(|a| {

@@ -1325,7 +1325,7 @@ impl App {
         }
     }
 
-    fn save_replay(&mut self) {
+    pub(crate) fn save_replay(&mut self) {
         if !self.cfg.replay_on {
             self.toast.info("O replay está desligado na tela Captura");
             return;
@@ -3152,6 +3152,10 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                 }
                 a.show_main();
             });
+            LRESULT(0)
+        }
+        crate::link::WM_LINK => {
+            with(crate::link::drain);
             LRESULT(0)
         }
         WM_SETUP_DONE => {

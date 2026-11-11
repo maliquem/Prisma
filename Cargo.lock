@@ -2298,6 +2298,7 @@ dependencies = [
  "iroh-dns",
  "mini-cuda",
  "mini-nvcodec",
+ "prisma-link",
  "tokio",
  "url",
  "vigem-client",
@@ -2306,6 +2307,15 @@ dependencies = [
  "windows-core 0.62.2",
  "windows-numerics",
  "winresource",
+]
+
+[[package]]
+name = "prisma-link"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "windows",
 ]
 
 [[package]]
