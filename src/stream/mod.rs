@@ -12,6 +12,8 @@ mod hud;
 pub mod code;
 pub mod host;
 #[cfg(feature = "stream")]
+mod ear;
+#[cfg(feature = "stream")]
 mod kvm;
 mod link;
 #[cfg(feature = "stream")]
@@ -246,6 +248,10 @@ pub const DECODES_444: u8 = 2;
 /// da borda desta tela para a do host). Host de versão anterior manda o vídeo assim mesmo.
 #[cfg_attr(not(feature = "stream"), allow(dead_code))]
 pub const NO_VIDEO: u8 = 4;
+/// `Hello.flags`: só o som do host, sem vídeo (Só o som). Host de versão anterior manda o vídeo
+/// assim mesmo.
+#[cfg_attr(not(feature = "stream"), allow(dead_code))]
+pub const SOUND_ONLY: u8 = 8;
 
 /// O que um pacote diz.
 #[derive(Debug, PartialEq)]
@@ -571,6 +577,10 @@ pub fn run_args() -> bool {
             }
             if let Some(v) = a.strip_prefix("--stream-connect=") {
                 net::connect(v);
+                return true;
+            }
+            if let Some(v) = a.strip_prefix("--stream-sound=") {
+                ear::listen(v);
                 return true;
             }
             if let Some(v) = a.strip_prefix("--stream-mouse=") {

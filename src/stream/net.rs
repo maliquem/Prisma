@@ -708,6 +708,8 @@ fn host_with(invite_perms: Option<u8>, service: bool) {
                     match hello {
                         // Só mouse e teclado: fica fora da sala do vídeo, numa linha própria.
                         Some(hello) if hello.flags & NO_VIDEO != 0 => super::kvm::serve(link, dev.perms, dev.name),
+                        // Só o som: também fora da sala do vídeo.
+                        Some(hello) if hello.flags & SOUND_ONLY != 0 => super::ear::serve(link, dev.perms, dev.name, hello.pid),
                         Some(hello) => {
                             let _ = jtx.send(Joiner { link, hello, perms: dev.perms, name: dev.name, id: hex(&dev.id) });
                         }

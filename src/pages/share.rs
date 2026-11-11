@@ -43,6 +43,8 @@ struct State {
     view: Option<Proc>,
     /// Mouse e teclado neste PC pareado (sem vídeo), e o nome dele.
     kvm: Option<(Proc, String)>,
+    /// Só o som ligado, e de qual PC.
+    ear: Option<(Proc, String)>,
     pair: Option<Proc>,
     invite: Option<Proc>,
     field: String,
@@ -174,6 +176,11 @@ fn stop(p: &mut Option<Proc>) {
 
 fn stop_kvm(st: &mut State) {
     let mut p = st.kvm.take().map(|k| k.0);
+    stop(&mut p);
+}
+
+fn stop_ear(st: &mut State) {
+    let mut p = st.ear.take().map(|k| k.0);
     stop(&mut p);
 }
 
@@ -613,7 +620,8 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
     y += 48.0;
     // O que o pareamento e quem assiste disseram por último.
     let kvm_log = st.kvm.as_ref().map(|k| tail_of(&k.0)).unwrap_or_default();
-    let side: Vec<String> = tail(&st.pair).into_iter().chain(tail(&st.view)).chain(kvm_log).filter(|l| !l.starts_with("Conexão pela internet")).collect();
+    let ear_log = st.ear.as_ref().map(|k| tail_of(&k.0)).unwrap_or_default();
+    let side: Vec<String> = tail(&st.pair).into_iter().chain(tail(&st.view)).chain(kvm_log).chain(ear_log).filter(|l| !l.starts_with("Conexão pela internet")).collect();
     if let Some(last) = side.last() {
         ui.c.text_wrap(rect(rx, y, rw, 36.0), last, 12.0, TEXT2, Weight::Regular);
     }
@@ -641,16 +649,18 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
     let rows: Vec<_> = all.iter().filter(|d| d.viewer == (st.dev_tab == 1)).collect();
     // Mouse e teclado ligados (o processo ainda roda) em qual PC.
     let kvm_on = st.kvm.as_mut().and_then(|k| matches!(k.0.child.try_wait(), Ok(None)).then(|| k.1.clone()));
-    // Botões da direita: Esquecer, Renomear e, nos PCs que este assiste, Assistir e Mouse e teclado. A largura
-    // segue o texto, que em outros idiomas é mais comprido; sem espaço para o nome ao lado,
-    // os botões descem para uma linha própria.
+    let ear_on = st.ear.as_mut().and_then(|k| matches!(k.0.child.try_wait(), Ok(None)).then(|| k.1.clone()));
+    // Botões da direita: Esquecer, Renomear e, nos PCs que este assiste, Assistir, Mouse e teclado
+    // e Só o som. A largura segue o texto, que em outros idiomas é mais comprido; sem espaço para
+    // o nome ao lado, os botões descem para uma linha própria.
     let bw = |s: &str| (crate::ui::gfx::measure(s, 14.0, Weight::Semibold, None).0 + 28.0).max(84.0);
-    let (forget_w, watch_bw, kvm_bw) = (bw("Esquecer"), bw("Assistir"), bw("Mouse e teclado").max(bw("Parar")));
+    let (forget_w, watch_bw, kvm_bw, ear_bw) = (bw("Esquecer"), bw("Assistir"), bw("Mouse e teclado").max(bw("Parar")), bw("Só o som").max(bw("Parar")));
     let rn_max = bw("Renomear").max(bw("Salvar"));
-    let all_buttons = forget_w + rn_max + if st.dev_tab == 0 { watch_bw + kvm_bw + 16.0 } else { 0.0 } + 16.0;
+    let extra_bw = kvm_bw + ear_bw + 8.0;
+    let all_buttons = forget_w + rn_max + if st.dev_tab == 0 { watch_bw + extra_bw + 16.0 } else { 0.0 } + 16.0;
     let stack = rw - 24.0 - all_buttons - 8.0 < 160.0;
     let drop = if stack { 44.0 } else { 0.0 };
-    // Nem os botões sozinhos cabem numa linha: Mouse e teclado desce para outra.
+    // Nem os botões sozinhos cabem numa linha: Mouse e teclado e Só o som descem para outra.
     let kvm_down = rw - 24.0 < all_buttons;
     let row_v = 132.0 + drop;
     let row_h = 64.0 + drop + if kvm_down { 44.0 } else { 0.0 };
@@ -667,6 +677,7 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
     let mut forget: Option<(String, String)> = None;
     let mut watch: Option<String> = None;
     let mut kvm: Option<(String, bool)> = None;
+    let mut ear: Option<(String, bool)> = None;
     ui.begin_scroll("sh-list", list, content);
     let mut yy = list.y;
     for (i, d) in rows.iter().enumerate() {
@@ -682,7 +693,7 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
         } else if kvm_down {
             watch_bw + 8.0
         } else {
-            watch_bw + kvm_bw + 16.0
+            watch_bw + extra_bw + 16.0
         };
         let name_w = if stack { pw } else { (pw - forget_w - rn_w - watch_w - 24.0).max(60.0) };
         let by = row.y + 10.0 + drop;
@@ -729,9 +740,19 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
                 watch = Some(d.name.clone());
             }
             let on = kvm_on.as_deref() == Some(d.name.as_str());
-            let kvm_r = if kvm_down { rect(row.right() - 12.0 - kvm_bw, by + 44.0, kvm_bw, 32.0) } else { rect(rn_r.x - watch_w, by, kvm_bw, 32.0) };
+            let (kvm_r, ear_r) = if kvm_down {
+                let ear_r = rect(row.right() - 12.0 - ear_bw, by + 44.0, ear_bw, 32.0);
+                (rect(ear_r.x - 8.0 - kvm_bw, by + 44.0, kvm_bw, 32.0), ear_r)
+            } else {
+                let kvm_r = rect(rn_r.x - watch_w, by, kvm_bw, 32.0);
+                (kvm_r, rect(kvm_r.right() + 8.0, by, ear_bw, 32.0))
+            };
             if ui.button(&format!("sh-kvm{i}"), kvm_r, if on { "Parar" } else { "Mouse e teclado" }, false) {
                 kvm = Some((d.name.clone(), !on));
+            }
+            let hearing = ear_on.as_deref() == Some(d.name.as_str());
+            if ui.button(&format!("sh-ear{i}"), ear_r, if hearing { "Parar" } else { "Só o som" }, false) {
+                ear = Some((d.name.clone(), !hearing));
             }
         }
         yy += rh;
@@ -777,6 +798,12 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
         stop_kvm(st);
         if start {
             st.kvm = spawn(st, &[format!("--stream-mouse={name}")], "mouse-teclado.log").map(|p| (p, name));
+        }
+    }
+    if let Some((name, start)) = ear {
+        stop_ear(st);
+        if start {
+            st.ear = spawn(st, &[format!("--stream-sound={name}")], "so-o-som.log").map(|p| (p, name));
         }
     }
 
@@ -1239,6 +1266,7 @@ pub fn shutdown() {
         stop(&mut st.host);
         stop(&mut st.view);
         stop_kvm(st);
+        stop_ear(st);
         stop(&mut st.pair);
         stop(&mut st.invite);
         if had_host {

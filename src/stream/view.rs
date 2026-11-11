@@ -73,17 +73,10 @@ struct Shared {
     offset: AtomicI64,
     lost: AtomicU32,
     bytes: AtomicU64,
-    /// Som recebido esperando para tocar, em amostras de 16 bits intercaladas.
-    audio: Mutex<VecDeque<i16>>,
+    spk: Speaker,
     mute: bool,
-    /// Calado pelo menu ou pela opção: o som chega e é jogado fora.
-    silenced: AtomicBool,
     audio_lost: AtomicU32,
     audio_blocks: AtomicU32,
-    /// Vezes que o som acabou antes do próximo bloco chegar.
-    underruns: AtomicU32,
-    /// Som no buffer na hora de tocar, em quadros, para saber a latência do som.
-    audio_fill: AtomicU32,
     /// Permissões que o host deu, do último Info.
     perms: AtomicU8,
     pads: Mutex<[PadView; PADS]>,
@@ -225,8 +218,7 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
                 }
                 audio_next = Some(seq.wrapping_add(1));
                 if !sh.mute {
-                    let mut q = sh.audio.lock().unwrap();
-                    q.extend(data.chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])));
+                    sh.spk.audio.lock().unwrap().extend(data.chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])));
                 }
             }
             Some(Msg::Pong { t, host }) => {
@@ -314,17 +306,39 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
 /// e o bastante para a rede variar um pouco sem o som falhar.
 const AUDIO_TARGET: usize = 720;
 
-/// Toca o som recebido na saída padrão, com o menor período que o Windows deixa.
+/// O som que chega, a caminho da saída padrão. Serve ao Assistir e ao Só o som.
+pub(super) struct Speaker {
+    /// Som recebido esperando para tocar, em amostras de 16 bits intercaladas.
+    pub(super) audio: Mutex<VecDeque<i16>>,
+    /// Calado pelo menu ou pela opção: o som chega e é jogado fora.
+    pub(super) silenced: AtomicBool,
+    /// Vezes que o som acabou antes do próximo bloco chegar.
+    pub(super) underruns: AtomicU32,
+    /// Som no buffer na hora de tocar, em quadros, para saber a latência do som.
+    pub(super) fill: AtomicU32,
+}
+
+impl Speaker {
+    pub(super) fn new(silenced: bool) -> Self {
+        Self { audio: Mutex::new(VecDeque::new()), silenced: AtomicBool::new(silenced), underruns: AtomicU32::new(0), fill: AtomicU32::new(0) }
+    }
+}
+
 fn play(sh: Arc<Shared>) {
+    play_until(&sh.spk, &sh.quit);
+}
+
+/// Toca o som recebido na saída padrão, com o menor período que o Windows deixa, até `quit`.
+pub(super) fn play_until(spk: &Speaker, quit: &AtomicBool) {
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-        if let Err(e) = play_loop(&sh) {
+        if let Err(e) = play_loop(spk, quit) {
             eprintln!("som: {e:?}");
         }
     }
 }
 
-unsafe fn play_loop(sh: &Shared) -> Result<()> {
+unsafe fn play_loop(sh: &Speaker, quit: &AtomicBool) -> Result<()> {
     let en: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
     let dev = en.GetDefaultAudioEndpoint(eRender, eConsole)?;
     let f = sound::format();
@@ -347,7 +361,7 @@ unsafe fn play_loop(sh: &Shared) -> Result<()> {
     let render: IAudioRenderClient = client.GetService()?;
     client.Start()?;
     let mut priming = true;
-    while !sh.quit.load(Ordering::Relaxed) {
+    while !quit.load(Ordering::Relaxed) {
         let _ = WaitForSingleObject(ev, 100);
         let pad = client.GetCurrentPadding()?;
         let free = size.saturating_sub(pad);
@@ -358,7 +372,7 @@ unsafe fn play_loop(sh: &Shared) -> Result<()> {
         let out = std::slice::from_raw_parts_mut(ptr, free as usize * 2);
         let mut q = sh.audio.lock().unwrap();
         let have = q.len() / 2;
-        sh.audio_fill.store((have as u32).wrapping_add(pad), Ordering::Relaxed);
+        sh.fill.store((have as u32).wrapping_add(pad), Ordering::Relaxed);
         if priming && have >= AUDIO_TARGET {
             priming = false;
         }
@@ -1098,13 +1112,10 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         offset: AtomicI64::new(0),
         lost: AtomicU32::new(0),
         bytes: AtomicU64::new(0),
-        audio: Mutex::new(VecDeque::new()),
+        spk: Speaker::new(co.mute),
         mute: std::env::var("PRISMA_MUTE").is_ok_and(|v| v == "1"),
-        silenced: AtomicBool::new(co.mute),
         audio_lost: AtomicU32::new(0),
         audio_blocks: AtomicU32::new(0),
-        underruns: AtomicU32::new(0),
-        audio_fill: AtomicU32::new(0),
         perms: AtomicU8::new(0),
         pads: Mutex::new([NO_PAD; PADS]),
         pad_background: AtomicBool::new(std::env::var("PRISMA_PAD_BACKGROUND").map(|v| v == "1").unwrap_or(co.pad_background)),
@@ -1213,7 +1224,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                 max_hz: hz,
                 meter: co.meter,
                 warn: co.warn,
-                sound: !sh.silenced.load(Ordering::Relaxed),
+                sound: !sh.spk.silenced.load(Ordering::Relaxed),
                 keyboard: KEYS.lock().unwrap().keyboard,
                 vsync: co.vsync,
                 ask444: can444.then_some(flags & DECODES_444 != 0),
@@ -1258,7 +1269,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                     let _ = co.save();
                 }
                 hud::Pick::Sound => {
-                    sh.silenced.fetch_xor(true, Ordering::Relaxed);
+                    sh.spk.silenced.fetch_xor(true, Ordering::Relaxed);
                 }
                 hud::Pick::Vsync => {
                     co.vsync = !co.vsync;
@@ -1450,7 +1461,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
             let rtt = sh.rtt.load(Ordering::Relaxed);
             second.rtt.push(rtt);
             if start.elapsed() > warm && !sh.mute {
-                fill.push(sh.audio_fill.load(Ordering::Relaxed) as i64);
+                fill.push(sh.spk.fill.load(Ordering::Relaxed) as i64);
             }
             let fps_now = second.shown as f64 / tick.elapsed().as_secs_f64();
             let lost_total = sh.lost.load(Ordering::Relaxed);
@@ -1558,7 +1569,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
             s += &format!(
                 "som: {blocks} blocos de 5 ms recebidos, {} perdidos, {} vezes acabou antes do próximo, espera na saída {:.1} ms (mediana)\n",
                 sh.audio_lost.load(Ordering::Relaxed),
-                sh.underruns.load(Ordering::Relaxed),
+                sh.spk.underruns.load(Ordering::Relaxed),
                 med
             );
         }

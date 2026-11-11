@@ -47,7 +47,7 @@ pub(super) struct Hello {
     h: u32,
     hz: u32,
     codecs: u8,
-    pid: u32,
+    pub(super) pid: u32,
     pub(super) flags: u8,
 }
 
@@ -522,7 +522,7 @@ fn sound_from(opts: &Opts, viewer_here: Option<u32>, keep: Option<u32>) -> (Soun
 /// Som do PC em blocos de 5 ms, para quem tem a permissão de som. A origem segue as opções e os
 /// programas abertos durante a transmissão: outra linha decide a cada segundo, e esta só troca a
 /// captura quando a decisão muda (procurar processos e sessões de som atrasaria os blocos).
-fn audio(links: Arc<Mutex<Vec<Arc<dyn Link>>>>, viewer_here: Option<u32>, stop: Arc<AtomicBool>) {
+pub(super) fn audio(links: Arc<Mutex<Vec<Arc<dyn Link>>>>, viewer_here: Option<u32>, stop: Arc<AtomicBool>) {
     let choice: Arc<Mutex<Option<(SoundFrom, String)>>> = Arc::new(Mutex::new(None));
     let chooser = {
         let (choice, stop) = (choice.clone(), stop.clone());

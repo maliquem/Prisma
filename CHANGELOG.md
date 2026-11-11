@@ -6,6 +6,7 @@
 - Fixed: removing a game from the Meter deleted the driver profile Prisma had made for it even when it had other settings in it; now the profile only goes away when empty. / Corrigido: tirar um jogo do Medidor apagava o perfil do driver feito pelo Prisma mesmo com outras opções nele; agora o perfil só sai quando está vazio.
 
 - Share screen: new Mouse and keyboard button on the PCs this one watches, like Deskflow: this PC's mouse and keyboard go to the paired PC next to it, with no video, when the mouse crosses the screen edge picked under Client > Other PC's screen; Scroll Lock or the opposite edge brings it back, and copied text goes along with the copy and paste permission. Needs Prisma on both PCs. / Compartilhar tela: novo botão Mouse e teclado nos PCs que este assiste, como o Deskflow: o mouse e o teclado deste PC vão para o PC pareado ao lado, sem vídeo, quando o mouse passa pela borda escolhida em Cliente > Tela do outro PC; Scroll Lock ou a borda oposta trazem de volta, e o texto copiado vai junto com a permissão de copiar e colar. Precisa do Prisma nos dois PCs.
+- Share screen: new Sound only button on the PCs this one watches, like AudioRelay: the paired PC's sound plays on this one, with no video, following the sound options in its Host tab. Needs the sound permission and Prisma on both PCs. / Compartilhar tela: novo botão Só o som nos PCs que este assiste, como o AudioRelay: o som do PC pareado toca neste, sem vídeo, seguindo as opções de som do Host de lá. Precisa da permissão de som e do Prisma nos dois PCs.
 
 ## 0.14.0
 
