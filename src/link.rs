@@ -6,7 +6,7 @@ use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::mpsc::{sync_channel, SyncSender};
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use prisma_link::{cap, Page as LinkPage, Reply, Request, ServerInfo};
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
@@ -30,7 +30,10 @@ pub enum Outcome {
     Failed(String),
 }
 
-static QUEUE: Mutex<VecDeque<(Request, SyncSender<Outcome>)>> = Mutex::new(VecDeque::new());
+/// Cada pedido leva a hora em que entrou: pedido mais velho que `WAIT` já perdeu o cliente.
+type Entry = (Instant, Request, SyncSender<Outcome>);
+
+static QUEUE: Mutex<VecDeque<Entry>> = Mutex::new(VecDeque::new());
 
 /// O que este Prisma sabe fazer pelo launcher. Sem `page.game_profile`: ainda não há uma
 /// página de perfil por jogo.
@@ -90,10 +93,14 @@ fn reply_for(invite: bool, outcome: Outcome) -> Option<Reply> {
 }
 
 fn push(req: Request, tx: SyncSender<Outcome>) {
+    push_at(Instant::now(), req, tx);
+}
+
+fn push_at(at: Instant, req: Request, tx: SyncSender<Outcome>) {
     QUEUE
         .lock()
         .unwrap_or_else(|e| e.into_inner())
-        .push_back((req, tx));
+        .push_back((at, req, tx));
 }
 
 /// Na thread principal, no `WM_LINK`: atende tudo o que está na fila.
@@ -105,7 +112,11 @@ fn drain_with(mut f: impl FnMut(Request) -> Outcome) {
     loop {
         // A trava sai antes de atender: o pedido pode demorar e a thread do pipe empilha.
         let next = QUEUE.lock().unwrap_or_else(|e| e.into_inner()).pop_front();
-        let Some((req, tx)) = next else { break };
+        let Some((at, req, tx)) = next else { break };
+        // Pedido parado na fila (janela ocupada, menu aberto) não roda atrasado: o cliente já desistiu.
+        if at.elapsed() > WAIT {
+            continue;
+        }
         let _ = tx.send(f(req));
     }
 }
@@ -128,8 +139,14 @@ impl App {
                 Outcome::Done
             }
             Request::ShareInvite => Outcome::Failed("indisponível".into()),
-            // Avisos de jogo aberto e fechado: ainda sem efeito.
-            Request::GameStarted { .. } | Request::GameStopped { .. } => Outcome::Done,
+            Request::GameStarted { pid, exe, .. } => {
+                self.detector.hint(pid, &exe);
+                Outcome::Done
+            }
+            Request::GameStopped { pid } => {
+                self.detector.unhint(pid);
+                Outcome::Done
+            }
             Request::Hello { .. } | Request::Unknown => Outcome::Done,
         }
     }
@@ -153,8 +170,12 @@ mod tests {
         assert!(!has(cap::PAGE_GAME_PROFILE));
     }
 
+    /// A fila é global: os testes que a usam rodam um de cada vez.
+    static QUEUE_TEST: Mutex<()> = Mutex::new(());
+
     #[test]
     fn queue_round_trip() {
+        let _g = QUEUE_TEST.lock().unwrap_or_else(|e| e.into_inner());
         let (tx, rx) = sync_channel(1);
         push(Request::SaveReplay, tx);
         drain_with(|req| {
@@ -162,5 +183,25 @@ mod tests {
             Outcome::Done
         });
         assert_eq!(rx.recv_timeout(Duration::from_secs(1)), Ok(Outcome::Done));
+    }
+
+    #[test]
+    fn stale_entries_are_dropped() {
+        let _g = QUEUE_TEST.lock().unwrap_or_else(|e| e.into_inner());
+        let old = Instant::now()
+            .checked_sub(WAIT + Duration::from_secs(1))
+            .expect("relógio com tempo suficiente");
+        let (tx_old, rx_old) = sync_channel(1);
+        push_at(old, Request::SaveReplay, tx_old);
+        let (tx_new, rx_new) = sync_channel(1);
+        push(Request::SaveReplay, tx_new);
+        let mut calls = 0;
+        drain_with(|_| {
+            calls += 1;
+            Outcome::Done
+        });
+        assert_eq!(calls, 1);
+        assert!(rx_old.recv_timeout(Duration::from_millis(100)).is_err());
+        assert_eq!(rx_new.recv_timeout(Duration::from_secs(1)), Ok(Outcome::Done));
     }
 }

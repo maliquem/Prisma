@@ -204,6 +204,8 @@ pub struct Detector {
     gpu_since: Option<Instant>,
     cpu_since: Option<Instant>,
     last_load: Option<Instant>,
+    /// Jogos abertos pelo launcher: (pid, nome do exe).
+    launched: Vec<(u32, String)>,
 }
 
 const LIBRARIES: &[&str] = &[
@@ -249,7 +251,22 @@ impl Detector {
             gpu_since: None,
             cpu_since: None,
             last_load: None,
+            launched: Vec::new(),
         }
+    }
+
+    /// O launcher abriu este jogo: quando for o primeiro plano, entra no modo jogo na hora.
+    pub fn hint(&mut self, pid: u32, exe: &str) {
+        self.launched.retain(|(p, _)| *p != pid);
+        self.launched.push((pid, procs::exe_name(exe)));
+    }
+
+    pub fn unhint(&mut self, pid: u32) {
+        self.launched.retain(|(p, _)| *p != pid);
+    }
+
+    fn hinted(&self, pid: u32, exe: &str) -> bool {
+        self.launched.iter().any(|(p, n)| *p == pid || n.eq_ignore_ascii_case(exe))
     }
 
     fn set_mode(&mut self, mode: Mode, label: &str) {
@@ -289,7 +306,7 @@ impl Detector {
                 let candidate = !known && (cover || lib);
                 crate::sys::monitor::GPU_WANTED.store(candidate || self.mode == Mode::Game, std::sync::atomic::Ordering::Relaxed);
                 let own = groups.iter().find(|g| g.pids.contains(&pid)).map_or(0.0, |g| g.gpu);
-                if candidate && ((cover && own >= 10.0) || (lib && own >= 3.0)) {
+                if self.hinted(pid, &exe) || (candidate && ((cover && own >= 10.0) || (lib && own >= 3.0))) {
                     game = Some((exe, pid));
                 }
             }
@@ -327,5 +344,34 @@ impl Detector {
             }
         }
         Event::None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hint_matches_pid() {
+        let mut d = Detector::new();
+        d.hint(10, r"C:\G\Hades.exe");
+        assert!(d.hinted(10, "other.exe"));
+    }
+
+    #[test]
+    fn hint_matches_exe_name_any_case() {
+        let mut d = Detector::new();
+        d.hint(10, r"C:\G\Launcher.exe");
+        assert!(d.hinted(99, "LAUNCHER.EXE"));
+        assert!(!d.hinted(99, "game.exe"));
+    }
+
+    #[test]
+    fn unhint_removes() {
+        let mut d = Detector::new();
+        d.hint(10, r"C:\G\Launcher.exe");
+        d.unhint(10);
+        assert!(!d.hinted(10, "x.exe"));
+        assert!(!d.hinted(99, "launcher.exe"));
     }
 }
