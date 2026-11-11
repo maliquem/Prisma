@@ -58,7 +58,7 @@ Sits on the right or left of the screen and shows everything in one column. Shor
 - **Frame time:** the time of each frame, in milliseconds. Low variation is good.
 - **PC latency:** appears only in games with Reflex.
 - **Upscaling, frame generation and Reflex:** shows what the game loaded.
-- **Power plan:** shows the Windows plan in use, and the arrows switch to another.
+- **Power plan:** shows the Windows plan in use. With the controls open, click it (or press Enter) to open the list and pick another; the arrows switch to the next one.
 
 To use the panel buttons inside a game, press **Ctrl + Alt + 5**. The game stays in front, and this unlocks the mouse and keyboard: arrows move through the options and change the chosen one, and clicks work too. To write the limit, type the number and press Enter. Press the shortcut again, or Esc, to go back to the game. Ctrl + Alt + 0 hides the meter and resets the readings.
 
@@ -74,9 +74,11 @@ With the limiter on, each game keeps its own limit. In the game list on the Mete
 - **Limiting:** Real FPS counts the frames the game makes. With generation counts the frames that reach the screen.
 - **DLSS profile:** chooses the profile the NVIDIA driver uses for that game. It applies on reopening the game. It only appears for games that ship DLSS; for the others, the column says No DLSS.
 - **Auto HDR:** the same Auto HDR per game choice as the HDR tab (Default, Force or Turn off). Changing it here changes it there.
+- **Power:** the Windows power plan that turns on when the game opens. When it closes, the previous plan comes back, unless someone changed it in between. **Don't change** leaves it as it is, and then automatic Power applies.
+- **Remove from the list after not opening for:** a game unused for 7, 14, 30, 60 or 90 days leaves the list, so it doesn't grow too long. Its choices stay saved and apply when it opens again, and it comes back to the list. **Show all** also shows the unused ones. The default is never.
 - **Shortcuts:** Ctrl + Alt + 3 turns it on and off. Ctrl + Alt + up or down arrow changes the limit. The limit goes from 20 to 1023.
 
-If injection fails, the game crashes or an anti-cheat is detected, Prisma moves to the driver on its own and tells you.
+If injection fails, the game crashes or an anti-cheat is detected, Prisma moves to the driver on its own and tells you. Without Windows frame readings, injection still goes in after 8 seconds of the game in focus, and the reason the readings did not open goes to the actions log.
 
 - **Do not use injection in online games.** Anti-cheat detection recognizes known files and titles, but finding nothing does not prove a game has none. In those games, choose the Driver method.
 - **You can't:** use injection in DirectX 9 and Vulkan. Those games use the driver limit, which applies on reopening. The driver limit requires an NVIDIA card. In exclusive fullscreen, the bar may not appear.

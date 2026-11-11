@@ -107,6 +107,8 @@ pub struct Meter {
     by_flip: bool,
     silent: u32,
     restarted: Option<Instant>,
+    /// Último motivo de o rastreamento não abrir, para registrar só quando muda.
+    track_error: Option<String>,
     /// Jogo com limite trocado pelos atalhos, gravado quando as teclas param.
     limit_write: Option<(String, Instant)>,
     pub log: Option<Log>,
@@ -131,7 +133,14 @@ pub struct Meter {
     plans: Vec<(String, String)>,
     plan_active: String,
     plans_at: Option<Instant>,
+    /// A lista de planos está aberta no completo.
+    plans_open: bool,
+    /// Plano que estava ativo antes do plano do jogo, para voltar quando ele fecha.
+    power_before: Option<(String, String)>,
 }
+
+/// Opção do campo do plano de energia: abre e fecha a lista.
+const PLAN_LIST: usize = usize::MAX;
 
 /// Opção do campo do limite. Valores acima dela são o número digitado.
 const TYPE_LIMIT: usize = 2;
@@ -434,6 +443,7 @@ impl Meter {
             live: false,
             by_flip: false,
             silent: 0,
+            track_error: None,
             restarted: None,
             limit_write: None,
             log: None,
@@ -451,6 +461,8 @@ impl Meter {
             plans: Vec::new(),
             plan_active: String::new(),
             plans_at: None,
+            plans_open: false,
+            power_before: None,
         }
     }
 
@@ -483,17 +495,37 @@ impl Meter {
 
     fn restart_if_none(&mut self) {
         if self.tracker.is_none() {
-            self.tracker = Tracker::start();
+            self.tracker = self.open_tracker();
             self.restarted = Some(Instant::now());
             self.target = 0;
             self.silent = 0;
         }
     }
 
+    /// Abre o rastreamento; a falha vai para o registro uma vez, até o motivo mudar.
+    fn open_tracker(&mut self) -> Option<Tracker> {
+        match Tracker::start() {
+            Ok(t) => {
+                if self.track_error.take().is_some() {
+                    crate::config::log("medidor: o rastreamento de quadros abriu");
+                }
+                Some(t)
+            }
+            Err(e) => {
+                if self.track_error.as_deref() != Some(e.as_str()) {
+                    crate::config::log(&format!("medidor: sem rastreamento de quadros, {e}"));
+                    self.track_error = Some(e);
+                }
+                None
+            }
+        }
+    }
+
     /// A sessão de eventos caiu, ou não entrega nada com o jogo em foco: religa em vez de deixar o número parado.
     fn keep_tracking(&mut self, silent: bool) {
         let dead = self.tracker.as_ref().is_some_and(|t| !t.alive());
-        self.silent = if silent { self.silent + 1 } else { 0 };
+        // Sem sessão aberta não há o que religar: a nova tentativa vem logo abaixo.
+        self.silent = if silent && self.tracker.is_some() { self.silent + 1 } else { 0 };
         if dead || self.silent >= SILENT_SECS {
             crate::config::log(&format!("medidor: religou o rastreamento, sessão {}", if dead { "encerrada" } else { "sem eventos" }));
             self.tracker = None;
@@ -671,7 +703,10 @@ impl Meter {
             }
         }
         let last = self.rows.len().saturating_sub(1);
+        let on_power = self.rows.get(self.row) == Some(&Row::Power);
         match key {
+            ENTER if on_power => return Some((Row::Power, PLAN_LIST)),
+            ESC if self.plans_open => self.plans_open = false,
             ESC | ENTER => self.set_controls(false),
             UP => self.row = self.row.saturating_sub(1),
             DOWN => self.row = (self.row + 1).min(last),
@@ -680,6 +715,12 @@ impl Meter {
                 let forward = key == RIGHT;
                 if row == Row::Fps {
                     return Some((row, forward as usize));
+                }
+                if row == Row::Power {
+                    let n = self.plans.len();
+                    let at = self.plans.iter().position(|p| p.0.eq_ignore_ascii_case(&self.plan_active))?;
+                    let next = if forward { (at + 1).min(n - 1) } else { at.saturating_sub(1) };
+                    return (next != at).then_some((row, next));
                 }
                 let (selected, count) = self.selected(row)?;
                 let next = if forward { (selected + 1).min(count - 1) } else { selected.saturating_sub(1) };
@@ -698,11 +739,12 @@ impl Meter {
     /// Aplica uma opção dos controles ao jogo aberto.
     pub fn act(&mut self, cfg: &mut Config, row: Row, option: usize) {
         if row == Row::Power {
-            let n = self.plans.len();
-            if n > 0 {
-                let at = self.plans.iter().position(|p| p.0.eq_ignore_ascii_case(&self.plan_active)).unwrap_or(0);
-                let next = if option == 0 { (at + n - 1) % n } else { (at + 1) % n };
-                let (id, name) = self.plans[next].clone();
+            if option == PLAN_LIST {
+                self.plans_open = !self.plans_open;
+                return;
+            }
+            self.plans_open = false;
+            if let Some((id, name)) = self.plans.get(option).cloned() {
                 if power::set_active(&id) {
                     self.plan_active = id;
                     crate::config::log(&format!("medidor: plano de energia {name}"));
@@ -808,10 +850,11 @@ impl Meter {
             self.fall_back(cfg, "Anti-cheat: limite vale ao reabrir.", "anti-cheat detectado");
             return;
         }
-        if self.limiter.is_none() && !self.session.inject_tried && focused && live && self.session.started.is_some_and(|t| t.elapsed().as_secs() >= INJECT_AFTER) && value > 0 {
+        if self.limiter.is_none() && !self.session.inject_tried && focused && (live || self.tracker.is_none()) && self.session.started.is_some_and(|t| t.elapsed().as_secs() >= INJECT_AFTER) && value > 0 {
             self.session.inject_tried = true;
             crate::config::log("medidor: carregando o limitador no jogo");
-            self.limiter = Limiter::attach(self.target);
+            // Sem rastreamento não há alvo medido: vale o processo do jogo.
+            self.limiter = Limiter::attach(if self.target != 0 { self.target } else { self.session.pid });
             self.limiter_exe = self.session.exe.clone();
             if self.limiter.is_none() {
                 self.fall_back(cfg, "Injeção falhou. Limite vale ao reabrir.", "o módulo não carregou");
@@ -971,6 +1014,14 @@ impl Meter {
         self.scanned = None;
         self.hidden = false;
         let listed = entry(cfg, &exe).cloned();
+        if let Some(g) = cfg.meter_games.iter_mut().find(|g| g.exe.eq_ignore_ascii_case(&exe)) {
+            let day = crate::config::today();
+            if g.last != day {
+                g.last = day;
+                cfg.save();
+            }
+        }
+        self.apply_game_plan(listed.as_ref());
         self.session.opened = listed.as_ref().and_then(|g| driver_limit(g, 1));
         self.session.opened_preset = listed.as_ref().map_or(0, |g| g.preset);
         let hdr_wanted = match listed.as_ref().map_or(0, |g| g.hdr) {
@@ -994,7 +1045,7 @@ impl Meter {
             // Medir para o limitador não depende de o medidor estar visível.
             monitor::METER.store(true, std::sync::atomic::Ordering::Relaxed);
             if self.tracker.is_none() {
-                self.tracker = Tracker::start();
+                self.tracker = self.open_tracker();
                 self.target = 0;
             }
         }
@@ -1003,8 +1054,30 @@ impl Meter {
         }
     }
 
+    /// O jogo tem plano de energia escolhido: liga ele e guarda o de antes.
+    fn apply_game_plan(&mut self, g: Option<&MeterGame>) {
+        let Some(want) = g.map(|g| g.power.clone()).filter(|p| !p.is_empty()) else { return };
+        let now = power::active().unwrap_or_default();
+        if now.eq_ignore_ascii_case(&want) {
+            return;
+        }
+        if power::set_active(&want) {
+            self.power_before = Some((now, want.clone()));
+            self.plan_active = want.clone();
+            let name = power::list().into_iter().find(|p| p.id.eq_ignore_ascii_case(&want)).map_or(want, |p| p.name);
+            crate::config::log(&format!("medidor: plano de energia do jogo, {name}"));
+        }
+    }
+
     /// Fim do jogo, ou do Prisma: devolve o HDR e fecha o rastreamento.
     pub fn leave(&mut self, cfg: &mut Config) {
+        // Volta o plano de antes, se ninguém trocou depois (a Energia automática, ou a pessoa).
+        if let Some((before, game)) = self.power_before.take() {
+            if !before.is_empty() && power::active().is_some_and(|a| a.eq_ignore_ascii_case(&game)) && power::set_active(&before) {
+                crate::config::log("medidor: voltou o plano de energia de antes do jogo");
+            }
+        }
+        self.plans_open = false;
         self.set_controls(false);
         self.stop_log(cfg);
         self.keep_limiter(cfg, false, false);
@@ -1257,8 +1330,10 @@ impl Meter {
             }
         }
         if on(ITEM_POWER) || open {
-            let name = self.plans.iter().find(|p| p.0.eq_ignore_ascii_case(&self.plan_active)).map_or("—".to_string(), |p| p.1.clone());
-            out.push(Line::Cycle("Plano de energia".into(), Row::Power, name));
+            let at = self.plans.iter().position(|p| p.0.eq_ignore_ascii_case(&self.plan_active));
+            let name = at.map_or("—".to_string(), |i| self.plans[i].1.clone());
+            let list = if self.plans_open && open { self.plans.iter().map(|p| p.1.clone()).collect() } else { Vec::new() };
+            out.push(Line::Drop("Plano de energia".into(), Row::Power, name, list, at));
         }
         if on(ITEM_LOG) || self.log.is_some() {
             out.push(Line::Head("Registro de dados".into()));
@@ -1379,8 +1454,8 @@ enum Line {
     Bar(String, String, f32),
     Choice(String, Row, Vec<String>, usize),
     Stepper(String, Row, u32, Option<String>),
-    /// Nome e o valor atual entre as setas de anterior e próximo.
-    Cycle(String, Row, String),
+    /// Nome, o valor atual num campo que abre a lista, e a lista aberta (vazia quando fechada).
+    Drop(String, Row, String, Vec<String>, Option<usize>),
     /// Uso da CPU ou da GPU, em número grande para ler de longe.
     Usage(&'static str, f32),
 }
@@ -1397,7 +1472,8 @@ impl Line {
             Line::Strip => 46.0,
             Line::Cores(_) => 44.0,
             Line::Bar(..) => 34.0,
-            Line::Choice(..) | Line::Cycle(..) => 54.0,
+            Line::Choice(..) => 54.0,
+            Line::Drop(_, _, _, list, _) => 54.0 + list.len() as f32 * 28.0,
             Line::Stepper(..) => 36.0,
             Line::Usage(..) => 48.0,
         }
@@ -1405,7 +1481,7 @@ impl Line {
 
     fn row(&self) -> Option<Row> {
         match self {
-            Line::Choice(_, row, ..) | Line::Stepper(_, row, ..) | Line::Cycle(_, row, _) => Some(*row),
+            Line::Choice(_, row, ..) | Line::Stepper(_, row, ..) | Line::Drop(_, row, ..) => Some(*row),
             _ => None,
         }
     }
@@ -1440,14 +1516,23 @@ impl Line {
                     cx = r.right() + 4.0;
                 }
             }
-            Line::Cycle(name, row, value) => {
+            Line::Drop(name, row, value, list, at) => {
                 c.text(rect(x, y, w, 20.0), name, 12.0, if focus == Some(*row) { ACCENT } else { TEXT2 }, Align::Left, Weight::Regular);
-                chip(c, rect(x, y + 21.0, 34.0, 26.0), "‹", false, *row, 0, hits);
-                let field = rect(x + 38.0, y + 21.0, w - 76.0, 26.0);
-                c.round(field, 6.0, rgb(0x1b1d22));
-                c.round_line(field, 6.0, rgb(0x3a3f49), 1.0);
-                c.text_raw(field, value, 12.0, WHITE, Align::Center, Weight::Semibold);
-                chip(c, rect(x + w - 34.0, y + 21.0, 34.0, 26.0), "›", false, *row, 1, hits);
+                let field = rect(x, y + 21.0, w, 26.0);
+                let hot = hover == Some((*row, PLAN_LIST)) || !list.is_empty();
+                c.round(field, 6.0, if hot { CARD2 } else { rgb(0x1b1d22) });
+                c.round_line(field, 6.0, if hot { ACCENT } else { rgb(0x3a3f49) }, 1.0);
+                c.text_raw(rect(field.x + 10.0, field.y, field.w - 34.0, field.h), value, 12.0, WHITE, Align::Left, Weight::Semibold);
+                c.text(rect(field.right() - 26.0, field.y, 18.0, field.h), if list.is_empty() { "▾" } else { "▴" }, 12.0, TEXT2, Align::Center, Weight::Regular);
+                hits.push((field, *row, PLAN_LIST));
+                for (i, item) in list.iter().enumerate() {
+                    let r = rect(x, field.bottom() + 2.0 + i as f32 * 28.0, w, 26.0);
+                    let on = *at == Some(i);
+                    let hot = hover == Some((*row, i));
+                    c.round(r, 6.0, if on { ACCENT } else if hot { CARD2 } else { rgb(0x1b1d22) });
+                    c.text_raw(rect(r.x + 10.0, r.y, r.w - 20.0, r.h), item, 12.0, if on { rgb(0x10202c) } else { TEXT }, Align::Left, if on { Weight::Semibold } else { Weight::Regular });
+                    hits.push((r, *row, i));
+                }
             }
             Line::Stepper(name, row, value, typing) => {
                 c.text(rect(x, y + 3.0, w * 0.4, 24.0), name, 12.0, if focus == Some(*row) { ACCENT } else { TEXT2 }, Align::Left, Weight::Regular);
@@ -1511,7 +1596,7 @@ impl Line {
                     c.round(rect(bx, y + 38.0 - h, bw, h), 2.0, if *v >= 90.0 { WARN } else { ACCENT });
                 }
             }
-            Line::Choice(..) | Line::Stepper(..) | Line::Cycle(..) => {}
+            Line::Choice(..) | Line::Stepper(..) | Line::Drop(..) => {}
             Line::Usage(name, pct) => {
                 c.line(x, y + 6.0, x + w, y + 6.0, rgb(0x3a3f49), 1.0);
                 c.text(rect(x, y + 10.0, w * 0.5, 36.0), name, 30.0, WHITE, Align::Left, Weight::Semibold);

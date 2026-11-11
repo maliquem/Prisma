@@ -168,7 +168,7 @@ pub struct Tracker {
 }
 
 /// Só os eventos que interessam chegam ao Prisma: o resto nem sai do kernel.
-unsafe fn enable_filtered(handle: CONTROLTRACE_HANDLE) -> bool {
+unsafe fn enable_filtered(handle: CONTROLTRACE_HANDLE) -> WIN32_ERROR {
     #[repr(C)]
     struct Ids {
         filter_in: u8,
@@ -184,12 +184,12 @@ unsafe fn enable_filtered(handle: CONTROLTRACE_HANDLE) -> bool {
         FilterDescCount: 1,
         ..Default::default()
     };
-    EnableTraceEx2(handle, &DXGKRNL, EVENT_CONTROL_CODE_ENABLE_PROVIDER.0, VERBOSE, KEYWORD_BASE | KEYWORD_PRESENT, 0, 0, Some(&params)).is_ok()
+    EnableTraceEx2(handle, &DXGKRNL, EVENT_CONTROL_CODE_ENABLE_PROVIDER.0, VERBOSE, KEYWORD_BASE | KEYWORD_PRESENT, 0, 0, Some(&params))
 }
 
 impl Tracker {
-    /// Sem permissão de rastreamento devolve None, e o medidor mostra o resto.
-    pub fn start() -> Option<Self> {
+    /// Sem permissão de rastreamento devolve o motivo, e o medidor mostra o resto.
+    pub fn start() -> std::result::Result<Self, String> {
         unsafe {
             let mut stale = props();
             let _ = ControlTraceW(CONTROLTRACE_HANDLE::default(), NAME, &mut stale.p, EVENT_TRACE_CONTROL_STOP);
@@ -200,8 +200,16 @@ impl Tracker {
             p.p.MaximumBuffers = 16;
             p.p.FlushTimer = 1;
             let mut handle = CONTROLTRACE_HANDLE::default();
-            if StartTraceW(&mut handle, NAME, &mut p.p).is_err() || !enable_filtered(handle) {
-                return None;
+            let started = StartTraceW(&mut handle, NAME, &mut p.p);
+            if started != ERROR_SUCCESS {
+                return Err(format!("a sessão não abriu (erro {})", started.0));
+            }
+            let enabled = enable_filtered(handle);
+            if enabled != ERROR_SUCCESS {
+                let mut stop = props();
+                let _ = ControlTraceW(handle, PCWSTR::null(), &mut stop.p, EVENT_TRACE_CONTROL_STOP);
+                // 1450: o Windows deixa só 8 sessões ouvindo a placa de vídeo, e outros programas usam as outras.
+                return Err(format!("a placa de vídeo não aceitou a sessão (erro {})", enabled.0));
             }
             let mut f = 0i64;
             let _ = QueryPerformanceFrequency(&mut f);
@@ -212,9 +220,10 @@ impl Tracker {
             log.Anonymous2.EventRecordCallback = Some(on_event);
             let consumer = OpenTraceW(&mut log);
             if consumer.Value == u64::MAX {
+                let e = GetLastError();
                 let mut stop = props();
                 let _ = ControlTraceW(handle, PCWSTR::null(), &mut stop.p, EVENT_TRACE_CONTROL_STOP);
-                return None;
+                return Err(format!("não deu para ler a sessão (erro {})", e.0));
             }
             let c = consumer.Value;
             let thread = std::thread::Builder::new()
@@ -223,7 +232,7 @@ impl Tracker {
                     let _ = ProcessTrace(&[PROCESSTRACE_HANDLE { Value: c }], None, None);
                 })
                 .ok();
-            Some(Self { handle, consumer, thread, frequency: f as f32, pcl: false })
+            Ok(Self { handle, consumer, thread, frequency: f as f32, pcl: false })
         }
     }
 
@@ -384,7 +393,10 @@ pub fn reflex_pids() -> Vec<u32> {
 /// Teste: mede um processo por alguns segundos.
 #[cfg(debug_assertions)]
 pub fn measure(pid: u32, secs: u64) -> String {
-    let Some(mut t) = Tracker::start() else { return "sem sessao".to_string() };
+    let mut t = match Tracker::start() {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
     t.set_target(pid);
     let mut out = String::new();
     for _ in 0..secs {

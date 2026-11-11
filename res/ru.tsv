@@ -1804,3 +1804,10 @@ Telas lado a lado: esquerda, meio e direita	Экраны рядом: слева,
 Mouse e teclado entre PCs	Мышь и клавиатура между ПК
 Travar o mouse na tela atual	Закрепить мышь на текущем экране
 As três posições já têm tela. Mude em Cliente > Telas lado a lado.	Все три места уже заняты. Измените это в разделе «Клиент» > «Экраны рядом».
+Tirar da lista sem abrir há	Убирать из списка, если не запускался
+Nunca tirar	Не убирать
+{} dias	{} дн.
+Mostrar todos	Показать все
+Esconder parados	Скрыть неиспользуемые
+Mostrando também os jogos parados.	Показаны и неиспользуемые игры.
+Fora da lista por falta de uso: {}. Voltam ao abrir.	Игр вне списка из-за простоя: {}. Вернутся при запуске.

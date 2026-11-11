@@ -1804,3 +1804,10 @@ Telas lado a lado: esquerda, meio e direita	并排屏幕：左、中、右
 Mouse e teclado entre PCs	电脑之间的鼠标和键盘
 Travar o mouse na tela atual	将鼠标锁定在当前屏幕
 As três posições já têm tela. Mude em Cliente > Telas lado a lado.	三个位置都已有屏幕。请在“客户端”>“并排屏幕”中更改。
+Tirar da lista sem abrir há	多久未打开后从列表移除
+Nunca tirar	从不移除
+{} dias	{} 天
+Mostrar todos	显示全部
+Esconder parados	隐藏未使用的
+Mostrando também os jogos parados.	也显示未使用的游戏。
+Fora da lista por falta de uso: {}. Voltam ao abrir.	因未使用而移出列表：{} 个。打开后会回来。

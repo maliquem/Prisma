@@ -58,7 +58,7 @@ Fica à direita ou à esquerda da tela e mostra tudo em uma coluna. Atalho: Ctrl
 - **Frame time:** o tempo de cada quadro, em milissegundos. Variação baixa é bom.
 - **Latência do PC:** só aparece em jogos com Reflex.
 - **Upscaling, geração de quadros e Reflex:** mostra o que foi carregado pelo jogo.
-- **Plano de energia:** mostra o plano do Windows em uso, e as setas trocam por outro.
+- **Plano de energia:** mostra o plano do Windows em uso. Com os controles abertos, clique nele (ou aperte Enter) para abrir a lista e escolher outro; as setas trocam pelo vizinho.
 
 Para usar os botões do painel dentro do jogo, aperte **Ctrl + Alt + 5**. O jogo continua em primeiro plano, e isso libera o mouse e o teclado: as setas andam pelas opções e mudam a escolhida, e o clique também funciona. Para escrever o limite, digite o número e aperte Enter. Aperte o atalho de novo, ou Esc, para voltar ao jogo. Ctrl + Alt + 0 esconde o medidor e zera as medições.
 
@@ -74,9 +74,11 @@ Com o limitador ligado, cada jogo guarda o próprio limite. Na lista de jogos da
 - **Limitando:** FPS real conta os quadros que o jogo produz. Com geração considera os quadros que vão para a tela.
 - **Perfil DLSS:** escolhe o perfil que o driver NVIDIA usa naquele jogo. Vale ao reabrir o jogo. Só aparece nos jogos que trazem o DLSS; nos outros, a coluna diz Sem DLSS.
 - **Auto HDR:** a mesma escolha de Auto HDR por jogo da aba HDR (Padrão, Forçar ou Desligar). Mudar aqui muda lá.
+- **Energia:** o plano de energia do Windows que liga quando o jogo abre. Quando ele fecha, volta o plano de antes, se ninguém trocou no meio. **Não mudar** deixa como está, e aí vale a Energia automática.
+- **Tirar da lista sem abrir há:** um jogo parado por 7, 14, 30, 60 ou 90 dias sai da lista, para ela não crescer demais. As escolhas dele ficam guardadas e valem quando ele abrir de novo, e ele volta para a lista. **Mostrar todos** mostra também os parados. O padrão é nunca tirar.
 - **Atalhos:** Ctrl + Alt + 3 liga e desliga. Ctrl + Alt + seta para cima ou para baixo muda o limite. O limite vai de 20 a 1023.
 
-Se a injeção falhar, se o jogo cair ou se houver anti-cheat detectado, o Prisma passa sozinho para o driver e avisa.
+Se a injeção falhar, se o jogo cair ou se houver anti-cheat detectado, o Prisma passa sozinho para o driver e avisa. Sem a leitura de quadros do Windows, a injeção entra mesmo assim depois de 8 segundos de jogo em foco, e o motivo de a leitura não abrir vai para o registro de ações.
 
 - **Não use injeção em jogos online.** A detecção de anti-cheat reconhece arquivos e títulos conhecidos, mas não achar nada não prova que o jogo não tem. Nesses jogos, escolha o método Driver.
 - **Não dá para:** usar injeção em DirectX 9 e Vulkan. Esses jogos usam o limite do driver, que vale ao reabrir. O limite pelo driver exige placa NVIDIA. Em tela cheia exclusiva, a barra pode não aparecer.

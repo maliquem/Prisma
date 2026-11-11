@@ -1810,3 +1810,10 @@ Telas lado a lado: esquerda, meio e direita	Screens side by side: left, middle a
 Mouse e teclado entre PCs	Mouse and keyboard between PCs
 Travar o mouse na tela atual	Lock the mouse to the current screen
 As três posições já têm tela. Mude em Cliente > Telas lado a lado.	All three positions already have a screen. Change it in Client > Screens side by side.
+Tirar da lista sem abrir há	Remove from the list after not opening for
+Nunca tirar	Never remove
+{} dias	{} days
+Mostrar todos	Show all
+Esconder parados	Hide unused
+Mostrando também os jogos parados.	Also showing unused games.
+Fora da lista por falta de uso: {}. Voltam ao abrir.	Out of the list for not being used: {}. They come back when opened.

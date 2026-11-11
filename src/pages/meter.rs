@@ -7,7 +7,20 @@ const ROW: f32 = 56.0;
 const ROW_NARROW: f32 = 112.0;
 /// Largura dos controles de cada jogo e o mínimo que sobra para o nome ao lado deles.
 const CONTROLS_W: f32 = 840.0;
+/// A escolha do plano de energia, à esquerda das outras (ou na linha do nome, sem espaço).
+const POWER_W: f32 = 200.0;
 const NAME_MIN: f32 = 250.0;
+/// Dias sem abrir que tiram um jogo da lista (0: nunca).
+const HIDE_DAYS: [u32; 6] = [0, 7, 14, 30, 60, 90];
+/// Mostra também os jogos que saíram da lista por falta de uso.
+static SHOW_IDLE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Os jogos que aparecem na lista, pela posição na configuração.
+fn shown(app: &App) -> Vec<usize> {
+    let (days, day) = (app.cfg.meter_hide_days, crate::config::today());
+    let all = SHOW_IDLE.load(std::sync::atomic::Ordering::Relaxed);
+    (0..app.cfg.meter_games.len()).filter(|&i| all || !app.cfg.meter_games[i].idle(days, day)).collect()
+}
 /// Minutos do registro sendo digitados.
 static LOG_FIELD: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 
@@ -184,15 +197,47 @@ fn log(ui: &mut Ui, app: &mut App, r: Rect) {
 
 /// Em janela estreita, o nome vai para cima dos controles.
 fn is_narrow(w: f32) -> bool {
-    w - CONTROLS_W < NAME_MIN
+    w - CONTROLS_W - POWER_W - 12.0 < NAME_MIN
 }
 
 fn games(ui: &mut Ui, app: &mut App, r: Rect) {
     ui.card(r);
-    ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 150.0, 22.0), "Jogos");
+    ui.title(rect(r.x + 16.0, r.y + 12.0, 120.0, 22.0), "Jogos");
     picker::add_button(ui, app, rect(r.right() - 124.0, r.y + 8.0, 108.0, 32.0), Target::MeterGame);
-    let (view_x, limit_x, fps_x, how_x, unit_x, hdr_x, preset_x) = (r.right() - CONTROLS_W, r.right() - 722.0, r.right() - 602.0, r.right() - 494.0, r.right() - 392.0, r.right() - 274.0, r.right() - 156.0);
-    let y = r.y + 46.0;
+    // Jogo parado há tantos dias sai da lista; as escolhas dele ficam e voltam quando ele abre.
+    let hide_w = 150.0;
+    let hide_label = "Tirar da lista sem abrir há";
+    let label_w = crate::ui::gfx::measure(&crate::i18n::tr(hide_label), 13.0, Weight::Regular, None).0 + 12.0;
+    let hide_r = rect(r.right() - 124.0 - 12.0 - hide_w, r.y + 8.0, hide_w, 32.0);
+    let wide = hide_r.x - label_w > r.x + 140.0;
+    if wide {
+        ui.c.text(rect(hide_r.x - label_w, r.y + 8.0, label_w - 8.0, 32.0), hide_label, 13.0, TEXT2, Align::Right, Weight::Regular);
+    }
+    let day_names: Vec<String> = HIDE_DAYS
+        .iter()
+        .map(|d| if *d == 0 { crate::i18n::tr("Nunca tirar").into_owned() } else { crate::i18n::tr("{} dias").replace("{}", &d.to_string()) })
+        .collect();
+    let mut s = HIDE_DAYS.iter().position(|d| *d == app.cfg.meter_hide_days).unwrap_or(0);
+    if ui.select("mt-hide", hide_r, &day_names, &mut s) {
+        app.cfg.meter_hide_days = HIDE_DAYS[s];
+        app.cfg.save();
+    }
+    let list = shown(app);
+    let idle = app.cfg.meter_games.len() - list.len();
+    let all = SHOW_IDLE.load(std::sync::atomic::Ordering::Relaxed);
+    let (power_x, view_x, limit_x, fps_x, how_x, unit_x, hdr_x, preset_x) =
+        (r.right() - CONTROLS_W - POWER_W - 12.0, r.right() - CONTROLS_W, r.right() - 722.0, r.right() - 602.0, r.right() - 494.0, r.right() - 392.0, r.right() - 274.0, r.right() - 156.0);
+    let mut y = r.y + 46.0;
+    // Quantos saíram da lista, e o botão para ver todos.
+    if idle > 0 || (all && app.cfg.meter_hide_days > 0) {
+        let text = if all { crate::i18n::tr("Mostrando também os jogos parados.").into_owned() } else { crate::i18n::tr("Fora da lista por falta de uso: {}. Voltam ao abrir.").replace("{}", &idle.to_string()) };
+        let bw = (crate::ui::gfx::measure(&crate::i18n::tr("Esconder parados"), 13.0, Weight::Semibold, None).0.max(crate::ui::gfx::measure(&crate::i18n::tr("Mostrar todos"), 13.0, Weight::Semibold, None).0)) + 28.0;
+        ui.c.text(rect(r.x + 16.0, y, r.w - bw - 44.0, 30.0), &text, 12.0, MUTED, Align::Left, Weight::Regular);
+        if ui.button("mt-idle", rect(r.right() - 16.0 - bw, y, bw, 30.0), if all { "Esconder parados" } else { "Mostrar todos" }, false) {
+            SHOW_IDLE.store(!all, std::sync::atomic::Ordering::Relaxed);
+        }
+        y += 34.0;
+    }
     let narrow = is_narrow(r.w);
     let row_h = if narrow { ROW_NARROW } else { ROW };
     let heads = |ui: &mut Ui, y: f32| {
@@ -202,18 +247,24 @@ fn games(ui: &mut Ui, app: &mut App, r: Rect) {
     };
     if !narrow {
         heads(ui, y);
+        ui.c.text(rect(power_x, y, POWER_W, 18.0), "Energia", 12.0, MUTED, Align::Left, Weight::Regular);
     }
     let cap = crate::meter::first_limit(app.refresh_hz());
     let (mut remove, mut limit, mut preset, mut changed, mut blocked, mut auto_hdr) = (None, None, None, false, false, None);
-    let count = app.cfg.meter_games.len();
-    if count == 0 {
+    if app.cfg.meter_games.is_empty() {
         ui.c.text(rect(r.x + 16.0, y + 24.0, r.w - 32.0, 22.0), "Nenhum jogo ainda. Use Adicionar.", 13.0, MUTED, Align::Left, Weight::Regular);
     }
-    for i in 0..count {
-        let top = y + 24.0 + i as f32 * row_h;
+    // Plano de energia: nenhum (deixa como está) ou um dos planos do Windows.
+    let plans: Vec<(String, String)> = std::iter::once((String::new(), crate::i18n::tr("Não mudar").into_owned())).chain(app.plans.iter().map(|p| (p.id.clone(), p.name.clone()))).collect();
+    let plan_names: Vec<String> = plans.iter().map(|p| p.1.clone()).collect();
+    let mut power: Option<(usize, String)> = None;
+    for (k, &i) in list.iter().enumerate() {
+        let top = y + 24.0 + k as f32 * row_h;
         let g = &mut app.cfg.meter_games[i];
         ui.file_icon(&g.path, &g.exe, rect(r.x + 16.0, top + 13.0, 26.0, 26.0));
-        let room = if narrow { r.w - 68.0 } else { view_x - r.x - 64.0 };
+        // Sem espaço, o plano de energia vai para a linha do nome, à direita.
+        let power_label = crate::ui::gfx::measure("Energia", 12.0, Weight::Regular, None).0 + 8.0;
+        let room = if narrow { r.w - 84.0 - POWER_W - power_label } else { power_x - r.x - 64.0 };
         ui.c.text(rect(r.x + 52.0, top + 6.0, room, 22.0), app_name(&g.exe), 14.0, TEXT, Align::Left, Weight::Regular);
         let protected = crate::meter::anti_cheat(&g.path);
         let note = if protected {
@@ -229,6 +280,17 @@ fn games(ui: &mut Ui, app: &mut App, r: Rect) {
         }
         let controls = if narrow { top + 68.0 } else { top + 8.0 };
         let row = |x: f32, w: f32| rect(x, controls, w, 36.0);
+        let mut s = plans.iter().position(|p| p.0.eq_ignore_ascii_case(&g.power)).unwrap_or(0);
+        let power_r = if narrow {
+            let pr = rect(r.right() - 16.0 - POWER_W, top + 8.0, POWER_W, 36.0);
+            ui.c.text(rect(pr.x - power_label, pr.y, power_label - 6.0, 36.0), "Energia", 12.0, MUTED, Align::Right, Weight::Regular);
+            pr
+        } else {
+            row(power_x, POWER_W)
+        };
+        if ui.select(&format!("mt-e{i}"), power_r, &plan_names, &mut s) {
+            power = Some((i, plans[s].0.clone()));
+        }
         // A mesma escolha da aba HDR: mudar aqui muda lá.
         let mut s = app.cfg.hdr_games.iter().find(|h| h.exe.eq_ignore_ascii_case(&g.exe)).map_or(0, |h| h.mode as usize);
         if ui.select(&format!("mt-v{i}"), row(view_x, 112.0), &opts(&["Padrão", "Forçar", "Desligar"]), &mut s) {
@@ -305,6 +367,10 @@ fn games(ui: &mut Ui, app: &mut App, r: Rect) {
     if blocked {
         app.toast.info("Injeção bloqueada: anti-cheat detectado.");
     }
+    if let Some((i, id)) = power {
+        app.cfg.meter_games[i].power = id;
+        changed = true;
+    }
     if let Some((exe, path, mode)) = auto_hdr {
         if crate::sys::autohdr::apply(&exe, mode) {
             match app.cfg.hdr_games.iter_mut().find(|h| h.exe.eq_ignore_ascii_case(&exe)) {
@@ -350,7 +416,14 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let top = 88.0;
     let view = rect(x, top, w, a.h - top - 20.0);
     let (h1, h2, hl, hr) = (272.0, 212.0, 154.0, 172.0);
-    let h3 = 88.0 + app.cfg.meter_games.len().max(1) as f32 * if is_narrow(w) { ROW_NARROW } else { ROW };
+    let n = shown(app).len();
+    let note = if app.cfg.meter_games.len() > n || SHOW_IDLE.load(std::sync::atomic::Ordering::Relaxed) { 34.0 } else { 0.0 };
+    let h3 = 88.0 + note + n.max(1) as f32 * if is_narrow(w) { ROW_NARROW } else { ROW };
+    // Teste: a foto mostra o fim da página, onde fica a lista de jogos.
+    #[cfg(debug_assertions)]
+    if std::env::var("PRISMA_TEST_BOTTOM").is_ok_and(|v| v == "1") {
+        ui.stick_bottom("meter");
+    }
     ui.begin_scroll("meter", view, h1 + h2 + hl + hr + h3 + 48.0);
     // Listas por último, para abrirem por cima do resto.
     games(ui, app, rect(x, top + h1 + h2 + hl + hr + 48.0, w, h3));
