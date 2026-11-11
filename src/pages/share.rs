@@ -216,22 +216,23 @@ pub(crate) fn invite_of(lines: &[String]) -> Option<Shown> {
 }
 
 /// Cria um convite como o botão "Criar convite": liga o host se nem o serviço nem o host
-/// estiverem ligados, para o convite anterior e abre o novo. Devolve o registro do convite.
-pub fn create_invite(_app: &mut App) -> Option<PathBuf> {
+/// estiverem ligados, para o convite anterior e abre o novo. Devolve o registro do convite e o
+/// processo que o escreve.
+pub fn create_invite(_app: &mut App) -> Option<(PathBuf, u32)> {
     let mut guard = STATE.lock().unwrap_or_else(|e| e.into_inner());
     let st = guard.get_or_insert_with(test_setup);
     let opts = st.opts.get_or_insert_with(Opts::load).clone();
     invite_in(st, &opts)
 }
 
-fn invite_in(st: &mut State, opts: &Opts) -> Option<PathBuf> {
+fn invite_in(st: &mut State, opts: &Opts) -> Option<(PathBuf, u32)> {
     if !stream::service::installed() && !st.host.as_mut().is_some_and(Proc::alive) {
         st.host = spawn(st, &["--stream-share".to_string()], "host.log");
     }
     stop(&mut st.invite);
     st.invite = spawn(st, &[format!("--stream-invite={},{}", stream::perms_key(opts.invite), opts.invite_min)], "convite.log");
     st.revoked.clear();
-    st.invite.as_ref().map(|p| p.log.clone())
+    st.invite.as_ref().map(|p| (p.log.clone(), p.child.id()))
 }
 
 fn stop(p: &mut Option<Proc>) {

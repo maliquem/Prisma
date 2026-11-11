@@ -29,9 +29,9 @@ const INVITE_WAIT: Duration = Duration::from_secs(20);
 #[derive(Debug, PartialEq)]
 pub enum Outcome {
     Done,
-    /// O convite está sendo criado; o código aparece neste registro.
+    /// O convite está sendo criado pelo processo `pid`; o código aparece neste registro.
     #[cfg_attr(not(feature = "stream"), allow(dead_code))]
-    InviteLog(PathBuf),
+    InviteLog { log: PathBuf, pid: u32 },
     Failed(String),
 }
 
@@ -99,43 +99,44 @@ fn reply_for(invite: bool, outcome: Outcome) -> Option<Reply> {
     match outcome {
         Outcome::Failed(reason) if invite => Some(Reply::ShareInviteFailed { reason }),
         #[cfg(feature = "stream")]
-        Outcome::InviteLog(log) if invite => Some(wait_invite(&log, INVITE_WAIT)),
+        Outcome::InviteLog { log, pid } if invite => Some(wait_invite(&log, INVITE_WAIT, || crate::sys::procs::is_alive(pid))),
         #[cfg(not(feature = "stream"))]
-        Outcome::InviteLog(_) if invite => Some(Reply::ShareInviteFailed {
+        Outcome::InviteLog { .. } if invite => Some(Reply::ShareInviteFailed {
             reason: "indisponível".into(),
         }),
         _ => None,
     }
 }
 
-/// Lê o registro do convite a cada 250 ms até o código aparecer, o código não ser publicado ou
-/// o prazo acabar.
+/// Lê o registro do convite a cada 250 ms. Com o código na mão, espera o resultado da
+/// publicação nos relés: publicado responde o código, não publicado responde a falha. Se o prazo
+/// acabar ou o processo do convite sair, uma última leitura decide: código sem resultado ainda
+/// vale (o convite longo funciona), sem código é falha.
 #[cfg(feature = "stream")]
-fn wait_invite(log: &std::path::Path, limit: Duration) -> Reply {
+fn wait_invite(log: &std::path::Path, limit: Duration, alive: impl Fn() -> bool) -> Reply {
     use crate::stream::{weblink::web_link, CODE_FAIL};
+    const NOT_PUBLISHED: &str = "o código não foi publicado; use o convite longo na página Compartilhar tela";
+    let failed = |reason: &str| Reply::ShareInviteFailed { reason: reason.into() };
     let start = Instant::now();
     loop {
+        // O processo é visto antes da leitura: se já tinha saído, esta leitura é a última.
+        let late = start.elapsed() >= limit;
+        let over = late || !alive();
         let lines: Vec<String> = std::fs::read(log)
             .map(|b| String::from_utf8_lossy(&b).lines().filter(|l| !l.trim().is_empty()).map(str::to_string).collect())
             .unwrap_or_default();
         match crate::pages::share::invite_of(&lines) {
-            Some(s) if s.published == Some(false) => break,
-            Some(s) => {
+            Some(s) if s.published == Some(false) => return failed(NOT_PUBLISHED),
+            Some(s) if s.published == Some(true) || over => {
                 let link = web_link(&s.code);
                 return Reply::ShareInviteCode { code: s.code, link };
             }
-            None if lines.iter().any(|l| l.starts_with(CODE_FAIL)) => break,
-            None => {}
-        }
-        if start.elapsed() >= limit {
-            return Reply::ShareInviteFailed {
-                reason: "o convite não ficou pronto a tempo".into(),
-            };
+            None if lines.iter().any(|l| l.starts_with(CODE_FAIL)) => return failed(NOT_PUBLISHED),
+            None if late => return failed("o convite não ficou pronto a tempo"),
+            None if over => return failed("o convite não foi criado"),
+            _ => {}
         }
         std::thread::sleep(Duration::from_millis(250).min(limit.saturating_sub(start.elapsed())));
-    }
-    Reply::ShareInviteFailed {
-        reason: CODE_FAIL.into(),
     }
 }
 
@@ -189,7 +190,7 @@ impl App {
             }
             #[cfg(feature = "stream")]
             Request::ShareInvite => match crate::pages::share::create_invite(self) {
-                Some(log) => Outcome::InviteLog(log),
+                Some((log, pid)) => Outcome::InviteLog { log, pid },
                 None => Outcome::Failed("não deu para criar o convite".into()),
             },
             #[cfg(not(feature = "stream"))]
@@ -286,29 +287,62 @@ mod tests {
     }
 
     #[cfg(feature = "stream")]
+    fn code_reply() -> Reply {
+        let link = crate::stream::weblink::web_link("K7Q-2PX");
+        Reply::ShareInviteCode { code: "K7Q-2PX".into(), link }
+    }
+
+    #[cfg(feature = "stream")]
+    fn code_log(after: &str) -> String {
+        format!("Convite novo ...\n{}K7Q-2PX\nPRISMA-LONGO\n{after}", crate::stream::CODE_LINE)
+    }
+
+    #[cfg(feature = "stream")]
     #[test]
     fn invite_found_in_log() {
-        use crate::stream::{weblink::web_link, CODE_LINE};
-        let p = temp_log("found", &format!("Convite novo ...\n{CODE_LINE}K7Q-2PX\n"));
-        let r = wait_invite(&p, Duration::from_secs(2));
+        let p = temp_log("found", &code_log(&format!("{} (2 de 3 relés)\n", crate::stream::CODE_OK)));
+        let t = Instant::now();
+        let r = wait_invite(&p, Duration::from_secs(5), || true);
         let _ = std::fs::remove_file(&p);
-        assert_eq!(r, Reply::ShareInviteCode { code: "K7Q-2PX".into(), link: web_link("K7Q-2PX") });
+        assert_eq!(r, code_reply());
+        assert!(t.elapsed() < Duration::from_secs(1));
+    }
+
+    #[cfg(feature = "stream")]
+    #[test]
+    fn invite_not_published() {
+        let p = temp_log("fail", &code_log(&format!("{}: mande o convite longo\n", crate::stream::CODE_FAIL)));
+        let r = wait_invite(&p, Duration::from_secs(5), || true);
+        let _ = std::fs::remove_file(&p);
+        assert!(matches!(r, Reply::ShareInviteFailed { .. }), "{r:?}");
+    }
+
+    #[cfg(feature = "stream")]
+    #[test]
+    fn invite_publishing_at_deadline_still_gives_code() {
+        let p = temp_log("pending", &code_log(""));
+        let t = Instant::now();
+        let r = wait_invite(&p, Duration::from_millis(500), || true);
+        let _ = std::fs::remove_file(&p);
+        assert_eq!(r, code_reply());
+        assert!(t.elapsed() >= Duration::from_millis(500));
     }
 
     #[cfg(feature = "stream")]
     #[test]
     fn invite_written_late() {
-        use crate::stream::{weblink::web_link, CODE_LINE};
         let p = temp_log("late", "");
         let q = p.clone();
         let w = std::thread::spawn(move || {
             std::thread::sleep(Duration::from_millis(300));
-            std::fs::write(&q, format!("Convite novo ...\n{CODE_LINE}K7Q-2PX\n")).unwrap();
+            std::fs::write(&q, code_log("")).unwrap();
+            std::thread::sleep(Duration::from_millis(300));
+            std::fs::write(&q, code_log(&format!("{} (3 de 3 relés)\n", crate::stream::CODE_OK))).unwrap();
         });
-        let r = wait_invite(&p, Duration::from_secs(5));
+        let r = wait_invite(&p, Duration::from_secs(5), || true);
         w.join().unwrap();
         let _ = std::fs::remove_file(&p);
-        assert_eq!(r, Reply::ShareInviteCode { code: "K7Q-2PX".into(), link: web_link("K7Q-2PX") });
+        assert_eq!(r, code_reply());
     }
 
     #[cfg(feature = "stream")]
@@ -316,9 +350,29 @@ mod tests {
     fn invite_times_out() {
         let p = temp_log("timeout", "Convite novo ...\n");
         let t = Instant::now();
-        let r = wait_invite(&p, Duration::from_millis(500));
+        let r = wait_invite(&p, Duration::from_millis(500), || true);
         let _ = std::fs::remove_file(&p);
         assert!(matches!(r, Reply::ShareInviteFailed { .. }), "{r:?}");
         assert!(t.elapsed() < Duration::from_secs(2));
+    }
+
+    #[cfg(feature = "stream")]
+    #[test]
+    fn invite_process_gone_answers_at_once() {
+        let p = temp_log("gone", "erro: sem identidade\n");
+        let t = Instant::now();
+        let r = wait_invite(&p, Duration::from_secs(20), || false);
+        let _ = std::fs::remove_file(&p);
+        assert!(matches!(r, Reply::ShareInviteFailed { .. }), "{r:?}");
+        assert!(t.elapsed() < Duration::from_secs(1));
+    }
+
+    #[cfg(feature = "stream")]
+    #[test]
+    fn invite_process_gone_after_code() {
+        let p = temp_log("gone-code", &code_log(""));
+        let r = wait_invite(&p, Duration::from_secs(20), || false);
+        let _ = std::fs::remove_file(&p);
+        assert_eq!(r, code_reply());
     }
 }
