@@ -263,7 +263,8 @@ pub struct Config {
     pub shot_hdr: bool,
     pub replay_on: bool,
     pub replay_secs: u32,
-    pub lang_en: bool,
+    /// Idioma: `crate::i18n::PT`, `EN`, `ES`, `RU` ou `ZH`.
+    pub lang: u8,
     pub update_auto: bool,
     /// Dia da última busca, para o programa procurar uma vez por dia mesmo reabrindo.
     pub upd_checked: u64,
@@ -362,7 +363,7 @@ impl Default for Config {
             shot_hdr: false,
             replay_on: false,
             replay_secs: 30,
-            lang_en: !crate::i18n::system_is_portuguese(),
+            lang: crate::i18n::system_lang(),
             update_auto: true,
             upd_checked: 0,
             upd_found: String::new(),
@@ -558,7 +559,9 @@ impl Config {
                 "shot_hdr" => c.shot_hdr = b,
                 "replay_on" => c.replay_on = b,
                 "replay_secs" => c.replay_secs = v.parse().unwrap_or(30),
-                "lang_en" => c.lang_en = b,
+                // Antes só havia português e inglês.
+                "lang_en" => c.lang = if b { crate::i18n::EN } else { crate::i18n::PT },
+                "lang" => c.lang = v.parse().unwrap_or(crate::i18n::EN),
                 "update_auto" => c.update_auto = b,
                 "upd_checked" => c.upd_checked = v.parse().unwrap_or(0),
                 "upd_found" => c.upd_found = v.to_string(),
@@ -658,7 +661,7 @@ impl Config {
         let _ = writeln!(s, "shot_hdr={}", b(self.shot_hdr));
         let _ = writeln!(s, "replay_on={}", b(self.replay_on));
         let _ = writeln!(s, "replay_secs={}", self.replay_secs);
-        let _ = writeln!(s, "lang_en={}", b(self.lang_en));
+        let _ = writeln!(s, "lang={}", self.lang);
         let _ = writeln!(s, "update_auto={}", b(self.update_auto));
         let _ = writeln!(s, "upd_checked={}", self.upd_checked);
         let _ = writeln!(s, "upd_found={}", self.upd_found);
@@ -821,7 +824,7 @@ impl Config {
                 self.hk_force = d.hk_force;
                 self.hk_explorer = d.hk_explorer;
                 self.update_auto = d.update_auto;
-                self.lang_en = d.lang_en;
+                self.lang = d.lang;
             }
             Defaults::Tweaks => {
                 self.tw_log = d.tw_log;

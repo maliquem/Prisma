@@ -300,13 +300,13 @@ impl<'a> Ui<'a> {
             };
             self.c.round(r, 8.0, bg);
             let fg = if on { ON_ACCENT } else { MUTED };
-            self.c.text(r, label, 14.0, fg, Align::Center, Weight::Semibold);
+            self.c.text_fit(rect(r.x + 6.0, r.y, r.w - 12.0, r.h), label, 14.0, fg, Align::Center, Weight::Semibold);
         } else {
             if hover {
                 self.c.round(r, 8.0, CARD2);
             }
             self.c.round_line(r, 8.0, if on { BORDER2 } else { BORDER }, 1.0);
-            self.c.text(r, label, 14.0, if on { TEXT } else { MUTED }, Align::Center, Weight::Regular);
+            self.c.text_fit(rect(r.x + 6.0, r.y, r.w - 12.0, r.h), label, 14.0, if on { TEXT } else { MUTED }, Align::Center, Weight::Regular);
         }
         clicked
     }
@@ -362,7 +362,7 @@ impl<'a> Ui<'a> {
         self.c.round_line(r, 8.0, if hover { BORDER2 } else { BORDER }, 1.0);
         let label = options.get(*sel).map(String::as_str).unwrap_or("");
         let t = rect(r.x + 10.0, r.y, r.w - 34.0, r.h);
-        self.c.text(t, label, 14.0, TEXT, Align::Left, Weight::Regular);
+        self.c.text_fit(t, label, 14.0, TEXT, Align::Left, Weight::Regular);
         let (ax, ay) = (r.right() - 24.0, r.y + r.h / 2.0 - 2.0);
         self.c.line(ax, ay, ax + 5.0, ay + 5.0, MUTED, 1.5);
         self.c.line(ax + 5.0, ay + 5.0, ax + 10.0, ay, MUTED, 1.5);

@@ -67,12 +67,12 @@ pub fn draw(ui: &mut Ui, app: &mut App, full: Rect) {
 
     ui.c.icon(x, y + 4.0, 30.0, &[&[(12., 3.), (3., 20.), (21., 20.), (12., 3.)], &[(12., 3.), (12., 20.)]], ACCENT);
     ui.c.text(rect(x + 42.0, y, w - 242.0, 38.0), "Boas-vindas ao Prisma", 24.0, TEXT, Align::Left, Weight::Semibold);
-    let langs = vec!["Português (Brasil)".to_string(), "English".to_string()];
-    let mut lang = app.cfg.lang_en as usize;
+    let langs: Vec<String> = crate::i18n::NAMES.iter().map(|n| n.to_string()).collect();
+    let mut lang = app.cfg.lang as usize;
     if ui.select("w-lang", rect(x + w - 190.0, y, 190.0, 38.0), &langs, &mut lang) {
-        app.cfg.lang_en = lang == 1;
+        app.cfg.lang = lang as u8;
         app.cfg.save();
-        crate::i18n::set_english(app.cfg.lang_en);
+        crate::i18n::set_lang(app.cfg.lang);
         ui.s.needs_redraw = true;
     }
     y += 44.0;

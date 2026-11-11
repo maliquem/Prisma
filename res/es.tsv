@@ -1,0 +1,1558 @@
+Abrir o Prisma com Ctrl+Shift+Esc, no lugar do Gerenciador de Tarefas	Abrir Prisma con Ctrl+Shift+Esc en lugar del Administrador de tareas
+Atalho de Otimizar	Atajo de Optimizar
+Atalhos que não funcionaram	Atajos que no funcionaron
+Configurações	Configuración
+Em Arquivos de Programas, com atalho e entrada para desinstalar.	En Archivos de programa, con acceso directo y entrada para desinstalar.
+Iniciar com o Windows, como administrador	Iniciar con Windows, como administrador
+Instalar libera o início com o Windows e a troca do Gerenciador de Tarefas.	Instalar permite iniciar con Windows y reemplazar el Administrador de tareas.
+Instalar no PC	Instalar en este PC
+Início com o Windows, permissões e atalhos gerais.	Inicio, permisos, idioma y actualizaciones.
+Reabrir como administrador	Reabrir como administrador
+Roda de qualquer pasta. As configurações ficam ao lado do programa, em PrismaData.	Funciona desde cualquier carpeta. La configuración queda junto al programa, en PrismaData.
+Versão instalada	Versión instalada
+Versão portátil	Versión portátil
+Abrir no Explorador	Abrir en el Explorador
+Analisando…	Analizando…
+Analisar	Analizar
+Apagar	Eliminar
+Apagar pede admin	Eliminar requiere administrador
+Confirmar: Lixeira	Confirmar: Papelera de reciclaje
+Disco {}:	Disco {}:
+Enviado para a Lixeira	Enviado a la Papelera de reciclaje
+Escolha um disco e clique em Analisar.	Elige un disco y haz clic en Analizar.
+Espaço em disco	Espacio en disco
+Lendo {} de {} registros	Leyendo {} de {} registros
+Maiores arquivos	Archivos más grandes
+Mostra o que ocupa espaço em cada disco.	Muestra qué ocupa espacio en cada disco.
+Não consegui apagar	No se pudo eliminar
+Os {} maiores arquivos do disco	Los {} archivos más grandes del disco
+Pastas	Carpetas
+Sem extensão	Sin extensión
+Tipos de arquivo	Tipos de archivo
+lendo a tabela do NTFS	leyendo la tabla NTFS
+percorrendo as pastas	recorriendo las carpetas
+{} itens lidos	{} elementos leídos
+{} arquivos	{} archivos
+{} arquivos em {} s, {}	{} archivos en {} s, {}
+A gravação parou por um erro	La grabación se detuvo por un error
+Abrir o Prisma	Abrir Prisma
+Aumentar volume	Subir volumen
+Desfazendo	Deshaciendo
+Desfazendo tudo	Deshaciendo todo
+Diminuir volume	Bajar volumen
+Fechar {} {} para liberar {} GB de RAM?	¿Cerrar {1} {2} para liberar {3} GB de RAM?
+programa	programa
+programas	programas
+Foto da tela inteira	Captura de pantalla completa
+Foto da área	Captura de área
+Foto salva e copiada	Captura guardada y copiada
+Gravar	Grabar
+Gravação salva em {}	Grabación guardada en {}
+Janela restaurada	Ventana restaurada
+Mudo	Silenciar
+Nada para fechar agora	Nada que cerrar ahora
+Não consegui capturar a tela	No se pudo capturar la pantalla
+Não consegui salvar a foto	No se pudo guardar la captura
+O replay está desligado na tela Captura	La repetición está desactivada en la página Captura
+O replay só grava em modo jogo	La repetición solo graba en modo juego
+Otimizar	Optimizar
+Otimizar agora	Optimizar ahora
+Sair	Salir
+Sem bordas	Sin bordes
+Tirar foto da área	Capturar área
+{} não tem som tocando	{} no está reproduciendo sonido
+{}: {} já está em uso	{}: {} ya está en uso
+{} detectado	{} detectado
+{} restaurados, {} mudaram depois e ficaram como estão	{} restaurados, {} cambiaron después y se dejaron como están
+{} valores restaurados	{} valores restaurados
+{} valores restaurados. Apps voltam pela Loja.	{} valores restaurados. Las apps vuelven por la Store.
+{} · {} desfaz	{} · {} deshace
+Últimos {} s salvos	Últimos {} s guardados
+Agendamento de GPU desligado	Programación de GPU desactivada
+Agendamento de GPU ligado	Programación de GPU activada
+Alguma ferramenta ou atualização marcou esses apps. Sem Game Pass isso não costuma atrapalhar.	Una herramienta o actualización marcó estas apps. Sin Game Pass, esto no suele causar problemas.
+Arquivo de paginação desligado	Archivo de paginación desactivado
+Disco {} ({}) pede cuidado	El disco {} ({}) necesita atención
+Integridade da Memória desligada	Integridad de memoria desactivada
+Integridade da Memória ligada	Integridad de memoria activada
+Jogos e compilações podem falhar sem aviso. Ligue em Sistema, Avançado, Desempenho.	Juegos y compilaciones pueden fallar sin aviso. Actívalo en Sistema, Avanzado, Rendimiento.
+Já houve caso em que isso quebrou o Windows Update. Veja antes de aplicar qualquer ajuste.	Esto ya rompió Windows Update antes. Revísalo antes de aplicar cualquier ajuste.
+Lista de processos indisponível	Lista de procesos no disponible
+Mais nova que os testes do catálogo. Os ajustes funcionam, com o rótulo Não testado nesta build.	Más nueva que las pruebas del catálogo. Los ajustes siguen funcionando, marcados como No probado en esta compilación.
+Na prática o Windows trata como Necessários. O perfil grava o valor correto.	En la práctica, Windows lo trata como Obligatorio. El perfil escribe el valor correcto.
+Necessário para a geração de quadros do DLSS.	Necesario para la generación de fotogramas de DLSS.
+O DLSS Frame Generation exige ele ligado, em Configurações, Sistema, Tela, Gráficos.	DLSS Frame Generation lo necesita activado, en Configuración, Sistema, Pantalla, Gráficos.
+O PC fica com menos proteção contra drivers maliciosos. A Microsoft pode religar em atualizações.	El PC tiene menos protección contra controladores maliciosos. Microsoft puede volver a activarlo en actualizaciones.
+Pasta Windows.old presente	Carpeta Windows.old presente
+Permite voltar de versão. Apagar libera espaço, mas encerra essa volta.	Permite volver atrás. Borrarla libera espacio, pero elimina esa opción.
+Proteção ativa. Em jogos limitados pela CPU custa cerca de 6%; em 4K, cerca de 2%. A escolha é sua, na tela oficial.	Protección activa. Cuesta cerca de 6% en juegos limitados por CPU y cerca de 2% en 4K. La decisión es tuya, en la página oficial.
+Reinicie antes de aplicar ajustes ou reparar o Windows.	Reinicia antes de aplicar ajustes o reparar Windows.
+Reinício pendente	Reinicio pendiente
+Serviço TrustedInstaller alterado	Servicio TrustedInstaller modificado
+Telemetria em 0, valor que o Pro não suporta	Telemetría en 0, un valor que Pro no admite
+{} apps do Windows foram retirados antes	Se quitaron {} apps de Windows antes
+{} de hardware. Veja em Ferramentas, Histórico de falhas.	{} de hardware. Ver Herramientas, Historial de fallos.
+{} quedas ou erros graves em 90 dias	{} fallos o errores graves en 90 días
+{}. Copie o que importa antes de qualquer reparo.	{}. Copia lo importante antes de cualquier reparación.
+Pasta Inicializar	Carpeta de inicio
+Pasta Inicializar, todos os usuários	Carpeta de inicio, todos los usuarios
+Registro, programas de 32 bits	Registro, programas de 32 bits
+Registro, só este usuário	Registro, solo este usuario
+Registro, todos os usuários	Registro, todos los usuarios
+1 minuto	1 minuto
+2 minutos	2 minutos
+15 segundos	15 segundos
+30 segundos	30 segundos
+1080p a 60 FPS	1080p a 60 FPS
+1440p a 60 FPS	1440p a 60 FPS
+4K a 60 FPS	4K a 60 FPS
+AV1 pela GPU	AV1 en la GPU
+Atalhos e pasta	Atajos y carpeta
+Captura	Captura
+Cerca de {} MB por minuto	Unos {} MB por minuto
+Cor com HDR ligado na tela	Color cuando la pantalla está en HDR
+Em modo jogo, guarda os últimos segundos na memória. O atalho salva sem interromper.	En modo juego, guarda los últimos segundos en memoria. El atajo guarda sin interrumpir.
+Estimativa, varia com a cena	Estimación, varía con la escena
+Formato de foto	Formato de captura
+Gravar e parar	Grabar y detener
+Gravar em HDR10	Grabar en HDR10
+Gravar em SDR	Grabar en SDR
+H.264 (mais compatível)	H.264 (más compatible)
+HEVC pela GPU	HEVC en la GPU
+Janela em foco	Ventana enfocada
+Ligar replay	Activar repetición
+Microfone	Micrófono
+Monitor em foco	Monitor enfocado
+Mostrar o cursor	Mostrar el cursor
+Nativo: {} FPS	Nativo: {} FPS
+PNG e JPEG XR em HDR	PNG y JPEG XR en HDR
+PNG em SDR	PNG en SDR
+Parar	Detener
+Pasta	Carpeta
+Resolução e FPS	Resolución y FPS
+Salvar replay	Guardar repetición
+Som do sistema	Sonido del sistema
+Tela	Pantalla
+Tirar foto	Hacer captura
+Tudo fica no seu PC. Nada é enviado.	Todo queda en tu PC. No se envía nada.
+Vídeo	Vídeo
+Espaço	Espacio
+Nenhum	Ninguno
+Tecla {}	Tecla {}
+Atributo {} abaixo do limite do fabricante	Atributo {} por debajo del límite del fabricante
+Blocos com erro (30 dias)	Bloques defectuosos (30 días)
+Desligamentos incorretos	Apagados inseguros
+Erros de cabo	Errores de cable
+Erros de mídia	Errores de medio
+Este disco não respondeu	Este disco no respondió
+O adaptador USB não libera os dados de saúde	El adaptador USB no expone datos de salud
+O próprio disco prevê falha	El propio disco prevé un fallo
+O próprio disco reportou alerta crítico	El propio disco informó una advertencia crítica
+Outro	Otro
+Partidas do motor	Arranques del motor
+Pouca vida útil restante	Queda poca vida
+Reserva de blocos abaixo do mínimo	Bloques de reserva por debajo del mínimo
+Reserva disponível	Reserva disponible
+Sem sinais de problema	Sin señales de problemas
+Setores incorrigíveis	Sectores no corregibles
+Setores pendentes	Sectores pendientes
+Setores realocados	Sectores reasignados
+Temperatura alta	Temperatura alta
+Temperatura ou reserva pedem atenção	La temperatura o la reserva necesitan atención
+Total escrito	Total escrito
+Total lido	Total leído
+Vezes ligado	Ciclos de encendido
+Vida útil restante	Vida restante
+{} blocos com erro em 30 dias	{} bloques defectuosos en 30 días
+{} erros de mídia	{} errores de medio
+{}, o último em {}	{}, el más reciente el {}
+{} setores realocados	{} sectores reasignados
+{}% (mínimo {}%)	{}% (mínimo {}%)
+{} setores instáveis	{} sectores inestables
+Ao entrar em modo jogo	Al entrar en modo juego
+CPU acima de 35% por 20 s	CPU por encima del 35% durante 20 s
+Carga alta há {} min	Carga alta durante {} min
+Com jogo ou carga pesada	Con un juego o carga pesada
+Criar planos Prisma	Crear planes de Prisma
+Em repouso	En reposo
+Energia	Energía
+GPU 3D acima de 40% por 5 s	GPU 3D por encima del 40% durante 5 s
+Jogo em tela cheia ou sem bordas	Juego a pantalla completa o sin borde
+Modo jogo há {} min · {} detectado	Modo juego durante {} min · {} detectado
+Mínimo	Mínimo
+No resto do tempo	El resto del tiempo
+Núcleos	Núcleos
+O que conta como carga	Qué cuenta como carga
+Otimizar sem perguntar	Optimizar sin preguntar
+Perguntar se quero otimizar	Preguntar si optimizar
+Plano	Plan
+Seus planos na tomada	Tus planes con corriente
+Steam, Epic, GOG e Xbox	Steam, Epic, GOG y Xbox
+Sua Economia de energia mantém a CPU em 100% mínimo, então quase não economiza.	Tu plan Economizador mantiene la CPU al 100% como mínimo, así que casi no ahorra.
+Só trocar o plano	Solo cambiar el plan
+Não perguntar	No preguntar
+Troca automática	Cambio automático
+Volta ao repouso após 60 s sem carga.	Vuelve al reposo tras 60 s sin carga.
+Últimas 2 horas	Últimas 2 horas
+sem codificador de vídeo na GPU	no hay codificador de vídeo en la GPU
+Assinado por {}	Firmado por {}
+Assinatura inválida	Firma no válida
+Sem assinatura própria	Sin firma propia
+Aplicar sozinho quando o programa abrir de novo	Aplicar automáticamente cuando el programa vuelva a abrirse
+Atalho	Atajo
+Deixa a janela em foco em tela cheia sem bordas. O mesmo atalho desfaz.	Pone la ventana enfocada en pantalla completa sin bordes. El mismo atajo lo deshace.
+Janela	Ventana
+Janelas abertas	Ventanas abiertas
+Restaurar	Restaurar
+Tela cheia	Pantalla completa
+Remover o Prisma deste computador? Suas configurações ficam guardadas.	¿Quitar Prisma de este equipo? Tu configuración se conserva.
+Não consegui instalar o Prisma.	No se pudo instalar Prisma.
+Ajustes do Windows	Ajustes de Windows
+Carga alta	Carga alta
+Desinstalar	Desinstalar
+Discos e redes	Discos y redes
+Energia automática	Energía automática
+Ferramentas	Herramientas
+Inicialização	Inicio
+Modo jogo ativo	Modo juego activado
+Plano desconhecido	Plan desconocido
+Pressione as teclas	Pulsa las teclas
+Programas	Programas
+Repouso	Reposo
+Serviços	Servicios
+Troca automática desligada	Cambio automático desactivado
+Cada coluna é um núcleo	Cada columna es un núcleo
+Disco	Disco
+Finalizar tarefa	Finalizar tarea
+Frequência	Frecuencia
+Mais usado	Más usado
+Menos usado	Menos usado
+Núcleo {} · {}	Núcleo {} · {}
+Programa	Programa
+Rede	Red
+de {}	de {}
+{} threads · {} · {}	{} hilos · {} · {}
+Blacklist	Lista de nunca cerrar
+Detecção automática	Detección automática
+Fechar 1 selecionado	Cerrar 1 seleccionado
+Fechar {} selecionados	Cerrar {} seleccionados
+Forçar	Forzar
+Libera {} de RAM	Libera {} de RAM
+Nada é fechado sem você confirmar.	No se cierra nada sin tu confirmación.
+Nunca fechar	Nunca cerrar
+Não	No
+Não fecharam: {}	No se cerró: {}
+Pede para o programa fechar normalmente, então trabalho não salvo gera o aviso dele. Forçar é uma opção à parte.	Pide al programa que se cierre normalmente, así el trabajo sin guardar muestra su propio aviso. Forzar es una opción aparte.
+Pode fechar	Se puede cerrar
+Proteger	Proteger
+Sem sugestões agora. O Prisma aprende com o que você usa.	Sin sugerencias por ahora. Prisma aprende de lo que usas.
+Sempre	Siempre
+Sempre fechar ao otimizar	Cerrar siempre al optimizar
+Sim	Sí
+Você usa {} sempre. Colocar na blacklist?	Siempre usas {}. ¿Añadirlo a la lista de nunca cerrar?
+Whitelist	Lista de cerrar siempre
+{} · {} VRAM	{} · {} VRAM
+{} ficou {} dias aberto sem você usar. Colocar na whitelist?	{} estuvo abierto {} días sin usarse. ¿Añadirlo a la lista de cerrar siempre?
+Aberto em segundo plano	Abrir en segundo plano
+Sem janela aberta	Ninguna ventana abierta
+Sempre fechar (whitelist)	Cerrar siempre (lista de cerrar siempre)
+Agora não	Ahora no
+Fechar	Cerrar
+Ver lista	Ver lista
+Agr. garantido	Agres. garantizado
+Agressivo	Agresivo
+Desligado	Desactivado
+Efic. agressivo	Efic. agresivo
+Efic. garantido	Efic. garantizado
+Eficiente	Eficiente
+Abrindo as propriedades no Windows	Abriendo las propiedades en Windows
+Automático	Automático
+Botão direito no serviço abre as propriedades dele no Windows.	Haz clic derecho en un servicio para abrir sus propiedades en Windows.
+Buscar	Buscar
+Editar no Windows	Editar en Windows
+Escolha um serviço para ver o que ele faz.	Elige un servicio para ver qué hace.
+Executável	Ejecutable
+Iniciar	Iniciar
+O serviço não traz descrição.	Este servicio no tiene descripción.
+Parado	Detenido
+Parados	Detenido
+Precisa do Prisma como administrador	Necesita Prisma como administrador
+Reiniciar	Reiniciar
+Rodando	En ejecución
+Rodando · PID {}	En ejecución · PID {}
+Todos	Todos
+{} rodando de {}.	{} en ejecución de {}.
+Arraste para escolher a área · Enter copia a tela inteira · Esc cancela	Arrastra para elegir el área · Enter copia toda la pantalla · Esc cancela
+Caneta	Lápiz
+Elipse	Elipse
+Foto copiada	Captura copiada
+Foto fixada: arraste para mover, botão direito fecha	Captura fijada: arrastra para mover, clic derecho cierra
+Foto salva	Captura guardada
+Linha	Línea
+Marcador	Resaltador
+Não consegui copiar	No se pudo copiar
+Não consegui gerar a imagem	No se pudo crear la imagen
+Número	Número
+Olá, mundo	Hola, mundo
+Pixelar	Pixelar
+Retângulo	Rectángulo
+Seta	Flecha
+Texto	Texto
+Adicionar	Añadir
+Assinatura	Firma
+Ativado	Activado
+Ativados	Activado
+Comando	Comando
+Confirmar remoção	Confirmar eliminación
+Desativado	Desactivado
+Desativados	Desactivado
+Escolha um item para ver de onde ele vem e quem assinou.	Elige un elemento para ver de dónde viene y quién lo firmó.
+Nome	Nombre
+Remover da inicialização	Quitar del inicio
+{} de {} abrem com o Windows.	{} de {} abren con Windows.
+Atenção	Aviso
+Ativo {}	Activo {}
+Baixando {}	Descargando {}
+Bom	Bien
+Conectado · {}	Conectado · {}
+Conectado · {} · {}	Conectado · {} · {}
+Desconectado	Desconectado
+Disco {}	Disco {}
+Discos	Discos
+Enviando {}	Subiendo {}
+Lendo o disco…	Leyendo el disco…
+Ler saúde de novo	Leer la salud de nuevo
+Ler {} · Gravar {}	Lectura {} · Escritura {}
+Número de série	Número de serie
+Redes	Redes
+Risco	En riesgo
+Saúde	Salud
+Sem dados	Sin datos
+Temperatura	Temperatura
+Tempo ligado	Tiempo encendido
+Total: {} recebidos, {} enviados	Total: {} recibidos, {} enviados
+Tudo que está ligado no PC, em tempo real.	Todo lo conectado al PC, en tiempo real.
+{} h ({} anos)	{} h ({} años)
+{} livres de {}	{} libres de {}
+  Marcada: {}	Seleccionado: {}
+  Marcas removidas do registro	Selecciones quitadas del registro
+  Terminou com código {} em {}	Terminó con código {} en {}
+  ✓ Etapa concluída em {}	✓ Paso terminado en {}
+  ✗ Não concluiu ({})	✗ No terminó ({})
+A cópia não começou.	La copia no empezó.
+A verificação achou problemas que não corrigiu. Veja a saída acima.	La comprobación encontró problemas que no corrigió. Mira la salida de arriba.
+A verificação não começou.	La comprobación no empezó.
+Abre as opções de recuperação, inclusive Modo de Segurança. Reinicia agora.	Abre las opciones de recuperación, incluido el Modo seguro. Reinicia ahora.
+Abre o Diagnóstico de Memória do Windows, que reinicia o PC e testa antes de ligar.	Abre el Diagnóstico de memoria de Windows, que reinicia el PC y prueba antes de arrancar.
+Algo não terminou	Algo no terminó
+Algo não terminou: {}	Algo no terminó: {}
+Alterando	Cambiando
+Analisando	Analizando
+Analisar cache de atualizações	Analizar la caché de actualizaciones
+Atalhos para ferramentas escondidas.	Accesos a herramientas ocultas.
+Atualiza pelo winget, um por um, sem janelas.	Actualiza con winget, uno por uno, sin ventanas.
+Atualizando	Actualizando
+Atualizar todos os programas	Actualizar todos los programas
+Atualizações concluídas.	Actualizaciones terminadas.
+Automático do roteador	Automático desde el router
+Avançado	Avanzado
+Avisa o SSD sobre o espaço livre. Só para SSD saudável.	Informa al SSD del espacio libre. Solo para un SSD sano.
+Bloqueado em disco suspeito.	Bloqueado en un disco sospechoso.
+Cache de DNS limpo.	Caché DNS borrada.
+Conferindo	Comprobando
+Confiabilidade	Confiabilidad
+Confira a saída: o defrag devolve sucesso até quando falha.	Revisa la salida: defrag informa éxito incluso cuando falla.
+Confirmar	Confirmar
+Confirme acima para liberar.	Confirma arriba para desbloquear.
+Consertar o Windows Update	Reparar Windows Update
+Copiando	Copiando
+Copiar dados de um disco com defeito	Copiar datos de un disco que falla
+Corrigir (/f)	Reparar (/f)
+Corrigir e ler a superfície (/r)	Reparar y leer la superficie (/r)
+Cópia concluída. Confira os arquivos no destino.	Copia terminada. Revisa los archivos en el destino.
+DISM: conferir e reparar a imagem	DISM: comprobar y reparar la imagen
+DNS alterado. Confira acima.	DNS cambiado. Revisa arriba.
+De onde	Desde
+Desfaz o item anterior, em todos os discos.	Deshace el elemento anterior, en todos los discos.
+Desligamento inesperado	Apagado inesperado
+Desligar libera o hiberfil.sys, mas pode afetar a Inicialização Rápida.	Desactivarla libera hiberfil.sys, pero puede afectar al Inicio rápido.
+Diagnóstico	Diagnóstico
+Dispositivos	Dispositivos
+Drivers com problema	Controladores con problemas
+Erro de hardware (WHEA)	Error de hardware (WHEA)
+Erros encontrados e corrigidos.	Errores encontrados y corregidos.
+Escolha origem e destino.	Elige origen y destino.
+Escolhendo o que limpar	Eligiendo qué limpiar
+Escolher pasta	Elegir carpeta
+Estado da recuperação	Estado de recuperación
+Estados disponíveis	Estados disponibles
+Este disco está suspeito: copie os dados antes de qualquer reparo. Modos que escrevem podem piorar a perda.	Este disco es sospechoso: copia tus datos antes de cualquier reparación. Los modos que escriben pueden empeorar la pérdida.
+Eventos	Eventos
+Evita que o Windows rode a verificação sozinho ao ligar num disco suspeito, até você copiar os dados.	Impide que Windows ejecute la comprobación solo al arrancar en un disco sospechoso, hasta que copies tus datos.
+Excluindo do chkdsk automático	Excluyendo del chkdsk automático
+Executar	Ejecutar
+Falhas	Fallos
+Gerar pacote de suporte	Crear paquete de soporte
+Guardada em {}	Guardado en {}
+Hibernação desligada.	Hibernación desactivada.
+Hibernação ligada.	Hibernación activada.
+Histórico de falhas	Historial de fallos
+Horários em UTC. Vários itens no mesmo horário costumam ser a mesma queda.	Horas en UTC. Varios elementos a la misma hora suelen ser el mismo fallo.
+Impedir verificação automática	Impedir la comprobación automática
+Já copiei os dados e aceito o risco	Copié mis datos y acepto el riesgo
+Lendo	Leyendo
+Lendo o log do sistema	Leyendo el registro del sistema
+Liberados {}	{} liberados
+Ligar ou desligar hibernação	Activar o desactivar la hibernación
+Limpando	Limpiando
+Limpar arquivos do sistema	Limpiar archivos del sistema
+Limpar cache de DNS	Borrar caché DNS
+Limpar cache de atualizações	Limpiar caché de actualizaciones
+Limpeza	Limpieza
+Limpeza concluída. Windows.old e Lixeira não foram tocados.	Limpieza terminada. Windows.old y la Papelera de reciclaje no se tocaron.
+Lista acima.	Lista arriba.
+Lista dispositivos com erro. Só leitura.	Enumera dispositivos con errores. Solo lectura.
+Lista o que tem versão nova pelo winget.	Lista lo que tiene versión nueva en winget.
+Lê o último resultado. Sem registro não quer dizer aprovado.	Lee el último resultado. Sin registro no significa que pasó.
+Mostra quanto a pasta WinSxS ocupa de verdade e se vale limpar.	Muestra cuánto usa de verdad la carpeta WinSxS y si vale la pena limpiarla.
+Mostra se o ambiente de recuperação do Windows está ativo.	Muestra si el entorno de recuperación de Windows está activo.
+Muda o servidor de nomes do adaptador. DNS criptografado se ativa em Configurações, Rede.	Cambia el servidor de nombres del adaptador. El DNS cifrado se activa en Configuración, Red.
+Nem tudo atualizou; veja acima	No todo se actualizó; mira arriba
+Nem tudo atualizou; veja acima: {}	No todo se actualizó; mira arriba: {}
+Nenhum resultado registrado. Isso não quer dizer aprovado.	No hay resultado registrado. Eso no significa que pasó.
+Nenhuma queda ou erro grave em 90 dias.	Sin fallos ni errores graves en 90 días.
+Não achei o registro do SFC. Confira a saída acima.	No se encontró el registro de SFC. Revisa la salida de arriba.
+Não funcionou	No funcionó
+Não funcionou: {}	No funcionó: {}
+Não funcionou por inteiro	No funcionó del todo
+Não funcionou por inteiro: {}	No funcionó del todo: {}
+Não iniciou	No empezó
+Não iniciou: {}	No empezó: {}
+O DISM não conseguiu reparar a imagem. Veja a saída acima e o arquivo dism.log.	DISM no pudo reparar la imagen. Mira la salida de arriba y el archivo dism.log.
+O SFC não conseguiu reparar {} arquivos. Veja CBS.log e rode o reparo de novo após reiniciar.	SFC no pudo reparar {} archivos. Mira CBS.log y vuelve a ejecutar la reparación tras reiniciar.
+O destino precisa estar em outro disco.	El destino debe estar en otro disco.
+O disco do sistema está suspeito: resolva isso antes de reparar o Windows.	El disco del sistema es sospechoso: resuelve eso antes de reparar Windows.
+O disco está em uso: a verificação pede reinício. Em disco suspeito, copie os dados antes.	El disco está en uso: la comprobación necesita reiniciar. En un disco sospechoso, copia tus datos primero.
+O modo /r lê toda a superfície por muitas horas: bloqueado em disco suspeito.	El modo /r lee toda la superficie durante muchas horas: bloqueado en un disco sospechoso.
+O modo sem reparo só lê. Os modos que corrigem escrevem no disco e ficam bloqueados em disco suspeito.	El modo sin reparar solo lee. Los modos que corrigen escriben en el disco y están bloqueados en un disco sospechoso.
+O passo a passo aparece aqui.	Aquí aparece el registro paso a paso.
+O que acorda o PC	Qué despierta el PC
+O que impede o sono	Qué impide la suspensión
+O que o Windows esconde em linha de comando, com resultado em português.	Lo que Windows esconde en la línea de comandos, con resultados claros.
+Otimizar SSD (TRIM)	Optimizar SSD (TRIM)
+Pacote salvo na pasta indicada acima.	Paquete guardado en la carpeta de arriba.
+Painéis do Windows	Paneles de Windows
+Para onde (outro disco)	A (otro disco)
+Para os serviços, renomeia as pastas de cache sem apagá-las e religa tudo. Para quando as atualizações travam.	Detiene los servicios, renombra las carpetas de caché sin borrarlas y vuelve a iniciar todo. Para cuando las actualizaciones se atascan.
+Parar {}	Detener {}
+Parte dos arquivos não foi copiada: pode ser área danificada. Veja a saída acima.	Algunos archivos no se copiaron: puede ser una zona dañada. Mira la salida de arriba.
+Pasta: {}	Carpeta: {}
+Pede administrador	Necesita administrador
+Pedindo a limpeza	Solicitando la limpieza
+Primeiro degrau quando sites não abrem. Não tem efeito colateral.	Primer paso cuando los sitios no abren. No tiene efectos secundarios.
+Primeiro passo em disco suspeito. Lê uma vez, pula o que estiver ruim e registra o que falhou. Só escreve no destino.	Primer paso en un disco sospechoso. Lee una vez, salta lo dañado y registra lo que falló. Solo escribe en el destino.
+Procurando	Buscando
+Pronto. Lembre de desfazer depois de trocar o disco.	Listo. Recuerda deshacerlo después de cambiar el disco.
+Pronto. Procure atualizações de novo em Configurações.	Listo. Busca actualizaciones de nuevo en Configuración.
+Pronto. Reinicie para valer.	Listo. Reinicia para que surta efecto.
+Recursos	Características
+Refazer a pilha de rede	Restablecer la pila de red
+Reinicia direto na configuração da placa-mãe.	Reinicia directo en la configuración de la placa base.
+Reiniciando	Reiniciando
+Reiniciando.	Reiniciando.
+Reiniciar em modo avançado	Reiniciar en modo avanzado
+Reiniciar na BIOS	Reiniciar en la BIOS
+Reinício sem desligar corretamente	Reiniciar sin apagado limpio
+Reinícios inesperados, telas azuis e erros de hardware dos últimos 90 dias. Só leitura.	Reinicios inesperados, pantallas azules y errores de hardware de los últimos 90 días. Solo lectura.
+Religar {}	Iniciar {}
+Renomear as pastas de cache	Renombrar las carpetas de caché
+Reparar	Reparar
+Reparar o Windows	Reparar Windows
+Reparar online (/scan)	Reparar en línea (/scan)
+Reparou {} arquivos. Reinicie e rode de novo para confirmar.	Se repararon {} archivos. Reinicia y vuelve a ejecutarlo para confirmar.
+Roda a tarefa do próprio Windows, que preserva 30 dias de atualizações.	Ejecuta la tarea propia de Windows, que conserva 30 días de actualizaciones.
+Roda o DISM, que baixa o que estiver danificado, e depois o SFC, nessa ordem, como manda a Microsoft. Pode levar de 10 a 30 minutos e usa o disco do sistema.	Ejecuta DISM, que descarga lo dañado, y luego SFC, en el orden que recomienda Microsoft. Puede tardar de 10 a 30 minutos y usa el disco del sistema.
+Rodando…	Ejecutando…
+SFC: conferir os arquivos do sistema	SFC: comprobar los archivos del sistema
+Salva relatório de vídeo, informações do sistema e histórico de falhas numa pasta.	Guarda un informe de vídeo, información del sistema e historial de fallos en una carpeta.
+Salvando a configuração atual	Guardando la configuración actual
+Segundo degrau: Winsock e TCP/IP. Salva o estado atual antes. Pede reinício.	Segundo paso: Winsock y TCP/IP. Primero guarda el estado actual. Necesita reiniciar.
+Sem administrador, as duas últimas podem falhar.	Sin derechos de administrador, las dos últimas pueden fallar.
+Sem problemas no sistema de arquivos.	Sin problemas en el sistema de archivos.
+Servidor principal	Servidor principal
+Servidor secundário	Servidor secundario
+Sistema	Sistema
+Só verificar, sem reparar	Solo comprobar, sin reparar
+TRIM é só para SSD.	TRIM es solo para SSD.
+Tarefa iniciada: ela segue em segundo plano por alguns minutos.	Tarea iniciada: sigue en segundo plano unos minutos.
+Tela azul	Pantalla azul
+Temporários, restos de atualização e relatórios. Não toca em Windows.old, Lixeira, Downloads nem shaders.	Archivos temporales, restos de actualizaciones e informes. No toca Windows.old, la Papelera, Descargas ni los shaders.
+Testar memória	Probar la memoria
+Timers de despertar	Temporizadores de activación
+Todas as opções	Todas las opciones
+Trocar DNS	Cambiar DNS
+Três estados possíveis: passou, com erros ou sem resultado.	Tres estados posibles: aprobado, con errores o sin resultado.
+Veja a recomendação no fim da saída.	Mira la recomendación al final de la salida.
+Veja o estado acima.	Mira el estado de arriba.
+Ver programas desatualizados	Ver programas desactualizados
+Ver resultado do teste de memória	Ver resultado de la prueba de memoria
+Verificando {}	Comprobando {}
+Verificar disco	Comprobar disco
+Verificação automática de volta ao padrão.	Comprobación automática vuelta al valor predeterminado.
+Voltando ao automático	Volviendo a automático
+Voltando ao padrão	Volviendo al valor predeterminado
+Voltar a verificação automática	Restaurar la comprobación automática
+Windows íntegro: nenhum arquivo corrompido.	Windows está íntegro: no hay archivos dañados.
+automático	automático
+sem erros	sin errores
+veja o Visualizador de Eventos	ver el Visor de eventos
+{} guardada em {}	{} guardado en {}
+{} evento {}: {}	{} evento {}: {}
+Último despertar	Última activación
+Último despertar, estados de energia disponíveis e o que impede o sono.	Última activación, estados de energía disponibles y qué impide la suspensión.
+▸ {}  Fim, em {}	▸ {}  Terminado, en {}
+Fim, em {}	Terminado, en {}
+Ponto de restauração	Punto de restauración
+  App {}: volta pela Loja, não por aqui	App {}: vuelve por la Store, no aquí
+  Removendo o app {}…	Quitando la app {}…
+  Serviço {}: não existe neste PC, nada a fazer	Servicio {}: no está en este PC, nada que hacer
+  ✓ App {}: removido	✓ App {}: quitada
+  ✓ Criado	✓ Creado
+  ✓ Registro {}: removido, como era antes	✓ Registro {}: quitado, como estaba antes
+  ✓ Registro {}: voltou para {}	✓ Registro {}: vuelto a {}
+  ✓ Registro {}: {} → {}	✓ Registro {}: {} → {}
+  ✓ Serviço {}: início {} → {}	✓ Servicio {}: inicio {} → {}
+  ✓ Serviço {}: início voltou para {}	✓ Servicio {}: inicio vuelto a {}
+  ✗ App {}: continua instalado	✗ App {}: sigue instalada
+  ✗ O Windows recusou	✗ Windows lo rechazó
+  ✗ Registro {}: mudou depois do Prisma, ficou como está	✗ Registro {}: cambiado después de Prisma, se dejó como está
+  ✗ Registro {}: não consegui restaurar	✗ Registro {}: no se pudo restaurar
+  ✗ Registro {}: o Windows recusou a escrita	✗ Registro {}: Windows rechazó la escritura
+  ✗ Serviço {}: o Windows recusou a mudança	✗ Servicio {}: Windows rechazó el cambio
+  ✗ Serviço {}: mudou depois do Prisma, ficou como está	✗ Servicio {}: cambiado después de Prisma, se dejó como está
+  ✗ Serviço {}: não consegui restaurar	✗ Servicio {}: no se pudo restaurar
+6% de FPS em 720p e cerca de 2% em 4K, mas tira uma proteção real do kernel. A escolha fica na tela oficial do Windows.	6% de FPS a 720p y cerca de 2% en 4K, pero quita una protección real del núcleo. La decisión queda en la página oficial de Windows.
+A Microsoft recomenda contra, e há relatos de quebra.	Microsoft lo desaconseja y hay informes de fallos.
+Abrir tela do Windows	Abrir página de Windows
+Aplicado	Aplicado
+Aplicado, mas uma conferência falhou. Veja o que mudou.	Aplicado, pero una comprobación falló. Mira qué cambió.
+Aplicado. Windows Update, Loja e Central de Segurança conferidos.	Aplicado. Windows Update, Store y Centro de seguridad comprobados.
+Aplicar {}	Aplicar {}
+Atualizações sem compartilhar com outros PCs	Actualizaciones sin compartir con otros PC
+Auditoria	Auditoría
+Automático com atraso	Automático (retrasado)
+Baixo impacto.	Bajo impacto.
+Bloquear atualizações	Bloquear actualizaciones
+Bloqueia correções automáticas de problemas da Microsoft.	Bloquea las correcciones automáticas de problemas de Microsoft.
+Cada item foi pesquisado. Menos ajustes aqui é uma decisão, não uma falta.	Cada elemento fue investigado. Menos ajustes aquí es una decisión, no un hueco.
+Caminhos de arquivo longos	Rutas de archivo largas
+Central de Segurança ativa	Centro de seguridad activo
+Conferindo o essencial	Comprobando lo esencial
+Confirmar: aplicar {}	Confirmar: aplicar {}
+Consenso entre as seis ferramentas analisadas.	Consenso entre las seis herramientas analizadas.
+Consenso entre ferramentas, mas muita gente usa.	Consenso entre herramientas, pero mucha gente lo usa.
+Conveniência, e ajuda a notar arquivos disfarçados.	Comodidad, y ayuda a detectar archivos disfrazados.
+Conveniência.	Comodidad.
+Copiar e colar entre aparelhos para de funcionar.	Copiar y pegar entre dispositivos deja de funcionar.
+Dados de diagnóstico no mínimo do Pro	Datos de diagnóstico al mínimo de Pro
+Derruba o WSL e outras máquinas virtuais.	Rompe WSL y otras máquinas virtuales.
+Desde 2020 o Windows não muda a resolução de outros programas.	Desde 2020, Windows no cambia la resolución del temporizador de otros programas.
+Desenvolvimento	Desarrollo
+Desfazer	Deshacer
+Desfazer tudo	Deshacer todo
+Documentado	Documentado
+Evita erros em projetos grandes. Pode pedir reinício.	Evita errores en proyectos grandes. Puede necesitar reiniciar.
+Ferramentas de timer	Herramientas de temporizador
+Fica em Necessários. Desligar por completo não existe no Pro.	Queda en Obligatorio. Apagarlo por completo no existe en Pro.
+Finalizar tarefa na barra de tarefas	Finalizar tarea en la barra de tareas
+Fora da lista	Fuera
+IA do Windows desligada onde a política vale	IA de Windows desactivada donde se aplica la directiva
+Jogo	Juegos
+Jogos modernos usam UDP nos dados críticos.	Los juegos modernos usan UDP para datos críticos.
+Já estava assim	Ya está así
+Limiar de svchost	Umbral de svchost
+Limpadores de RAM	Limpiadores de RAM
+Listas de serviços em massa	Listas masivas de servicios
+Loja do Windows presente	Microsoft Store presente
+Mantém o histórico da área de transferência funcionando.	Mantiene funcionando el historial del portapapeles.
+Medido	Medido
+Menu Iniciar sem recomendações	Menú Inicio sin recomendaciones
+Modo Desenvolvedor	Modo de desarrollador
+Modo MSI, isolar núcleos, afinidade	Modo MSI, aislamiento de núcleo, afinidad
+Mostrar extensões de arquivo	Mostrar extensiones de archivo
+Nenhum jogo foi visto usando; o valor 100 impediu o serviço de iniciar.	No se vio ningún juego usándolo; el valor 100 impedía que el servicio arrancara.
+Notícias, Clima, Solitaire, Clipchamp, Feedback, Office Hub, To Do e Power Automate.	Noticias, Tiempo, Solitario, Clipchamp, Opinión, Office Hub, To Do y Power Automate.
+Não aplicados: {}	No aplicado: {}
+Não desliga o Bing por inteiro: essa opção não existe no Pro.	No apaga Bing por completo: esa opción no existe en Pro.
+Não melhora, e a latência de rede subiu ao desligar.	Sin mejora, y la latencia de red subió al desactivarlo.
+Não testado nesta build ({}, {}).	No probado en esta compilación ({}, {}).
+O Windows continua baixando normalmente da Microsoft.	Windows sigue descargando normalmente de Microsoft.
+O Windows desfez	Windows lo deshizo
+O Windows recusou o ponto de restauração. {}	Windows rechazó el punto de restauración. {}
+O Windows recusou o ponto de restauração	Windows rechazó el punto de restauración
+O passo a passo aparece aqui ao aplicar ou desfazer.	El registro paso a paso aparece aquí al aplicar o deshacer.
+O que o Prisma achou neste PC	Lo que Prisma encontró en este PC
+O que outros otimizadores fazem e o Prisma não	Lo que otros optimizadores hacen y Prisma no
+O único serviço automático que vale mudar.	El único servicio automático que vale la pena cambiar.
+Opcional e com aviso: há relatos de efeito em conquistas do Xbox.	Opcional, con aviso: hay informes de efectos en los logros de Xbox.
+Pagefile desligado	Archivo de paginación desactivado
+Paint e análise de dados. O Recall só roda em PCs com NPU.	Paint y análisis de datos. Recall solo funciona en PC con NPU.
+Parar o serviço de telemetria	Detener el servicio de telemetría
+Pede reinício	Necesita reiniciar
+Perfis	Perfiles
+Permite instalar pacotes de teste e criar links sem administrador.	Permite instalar paquetes de prueba y crear enlaces sin derechos de administrador.
+Pesquisa sem destaques, nuvem e localização	Búsqueda sin destacados, nube ni ubicación
+Planos Ultimate e Bitsum	Planes Ultimate y Bitsum
+Ponto de restauração criado. {}	Punto de restauración creado. {}
+Pouco ou nada, e um jogo ficou injogável.	Poco o nada, y un juego quedó injugable.
+Preserva WSL e virtualização, e liga caminhos longos.	Mantiene WSL y la virtualización, y activa las rutas largas.
+Privacidade	Privacidad
+Quebraram Bluetooth; as ferramentas sérias recuaram disso.	Rompieron el Bluetooth; las herramientas serias dieron marcha atrás.
+Questão de gosto	Cuestión de gusto
+Questão de gosto.	Cuestión de gusto.
+Reduz o envio de dados até o limite do Pro.	Reduce los datos enviados, hasta el límite de Pro.
+Reduzem segurança, sem ganho.	Reducen la seguridad sin ganancia.
+Relatos	Informes
+Remover Edge ou Loja	Quitar Edge o la Store
+Remover Notas, Alarmes e Gravador	Quitar Bloc de notas, Alarmas y Grabadora
+Remover apps que quase ninguém usa	Quitar apps que casi nadie usa
+Remover o app Copilot	Quitar la app de Copilot
+Restauração	Punto de restauración
+Sem ID de publicidade e experiências personalizadas	Sin ID de publicidad ni experiencias personalizadas
+Sem conteúdo sugerido e instalação silenciosa de apps	Sin contenido sugerido ni instalaciones silenciosas de apps
+Sem ganho medido. Só evita que o Windows grave os últimos segundos.	Sin ganancia medida. Solo impide que Windows grabe los últimos segundos.
+Sem ganho medido; a purga repetida causou travadas com 32 GB.	Sin ganancia medida; las purgas repetidas causaron tirones con 32 GB.
+Sem gravação em segundo plano do Game Bar	Sin grabación en segundo plano de la Game Bar
+Sem pedidos de feedback e com menos relatórios	Sin pedidos de opinión y menos informes
+Sem publicar histórico de atividades	Sin publicar el historial de actividad
+Sem reversão confiável.	No hay forma fiable de volver atrás.
+Sem teste independente em Ryzen 5000.	Sin prueba independiente en Ryzen 5000.
+Serviço de mapas abre só quando precisar	El servicio de Mapas solo abre cuando hace falta
+Sem efeito comprovado.	Sin efecto comprobado.
+Só leitura: nada foi alterado.	Solo lectura: no se cambió nada.
+Só o app. A Microsoft não oferece política clara para o Pro.	Solo la app. Microsoft no ofrece una directiva clara para Pro.
+Só o que tem efeito comprovado. Tudo pode ser desfeito.	Solo lo que tiene efecto comprobado. Todo se puede deshacer.
+Só para este usuário: as políticas equivalentes não valem no Pro.	Solo este usuario: las directivas equivalentes no se aplican en Pro.
+Tira o painel de notícias.	Quita el panel de noticias.
+Transferência em segundo plano não está desativada	La transferencia en segundo plano no se desactiva
+Travou serviços do Xbox; dois projetos removeram.	Congeló los servicios de Xbox; dos proyectos lo quitaron.
+Um PC de 32 GB chegou a usar 39 GB de memória reservada.	Un PC de 32 GB acabó usando 39 GB de memoria reservada.
+Ver discos	Ver discos
+Ver log	Mostrar registro
+Verifica o que importa para jogar e tira ruído. Não promete FPS.	Revisa lo que importa para jugar y quita ruido. No promete FPS.
+Verificando…	Comprobando…
+Verificar de novo	Comprobar de nuevo
+Virtualização desligada	Virtualización desactivada
+Volta só pela Loja	Solo vuelve por la Store
+Widgets desligados	Widgets desactivados
+Windows Update não está desativado	Windows Update no se desactiva
+não existia	no existía
+outro valor	otro valor
+tipo {}	tipo {}
+{} de {}: {}	{} de {}: {}
+Área de transferência sem nuvem	Portapapeles sin nube
+Arquivo	Archivo
+Buscar por nome ou empresa	Buscar por nombre o empresa
+Concluído:	Hecho:
+Concluído: {}	Hecho: {}
+Confirmar: remover {}	Confirmar: quitar {}
+Criar ponto de restauração	Crear punto de restauración
+Data	Fecha
+Desinstalando	Desinstalando
+Desinstalar 1	Desinstalar 1
+Desinstalar {}	Desinstalar {}
+Limpar {} selecionados	Limpiar {} seleccionados
+Manter tudo	Conservar todo
+Nada sobrou.	No quedó nada.
+Não abriu:	No se abrió:
+Não abriu: {}	No se abrió: {}
+O que sobrou	Lo que quedó
+Ordenar por	Ordenar por
+Pastas vão para a Lixeira. O registro ganha um backup antes.	Las carpetas van a la Papelera. El registro recibe una copia antes.
+Ponto de restauração pedido	Punto de restauración solicitado
+Procurando restos…	Buscando restos…
+Registro	Registro
+Removendo {}…	Quitando {}…
+Restos limpos	Restos limpiados
+Se o programa abrir a própria janela, siga por ela.	Si el programa abre su propia ventana, síguela allí.
+Sem janela quando der	Sin ventana si es posible
+Tamanho	Tamaño
+{} itens não saíram	{} elementos no salieron
+{} programas instalados.	{} programas instalados.
+{} restos encontrados. Confira antes de limpar.	{} restos encontrados. Revísalos antes de limpiar.
+10% por toque	10% por pulsación
+2% por toque	2% por pulsación
+5% por toque	5% por pulsación
+Agora: {} + tecla de volume ou mudo	Ahora: {} + tecla de volumen o silencio
+As teclas de volume do teclado, com o modificador, mudam só o programa em foco.	Las teclas de volumen del teclado, con el modificador, cambian solo el programa enfocado.
+Em foco	En foco
+Modificador (pode combinar dois)	Modificador (puedes combinar dos)
+Mostrar aviso na tela	Mostrar aviso en pantalla
+Nenhum programa com som agora.	Ningún programa con sonido ahora.
+Passo	Paso
+Programas com som	Programas con sonido
+Silenciado	Silenciado
+Tocando	Reproduciendo
+Volume por programa	Volumen por programa
+Anéis	Anillos
+Atalho para ligar e desligar	Atajo para activar y desactivar
+Barras finas	Barras finas
+Instrumento	Instrumento
+Mostra CPU, GPU, RAM e VRAM por cima de tudo. Arraste para mudar de lugar.	Muestra CPU, GPU, RAM y VRAM por encima de todo. Arrástralo para moverlo.
+Mostrar widget	Mostrar widget
+Pílula	Píldora
+Idioma	Idioma
+Atualizações	Actualizaciones
+Versão {}	Versión {}
+Procurar agora	Comprobar ahora
+Procurar ao abrir o programa	Comprobar al abrir el programa
+Procurando…	Comprobando…
+Você está na versão mais recente.	Tienes la última versión.
+Versão {} disponível	Versión {} disponible
+Instalar a versão {}	Instalar la versión {}
+Confirmar: instalar e reiniciar	Confirmar: instalar y reiniciar
+Baixando a atualização… {}%	Descargando la actualización… {}%
+Instalando…	Instalando…
+Não consegui acessar o GitHub.	No se pudo contactar con GitHub.
+Ainda não há versão publicada.	Aún no se ha publicado ninguna versión.
+O arquivo baixado não confere. Nada foi alterado.	El archivo descargado no coincide. No se cambió nada.
+A atualização não tem a assinatura do Prisma. Nada foi alterado.	La actualización no lleva la firma de Prisma. No se cambió nada.
+Sem permissão nesta pasta. Reabra como administrador.	Sin permiso en esta carpeta. Vuelve a abrir como administrador.
+Não consegui trocar o programa. Nada foi alterado.	No se pudo reemplazar el programa. No se cambió nada.
+Espere a tarefa em andamento terminar.	Espera a que termine la tarea en curso.
+Nova versão {} disponível em Configurações	Nueva versión {} disponible en Configuración
+Atualizado para a versão {}	Actualizado a la versión {}
+Busca só o GitHub do Prisma, sem enviar dados seus.	Solo contacta con la página de Prisma en GitHub y no envía ninguno de tus datos.
+Programas salvos	Programas guardados
+Quem usa o Fullscreenizer uma vez entra na lista. Marque Automático para aplicar sempre que o programa abrir.	Todo programa en el que uses el Fullscreenizer entra en la lista. Marca Automático para aplicarlo siempre que el programa abra.
+Nenhum programa ainda. Use o Fullscreenizer em uma janela ou clique em Adicionar.	Aún no hay programas. Usa el Fullscreenizer en una ventana o pulsa Añadir.
+Detalhes	Detalles
+Mostrando {}	Mostrando {}
+Ir para detalhes	Ir a detalles
+Ver todos os processos	Mostrar todos los procesos
+Abrir local do arquivo	Abrir ubicación del archivo
+Pesquisar online	Buscar en internet
+Propriedades	Propiedades
+Finalizar tarefa?	¿Finalizar tarea?
+{} será fechado à força. O que não foi salvo nesse programa será perdido.	{} se cerrará a la fuerza. Se perderá lo que no esté guardado en este programa.
+Parar este serviço?	¿Detener este servicio?
+{} vai parar agora. Programas que dependem dele podem deixar de funcionar.	{} se detendrá ahora. Los programas que dependen de él pueden dejar de funcionar.
+Reiniciar este serviço?	¿Reiniciar este servicio?
+{} vai parar e iniciar de novo.	{} se detendrá y volverá a iniciarse.
+Botão direito no serviço mostra iniciar, parar, reiniciar e propriedades.	Clic derecho en un servicio para iniciar, detener, reiniciar y propiedades.
+Remover da inicialização?	¿Quitar del inicio?
+{} deixa de abrir com o Windows. O programa continua instalado.	{} ya no abrirá con Windows. El programa sigue instalado.
+Desinstalar estes programas?	¿Desinstalar estos programas?
+{} e mais {}	{} y {} más
+Limpar os restos selecionados?	¿Limpiar los restos seleccionados?
+Pastas e arquivos vão para a Lixeira. As chaves do registro são apagadas depois de um backup.	Carpetas y archivos van a la Papelera. Las claves del registro se borran tras una copia.
+Restos excluídos	Restos borrados
+{} itens foram excluídos com sucesso.	{} elementos borrados correctamente.
+Alguns restos não saíram	Algunos restos no salieron
+{} itens excluídos, {} não saíram: {}	{} elementos borrados, {} no salieron: {}
+Não foi removido: {}	No quitados: {}
+{} restos encontrados. Só vêm marcados os que têm o nome exato; confira os outros.	{} restos encontrados. Solo las coincidencias exactas de nombre vienen marcadas; revisa los demás.
+Procurando restos	Buscando restos
+Criando ponto de restauração…	Creando punto de restauración…
+Ponto de restauração criado	Punto de restauración creado
+Desinstalado: {}	Desinstalado: {}
+Desinstalando {}…	Desinstalando {}…
+Na fila: {}	En cola: {}
+Executar esta ferramenta?	¿Ejecutar esta herramienta?
+Outra ferramenta está rodando. Espere terminar.	Hay otra herramienta en marcha. Espera a que termine.
+Desfazer tudo?	¿Deshacer todo?
+Todos os ajustes aplicados pelo Prisma voltam ao valor anterior, menos o que foi mudado depois.	Todos los ajustes aplicados por Prisma vuelven a su valor anterior, salvo lo que se cambió después.
+Aplicar estes ajustes?	¿Aplicar estos ajustes?
+{} ajustes vão mudar o Windows. Tudo pode ser desfeito depois.	{} ajustes cambiarán Windows. Todo se puede deshacer después.
+Enviar para a Lixeira?	¿Enviar a la Papelera?
+Acima de	Arriba
+GPU 3D	GPU 3D
+Som do sistema ligado: grava todos os sons do PC.	Sonido del sistema activado: graba todo el sonido del PC.
+Som do sistema desligado: grava só o som da janela capturada.	Sonido del sistema desactivado: graba solo el sonido de la ventana capturada.
+Som do sistema desligado: não grava o som do PC. Para gravar um programa só, escolha Janela em foco.	Sonido del sistema desactivado: no se graba el sonido del PC. Para grabar un solo programa, elige Ventana en foco.
+Instalar no PC?	¿Instalar en este PC?
+O Prisma vai para Arquivos de Programas e reabre de lá. O Windows pede permissão de administrador.	Prisma se mueve a Archivos de programa y vuelve a abrirse desde allí. Windows pide permiso de administrador.
+A instalação precisa da permissão de administrador	Instalar necesita permiso de administrador
+Substituir o Gerenciador de Tarefas	Sustituir el Administrador de tareas
+Ligado: Ctrl+Shift+Esc abre o Prisma.	Activado: Ctrl+Shift+Esc abre Prisma.
+Desligado: Ctrl+Shift+Esc abre o Gerenciador de Tarefas do Windows.	Desactivado: Ctrl+Shift+Esc abre el Administrador de tareas de Windows.
+Ativar	Activar
+Desativar	Desactivar
+Devolver o Gerenciador de Tarefas?	¿Devolver el Administrador de tareas?
+Ctrl+Shift+Esc volta a abrir o Gerenciador de Tarefas do Windows.	Ctrl+Shift+Esc vuelve a abrir el Administrador de tareas de Windows.
+Substituir o Gerenciador de Tarefas?	¿Sustituir el Administrador de tareas?
+Ctrl+Shift+Esc passa a abrir o Prisma. Dá para desfazer aqui a qualquer momento.	Ctrl+Shift+Esc abrirá Prisma. Puedes deshacerlo aquí cuando quieras.
+Desligado. Só na versão instalada, por segurança.	Desactivado. Solo en la versión instalada, por seguridad.
+Instalar a atualização?	¿Instalar la actualización?
+O Prisma vai baixar a versão {}, reiniciar e continuar com as suas configurações.	Prisma descargará la versión {}, se reiniciará y conservará tu configuración.
+Padrão	Predeterminado
+Voltar ao padrão?	¿Volver a lo predeterminado?
+As opções desta tela voltaram ao padrão	Las opciones de esta página volvieron a lo predeterminado
+Volta atalhos, pasta, formatos, som e replay ao padrão.	Restablece atajos, carpeta, formatos, sonido y repetición a lo predeterminado.
+Volta os planos, a troca automática e o que conta como carga ao padrão.	Restablece los planes, el cambio automático y lo que cuenta como carga a lo predeterminado.
+Volta o atalho ao padrão e desliga o modo automático de todos os programas. A lista continua salva.	Restablece el atajo a lo predeterminado y desactiva el modo automático en todos los programas. La lista se conserva.
+Volta as opções de ponto de restauração e de desinstalar sem janela ao padrão.	Restablece las opciones de punto de restauración y desinstalación sin ventana a lo predeterminado.
+Volta as opções Ver log e Restauração ao padrão. Os ajustes aplicados continuam como estão: para reverter, use Desfazer.	Restablece las opciones Mostrar registro y Punto de restauración a lo predeterminado. Los ajustes aplicados siguen igual: usa Deshacer para revertirlos.
+Esvazia as listas de nunca fechar e sempre fechar, e as sugestões recusadas. Essa ação não fecha nenhum programa.	Vacía las listas de nunca cerrar y siempre cerrar y las sugerencias rechazadas. No cierra ningún programa.
+Volta o modificador, o passo e o aviso na tela ao padrão.	Restablece el modificador, el paso y el aviso en pantalla a lo predeterminado.
+Volta o atalho, o estilo e a posição do widget ao padrão, e esconde o widget.	Restablece el atajo, el estilo y la posición del widget a lo predeterminado, y oculta el widget.
+Volta os atalhos de Otimizar, Fechar à força e Reiniciar o Explorer, o idioma e a busca de atualização ao padrão.	Restablece los atajos de Optimizar, Forzar cierre y Reiniciar Explorador, el idioma y la comprobación de actualizaciones a lo predeterminado.
+Fechar à força	Forzar cierre
+Encerra na hora o programa em foco, mesmo travado. O que não foi salvo é perdido.	Termina al instante el programa en foco, aunque esté congelado. Se pierde lo no guardado.
+{} fechado à força	{} cerrado a la fuerza
+O Windows protegeu {}	Windows protegió {}
+Som	Sonido
+Volume e aparelhos de saída e de entrada de cada programa.	Volumen y dispositivos de salida y entrada de cada programa.
+Padrão do Windows	Predeterminado de Windows
+Saída	Salida
+Entrada	Entrada
+Sem som agora	Sin sonido ahora
+Da lista de programas	De la lista de programas
+Escolher arquivo .exe	Elegir archivo .exe
+Adicionar programa	Añadir programa
+Voltar	Volver
+Procurando programas…	Buscando programas…
+Nenhum programa encontrado.	No se encontraron programas.
+HDR ligado	HDR activado
+HDR desligado, cor ampla	HDR desactivado, color amplio
+HDR desligado	HDR desactivado
+Sem suporte a HDR	Sin soporte HDR
+Modo	Modo
+Imagem	Imagen
+Profundidade	Profundidad
+{} bits	{} bits
+Brilho do SDR	Brillo SDR
+{} nits	{} nits
+Perfil de calibração	Perfil de calibración
+Nenhum perfil de calibração ativo nesta tela.	No hay perfil de calibración activo en esta pantalla.
+Neutra	Neutro
+Reforço de {}%	Refuerzo de {}%
+Matriz própria	Matriz propia
+Saturação	Saturación
+Curva	Curva
+Corrigida	Corregida
+Conferem com a tela	Coincide con la pantalla
+Não conferem com a tela	No coincide con la pantalla
+Sem ficha para comparar	Sin datos de pantalla para comparar
+Cores primárias	Primarios
+Brilho declarado, em nits	Brillo declarado, en nits
+Pico	Pico
+Preto	Negro
+Ficha enviada pela tela	Datos enviados por la pantalla
+Sem leitura direta nesta placa	Sin lectura directa en esta tarjeta gráfica
+Override de EDID em uso	Sustitución de EDID en uso
+Ficha em uso no Windows	Datos en uso por Windows
+Não informado	No informado
+Sem perfil	Sin perfil
+Bloco Dolby Vision	Bloque Dolby Vision
+Não declarado	No declarado
+O que o Windows informa aos jogos agora	Lo que Windows informa ahora a los juegos
+A tela declara	La pantalla declara
+Guiado pela tela	Dirigido por la pantalla
+Baixa latência 4:2:2	Baja latencia 4:2:2
+Guiado pela tela e baixa latência 4:2:2	Dirigido por la pantalla y baja latencia 4:2:2
+Guiado pela tela e baixa latência 4:4:4	Dirigido por la pantalla y baja latencia 4:4:4
+Modos	Modos
+Outro valor	Otro valor
+Sem valor salvo	Sin valor guardado
+HDR salvo no Windows	HDR guardado en Windows
+Extensão da Store	Extensión de la Store
+Instalada	Instalada
+Não instalada	No instalada
+Saída padrão	Salida predeterminada
+Sem suporte	No compatible
+Outro formato	Otro formato
+Som espacial	Sonido espacial
+{} canais · {} kHz	{} canales · {} kHz
+Mistura do Windows	Mezcla de Windows
+Não encontrada	No encontrado
+App Dolby Access	App Dolby Access
+Instalado	Instalada
+Não instalado	No instalada
+Canais aceitos	Canales aceptados
+O perfil reforça a saturação em {}% e isso vale para todo o conteúdo HDR, inclusive jogos com HDR próprio.	El perfil aumenta la saturación un {}%, y eso vale para todo el contenido HDR, incluidos los juegos con HDR propio.
+As cores primárias do perfil não são as desta tela. Isso costuma vir de um perfil feito em outra tela, e os programas que leem esses dados recebem a informação errada.	Los primarios del perfil no son los de esta pantalla. Suele venir de un perfil hecho en otra pantalla, y los programas que leen estos datos reciben información errónea.
+O HDR está desligado. O perfil e o valor informado aos jogos mudam quando ele liga, então confira de novo com o HDR ligado.	El HDR está desactivado. El perfil y el valor informado a los juegos cambian al activarlo, así que vuelve a comprobar con el HDR activado.
+Há um override de EDID nesta tela. O Windows usa os valores dele, não os que a tela envia.	Esta pantalla tiene una sustitución de EDID. Windows usa sus valores, no los que envía la pantalla.
+Há um override de EDID nesta tela, e esta placa não permite ler a ficha original.	Esta pantalla tiene una sustitución de EDID, y esta tarjeta gráfica no puede leer los datos originales.
+A tela declara Dolby Vision, mas não o modo 4:4:4 de baixa latência. Segundo relatos, é isso que faz o Windows não mostrar a certificação Dolby Vision.	La pantalla declara Dolby Vision, pero no el modo de baja latencia 4:4:4. Según informes de usuarios, por eso Windows no muestra la certificación Dolby Vision.
+A tela só aceita PCM de 2 canais. Com o som espacial desligado, todo o som do PC sai em estéreo.	La pantalla solo acepta PCM de 2 canales. Con el sonido espacial desactivado, todo el audio del PC sale en estéreo.
+O que a tela, o perfil e o Windows estão informando, e a calibração própria.	Lo que informan la pantalla, el perfil y Windows, más tu propia calibración.
+Lendo…	Leyendo…
+Ler de novo	Leer de nuevo
+Lendo a tela e o perfil…	Leyendo la pantalla y el perfil…
+Não consegui ler as telas.	No se pudieron leer las pantallas.
+Calibração própria	Calibración propia
+Você ajusta os padrões a olho e o Prisma grava o resultado como perfil de HDR. Antes de começar, deixe a TV no modo de imagem em que você joga, desligue o mapeamento dinâmico (use HGIG se houver), desligue a luz noturna do Windows e deixe a sala como quando você joga. Leva cerca de 5 minutos e abre em tela cheia.	Ajustas los patrones a ojo y Prisma guarda el resultado como un perfil HDR. Antes de empezar, pon la TV en el modo de imagen con el que juegas, desactiva el mapeo de tonos dinámico (usa HGIG si existe), desactiva la luz nocturna de Windows y deja la habitación como cuando juegas. Tarda unos 5 minutos y se abre a pantalla completa.
+Modo de imagem da TV	Modo de imagen de la TV
+Filmmaker	Filmmaker
+Cinema	Cine
+Vívido	Vívido
+Começar calibração	Iniciar calibración
+Ligue o HDR para calibrar.	Activa el HDR para calibrar.
+Resultado da calibração	Resultado de la calibración
+Pico em {}% da tela	Pico al {}% de la pantalla
+Vermelho	Rojo
+Verde	Verde
+Azul	Azul
+Saturação neutra	Saturación neutra
+Manter reforço de {}%	Mantener refuerzo de {}%
+A forma não sumiu antes de 4000 nits: a TV está suavizando em vez de cortar, e o resultado não é confiável. Desligue o mapeamento dinâmico ou use HGIG e repita.	La forma no desapareció antes de 4000 nits: la TV está suavizando en vez de recortar, así que el resultado no es fiable. Desactiva el mapeo de tonos dinámico o usa HGIG y vuelve a intentarlo.
+Salvar e ativar	Guardar y activar
+Descartar	Descartar
+Perfis do Prisma	Perfiles de Prisma
+Pico {} · Tela cheia {} · Preto {}	Pico {} · Pantalla completa {} · Negro {}
+Ativo	Activo
+Perfil anterior: {}	Perfil anterior: {}
+O Windows não aceitou o perfil.	Windows no aceptó el perfil.
+Perfil salvo e ativado.	Perfil guardado y activado.
+Os padrões estão abertos na tela.	Los patrones están abiertos en la pantalla.
+Gravando e conferindo o perfil…	Guardando y comprobando el perfil…
+O Windows não aceitou o perfil. O perfil anterior foi mantido.	Windows no aceptó el perfil. Se mantuvo el perfil anterior.
+Não consegui abrir os padrões em HDR.	No se pudieron abrir los patrones HDR.
+Passo {} de {}: preto	Paso {} de {}: negro
+Passo {} de {}: pico em janela de {}%	Paso {} de {}: pico en una ventana del {}%
+Passo {} de {}: canal vermelho	Paso {} de {}: canal rojo
+Passo {} de {}: canal verde	Paso {} de {}: canal verde
+Passo {} de {}: canal azul	Paso {} de {}: canal azul
+Abaixe até as formas sumirem e pare no primeiro valor em que somem. Agora: {} nits. S liga ou desliga a moldura.	Baja hasta que las formas desaparezcan y para en el primer valor en que lo hagan. Ahora: {} nits. S activa o desactiva el marco.
+Aumente até o quadrado escuro do centro sumir no fundo claro e pare no primeiro valor em que some. Agora: {} nits.	Sube hasta que el cuadrado oscuro del centro desaparezca en el fondo claro y para en el primer valor en que lo haga. Ahora: {} nits.
+← → ajustam · ↑ ↓ ajustam mais rápido · Enter confirma · Backspace volta · H esconde este texto · T troca o caminho (agora pelo Windows) · Esc sai	← → ajusta · ↑ ↓ ajusta más rápido · Enter confirma · Retroceso vuelve · H oculta este texto · T cambia el camino (ahora por Windows) · Esc sale
+← → ajustam · ↑ ↓ ajustam mais rápido · Enter confirma · Backspace volta · H esconde este texto · T troca o caminho (agora direto) · Esc sai	← → ajusta · ↑ ↓ ajusta más rápido · Enter confirma · Retroceso vuelve · H oculta este texto · T cambia el camino (ahora directo) · Esc sale
+Perfil ativado. O Windows ainda informa os valores antigos aos jogos.	Perfil activado. Windows aún informa los valores antiguos a los juegos.
+Medir atraso	Medir retraso
+Medindo…	Midiendo…
+Sem som espacial	Sin sonido espacial
+Atraso medido	Retraso medido
+{}: {} ms	{}: {} ms
+Atraso do som: {} ms	Retraso del sonido: {} ms
+Ajuste até o clarão e o clique parecerem um só. Para medir com mais precisão, filme com o celular e deixe em 0 ms.	Ajusta hasta que el destello y el clic parezcan uno solo. Para una lectura más precisa, grábalo con el móvil y déjalo en 0 ms.
+← → mudam 5 ms · ↑ ↓ mudam 25 ms · Enter ou Esc guarda e sai	← → cambia 5 ms · ↑ ↓ cambia 25 ms · Enter o Esc guarda y sale
+Não consegui abrir o teste.	No se pudo abrir la prueba.
+Auto HDR por jogo	Auto HDR por juego
+Só para jogos DX11 e DX12 sem HDR próprio. Vale a partir da próxima vez que o jogo abrir.	Solo para juegos DX11 y DX12 sin HDR propio. Se aplica la próxima vez que se abra el juego.
+O Auto HDR está desligado nas configurações do Windows. Ligue lá para valer.	Auto HDR está desactivado en la configuración de Windows. Actívalo allí para que esto surta efecto.
+Forçar Auto HDR	Forzar Auto HDR
+Desligar Auto HDR	Desactivar Auto HDR
+Não consegui gravar a escolha.	No se pudo guardar la elección.
+Seta: aponta para algo (A)	Flecha: señala algo (A)
+Retângulo: destaca uma área (R)	Rectángulo: resalta un área (R)
+Elipse: circula algo (E)	Elipse: rodea algo (E)
+Linha: traça uma reta (L)	Línea: traza una línea recta (L)
+Caneta: desenha à mão livre (P)	Lápiz: dibuja a mano alzada (P)
+Marcador: grifa por cima (M)	Marcador: resalta por encima (M)
+Texto: escreve na imagem (T)	Texto: escribe en la imagen (T)
+Número: marca passos em ordem (N)	Número: marca pasos en orden (N)
+Pixelar: esconde uma parte (B)	Pixelar: oculta una parte (B)
+Laranja (1)	Naranja (1)
+Azul (2)	Azul (2)
+Branco (3)	Blanco (3)
+Preto (4)	Negro (4)
+Fixar a imagem flutuando na tela (F)	Fijar la imagen en la pantalla (F)
+Salvar na pasta (Ctrl+S)	Guardar en la carpeta (Ctrl+S)
+Copiar para a área de transferência (Ctrl+C)	Copiar al portapapeles (Ctrl+C)
+Foto da janela	Foto de ventana
+Foto da janela em foco	Foto de la ventana en foco
+Gravar janela	Grabar ventana
+Gravar tela	Grabar pantalla
+Gravar Janela	Grabar Ventana
+Gravar Tela	Grabar Pantalla
+Gravar Janela e parar	Grabar Ventana y detener
+Gravar Tela e parar	Grabar Pantalla y detener
+O replay grava	La repetición graba
+Som do sistema desligado: Gravar Janela grava só o som da janela, e Gravar Tela não grava o som do PC.	Sonido del sistema desactivado: Grabar Ventana graba solo esa ventana, y Grabar Pantalla no graba sonido del PC.
+Editar plano	Editar plan
+Exportar	Exportar
+Importar	Importar
+Mostrar ocultas	Mostrar ocultos
+Na tomada	Enchufado
+Na bateria	Con batería
+Lendo o plano…	Leyendo el plan…
+Nenhuma opção encontrada.	No se encontraron opciones.
+O Windows não aceitou esse valor	Windows no aceptó este valor
+Planos de energia	Planes de energía
+Plano importado	Plan importado
+Não consegui importar esse arquivo	No se pudo importar este archivo
+Plano exportado	Plan exportado
+Não consegui exportar o plano	No se pudo exportar el plan
+Geral	General
+Editar	Editar
+Selecione um plano primeiro	Elige un plan primero
+Manter o som acordado	Mantener el sonido despierto
+Silêncio puro	Silencio puro
+Sinal inaudível	Señal inaudible
+Evita o corte no começo do som em HDMI e Dolby. Para sozinho depois de 10 minutos sem uso.	Evita el corte al inicio de los sonidos en HDMI y Dolby. Se detiene solo tras 10 minutos sin uso.
+Medidor	Medidor
+Leitor de performance, limitador de FPS e HDR automático por jogo.	Lector de rendimiento, limitador de FPS y HDR automático por juego.
+Volta atalhos, opacidade, itens e regras ao padrão. A lista de jogos continua salva.	Restablece atajos, opacidad, elementos y reglas. La lista de juegos se conserva.
+HDR automático	HDR automático
+Só na lista	Solo los de la lista
+Mostrar compacto	Mostrar compacto
+Mostrar completo	Mostrar completo
+Esconder tudo	Ocultar todo
+Opacidade do compacto	Opacidad del compacto
+Opacidade do completo	Opacidad del completo
+O que aparece no completo	Qué muestra la vista completa
+Fica em uma coluna. A segunda só abre se não couber na tela.	Una columna. Se abre una segunda solo si no cabe.
+FPS e médias	FPS y promedios
+Frame time	Tiempo de fotograma
+Latência do PC	Latencia del PC
+Limitador	Limitador
+Upscaling	Escalado
+Geração de quadros	Generación de fotogramas
+Reflex	Reflex
+CPU por núcleo	CPU por núcleo
+VRAM e RAM	VRAM y RAM
+Disco e rede	Disco y red
+Modo de exibição	Modo de pantalla
+Tempo de jogo	Tiempo de juego
+Jogos	Juegos
+Limitando	Limitando
+Perfil DLSS	Perfil DLSS
+Nenhum jogo ainda. Use Adicionar.	Aún no hay juegos. Usa Añadir.
+Anti-cheat detectado	Antitrampas detectado
+Nenhum anti-cheat detectado	Ningún antitrampas detectado
+Compacto	Compacto
+Completo	Completo
+Manual	Manual
+Com geração	Con generación
+FPS real	FPS reales
+Ligar	Activar
+Não ligar	No activar
+Do jogo	Del juego
+Recomendado	Recomendado
+Limite gravado. Vale na próxima abertura do jogo.	Límite guardado. Se aplica la próxima vez que se abra el juego.
+Não consegui gravar no driver NVIDIA.	No se pudo escribir en el driver de NVIDIA.
+Latência	Latencia
+Medindo {} min	Midiendo {} min
+Flip direto	Volteo directo
+Composto pelo Windows	Compuesto por Windows
+{} reais + {} gerados	{} reales + {} generados
+Média	Promedio
+Só em jogos com Reflex	Solo en juegos con Reflex
+Limite	Límite
+Método	Método
+Limite do driver	Límite del driver
+Medindo há {} min de {}.	Midiendo durante {} de {} min.
+Limite {} vale na próxima abertura do jogo.	El límite {} se aplica la próxima vez que se abra el juego.
+Nenhum carregado	Ninguno cargado
+{} · carregado	{} · cargado
+Ligada · {}x	Activado · {}x
+{} carregado	{} cargado
+Não detectada	No detectado
+Integrado no jogo	Integrado en el juego
+Não detectado	No detectado
+Pico informado	Pico informado
+Sugestão no jogo: pico {} nits · branco 200 nits	Sugerencia en el juego: pico {} nits · blanco 200 nits
+Núcleo	Núcleo
+Memória	Memoria
+{} MHz · ventoinha {}%	{} MHz · ventilador {}%
+Variação	Variación
+{} ms · variação {} ms	{} ms · variación {} ms
+Medidor compacto	Medidor compacto
+Medidor completo	Medidor completo
+Esconder medidor	Ocultar medidor
+Reportar bug	Informar un error
+Preencha aqui. O navegador abre o GitHub com tudo escrito.	Rellena esto. Tu navegador abre GitHub con todo escrito.
+Função com problema	Función con el problema
+Gravidade	Gravedad
+Leve	Leve
+Moderado	Moderada
+Grave	Grave
+Incomoda, mas dá para usar.	Molesta, pero se puede usar.
+Atrapalha o uso, mas tem como contornar.	Estorba, pero hay forma de evitarlo.
+Trava, fecha, perde dados ou impede o uso.	Congela, cierra, pierde datos o impide el uso.
+O que aconteceu? Conte o que fez, o que esperava e o que viu.	¿Qué pasó? Cuenta qué hiciste, qué esperabas y qué viste.
+Foto (opcional)	Imagen (opcional)
+Ajuda em bugs visuais. Use o atalho de foto do Prisma, copie e clique em Colar.	Ayuda con errores visuales. Usa el atajo de foto de Prisma, copia y pulsa Pegar.
+Escolher	Elegir
+Colar	Pegar
+Tirar a foto	Quitar imagen
+Incluir dados do PC e registro	Incluir datos del PC y registro
+Ver o que vai junto	Ver qué se envía
+A página do GitHub é pública. Nome de usuário, nome do PC e caminhos de arquivo não vão junto.	Las páginas de GitHub son públicas. Se omiten el nombre de usuario, el nombre del PC y las rutas de archivos.
+Enviar pelo navegador	Enviar por el navegador
+Enviar direto	Enviar directamente
+Outra coisa	Otra cosa
+Se o GitHub pedir, entre na sua conta. O texto continua lá depois.	Si GitHub lo pide, inicia sesión en tu cuenta. El texto sigue allí después.
+O texto era grande demais para o endereço: clique na descrição, selecione tudo e aperte Ctrl+V.	El texto era demasiado largo para el enlace: haz clic en la descripción, selecciona todo y pulsa Ctrl+V.
+Clique em Copiar a foto, depois clique no fim da descrição e aperte Ctrl+V.	Pulsa Copiar la imagen, luego haz clic al final de la descripción y pulsa Ctrl+V.
+Clique no fim da descrição e aperte Ctrl+V: a foto já está copiada.	Haz clic al final de la descripción y pulsa Ctrl+V: la imagen ya está copiada.
+Confira o texto e clique em Create no GitHub.	Revisa el texto y pulsa Create en GitHub.
+Falta só confirmar no navegador	Solo falta la confirmación en el navegador
+Copiar a foto	Copiar la imagen
+Copiar o relatório	Copiar el informe
+Abrir de novo	Abrir de nuevo
+Voltar ao formulário	Volver al formulario
+Novo relatório	Nuevo informe
+Falando com o GitHub...	Hablando con GitHub...
+Digite este código na página que abriu	Escribe este código en la página que se abrió
+Depois de autorizar, o Prisma cria a página sozinho. A autorização vale só para este envio e não fica guardada.	Tras autorizar, Prisma crea la página por sí solo. La autorización es solo para este informe y no se guarda.
+Enviando...	Enviando...
+Relatório enviado. Obrigado!	Informe enviado. ¡Gracias!
+A página abriu no navegador. A foto está copiada: clique no campo de comentário, aperte Ctrl+V e clique em Comment.	La página se abrió en tu navegador. La imagen está copiada: haz clic en el cuadro de comentario, pulsa Ctrl+V y luego Comment.
+A página abriu no navegador.	La página se abrió en tu navegador.
+Não deu para enviar direto	No se pudo enviar directamente
+Não consegui falar com o GitHub.	No se pudo contactar con GitHub.
+O código expirou. Tente de novo.	El código caducó. Inténtalo de nuevo.
+O GitHub recusou a autorização.	GitHub rechazó la autorización.
+Função	Función
+Versão	Versión
+O que aconteceu	Qué pasó
+Foto	Imagen
+Apague esta linha e cole a foto aqui (Ctrl+V).	Borra esta línea y pega la imagen aquí (Ctrl+V).
+O texto não coube no endereço. Apague esta linha e cole o relatório completo (Ctrl+V).	El texto no cupo en el enlace. Borra esta línea y pega el informe completo (Ctrl+V).
+Dados do PC e registro	Datos del PC y registro
+Não há imagem copiada	No hay imagen copiada
+Relatório copiado	Informe copiado
+Não consegui abrir o navegador	No se pudo abrir el navegador
+Não consegui abrir essa imagem	No se pudo abrir esta imagen
+Imagens	Imágenes
+O Prisma fechou sozinho da última vez. Se puder, conte em Reportar bug.	Prisma se cerró inesperadamente la última vez. Si puedes, cuéntanoslo en Informar un error.
+Abra um jogo para usar o limitador.	Abre un juego para usar el limitador.
+Abra um jogo para gravar o registro.	Abre un juego para grabar el registro.
+Registro iniciado	Registro iniciado
+Não consegui criar a pasta do registro	No se pudo crear la carpeta del registro
+Registro salvo em Documentos\Prisma\Logs	Registro guardado en Documentos\Prisma\Logs
+Sem limite	Sin límite
+Limite {}	Límite {}
+Sem driver NVIDIA	Sin driver de NVIDIA
+Ativo agora	Activo ahora
+{} FPS	{} FPS
+O novo limite vale ao reabrir o jogo.	El nuevo límite se aplica cuando el juego se vuelva a abrir.
+Ligar: {}	Activar: {}
+Ajustar: {} · {}	Ajustar: {} · {}
+Gravando	Grabación
+Duração	Duración
+Ligar e desligar: {}	Iniciar y detener: {}
+Ligar e desligar	Iniciar y detener
+Registro ligado	Registro iniciado
+Registro salvo	Registro guardado
+Registro {}	Registro {}
+Sem quadros agora	Sin fotogramas ahora
+Limitador durante o jogo	Limitador durante el juego
+Com o jogo aberto, estes atalhos mudam o limite dele, e o medidor completo mostra o resultado.	Con el juego abierto, estos atajos cambian su límite y el medidor completo muestra el resultado.
+O driver NVIDIA só lê o limite quando o jogo abre, então a mudança vale ao reabrir o jogo.	El driver de NVIDIA solo lee el límite al abrir el juego, así que el cambio se aplica cuando el juego se vuelva a abrir.
+Ligar ou desligar	Activar o desactivar
+Aumentar o limite	Subir el límite
+Diminuir o limite	Bajar el límite
+Ligar o limitador	Activar el limitador
+Registro de dados	Registro de datos
+Grava cada quadro, cada segundo e a CPU de cada thread do jogo, para estudar desempenho. Só roda se você ligar.	Graba cada fotograma, cada segundo y la CPU de cada hilo del juego, para estudiar el rendimiento. Solo funciona si lo activas.
+5 minutos	5 minutos
+10 minutos	10 minutos
+Abrir pasta	Abrir carpeta
+Começar sozinho quando um jogo abrir	Empezar solo cuando se abra un juego
+Pronto para gravar	Listo para grabar
+Abra um jogo para iniciar	Abre un juego para empezar
+Quadros	Fotogramas
+FPS médio	FPS promedio
+Frame time mediano	Tiempo de fotograma mediano
+Frame time p95	Tiempo de fotograma p95
+Frame time p99	Tiempo de fotograma p99
+Frame time p99,9	Tiempo de fotograma p99.9
+Pior quadro	Peor fotograma
+Engasgos	Tirones
+CPU média	CPU promedio
+Núcleo lógico mais usado	Núcleo lógico más ocupado
+GPU média	GPU promedio
+Pico de VRAM	Pico de VRAM
+Pico de RAM	Pico de RAM
+Threads mais ocupadas, em % de um núcleo	Hilos más ocupados, en % de un núcleo
+média	promedio
+pico	pico
+Limite ativo	Límite activo
+Leitura: GPU cheia na maior parte do tempo, então o limite parece ser a GPU.	Lectura: GPU llena casi todo el tiempo, así que el límite parece ser la GPU.
+Leitura: uma thread perto de um núcleo inteiro com a GPU sobrando, então o limite parece ser a CPU.	Lectura: un hilo cerca de un núcleo entero con GPU de sobra, así que el límite parece ser la CPU.
+Leitura: nem GPU nem uma thread sozinha ficaram cheias. Veja os trechos em segundos.csv.	Lectura: ni la GPU ni un solo hilo se llenaron. Revisa los tramos en segundos.csv.
+Fechar {} {} e liberar {} GB?	¿Cerrar {} {} y liberar {3} GB?
+Posição do compacto	Posición del compacto
+Posição do completo	Posición del completo
+Superior esquerdo	Arriba a la izquierda
+Superior centro	Arriba al centro
+Superior direito	Arriba a la derecha
+Lado direito	Lado derecho
+Lado esquerdo	Lado izquierdo
+Injeção	Inyección
+Driver	Driver
+Injeção, aguardando	Inyección, esperando
+Injeção desligada	Inyección desactivada
+Injeção desligada: o jogo caiu com ela.	Inyección desactivada: el juego falló con ella.
+Injeção desligada: o jogo caiu	Inyección desactivada: el juego falló
+Injeção bloqueada: anti-cheat detectado.	Inyección bloqueada: antitrampas detectado.
+Injeção parada: geração de quadros carregada.	Inyección detenida: generación de fotogramas cargada.
+A injeção não carregou neste jogo.	La inyección no cargó en este juego.
+Usar injeção neste jogo?	¿Usar inyección en este juego?
+O limite passa a mudar na hora, mas um módulo do Prisma entra no jogo, e isso pode derrubá-lo. Não use em jogo online: um anti-cheat pode punir mesmo sem ter sido detectado aqui. Se o jogo cair, a injeção desliga sozinha.	El límite cambia al instante, pero un módulo de Prisma entra en el juego, lo que puede hacerlo fallar. No lo uses en línea: un antitrampas puede castigarte aunque aquí no se haya detectado ninguno. Si el juego falla, la inyección se desactiva sola.
+Com injeção, o limite muda na hora.	Con inyección, el límite cambia al instante.
+Pelo driver NVIDIA, a mudança vale ao reabrir o jogo. Com o método Injeção, ela vale na hora.	Por el driver de NVIDIA, el cambio se aplica cuando el juego se vuelva a abrir. Con el método Inyección, se aplica al instante.
+Controles do medidor	Controles del medidor
+Controles no medidor	Controles en el medidor
+Controles: {}	Controles: {}
+Setas ou mouse mudam. Esc fecha.	Las flechas o el ratón lo cambian. Esc cierra.
+Limite pelo driver	Límite por driver
+Limite pelo driver: a injeção falhou	Límite por driver: la inyección falló
+O jogo caiu. Limite vale ao reabrir.	El juego falló. El límite se aplica al reabrir.
+Anti-cheat: limite vale ao reabrir.	Antitrampas: el límite se aplica al reabrir.
+Injeção falhou. Limite vale ao reabrir.	La inyección falló. El límite se aplica al reabrir.
+O novo perfil vale ao reabrir o jogo.	El nuevo perfil se aplica cuando el juego se vuelva a abrir.
+A injeção muda o limite na hora. Se falhar ou houver anti-cheat, ele vai para o driver e vale ao reabrir o jogo.	La inyección cambia el límite al instante. Si falla o encuentra un antitrampas, el driver toma el relevo cuando el juego se vuelva a abrir.
+{} FPS · injeção	{} FPS · inyección
+Boas-vindas ao Prisma	Te damos la bienvenida a Prisma
+Escolha como ele vai ficar neste PC. Tudo isso muda depois em Configurações.	Elige cómo se queda en este PC. Todo esto se puede cambiar después en Configuración.
+Vai para Arquivos de Programas, ganha atalho no menu Iniciar e abre com o Windows. Sem isso, roda daqui mesmo, como portátil.	Va a Archivos de programa, recibe un acceso en el menú Inicio y abre con Windows. Sin esto, funciona desde aquí como versión portátil.
+Dar permissão de administrador	Dar permiso de administrador
+Libera o Medidor, a rede por programa, a saúde dos discos e a leitura rápida do NTFS. Abre sem perguntar.	Desbloquea el Medidor, la red por programa, la salud del disco y el escaneo NTFS rápido. Abre sin preguntar.
+Libera o Medidor, a rede por programa, a saúde dos discos e a leitura rápida do NTFS. Sem instalar, o Windows pede permissão a cada abertura.	Desbloquea el Medidor, la red por programa, la salud del disco y el escaneo NTFS rápido. Sin instalar, Windows pregunta cada vez que se abre.
+Ctrl+Shift+Esc passa a abrir o Prisma. O Gerenciador do Windows volta quando você quiser.	Ctrl+Shift+Esc abre Prisma. El Administrador de tareas de Windows vuelve cuando quieras.
+Só na versão instalada. Em outra pasta, qualquer programa pode trocar o arquivo que o atalho abre.	Solo en la versión instalada. En cualquier otra carpeta, cualquier programa puede cambiar el archivo que abre el atajo.
+Precisa instalar	Necesita instalar
+Não mostrar novamente	No volver a mostrar
+Não mostrar de novo	No volver a mostrar
+Abrir o guia	Abrir la guía
+Continuar	Continuar
+Já feito	Ya está hecho
+Guia e tutorial	Guía y tutorial
+Guia	Guía
+O que cada função faz, o que dá e o que não dá para fazer.	Qué hace cada función, y qué puede y no puede hacer.
+Iniciar com o Windows	Iniciar con Windows
+Sempre abrir como administrador	Abrir siempre como administrador
+Procurar atualizações sozinho, uma vez por dia	Buscar actualizaciones por sí solo, una vez al día
+Mostrar as boas-vindas ao abrir	Mostrar la pantalla de bienvenida al abrir
+Nova atualização disponível	Nueva actualización disponible
+A versão {} está pronta. Quer atualizar agora?	La versión {} está lista. ¿Actualizar ahora?
+Essas escolhas precisam da permissão de administrador	Estas opciones necesitan permiso de administrador
+Não consegui substituir o Gerenciador de Tarefas.	No se pudo sustituir el Administrador de tareas.
+A atualização precisa da permissão de administrador	La actualización necesita permiso de administrador
+Enter aplica. Esc cancela.	Enter aplica. Esc cancela.
+Setas, mouse ou números. Esc fecha.	Flechas, ratón o números. Esc cierra.
+0,1% low	0,1% bajo
+Buscar por nome ou PID	Buscar por nombre o PID
+Nenhum processo com esse nome ou PID	Ningún proceso con ese nombre o PID
+Reiniciar o Explorer	Reiniciar Explorador
+Reiniciar o Explorer?	¿Reiniciar el Explorador?
+A barra de tarefas e a área de trabalho somem por alguns segundos e voltam sozinhas. As janelas de pasta abertas fecham.	La barra de tareas y el escritorio desaparecen unos segundos y vuelven solos. Las ventanas de carpetas abiertas se cierran.
+Aperte {} de novo para reiniciar o Explorer	Pulsa {} otra vez para reiniciar el Explorador
+Reiniciando o Explorer…	Reiniciando el Explorador…
+Explorer reiniciado	Explorador reiniciado
+O Windows não deixou fechar o Explorer	Windows no dejó que Prisma cerrara el Explorador
+Reiniciar agora	Reiniciar ahora
+Novidades	Novedades
+O que mudou da versão {} para a {}	Qué cambió de la versión {} a la {}
+O que mudou em cada versão	Qué cambió en cada versión
+Ver todas as versões	Ver todas las versiones
+O Windows não deixou trocar o Gerenciador	Windows no dejó que Prisma sustituyera el Administrador de tareas
+Algumas versões do Windows protegem essa troca até de administrador. O Prisma passou a pegar o Ctrl+Shift+Esc ele mesmo, enquanto estiver aberto. O Ctrl+Alt+Del e o menu da barra de tarefas ainda abrem o Gerenciador do Windows.	Algunas versiones de Windows protegen este cambio incluso frente a administradores. Ahora Prisma captura Ctrl+Shift+Esc él mismo mientras está abierto. Ctrl+Alt+Supr y el menú de la barra de tareas siguen abriendo el Administrador de tareas de Windows.
+Ligado pelo atalho: Ctrl+Shift+Esc abre o Prisma.	Activado por el atajo: Ctrl+Shift+Esc abre Prisma.
+Pesquisar	Buscar
+Pesquisar arquivos	Buscar archivos
+Acha arquivos e pastas pelo nome em todos os discos, enquanto você digita.	Encuentra archivos y carpetas por nombre en todos tus discos, mientras escribes.
+Ligar a pesquisa	Activar la búsqueda
+O Prisma guarda os nomes de todos os arquivos dos seus discos num índice, e a pesquisa responde enquanto você digita. O índice usa memória: cerca de 70 MB a cada milhão de arquivos.	Prisma guarda los nombres de todos los archivos de tus discos en un índice, y la búsqueda responde mientras escribes. El índice usa memoria: unos 70 MB por millón de archivos.
+Com o Prisma como administrador, o índice fica pronto em segundos e se atualiza na hora em que um arquivo muda.	Con Prisma como administrador, el índice está listo en segundos y se actualiza en cuanto cambia un archivo.
+Sem administrador, o Prisma percorre as pastas, o que demora mais, e atualiza o índice a cada 15 minutos.	Sin administrador, Prisma recorre las carpetas, lo que tarda más, y actualiza el índice cada 15 minutos.
+Discos com problema de saúde ficam de fora, para não forçar o disco. Dá para incluir em Opções.	Los discos con problemas de salud quedan fuera, para no forzarlos. Puedes incluirlos en Opciones.
+Atalho: {} abre a pesquisa por cima de qualquer programa.	Atajo: {} abre la búsqueda encima de cualquier programa.
+Opções	Opciones
+Atalho da janelinha	Atajo de la ventana emergente
+Ler os discos de novo	Leer los discos de nuevo
+Desligar	Desactivar
+Desligar a pesquisa?	¿Desactivar la búsqueda?
+O índice sai da memória e do disco. Ao ligar de novo, os discos são lidos outra vez.	El índice sale de la memoria y del disco. Al volver a activarla, los discos se leen de nuevo.
+Disco com problema de saúde: ler ele inteiro força o disco	Disco con problemas de salud: leerlo entero fuerza el disco
+Nome do arquivo ou da pasta	Nombre de archivo o carpeta
+Pesquisar arquivos e pastas	Buscar archivos y carpetas
+Modificado	Modificado
+Abrir	Abrir
+Mostrar na pasta	Mostrar en la carpeta
+Copiar caminho	Copiar ruta
+Caminho copiado	Ruta copiada
+Apagado ou movido	Borrado o movido
+Nada encontrado.	No se encontró nada.
+O índice ainda está sendo preparado.	El índice aún se está preparando.
+Preparando o índice…	Preparando el índice…
+Conferindo a saúde dos discos…	Comprobando la salud de los discos…
+Digite parte do nome. Dicas: ext:pdf só PDFs · pasta: só pastas · *.mp4 com curinga · !palavra tira · docs\nota procura no caminho	Escribe parte del nombre. Trucos: ext:pdf solo PDF · folder: solo carpetas · *.mp4 comodín · !palabra excluye · docs\nota busca en la ruta
+Enter abre · Ctrl+Enter mostra na pasta · Ctrl+C copia o caminho	Enter abre · Ctrl+Enter muestra en la carpeta · Ctrl+C copia la ruta
+ext:pdf só PDFs · pasta: só pastas · *.mp4 curinga · !palavra tira	ext:pdf solo PDF · folder: solo carpetas · *.mp4 comodín · !palabra excluye
+atualiza na hora	se actualiza al instante
+atualiza a cada 15 minutos	se actualiza cada 15 minutos
+{} itens em {} · {} de memória · {}	{} elementos en {} · {} de memoria · {}
+{} encontrados · {} ms	{} encontrados · {} ms
+{} encontrados, mostrando {} · {} ms	{} encontrados, mostrando {} · {} ms
+Lendo o disco {}: {}%	Leyendo el disco {}: {}%
+Lendo o disco {}: {} itens	Leyendo el disco {}: {} elementos
+Ctrl + Alt + Espaço	Ctrl + Alt + Espacio
+{} + Espaço	{} + Espacio
+Programa instalado	Programa instalado
+Pesquisar no {}	Buscar en {}
+Perguntar ao {}	Preguntar a {}
+Copia a pergunta	Copia la pregunta
+Rodar no PowerShell	Ejecutar en PowerShell
+Rodar no CMD	Ejecutar en CMD
+Cmdlet do PowerShell	Cmdlet de PowerShell
+Função do PowerShell	Función de PowerShell
+Atalho para {}	Alias de {}
+Parâmetro de {}	Parámetro de {}
+Do histórico	Del historial
+Pergunta copiada: cole com Ctrl+V	Pregunta copiada: pégala con Ctrl+V
+O comando não abriu como administrador	El comando no se abrió como administrador
+Não deu para abrir o terminal	No se pudo abrir la terminal
+Texto copiado	Texto copiado
+Com o aplicativo instalado, a IA abre nele. Quando não dá para levar a pergunta pronta, ela vai copiada: cole com Ctrl+V.	Con la app instalada, la IA se abre en ella. Cuando la pregunta no se puede enviar lista, se copia: pégala con Ctrl+V.
+Na pesquisa também	También en la búsqueda
+Programas instalados primeiro	Programas instalados primero
+Programas do menu Iniciar que combinam com o texto aparecem no topo. Enter abre, Ctrl+Shift+Enter abre como administrador.	Los programas del menú Inicio que coinciden con el texto aparecen arriba. Enter abre, Ctrl+Shift+Enter abre como administrador.
+Pesquisar na internet e perguntar a IAs	Buscar en la web y preguntar a IA
+O texto vira pesquisa no navegador padrão ou pergunta a uma IA. Perguntas vêm no topo; o resto, depois dos primeiros arquivos.	El texto se convierte en una búsqueda en el navegador predeterminado o en una pregunta a una IA. Las preguntas van arriba; lo demás, después de los primeros archivos.
+Comandos com > (PowerShell e CMD)	Comandos con > (PowerShell y CMD)
+Comece com > para rodar um comando. Enter roda sem administrador, Ctrl+Shift+Enter como administrador, Tab completa.	Empieza con > para ejecutar un comando. Enter ejecuta sin administrador, Ctrl+Shift+Enter como administrador, Tab completa.
+Completar como o terminal	Completar como la terminal
+Mantém um PowerShell escondido enquanto você digita um comando, para completar caminhos, parâmetros e o histórico como o terminal. Ele fecha sozinho depois de 2 minutos parado.	Mantiene un PowerShell oculto mientras escribes un comando, para completar rutas, parámetros e historial como la terminal. Se cierra solo tras 2 minutos sin uso.
+Lista de comandos: {}	Lista de comandos: {}
+Lendo a lista de comandos…	Leyendo la lista de comandos…
+Buscadores e IAs	Buscadores e IA
+Aplicativo instalado: abre nele	App instalada: se abre en ella
+Digite um comando do PowerShell ou do CMD.	Escribe un comando de PowerShell o CMD.
+Digite parte do nome. Dicas: ext:pdf só PDFs · pasta: só pastas · *.mp4 com curinga · !palavra tira · docs\nota procura no caminho · > roda um comando	Escribe parte del nombre. Trucos: ext:pdf solo PDF · folder: solo carpetas · *.mp4 comodín · !palabra excluye · docs\nota busca en la ruta · > ejecuta un comando
+> roda um comando · ext:pdf só PDFs · pasta: só pastas · *.mp4 curinga	> ejecuta un comando · ext:pdf solo PDF · folder: solo carpetas · *.mp4 comodín
+Enter abre · Ctrl+Shift+Enter como administrador · Ctrl+Enter mostra na pasta	Enter abre · Ctrl+Shift+Enter como administrador · Ctrl+Enter muestra en la carpeta
+Enter abre · Ctrl+C copia o texto	Enter abre · Ctrl+C copia el texto
+Enter roda · Ctrl+Shift+Enter como administrador · Tab completa	Enter ejecuta · Ctrl+Shift+Enter como administrador · Tab completa
+Enter ou Tab completa · Esc fecha	Enter o Tab completa · Esc cierra
+Compartilhar tela	Compartir pantalla
+Acesso remoto e co-op pela internet, sem conta. Em teste.	Acceso remoto y cooperativo en línea, sin cuenta. En pruebas.
+Este PC	Este PC
+O serviço do Windows compartilha este PC, inclusive a tela de bloqueio.	El servicio de Windows comparte este PC y su pantalla de bloqueo.
+Compartilhando. Os aparelhos pareados já podem conectar.	Compartiendo. Los dispositivos emparejados ya pueden conectarse.
+Desligado.	Desactivado.
+Quem parear agora pode	Quien se empareje ahora puede
+Criar convite	Crear invitación
+Compartilhar este PC	Compartir este PC
+Copiar convite	Copiar invitación
+Convite copiado. Vale 10 minutos e uma vez.	Invitación copiada. Sirve una vez, durante 10 minutos.
+Nenhum convite ainda	Aún no hay invitación
+Convite pronto: mande para o outro PC. Ele vale 10 minutos e uma vez, e a confirmação aparece aqui.	Invitación lista: envíala al otro PC. Sirve una vez, durante 10 minutos, y la confirmación aparece aquí.
+O convite aparece quando o compartilhamento liga.	La invitación aparece cuando empieza a compartir.
+Desligar o HDR quando quem assiste não tem HDR	Desactivar el HDR cuando quien mira no tenga HDR
+Pessoas ao mesmo tempo	Personas a la vez
+Controles virtuais	Mandos virtuales
+Serviço do Windows instalado	Servicio de Windows instalado
+Serviço do Windows	Servicio de Windows
+Para usar a tela de bloqueio, o UAC e o Ctrl+Alt+Del de longe. Pede administrador.	Para usar a distancia la pantalla de bloqueo, el UAC y Ctrl+Alt+Supr. Necesita administrador.
+Aguarde	Espera
+Remover	Quitar
+Instalar	Instalar
+Remover o serviço?	¿Quitar el servicio?
+O compartilhamento da tela de bloqueio para, e os aparelhos pareados voltam para este usuário.	Se deja de compartir la pantalla de bloqueo y los dispositivos emparejados vuelven a este usuario.
+Instalar o serviço?	¿Instalar el servicio?
+O Prisma vai pedir administrador e mostrar o que muda no Windows antes de instalar. O serviço liga com o PC, mesmo antes do login.	Prisma pedirá administrador y mostrará qué cambia en Windows antes de instalar. El servicio arranca con el PC, incluso antes de iniciar sesión.
+Pela internet, a conexão usa o iroh (n0, licença MIT ou Apache-2.0). Sem caminho direto nem VPN, os pacotes passam pelos relés públicos da n0, sempre criptografados de ponta a ponta.	Por internet, la conexión usa iroh (n0, licencia MIT o Apache-2.0). Sin camino directo ni VPN, los paquetes pasan por los relés públicos de n0, siempre cifrados de extremo a extremo.
+Aparelhos pareados	Dispositivos emparejados
+Parear com outro PC	Emparejar con otro PC
+Convite do outro PC	Invitación del otro PC
+Parear	Emparejar
+Isso não parece um convite do Prisma	Eso no parece una invitación de Prisma
+Nenhum aparelho pareado. Ligue o compartilhamento neste PC e cole o convite no outro, ou o contrário.	No hay dispositivos emparejados. Empieza a compartir en este PC y pega la invitación en el otro, o al revés.
+Esquecer	Olvidar
+Controle	Mando
+Teclado	Teclado
+Copiar e colar	Copiar y pegar
+Tela segura	Pantalla segura
+Perguntar a cada conexão	Preguntar en cada conexión
+Assistir	Ver
+Não deu para salvar. Com o serviço, abra o Prisma como administrador.	No se pudo guardar. Con el servicio, abre Prisma como administrador.
+Esquecer este aparelho?	¿Olvidar este dispositivo?
+«{}» vai precisar de um convite novo para conectar.	“{}” necesitará una invitación nueva para conectarse.
+Só ver	Solo ver
+Ver e usar controle	Ver y usar un mando
+Ver, controle, teclado e mouse	Ver, mando, teclado y ratón
+Acesso total	Acceso total
+Esta cópia do Prisma foi compilada sem o compartilhamento.	Esta copia de Prisma se compiló sin compartir pantalla.
+Serviço instalado e ligado. Para parear um aparelho novo, use Criar convite na página Compartilhar tela.	Servicio instalado y en marcha. Para emparejar un dispositivo nuevo, usa Crear invitación en la página Compartir pantalla.
+O serviço não foi instalado: {}	El servicio no se instaló: {}
+Serviço removido.	Servicio quitado.
+Instalar o serviço de compartilhar tela do Prisma?	¿Instalar el servicio de compartir pantalla de Prisma?
+O que ele faz: roda como SYSTEM (o nível mais alto do Windows) e começa junto com o Windows. Com ele, os aparelhos pareados conseguem ver e usar o aviso do UAC, a tela de bloqueio e a do PIN, inclusive depois de o PC reiniciar sozinho. Mexer na tela segura e mandar Ctrl+Alt+Del pede a permissão "Tela segura" (ou Acesso total) no aparelho.	Qué hace: funciona como SYSTEM (el nivel más alto de Windows) y arranca con Windows. Con él, los dispositivos emparejados pueden ver y usar el aviso del UAC, la pantalla de bloqueo y la del PIN, incluso después de que el PC se reinicie solo. Usar la pantalla segura y enviar Ctrl+Alt+Supr necesita el permiso "Pantalla segura" (o Acceso total) en el dispositivo.
+O que muda no PC:	Qué cambia en el PC:
+• uma cópia do Prisma em Arquivos de Programas\PrismaServico;	• una copia de Prisma en Program Files\PrismaServico;
+• a identidade e os aparelhos pareados passam para ProgramData\Prisma\compartilhar, que só o SYSTEM, os administradores e você abrem;	• la identidad y los dispositivos emparejados pasan a ProgramData\Prisma\compartilhar, que solo SYSTEM, los administradores y tú pueden abrir;
+• o serviço "Prisma: compartilhar tela".	• el servicio "Prisma: compartilhar tela".
+Para tirar tudo: Remover, na página Compartilhar tela do Prisma.	Para deshacerlo todo: Quitar, en la página Compartir pantalla de Prisma.
+Permitir o Ctrl+Alt+Del de longe?	¿Permitir Ctrl+Alt+Supr a distancia?
+Para isso, o Windows pede uma política: "SoftwareSASGeneration" igual a 1, que deixa serviços gerarem o Ctrl+Alt+Del. Ela é desfeita quando o serviço for removido.	Para eso, Windows necesita una directiva: "SoftwareSASGeneration" con valor 1, que deja a los servicios generar Ctrl+Alt+Supr. Se deshace al quitar el servicio.
+Sem ela, o resto funciona; só o Ctrl+Alt+Del não.	Sin ella, todo lo demás funciona; solo Ctrl+Alt+Supr no.
+Remover o serviço de compartilhar tela do Prisma?	¿Quitar el servicio de compartir pantalla de Prisma?
+Os aparelhos pareados voltam para a pasta de sempre do Prisma, e a política do Ctrl+Alt+Del volta como estava.	Los dispositivos emparejados vuelven a la carpeta habitual de Prisma, y la directiva de Ctrl+Alt+Supr vuelve a como estaba.
+«{}» quer parear com este PC.	“{}” quiere emparejarse con este PC.
+Permissões: {}.	Permisos: {}.
+Código de confirmação: {}	Código de confirmación: {}
+Confira se o outro PC mostra o mesmo código. Se não mostrar, clique em Cancelar.	Comprueba que el otro PC muestre el mismo código. Si no, pulsa Cancelar.
+Sim: confiar neste aparelho.	Sí: confiar en este dispositivo.
+Não: parear, mas perguntar a cada conexão.	No: emparejar, pero preguntar en cada conexión.
+Cancelar: recusar.	Cancelar: rechazar.
+«{}» quer se conectar a este PC.	“{}” quiere conectarse a este PC.
+Permitir?	¿Permitir?
+Conectados agora:	Conectados ahora:
+Ctrl+Alt+Shift+Q, neste PC, desconecta todo mundo na hora.	Ctrl+Alt+Shift+Q, en este PC, desconecta a todos a la vez.
+Compartilhar	Compartir
+Host	Anfitrión
+Cliente	Visor
+Atalhos	Atajos
+Controles	Mandos
+Parear com este convite?	¿Emparejar con esta invitación?
+Chegou o convite {}. Os dois PCs vão mostrar um código de confirmação de seis dígitos: confira antes de aceitar no outro PC.	Llegó la invitación {}. Los dos PC mostrarán un código de confirmación de seis cifras: compruébalo antes de aceptar en el otro PC.
+Não deu para salvar as opções de quem assiste.	No se pudieron guardar las opciones del visor.
+Convite criado	Invitación creada
+Publicando o código nos relés...	Publicando el código en los relés...
+Pronto. Vale 10 minutos e uma vez.	Lista. Válida durante 10 minutos y un uso.
+Os relés não responderam: mande o convite longo.	Los relés no respondieron: envía la invitación larga.
+No outro PC, digite o código em Parear com outro PC, ou mande o link: ele abre o Prisma e pareia depois de perguntar.	En el otro PC, escribe el código en Emparejar con otro PC, o envía el enlace: abre Prisma y empareja tras preguntar.
+Copiar código	Copiar código
+Código copiado. Vale 10 minutos e uma vez.	Código copiado. Válido durante 10 minutos y un uso.
+Copiar link	Copiar enlace
+Link copiado. Vale 10 minutos e uma vez.	Enlace copiado. Válido durante 10 minutos y un uso.
+Convite do Prisma para ver este PC:	Invitación de Prisma para ver este PC:
+Convite do Prisma	Invitación de Prisma
+Copiar convite longo	Copiar invitación larga
+Ligado pelo serviço do Windows.	Funcionando a través del servicio de Windows.
+Último convite:	Última invitación:
+Mostrar	Mostrar
+Os aparelhos pareados conectam quando o compartilhamento está ligado.	Los dispositivos emparejados se conectan mientras se comparte.
+Código ou convite do outro PC	Código o invitación del otro PC
+Isso não parece um código do Prisma	Eso no parece un código de Prisma
+Conexão pela internet	Conexión por internet
+Nenhum aparelho pareado. Crie um convite neste PC e digite o código no outro, ou o contrário.	No hay dispositivos emparejados. Crea una invitación en este PC y escribe el código en el otro, o al revés.
+Nome deste PC	Nombre de este PC
+Monitor	Monitor
+Principal	Principal
+Resolução máxima	Resolución máxima
+Quadros por segundo	Fotogramas por segundo
+Ritmo dos quadros	Ritmo de fotogramas
+Só quando a tela muda	Cuando la pantalla cambia
+Constante	Constante
+Prioridade	Prioridad
+Menor atraso	Menor retraso
+Equilíbrio	Equilibrado
+Qualidade	Calidad
+Codec	Códec
+Limite de banda	Límite de ancho de banda
+HDR10 de 10 bits quando as duas telas estão em HDR	HDR10 de 10 bits cuando las dos pantallas están en HDR
+Aceitar 4:4:4 quando quem assiste pede	Aceptar 4:4:4 cuando quien mira lo pida
+Os automáticos seguem quem assiste: a altura da tela, o menor entre os Hz dos dois lados e o melhor codec que os dois têm. O 4:4:4 e o HDR10 caem sozinhos se o outro lado não tiver.	Los valores automáticos siguen a quien mira: la altura de su pantalla, la frecuencia más baja de los dos lados y el mejor códec que ambos tengan. 4:4:4 y HDR10 se desactivan solos si el otro lado no los tiene.
+Som, mouse e teclado	Sonido, ratón y teclado
+Som que vai	Sonido que se envía
+Todo o PC	Todo el PC
+Só	Solo
+Tirar do som o programa de chamada	Dejar fuera del sonido la app de llamadas
+Uma pessoa por vez no mouse e no teclado	Una persona a la vez en el ratón y el teclado
+O mouse e o teclado deste PC têm prioridade	El ratón y el teclado de este PC tienen prioridad
+Recusar conexões enquanto este PC assiste a outro	Rechazar conexiones mientras este PC ve a otro
+Com prioridade, quem assiste para por 1 segundo sempre que alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. Programas de chamada: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack e Signal; sai do som o primeiro que estiver aberto.	Con prioridad, el visor se pausa 1 segundo cada vez que alguien aquí mueve el ratón o escribe. Una persona a la vez: el turno pasa tras 2 segundos sin entrada. Apps de llamadas: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack y Signal; la primera que esté abierta queda fuera del sonido.
+Janela de quem assiste	Ventana del visor
+Abrir em tela cheia sem borda	Abrir en pantalla completa sin bordes
+VSync: sem rasgos na imagem, com um pouco mais de atraso	VSync: sin cortes de imagen, con un poco más de retraso
+Modo imersivo	Modo inmersivo
+Só o mouse	Solo ratón
+Só o teclado	Solo teclado
+Mouse e teclado	Ratón y teclado
+Pedir 4:4:4 (texto mais nítido; precisa de NVIDIA ou Intel)	Pedir 4:4:4 (texto más nítido; necesita NVIDIA o Intel)
+Começar sem o som do outro PC	Empezar sin el sonido del otro PC
+No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. O atalho do menu sempre funciona aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga.	En modo inmersivo, a pantalla completa, el ratón se queda dentro de la ventana, y la tecla Windows y Alt+Tab van al otro PC. El atajo del menú siempre funciona aquí. En una pantalla G-SYNC o FreeSync, deja VSync desactivado: la imagen no se corta.
+Medidor e avisos	Medidor y avisos
+Medidor de latência	Medidor de latencia
+Simples	Simple
+Detalhado	Detallado
+Avisar quando a conexão piorar	Avisar cuando la conexión empeore
+O simples mostra o atraso de ponta a ponta e uma bolinha verde, amarela ou vermelha. O detalhado mostra também a rede, o vídeo, os quadros por segundo, a banda, a decodificação, os quadros perdidos e o caminho. O aviso aparece quando a rede perde mais de 2% dos quadros, quando a latência varia mais de 10 ms ou sobe por 3 segundos seguidos. Os quadros por segundo pedidos não passam dos Hz desta tela; o automático usa os Hz dela. Tudo isso muda também pelo menu da conexão.	Simple muestra el retraso de extremo a extremo y un punto verde, amarillo o rojo. Detallado también muestra la red, el vídeo, los fotogramas por segundo, el ancho de banda, la decodificación, los fotogramas perdidos y la ruta. El aviso aparece cuando la red pierde más del 2% de los fotogramas, cuando la latencia varía más de 10 ms o sube 3 segundos seguidos. Los fotogramas por segundo pedidos nunca pasan de los Hz de esta pantalla; Automático usa sus Hz. Todo esto también se puede cambiar desde el menú de la conexión.
+Portas	Puertos
+Porta UDP do host	Puerto UDP del anfitrión
+Automática	Automático
+Use um número de 1024 a 65535.	Usa un número de 1024 a 65535.
+Pedir ao roteador para abrir a porta (UPnP, NAT-PMP, PCP)	Pedir al router que abra el puerto (UPnP, NAT-PMP, PCP)
+Automática serve para quase todo mundo: o Prisma fura o NAT sem porta fixa. A porta fixa é para quem redireciona a porta no roteador. Ela vale na próxima vez que o compartilhamento ligar. O pedido ao roteador some sozinho quando a conexão acaba.	Automático funciona para casi todos: Prisma atraviesa el NAT sin puerto fijo. Un puerto fijo es para quien redirige el puerto en el router. Surte efecto la próxima vez que se empiece a compartir. La petición al router desaparece sola cuando termina la conexión.
+Como a conexão passa	Cómo viaja la conexión
+Última conexão:	Última conexión:
+Atalhos da conexão	Atajos de la conexión
+Na janela de quem assiste	En la ventana del visor
+Menu da conexão	Menú de la conexión
+Ctrl+Alt+Del no outro PC	Ctrl+Alt+Supr en el otro PC
+No PC que compartilha	En el PC que comparte
+Desconectar todo mundo	Desconectar a todos
+Dois atalhos iguais: só o primeiro da lista funciona.	Dos atajos iguales: solo funciona el primero de la lista.
+Clique num atalho e aperte a combinação nova; Esc cancela. Os atalhos de quem assiste ficam com a janela e não vão para o outro PC. Use combinações com Ctrl, Alt ou Shift, para não roubar teclas do jogo. Os novos valem na próxima conexão. O atalho do modo imersivo liga e desliga só na conexão aberta; o modo que fica é o da aba Cliente.	Haz clic en un atajo y pulsa la nueva combinación; Esc cancela. Los atajos del visor se quedan en la ventana y no se envían al otro PC. Usa combinaciones con Ctrl, Alt o Shift para no quitar teclas al juego. Los nuevos surten efecto en la próxima conexión. El atajo del modo inmersivo lo activa y desactiva solo en la conexión abierta; el modo que se queda es el de la pestaña Visor.
+com fio	con cable
+bateria cheia	batería llena
+bateria média	batería media
+bateria baixa	batería baja
+bateria acabando	batería casi vacía
+Controles virtuais no host	Mandos virtuales en el anfitrión
+Mandar o controle com a janela em segundo plano	Enviar el mando con la ventana en segundo plano
+Usar o teclado como controle	Usar el teclado como mando
+No host, cada controle de quem assiste vira um controle de Xbox virtual, pelo ViGEmBus ou pelo VIIPER (o Prisma não instala nenhum dos dois). Eles saem sozinhos quando o jogo da frente tem anti-cheat. Teclado como controle: WASD é o analógico esquerdo, as setas são o direcional, J é A, K é B, U é X, I é Y, Q e E são LB e RB, Z e C os gatilhos, Enter é Start e Backspace é Back.	En el anfitrión, cada mando de quien mira se convierte en un mando virtual de Xbox, mediante ViGEmBus o VIIPER (Prisma no instala ninguno). Se quitan solos cuando el juego en primer plano tiene antitrampas. Teclado como mando: WASD es el stick izquierdo, las flechas son la cruceta, J es A, K es B, U es X, I es Y, Q y E son LB y RB, Z y C los gatillos, Enter es Start y Retroceso es Back.
+Ligados agora	Conectados ahora
+Neste PC	En este PC
+Nenhum controle ligado.	No hay mandos conectados.
+Virtuais de quem assiste a este PC	Virtuales de quienes ven este PC
+controle	mando
+jogador	jugador
+parado	inactivo
+Nenhum agora.	Ninguno ahora.
+O Windows não abriu a janela de compartilhar: o convite foi copiado.	Windows no abrió la ventana de compartir: la invitación se copió.
+Conexão instável: a rede está perdendo quadros	Conexión inestable: la red está perdiendo fotogramas
+Conexão instável: a latência está variando	Conexión inestable: la latencia está saltando
+Conexão piorando: a latência está subindo	La conexión empeora: la latencia está subiendo
+ponta a ponta	de extremo a extremo
+rede	red
+q/s	fps
+decodificação	decodificación
+perdidos	perdidos
+Mandar Ctrl+Alt+Del	Enviar Ctrl+Alt+Supr
+Desconectar	Desconectar
+O serviço está caindo: reabra o Prisma como administrador.	El servicio sigue fallando: vuelve a abrir Prisma como administrador.
+Conexão	Conexión
+Mouse	Ratón
+Os dois	Ambos
+Ligar e desligar o modo imersivo	Activar y desactivar el modo inmersivo
+Trocar o medidor de latência	Cambiar el medidor de latencia
+Ligar e desligar o som	Activar y desactivar el sonido
+Conectados	Conectado
+Conectados agora	Conectados ahora
+Banir	Expulsar
+Personalizado	Personalizado
+Pela VPN	Por la VPN
+Direto na rede local	Directo en la red local
+Direto pela internet	Directo por internet
+Pelo relé da n0	Por el relé de n0
+UDP direto	UDP directo
+Conectando	Conectando
+O acesso muda na hora e fica salvo para as próximas conexões. Desconectar derruba só esta conexão: o aparelho continua pareado. Banir derruba e esquece o aparelho, que só volta com um convite novo.	El acceso cambia al instante y se guarda para las próximas conexiones. Desconectar corta solo esta conexión: el dispositivo sigue emparejado. Expulsar corta y olvida el dispositivo, que solo vuelve con una invitación nueva.
+Banir este aparelho?	¿Expulsar este dispositivo?
+«{}» sai agora e vai precisar de um convite novo para conectar.	“{}” sale ahora y necesitará una invitación nueva para conectarse.
+«{}» conectou a este PC	“{}” se conectó a este PC
+«{}» saiu	“{}” salió
+Auto HDR	Auto HDR
+Sem DLSS	Sin DLSS
+Plano de energia	Plan de energía
+Minutos de jogo gravados (0 é sem limite)	Minutos de juego grabados (0 es sin límite)
+Liga o HDR do Windows quando o jogo abre e desliga quando ele fecha. Se o HDR já estava ligado, ele continua ligado. Em Todos, vale para todo jogo que o modo jogo do Energia reconhece; Não ligar, na lista, tira um jogo. O medidor só aparece pelo atalho.	Activa el HDR de Windows al abrir el juego y lo desactiva al cerrarlo. Si el HDR ya estaba activado, sigue activado. Con Todos, vale para todo juego que reconozca el modo juego de Energía; No activar, en la lista, deja un juego fuera. El medidor solo aparece con el atajo.
+Controlador de memória da GPU, média	Controlador de memoria de la GPU, promedio
+Energia da GPU, média do limite	Energía de la GPU, promedio del límite
+Clock da GPU segurado por	Reloj de la GPU frenado por
+A VRAM chegou perto do total: texturas e resolução são os primeiros ajustes.	La VRAM casi se llenó: texturas y resolución son lo primero que conviene bajar.
+A temperatura segurou o clock da GPU em parte do tempo.	La temperatura frenó el reloj de la GPU parte del tiempo.
+Leitura: GPU cheia e no limite de energia, então o limite é a GPU. Menos carga por quadro (resolução, sombras, efeitos) é o que rende.	Lectura: GPU llena y en su límite de energía, así que el límite es la GPU. Lo que compensa es menos trabajo por fotograma (resolución, sombras, efectos).
+Renomear	Renombrar
+Salvar	Guardar
+Este PC assiste	Este PC ve
+Assistem a este PC	Ven este PC
+Nenhum PC para assistir. Digite aqui o código de um convite feito no outro PC.	Ningún PC para ver. Escribe aquí el código de una invitación hecha en el otro PC.
+Nenhum PC assiste a este. Crie um convite e digite o código no outro PC.	Ningún PC ve este. Crea una invitación y escribe el código en el otro PC.
+Atalhos de aparelho padrão	Atajos de dispositivo predeterminado
+Fixo, fechado	Fijado, cerrado
+Não mudar	No cambiar
+Aparelho padrão	Dispositivo predeterminado
+não deu para trocar	no se pudo cambiar
+aparelho desligado	dispositivo desconectado
+Cada atalho troca a saída e a entrada padrão do Windows de uma vez. Use Adicionar.	Cada atajo cambia a la vez la salida y la entrada predeterminadas de Windows. Usa Añadir.
+Não deu para mudar na hora. Vale na próxima conexão.	No se pudo cambiar al instante. Se aplica en la próxima conexión.

@@ -13,7 +13,7 @@ Prisma is a single file, Prisma.exe. The first time you open it, the welcome scr
 - **Replace Task Manager:** Ctrl+Shift+Esc opens Prisma. It works only in the installed version: in an ordinary folder, any program could swap the file the shortcut opens, and the shortcut applies to every account on the PC. Without Install on this PC checked, this option is grayed out.
 - **Don't show again:** checked by default, so the screen appears once. Unchecked, it appears every time the program opens again. You can change this in Settings.
 
-The screen also has the language selector. Prisma starts in the Windows language: Portuguese on Windows in Portuguese and English on all others.
+The screen also has the language selector. Prisma starts in the Windows language: Portuguese, English, Spanish, Russian or Simplified Chinese, following Windows, and English on all others.
 
 All of this can be changed later in **Settings**. Prisma stays in the Windows tray: closing the window does not end the program. To exit, use the menu on the tray icon.
 
@@ -226,7 +226,7 @@ Shows CPU, GPU, RAM and VRAM on top of everything, in four styles. Drag it to mo
 - **Replace Task Manager:** turns it on or gives it back. Uninstalling also gives it back. Some Windows versions protect this change even from administrators. Then Prisma tells you and catches Ctrl+Shift+Esc itself while it is open, and the card shows "On through the shortcut". Ctrl+Alt+Del and the taskbar menu still open the Windows Task Manager. In the portable version you can only turn it off.
 - **Force close:** a shortcut, Alt + F4 by default, ends the program in focus right away, even frozen in fullscreen. Anything unsaved is lost. The desktop, the taskbar and Windows processes keep the normal Alt + F4.
 - **Restart Explorer:** choose a shortcut; there is none by default. Since it closes the taskbar, you press it twice within 4 seconds: the first press only warns you. The button next to the name restarts it right away, after asking.
-- **Language:** Brazilian Portuguese or English.
+- **Language:** Brazilian Portuguese, English, Spanish, Russian or Simplified Chinese. This guide and the version notes stay in English in the last three.
 - **Updates:** see the section below.
 - **Show the welcome screen on open:** brings the first screen back.
 

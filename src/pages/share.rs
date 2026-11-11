@@ -628,10 +628,19 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
     }
     y += 38.0;
     let rows: Vec<_> = all.iter().filter(|d| d.viewer == (st.dev_tab == 1)).collect();
-    const ROW_V: f32 = 132.0;
-    const ROW_H: f32 = 64.0;
+    // Botões da direita: Esquecer, Renomear e, nos PCs que este assiste, Assistir. A largura
+    // segue o texto, que em outros idiomas é mais comprido; sem espaço para o nome ao lado,
+    // os botões descem para uma linha própria.
+    let bw = |s: &str| (crate::ui::gfx::measure(s, 14.0, Weight::Semibold, None).0 + 28.0).max(84.0);
+    let (forget_w, watch_bw) = (bw("Esquecer"), bw("Assistir"));
+    let rn_max = bw("Renomear").max(bw("Salvar"));
+    let all_buttons = forget_w + rn_max + if st.dev_tab == 0 { watch_bw + 8.0 } else { 0.0 } + 16.0;
+    let stack = rw - 24.0 - all_buttons - 8.0 < 160.0;
+    let drop = if stack { 44.0 } else { 0.0 };
+    let row_v = 132.0 + drop;
+    let row_h = 64.0 + drop;
     let list = rect(rx, y, rw, r.bottom() - y - 12.0);
-    let content: f32 = rows.iter().map(|d| if d.viewer { ROW_V } else { ROW_H }).sum::<f32>().max(1.0);
+    let content: f32 = rows.iter().map(|d| if d.viewer { row_v } else { row_h }).sum::<f32>().max(1.0);
     if all.is_empty() {
         ui.c.text_wrap(rect(rx, y, rw, 60.0), "Nenhum aparelho pareado. Crie um convite neste PC e digite o código no outro, ou o contrário.", 13.0, MUTED, Weight::Regular);
     } else if rows.is_empty() {
@@ -645,16 +654,17 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
     ui.begin_scroll("sh-list", list, content);
     let mut yy = list.y;
     for (i, d) in rows.iter().enumerate() {
-        let rh = if d.viewer { ROW_V } else { ROW_H };
+        let rh = if d.viewer { row_v } else { row_h };
         let row = rect(rx, yy, rw, rh - 8.0);
         ui.c.round(row, 8.0, CARD2);
         let px = row.x + 12.0;
         let pw = row.w - 24.0;
-        // Botões da direita: Esquecer, Renomear e, nos PCs que este assiste, Assistir.
-        let buttons = if d.viewer { 2.0 } else { 3.0 } * 92.0;
-        let name_w = (pw - buttons - 8.0).max(60.0);
-        let alias = app.cfg.share_names.iter().find(|n| n.0 == d.id).map(|n| n.1.clone());
         let editing = st.renaming.as_ref().is_some_and(|e| e.0 == d.id);
+        let rn_w = bw(if editing { "Salvar" } else { "Renomear" });
+        let watch_w = if d.viewer { 0.0 } else { watch_bw + 8.0 };
+        let name_w = if stack { pw } else { (pw - forget_w - rn_w - watch_w - 24.0).max(60.0) };
+        let by = row.y + 10.0 + drop;
+        let alias = app.cfg.share_names.iter().find(|n| n.0 == d.id).map(|n| n.1.clone());
         if editing {
             let field = &mut st.renaming.as_mut().unwrap().1;
             ui.search(&format!("sh-rn{i}"), rect(px, row.y + 6.0, name_w, 36.0), field, &d.name);
@@ -665,10 +675,10 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
                 ui.c.text_raw(rect(px, row.y + 29.0, name_w, 16.0), &d.name, 11.0, MUTED, Align::Left, Weight::Regular);
             }
         }
-        if ui.button(&format!("sh-forget{i}"), rect(row.right() - 96.0, row.y + 10.0, 84.0, 32.0), "Esquecer", false) {
+        if ui.button(&format!("sh-forget{i}"), rect(row.right() - 12.0 - forget_w, by, forget_w, 32.0), "Esquecer", false) {
             forget = Some((d.id.clone(), d.name.clone()));
         }
-        let rn_r = rect(row.right() - 188.0, row.y + 10.0, 84.0, 32.0);
+        let rn_r = rect(row.right() - 20.0 - forget_w - rn_w, by, rn_w, 32.0);
         if editing {
             if ui.button(&format!("sh-rn-ok{i}"), rn_r, "Salvar", true) {
                 renamed = st.renaming.take();
@@ -681,18 +691,18 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
             let mut perms = d.perms;
             for (k, (name, bit)) in PERMS.iter().enumerate() {
                 let cx = px + (k % 3) as f32 * cw;
-                let cy = row.y + 50.0 + (k / 3) as f32 * 26.0;
+                let cy = row.y + 50.0 + drop + (k / 3) as f32 * 26.0;
                 let mut on = perms & bit != 0;
                 if ui.check(&format!("sh-p{i}-{k}"), rect(cx, cy, cw - 4.0, 26.0), name, &mut on) {
                     perms = if on { perms | bit } else { perms & !bit };
                 }
             }
             let mut ask = d.ask;
-            let changed_ask = ui.check(&format!("sh-ask{i}"), rect(px, row.y + 100.0, pw, 24.0), "Perguntar a cada conexão", &mut ask);
+            let changed_ask = ui.check(&format!("sh-ask{i}"), rect(px, row.y + 100.0 + drop, pw, 24.0), "Perguntar a cada conexão", &mut ask);
             if perms != d.perms || changed_ask {
                 changes.push((d.id.clone(), perms, ask));
             }
-        } else if ui.button(&format!("sh-watch{i}"), rect(row.right() - 280.0, row.y + 10.0, 84.0, 32.0), "Assistir", true) {
+        } else if ui.button(&format!("sh-watch{i}"), rect(rn_r.x - watch_w, by, watch_w - 8.0, 32.0), "Assistir", true) {
             watch = Some(d.name.clone());
         }
         yy += rh;

@@ -132,12 +132,12 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     }
 
     // Lista por último, para abrir por cima do resto.
-    let opts = vec!["Português (Brasil)".to_string(), "English".to_string()];
-    let mut v = app.cfg.lang_en as usize;
+    let opts: Vec<String> = crate::i18n::NAMES.iter().map(|n| n.to_string()).collect();
+    let mut v = app.cfg.lang as usize;
     if ui.select("lang", rect(rl.x + 16.0, rl.y + 34.0, field, 44.0), &opts, &mut v) {
-        app.cfg.lang_en = v == 1;
+        app.cfg.lang = v as u8;
         app.cfg.save();
-        crate::i18n::set_english(app.cfg.lang_en);
+        crate::i18n::set_lang(app.cfg.lang);
     }
 }
 

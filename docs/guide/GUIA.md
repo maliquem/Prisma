@@ -13,7 +13,7 @@ O Prisma é um único arquivo, Prisma.exe. Na primeira vez que você abre, ele m
 - **Substituir o Gerenciador de Tarefas:** Ctrl+Shift+Esc passa a abrir o Prisma. Só funciona na versão instalada: numa pasta comum, qualquer programa poderia trocar o arquivo que o atalho abre, e o atalho vale para todas as contas do PC. Sem marcar Instalar no PC, essa opção fica apagada.
 - **Não mostrar novamente:** vem marcado, então a tela aparece uma vez. Desmarcado, ela aparece toda vez que o programa abrir de novo. Dá para mudar em Configurações.
 
-A tela também tem o seletor de idioma. O Prisma começa no idioma do Windows: português no Windows em português e inglês nos demais.
+A tela também tem o seletor de idioma. O Prisma começa no idioma do Windows: português, inglês, espanhol, russo ou chinês simplificado, conforme o Windows, e inglês nos demais.
 
 Tudo isso pode ser mudado depois em **Configurações**. O Prisma fica na bandeja do Windows: fechar a janela não encerra o programa. Para sair, use o menu do ícone na bandeja.
 
@@ -226,7 +226,7 @@ Mostra CPU, GPU, RAM e VRAM por cima de tudo, em quatro estilos. Arraste para mu
 - **Substituir o Gerenciador de Tarefas:** ativa ou devolve. A desinstalação também devolve. Algumas versões do Windows protegem essa troca até de administrador. Nesse caso o Prisma avisa e passa a pegar o Ctrl+Shift+Esc ele mesmo, enquanto estiver aberto, e o cartão mostra "Ligado pelo atalho". O Ctrl+Alt+Del e o menu da barra de tarefas continuam abrindo o Gerenciador do Windows. Na versão portátil só dá para desativar.
 - **Fechar à força:** um atalho, Alt + F4 por padrão, encerra na hora o programa em foco, mesmo travado em tela cheia. O que não foi salvo é perdido. A área de trabalho, a barra de tarefas e os processos do Windows continuam com o Alt + F4 normal.
 - **Reiniciar o Explorer:** escolha um atalho, que vem sem nenhum. Como ele fecha a barra de tarefas, é preciso apertar duas vezes em até 4 segundos: o primeiro toque só avisa. O botão ao lado do nome reinicia na hora, depois de perguntar.
-- **Idioma:** português do Brasil ou inglês.
+- **Idioma:** português do Brasil, inglês, espanhol, russo ou chinês simplificado. Este guia e as novidades ficam em inglês nos três últimos.
 - **Atualizações:** veja a seção abaixo.
 - **Mostrar as boas-vindas ao abrir:** traz a tela inicial de volta.
 

@@ -6,7 +6,7 @@ use crate::meter;
 const ROW: f32 = 56.0;
 const ROW_NARROW: f32 = 112.0;
 /// Largura dos controles de cada jogo e o mínimo que sobra para o nome ao lado deles.
-const CONTROLS_W: f32 = 760.0;
+const CONTROLS_W: f32 = 840.0;
 const NAME_MIN: f32 = 250.0;
 /// Minutos do registro sendo digitados.
 static LOG_FIELD: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
@@ -26,7 +26,7 @@ const ITEMS: [(&str, u32); 16] = [
     ("Disco e rede", meter::ITEM_IO),
     ("Modo de exibição", meter::ITEM_MODE),
     ("Tempo de jogo", meter::ITEM_TIME),
-    ("Registro", meter::ITEM_LOG),
+    ("Registro de dados", meter::ITEM_LOG),
     ("Plano de energia", meter::ITEM_POWER),
 ];
 
@@ -191,7 +191,7 @@ fn games(ui: &mut Ui, app: &mut App, r: Rect) {
     ui.card(r);
     ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 150.0, 22.0), "Jogos");
     picker::add_button(ui, app, rect(r.right() - 124.0, r.y + 8.0, 108.0, 32.0), Target::MeterGame);
-    let (view_x, limit_x, fps_x, how_x, unit_x, hdr_x, preset_x) = (r.right() - CONTROLS_W, r.right() - 660.0, r.right() - 546.0, r.right() - 440.0, r.right() - 336.0, r.right() - 226.0, r.right() - 136.0);
+    let (view_x, limit_x, fps_x, how_x, unit_x, hdr_x, preset_x) = (r.right() - CONTROLS_W, r.right() - 722.0, r.right() - 602.0, r.right() - 494.0, r.right() - 392.0, r.right() - 274.0, r.right() - 156.0);
     let y = r.y + 46.0;
     let narrow = is_narrow(r.w);
     let row_h = if narrow { ROW_NARROW } else { ROW };
@@ -231,12 +231,12 @@ fn games(ui: &mut Ui, app: &mut App, r: Rect) {
         let row = |x: f32, w: f32| rect(x, controls, w, 36.0);
         // A mesma escolha da aba HDR: mudar aqui muda lá.
         let mut s = app.cfg.hdr_games.iter().find(|h| h.exe.eq_ignore_ascii_case(&g.exe)).map_or(0, |h| h.mode as usize);
-        if ui.select(&format!("mt-v{i}"), row(view_x, 96.0), &opts(&["Padrão", "Forçar", "Desligar"]), &mut s) {
+        if ui.select(&format!("mt-v{i}"), row(view_x, 112.0), &opts(&["Padrão", "Forçar", "Desligar"]), &mut s) {
             auto_hdr = Some((g.exe.clone(), g.path.clone(), s as u8));
         }
         let g = &mut app.cfg.meter_games[i];
         let mut s = g.limit_mode as usize;
-        if ui.select(&format!("mt-l{i}"), row(limit_x, 110.0), &opts(&["Desligado", "Automático", "Manual"]), &mut s) {
+        if ui.select(&format!("mt-l{i}"), row(limit_x, 114.0), &opts(&["Desligado", "Automático", "Manual"]), &mut s) {
             g.limit_mode = s as u8;
             if s == 1 {
                 g.limit_fps = cap;
@@ -270,13 +270,13 @@ fn games(ui: &mut Ui, app: &mut App, r: Rect) {
             }
         }
         let mut s = g.limit_real as usize;
-        if ui.select(&format!("mt-u{i}"), row(unit_x, 106.0), &opts(&["Com geração", "FPS real"]), &mut s) {
+        if ui.select(&format!("mt-u{i}"), row(unit_x, 112.0), &opts(&["Com geração", "FPS real"]), &mut s) {
             g.limit_real = s == 1;
             limit = Some(i);
             changed = true;
         }
         let mut s = g.hdr as usize;
-        if ui.select(&format!("mt-h{i}"), row(hdr_x, 86.0), &opts(&["Padrão", "Ligar", "Não ligar"]), &mut s) {
+        if ui.select(&format!("mt-h{i}"), row(hdr_x, 112.0), &opts(&["Padrão", "Ligar", "Não ligar"]), &mut s) {
             g.hdr = s as u8;
             changed = true;
         }
@@ -284,14 +284,14 @@ fn games(ui: &mut Ui, app: &mut App, r: Rect) {
         match crate::meter::has_dlss(&g.path) {
             Some(true) => {
                 let mut s = g.preset as usize;
-                if ui.select(&format!("mt-p{i}"), row(preset_x, 92.0), &opts(&["Do jogo", "Recomendado", "K", "L", "M"]), &mut s) {
+                if ui.select(&format!("mt-p{i}"), row(preset_x, 112.0), &opts(&["Do jogo", "Recomendado", "K", "L", "M"]), &mut s) {
                     g.preset = s as u8;
                     preset = Some(i);
                     changed = true;
                 }
             }
-            Some(false) => ui.c.text(row(preset_x, 92.0), "Sem DLSS", 12.0, MUTED, Align::Left, Weight::Regular),
-            None => ui.c.text(row(preset_x, 92.0), "…", 12.0, MUTED, Align::Left, Weight::Regular),
+            Some(false) => ui.c.text(row(preset_x, 112.0), "Sem DLSS", 12.0, MUTED, Align::Left, Weight::Regular),
+            None => ui.c.text(row(preset_x, 112.0), "…", 12.0, MUTED, Align::Left, Weight::Regular),
         }
         let b = rect(r.right() - 38.0, controls + 6.0, 24.0, 24.0);
         if ui.is_hover(b) {

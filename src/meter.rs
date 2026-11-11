@@ -1261,7 +1261,7 @@ impl Meter {
             out.push(Line::Cycle("Plano de energia".into(), Row::Power, name));
         }
         if on(ITEM_LOG) || self.log.is_some() {
-            out.push(Line::Head("Registro".into()));
+            out.push(Line::Head("Registro de dados".into()));
             match &self.log {
                 Some(l) => {
                     let time = l.limit.map_or(clock(l.seen), |v| format!("{} / {}", clock(l.seen), clock(v)));

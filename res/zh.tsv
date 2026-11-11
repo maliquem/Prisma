@@ -1,0 +1,1558 @@
+Abrir o Prisma com Ctrl+Shift+Esc, no lugar do Gerenciador de Tarefas	用 Ctrl+Shift+Esc 打开 Prisma，代替任务管理器
+Atalho de Otimizar	优化快捷键
+Atalhos que não funcionaram	未生效的快捷键
+Configurações	设置
+Em Arquivos de Programas, com atalho e entrada para desinstalar.	装在 Program Files 中，带快捷方式和卸载项。
+Iniciar com o Windows, como administrador	随 Windows 以管理员身份启动
+Instalar libera o início com o Windows e a troca do Gerenciador de Tarefas.	安装后可随 Windows 启动并替换任务管理器。
+Instalar no PC	安装到此电脑
+Início com o Windows, permissões e atalhos gerais.	启动、权限、语言和更新。
+Reabrir como administrador	以管理员身份重新打开
+Roda de qualquer pasta. As configurações ficam ao lado do programa, em PrismaData.	可在任意文件夹运行。设置保存在程序旁的 PrismaData 中。
+Versão instalada	安装版
+Versão portátil	便携版
+Abrir no Explorador	在资源管理器中打开
+Analisando…	正在分析…
+Analisar	分析
+Apagar	删除
+Apagar pede admin	删除需要管理员权限
+Confirmar: Lixeira	确认：回收站
+Disco {}:	磁盘 {}:
+Enviado para a Lixeira	已移到回收站
+Escolha um disco e clique em Analisar.	选择一个磁盘，然后点击“分析”。
+Espaço em disco	磁盘空间
+Lendo {} de {} registros	正在读取 {} / {} 条记录
+Maiores arquivos	最大的文件
+Mostra o que ocupa espaço em cada disco.	显示每个磁盘上占用空间的内容。
+Não consegui apagar	无法删除
+Os {} maiores arquivos do disco	磁盘上最大的 {} 个文件
+Pastas	文件夹
+Sem extensão	无扩展名
+Tipos de arquivo	文件类型
+lendo a tabela do NTFS	正在读取 NTFS 表
+percorrendo as pastas	正在遍历文件夹
+{} itens lidos	已读取 {} 项
+{} arquivos	{} 个文件
+{} arquivos em {} s, {}	{} 个文件，用时 {} 秒，{}
+A gravação parou por um erro	录制因错误而停止
+Abrir o Prisma	打开 Prisma
+Aumentar volume	调高音量
+Desfazendo	正在撤销
+Desfazendo tudo	正在全部撤销
+Diminuir volume	调低音量
+Fechar {} {} para liberar {} GB de RAM?	关闭 {1} 个{2}以释放 {3} GB 内存？
+programa	程序
+programas	程序
+Foto da tela inteira	全屏截图
+Foto da área	区域截图
+Foto salva e copiada	截图已保存并复制
+Gravar	录制
+Gravação salva em {}	录像已保存到 {}
+Janela restaurada	窗口已还原
+Mudo	静音
+Nada para fechar agora	现在没有可关闭的
+Não consegui capturar a tela	无法捕获屏幕
+Não consegui salvar a foto	无法保存截图
+O replay está desligado na tela Captura	“捕获”页面中的回放已关闭
+O replay só grava em modo jogo	回放只在游戏模式下录制
+Otimizar	优化
+Otimizar agora	立即优化
+Sair	退出
+Sem bordas	无边框
+Tirar foto da área	截取区域
+{} não tem som tocando	{} 没有在播放声音
+{}: {} já está em uso	{}：{} 已被占用
+{} detectado	检测到 {}
+{} restaurados, {} mudaram depois e ficaram como estão	已恢复 {} 项，{} 项之后被更改，保持原样
+{} valores restaurados	已恢复 {} 个值
+{} valores restaurados. Apps voltam pela Loja.	已恢复 {} 个值。应用可通过 Store 找回。
+{} · {} desfaz	{} · {} 撤销
+Últimos {} s salvos	已保存最后 {} 秒
+Agendamento de GPU desligado	GPU 调度已关闭
+Agendamento de GPU ligado	GPU 调度已开启
+Alguma ferramenta ou atualização marcou esses apps. Sem Game Pass isso não costuma atrapalhar.	某个工具或更新标记了这些应用。没有 Game Pass 时通常不会有问题。
+Arquivo de paginação desligado	页面文件已关闭
+Disco {} ({}) pede cuidado	磁盘 {}（{}）需要注意
+Integridade da Memória desligada	内存完整性已关闭
+Integridade da Memória ligada	内存完整性已开启
+Jogos e compilações podem falhar sem aviso. Ligue em Sistema, Avançado, Desempenho.	游戏和编译可能无故失败。请在“系统”、“高级”、“性能”中开启。
+Já houve caso em que isso quebrou o Windows Update. Veja antes de aplicar qualquer ajuste.	这曾导致 Windows 更新损坏。应用任何调整前请先检查。
+Lista de processos indisponível	进程列表不可用
+Mais nova que os testes do catálogo. Os ajustes funcionam, com o rótulo Não testado nesta build.	比目录测试的版本更新。调整仍可用，并标注“未在此版本测试”。
+Na prática o Windows trata como Necessários. O perfil grava o valor correto.	实际上 Windows 将其视为“必需”。配置会写入正确的值。
+Necessário para a geração de quadros do DLSS.	DLSS 帧生成需要它。
+O DLSS Frame Generation exige ele ligado, em Configurações, Sistema, Tela, Gráficos.	DLSS 帧生成需要在“设置”、“系统”、“显示”、“图形”中开启它。
+O PC fica com menos proteção contra drivers maliciosos. A Microsoft pode religar em atualizações.	电脑对恶意驱动的防护减少。Microsoft 可能在更新中重新开启它。
+Pasta Windows.old presente	存在 Windows.old 文件夹
+Permite voltar de versão. Apagar libera espaço, mas encerra essa volta.	可用于回退。删除可释放空间，但会失去这个选项。
+Proteção ativa. Em jogos limitados pela CPU custa cerca de 6%; em 4K, cerca de 2%. A escolha é sua, na tela oficial.	防护已开启。在受 CPU 限制的游戏中约损失 6%，4K 下约 2%。是否关闭由你决定，见官方页面。
+Reinicie antes de aplicar ajustes ou reparar o Windows.	应用调整或修复 Windows 前请先重启。
+Reinício pendente	等待重启
+Serviço TrustedInstaller alterado	TrustedInstaller 服务已被修改
+Telemetria em 0, valor que o Pro não suporta	遥测为 0，专业版不支持此值
+{} apps do Windows foram retirados antes	之前已移除 {} 个 Windows 应用
+{} de hardware. Veja em Ferramentas, Histórico de falhas.	{} 来自硬件。见“工具”、“崩溃历史”。
+{} quedas ou erros graves em 90 dias	90 天内有 {} 次崩溃或严重错误
+{}. Copie o que importa antes de qualquer reparo.	{}。任何修复前请先复制重要数据。
+Pasta Inicializar	启动文件夹
+Pasta Inicializar, todos os usuários	启动文件夹，所有用户
+Registro, programas de 32 bits	注册表，32 位程序
+Registro, só este usuário	注册表，仅当前用户
+Registro, todos os usuários	注册表，所有用户
+1 minuto	1 分钟
+2 minutos	2 分钟
+15 segundos	15 秒
+30 segundos	30 秒
+1080p a 60 FPS	1080p 60 FPS
+1440p a 60 FPS	1440p 60 FPS
+4K a 60 FPS	4K 60 FPS
+AV1 pela GPU	GPU 上的 AV1
+Atalhos e pasta	快捷键和文件夹
+Captura	捕获
+Cerca de {} MB por minuto	每分钟约 {} MB
+Cor com HDR ligado na tela	显示器处于 HDR 时的颜色
+Em modo jogo, guarda os últimos segundos na memória. O atalho salva sem interromper.	在游戏模式下，把最后几秒保存在内存中。快捷键保存时不会中断。
+Estimativa, varia com a cena	估计值，随场景变化
+Formato de foto	截图格式
+Gravar e parar	录制和停止
+Gravar em HDR10	以 HDR10 录制
+Gravar em SDR	以 SDR 录制
+H.264 (mais compatível)	H.264（兼容性最好）
+HEVC pela GPU	GPU 上的 HEVC
+Janela em foco	当前窗口
+Ligar replay	开启回放
+Microfone	麦克风
+Monitor em foco	当前显示器
+Mostrar o cursor	显示光标
+Nativo: {} FPS	原生：{} FPS
+PNG e JPEG XR em HDR	HDR 下为 PNG 和 JPEG XR
+PNG em SDR	SDR 下为 PNG
+Parar	停止
+Pasta	文件夹
+Resolução e FPS	分辨率和 FPS
+Salvar replay	保存回放
+Som do sistema	系统声音
+Tela	屏幕
+Tirar foto	截图
+Tudo fica no seu PC. Nada é enviado.	一切都留在你的电脑上，不会发送任何内容。
+Vídeo	视频
+Espaço	空格
+Nenhum	无
+Tecla {}	按键 {}
+Atributo {} abaixo do limite do fabricante	属性 {} 低于厂商阈值
+Blocos com erro (30 dias)	坏块（30 天）
+Desligamentos incorretos	不安全关机
+Erros de cabo	线缆错误
+Erros de mídia	介质错误
+Este disco não respondeu	此磁盘没有响应
+O adaptador USB não libera os dados de saúde	USB 转接器不提供健康数据
+O próprio disco prevê falha	磁盘自身预测会故障
+O próprio disco reportou alerta crítico	磁盘自身报告了严重警告
+Outro	其他
+Partidas do motor	启动次数
+Pouca vida útil restante	剩余寿命很少
+Reserva de blocos abaixo do mínimo	备用块低于最低值
+Reserva disponível	可用备用空间
+Sem sinais de problema	没有问题迹象
+Setores incorrigíveis	无法纠正的扇区
+Setores pendentes	待处理扇区
+Setores realocados	重新分配的扇区
+Temperatura alta	温度过高
+Temperatura ou reserva pedem atenção	温度或备用空间需要注意
+Total escrito	总写入
+Total lido	总读取
+Vezes ligado	通电次数
+Vida útil restante	剩余寿命
+{} blocos com erro em 30 dias	30 天内 {} 个坏块
+{} erros de mídia	{} 个介质错误
+{}, o último em {}	{}，最近一次在 {}
+{} setores realocados	{} 个重新分配的扇区
+{}% (mínimo {}%)	{}%（最低 {}%）
+{} setores instáveis	{} 个不稳定扇区
+Ao entrar em modo jogo	进入游戏模式时
+CPU acima de 35% por 20 s	CPU 高于 35% 持续 20 秒
+Carga alta há {} min	高负载持续 {} 分钟
+Com jogo ou carga pesada	运行游戏或高负载时
+Criar planos Prisma	创建 Prisma 电源计划
+Em repouso	空闲时
+Energia	电源
+GPU 3D acima de 40% por 5 s	GPU 3D 高于 40% 持续 5 秒
+Jogo em tela cheia ou sem bordas	全屏或无边框的游戏
+Modo jogo há {} min · {} detectado	游戏模式 {} 分钟 · 检测到 {}
+Mínimo	最低
+No resto do tempo	其余时间
+Núcleos	核心
+O que conta como carga	什么算作负载
+Otimizar sem perguntar	不询问直接优化
+Perguntar se quero otimizar	询问是否优化
+Plano	计划
+Seus planos na tomada	你的交流电源计划
+Steam, Epic, GOG e Xbox	Steam、Epic、GOG 和 Xbox
+Sua Economia de energia mantém a CPU em 100% mínimo, então quase não economiza.	你的“节能”计划让 CPU 最低保持 100%，几乎省不了电。
+Só trocar o plano	只切换计划
+Não perguntar	不要询问
+Troca automática	自动切换
+Volta ao repouso após 60 s sem carga.	无负载 60 秒后回到空闲。
+Últimas 2 horas	最近 2 小时
+sem codificador de vídeo na GPU	GPU 上没有视频编码器
+Assinado por {}	由 {} 签名
+Assinatura inválida	签名无效
+Sem assinatura própria	没有自己的签名
+Aplicar sozinho quando o programa abrir de novo	程序再次打开时自动应用
+Atalho	快捷键
+Deixa a janela em foco em tela cheia sem bordas. O mesmo atalho desfaz.	把当前窗口变成无边框全屏。同一快捷键可撤销。
+Janela	窗口
+Janelas abertas	已打开的窗口
+Restaurar	还原
+Tela cheia	全屏
+Remover o Prisma deste computador? Suas configurações ficam guardadas.	从这台电脑移除 Prisma？你的设置会保留。
+Não consegui instalar o Prisma.	无法安装 Prisma。
+Ajustes do Windows	Windows 调整
+Carga alta	高负载
+Desinstalar	卸载
+Discos e redes	磁盘和网络
+Energia automática	自动电源
+Ferramentas	工具
+Inicialização	启动
+Modo jogo ativo	游戏模式已开启
+Plano desconhecido	未知计划
+Pressione as teclas	请按键
+Programas	程序
+Repouso	空闲
+Serviços	服务
+Troca automática desligada	自动切换已关闭
+Cada coluna é um núcleo	每一列是一个核心
+Disco	磁盘
+Finalizar tarefa	结束任务
+Frequência	频率
+Mais usado	使用最多
+Menos usado	使用最少
+Núcleo {} · {}	核心 {} · {}
+Programa	程序
+Rede	网络
+de {}	共 {}
+{} threads · {} · {}	{} 个线程 · {} · {}
+Blacklist	从不关闭列表
+Detecção automática	自动检测
+Fechar 1 selecionado	关闭 1 个所选
+Fechar {} selecionados	关闭 {} 个所选
+Forçar	强制
+Libera {} de RAM	释放 {} 内存
+Nada é fechado sem você confirmar.	未经你确认不会关闭任何程序。
+Nunca fechar	从不关闭
+Não	否
+Não fecharam: {}	未关闭：{}
+Pede para o programa fechar normalmente, então trabalho não salvo gera o aviso dele. Forçar é uma opção à parte.	请求程序正常关闭，这样未保存的工作会弹出它自己的提示。“强制”是单独的选项。
+Pode fechar	可以关闭
+Proteger	保护
+Sem sugestões agora. O Prisma aprende com o que você usa.	暂无建议。Prisma 会从你的使用中学习。
+Sempre	始终
+Sempre fechar ao otimizar	优化时始终关闭
+Sim	是
+Você usa {} sempre. Colocar na blacklist?	你总是使用 {}。加入从不关闭列表？
+Whitelist	始终关闭列表
+{} · {} VRAM	{} · {} 显存
+{} ficou {} dias aberto sem você usar. Colocar na whitelist?	{} 已打开 {} 天未使用。加入始终关闭列表？
+Aberto em segundo plano	在后台打开
+Sem janela aberta	没有打开的窗口
+Sempre fechar (whitelist)	始终关闭（始终关闭列表）
+Agora não	以后再说
+Fechar	关闭
+Ver lista	查看列表
+Agr. garantido	激进保证
+Agressivo	激进
+Desligado	关闭
+Efic. agressivo	高效激进
+Efic. garantido	高效保证
+Eficiente	高效
+Abrindo as propriedades no Windows	正在 Windows 中打开属性
+Automático	自动
+Botão direito no serviço abre as propriedades dele no Windows.	右键点击服务可在 Windows 中打开其属性。
+Buscar	搜索
+Editar no Windows	在 Windows 中编辑
+Escolha um serviço para ver o que ele faz.	选择一个服务，查看它的作用。
+Executável	可执行文件
+Iniciar	启动
+O serviço não traz descrição.	此服务没有描述。
+Parado	已停止
+Parados	已停止
+Precisa do Prisma como administrador	需要以管理员身份运行 Prisma
+Reiniciar	重启
+Rodando	正在运行
+Rodando · PID {}	正在运行 · PID {}
+Todos	全部
+{} rodando de {}.	{} 个正在运行，共 {} 个。
+Arraste para escolher a área · Enter copia a tela inteira · Esc cancela	拖动选择区域 · Enter 复制整个屏幕 · Esc 取消
+Caneta	画笔
+Elipse	椭圆
+Foto copiada	截图已复制
+Foto fixada: arraste para mover, botão direito fecha	已固定截图：拖动可移动，右键关闭
+Foto salva	截图已保存
+Linha	直线
+Marcador	荧光笔
+Não consegui copiar	无法复制
+Não consegui gerar a imagem	无法创建图像
+Número	编号
+Olá, mundo	你好，世界
+Pixelar	像素化
+Retângulo	矩形
+Seta	箭头
+Texto	文字
+Adicionar	添加
+Assinatura	签名
+Ativado	已启用
+Ativados	已启用
+Comando	命令
+Confirmar remoção	确认移除
+Desativado	已禁用
+Desativados	已禁用
+Escolha um item para ver de onde ele vem e quem assinou.	选择一项，查看它来自哪里、由谁签名。
+Nome	名称
+Remover da inicialização	从启动中移除
+{} de {} abrem com o Windows.	{} / {} 随 Windows 启动。
+Atenção	警告
+Ativo {}	活动 {}
+Baixando {}	下载 {}
+Bom	良好
+Conectado · {}	已连接 · {}
+Conectado · {} · {}	已连接 · {} · {}
+Desconectado	已断开
+Disco {}	磁盘 {}
+Discos	磁盘
+Enviando {}	上传 {}
+Lendo o disco…	正在读取磁盘…
+Ler saúde de novo	重新读取健康状况
+Ler {} · Gravar {}	读 {} · 写 {}
+Número de série	序列号
+Redes	网络
+Risco	有风险
+Saúde	健康
+Sem dados	无数据
+Temperatura	温度
+Tempo ligado	通电时间
+Total: {} recebidos, {} enviados	总计：接收 {}，发送 {}
+Tudo que está ligado no PC, em tempo real.	实时显示连接到电脑的所有设备。
+{} h ({} anos)	{} 小时（{} 年）
+{} livres de {}	{} 可用，共 {}
+  Marcada: {}	已选择：{}
+  Marcas removidas do registro	已从注册表移除所选项
+  Terminou com código {} em {}	以代码 {} 结束，用时 {}
+  ✓ Etapa concluída em {}	✓ 步骤完成，用时 {}
+  ✗ Não concluiu ({})	✗ 未完成（{}）
+A cópia não começou.	复制没有开始。
+A verificação achou problemas que não corrigiu. Veja a saída acima.	检查发现了未修复的问题。见上方输出。
+A verificação não começou.	检查没有开始。
+Abre as opções de recuperação, inclusive Modo de Segurança. Reinicia agora.	打开恢复选项，包括安全模式。立即重启。
+Abre o Diagnóstico de Memória do Windows, que reinicia o PC e testa antes de ligar.	打开 Windows 内存诊断，它会重启电脑并在启动前测试。
+Algo não terminou	有步骤没有完成
+Algo não terminou: {}	有步骤没有完成：{}
+Alterando	正在更改
+Analisando	正在分析
+Analisar cache de atualizações	分析更新缓存
+Atalhos para ferramentas escondidas.	隐藏工具的快捷入口。
+Atualiza pelo winget, um por um, sem janelas.	通过 winget 逐个更新，不弹窗口。
+Atualizando	正在更新
+Atualizar todos os programas	更新所有程序
+Atualizações concluídas.	更新完成。
+Automático do roteador	由路由器自动分配
+Avançado	高级
+Avisa o SSD sobre o espaço livre. Só para SSD saudável.	告诉 SSD 哪些空间空闲。仅用于健康的 SSD。
+Bloqueado em disco suspeito.	在可疑磁盘上已阻止。
+Cache de DNS limpo.	DNS 缓存已清除。
+Conferindo	正在检查
+Confiabilidade	可靠性
+Confira a saída: o defrag devolve sucesso até quando falha.	请检查输出：defrag 即使失败也会报告成功。
+Confirmar	确认
+Confirme acima para liberar.	在上方确认后解锁。
+Consertar o Windows Update	修复 Windows 更新
+Copiando	正在复制
+Copiar dados de um disco com defeito	从故障磁盘复制数据
+Corrigir (/f)	修复 (/f)
+Corrigir e ler a superfície (/r)	修复并读取表面 (/r)
+Cópia concluída. Confira os arquivos no destino.	复制完成。请检查目标位置的文件。
+DISM: conferir e reparar a imagem	DISM：检查并修复映像
+DNS alterado. Confira acima.	DNS 已更改。见上方。
+De onde	来源
+Desfaz o item anterior, em todos os discos.	撤销上一项，作用于所有磁盘。
+Desligamento inesperado	意外关机
+Desligar libera o hiberfil.sys, mas pode afetar a Inicialização Rápida.	关闭后会释放 hiberfil.sys，但可能影响快速启动。
+Diagnóstico	诊断
+Dispositivos	设备
+Drivers com problema	有问题的驱动
+Erro de hardware (WHEA)	硬件错误 (WHEA)
+Erros encontrados e corrigidos.	已发现并修复错误。
+Escolha origem e destino.	选择来源和目标。
+Escolhendo o que limpar	正在选择要清理的内容
+Escolher pasta	选择文件夹
+Estado da recuperação	恢复状态
+Estados disponíveis	可用状态
+Este disco está suspeito: copie os dados antes de qualquer reparo. Modos que escrevem podem piorar a perda.	此磁盘可疑：任何修复前请先复制数据。会写入的模式可能让损失更严重。
+Eventos	事件
+Evita que o Windows rode a verificação sozinho ao ligar num disco suspeito, até você copiar os dados.	在你复制数据之前，阻止 Windows 在启动时自动检查可疑磁盘。
+Excluindo do chkdsk automático	正在从自动 chkdsk 中排除
+Executar	运行
+Falhas	崩溃
+Gerar pacote de suporte	创建支持包
+Guardada em {}	已保存到 {}
+Hibernação desligada.	休眠已关闭。
+Hibernação ligada.	休眠已开启。
+Histórico de falhas	崩溃历史
+Horários em UTC. Vários itens no mesmo horário costumam ser a mesma queda.	时间为 UTC。同一时间的多条记录通常是同一次崩溃。
+Impedir verificação automática	阻止自动检查
+Já copiei os dados e aceito o risco	我已复制数据并接受风险
+Lendo	正在读取
+Lendo o log do sistema	正在读取系统日志
+Liberados {}	已释放 {}
+Ligar ou desligar hibernação	开启或关闭休眠
+Limpando	正在清理
+Limpar arquivos do sistema	清理系统文件
+Limpar cache de DNS	清除 DNS 缓存
+Limpar cache de atualizações	清理更新缓存
+Limpeza	清理
+Limpeza concluída. Windows.old e Lixeira não foram tocados.	清理完成。未改动 Windows.old 和回收站。
+Lista acima.	列表见上方。
+Lista dispositivos com erro. Só leitura.	列出有错误的设备。只读。
+Lista o que tem versão nova pelo winget.	列出 winget 中有新版本的程序。
+Lê o último resultado. Sem registro não quer dizer aprovado.	读取最近一次结果。没有记录不代表已通过。
+Mostra quanto a pasta WinSxS ocupa de verdade e se vale limpar.	显示 WinSxS 文件夹实际占用多少，以及是否值得清理。
+Mostra se o ambiente de recuperação do Windows está ativo.	显示 Windows 恢复环境是否启用。
+Muda o servidor de nomes do adaptador. DNS criptografado se ativa em Configurações, Rede.	更改网卡的 DNS 服务器。加密 DNS 在“设置”、“网络”中开启。
+Nem tudo atualizou; veja acima	没有全部更新；见上方
+Nem tudo atualizou; veja acima: {}	没有全部更新；见上方：{}
+Nenhum resultado registrado. Isso não quer dizer aprovado.	没有记录结果。这不代表已通过。
+Nenhuma queda ou erro grave em 90 dias.	90 天内没有崩溃或严重错误。
+Não achei o registro do SFC. Confira a saída acima.	找不到 SFC 记录。请检查上方输出。
+Não funcionou	没有成功
+Não funcionou: {}	没有成功：{}
+Não funcionou por inteiro	没有完全成功
+Não funcionou por inteiro: {}	没有完全成功：{}
+Não iniciou	没有启动
+Não iniciou: {}	没有启动：{}
+O DISM não conseguiu reparar a imagem. Veja a saída acima e o arquivo dism.log.	DISM 无法修复映像。见上方输出和 dism.log 文件。
+O SFC não conseguiu reparar {} arquivos. Veja CBS.log e rode o reparo de novo após reiniciar.	SFC 无法修复 {} 个文件。查看 CBS.log，重启后再运行一次修复。
+O destino precisa estar em outro disco.	目标必须在另一个磁盘上。
+O disco do sistema está suspeito: resolva isso antes de reparar o Windows.	系统盘可疑：修复 Windows 前请先处理这个问题。
+O disco está em uso: a verificação pede reinício. Em disco suspeito, copie os dados antes.	磁盘正在使用：检查需要重启。若磁盘可疑，请先复制数据。
+O modo /r lê toda a superfície por muitas horas: bloqueado em disco suspeito.	/r 模式会花很多小时读取整个表面：在可疑磁盘上已阻止。
+O modo sem reparo só lê. Os modos que corrigem escrevem no disco e ficam bloqueados em disco suspeito.	不修复模式只读取。修复模式会写入磁盘，在可疑磁盘上已阻止。
+O passo a passo aparece aqui.	逐步日志显示在这里。
+O que acorda o PC	什么唤醒了电脑
+O que impede o sono	什么阻止睡眠
+O que o Windows esconde em linha de comando, com resultado em português.	Windows 隐藏在命令行里的内容，结果清晰明了。
+Otimizar SSD (TRIM)	优化 SSD (TRIM)
+Pacote salvo na pasta indicada acima.	支持包已保存到上面显示的文件夹。
+Painéis do Windows	Windows 面板
+Para onde (outro disco)	目标（另一个磁盘）
+Para os serviços, renomeia as pastas de cache sem apagá-las e religa tudo. Para quando as atualizações travam.	停止服务，重命名缓存文件夹（不删除），然后重新启动一切。适用于更新卡住时。
+Parar {}	停止 {}
+Parte dos arquivos não foi copiada: pode ser área danificada. Veja a saída acima.	部分文件没有复制：可能是损坏区域。见上方输出。
+Pasta: {}	文件夹：{}
+Pede administrador	需要管理员权限
+Pedindo a limpeza	正在请求清理
+Primeiro degrau quando sites não abrem. Não tem efeito colateral.	网站打不开时的第一步。没有副作用。
+Primeiro passo em disco suspeito. Lê uma vez, pula o que estiver ruim e registra o que falhou. Só escreve no destino.	可疑磁盘上的第一步。只读取一次，跳过坏的部分并记录失败项。只写入目标位置。
+Procurando	正在搜索
+Pronto. Lembre de desfazer depois de trocar o disco.	完成。更换磁盘后记得撤销此项。
+Pronto. Procure atualizações de novo em Configurações.	完成。请在“设置”中再次检查更新。
+Pronto. Reinicie para valer.	完成。重启后生效。
+Recursos	功能
+Refazer a pilha de rede	重置网络协议栈
+Reinicia direto na configuração da placa-mãe.	直接重启进入主板设置。
+Reiniciando	正在重启
+Reiniciando.	正在重启。
+Reiniciar em modo avançado	重启到高级模式
+Reiniciar na BIOS	重启进入 BIOS
+Reinício sem desligar corretamente	不正常关闭直接重启
+Reinícios inesperados, telas azuis e erros de hardware dos últimos 90 dias. Só leitura.	最近 90 天的意外重启、蓝屏和硬件错误。只读。
+Religar {}	启动 {}
+Renomear as pastas de cache	重命名缓存文件夹
+Reparar	修复
+Reparar o Windows	修复 Windows
+Reparar online (/scan)	联机修复 (/scan)
+Reparou {} arquivos. Reinicie e rode de novo para confirmar.	已修复 {} 个文件。重启后再运行一次以确认。
+Roda a tarefa do próprio Windows, que preserva 30 dias de atualizações.	运行 Windows 自带的任务，它会保留 30 天的更新。
+Roda o DISM, que baixa o que estiver danificado, e depois o SFC, nessa ordem, como manda a Microsoft. Pode levar de 10 a 30 minutos e usa o disco do sistema.	按 Microsoft 推荐的顺序运行 DISM（下载损坏的部分），然后运行 SFC。可能需要 10 到 30 分钟，并使用系统盘。
+Rodando…	正在运行…
+SFC: conferir os arquivos do sistema	SFC：检查系统文件
+Salva relatório de vídeo, informações do sistema e histórico de falhas numa pasta.	把视频报告、系统信息和崩溃历史保存到一个文件夹。
+Salvando a configuração atual	正在保存当前配置
+Segundo degrau: Winsock e TCP/IP. Salva o estado atual antes. Pede reinício.	第二步：Winsock 和 TCP/IP。先保存当前状态。需要重启。
+Sem administrador, as duas últimas podem falhar.	没有管理员权限时，最后两项可能失败。
+Sem problemas no sistema de arquivos.	文件系统没有问题。
+Servidor principal	首选服务器
+Servidor secundário	备用服务器
+Sistema	系统
+Só verificar, sem reparar	只检查，不修复
+TRIM é só para SSD.	TRIM 只适用于 SSD。
+Tarefa iniciada: ela segue em segundo plano por alguns minutos.	任务已启动：会在后台继续几分钟。
+Tela azul	蓝屏
+Temporários, restos de atualização e relatórios. Não toca em Windows.old, Lixeira, Downloads nem shaders.	临时文件、更新残留和报告。不会动 Windows.old、回收站、下载文件夹和着色器。
+Testar memória	测试内存
+Timers de despertar	唤醒定时器
+Todas as opções	所有选项
+Trocar DNS	更改 DNS
+Três estados possíveis: passou, com erros ou sem resultado.	三种可能状态：通过、有错误或无结果。
+Veja a recomendação no fim da saída.	见输出末尾的建议。
+Veja o estado acima.	见上方状态。
+Ver programas desatualizados	查看过期程序
+Ver resultado do teste de memória	查看内存测试结果
+Verificando {}	正在检查 {}
+Verificar disco	检查磁盘
+Verificação automática de volta ao padrão.	自动检查已恢复默认。
+Voltando ao automático	正在恢复为自动
+Voltando ao padrão	正在恢复默认
+Voltar a verificação automática	恢复自动检查
+Windows íntegro: nenhum arquivo corrompido.	Windows 完好：没有损坏的文件。
+automático	自动
+sem erros	无错误
+veja o Visualizador de Eventos	请查看事件查看器
+{} guardada em {}	{} 已保存到 {}
+{} evento {}: {}	{} 事件 {}：{}
+Último despertar	最近一次唤醒
+Último despertar, estados de energia disponíveis e o que impede o sono.	最近一次唤醒、可用电源状态，以及什么阻止睡眠。
+▸ {}  Fim, em {}	▸ {}  已完成，用时 {}
+Fim, em {}	已完成，用时 {}
+Ponto de restauração	还原点
+  App {}: volta pela Loja, não por aqui	应用 {}：需通过 Store 找回，不在这里
+  Removendo o app {}…	正在移除应用 {}…
+  Serviço {}: não existe neste PC, nada a fazer	服务 {}：此电脑上没有，无需操作
+  ✓ App {}: removido	✓ 应用 {}：已移除
+  ✓ Criado	✓ 已创建
+  ✓ Registro {}: removido, como era antes	✓ 注册表 {}：已移除，恢复原样
+  ✓ Registro {}: voltou para {}	✓ 注册表 {}：已恢复为 {}
+  ✓ Registro {}: {} → {}	✓ 注册表 {}：{} → {}
+  ✓ Serviço {}: início {} → {}	✓ 服务 {}：启动类型 {} → {}
+  ✓ Serviço {}: início voltou para {}	✓ 服务 {}：启动类型已恢复为 {}
+  ✗ App {}: continua instalado	✗ 应用 {}：仍已安装
+  ✗ O Windows recusou	✗ Windows 拒绝了
+  ✗ Registro {}: mudou depois do Prisma, ficou como está	✗ 注册表 {}：在 Prisma 之后被更改，保持原样
+  ✗ Registro {}: não consegui restaurar	✗ 注册表 {}：无法恢复
+  ✗ Registro {}: o Windows recusou a escrita	✗ 注册表 {}：Windows 拒绝写入
+  ✗ Serviço {}: o Windows recusou a mudança	✗ 服务 {}：Windows 拒绝更改
+  ✗ Serviço {}: mudou depois do Prisma, ficou como está	✗ 服务 {}：在 Prisma 之后被更改，保持原样
+  ✗ Serviço {}: não consegui restaurar	✗ 服务 {}：无法恢复
+6% de FPS em 720p e cerca de 2% em 4K, mas tira uma proteção real do kernel. A escolha fica na tela oficial do Windows.	720p 下约 6% FPS，4K 下约 2%，但会去掉一项真正的内核防护。是否关闭请在 Windows 官方页面决定。
+A Microsoft recomenda contra, e há relatos de quebra.	Microsoft 不建议这样做，也有出问题的报告。
+Abrir tela do Windows	打开 Windows 页面
+Aplicado	已应用
+Aplicado, mas uma conferência falhou. Veja o que mudou.	已应用，但有一项检查失败。查看改了什么。
+Aplicado. Windows Update, Loja e Central de Segurança conferidos.	已应用。已检查 Windows 更新、Store 和安全中心。
+Aplicar {}	应用 {}
+Atualizações sem compartilhar com outros PCs	更新不与其他电脑共享
+Auditoria	审核
+Automático com atraso	自动（延迟启动）
+Baixo impacto.	影响小。
+Bloquear atualizações	阻止更新
+Bloqueia correções automáticas de problemas da Microsoft.	阻止 Microsoft 自动修复问题。
+Cada item foi pesquisado. Menos ajustes aqui é uma decisão, não uma falta.	每一项都经过研究。这里调整少是有意为之，不是遗漏。
+Caminhos de arquivo longos	长文件路径
+Central de Segurança ativa	安全中心已启用
+Conferindo o essencial	正在检查要点
+Confirmar: aplicar {}	确认：应用 {}
+Consenso entre as seis ferramentas analisadas.	六款被分析工具的共识。
+Consenso entre ferramentas, mas muita gente usa.	工具间有共识，但很多人在用。
+Conveniência, e ajuda a notar arquivos disfarçados.	方便，也有助于发现伪装的文件。
+Conveniência.	方便。
+Copiar e colar entre aparelhos para de funcionar.	设备间复制粘贴将无法使用。
+Dados de diagnóstico no mínimo do Pro	诊断数据设为专业版最低
+Derruba o WSL e outras máquinas virtuais.	会破坏 WSL 和其他虚拟机。
+Desde 2020 o Windows não muda a resolução de outros programas.	自 2020 年起，Windows 不再改变其他程序的计时器精度。
+Desenvolvimento	开发
+Desfazer	撤销
+Desfazer tudo	全部撤销
+Documentado	有文档
+Evita erros em projetos grandes. Pode pedir reinício.	避免大型项目出错。可能需要重启。
+Ferramentas de timer	计时器工具
+Fica em Necessários. Desligar por completo não existe no Pro.	保持“必需”。专业版无法完全关闭。
+Finalizar tarefa na barra de tarefas	任务栏上的“结束任务”
+Fora da lista	未纳入
+IA do Windows desligada onde a política vale	在策略适用处关闭 Windows AI
+Jogo	游戏
+Jogos modernos usam UDP nos dados críticos.	现代游戏用 UDP 传输关键数据。
+Já estava assim	已经是这样
+Limiar de svchost	svchost 阈值
+Limpadores de RAM	内存清理工具
+Listas de serviços em massa	批量服务列表
+Loja do Windows presente	Microsoft Store 存在
+Mantém o histórico da área de transferência funcionando.	保持剪贴板历史可用。
+Medido	已测量
+Menu Iniciar sem recomendações	开始菜单不显示推荐
+Modo Desenvolvedor	开发者模式
+Modo MSI, isolar núcleos, afinidade	MSI 模式、内核隔离、亲和性
+Mostrar extensões de arquivo	显示文件扩展名
+Nenhum jogo foi visto usando; o valor 100 impediu o serviço de iniciar.	没看到有游戏使用它；值 100 会让服务无法启动。
+Notícias, Clima, Solitaire, Clipchamp, Feedback, Office Hub, To Do e Power Automate.	资讯、天气、纸牌、Clipchamp、反馈中心、Office Hub、To Do 和 Power Automate。
+Não aplicados: {}	未应用：{}
+Não desliga o Bing por inteiro: essa opção não existe no Pro.	不能完全关闭 Bing：专业版没有这个选项。
+Não melhora, e a latência de rede subiu ao desligar.	没有改善，关闭后网络延迟反而上升。
+Não testado nesta build ({}, {}).	未在此版本测试（{}，{}）。
+O Windows continua baixando normalmente da Microsoft.	Windows 仍会正常从 Microsoft 下载。
+O Windows desfez	Windows 撤销了它
+O Windows recusou o ponto de restauração. {}	Windows 拒绝了还原点。{}
+O Windows recusou o ponto de restauração	Windows 拒绝了还原点
+O passo a passo aparece aqui ao aplicar ou desfazer.	应用或撤销时，逐步日志显示在这里。
+O que o Prisma achou neste PC	Prisma 在这台电脑上发现的
+O que outros otimizadores fazem e o Prisma não	其他优化工具会做、Prisma 不做的
+O único serviço automático que vale mudar.	唯一值得更改的自动服务。
+Opcional e com aviso: há relatos de efeito em conquistas do Xbox.	可选，带警告：有报告称会影响 Xbox 成就。
+Pagefile desligado	页面文件已关闭
+Paint e análise de dados. O Recall só roda em PCs com NPU.	画图和数据分析。Recall 只在有 NPU 的电脑上运行。
+Parar o serviço de telemetria	停止遥测服务
+Pede reinício	需要重启
+Perfis	配置
+Permite instalar pacotes de teste e criar links sem administrador.	无需管理员权限即可安装测试包和创建链接。
+Pesquisa sem destaques, nuvem e localização	搜索不显示精选、云端和位置
+Planos Ultimate e Bitsum	卓越性能和 Bitsum 计划
+Ponto de restauração criado. {}	已创建还原点。{}
+Pouco ou nada, e um jogo ficou injogável.	几乎没用，还有一个游戏因此无法游玩。
+Preserva WSL e virtualização, e liga caminhos longos.	保留 WSL 和虚拟化，并开启长路径。
+Privacidade	隐私
+Quebraram Bluetooth; as ferramentas sérias recuaram disso.	曾导致蓝牙故障；严肃的工具已放弃这样做。
+Questão de gosto	看个人喜好
+Questão de gosto.	看个人喜好。
+Reduz o envio de dados até o limite do Pro.	把发送的数据减少到专业版的下限。
+Reduzem segurança, sem ganho.	降低安全性却没有收益。
+Relatos	报告
+Remover Edge ou Loja	移除 Edge 或 Store
+Remover Notas, Alarmes e Gravador	移除记事本、闹钟和录音机
+Remover apps que quase ninguém usa	移除几乎没人用的应用
+Remover o app Copilot	移除 Copilot 应用
+Restauração	还原点
+Sem ID de publicidade e experiências personalizadas	不使用广告 ID 和个性化体验
+Sem conteúdo sugerido e instalação silenciosa de apps	不推荐内容，不静默安装应用
+Sem ganho medido. Só evita que o Windows grave os últimos segundos.	未测到收益。只会让 Windows 不再录制最后几秒。
+Sem ganho medido; a purga repetida causou travadas com 32 GB.	未测到收益；在 32 GB 下反复清理导致卡顿。
+Sem gravação em segundo plano do Game Bar	关闭 Game Bar 后台录制
+Sem pedidos de feedback e com menos relatórios	不请求反馈，减少报告
+Sem publicar histórico de atividades	不发布活动历史
+Sem reversão confiável.	没有可靠的回退方式。
+Sem teste independente em Ryzen 5000.	没有在 Ryzen 5000 上的独立测试。
+Serviço de mapas abre só quando precisar	地图服务只在需要时启动
+Sem efeito comprovado.	没有已证实的效果。
+Só leitura: nada foi alterado.	只读：没有更改任何内容。
+Só o app. A Microsoft não oferece política clara para o Pro.	只有应用本身。Microsoft 没有为专业版提供明确策略。
+Só o que tem efeito comprovado. Tudo pode ser desfeito.	只做有已证实效果的调整。全部可以撤销。
+Só para este usuário: as políticas equivalentes não valem no Pro.	仅当前用户：对应的策略在专业版上不生效。
+Tira o painel de notícias.	移除资讯面板。
+Transferência em segundo plano não está desativada	不会关闭后台传输
+Travou serviços do Xbox; dois projetos removeram.	它曾让 Xbox 服务卡死；两个项目已移除它。
+Um PC de 32 GB chegou a usar 39 GB de memória reservada.	一台 32 GB 的电脑最终用了 39 GB 的保留内存。
+Ver discos	查看磁盘
+Ver log	显示日志
+Verifica o que importa para jogar e tira ruído. Não promete FPS.	检查对游戏重要的项目并去除干扰。不承诺提升 FPS。
+Verificando…	正在检查…
+Verificar de novo	再次检查
+Virtualização desligada	虚拟化已关闭
+Volta só pela Loja	只能通过 Store 找回
+Widgets desligados	小组件已关闭
+Windows Update não está desativado	不会关闭 Windows 更新
+não existia	原本不存在
+outro valor	其他值
+tipo {}	类型 {}
+{} de {}: {}	{} / {}：{}
+Área de transferência sem nuvem	剪贴板不使用云
+Arquivo	文件
+Buscar por nome ou empresa	按名称或公司搜索
+Concluído:	完成：
+Concluído: {}	完成：{}
+Confirmar: remover {}	确认：移除 {}
+Criar ponto de restauração	创建还原点
+Data	日期
+Desinstalando	正在卸载
+Desinstalar 1	卸载 1 个
+Desinstalar {}	卸载 {} 个
+Limpar {} selecionados	清理 {} 个所选
+Manter tudo	全部保留
+Nada sobrou.	没有残留。
+Não abriu:	未打开：
+Não abriu: {}	未打开：{}
+O que sobrou	残留内容
+Ordenar por	排序方式
+Pastas vão para a Lixeira. O registro ganha um backup antes.	文件夹会移到回收站。注册表会先备份。
+Ponto de restauração pedido	已请求还原点
+Procurando restos…	正在查找残留…
+Registro	注册表
+Removendo {}…	正在移除 {}…
+Restos limpos	残留已清理
+Se o programa abrir a própria janela, siga por ela.	如果程序打开了自己的窗口，请在那里继续。
+Sem janela quando der	尽量不弹窗口
+Tamanho	大小
+{} itens não saíram	{} 项未能移除
+{} programas instalados.	已安装 {} 个程序。
+{} restos encontrados. Confira antes de limpar.	找到 {} 项残留。清理前请先检查。
+10% por toque	每次 10%
+2% por toque	每次 2%
+5% por toque	每次 5%
+Agora: {} + tecla de volume ou mudo	现在：{} + 音量键或静音键
+As teclas de volume do teclado, com o modificador, mudam só o programa em foco.	键盘音量键配合修饰键时，只改变当前程序。
+Em foco	当前焦点
+Modificador (pode combinar dois)	修饰键（可组合两个）
+Mostrar aviso na tela	在屏幕上显示提示
+Nenhum programa com som agora.	现在没有程序在播放声音。
+Passo	步长
+Programas com som	有声音的程序
+Silenciado	已静音
+Tocando	正在播放
+Volume por programa	按程序调节音量
+Anéis	圆环
+Atalho para ligar e desligar	开关快捷键
+Barras finas	细条
+Instrumento	仪表
+Mostra CPU, GPU, RAM e VRAM por cima de tudo. Arraste para mudar de lugar.	在所有内容上方显示 CPU、GPU、内存和显存。拖动可移动。
+Mostrar widget	显示小组件
+Pílula	胶囊
+Idioma	语言
+Atualizações	更新
+Versão {}	版本 {}
+Procurar agora	立即检查
+Procurar ao abrir o programa	程序打开时检查
+Procurando…	正在检查…
+Você está na versão mais recente.	已是最新版本。
+Versão {} disponível	有新版本 {}
+Instalar a versão {}	安装版本 {}
+Confirmar: instalar e reiniciar	确认：安装并重启
+Baixando a atualização… {}%	正在下载更新… {}%
+Instalando…	正在安装…
+Não consegui acessar o GitHub.	无法连接 GitHub。
+Ainda não há versão publicada.	尚未发布任何版本。
+O arquivo baixado não confere. Nada foi alterado.	下载的文件不匹配。未做任何更改。
+A atualização não tem a assinatura do Prisma. Nada foi alterado.	更新没有 Prisma 签名。未做任何更改。
+Sem permissão nesta pasta. Reabra como administrador.	此文件夹没有权限。请以管理员身份重新打开。
+Não consegui trocar o programa. Nada foi alterado.	无法替换程序。未做任何更改。
+Espere a tarefa em andamento terminar.	请等待正在运行的任务完成。
+Nova versão {} disponível em Configurações	新版本 {} 可在“设置”中获取
+Atualizado para a versão {}	已更新到版本 {}
+Busca só o GitHub do Prisma, sem enviar dados seus.	只访问 Prisma 的 GitHub 页面，不发送你的任何数据。
+Programas salvos	已保存的程序
+Quem usa o Fullscreenizer uma vez entra na lista. Marque Automático para aplicar sempre que o programa abrir.	你使用过全屏化工具的程序都会加入列表。勾选“自动”可在程序每次打开时应用。
+Nenhum programa ainda. Use o Fullscreenizer em uma janela ou clique em Adicionar.	还没有程序。对窗口使用全屏化工具，或点击“添加”。
+Detalhes	详细信息
+Mostrando {}	正在显示 {}
+Ir para detalhes	转到详细信息
+Ver todos os processos	显示所有进程
+Abrir local do arquivo	打开文件位置
+Pesquisar online	在线搜索
+Propriedades	属性
+Finalizar tarefa?	结束任务？
+{} será fechado à força. O que não foi salvo nesse programa será perdido.	将强制关闭 {}。此程序中未保存的内容会丢失。
+Parar este serviço?	停止此服务？
+{} vai parar agora. Programas que dependem dele podem deixar de funcionar.	{} 将立即停止。依赖它的程序可能无法工作。
+Reiniciar este serviço?	重启此服务？
+{} vai parar e iniciar de novo.	{} 将停止并重新启动。
+Botão direito no serviço mostra iniciar, parar, reiniciar e propriedades.	右键点击服务可启动、停止、重启和查看属性。
+Remover da inicialização?	从启动中移除？
+{} deixa de abrir com o Windows. O programa continua instalado.	{} 将不再随 Windows 启动。程序仍保持安装。
+Desinstalar estes programas?	卸载这些程序？
+{} e mais {}	{} 和另外 {} 个
+Limpar os restos selecionados?	清理所选残留？
+Pastas e arquivos vão para a Lixeira. As chaves do registro são apagadas depois de um backup.	文件夹和文件会移到回收站。注册表项会在备份后删除。
+Restos excluídos	残留已删除
+{} itens foram excluídos com sucesso.	已成功删除 {} 项。
+Alguns restos não saíram	部分残留未能移除
+{} itens excluídos, {} não saíram: {}	已删除 {} 项，{} 项未能移除：{}
+Não foi removido: {}	未移除：{}
+{} restos encontrados. Só vêm marcados os que têm o nome exato; confira os outros.	找到 {} 项残留。只有名称完全匹配的项已勾选；请检查其余项。
+Procurando restos	正在查找残留
+Criando ponto de restauração…	正在创建还原点…
+Ponto de restauração criado	已创建还原点
+Desinstalado: {}	已卸载：{}
+Desinstalando {}…	正在卸载 {}…
+Na fila: {}	已排队：{}
+Executar esta ferramenta?	运行此工具？
+Outra ferramenta está rodando. Espere terminar.	另一个工具正在运行。请等它完成。
+Desfazer tudo?	全部撤销？
+Todos os ajustes aplicados pelo Prisma voltam ao valor anterior, menos o que foi mudado depois.	Prisma 应用的所有调整都会恢复为之前的值，之后被更改的除外。
+Aplicar estes ajustes?	应用这些调整？
+{} ajustes vão mudar o Windows. Tudo pode ser desfeito depois.	将有 {} 项调整更改 Windows。之后都可以撤销。
+Enviar para a Lixeira?	移到回收站？
+Acima de	上方
+GPU 3D	GPU 3D
+Som do sistema ligado: grava todos os sons do PC.	系统声音开启：录制电脑的所有声音。
+Som do sistema desligado: grava só o som da janela capturada.	系统声音关闭：只录制被捕获窗口的声音。
+Som do sistema desligado: não grava o som do PC. Para gravar um programa só, escolha Janela em foco.	系统声音关闭：不录制电脑声音。要录制单个程序，请选择“当前窗口”。
+Instalar no PC?	安装到此电脑？
+O Prisma vai para Arquivos de Programas e reabre de lá. O Windows pede permissão de administrador.	Prisma 会移到 Program Files 并从那里重新打开。Windows 会请求管理员权限。
+A instalação precisa da permissão de administrador	安装需要管理员权限
+Substituir o Gerenciador de Tarefas	替换任务管理器
+Ligado: Ctrl+Shift+Esc abre o Prisma.	开启：Ctrl+Shift+Esc 打开 Prisma。
+Desligado: Ctrl+Shift+Esc abre o Gerenciador de Tarefas do Windows.	关闭：Ctrl+Shift+Esc 打开 Windows 任务管理器。
+Ativar	开启
+Desativar	关闭
+Devolver o Gerenciador de Tarefas?	还原任务管理器？
+Ctrl+Shift+Esc volta a abrir o Gerenciador de Tarefas do Windows.	Ctrl+Shift+Esc 将重新打开 Windows 任务管理器。
+Substituir o Gerenciador de Tarefas?	替换任务管理器？
+Ctrl+Shift+Esc passa a abrir o Prisma. Dá para desfazer aqui a qualquer momento.	Ctrl+Shift+Esc 将打开 Prisma。你可以随时在这里撤销。
+Desligado. Só na versão instalada, por segurança.	关闭。为安全起见，仅限安装版。
+Instalar a atualização?	安装更新？
+O Prisma vai baixar a versão {}, reiniciar e continuar com as suas configurações.	Prisma 将下载版本 {}，重启并保留你的设置。
+Padrão	默认
+Voltar ao padrão?	恢复默认？
+As opções desta tela voltaram ao padrão	本页选项已恢复默认
+Volta atalhos, pasta, formatos, som e replay ao padrão.	将快捷键、文件夹、格式、声音和回放恢复默认。
+Volta os planos, a troca automática e o que conta como carga ao padrão.	将计划、自动切换以及什么算作负载恢复默认。
+Volta o atalho ao padrão e desliga o modo automático de todos os programas. A lista continua salva.	将快捷键恢复默认，并关闭所有程序的自动模式。列表会保留。
+Volta as opções de ponto de restauração e de desinstalar sem janela ao padrão.	将还原点和无窗口卸载选项恢复默认。
+Volta as opções Ver log e Restauração ao padrão. Os ajustes aplicados continuam como estão: para reverter, use Desfazer.	将“显示日志”和“还原点”选项恢复默认。已应用的调整保持不变：用“撤销”还原。
+Esvazia as listas de nunca fechar e sempre fechar, e as sugestões recusadas. Essa ação não fecha nenhum programa.	清空从不关闭和始终关闭列表以及已拒绝的建议。不会关闭任何程序。
+Volta o modificador, o passo e o aviso na tela ao padrão.	将修饰键、步长和屏幕提示恢复默认。
+Volta o atalho, o estilo e a posição do widget ao padrão, e esconde o widget.	将小组件的快捷键、样式和位置恢复默认，并隐藏小组件。
+Volta os atalhos de Otimizar, Fechar à força e Reiniciar o Explorer, o idioma e a busca de atualização ao padrão.	将“优化”、“强制关闭”和“重启资源管理器”快捷键、语言和更新检查恢复默认。
+Fechar à força	强制关闭
+Encerra na hora o programa em foco, mesmo travado. O que não foi salvo é perdido.	立即结束当前程序，即使它已卡死。未保存的内容会丢失。
+{} fechado à força	已强制关闭 {}
+O Windows protegeu {}	Windows 保护了 {}
+Som	声音
+Volume e aparelhos de saída e de entrada de cada programa.	每个程序的音量以及输出和输入设备。
+Padrão do Windows	Windows 默认
+Saída	输出
+Entrada	输入
+Sem som agora	现在没有声音
+Da lista de programas	从程序列表
+Escolher arquivo .exe	选择 .exe 文件
+Adicionar programa	添加程序
+Voltar	返回
+Procurando programas…	正在查找程序…
+Nenhum programa encontrado.	没有找到程序。
+HDR ligado	HDR 已开启
+HDR desligado, cor ampla	HDR 已关闭，广色域
+HDR desligado	HDR 已关闭
+Sem suporte a HDR	不支持 HDR
+Modo	模式
+Imagem	画面
+Profundidade	位深
+{} bits	{} 位
+Brilho do SDR	SDR 亮度
+{} nits	{} 尼特
+Perfil de calibração	校准配置文件
+Nenhum perfil de calibração ativo nesta tela.	此显示器没有启用的校准配置文件。
+Neutra	中性
+Reforço de {}%	增强 {}%
+Matriz própria	自定义矩阵
+Saturação	饱和度
+Curva	曲线
+Corrigida	已校正
+Conferem com a tela	与显示器一致
+Não conferem com a tela	与显示器不一致
+Sem ficha para comparar	没有可比较的显示器数据
+Cores primárias	原色
+Brilho declarado, em nits	声明的亮度（尼特）
+Pico	峰值
+Preto	黑色
+Ficha enviada pela tela	显示器发送的数据
+Sem leitura direta nesta placa	此显卡无法直接读取
+Override de EDID em uso	正在使用 EDID 覆盖
+Ficha em uso no Windows	Windows 正在使用的数据
+Não informado	未报告
+Sem perfil	无配置文件
+Bloco Dolby Vision	Dolby Vision 数据块
+Não declarado	未声明
+O que o Windows informa aos jogos agora	Windows 现在告诉游戏的值
+A tela declara	显示器声明
+Guiado pela tela	显示器主导
+Baixa latência 4:2:2	低延迟 4:2:2
+Guiado pela tela e baixa latência 4:2:2	显示器主导和低延迟 4:2:2
+Guiado pela tela e baixa latência 4:4:4	显示器主导和低延迟 4:4:4
+Modos	模式
+Outro valor	其他值
+Sem valor salvo	没有保存的值
+HDR salvo no Windows	Windows 中保存的 HDR
+Extensão da Store	Store 扩展
+Instalada	已安装
+Não instalada	未安装
+Saída padrão	默认输出
+Sem suporte	不支持
+Outro formato	其他格式
+Som espacial	空间音效
+{} canais · {} kHz	{} 声道 · {} kHz
+Mistura do Windows	Windows 混音
+Não encontrada	未找到
+App Dolby Access	Dolby Access 应用
+Instalado	已安装
+Não instalado	未安装
+Canais aceitos	支持的声道
+O perfil reforça a saturação em {}% e isso vale para todo o conteúdo HDR, inclusive jogos com HDR próprio.	配置文件把饱和度提高了 {}%，这会作用于所有 HDR 内容，包括自带 HDR 的游戏。
+As cores primárias do perfil não são as desta tela. Isso costuma vir de um perfil feito em outra tela, e os programas que leem esses dados recebem a informação errada.	配置文件的原色不是这台显示器的。这通常来自在另一台显示器上制作的配置文件，读取这些数据的程序会得到错误信息。
+O HDR está desligado. O perfil e o valor informado aos jogos mudam quando ele liga, então confira de novo com o HDR ligado.	HDR 已关闭。开启后配置文件和报告给游戏的值会改变，请在 HDR 开启时再检查一次。
+Há um override de EDID nesta tela. O Windows usa os valores dele, não os que a tela envia.	此显示器有 EDID 覆盖。Windows 使用覆盖的值，而不是显示器发送的值。
+Há um override de EDID nesta tela, e esta placa não permite ler a ficha original.	此显示器有 EDID 覆盖，且此显卡无法读取原始数据。
+A tela declara Dolby Vision, mas não o modo 4:4:4 de baixa latência. Segundo relatos, é isso que faz o Windows não mostrar a certificação Dolby Vision.	显示器声明支持 Dolby Vision，但没有低延迟 4:4:4 模式。据用户报告，这就是 Windows 不显示 Dolby Vision 认证的原因。
+A tela só aceita PCM de 2 canais. Com o som espacial desligado, todo o som do PC sai em estéreo.	显示器只接受 2 声道 PCM。关闭空间音效时，电脑的所有声音都以立体声输出。
+O que a tela, o perfil e o Windows estão informando, e a calibração própria.	显示器、配置文件和 Windows 报告的内容，以及你自己的校准。
+Lendo…	正在读取…
+Ler de novo	重新读取
+Lendo a tela e o perfil…	正在读取显示器和配置文件…
+Não consegui ler as telas.	无法读取显示器。
+Calibração própria	自行校准
+Você ajusta os padrões a olho e o Prisma grava o resultado como perfil de HDR. Antes de começar, deixe a TV no modo de imagem em que você joga, desligue o mapeamento dinâmico (use HGIG se houver), desligue a luz noturna do Windows e deixe a sala como quando você joga. Leva cerca de 5 minutos e abre em tela cheia.	你用眼睛调整测试图，Prisma 把结果保存为 HDR 配置文件。开始前，请把电视设为你玩游戏时的画面模式，关闭动态色调映射（如有 HGIG 请使用），关闭 Windows 夜间模式，并保持房间和玩游戏时一样。大约需要 5 分钟，会全屏打开。
+Modo de imagem da TV	电视画面模式
+Filmmaker	Filmmaker
+Cinema	影院
+Vívido	鲜艳
+Começar calibração	开始校准
+Ligue o HDR para calibrar.	请开启 HDR 后校准。
+Resultado da calibração	校准结果
+Pico em {}% da tela	屏幕 {}% 区域的峰值
+Vermelho	红
+Verde	绿
+Azul	蓝
+Saturação neutra	中性饱和度
+Manter reforço de {}%	保持增强 {}%
+A forma não sumiu antes de 4000 nits: a TV está suavizando em vez de cortar, e o resultado não é confiável. Desligue o mapeamento dinâmico ou use HGIG e repita.	图形在 4000 尼特前没有消失：电视在平滑压缩而不是截断，结果不可靠。请关闭动态色调映射或使用 HGIG 后再试。
+Salvar e ativar	保存并启用
+Descartar	放弃
+Perfis do Prisma	Prisma 配置文件
+Pico {} · Tela cheia {} · Preto {}	峰值 {} · 全屏 {} · 黑色 {}
+Ativo	已启用
+Perfil anterior: {}	之前的配置文件：{}
+O Windows não aceitou o perfil.	Windows 没有接受该配置文件。
+Perfil salvo e ativado.	配置文件已保存并启用。
+Os padrões estão abertos na tela.	测试图已在屏幕上打开。
+Gravando e conferindo o perfil…	正在保存并检查配置文件…
+O Windows não aceitou o perfil. O perfil anterior foi mantido.	Windows 没有接受该配置文件。已保留之前的配置文件。
+Não consegui abrir os padrões em HDR.	无法打开 HDR 测试图。
+Passo {} de {}: preto	第 {} 步，共 {} 步：黑色
+Passo {} de {}: pico em janela de {}%	第 {} 步，共 {} 步：{}% 窗口的峰值
+Passo {} de {}: canal vermelho	第 {} 步，共 {} 步：红色通道
+Passo {} de {}: canal verde	第 {} 步，共 {} 步：绿色通道
+Passo {} de {}: canal azul	第 {} 步，共 {} 步：蓝色通道
+Abaixe até as formas sumirem e pare no primeiro valor em que somem. Agora: {} nits. S liga ou desliga a moldura.	调低直到图形消失，停在它们刚消失的那个值。现在：{} 尼特。S 开关边框。
+Aumente até o quadrado escuro do centro sumir no fundo claro e pare no primeiro valor em que some. Agora: {} nits.	调高直到中间的暗方块融入亮背景，停在它刚消失的那个值。现在：{} 尼特。
+← → ajustam · ↑ ↓ ajustam mais rápido · Enter confirma · Backspace volta · H esconde este texto · T troca o caminho (agora pelo Windows) · Esc sai	← → 调整 · ↑ ↓ 快速调整 · Enter 确认 · Backspace 返回 · H 隐藏此文字 · T 切换路径（当前经由 Windows） · Esc 退出
+← → ajustam · ↑ ↓ ajustam mais rápido · Enter confirma · Backspace volta · H esconde este texto · T troca o caminho (agora direto) · Esc sai	← → 调整 · ↑ ↓ 快速调整 · Enter 确认 · Backspace 返回 · H 隐藏此文字 · T 切换路径（当前直接） · Esc 退出
+Perfil ativado. O Windows ainda informa os valores antigos aos jogos.	配置文件已启用。Windows 仍向游戏报告旧值。
+Medir atraso	测量延迟
+Medindo…	正在测量…
+Sem som espacial	无空间音效
+Atraso medido	测得的延迟
+{}: {} ms	{}：{} 毫秒
+Atraso do som: {} ms	声音延迟：{} 毫秒
+Ajuste até o clarão e o clique parecerem um só. Para medir com mais precisão, filme com o celular e deixe em 0 ms.	调整到闪光和咔嗒声感觉同时发生。要更精确，请用手机拍下来，并保持 0 毫秒。
+← → mudam 5 ms · ↑ ↓ mudam 25 ms · Enter ou Esc guarda e sai	← → 改变 5 毫秒 · ↑ ↓ 改变 25 毫秒 · Enter 或 Esc 保存并退出
+Não consegui abrir o teste.	无法打开测试。
+Auto HDR por jogo	按游戏设置自动 HDR
+Só para jogos DX11 e DX12 sem HDR próprio. Vale a partir da próxima vez que o jogo abrir.	只适用于没有自带 HDR 的 DX11 和 DX12 游戏。下次打开游戏时生效。
+O Auto HDR está desligado nas configurações do Windows. Ligue lá para valer.	Windows 设置中自动 HDR 已关闭。请在那里开启，此项才会生效。
+Forçar Auto HDR	强制自动 HDR
+Desligar Auto HDR	关闭自动 HDR
+Não consegui gravar a escolha.	无法保存选择。
+Seta: aponta para algo (A)	箭头：指向某处 (A)
+Retângulo: destaca uma área (R)	矩形：突出一个区域 (R)
+Elipse: circula algo (E)	椭圆：圈出某处 (E)
+Linha: traça uma reta (L)	直线：画一条直线 (L)
+Caneta: desenha à mão livre (P)	画笔：自由绘制 (P)
+Marcador: grifa por cima (M)	荧光笔：在上面突出显示 (M)
+Texto: escreve na imagem (T)	文字：在图像上写字 (T)
+Número: marca passos em ordem (N)	编号：按顺序标记步骤 (N)
+Pixelar: esconde uma parte (B)	像素化：隐藏一部分 (B)
+Laranja (1)	橙色 (1)
+Azul (2)	蓝色 (2)
+Branco (3)	白色 (3)
+Preto (4)	黑色 (4)
+Fixar a imagem flutuando na tela (F)	把图像固定在屏幕上 (F)
+Salvar na pasta (Ctrl+S)	保存到文件夹 (Ctrl+S)
+Copiar para a área de transferência (Ctrl+C)	复制到剪贴板 (Ctrl+C)
+Foto da janela	窗口截图
+Foto da janela em foco	当前窗口截图
+Gravar janela	录制窗口
+Gravar tela	录制屏幕
+Gravar Janela	录制窗口
+Gravar Tela	录制屏幕
+Gravar Janela e parar	录制窗口并停止
+Gravar Tela e parar	录制屏幕并停止
+O replay grava	回放录制
+Som do sistema desligado: Gravar Janela grava só o som da janela, e Gravar Tela não grava o som do PC.	系统声音关闭：“录制窗口”只录制该窗口，“录制屏幕”不录制电脑声音。
+Editar plano	编辑计划
+Exportar	导出
+Importar	导入
+Mostrar ocultas	显示隐藏项
+Na tomada	接通电源
+Na bateria	使用电池
+Lendo o plano…	正在读取计划…
+Nenhuma opção encontrada.	未找到选项。
+O Windows não aceitou esse valor	Windows 不接受此值
+Planos de energia	电源计划
+Plano importado	计划已导入
+Não consegui importar esse arquivo	无法导入此文件
+Plano exportado	计划已导出
+Não consegui exportar o plano	无法导出计划
+Geral	常规
+Editar	编辑
+Selecione um plano primeiro	请先选择一个计划
+Manter o som acordado	保持声音唤醒
+Silêncio puro	纯静音
+Sinal inaudível	听不见的信号
+Evita o corte no começo do som em HDMI e Dolby. Para sozinho depois de 10 minutos sem uso.	避免 HDMI 和 Dolby 下声音开头被截断。空闲 10 分钟后自动停止。
+Medidor	性能监视
+Leitor de performance, limitador de FPS e HDR automático por jogo.	性能读数、FPS 限制器和按游戏自动 HDR。
+Volta atalhos, opacidade, itens e regras ao padrão. A lista de jogos continua salva.	恢复快捷键、不透明度、显示项和规则。游戏列表会保留。
+HDR automático	自动 HDR
+Só na lista	仅列表中的
+Mostrar compacto	显示紧凑版
+Mostrar completo	显示完整版
+Esconder tudo	全部隐藏
+Opacidade do compacto	紧凑版不透明度
+Opacidade do completo	完整版不透明度
+O que aparece no completo	完整视图显示的内容
+Fica em uma coluna. A segunda só abre se não couber na tela.	一列。放不下时才打开第二列。
+FPS e médias	FPS 和平均值
+Frame time	帧时间
+Latência do PC	电脑延迟
+Limitador	限制器
+Upscaling	超分辨率
+Geração de quadros	帧生成
+Reflex	Reflex
+CPU por núcleo	每核 CPU
+VRAM e RAM	显存和内存
+Disco e rede	磁盘和网络
+Modo de exibição	显示模式
+Tempo de jogo	游戏时长
+Jogos	游戏
+Limitando	正在限制
+Perfil DLSS	DLSS 配置
+Nenhum jogo ainda. Use Adicionar.	还没有游戏。请使用“添加”。
+Anti-cheat detectado	检测到反作弊
+Nenhum anti-cheat detectado	未检测到反作弊
+Compacto	紧凑
+Completo	完整
+Manual	手动
+Com geração	含生成帧
+FPS real	真实 FPS
+Ligar	开启
+Não ligar	不开启
+Do jogo	由游戏决定
+Recomendado	推荐
+Limite gravado. Vale na próxima abertura do jogo.	限制已保存。下次打开游戏时生效。
+Não consegui gravar no driver NVIDIA.	无法写入 NVIDIA 驱动。
+Latência	延迟
+Medindo {} min	正在测量 {} 分钟
+Flip direto	直接翻转
+Composto pelo Windows	由 Windows 合成
+{} reais + {} gerados	{} 真实 + {} 生成
+Média	平均
+Só em jogos com Reflex	仅限支持 Reflex 的游戏
+Limite	限制
+Método	方式
+Limite do driver	驱动限制
+Medindo há {} min de {}.	已测量 {} / {} 分钟。
+Limite {} vale na próxima abertura do jogo.	限制 {} 将在下次打开游戏时生效。
+Nenhum carregado	未加载
+{} · carregado	{} · 已加载
+Ligada · {}x	开启 · {}x
+{} carregado	已加载 {}
+Não detectada	未检测到
+Integrado no jogo	游戏内置
+Não detectado	未检测到
+Pico informado	报告的峰值
+Sugestão no jogo: pico {} nits · branco 200 nits	游戏内建议：峰值 {} 尼特 · 白色 200 尼特
+Núcleo	核心
+Memória	显存
+{} MHz · ventoinha {}%	{} MHz · 风扇 {}%
+Variação	波动
+{} ms · variação {} ms	{} 毫秒 · 波动 {} 毫秒
+Medidor compacto	紧凑监视
+Medidor completo	完整监视
+Esconder medidor	隐藏监视
+Reportar bug	报告问题
+Preencha aqui. O navegador abre o GitHub com tudo escrito.	填写此表。浏览器会打开 GitHub，内容已全部写好。
+Função com problema	出问题的功能
+Gravidade	严重程度
+Leve	轻微
+Moderado	中等
+Grave	严重
+Incomoda, mas dá para usar.	烦人，但还能用。
+Atrapalha o uso, mas tem como contornar.	碍事，但有变通办法。
+Trava, fecha, perde dados ou impede o uso.	卡死、关闭、丢失数据或无法使用。
+O que aconteceu? Conte o que fez, o que esperava e o que viu.	发生了什么？说说你做了什么、预期什么、看到了什么。
+Foto (opcional)	图片（可选）
+Ajuda em bugs visuais. Use o atalho de foto do Prisma, copie e clique em Colar.	有助于视觉问题。使用 Prisma 的截图快捷键，复制后点击“粘贴”。
+Escolher	选择
+Colar	粘贴
+Tirar a foto	移除图片
+Incluir dados do PC e registro	附上电脑数据和日志
+Ver o que vai junto	查看会发送什么
+A página do GitHub é pública. Nome de usuário, nome do PC e caminhos de arquivo não vão junto.	GitHub 页面是公开的。用户名、电脑名和文件路径不会包含在内。
+Enviar pelo navegador	通过浏览器发送
+Enviar direto	直接发送
+Outra coisa	其他
+Se o GitHub pedir, entre na sua conta. O texto continua lá depois.	如果 GitHub 要求，请登录你的账号。文本之后仍会保留。
+O texto era grande demais para o endereço: clique na descrição, selecione tudo e aperte Ctrl+V.	文本太长，放不进链接：点击描述，全选后按 Ctrl+V。
+Clique em Copiar a foto, depois clique no fim da descrição e aperte Ctrl+V.	点击“复制图片”，再点击描述末尾并按 Ctrl+V。
+Clique no fim da descrição e aperte Ctrl+V: a foto já está copiada.	点击描述末尾并按 Ctrl+V：图片已复制。
+Confira o texto e clique em Create no GitHub.	检查文本后在 GitHub 上点击 Create。
+Falta só confirmar no navegador	只剩浏览器中的确认
+Copiar a foto	复制图片
+Copiar o relatório	复制报告
+Abrir de novo	再次打开
+Voltar ao formulário	返回表单
+Novo relatório	新报告
+Falando com o GitHub...	正在连接 GitHub...
+Digite este código na página que abriu	在打开的页面中输入此代码
+Depois de autorizar, o Prisma cria a página sozinho. A autorização vale só para este envio e não fica guardada.	授权后，Prisma 会自行创建页面。授权只用于这份报告，不会保存。
+Enviando...	正在发送...
+Relatório enviado. Obrigado!	报告已发送。谢谢！
+A página abriu no navegador. A foto está copiada: clique no campo de comentário, aperte Ctrl+V e clique em Comment.	页面已在浏览器中打开。图片已复制：点击评论框，按 Ctrl+V，然后点击 Comment。
+A página abriu no navegador.	页面已在浏览器中打开。
+Não deu para enviar direto	无法直接发送
+Não consegui falar com o GitHub.	无法连接 GitHub。
+O código expirou. Tente de novo.	代码已过期。请重试。
+O GitHub recusou a autorização.	GitHub 拒绝了授权。
+Função	功能
+Versão	版本
+O que aconteceu	发生了什么
+Foto	图片
+Apague esta linha e cole a foto aqui (Ctrl+V).	删除这一行，在这里粘贴图片 (Ctrl+V)。
+O texto não coube no endereço. Apague esta linha e cole o relatório completo (Ctrl+V).	文本放不进链接。删除这一行，粘贴完整报告 (Ctrl+V)。
+Dados do PC e registro	电脑数据和日志
+Não há imagem copiada	没有复制图片
+Relatório copiado	报告已复制
+Não consegui abrir o navegador	无法打开浏览器
+Não consegui abrir essa imagem	无法打开此图片
+Imagens	图片
+O Prisma fechou sozinho da última vez. Se puder, conte em Reportar bug.	Prisma 上次意外关闭。如果可以，请在“报告问题”中告诉我们。
+Abra um jogo para usar o limitador.	打开游戏以使用限制器。
+Abra um jogo para gravar o registro.	打开游戏以记录日志。
+Registro iniciado	日志已开始
+Não consegui criar a pasta do registro	无法创建日志文件夹
+Registro salvo em Documentos\Prisma\Logs	日志已保存到 文档\Prisma\Logs
+Sem limite	不限制
+Limite {}	限制 {}
+Sem driver NVIDIA	没有 NVIDIA 驱动
+Ativo agora	当前生效
+{} FPS	{} FPS
+O novo limite vale ao reabrir o jogo.	新限制在游戏重新打开时生效。
+Ligar: {}	开启：{}
+Ajustar: {} · {}	调整：{} · {}
+Gravando	记录
+Duração	时长
+Ligar e desligar: {}	开始和停止：{}
+Ligar e desligar	开始和停止
+Registro ligado	日志已开始
+Registro salvo	日志已保存
+Registro {}	日志 {}
+Sem quadros agora	现在没有帧
+Limitador durante o jogo	游戏中的限制器
+Com o jogo aberto, estes atalhos mudam o limite dele, e o medidor completo mostra o resultado.	游戏打开时，这些快捷键会改变它的限制，完整监视会显示结果。
+O driver NVIDIA só lê o limite quando o jogo abre, então a mudança vale ao reabrir o jogo.	NVIDIA 驱动只在游戏打开时读取限制，所以更改会在游戏重新打开时生效。
+Ligar ou desligar	开启或关闭
+Aumentar o limite	提高限制
+Diminuir o limite	降低限制
+Ligar o limitador	开启限制器
+Registro de dados	数据日志
+Grava cada quadro, cada segundo e a CPU de cada thread do jogo, para estudar desempenho. Só roda se você ligar.	记录每一帧、每一秒以及游戏每个线程的 CPU，用于研究性能。只在你开启时运行。
+5 minutos	5 分钟
+10 minutos	10 分钟
+Abrir pasta	打开文件夹
+Começar sozinho quando um jogo abrir	游戏打开时自动开始
+Pronto para gravar	准备记录
+Abra um jogo para iniciar	打开游戏即可开始
+Quadros	帧数
+FPS médio	平均 FPS
+Frame time mediano	帧时间中位数
+Frame time p95	帧时间 p95
+Frame time p99	帧时间 p99
+Frame time p99,9	帧时间 p99.9
+Pior quadro	最差帧
+Engasgos	卡顿
+CPU média	平均 CPU
+Núcleo lógico mais usado	最忙的逻辑核心
+GPU média	平均 GPU
+Pico de VRAM	显存峰值
+Pico de RAM	内存峰值
+Threads mais ocupadas, em % de um núcleo	最忙的线程，按单核百分比
+média	平均
+pico	峰值
+Limite ativo	当前限制
+Leitura: GPU cheia na maior parte do tempo, então o limite parece ser a GPU.	判断：GPU 大部分时间满载，瓶颈看起来是 GPU。
+Leitura: uma thread perto de um núcleo inteiro com a GPU sobrando, então o limite parece ser a CPU.	判断：有一个线程接近满核而 GPU 有余量，瓶颈看起来是 CPU。
+Leitura: nem GPU nem uma thread sozinha ficaram cheias. Veja os trechos em segundos.csv.	判断：GPU 和单个线程都没有满载。请查看 segundos.csv 中的各个时段。
+Fechar {} {} e liberar {} GB?	关闭 {} {} 并释放 {3} GB？
+Posição do compacto	紧凑版位置
+Posição do completo	完整版位置
+Superior esquerdo	左上
+Superior centro	顶部居中
+Superior direito	右上
+Lado direito	右侧
+Lado esquerdo	左侧
+Injeção	注入
+Driver	驱动
+Injeção, aguardando	注入，等待中
+Injeção desligada	注入已关闭
+Injeção desligada: o jogo caiu com ela.	注入已关闭：游戏曾因此崩溃。
+Injeção desligada: o jogo caiu	注入已关闭：游戏崩溃了
+Injeção bloqueada: anti-cheat detectado.	注入已阻止：检测到反作弊。
+Injeção parada: geração de quadros carregada.	注入已停止：已加载帧生成。
+A injeção não carregou neste jogo.	注入没有在此游戏中加载。
+Usar injeção neste jogo?	在此游戏中使用注入？
+O limite passa a mudar na hora, mas um módulo do Prisma entra no jogo, e isso pode derrubá-lo. Não use em jogo online: um anti-cheat pode punir mesmo sem ter sido detectado aqui. Se o jogo cair, a injeção desliga sozinha.	限制会立即改变，但 Prisma 的模块会进入游戏，可能导致崩溃。不要在联机时使用：即使这里没检测到反作弊，也可能受到处罚。如果游戏崩溃，注入会自动关闭。
+Com injeção, o limite muda na hora.	使用注入时，限制会立即改变。
+Pelo driver NVIDIA, a mudança vale ao reabrir o jogo. Com o método Injeção, ela vale na hora.	通过 NVIDIA 驱动，更改在游戏重新打开时生效。使用“注入”方式则立即生效。
+Controles do medidor	监视控制
+Controles no medidor	监视中的控制
+Controles: {}	控制：{}
+Setas ou mouse mudam. Esc fecha.	用方向键或鼠标调整。Esc 关闭。
+Limite pelo driver	驱动限制
+Limite pelo driver: a injeção falhou	驱动限制：注入失败
+O jogo caiu. Limite vale ao reabrir.	游戏崩溃了。重新打开后限制生效。
+Anti-cheat: limite vale ao reabrir.	反作弊：重新打开后限制生效。
+Injeção falhou. Limite vale ao reabrir.	注入失败。重新打开后限制生效。
+O novo perfil vale ao reabrir o jogo.	新配置在游戏重新打开时生效。
+A injeção muda o limite na hora. Se falhar ou houver anti-cheat, ele vai para o driver e vale ao reabrir o jogo.	注入会立即改变限制。如果失败或发现反作弊，游戏重新打开时由驱动接管。
+{} FPS · injeção	{} FPS · 注入
+Boas-vindas ao Prisma	欢迎使用 Prisma
+Escolha como ele vai ficar neste PC. Tudo isso muda depois em Configurações.	选择它在这台电脑上的使用方式。之后都可以在“设置”中更改。
+Vai para Arquivos de Programas, ganha atalho no menu Iniciar e abre com o Windows. Sem isso, roda daqui mesmo, como portátil.	安装到 Program Files，在开始菜单中创建快捷方式并随 Windows 启动。不选则作为便携版从这里运行。
+Dar permissão de administrador	授予管理员权限
+Libera o Medidor, a rede por programa, a saúde dos discos e a leitura rápida do NTFS. Abre sem perguntar.	解锁性能监视、按程序统计网络、磁盘健康和快速 NTFS 扫描。打开时不再询问。
+Libera o Medidor, a rede por programa, a saúde dos discos e a leitura rápida do NTFS. Sem instalar, o Windows pede permissão a cada abertura.	解锁性能监视、按程序统计网络、磁盘健康和快速 NTFS 扫描。不安装时，每次打开 Windows 都会询问。
+Ctrl+Shift+Esc passa a abrir o Prisma. O Gerenciador do Windows volta quando você quiser.	Ctrl+Shift+Esc 打开 Prisma。随时可以换回 Windows 任务管理器。
+Só na versão instalada. Em outra pasta, qualquer programa pode trocar o arquivo que o atalho abre.	仅限安装版。在其他文件夹中，任何程序都可能替换快捷键打开的文件。
+Precisa instalar	需要安装
+Não mostrar novamente	不再显示
+Não mostrar de novo	不再显示
+Abrir o guia	打开指南
+Continuar	继续
+Já feito	已完成
+Guia e tutorial	指南和教程
+Guia	指南
+O que cada função faz, o que dá e o que não dá para fazer.	每项功能的作用，以及它能做和不能做的事。
+Iniciar com o Windows	随 Windows 启动
+Sempre abrir como administrador	始终以管理员身份打开
+Procurar atualizações sozinho, uma vez por dia	每天自动检查一次更新
+Mostrar as boas-vindas ao abrir	打开时显示欢迎界面
+Nova atualização disponível	有新的更新
+A versão {} está pronta. Quer atualizar agora?	版本 {} 已就绪。现在更新？
+Essas escolhas precisam da permissão de administrador	这些选项需要管理员权限
+Não consegui substituir o Gerenciador de Tarefas.	无法替换任务管理器。
+A atualização precisa da permissão de administrador	更新需要管理员权限
+Enter aplica. Esc cancela.	Enter 应用。Esc 取消。
+Setas, mouse ou números. Esc fecha.	方向键、鼠标或数字。Esc 关闭。
+0,1% low	0.1% 低帧
+Buscar por nome ou PID	按名称或 PID 搜索
+Nenhum processo com esse nome ou PID	没有该名称或 PID 的进程
+Reiniciar o Explorer	重启资源管理器
+Reiniciar o Explorer?	重启资源管理器？
+A barra de tarefas e a área de trabalho somem por alguns segundos e voltam sozinhas. As janelas de pasta abertas fecham.	任务栏和桌面会消失几秒钟，然后自行恢复。打开的文件夹窗口会关闭。
+Aperte {} de novo para reiniciar o Explorer	再按一次 {} 重启资源管理器
+Reiniciando o Explorer…	正在重启资源管理器…
+Explorer reiniciado	资源管理器已重启
+O Windows não deixou fechar o Explorer	Windows 不允许 Prisma 关闭资源管理器
+Reiniciar agora	立即重启
+Novidades	新功能
+O que mudou da versão {} para a {}	从版本 {} 到 {} 的变化
+O que mudou em cada versão	每个版本的变化
+Ver todas as versões	查看所有版本
+O Windows não deixou trocar o Gerenciador	Windows 不允许 Prisma 替换任务管理器
+Algumas versões do Windows protegem essa troca até de administrador. O Prisma passou a pegar o Ctrl+Shift+Esc ele mesmo, enquanto estiver aberto. O Ctrl+Alt+Del e o menu da barra de tarefas ainda abrem o Gerenciador do Windows.	某些 Windows 版本即使对管理员也会保护这项更改。现在 Prisma 打开时会自己捕获 Ctrl+Shift+Esc。Ctrl+Alt+Del 和任务栏菜单仍会打开 Windows 任务管理器。
+Ligado pelo atalho: Ctrl+Shift+Esc abre o Prisma.	通过快捷键开启：Ctrl+Shift+Esc 打开 Prisma。
+Pesquisar	搜索
+Pesquisar arquivos	搜索文件
+Acha arquivos e pastas pelo nome em todos os discos, enquanto você digita.	边输入边按名称查找所有磁盘上的文件和文件夹。
+Ligar a pesquisa	开启搜索
+O Prisma guarda os nomes de todos os arquivos dos seus discos num índice, e a pesquisa responde enquanto você digita. O índice usa memória: cerca de 70 MB a cada milhão de arquivos.	Prisma 把磁盘上所有文件的名称保存在索引中，搜索会边输入边给出结果。索引会占用内存：每一百万个文件约 70 MB。
+Com o Prisma como administrador, o índice fica pronto em segundos e se atualiza na hora em que um arquivo muda.	Prisma 以管理员身份运行时，索引几秒钟就绪，文件一变就会更新。
+Sem administrador, o Prisma percorre as pastas, o que demora mais, e atualiza o índice a cada 15 minutos.	没有管理员权限时，Prisma 会遍历文件夹，耗时更长，并每 15 分钟更新一次索引。
+Discos com problema de saúde ficam de fora, para não forçar o disco. Dá para incluir em Opções.	有健康问题的磁盘会被排除，以免加重负担。可在“选项”中加入。
+Atalho: {} abre a pesquisa por cima de qualquer programa.	快捷键：{} 在任何程序上方打开搜索。
+Opções	选项
+Atalho da janelinha	弹出窗口快捷键
+Ler os discos de novo	重新读取磁盘
+Desligar	关闭
+Desligar a pesquisa?	关闭搜索？
+O índice sai da memória e do disco. Ao ligar de novo, os discos são lidos outra vez.	索引会从内存和磁盘中清除。重新开启时会再次读取磁盘。
+Disco com problema de saúde: ler ele inteiro força o disco	有健康问题的磁盘：完整读取会加重磁盘负担
+Nome do arquivo ou da pasta	文件或文件夹名称
+Pesquisar arquivos e pastas	搜索文件和文件夹
+Modificado	修改时间
+Abrir	打开
+Mostrar na pasta	在文件夹中显示
+Copiar caminho	复制路径
+Caminho copiado	路径已复制
+Apagado ou movido	已删除或移动
+Nada encontrado.	什么也没找到。
+O índice ainda está sendo preparado.	索引仍在准备中。
+Preparando o índice…	正在准备索引…
+Conferindo a saúde dos discos…	正在检查磁盘健康…
+Digite parte do nome. Dicas: ext:pdf só PDFs · pasta: só pastas · *.mp4 com curinga · !palavra tira · docs\nota procura no caminho	输入名称的一部分。提示：ext:pdf 仅 PDF · folder: 仅文件夹 · *.mp4 通配符 · !词 排除 · docs\note 搜索路径
+Enter abre · Ctrl+Enter mostra na pasta · Ctrl+C copia o caminho	Enter 打开 · Ctrl+Enter 在文件夹中显示 · Ctrl+C 复制路径
+ext:pdf só PDFs · pasta: só pastas · *.mp4 curinga · !palavra tira	ext:pdf 仅 PDF · folder: 仅文件夹 · *.mp4 通配符 · !词 排除
+atualiza na hora	即时更新
+atualiza a cada 15 minutos	每 15 分钟更新
+{} itens em {} · {} de memória · {}	{} 项，位于 {} · 内存 {} · {}
+{} encontrados · {} ms	找到 {} 项 · {} 毫秒
+{} encontrados, mostrando {} · {} ms	找到 {} 项，显示 {} 项 · {} 毫秒
+Lendo o disco {}: {}%	正在读取磁盘 {}：{}%
+Lendo o disco {}: {} itens	正在读取磁盘 {}：{} 项
+Ctrl + Alt + Espaço	Ctrl + Alt + 空格
+{} + Espaço	{} + 空格
+Programa instalado	已安装的程序
+Pesquisar no {}	在 {} 上搜索
+Perguntar ao {}	问 {}
+Copia a pergunta	复制问题
+Rodar no PowerShell	在 PowerShell 中运行
+Rodar no CMD	在 CMD 中运行
+Cmdlet do PowerShell	PowerShell cmdlet
+Função do PowerShell	PowerShell 函数
+Atalho para {}	{} 的别名
+Parâmetro de {}	{} 的参数
+Do histórico	来自历史
+Pergunta copiada: cole com Ctrl+V	问题已复制：用 Ctrl+V 粘贴
+O comando não abriu como administrador	命令没有以管理员身份打开
+Não deu para abrir o terminal	无法打开终端
+Texto copiado	文本已复制
+Com o aplicativo instalado, a IA abre nele. Quando não dá para levar a pergunta pronta, ela vai copiada: cole com Ctrl+V.	安装了应用时，AI 会在应用中打开。问题无法直接发送时会被复制：用 Ctrl+V 粘贴。
+Na pesquisa também	也在搜索中
+Programas instalados primeiro	已安装的程序优先
+Programas do menu Iniciar que combinam com o texto aparecem no topo. Enter abre, Ctrl+Shift+Enter abre como administrador.	与文本匹配的开始菜单程序显示在顶部。Enter 打开，Ctrl+Shift+Enter 以管理员身份打开。
+Pesquisar na internet e perguntar a IAs	网络搜索和询问 AI
+O texto vira pesquisa no navegador padrão ou pergunta a uma IA. Perguntas vêm no topo; o resto, depois dos primeiros arquivos.	文本会变成默认浏览器中的搜索或向 AI 的提问。问题显示在顶部；其他的排在前几个文件之后。
+Comandos com > (PowerShell e CMD)	用 > 运行命令（PowerShell 和 CMD）
+Comece com > para rodar um comando. Enter roda sem administrador, Ctrl+Shift+Enter como administrador, Tab completa.	以 > 开头即可运行命令。Enter 不以管理员身份运行，Ctrl+Shift+Enter 以管理员身份运行，Tab 补全。
+Completar como o terminal	像终端一样补全
+Mantém um PowerShell escondido enquanto você digita um comando, para completar caminhos, parâmetros e o histórico como o terminal. Ele fecha sozinho depois de 2 minutos parado.	输入命令时保持一个隐藏的 PowerShell，像终端一样补全路径、参数和历史。空闲 2 分钟后自动关闭。
+Lista de comandos: {}	命令列表：{}
+Lendo a lista de comandos…	正在读取命令列表…
+Buscadores e IAs	搜索引擎和 AI
+Aplicativo instalado: abre nele	已安装应用：在应用中打开
+Digite um comando do PowerShell ou do CMD.	输入 PowerShell 或 CMD 命令。
+Digite parte do nome. Dicas: ext:pdf só PDFs · pasta: só pastas · *.mp4 com curinga · !palavra tira · docs\nota procura no caminho · > roda um comando	输入名称的一部分。提示：ext:pdf 仅 PDF · folder: 仅文件夹 · *.mp4 通配符 · !词 排除 · docs\note 搜索路径 · > 运行命令
+> roda um comando · ext:pdf só PDFs · pasta: só pastas · *.mp4 curinga	> 运行命令 · ext:pdf 仅 PDF · folder: 仅文件夹 · *.mp4 通配符
+Enter abre · Ctrl+Shift+Enter como administrador · Ctrl+Enter mostra na pasta	Enter 打开 · Ctrl+Shift+Enter 以管理员身份 · Ctrl+Enter 在文件夹中显示
+Enter abre · Ctrl+C copia o texto	Enter 打开 · Ctrl+C 复制文本
+Enter roda · Ctrl+Shift+Enter como administrador · Tab completa	Enter 运行 · Ctrl+Shift+Enter 以管理员身份 · Tab 补全
+Enter ou Tab completa · Esc fecha	Enter 或 Tab 补全 · Esc 关闭
+Compartilhar tela	屏幕共享
+Acesso remoto e co-op pela internet, sem conta. Em teste.	远程访问和在线合作，无需账号。测试中。
+Este PC	此电脑
+O serviço do Windows compartilha este PC, inclusive a tela de bloqueio.	Windows 服务正在共享此电脑，包括锁屏。
+Compartilhando. Os aparelhos pareados já podem conectar.	正在共享。已配对的设备现在可以连接。
+Desligado.	已关闭。
+Quem parear agora pode	现在配对的设备可以
+Criar convite	创建邀请
+Compartilhar este PC	共享此电脑
+Copiar convite	复制邀请
+Convite copiado. Vale 10 minutos e uma vez.	邀请已复制。只能使用一次，有效 10 分钟。
+Nenhum convite ainda	还没有邀请
+Convite pronto: mande para o outro PC. Ele vale 10 minutos e uma vez, e a confirmação aparece aqui.	邀请已就绪：把它发给另一台电脑。只能使用一次，有效 10 分钟，确认会显示在这里。
+O convite aparece quando o compartilhamento liga.	开始共享后会显示邀请。
+Desligar o HDR quando quem assiste não tem HDR	观看方没有 HDR 时关闭 HDR
+Pessoas ao mesmo tempo	同时连接人数
+Controles virtuais	虚拟手柄
+Serviço do Windows instalado	已安装 Windows 服务
+Serviço do Windows	Windows 服务
+Para usar a tela de bloqueio, o UAC e o Ctrl+Alt+Del de longe. Pede administrador.	用于远程使用锁屏、UAC 和 Ctrl+Alt+Del。需要管理员权限。
+Aguarde	请稍候
+Remover	移除
+Instalar	安装
+Remover o serviço?	移除服务？
+O compartilhamento da tela de bloqueio para, e os aparelhos pareados voltam para este usuário.	将停止共享锁屏，已配对的设备回到当前用户下。
+Instalar o serviço?	安装服务？
+O Prisma vai pedir administrador e mostrar o que muda no Windows antes de instalar. O serviço liga com o PC, mesmo antes do login.	Prisma 会请求管理员权限，并在安装前显示 Windows 中会改变什么。服务随电脑启动，甚至在登录之前。
+Pela internet, a conexão usa o iroh (n0, licença MIT ou Apache-2.0). Sem caminho direto nem VPN, os pacotes passam pelos relés públicos da n0, sempre criptografados de ponta a ponta.	通过互联网时，连接使用 iroh（n0，MIT 或 Apache-2.0 许可）。没有直连路径或 VPN 时，数据包会经过 n0 的公共中继，始终端到端加密。
+Aparelhos pareados	已配对的设备
+Parear com outro PC	与另一台电脑配对
+Convite do outro PC	来自另一台电脑的邀请
+Parear	配对
+Isso não parece um convite do Prisma	这看起来不像 Prisma 邀请
+Nenhum aparelho pareado. Ligue o compartilhamento neste PC e cole o convite no outro, ou o contrário.	没有已配对的设备。在此电脑上开始共享，然后在另一台上粘贴邀请，或者反过来。
+Esquecer	忘记
+Controle	手柄
+Teclado	键盘
+Copiar e colar	复制粘贴
+Tela segura	安全桌面
+Perguntar a cada conexão	每次连接都询问
+Assistir	观看
+Não deu para salvar. Com o serviço, abra o Prisma como administrador.	无法保存。安装了服务时，请以管理员身份打开 Prisma。
+Esquecer este aparelho?	忘记此设备？
+«{}» vai precisar de um convite novo para conectar.	“{}”需要新的邀请才能连接。
+Só ver	仅观看
+Ver e usar controle	观看并使用手柄
+Ver, controle, teclado e mouse	观看、手柄、键盘和鼠标
+Acesso total	完全访问
+Esta cópia do Prisma foi compilada sem o compartilhamento.	此版本的 Prisma 构建时未包含屏幕共享。
+Serviço instalado e ligado. Para parear um aparelho novo, use Criar convite na página Compartilhar tela.	服务已安装并运行。要配对新设备，请在“屏幕共享”页面使用“创建邀请”。
+O serviço não foi instalado: {}	服务未安装：{}
+Serviço removido.	服务已移除。
+Instalar o serviço de compartilhar tela do Prisma?	安装 Prisma 屏幕共享服务？
+O que ele faz: roda como SYSTEM (o nível mais alto do Windows) e começa junto com o Windows. Com ele, os aparelhos pareados conseguem ver e usar o aviso do UAC, a tela de bloqueio e a do PIN, inclusive depois de o PC reiniciar sozinho. Mexer na tela segura e mandar Ctrl+Alt+Del pede a permissão "Tela segura" (ou Acesso total) no aparelho.	作用：以 SYSTEM（Windows 中的最高级别）身份运行，并随 Windows 启动。有了它，已配对的设备即使在电脑自行重启后，也能看到并使用 UAC 提示、锁屏和 PIN 界面。使用安全桌面和发送 Ctrl+Alt+Del 需要设备拥有“安全桌面”权限（或完全访问）。
+O que muda no PC:	电脑上会改变的内容：
+• uma cópia do Prisma em Arquivos de Programas\PrismaServico;	• Program Files\PrismaServico 中的一份 Prisma 副本；
+• a identidade e os aparelhos pareados passam para ProgramData\Prisma\compartilhar, que só o SYSTEM, os administradores e você abrem;	• 身份和已配对设备移到 ProgramData\Prisma\compartilhar，只有 SYSTEM、管理员和你可以打开；
+• o serviço "Prisma: compartilhar tela".	• 服务 "Prisma: compartilhar tela"。
+Para tirar tudo: Remover, na página Compartilhar tela do Prisma.	要撤销一切：在 Prisma 的“屏幕共享”页面点击“移除”。
+Permitir o Ctrl+Alt+Del de longe?	允许远程 Ctrl+Alt+Del？
+Para isso, o Windows pede uma política: "SoftwareSASGeneration" igual a 1, que deixa serviços gerarem o Ctrl+Alt+Del. Ela é desfeita quando o serviço for removido.	为此 Windows 需要一项策略："SoftwareSASGeneration" 设为 1，允许服务生成 Ctrl+Alt+Del。移除服务时会撤销。
+Sem ela, o resto funciona; só o Ctrl+Alt+Del não.	没有它，其他功能都正常；只有 Ctrl+Alt+Del 不行。
+Remover o serviço de compartilhar tela do Prisma?	移除 Prisma 屏幕共享服务？
+Os aparelhos pareados voltam para a pasta de sempre do Prisma, e a política do Ctrl+Alt+Del volta como estava.	已配对的设备回到 Prisma 平常的文件夹，Ctrl+Alt+Del 策略恢复原状。
+«{}» quer parear com este PC.	“{}”想与此电脑配对。
+Permissões: {}.	权限：{}。
+Código de confirmação: {}	确认码：{}
+Confira se o outro PC mostra o mesmo código. Se não mostrar, clique em Cancelar.	请确认另一台电脑显示的是同一个码。如果不是，请点击“取消”。
+Sim: confiar neste aparelho.	是：信任此设备。
+Não: parear, mas perguntar a cada conexão.	否：配对，但每次连接都询问。
+Cancelar: recusar.	取消：拒绝。
+«{}» quer se conectar a este PC.	“{}”想连接此电脑。
+Permitir?	允许？
+Conectados agora:	当前已连接：
+Ctrl+Alt+Shift+Q, neste PC, desconecta todo mundo na hora.	在此电脑上按 Ctrl+Alt+Shift+Q 可一次断开所有人。
+Compartilhar	共享
+Host	主机
+Cliente	观看端
+Atalhos	快捷键
+Controles	手柄
+Parear com este convite?	用此邀请配对？
+Chegou o convite {}. Os dois PCs vão mostrar um código de confirmação de seis dígitos: confira antes de aceitar no outro PC.	收到邀请 {}。两台电脑都会显示一个六位确认码：在另一台电脑上接受前请先核对。
+Não deu para salvar as opções de quem assiste.	无法保存观看端选项。
+Convite criado	邀请已创建
+Publicando o código nos relés...	正在把代码发布到中继...
+Pronto. Vale 10 minutos e uma vez.	就绪。有效 10 分钟，只能使用一次。
+Os relés não responderam: mande o convite longo.	中继没有响应：请发送长邀请。
+No outro PC, digite o código em Parear com outro PC, ou mande o link: ele abre o Prisma e pareia depois de perguntar.	在另一台电脑上，在“与另一台电脑配对”中输入代码，或发送链接：它会打开 Prisma 并在询问后配对。
+Copiar código	复制代码
+Código copiado. Vale 10 minutos e uma vez.	代码已复制。有效 10 分钟，只能使用一次。
+Copiar link	复制链接
+Link copiado. Vale 10 minutos e uma vez.	链接已复制。有效 10 分钟，只能使用一次。
+Convite do Prisma para ver este PC:	观看此电脑的 Prisma 邀请：
+Convite do Prisma	Prisma 邀请
+Copiar convite longo	复制长邀请
+Ligado pelo serviço do Windows.	正在通过 Windows 服务运行。
+Último convite:	最近的邀请：
+Mostrar	显示
+Os aparelhos pareados conectam quando o compartilhamento está ligado.	共享开启时，已配对的设备会连接。
+Código ou convite do outro PC	来自另一台电脑的代码或邀请
+Isso não parece um código do Prisma	这看起来不像 Prisma 代码
+Conexão pela internet	通过互联网连接
+Nenhum aparelho pareado. Crie um convite neste PC e digite o código no outro, ou o contrário.	没有已配对的设备。在此电脑上创建邀请，然后在另一台上输入代码，或者反过来。
+Nome deste PC	此电脑的名称
+Monitor	监视器
+Principal	主显示器
+Resolução máxima	最大分辨率
+Quadros por segundo	每秒帧数
+Ritmo dos quadros	帧节奏
+Só quando a tela muda	屏幕变化时
+Constante	恒定
+Prioridade	优先
+Menor atraso	最低延迟
+Equilíbrio	平衡
+Qualidade	画质
+Codec	编解码器
+Limite de banda	带宽限制
+HDR10 de 10 bits quando as duas telas estão em HDR	两块屏幕都处于 HDR 时使用 10 位 HDR10
+Aceitar 4:4:4 quando quem assiste pede	观看方请求时接受 4:4:4
+Os automáticos seguem quem assiste: a altura da tela, o menor entre os Hz dos dois lados e o melhor codec que os dois têm. O 4:4:4 e o HDR10 caem sozinhos se o outro lado não tiver.	自动值跟随观看方：其屏幕高度、两端中较低的刷新率，以及双方都有的最佳编解码器。另一端不支持时，4:4:4 和 HDR10 会自动关闭。
+Som, mouse e teclado	声音、鼠标和键盘
+Som que vai	发送的声音
+Todo o PC	整台电脑
+Só	仅
+Tirar do som o programa de chamada	声音中排除通话应用
+Uma pessoa por vez no mouse e no teclado	鼠标和键盘一次一人
+O mouse e o teclado deste PC têm prioridade	此电脑的鼠标和键盘优先
+Recusar conexões enquanto este PC assiste a outro	此电脑正在观看其他电脑时拒绝连接
+Com prioridade, quem assiste para por 1 segundo sempre que alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. Programas de chamada: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack e Signal; sai do som o primeiro que estiver aberto.	开启优先时，每当这里有人移动鼠标或打字，观看方会暂停 1 秒。一次一人：2 秒无输入后轮换。通话应用：Discord、Teams、Zoom、WhatsApp、Skype、Telegram、Slack 和 Signal；第一个打开的会被排除在声音之外。
+Janela de quem assiste	观看窗口
+Abrir em tela cheia sem borda	以无边框全屏打开
+VSync: sem rasgos na imagem, com um pouco mais de atraso	垂直同步：不撕裂，延迟稍高
+Modo imersivo	沉浸模式
+Só o mouse	仅鼠标
+Só o teclado	仅键盘
+Mouse e teclado	鼠标和键盘
+Pedir 4:4:4 (texto mais nítido; precisa de NVIDIA ou Intel)	请求 4:4:4（文字更清晰；需要 NVIDIA 或 Intel）
+Começar sem o som do outro PC	开始时不播放另一台电脑的声音
+No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. O atalho do menu sempre funciona aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga.	在沉浸模式下全屏时，鼠标留在窗口内，Windows 键和 Alt+Tab 发往另一台电脑。菜单快捷键在这里始终有效。在 G-SYNC 或 FreeSync 屏幕上请关闭垂直同步：画面不会撕裂。
+Medidor e avisos	监视和警告
+Medidor de latência	延迟监视
+Simples	简单
+Detalhado	详细
+Avisar quando a conexão piorar	连接变差时警告
+O simples mostra o atraso de ponta a ponta e uma bolinha verde, amarela ou vermelha. O detalhado mostra também a rede, o vídeo, os quadros por segundo, a banda, a decodificação, os quadros perdidos e o caminho. O aviso aparece quando a rede perde mais de 2% dos quadros, quando a latência varia mais de 10 ms ou sobe por 3 segundos seguidos. Os quadros por segundo pedidos não passam dos Hz desta tela; o automático usa os Hz dela. Tudo isso muda também pelo menu da conexão.	简单显示端到端延迟和一个绿、黄或红点。详细还会显示网络、视频、每秒帧数、带宽、解码、丢帧和路由。网络丢帧超过 2%、延迟波动超过 10 毫秒或连续 3 秒上升时会出现警告。请求的每秒帧数不会超过此屏幕的刷新率；“自动”使用其刷新率。这些也都可以在连接菜单中更改。
+Portas	端口
+Porta UDP do host	主机 UDP 端口
+Automática	自动
+Use um número de 1024 a 65535.	请使用 1024 到 65535 之间的数字。
+Pedir ao roteador para abrir a porta (UPnP, NAT-PMP, PCP)	请求路由器开放端口（UPnP、NAT-PMP、PCP）
+Automática serve para quase todo mundo: o Prisma fura o NAT sem porta fixa. A porta fixa é para quem redireciona a porta no roteador. Ela vale na próxima vez que o compartilhamento ligar. O pedido ao roteador some sozinho quando a conexão acaba.	“自动”几乎适用于所有人：Prisma 无需固定端口即可穿越 NAT。固定端口适合在路由器上做端口转发的人。下次开始共享时生效。连接结束后，对路由器的请求会自动撤销。
+Como a conexão passa	连接如何传输
+Última conexão:	最近一次连接：
+Atalhos da conexão	连接快捷键
+Na janela de quem assiste	在观看窗口中
+Menu da conexão	连接菜单
+Ctrl+Alt+Del no outro PC	在另一台电脑上按 Ctrl+Alt+Del
+No PC que compartilha	在共享的电脑上
+Desconectar todo mundo	断开所有人
+Dois atalhos iguais: só o primeiro da lista funciona.	两个相同的快捷键：只有列表中的第一个有效。
+Clique num atalho e aperte a combinação nova; Esc cancela. Os atalhos de quem assiste ficam com a janela e não vão para o outro PC. Use combinações com Ctrl, Alt ou Shift, para não roubar teclas do jogo. Os novos valem na próxima conexão. O atalho do modo imersivo liga e desliga só na conexão aberta; o modo que fica é o da aba Cliente.	点击一个快捷键并按下新组合；Esc 取消。观看端快捷键留在窗口中，不会发送到另一台电脑。请使用带 Ctrl、Alt 或 Shift 的组合，以免占用游戏按键。新的快捷键在下次连接时生效。沉浸模式快捷键只在当前连接中开关它；保持的模式以“观看端”标签页为准。
+com fio	有线
+bateria cheia	电量满
+bateria média	电量中
+bateria baixa	电量低
+bateria acabando	电量几乎耗尽
+Controles virtuais no host	主机上的虚拟手柄
+Mandar o controle com a janela em segundo plano	窗口在后台时也发送手柄
+Usar o teclado como controle	把键盘当作手柄
+No host, cada controle de quem assiste vira um controle de Xbox virtual, pelo ViGEmBus ou pelo VIIPER (o Prisma não instala nenhum dos dois). Eles saem sozinhos quando o jogo da frente tem anti-cheat. Teclado como controle: WASD é o analógico esquerdo, as setas são o direcional, J é A, K é B, U é X, I é Y, Q e E são LB e RB, Z e C os gatilhos, Enter é Start e Backspace é Back.	在主机上，观看方的每个手柄都会通过 ViGEmBus 或 VIIPER 变成一个虚拟 Xbox 手柄（Prisma 不安装两者中的任何一个）。前台游戏有反作弊时会自动移除。键盘当手柄：WASD 是左摇杆，方向键是十字键，J 是 A，K 是 B，U 是 X，I 是 Y，Q 和 E 是 LB 和 RB，Z 和 C 是扳机，Enter 是 Start，Backspace 是 Back。
+Ligados agora	当前已连接
+Neste PC	此电脑上
+Nenhum controle ligado.	没有连接手柄。
+Virtuais de quem assiste a este PC	来自观看此电脑者的虚拟手柄
+controle	手柄
+jogador	玩家
+parado	空闲
+Nenhum agora.	现在没有。
+O Windows não abriu a janela de compartilhar: o convite foi copiado.	Windows 没有打开共享窗口：邀请已复制。
+Conexão instável: a rede está perdendo quadros	连接不稳定：网络正在丢帧
+Conexão instável: a latência está variando	连接不稳定：延迟忽高忽低
+Conexão piorando: a latência está subindo	连接正在变差：延迟在上升
+ponta a ponta	端到端
+rede	网络
+q/s	fps
+decodificação	解码
+perdidos	丢失
+Mandar Ctrl+Alt+Del	发送 Ctrl+Alt+Del
+Desconectar	断开
+O serviço está caindo: reabra o Prisma como administrador.	服务反复崩溃：请以管理员身份重新打开 Prisma。
+Conexão	连接
+Mouse	鼠标
+Os dois	两者
+Ligar e desligar o modo imersivo	开关沉浸模式
+Trocar o medidor de latência	切换延迟监视
+Ligar e desligar o som	开关声音
+Conectados	已连接
+Conectados agora	当前已连接
+Banir	封禁
+Personalizado	自定义
+Pela VPN	通过 VPN
+Direto na rede local	局域网直连
+Direto pela internet	互联网直连
+Pelo relé da n0	通过 n0 中继
+UDP direto	直接 UDP
+Conectando	正在连接
+O acesso muda na hora e fica salvo para as próximas conexões. Desconectar derruba só esta conexão: o aparelho continua pareado. Banir derruba e esquece o aparelho, que só volta com um convite novo.	访问权限立即更改，并保存给之后的连接。“断开”只断开这次连接：设备仍保持配对。“封禁”会断开并忘记该设备，只能凭新的邀请回来。
+Banir este aparelho?	封禁此设备？
+«{}» sai agora e vai precisar de um convite novo para conectar.	“{}”将立即离开，需要新的邀请才能连接。
+«{}» conectou a este PC	“{}”已连接到此电脑
+«{}» saiu	“{}”已离开
+Auto HDR	自动 HDR
+Sem DLSS	无 DLSS
+Plano de energia	电源计划
+Minutos de jogo gravados (0 é sem limite)	记录的游戏分钟数（0 为不限）
+Liga o HDR do Windows quando o jogo abre e desliga quando ele fecha. Se o HDR já estava ligado, ele continua ligado. Em Todos, vale para todo jogo que o modo jogo do Energia reconhece; Não ligar, na lista, tira um jogo. O medidor só aparece pelo atalho.	游戏打开时开启 Windows HDR，关闭时关闭。如果 HDR 原本已开启，则保持开启。选择“全部”时，适用于“电源”游戏模式识别的所有游戏；在列表中选“不开启”可排除某个游戏。监视只通过快捷键显示。
+Controlador de memória da GPU, média	GPU 显存控制器，平均
+Energia da GPU, média do limite	GPU 功耗，占上限的平均值
+Clock da GPU segurado por	GPU 频率受限于
+A VRAM chegou perto do total: texturas e resolução são os primeiros ajustes.	显存接近占满：最先应降低的是纹理和分辨率。
+A temperatura segurou o clock da GPU em parte do tempo.	温度在部分时间限制了 GPU 频率。
+Leitura: GPU cheia e no limite de energia, então o limite é a GPU. Menos carga por quadro (resolução, sombras, efeitos) é o que rende.	判断：GPU 满载且达到功耗上限，瓶颈是 GPU。降低每帧的工作量（分辨率、阴影、特效）最有效。
+Renomear	重命名
+Salvar	保存
+Este PC assiste	此电脑观看
+Assistem a este PC	观看此电脑
+Nenhum PC para assistir. Digite aqui o código de um convite feito no outro PC.	没有可观看的电脑。在这里输入另一台电脑上创建的邀请代码。
+Nenhum PC assiste a este. Crie um convite e digite o código no outro PC.	没有电脑在观看此电脑。创建邀请，然后在另一台电脑上输入代码。
+Atalhos de aparelho padrão	默认设备快捷键
+Fixo, fechado	已固定，已关闭
+Não mudar	不更改
+Aparelho padrão	默认设备
+não deu para trocar	无法切换
+aparelho desligado	设备已拔出
+Cada atalho troca a saída e a entrada padrão do Windows de uma vez. Use Adicionar.	每个快捷键会同时切换 Windows 默认输出和输入。请使用“添加”。
+Não deu para mudar na hora. Vale na próxima conexão.	无法立即更改。将在下次连接时生效。

@@ -1,0 +1,1558 @@
+Abrir o Prisma com Ctrl+Shift+Esc, no lugar do Gerenciador de Tarefas	Открывать Prisma по Ctrl+Shift+Esc вместо диспетчера задач
+Atalho de Otimizar	Сочетание для оптимизации
+Atalhos que não funcionaram	Сочетания, которые не сработали
+Configurações	Настройки
+Em Arquivos de Programas, com atalho e entrada para desinstalar.	В Program Files, с ярлыком и записью для удаления.
+Iniciar com o Windows, como administrador	Запускать с Windows от имени администратора
+Instalar libera o início com o Windows e a troca do Gerenciador de Tarefas.	Установка позволяет запускаться с Windows и заменять диспетчер задач.
+Instalar no PC	Установить на этот ПК
+Início com o Windows, permissões e atalhos gerais.	Запуск, права, язык и обновления.
+Reabrir como administrador	Перезапустить от имени администратора
+Roda de qualquer pasta. As configurações ficam ao lado do programa, em PrismaData.	Работает из любой папки. Настройки хранятся рядом с программой, в PrismaData.
+Versão instalada	Установленная версия
+Versão portátil	Портативная версия
+Abrir no Explorador	Открыть в проводнике
+Analisando…	Анализ…
+Analisar	Анализировать
+Apagar	Удалить
+Apagar pede admin	Для удаления нужны права администратора
+Confirmar: Lixeira	Подтвердить: корзина
+Disco {}:	Диск {}:
+Enviado para a Lixeira	Отправлено в корзину
+Escolha um disco e clique em Analisar.	Выберите диск и нажмите «Анализировать».
+Espaço em disco	Место на диске
+Lendo {} de {} registros	Чтение {} из {} записей
+Maiores arquivos	Самые большие файлы
+Mostra o que ocupa espaço em cada disco.	Показывает, что занимает место на каждом диске.
+Não consegui apagar	Не удалось удалить
+Os {} maiores arquivos do disco	{} самых больших файлов на диске
+Pastas	Папки
+Sem extensão	Без расширения
+Tipos de arquivo	Типы файлов
+lendo a tabela do NTFS	чтение таблицы NTFS
+percorrendo as pastas	обход папок
+{} itens lidos	Прочитано элементов: {}
+{} arquivos	Файлов: {}
+{} arquivos em {} s, {}	{} файлов за {} с, {}
+A gravação parou por um erro	Запись остановлена из-за ошибки
+Abrir o Prisma	Открыть Prisma
+Aumentar volume	Громче
+Desfazendo	Отмена
+Desfazendo tudo	Отмена всего
+Diminuir volume	Тише
+Fechar {} {} para liberar {} GB de RAM?	Закрыть {1} ({2}) и освободить {3} ГБ ОЗУ?
+programa	программу
+programas	программы
+Foto da tela inteira	Снимок всего экрана
+Foto da área	Снимок области
+Foto salva e copiada	Снимок сохранён и скопирован
+Gravar	Запись
+Gravação salva em {}	Запись сохранена в {}
+Janela restaurada	Окно восстановлено
+Mudo	Без звука
+Nada para fechar agora	Сейчас нечего закрывать
+Não consegui capturar a tela	Не удалось захватить экран
+Não consegui salvar a foto	Не удалось сохранить снимок
+O replay está desligado na tela Captura	Повтор выключен на странице «Захват»
+O replay só grava em modo jogo	Повтор записывает только в игровом режиме
+Otimizar	Оптимизировать
+Otimizar agora	Оптимизировать сейчас
+Sair	Выход
+Sem bordas	Без рамки
+Tirar foto da área	Снимок области
+{} não tem som tocando	{} не воспроизводит звук
+{}: {} já está em uso	{}: {} уже занято
+{} detectado	Обнаружено: {}
+{} restaurados, {} mudaram depois e ficaram como estão	Восстановлено: {}; {} изменились позже и оставлены как есть
+{} valores restaurados	Восстановлено значений: {}
+{} valores restaurados. Apps voltam pela Loja.	Восстановлено значений: {}. Приложения возвращаются через Store.
+{} · {} desfaz	{} · {} отменяет
+Últimos {} s salvos	Сохранены последние {} с
+Agendamento de GPU desligado	Планирование GPU выключено
+Agendamento de GPU ligado	Планирование GPU включено
+Alguma ferramenta ou atualização marcou esses apps. Sem Game Pass isso não costuma atrapalhar.	Эти приложения отметила утилита или обновление. Без Game Pass это обычно не мешает.
+Arquivo de paginação desligado	Файл подкачки отключён
+Disco {} ({}) pede cuidado	Диск {} ({}) требует внимания
+Integridade da Memória desligada	Целостность памяти выключена
+Integridade da Memória ligada	Целостность памяти включена
+Jogos e compilações podem falhar sem aviso. Ligue em Sistema, Avançado, Desempenho.	Игры и сборки могут падать без предупреждения. Включите в «Система», «Дополнительно», «Быстродействие».
+Já houve caso em que isso quebrou o Windows Update. Veja antes de aplicar qualquer ajuste.	Это уже ломало Windows Update. Проверьте перед любой настройкой.
+Lista de processos indisponível	Список процессов недоступен
+Mais nova que os testes do catálogo. Os ajustes funcionam, com o rótulo Não testado nesta build.	Новее, чем проверено в каталоге. Настройки работают, с пометкой «Не проверено на этой сборке».
+Na prática o Windows trata como Necessários. O perfil grava o valor correto.	На практике Windows считает это «Обязательным». Профиль записывает верное значение.
+Necessário para a geração de quadros do DLSS.	Нужно для генерации кадров DLSS.
+O DLSS Frame Generation exige ele ligado, em Configurações, Sistema, Tela, Gráficos.	DLSS Frame Generation требует включить это в «Параметры», «Система», «Дисплей», «Графика».
+O PC fica com menos proteção contra drivers maliciosos. A Microsoft pode religar em atualizações.	У ПК меньше защиты от вредоносных драйверов. Microsoft может снова включить это в обновлениях.
+Pasta Windows.old presente	Есть папка Windows.old
+Permite voltar de versão. Apagar libera espaço, mas encerra essa volta.	Позволяет откатиться. Удаление освобождает место, но убирает эту возможность.
+Proteção ativa. Em jogos limitados pela CPU custa cerca de 6%; em 4K, cerca de 2%. A escolha é sua, na tela oficial.	Защита включена. Стоит около 6% в играх, упирающихся в CPU, и около 2% в 4K. Решать вам, на официальной странице.
+Reinicie antes de aplicar ajustes ou reparar o Windows.	Перезагрузите ПК перед настройками или восстановлением Windows.
+Reinício pendente	Ожидается перезагрузка
+Serviço TrustedInstaller alterado	Служба TrustedInstaller изменена
+Telemetria em 0, valor que o Pro não suporta	Телеметрия на 0 — значение, которое Pro не поддерживает
+{} apps do Windows foram retirados antes	Ранее удалено приложений Windows: {}
+{} de hardware. Veja em Ferramentas, Histórico de falhas.	{} из-за оборудования. См. «Инструменты», «История сбоев».
+{} quedas ou erros graves em 90 dias	Сбоев или серьёзных ошибок за 90 дней: {}
+{}. Copie o que importa antes de qualquer reparo.	{}. Скопируйте важное перед любым восстановлением.
+Pasta Inicializar	Папка автозагрузки
+Pasta Inicializar, todos os usuários	Папка автозагрузки, все пользователи
+Registro, programas de 32 bits	Реестр, 32-битные программы
+Registro, só este usuário	Реестр, только этот пользователь
+Registro, todos os usuários	Реестр, все пользователи
+1 minuto	1 минута
+2 minutos	2 минуты
+15 segundos	15 секунд
+30 segundos	30 секунд
+1080p a 60 FPS	1080p, 60 FPS
+1440p a 60 FPS	1440p, 60 FPS
+4K a 60 FPS	4K, 60 FPS
+AV1 pela GPU	AV1 на GPU
+Atalhos e pasta	Сочетания и папка
+Captura	Захват
+Cerca de {} MB por minuto	Около {} МБ в минуту
+Cor com HDR ligado na tela	Цвет, когда экран в HDR
+Em modo jogo, guarda os últimos segundos na memória. O atalho salva sem interromper.	В игровом режиме хранит последние секунды в памяти. Сочетание сохраняет без прерывания.
+Estimativa, varia com a cena	Оценка, зависит от сцены
+Formato de foto	Формат снимка
+Gravar e parar	Записать и остановить
+Gravar em HDR10	Запись в HDR10
+Gravar em SDR	Запись в SDR
+H.264 (mais compatível)	H.264 (самый совместимый)
+HEVC pela GPU	HEVC на GPU
+Janela em foco	Активное окно
+Ligar replay	Включить повтор
+Microfone	Микрофон
+Monitor em foco	Активный монитор
+Mostrar o cursor	Показывать курсор
+Nativo: {} FPS	Родная: {} FPS
+PNG e JPEG XR em HDR	PNG и JPEG XR в HDR
+PNG em SDR	PNG в SDR
+Parar	Стоп
+Pasta	Папка
+Resolução e FPS	Разрешение и FPS
+Salvar replay	Сохранить повтор
+Som do sistema	Системный звук
+Tela	Экран
+Tirar foto	Сделать снимок
+Tudo fica no seu PC. Nada é enviado.	Всё остаётся на вашем ПК. Ничего не отправляется.
+Vídeo	Видео
+Espaço	Пробел
+Nenhum	Нет
+Tecla {}	Клавиша {}
+Atributo {} abaixo do limite do fabricante	Атрибут {} ниже порога производителя
+Blocos com erro (30 dias)	Плохие блоки (30 дней)
+Desligamentos incorretos	Небезопасные отключения
+Erros de cabo	Ошибки кабеля
+Erros de mídia	Ошибки носителя
+Este disco não respondeu	Этот диск не ответил
+O adaptador USB não libera os dados de saúde	USB-адаптер не передаёт данные о здоровье
+O próprio disco prevê falha	Диск сам предсказывает отказ
+O próprio disco reportou alerta crítico	Диск сам сообщил о критическом предупреждении
+Outro	Другое
+Partidas do motor	Раскрутки
+Pouca vida útil restante	Ресурс почти исчерпан
+Reserva de blocos abaixo do mínimo	Резервных блоков меньше минимума
+Reserva disponível	Доступный резерв
+Sem sinais de problema	Признаков проблем нет
+Setores incorrigíveis	Неисправимые секторы
+Setores pendentes	Ожидающие секторы
+Setores realocados	Переназначенные секторы
+Temperatura alta	Высокая температура
+Temperatura ou reserva pedem atenção	Температура или резерв требуют внимания
+Total escrito	Всего записано
+Total lido	Всего прочитано
+Vezes ligado	Циклы включения
+Vida útil restante	Остаток ресурса
+{} blocos com erro em 30 dias	Плохих блоков за 30 дней: {}
+{} erros de mídia	Ошибок носителя: {}
+{}, o último em {}	{}, последняя {}
+{} setores realocados	Переназначенных секторов: {}
+{}% (mínimo {}%)	{}% (минимум {}%)
+{} setores instáveis	Нестабильных секторов: {}
+Ao entrar em modo jogo	При входе в игровой режим
+CPU acima de 35% por 20 s	CPU выше 35% в течение 20 с
+Carga alta há {} min	Высокая нагрузка в течение {} мин
+Com jogo ou carga pesada	С игрой или высокой нагрузкой
+Criar planos Prisma	Создать планы Prisma
+Em repouso	В покое
+Energia	Питание
+GPU 3D acima de 40% por 5 s	GPU 3D выше 40% в течение 5 с
+Jogo em tela cheia ou sem bordas	Игра на весь экран или без рамки
+Modo jogo há {} min · {} detectado	Игровой режим {} мин · обнаружено: {}
+Mínimo	Минимум
+No resto do tempo	Остальное время
+Núcleos	Ядра
+O que conta como carga	Что считается нагрузкой
+Otimizar sem perguntar	Оптимизировать без вопроса
+Perguntar se quero otimizar	Спрашивать об оптимизации
+Plano	План
+Seus planos na tomada	Ваши планы от сети
+Steam, Epic, GOG e Xbox	Steam, Epic, GOG и Xbox
+Sua Economia de energia mantém a CPU em 100% mínimo, então quase não economiza.	План «Экономия энергии» держит CPU минимум на 100% и почти не экономит.
+Só trocar o plano	Только сменить план
+Não perguntar	Не спрашивать
+Troca automática	Автопереключение
+Volta ao repouso após 60 s sem carga.	В покой после 60 с без нагрузки.
+Últimas 2 horas	Последние 2 часа
+sem codificador de vídeo na GPU	на GPU нет видеокодировщика
+Assinado por {}	Подписано: {}
+Assinatura inválida	Неверная подпись
+Sem assinatura própria	Нет собственной подписи
+Aplicar sozinho quando o programa abrir de novo	Применять автоматически при следующем запуске программы
+Atalho	Сочетание
+Deixa a janela em foco em tela cheia sem bordas. O mesmo atalho desfaz.	Разворачивает активное окно на весь экран без рамки. То же сочетание отменяет.
+Janela	Окно
+Janelas abertas	Открытые окна
+Restaurar	Восстановить
+Tela cheia	Полный экран
+Remover o Prisma deste computador? Suas configurações ficam guardadas.	Удалить Prisma с этого компьютера? Настройки сохранятся.
+Não consegui instalar o Prisma.	Не удалось установить Prisma.
+Ajustes do Windows	Настройки Windows
+Carga alta	Высокая нагрузка
+Desinstalar	Удаление
+Discos e redes	Диски и сети
+Energia automática	Автоматическое питание
+Ferramentas	Инструменты
+Inicialização	Автозагрузка
+Modo jogo ativo	Игровой режим включён
+Plano desconhecido	Неизвестный план
+Pressione as teclas	Нажмите клавиши
+Programas	Программы
+Repouso	Покой
+Serviços	Службы
+Troca automática desligada	Автоматическое переключение выключено
+Cada coluna é um núcleo	Каждый столбец — ядро
+Disco	Диск
+Finalizar tarefa	Снять задачу
+Frequência	Частота
+Mais usado	Больше всех
+Menos usado	Меньше всех
+Núcleo {} · {}	Ядро {} · {}
+Programa	Программа
+Rede	Сеть
+de {}	из {}
+{} threads · {} · {}	{} потоков · {} · {}
+Blacklist	Список «никогда не закрывать»
+Detecção automática	Автоматическое обнаружение
+Fechar 1 selecionado	Закрыть 1 выбранную
+Fechar {} selecionados	Закрыть выбранные ({})
+Forçar	Принудительно
+Libera {} de RAM	Освобождает {} ОЗУ
+Nada é fechado sem você confirmar.	Ничего не закрывается без вашего подтверждения.
+Nunca fechar	Никогда не закрывать
+Não	Нет
+Não fecharam: {}	Не закрылось: {}
+Pede para o programa fechar normalmente, então trabalho não salvo gera o aviso dele. Forçar é uma opção à parte.	Просит программу закрыться обычным способом, чтобы несохранённая работа показала свой запрос. «Принудительно» — отдельный вариант.
+Pode fechar	Можно закрыть
+Proteger	Защитить
+Sem sugestões agora. O Prisma aprende com o que você usa.	Пока нет предложений. Prisma учится на том, чем вы пользуетесь.
+Sempre	Всегда
+Sempre fechar ao otimizar	Всегда закрывать при оптимизации
+Sim	Да
+Você usa {} sempre. Colocar na blacklist?	Вы всегда используете {}. Добавить в список «никогда не закрывать»?
+Whitelist	Список «всегда закрывать»
+{} · {} VRAM	{} · {} VRAM
+{} ficou {} dias aberto sem você usar. Colocar na whitelist?	{} открыт уже {} дн. без использования. Добавить в список «всегда закрывать»?
+Aberto em segundo plano	Открыть в фоне
+Sem janela aberta	Нет открытых окон
+Sempre fechar (whitelist)	Всегда закрывать (список «всегда закрывать»)
+Agora não	Не сейчас
+Fechar	Закрыть
+Ver lista	Показать список
+Agr. garantido	Агр. гарантир.
+Agressivo	Агрессивный
+Desligado	Выкл.
+Efic. agressivo	Эконом. агрессив.
+Efic. garantido	Эконом. гарантир.
+Eficiente	Экономный
+Abrindo as propriedades no Windows	Открытие свойств в Windows
+Automático	Автоматически
+Botão direito no serviço abre as propriedades dele no Windows.	Щёлкните службу правой кнопкой, чтобы открыть её свойства в Windows.
+Buscar	Поиск
+Editar no Windows	Изменить в Windows
+Escolha um serviço para ver o que ele faz.	Выберите службу, чтобы увидеть, что она делает.
+Executável	Исполняемый файл
+Iniciar	Запустить
+O serviço não traz descrição.	У этой службы нет описания.
+Parado	Остановлена
+Parados	Остановлено
+Precisa do Prisma como administrador	Нужна Prisma от имени администратора
+Reiniciar	Перезапустить
+Rodando	Работает
+Rodando · PID {}	Работает · PID {}
+Todos	Все
+{} rodando de {}.	Работает {} из {}.
+Arraste para escolher a área · Enter copia a tela inteira · Esc cancela	Перетащите, чтобы выбрать область · Enter копирует весь экран · Esc отменяет
+Caneta	Перо
+Elipse	Эллипс
+Foto copiada	Снимок скопирован
+Foto fixada: arraste para mover, botão direito fecha	Закреплённый снимок: перетащите для перемещения, правый щелчок закрывает
+Foto salva	Снимок сохранён
+Linha	Линия
+Marcador	Маркер
+Não consegui copiar	Не удалось скопировать
+Não consegui gerar a imagem	Не удалось создать изображение
+Número	Номер
+Olá, mundo	Привет, мир
+Pixelar	Пикселизация
+Retângulo	Прямоугольник
+Seta	Стрелка
+Texto	Текст
+Adicionar	Добавить
+Assinatura	Подпись
+Ativado	Включено
+Ativados	Включена
+Comando	Команда
+Confirmar remoção	Подтвердить удаление
+Desativado	Выключено
+Desativados	Выключена
+Escolha um item para ver de onde ele vem e quem assinou.	Выберите элемент, чтобы увидеть, откуда он и кто его подписал.
+Nome	Имя
+Remover da inicialização	Убрать из автозагрузки
+{} de {} abrem com o Windows.	{} из {} запускаются с Windows.
+Atenção	Внимание
+Ativo {}	Активно {}
+Baixando {}	Загрузка {}
+Bom	Хорошо
+Conectado · {}	Подключено · {}
+Conectado · {} · {}	Подключено · {} · {}
+Desconectado	Отключено
+Disco {}	Диск {}
+Discos	Диски
+Enviando {}	Отдача {}
+Lendo o disco…	Чтение диска…
+Ler saúde de novo	Прочитать здоровье снова
+Ler {} · Gravar {}	Чтение {} · Запись {}
+Número de série	Серийный номер
+Redes	Сети
+Risco	Под угрозой
+Saúde	Здоровье
+Sem dados	Нет данных
+Temperatura	Температура
+Tempo ligado	Время работы
+Total: {} recebidos, {} enviados	Всего: получено {}, отправлено {}
+Tudo que está ligado no PC, em tempo real.	Всё, что подключено к ПК, в реальном времени.
+{} h ({} anos)	{} ч (лет: {})
+{} livres de {}	Свободно {} из {}
+  Marcada: {}	Выбрано: {}
+  Marcas removidas do registro	Выбор удалён из реестра
+  Terminou com código {} em {}	Завершено с кодом {} за {}
+  ✓ Etapa concluída em {}	✓ Шаг завершён за {}
+  ✗ Não concluiu ({})	✗ Не завершено ({})
+A cópia não começou.	Копирование не началось.
+A verificação achou problemas que não corrigiu. Veja a saída acima.	Проверка нашла проблемы, которые не исправила. См. вывод выше.
+A verificação não começou.	Проверка не началась.
+Abre as opções de recuperação, inclusive Modo de Segurança. Reinicia agora.	Открывает параметры восстановления, включая безопасный режим. Перезагружает сейчас.
+Abre o Diagnóstico de Memória do Windows, que reinicia o PC e testa antes de ligar.	Открывает средство проверки памяти Windows, которое перезагружает ПК и проверяет до загрузки.
+Algo não terminou	Что-то не завершилось
+Algo não terminou: {}	Что-то не завершилось: {}
+Alterando	Изменение
+Analisando	Анализ
+Analisar cache de atualizações	Проанализировать кэш обновлений
+Atalhos para ferramentas escondidas.	Ярлыки к скрытым инструментам.
+Atualiza pelo winget, um por um, sem janelas.	Обновляет через winget, по одной, без окон.
+Atualizando	Обновление
+Atualizar todos os programas	Обновить все программы
+Atualizações concluídas.	Обновления завершены.
+Automático do roteador	Автоматически от роутера
+Avançado	Дополнительно
+Avisa o SSD sobre o espaço livre. Só para SSD saudável.	Сообщает SSD о свободном месте. Только для исправного SSD.
+Bloqueado em disco suspeito.	Заблокировано на подозрительном диске.
+Cache de DNS limpo.	Кэш DNS очищен.
+Conferindo	Проверка
+Confiabilidade	Надёжность
+Confira a saída: o defrag devolve sucesso até quando falha.	Проверьте вывод: defrag сообщает об успехе, даже когда ошибается.
+Confirmar	Подтвердить
+Confirme acima para liberar.	Подтвердите выше, чтобы разблокировать.
+Consertar o Windows Update	Починить Windows Update
+Copiando	Копирование
+Copiar dados de um disco com defeito	Копия данных со сбойного диска
+Corrigir (/f)	Исправить (/f)
+Corrigir e ler a superfície (/r)	Исправить и прочитать поверхность (/r)
+Cópia concluída. Confira os arquivos no destino.	Копирование завершено. Проверьте файлы в месте назначения.
+DISM: conferir e reparar a imagem	DISM: проверить и восстановить образ
+DNS alterado. Confira acima.	DNS изменён. См. выше.
+De onde	Откуда
+Desfaz o item anterior, em todos os discos.	Отменяет предыдущий пункт на всех дисках.
+Desligamento inesperado	Неожиданное выключение
+Desligar libera o hiberfil.sys, mas pode afetar a Inicialização Rápida.	Выключение освобождает hiberfil.sys, но может повлиять на быстрый запуск.
+Diagnóstico	Диагностика
+Dispositivos	Устройства
+Drivers com problema	Драйверы с проблемами
+Erro de hardware (WHEA)	Аппаратная ошибка (WHEA)
+Erros encontrados e corrigidos.	Ошибки найдены и исправлены.
+Escolha origem e destino.	Выберите источник и назначение.
+Escolhendo o que limpar	Выбор того, что очистить
+Escolher pasta	Выбрать папку
+Estado da recuperação	Состояние восстановления
+Estados disponíveis	Доступные состояния
+Este disco está suspeito: copie os dados antes de qualquer reparo. Modos que escrevem podem piorar a perda.	Этот диск подозрителен: скопируйте данные перед любым восстановлением. Режимы с записью могут усугубить потерю.
+Eventos	События
+Evita que o Windows rode a verificação sozinho ao ligar num disco suspeito, até você copiar os dados.	Не даёт Windows запускать проверку при загрузке на подозрительном диске, пока вы не скопируете данные.
+Excluindo do chkdsk automático	Исключение из автоматического chkdsk
+Executar	Выполнить
+Falhas	Сбои
+Gerar pacote de suporte	Создать пакет для поддержки
+Guardada em {}	Сохранено в {}
+Hibernação desligada.	Гибернация выключена.
+Hibernação ligada.	Гибернация включена.
+Histórico de falhas	История сбоев
+Horários em UTC. Vários itens no mesmo horário costumam ser a mesma queda.	Время в UTC. Несколько записей в одно время обычно — один и тот же сбой.
+Impedir verificação automática	Запретить автоматическую проверку
+Já copiei os dados e aceito o risco	Данные скопированы, риск принимаю
+Lendo	Чтение
+Lendo o log do sistema	Чтение системного журнала
+Liberados {}	Освобождено {}
+Ligar ou desligar hibernação	Включить или выключить гибернацию
+Limpando	Очистка
+Limpar arquivos do sistema	Очистить системные файлы
+Limpar cache de DNS	Очистить кэш DNS
+Limpar cache de atualizações	Очистить кэш обновлений
+Limpeza	Очистка
+Limpeza concluída. Windows.old e Lixeira não foram tocados.	Очистка завершена. Windows.old и корзина не тронуты.
+Lista acima.	Список выше.
+Lista dispositivos com erro. Só leitura.	Показывает устройства с ошибками. Только чтение.
+Lista o que tem versão nova pelo winget.	Показывает, у чего есть новая версия в winget.
+Lê o último resultado. Sem registro não quer dizer aprovado.	Читает последний результат. Отсутствие записи не значит, что проверка пройдена.
+Mostra quanto a pasta WinSxS ocupa de verdade e se vale limpar.	Показывает, сколько на самом деле занимает папка WinSxS и стоит ли её чистить.
+Mostra se o ambiente de recuperação do Windows está ativo.	Показывает, включена ли среда восстановления Windows.
+Muda o servidor de nomes do adaptador. DNS criptografado se ativa em Configurações, Rede.	Меняет DNS-сервер адаптера. Шифрованный DNS включается в «Параметры», «Сеть».
+Nem tudo atualizou; veja acima	Обновилось не всё; см. выше
+Nem tudo atualizou; veja acima: {}	Обновилось не всё; см. выше: {}
+Nenhum resultado registrado. Isso não quer dizer aprovado.	Результат не записан. Это не значит, что проверка пройдена.
+Nenhuma queda ou erro grave em 90 dias.	Нет сбоев и серьёзных ошибок за 90 дней.
+Não achei o registro do SFC. Confira a saída acima.	Не найдена запись SFC. Проверьте вывод выше.
+Não funcionou	Не сработало
+Não funcionou: {}	Не сработало: {}
+Não funcionou por inteiro	Сработало не полностью
+Não funcionou por inteiro: {}	Сработало не полностью: {}
+Não iniciou	Не запустилось
+Não iniciou: {}	Не запустилось: {}
+O DISM não conseguiu reparar a imagem. Veja a saída acima e o arquivo dism.log.	DISM не смог восстановить образ. См. вывод выше и файл dism.log.
+O SFC não conseguiu reparar {} arquivos. Veja CBS.log e rode o reparo de novo após reiniciar.	SFC не смог восстановить файлов: {}. См. CBS.log и повторите после перезагрузки.
+O destino precisa estar em outro disco.	Назначение должно быть на другом диске.
+O disco do sistema está suspeito: resolva isso antes de reparar o Windows.	Системный диск подозрителен: разберитесь с этим до восстановления Windows.
+O disco está em uso: a verificação pede reinício. Em disco suspeito, copie os dados antes.	Диск занят: для проверки нужна перезагрузка. На подозрительном диске сначала скопируйте данные.
+O modo /r lê toda a superfície por muitas horas: bloqueado em disco suspeito.	Режим /r читает всю поверхность много часов: заблокирован на подозрительном диске.
+O modo sem reparo só lê. Os modos que corrigem escrevem no disco e ficam bloqueados em disco suspeito.	Режим без исправления только читает. Режимы с исправлением пишут на диск и заблокированы на подозрительном диске.
+O passo a passo aparece aqui.	Здесь появится пошаговый журнал.
+O que acorda o PC	Что будит ПК
+O que impede o sono	Что мешает сну
+O que o Windows esconde em linha de comando, com resultado em português.	То, что Windows прячет в командной строке, с понятными результатами.
+Otimizar SSD (TRIM)	Оптимизировать SSD (TRIM)
+Pacote salvo na pasta indicada acima.	Пакет сохранён в папке, показанной выше.
+Painéis do Windows	Панели Windows
+Para onde (outro disco)	Куда (другой диск)
+Para os serviços, renomeia as pastas de cache sem apagá-las e religa tudo. Para quando as atualizações travam.	Останавливает службы, переименовывает папки кэша без удаления и снова всё запускает. Когда обновления застряли.
+Parar {}	Остановить {}
+Parte dos arquivos não foi copiada: pode ser área danificada. Veja a saída acima.	Некоторые файлы не скопировались: возможно, это повреждённая область. См. вывод выше.
+Pasta: {}	Папка: {}
+Pede administrador	Нужны права администратора
+Pedindo a limpeza	Запрос очистки
+Primeiro degrau quando sites não abrem. Não tem efeito colateral.	Первый шаг, когда сайты не открываются. Без побочных эффектов.
+Primeiro passo em disco suspeito. Lê uma vez, pula o que estiver ruim e registra o que falhou. Só escreve no destino.	Первый шаг на подозрительном диске. Читает один раз, пропускает плохое и записывает, что не удалось. Пишет только в назначение.
+Procurando	Поиск
+Pronto. Lembre de desfazer depois de trocar o disco.	Готово. Не забудьте отменить это после замены диска.
+Pronto. Procure atualizações de novo em Configurações.	Готово. Снова проверьте обновления в «Параметрах».
+Pronto. Reinicie para valer.	Готово. Перезагрузите ПК, чтобы применить.
+Recursos	Компоненты
+Refazer a pilha de rede	Сбросить сетевой стек
+Reinicia direto na configuração da placa-mãe.	Перезагружает сразу в настройки материнской платы.
+Reiniciando	Перезагрузка
+Reiniciando.	Перезагрузка.
+Reiniciar em modo avançado	Перезагрузка в расширенный режим
+Reiniciar na BIOS	Перезагрузка в BIOS
+Reinício sem desligar corretamente	Перезагрузка без чистого завершения
+Reinícios inesperados, telas azuis e erros de hardware dos últimos 90 dias. Só leitura.	Неожиданные перезагрузки, синие экраны и аппаратные ошибки за последние 90 дней. Только чтение.
+Religar {}	Запустить {}
+Renomear as pastas de cache	Переименовать папки кэша
+Reparar	Восстановить
+Reparar o Windows	Восстановить Windows
+Reparar online (/scan)	Восстановить онлайн (/scan)
+Reparou {} arquivos. Reinicie e rode de novo para confirmar.	Восстановлено файлов: {}. Перезагрузите и запустите снова для проверки.
+Roda a tarefa do próprio Windows, que preserva 30 dias de atualizações.	Запускает собственную задачу Windows, которая хранит 30 дней обновлений.
+Roda o DISM, que baixa o que estiver danificado, e depois o SFC, nessa ordem, como manda a Microsoft. Pode levar de 10 a 30 minutos e usa o disco do sistema.	Запускает DISM, который скачивает повреждённое, затем SFC, в порядке, рекомендованном Microsoft. Может занять 10–30 минут и использует системный диск.
+Rodando…	Выполняется…
+SFC: conferir os arquivos do sistema	SFC: проверить системные файлы
+Salva relatório de vídeo, informações do sistema e histórico de falhas numa pasta.	Сохраняет в папку отчёт о видео, сведения о системе и историю сбоев.
+Salvando a configuração atual	Сохранение текущей конфигурации
+Segundo degrau: Winsock e TCP/IP. Salva o estado atual antes. Pede reinício.	Второй шаг: Winsock и TCP/IP. Сначала сохраняет текущее состояние. Нужна перезагрузка.
+Sem administrador, as duas últimas podem falhar.	Без прав администратора последние два могут не сработать.
+Sem problemas no sistema de arquivos.	Проблем с файловой системой нет.
+Servidor principal	Основной сервер
+Servidor secundário	Дополнительный сервер
+Sistema	Система
+Só verificar, sem reparar	Только проверить, без исправления
+TRIM é só para SSD.	TRIM только для SSD.
+Tarefa iniciada: ela segue em segundo plano por alguns minutos.	Задача запущена: она продолжится в фоне несколько минут.
+Tela azul	Синий экран
+Temporários, restos de atualização e relatórios. Não toca em Windows.old, Lixeira, Downloads nem shaders.	Временные файлы, остатки обновлений и отчёты. Не трогает Windows.old, корзину, «Загрузки» и шейдеры.
+Testar memória	Проверить память
+Timers de despertar	Таймеры пробуждения
+Todas as opções	Все параметры
+Trocar DNS	Сменить DNS
+Três estados possíveis: passou, com erros ou sem resultado.	Три возможных состояния: пройдено, с ошибками или нет результата.
+Veja a recomendação no fim da saída.	См. рекомендацию в конце вывода.
+Veja o estado acima.	См. состояние выше.
+Ver programas desatualizados	Показать устаревшие программы
+Ver resultado do teste de memória	Показать результат проверки памяти
+Verificando {}	Проверка {}
+Verificar disco	Проверить диск
+Verificação automática de volta ao padrão.	Автоматическая проверка возвращена по умолчанию.
+Voltando ao automático	Возврат к автоматическому
+Voltando ao padrão	Возврат к умолчанию
+Voltar a verificação automática	Вернуть автоматическую проверку
+Windows íntegro: nenhum arquivo corrompido.	Windows цела: повреждённых файлов нет.
+automático	автоматически
+sem erros	без ошибок
+veja o Visualizador de Eventos	см. «Просмотр событий»
+{} guardada em {}	{} сохранено в {}
+{} evento {}: {}	{} событие {}: {}
+Último despertar	Последнее пробуждение
+Último despertar, estados de energia disponíveis e o que impede o sono.	Последнее пробуждение, доступные состояния питания и что мешает сну.
+▸ {}  Fim, em {}	▸ {}  Завершено за {}
+Fim, em {}	Завершено за {}
+Ponto de restauração	Точка восстановления
+  App {}: volta pela Loja, não por aqui	Приложение {}: возвращается через Store, не здесь
+  Removendo o app {}…	Удаление приложения {}…
+  Serviço {}: não existe neste PC, nada a fazer	Служба {}: нет на этом ПК, делать нечего
+  ✓ App {}: removido	✓ Приложение {}: удалено
+  ✓ Criado	✓ Создано
+  ✓ Registro {}: removido, como era antes	✓ Реестр {}: удалено, как было раньше
+  ✓ Registro {}: voltou para {}	✓ Реестр {}: возвращено к {}
+  ✓ Registro {}: {} → {}	✓ Реестр {}: {} → {}
+  ✓ Serviço {}: início {} → {}	✓ Служба {}: запуск {} → {}
+  ✓ Serviço {}: início voltou para {}	✓ Служба {}: запуск возвращён к {}
+  ✗ App {}: continua instalado	✗ Приложение {}: всё ещё установлено
+  ✗ O Windows recusou	✗ Windows отказала
+  ✗ Registro {}: mudou depois do Prisma, ficou como está	✗ Реестр {}: изменён после Prisma, оставлен как есть
+  ✗ Registro {}: não consegui restaurar	✗ Реестр {}: не удалось восстановить
+  ✗ Registro {}: o Windows recusou a escrita	✗ Реестр {}: Windows отказала в записи
+  ✗ Serviço {}: o Windows recusou a mudança	✗ Служба {}: Windows отказала в изменении
+  ✗ Serviço {}: mudou depois do Prisma, ficou como está	✗ Служба {}: изменена после Prisma, оставлена как есть
+  ✗ Serviço {}: não consegui restaurar	✗ Служба {}: не удалось восстановить
+6% de FPS em 720p e cerca de 2% em 4K, mas tira uma proteção real do kernel. A escolha fica na tela oficial do Windows.	6% FPS в 720p и около 2% в 4K, но убирает реальную защиту ядра. Решение остаётся на официальной странице Windows.
+A Microsoft recomenda contra, e há relatos de quebra.	Microsoft не советует, и есть сообщения о поломках.
+Abrir tela do Windows	Открыть страницу Windows
+Aplicado	Применено
+Aplicado, mas uma conferência falhou. Veja o que mudou.	Применено, но одна проверка не прошла. Посмотрите, что изменилось.
+Aplicado. Windows Update, Loja e Central de Segurança conferidos.	Применено. Windows Update, Store и Центр безопасности проверены.
+Aplicar {}	Применить {}
+Atualizações sem compartilhar com outros PCs	Обновления без раздачи другим ПК
+Auditoria	Аудит
+Automático com atraso	Автоматически (отложенный запуск)
+Baixo impacto.	Низкое влияние.
+Bloquear atualizações	Блокировать обновления
+Bloqueia correções automáticas de problemas da Microsoft.	Блокирует автоматические исправления проблем от Microsoft.
+Cada item foi pesquisado. Menos ajustes aqui é uma decisão, não uma falta.	Каждый пункт изучен. Меньше настроек здесь — решение, а не пробел.
+Caminhos de arquivo longos	Длинные пути к файлам
+Central de Segurança ativa	Центр безопасности активен
+Conferindo o essencial	Проверка главного
+Confirmar: aplicar {}	Подтвердить: применить {}
+Consenso entre as seis ferramentas analisadas.	Согласие шести проанализированных утилит.
+Consenso entre ferramentas, mas muita gente usa.	Утилиты согласны, но многие этим пользуются.
+Conveniência, e ajuda a notar arquivos disfarçados.	Удобство, и помогает замечать замаскированные файлы.
+Conveniência.	Удобство.
+Copiar e colar entre aparelhos para de funcionar.	Копирование и вставка между устройствами перестаёт работать.
+Dados de diagnóstico no mínimo do Pro	Диагностические данные на минимуме Pro
+Derruba o WSL e outras máquinas virtuais.	Ломает WSL и другие виртуальные машины.
+Desde 2020 o Windows não muda a resolução de outros programas.	С 2020 года Windows не меняет разрешение таймера для других программ.
+Desenvolvimento	Разработка
+Desfazer	Отменить
+Desfazer tudo	Отменить всё
+Documentado	Задокументировано
+Evita erros em projetos grandes. Pode pedir reinício.	Избегает ошибок в больших проектах. Может потребоваться перезагрузка.
+Ferramentas de timer	Утилиты таймера
+Fica em Necessários. Desligar por completo não existe no Pro.	Остаётся «Обязательно». Полного отключения в Pro нет.
+Finalizar tarefa na barra de tarefas	«Снять задачу» на панели задач
+Fora da lista	Не вошло
+IA do Windows desligada onde a política vale	ИИ Windows выключен там, где действует политика
+Jogo	Игры
+Jogos modernos usam UDP nos dados críticos.	Современные игры используют UDP для важных данных.
+Já estava assim	Уже так
+Limiar de svchost	Порог svchost
+Limpadores de RAM	Очистители ОЗУ
+Listas de serviços em massa	Массовые списки служб
+Loja do Windows presente	Microsoft Store на месте
+Mantém o histórico da área de transferência funcionando.	Сохраняет работу журнала буфера обмена.
+Medido	Измерено
+Menu Iniciar sem recomendações	Меню «Пуск» без рекомендаций
+Modo Desenvolvedor	Режим разработчика
+Modo MSI, isolar núcleos, afinidade	Режим MSI, изоляция ядра, привязка
+Mostrar extensões de arquivo	Показывать расширения файлов
+Nenhum jogo foi visto usando; o valor 100 impediu o serviço de iniciar.	Ни одна игра этого не использовала; значение 100 мешало запуску службы.
+Notícias, Clima, Solitaire, Clipchamp, Feedback, Office Hub, To Do e Power Automate.	Новости, Погода, Solitaire, Clipchamp, Отзывы, Office Hub, To Do и Power Automate.
+Não aplicados: {}	Не применено: {}
+Não desliga o Bing por inteiro: essa opção não existe no Pro.	Не отключает Bing полностью: такой возможности в Pro нет.
+Não melhora, e a latência de rede subiu ao desligar.	Без улучшения, а задержка сети выросла при отключении.
+Não testado nesta build ({}, {}).	Не проверено на этой сборке ({}, {}).
+O Windows continua baixando normalmente da Microsoft.	Windows продолжает загружать обновления от Microsoft как обычно.
+O Windows desfez	Windows это отменила
+O Windows recusou o ponto de restauração. {}	Windows отказала в точке восстановления. {}
+O Windows recusou o ponto de restauração	Windows отказала в точке восстановления
+O passo a passo aparece aqui ao aplicar ou desfazer.	Пошаговый журнал появится здесь при применении или отмене.
+O que o Prisma achou neste PC	Что Prisma нашла на этом ПК
+O que outros otimizadores fazem e o Prisma não	Что делают другие оптимизаторы, а Prisma нет
+O único serviço automático que vale mudar.	Единственная автоматическая служба, которую стоит менять.
+Opcional e com aviso: há relatos de efeito em conquistas do Xbox.	По желанию, с предупреждением: есть сообщения о влиянии на достижения Xbox.
+Pagefile desligado	Файл подкачки выключен
+Paint e análise de dados. O Recall só roda em PCs com NPU.	Paint и анализ данных. Recall работает только на ПК с NPU.
+Parar o serviço de telemetria	Остановить службу телеметрии
+Pede reinício	Нужна перезагрузка
+Perfis	Профили
+Permite instalar pacotes de teste e criar links sem administrador.	Позволяет ставить тестовые пакеты и создавать ссылки без прав администратора.
+Pesquisa sem destaques, nuvem e localização	Поиск без подсветки, облака и местоположения
+Planos Ultimate e Bitsum	Планы Ultimate и Bitsum
+Ponto de restauração criado. {}	Точка восстановления создана. {}
+Pouco ou nada, e um jogo ficou injogável.	Мало или ничего, а одна игра стала неиграбельной.
+Preserva WSL e virtualização, e liga caminhos longos.	Сохраняет WSL и виртуализацию и включает длинные пути.
+Privacidade	Конфиденциальность
+Quebraram Bluetooth; as ferramentas sérias recuaram disso.	Ломали Bluetooth; серьёзные утилиты от этого отказались.
+Questão de gosto	Дело вкуса
+Questão de gosto.	Дело вкуса.
+Reduz o envio de dados até o limite do Pro.	Уменьшает отправляемые данные до предела Pro.
+Reduzem segurança, sem ganho.	Снижают безопасность без выигрыша.
+Relatos	Отчёты
+Remover Edge ou Loja	Удалить Edge или Store
+Remover Notas, Alarmes e Gravador	Удалить Блокнот, Будильники и Звукозапись
+Remover apps que quase ninguém usa	Удалить приложения, которыми почти никто не пользуется
+Remover o app Copilot	Удалить приложение Copilot
+Restauração	Точка восстановления
+Sem ID de publicidade e experiências personalizadas	Без рекламного ID и персонализированного опыта
+Sem conteúdo sugerido e instalação silenciosa de apps	Без предлагаемого контента и тихой установки приложений
+Sem ganho medido. Só evita que o Windows grave os últimos segundos.	Измеренного выигрыша нет. Только мешает Windows записывать последние секунды.
+Sem ganho medido; a purga repetida causou travadas com 32 GB.	Измеренного выигрыша нет; частая очистка вызывала подтормаживания при 32 ГБ.
+Sem gravação em segundo plano do Game Bar	Без фоновой записи Game Bar
+Sem pedidos de feedback e com menos relatórios	Без запросов отзывов и с меньшим числом отчётов
+Sem publicar histórico de atividades	Без публикации журнала действий
+Sem reversão confiável.	Надёжного пути назад нет.
+Sem teste independente em Ryzen 5000.	Нет независимых тестов на Ryzen 5000.
+Serviço de mapas abre só quando precisar	Служба карт запускается только при необходимости
+Sem efeito comprovado.	Эффект не доказан.
+Só leitura: nada foi alterado.	Только чтение: ничего не изменено.
+Só o app. A Microsoft não oferece política clara para o Pro.	Только приложение. Microsoft не даёт ясной политики для Pro.
+Só o que tem efeito comprovado. Tudo pode ser desfeito.	Только то, что доказанно работает. Всё можно отменить.
+Só para este usuário: as políticas equivalentes não valem no Pro.	Только этот пользователь: такие политики не действуют в Pro.
+Tira o painel de notícias.	Убирает панель новостей.
+Transferência em segundo plano não está desativada	Фоновая передача не отключается
+Travou serviços do Xbox; dois projetos removeram.	Она подвешивала службы Xbox; два проекта её убрали.
+Um PC de 32 GB chegou a usar 39 GB de memória reservada.	ПК с 32 ГБ в итоге использовал 39 ГБ зарезервированной памяти.
+Ver discos	Показать диски
+Ver log	Показать журнал
+Verifica o que importa para jogar e tira ruído. Não promete FPS.	Проверяет то, что важно для игр, и убирает лишнее. FPS не обещает.
+Verificando…	Проверка…
+Verificar de novo	Проверить снова
+Virtualização desligada	Виртуализация выключена
+Volta só pela Loja	Возвращается только через Store
+Widgets desligados	Виджеты выключены
+Windows Update não está desativado	Windows Update не отключается
+não existia	не существовало
+outro valor	другое значение
+tipo {}	тип {}
+{} de {}: {}	{} из {}: {}
+Área de transferência sem nuvem	Буфер обмена без облака
+Arquivo	Файл
+Buscar por nome ou empresa	Поиск по имени или компании
+Concluído:	Готово:
+Concluído: {}	Готово: {}
+Confirmar: remover {}	Подтвердить: удалить {}
+Criar ponto de restauração	Создать точку восстановления
+Data	Дата
+Desinstalando	Удаление
+Desinstalar 1	Удалить 1
+Desinstalar {}	Удалить {}
+Limpar {} selecionados	Очистить выбранные ({})
+Manter tudo	Оставить всё
+Nada sobrou.	Ничего не осталось.
+Não abriu:	Не открылось:
+Não abriu: {}	Не открылось: {}
+O que sobrou	Что осталось
+Ordenar por	Сортировка
+Pastas vão para a Lixeira. O registro ganha um backup antes.	Папки уходят в корзину. Реестр сначала сохраняется в копию.
+Ponto de restauração pedido	Точка восстановления запрошена
+Procurando restos…	Поиск остатков…
+Registro	Реестр
+Removendo {}…	Удаление {}…
+Restos limpos	Остатки очищены
+Se o programa abrir a própria janela, siga por ela.	Если программа открывает своё окно, продолжайте там.
+Sem janela quando der	Без окна, когда возможно
+Tamanho	Размер
+{} itens não saíram	Не удалилось элементов: {}
+{} programas instalados.	Установлено программ: {}.
+{} restos encontrados. Confira antes de limpar.	Найдено остатков: {}. Просмотрите их перед очисткой.
+10% por toque	10% за нажатие
+2% por toque	2% за нажатие
+5% por toque	5% за нажатие
+Agora: {} + tecla de volume ou mudo	Сейчас: {} + клавиша громкости/звука
+As teclas de volume do teclado, com o modificador, mudam só o programa em foco.	Клавиши громкости с модификатором меняют только активную программу.
+Em foco	В фокусе
+Modificador (pode combinar dois)	Модификатор (можно сочетать два)
+Mostrar aviso na tela	Показывать уведомление на экране
+Nenhum programa com som agora.	Сейчас ни одна программа не играет звук.
+Passo	Шаг
+Programas com som	Программы со звуком
+Silenciado	Без звука
+Tocando	Играет
+Volume por programa	Громкость по программам
+Anéis	Кольца
+Atalho para ligar e desligar	Клавиши для включения и выключения
+Barras finas	Тонкие полосы
+Instrumento	Прибор
+Mostra CPU, GPU, RAM e VRAM por cima de tudo. Arraste para mudar de lugar.	Показывает CPU, GPU, ОЗУ и видеопамять поверх всего. Перетащите, чтобы переместить.
+Mostrar widget	Показать виджет
+Pílula	Капсула
+Idioma	Язык
+Atualizações	Обновления
+Versão {}	Версия {}
+Procurar agora	Проверить сейчас
+Procurar ao abrir o programa	Проверять при запуске программы
+Procurando…	Проверка…
+Você está na versão mais recente.	У вас последняя версия.
+Versão {} disponível	Доступна версия {}
+Instalar a versão {}	Установить версию {}
+Confirmar: instalar e reiniciar	Подтвердить: установить и перезапустить
+Baixando a atualização… {}%	Загрузка обновления… {}%
+Instalando…	Установка…
+Não consegui acessar o GitHub.	Не удалось связаться с GitHub.
+Ainda não há versão publicada.	Ещё не опубликовано ни одной версии.
+O arquivo baixado não confere. Nada foi alterado.	Загруженный файл не совпадает. Ничего не изменено.
+A atualização não tem a assinatura do Prisma. Nada foi alterado.	У обновления нет подписи Prisma. Ничего не изменено.
+Sem permissão nesta pasta. Reabra como administrador.	Нет прав в этой папке. Откройте снова от имени администратора.
+Não consegui trocar o programa. Nada foi alterado.	Не удалось заменить программу. Ничего не изменено.
+Espere a tarefa em andamento terminar.	Дождитесь завершения текущей задачи.
+Nova versão {} disponível em Configurações	Новая версия {} доступна в настройках
+Atualizado para a versão {}	Обновлено до версии {}
+Busca só o GitHub do Prisma, sem enviar dados seus.	Обращается только к странице Prisma на GitHub и не отправляет ваших данных.
+Programas salvos	Сохранённые программы
+Quem usa o Fullscreenizer uma vez entra na lista. Marque Automático para aplicar sempre que o programa abrir.	Каждая программа, к которой применён Fullscreenizer, попадает в список. Отметьте «Авто», чтобы применять его при каждом запуске программы.
+Nenhum programa ainda. Use o Fullscreenizer em uma janela ou clique em Adicionar.	Программ пока нет. Примените Fullscreenizer к окну или нажмите «Добавить».
+Detalhes	Подробности
+Mostrando {}	Показано: {}
+Ir para detalhes	Перейти к подробностям
+Ver todos os processos	Показать все процессы
+Abrir local do arquivo	Открыть расположение файла
+Pesquisar online	Искать в интернете
+Propriedades	Свойства
+Finalizar tarefa?	Снять задачу?
+{} será fechado à força. O que não foi salvo nesse programa será perdido.	{} будет закрыт принудительно. Всё несохранённое в этой программе пропадёт.
+Parar este serviço?	Остановить эту службу?
+{} vai parar agora. Programas que dependem dele podem deixar de funcionar.	{} сейчас остановится. Зависящие от неё программы могут перестать работать.
+Reiniciar este serviço?	Перезапустить эту службу?
+{} vai parar e iniciar de novo.	{} остановится и запустится снова.
+Botão direito no serviço mostra iniciar, parar, reiniciar e propriedades.	Щёлкните службу правой кнопкой для запуска, остановки, перезапуска и свойств.
+Remover da inicialização?	Убрать из автозагрузки?
+{} deixa de abrir com o Windows. O programa continua instalado.	{} больше не будет запускаться с Windows. Программа остаётся установленной.
+Desinstalar estes programas?	Удалить эти программы?
+{} e mais {}	{} и ещё {}
+Limpar os restos selecionados?	Очистить выбранные остатки?
+Pastas e arquivos vão para a Lixeira. As chaves do registro são apagadas depois de um backup.	Папки и файлы уходят в корзину. Ключи реестра удаляются после резервной копии.
+Restos excluídos	Остатки удалены
+{} itens foram excluídos com sucesso.	Успешно удалено элементов: {}.
+Alguns restos não saíram	Некоторые остатки не удалились
+{} itens excluídos, {} não saíram: {}	Удалено: {}, не удалилось: {}: {}
+Não foi removido: {}	Не удалено: {}
+{} restos encontrados. Só vêm marcados os que têm o nome exato; confira os outros.	Найдено остатков: {}. Отмечены только точные совпадения по имени; проверьте остальные.
+Procurando restos	Поиск остатков
+Criando ponto de restauração…	Создание точки восстановления…
+Ponto de restauração criado	Точка восстановления создана
+Desinstalado: {}	Удалено: {}
+Desinstalando {}…	Удаление {}…
+Na fila: {}	В очереди: {}
+Executar esta ferramenta?	Запустить этот инструмент?
+Outra ferramenta está rodando. Espere terminar.	Работает другой инструмент. Дождитесь его завершения.
+Desfazer tudo?	Отменить всё?
+Todos os ajustes aplicados pelo Prisma voltam ao valor anterior, menos o que foi mudado depois.	Все настройки, применённые Prisma, вернутся к прежним значениям, кроме изменённого позже.
+Aplicar estes ajustes?	Применить эти настройки?
+{} ajustes vão mudar o Windows. Tudo pode ser desfeito depois.	Настроек, которые изменят Windows: {}. Всё можно будет отменить.
+Enviar para a Lixeira?	Отправить в корзину?
+Acima de	Сверху
+GPU 3D	GPU 3D
+Som do sistema ligado: grava todos os sons do PC.	Системный звук включён: записывается весь звук ПК.
+Som do sistema desligado: grava só o som da janela capturada.	Системный звук выключен: записывается только звук захваченного окна.
+Som do sistema desligado: não grava o som do PC. Para gravar um programa só, escolha Janela em foco.	Системный звук выключен: звук ПК не записывается. Чтобы записать одну программу, выберите «Активное окно».
+Instalar no PC?	Установить на этот ПК?
+O Prisma vai para Arquivos de Programas e reabre de lá. O Windows pede permissão de administrador.	Prisma переместится в Program Files и откроется оттуда. Windows запросит права администратора.
+A instalação precisa da permissão de administrador	Для установки нужны права администратора
+Substituir o Gerenciador de Tarefas	Заменить диспетчер задач
+Ligado: Ctrl+Shift+Esc abre o Prisma.	Включено: Ctrl+Shift+Esc открывает Prisma.
+Desligado: Ctrl+Shift+Esc abre o Gerenciador de Tarefas do Windows.	Выключено: Ctrl+Shift+Esc открывает диспетчер задач Windows.
+Ativar	Включить
+Desativar	Выключить
+Devolver o Gerenciador de Tarefas?	Вернуть диспетчер задач?
+Ctrl+Shift+Esc volta a abrir o Gerenciador de Tarefas do Windows.	Ctrl+Shift+Esc снова будет открывать диспетчер задач Windows.
+Substituir o Gerenciador de Tarefas?	Заменить диспетчер задач?
+Ctrl+Shift+Esc passa a abrir o Prisma. Dá para desfazer aqui a qualquer momento.	Ctrl+Shift+Esc будет открывать Prisma. Это можно отменить здесь в любой момент.
+Desligado. Só na versão instalada, por segurança.	Выключено. Только для установленной версии, ради безопасности.
+Instalar a atualização?	Установить обновление?
+O Prisma vai baixar a versão {}, reiniciar e continuar com as suas configurações.	Prisma загрузит версию {}, перезапустится и сохранит ваши настройки.
+Padrão	По умолчанию
+Voltar ao padrão?	Вернуть по умолчанию?
+As opções desta tela voltaram ao padrão	Параметры этой страницы возвращены по умолчанию
+Volta atalhos, pasta, formatos, som e replay ao padrão.	Сбрасывает клавиши, папку, форматы, звук и повтор по умолчанию.
+Volta os planos, a troca automática e o que conta como carga ao padrão.	Сбрасывает планы, автопереключение и то, что считается нагрузкой, по умолчанию.
+Volta o atalho ao padrão e desliga o modo automático de todos os programas. A lista continua salva.	Сбрасывает клавиши по умолчанию и выключает авторежим для всех программ. Список сохраняется.
+Volta as opções de ponto de restauração e de desinstalar sem janela ao padrão.	Сбрасывает параметры точки восстановления и удаления без окна по умолчанию.
+Volta as opções Ver log e Restauração ao padrão. Os ajustes aplicados continuam como estão: para reverter, use Desfazer.	Сбрасывает параметры «Показать журнал» и «Точка восстановления» по умолчанию. Применённые настройки остаются: отмените их кнопкой «Отменить».
+Esvazia as listas de nunca fechar e sempre fechar, e as sugestões recusadas. Essa ação não fecha nenhum programa.	Очищает списки «никогда не закрывать» и «всегда закрывать» и отклонённые предложения. Программы не закрываются.
+Volta o modificador, o passo e o aviso na tela ao padrão.	Сбрасывает модификатор, шаг и уведомление на экране по умолчанию.
+Volta o atalho, o estilo e a posição do widget ao padrão, e esconde o widget.	Сбрасывает клавиши, стиль и положение виджета по умолчанию и скрывает виджет.
+Volta os atalhos de Otimizar, Fechar à força e Reiniciar o Explorer, o idioma e a busca de atualização ao padrão.	Сбрасывает клавиши «Оптимизировать», «Закрыть принудительно» и «Перезапустить Проводник», язык и проверку обновлений по умолчанию.
+Fechar à força	Закрыть принудительно
+Encerra na hora o programa em foco, mesmo travado. O que não foi salvo é perdido.	Сразу завершает активную программу, даже зависшую. Несохранённое пропадёт.
+{} fechado à força	{}: закрыто принудительно
+O Windows protegeu {}	Windows защитила {}
+Som	Звук
+Volume e aparelhos de saída e de entrada de cada programa.	Громкость и устройства вывода и ввода для каждой программы.
+Padrão do Windows	По умолчанию Windows
+Saída	Вывод
+Entrada	Ввод
+Sem som agora	Сейчас нет звука
+Da lista de programas	Из списка программ
+Escolher arquivo .exe	Выбрать файл .exe
+Adicionar programa	Добавить программу
+Voltar	Назад
+Procurando programas…	Поиск программ…
+Nenhum programa encontrado.	Программы не найдены.
+HDR ligado	HDR включён
+HDR desligado, cor ampla	HDR выключен, широкий цвет
+HDR desligado	HDR выключен
+Sem suporte a HDR	Нет поддержки HDR
+Modo	Режим
+Imagem	Изображение
+Profundidade	Глубина
+{} bits	{} бит
+Brilho do SDR	Яркость SDR
+{} nits	{} нит
+Perfil de calibração	Профиль калибровки
+Nenhum perfil de calibração ativo nesta tela.	На этом дисплее нет активного профиля калибровки.
+Neutra	Нейтральный
+Reforço de {}%	Усиление {}%
+Matriz própria	Своя матрица
+Saturação	Насыщенность
+Curva	Кривая
+Corrigida	Исправленная
+Conferem com a tela	Совпадает с дисплеем
+Não conferem com a tela	Не совпадает с дисплеем
+Sem ficha para comparar	Нет данных дисплея для сравнения
+Cores primárias	Основные цвета
+Brilho declarado, em nits	Заявленная яркость, нит
+Pico	Пик
+Preto	Чёрный
+Ficha enviada pela tela	Данные, переданные дисплеем
+Sem leitura direta nesta placa	Нет прямого чтения на этой видеокарте
+Override de EDID em uso	Используется подмена EDID
+Ficha em uso no Windows	Данные, используемые Windows
+Não informado	Не сообщается
+Sem perfil	Нет профиля
+Bloco Dolby Vision	Блок Dolby Vision
+Não declarado	Не заявлено
+O que o Windows informa aos jogos agora	Что Windows сейчас сообщает играм
+A tela declara	Дисплей заявляет
+Guiado pela tela	Под управлением дисплея
+Baixa latência 4:2:2	Низкая задержка 4:2:2
+Guiado pela tela e baixa latência 4:2:2	Под управлением дисплея и низкая задержка 4:2:2
+Guiado pela tela e baixa latência 4:4:4	Под управлением дисплея и низкая задержка 4:4:4
+Modos	Режимы
+Outro valor	Другое значение
+Sem valor salvo	Нет сохранённого значения
+HDR salvo no Windows	HDR, сохранённый в Windows
+Extensão da Store	Расширение из Store
+Instalada	Установлено
+Não instalada	Не установлено
+Saída padrão	Вывод по умолчанию
+Sem suporte	Не поддерживается
+Outro formato	Другой формат
+Som espacial	Пространственный звук
+{} canais · {} kHz	Каналы: {} · {} кГц
+Mistura do Windows	Микшер Windows
+Não encontrada	Не найдено
+App Dolby Access	Приложение Dolby Access
+Instalado	Установлено
+Não instalado	Не установлено
+Canais aceitos	Принимаемые каналы
+O perfil reforça a saturação em {}% e isso vale para todo o conteúdo HDR, inclusive jogos com HDR próprio.	Профиль повышает насыщенность на {}%, и это касается всего HDR-контента, включая игры со своим HDR.
+As cores primárias do perfil não são as desta tela. Isso costuma vir de um perfil feito em outra tela, e os programas que leem esses dados recebem a informação errada.	Основные цвета профиля не совпадают с этим дисплеем. Обычно это профиль, сделанный на другом дисплее, и программы, читающие эти данные, получают неверную информацию.
+O HDR está desligado. O perfil e o valor informado aos jogos mudam quando ele liga, então confira de novo com o HDR ligado.	HDR выключен. Профиль и значение для игр меняются при включении, поэтому проверьте снова с включённым HDR.
+Há um override de EDID nesta tela. O Windows usa os valores dele, não os que a tela envia.	У этого дисплея подмена EDID. Windows использует её значения, а не те, что передаёт дисплей.
+Há um override de EDID nesta tela, e esta placa não permite ler a ficha original.	У этого дисплея подмена EDID, и эта видеокарта не может прочитать исходные данные.
+A tela declara Dolby Vision, mas não o modo 4:4:4 de baixa latência. Segundo relatos, é isso que faz o Windows não mostrar a certificação Dolby Vision.	Дисплей заявляет Dolby Vision, но не режим низкой задержки 4:4:4. По сообщениям пользователей, поэтому Windows не показывает сертификацию Dolby Vision.
+A tela só aceita PCM de 2 canais. Com o som espacial desligado, todo o som do PC sai em estéreo.	Дисплей принимает только 2-канальный PCM. При выключенном пространственном звуке весь звук ПК выводится в стерео.
+O que a tela, o perfil e o Windows estão informando, e a calibração própria.	Что сообщают дисплей, профиль и Windows, плюс ваша собственная калибровка.
+Lendo…	Чтение…
+Ler de novo	Прочитать снова
+Lendo a tela e o perfil…	Чтение дисплея и профиля…
+Não consegui ler as telas.	Не удалось прочитать дисплеи.
+Calibração própria	Своя калибровка
+Você ajusta os padrões a olho e o Prisma grava o resultado como perfil de HDR. Antes de começar, deixe a TV no modo de imagem em que você joga, desligue o mapeamento dinâmico (use HGIG se houver), desligue a luz noturna do Windows e deixe a sala como quando você joga. Leva cerca de 5 minutos e abre em tela cheia.	Вы настраиваете шаблоны на глаз, а Prisma сохраняет результат как HDR-профиль. Перед началом включите на ТВ режим изображения, в котором играете, выключите динамическое тональное отображение (используйте HGIG, если есть), выключите ночной свет Windows и оставьте освещение комнаты как во время игры. Займёт около 5 минут и открывается на весь экран.
+Modo de imagem da TV	Режим изображения ТВ
+Filmmaker	Filmmaker
+Cinema	Кино
+Vívido	Яркий
+Começar calibração	Начать калибровку
+Ligue o HDR para calibrar.	Включите HDR для калибровки.
+Resultado da calibração	Результат калибровки
+Pico em {}% da tela	Пик на {}% экрана
+Vermelho	Красный
+Verde	Зелёный
+Azul	Синий
+Saturação neutra	Нейтральная насыщенность
+Manter reforço de {}%	Оставить усиление {}%
+A forma não sumiu antes de 4000 nits: a TV está suavizando em vez de cortar, e o resultado não é confiável. Desligue o mapeamento dinâmico ou use HGIG e repita.	Фигура не исчезла до 4000 нит: ТВ плавно сглаживает, а не обрезает, поэтому результат ненадёжен. Выключите динамическое тональное отображение или используйте HGIG и попробуйте снова.
+Salvar e ativar	Сохранить и активировать
+Descartar	Отбросить
+Perfis do Prisma	Профили Prisma
+Pico {} · Tela cheia {} · Preto {}	Пик {} · Весь экран {} · Чёрный {}
+Ativo	Активен
+Perfil anterior: {}	Предыдущий профиль: {}
+O Windows não aceitou o perfil.	Windows не приняла профиль.
+Perfil salvo e ativado.	Профиль сохранён и активирован.
+Os padrões estão abertos na tela.	Шаблоны открыты на экране.
+Gravando e conferindo o perfil…	Сохранение и проверка профиля…
+O Windows não aceitou o perfil. O perfil anterior foi mantido.	Windows не приняла профиль. Сохранён предыдущий профиль.
+Não consegui abrir os padrões em HDR.	Не удалось открыть HDR-шаблоны.
+Passo {} de {}: preto	Шаг {} из {}: чёрный
+Passo {} de {}: pico em janela de {}%	Шаг {} из {}: пик в окне {}%
+Passo {} de {}: canal vermelho	Шаг {} из {}: красный канал
+Passo {} de {}: canal verde	Шаг {} из {}: зелёный канал
+Passo {} de {}: canal azul	Шаг {} из {}: синий канал
+Abaixe até as formas sumirem e pare no primeiro valor em que somem. Agora: {} nits. S liga ou desliga a moldura.	Уменьшайте, пока фигуры не исчезнут, и остановитесь на первом таком значении. Сейчас: {} нит. S включает и выключает рамку.
+Aumente até o quadrado escuro do centro sumir no fundo claro e pare no primeiro valor em que some. Agora: {} nits.	Увеличивайте, пока тёмный квадрат в центре не растворится в светлом фоне, и остановитесь на первом таком значении. Сейчас: {} нит.
+← → ajustam · ↑ ↓ ajustam mais rápido · Enter confirma · Backspace volta · H esconde este texto · T troca o caminho (agora pelo Windows) · Esc sai	← → настройка · ↑ ↓ быстрее · Enter подтверждает · Backspace назад · H скрывает текст · T меняет путь (сейчас через Windows) · Esc выход
+← → ajustam · ↑ ↓ ajustam mais rápido · Enter confirma · Backspace volta · H esconde este texto · T troca o caminho (agora direto) · Esc sai	← → настройка · ↑ ↓ быстрее · Enter подтверждает · Backspace назад · H скрывает текст · T меняет путь (сейчас напрямую) · Esc выход
+Perfil ativado. O Windows ainda informa os valores antigos aos jogos.	Профиль активирован. Windows всё ещё сообщает играм старые значения.
+Medir atraso	Измерить задержку
+Medindo…	Измерение…
+Sem som espacial	Без пространственного звука
+Atraso medido	Измеренная задержка
+{}: {} ms	{}: {} мс
+Atraso do som: {} ms	Задержка звука: {} мс
+Ajuste até o clarão e o clique parecerem um só. Para medir com mais precisão, filme com o celular e deixe em 0 ms.	Настраивайте, пока вспышка и щелчок не сольются. Для точного измерения снимите на телефон и оставьте 0 мс.
+← → mudam 5 ms · ↑ ↓ mudam 25 ms · Enter ou Esc guarda e sai	← → на 5 мс · ↑ ↓ на 25 мс · Enter или Esc сохраняет и выходит
+Não consegui abrir o teste.	Не удалось открыть тест.
+Auto HDR por jogo	Auto HDR для каждой игры
+Só para jogos DX11 e DX12 sem HDR próprio. Vale a partir da próxima vez que o jogo abrir.	Только для игр DX11 и DX12 без своего HDR. Применяется при следующем запуске игры.
+O Auto HDR está desligado nas configurações do Windows. Ligue lá para valer.	Auto HDR выключен в параметрах Windows. Включите его там, чтобы это работало.
+Forçar Auto HDR	Принудительно Auto HDR
+Desligar Auto HDR	Выключить Auto HDR
+Não consegui gravar a escolha.	Не удалось сохранить выбор.
+Seta: aponta para algo (A)	Стрелка: указывает на что-то (A)
+Retângulo: destaca uma área (R)	Прямоугольник: выделяет область (R)
+Elipse: circula algo (E)	Эллипс: обводит что-то (E)
+Linha: traça uma reta (L)	Линия: рисует прямую (L)
+Caneta: desenha à mão livre (P)	Перо: рисует от руки (P)
+Marcador: grifa por cima (M)	Маркер: выделяет поверх (M)
+Texto: escreve na imagem (T)	Текст: пишет на изображении (T)
+Número: marca passos em ordem (N)	Номер: отмечает шаги по порядку (N)
+Pixelar: esconde uma parte (B)	Пикселизация: скрывает часть (B)
+Laranja (1)	Оранжевый (1)
+Azul (2)	Синий (2)
+Branco (3)	Белый (3)
+Preto (4)	Чёрный (4)
+Fixar a imagem flutuando na tela (F)	Закрепить изображение на экране (F)
+Salvar na pasta (Ctrl+S)	Сохранить в папку (Ctrl+S)
+Copiar para a área de transferência (Ctrl+C)	Копировать в буфер обмена (Ctrl+C)
+Foto da janela	Снимок окна
+Foto da janela em foco	Снимок активного окна
+Gravar janela	Запись окна
+Gravar tela	Запись экрана
+Gravar Janela	Запись окна
+Gravar Tela	Запись экрана
+Gravar Janela e parar	Запись окна и стоп
+Gravar Tela e parar	Запись экрана и стоп
+O replay grava	Повтор записывает
+Som do sistema desligado: Gravar Janela grava só o som da janela, e Gravar Tela não grava o som do PC.	Системный звук выключен: «Запись окна» записывает только это окно, а «Запись экрана» не записывает звук ПК.
+Editar plano	Изменить план
+Exportar	Экспорт
+Importar	Импорт
+Mostrar ocultas	Показать скрытые
+Na tomada	От сети
+Na bateria	От батареи
+Lendo o plano…	Чтение плана…
+Nenhuma opção encontrada.	Параметры не найдены.
+O Windows não aceitou esse valor	Windows не приняла это значение
+Planos de energia	Планы электропитания
+Plano importado	План импортирован
+Não consegui importar esse arquivo	Не удалось импортировать этот файл
+Plano exportado	План экспортирован
+Não consegui exportar o plano	Не удалось экспортировать план
+Geral	Общие
+Editar	Изменить
+Selecione um plano primeiro	Сначала выберите план
+Manter o som acordado	Не давать звуку засыпать
+Silêncio puro	Полная тишина
+Sinal inaudível	Неслышимый сигнал
+Evita o corte no começo do som em HDMI e Dolby. Para sozinho depois de 10 minutos sem uso.	Убирает обрезку начала звуков на HDMI и Dolby. Останавливается сам после 10 минут простоя.
+Medidor	Счётчик
+Leitor de performance, limitador de FPS e HDR automático por jogo.	Показатели производительности, ограничитель FPS и автоматический HDR для каждой игры.
+Volta atalhos, opacidade, itens e regras ao padrão. A lista de jogos continua salva.	Восстанавливает клавиши, прозрачность, элементы и правила. Список игр сохраняется.
+HDR automático	Автоматический HDR
+Só na lista	Только из списка
+Mostrar compacto	Показать компактно
+Mostrar completo	Показать полностью
+Esconder tudo	Скрыть всё
+Opacidade do compacto	Непрозрачность компактного
+Opacidade do completo	Непрозрачность полного
+O que aparece no completo	Что показывает полный вид
+Fica em uma coluna. A segunda só abre se não couber na tela.	Один столбец. Второй открывается, только если не помещается.
+FPS e médias	FPS и средние
+Frame time	Время кадра
+Latência do PC	Задержка ПК
+Limitador	Ограничитель
+Upscaling	Масштабирование
+Geração de quadros	Генерация кадров
+Reflex	Reflex
+CPU por núcleo	CPU по ядрам
+VRAM e RAM	Видеопамять и ОЗУ
+Disco e rede	Диск и сеть
+Modo de exibição	Режим отображения
+Tempo de jogo	Время в игре
+Jogos	Игры
+Limitando	Ограничение
+Perfil DLSS	Профиль DLSS
+Nenhum jogo ainda. Use Adicionar.	Игр пока нет. Нажмите «Добавить».
+Anti-cheat detectado	Обнаружен античит
+Nenhum anti-cheat detectado	Античит не обнаружен
+Compacto	Компактный
+Completo	Полный
+Manual	Вручную
+Com geração	С генерацией
+FPS real	Реальные FPS
+Ligar	Включить
+Não ligar	Не включать
+Do jogo	Из игры
+Recomendado	Рекомендуется
+Limite gravado. Vale na próxima abertura do jogo.	Ограничение сохранено. Применится при следующем запуске игры.
+Não consegui gravar no driver NVIDIA.	Не удалось записать в драйвер NVIDIA.
+Latência	Задержка
+Medindo {} min	Измерение {} мин
+Flip direto	Прямой вывод (flip)
+Composto pelo Windows	Компоновка Windows
+{} reais + {} gerados	{} реальных + {} сгенерированных
+Média	Среднее
+Só em jogos com Reflex	Только в играх с Reflex
+Limite	Ограничение
+Método	Метод
+Limite do driver	Ограничение драйвером
+Medindo há {} min de {}.	Измерение: {} из {} мин.
+Limite {} vale na próxima abertura do jogo.	Ограничение {} применится при следующем запуске игры.
+Nenhum carregado	Ничего не загружено
+{} · carregado	{} · загружено
+Ligada · {}x	Вкл. · {}x
+{} carregado	{}: загружено
+Não detectada	Не обнаружено
+Integrado no jogo	Встроено в игру
+Não detectado	Не обнаружено
+Pico informado	Заявленный пик
+Sugestão no jogo: pico {} nits · branco 200 nits	Совет для игры: пик {} нит · белый 200 нит
+Núcleo	Ядро
+Memória	Память
+{} MHz · ventoinha {}%	{} МГц · вентилятор {}%
+Variação	Разброс
+{} ms · variação {} ms	{} мс · разброс {} мс
+Medidor compacto	Компактный счётчик
+Medidor completo	Полный счётчик
+Esconder medidor	Скрыть счётчик
+Reportar bug	Сообщить об ошибке
+Preencha aqui. O navegador abre o GitHub com tudo escrito.	Заполните форму. Браузер откроет GitHub, где всё уже написано.
+Função com problema	Функция с проблемой
+Gravidade	Серьёзность
+Leve	Мелкая
+Moderado	Средняя
+Grave	Серьёзная
+Incomoda, mas dá para usar.	Раздражает, но пользоваться можно.
+Atrapalha o uso, mas tem como contornar.	Мешает, но есть обходной путь.
+Trava, fecha, perde dados ou impede o uso.	Зависает, закрывается, теряет данные или мешает работе.
+O que aconteceu? Conte o que fez, o que esperava e o que viu.	Что случилось? Расскажите, что вы сделали, чего ожидали и что увидели.
+Foto (opcional)	Изображение (по желанию)
+Ajuda em bugs visuais. Use o atalho de foto do Prisma, copie e clique em Colar.	Помогает при визуальных ошибках. Используйте клавиши снимка Prisma, скопируйте и нажмите «Вставить».
+Escolher	Выбрать
+Colar	Вставить
+Tirar a foto	Убрать изображение
+Incluir dados do PC e registro	Приложить данные ПК и журнал
+Ver o que vai junto	Что будет отправлено
+A página do GitHub é pública. Nome de usuário, nome do PC e caminhos de arquivo não vão junto.	Страницы GitHub публичны. Имя пользователя, имя ПК и пути к файлам не включаются.
+Enviar pelo navegador	Отправить через браузер
+Enviar direto	Отправить напрямую
+Outra coisa	Другое
+Se o GitHub pedir, entre na sua conta. O texto continua lá depois.	Если GitHub попросит, войдите в свою учётную запись. Текст останется там.
+O texto era grande demais para o endereço: clique na descrição, selecione tudo e aperte Ctrl+V.	Текст слишком длинный для ссылки: щёлкните описание, выделите всё и нажмите Ctrl+V.
+Clique em Copiar a foto, depois clique no fim da descrição e aperte Ctrl+V.	Нажмите «Копировать изображение», затем щёлкните в конце описания и нажмите Ctrl+V.
+Clique no fim da descrição e aperte Ctrl+V: a foto já está copiada.	Щёлкните в конце описания и нажмите Ctrl+V: изображение уже скопировано.
+Confira o texto e clique em Create no GitHub.	Проверьте текст и нажмите Create на GitHub.
+Falta só confirmar no navegador	Осталось только подтверждение в браузере
+Copiar a foto	Копировать изображение
+Copiar o relatório	Копировать отчёт
+Abrir de novo	Открыть снова
+Voltar ao formulário	Назад к форме
+Novo relatório	Новый отчёт
+Falando com o GitHub...	Связь с GitHub...
+Digite este código na página que abriu	Введите этот код на открывшейся странице
+Depois de autorizar, o Prisma cria a página sozinho. A autorização vale só para este envio e não fica guardada.	После авторизации Prisma сама создаст страницу. Авторизация только для этого отчёта и не сохраняется.
+Enviando...	Отправка...
+Relatório enviado. Obrigado!	Отчёт отправлен. Спасибо!
+A página abriu no navegador. A foto está copiada: clique no campo de comentário, aperte Ctrl+V e clique em Comment.	Страница открылась в браузере. Изображение скопировано: щёлкните поле комментария, нажмите Ctrl+V, затем Comment.
+A página abriu no navegador.	Страница открылась в браузере.
+Não deu para enviar direto	Не удалось отправить напрямую
+Não consegui falar com o GitHub.	Не удалось связаться с GitHub.
+O código expirou. Tente de novo.	Срок действия кода истёк. Попробуйте снова.
+O GitHub recusou a autorização.	GitHub отклонил авторизацию.
+Função	Функция
+Versão	Версия
+O que aconteceu	Что случилось
+Foto	Изображение
+Apague esta linha e cole a foto aqui (Ctrl+V).	Удалите эту строку и вставьте сюда изображение (Ctrl+V).
+O texto não coube no endereço. Apague esta linha e cole o relatório completo (Ctrl+V).	Текст не поместился в ссылку. Удалите эту строку и вставьте полный отчёт (Ctrl+V).
+Dados do PC e registro	Данные ПК и журнал
+Não há imagem copiada	Нет скопированного изображения
+Relatório copiado	Отчёт скопирован
+Não consegui abrir o navegador	Не удалось открыть браузер
+Não consegui abrir essa imagem	Не удалось открыть это изображение
+Imagens	Изображения
+O Prisma fechou sozinho da última vez. Se puder, conte em Reportar bug.	В прошлый раз Prisma неожиданно закрылась. Если можете, расскажите об этом в «Сообщить об ошибке».
+Abra um jogo para usar o limitador.	Откройте игру, чтобы использовать ограничитель.
+Abra um jogo para gravar o registro.	Откройте игру, чтобы записать журнал.
+Registro iniciado	Журнал запущен
+Não consegui criar a pasta do registro	Не удалось создать папку журнала
+Registro salvo em Documentos\Prisma\Logs	Журнал сохранён в Документы\Prisma\Logs
+Sem limite	Без ограничения
+Limite {}	Ограничение {}
+Sem driver NVIDIA	Нет драйвера NVIDIA
+Ativo agora	Активно сейчас
+{} FPS	{} FPS
+O novo limite vale ao reabrir o jogo.	Новое ограничение применится после перезапуска игры.
+Ligar: {}	Включить: {}
+Ajustar: {} · {}	Настроить: {} · {}
+Gravando	Запись
+Duração	Длительность
+Ligar e desligar: {}	Старт и стоп: {}
+Ligar e desligar	Старт и стоп
+Registro ligado	Журнал запущен
+Registro salvo	Журнал сохранён
+Registro {}	Журнал {}
+Sem quadros agora	Сейчас нет кадров
+Limitador durante o jogo	Ограничитель во время игры
+Com o jogo aberto, estes atalhos mudam o limite dele, e o medidor completo mostra o resultado.	Когда игра открыта, эти клавиши меняют её ограничение, а полный счётчик показывает результат.
+O driver NVIDIA só lê o limite quando o jogo abre, então a mudança vale ao reabrir o jogo.	Драйвер NVIDIA читает ограничение только при запуске игры, поэтому изменение применится после перезапуска игры.
+Ligar ou desligar	Включить или выключить
+Aumentar o limite	Поднять ограничение
+Diminuir o limite	Снизить ограничение
+Ligar o limitador	Включить ограничитель
+Registro de dados	Журнал данных
+Grava cada quadro, cada segundo e a CPU de cada thread do jogo, para estudar desempenho. Só roda se você ligar.	Записывает каждый кадр, каждую секунду и CPU каждого потока игры для анализа производительности. Работает, только если включить.
+5 minutos	5 минут
+10 minutos	10 минут
+Abrir pasta	Открыть папку
+Começar sozinho quando um jogo abrir	Начинать само при запуске игры
+Pronto para gravar	Готово к записи
+Abra um jogo para iniciar	Откройте игру, чтобы начать
+Quadros	Кадры
+FPS médio	Средний FPS
+Frame time mediano	Медианное время кадра
+Frame time p95	Время кадра p95
+Frame time p99	Время кадра p99
+Frame time p99,9	Время кадра p99.9
+Pior quadro	Худший кадр
+Engasgos	Подтормаживания
+CPU média	Средний CPU
+Núcleo lógico mais usado	Самое загруженное логическое ядро
+GPU média	Средний GPU
+Pico de VRAM	Пик видеопамяти
+Pico de RAM	Пик ОЗУ
+Threads mais ocupadas, em % de um núcleo	Самые загруженные потоки, в % одного ядра
+média	среднее
+pico	пик
+Limite ativo	Активное ограничение
+Leitura: GPU cheia na maior parte do tempo, então o limite parece ser a GPU.	Вывод: GPU загружен почти всё время, похоже, упор в GPU.
+Leitura: uma thread perto de um núcleo inteiro com a GPU sobrando, então o limite parece ser a CPU.	Вывод: один поток близок к полному ядру при свободном GPU, похоже, упор в CPU.
+Leitura: nem GPU nem uma thread sozinha ficaram cheias. Veja os trechos em segundos.csv.	Вывод: ни GPU, ни отдельный поток не были загружены полностью. Посмотрите отрезки в segundos.csv.
+Fechar {} {} e liberar {} GB?	Закрыть {} {} и освободить {3} ГБ?
+Posição do compacto	Положение компактного
+Posição do completo	Положение полного
+Superior esquerdo	Слева сверху
+Superior centro	Сверху по центру
+Superior direito	Справа сверху
+Lado direito	Справа
+Lado esquerdo	Слева
+Injeção	Внедрение
+Driver	Драйвер
+Injeção, aguardando	Внедрение, ожидание
+Injeção desligada	Внедрение выключено
+Injeção desligada: o jogo caiu com ela.	Внедрение выключено: игра с ним падала.
+Injeção desligada: o jogo caiu	Внедрение выключено: игра упала
+Injeção bloqueada: anti-cheat detectado.	Внедрение заблокировано: обнаружен античит.
+Injeção parada: geração de quadros carregada.	Внедрение остановлено: загружена генерация кадров.
+A injeção não carregou neste jogo.	Внедрение не загрузилось в этой игре.
+Usar injeção neste jogo?	Использовать внедрение в этой игре?
+O limite passa a mudar na hora, mas um módulo do Prisma entra no jogo, e isso pode derrubá-lo. Não use em jogo online: um anti-cheat pode punir mesmo sem ter sido detectado aqui. Se o jogo cair, a injeção desliga sozinha.	Ограничение меняется сразу, но в игру входит модуль Prisma, что может её обрушить. Не используйте в сети: античит может наказать, даже если здесь он не обнаружен. Если игра упадёт, внедрение выключится само.
+Com injeção, o limite muda na hora.	С внедрением ограничение меняется сразу.
+Pelo driver NVIDIA, a mudança vale ao reabrir o jogo. Com o método Injeção, ela vale na hora.	Через драйвер NVIDIA изменение применяется после перезапуска игры. Методом «Внедрение» — сразу.
+Controles do medidor	Управление счётчиком
+Controles no medidor	Управление в счётчике
+Controles: {}	Управление: {}
+Setas ou mouse mudam. Esc fecha.	Меняется стрелками или мышью. Esc закрывает.
+Limite pelo driver	Ограничение драйвером
+Limite pelo driver: a injeção falhou	Ограничение драйвером: внедрение не удалось
+O jogo caiu. Limite vale ao reabrir.	Игра упала. Ограничение применится после перезапуска.
+Anti-cheat: limite vale ao reabrir.	Античит: ограничение применится после перезапуска.
+Injeção falhou. Limite vale ao reabrir.	Внедрение не удалось. Ограничение применится после перезапуска.
+O novo perfil vale ao reabrir o jogo.	Новый профиль применится после перезапуска игры.
+A injeção muda o limite na hora. Se falhar ou houver anti-cheat, ele vai para o driver e vale ao reabrir o jogo.	Внедрение меняет ограничение сразу. Если оно не удастся или найдёт античит, драйвер подхватит после перезапуска игры.
+{} FPS · injeção	{} FPS · внедрение
+Boas-vindas ao Prisma	Добро пожаловать в Prisma
+Escolha como ele vai ficar neste PC. Tudo isso muda depois em Configurações.	Выберите, как она будет работать на этом ПК. Всё это можно изменить позже в настройках.
+Vai para Arquivos de Programas, ganha atalho no menu Iniciar e abre com o Windows. Sem isso, roda daqui mesmo, como portátil.	Переходит в Program Files, получает ярлык в меню «Пуск» и запускается с Windows. Без этого работает отсюда как портативная версия.
+Dar permissão de administrador	Дать права администратора
+Libera o Medidor, a rede por programa, a saúde dos discos e a leitura rápida do NTFS. Abre sem perguntar.	Открывает счётчик, сеть по программам, здоровье дисков и быстрое сканирование NTFS. Запускается без вопросов.
+Libera o Medidor, a rede por programa, a saúde dos discos e a leitura rápida do NTFS. Sem instalar, o Windows pede permissão a cada abertura.	Открывает счётчик, сеть по программам, здоровье дисков и быстрое сканирование NTFS. Без установки Windows спрашивает при каждом запуске.
+Ctrl+Shift+Esc passa a abrir o Prisma. O Gerenciador do Windows volta quando você quiser.	Ctrl+Shift+Esc открывает Prisma. Диспетчер задач Windows можно вернуть в любой момент.
+Só na versão instalada. Em outra pasta, qualquer programa pode trocar o arquivo que o atalho abre.	Только для установленной версии. В любой другой папке любая программа может подменить файл, который открывают клавиши.
+Precisa instalar	Нужна установка
+Não mostrar novamente	Больше не показывать
+Não mostrar de novo	Больше не показывать
+Abrir o guia	Открыть руководство
+Continuar	Продолжить
+Já feito	Уже сделано
+Guia e tutorial	Руководство и обучение
+Guia	Руководство
+O que cada função faz, o que dá e o que não dá para fazer.	Что делает каждая функция, что она может и чего не может.
+Iniciar com o Windows	Запускать с Windows
+Sempre abrir como administrador	Всегда открывать от имени администратора
+Procurar atualizações sozinho, uma vez por dia	Самостоятельно искать обновления раз в день
+Mostrar as boas-vindas ao abrir	Показывать приветствие при запуске
+Nova atualização disponível	Доступно новое обновление
+A versão {} está pronta. Quer atualizar agora?	Версия {} готова. Обновить сейчас?
+Essas escolhas precisam da permissão de administrador	Эти параметры требуют прав администратора
+Não consegui substituir o Gerenciador de Tarefas.	Не удалось заменить диспетчер задач.
+A atualização precisa da permissão de administrador	Для обновления нужны права администратора
+Enter aplica. Esc cancela.	Enter применяет. Esc отменяет.
+Setas, mouse ou números. Esc fecha.	Стрелки, мышь или цифры. Esc закрывает.
+0,1% low	0,1% низких
+Buscar por nome ou PID	Поиск по имени или PID
+Nenhum processo com esse nome ou PID	Нет процесса с таким именем или PID
+Reiniciar o Explorer	Перезапустить Проводник
+Reiniciar o Explorer?	Перезапустить Проводник?
+A barra de tarefas e a área de trabalho somem por alguns segundos e voltam sozinhas. As janelas de pasta abertas fecham.	Панель задач и рабочий стол исчезнут на несколько секунд и вернутся сами. Открытые окна папок закроются.
+Aperte {} de novo para reiniciar o Explorer	Нажмите {} ещё раз, чтобы перезапустить Проводник
+Reiniciando o Explorer…	Перезапуск Проводника…
+Explorer reiniciado	Проводник перезапущен
+O Windows não deixou fechar o Explorer	Windows не дала Prisma закрыть Проводник
+Reiniciar agora	Перезапустить сейчас
+Novidades	Что нового
+O que mudou da versão {} para a {}	Что изменилось с версии {} до {}
+O que mudou em cada versão	Что менялось в каждой версии
+Ver todas as versões	Все версии
+O Windows não deixou trocar o Gerenciador	Windows не дала Prisma заменить диспетчер задач
+Algumas versões do Windows protegem essa troca até de administrador. O Prisma passou a pegar o Ctrl+Shift+Esc ele mesmo, enquanto estiver aberto. O Ctrl+Alt+Del e o menu da barra de tarefas ainda abrem o Gerenciador do Windows.	Некоторые версии Windows защищают это изменение даже от администраторов. Теперь Prisma сама перехватывает Ctrl+Shift+Esc, пока открыт. Ctrl+Alt+Del и меню панели задач по-прежнему открывают диспетчер задач Windows.
+Ligado pelo atalho: Ctrl+Shift+Esc abre o Prisma.	Включено через перехват: Ctrl+Shift+Esc открывает Prisma.
+Pesquisar	Поиск
+Pesquisar arquivos	Поиск файлов
+Acha arquivos e pastas pelo nome em todos os discos, enquanto você digita.	Находит файлы и папки по имени на всех дисках по мере ввода.
+Ligar a pesquisa	Включить поиск
+O Prisma guarda os nomes de todos os arquivos dos seus discos num índice, e a pesquisa responde enquanto você digita. O índice usa memória: cerca de 70 MB a cada milhão de arquivos.	Prisma хранит имена всех файлов на дисках в индексе, и поиск отвечает по мере ввода. Индекс использует память: около 70 МБ на миллион файлов.
+Com o Prisma como administrador, o índice fica pronto em segundos e se atualiza na hora em que um arquivo muda.	Если Prisma запущена от имени администратора, индекс готов за секунды и обновляется сразу при изменении файла.
+Sem administrador, o Prisma percorre as pastas, o que demora mais, e atualiza o índice a cada 15 minutos.	Без прав администратора Prisma обходит папки, что дольше, и обновляет индекс каждые 15 минут.
+Discos com problema de saúde ficam de fora, para não forçar o disco. Dá para incluir em Opções.	Диски с проблемами здоровья исключаются, чтобы не нагружать их. Их можно включить в «Параметрах».
+Atalho: {} abre a pesquisa por cima de qualquer programa.	Клавиши: {} открывает поиск поверх любой программы.
+Opções	Параметры
+Atalho da janelinha	Клавиши всплывающего окна
+Ler os discos de novo	Прочитать диски снова
+Desligar	Выключить
+Desligar a pesquisa?	Выключить поиск?
+O índice sai da memória e do disco. Ao ligar de novo, os discos são lidos outra vez.	Индекс удаляется из памяти и с диска. При повторном включении диски будут прочитаны снова.
+Disco com problema de saúde: ler ele inteiro força o disco	Диск с проблемами здоровья: полное чтение нагружает диск
+Nome do arquivo ou da pasta	Имя файла или папки
+Pesquisar arquivos e pastas	Поиск файлов и папок
+Modificado	Изменён
+Abrir	Открыть
+Mostrar na pasta	Показать в папке
+Copiar caminho	Копировать путь
+Caminho copiado	Путь скопирован
+Apagado ou movido	Удалён или перемещён
+Nada encontrado.	Ничего не найдено.
+O índice ainda está sendo preparado.	Индекс ещё готовится.
+Preparando o índice…	Подготовка индекса…
+Conferindo a saúde dos discos…	Проверка здоровья дисков…
+Digite parte do nome. Dicas: ext:pdf só PDFs · pasta: só pastas · *.mp4 com curinga · !palavra tira · docs\nota procura no caminho	Введите часть имени. Подсказки: ext:pdf только PDF · folder: только папки · *.mp4 шаблон · !слово исключает · docs\note ищет в пути
+Enter abre · Ctrl+Enter mostra na pasta · Ctrl+C copia o caminho	Enter открывает · Ctrl+Enter показывает в папке · Ctrl+C копирует путь
+ext:pdf só PDFs · pasta: só pastas · *.mp4 curinga · !palavra tira	ext:pdf только PDF · folder: только папки · *.mp4 шаблон · !слово исключает
+atualiza na hora	обновляется мгновенно
+atualiza a cada 15 minutos	обновляется каждые 15 минут
+{} itens em {} · {} de memória · {}	Элементов: {} на {} · {} памяти · {}
+{} encontrados · {} ms	Найдено: {} · {} мс
+{} encontrados, mostrando {} · {} ms	Найдено: {}, показано {} · {} мс
+Lendo o disco {}: {}%	Чтение диска {}: {}%
+Lendo o disco {}: {} itens	Чтение диска {}: элементов {}
+Ctrl + Alt + Espaço	Ctrl + Alt + Пробел
+{} + Espaço	{} + Пробел
+Programa instalado	Установленная программа
+Pesquisar no {}	Искать в {}
+Perguntar ao {}	Спросить {}
+Copia a pergunta	Копирует вопрос
+Rodar no PowerShell	Выполнить в PowerShell
+Rodar no CMD	Выполнить в CMD
+Cmdlet do PowerShell	Командлет PowerShell
+Função do PowerShell	Функция PowerShell
+Atalho para {}	Псевдоним для {}
+Parâmetro de {}	Параметр {}
+Do histórico	Из истории
+Pergunta copiada: cole com Ctrl+V	Вопрос скопирован: вставьте его через Ctrl+V
+O comando não abriu como administrador	Команда не открылась от имени администратора
+Não deu para abrir o terminal	Не удалось открыть терминал
+Texto copiado	Текст скопирован
+Com o aplicativo instalado, a IA abre nele. Quando não dá para levar a pergunta pronta, ela vai copiada: cole com Ctrl+V.	Если приложение установлено, ИИ открывается в нём. Если вопрос нельзя передать готовым, он копируется: вставьте его через Ctrl+V.
+Na pesquisa também	Также в поиске
+Programas instalados primeiro	Сначала установленные программы
+Programas do menu Iniciar que combinam com o texto aparecem no topo. Enter abre, Ctrl+Shift+Enter abre como administrador.	Программы меню «Пуск», подходящие под текст, показываются сверху. Enter открывает, Ctrl+Shift+Enter — от имени администратора.
+Pesquisar na internet e perguntar a IAs	Искать в интернете и спрашивать ИИ
+O texto vira pesquisa no navegador padrão ou pergunta a uma IA. Perguntas vêm no topo; o resto, depois dos primeiros arquivos.	Текст становится поиском в браузере по умолчанию или вопросом к ИИ. Вопросы идут сверху; остальное — после первых файлов.
+Comandos com > (PowerShell e CMD)	Команды с > (PowerShell и CMD)
+Comece com > para rodar um comando. Enter roda sem administrador, Ctrl+Shift+Enter como administrador, Tab completa.	Начните с >, чтобы выполнить команду. Enter выполняет без прав администратора, Ctrl+Shift+Enter — с ними, Tab дополняет.
+Completar como o terminal	Дополнять как терминал
+Mantém um PowerShell escondido enquanto você digita um comando, para completar caminhos, parâmetros e o histórico como o terminal. Ele fecha sozinho depois de 2 minutos parado.	Держит скрытый PowerShell, пока вы вводите команду, чтобы дополнять пути, параметры и историю как терминал. Закрывается сам после 2 минут простоя.
+Lista de comandos: {}	Список команд: {}
+Lendo a lista de comandos…	Чтение списка команд…
+Buscadores e IAs	Поисковики и ИИ
+Aplicativo instalado: abre nele	Установленное приложение: открывается в нём
+Digite um comando do PowerShell ou do CMD.	Введите команду PowerShell или CMD.
+Digite parte do nome. Dicas: ext:pdf só PDFs · pasta: só pastas · *.mp4 com curinga · !palavra tira · docs\nota procura no caminho · > roda um comando	Введите часть имени. Подсказки: ext:pdf только PDF · folder: только папки · *.mp4 шаблон · !слово исключает · docs\note ищет в пути · > выполняет команду
+> roda um comando · ext:pdf só PDFs · pasta: só pastas · *.mp4 curinga	> выполняет команду · ext:pdf только PDF · folder: только папки · *.mp4 шаблон
+Enter abre · Ctrl+Shift+Enter como administrador · Ctrl+Enter mostra na pasta	Enter открывает · Ctrl+Shift+Enter от администратора · Ctrl+Enter показывает в папке
+Enter abre · Ctrl+C copia o texto	Enter открывает · Ctrl+C копирует текст
+Enter roda · Ctrl+Shift+Enter como administrador · Tab completa	Enter выполняет · Ctrl+Shift+Enter от администратора · Tab дополняет
+Enter ou Tab completa · Esc fecha	Enter или Tab дополняет · Esc закрывает
+Compartilhar tela	Общий экран
+Acesso remoto e co-op pela internet, sem conta. Em teste.	Удалённый доступ и совместная игра по сети, без учётной записи. Тестируется.
+Este PC	Этот ПК
+O serviço do Windows compartilha este PC, inclusive a tela de bloqueio.	Служба Windows раздаёт этот ПК, включая экран блокировки.
+Compartilhando. Os aparelhos pareados já podem conectar.	Раздача идёт. Сопряжённые устройства уже могут подключиться.
+Desligado.	Выключено.
+Quem parear agora pode	Кто сопряжётся сейчас, сможет
+Criar convite	Создать приглашение
+Compartilhar este PC	Раздавать этот ПК
+Copiar convite	Копировать приглашение
+Convite copiado. Vale 10 minutos e uma vez.	Приглашение скопировано. Действует один раз, 10 минут.
+Nenhum convite ainda	Приглашения пока нет
+Convite pronto: mande para o outro PC. Ele vale 10 minutos e uma vez, e a confirmação aparece aqui.	Приглашение готово: отправьте его на другой ПК. Действует один раз, 10 минут, а подтверждение появится здесь.
+O convite aparece quando o compartilhamento liga.	Приглашение появится, когда начнётся раздача.
+Desligar o HDR quando quem assiste não tem HDR	Выключать HDR, если у зрителя нет HDR
+Pessoas ao mesmo tempo	Человек одновременно
+Controles virtuais	Виртуальные геймпады
+Serviço do Windows instalado	Служба Windows установлена
+Serviço do Windows	Служба Windows
+Para usar a tela de bloqueio, o UAC e o Ctrl+Alt+Del de longe. Pede administrador.	Для удалённого доступа к экрану блокировки, UAC и Ctrl+Alt+Del. Нужны права администратора.
+Aguarde	Подождите
+Remover	Удалить
+Instalar	Установить
+Remover o serviço?	Удалить службу?
+O compartilhamento da tela de bloqueio para, e os aparelhos pareados voltam para este usuário.	Раздача экрана блокировки прекратится, и сопряжённые устройства вернутся к этому пользователю.
+Instalar o serviço?	Установить службу?
+O Prisma vai pedir administrador e mostrar o que muda no Windows antes de instalar. O serviço liga com o PC, mesmo antes do login.	Prisma запросит права администратора и покажет, что изменится в Windows, до установки. Служба запускается вместе с ПК, ещё до входа в систему.
+Pela internet, a conexão usa o iroh (n0, licença MIT ou Apache-2.0). Sem caminho direto nem VPN, os pacotes passam pelos relés públicos da n0, sempre criptografados de ponta a ponta.	Через интернет соединение использует iroh (n0, лицензия MIT или Apache-2.0). Без прямого пути или VPN пакеты идут через публичные ретрансляторы n0, всегда со сквозным шифрованием.
+Aparelhos pareados	Сопряжённые устройства
+Parear com outro PC	Сопряжение с другим ПК
+Convite do outro PC	Приглашение с другого ПК
+Parear	Сопрячь
+Isso não parece um convite do Prisma	Это не похоже на приглашение Prisma
+Nenhum aparelho pareado. Ligue o compartilhamento neste PC e cole o convite no outro, ou o contrário.	Нет сопряжённых устройств. Начните раздачу на этом ПК и вставьте приглашение на другом, или наоборот.
+Esquecer	Забыть
+Controle	Геймпад
+Teclado	Клавиатура
+Copiar e colar	Копирование и вставка
+Tela segura	Защищённый экран
+Perguntar a cada conexão	Спрашивать при каждом подключении
+Assistir	Смотреть
+Não deu para salvar. Com o serviço, abra o Prisma como administrador.	Не удалось сохранить. При установленной службе откройте Prisma от имени администратора.
+Esquecer este aparelho?	Забыть это устройство?
+«{}» vai precisar de um convite novo para conectar.	Для подключения «{}» понадобится новое приглашение.
+Só ver	Только просмотр
+Ver e usar controle	Просмотр и геймпад
+Ver, controle, teclado e mouse	Просмотр, геймпад, клавиатура и мышь
+Acesso total	Полный доступ
+Esta cópia do Prisma foi compilada sem o compartilhamento.	Эта сборка Prisma собрана без общего экрана.
+Serviço instalado e ligado. Para parear um aparelho novo, use Criar convite na página Compartilhar tela.	Служба установлена и работает. Чтобы сопрячь новое устройство, нажмите «Создать приглашение» на странице «Общий экран».
+O serviço não foi instalado: {}	Служба не установлена: {}
+Serviço removido.	Служба удалена.
+Instalar o serviço de compartilhar tela do Prisma?	Установить службу общего экрана Prisma?
+O que ele faz: roda como SYSTEM (o nível mais alto do Windows) e começa junto com o Windows. Com ele, os aparelhos pareados conseguem ver e usar o aviso do UAC, a tela de bloqueio e a do PIN, inclusive depois de o PC reiniciar sozinho. Mexer na tela segura e mandar Ctrl+Alt+Del pede a permissão "Tela segura" (ou Acesso total) no aparelho.	Что она делает: работает как SYSTEM (высший уровень в Windows) и запускается вместе с Windows. С ней сопряжённые устройства видят и могут использовать запрос UAC, экран блокировки и экран PIN, даже после самостоятельной перезагрузки ПК. Для защищённого экрана и отправки Ctrl+Alt+Del устройству нужно разрешение «Защищённый экран» (или «Полный доступ»).
+O que muda no PC:	Что изменится на ПК:
+• uma cópia do Prisma em Arquivos de Programas\PrismaServico;	• копия Prisma в Program Files\PrismaServico;
+• a identidade e os aparelhos pareados passam para ProgramData\Prisma\compartilhar, que só o SYSTEM, os administradores e você abrem;	• идентификатор и сопряжённые устройства переносятся в ProgramData\Prisma\compartilhar, куда есть доступ только у SYSTEM, администраторов и вас;
+• o serviço "Prisma: compartilhar tela".	• служба "Prisma: compartilhar tela".
+Para tirar tudo: Remover, na página Compartilhar tela do Prisma.	Чтобы всё отменить: «Удалить» на странице «Общий экран» в Prisma.
+Permitir o Ctrl+Alt+Del de longe?	Разрешить удалённый Ctrl+Alt+Del?
+Para isso, o Windows pede uma política: "SoftwareSASGeneration" igual a 1, que deixa serviços gerarem o Ctrl+Alt+Del. Ela é desfeita quando o serviço for removido.	Для этого Windows нужна политика: "SoftwareSASGeneration" со значением 1, которая позволяет службам генерировать Ctrl+Alt+Del. Отменяется при удалении службы.
+Sem ela, o resto funciona; só o Ctrl+Alt+Del não.	Без неё всё остальное работает; не работает только Ctrl+Alt+Del.
+Remover o serviço de compartilhar tela do Prisma?	Удалить службу общего экрана Prisma?
+Os aparelhos pareados voltam para a pasta de sempre do Prisma, e a política do Ctrl+Alt+Del volta como estava.	Сопряжённые устройства вернутся в обычную папку Prisma, а политика Ctrl+Alt+Del — в прежнее состояние.
+«{}» quer parear com este PC.	«{}» хочет сопрячься с этим ПК.
+Permissões: {}.	Разрешения: {}.
+Código de confirmação: {}	Код подтверждения: {}
+Confira se o outro PC mostra o mesmo código. Se não mostrar, clique em Cancelar.	Убедитесь, что на другом ПК тот же код. Если нет, нажмите «Отмена».
+Sim: confiar neste aparelho.	Да: доверять этому устройству.
+Não: parear, mas perguntar a cada conexão.	Нет: сопрячь, но спрашивать при каждом подключении.
+Cancelar: recusar.	Отмена: отказать.
+«{}» quer se conectar a este PC.	«{}» хочет подключиться к этому ПК.
+Permitir?	Разрешить?
+Conectados agora:	Подключены сейчас:
+Ctrl+Alt+Shift+Q, neste PC, desconecta todo mundo na hora.	Ctrl+Alt+Shift+Q на этом ПК отключает всех сразу.
+Compartilhar	Раздача
+Host	Хост
+Cliente	Просмотр
+Atalhos	Сочетания клавиш
+Controles	Геймпады
+Parear com este convite?	Сопрячь по этому приглашению?
+Chegou o convite {}. Os dois PCs vão mostrar um código de confirmação de seis dígitos: confira antes de aceitar no outro PC.	Пришло приглашение {}. Оба ПК покажут шестизначный код подтверждения: сверьте его, прежде чем принять на другом ПК.
+Não deu para salvar as opções de quem assiste.	Не удалось сохранить параметры просмотра.
+Convite criado	Приглашение создано
+Publicando o código nos relés...	Публикация кода на ретрансляторах...
+Pronto. Vale 10 minutos e uma vez.	Готово. Действует 10 минут и один раз.
+Os relés não responderam: mande o convite longo.	Ретрансляторы не ответили: отправьте длинное приглашение.
+No outro PC, digite o código em Parear com outro PC, ou mande o link: ele abre o Prisma e pareia depois de perguntar.	На другом ПК введите код в «Сопряжение с другим ПК» или отправьте ссылку: она откроет Prisma и выполнит сопряжение после вопроса.
+Copiar código	Копировать код
+Código copiado. Vale 10 minutos e uma vez.	Код скопирован. Действует 10 минут и один раз.
+Copiar link	Копировать ссылку
+Link copiado. Vale 10 minutos e uma vez.	Ссылка скопирована. Действует 10 минут и один раз.
+Convite do Prisma para ver este PC:	Приглашение Prisma для просмотра этого ПК:
+Convite do Prisma	Приглашение Prisma
+Copiar convite longo	Копировать длинное приглашение
+Ligado pelo serviço do Windows.	Работает через службу Windows.
+Último convite:	Последнее приглашение:
+Mostrar	Показать
+Os aparelhos pareados conectam quando o compartilhamento está ligado.	Сопряжённые устройства подключаются, пока идёт раздача.
+Código ou convite do outro PC	Код приглашения с другого ПК
+Isso não parece um código do Prisma	Это не похоже на код Prisma
+Conexão pela internet	Подключение через интернет
+Nenhum aparelho pareado. Crie um convite neste PC e digite o código no outro, ou o contrário.	Нет сопряжённых устройств. Создайте приглашение на этом ПК и введите код на другом, или наоборот.
+Nome deste PC	Имя этого ПК
+Monitor	Монитор
+Principal	Основной
+Resolução máxima	Максимальное разрешение
+Quadros por segundo	Кадров в секунду
+Ritmo dos quadros	Темп кадров
+Só quando a tela muda	При изменении экрана
+Constante	Постоянный
+Prioridade	Приоритет
+Menor atraso	Минимальная задержка
+Equilíbrio	Баланс
+Qualidade	Качество
+Codec	Кодек
+Limite de banda	Ограничение полосы
+HDR10 de 10 bits quando as duas telas estão em HDR	10-битный HDR10, когда оба экрана в HDR
+Aceitar 4:4:4 quando quem assiste pede	Принимать 4:4:4 по запросу зрителя
+Os automáticos seguem quem assiste: a altura da tela, o menor entre os Hz dos dois lados e o melhor codec que os dois têm. O 4:4:4 e o HDR10 caem sozinhos se o outro lado não tiver.	Автоматические значения подстраиваются под зрителя: высота его экрана, меньшая частота из двух сторон и лучший общий кодек. 4:4:4 и HDR10 отключаются сами, если у другой стороны их нет.
+Som, mouse e teclado	Звук, мышь и клавиатура
+Som que vai	Передаваемый звук
+Todo o PC	Весь ПК
+Só	Только
+Tirar do som o programa de chamada	Не передавать звук приложения для звонков
+Uma pessoa por vez no mouse e no teclado	Мышь и клавиатура — по одному человеку
+O mouse e o teclado deste PC têm prioridade	Мышь и клавиатура этого ПК в приоритете
+Recusar conexões enquanto este PC assiste a outro	Отклонять подключения, пока этот ПК смотрит другой
+Com prioridade, quem assiste para por 1 segundo sempre que alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. Programas de chamada: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack e Signal; sai do som o primeiro que estiver aberto.	При приоритете просмотр приостанавливается на 1 секунду, когда кто-то здесь двигает мышь или печатает. По одному: очередь переходит после 2 секунд без ввода. Приложения для звонков: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack и Signal; первое открытое не попадает в звук.
+Janela de quem assiste	Окно просмотра
+Abrir em tela cheia sem borda	Открывать в полноэкранном режиме без рамки
+VSync: sem rasgos na imagem, com um pouco mais de atraso	VSync: без разрывов, с чуть большей задержкой
+Modo imersivo	Режим погружения
+Só o mouse	Только мышь
+Só o teclado	Только клавиатура
+Mouse e teclado	Мышь и клавиатура
+Pedir 4:4:4 (texto mais nítido; precisa de NVIDIA ou Intel)	Запрашивать 4:4:4 (чётче текст; нужен NVIDIA или Intel)
+Começar sem o som do outro PC	Начинать без звука другого ПК
+No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. O atalho do menu sempre funciona aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga.	В режиме погружения на весь экран мышь остаётся внутри окна, а клавиша Windows и Alt+Tab уходят на другой ПК. Сочетание для меню всегда работает здесь. На экране с G-SYNC или FreeSync оставьте VSync выключенным: изображение не рвётся.
+Medidor e avisos	Счётчик и предупреждения
+Medidor de latência	Счётчик задержки
+Simples	Простой
+Detalhado	Подробный
+Avisar quando a conexão piorar	Предупреждать, когда связь ухудшается
+O simples mostra o atraso de ponta a ponta e uma bolinha verde, amarela ou vermelha. O detalhado mostra também a rede, o vídeo, os quadros por segundo, a banda, a decodificação, os quadros perdidos e o caminho. O aviso aparece quando a rede perde mais de 2% dos quadros, quando a latência varia mais de 10 ms ou sobe por 3 segundos seguidos. Os quadros por segundo pedidos não passam dos Hz desta tela; o automático usa os Hz dela. Tudo isso muda também pelo menu da conexão.	Простой показывает сквозную задержку и зелёную, жёлтую или красную точку. Подробный также показывает сеть, видео, кадры в секунду, полосу, декодирование, потерянные кадры и маршрут. Предупреждение появляется, когда сеть теряет больше 2% кадров, когда задержка скачет больше чем на 10 мс или растёт 3 секунды подряд. Запрошенные кадры в секунду не превышают частоту этого экрана; «Авто» использует его частоту. Всё это можно менять и из меню подключения.
+Portas	Порты
+Porta UDP do host	UDP-порт хоста
+Automática	Автоматически
+Use um número de 1024 a 65535.	Используйте число от 1024 до 65535.
+Pedir ao roteador para abrir a porta (UPnP, NAT-PMP, PCP)	Просить роутер открыть порт (UPnP, NAT-PMP, PCP)
+Automática serve para quase todo mundo: o Prisma fura o NAT sem porta fixa. A porta fixa é para quem redireciona a porta no roteador. Ela vale na próxima vez que o compartilhamento ligar. O pedido ao roteador some sozinho quando a conexão acaba.	«Автоматически» подходит почти всем: Prisma проходит NAT без фиксированного порта. Фиксированный порт — для тех, кто пробрасывает порт на роутере. Применяется при следующем запуске раздачи. Запрос к роутеру снимается сам по окончании подключения.
+Como a conexão passa	Как идёт соединение
+Última conexão:	Последнее подключение:
+Atalhos da conexão	Сочетания для подключения
+Na janela de quem assiste	В окне просмотра
+Menu da conexão	Меню подключения
+Ctrl+Alt+Del no outro PC	Ctrl+Alt+Del на другом ПК
+No PC que compartilha	На раздающем ПК
+Desconectar todo mundo	Отключить всех
+Dois atalhos iguais: só o primeiro da lista funciona.	Два одинаковых сочетания: работает только первое в списке.
+Clique num atalho e aperte a combinação nova; Esc cancela. Os atalhos de quem assiste ficam com a janela e não vão para o outro PC. Use combinações com Ctrl, Alt ou Shift, para não roubar teclas do jogo. Os novos valem na próxima conexão. O atalho do modo imersivo liga e desliga só na conexão aberta; o modo que fica é o da aba Cliente.	Щёлкните сочетание и нажмите новую комбинацию; Esc отменяет. Сочетания просмотра остаются в окне и не передаются на другой ПК. Используйте комбинации с Ctrl, Alt или Shift, чтобы не отнимать клавиши у игры. Новые действуют со следующего подключения. Сочетание режима погружения включает и выключает его только для открытого подключения; постоянный режим задаётся на вкладке «Просмотр».
+com fio	проводной
+bateria cheia	батарея полная
+bateria média	батарея наполовину
+bateria baixa	батарея слабая
+bateria acabando	батарея почти разряжена
+Controles virtuais no host	Виртуальные геймпады на хосте
+Mandar o controle com a janela em segundo plano	Передавать геймпад, когда окно в фоне
+Usar o teclado como controle	Использовать клавиатуру как геймпад
+No host, cada controle de quem assiste vira um controle de Xbox virtual, pelo ViGEmBus ou pelo VIIPER (o Prisma não instala nenhum dos dois). Eles saem sozinhos quando o jogo da frente tem anti-cheat. Teclado como controle: WASD é o analógico esquerdo, as setas são o direcional, J é A, K é B, U é X, I é Y, Q e E são LB e RB, Z e C os gatilhos, Enter é Start e Backspace é Back.	На хосте каждый геймпад зрителя становится виртуальным геймпадом Xbox через ViGEmBus или VIIPER (Prisma их не устанавливает). Они убираются сами, когда у игры на переднем плане есть античит. Клавиатура как геймпад: WASD — левый стик, стрелки — крестовина, J — A, K — B, U — X, I — Y, Q и E — LB и RB, Z и C — курки, Enter — Start, Backspace — Back.
+Ligados agora	Подключены сейчас
+Neste PC	На этом ПК
+Nenhum controle ligado.	Геймпады не подключены.
+Virtuais de quem assiste a este PC	Виртуальные от зрителей этого ПК
+controle	геймпад
+jogador	игрок
+parado	простаивает
+Nenhum agora.	Сейчас нет.
+O Windows não abriu a janela de compartilhar: o convite foi copiado.	Windows не открыла окно отправки: приглашение скопировано.
+Conexão instável: a rede está perdendo quadros	Нестабильная связь: сеть теряет кадры
+Conexão instável: a latência está variando	Нестабильная связь: задержка скачет
+Conexão piorando: a latência está subindo	Связь ухудшается: задержка растёт
+ponta a ponta	сквозная
+rede	сеть
+q/s	fps
+decodificação	декодирование
+perdidos	потеряно
+Mandar Ctrl+Alt+Del	Отправить Ctrl+Alt+Del
+Desconectar	Отключить
+O serviço está caindo: reabra o Prisma como administrador.	Служба постоянно падает: откройте Prisma снова от имени администратора.
+Conexão	Подключение
+Mouse	Мышь
+Os dois	Оба
+Ligar e desligar o modo imersivo	Включить и выключить режим погружения
+Trocar o medidor de latência	Переключить счётчик задержки
+Ligar e desligar o som	Включить и выключить звук
+Conectados	Подключено
+Conectados agora	Подключены сейчас
+Banir	Заблокировать
+Personalizado	Свой вариант
+Pela VPN	Через VPN
+Direto na rede local	Напрямую в локальной сети
+Direto pela internet	Напрямую через интернет
+Pelo relé da n0	Через ретранслятор n0
+UDP direto	Прямой UDP
+Conectando	Подключение
+O acesso muda na hora e fica salvo para as próximas conexões. Desconectar derruba só esta conexão: o aparelho continua pareado. Banir derruba e esquece o aparelho, que só volta com um convite novo.	Доступ меняется сразу и сохраняется для следующих подключений. «Отключить» обрывает только это подключение: устройство остаётся сопряжённым. «Заблокировать» обрывает и забывает устройство, вернуться оно сможет только по новому приглашению.
+Banir este aparelho?	Заблокировать это устройство?
+«{}» sai agora e vai precisar de um convite novo para conectar.	«{}» сейчас отключится, и для подключения понадобится новое приглашение.
+«{}» conectou a este PC	«{}» подключается к этому ПК
+«{}» saiu	«{}»: отключение
+Auto HDR	Auto HDR
+Sem DLSS	Без DLSS
+Plano de energia	План электропитания
+Minutos de jogo gravados (0 é sem limite)	Минуты игры в записи (0 — без лимита)
+Liga o HDR do Windows quando o jogo abre e desliga quando ele fecha. Se o HDR já estava ligado, ele continua ligado. Em Todos, vale para todo jogo que o modo jogo do Energia reconhece; Não ligar, na lista, tira um jogo. O medidor só aparece pelo atalho.	Включает HDR Windows при запуске игры и выключает при выходе. Если HDR уже был включён, он остаётся. «Все» действует для каждой игры, которую видит игровой режим «Питания»; «Не включать» в списке исключает игру. Счётчик — только по сочетанию клавиш.
+Controlador de memória da GPU, média	Контроллер памяти GPU, среднее
+Energia da GPU, média do limite	Мощность GPU, среднее от предела
+Clock da GPU segurado por	Частоту GPU сдерживает
+A VRAM chegou perto do total: texturas e resolução são os primeiros ajustes.	Видеопамять почти заполнилась: текстуры и разрешение стоит снижать в первую очередь.
+A temperatura segurou o clock da GPU em parte do tempo.	Температура часть времени сдерживала частоту GPU.
+Leitura: GPU cheia e no limite de energia, então o limite é a GPU. Menos carga por quadro (resolução, sombras, efeitos) é o que rende.	Вывод: GPU загружен и упирается в предел мощности, значит, упор в GPU. Окупается меньше работы на кадр (разрешение, тени, эффекты).
+Renomear	Переименовать
+Salvar	Сохранить
+Este PC assiste	Этот ПК смотрит
+Assistem a este PC	Смотрят этот ПК
+Nenhum PC para assistir. Digite aqui o código de um convite feito no outro PC.	Нет ПК для просмотра. Введите здесь код приглашения, созданного на другом ПК.
+Nenhum PC assiste a este. Crie um convite e digite o código no outro PC.	Этот ПК никто не смотрит. Создайте приглашение и введите код на другом ПК.
+Atalhos de aparelho padrão	Сочетания для устройств по умолчанию
+Fixo, fechado	Закреплено, закрыто
+Não mudar	Не менять
+Aparelho padrão	Устройство по умолчанию
+não deu para trocar	не удалось переключить
+aparelho desligado	устройство отключено
+Cada atalho troca a saída e a entrada padrão do Windows de uma vez. Use Adicionar.	Каждое сочетание сразу переключает вывод и ввод Windows по умолчанию. Нажмите «Добавить».
+Não deu para mudar na hora. Vale na próxima conexão.	Не удалось изменить сразу. Применится при следующем подключении.

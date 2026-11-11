@@ -2441,10 +2441,30 @@ impl App {
                 Some("meter") => self.page = Page::Meter,
                 Some("sound") => self.page = Page::Volume,
                 Some("guide") => self.page = Page::Guide,
+                Some("monitor") => self.page = Page::Monitor,
+                Some("storage") => self.page = Page::Storage,
+                Some("search") => self.page = Page::Search,
+                Some("startup") => self.page = Page::Startup,
+                Some("services") => self.page = Page::Services,
+                Some("uninstall") => self.page = Page::Uninstall,
+                Some("tweaks") => self.page = Page::Tweaks,
+                Some("tools") => self.page = Page::Tools,
+                Some("optimize") => self.page = Page::Optimize,
+                Some("energy") => self.page = Page::Energy,
+                Some("fullscreen") => self.page = Page::Fullscreen,
+                Some("hdr") => self.page = Page::Hdr,
+                Some("capture") => self.page = Page::Capture,
+                Some("widget") => self.page = Page::Widget,
+                Some("adjust") => self.page = Page::Adjust,
+                Some("report") => self.page = Page::Report,
                 _ => {}
             }
             if args.iter().any(|a| a == "--test-en") {
                 crate::i18n::set_english(true);
+            }
+            // `--test-lang=N`: um idioma pelo número (2 espanhol, 3 russo, 4 chinês).
+            if let Some(n) = arg("--test-lang=").and_then(|v| v.parse().ok()) {
+                crate::i18n::set_lang(n);
             }
             // Uma foto só: refazer a cada aviso do relógio deixava a fila sempre cheia, e o
             // pedido de saída nunca chegava.
@@ -2578,7 +2598,7 @@ impl App {
                 self.register_hotkeys();
             }
             Defaults::Settings => {
-                crate::i18n::set_english(self.cfg.lang_en);
+                crate::i18n::set_lang(self.cfg.lang);
                 self.register_hotkeys();
             }
             Defaults::Fullscreen => self.register_hotkeys(),

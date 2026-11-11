@@ -172,6 +172,40 @@ fn format(size: f32, weight: Weight, wrap: bool) -> IDWriteTextFormat {
     })
 }
 
+/// Teste: grava o texto que não cabe no espaço onde foi desenhado (`PRISMA_OVERFLOW`).
+#[cfg(debug_assertions)]
+fn note_overflow(f: &IDWriteTextFormat, t: &[u16], s: &str, r: Rect, wrap: bool) {
+    use std::io::Write;
+    let Ok(path) = std::env::var("PRISMA_OVERFLOW") else { return };
+    if r.w < 4.0 || s.trim().is_empty() {
+        return;
+    }
+    let (w, h) = shared(|sh| unsafe {
+        let Ok(l) = sh.dw.CreateTextLayout(t, f, if wrap { r.w } else { 100000.0 }, 100000.0) else { return (0.0, 0.0) };
+        let mut m = DWRITE_TEXT_METRICS::default();
+        let _ = l.GetMetrics(&mut m);
+        (m.width, m.height)
+    });
+    let bad = if wrap { h > r.h + 1.0 && r.h > 0.0 } else { w > r.w + 0.5 };
+    if bad {
+        if let Ok(mut o) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+            let _ = writeln!(o, "{:.0}x{:.0} at {:.0},{:.0} needs {:.0}x{:.0}: {s}", r.w, r.h, r.x, r.y, w, h);
+        }
+    }
+}
+
+/// Largura de uma linha já traduzida.
+fn measure_raw(text: &str, size: f32, weight: Weight) -> f32 {
+    let f = format(size, weight, false);
+    let t = wide(text);
+    shared(|s| unsafe {
+        let Ok(layout) = s.dw.CreateTextLayout(&t, &f, 100000.0, 100000.0) else { return 0.0 };
+        let mut m = DWRITE_TEXT_METRICS::default();
+        let _ = layout.GetMetrics(&mut m);
+        m.width
+    })
+}
+
 /// Mede o texto em DIPs. `max_w` limita a largura quando há quebra de linha.
 pub fn measure(text: &str, size: f32, weight: Weight, max_w: Option<f32>) -> (f32, f32) {
     let f = format(size, weight, max_w.is_some());
@@ -374,6 +408,17 @@ impl Canvas {
         self.text_ex(r, s, size, c, align, weight, false)
     }
 
+    /// Uma linha que diminui a letra, até 11 px, quando o texto não cabe; serve aos botões e
+    /// seletores, cujo texto em outros idiomas pode passar da largura.
+    pub fn text_fit(&self, r: Rect, s: &str, size: f32, c: Color, align: Align, weight: Weight) {
+        let t = crate::i18n::tr(s);
+        let mut sz = size;
+        while sz > 11.0 && measure_raw(&t, sz, weight) > r.w {
+            sz -= 1.0;
+        }
+        self.text_ex(r, &t, sz, c, align, weight, false)
+    }
+
     pub fn text_wrap(&self, r: Rect, s: &str, size: f32, c: Color, weight: Weight) {
         self.text_ex(r, &crate::i18n::tr(s), size, c, Align::Left, weight, true)
     }
@@ -381,6 +426,8 @@ impl Canvas {
     fn text_ex(&self, r: Rect, s: &str, size: f32, c: Color, a: Align, wt: Weight, wrap: bool) {
         let f = format(size, wt, wrap);
         let t = wide(s);
+        #[cfg(debug_assertions)]
+        note_overflow(&f, &t, s, r, wrap);
         unsafe {
             let _ = f.SetTextAlignment(match a {
                 Align::Left => DWRITE_TEXT_ALIGNMENT_LEADING,

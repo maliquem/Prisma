@@ -1,6 +1,6 @@
 # Prisma
 
-**English** · [Português (Brasil)](README.pt-BR.md)
+**English** · [Português (Brasil)](README.pt-BR.md) · [Español](README.es.md) · [Русский](README.ru.md) · [简体中文](README.zh-CN.md)
 
 A lightweight utility for Windows 11, written entirely in Rust with no UI framework. It sits in the tray, loads only what is in use and fits in a single 2 MB file. It replaces Task Manager and brings together the small tools a PC gamer usually collects one by one.
 
@@ -23,7 +23,7 @@ The installed version starts with Windows by default, and you can turn that off 
 
 The guide and **Report a bug** are two buttons next to the Prisma name, at the top of the window. Hover over them to see what each one does.
 
-The interface comes in English and Brazilian Portuguese. Prisma starts in your Windows language, and you can change it in **Settings**. Text that comes from Windows itself, such as service descriptions and command output, stays in the Windows language.
+The interface comes in English, Brazilian Portuguese, Spanish, Russian and Simplified Chinese. Prisma starts in your Windows language, and you can change it in **Settings**. The guide and the notes for each version come in English and Portuguese; the other languages show them in English. Text that comes from Windows itself, such as service descriptions and command output, stays in the Windows language.
 
 ## Updates
 
