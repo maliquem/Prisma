@@ -10,6 +10,15 @@ use windows::Win32::System::Diagnostics::Etw::*;
 use windows::Win32::System::Performance::{QueryPerformanceCounter, QueryPerformanceFrequency};
 
 const DXGKRNL: GUID = GUID::from_u128(0x802ec45a_1e99_4b83_9920_87c98277ba9d);
+/// Apresentações pedidas pelo próprio jogo (DXGI e Direct3D 9). Chegam em qualquer modo de tela,
+/// inclusive quando o jogo desenha direto na tela e a placa não gera os eventos de troca de imagem.
+const DXGI: GUID = GUID::from_u128(0xca11c036_0102_4a2d_a6ad_f03cfed5d3c9);
+const D3D9: GUID = GUID::from_u128(0x783aca0a_790e_4d7f_8451_aa850511c6b9);
+const KEYWORD_ANALYTIC: u64 = 0x8000_0000_0000_0000;
+const INFO: u8 = 4;
+const DXGI_PRESENT: u16 = 42;
+const DXGI_PRESENT_MPO: u16 = 55;
+const D3D9_PRESENT: u16 = 1;
 /// Marcadores de latência que jogos com Reflex publicam.
 const PCL: GUID = GUID::from_u128(0x0d216f06_82a6_4d49_bc4f_8f38ae56efab);
 // A versão de teste roda junto com a de verdade: sessão com o mesmo nome derrubaria a outra.
@@ -43,8 +52,12 @@ struct State {
     /// Um quarto de segundo em unidades do relógio.
     quiet: i64,
     last_present: i64,
+    /// Última apresentação do alvo vista pelo DXGI ou Direct3D 9. Enquanto elas chegam, valem só elas.
+    last_user: i64,
     /// Quadros contados pela troca de imagem desde a última leitura.
     by_flip: u32,
+    /// Quadros contados pelas apresentações do jogo desde a última leitura.
+    by_user: u32,
     /// Todos os quadros, só enquanto o registro em arquivo está ligado.
     rec: Option<Vec<i64>>,
     times: VecDeque<i64>,
@@ -58,6 +71,16 @@ struct State {
 }
 
 impl State {
+    fn push_time(&mut self, t: i64) {
+        if self.times.len() >= KEEP {
+            self.times.pop_front();
+        }
+        self.times.push_back(t);
+        if let Some(rec) = &mut self.rec {
+            rec.push(t);
+        }
+    }
+
     /// História limpa, sem perder o que não é história.
     fn fresh(&mut self, target: u32) -> Self {
         Self { target, quiet: self.quiet, rec: self.rec.take(), presents: std::mem::take(&mut self.presents), ..Default::default() }
@@ -86,6 +109,8 @@ pub struct Stats {
     pub worst: f32,
     /// O jogo parou de avisar a apresentação, e os quadros saem da troca de imagem.
     pub by_flip: bool,
+    /// Os quadros vêm das apresentações do jogo (DXGI ou Direct3D 9).
+    pub by_user: bool,
 }
 
 unsafe extern "system" fn on_event(r: *mut EVENT_RECORD) {
@@ -93,13 +118,24 @@ unsafe extern "system" fn on_event(r: *mut EVENT_RECORD) {
     let h = &r.EventHeader;
     let Ok(mut guard) = STATE.lock() else { return };
     let Some(s) = guard.as_mut() else { return };
-    if h.ProviderId == DXGKRNL {
-        let id = h.EventDescriptor.Id;
+    let id = h.EventDescriptor.Id;
+    let user = (h.ProviderId == DXGI && matches!(id, DXGI_PRESENT | DXGI_PRESENT_MPO)) || (h.ProviderId == D3D9 && id == D3D9_PRESENT);
+    if user {
+        *s.presents.entry(h.ProcessId).or_default() += 1;
+        if h.ProcessId == s.target {
+            s.last_user = h.TimeStamp;
+            s.by_user += 1;
+            s.push_time(h.TimeStamp);
+        }
+    } else if h.ProviderId == DXGKRNL {
         if !matches!(id, PRESENT_INFO | FLIP_INFO | FLIP_MPO_INFO) {
             return;
         }
         *s.presents.entry(h.ProcessId).or_default() += 1;
-        if h.ProcessId == s.target {
+        // Com as apresentações do jogo chegando, a placa só diz se a imagem vai direto à tela.
+        if h.ProcessId == s.target && h.TimeStamp - s.last_user < s.quiet * 4 {
+            s.flips += (id != PRESENT_INFO) as u32;
+        } else if h.ProcessId == s.target {
             let flip = id != PRESENT_INFO;
             let counted = if flip {
                 s.flips += 1;
@@ -110,13 +146,7 @@ unsafe extern "system" fn on_event(r: *mut EVENT_RECORD) {
             };
             if counted {
                 s.by_flip += flip as u32;
-                if s.times.len() >= KEEP {
-                    s.times.pop_front();
-                }
-                s.times.push_back(h.TimeStamp);
-                if let Some(rec) = &mut s.rec {
-                    rec.push(h.TimeStamp);
-                }
+                s.push_time(h.TimeStamp);
             }
         }
     } else if h.ProviderId == PCL && h.ProcessId == s.target && r.UserDataLength >= 12 && !r.UserData.is_null() {
@@ -167,24 +197,19 @@ pub struct Tracker {
     pcl: bool,
 }
 
-/// Só os eventos que interessam chegam ao Prisma: o resto nem sai do kernel.
-unsafe fn enable_filtered(handle: CONTROLTRACE_HANDLE) -> WIN32_ERROR {
-    #[repr(C)]
-    struct Ids {
-        filter_in: u8,
-        reserved: u8,
-        count: u16,
-        ids: [u16; 3],
-    }
-    let ids = Ids { filter_in: 1, reserved: 0, count: 3, ids: [PRESENT_INFO, FLIP_INFO, FLIP_MPO_INFO] };
-    let mut desc = EVENT_FILTER_DESCRIPTOR { Ptr: &ids as *const Ids as u64, Size: std::mem::size_of::<Ids>() as u32, Type: EVENT_FILTER_TYPE_EVENT_ID };
+/// Só os eventos que interessam chegam ao Prisma: o resto nem sai de onde nasceu.
+unsafe fn enable_filtered(handle: CONTROLTRACE_HANDLE, provider: &GUID, level: u8, keywords: u64, ids: &[u16]) -> WIN32_ERROR {
+    // EVENT_FILTER_EVENT_ID: incluir (1), reservado, quantos, e os números.
+    let mut buf: Vec<u16> = vec![1, ids.len() as u16];
+    buf.extend_from_slice(ids);
+    let mut desc = EVENT_FILTER_DESCRIPTOR { Ptr: buf.as_ptr() as u64, Size: (buf.len() * 2) as u32, Type: EVENT_FILTER_TYPE_EVENT_ID };
     let params = ENABLE_TRACE_PARAMETERS {
         Version: ENABLE_TRACE_PARAMETERS_VERSION_2,
         EnableFilterDesc: &mut desc,
         FilterDescCount: 1,
         ..Default::default()
     };
-    EnableTraceEx2(handle, &DXGKRNL, EVENT_CONTROL_CODE_ENABLE_PROVIDER.0, VERBOSE, KEYWORD_BASE | KEYWORD_PRESENT, 0, 0, Some(&params))
+    EnableTraceEx2(handle, provider, EVENT_CONTROL_CODE_ENABLE_PROVIDER.0, level, keywords, 0, 0, Some(&params))
 }
 
 impl Tracker {
@@ -204,13 +229,16 @@ impl Tracker {
             if started != ERROR_SUCCESS {
                 return Err(format!("a sessão não abriu (erro {})", started.0));
             }
-            let enabled = enable_filtered(handle);
+            let enabled = enable_filtered(handle, &DXGKRNL, VERBOSE, KEYWORD_BASE | KEYWORD_PRESENT, &[PRESENT_INFO, FLIP_INFO, FLIP_MPO_INFO]);
             if enabled != ERROR_SUCCESS {
                 let mut stop = props();
                 let _ = ControlTraceW(handle, PCWSTR::null(), &mut stop.p, EVENT_TRACE_CONTROL_STOP);
                 // 1450: o Windows deixa só 8 sessões ouvindo a placa de vídeo, e outros programas usam as outras.
                 return Err(format!("a placa de vídeo não aceitou a sessão (erro {})", enabled.0));
             }
+            // Sem estes, a placa ainda conta os quadros enquanto o Windows compõe a tela.
+            let _ = enable_filtered(handle, &DXGI, INFO, KEYWORD_ANALYTIC, &[DXGI_PRESENT, DXGI_PRESENT_MPO]);
+            let _ = enable_filtered(handle, &D3D9, INFO, KEYWORD_ANALYTIC, &[D3D9_PRESENT]);
             let mut f = 0i64;
             let _ = QueryPerformanceFrequency(&mut f);
             *STATE.lock().unwrap() = Some(State { quiet: f / 4, ..Default::default() });
@@ -312,6 +340,8 @@ impl Tracker {
         out.frames = ms.len();
         out.direct = s.flips > 0;
         out.by_flip = s.by_flip > 0;
+        out.by_user = s.by_user > 0;
+        s.by_user = 0;
         s.flips = 0;
         s.by_flip = 0;
         let last = *s.times.back().unwrap_or(&0);
@@ -402,7 +432,7 @@ pub fn measure(pid: u32, secs: u64) -> String {
     for _ in 0..secs {
         std::thread::sleep(std::time::Duration::from_secs(1));
         let s = t.stats();
-        out += &format!("fps {:.1} avg {:.1} low1 {:.1} low01 {:.1} ms {:.2} dev {:.2} direto {} troca {} top {:?}\n", s.fps, s.avg, s.low1, s.low01, s.ms, s.dev, s.direct, s.by_flip, t.presenters(pid).0);
+        out += &format!("fps {:.1} avg {:.1} low1 {:.1} low01 {:.1} ms {:.2} dev {:.2} direto {} troca {} jogo {} top {:?}\n", s.fps, s.avg, s.low1, s.low01, s.ms, s.dev, s.direct, s.by_flip, s.by_user, t.presenters(pid).0);
     }
     out
 }

@@ -105,6 +105,7 @@ pub struct Meter {
     /// Havia quadros na última olhada: a mudança vai para o registro uma vez só.
     live: bool,
     by_flip: bool,
+    by_user: bool,
     silent: u32,
     restarted: Option<Instant>,
     /// Último motivo de o rastreamento não abrir, para registrar só quando muda.
@@ -442,6 +443,7 @@ impl Meter {
             scanned: None,
             live: false,
             by_flip: false,
+            by_user: false,
             silent: 0,
             track_error: None,
             restarted: None,
@@ -937,6 +939,10 @@ impl Meter {
             crate::config::log("medidor: contando pela troca de imagem");
         }
         self.by_flip |= self.stats.by_flip;
+        if self.stats.by_user && !self.by_user {
+            crate::config::log("medidor: contando pelas apresentações do jogo");
+        }
+        self.by_user |= self.stats.by_user;
         if self.live && !live && focused {
             crate::config::log(&format!("medidor: quadros pararam, alvo {} jogo {} maior {top:?}", self.target, self.session.pid));
         }
@@ -1094,6 +1100,7 @@ impl Meter {
         self.target = 0;
         self.live = false;
         self.by_flip = false;
+        self.by_user = false;
         monitor::METER.store(false, std::sync::atomic::Ordering::Relaxed);
     }
 
