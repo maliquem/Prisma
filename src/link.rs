@@ -114,7 +114,9 @@ fn drain_with(mut f: impl FnMut(Request) -> Outcome) {
         let next = QUEUE.lock().unwrap_or_else(|e| e.into_inner()).pop_front();
         let Some((at, req, tx)) = next else { break };
         // Pedido parado na fila (janela ocupada, menu aberto) não roda atrasado: o cliente já desistiu.
-        if at.elapsed() > WAIT {
+        // Os avisos de jogo ficam de fora: perder um deixaria a dica errada para sempre.
+        let notice = matches!(req, Request::GameStarted { .. } | Request::GameStopped { .. });
+        if !notice && at.elapsed() > WAIT {
             continue;
         }
         let _ = tx.send(f(req));
@@ -203,5 +205,22 @@ mod tests {
         assert_eq!(calls, 1);
         assert!(rx_old.recv_timeout(Duration::from_millis(100)).is_err());
         assert_eq!(rx_new.recv_timeout(Duration::from_secs(1)), Ok(Outcome::Done));
+    }
+
+    #[test]
+    fn stale_game_notices_still_run() {
+        let _g = QUEUE_TEST.lock().unwrap_or_else(|e| e.into_inner());
+        let old = Instant::now()
+            .checked_sub(WAIT + Duration::from_secs(1))
+            .expect("relógio com tempo suficiente");
+        let (tx, rx) = sync_channel(1);
+        drop(rx); // o cliente já foi embora
+        push_at(old, Request::GameStopped { pid: 7 }, tx);
+        let mut calls = 0;
+        drain_with(|_| {
+            calls += 1;
+            Outcome::Done
+        });
+        assert_eq!(calls, 1);
     }
 }

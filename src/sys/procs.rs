@@ -27,6 +27,20 @@ pub fn image_path(pid: u32) -> Option<String> {
     }
 }
 
+/// O processo ainda está rodando? Sem permissão para abrir, assume que sim.
+pub fn is_alive(pid: u32) -> bool {
+    unsafe {
+        let h = match OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) {
+            Ok(h) => h,
+            Err(e) => return e.code() == windows::Win32::Foundation::E_ACCESSDENIED.into(),
+        };
+        let mut code = 0u32;
+        let ok = GetExitCodeProcess(h, &mut code).is_ok();
+        let _ = CloseHandle(h);
+        !ok || code == 259 // STILL_ACTIVE
+    }
+}
+
 pub fn exe_name(path: &str) -> String {
     path.rsplit('\\').next().unwrap_or(path).to_string()
 }

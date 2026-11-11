@@ -258,11 +258,16 @@ impl Detector {
     /// O launcher abriu este jogo: quando for o primeiro plano, entra no modo jogo na hora.
     pub fn hint(&mut self, pid: u32, exe: &str) {
         self.launched.retain(|(p, _)| *p != pid);
-        self.launched.push((pid, procs::exe_name(exe)));
+        self.launched.push((pid, procs::exe_name(&exe.replace('/', "\\"))));
     }
 
     pub fn unhint(&mut self, pid: u32) {
         self.launched.retain(|(p, _)| *p != pid);
+    }
+
+    /// Esquece os jogos avisados cujo processo já saiu (o aviso de parada pode ter se perdido).
+    fn prune(&mut self, alive: impl Fn(u32) -> bool) {
+        self.launched.retain(|(p, _)| alive(*p));
     }
 
     fn hinted(&self, pid: u32, exe: &str) -> bool {
@@ -286,6 +291,7 @@ impl Detector {
     /// `groups` traz a GPU de cada programa: jogo é quem desenha, não quem divide a tela com ele.
     pub fn tick(&mut self, cfg: &Config, cpu: f32, gpu: f32, groups: &[crate::sys::monitor::Group]) -> Event {
         let now = Instant::now();
+        self.prune(procs::is_alive);
         let gpu_on = cfg.rule_gpu && gpu > cfg.load_gpu_pct as f32;
         let cpu_on = cfg.rule_cpu && cpu > cfg.load_cpu_pct as f32;
         self.gpu_since = if gpu_on { self.gpu_since.or(Some(now)) } else { None };
@@ -364,6 +370,23 @@ mod tests {
         d.hint(10, r"C:\G\Launcher.exe");
         assert!(d.hinted(99, "LAUNCHER.EXE"));
         assert!(!d.hinted(99, "game.exe"));
+    }
+
+    #[test]
+    fn hint_normalises_forward_slashes() {
+        let mut d = Detector::new();
+        d.hint(10, "C:/G/Hades.exe");
+        assert!(d.hinted(99, "hades.exe"));
+    }
+
+    #[test]
+    fn prune_drops_dead_pids() {
+        let mut d = Detector::new();
+        d.hint(10, r"C:\G\A.exe");
+        d.hint(11, r"C:\G\B.exe");
+        d.prune(|p| p == 11);
+        assert!(!d.hinted(10, "x.exe") && !d.hinted(99, "a.exe"));
+        assert!(d.hinted(11, "x.exe"));
     }
 
     #[test]
