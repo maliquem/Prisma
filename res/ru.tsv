@@ -1440,6 +1440,8 @@ Limite de banda	Ограничение полосы
 HDR10 de 10 bits quando as duas telas estão em HDR	10-битный HDR10, когда оба экрана в HDR
 Aceitar 4:4:4 quando quem assiste pede	Принимать 4:4:4 по запросу зрителя
 Os automáticos seguem quem assiste: a altura da tela, o menor entre os Hz dos dois lados e o melhor codec que os dois têm. O 4:4:4 e o HDR10 caem sozinhos se o outro lado não tiver.	Автоматические значения подстраиваются под зрителя: высота его экрана, меньшая частота из двух сторон и лучший общий кодек. 4:4:4 и HDR10 отключаются сами, если у другой стороны их нет.
+PyroWave: uns 200 Mbit/s em 1080p60 e mais em 4K. Só na rede local ou pela VPN (ZeroTier, Tailscale), nunca pelo relé; fora delas, e se quem assiste não tiver a biblioteca, vale o automático.	PyroWave: около 200 Мбит/с при 1080p60 и больше в 4K. Только в локальной сети или через VPN (ZeroTier, Tailscale), никогда через ретранслятор; вне их, или если у зрителя нет библиотеки, действует автоматический выбор.
+PyroWave: falta a libpyrowave-shared-1.dll ao lado do Prisma, então vale o automático. Com ela, uns 200 Mbit/s em 1080p60, só na rede local ou pela VPN, nunca pelo relé.	PyroWave: рядом с Prisma нет libpyrowave-shared-1.dll, поэтому действует автоматический выбор. С ней — около 200 Мбит/с при 1080p60, только в локальной сети или через VPN, никогда через ретранслятор.
 Som, mouse e teclado	Звук, мышь и клавиатура
 Som que vai	Передаваемый звук
 Todo o PC	Весь ПК
@@ -1456,7 +1458,7 @@ Modo imersivo	Режим погружения
 Só o mouse	Только мышь
 Só o teclado	Только клавиатура
 Mouse e teclado	Мышь и клавиатура
-Pedir 4:4:4 (texto mais nítido; precisa de NVIDIA ou Intel)	Запрашивать 4:4:4 (чётче текст; нужен NVIDIA или Intel)
+Pedir 4:4:4 (texto mais nítido; HEVC só em NVIDIA ou Intel)	Запрашивать 4:4:4 (чётче текст; HEVC — NVIDIA или Intel)
 Começar sem o som do outro PC	Начинать без звука другого ПК
 No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. O atalho do menu sempre funciona aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga. Telas lado a lado valem para Mouse e teclado, na lista de PCs: o mouse passa pela borda de uma tela para a vizinha, sem vídeo. Um PC sem posição vai para a primeira livre ao lado deste.	В режиме погружения, в полноэкранном режиме, мышь остаётся внутри окна, а клавиша Windows и Alt+Tab уходят на другой ПК. Сочетание для меню здесь работает всегда. На экране с G-SYNC или FreeSync оставьте VSync выключенным: изображение не рвётся. Экраны рядом нужны для режима «Мышь и клавиатура» в списке ПК: мышь переходит через край одного экрана на соседний, без видео. ПК без места встаёт на первое свободное рядом с этим.
 Medidor e avisos	Счётчик и предупреждения

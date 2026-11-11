@@ -1446,6 +1446,8 @@ Limite de banda	Bandwidth limit
 HDR10 de 10 bits quando as duas telas estão em HDR	10-bit HDR10 when both screens are in HDR
 Aceitar 4:4:4 quando quem assiste pede	Accept 4:4:4 when the viewer asks
 Os automáticos seguem quem assiste: a altura da tela, o menor entre os Hz dos dois lados e o melhor codec que os dois têm. O 4:4:4 e o HDR10 caem sozinhos se o outro lado não tiver.	The automatic values follow the viewer: the screen height, the lower refresh rate of the two sides and the best codec both have. 4:4:4 and HDR10 drop on their own if the other side lacks them.
+PyroWave: uns 200 Mbit/s em 1080p60 e mais em 4K. Só na rede local ou pela VPN (ZeroTier, Tailscale), nunca pelo relé; fora delas, e se quem assiste não tiver a biblioteca, vale o automático.	PyroWave: about 200 Mbit/s at 1080p60 and more at 4K. Only on the local network or over a VPN (ZeroTier, Tailscale), never through the relay; outside them, or if the viewer lacks the library, automatic applies.
+PyroWave: falta a libpyrowave-shared-1.dll ao lado do Prisma, então vale o automático. Com ela, uns 200 Mbit/s em 1080p60, só na rede local ou pela VPN, nunca pelo relé.	PyroWave: libpyrowave-shared-1.dll is missing next to Prisma, so automatic applies. With it, about 200 Mbit/s at 1080p60, only on the local network or over a VPN, never through the relay.
 Som, mouse e teclado	Sound, mouse and keyboard
 Som que vai	Sound that is sent
 Todo o PC	The whole PC
@@ -1462,7 +1464,7 @@ Modo imersivo	Immersive mode
 Só o mouse	Mouse only
 Só o teclado	Keyboard only
 Mouse e teclado	Mouse and keyboard
-Pedir 4:4:4 (texto mais nítido; precisa de NVIDIA ou Intel)	Ask for 4:4:4 (sharper text; needs NVIDIA or Intel)
+Pedir 4:4:4 (texto mais nítido; HEVC só em NVIDIA ou Intel)	Ask for 4:4:4 (sharper text; HEVC needs NVIDIA or Intel)
 Começar sem o som do outro PC	Start without the other PC's sound
 No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. O atalho do menu sempre funciona aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga. Telas lado a lado valem para Mouse e teclado, na lista de PCs: o mouse passa pela borda de uma tela para a vizinha, sem vídeo. Um PC sem posição vai para a primeira livre ao lado deste.	In immersive mode, in fullscreen, the mouse stays inside the window, and the Windows key and Alt+Tab go to the other PC. The menu shortcut always works here. On a G-SYNC or FreeSync screen, leave VSync off: the picture does not tear. Screens side by side are for Mouse and keyboard, in the PC list: the mouse goes past the edge of one screen to the next one, with no video. A PC with no position goes to the first free one next to this PC.
 Medidor e avisos	Meter and warnings

@@ -25,6 +25,7 @@ mod screen;
 #[cfg(feature = "stream")]
 pub mod service;
 pub mod view;
+pub mod wave;
 #[cfg(feature = "stream")]
 pub mod weblink;
 
@@ -252,20 +253,25 @@ pub const NO_VIDEO: u8 = 4;
 /// assim mesmo.
 #[cfg_attr(not(feature = "stream"), allow(dead_code))]
 pub const SOUND_ONLY: u8 = 8;
+/// `Hello.flags`: quem assiste pede 4:4:4. Vale para o PyroWave, que decodifica 4:4:4 em qualquer
+/// placa; o HEVC 4:4:4 ainda pede também [`DECODES_444`].
+pub const ASKS_444: u8 = 16;
 
 /// O que um pacote diz.
 #[derive(Debug, PartialEq)]
 pub enum Msg<'a> {
-    Video { key: bool, idx: u16, count: u16, frame: u32, pts: i64, data: &'a [u8] },
+    /// Um pedaço de quadro. `more`: o pacote do PyroWave continua no pedaço seguinte (um bloco maior
+    /// que um datagrama); no NVENC é sempre falso.
+    Video { key: bool, more: bool, idx: u16, count: u16, frame: u32, pts: i64, data: &'a [u8] },
     /// Como o vídeo está saindo: codec, tamanho e quadros por segundo.
     /// `perms` são as permissões de quem assiste ([`SOUND`], [`PAD`], [`KEYBOARD`], [`MOUSE`]); `recover`, se ele se recupera de um quadro
     /// perdido sem quadro-chave (quem assiste avisa com `Nack` e segue mostrando). `hdr10`: 10 bits,
     /// BT.2020 com PQ. `yuv444`: HEVC com a cor inteira em cada pixel.
     /// `priority`: 0 menor atraso, 1 equilibrado, 2 qualidade; 255 quando o host é de uma versão
     /// que não manda (o byte veio depois, no fim, e as versões antigas o ignoram).
-    Info { codec: Codec, w: u32, h: u32, fps: u32, perms: u8, recover: bool, hdr10: bool, yuv444: bool, priority: u8 },
+    Info { codec: VideoCodec, w: u32, h: u32, fps: u32, perms: u8, recover: bool, hdr10: bool, yuv444: bool, priority: u8 },
     /// Quem assiste chegou: tamanho e Hz da tela dele, codecs que ele decodifica (bits 0 H.264,
-    /// 1 HEVC, 2 AV1) e o número do processo, para o host tirar o som dele quando os dois estão no mesmo PC.
+    /// 1 HEVC, 2 AV1, 3 PyroWave) e o número do processo, para o host tirar o som dele quando os dois estão no mesmo PC.
     /// `flags`: [`SEES_HDR`] e [`DECODES_444`].
     Hello { w: u32, h: u32, hz: u32, codecs: u8, pid: u32, flags: u8 },
     KeyReq,
@@ -293,6 +299,18 @@ pub enum Msg<'a> {
     Clip { id: u16, part: u8, parts: u8, data: &'a [u8] },
 }
 
+/// O codec do vídeo na rede: um dos de sempre (NVENC e Media Foundation) ou o PyroWave, que só
+/// sai na rede local ou pela VPN (veja `wave.rs`).
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum VideoCodec {
+    Std(Codec),
+    Wave,
+}
+
+/// `Hello.codecs`: quem assiste tem o PyroWave. Quem não conhece o bit nunca o liga, e o host
+/// nunca manda PyroWave para quem não pediu.
+pub const WAVE: u8 = 8;
+
 pub fn codec_bit(c: Codec) -> u8 {
     match c {
         Codec::H264 => 1,
@@ -301,28 +319,31 @@ pub fn codec_bit(c: Codec) -> u8 {
     }
 }
 
-fn codec_id(c: Codec) -> u8 {
+fn codec_id(c: VideoCodec) -> u8 {
     match c {
-        Codec::H264 => 0,
-        Codec::Hevc => 1,
-        Codec::Av1 => 2,
+        VideoCodec::Std(Codec::H264) => 0,
+        VideoCodec::Std(Codec::Hevc) => 1,
+        VideoCodec::Std(Codec::Av1) => 2,
+        VideoCodec::Wave => 3,
     }
 }
 
-fn codec_of(v: u8) -> Option<Codec> {
+fn codec_of(v: u8) -> Option<VideoCodec> {
     Some(match v {
-        0 => Codec::H264,
-        1 => Codec::Hevc,
-        2 => Codec::Av1,
+        0 => VideoCodec::Std(Codec::H264),
+        1 => VideoCodec::Std(Codec::Hevc),
+        2 => VideoCodec::Std(Codec::Av1),
+        3 => VideoCodec::Wave,
         _ => return None,
     })
 }
 
-pub fn codec_name(c: Codec) -> &'static str {
+pub fn codec_name(c: VideoCodec) -> &'static str {
     match c {
-        Codec::Av1 => "AV1",
-        Codec::Hevc => "HEVC",
-        Codec::H264 => "H.264",
+        VideoCodec::Std(Codec::Av1) => "AV1",
+        VideoCodec::Std(Codec::Hevc) => "HEVC",
+        VideoCodec::Std(Codec::H264) => "H.264",
+        VideoCodec::Wave => "PyroWave",
     }
 }
 
@@ -335,10 +356,10 @@ fn head(out: &mut Vec<u8>, k: Kind) {
 
 pub fn write(out: &mut Vec<u8>, m: &Msg) {
     match *m {
-        Msg::Video { key, idx, count, frame, pts, data } => {
+        Msg::Video { key, more, idx, count, frame, pts, data } => {
             head(out, Kind::Video);
             out.push(key as u8);
-            out.push(0);
+            out.push(more as u8);
             out.extend_from_slice(&idx.to_le_bytes());
             out.extend_from_slice(&count.to_le_bytes());
             out.extend_from_slice(&[0, 0]);
@@ -450,6 +471,7 @@ pub fn read(b: &[u8]) -> Option<Msg<'_>> {
     Some(match b[2] {
         1 => Msg::Video {
             key: *b.get(4)? != 0,
+            more: *b.get(5)? != 0,
             idx: u16_at(b, 6)?,
             count: u16_at(b, 8)?,
             frame: u32_at(b, 12)?,
@@ -544,6 +566,10 @@ pub fn run_args() -> bool {
             screen::bench(v);
             return true;
         }
+        if let Some(v) = a.strip_prefix("--test-wave=") {
+            wave::bench(v);
+            return true;
+        }
         #[cfg(feature = "stream")]
         {
             // Sem valor: quem parear agora só vê. `--stream-net=jogar`, `=total` e outros dão mais.
@@ -612,11 +638,12 @@ mod tests {
 
     #[test]
     fn packets_round_trip() {
-        round(Msg::Video { key: true, idx: 3, count: 9, frame: 77, pts: -5, data: &[1, 2, 3] });
-        round(Msg::Info { codec: Codec::Av1, w: 1920, h: 1080, fps: 60, perms: SOUND | PAD, recover: true, hdr10: true, yuv444: false, priority: 2 });
+        round(Msg::Video { key: true, more: true, idx: 3, count: 9, frame: 77, pts: -5, data: &[1, 2, 3] });
+        round(Msg::Info { codec: VideoCodec::Std(Codec::Av1), w: 1920, h: 1080, fps: 60, perms: SOUND | PAD, recover: true, hdr10: true, yuv444: false, priority: 2 });
+        round(Msg::Info { codec: VideoCodec::Wave, w: 1920, h: 1080, fps: 60, perms: 0, recover: true, hdr10: false, yuv444: false, priority: 1 });
         // Host de versão anterior: sem o byte da prioridade, que vira "sem informação".
         let mut old = Vec::new();
-        write(&mut old, &Msg::Info { codec: Codec::Hevc, w: 1280, h: 720, fps: 30, perms: 0, recover: false, hdr10: false, yuv444: true, priority: 0 });
+        write(&mut old, &Msg::Info { codec: VideoCodec::Std(Codec::Hevc), w: 1280, h: 720, fps: 30, perms: 0, recover: false, hdr10: false, yuv444: true, priority: 0 });
         old.pop();
         assert!(matches!(read(&old), Some(Msg::Info { priority: 255, yuv444: true, fps: 30, .. })));
         round(Msg::Pad { pad: 4, seq: 65535, on: true, state: PadState { buttons: 0xF00F, lt: 255, rt: 1, lx: -32768, ly: 32767, rx: -1, ry: 0 } });
@@ -683,7 +710,7 @@ mod tests {
     #[test]
     fn video_header_size() {
         let mut b = Vec::new();
-        write(&mut b, &Msg::Video { key: false, idx: 0, count: 1, frame: 0, pts: 0, data: &[] });
+        write(&mut b, &Msg::Video { key: false, more: false, idx: 0, count: 1, frame: 0, pts: 0, data: &[] });
         assert_eq!(b.len(), VIDEO_HEAD);
     }
 }

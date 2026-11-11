@@ -751,7 +751,7 @@ pub(super) fn serve(link: Arc<dyn Link>, perms: u8, name: String) {
     let mut info = Vec::new();
     write(
         &mut info,
-        &Msg::Info { codec: Codec::H264, w: (r.right - r.left) as u32, h: (r.bottom - r.top) as u32, fps: 0, perms, recover: false, hdr10: false, yuv444: false, priority: 255 },
+        &Msg::Info { codec: VideoCodec::Std(Codec::H264), w: (r.right - r.left) as u32, h: (r.bottom - r.top) as u32, fps: 0, perms, recover: false, hdr10: false, yuv444: false, priority: 255 },
     );
     link.send(&info);
     let mut inj = host::Injector::new(mon, perms);

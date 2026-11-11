@@ -131,7 +131,7 @@ pub(super) fn serve(link: Arc<dyn Link>, perms: u8, name: String, pid: u32) {
         return;
     }
     let mut info = Vec::new();
-    write(&mut info, &Msg::Info { codec: Codec::H264, w: 0, h: 0, fps: 0, perms, recover: false, hdr10: false, yuv444: false, priority: 255 });
+    write(&mut info, &Msg::Info { codec: VideoCodec::Std(Codec::H264), w: 0, h: 0, fps: 0, perms, recover: false, hdr10: false, yuv444: false, priority: 255 });
     link.send(&info);
     eprintln!("«{name}» ouve o som daqui");
     crate::config::log(&format!("compartilhar: «{name}» ouve o som deste PC"));

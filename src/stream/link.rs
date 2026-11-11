@@ -35,6 +35,25 @@ pub trait Link: Send + Sync {
     fn route(&self) -> String {
         String::new()
     }
+    /// O caminho é a rede local ou uma VPN, sem relé e sem passar pela internet aberta. Só assim
+    /// sai o PyroWave, que gasta centenas de Mbit/s.
+    fn near(&self) -> bool {
+        false
+    }
+}
+
+/// Endereço de rede local (privado, de enlace ou deste PC).
+pub fn is_local(ip: std::net::IpAddr) -> bool {
+    use std::net::IpAddr;
+    match ip {
+        IpAddr::V4(v) => v.is_private() || v.is_link_local() || v.is_loopback(),
+        IpAddr::V6(v) => v.is_loopback() || (v.segments()[0] & 0xfe00) == 0xfc00 || (v.segments()[0] & 0xffc0) == 0xfe80,
+    }
+}
+
+/// Endereço solto da faixa 100.64.0.0/10, a que o Tailscale usa.
+pub fn is_cgnat(ip: std::net::IpAddr) -> bool {
+    matches!(ip, std::net::IpAddr::V4(v) if v.octets()[0] == 100 && (v.octets()[1] & 0xc0) == 64)
 }
 
 /// UDP com um endereço do outro lado.
@@ -90,5 +109,9 @@ impl Link for Udp {
 
     fn route(&self) -> String {
         format!("UDP direto, {}", self.peer)
+    }
+
+    fn near(&self) -> bool {
+        is_local(self.peer.ip()) || is_cgnat(self.peer.ip())
     }
 }

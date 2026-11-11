@@ -856,7 +856,8 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
 /// Valores das listas do host, com o 0 como automático.
 const RES: [(u32, &str); 5] = [(0, "Automático"), (720, "720p"), (1080, "1080p"), (1440, "1440p"), (2160, "2160p (4K)")];
 const FPS: [u32; 8] = [0, 30, 60, 90, 120, 144, 165, 240];
-const MBPS: [u32; 9] = [0, 5, 10, 20, 30, 50, 80, 120, 150];
+/// Acima de [`stream::NV_MAX_MBPS`], só com o PyroWave.
+const MBPS: [u32; 13] = [0, 5, 10, 20, 30, 50, 80, 120, 150, 200, 300, 500, 700];
 
 /// As placas de vídeo deste PC, lidas de novo a cada 10 s (uma placa externa pode chegar).
 fn gpu_names() -> Vec<String> {
@@ -931,7 +932,18 @@ fn host_tab(ui: &mut Ui, st: &mut State, o: &mut Opts, x: f32, top: f32, w: f32,
     y += 32.0;
     ui.check("sh-hdr", rect(ix, y, iw, 30.0), "Desligar o HDR quando quem assiste não tem HDR", &mut o.hdr_off);
     y += 36.0;
-    ui.c.text_wrap(rect(ix, y, iw, (l.bottom() - y - 12.0).max(0.0)), "Os automáticos seguem quem assiste: a altura da tela, o menor entre os Hz dos dois lados e o melhor codec que os dois têm. O 4:4:4 e o HDR10 caem sozinhos se o outro lado não tiver.", 12.0, MUTED, Weight::Regular);
+    let foot = rect(ix, y, iw, (l.bottom() - y - 12.0).max(0.0));
+    if o.codec == "pyrowave" {
+        // O PyroWave troca compressão por atraso: só cabe em rede rápida, e o relé nunca leva.
+        let s = if stream::wave::available() {
+            "PyroWave: uns 200 Mbit/s em 1080p60 e mais em 4K. Só na rede local ou pela VPN (ZeroTier, Tailscale), nunca pelo relé; fora delas, e se quem assiste não tiver a biblioteca, vale o automático."
+        } else {
+            "PyroWave: falta a libpyrowave-shared-1.dll ao lado do Prisma, então vale o automático. Com ela, uns 200 Mbit/s em 1080p60, só na rede local ou pela VPN, nunca pelo relé."
+        };
+        ui.c.text_wrap(foot, s, 12.0, WARN, Weight::Regular);
+    } else {
+        ui.c.text_wrap(foot, "Os automáticos seguem quem assiste: a altura da tela, o menor entre os Hz dos dois lados e o melhor codec que os dois têm. O 4:4:4 e o HDR10 caem sozinhos se o outro lado não tiver.", 12.0, MUTED, Weight::Regular);
+    }
 
     let r = rect(l.right() + GAP, top, w - lw - GAP, h);
     ui.card(r);
@@ -991,10 +1003,14 @@ fn host_tab(ui: &mut Ui, st: &mut State, o: &mut Opts, x: f32, top: f32, w: f32,
     pick(ui, "sh-prio", prio_r, &[0u8, 1, 2], opt(&["Menor atraso", "Equilíbrio", "Qualidade"]), &mut o.priority);
     let codec_vals: Vec<&str> = stream::CODECS.to_vec();
     let mut cur = o.codec.as_str();
-    pick(ui, "sh-codec", codec_r, &codec_vals, opt(&["Automático", "AV1", "HEVC (H.265)", "H.264"]), &mut cur);
+    pick(ui, "sh-codec", codec_r, &codec_vals, opt(&["Automático", "AV1", "HEVC (H.265)", "H.264", "PyroWave"]), &mut cur);
     o.codec = cur.to_string();
-    let mbps_names: Vec<String> = MBPS.iter().map(|&m| if m == 0 { crate::i18n::tr("Automático").into_owned() } else { format!("{m} Mbit/s") }).collect();
-    pick(ui, "sh-mbps", mbps_r, &MBPS, mbps_names, &mut o.mbps);
+    // Os limites acima do NVENC só aparecem com o PyroWave; trocar de codec traz o limite para baixo.
+    let cap = if o.codec == "pyrowave" { stream::MAX_MBPS } else { stream::NV_MAX_MBPS };
+    o.mbps = o.mbps.min(cap);
+    let mbps_vals: Vec<u32> = MBPS.iter().copied().filter(|&m| m <= cap).collect();
+    let mbps_names: Vec<String> = mbps_vals.iter().map(|&m| if m == 0 { crate::i18n::tr("Automático").into_owned() } else { format!("{m} Mbit/s") }).collect();
+    pick(ui, "sh-mbps", mbps_r, &mbps_vals, mbps_names, &mut o.mbps);
 
     // Programas com som agora, lidos a cada 5 s.
     if st.sound_apps.1.is_none_or(|t| t.elapsed().as_secs() >= 5) {
@@ -1036,7 +1052,7 @@ fn client_tab(ui: &mut Ui, app: &App, c: &mut ClientOpts, x: f32, top: f32, w: f
     let ctl = 240.0f32.min(iw * 0.55);
     let imm_r = row(ui, ix, y, iw, "Modo imersivo", ctl);
     y += 46.0;
-    ui.check("sh-ask444", rect(ix, y, iw, 30.0), "Pedir 4:4:4 (texto mais nítido; precisa de NVIDIA ou Intel)", &mut c.ask444);
+    ui.check("sh-ask444", rect(ix, y, iw, 30.0), "Pedir 4:4:4 (texto mais nítido; HEVC só em NVIDIA ou Intel)", &mut c.ask444);
     y += 34.0;
     ui.check("sh-mute", rect(ix, y, iw, 30.0), "Começar sem o som do outro PC", &mut c.mute);
     y += 38.0;

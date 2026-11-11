@@ -1440,6 +1440,8 @@ Limite de banda	Límite de ancho de banda
 HDR10 de 10 bits quando as duas telas estão em HDR	HDR10 de 10 bits cuando las dos pantallas están en HDR
 Aceitar 4:4:4 quando quem assiste pede	Aceptar 4:4:4 cuando quien mira lo pida
 Os automáticos seguem quem assiste: a altura da tela, o menor entre os Hz dos dois lados e o melhor codec que os dois têm. O 4:4:4 e o HDR10 caem sozinhos se o outro lado não tiver.	Los valores automáticos siguen a quien mira: la altura de su pantalla, la frecuencia más baja de los dos lados y el mejor códec que ambos tengan. 4:4:4 y HDR10 se desactivan solos si el otro lado no los tiene.
+PyroWave: uns 200 Mbit/s em 1080p60 e mais em 4K. Só na rede local ou pela VPN (ZeroTier, Tailscale), nunca pelo relé; fora delas, e se quem assiste não tiver a biblioteca, vale o automático.	PyroWave: unos 200 Mbit/s en 1080p60 y más en 4K. Solo en la red local o por VPN (ZeroTier, Tailscale), nunca por el relé; fuera de ellas, o si quien mira no tiene la biblioteca, se usa el automático.
+PyroWave: falta a libpyrowave-shared-1.dll ao lado do Prisma, então vale o automático. Com ela, uns 200 Mbit/s em 1080p60, só na rede local ou pela VPN, nunca pelo relé.	PyroWave: falta libpyrowave-shared-1.dll junto a Prisma, así que se usa el automático. Con ella, unos 200 Mbit/s en 1080p60, solo en la red local o por VPN, nunca por el relé.
 Som, mouse e teclado	Sonido, ratón y teclado
 Som que vai	Sonido que se envía
 Todo o PC	Todo el PC
@@ -1456,7 +1458,7 @@ Modo imersivo	Modo inmersivo
 Só o mouse	Solo ratón
 Só o teclado	Solo teclado
 Mouse e teclado	Ratón y teclado
-Pedir 4:4:4 (texto mais nítido; precisa de NVIDIA ou Intel)	Pedir 4:4:4 (texto más nítido; necesita NVIDIA o Intel)
+Pedir 4:4:4 (texto mais nítido; HEVC só em NVIDIA ou Intel)	Pedir 4:4:4 (texto más nítido; en HEVC necesita NVIDIA o Intel)
 Começar sem o som do outro PC	Empezar sin el sonido del otro PC
 No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. O atalho do menu sempre funciona aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga. Telas lado a lado valem para Mouse e teclado, na lista de PCs: o mouse passa pela borda de uma tela para a vizinha, sem vídeo. Um PC sem posição vai para a primeira livre ao lado deste.	En el modo inmersivo, en pantalla completa, el ratón se queda dentro de la ventana, y la tecla Windows y Alt+Tab van al otro PC. El atajo del menú siempre funciona aquí. En una pantalla con G-SYNC o FreeSync, deja el VSync desactivado: la imagen no se rasga. Las pantallas lado a lado sirven para Ratón y teclado, en la lista de PC: el ratón pasa por el borde de una pantalla a la de al lado, sin vídeo. Un PC sin posición va a la primera libre junto a este.
 Medidor e avisos	Medidor y avisos

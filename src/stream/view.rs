@@ -31,6 +31,7 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 
 use super::*;
 use crate::capture::decoder::{can_decode, Decoded, Decoder};
+use crate::capture::live_enc::VideoFmt;
 use crate::capture::mux::{Codec, Pkt};
 use crate::capture::{d3d, sound, D3d};
 
@@ -41,8 +42,10 @@ struct Frame {
 }
 
 enum Event {
-    Info { codec: Codec, w: u32, h: u32, fps: u32, perms: u8, hdr10: bool, yuv444: bool, priority: u8 },
+    Info { codec: VideoCodec, w: u32, h: u32, fps: u32, perms: u8, hdr10: bool, yuv444: bool, priority: u8 },
     Frame(Frame),
+    /// Um quadro do PyroWave: os pacotes que chegaram (todos, ou o que deu antes do próximo quadro).
+    Wave { pts: i64, parts: Vec<Vec<u8>> },
 }
 
 /// O que o host disse de um controle daqui: jogador (0 sem vaga), vaga do XInput lá e motivo.
@@ -93,6 +96,8 @@ struct Asm {
     key: bool,
     pts: i64,
     parts: Vec<Option<Vec<u8>>>,
+    /// O pacote do PyroWave continua no pedaço seguinte.
+    more: Vec<bool>,
 }
 
 fn newer(a: u32, b: u32) -> bool {
@@ -113,6 +118,8 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
     let mut audio_next: Option<u32> = None;
     // O host se recupera de perda sem quadro-chave (NVENC direto).
     let mut recover = false;
+    // PyroWave: cada quadro vale sozinho; um quadro incompleto ainda vai para a tela.
+    let mut wave = false;
     // Área de transferência, aberta quando o host dá a permissão.
     let mut clip: Option<super::clip::Clip> = None;
     let mut clip_in = super::clip::Pieces::default();
@@ -150,7 +157,7 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
                 }
             }
         }
-        if waiting_key && sh.got_info.load(Ordering::Relaxed) && last_req.elapsed() > Duration::from_millis(150) {
+        if waiting_key && !wave && sh.got_info.load(Ordering::Relaxed) && last_req.elapsed() > Duration::from_millis(150) {
             write(&mut out, &Msg::KeyReq);
             link.send(&out);
             last_req = Instant::now();
@@ -179,6 +186,7 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
             }
             Some(Msg::Info { codec, w, h, fps, perms, recover: r, hdr10, yuv444, priority }) => {
                 recover = r;
+                wave = codec == VideoCodec::Wave;
                 sh.got_info.store(true, Ordering::Relaxed);
                 sh.perms.store(perms, Ordering::Relaxed);
                 push(Event::Info { codec, w, h, fps, perms, hdr10, yuv444, priority });
@@ -233,20 +241,53 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
                     sh.offset.store(o, Ordering::Relaxed);
                 }
             }
-            Some(Msg::Video { key, idx, count, frame, pts, data }) => {
+            Some(Msg::Video { key, more, idx, count, frame, pts, data }) => {
                 if count == 0 || idx >= count {
                     continue;
                 }
                 if let Some(e) = expect.filter(|&e| newer(e, frame)) {
                     // Quadro-chave muito atrás do esperado: o host recomeçou o vídeo (outros quadros
                     // por segundo, outra opção) e a contagem voltou. Sem isto, tudo seria descartado
-                    // como atrasado e a imagem pararia. Hosts novos continuam a contagem.
-                    if !(key && e.wrapping_sub(frame) > 64) {
+                    // como atrasado e a imagem pararia. Hosts novos continuam a contagem. No PyroWave,
+                    // todo quadro vale como chave.
+                    if !((key || wave) && e.wrapping_sub(frame) > 64) {
                         continue;
                     }
                     expect = None;
                     cur = None;
                     waiting_key = true;
+                }
+                if wave {
+                    // Chegou pedaço de um quadro mais novo: o anterior vai como está (o PyroWave
+                    // preenche o que faltou com menos detalhe). Nada de pedir quadro-chave.
+                    if cur.as_ref().is_some_and(|a| a.frame != frame) {
+                        if !newer(frame, cur.as_ref().unwrap().frame) {
+                            continue;
+                        }
+                        let a = cur.take().unwrap();
+                        sh.lost.fetch_add(1, Ordering::Relaxed);
+                        expect = Some(a.frame.wrapping_add(1));
+                        push(Event::Wave { pts: a.pts, parts: super::wave::join(a.parts, &a.more) });
+                    }
+                    // Quadros que não mandaram nenhum pedaço.
+                    if let (None, Some(e)) = (&cur, expect.filter(|&e| e != frame)) {
+                        sh.lost.fetch_add(frame.wrapping_sub(e).min(1000), Ordering::Relaxed);
+                    }
+                    let a = cur.get_or_insert_with(|| Asm { frame, count, got: 0, key, pts, parts: vec![None; count as usize], more: vec![false; count as usize] });
+                    if a.count != count {
+                        continue;
+                    }
+                    if a.parts[idx as usize].is_none() {
+                        a.parts[idx as usize] = Some(data.to_vec());
+                        a.more[idx as usize] = more;
+                        a.got += 1;
+                    }
+                    if a.got == a.count {
+                        let a = cur.take().unwrap();
+                        expect = Some(a.frame.wrapping_add(1));
+                        push(Event::Wave { pts: a.pts, parts: super::wave::join(a.parts, &a.more) });
+                    }
+                    continue;
                 }
                 if let Some(a) = &cur {
                     if a.frame != frame {
@@ -265,7 +306,7 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
                         cur = None;
                     }
                 }
-                let a = cur.get_or_insert_with(|| Asm { frame, count, got: 0, key, pts, parts: vec![None; count as usize] });
+                let a = cur.get_or_insert_with(|| Asm { frame, count, got: 0, key, pts, parts: vec![None; count as usize], more: vec![false; count as usize] });
                 if a.count != count {
                     continue;
                 }
@@ -1077,8 +1118,12 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
             codecs |= codec_bit(c);
         }
     }
-    // Tela em HDR: o host manda HDR10 se a dele também estiver. 4:4:4 só pedindo, porque abre o
-    // CUDA aqui e gasta mais rede.
+    // O PyroWave só é anunciado com a biblioteca aqui; o Vulkan só abre se o host o escolher.
+    if super::wave::available() {
+        codecs |= WAVE;
+    }
+    // Tela em HDR: o host manda HDR10 se a dele também estiver. 4:4:4 só pedindo, porque gasta mais
+    // rede (e, no HEVC, abre o CUDA aqui). O PyroWave faz 4:4:4 em qualquer placa.
     let mut flags = 0u8;
     #[cfg(feature = "stream")]
     let can444 = crate::capture::nvdec::can_444();
@@ -1087,13 +1132,12 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     if crate::capture::monitor_color(mon).hdr {
         flags |= SEES_HDR;
     }
-    #[cfg(feature = "stream")]
-    if std::env::var("PRISMA_444").map(|v| v == "1").unwrap_or(co.ask444) {
-        if can444 {
-            flags |= DECODES_444;
-        } else {
-            eprintln!("4:4:4: esta placa não decodifica HEVC 4:4:4; fica o 4:2:0");
-        }
+    // O pedido de 4:4:4: para o PyroWave basta pedir; para o HEVC, a placa também precisa decodificar.
+    let ask = |on: bool| if on { ASKS_444 | if can444 { DECODES_444 } else { 0 } } else { 0 };
+    let ask444 = std::env::var("PRISMA_444").map(|v| v == "1").unwrap_or(co.ask444);
+    flags |= ask(ask444);
+    if ask444 && !can444 && codecs & WAVE == 0 {
+        eprintln!("4:4:4: esta placa não decodifica HEVC 4:4:4; fica o 4:2:0");
     }
     let mut hello = Vec::new();
     // Quadros por segundo pedidos: o automático manda os Hz desta tela.
@@ -1137,7 +1181,10 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     };
 
     let mut dec: Option<Decoder> = None;
-    let mut info: Option<(Codec, u32, u32, u32)> = None;
+    let mut wave: Option<super::wave::WaveDecoder> = None;
+    // O quadro do PyroWave mais novo ainda não mostrado.
+    let mut wave_frame: Option<(i64, Vec<Vec<u8>>)> = None;
+    let mut info: Option<(VideoCodec, u32, u32, u32)> = None;
     // Prioridade do host (255: versão que não manda).
     let mut host_priority = 255u8;
     // HDR10 e 4:4:4 do vídeo atual; a janela em HDR10.
@@ -1212,6 +1259,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                 clipped = false;
             }
             let extra = match vfmt {
+                (true, true) => " 4:4:4 HDR10",
                 (true, _) => " HDR10",
                 (_, true) => " 4:4:4",
                 _ => "",
@@ -1227,7 +1275,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                 sound: !sh.spk.silenced.load(Ordering::Relaxed),
                 keyboard: KEYS.lock().unwrap().keyboard,
                 vsync: co.vsync,
-                ask444: can444.then_some(flags & DECODES_444 != 0),
+                ask444: (can444 || codecs & WAVE != 0).then_some(flags & ASKS_444 != 0),
                 pad_background: sh.pad_background.load(Ordering::Relaxed),
                 pad_keys: (sh.perms.load(Ordering::Relaxed) & PAD != 0).then(|| sh.pad_keys.load(Ordering::Relaxed)),
                 video: info.map(|(c, w, h, fps)| format!("{w}x{h} {}{extra} · {fps} {} · {}", codec_name(c), crate::i18n::tr("q/s"), link.route())).unwrap_or_default(),
@@ -1279,7 +1327,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                 hud::Pick::Ask444 => {
                     co.ask444 = !co.ask444;
                     let _ = co.save();
-                    flags ^= DECODES_444;
+                    flags = flags & !(ASKS_444 | DECODES_444) | ask(co.ask444);
                     // A descrição nova faz o host recomeçar o vídeo com ou sem o 4:4:4.
                     let mut again = Vec::new();
                     write(&mut again, &Msg::Hello { w: screen_w, h: screen_h, hz: ask_hz(co.fps), codecs, pid: std::process::id(), flags });
@@ -1329,6 +1377,8 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                         vfmt = (hdr10, yuv444);
                         scaler = None;
                         dec = None;
+                        wave = None;
+                        wave_frame = None;
                         #[cfg(feature = "stream")]
                         {
                             nv = None;
@@ -1343,7 +1393,24 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                                 Err(e) => eprintln!("janela HDR10: {e:?}"),
                             }
                         }
-                        if yuv444 {
+                        if codec == VideoCodec::Wave {
+                            wave = match super::wave::WaveDecoder::new(&d, w, h, VideoFmt { hdr10, yuv444 }) {
+                                Ok(x) => {
+                                    eprintln!("PyroWave {}: Vulkan aberto em {:.0} ms", super::wave::fmt_name(x.vf), x.open_ms());
+                                    Some(x)
+                                }
+                                Err(e) => {
+                                    // Sem o PyroWave aqui: a descrição nova da tela faz o host voltar ao automático.
+                                    eprintln!("{}; pedindo outro codec ao host", e.message());
+                                    codecs &= !WAVE;
+                                    let mut again = Vec::new();
+                                    write(&mut again, &Msg::Hello { w: screen_w, h: screen_h, hz: ask_hz(co.fps), codecs, pid: std::process::id(), flags });
+                                    link.send(&again);
+                                    link.send(&again);
+                                    None
+                                }
+                            };
+                        } else if yuv444 {
                             #[cfg(feature = "stream")]
                             {
                                 use crate::capture::nvdec::{Draw444, Nvdec};
@@ -1357,8 +1424,8 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                             }
                             #[cfg(not(feature = "stream"))]
                             eprintln!("o 4:4:4 só existe compilando com --features stream");
-                        } else {
-                            dec = match Decoder::new(&d.dev, codec, w, h, fps, None, hdr10) {
+                        } else if let VideoCodec::Std(c) = codec {
+                            dec = match Decoder::new(&d.dev, c, w, h, fps, None, hdr10) {
                                 Ok(x) => Some(x),
                                 Err(e) => {
                                     eprintln!("sem decodificador para {}: {e:?}", codec_name(codec));
@@ -1367,6 +1434,10 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                             };
                         }
                     }
+                }
+                Event::Wave { pts, parts } => {
+                    // Cada quadro vale sozinho: só o mais novo vai para a tela.
+                    wave_frame = Some((pts, parts));
                 }
                 #[cfg(feature = "stream")]
                 Event::Frame(f) if nv.is_some() => {
@@ -1437,6 +1508,23 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                 second.e2e.push(shown + sh.offset.load(Ordering::Relaxed) - pts);
             }
         }
+        if let (Some((pts, parts)), Some(wd)) = (wave_frame.take(), &mut wave) {
+            let t = now();
+            match wd.decode(&parts) {
+                Ok(true) => {
+                    second.decode.push(now() - t);
+                    let bb: ID3D11Texture2D = swap.GetBuffer(0)?;
+                    let (ow, oh) = buffer_size(&bb);
+                    if wd.draw(&d.dev, &d.ctx, &bb, video_rect(wd.w, wd.h, ow, oh)).is_ok() && swap.Present(sync, present_flags).is_ok() {
+                        let shown = now();
+                        second.shown += 1;
+                        second.e2e.push(shown + sh.offset.load(Ordering::Relaxed) - pts);
+                    }
+                }
+                Ok(false) => {}
+                Err(e) => eprintln!("{}", e.message()),
+            }
+        }
         if let (Some(f), Some((_, w, h, fps))) = (last, info) {
             if let Some((tex, slice)) = f.texture() {
                 let bb: ID3D11Texture2D = swap.GetBuffer(0)?;
@@ -1483,6 +1571,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
             }
             lost_mark = lost_total;
             let extra = match vfmt {
+                (true, true) => " 4:4:4 HDR10",
                 (true, _) => " HDR10",
                 (_, true) => " 4:4:4",
                 _ => "",

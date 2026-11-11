@@ -466,12 +466,13 @@ impl Link for Net {
         }
         "procurando caminho".into()
     }
-}
 
-fn is_local(ip: IpAddr) -> bool {
-    match ip {
-        IpAddr::V4(v) => v.is_private() || v.is_link_local() || v.is_loopback(),
-        IpAddr::V6(v) => v.is_loopback() || (v.segments()[0] & 0xfe00) == 0xfc00 || (v.segments()[0] & 0xffc0) == 0xfe80,
+    /// Só o caminho escolhido agora conta: o iroh pode trocar do relé para o direto (e voltar).
+    fn near(&self) -> bool {
+        self.conn.paths().iter().filter(|p| p.is_selected()).any(|p| match p.remote_addr() {
+            TransportAddr::Ip(a) => is_local(a.ip()) || vpn_of(a.ip()).is_some(),
+            _ => false,
+        })
     }
 }
 
@@ -498,8 +499,7 @@ fn vpn_of(ip: IpAddr) -> Option<&'static str> {
     let IpAddr::V4(v4) = ip else { return None };
     let s = v4.to_string();
     // Tailscale dá endereços soltos em 100.64.0.0/10.
-    let o = v4.octets();
-    if o[0] == 100 && (o[1] & 0xc0) == 64 && nets.iter().any(|(_, v)| *v == "Tailscale") {
+    if is_cgnat(ip) && nets.iter().any(|(_, v)| *v == "Tailscale") {
         return Some("Tailscale");
     }
     nets.iter().find(|(p, _)| s.starts_with(p.as_str())).map(|(_, v)| *v)

@@ -138,6 +138,8 @@ struct Room {
     clip_id: u16,
     /// Número do próximo quadro de vídeo, contínuo entre as sessões da sala.
     frame_id: u32,
+    /// O PyroWave não abriu nesta sala: fica o automático até ela acabar (senão recomeçaria sem fim).
+    wave_failed: bool,
 }
 
 impl Room {
@@ -384,7 +386,7 @@ pub fn restore_hdr() {
 /// Devolve o endereço de alguém novo que chegou pelo UDP, se for o caso.
 pub(super) fn serve(d: &D3d, first: Joiner, joins: Option<&mpsc::Receiver<Joiner>>) -> Option<(Hello, SocketAddr)> {
     let _hdr = HdrOff::new(&first.hello);
-    let mut room = Room { guests: vec![Guest::new(first)], bridge: None, bridge_err: None, anti_cheat: false, checked: Instant::now() - Duration::from_secs(10), clip: None, clip_id: 0, frame_id: 0 };
+    let mut room = Room { guests: vec![Guest::new(first)], bridge: None, bridge_err: None, anti_cheat: false, checked: Instant::now() - Duration::from_secs(10), clip: None, clip_id: 0, frame_id: 0, wave_failed: false };
     let g = &room.guests[0];
     eprintln!("chegou «{}»: tela {}x{} a {} Hz, {} ({})", g.name, g.hello.w, g.hello.h, g.hello.hz, perms_text(g.perms), g.link.route());
     loop {
@@ -977,12 +979,83 @@ fn pads_tick(room: &mut Room, out: &mut Vec<u8>, repeat_info: bool) {
     }
 }
 
-/// O vídeo que já está saindo serve para quem chegou?
-fn fits(hello: &Hello, codec: Codec, vf: VideoFmt) -> bool {
+/// O vídeo que já está saindo serve para quem chegou? (O PyroWave também pede o caminho perto,
+/// que quem chama confere pelo canal.)
+fn fits(hello: &Hello, codec: VideoCodec, vf: VideoFmt) -> bool {
+    let codec = match codec {
+        VideoCodec::Wave => return hello.codecs & WAVE != 0 && (!vf.hdr10 || hello.flags & SEES_HDR != 0),
+        VideoCodec::Std(c) => c,
+    };
     if vf.yuv444 {
         return hello.flags & DECODES_444 != 0;
     }
     hello.codecs & codec_bit(codec) != 0 && (!vf.hdr10 || hello.flags & SEES_HDR != 0)
+}
+
+/// Um quadro pronto para a rede, já em pedaços que cabem num pacote.
+struct Ready {
+    key: bool,
+    pts: i64,
+    chunks: super::wave::Chunks,
+}
+
+/// O codificador da sessão: o NVENC (depois da conversão para NV12, P010 ou AYUV) ou o PyroWave,
+/// que lê a captura direto e faz cada quadro sozinho, sem quadro-chave.
+enum Coder {
+    Nv { enc: LiveEncoder, conv: Prep },
+    Wave(super::wave::WaveEncoder),
+}
+
+impl Coder {
+    fn ready(&self) -> bool {
+        match self {
+            Coder::Nv { enc, .. } => enc.ready(),
+            Coder::Wave(_) => true,
+        }
+    }
+
+    fn force_key(&self) {
+        if let Coder::Nv { enc, .. } = self {
+            enc.force_key();
+        }
+    }
+
+    fn invalidate(&self, pts: i64) -> bool {
+        match self {
+            Coder::Nv { enc, .. } => enc.invalidate(pts),
+            Coder::Wave(_) => true,
+        }
+    }
+
+    fn recovers(&self) -> bool {
+        match self {
+            Coder::Nv { enc, .. } => enc.recovers(),
+            Coder::Wave(_) => true,
+        }
+    }
+
+    /// Codifica o quadro que está na textura do meio. O PyroWave devolve o quadro na hora, já em
+    /// pacotes de até `space` bytes; o NVENC devolve depois, por [`Coder::pump`].
+    unsafe fn feed(&mut self, ctx: &ID3D11DeviceContext, pts: i64, space: usize, out: &mut Vec<Ready>) -> Result<()> {
+        match self {
+            Coder::Nv { enc, conv } => {
+                let t = conv.convert(ctx)?;
+                enc.feed(&t, pts)
+            }
+            Coder::Wave(w) => {
+                out.push(Ready { key: false, pts, chunks: w.encode(ctx, space)? });
+                Ok(())
+            }
+        }
+    }
+
+    fn pump(&mut self, space: usize, pkts: &mut Vec<Pkt>, out: &mut Vec<Ready>) -> Result<()> {
+        if let Coder::Nv { enc, .. } = self {
+            enc.pump(pkts)?;
+            out.extend(pkts.drain(..).map(|p| Ready { key: p.key, pts: p.pts, chunks: super::wave::Chunks::plain(&p.data, space) }));
+        }
+        Ok(())
+    }
 }
 
 /// De onde vem a imagem: WGC (com o cursor do Windows) ou Desktop Duplication (no serviço, para
@@ -1099,8 +1172,38 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
         tries.extend([(Codec::Av1, ten), (Codec::Hevc, ten)]);
     }
     tries.extend([Codec::Av1, Codec::Hevc, Codec::H264].map(|c| (c, VideoFmt::default())));
+    let mbps = std::env::var("PRISMA_MBPS").ok().and_then(|v| v.parse::<u32>().ok()).or((opts.mbps > 0).then_some(opts.mbps));
+
+    // PyroWave: só pedido, com todos tendo a biblioteca e todos na rede local ou na VPN (nunca pelo
+    // relé). HDR10 nas mesmas condições do NVENC; 4:4:4 quando todos pedem e o host aceita, em
+    // qualquer placa (o PyroWave não depende do NVDEC).
+    let mut wave = None;
+    if codec_opt == "pyrowave" && !room.wave_failed {
+        let far: Vec<String> = room.guests.iter().filter(|g| !g.link.near()).map(|g| format!("«{}» ({})", g.name, g.link.route())).collect();
+        if codecs & WAVE == 0 {
+            eprintln!("PyroWave: quem assiste não tem a biblioteca; fica o automático");
+        } else if !far.is_empty() {
+            eprintln!("PyroWave só na rede local ou pela VPN, e {} não está: fica o automático", far.join(", "));
+        } else {
+            let vf = VideoFmt { hdr10: want_hdr, yuv444: flags & ASKS_444 != 0 && opts.allow444 };
+            let bits = mbps.map(|m| m as u64 * 1_000_000).unwrap_or_else(|| super::wave::auto_bits(out_w, out_h, fps, vf));
+            match super::wave::WaveEncoder::new(d, src_w, src_h, out_w, out_h, fps, bits, vf) {
+                Ok(w) => {
+                    eprintln!("vídeo: {}x{} a {} quadros/s, PyroWave {}, {:.0} Mbit/s ({})", out_w, out_h, fps, super::wave::fmt_name(vf), bits as f64 / 1e6, w.name());
+                    wave = Some(w);
+                }
+                Err(e) => {
+                    eprintln!("{}; fica o automático", e.message());
+                    room.wave_failed = true;
+                }
+            }
+        }
+    }
     let mut made = None;
     for (c, vf) in tries {
+        if wave.is_some() {
+            break;
+        }
         // O 4:4:4 vai para o NVDEC de quem assiste, não para o Media Foundation da lista de codecs.
         if (!vf.yuv444 && codecs & codec_bit(c) == 0) || wanted.is_some_and(|w| w != c) {
             continue;
@@ -1111,9 +1214,8 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
             2 => 6,
             _ => 4,
         };
-        let mbps = std::env::var("PRISMA_MBPS").ok().and_then(|v| v.parse::<u32>().ok()).or((opts.mbps > 0).then_some(opts.mbps));
         let bits = match mbps {
-            Some(m) => m * 1_000_000,
+            Some(m) => m.min(super::NV_MAX_MBPS) * 1_000_000,
             None => (bitrate(out_w, out_h, fps, c) as u64 * factor / 2).min(150_000_000) as u32,
         };
         // O 4:4:4 leva cerca de metade a mais de dados pela mesma nitidez.
@@ -1125,30 +1227,37 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                     (_, true) => ", 4:4:4",
                     _ => "",
                 };
-                eprintln!("vídeo: {}x{} a {} quadros/s, {}{}, {:.1} Mbit/s ({})", out_w, out_h, fps, codec_name(c), extra, bits as f64 / 1e6, e.name());
+                eprintln!("vídeo: {}x{} a {} quadros/s, {}{}, {:.1} Mbit/s ({})", out_w, out_h, fps, codec_name(VideoCodec::Std(c)), extra, bits as f64 / 1e6, e.name());
                 made = Some((e, c, vf));
                 break;
             }
-            Err(e) if vf != VideoFmt::default() => eprintln!("vídeo: {}{} recusado ({}); tentando o próximo", codec_name(c), if vf.hdr10 { " HDR10" } else { " 4:4:4" }, e.message()),
+            Err(e) if vf != VideoFmt::default() => eprintln!("vídeo: {}{} recusado ({}); tentando o próximo", codec_name(VideoCodec::Std(c)), if vf.hdr10 { " HDR10" } else { " 4:4:4" }, e.message()),
             Err(_) => {}
         }
     }
-    let Some((mut enc, codec, vf)) = made else {
-        return Err(Error::new(E_FAIL, "nenhum codec em comum com quem assiste"));
-    };
-
+    // A textura do meio recebe a captura: a do PyroWave é compartilhada com o Vulkan dele.
     // HDR10 sai em PQ de 10 bits; senão a tela em HDR vira SDR antes de codificar.
-    let mid = bgra_texture(&d.dev, src_w, src_h, if vf.hdr10 { DXGI_FORMAT_R10G10B10A2_UNORM } else { DXGI_FORMAT_B8G8R8A8_UNORM })?;
+    let (mut enc, mid, codec, vf) = match (wave, made) {
+        (Some(w), _) => {
+            let (mid, vf) = (w.input().clone(), w.vf);
+            (Coder::Wave(w), mid, VideoCodec::Wave, vf)
+        }
+        (None, Some((e, c, vf))) => {
+            let mid = bgra_texture(&d.dev, src_w, src_h, if vf.hdr10 { DXGI_FORMAT_R10G10B10A2_UNORM } else { DXGI_FORMAT_B8G8R8A8_UNORM })?;
+            let out_fmt = if vf.yuv444 {
+                ConvOut::Ayuv
+            } else if vf.hdr10 {
+                ConvOut::P010
+            } else {
+                ConvOut::Nv12
+            };
+            let conv = Prep::new(&d.dev, &d.ctx, &mid, src_w, src_h, out_w, out_h, fps, out_fmt)?;
+            (Coder::Nv { enc: e, conv }, mid, VideoCodec::Std(c), vf)
+        }
+        (None, None) => return Err(Error::new(E_FAIL, "nenhum codec em comum com quem assiste")),
+    };
     // Na Desktop Duplication, a conversão de cor e o cursor ficam com ela.
     let tone = if color.hdr && cap.is_some() { Some(ToneMap::new(&d.dev, &mid, vf.hdr10, color.white_nits)?) } else { None };
-    let out_fmt = if vf.yuv444 {
-        ConvOut::Ayuv
-    } else if vf.hdr10 {
-        ConvOut::P010
-    } else {
-        ConvOut::Nv12
-    };
-    let mut conv = Prep::new(&d.dev, &d.ctx, &mid, src_w, src_h, out_w, out_h, fps, out_fmt)?;
 
     let priority = opts.priority;
     // Desktop Duplication com a tela noutra placa: a captura fica lá, com a sua textura.
@@ -1222,6 +1331,10 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     let mut last_fed = i64::MIN / 2;
     let mut pending: Option<i64> = None;
     let mut pkts: Vec<Pkt> = Vec::new();
+    let mut ready: Vec<Ready> = Vec::new();
+    // PyroWave pedido: se o caminho de alguém sair da rede local ou da VPN (ou voltar), o vídeo
+    // recomeça com o codec que cabe.
+    let wave_asked = codec_opt == "pyrowave" && !room.wave_failed;
     // A contagem continua de uma sessão para a outra: quem assiste descarta quadro "velho".
     let mut frame_id = room.frame_id;
     let mut result = End::Gone;
@@ -1285,6 +1398,14 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                 }
                 opts = fresh;
             }
+            if wave_asked {
+                let fit = room.guests.iter().all(|g| g.hello.codecs & WAVE != 0 && g.link.near());
+                if fit != (codec == VideoCodec::Wave) {
+                    eprintln!("{}", if fit { "todos na rede local ou na VPN: o vídeo volta ao PyroWave" } else { "alguém saiu da rede local ou da VPN: o vídeo sai do PyroWave" });
+                    result = End::Again;
+                    break 'run;
+                }
+            }
         }
         let secure = match &cap {
             Cap::Wgc { pool, .. } => {
@@ -1310,7 +1431,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                 }
                 eprintln!("chegou «{}»: tela {}x{} a {} Hz, {} ({})", j.name, j.hello.w, j.hello.h, j.hello.hz, perms_text(j.perms), j.link.route());
                 let echo = j.link.same_pc() && exclude.is_none() && j.perms & SOUND != 0;
-                let ok = fits(&j.hello, codec, vf) && !echo;
+                let ok = fits(&j.hello, codec, vf) && (codec != VideoCodec::Wave || j.link.near()) && !echo;
                 let mut g = Guest::new(j);
                 if ok {
                     g.input = (g.perms & (KEYBOARD | MOUSE) != 0).then(|| Injector::new(mon, g.perms));
@@ -1449,6 +1570,9 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
         }
 
         let mut changed = false;
+        // O mesmo vídeo para todo mundo, em pedaços que cabem no caminho mais estreito.
+        let room_mtu = room.guests.iter().map(|g| g.link.mtu()).min().unwrap_or(MTU);
+        let space = room_mtu - VIDEO_HEAD;
         let step = (|| -> Result<()> {
             let pool = match &mut cap {
                 Cap::Wgc { pool: Some((pool, ..)), .. } => pool,
@@ -1459,7 +1583,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                         super::screen::Got::Changed => changed = true,
                         super::screen::Got::Nothing => {}
                     }
-                    enc.pump(&mut pkts)?;
+                    enc.pump(space, &mut pkts, &mut ready)?;
                     // A Desktop Duplication entrega cada mudança (o mouse também): o ritmo fica aqui.
                     if enc.ready() && fed_at.elapsed() >= Duration::from_nanos(interval as u64 * 90) {
                         if let Some(pts) = pending.take() {
@@ -1470,15 +1594,13 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                                 }
                                 None => x.compose(&mid)?,
                             }
-                            let t = conv.convert(&d.ctx)?;
-                            enc.feed(&t, pts)?;
+                            enc.feed(&d.ctx, pts, space, &mut ready)?;
                             last_fed = pts;
                             fed_at = Instant::now();
                         } else if opts.constant && last_fed > i64::MIN / 2 && fed_at.elapsed() >= Duration::from_nanos(interval as u64 * 100) {
                             // Ritmo constante: a tela parada repete o último quadro, no ritmo de sempre.
-                            let t = conv.convert(&d.ctx)?;
                             let pts = now();
-                            enc.feed(&t, pts)?;
+                            enc.feed(&d.ctx, pts, space, &mut ready)?;
                             last_fed = pts;
                             fed_at = Instant::now();
                         }
@@ -1512,15 +1634,14 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                 let _ = f.Close();
                 pending = Some(pts);
             }
-            enc.pump(&mut pkts)?;
+            enc.pump(space, &mut pkts, &mut ready)?;
             if enc.ready() {
                 // Ritmo constante: a tela parada repete o último quadro, no ritmo de sempre.
                 if pending.is_none() && opts.constant && last_fed > i64::MIN / 2 && now() - last_fed >= interval {
                     pending = Some(now());
                 }
                 if let Some(pts) = pending.take() {
-                    let t = conv.convert(&d.ctx)?;
-                    enc.feed(&t, pts)?;
+                    enc.feed(&d.ctx, pts, space, &mut ready)?;
                     last_fed = pts;
                 }
             }
@@ -1535,24 +1656,25 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
             result = End::Again;
             break;
         }
-        // O mesmo vídeo para todo mundo, em pedaços que cabem no caminho mais estreito.
-        let room_mtu = room.guests.iter().map(|g| g.link.mtu()).min().unwrap_or(MTU);
-        for p in pkts.drain(..) {
+        for p in ready.drain(..) {
             if p.key {
                 // Repete a descrição com cada quadro-chave, caso a primeira tenha se perdido.
                 for g in &room.guests {
                     g.link.send(&infos[g.perms as usize]);
                 }
             }
-            let space = room_mtu - VIDEO_HEAD;
-            let count = p.data.len().div_ceil(space).max(1);
-            if count > u16::MAX as usize {
+            let c = &p.chunks;
+            let count = c.parts.len();
+            if count == 0 || count > u16::MAX as usize {
                 continue;
             }
-            for (idx, chunk) in p.data.chunks(space).enumerate() {
-                write(&mut out, &Msg::Video { key: p.key, idx: idx as u16, count: count as u16, frame: frame_id, pts: p.pts, data: chunk });
-                for g in &room.guests {
-                    g.link.send(&out);
+            for (idx, chunk) in c.parts.iter().enumerate() {
+                write(&mut out, &Msg::Video { key: p.key, more: c.more[idx], idx: idx as u16, count: count as u16, frame: frame_id, pts: p.pts, data: chunk });
+                // Os pedaços críticos do PyroWave vão duas vezes: sem eles, o quadro inteiro se perde.
+                for _ in 0..if idx < c.critical { 2 } else { 1 } {
+                    for g in &room.guests {
+                        g.link.send(&out);
+                    }
                 }
             }
             sent.push_back((frame_id, p.pts));
@@ -1632,7 +1754,7 @@ mod tests {
 
     fn room(guests: Vec<Guest>) -> (Room, super::super::pads::FakeLog) {
         let log = Arc::new(Mutex::new(Vec::new()));
-        let r = Room { guests, bridge: Some(Bridge::fake(log.clone())), bridge_err: None, anti_cheat: false, checked: Instant::now(), clip: None, clip_id: 0, frame_id: 0 };
+        let r = Room { guests, bridge: Some(Bridge::fake(log.clone())), bridge_err: None, anti_cheat: false, checked: Instant::now(), clip: None, clip_id: 0, frame_id: 0, wave_failed: false };
         (r, log)
     }
 
@@ -1704,11 +1826,17 @@ mod tests {
     fn joiner_fits_current_video() {
         let h = |codecs, flags| Hello { w: 0, h: 0, hz: 0, codecs, pid: 0, flags };
         let plain = VideoFmt::default();
-        assert!(fits(&h(2, 0), Codec::Hevc, plain));
-        assert!(!fits(&h(1, 0), Codec::Hevc, plain));
-        assert!(!fits(&h(7, 0), Codec::Av1, VideoFmt { hdr10: true, yuv444: false }));
-        assert!(fits(&h(7, SEES_HDR), Codec::Av1, VideoFmt { hdr10: true, yuv444: false }));
-        assert!(!fits(&h(7, SEES_HDR), Codec::Hevc, VideoFmt { hdr10: false, yuv444: true }));
-        assert!(fits(&h(0, DECODES_444), Codec::Hevc, VideoFmt { hdr10: false, yuv444: true }));
+        assert!(fits(&h(2, 0), VideoCodec::Std(Codec::Hevc), plain));
+        assert!(!fits(&h(1, 0), VideoCodec::Std(Codec::Hevc), plain));
+        assert!(!fits(&h(7, 0), VideoCodec::Std(Codec::Av1), VideoFmt { hdr10: true, yuv444: false }));
+        assert!(fits(&h(7, SEES_HDR), VideoCodec::Std(Codec::Av1), VideoFmt { hdr10: true, yuv444: false }));
+        assert!(!fits(&h(7, SEES_HDR), VideoCodec::Std(Codec::Hevc), VideoFmt { hdr10: false, yuv444: true }));
+        assert!(fits(&h(0, DECODES_444), VideoCodec::Std(Codec::Hevc), VideoFmt { hdr10: false, yuv444: true }));
+        assert!(fits(&h(WAVE, 0), VideoCodec::Wave, plain));
+        assert!(!fits(&h(7, DECODES_444), VideoCodec::Wave, plain));
+        // O PyroWave 4:4:4 serve a quem tem a biblioteca, peça ou não; o HDR10 pede a tela em HDR.
+        assert!(fits(&h(WAVE, 0), VideoCodec::Wave, VideoFmt { hdr10: false, yuv444: true }));
+        assert!(!fits(&h(WAVE, ASKS_444), VideoCodec::Wave, VideoFmt { hdr10: true, yuv444: true }));
+        assert!(fits(&h(WAVE, SEES_HDR), VideoCodec::Wave, VideoFmt { hdr10: true, yuv444: true }));
     }
 }

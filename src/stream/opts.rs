@@ -50,7 +50,12 @@ pub fn mods_now(ctrl: bool, alt: bool, shift: bool) -> u32 {
 }
 
 /// Codecs na ordem da lista da página.
-pub const CODECS: [&str; 4] = ["auto", "av1", "hevc", "h264"];
+pub const CODECS: [&str; 5] = ["auto", "av1", "hevc", "h264", "pyrowave"];
+
+/// Maior limite de banda que o NVENC recebe; acima disso, só o PyroWave, que vai até [`MAX_MBPS`].
+pub const NV_MAX_MBPS: u32 = 150;
+/// Maior limite de banda aceito (o PyroWave em rede local rápida).
+pub const MAX_MBPS: u32 = 700;
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct Opts {
@@ -154,7 +159,7 @@ impl Opts {
                 "nome" => o.name = clean(v, 40),
                 "resolucao" => o.res = v.parse().unwrap_or(0),
                 "quadros" => o.fps = v.parse::<u32>().unwrap_or(0).min(480),
-                "banda" => o.mbps = v.parse::<u32>().unwrap_or(0).min(500),
+                "banda" => o.mbps = v.parse::<u32>().unwrap_or(0).min(MAX_MBPS),
                 "codec" if CODECS.contains(&v) => o.codec = v.into(),
                 "prioridade" => o.priority = v.parse::<u8>().unwrap_or(1).min(2),
                 "dez_bits" => o.ten_bit = flag(v),
@@ -412,6 +417,9 @@ mod tests {
         };
         assert_eq!(Opts::parse(&o.text()), o);
         assert_eq!(Opts::parse("pessoas=99\ncontroles=outro\ncodec=mp3\nnome=a\tb"), Opts { guests: 8, name: "ab".into(), ..Opts::default() });
+        // Com o PyroWave, o limite passa do teto do NVENC até o MAX_MBPS.
+        assert_eq!(Opts::parse("codec=pyrowave\nbanda=500").mbps, 500);
+        assert_eq!(Opts::parse("banda=9000").mbps, MAX_MBPS);
         // Arquivo da 0.11.0: o resto fica no padrão.
         assert_eq!(Opts::parse("hdr_desligar=1\npessoas=2\ncontroles=auto\nconvite=total\n"), Opts { hdr_off: true, guests: 2, invite: TOTAL, ..Opts::default() });
         let c = ClientOpts { fullscreen: false, vsync: true, immersive: 1, meter: 2, warn: false, mute: true, ask444: true, pad_background: true, pad_keys: true, fps: 60, gpu: "AMD Radeon(TM) Graphics".into(), key_menu: (MOD_ALT, 0x70), key_sound: (MOD_CTRL, b'M' as u32), ..ClientOpts::default() };
