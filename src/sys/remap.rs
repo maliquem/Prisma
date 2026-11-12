@@ -1131,11 +1131,9 @@ pub fn feed(key: &str, inp: &Input, arrived: Instant) {
             }
         };
         if fire {
-            let stop = !STOPPED.fetch_xor(true, Ordering::Relaxed);
-            for e in r.engines.values_mut() {
-                acts.extend(e.0.release_all());
-            }
-            events.push(pads::Event::Stopped { on: stop });
+            let on = !STOPPED.load(Ordering::Relaxed);
+            acts.extend(stop(r, on));
+            events.push(pads::Event::Stopped { on });
         }
         if !STOPPED.load(Ordering::Relaxed) {
             let p = &r.profiles[r.cur];
@@ -1150,11 +1148,7 @@ pub fn feed(key: &str, inp: &Input, arrived: Instant) {
                     Act::Cmd(Out::Profile(n)) => {
                         // Troca na mão: vale até o foco mudar de programa.
                         if let Some(to) = strings.get(n as usize).and_then(|s| r.profiles.iter().position(|p| p.name == *s)) {
-                            r.want = None;
-                            r.cur = to;
-                            for e in r.engines.values_mut() {
-                                acts.extend(e.0.release_all());
-                            }
+                            acts.extend(switch(r, to));
                             events.push(pads::Event::Profile { name: r.profiles[to].name.clone() });
                         }
                     }
@@ -1174,11 +1168,7 @@ pub fn feed(key: &str, inp: &Input, arrived: Instant) {
             }
             if let Some((to, at)) = r.want {
                 if arrived >= at && r.engines.values().all(|e| e.0.idle()) {
-                    r.want = None;
-                    r.cur = to;
-                    for e in r.engines.values_mut() {
-                        acts.extend(e.0.release_all());
-                    }
+                    acts.extend(switch(r, to));
                     events.push(pads::Event::Profile { name: r.profiles[to].name.clone() });
                 }
             }
@@ -1197,6 +1187,40 @@ pub fn feed(key: &str, inp: &Input, arrived: Instant) {
     }
     events.into_iter().for_each(pads::emit);
     focus_tick(arrived);
+}
+
+/// Passa ao perfil `to` e solta tudo dos controles: as teclas da camada velha não ficam presas.
+fn switch(r: &mut Run, to: usize) -> Vec<Act> {
+    r.want = None;
+    r.cur = to;
+    r.engines.values_mut().flat_map(|e| e.0.release_all()).collect()
+}
+
+/// Para (`on`) ou volta o mapeamento, soltando tudo.
+fn stop(r: &mut Run, on: bool) -> Vec<Act> {
+    STOPPED.store(on, Ordering::Relaxed);
+    r.engines.values_mut().flat_map(|e| e.0.release_all()).collect()
+}
+
+/// Troca de perfil pedida de fora (Prisma Launcher): vale até o programa em foco mudar.
+pub fn switch_to(name: &str) -> bool {
+    let acts = {
+        let mut g = RUN.lock().unwrap();
+        let Some(r) = g.as_mut() else { return false };
+        let Some(to) = r.profiles.iter().position(|p| p.name == name) else { return false };
+        switch(r, to)
+    };
+    send(&acts);
+    pads::emit(pads::Event::Profile { name: name.to_string() });
+    true
+}
+
+/// Parada pedida de fora; devolve se ficou parado.
+pub fn set_stopped(on: bool) -> bool {
+    let acts = RUN.lock().unwrap().as_mut().map(|r| stop(r, on)).unwrap_or_default();
+    send(&acts);
+    pads::emit(pads::Event::Stopped { on });
+    on
 }
 
 /// Olha o programa em foco a cada 250 ms enquanto algum controle manda relatórios: pega também o

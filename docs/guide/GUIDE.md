@@ -288,7 +288,7 @@ Prisma Launcher, the games launcher, talks to Prisma running on the same PC thro
 - **NVIDIA driver:** read and change driver options in the game profile or the global one, with the same values as the NVIDIA driver page. The game joins the page list. Only with an NVIDIA card.
 - **Capture:** take a photo of the game window only, even with the launcher on top (it goes straight to the capture folder and the clipboard, without opening the editor), and start or stop recording the game window. Saving the replay works too.
 - **Share screen:** create an invite, lasting what the launcher picks (from 1 minute to 24 hours) or what the page says.
-- **Controllers:** see the connected controllers, with connection, battery and report rate.
+- **Controllers:** see the connected controllers, with connection, battery and report rate. With controller as keyboard and mouse on, see the profile in use, switch profile (until the program in focus changes) and stop or resume mapping, like the stop combination on the controller.
 - **Open a page:** Meter, Power, Fullscreenizer, Sound, HDR, NVIDIA driver, Capture, Share screen or Controllers.
 
 The game the launcher opens also enters game mode at once, without waiting for detection. Nothing opens over the game: Prisma only shows a notice, as with the shortcuts. With Prisma closed, the launcher reaches none of this.

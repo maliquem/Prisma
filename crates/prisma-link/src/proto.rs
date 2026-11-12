@@ -73,6 +73,18 @@ pub enum Request {
     },
     /// Controles ligados agora (`controllers`).
     Controllers,
+    /// Perfis do controle como teclado e mouse e qual está em uso (`controllers.mapping`).
+    PadProfiles,
+    /// Troca para o perfil `name` até o programa em foco mudar (`controllers.mapping`).
+    SetPadProfile {
+        name: String,
+    },
+    /// Para ou volta o mapeamento, como a combinação de parada no controle; `None` alterna
+    /// (`controllers.mapping`).
+    PadStop {
+        #[serde(default)]
+        on: Option<bool>,
+    },
     #[serde(other)]
     Unknown,
 }
@@ -224,6 +236,15 @@ pub enum Reply {
     },
     Controllers {
         pads: Vec<Controller>,
+    },
+    PadProfiles {
+        profiles: Vec<String>,
+        /// Perfil em uso; vazio com o mapeamento desligado.
+        active: String,
+        /// O controle como teclado e mouse está ligado na tela Controles.
+        mapping: bool,
+        /// Parado pela combinação no controle ou pelo `PadStop`.
+        stopped: bool,
     },
     #[serde(other)]
     Unknown,
@@ -389,6 +410,7 @@ mod tests {
             Reply::Controllers {
                 pads: vec![Controller { name: "DualSense".into(), link: "usb".into(), battery: Some(15), charging: true, wired: false, rate_hz: Some(250), p99_us: Some(4100) }],
             },
+            Reply::PadProfiles { profiles: vec!["Desktop".into(), "Base".into()], active: "Desktop".into(), mapping: true, stopped: false },
         ];
         for r in replies {
             let json = serde_json::to_string(&r).unwrap();

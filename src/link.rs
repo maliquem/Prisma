@@ -14,6 +14,7 @@ use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_APP};
 
 use crate::app::App;
 use crate::pages::Page;
+use crate::sys::remap;
 use crate::sys::drs::{self, Profile};
 use crate::sys::nvset::{self, Kind, Setting};
 use crate::sys::{audio, power, procs};
@@ -74,6 +75,16 @@ impl PartialEq for Outcome {
 
 /// Falha com o código e o motivo no idioma do Prisma.
 /// Um controle como o launcher recebe: só números inteiros, porque `Reply` compara com `Eq`.
+/// Perfis do mapeamento, o que está em uso e se está ligado ou parado.
+fn pad_profiles() -> Reply {
+    Reply::PadProfiles {
+        profiles: remap::profiles().into_iter().map(|p| p.name).collect(),
+        active: remap::active().unwrap_or_default(),
+        mapping: remap::enabled(),
+        stopped: remap::stopped(),
+    }
+}
+
 fn controller_of(p: &crate::sys::pads::Pad) -> Controller {
     use crate::sys::pads::{Battery, Link};
     let (battery, charging) = match p.battery {
@@ -143,6 +154,7 @@ fn caps_with(nvidia: bool) -> Vec<String> {
         cap::PAGE_CAPTURE,
         cap::PAGE_CONTROLLERS,
         cap::CONTROLLERS,
+        cap::CONTROLLERS_MAPPING,
         cap::SAVE_REPLAY,
         cap::METER_VIEW,
         cap::POWER_PLAN,
@@ -351,6 +363,23 @@ impl App {
                 Outcome::Done
             }
             Request::Controllers => Outcome::Reply(Reply::Controllers { pads: crate::sys::pads::list().iter().map(controller_of).collect() }),
+            Request::PadProfiles => Outcome::Reply(pad_profiles()),
+            Request::SetPadProfile { name } => {
+                if !remap::enabled() {
+                    Outcome::Failed(code::NOT_SUPPORTED, crate::i18n::tr("O controle como teclado e mouse está desligado").into_owned())
+                } else if remap::switch_to(&name) {
+                    Outcome::Done
+                } else {
+                    Outcome::Failed(code::INVALID, crate::i18n::tr("Esse perfil não existe").into_owned())
+                }
+            }
+            Request::PadStop { on } => {
+                if !remap::enabled() {
+                    Outcome::Failed(code::NOT_SUPPORTED, crate::i18n::tr("O controle como teclado e mouse está desligado").into_owned())
+                } else {
+                    Outcome::Reply(Reply::Toggled { on: remap::set_stopped(on.unwrap_or(!remap::stopped())) })
+                }
+            }
             Request::PowerPlans => Outcome::Reply(Reply::PowerPlans {
                 plans: power::list().into_iter().map(|p| PowerPlan { id: p.id, name: p.name }).collect(),
                 active: power::active().unwrap_or_default(),
@@ -582,6 +611,7 @@ mod tests {
                 cap::METER_VIEW, cap::POWER_PLAN, cap::FULLSCREEN, cap::SOUND_VOLUME, cap::HDR,
                 cap::WINDOW_SHOT, cap::RECORD_WINDOW, cap::PAGE_ENERGY, cap::PAGE_FULLSCREEN,
                 cap::PAGE_SOUND, cap::PAGE_HDR, cap::PAGE_CAPTURE, cap::PAGE_CONTROLLERS, cap::CONTROLLERS,
+                cap::CONTROLLERS_MAPPING,
             ] {
                 assert!(has(c), "{c}");
             }
@@ -608,6 +638,9 @@ mod tests {
             Request::WindowShot { pid: 1 },
             Request::RecordWindow { pid: 1 },
             Request::Controllers,
+            Request::PadProfiles,
+            Request::SetPadProfile { name: String::new() },
+            Request::PadStop { on: None },
         ];
         for r in &answer {
             assert_eq!(wait_of(r), Wait::Answer, "{r:?}");

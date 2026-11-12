@@ -288,7 +288,7 @@ O Prisma Launcher, o lançador de jogos, conversa com o Prisma aberto no mesmo P
 - **Driver NVIDIA:** ler e mudar as opções do driver no perfil do jogo ou no global, com os mesmos valores da tela Driver NVIDIA. O jogo entra na lista da tela. Só com placa NVIDIA.
 - **Captura:** tirar uma foto só da janela do jogo, mesmo com o launcher por cima (vai direto para a pasta de capturas e para a área de transferência, sem abrir o editor), e começar ou parar a gravação da janela do jogo. Salvar o replay também funciona.
 - **Compartilhar tela:** criar um convite, com a validade escolhida no launcher (de 1 minuto a 24 horas) ou a da página.
-- **Controles:** ver os controles ligados, com a conexão, a bateria e a taxa de relatório.
+- **Controles:** ver os controles ligados, com a conexão, a bateria e a taxa de relatório. Com o controle como teclado e mouse ligado, ver o perfil em uso, trocar de perfil (vale até o programa em foco mudar) e parar ou voltar o mapeamento, como a combinação de parada no controle.
 - **Abrir uma tela:** Medidor, Energia, Fullscreenizer, Som, HDR, Driver NVIDIA, Captura, Compartilhar tela ou Controles.
 
 O jogo aberto pelo launcher também entra no modo jogo na hora, sem esperar a detecção. Nada abre por cima do jogo: o Prisma só mostra um aviso, como nos atalhos. Com o Prisma fechado, o launcher não alcança nada disso.
