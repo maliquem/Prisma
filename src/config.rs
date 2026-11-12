@@ -311,6 +311,11 @@ pub struct Config {
     pub pad_radial_tap: bool,
     /// Aberto segurando, o radial fica aberto depois de soltar.
     pub pad_radial_stay: bool,
+    /// Com o stick de volta ao centro, o lugar escolhido continua escolhido.
+    pub pad_radial_keep: bool,
+    /// Botões que confirmam e voltam no radial: posição em `sys::radial::PICK_BUTTONS`.
+    pub pad_radial_ok: u8,
+    pub pad_radial_back: u8,
     /// O Prisma cuida do botão Guia: a Game Bar deixa de abrir por ele e o Prisma manda Win + G.
     pub pad_guide: bool,
     /// Valor da Game Bar antes de `pad_guide` (-1: não havia), para devolver ao desligar.
@@ -431,6 +436,9 @@ impl Default for Config {
             pad_radial_ms: 400,
             pad_radial_tap: false,
             pad_radial_stay: false,
+            pad_radial_keep: false,
+            pad_radial_ok: 0,
+            pad_radial_back: 1,
             pad_guide: false,
             pad_gamebar_prev: -1,
             lang: crate::i18n::system_lang(),
@@ -681,6 +689,9 @@ impl Config {
                 "pad_radial_ms" => c.pad_radial_ms = (v.parse::<u32>().unwrap_or(400) / 50 * 50).clamp(200, 2000),
                 "pad_radial_tap" => c.pad_radial_tap = b,
                 "pad_radial_stay" => c.pad_radial_stay = b,
+                "pad_radial_keep" => c.pad_radial_keep = b,
+                "pad_radial_ok" => c.pad_radial_ok = v.parse::<u8>().unwrap_or(0).min(5),
+                "pad_radial_back" => c.pad_radial_back = v.parse::<u8>().unwrap_or(1).min(5),
                 "pad_guide" => c.pad_guide = b,
                 "pad_gamebar_prev" => c.pad_gamebar_prev = v.parse::<i64>().unwrap_or(-1),
                 // Antes só havia português e inglês.
@@ -798,6 +809,9 @@ impl Config {
         let _ = writeln!(s, "pad_radial_ms={}", self.pad_radial_ms);
         let _ = writeln!(s, "pad_radial_tap={}", b(self.pad_radial_tap));
         let _ = writeln!(s, "pad_radial_stay={}", b(self.pad_radial_stay));
+        let _ = writeln!(s, "pad_radial_keep={}", b(self.pad_radial_keep));
+        let _ = writeln!(s, "pad_radial_ok={}", self.pad_radial_ok);
+        let _ = writeln!(s, "pad_radial_back={}", self.pad_radial_back);
         let _ = writeln!(s, "pad_guide={}", b(self.pad_guide));
         let _ = writeln!(s, "pad_gamebar_prev={}", self.pad_gamebar_prev);
         let _ = writeln!(s, "lang={}", self.lang);

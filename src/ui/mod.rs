@@ -34,6 +34,18 @@ struct Popup {
     selected: usize,
     /// Opções de menu que aparecem apagadas e não respondem.
     off: Vec<bool>,
+    /// Lista mais alta que a caixa: quanto já desceu.
+    top: f32,
+}
+
+/// Altura de uma opção da lista, e quantas cabem antes de rolar.
+const ROW: f32 = 36.0;
+const ROWS_MAX: f32 = 10.0;
+
+/// Altura da caixa da lista: no máximo `ROWS_MAX` opções e o que cabe na janela.
+fn popup_h(n: usize, view_h: f32) -> f32 {
+    let h = (n as f32).min(ROWS_MAX) * ROW + 8.0;
+    if view_h > 0.0 { h.min(view_h - 16.0) } else { h }
 }
 
 /// Pergunta no meio da tela: nada atrás dela responde até escolher.
@@ -347,19 +359,25 @@ impl<'a> Ui<'a> {
         }
         let hover = self.hover(r);
         if self.clickable(id, r) {
-            let h = options.len() as f32 * 36.0 + 8.0;
+            let h = popup_h(options.len(), self.s.view_h);
+            // Larga só o bastante para a opção mais longa: uma caixa larga não abre uma lista enorme.
+            let widest = options.iter().map(|o| measure(o, 14.0, Weight::Regular, None).0).fold(0.0, f32::max);
+            let w = r.w.min((widest + 40.0).max(200.0));
             let y = r.y - self.dy;
             let mut top = y + r.h + 4.0;
             // Sem espaço embaixo, a lista abre para cima.
             if self.s.view_h > 0.0 && top + h > self.s.view_h - 8.0 {
                 top = (y - h - 4.0).max(8.0);
             }
+            // Abre já mostrando a opção escolhida.
+            let max = (options.len() as f32 * ROW + 8.0 - h).max(0.0);
             self.s.popup = Some(Popup {
                 id,
-                rect: rect(r.x, top, r.w, h),
+                rect: rect(r.x, top, w, h),
                 options: options.to_vec(),
                 selected: *sel,
                 off: Vec::new(),
+                top: ((*sel as f32 - (ROWS_MAX / 2.0).floor()).max(0.0) * ROW).min(max),
             });
             self.s.popup_new = true;
             self.s.needs_redraw = true;
@@ -378,7 +396,7 @@ impl<'a> Ui<'a> {
     /// Abre um menu onde o mouse está. A escolha chega depois por `menu_pick`.
     pub fn menu(&mut self, key: &str, items: &[(&str, bool)]) {
         let w = 230.0;
-        let h = items.len() as f32 * 36.0 + 8.0;
+        let h = popup_h(items.len(), self.s.view_h);
         let mut x = self.s.mx;
         let mut y = self.s.my;
         if self.s.view_w > 0.0 && x + w > self.s.view_w - 8.0 {
@@ -393,6 +411,7 @@ impl<'a> Ui<'a> {
             options: items.iter().map(|i| i.0.to_string()).collect(),
             selected: usize::MAX,
             off: items.iter().map(|i| !i.1).collect(),
+            top: 0.0,
         });
         self.s.popup_new = true;
         self.s.needs_redraw = true;
@@ -663,14 +682,25 @@ impl<'a> Ui<'a> {
         self.c.translate(0.0, 0.0);
         let mut close = false;
         let mut pick = None;
-        if let Some(p) = &self.s.popup {
+        if let Some(p) = &mut self.s.popup {
+            let max = (p.options.len() as f32 * ROW + 8.0 - p.rect.h).max(0.0);
+            if self.s.wheel != 0.0 && p.rect.contains(self.s.mx, self.s.my) {
+                p.top = (p.top - self.s.wheel * ROW * 3.0).clamp(0.0, max);
+                self.s.needs_redraw = true;
+            }
+            let p = &*p;
             let shadow = rect(p.rect.x, p.rect.y, p.rect.w, p.rect.h);
             self.c.round(shadow, 10.0, CARD2);
             self.c.round_line(shadow, 10.0, BORDER2, 1.0);
+            let inner = p.rect.inset_xy(0.0, 4.0);
+            self.c.push_clip(inner);
             for (i, o) in p.options.iter().enumerate() {
-                let r = rect(p.rect.x + 4.0, p.rect.y + 4.0 + i as f32 * 36.0, p.rect.w - 8.0, 36.0);
+                let r = rect(p.rect.x + 4.0, p.rect.y + 4.0 + i as f32 * ROW - p.top, p.rect.w - (if max > 0.0 { 16.0 } else { 8.0 }), ROW);
+                if r.bottom() < inner.y || r.y > inner.bottom() {
+                    continue;
+                }
                 let off = p.off.get(i).copied().unwrap_or(false);
-                let hover = !off && r.contains(self.s.mx, self.s.my);
+                let hover = !off && r.contains(self.s.mx, self.s.my) && inner.contains(self.s.mx, self.s.my);
                 if hover {
                     self.c.round(r, 6.0, BORDER);
                 }
@@ -681,10 +711,17 @@ impl<'a> Ui<'a> {
                 } else {
                     TEXT
                 };
-                self.c.text(r.inset_xy(8.0, 0.0), o, 14.0, color, Align::Left, Weight::Regular);
+                self.c.text_fit(r.inset_xy(8.0, 0.0), o, 14.0, color, Align::Left, Weight::Regular);
                 if hover && self.s.released && !self.s.popup_new {
                     pick = Some((p.id, i));
                 }
+            }
+            self.c.pop_clip();
+            if max > 0.0 {
+                let span = inner.h;
+                let th = (span * span / (span + max)).max(24.0);
+                let ty = inner.y + (span - th) * (p.top / max);
+                self.c.round(rect(p.rect.right() - 8.0, ty, 4.0, th), 2.0, BORDER2);
             }
             if (self.s.released || self.s.right_released) && !self.s.popup_new {
                 close = true;

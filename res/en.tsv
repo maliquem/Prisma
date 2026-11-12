@@ -2104,9 +2104,7 @@ Teclado ativado	Keyboard on
 Teclado desativado	Keyboard off
 Radial do Prisma (segure o botão)	Prisma radial (hold the button)
 Radial do Prisma	Prisma radial
-Solte {} para escolher · com o stick no centro, cancela	Release {} to choose · with the stick centered, it cancels
 Nada	Nothing
-O stick direito aponta. Segurando, soltar o botão dispara; aberto para ficar, A dispara e B fecha.	The right stick points. Held, releasing the button runs the action; left open, A runs it and B closes.
 Botão	Button
 Abrir com	Open with
 Toque	Tap
@@ -2120,10 +2118,17 @@ O Prisma cuida do botão Guia	Prisma handles the Guide button
 A Xbox Game Bar deixa de abrir pelo botão Guia do controle, e o Prisma faz a função normal dele (Win + G). Desligar devolve a opção da Game Bar como estava.	Xbox Game Bar stops opening from the controller's Guide button, and Prisma does its normal function (Win + G). Turning this off puts the Game Bar option back as it was.
 Com o Steam aberto, desligue nele a opção do botão Guia.	With Steam open, turn off its Guide button option.
 {} dispara · {} fecha	{} runs · {} closes
-Solte o botão para escolher · com o stick no centro, cancela	Release the button to choose · with the stick centered, it cancels
 Abrir um programa…	Open a program…
 Escolher outro programa…	Pick another program…
 Aberto por toque, ou com dois círculos, ele sempre fica aberto.	Opened with a tap, or with two circles, it always stays open.
 Dois círculos (16 lugares)	Two circles (16 slots)
-Um círculo em cada stick, com 8 lugares cada. O stick que apontar por último escolhe, e o radial sempre fica aberto: A dispara e B fecha.	One circle on each stick, 8 slots each. The stick that pointed last picks, and the radial always stays open: A runs and B closes.
 Stick	Stick
+Solte {} para escolher · {} cancela	Release {} to choose · {} cancels
+Solte o botão para escolher · {} cancela	Release the button to choose · {} cancels
+O stick direito aponta. Segurando, soltar o botão dispara; aberto para ficar, Confirmar dispara e Voltar fecha.	The right stick points. Held, releasing the button runs the action; left open, Confirm runs it and Back closes.
+Um círculo em cada stick, com 8 lugares cada. O stick que apontar por último escolhe, e o radial sempre fica aberto: Confirmar dispara e Voltar fecha.	One circle on each stick, 8 slots each. The stick that pointed last picks, and the radial always stays open: Confirm runs and Back closes.
+Teclado do Prisma	Prisma keyboard
+Abre e fecha o teclado na tela	Opens and closes the on-screen keyboard
+Aberto para ficar, Confirmar dispara o lugar escolhido. Voltar fecha sem escolher, aberto de qualquer jeito.	When it stays open, Confirm runs the chosen slot. Back closes without choosing, however it was opened.
+A escolha fica com o stick no centro	Choice stays with the stick centered
+Soltar o stick não desfaz a escolha: o último lugar apontado continua marcado até apontar outro.	Letting go of the stick does not undo the choice: the last slot pointed at stays marked until you point at another.

@@ -59,6 +59,7 @@ pub fn test_target(app: &mut App, what: &str) {
                 ed.kind = 8;
                 ed.run = "C:/Windows/System32/notepad.exe".into();
             }
+            "keyboard" => ed.kind = 9,
             "wizard" => {
                 ed.tpl = remap::TEMPLATES.len() + 1;
                 ed.acc = [1, 1, 2];
@@ -90,7 +91,7 @@ const SPEEDS_T: [&str; 4] = ["Turbo 2x", "Turbo 3x", "Turbo 4x", "Turbo 5x"];
 const SIDES: [&str; 3] = ["Os dois lados", "Só o lado esquerdo", "Só o lado direito"];
 const CLICKS: [&str; 2] = ["Segurar para arrastar", "Clique liga e desliga"];
 const SPEEDS: [(&str, f32); 3] = [("Mouse devagar", 800.0), ("Mouse normal", 1600.0), ("Mouse rápido", 2600.0)];
-const KINDS: [&str; 9] = ["Tecla", "Tecla especial", "Mouse", "Roda", "Camada enquanto segura", "Liga e desliga camada", "Ação do Prisma", "Trocar de perfil", "Abrir programa"];
+const KINDS: [&str; 10] = ["Tecla", "Tecla especial", "Mouse", "Roda", "Camada enquanto segura", "Liga e desliga camada", "Ação do Prisma", "Trocar de perfil", "Abrir programa", "Teclado do Prisma"];
 /// Teclas que o campo de tecla não pega (Esc cancela) ou que não existem no teclado comum.
 const SPECIAL: [(u16, &str); 12] = [
     (0x1B, "Esc"),
@@ -537,6 +538,8 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
         let shown = if ed.run.is_empty() { tr("Nenhum programa escolhido") } else { crate::sys::procs::exe_name(&ed.run) };
         ui.c.text_fit(rect(vr.x, vr.y, half_v, vr.h), &shown, 13.0, if ed.run.is_empty() { MUTED } else { TEXT }, Align::Left, Weight::Regular);
         pick = Some(rect(vr.x + half_v + 8.0, vr.y, half_v, vr.h));
+    } else if ed.kind == 9 {
+        ui.c.text_fit(vr, &tr("Abre e fecha o teclado na tela"), 13.0, MUTED, Align::Left, Weight::Regular);
     } else {
         ed.val = ed.val.min(values.len().saturating_sub(1));
         ui.select("pp-val", vr, &values, &mut ed.val);
@@ -559,6 +562,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
         6 => Some(Out::Action(if ed.val < remap::ACTIONS.len() { ed.val as u8 } else { remap::SOUND + (ed.val - remap::ACTIONS.len()) as u8 })),
         // Perfil e programa só entram na lista de textos do perfil ao adicionar.
         7 => others_p.get(ed.val).map(|_| Out::Profile(0)),
+        9 => Some(Out::Action(remap::KEYBOARD)),
         _ => (!ed.run.is_empty()).then_some(Out::Run(0)),
     };
     if ui.button_ex("pp-add", rect(x + 2.0 * (third + 8.0), y, third, 34.0), "Adicionar", true, out.is_some()) {

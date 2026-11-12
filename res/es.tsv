@@ -2098,9 +2098,7 @@ Teclado ativado	Teclado activado
 Teclado desativado	Teclado desactivado
 Radial do Prisma (segure o botão)	Radial de Prisma (mantén el botón)
 Radial do Prisma	Radial de Prisma
-Solte {} para escolher · com o stick no centro, cancela	Suelta {} para elegir · con el stick en el centro, cancela
 Nada	Nada
-O stick direito aponta. Segurando, soltar o botão dispara; aberto para ficar, A dispara e B fecha.	El stick derecho apunta. Mantenido, al soltar el botón se ejecuta; abierto, A ejecuta y B cierra.
 Botão	Botón
 Abrir com	Abrir con
 Toque	Toque
@@ -2114,10 +2112,17 @@ O Prisma cuida do botão Guia	Prisma se encarga del botón Guía
 A Xbox Game Bar deixa de abrir pelo botão Guia do controle, e o Prisma faz a função normal dele (Win + G). Desligar devolve a opção da Game Bar como estava.	La Xbox Game Bar deja de abrirse con el botón Guía del mando, y Prisma hace su función normal (Win + G). Al desactivarlo, la opción de la Game Bar vuelve a como estaba.
 Com o Steam aberto, desligue nele a opção do botão Guia.	Con Steam abierto, desactiva en él la opción del botón Guía.
 {} dispara · {} fecha	{} ejecuta · {} cierra
-Solte o botão para escolher · com o stick no centro, cancela	Suelta el botón para elegir · con el stick en el centro, cancela
 Abrir um programa…	Abrir un programa…
 Escolher outro programa…	Elegir otro programa…
 Aberto por toque, ou com dois círculos, ele sempre fica aberto.	Abierto con un toque, o con dos círculos, siempre queda abierto.
 Dois círculos (16 lugares)	Dos círculos (16 lugares)
-Um círculo em cada stick, com 8 lugares cada. O stick que apontar por último escolhe, e o radial sempre fica aberto: A dispara e B fecha.	Un círculo en cada stick, con 8 lugares cada uno. Elige el stick que apuntó por último, y el radial siempre queda abierto: A ejecuta y B cierra.
 Stick	Stick
+Solte {} para escolher · {} cancela	Suelta {} para elegir · {} cancela
+Solte o botão para escolher · {} cancela	Suelta el botón para elegir · {} cancela
+O stick direito aponta. Segurando, soltar o botão dispara; aberto para ficar, Confirmar dispara e Voltar fecha.	El stick derecho apunta. Mantenido, al soltar el botón se ejecuta; abierto, Confirmar ejecuta y Volver cierra.
+Um círculo em cada stick, com 8 lugares cada. O stick que apontar por último escolhe, e o radial sempre fica aberto: Confirmar dispara e Voltar fecha.	Un círculo en cada stick, con 8 lugares cada uno. Elige el stick que apuntó por último, y el radial siempre queda abierto: Confirmar ejecuta y Volver cierra.
+Teclado do Prisma	Teclado de Prisma
+Abre e fecha o teclado na tela	Abre y cierra el teclado en pantalla
+Aberto para ficar, Confirmar dispara o lugar escolhido. Voltar fecha sem escolher, aberto de qualquer jeito.	Abierto, Confirmar ejecuta el lugar elegido. Volver cierra sin elegir, se haya abierto como se haya abierto.
+A escolha fica com o stick no centro	La elección queda con el stick al centro
+Soltar o stick não desfaz a escolha: o último lugar apontado continua marcado até apontar outro.	Soltar el stick no deshace la elección: el último lugar apuntado sigue marcado hasta apuntar otro.

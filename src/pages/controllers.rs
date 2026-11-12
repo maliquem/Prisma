@@ -16,6 +16,8 @@ pub struct State {
     conflicts: Vec<&'static str>,
     /// Editor de perfis aberto no lugar da coluna da direita.
     pub(super) edit: Option<super::pad_profiles::Editor>,
+    /// Altura da coluna da esquerda no quadro anterior, para a rolagem.
+    left_h: f32,
 }
 
 impl State {
@@ -178,7 +180,8 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let lw = 300.0;
     let rw = a.w - 56.0 - lw - 12.0;
 
-    // Coluna esquerda: controles, avisos, conflitos.
+    // Coluna esquerda: controles, avisos, conflitos. Rola: o cartão do radial passa da janela.
+    ui.begin_scroll("pads-left", rect(x, top, lw, a.h - top - 12.0), app.pads.left_h);
     let mut y = top;
     if list.is_empty() {
         let r = rect(x, y, lw, 96.0);
@@ -237,6 +240,11 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         ui.card(r);
         ui.c.text_wrap(rect(r.x + 16.0, r.y + 10.0, r.w - 32.0, r.h - 16.0), t, 12.0, TEXT2, Weight::Regular);
         y += r.h + 8.0;
+    }
+    ui.end_scroll();
+    if (y - top - app.pads.left_h).abs() > 0.5 {
+        app.pads.left_h = y - top;
+        ui.s.needs_redraw = true;
     }
 
     // Coluna direita: o editor de perfis, ou o controle escolhido.
@@ -424,10 +432,10 @@ fn radial(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
     use crate::sys::remap;
     const DIRS: [&str; 8] = ["↑", "↗", "→", "↘", "↓", "↙", "←", "↖"];
     let two = app.cfg.pad_radial_two;
-    let r = rect(at.x, at.y, at.w, if two { 1128.0 } else { 788.0 });
+    let r = rect(at.x, at.y, at.w, if two { 1252.0 } else { 912.0 });
     ui.card(r);
     ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Radial do Prisma");
-    ui.c.text_wrap(rect(r.x + 16.0, r.y + 40.0, r.w - 32.0, 58.0), "O stick direito aponta. Segurando, soltar o botão dispara; aberto para ficar, A dispara e B fecha.", 12.0, TEXT2, Weight::Regular);
+    ui.c.text_wrap(rect(r.x + 16.0, r.y + 40.0, r.w - 32.0, 58.0), "O stick direito aponta. Segurando, soltar o botão dispara; aberto para ficar, Confirmar dispara e Voltar fecha.", 12.0, TEXT2, Weight::Regular);
     let tr = |s: &str| crate::i18n::tr(s).into_owned();
     let mut changed = false;
     let row = |i: usize| (rect(r.x + 16.0, r.y + 104.0 + i as f32 * 42.0, 108.0, 34.0), rect(r.x + 128.0, r.y + 104.0 + i as f32 * 42.0, r.w - 144.0, 34.0));
@@ -461,7 +469,27 @@ fn radial(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
         changed = true;
     }
     ui.tip(rect(l.x, l.y, r.w - 32.0, 34.0), "Aberto por toque, ou com dois círculos, ele sempre fica aberto.");
-    let check = rect(r.x + 10.0, r.y + 272.0, r.w - 20.0, 36.0);
+    // Confirmar e Voltar: escolher no outro o botão de um troca os dois.
+    let f = pads::list().get(app.pads.sel).map_or(Family::Xbox, |p| p.family);
+    let btns: Vec<String> = crate::sys::radial::PICK_BUTTONS.iter().map(|&b| super::pad_profiles::button_label(f, b)).collect();
+    for (i, key, label) in [(4, "pad-radial-ok", "Confirmar"), (5, "pad-radial-back", "Voltar")] {
+        let (l, c) = row(i);
+        ui.c.text_fit(l, &tr(label), 12.0, TEXT2, Align::Left, Weight::Regular);
+        let (mine, other) = if i == 4 { (app.cfg.pad_radial_ok, app.cfg.pad_radial_back) } else { (app.cfg.pad_radial_back, app.cfg.pad_radial_ok) };
+        let mut v = mine.min(5) as usize;
+        if ui.select(key, c, &btns, &mut v) && v as u8 != mine {
+            let (m, o) = (v as u8, if v as u8 == other { mine } else { other });
+            (app.cfg.pad_radial_ok, app.cfg.pad_radial_back) = if i == 4 { (m, o) } else { (o, m) };
+            changed = true;
+        }
+    }
+    ui.tip(rect(r.x + 16.0, r.y + 272.0, r.w - 32.0, 76.0), "Aberto para ficar, Confirmar dispara o lugar escolhido. Voltar fecha sem escolher, aberto de qualquer jeito.");
+    let check = rect(r.x + 10.0, r.y + 356.0, r.w - 20.0, 36.0);
+    if ui.check("pad-radial-keep", check, "A escolha fica com o stick no centro", &mut app.cfg.pad_radial_keep) {
+        changed = true;
+    }
+    ui.tip(check, "Soltar o stick não desfaz a escolha: o último lugar apontado continua marcado até apontar outro.");
+    let check = rect(r.x + 10.0, r.y + 396.0, r.w - 20.0, 36.0);
     let mut guide = app.cfg.pad_guide;
     if ui.check("pad-guide", check, "O Prisma cuida do botão Guia", &mut guide) {
         if guide {
@@ -474,19 +502,19 @@ fn radial(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
         changed = true;
     }
     ui.tip(check, "A Xbox Game Bar deixa de abrir pelo botão Guia do controle, e o Prisma faz a função normal dele (Win + G). Desligar devolve a opção da Game Bar como estava.");
-    ui.c.text_wrap(rect(r.x + 16.0, r.y + 310.0, r.w - 32.0, 46.0), "Com o Steam aberto, desligue nele a opção do botão Guia.", 12.0, MUTED, Weight::Regular);
-    let check = rect(r.x + 10.0, r.y + 356.0, r.w - 20.0, 36.0);
+    ui.c.text_wrap(rect(r.x + 16.0, r.y + 434.0, r.w - 32.0, 46.0), "Com o Steam aberto, desligue nele a opção do botão Guia.", 12.0, MUTED, Weight::Regular);
+    let check = rect(r.x + 10.0, r.y + 480.0, r.w - 20.0, 36.0);
     if ui.check("pad-radial-two", check, "Dois círculos (16 lugares)", &mut app.cfg.pad_radial_two) {
         changed = true;
     }
-    ui.tip(check, "Um círculo em cada stick, com 8 lugares cada. O stick que apontar por último escolhe, e o radial sempre fica aberto: A dispara e B fecha.");
+    ui.tip(check, "Um círculo em cada stick, com 8 lugares cada. O stick que apontar por último escolhe, e o radial sempre fica aberto: Confirmar dispara e Voltar fecha.");
     // Nada, e todas as ações menos o próprio radial.
     let ids: Vec<u8> = std::iter::once(EMPTY).chain((0..remap::ACTIONS.len() as u8).filter(|&a| a != remap::RADIAL)).collect();
     let names: Vec<String> = ids.iter().map(|&a| crate::i18n::tr(remap::ACTIONS.get(a as usize).copied().unwrap_or("Nada")).into_owned()).collect();
     // Lugares 0 a 7 no stick direito; com dois círculos, 8 a 15 no esquerdo.
     // Um círculo: escolher o stick que aponta; dois: um título para cada stick.
     if !two {
-        let (l, c) = row(7);
+        let (l, c) = row(10);
         ui.c.text_fit(l, &tr("Stick"), 12.0, TEXT2, Align::Left, Weight::Regular);
         let mut s = app.cfg.pad_radial_left as usize;
         if ui.select("pad-radial-left", c, &[tr("Direito"), tr("Esquerdo")], &mut s) {
@@ -495,7 +523,7 @@ fn radial(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
         }
     }
     for i in 0..if two { 16 } else { 8 } {
-        let top = r.y + if two { 398.0 + (i / 8) as f32 * 360.0 } else { 418.0 };
+        let top = r.y + if two { 522.0 + (i / 8) as f32 * 360.0 } else { 544.0 };
         if two && i % 8 == 0 {
             ui.c.text_fit(rect(r.x + 16.0, top, r.w - 32.0, 20.0), &tr(if i == 0 { "Stick direito" } else { "Stick esquerdo" }), 12.0, MUTED, Align::Left, Weight::Semibold);
         }

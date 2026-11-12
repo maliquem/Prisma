@@ -2529,7 +2529,7 @@ impl App {
                     self.page = Page::Controllers;
                     self.pads.open_editor();
                 }
-                Some(p @ ("controllers-action" | "controllers-run" | "controllers-wizard")) => {
+                Some(p @ ("controllers-action" | "controllers-run" | "controllers-wizard" | "controllers-keyboard")) => {
                     self.page = Page::Controllers;
                     self.pads.open_editor();
                     crate::pages::pad_profiles::test_target(self, &p[12..]);
@@ -2619,22 +2619,25 @@ impl App {
             st.view_w = w;
             st.view_h = h;
             // `--test-scroll=key:px` desce uma área rolável antes da foto.
-            if let Some((key, px)) = std::env::args().find_map(|a| a.strip_prefix("--test-scroll=").and_then(|v| v.split_once(':')).map(|(k, p)| (k.to_string(), p.parse().unwrap_or(0.0)))) {
-                st.set_scroll(&key, px);
-            }
+            let scroll = std::env::args().find_map(|a| a.strip_prefix("--test-scroll=").and_then(|v| v.split_once(':')).map(|(k, p)| (k.to_string(), p.parse().unwrap_or(0.0))));
             // `--test-click=x,y`: aperta no primeiro passe e solta no segundo.
             let click: Option<(f32, f32)> = std::env::args().find_map(|a| {
                 let (x, y) = a.strip_prefix("--test-click=")?.split_once(',')?;
                 Some((x.parse().ok()?, y.parse().ok()?))
             });
             // Três passes: a pesquisa sai no primeiro e o resultado chega antes do último.
+            // Com rolagem, o clique fica um passe depois: a altura da área só se sabe no primeiro.
+            let first = scroll.is_some() as usize;
             for pass in 0..3 {
+                if let Some((key, px)) = &scroll {
+                    st.set_scroll(key, *px);
+                }
                 if let Some((x, y)) = click {
                     st.mx = x;
                     st.my = y;
-                    st.pressed = pass == 0;
-                    st.down = pass == 0;
-                    st.released = pass == 1;
+                    st.pressed = pass == first;
+                    st.down = pass == first;
+                    st.released = pass == first + 1;
                 }
                 if pass > 0 {
                     std::thread::sleep(std::time::Duration::from_millis(1500));
@@ -3097,6 +3100,9 @@ impl App {
             hold: std::time::Duration::from_millis(c.pad_radial_ms as u64),
             tap_opens: c.pad_radial_tap,
             stay: c.pad_radial_stay,
+            keep: c.pad_radial_keep,
+            ok: crate::sys::radial::PICK_BUTTONS[c.pad_radial_ok.min(5) as usize],
+            back: crate::sys::radial::PICK_BUTTONS[c.pad_radial_back.min(5) as usize],
             guide_normal: c.pad_guide,
         });
     }
@@ -3560,7 +3566,7 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
         WM_PICK_RADIAL => {
             if let Some(path) = capture::choose_exe(h) {
                 with(|a| {
-                    crate::pages::controllers::set_radial_program(a, w.0.min(7), &path);
+                    crate::pages::controllers::set_radial_program(a, w.0.min(crate::sys::radial::SLOTS - 1), &path);
                     a.invalidate();
                 });
             }
