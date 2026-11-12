@@ -3099,7 +3099,6 @@ impl App {
             button: [0, crate::sys::pads::BACK, crate::sys::pads::GUIDE][c.pad_radial_btn.min(2) as usize],
             hold: std::time::Duration::from_millis(c.pad_radial_ms as u64),
             tap_opens: c.pad_radial_tap,
-            stay: c.pad_radial_stay,
             keep: c.pad_radial_keep,
             ok: crate::sys::radial::PICK_BUTTONS[c.pad_radial_ok.min(5) as usize],
             back: crate::sys::radial::PICK_BUTTONS[c.pad_radial_back.min(5) as usize],

@@ -655,14 +655,7 @@ impl Radial {
             let f = pads::list().first().map_or(pads::Family::Xbox, |p| p.family);
             let label = |b| crate::pages::pad_profiles::button_label(f, b);
             let b = |i: u8| label(crate::sys::radial::PICK_BUTTONS[i.min(5) as usize]);
-            let back = b(cfg.pad_radial_back);
-            self.hint = if v.stay {
-                crate::i18n::tr("{} dispara · {} fecha").replacen("{}", &b(cfg.pad_radial_ok), 1).replacen("{}", &back, 1)
-            } else if v.watch == 0 {
-                crate::i18n::tr("Solte o botão para escolher · {} cancela").replacen("{}", &back, 1)
-            } else {
-                crate::i18n::tr("Solte {} para escolher · {} cancela").replacen("{}", &label(v.watch), 1).replacen("{}", &back, 1)
-            };
+            self.hint = crate::i18n::tr("{} dispara · {} fecha").replacen("{}", &b(cfg.pad_radial_ok), 1).replacen("{}", &b(cfg.pad_radial_back), 1);
             self.arrow = crate::sys::radial::stick();
             unsafe {
                 SetTimer(Some(hwnd), 1, KB_FRAME, None);

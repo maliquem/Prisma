@@ -309,8 +309,6 @@ pub struct Config {
     pub pad_radial_ms: u32,
     /// Toque abre o radial e segurar faz a função normal (o contrário do padrão).
     pub pad_radial_tap: bool,
-    /// Aberto segurando, o radial fica aberto depois de soltar.
-    pub pad_radial_stay: bool,
     /// Com o stick de volta ao centro, o lugar escolhido continua escolhido.
     pub pad_radial_keep: bool,
     /// Botões que confirmam e voltam no radial: posição em `sys::radial::PICK_BUTTONS`.
@@ -435,8 +433,7 @@ impl Default for Config {
             pad_radial_btn: 1,
             pad_radial_ms: 400,
             pad_radial_tap: false,
-            pad_radial_stay: false,
-            pad_radial_keep: false,
+            pad_radial_keep: true,
             pad_radial_ok: 0,
             pad_radial_back: 1,
             pad_guide: false,
@@ -688,7 +685,6 @@ impl Config {
                 "pad_radial_btn" =>c.pad_radial_btn = v.parse::<u8>().unwrap_or(1).min(2),
                 "pad_radial_ms" => c.pad_radial_ms = (v.parse::<u32>().unwrap_or(400) / 50 * 50).clamp(200, 2000),
                 "pad_radial_tap" => c.pad_radial_tap = b,
-                "pad_radial_stay" => c.pad_radial_stay = b,
                 "pad_radial_keep" => c.pad_radial_keep = b,
                 "pad_radial_ok" => c.pad_radial_ok = v.parse::<u8>().unwrap_or(0).min(5),
                 "pad_radial_back" => c.pad_radial_back = v.parse::<u8>().unwrap_or(1).min(5),
@@ -808,7 +804,6 @@ impl Config {
         let _ = writeln!(s, "pad_radial_btn={}", self.pad_radial_btn);
         let _ = writeln!(s, "pad_radial_ms={}", self.pad_radial_ms);
         let _ = writeln!(s, "pad_radial_tap={}", b(self.pad_radial_tap));
-        let _ = writeln!(s, "pad_radial_stay={}", b(self.pad_radial_stay));
         let _ = writeln!(s, "pad_radial_keep={}", b(self.pad_radial_keep));
         let _ = writeln!(s, "pad_radial_ok={}", self.pad_radial_ok);
         let _ = writeln!(s, "pad_radial_back={}", self.pad_radial_back);

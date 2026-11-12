@@ -1,5 +1,5 @@
-//! Radial do Prisma: um círculo com até 8 ações do Prisma. O stick direito aponta. Aberto
-//! segurando, soltar o botão dispara a ação apontada; aberto para ficar, Confirmar (A) dispara e Voltar (B) fecha.
+//! Radial do Prisma: um círculo com até 8 ações do Prisma. O stick direito aponta, e
+//! ele fica aberto até Confirmar (A) disparar ou Voltar (B) fechar.
 //! Enquanto ele está aberto, o controle serve só a ele, como no teclado do Prisma.
 
 use std::collections::HashMap;
@@ -36,8 +36,6 @@ pub struct Config {
     pub hold: Duration,
     /// Toque abre o radial e segurar faz a função normal do botão (o padrão é o contrário).
     pub tap_opens: bool,
-    /// Aberto segurando, fica aberto depois de soltar: `ok` dispara, `back` fecha.
-    pub stay: bool,
     /// Com o stick de volta ao centro, o lugar escolhido continua escolhido.
     pub keep: bool,
     /// Botão que dispara (aberto para ficar) e botão que fecha sem escolher.
@@ -54,8 +52,7 @@ pub const DEFAULT: Config = Config {
     button: 0,
     hold: Duration::from_millis(400),
     tap_opens: false,
-    stay: false,
-    keep: false,
+    keep: true,
     ok: pads::A,
     back: pads::B,
     guide_normal: false,
@@ -67,8 +64,6 @@ pub const PICK_BUTTONS: [u32; 6] = [pads::A, pads::B, pads::X, pads::Y, pads::LB
 static CFG: Mutex<Config> = Mutex::new(DEFAULT);
 
 pub fn configure(mut c: Config) {
-    // Com dois círculos os dois sticks apontam: não há como soltar o botão escolhendo.
-    c.stay |= c.two;
     // O mesmo botão nos dois: volta ao padrão, senão nada fecharia.
     if c.ok == c.back {
         (c.ok, c.back) = (pads::A, pads::B);
@@ -86,11 +81,10 @@ struct Radial {
     last: [Option<usize>; 2],
     /// Stick direito e esquerdo.
     stick: [(f32, f32); 2],
-    stay: bool,
     keep: bool,
     ok: u32,
     back: u32,
-    /// Botões cuja soltura dispara (aberto segurando); 0: os que estiverem apertados no 1º relatório.
+    /// Botão que abriu: apertado de novo, fecha. 0: aberto por uma ligação do perfil.
     watch: u32,
     prev: u32,
 }
@@ -109,7 +103,6 @@ static STATE: Mutex<State> = Mutex::new(State::Closed);
 pub struct View {
     pub open: bool,
     pub sel: Option<usize>,
-    pub stay: bool,
     pub two: bool,
     pub left: bool,
     pub watch: u32,
@@ -120,7 +113,6 @@ pub fn view() -> View {
         State::Open(r) => View {
             open: true,
             sel: r.sel,
-            stay: r.stay,
             two: r.two,
             left: r.left,
             watch: r.watch,
@@ -138,7 +130,7 @@ pub fn stick() -> [(f32, f32); 2] {
 }
 
 /// Abre. O que o perfil segurava é solto antes. Não chamar com o mapeamento travado (`remap::RUN`).
-fn open(stay: bool, watch: u32) {
+fn open(watch: u32) {
     let (slots, two, left, keep, ok, back) = { let c = CFG.lock().unwrap(); (c.slots, c.two, c.left && !c.two, c.keep, c.ok, c.back) };
     let mut s = STATE.lock().unwrap();
     if !matches!(*s, State::Open(_)) {
@@ -150,7 +142,6 @@ fn open(stay: bool, watch: u32) {
             sel: None,
             last: [None; 2],
             stick: [(0.0, 0.0); 2],
-            stay,
             keep,
             ok,
             back,
@@ -164,16 +155,19 @@ fn open(stay: bool, watch: u32) {
     }
 }
 
+/// Botão que abre o radial (0: nenhum).
+pub fn button() -> u32 {
+    CFG.lock().unwrap().button
+}
+
 /// Aberto pela ação "Radial do Prisma" ligada a um botão do perfil (segurar).
 pub fn open_action() {
-    let stay = CFG.lock().unwrap().stay;
-    open(stay, 0);
+    open(0);
 }
 
 /// Só para as fotos do manual: aberto, apontando para `sel`.
 pub fn show_for_test(sel: usize) {
-    let stay = CFG.lock().unwrap().stay;
-    open(stay, pads::BACK);
+    open(pads::BACK);
     if let State::Open(r) = &mut *STATE.lock().unwrap() {
         r.sel = Some(sel);
         let a = ((sel % 8) as f32 * 45.0).to_radians();
@@ -204,24 +198,11 @@ fn step(r: &mut Radial, inp: &Input) -> (Option<u8>, bool, bool) {
     r.sel = sel;
     let down = inp.buttons & !r.prev;
     r.prev = inp.buttons;
-    if r.stay {
-        if down & r.ok != 0 && sel.is_some() {
-            return (sel.map(|i| r.slots[i]), true, true);
-        }
-        if down & (r.back | r.watch) != 0 {
-            return (None, true, true);
-        }
-    } else {
-        // Segurando, Voltar fecha sem escolher.
-        if down & r.back != 0 {
-            return (None, true, true);
-        }
-        if r.watch == 0 {
-            r.watch = inp.buttons;
-        }
-        if inp.buttons & r.watch == 0 {
-            return (sel.map(|i| r.slots[i]), true, true);
-        }
+    if down & r.ok != 0 && sel.is_some() {
+        return (sel.map(|i| r.slots[i]), true, true);
+    }
+    if down & (r.back | r.watch) != 0 {
+        return (None, true, true);
     }
     (None, false, changed)
 }
@@ -340,7 +321,7 @@ static TRIG: Mutex<Option<HashMap<String, Trig>>> = Mutex::new(None);
 /// O que o mapeamento faz com um relatório por causa do botão que abre o radial.
 pub struct Trigger {
     /// Abrir o radial (depois de soltar a trava do mapeamento).
-    pub open: Option<(bool, u32)>,
+    pub open: Option<u32>,
     /// Botões que o perfil vê, um passo por item (o toque vira aperto e soltura).
     pub steps: Vec<u32>,
     /// Mandar Win + G: a função normal do Guia feita pelo Prisma.
@@ -375,20 +356,13 @@ pub fn trigger(key: &str, buttons: u32, now: Instant, game: bool) -> Trigger {
         _ => vec![rest],
     };
     let win_g = guide && c.guide_normal && matches!(normal, Normal::Tap | Normal::Down);
-    // Aberto por toque, o botão já foi solto: fica aberto. Segurando, segue o `stay`.
-    let open = open.then(|| {
-        if c.tap_opens {
-            (true, c.button)
-        } else {
-            (c.stay, c.button)
-        }
-    });
+    let open = open.then_some(c.button);
     Trigger { open, steps, win_g }
 }
 
 /// Abre o radial pedido por `trigger`.
-pub fn open_from(open: (bool, u32)) {
-    self::open(open.0, open.1);
+pub fn open_from(button: u32) {
+    self::open(button);
     pads::emit(pads::Event::Radial);
 }
 
@@ -427,7 +401,7 @@ mod tests {
         }
     }
 
-    fn radial(stay: bool, watch: u32) -> Radial {
+    fn radial(watch: u32) -> Radial {
         Radial {
             slots: [10, 11, EMPTY, 13, 14, 15, 16, 17, 20, 21, 22, 23, 24, 25, 26, EMPTY],
             two: false,
@@ -436,7 +410,6 @@ mod tests {
             sel: None,
             last: [None; 2],
             stick: [(0.0, 0.0); 2],
-            stay,
             keep: false,
             ok: pads::A,
             back: pads::B,
@@ -446,39 +419,9 @@ mod tests {
     }
 
     #[test]
-    fn release_fires_where_the_stick_points() {
-        let mut r = radial(false, pads::BACK);
-        assert_eq!(
-            step(&mut r, &inp(pads::BACK, 0.0, 0.0)),
-            (None, false, false)
-        );
-        assert_eq!(
-            step(&mut r, &inp(pads::BACK, 0.7, 0.7)),
-            (None, false, true)
-        );
-        // Lugar vazio não é escolhido.
-        assert_eq!(
-            step(&mut r, &inp(pads::BACK, 1.0, 0.0)),
-            (None, false, true)
-        );
-        assert_eq!(
-            step(&mut r, &inp(pads::BACK, 0.7, 0.7)),
-            (None, false, true)
-        );
-        assert_eq!(step(&mut r, &inp(0, 0.7, 0.7)), (Some(11), true, true));
-        // Stick no centro ao soltar: fecha sem ação.
-        let mut r = radial(false, pads::BACK);
-        assert_eq!(step(&mut r, &inp(0, 0.1, 0.0)), (None, true, true));
-        // Aberto por uma ligação do perfil: vale o botão que estava apertado.
-        let mut r = radial(false, 0);
-        assert_eq!(step(&mut r, &inp(pads::LB, 0.0, 1.0)).1, false);
-        assert_eq!(step(&mut r, &inp(0, 0.0, 1.0)), (Some(10), true, true));
-    }
-
-    #[test]
     fn kept_choice_and_chosen_confirm_and_back_buttons() {
         // Fica aberto, com X confirmando e Y voltando: A e B não fazem nada.
-        let mut r = Radial { keep: true, ok: pads::X, back: pads::Y, ..radial(true, pads::GUIDE) };
+        let mut r = Radial { keep: true, ok: pads::X, back: pads::Y, ..radial(pads::GUIDE) };
         step(&mut r, &inp(0, 0.0, 1.0));
         // Stick de volta ao centro: a escolha continua.
         assert_eq!(step(&mut r, &inp(0, 0.0, 0.0)), (None, false, false));
@@ -486,22 +429,19 @@ mod tests {
         assert_eq!(step(&mut r, &inp(pads::A, 0.0, 0.0)).1, false);
         assert_eq!(step(&mut r, &inp(pads::B, 0.0, 0.0)).1, false);
         assert_eq!(step(&mut r, &inp(pads::X, 0.0, 0.0)), (Some(10), true, true));
-        let mut r = Radial { ok: pads::X, back: pads::Y, ..radial(true, pads::GUIDE) };
+        let mut r = Radial { ok: pads::X, back: pads::Y, ..radial(pads::GUIDE) };
         step(&mut r, &inp(0, 0.0, 1.0));
         assert_eq!(step(&mut r, &inp(pads::Y, 0.0, 1.0)), (None, true, true));
-        // Segurando: soltar com a escolha guardada dispara; Voltar fecha sem escolher.
-        let mut r = Radial { keep: true, ..radial(false, pads::BACK) };
-        step(&mut r, &inp(pads::BACK, 0.0, 1.0));
-        step(&mut r, &inp(pads::BACK, 0.0, 0.0));
-        assert_eq!(step(&mut r, &inp(0, 0.0, 0.0)), (Some(10), true, true));
-        let mut r = radial(false, pads::BACK);
-        step(&mut r, &inp(pads::BACK, 0.0, 1.0));
-        assert_eq!(step(&mut r, &inp(pads::BACK | pads::B, 0.0, 1.0)), (None, true, true));
+        // Sem `keep`, o stick no centro desfaz a escolha e Confirmar não faz nada.
+        let mut r = radial(pads::GUIDE);
+        step(&mut r, &inp(0, 0.0, 1.0));
+        step(&mut r, &inp(0, 0.0, 0.0));
+        assert_eq!(step(&mut r, &inp(pads::A, 0.0, 0.0)).1, false);
     }
 
     #[test]
-    fn stay_open_fires_with_a_and_closes_with_b_or_the_button() {
-        let mut r = radial(true, pads::GUIDE);
+    fn fires_with_confirm_and_closes_with_back_or_the_button() {
+        let mut r = radial(pads::GUIDE);
         // O Guia ainda segurado de quando abriu não fecha.
         assert_eq!(step(&mut r, &inp(pads::GUIDE, 0.0, 0.0)).1, false);
         assert_eq!(step(&mut r, &inp(0, 0.0, 0.0)).1, false);
@@ -512,10 +452,10 @@ mod tests {
             step(&mut r, &inp(pads::A, 0.0, 1.0)),
             (Some(10), true, true)
         );
-        let mut r = radial(true, pads::GUIDE);
+        let mut r = radial(pads::GUIDE);
         step(&mut r, &inp(0, 0.0, 1.0));
         assert_eq!(step(&mut r, &inp(pads::B, 0.0, 1.0)), (None, true, true));
-        let mut r = radial(true, pads::GUIDE);
+        let mut r = radial(pads::GUIDE);
         step(&mut r, &inp(0, 0.0, 1.0));
         assert_eq!(
             step(&mut r, &inp(pads::GUIDE, 0.0, 1.0)),
@@ -601,7 +541,7 @@ mod tests {
 
     #[test]
     fn two_circles_follow_the_stick_that_moved_last() {
-        let mut r = radial(true, pads::GUIDE);
+        let mut r = radial(pads::GUIDE);
         r.two = true;
         let both = |lx, ly, rx, ry, b| Input { buttons: b, lx, ly, rx, ry, ..Default::default() };
         // Esquerdo para cima: lugar 8.
@@ -617,7 +557,7 @@ mod tests {
         assert_eq!(r.sel, Some(8));
         assert_eq!(step(&mut r, &both(0.0, 1.0, 0.0, 0.0, pads::A)), (Some(20), true, true));
         // Um círculo só: o esquerdo não escolhe nada.
-        let mut r = radial(true, pads::GUIDE);
+        let mut r = radial(pads::GUIDE);
         step(&mut r, &both(0.0, 1.0, 0.0, 0.0, 0));
         assert_eq!(r.sel, None);
         // Um círculo no stick esquerdo: ele escolhe os lugares 0 a 7 e o direito não faz nada.

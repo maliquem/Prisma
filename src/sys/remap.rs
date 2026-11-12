@@ -98,7 +98,7 @@ pub const ACTIONS: [&str; 28] = [
     "Desconectar o Bluetooth",
     "Mostrar a bateria",
     "Abrir e fechar o teclado do Prisma",
-    "Radial do Prisma (segure o botão)",
+    "Abrir o radial do Prisma",
 ];
 /// Ação que abre e fecha o teclado do Prisma (`sys::osk`).
 pub const KEYBOARD: u8 = 26;
@@ -1093,6 +1093,13 @@ pub fn configure(on: bool, games: Vec<String>) {
 
 pub fn enabled() -> bool {
     ON.load(Ordering::Relaxed)
+}
+
+/// Botões ligados sozinhos, no perfil em uso, a abrir e fechar o teclado do Prisma.
+pub fn keyboard_buttons() -> u32 {
+    let g = RUN.lock().unwrap();
+    let Some(r) = g.as_ref().filter(|_| enabled()) else { return 0 };
+    r.profiles[r.cur].layers.iter().flat_map(|l| &l.binds).filter(|b| b.out == Out::Action(KEYBOARD) && b.with == 0).fold(0, |m, b| m | b.button)
 }
 
 pub fn stopped() -> bool {

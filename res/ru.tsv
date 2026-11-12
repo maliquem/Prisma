@@ -2096,16 +2096,12 @@ Abrir e fechar o teclado do Prisma	Открыть и закрыть клавиа
 {} maiúsculas · {} números · os dois: acentos · {} fecha	{} заглавные · {} цифры · оба: диакритика · {} закрывает
 Teclado ativado	Клавиатура включена
 Teclado desativado	Клавиатура выключена
-Radial do Prisma (segure o botão)	Радиальное меню Prisma (удерживайте кнопку)
 Radial do Prisma	Радиальное меню Prisma
 Nada	Ничего
 Botão	Кнопка
 Abrir com	Открывать
 Toque	Нажатие
 Segurar por	Удерживать
-Depois	Затем
-Soltar escolhe	Отпустить — выбор
-Fica aberto	Не закрывать
 Vale com o controle como teclado e mouse ligado. Nos jogos (perfil Base) o Select fica só com o jogo; o Guia abre em qualquer perfil. Também dá para ligar qualquer botão de um perfil a Radial do Prisma.	Работает, когда включён геймпад как клавиатура и мышь. В играх (профиль Base) Select остаётся за игрой; Guide открывает меню в любом профиле. Можно также назначить любую кнопку профиля на «Радиальное меню Prisma».
 O outro jeito faz a função normal do botão.	Другой способ выполняет обычную функцию кнопки.
 O Prisma cuida do botão Guia	Prisma управляет кнопкой Guide
@@ -2114,15 +2110,13 @@ Com o Steam aberto, desligue nele a opção do botão Guia.	Если откры�
 {} dispara · {} fecha	{} — запуск · {} — закрыть
 Abrir um programa…	Открыть программу…
 Escolher outro programa…	Выбрать другую программу…
-Aberto por toque, ou com dois círculos, ele sempre fica aberto.	Открытое нажатием или с двумя кругами, меню всегда остаётся открытым.
 Dois círculos (16 lugares)	Два круга (16 мест)
 Stick	Стик
-Solte {} para escolher · {} cancela	Отпустите {}, чтобы выбрать · {} — отмена
-Solte o botão para escolher · {} cancela	Отпустите кнопку, чтобы выбрать · {} — отмена
-O stick direito aponta. Segurando, soltar o botão dispara; aberto para ficar, Confirmar dispara e Voltar fecha.	Правый стик указывает. Удерживая, отпустите кнопку для запуска; в открытом меню «Подтвердить» запускает, «Назад» закрывает.
-Um círculo em cada stick, com 8 lugares cada. O stick que apontar por último escolhe, e o radial sempre fica aberto: Confirmar dispara e Voltar fecha.	По кругу на каждый стик, по 8 мест. Выбирает стик, который указал последним, а меню всегда остаётся открытым: «Подтвердить» запускает, «Назад» закрывает.
 Teclado do Prisma	Клавиатура Prisma
 Abre e fecha o teclado na tela	Открывает и закрывает экранную клавиатуру
-Aberto para ficar, Confirmar dispara o lugar escolhido. Voltar fecha sem escolher, aberto de qualquer jeito.	Когда меню открыто, «Подтвердить» запускает выбранное место. «Назад» закрывает без выбора, как бы меню ни было открыто.
 A escolha fica com o stick no centro	Выбор остаётся при стике в центре
 Soltar o stick não desfaz a escolha: o último lugar apontado continua marcado até apontar outro.	Если отпустить стик, выбор не сбрасывается: последнее место остаётся отмеченным, пока не укажете другое.
+Abrir o radial do Prisma	Открыть радиальное меню Prisma
+O stick direito aponta. O radial fica aberto até Confirmar disparar ou Voltar fechar.	Правый стик указывает. Меню открыто, пока «Подтвердить» не запустит или «Назад» не закроет.
+Um círculo em cada stick, com 8 lugares cada. O stick que apontar por último escolhe.	По кругу на каждый стик, по 8 мест. Выбирает стик, который указал последним.
+O radial fica aberto até Confirmar disparar o lugar escolhido ou Voltar fechar sem escolher.	Меню открыто, пока «Подтвердить» не запустит выбранное место или «Назад» не закроет без выбора.

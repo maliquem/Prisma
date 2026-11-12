@@ -2096,16 +2096,12 @@ Abrir e fechar o teclado do Prisma	打开和关闭 Prisma 键盘
 {} maiúsculas · {} números · os dois: acentos · {} fecha	{} 大写 · {} 数字 · 同时按：重音字母 · {} 关闭
 Teclado ativado	键盘已开启
 Teclado desativado	键盘已关闭
-Radial do Prisma (segure o botão)	Prisma 轮盘（按住按键）
 Radial do Prisma	Prisma 轮盘
 Nada	无
 Botão	按键
 Abrir com	打开方式
 Toque	轻按
 Segurar por	按住时长
-Depois	之后
-Soltar escolhe	松开即选择
-Fica aberto	保持打开
 Vale com o controle como teclado e mouse ligado. Nos jogos (perfil Base) o Select fica só com o jogo; o Guia abre em qualquer perfil. Também dá para ligar qualquer botão de um perfil a Radial do Prisma.	需开启“手柄作为键盘和鼠标”。游戏中（Base 配置）Select 只给游戏；Guide 在任何配置中都能打开。也可以把配置中的任意按键设为“Prisma 轮盘”。
 O outro jeito faz a função normal do botão.	另一种方式执行按键的原本功能。
 O Prisma cuida do botão Guia	由 Prisma 处理 Guide 键
@@ -2114,15 +2110,13 @@ Com o Steam aberto, desligue nele a opção do botão Guia.	Steam 打开时，�
 {} dispara · {} fecha	{} 执行 · {} 关闭
 Abrir um programa…	打开程序…
 Escolher outro programa…	选择其他程序…
-Aberto por toque, ou com dois círculos, ele sempre fica aberto.	轻按打开或使用两个圆环时，始终保持打开。
 Dois círculos (16 lugares)	两个圆环（16 个位置）
 Stick	摇杆
-Solte {} para escolher · {} cancela	松开 {} 进行选择 · {} 取消
-Solte o botão para escolher · {} cancela	松开按键进行选择 · {} 取消
-O stick direito aponta. Segurando, soltar o botão dispara; aberto para ficar, Confirmar dispara e Voltar fecha.	右摇杆指向。按住时，松开按键执行；保持打开时，确认执行，返回关闭。
-Um círculo em cada stick, com 8 lugares cada. O stick que apontar por último escolhe, e o radial sempre fica aberto: Confirmar dispara e Voltar fecha.	每个摇杆一个圆环，各 8 个位置。最后指向的摇杆决定选择，轮盘始终保持打开：确认执行，返回关闭。
 Teclado do Prisma	Prisma 键盘
 Abre e fecha o teclado na tela	打开和关闭屏幕键盘
-Aberto para ficar, Confirmar dispara o lugar escolhido. Voltar fecha sem escolher, aberto de qualquer jeito.	保持打开时，确认执行所选位置。无论如何打开，返回都会不选择直接关闭。
 A escolha fica com o stick no centro	摇杆回中时保留选择
 Soltar o stick não desfaz a escolha: o último lugar apontado continua marcado até apontar outro.	松开摇杆不会取消选择：最后指向的位置保持选中，直到指向其他位置。
+Abrir o radial do Prisma	打开 Prisma 轮盘
+O stick direito aponta. O radial fica aberto até Confirmar disparar ou Voltar fechar.	右摇杆指向。轮盘保持打开，直到确认执行或返回关闭。
+Um círculo em cada stick, com 8 lugares cada. O stick que apontar por último escolhe.	每个摇杆一个圆环，各 8 个位置。最后指向的摇杆决定选择。
+O radial fica aberto até Confirmar disparar o lugar escolhido ou Voltar fechar sem escolher.	轮盘保持打开，直到确认执行所选位置，或返回不选择直接关闭。
