@@ -683,7 +683,7 @@ impl Radial {
     }
 
     fn width(&self) -> f32 {
-        if self.two { RD_W * 2.0 - 40.0 } else { RD_W }
+        if self.two { RD_W * 2.0 + 40.0 } else { RD_W }
     }
 
     fn paint(&mut self) {
@@ -693,7 +693,11 @@ impl Radial {
             c.round(r, 18.0, rgb(0x0d0f14).alpha(0.92));
             let cy = 210.0;
             // Com dois círculos, o do stick esquerdo (lugares 8 a 15) fica à esquerda.
-            let rings: &[(f32, usize)] = if two { &[(RD_W / 2.0 - 10.0, 8), (r.w - RD_W / 2.0 + 10.0, 0)] } else { &[(RD_W / 2.0, 0)] };
+            let rings: &[(f32, usize)] = if two { &[(RD_W / 2.0, 8), (r.w - RD_W / 2.0, 0)] } else { &[(RD_W / 2.0, 0)] };
+            // Traço entre os dois círculos, para não parecerem um só.
+            if two {
+                c.line(r.w / 2.0, 40.0, r.w / 2.0, 380.0, WHITE.alpha(0.10), 1.0);
+            }
             for &(cx, first) in rings {
             stick_arrow(c, cx, cy, arrow[if left { 1 } else { first / 8 }]);
             for (i, name) in names.iter().enumerate().skip(first).take(8) {

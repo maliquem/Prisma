@@ -424,7 +424,7 @@ fn radial(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
     use crate::sys::remap;
     const DIRS: [&str; 8] = ["↑", "↗", "→", "↘", "↓", "↙", "←", "↖"];
     let two = app.cfg.pad_radial_two;
-    let r = rect(at.x, at.y, at.w, if two { 794.0 } else { 618.0 });
+    let r = rect(at.x, at.y, at.w, if two { 1128.0 } else { 788.0 });
     ui.card(r);
     ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Radial do Prisma");
     ui.c.text_wrap(rect(r.x + 16.0, r.y + 40.0, r.w - 32.0, 58.0), "O stick direito aponta. Segurando, soltar o botão dispara; aberto para ficar, A dispara e B fecha.", 12.0, TEXT2, Weight::Regular);
@@ -483,7 +483,6 @@ fn radial(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
     // Nada, e todas as ações menos o próprio radial.
     let ids: Vec<u8> = std::iter::once(EMPTY).chain((0..remap::ACTIONS.len() as u8).filter(|&a| a != remap::RADIAL)).collect();
     let names: Vec<String> = ids.iter().map(|&a| crate::i18n::tr(remap::ACTIONS.get(a as usize).copied().unwrap_or("Nada")).into_owned()).collect();
-    let col = (r.w - 40.0) / 2.0;
     // Lugares 0 a 7 no stick direito; com dois círculos, 8 a 15 no esquerdo.
     // Um círculo: escolher o stick que aponta; dois: um título para cada stick.
     if !two {
@@ -496,11 +495,12 @@ fn radial(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
         }
     }
     for i in 0..if two { 16 } else { 8 } {
-        let top = r.y + if two { 398.0 + (i / 8) as f32 * 196.0 } else { 418.0 };
+        let top = r.y + if two { 398.0 + (i / 8) as f32 * 360.0 } else { 418.0 };
         if two && i % 8 == 0 {
             ui.c.text_fit(rect(r.x + 16.0, top, r.w - 32.0, 20.0), &tr(if i == 0 { "Stick direito" } else { "Stick esquerdo" }), 12.0, MUTED, Align::Left, Weight::Semibold);
         }
-        let (cx, cy) = (r.x + 16.0 + (i % 2) as f32 * (col + 8.0), top + 22.0 + (i % 8 / 2) as f32 * 42.0);
+        // Uma escolha por linha: em duas colunas os nomes das ações não cabiam.
+        let (cx, cy) = (r.x + 16.0, top + 22.0 + (i % 8) as f32 * 42.0);
         ui.c.text_raw(rect(cx, cy, 22.0, 34.0), DIRS[i % 8], 16.0, MUTED, Align::Left, Weight::Semibold);
         // No fim: o programa deste lugar (se houver) e escolher um programa. O lugar só muda quando a escolha volta.
         let prog = app.cfg.pad_radial[i] == PROGRAM;
@@ -512,7 +512,7 @@ fn radial(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
         opts.push(tr(if prog { "Escolher outro programa…" } else { "Abrir um programa…" }));
         let mut sel = if prog { pick_at - 1 } else { ids.iter().position(|&a| a == app.cfg.pad_radial[i]).unwrap_or(0) };
         let menu = format!("pad-radial-run-{i}");
-        if ui.select(&format!("pad-radial-{i}"), rect(cx + 24.0, cy, col - 24.0, 34.0), &opts, &mut sel) {
+        if ui.select(&format!("pad-radial-{i}"), rect(cx + 24.0, cy, r.w - 56.0, 34.0), &opts, &mut sel) {
             if sel == pick_at {
                 ui.menu(&menu, &[("Da lista de programas", true), ("Escolher arquivo .exe", true)]);
             } else if sel < ids.len() {
