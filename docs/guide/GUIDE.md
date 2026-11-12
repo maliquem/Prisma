@@ -244,7 +244,7 @@ In testing. Shows and controls another PC over the internet, for remote access o
 
 ## Controllers
 
-Shows the controllers connected over USB or Bluetooth, live, without changing anything on them. Reads DualSense, DualShock 4, Xbox controllers and the ones that present themselves as Xbox, and generic controllers, with numbered buttons. With no controller connected, Prisma spends nothing on them.
+Shows the controllers connected over USB or Bluetooth, live, and can use the controller as keyboard and mouse. Nothing is written to the controller. Reads DualSense, DualShock 4, Xbox controllers and the ones that present themselves as Xbox, and generic controllers, with numbered buttons. With no controller connected, Prisma spends nothing on them.
 
 - **List:** name, connection (USB or Bluetooth), battery and report rate of each controller. Click one to see it live.
 - **Live:** the sticks with their dot, the triggers as bars and the buttons, which light up when pressed.
@@ -255,7 +255,12 @@ Shows the controllers connected over USB or Bluetooth, live, without changing an
 - **Conflicts:** with Steam, reWASD, DS4Windows or DSX open, the page explains in one sentence what each one can change on the controller.
 - **Paired without the controller part:** if a Bluetooth controller shows as connected but Windows didn't turn on its controller part, the page tells you to remove it and pair again with the classic Windows wizard (Win + R, `devicepairingwizard`). This happened with a DualSense paired from Settings.
 - **Copy diagnostics:** copies a text with the controllers, connection, battery, rate and conflicts, to paste in a report.
-- **Can't:** change buttons, light, rumble or triggers. That comes in the next versions.
+- **Mapping:** **Controller as keyboard and mouse** (off by default) makes the controller send keys and mouse to Windows. Outside games the **Desktop** profile applies: the left stick moves the mouse, the right one scrolls, A clicks, B right-clicks, X is Esc, Y is Enter, Select is Win + Tab, Start opens the Start menu, the D-pad is the arrows, LB and RB go back and forward in the browser, the triggers lower and raise the volume, clicking the right stick opens the on-screen keyboard and the DualSense Mute button mutes the sound. In games (the Meter ones and any full-screen program, except the desktop) the **Base** profile applies, which changes nothing: without a driver, the game still sees the controller, and mapping on top of it would give both commands at once.
+- **Profile switch:** the profile follows the program in focus, checked every 0.25 second while the controller sends reports, after 0.4 second and never with a button held. The notice shows the new profile, and the connect notice shows the active one.
+- **Emergency stop:** hold Guide (or PS) + Select + Start for 2 seconds and mapping stops at once, releasing everything. The same combination turns it back on.
+- **Game as administrator:** Windows doesn't let keys from a regular program reach a program opened as administrator. Prisma warns once per program.
+- **Internal time:** the page shows how long Prisma takes from the controller's report arriving to the key going out, median and p99.
+- **Can't:** edit profiles, change light, rumble or triggers. That comes in the next versions.
 
 ## Widget
 

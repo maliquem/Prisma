@@ -1907,7 +1907,7 @@ O Windows não trocou o HDR	Windows не переключил HDR
 Nome de executável inválido	Недопустимое имя исполняемого файла
 O Prisma não conhece essa opção	Prisma не знает этот параметр
 Valor fora das opções	Значение вне вариантов
-Cada controle ao vivo, a bateria e a taxa de relatório. Só leitura: nada muda no controle.	Каждый геймпад вживую, заряд и частота отчётов. Только чтение: в геймпаде ничего не меняется.
+Cada controle ao vivo, e o controle como teclado e mouse. Nada é gravado no controle.	Каждый геймпад вживую и геймпад как клавиатура и мышь. В геймпад ничего не пишется.
 Copiar diagnóstico	Копировать диагностику
 Diagnóstico copiado	Диагностика скопирована
 Nenhum controle ligado. Ligue um controle por USB ou Bluetooth e ele aparece aqui.	Геймпады не подключены. Подключите геймпад по USB или Bluetooth, и он появится здесь.
@@ -1960,3 +1960,15 @@ Bateria do {} em {}%	Заряд {}: {}%
 Bateria do {} baixa	Низкий заряд {}
 {}: variação de {} ms entre relatórios	{}: разброс {} мс между отчётами
 em movimento	в движении
+Mapeamento	Назначение
+Controle como teclado e mouse	Геймпад как клавиатура и мышь
+Fora dos jogos vale o perfil Desktop: o stick esquerdo mexe o mouse, A e B clicam. Nos jogos (os do Medidor e qualquer programa em tela cheia) vale o perfil Base, que não muda nada: sem driver, o jogo continua vendo o controle.	Вне игр действует профиль Desktop: левый стик двигает мышь, A и B нажимают кнопки мыши. В играх (из Счётчика и в любой программе на весь экран) действует профиль Base, который ничего не меняет: без драйвера игра по-прежнему видит геймпад.
+Parado pela combinação	Остановлено комбинацией
+Perfil {}	Профиль {}
+Para parar tudo sem teclado, segure Guia (ou PS) + Select + Start por 2 segundos. A mesma combinação liga de novo.	Чтобы всё остановить без клавиатуры, удерживайте Guide (или PS) + Select + Start 2 секунды. Та же комбинация включает снова.
+Tempo interno: {} µs na mediana, {} µs no p99	Внутреннее время: медиана {} мкс, p99 {} мкс
+{} conectado por USB, perfil {}	{} подключён по USB, профиль {}
+{} conectado por Bluetooth, perfil {}	{} подключён по Bluetooth, профиль {}
+Mapeamento parado. Segure a mesma combinação para voltar.	Назначение остановлено. Удерживайте ту же комбинацию, чтобы включить снова.
+Mapeamento ligado de novo	Назначение снова включено
+{} roda como administrador: o Windows não deixa as teclas do controle chegarem nele.	{} запущен от имени администратора: Windows не пропускает к нему нажатия с геймпада.

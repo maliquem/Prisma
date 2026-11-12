@@ -244,7 +244,7 @@ Em teste. Mostra e controla outro PC pela internet, para acesso remoto ou para j
 
 ## Controles
 
-Mostra os controles ligados por USB ou Bluetooth, ao vivo, sem mudar nada neles. Lê DualSense, DualShock 4, controles Xbox e os que se apresentam como Xbox, e controles genéricos, com os botões numerados. Sem controle ligado, o Prisma não gasta nada com eles.
+Mostra os controles ligados por USB ou Bluetooth, ao vivo, e pode usar o controle como teclado e mouse. Nada é gravado no controle. Lê DualSense, DualShock 4, controles Xbox e os que se apresentam como Xbox, e controles genéricos, com os botões numerados. Sem controle ligado, o Prisma não gasta nada com eles.
 
 - **Lista:** nome, conexão (USB ou Bluetooth), bateria e taxa de relatório de cada controle. Clique em um para ver ao vivo.
 - **Ao vivo:** os sticks com o ponto, os gatilhos em barras e os botões, que acendem quando apertados.
@@ -255,7 +255,12 @@ Mostra os controles ligados por USB ou Bluetooth, ao vivo, sem mudar nada neles.
 - **Conflitos:** com Steam, reWASD, DS4Windows ou DSX abertos, a página explica em uma frase o que cada um pode mudar no controle.
 - **Pareado sem controle:** se um controle Bluetooth aparece conectado mas o Windows não ligou a parte de controle, a página avisa para remover e parear de novo pelo assistente clássico do Windows (Win + R, `devicepairingwizard`). Isso aconteceu com um DualSense pareado pelas Configurações.
 - **Copiar diagnóstico:** copia um texto com os controles, a conexão, a bateria, a taxa e os conflitos, para colar num relatório.
-- **Não dá para:** mudar botões, luz, vibração ou gatilhos. Isso vem nas próximas versões.
+- **Mapeamento:** **Controle como teclado e mouse** (desligado de fábrica) faz o controle mandar teclas e mouse para o Windows. Fora dos jogos vale o perfil **Desktop**: o stick esquerdo mexe o mouse, o direito rola a página, A clica, B clica com o botão direito, X é Esc, Y é Enter, Select é Win + Tab, Start abre o menu Iniciar, o direcional são as setas, LB e RB voltam e avançam no navegador, os gatilhos baixam e sobem o volume, o clique do stick direito abre o teclado virtual e o Mudo do DualSense tira o som. Nos jogos (os do Medidor e qualquer programa em tela cheia, menos a área de trabalho) vale o perfil **Base**, que não muda nada: sem driver, o jogo continua vendo o controle, e mapear por cima dele daria os dois comandos ao mesmo tempo.
+- **Troca de perfil:** o perfil segue o programa em foco, conferido a cada 0,25 segundo enquanto o controle manda relatórios, com uma folga de 0,4 segundo e nunca com botão apertado. O aviso mostra o perfil novo, e o aviso de conectar mostra o perfil ativo.
+- **Parada de emergência:** segure Guia (ou PS) + Select + Start por 2 segundos e o mapeamento para na hora, soltando tudo. A mesma combinação liga de novo.
+- **Jogo como administrador:** o Windows não deixa as teclas de um programa comum chegarem num programa aberto como administrador. O Prisma avisa uma vez por programa.
+- **Tempo interno:** a página mostra quanto o Prisma leva do relatório do controle chegar até a tecla sair, na mediana e no p99.
+- **Não dá para:** editar os perfis, mudar luz, vibração ou gatilhos. Isso vem nas próximas versões.
 
 ## Widget
 

@@ -2302,6 +2302,7 @@ impl App {
     pub fn add_meter_game(&mut self, exe: &str, path: &str) {
         if !self.cfg.meter_games.iter().any(|g| g.exe.eq_ignore_ascii_case(exe)) {
             self.cfg.meter_games.push(crate::config::MeterGame { exe: exe.to_string(), path: path.to_string(), limit_fps: crate::meter::first_limit(self.refresh_hz()), limit_real: true, inject: true, last: crate::config::today(), ..Default::default() });
+            self.apply_pads();
         }
     }
 
@@ -2923,14 +2924,20 @@ impl App {
         use crate::sys::pads::{Battery, Event, Link};
         for e in crate::sys::pads::take_events() {
             let text = match e {
-                Event::Connected { name, link } if self.cfg.pad_notify => match link {
-                    Link::Usb => format!("{name} conectado por USB"),
-                    Link::Bluetooth => format!("{name} conectado por Bluetooth"),
+                Event::Connected { name, link } if self.cfg.pad_notify => match (link, crate::sys::remap::active()) {
+                    (Link::Usb, None) => format!("{name} conectado por USB"),
+                    (Link::Bluetooth, None) => format!("{name} conectado por Bluetooth"),
+                    (Link::Usb, Some(p)) => format!("{name} conectado por USB, perfil {p}"),
+                    (Link::Bluetooth, Some(p)) => format!("{name} conectado por Bluetooth, perfil {p}"),
                 },
                 Event::Disconnected { name } if self.cfg.pad_notify => format!("{name} desconectado"),
                 Event::BatteryLow { name, battery: Battery::Percent { pct, .. } } => format!("Bateria do {name} em {pct}%"),
                 Event::BatteryLow { name, .. } => format!("Bateria do {name} baixa"),
                 Event::Jitter { name, p99_ms } => format!("{name}: variação de {} ms entre relatórios", p99_ms.round()),
+                Event::Profile { name } => format!("Perfil {name}"),
+                Event::Stopped { on: true } => "Mapeamento parado. Segure a mesma combinação para voltar.".into(),
+                Event::Stopped { on: false } => "Mapeamento ligado de novo".into(),
+                Event::Elevated { exe } => format!("{exe} roda como administrador: o Windows não deixa as teclas do controle chegarem nele."),
                 _ => continue,
             };
             self.toast.info(&text);
@@ -2938,6 +2945,13 @@ impl App {
         if self.page == Page::Controllers {
             self.invalidate();
         }
+    }
+
+    /// Passa ao leitor de controles os limites dos avisos e, ao mapeamento, se está ligado e quais
+    /// são os jogos do Medidor (usam o perfil Base).
+    pub fn apply_pads(&self) {
+        crate::sys::pads::set_limits(self.cfg.pad_low, self.cfg.pad_jitter_ms);
+        crate::sys::remap::configure(self.cfg.pad_map, self.cfg.meter_games.iter().map(|g| g.exe.clone()).collect());
     }
 
     pub fn refresh_page(&mut self) {

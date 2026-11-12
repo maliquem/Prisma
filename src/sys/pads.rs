@@ -1,4 +1,5 @@
-//! Controles de jogo, só leitura (Fase 1): o Prisma nunca grava nada no controle.
+//! Controles de jogo: leitura. O Prisma nunca grava nada no controle; o mapeamento (Fase 2) fica em
+//! `remap`, que recebe cada relatório daqui.
 //!
 //! - Detecção pelo aviso do Windows (`WM_DEVICECHANGE`), sem consulta periódica: sem controle
 //!   ligado, a thread fica parada esperando mensagem.
@@ -122,6 +123,12 @@ pub enum Event {
     Disconnected { name: String },
     BatteryLow { name: String, battery: Battery },
     Jitter { name: String, p99_ms: f32 },
+    /// Mapeamento: perfil trocado pelo programa em foco.
+    Profile { name: String },
+    /// Parada de emergência ligada (`on`) ou desligada.
+    Stopped { on: bool },
+    /// Programa em foco roda como administrador: as teclas do Prisma não chegam nele.
+    Elevated { exe: String },
 }
 
 static PADS: Mutex<Vec<Pad>> = Mutex::new(Vec::new());
@@ -185,7 +192,7 @@ pub fn set_live(on: bool) {
     }
 }
 
-fn poke() {
+pub(crate) fn poke() {
     let w = WATCH.load(Ordering::Relaxed);
     if w != 0 {
         unsafe {
@@ -194,7 +201,7 @@ fn poke() {
     }
 }
 
-fn emit(e: Event) {
+pub(crate) fn emit(e: Event) {
     if QUIET.load(Ordering::Relaxed) {
         return;
     }
@@ -250,13 +257,15 @@ unsafe fn watch() {
     }
 }
 
-/// XInput: a cada 8 ms com a tela aberta, a cada segundo para bateria e avisos, e nada sem controle.
+/// XInput: a cada 4 ms com o mapeamento ligado, 8 ms com a tela aberta, a cada segundo para bateria
+/// e avisos, e nada sem controle.
 unsafe fn set_timer(h: HWND) {
     if IG.lock().unwrap().is_empty() {
         let _ = KillTimer(Some(h), TIMER_X);
         poll_xinput();
     } else {
-        SetTimer(Some(h), TIMER_X, if LIVE.load(Ordering::Relaxed) { 8 } else { 1000 }, None);
+        let ms = if super::remap::enabled() { 4 } else if LIVE.load(Ordering::Relaxed) { 8 } else { 1000 };
+        SetTimer(Some(h), TIMER_X, ms, None);
     }
 }
 
@@ -629,6 +638,7 @@ unsafe fn read_loop(d: Dev) {
             emit(Event::Connected { name: name.clone(), link });
         } else {
             PADS.lock().unwrap().retain(|p| p.key != d.path);
+            super::remap::forget(&d.path);
             emit(Event::Disconnected { name: name.clone() });
         }
     };
@@ -689,6 +699,7 @@ unsafe fn read_loop(d: Dev) {
             show(true);
             shown = true;
         }
+        let fed = parsed.as_ref().map(|x| x.0);
         let mut pads = PADS.lock().unwrap();
         let Some(p) = pads.iter_mut().find(|p| p.key == d.path) else { break };
         if let Some((inp, bat)) = parsed {
@@ -702,6 +713,9 @@ unsafe fn read_loop(d: Dev) {
         }
         let events = check_warnings(p);
         drop(pads);
+        if let Some(inp) = fed {
+            super::remap::feed(&d.path, &inp, now);
+        }
         events.into_iter().for_each(emit);
     }
     // Uma leitura ainda pendente escreve no buffer: cancela e espera antes de soltar.
@@ -827,6 +841,8 @@ unsafe fn poll_xinput() {
                 [(_, n, l, r)] => (n.clone(), *l, r.or(counted)),
                 _ => (format!("Controle Xbox {}", i + 1), Link::Usb, counted),
             };
+            let now = Instant::now();
+            super::remap::feed(&key, &xinput_input(&st.Gamepad), now);
             let mut pads = PADS.lock().unwrap();
             let events = if let Some(p) = pads.iter_mut().find(|p| p.key == key) {
                 p.input = xinput_input(&st.Gamepad);
@@ -859,13 +875,14 @@ unsafe fn poll_xinput() {
             XRATE.lock().unwrap()[i] = (0, 0, None, None);
         }
     }
-    let gone: Vec<String> = {
+    let gone: Vec<(String, String)> = {
         let mut pads = PADS.lock().unwrap();
-        let gone = pads.iter().filter(|p| p.key.strip_prefix("xinput:").and_then(|n| n.parse::<usize>().ok()).is_some_and(|n| !seen[n.min(3)])).map(|p| p.name.clone()).collect();
+        let gone: Vec<(String, String)> = pads.iter().filter(|p| p.key.strip_prefix("xinput:").and_then(|n| n.parse::<usize>().ok()).is_some_and(|n| !seen[n.min(3)])).map(|p| (p.key.clone(), p.name.clone())).collect();
         pads.retain(|p| p.key.strip_prefix("xinput:").and_then(|n| n.parse::<usize>().ok()).is_none_or(|n| seen[n.min(3)]));
         gone
     };
-    for name in gone {
+    for (key, name) in gone {
+        super::remap::forget(&key);
         emit(Event::Disconnected { name });
     }
 }

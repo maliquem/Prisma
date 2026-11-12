@@ -1913,7 +1913,7 @@ O Windows não trocou o HDR	Windows didn't switch HDR
 Nome de executável inválido	Invalid executable name
 O Prisma não conhece essa opção	Prisma doesn't know this option
 Valor fora das opções	Value outside the options
-Cada controle ao vivo, a bateria e a taxa de relatório. Só leitura: nada muda no controle.	Each controller live, its battery and report rate. Read only: nothing changes on the controller.
+Cada controle ao vivo, e o controle como teclado e mouse. Nada é gravado no controle.	Each controller live, and the controller as keyboard and mouse. Nothing is written to it.
 Copiar diagnóstico	Copy diagnostics
 Diagnóstico copiado	Diagnostics copied
 Nenhum controle ligado. Ligue um controle por USB ou Bluetooth e ele aparece aqui.	No controller connected. Connect one over USB or Bluetooth and it shows up here.
@@ -1966,3 +1966,15 @@ Bateria do {} em {}%	{} battery at {}%
 Bateria do {} baixa	{} battery low
 {}: variação de {} ms entre relatórios	{}: {} ms jitter between reports
 em movimento	while moving
+Mapeamento	Mapping
+Controle como teclado e mouse	Controller as keyboard and mouse
+Fora dos jogos vale o perfil Desktop: o stick esquerdo mexe o mouse, A e B clicam. Nos jogos (os do Medidor e qualquer programa em tela cheia) vale o perfil Base, que não muda nada: sem driver, o jogo continua vendo o controle.	Outside games the Desktop profile applies: the left stick moves the mouse, A and B click. In games (the Meter ones and any full-screen program) the Base profile applies, which changes nothing: without a driver, the game still sees the controller.
+Parado pela combinação	Stopped by the combination
+Perfil {}	Profile {}
+Para parar tudo sem teclado, segure Guia (ou PS) + Select + Start por 2 segundos. A mesma combinação liga de novo.	To stop everything without a keyboard, hold Guide (or PS) + Select + Start for 2 seconds. The same combination turns it back on.
+Tempo interno: {} µs na mediana, {} µs no p99	Internal time: {} µs median, {} µs p99
+{} conectado por USB, perfil {}	{} connected over USB, profile {}
+{} conectado por Bluetooth, perfil {}	{} connected over Bluetooth, profile {}
+Mapeamento parado. Segure a mesma combinação para voltar.	Mapping stopped. Hold the same combination to turn it back on.
+Mapeamento ligado de novo	Mapping on again
+{} roda como administrador: o Windows não deixa as teclas do controle chegarem nele.	{} runs as administrator: Windows doesn't let the controller's keys reach it.

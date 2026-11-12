@@ -289,6 +289,8 @@ pub struct Config {
     pub replay_secs: u32,
     /// Avisos do Prisma ao conectar e desconectar controle.
     pub pad_notify: bool,
+    /// Mapeamento: o controle vira teclado e mouse pelos perfis (Fase 2). Desligado de fábrica.
+    pub pad_map: bool,
     /// Aviso de bateria baixa do controle, em %; 0 desliga.
     pub pad_low: u8,
     /// Aviso quando o p99 do intervalo do controle passa deste valor, em ms; 0 desliga.
@@ -398,6 +400,7 @@ impl Default for Config {
             replay_on: false,
             replay_secs: 30,
             pad_notify: true,
+            pad_map: false,
             pad_low: 10,
             pad_jitter_ms: 0,
             lang: crate::i18n::system_lang(),
@@ -608,6 +611,7 @@ impl Config {
                 "replay_on" => c.replay_on = b,
                 "replay_secs" => c.replay_secs = v.parse().unwrap_or(30),
                 "pad_notify" => c.pad_notify = b,
+                "pad_map" => c.pad_map = b,
                 "pad_low" => c.pad_low = v.parse::<u8>().unwrap_or(10).min(50),
                 "pad_jitter_ms" => c.pad_jitter_ms = v.parse::<u32>().unwrap_or(0).min(100),
                 // Antes só havia português e inglês.
@@ -714,6 +718,7 @@ impl Config {
         let _ = writeln!(s, "replay_on={}", b(self.replay_on));
         let _ = writeln!(s, "replay_secs={}", self.replay_secs);
         let _ = writeln!(s, "pad_notify={}", b(self.pad_notify));
+        let _ = writeln!(s, "pad_map={}", b(self.pad_map));
         let _ = writeln!(s, "pad_low={}", self.pad_low);
         let _ = writeln!(s, "pad_jitter_ms={}", self.pad_jitter_ms);
         let _ = writeln!(s, "lang={}", self.lang);

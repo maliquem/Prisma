@@ -1907,7 +1907,7 @@ O Windows não trocou o HDR	Windows no cambió el HDR
 Nome de executável inválido	Nombre de ejecutable no válido
 O Prisma não conhece essa opção	Prisma no conoce esta opción
 Valor fora das opções	Valor fuera de las opciones
-Cada controle ao vivo, a bateria e a taxa de relatório. Só leitura: nada muda no controle.	Cada mando en vivo, la batería y la tasa de informes. Solo lectura: nada cambia en el mando.
+Cada controle ao vivo, e o controle como teclado e mouse. Nada é gravado no controle.	Cada mando en vivo, y el mando como teclado y ratón. No se graba nada en el mando.
 Copiar diagnóstico	Copiar diagnóstico
 Diagnóstico copiado	Diagnóstico copiado
 Nenhum controle ligado. Ligue um controle por USB ou Bluetooth e ele aparece aqui.	Ningún mando conectado. Conecta uno por USB o Bluetooth y aparecerá aquí.
@@ -1960,3 +1960,15 @@ Bateria do {} em {}%	Batería del {} al {}%
 Bateria do {} baixa	Batería del {} baja
 {}: variação de {} ms entre relatórios	{}: variación de {} ms entre informes
 em movimento	en movimiento
+Mapeamento	Asignación
+Controle como teclado e mouse	Mando como teclado y ratón
+Fora dos jogos vale o perfil Desktop: o stick esquerdo mexe o mouse, A e B clicam. Nos jogos (os do Medidor e qualquer programa em tela cheia) vale o perfil Base, que não muda nada: sem driver, o jogo continua vendo o controle.	Fuera de los juegos vale el perfil Desktop: el stick izquierdo mueve el ratón, A y B hacen clic. En los juegos (los del Medidor y cualquier programa a pantalla completa) vale el perfil Base, que no cambia nada: sin driver, el juego sigue viendo el mando.
+Parado pela combinação	Detenido por la combinación
+Perfil {}	Perfil {}
+Para parar tudo sem teclado, segure Guia (ou PS) + Select + Start por 2 segundos. A mesma combinação liga de novo.	Para detener todo sin teclado, mantén Guía (o PS) + Select + Start durante 2 segundos. La misma combinación lo vuelve a activar.
+Tempo interno: {} µs na mediana, {} µs no p99	Tiempo interno: {} µs de mediana, {} µs en p99
+{} conectado por USB, perfil {}	{} conectado por USB, perfil {}
+{} conectado por Bluetooth, perfil {}	{} conectado por Bluetooth, perfil {}
+Mapeamento parado. Segure a mesma combinação para voltar.	Asignación detenida. Mantén la misma combinación para volver.
+Mapeamento ligado de novo	Asignación activada de nuevo
+{} roda como administrador: o Windows não deixa as teclas do controle chegarem nele.	{} se ejecuta como administrador: Windows no deja que las teclas del mando le lleguen.

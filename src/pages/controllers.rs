@@ -155,7 +155,7 @@ fn button_names(f: Family) -> &'static [(u32, &'static str)] {
 }
 
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
-    header_room(ui, a, "Controles", "Cada controle ao vivo, a bateria e a taxa de relatório. Só leitura: nada muda no controle.", 220.0);
+    header_room(ui, a, "Controles", "Cada controle ao vivo, e o controle como teclado e mouse. Nada é gravado no controle.", 220.0);
     let list = pads::list();
     if ui.button("pads-copy", rect(a.right() - 208.0, 28.0, 180.0, 36.0), "Copiar diagnóstico", false) {
         let ok = crate::capture::copy_text(app.hub, &diagnostic(&list, &app.pads.conflicts));
@@ -215,9 +215,10 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     ui.tip(rect(r.x + 16.0, r.y + 124.0, r.w - 156.0, 36.0), "Avisa quando o intervalo entre relatórios do controle passa desse valor (p99). 0 desliga.");
     if changed {
         app.cfg.save();
-        pads::set_limits(app.cfg.pad_low, app.cfg.pad_jitter_ms);
+        app.apply_pads();
     }
     y += r.h + 12.0;
+    y = mapping(ui, app, rect(x, y, lw, 0.0));
     for t in &app.pads.conflicts {
         let r = rect(x, y, lw, 64.0);
         ui.card(r);
@@ -364,6 +365,32 @@ fn rows_draw(ui: &mut Ui, x: f32, y: f32, w: f32, rows: &[(&str, String, bool)])
 }
 
 /// Texto para colar num relatório: controles, conexão, taxa, bateria, conflitos.
+/// Mapeamento: liga e desliga, perfil ativo, parada de emergência e o tempo interno.
+fn mapping(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
+    use crate::sys::remap;
+    let r = rect(at.x, at.y, at.w, 214.0);
+    ui.card(r);
+    ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Mapeamento");
+    let check = rect(r.x + 10.0, r.y + 38.0, r.w - 20.0, 36.0);
+    if ui.check("pad-map", check, "Controle como teclado e mouse", &mut app.cfg.pad_map) {
+        app.cfg.save();
+        app.apply_pads();
+    }
+    ui.tip(check, "Fora dos jogos vale o perfil Desktop: o stick esquerdo mexe o mouse, A e B clicam. Nos jogos (os do Medidor e qualquer programa em tela cheia) vale o perfil Base, que não muda nada: sem driver, o jogo continua vendo o controle.");
+    let state = match (app.cfg.pad_map, remap::stopped(), remap::active()) {
+        (false, ..) => (crate::i18n::tr("Desligado").into_owned(), MUTED),
+        (true, true, _) => (crate::i18n::tr("Parado pela combinação").into_owned(), WARN),
+        (true, false, p) => (crate::i18n::tr("Perfil {}").replace("{}", &crate::i18n::tr(&p.unwrap_or_default())), TEXT),
+    };
+    ui.c.text_fit(rect(r.x + 16.0, r.y + 80.0, r.w - 32.0, 20.0), &state.0, 13.0, state.1, Align::Left, Weight::Semibold);
+    ui.c.text_wrap(rect(r.x + 16.0, r.y + 106.0, r.w - 32.0, 72.0), "Para parar tudo sem teclado, segure Guia (ou PS) + Select + Start por 2 segundos. A mesma combinação liga de novo.", 12.0, TEXT2, Weight::Regular);
+    if let Some((med, p99)) = remap::latency() {
+        let t = crate::i18n::tr("Tempo interno: {} µs na mediana, {} µs no p99").replacen("{}", &med.to_string(), 1).replacen("{}", &p99.to_string(), 1);
+        ui.c.text_fit(rect(r.x + 16.0, r.y + 184.0, r.w - 32.0, 20.0), &t, 12.0, MUTED, Align::Left, Weight::Regular);
+    }
+    r.bottom() + 12.0
+}
+
 fn diagnostic(list: &[Pad], conflicts: &[&str]) -> String {
     use std::fmt::Write;
     let mut s = format!("Prisma {} · Controles\n", crate::sys::update::current());
@@ -383,6 +410,15 @@ fn diagnostic(list: &[Pad], conflicts: &[&str]) -> String {
     }
     for c in conflicts {
         let _ = writeln!(s, "! {c}");
+    }
+    let map = match (crate::sys::remap::enabled(), crate::sys::remap::stopped()) {
+        (false, _) => "desligado".to_string(),
+        (true, true) => "parado pela combinação".to_string(),
+        (true, false) => format!("perfil {}", crate::sys::remap::active().unwrap_or_default()),
+    };
+    let _ = writeln!(s, "Mapeamento: {map}");
+    if let Some((med, p99)) = crate::sys::remap::latency() {
+        let _ = writeln!(s, "  tempo interno: mediana {med} µs, p99 {p99} µs");
     }
     s
 }

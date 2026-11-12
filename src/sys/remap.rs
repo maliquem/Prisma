@@ -1,0 +1,1122 @@
+//! Motor de mapeamento (Fase 2): controle para teclado e mouse, com ativadores, camadas e zonas
+//! mortas. A parte de cima (perfil e motor) não toca no Windows e tem testes; a de baixo recebe os
+//! relatórios de `pads`, troca o perfil pelo programa em foco e manda as teclas com `SendInput`.
+
+use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
+
+use super::pads::{self, Input};
+
+// Botões virtuais, depois dos físicos de `pads`: gatilhos e direções dos sticks viram botões.
+pub const LT: u32 = 1 << 17;
+pub const RT: u32 = 1 << 18;
+pub const LSU: u32 = 1 << 19;
+pub const LSD: u32 = 1 << 20;
+pub const LSL: u32 = 1 << 21;
+pub const LSR: u32 = 1 << 22;
+pub const RSU: u32 = 1 << 23;
+pub const RSD: u32 = 1 << 24;
+pub const RSL: u32 = 1 << 25;
+pub const RSR: u32 = 1 << 26;
+const COUNT: usize = 27;
+const ALL: u32 = (1 << COUNT) - 1;
+
+/// Nome de cada botão no arquivo do perfil.
+pub const NAMES: [(&str, u32); COUNT] = [
+    ("A", pads::A), ("B", pads::B), ("X", pads::X), ("Y", pads::Y), ("LB", pads::LB), ("RB", pads::RB),
+    ("BACK", pads::BACK), ("START", pads::START), ("LS", pads::LS), ("RS", pads::RS), ("UP", pads::UP),
+    ("DOWN", pads::DOWN), ("LEFT", pads::LEFT), ("RIGHT", pads::RIGHT), ("GUIDE", pads::GUIDE), ("PAD", pads::PAD),
+    ("MUTE", pads::MUTE), ("LT", LT), ("RT", RT), ("LSU", LSU), ("LSD", LSD), ("LSL", LSL), ("LSR", LSR),
+    ("RSU", RSU), ("RSD", RSD), ("RSL", RSL), ("RSR", RSR),
+];
+
+/// Segurar a partir de 400 ms; tocar é soltar antes disso; duplo é apertar de novo em até 300 ms.
+pub const HOLD: Duration = Duration::from_millis(400);
+pub const DOUBLE: Duration = Duration::from_millis(300);
+/// Guia (ou PS) + Select + Start por 2 s liga e desliga tudo, sem teclado.
+pub const STOP_COMBO: u32 = pads::GUIDE | pads::BACK | pads::START;
+const STOP_HOLD: Duration = Duration::from_secs(2);
+/// Folga antes de trocar de perfil pelo foco.
+const SWITCH_DELAY: Duration = Duration::from_millis(400);
+
+pub const CTRL: u8 = 1;
+pub const SHIFT: u8 = 2;
+pub const ALT: u8 = 4;
+pub const WIN: u8 = 8;
+const MODS: [(u8, u16, &str); 4] = [(CTRL, 0x11, "ctrl"), (SHIFT, 0x10, "shift"), (ALT, 0x12, "alt"), (WIN, 0x5B, "win")];
+const MAX_LAYERS: usize = 16;
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum Out {
+    /// Tecla virtual do Windows com modificadores.
+    Key(u16, u8),
+    /// 1 esquerdo, 2 direito, 3 meio, 4 e 5 laterais.
+    Mouse(u8),
+    /// Cliques da roda, para cima positivo.
+    Wheel(i8),
+    /// Camada enquanto o botão estiver apertado.
+    Layer(u8),
+    /// Liga e desliga a camada.
+    Toggle(u8),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum When {
+    Press,
+    Tap,
+    Hold,
+    Double,
+    Release,
+}
+const WHENS: [(When, &str); 5] = [(When::Press, "press"), (When::Tap, "tap"), (When::Hold, "hold"), (When::Double, "double"), (When::Release, "release")];
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct Bind {
+    pub button: u32,
+    /// Combinação: só vale com estes botões já apertados, e no lugar da ação normal do botão.
+    pub with: u32,
+    pub when: When,
+    pub out: Out,
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Stick {
+    /// As direções viram botões (LSU, LSD...).
+    Buttons,
+    /// Pixels por segundo com o stick no fim.
+    Mouse(f32),
+    /// Cliques de roda por segundo com o stick no fim.
+    Scroll(f32),
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct Layer {
+    pub name: String,
+    /// O que a camada não define vem da mãe. Só aponta para uma camada anterior: sem ciclo.
+    pub parent: Option<u8>,
+    pub ls: Option<Stick>,
+    pub rs: Option<Stick>,
+    pub binds: Vec<Bind>,
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct Zone {
+    pub start: f32,
+    pub end: f32,
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct Profile {
+    pub name: String,
+    /// Programas (.exe) que usam este perfil.
+    pub games: Vec<String>,
+    /// Stick esquerdo, direito, gatilho esquerdo, direito.
+    pub zones: [Zone; 4],
+    pub layers: Vec<Layer>,
+}
+
+pub const DESKTOP: &str = "Desktop";
+pub const BASE: &str = "Base";
+
+impl Profile {
+    fn empty(name: &str) -> Self {
+        let stick = Zone { start: 0.15, end: 0.95 };
+        let trig = Zone { start: 0.05, end: 0.95 };
+        Profile { name: name.into(), games: vec![], zones: [stick, stick, trig, trig], layers: vec![Layer { name: "Base".into(), parent: None, ls: None, rs: None, binds: vec![] }] }
+    }
+
+    /// Base: nada mapeado, o jogo lê o controle como ele é.
+    pub fn base() -> Self {
+        Self::empty(BASE)
+    }
+
+    /// Desktop: stick esquerdo mexe o mouse, o direito rola, e os botões fazem o básico do Windows.
+    pub fn desktop() -> Self {
+        let mut p = Self::empty(DESKTOP);
+        let l = &mut p.layers[0];
+        l.ls = Some(Stick::Mouse(1600.0));
+        l.rs = Some(Stick::Scroll(12.0));
+        let key = |vk: u16, m: u8| Out::Key(vk, m);
+        for (button, out) in [
+            (pads::A, Out::Mouse(1)),
+            (pads::B, Out::Mouse(2)),
+            (pads::X, key(0x1B, 0)),
+            (pads::Y, key(0x0D, 0)),
+            (pads::LB, key(0xA6, 0)),
+            (pads::RB, key(0xA7, 0)),
+            (pads::BACK, key(0x09, WIN)),
+            (pads::START, key(0x5B, 0)),
+            (pads::LS, Out::Mouse(3)),
+            (pads::RS, key(0x4F, CTRL | WIN)),
+            (pads::UP, key(0x26, 0)),
+            (pads::DOWN, key(0x28, 0)),
+            (pads::LEFT, key(0x25, 0)),
+            (pads::RIGHT, key(0x27, 0)),
+            (pads::MUTE, key(0xAD, 0)),
+            (LT, key(0xAE, 0)),
+            (RT, key(0xAF, 0)),
+        ] {
+            l.binds.push(Bind { button, with: 0, when: When::Press, out });
+        }
+        p
+    }
+
+    /// Texto do perfil: o mesmo para guardar, importar e exportar.
+    #[allow(dead_code)] // quem grava é a tela de perfis (2b)
+    pub fn to_text(&self) -> String {
+        use std::fmt::Write;
+        let mut s = String::from("prisma-profile 1\n");
+        let _ = writeln!(s, "name {}", self.name);
+        for g in &self.games {
+            let _ = writeln!(s, "game {g}");
+        }
+        for (z, n) in self.zones.iter().zip(["ls", "rs", "lt", "rt"]) {
+            let _ = writeln!(s, "zone {n} {} {}", z.start, z.end);
+        }
+        for (i, l) in self.layers.iter().enumerate() {
+            match l.parent {
+                Some(p) => _ = writeln!(s, "layer {p} {}", l.name),
+                None => _ = writeln!(s, "layer - {}", l.name),
+            }
+            for (side, st) in [("ls", l.ls), ("rs", l.rs)] {
+                match st {
+                    Some(Stick::Buttons) => _ = writeln!(s, "stick {i} {side} buttons"),
+                    Some(Stick::Mouse(v)) => _ = writeln!(s, "stick {i} {side} mouse {v}"),
+                    Some(Stick::Scroll(v)) => _ = writeln!(s, "stick {i} {side} scroll {v}"),
+                    None => {}
+                }
+            }
+            for b in &l.binds {
+                let mut button = button_name(b.button).to_string();
+                for (n, bit) in NAMES {
+                    if b.with & bit != 0 {
+                        button += "+";
+                        button += n;
+                    }
+                }
+                let when = WHENS.iter().find(|w| w.0 == b.when).map_or("press", |w| w.1);
+                let _ = writeln!(s, "bind {i} {button} {when} {}", out_text(b.out));
+            }
+        }
+        s
+    }
+
+    /// Lê um perfil. O texto pode vir de fora (importado), então tudo é conferido: botão, tecla,
+    /// camada, número. Linha que não entende derruba o perfil inteiro, para não usar meio perfil.
+    pub fn parse(text: &str) -> Option<Self> {
+        let mut lines = text.lines().map(str::trim).filter(|l| !l.is_empty());
+        if lines.next()? != "prisma-profile 1" {
+            return None;
+        }
+        let mut p = Profile { layers: vec![], ..Self::empty("") };
+        for line in lines {
+            let (cmd, rest) = line.split_once(' ')?;
+            match cmd {
+                "name" => p.name = rest.chars().filter(|c| !c.is_control()).take(60).collect(),
+                "game" => p.games.push(rest.to_lowercase()),
+                "zone" => {
+                    let mut it = rest.split(' ');
+                    let k = it.next()?;
+                    let i = ["ls", "rs", "lt", "rt"].iter().position(|n| *n == k)?;
+                    let (a, b) = (num(it.next()?)?, num(it.next()?)?);
+                    if !(a < b && b <= 1.0) {
+                        return None;
+                    }
+                    p.zones[i] = Zone { start: a, end: b };
+                }
+                "layer" => {
+                    let (parent, name) = rest.split_once(' ').unwrap_or((rest, ""));
+                    let parent = if parent == "-" { None } else { Some(parent.parse::<u8>().ok().filter(|&x| (x as usize) < p.layers.len())?) };
+                    if p.layers.len() >= MAX_LAYERS {
+                        return None;
+                    }
+                    p.layers.push(Layer { name: name.chars().filter(|c| !c.is_control()).take(40).collect(), parent, ls: None, rs: None, binds: vec![] });
+                }
+                "stick" => {
+                    let mut it = rest.split(' ');
+                    let l = layer_of(&p, it.next()?)?;
+                    let side = it.next()?;
+                    let st = match it.next()? {
+                        "buttons" => Stick::Buttons,
+                        "mouse" => Stick::Mouse(num(it.next()?)?.min(20000.0)),
+                        "scroll" => Stick::Scroll(num(it.next()?)?.min(200.0)),
+                        _ => return None,
+                    };
+                    match side {
+                        "ls" => p.layers[l].ls = Some(st),
+                        "rs" => p.layers[l].rs = Some(st),
+                        _ => return None,
+                    }
+                }
+                "bind" => {
+                    let mut it = rest.splitn(4, ' ');
+                    let l = layer_of(&p, it.next()?)?;
+                    let mut names = it.next()?.split('+');
+                    let button = button_bit(names.next()?)?;
+                    let mut with = 0;
+                    for n in names {
+                        with |= button_bit(n)?;
+                    }
+                    let w = it.next()?;
+                    let when = WHENS.iter().find(|x| x.1 == w)?.0;
+                    let out = parse_out(it.next()?)?;
+                    if with & button != 0 || p.layers[l].binds.len() >= 256 {
+                        return None;
+                    }
+                    p.layers[l].binds.push(Bind { button, with, when, out });
+                }
+                _ => return None,
+            }
+        }
+        // Camada citada numa ligação tem que existir.
+        let n = p.layers.len();
+        let ok = p.layers.iter().flat_map(|l| &l.binds).all(|b| !matches!(b.out, Out::Layer(x) | Out::Toggle(x) if x as usize >= n));
+        (ok && n > 0 && !p.name.is_empty()).then_some(p)
+    }
+}
+
+fn num(s: &str) -> Option<f32> {
+    s.parse::<f32>().ok().filter(|v| v.is_finite() && *v >= 0.0)
+}
+
+fn layer_of(p: &Profile, s: &str) -> Option<usize> {
+    s.parse::<usize>().ok().filter(|&l| l < p.layers.len())
+}
+
+#[allow(dead_code)]
+pub fn button_name(bit: u32) -> &'static str {
+    NAMES.iter().find(|n| n.1 == bit).map_or("?", |n| n.0)
+}
+
+fn button_bit(s: &str) -> Option<u32> {
+    NAMES.iter().find(|n| n.0 == s).map(|n| n.1)
+}
+
+#[allow(dead_code)]
+fn out_text(o: Out) -> String {
+    match o {
+        Out::Key(vk, m) => {
+            let mut s = format!("key {vk}");
+            for (bit, _, n) in MODS {
+                if m & bit != 0 {
+                    s += " ";
+                    s += n;
+                }
+            }
+            s
+        }
+        Out::Mouse(n) => format!("mouse {n}"),
+        Out::Wheel(n) => format!("wheel {n}"),
+        Out::Layer(n) => format!("layer {n}"),
+        Out::Toggle(n) => format!("toggle {n}"),
+    }
+}
+
+fn parse_out(s: &str) -> Option<Out> {
+    let mut it = s.split(' ');
+    let kind = it.next()?;
+    let n = it.next()?;
+    let out = match kind {
+        "key" => {
+            let vk = n.parse::<u16>().ok().filter(|v| (1..=254).contains(v))?;
+            let mut m = 0;
+            for name in it.by_ref() {
+                m |= MODS.iter().find(|x| x.2 == name)?.0;
+            }
+            Out::Key(vk, m)
+        }
+        "mouse" => Out::Mouse(n.parse::<u8>().ok().filter(|v| (1..=5).contains(v))?),
+        "wheel" => Out::Wheel(n.parse::<i8>().ok().filter(|v| *v != 0)?),
+        "layer" => Out::Layer(n.parse::<u8>().ok()?),
+        "toggle" => Out::Toggle(n.parse::<u8>().ok()?),
+        _ => return None,
+    };
+    it.next().is_none().then_some(out)
+}
+
+// ---------- Zonas mortas ----------
+
+/// Zona morta radial com zona externa: abaixo de `start` é zero, acima de `end` é o máximo, e o
+/// meio é esticado para começar do zero sem salto.
+pub fn radial(x: f32, y: f32, z: Zone) -> (f32, f32) {
+    let m = (x * x + y * y).sqrt();
+    if m <= z.start {
+        return (0.0, 0.0);
+    }
+    let s = ((m - z.start) / (z.end - z.start).max(0.01)).min(1.0) / m;
+    (x * s, y * s)
+}
+
+/// Gatilho: início e fim do curso.
+pub fn linear(v: f32, z: Zone) -> f32 {
+    ((v - z.start) / (z.end - z.start).max(0.01)).clamp(0.0, 1.0)
+}
+
+// ---------- Motor ----------
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Act {
+    Down(Out),
+    Up(Out),
+    Move(i32, i32),
+    /// Em unidades do Windows (120 por clique).
+    Wheel(i32),
+}
+
+#[derive(Default)]
+struct Btn {
+    down: Option<Instant>,
+    /// Camada onde foi apertado: o que ele apertou é solto lá, mesmo se a camada mudou.
+    layer: u8,
+    hold_fired: bool,
+    /// Já usado (combinação ou duplo): não toca, não segura, não solta.
+    used: bool,
+    outs: Vec<Out>,
+    released: Option<Instant>,
+    /// Toque esperando para ver se vem o duplo.
+    tap: Option<(Instant, Vec<Out>)>,
+}
+
+pub struct Engine {
+    btn: [Btn; COUNT],
+    prev: u32,
+    holds: Vec<u8>,
+    toggles: Vec<u8>,
+    /// Quantos botões seguram cada saída: a tecla só solta quando o último soltar.
+    count: HashMap<Out, u32>,
+    mx: f32,
+    my: f32,
+    wheel: f32,
+    last: Option<Instant>,
+}
+
+impl Default for Engine {
+    fn default() -> Self {
+        // Começa com tudo "apertado": o que já estava apertado ao ligar não dispara nada.
+        Engine { btn: std::array::from_fn(|_| Btn::default()), prev: ALL, holds: vec![], toggles: vec![], count: HashMap::new(), mx: 0.0, my: 0.0, wheel: 0.0, last: None }
+    }
+}
+
+fn binds(p: &Profile, layer: u8, bit: u32, chord: bool) -> Vec<&Bind> {
+    let mut l = Some(layer);
+    while let Some(i) = l {
+        let Some(ly) = p.layers.get(i as usize) else { break };
+        let v: Vec<&Bind> = ly.binds.iter().filter(|b| b.button == bit && (b.with != 0) == chord).collect();
+        if !v.is_empty() {
+            return v;
+        }
+        l = ly.parent;
+    }
+    vec![]
+}
+
+fn stick(p: &Profile, layer: u8, right: bool) -> Stick {
+    let mut l = Some(layer);
+    while let Some(i) = l {
+        let Some(ly) = p.layers.get(i as usize) else { break };
+        if let Some(s) = if right { ly.rs } else { ly.ls } {
+            return s;
+        }
+        l = ly.parent;
+    }
+    Stick::Buttons
+}
+
+fn outs(v: &[&Bind], when: When) -> Vec<Out> {
+    v.iter().filter(|b| b.when == when).map(|b| b.out).collect()
+}
+
+impl Engine {
+    pub fn layer(&self) -> u8 {
+        self.holds.last().or(self.toggles.last()).copied().unwrap_or(0)
+    }
+
+    /// Nada apertado: nem tecla, nem camada, nem botão no meio de um toque.
+    pub fn idle(&self) -> bool {
+        self.count.is_empty() && self.holds.is_empty() && self.btn.iter().all(|b| b.down.is_none() && b.tap.is_none())
+    }
+
+    fn down(&mut self, o: Out, acts: &mut Vec<Act>) {
+        match o {
+            Out::Layer(n) => self.holds.push(n),
+            Out::Toggle(n) => match self.toggles.iter().position(|&x| x == n) {
+                Some(i) => _ = self.toggles.remove(i),
+                None => self.toggles.push(n),
+            },
+            Out::Wheel(n) => acts.push(Act::Wheel(n as i32 * 120)),
+            _ => {
+                let c = self.count.entry(o).or_default();
+                *c += 1;
+                if *c == 1 {
+                    acts.push(Act::Down(o));
+                }
+            }
+        }
+    }
+
+    fn up(&mut self, o: Out, acts: &mut Vec<Act>) {
+        match o {
+            Out::Layer(n) => {
+                if let Some(i) = self.holds.iter().rposition(|&x| x == n) {
+                    self.holds.remove(i);
+                }
+            }
+            Out::Toggle(_) | Out::Wheel(_) => {}
+            _ => {
+                if let Some(c) = self.count.get_mut(&o) {
+                    *c -= 1;
+                    if *c == 0 {
+                        self.count.remove(&o);
+                        acts.push(Act::Up(o));
+                    }
+                }
+            }
+        }
+    }
+
+    fn tap(&mut self, o: Out, acts: &mut Vec<Act>) {
+        self.down(o, acts);
+        self.up(o, acts);
+    }
+
+    /// Solta tudo e esquece o estado. O que continuar apertado não dispara de novo.
+    pub fn release_all(&mut self) -> Vec<Act> {
+        let acts: Vec<Act> = self.count.drain().map(|(o, _)| Act::Up(o)).collect();
+        *self = Engine::default();
+        acts
+    }
+
+    pub fn step(&mut self, p: &Profile, inp: &Input, now: Instant) -> Vec<Act> {
+        let mut acts = vec![];
+        let dt = self.last.map_or(0.0, |t| now.saturating_duration_since(t).as_secs_f32().min(0.05));
+        self.last = Some(now);
+        let (lx, ly) = radial(inp.lx, inp.ly, p.zones[0]);
+        let (rx, ry) = radial(inp.rx, inp.ry, p.zones[1]);
+        let (lt, rt) = (linear(inp.lt, p.zones[2]), linear(inp.rt, p.zones[3]));
+        let prev = self.prev;
+        // Com folga: liga em 0,5 e só desliga abaixo de 0,4, para não piscar na borda.
+        let on = |v: f32, bit: u32| if v > 0.5 || (v > 0.4 && prev & bit != 0) { bit } else { 0 };
+        let cur = (inp.buttons & 0x1ffff) | on(lt, LT) | on(rt, RT) | on(ly, LSU) | on(-ly, LSD) | on(-lx, LSL) | on(lx, LSR) | on(ry, RSU) | on(-ry, RSD) | on(-rx, RSL) | on(rx, RSR);
+        let changed = cur ^ prev;
+        // Soltar antes de apertar: uma troca de botões no mesmo relatório solta a tecla velha antes.
+        for i in 0..COUNT {
+            if changed & !cur & (1 << i) != 0 {
+                self.release(p, i, now, &mut acts);
+            }
+        }
+        for i in 0..COUNT {
+            if changed & cur & (1 << i) != 0 {
+                self.press(p, i, cur, now, &mut acts);
+            }
+        }
+        for i in 0..COUNT {
+            let b = &self.btn[i];
+            if let Some(t) = b.down {
+                if !b.hold_fired && !b.used && now.saturating_duration_since(t) >= HOLD {
+                    let o = outs(&binds(p, b.layer, 1 << i, false), When::Hold);
+                    self.btn[i].hold_fired = true;
+                    for o in o {
+                        self.down(o, &mut acts);
+                        self.btn[i].outs.push(o);
+                    }
+                }
+            }
+            if self.btn[i].tap.as_ref().is_some_and(|t| now >= t.0) {
+                let (_, o) = self.btn[i].tap.take().unwrap();
+                for o in o {
+                    self.tap(o, &mut acts);
+                }
+            }
+        }
+        self.prev = cur;
+        let layer = self.layer();
+        for (right, x, y) in [(false, lx, ly), (true, rx, ry)] {
+            match stick(p, layer, right) {
+                Stick::Mouse(v) => {
+                    // Curva: devagar perto do centro, rápido no fim.
+                    self.mx += x * x.abs() * v * dt;
+                    self.my -= y * y.abs() * v * dt;
+                }
+                Stick::Scroll(v) => self.wheel += y * v * 120.0 * dt,
+                Stick::Buttons => {}
+            }
+        }
+        let (dx, dy) = (self.mx.trunc(), self.my.trunc());
+        if dx != 0.0 || dy != 0.0 {
+            acts.push(Act::Move(dx as i32, dy as i32));
+            self.mx -= dx;
+            self.my -= dy;
+        }
+        let w = self.wheel.trunc();
+        if w != 0.0 {
+            acts.push(Act::Wheel(w as i32));
+            self.wheel -= w;
+        }
+        acts
+    }
+
+    fn press(&mut self, p: &Profile, i: usize, cur: u32, now: Instant, acts: &mut Vec<Act>) {
+        let bit = 1u32 << i;
+        let layer = self.layer();
+        let pending = self.btn[i].tap.take();
+        let released = self.btn[i].released;
+        self.btn[i] = Btn { down: Some(now), layer, ..Default::default() };
+        let chord: Vec<Bind> = binds(p, layer, bit, true).into_iter().filter(|b| cur & b.with == b.with).cloned().collect();
+        if !chord.is_empty() {
+            for b in &chord {
+                for j in 0..COUNT {
+                    if b.with & (1 << j) != 0 {
+                        self.btn[j].used = true;
+                        // O toque guardado do outro botão também foi usado pela combinação.
+                        self.btn[j].tap = None;
+                    }
+                }
+                self.down(b.out, acts);
+                self.btn[i].outs.push(b.out);
+            }
+            self.btn[i].used = true;
+            return;
+        }
+        let all = binds(p, layer, bit, false);
+        let double = outs(&all, When::Double);
+        if !double.is_empty() && released.is_some_and(|r| now.saturating_duration_since(r) <= DOUBLE) {
+            self.btn[i].used = true;
+            for o in double {
+                self.down(o, acts);
+                self.btn[i].outs.push(o);
+            }
+            return;
+        }
+        if let Some((_, o)) = pending {
+            for o in o {
+                self.tap(o, acts);
+            }
+        }
+        for o in outs(&all, When::Press) {
+            self.down(o, acts);
+            self.btn[i].outs.push(o);
+        }
+    }
+
+    fn release(&mut self, p: &Profile, i: usize, now: Instant, acts: &mut Vec<Act>) {
+        let b = std::mem::take(&mut self.btn[i]);
+        for &o in &b.outs {
+            self.up(o, acts);
+        }
+        let Some(t) = b.down else { return };
+        if b.used {
+            return;
+        }
+        let all = binds(p, b.layer, 1 << i, false);
+        if !b.hold_fired && now.saturating_duration_since(t) < HOLD {
+            let tap = outs(&all, When::Tap);
+            if !tap.is_empty() && all.iter().any(|x| x.when == When::Double) {
+                self.btn[i].tap = Some((now + DOUBLE, tap));
+            } else {
+                for o in tap {
+                    self.tap(o, acts);
+                }
+            }
+        }
+        for o in outs(&all, When::Release) {
+            self.tap(o, acts);
+        }
+        self.btn[i].released = Some(now);
+    }
+}
+
+// ---------- No Windows ----------
+
+static ON: AtomicBool = AtomicBool::new(false);
+static STOPPED: AtomicBool = AtomicBool::new(false);
+static RUN: Mutex<Option<Run>> = Mutex::new(None);
+
+struct Run {
+    profiles: Vec<Profile>,
+    cur: usize,
+    /// Jogos do Medidor: usam o perfil Base quando não têm perfil próprio.
+    games: Vec<String>,
+    /// Motor de cada controle, e desde quando a combinação de parada está apertada.
+    engines: HashMap<String, (Engine, Option<(Instant, bool)>)>,
+    want: Option<(usize, Instant)>,
+    /// Do relatório chegar até o `SendInput` voltar, em µs, nos últimos envios.
+    lat: Vec<u32>,
+    warned: HashSet<String>,
+}
+
+fn profiles_dir() -> std::path::PathBuf {
+    crate::config::data_dir().join("perfis")
+}
+
+/// Desktop e Base sempre existem; os arquivos da pasta `perfis` substituem ou somam.
+fn load_profiles() -> Vec<Profile> {
+    let mut list = vec![Profile::desktop(), Profile::base()];
+    if let Ok(dir) = std::fs::read_dir(profiles_dir()) {
+        for e in dir.flatten() {
+            let Some(p) = std::fs::read_to_string(e.path()).ok().and_then(|t| Profile::parse(&t)) else { continue };
+            match list.iter_mut().find(|x| x.name == p.name) {
+                Some(x) => *x = p,
+                None => list.push(p),
+            }
+        }
+    }
+    list
+}
+
+/// Liga ou desliga o mapeamento. `games` são os .exe do Medidor.
+pub fn configure(on: bool, games: Vec<String>) {
+    let acts = {
+        let mut g = RUN.lock().unwrap();
+        let r = g.get_or_insert_with(|| Run { profiles: load_profiles(), cur: 0, games: vec![], engines: HashMap::new(), want: None, lat: vec![], warned: HashSet::new() });
+        r.games = games.into_iter().map(|s| s.to_lowercase()).collect();
+        ON.store(on, Ordering::Relaxed);
+        if on {
+            vec![]
+        } else {
+            let acts: Vec<Act> = r.engines.values_mut().flat_map(|e| e.0.release_all()).collect();
+            r.engines.clear();
+            acts
+        }
+    };
+    send(&acts);
+    super::pads::poke();
+}
+
+pub fn enabled() -> bool {
+    ON.load(Ordering::Relaxed)
+}
+
+pub fn stopped() -> bool {
+    STOPPED.load(Ordering::Relaxed)
+}
+
+pub fn active() -> Option<String> {
+    let g = RUN.lock().unwrap();
+    g.as_ref().filter(|_| enabled()).map(|r| r.profiles[r.cur].name.clone())
+}
+
+/// Mediana e p99 do tempo interno, em µs.
+pub fn latency() -> Option<(u32, u32)> {
+    let mut v = RUN.lock().unwrap().as_ref()?.lat.clone();
+    if v.len() < 20 {
+        return None;
+    }
+    v.sort_unstable();
+    Some((v[v.len() / 2], v[v.len() * 99 / 100]))
+}
+
+/// Um relatório novo do controle `key`, que chegou em `arrived`.
+pub fn feed(key: &str, inp: &Input, arrived: Instant) {
+    if !ON.load(Ordering::Relaxed) {
+        return;
+    }
+    let mut events = vec![];
+    let acts = {
+        let mut g = RUN.lock().unwrap();
+        let Some(r) = g.as_mut() else { return };
+        let mut acts = vec![];
+        // Parada de emergência: segurar a combinação liga e desliga; dispara uma vez por aperto.
+        let fire = {
+            let e = r.engines.entry(key.to_string()).or_default();
+            if inp.buttons & STOP_COMBO == STOP_COMBO {
+                let (since, fired) = e.1.get_or_insert((arrived, false));
+                let fire = !*fired && arrived.saturating_duration_since(*since) >= STOP_HOLD;
+                *fired |= fire;
+                fire
+            } else {
+                e.1 = None;
+                false
+            }
+        };
+        if fire {
+            let stop = !STOPPED.fetch_xor(true, Ordering::Relaxed);
+            for e in r.engines.values_mut() {
+                acts.extend(e.0.release_all());
+            }
+            events.push(pads::Event::Stopped { on: stop });
+        }
+        if !STOPPED.load(Ordering::Relaxed) {
+            let p = &r.profiles[r.cur];
+            let e = r.engines.get_mut(key).unwrap();
+            acts.extend(e.0.step(p, inp, arrived));
+            if let Some((to, at)) = r.want {
+                if arrived >= at && r.engines.values().all(|e| e.0.idle()) {
+                    r.want = None;
+                    r.cur = to;
+                    for e in r.engines.values_mut() {
+                        acts.extend(e.0.release_all());
+                    }
+                    events.push(pads::Event::Profile { name: r.profiles[to].name.clone() });
+                }
+            }
+        }
+        acts
+    };
+    if !acts.is_empty() {
+        send(&acts);
+        let us = arrived.elapsed().as_micros().min(u32::MAX as u128) as u32;
+        if let Some(r) = RUN.lock().unwrap().as_mut() {
+            if r.lat.len() >= 4096 {
+                r.lat.drain(..2048);
+            }
+            r.lat.push(us);
+        }
+    }
+    events.into_iter().for_each(pads::emit);
+    focus_tick(arrived);
+}
+
+/// Olha o programa em foco a cada 250 ms enquanto algum controle manda relatórios: pega também o
+/// jogo que abre em janela e só depois vai para a tela cheia, o que o aviso de foco do Windows não dá.
+fn focus_tick(now: Instant) {
+    use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+    static LAST: Mutex<(Option<Instant>, isize, bool)> = Mutex::new((None, 0, false));
+    let mut last = LAST.lock().unwrap();
+    if last.0.is_some_and(|t| now.saturating_duration_since(t) < Duration::from_millis(250)) {
+        return;
+    }
+    last.0 = Some(now);
+    let h = unsafe { GetForegroundWindow() };
+    let full = super::fullscreen::covers_monitor(h);
+    if (h.0 as isize, full) != (last.1, last.2) {
+        (last.1, last.2) = (h.0 as isize, full);
+        drop(last);
+        on_focus(super::procs::window_pid(h), full);
+    }
+}
+
+/// O controle saiu: solta o que ele segurava.
+pub fn forget(key: &str) {
+    let acts = RUN.lock().unwrap().as_mut().and_then(|r| r.engines.remove(key)).map(|mut e| e.0.release_all()).unwrap_or_default();
+    send(&acts);
+}
+
+/// Programa novo em foco. Troca de perfil depois da folga, e só com nada apertado. Jogo é o que está
+/// no Medidor ou o que ocupa a tela inteira (menos a área de trabalho do Windows).
+fn on_focus(pid: u32, full: bool) {
+    if !ON.load(Ordering::Relaxed) || pid == 0 || pid == std::process::id() {
+        return;
+    }
+    let Some(path) = super::procs::image_path(pid) else { return };
+    let exe = super::procs::exe_name(&path).to_lowercase();
+    let elevated = !crate::startup::is_elevated() && is_elevated(pid);
+    let mut events = vec![];
+    if let Some(r) = RUN.lock().unwrap().as_mut() {
+        let named = |n: &str| r.profiles.iter().position(|p| p.name == n).unwrap_or(0);
+        let game = r.games.contains(&exe) || (full && exe != "explorer.exe");
+        let to = r.profiles.iter().position(|p| p.games.contains(&exe)).unwrap_or_else(|| if game { named(BASE) } else { named(DESKTOP) });
+        r.want = (to != r.cur).then(|| (to, Instant::now() + SWITCH_DELAY));
+        if elevated && r.warned.insert(exe.clone()) {
+            events.push(pads::Event::Elevated { exe });
+        }
+    }
+    events.into_iter().for_each(pads::emit);
+}
+
+/// Programa como administrador: o Windows não deixa um programa comum mandar teclas para ele.
+fn is_elevated(pid: u32) -> bool {
+    use windows::Win32::Foundation::{CloseHandle, HANDLE};
+    use windows::Win32::Security::{GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY};
+    use windows::Win32::System::Threading::{OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION};
+    unsafe {
+        let Ok(h) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) else { return false };
+        let mut token = HANDLE::default();
+        // Sem permissão para ler o token de outro programa, ele é de administrador.
+        let elevated = if OpenProcessToken(h, TOKEN_QUERY, &mut token).is_err() {
+            true
+        } else {
+            let mut e = TOKEN_ELEVATION::default();
+            let mut len = 0;
+            let ok = GetTokenInformation(token, TokenElevation, Some(&mut e as *mut _ as *mut _), std::mem::size_of::<TOKEN_ELEVATION>() as u32, &mut len);
+            let _ = CloseHandle(token);
+            ok.is_ok() && e.TokenIsElevated != 0
+        };
+        let _ = CloseHandle(h);
+        elevated
+    }
+}
+
+fn send(acts: &[Act]) {
+    use windows::Win32::UI::Input::KeyboardAndMouse::*;
+    if acts.is_empty() {
+        return;
+    }
+    let key = |vk: u16, up: bool| -> INPUT {
+        let scan = unsafe { MapVirtualKeyW(vk as u32, MAPVK_VK_TO_VSC) } as u16;
+        // Setas, Insert, Delete, Home, End, PgUp, PgDn, Windows, menu, divisão, NumLock, Ctrl e Alt
+        // da direita e as teclas de mídia são "estendidas".
+        let ext = matches!(vk, 0x21..=0x28 | 0x2D | 0x2E | 0x5B..=0x5D | 0x6F | 0x90 | 0xA3 | 0xA5 | 0xA6..=0xB7);
+        let mut f = if up { KEYEVENTF_KEYUP } else { KEYBD_EVENT_FLAGS(0) };
+        if ext {
+            f |= KEYEVENTF_EXTENDEDKEY;
+        }
+        INPUT { r#type: INPUT_KEYBOARD, Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: VIRTUAL_KEY(vk), wScan: scan, dwFlags: f, ..Default::default() } } }
+    };
+    let mouse = |flags: MOUSE_EVENT_FLAGS, dx: i32, dy: i32, data: i32| INPUT {
+        r#type: INPUT_MOUSE,
+        Anonymous: INPUT_0 { mi: MOUSEINPUT { dx, dy, mouseData: data as u32, dwFlags: flags, ..Default::default() } },
+    };
+    let button = |n: u8, up: bool| match (n, up) {
+        (1, false) => mouse(MOUSEEVENTF_LEFTDOWN, 0, 0, 0),
+        (1, true) => mouse(MOUSEEVENTF_LEFTUP, 0, 0, 0),
+        (2, false) => mouse(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0),
+        (2, true) => mouse(MOUSEEVENTF_RIGHTUP, 0, 0, 0),
+        (3, false) => mouse(MOUSEEVENTF_MIDDLEDOWN, 0, 0, 0),
+        (3, true) => mouse(MOUSEEVENTF_MIDDLEUP, 0, 0, 0),
+        (n, up) => mouse(if up { MOUSEEVENTF_XUP } else { MOUSEEVENTF_XDOWN }, 0, 0, if n == 4 { 1 } else { 2 }),
+    };
+    let mut list = vec![];
+    for a in acts {
+        match *a {
+            Act::Down(Out::Key(vk, m)) => {
+                list.extend(MODS.iter().filter(|x| m & x.0 != 0).map(|x| key(x.1, false)));
+                list.push(key(vk, false));
+            }
+            Act::Up(Out::Key(vk, m)) => {
+                list.push(key(vk, true));
+                list.extend(MODS.iter().rev().filter(|x| m & x.0 != 0).map(|x| key(x.1, true)));
+            }
+            Act::Down(Out::Mouse(n)) => list.push(button(n, false)),
+            Act::Up(Out::Mouse(n)) => list.push(button(n, true)),
+            Act::Move(dx, dy) => list.push(mouse(MOUSEEVENTF_MOVE, dx, dy, 0)),
+            Act::Wheel(n) => list.push(mouse(MOUSEEVENTF_WHEEL, 0, 0, n)),
+            _ => {}
+        }
+    }
+    if !list.is_empty() {
+        unsafe {
+            SendInput(&list, std::mem::size_of::<INPUT>() as i32);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn at(ms: u64, t0: Instant) -> Instant {
+        t0 + Duration::from_millis(ms)
+    }
+
+    fn btn(b: u32) -> Input {
+        Input { buttons: b, ..Default::default() }
+    }
+
+    fn one(layer: &mut Layer, button: u32, when: When, out: Out) {
+        layer.binds.push(Bind { button, with: 0, when, out });
+    }
+
+    const K1: Out = Out::Key(0x41, 0);
+    const K2: Out = Out::Key(0x42, 0);
+
+    /// Motor ligado com nada apertado.
+    fn engine(p: &Profile, t0: Instant) -> Engine {
+        let mut e = Engine::default();
+        assert!(e.step(p, &btn(0), t0).is_empty());
+        e
+    }
+
+    #[test]
+    fn press_and_release() {
+        let t0 = Instant::now();
+        let mut p = Profile::base();
+        one(&mut p.layers[0], pads::A, When::Press, K1);
+        let mut e = engine(&p, t0);
+        assert_eq!(e.step(&p, &btn(pads::A), at(10, t0)), vec![Act::Down(K1)]);
+        assert_eq!(e.step(&p, &btn(0), at(20, t0)), vec![Act::Up(K1)]);
+        assert!(e.idle());
+    }
+
+    #[test]
+    fn held_at_start_does_nothing() {
+        let t0 = Instant::now();
+        let mut p = Profile::base();
+        one(&mut p.layers[0], pads::A, When::Press, K1);
+        let mut e = Engine::default();
+        assert!(e.step(&p, &btn(pads::A), t0).is_empty());
+        assert!(e.step(&p, &btn(0), at(10, t0)).is_empty());
+        assert_eq!(e.step(&p, &btn(pads::A), at(20, t0)), vec![Act::Down(K1)]);
+    }
+
+    #[test]
+    fn tap_hold_and_double() {
+        let t0 = Instant::now();
+        let mut p = Profile::base();
+        one(&mut p.layers[0], pads::A, When::Tap, K1);
+        one(&mut p.layers[0], pads::A, When::Hold, K2);
+        let mut e = engine(&p, t0);
+        // Toque.
+        assert!(e.step(&p, &btn(pads::A), at(10, t0)).is_empty());
+        assert_eq!(e.step(&p, &btn(0), at(100, t0)), vec![Act::Down(K1), Act::Up(K1)]);
+        // Segurar.
+        assert!(e.step(&p, &btn(pads::A), at(1000, t0)).is_empty());
+        assert_eq!(e.step(&p, &btn(pads::A), at(1500, t0)), vec![Act::Down(K2)]);
+        assert_eq!(e.step(&p, &btn(0), at(1600, t0)), vec![Act::Up(K2)]);
+        // Duplo: o toque espera a janela, e o segundo aperto dispara o duplo no lugar.
+        one(&mut p.layers[0], pads::A, When::Double, Out::Mouse(1));
+        e.step(&p, &btn(pads::A), at(3000, t0));
+        assert!(e.step(&p, &btn(0), at(3050, t0)).is_empty());
+        assert_eq!(e.step(&p, &btn(pads::A), at(3200, t0)), vec![Act::Down(Out::Mouse(1))]);
+        assert_eq!(e.step(&p, &btn(0), at(3300, t0)), vec![Act::Up(Out::Mouse(1))]);
+        // Toque só, sem segundo aperto: sai quando a janela acaba.
+        e.step(&p, &btn(pads::A), at(5000, t0));
+        assert!(e.step(&p, &btn(0), at(5050, t0)).is_empty());
+        assert_eq!(e.step(&p, &btn(0), at(5400, t0)), vec![Act::Down(K1), Act::Up(K1)]);
+        assert!(e.idle());
+    }
+
+    #[test]
+    fn key_releases_in_the_layer_it_was_pressed() {
+        let t0 = Instant::now();
+        let mut p = Profile::base();
+        p.layers.push(Layer { name: "Fn".into(), parent: Some(0), ls: None, rs: None, binds: vec![] });
+        one(&mut p.layers[0], pads::LB, When::Press, Out::Layer(1));
+        one(&mut p.layers[0], pads::A, When::Press, K1);
+        one(&mut p.layers[1], pads::A, When::Press, K2);
+        one(&mut p.layers[0], pads::B, When::Press, Out::Mouse(2));
+        let mut e = engine(&p, t0);
+        assert_eq!(e.step(&p, &btn(pads::A), at(10, t0)), vec![Act::Down(K1)]);
+        // Camada muda com A apertado: soltar A solta a tecla da camada de antes.
+        assert!(e.step(&p, &btn(pads::A | pads::LB), at(20, t0)).is_empty());
+        assert_eq!(e.layer(), 1);
+        assert_eq!(e.step(&p, &btn(pads::LB), at(30, t0)), vec![Act::Up(K1)]);
+        assert_eq!(e.step(&p, &btn(pads::LB | pads::A), at(40, t0)), vec![Act::Down(K2)]);
+        // Herança: B não está na camada 1 e vem da Base.
+        assert_eq!(e.step(&p, &btn(pads::LB | pads::A | pads::B), at(50, t0)), vec![Act::Down(Out::Mouse(2))]);
+        // Solta a camada antes dos botões: K2 e o clique soltam assim mesmo.
+        assert!(e.step(&p, &btn(pads::A | pads::B), at(60, t0)).is_empty());
+        assert_eq!(e.step(&p, &btn(0), at(70, t0)), vec![Act::Up(K2), Act::Up(Out::Mouse(2))]);
+        assert!(e.idle());
+    }
+
+    #[test]
+    fn toggle_layer() {
+        let t0 = Instant::now();
+        let mut p = Profile::base();
+        p.layers.push(Layer { name: "Fn".into(), parent: Some(0), ls: None, rs: None, binds: vec![] });
+        one(&mut p.layers[0], pads::RB, When::Press, Out::Toggle(1));
+        let mut e = engine(&p, t0);
+        e.step(&p, &btn(pads::RB), at(10, t0));
+        e.step(&p, &btn(0), at(20, t0));
+        assert_eq!(e.layer(), 1);
+        e.step(&p, &btn(pads::RB), at(30, t0));
+        e.step(&p, &btn(0), at(40, t0));
+        assert_eq!(e.layer(), 0);
+    }
+
+    #[test]
+    fn chord_replaces_and_cancels_tap() {
+        let t0 = Instant::now();
+        let mut p = Profile::base();
+        one(&mut p.layers[0], pads::LB, When::Tap, K1);
+        one(&mut p.layers[0], pads::A, When::Press, K2);
+        p.layers[0].binds.push(Bind { button: pads::A, with: pads::LB, when: When::Press, out: Out::Mouse(1) });
+        let mut e = engine(&p, t0);
+        e.step(&p, &btn(pads::LB), at(10, t0));
+        assert_eq!(e.step(&p, &btn(pads::LB | pads::A), at(20, t0)), vec![Act::Down(Out::Mouse(1))]);
+        assert_eq!(e.step(&p, &btn(pads::LB), at(30, t0)), vec![Act::Up(Out::Mouse(1))]);
+        // O toque do LB foi usado pela combinação.
+        assert!(e.step(&p, &btn(0), at(40, t0)).is_empty());
+        assert_eq!(e.step(&p, &btn(pads::A), at(50, t0)), vec![Act::Down(K2)]);
+    }
+
+    #[test]
+    fn same_key_from_two_buttons_releases_with_the_last() {
+        let t0 = Instant::now();
+        let mut p = Profile::base();
+        one(&mut p.layers[0], pads::A, When::Press, K1);
+        one(&mut p.layers[0], pads::B, When::Press, K1);
+        let mut e = engine(&p, t0);
+        assert_eq!(e.step(&p, &btn(pads::A), at(10, t0)), vec![Act::Down(K1)]);
+        assert!(e.step(&p, &btn(pads::A | pads::B), at(20, t0)).is_empty());
+        assert!(e.step(&p, &btn(pads::B), at(30, t0)).is_empty());
+        assert_eq!(e.step(&p, &btn(0), at(40, t0)), vec![Act::Up(K1)]);
+    }
+
+    #[test]
+    fn release_all_leaves_nothing_down() {
+        let t0 = Instant::now();
+        let p = Profile::desktop();
+        let mut e = engine(&p, t0);
+        let acts = e.step(&p, &btn(pads::A | pads::X | pads::UP), at(10, t0));
+        assert_eq!(acts.len(), 3);
+        let up = e.release_all();
+        assert_eq!(up.len(), 3);
+        assert!(up.iter().all(|a| matches!(a, Act::Up(_))));
+        // Ainda apertados depois de soltar tudo: não disparam de novo.
+        assert!(e.step(&p, &btn(pads::A | pads::X | pads::UP), at(20, t0)).is_empty());
+        assert!(e.step(&p, &btn(0), at(30, t0)).is_empty());
+    }
+
+    #[test]
+    fn trigger_and_stick_buttons_with_hysteresis() {
+        let t0 = Instant::now();
+        let mut p = Profile::base();
+        one(&mut p.layers[0], RT, When::Press, K1);
+        one(&mut p.layers[0], LSR, When::Press, K2);
+        let mut e = engine(&p, t0);
+        let i = |rt: f32, lx: f32| Input { rt, lx, ..Default::default() };
+        assert!(e.step(&p, &i(0.4, 0.0), at(10, t0)).is_empty());
+        assert_eq!(e.step(&p, &i(0.6, 0.0), at(20, t0)), vec![Act::Down(K1)]);
+        // Entre 0,4 e 0,5 continua apertado.
+        assert!(e.step(&p, &i(0.47, 0.0), at(30, t0)).is_empty());
+        assert_eq!(e.step(&p, &i(0.0, 0.9), at(40, t0)), vec![Act::Up(K1), Act::Down(K2)]);
+    }
+
+    #[test]
+    fn stick_moves_mouse_and_scrolls() {
+        let t0 = Instant::now();
+        let p = Profile::desktop();
+        let mut e = engine(&p, t0);
+        let acts = e.step(&p, &Input { lx: 1.0, ry: 1.0, ..Default::default() }, at(10, t0));
+        // 10 ms a 1600 px/s no fim = 16 px; roda a 12/s = 0,12 clique = 14 unidades.
+        assert!(matches!(acts[..], [Act::Move(15 | 16, 0), Act::Wheel(14)]), "{acts:?}");
+        // Dentro da zona morta, nada (só a sobra da conta anterior pode sair).
+        let acts = e.step(&p, &Input { lx: 0.1, ..Default::default() }, at(20, t0));
+        assert!(acts.iter().all(|a| matches!(a, Act::Move(0..=1, 0))), "{acts:?}");
+    }
+
+    #[test]
+    fn deadzones() {
+        let z = Zone { start: 0.1, end: 0.9 };
+        assert_eq!(radial(0.05, 0.05, z), (0.0, 0.0));
+        let (x, y) = radial(0.95, 0.0, z);
+        assert!((x - 1.0).abs() < 1e-5 && y == 0.0);
+        let (x, _) = radial(0.5, 0.0, z);
+        assert!((x - 0.5).abs() < 1e-5);
+        assert_eq!(linear(0.05, z), 0.0);
+        assert_eq!(linear(1.0, z), 1.0);
+        assert!((linear(0.5, z) - 0.5).abs() < 1e-5);
+    }
+
+    #[test]
+    fn profile_text_round_trip_and_rejects_bad_input() {
+        let mut p = Profile::desktop();
+        p.games.push("jogo.exe".into());
+        p.layers.push(Layer { name: "Fn".into(), parent: Some(0), ls: Some(Stick::Buttons), rs: None, binds: vec![] });
+        one(&mut p.layers[0], pads::LB, When::Hold, Out::Layer(1));
+        p.layers[1].binds.push(Bind { button: pads::A, with: pads::LB | pads::RB, when: When::Double, out: Out::Key(0x43, CTRL | SHIFT) });
+        let text = p.to_text();
+        assert_eq!(Profile::parse(&text), Some(p));
+        for bad in [
+            "",
+            "prisma-profile 2\nname x\nlayer - B",
+            "prisma-profile 1\nname x",
+            "prisma-profile 1\nname x\nlayer 0 B",
+            "prisma-profile 1\nname x\nlayer - B\nbind 0 A press key 0",
+            "prisma-profile 1\nname x\nlayer - B\nbind 0 A press key 300",
+            "prisma-profile 1\nname x\nlayer - B\nbind 1 A press key 65",
+            "prisma-profile 1\nname x\nlayer - B\nbind 0 Z press key 65",
+            "prisma-profile 1\nname x\nlayer - B\nbind 0 A+A press key 65",
+            "prisma-profile 1\nname x\nlayer - B\nbind 0 A press key 65 hyper",
+            "prisma-profile 1\nname x\nlayer - B\nbind 0 A press layer 3",
+            "prisma-profile 1\nname x\nlayer - B\nzone ls 0.9 0.1",
+            "prisma-profile 1\nname x\nlayer - B\nstick 0 ls mouse NaN",
+            "prisma-profile 1\nname x\nlayer - B\nrun calc.exe",
+        ] {
+            assert_eq!(Profile::parse(bad), None, "{bad}");
+        }
+    }
+}
