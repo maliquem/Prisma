@@ -1913,3 +1913,55 @@ O Windows não trocou o HDR	Windows didn't switch HDR
 Nome de executável inválido	Invalid executable name
 O Prisma não conhece essa opção	Prisma doesn't know this option
 Valor fora das opções	Value outside the options
+Cada controle ao vivo, a bateria e a taxa de relatório. Só leitura: nada muda no controle.	Each controller live, its battery and report rate. Read only: nothing changes on the controller.
+Copiar diagnóstico	Copy diagnostics
+Diagnóstico copiado	Diagnostics copied
+Nenhum controle ligado. Ligue um controle por USB ou Bluetooth e ele aparece aqui.	No controller connected. Connect one over USB or Bluetooth and it shows up here.
+Pareado sem a parte de controle: nenhum programa consegue ler. Remova nas configurações de Bluetooth e pareie de novo.	Paired without the controller part: no program can read it. Remove it in Bluetooth settings and pair again.
+Avisos	Notices
+Ao conectar e desconectar	On connect and disconnect
+Bateria baixa	Low battery
+Variação acima de	Jitter above
+Avisa quando o intervalo entre relatórios do controle passa desse valor (p99). 0 desliga.	Warns when the interval between the controller's reports goes above this value (p99). 0 turns it off.
+Steam aberto: o Steam Input pode trocar os botões que o jogo recebe.	Steam is open: Steam Input can change the buttons the game gets.
+reWASD aberto: ele pode esconder ou remapear o controle.	reWASD is open: it can hide or remap the controller.
+DS4Windows aberto: ele pode esconder o controle e criar um Xbox virtual.	DS4Windows is open: it can hide the controller and create a virtual Xbox one.
+DSX aberto: ele pode mudar o modo do controle e criar um controle virtual.	DSX is open: it can change the controller's mode and create a virtual controller.
+Medir sticks e gatilhos	Measure sticks and triggers
+Começar	Start
+Solte os sticks e os gatilhos e não toque no controle.	Let go of the sticks and triggers and don't touch the controller.
+Gire os dois sticks devagar, encostando na borda, algumas voltas.	Turn both sticks slowly against the edge, a few times around.
+Aperte os dois gatilhos até o fim algumas vezes.	Press both triggers all the way a few times.
+Etapa	Stage
+Mede o desvio dos sticks parados, a tremida, o alcance, o quanto o contorno foge de um círculo e o curso dos gatilhos. Leva 13 segundos.	Measures the sticks' drift at rest, their noise, their reach, how far the outline is from a circle and the triggers' travel. Takes 13 seconds.
+carregando	charging
+vazia	empty
+baixa	low
+pela metade	half
+cheia	full
+desconhecida	unknown
+taxa a medir	rate not measured
+bateria	battery
+Cruz	Cross
+Círculo	Circle
+Quadrado	Square
+Triângulo	Triangle
+Stick esquerdo	Left stick
+Stick direito	Right stick
+Desvio parado	Drift at rest
+Tremida	Noise
+Alcance	Reach
+Fora do círculo	Out of round
+Voltas cobertas	Turn coverage
+Gire mais para medir	Turn more to measure
+Gatilhos	Triggers
+Esquerdo	Left
+Direito	Right
+Controle Xbox	Xbox controller
+Controle Xbox {}	Xbox controller {}
+{} conectado por USB	{} connected over USB
+{} conectado por Bluetooth	{} connected over Bluetooth
+{} desconectado	{} disconnected
+Bateria do {} em {}%	{} battery at {}%
+Bateria do {} baixa	{} battery low
+{}: variação de {} ms entre relatórios	{}: {} ms jitter between reports

@@ -45,18 +45,17 @@ pub fn exe_name(path: &str) -> String {
     path.rsplit('\\').next().unwrap_or(path).to_string()
 }
 
-/// Mapa de pai para filhos, tirado de um instantâneo do sistema.
-pub fn parent_map() -> HashMap<u32, u32> {
-    let mut map = HashMap::new();
+/// Cada processo de um instantâneo do sistema.
+fn each_process(mut f: impl FnMut(&PROCESSENTRY32W)) {
     unsafe {
-        let Ok(snap) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else { return map };
+        let Ok(snap) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else { return };
         let mut e = PROCESSENTRY32W {
             dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
             ..Default::default()
         };
         if Process32FirstW(snap, &mut e).is_ok() {
             loop {
-                map.insert(e.th32ProcessID, e.th32ParentProcessID);
+                f(&e);
                 if Process32NextW(snap, &mut e).is_err() {
                     break;
                 }
@@ -64,7 +63,25 @@ pub fn parent_map() -> HashMap<u32, u32> {
         }
         let _ = CloseHandle(snap);
     }
+}
+
+/// Mapa de pai para filhos, tirado de um instantâneo do sistema.
+pub fn parent_map() -> HashMap<u32, u32> {
+    let mut map = HashMap::new();
+    each_process(|e| {
+        map.insert(e.th32ProcessID, e.th32ParentProcessID);
+    });
     map
+}
+
+/// Nomes dos executáveis rodando agora, em minúsculas.
+pub fn running_exes() -> std::collections::HashSet<String> {
+    let mut set = std::collections::HashSet::new();
+    each_process(|e| {
+        let n = e.szExeFile.iter().position(|&c| c == 0).unwrap_or(e.szExeFile.len());
+        set.insert(String::from_utf16_lossy(&e.szExeFile[..n]).to_lowercase());
+    });
+    set
 }
 
 /// True quando `pid` é `root` ou descende dele.

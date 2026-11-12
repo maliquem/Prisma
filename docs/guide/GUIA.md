@@ -242,6 +242,21 @@ Em teste. Mostra e controla outro PC pela internet, para acesso remoto ou para j
 - **Segurança:** Ctrl + Alt + Shift + Q, no host, desconecta todo mundo na hora. **Esquecer** tira um aparelho, que só volta com convite novo.
 - **Não dá para:** usar sem o Prisma aberto no host (a não ser com o serviço); capturar conteúdo protegido, que sai preto; ouvir o microfone de quem assiste.
 
+## Controles
+
+Mostra os controles ligados por USB ou Bluetooth, ao vivo, sem mudar nada neles. Lê DualSense, DualShock 4, controles Xbox e os que se apresentam como Xbox, e controles genéricos, com os botões numerados. Sem controle ligado, o Prisma não gasta nada com eles.
+
+- **Lista:** nome, conexão (USB ou Bluetooth), bateria e taxa de relatório de cada controle. Clique em um para ver ao vivo.
+- **Ao vivo:** os sticks com o ponto, os gatilhos em barras e os botões, que acendem quando apertados.
+- **Bateria:** em % no DualSense e no DualShock 4 por USB, em quatro níveis no Xbox, e "com fio" nos controles sem bateria. Por Bluetooth, o DualSense e o DualShock 4 só mandam a bateria num modo que exige gravar no controle, então ela fica "desconhecida".
+- **Taxa:** quantos relatórios por segundo o controle manda, com a média, o p99 e o máximo do intervalo entre eles, medidos a cada 2 segundos. No Xbox por Bluetooth o Windows não entrega os relatórios, e aparece "taxa a medir".
+- **Medir sticks e gatilhos:** **Começar** leva 13 segundos, em três etapas: soltar o controle, girar os sticks encostando na borda e apertar os gatilhos até o fim. Mostra o desvio parado (drift), a tremida, o alcance, o quanto o contorno foge de um círculo, as voltas cobertas e o curso de cada gatilho. Valores ruins ficam em laranja.
+- **Avisos:** o aviso do próprio Prisma (o mesmo do volume) aparece quando um controle conecta ou desconecta, quando a bateria fica abaixo do limite (10% de fábrica, uma vez por descarga; 0 desliga) e, se você ligar, quando a variação entre relatórios passa do valor escolhido.
+- **Conflitos:** com Steam, reWASD, DS4Windows ou DSX abertos, a página explica em uma frase o que cada um pode mudar no controle.
+- **Pareado sem controle:** se um controle Bluetooth aparece conectado mas o Windows não ligou a parte de controle, a página avisa para remover e parear de novo.
+- **Copiar diagnóstico:** copia um texto com os controles, a conexão, a bateria, a taxa e os conflitos, para colar num relatório.
+- **Não dá para:** mudar botões, luz, vibração ou gatilhos. Isso vem nas próximas versões.
+
 ## Widget
 
 Mostra CPU, GPU, RAM e VRAM por cima de tudo, em quatro estilos. Arraste para mudar de lugar. Atalho: Ctrl + Alt + W.
@@ -258,7 +273,8 @@ O Prisma Launcher, o lançador de jogos, conversa com o Prisma aberto no mesmo P
 - **Driver NVIDIA:** ler e mudar as opções do driver no perfil do jogo ou no global, com os mesmos valores da tela Driver NVIDIA. O jogo entra na lista da tela. Só com placa NVIDIA.
 - **Captura:** tirar uma foto só da janela do jogo, mesmo com o launcher por cima (vai direto para a pasta de capturas e para a área de transferência, sem abrir o editor), e começar ou parar a gravação da janela do jogo. Salvar o replay também funciona.
 - **Compartilhar tela:** criar um convite, com a validade escolhida no launcher (de 1 minuto a 24 horas) ou a da página.
-- **Abrir uma tela:** Medidor, Energia, Fullscreenizer, Som, HDR, Driver NVIDIA, Captura ou Compartilhar tela.
+- **Controles:** ver os controles ligados, com a conexão, a bateria e a taxa de relatório.
+- **Abrir uma tela:** Medidor, Energia, Fullscreenizer, Som, HDR, Driver NVIDIA, Captura, Compartilhar tela ou Controles.
 
 O jogo aberto pelo launcher também entra no modo jogo na hora, sem esperar a detecção. Nada abre por cima do jogo: o Prisma só mostra um aviso, como nos atalhos. Com o Prisma fechado, o launcher não alcança nada disso.
 

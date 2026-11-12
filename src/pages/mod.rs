@@ -3,6 +3,7 @@
 mod adjust;
 mod analyze;
 mod capture;
+pub mod controllers;
 mod energy;
 mod fullscreen;
 pub mod guide;
@@ -67,6 +68,7 @@ pub enum Page {
     Nvidia,
     Capture,
     Share,
+    Controllers,
     Widget,
     Adjust,
     Report,
@@ -151,6 +153,13 @@ const ICON_GPU: Icon = &[
     &[(10., 17.), (10., 20.)],
 ];
 
+const ICON_PAD: Icon = &[
+    &[(6., 8.), (18., 8.), (21., 15.), (20., 18.), (17., 18.), (15., 15.), (9., 15.), (7., 18.), (4., 18.), (3., 15.), (6., 8.)],
+    &[(6.5, 11.5), (10.5, 11.5)],
+    &[(8.5, 9.5), (8.5, 13.5)],
+    &[(15., 10.5), (15., 11.5)],
+    &[(17.5, 11.5), (17.5, 12.5)],
+];
 const ICON_SHARE: Icon = &[
     &[(3., 5.), (21., 5.), (21., 16.), (3., 16.), (3., 5.)],
     &[(9., 20.), (15., 20.)],
@@ -215,6 +224,7 @@ const NAV: &[(Page, &str, Icon)] = &[
     (Page::Nvidia, "Driver NVIDIA", ICON_GPU),
     (Page::Capture, "Captura", ICON_CAP),
     (Page::Share, "Compartilhar tela", ICON_SHARE),
+    (Page::Controllers, "Controles", ICON_PAD),
     (Page::Widget, "Widget", ICON_WID),
     (Page::Adjust, "Configurações", ICON_ADJ),
 ];
@@ -333,6 +343,7 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
         Page::Nvidia => nvidia::draw(&mut ui, app, area),
         Page::Capture => capture::draw(&mut ui, app, area),
         Page::Share => share::draw(&mut ui, app, area),
+        Page::Controllers => controllers::draw(&mut ui, app, area),
         Page::Widget => widget::draw(&mut ui, app, area),
         Page::Adjust => adjust::draw(&mut ui, app, area),
         Page::Report => report::draw(&mut ui, app, area),

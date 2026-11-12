@@ -1907,3 +1907,55 @@ O Windows não trocou o HDR	Windows 没有切换 HDR
 Nome de executável inválido	可执行文件名称无效
 O Prisma não conhece essa opção	Prisma 不认识此选项
 Valor fora das opções	值不在选项内
+Cada controle ao vivo, a bateria e a taxa de relatório. Só leitura: nada muda no controle.	实时查看每个手柄、电量和报告率。只读：不会更改手柄的任何设置。
+Copiar diagnóstico	复制诊断
+Diagnóstico copiado	诊断已复制
+Nenhum controle ligado. Ligue um controle por USB ou Bluetooth e ele aparece aqui.	未连接手柄。通过 USB 或蓝牙连接手柄后会显示在这里。
+Pareado sem a parte de controle: nenhum programa consegue ler. Remova nas configurações de Bluetooth e pareie de novo.	已配对但缺少手柄功能：任何程序都无法读取。请在蓝牙设置中删除后重新配对。
+Avisos	通知
+Ao conectar e desconectar	连接和断开时
+Bateria baixa	电量低
+Variação acima de	抖动高于
+Avisa quando o intervalo entre relatórios do controle passa desse valor (p99). 0 desliga.	当手柄报告间隔超过此值 (p99) 时提醒。0 为关闭。
+Steam aberto: o Steam Input pode trocar os botões que o jogo recebe.	Steam 已打开：Steam Input 可能会更改游戏收到的按键。
+reWASD aberto: ele pode esconder ou remapear o controle.	reWASD 已打开：它可能会隐藏或重新映射手柄。
+DS4Windows aberto: ele pode esconder o controle e criar um Xbox virtual.	DS4Windows 已打开：它可能会隐藏手柄并创建虚拟 Xbox 手柄。
+DSX aberto: ele pode mudar o modo do controle e criar um controle virtual.	DSX 已打开：它可能会更改手柄模式并创建虚拟手柄。
+Medir sticks e gatilhos	测量摇杆和扳机
+Começar	开始
+Solte os sticks e os gatilhos e não toque no controle.	松开摇杆和扳机，不要碰手柄。
+Gire os dois sticks devagar, encostando na borda, algumas voltas.	沿边缘慢慢转动两个摇杆几圈。
+Aperte os dois gatilhos até o fim algumas vezes.	将两个扳机按到底几次。
+Etapa	步骤
+Mede o desvio dos sticks parados, a tremida, o alcance, o quanto o contorno foge de um círculo e o curso dos gatilhos. Leva 13 segundos.	测量摇杆静止时的漂移、抖动、可达范围、轮廓偏离圆形的程度以及扳机行程。需要 13 秒。
+carregando	充电中
+vazia	耗尽
+baixa	低
+pela metade	一半
+cheia	满
+desconhecida	未知
+taxa a medir	报告率未测
+bateria	电量
+Cruz	叉
+Círculo	圆
+Quadrado	方
+Triângulo	三角
+Stick esquerdo	左摇杆
+Stick direito	右摇杆
+Desvio parado	静止漂移
+Tremida	抖动
+Alcance	可达范围
+Fora do círculo	偏离圆形
+Voltas cobertas	覆盖范围
+Gire mais para medir	请多转几圈再测
+Gatilhos	扳机
+Esquerdo	左
+Direito	右
+Controle Xbox	Xbox 手柄
+Controle Xbox {}	Xbox 手柄 {}
+{} conectado por USB	{} 已通过 USB 连接
+{} conectado por Bluetooth	{} 已通过蓝牙连接
+{} desconectado	{} 已断开
+Bateria do {} em {}%	{} 电量 {}%
+Bateria do {} baixa	{} 电量低
+{}: variação de {} ms entre relatórios	{}：报告间隔抖动 {} 毫秒

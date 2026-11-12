@@ -47,6 +47,8 @@ const TIMER_METER: usize = 77;
 const TIMER_SHARE: usize = 78;
 /// Quem entra e sai da sala do compartilhamento, para avisar.
 const TIMER_ROOM: usize = 79;
+/// A aba Controles redesenha o controle ao vivo enquanto está aberta.
+const TIMER_PADS: usize = 80;
 const WM_UPDATED: u32 = WM_APP + 77;
 const WM_PICK_FS: u32 = WM_APP + 78;
 const WM_PICK_SND: u32 = WM_APP + 79;
@@ -198,6 +200,7 @@ pub struct App {
     pub detector: Detector,
     pub widget: Widget,
     pub toast: Toast,
+    pub pads: crate::pages::controllers::State,
     /// Quem estava na sala do compartilhamento na última olhada (chave, nome).
     room_seen: Option<Vec<(String, String)>>,
     /// Até onde os avisos do compartilhamento já foram mostrados (ms desde 1970; 0 antes da primeira olhada).
@@ -405,6 +408,7 @@ pub fn start(background: bool) {
             detector: Detector::new(),
             widget: Widget::new(),
             toast: Toast::new(),
+            pads: Default::default(),
             room_seen: None,
             notices_since: 0,
             prompt: Prompt::new(),
@@ -878,6 +882,7 @@ pub fn start(background: bool) {
                 "--page=meter" => Page::Meter,
                 "--page=capture" => Page::Capture,
                 "--page=share" => Page::Share,
+                "--page=controllers" => Page::Controllers,
                 "--page=widget" => Page::Widget,
                 "--page=adjust" => Page::Adjust,
                 "--page=report" => Page::Report,
@@ -2502,6 +2507,7 @@ impl App {
             // `--test-page=share`: a página Compartilhar tela por cima das Novidades; `--test-en`: inglês.
             match arg("--test-page=").as_deref() {
                 Some("share") => self.page = Page::Share,
+                Some("controllers") => self.page = Page::Controllers,
                 Some("meter") => self.page = Page::Meter,
                 Some("sound") => self.page = Page::Volume,
                 Some("guide") => self.page = Page::Guide,
@@ -2912,10 +2918,39 @@ impl App {
         }
     }
 
+    /// Avisos dos controles, pelo aviso do próprio Prisma (como o do volume).
+    fn pad_events(&mut self) {
+        use crate::sys::pads::{Battery, Event, Link};
+        for e in crate::sys::pads::take_events() {
+            let text = match e {
+                Event::Connected { name, link } if self.cfg.pad_notify => match link {
+                    Link::Usb => format!("{name} conectado por USB"),
+                    Link::Bluetooth => format!("{name} conectado por Bluetooth"),
+                },
+                Event::Disconnected { name } if self.cfg.pad_notify => format!("{name} desconectado"),
+                Event::BatteryLow { name, battery: Battery::Percent { pct, .. } } => format!("Bateria do {name} em {pct}%"),
+                Event::BatteryLow { name, .. } => format!("Bateria do {name} baixa"),
+                Event::Jitter { name, p99_ms } => format!("{name}: variação de {} ms entre relatórios", p99_ms.round()),
+                _ => continue,
+            };
+            self.toast.info(&text);
+        }
+        if self.page == Page::Controllers {
+            self.invalidate();
+        }
+    }
+
     pub fn refresh_page(&mut self) {
         if self.page == Page::Share {
             unsafe {
                 SetTimer(Some(self.hub), TIMER_SHARE, 500, None);
+            }
+        }
+        if self.page == Page::Controllers {
+            crate::pages::controllers::refresh(self);
+            crate::sys::pads::set_live(true);
+            unsafe {
+                SetTimer(Some(self.hub), TIMER_PADS, 33, None);
             }
         }
         match self.page {
@@ -3199,6 +3234,10 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
             with(|a| a.taskmgr_done(l.0 != 0, w.0));
             LRESULT(0)
         }
+        crate::sys::pads::WM_PADS => {
+            with(|a| a.pad_events());
+            LRESULT(0)
+        }
         WM_FIND_DONE => {
             with(|a| {
                 if w.0 == 1 {
@@ -3231,6 +3270,14 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                     a.meter_paint();
                 } else if w.0 == TIMER_ROOM {
                     a.room_watch();
+                } else if w.0 == TIMER_PADS {
+                    if a.page == Page::Controllers && a.main.is_some() {
+                        crate::pages::controllers::tick(a);
+                        a.invalidate();
+                    } else {
+                        crate::sys::pads::set_live(false);
+                        let _ = KillTimer(Some(a.hub), TIMER_PADS);
+                    }
                 } else if w.0 == TIMER_SHARE {
                     if a.page == Page::Share && a.main.is_some() {
                         crate::pages::share::tick(a);

@@ -8,7 +8,7 @@ use std::sync::mpsc::{sync_channel, SyncSender};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use prisma_link::{cap, fail as code, MeterView, NvidiaKind, NvidiaSetting, NvidiaValue, Page as LinkPage, PowerPlan, Reply, Request, ServerInfo, VolumeChange};
+use prisma_link::{cap, fail as code, Controller, MeterView, NvidiaKind, NvidiaSetting, NvidiaValue, Page as LinkPage, PowerPlan, Reply, Request, ServerInfo, VolumeChange};
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_APP};
 
@@ -73,6 +73,25 @@ impl PartialEq for Outcome {
 }
 
 /// Falha com o código e o motivo no idioma do Prisma.
+/// Um controle como o launcher recebe: só números inteiros, porque `Reply` compara com `Eq`.
+fn controller_of(p: &crate::sys::pads::Pad) -> Controller {
+    use crate::sys::pads::{Battery, Link};
+    let (battery, charging) = match p.battery {
+        Battery::Percent { pct, charging } => (Some(pct as u32), charging),
+        Battery::Level(l) => (Some((l.min(3) as u32 * 100 + 1) / 3), false),
+        _ => (None, false),
+    };
+    Controller {
+        name: p.name.clone(),
+        link: if p.link == Link::Bluetooth { "bluetooth" } else { "usb" }.into(),
+        battery,
+        charging,
+        wired: p.battery == Battery::Wired,
+        rate_hz: p.rate.map(|r| r.hz.round() as u32),
+        p99_us: p.rate.map(|r| (r.p99_ms * 1000.0).round() as u32),
+    }
+}
+
 fn fail(code: &'static str, reason: &str) -> Outcome {
     Outcome::Failed(code, crate::i18n::tr(reason).into_owned())
 }
@@ -122,6 +141,8 @@ fn caps_with(nvidia: bool) -> Vec<String> {
         cap::PAGE_SOUND,
         cap::PAGE_HDR,
         cap::PAGE_CAPTURE,
+        cap::PAGE_CONTROLLERS,
+        cap::CONTROLLERS,
         cap::SAVE_REPLAY,
         cap::METER_VIEW,
         cap::POWER_PLAN,
@@ -290,6 +311,7 @@ impl App {
                     LinkPage::Hdr => Page::Hdr,
                     LinkPage::Nvidia if crate::pages::nvidia::available() => Page::Nvidia,
                     LinkPage::Capture => Page::Capture,
+                    LinkPage::Controllers => Page::Controllers,
                     _ => return Outcome::Done,
                 };
                 self.go(page);
@@ -328,6 +350,7 @@ impl App {
                 });
                 Outcome::Done
             }
+            Request::Controllers => Outcome::Reply(Reply::Controllers { pads: crate::sys::pads::list().iter().map(controller_of).collect() }),
             Request::PowerPlans => Outcome::Reply(Reply::PowerPlans {
                 plans: power::list().into_iter().map(|p| PowerPlan { id: p.id, name: p.name }).collect(),
                 active: power::active().unwrap_or_default(),
@@ -558,7 +581,7 @@ mod tests {
                 cap::PAGE_METER, cap::PAGE_SHARE, cap::SAVE_REPLAY, cap::GAME_EVENTS, cap::CAPTURE_DIRS,
                 cap::METER_VIEW, cap::POWER_PLAN, cap::FULLSCREEN, cap::SOUND_VOLUME, cap::HDR,
                 cap::WINDOW_SHOT, cap::RECORD_WINDOW, cap::PAGE_ENERGY, cap::PAGE_FULLSCREEN,
-                cap::PAGE_SOUND, cap::PAGE_HDR, cap::PAGE_CAPTURE,
+                cap::PAGE_SOUND, cap::PAGE_HDR, cap::PAGE_CAPTURE, cap::PAGE_CONTROLLERS, cap::CONTROLLERS,
             ] {
                 assert!(has(c), "{c}");
             }
@@ -567,8 +590,6 @@ mod tests {
             assert_eq!(has(cap::NVIDIA), nvidia);
             assert_eq!(has(cap::PAGE_NVIDIA), nvidia);
             assert!(!has(cap::PAGE_GAME_PROFILE));
-            // Reservada até a tela Controles existir.
-            assert!(!has(cap::PAGE_CONTROLLERS));
         }
     }
 
@@ -586,6 +607,7 @@ mod tests {
             Request::NvidiaSet { exe: String::new(), id: 1, value: None },
             Request::WindowShot { pid: 1 },
             Request::RecordWindow { pid: 1 },
+            Request::Controllers,
         ];
         for r in &answer {
             assert_eq!(wait_of(r), Wait::Answer, "{r:?}");

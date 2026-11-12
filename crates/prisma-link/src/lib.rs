@@ -12,7 +12,7 @@ mod server;
 
 pub use frame::{read_frame, write_frame};
 pub use proto::{
-    Capabilities, MeterView, NvidiaKind, NvidiaSetting, NvidiaValue, Page, PowerPlan, Reply, Request,
+    Capabilities, Controller, MeterView, NvidiaKind, NvidiaSetting, NvidiaValue, Page, PowerPlan, Reply, Request,
     VolumeChange,
 };
 
@@ -50,9 +50,9 @@ pub mod cap {
     pub const PAGE_HDR: &str = "page.hdr";
     pub const PAGE_NVIDIA: &str = "page.nvidia";
     pub const PAGE_CAPTURE: &str = "page.capture";
-    /// Reservada: a tela Controles ainda não existe. Nenhum Prisma anuncia esta capacidade até
-    /// ela existir; as ações dos Controles virão com nomes próprios quando forem combinadas.
     pub const PAGE_CONTROLLERS: &str = "page.controllers";
+    /// Lista dos controles ligados, com conexão, bateria e taxa (`Request::Controllers`).
+    pub const CONTROLLERS: &str = "controllers";
 }
 
 /// Códigos estáveis de `Reply::Failed`.

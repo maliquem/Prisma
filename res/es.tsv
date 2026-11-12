@@ -1907,3 +1907,55 @@ O Windows não trocou o HDR	Windows no cambió el HDR
 Nome de executável inválido	Nombre de ejecutable no válido
 O Prisma não conhece essa opção	Prisma no conoce esta opción
 Valor fora das opções	Valor fuera de las opciones
+Cada controle ao vivo, a bateria e a taxa de relatório. Só leitura: nada muda no controle.	Cada mando en vivo, la batería y la tasa de informes. Solo lectura: nada cambia en el mando.
+Copiar diagnóstico	Copiar diagnóstico
+Diagnóstico copiado	Diagnóstico copiado
+Nenhum controle ligado. Ligue um controle por USB ou Bluetooth e ele aparece aqui.	Ningún mando conectado. Conecta uno por USB o Bluetooth y aparecerá aquí.
+Pareado sem a parte de controle: nenhum programa consegue ler. Remova nas configurações de Bluetooth e pareie de novo.	Emparejado sin la parte de mando: ningún programa puede leerlo. Quítalo en la configuración de Bluetooth y vuelve a emparejarlo.
+Avisos	Avisos
+Ao conectar e desconectar	Al conectar y desconectar
+Bateria baixa	Batería baja
+Variação acima de	Variación mayor que
+Avisa quando o intervalo entre relatórios do controle passa desse valor (p99). 0 desliga.	Avisa cuando el intervalo entre informes del mando supera este valor (p99). 0 lo desactiva.
+Steam aberto: o Steam Input pode trocar os botões que o jogo recebe.	Steam abierto: Steam Input puede cambiar los botones que recibe el juego.
+reWASD aberto: ele pode esconder ou remapear o controle.	reWASD abierto: puede ocultar o reasignar el mando.
+DS4Windows aberto: ele pode esconder o controle e criar um Xbox virtual.	DS4Windows abierto: puede ocultar el mando y crear uno de Xbox virtual.
+DSX aberto: ele pode mudar o modo do controle e criar um controle virtual.	DSX abierto: puede cambiar el modo del mando y crear un mando virtual.
+Medir sticks e gatilhos	Medir sticks y gatillos
+Começar	Empezar
+Solte os sticks e os gatilhos e não toque no controle.	Suelta los sticks y los gatillos y no toques el mando.
+Gire os dois sticks devagar, encostando na borda, algumas voltas.	Gira los dos sticks despacio, tocando el borde, unas cuantas vueltas.
+Aperte os dois gatilhos até o fim algumas vezes.	Aprieta los dos gatillos hasta el fondo unas cuantas veces.
+Etapa	Etapa
+Mede o desvio dos sticks parados, a tremida, o alcance, o quanto o contorno foge de um círculo e o curso dos gatilhos. Leva 13 segundos.	Mide la deriva de los sticks en reposo, el temblor, el alcance, cuánto se aleja el contorno de un círculo y el recorrido de los gatillos. Tarda 13 segundos.
+carregando	cargando
+vazia	vacía
+baixa	baja
+pela metade	a la mitad
+cheia	llena
+desconhecida	desconocida
+taxa a medir	tasa sin medir
+bateria	batería
+Cruz	Cruz
+Círculo	Círculo
+Quadrado	Cuadrado
+Triângulo	Triángulo
+Stick esquerdo	Stick izquierdo
+Stick direito	Stick derecho
+Desvio parado	Deriva en reposo
+Tremida	Temblor
+Alcance	Alcance
+Fora do círculo	Fuera del círculo
+Voltas cobertas	Vueltas cubiertas
+Gire mais para medir	Gira más para medir
+Gatilhos	Gatillos
+Esquerdo	Izquierdo
+Direito	Derecho
+Controle Xbox	Mando Xbox
+Controle Xbox {}	Mando Xbox {}
+{} conectado por USB	{} conectado por USB
+{} conectado por Bluetooth	{} conectado por Bluetooth
+{} desconectado	{} desconectado
+Bateria do {} em {}%	Batería del {} al {}%
+Bateria do {} baixa	Batería del {} baja
+{}: variação de {} ms entre relatórios	{}: variación de {} ms entre informes

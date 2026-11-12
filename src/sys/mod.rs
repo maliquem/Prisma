@@ -25,6 +25,7 @@ pub mod mft;
 pub mod monitor;
 pub mod nets;
 pub mod nvml;
+pub mod pads;
 pub mod patterns;
 pub mod power;
 pub mod powerplan;

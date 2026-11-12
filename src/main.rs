@@ -92,6 +92,8 @@ fn main() {
         // Só a instância principal chega aqui: a ponte com o Prisma Launcher.
         if let Some(hub) = app::with(|a| a.hub) {
             crate::link::start(hub);
+            app::with(|a| sys::pads::set_limits(a.cfg.pad_low, a.cfg.pad_jitter_ms));
+            sys::pads::start(hub);
         }
         app::with(|a| a.check_news(before));
         if updated.is_some() {

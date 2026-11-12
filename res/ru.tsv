@@ -1907,3 +1907,55 @@ O Windows não trocou o HDR	Windows не переключил HDR
 Nome de executável inválido	Недопустимое имя исполняемого файла
 O Prisma não conhece essa opção	Prisma не знает этот параметр
 Valor fora das opções	Значение вне вариантов
+Cada controle ao vivo, a bateria e a taxa de relatório. Só leitura: nada muda no controle.	Каждый геймпад вживую, заряд и частота отчётов. Только чтение: в геймпаде ничего не меняется.
+Copiar diagnóstico	Копировать диагностику
+Diagnóstico copiado	Диагностика скопирована
+Nenhum controle ligado. Ligue um controle por USB ou Bluetooth e ele aparece aqui.	Геймпады не подключены. Подключите геймпад по USB или Bluetooth, и он появится здесь.
+Pareado sem a parte de controle: nenhum programa consegue ler. Remova nas configurações de Bluetooth e pareie de novo.	Сопряжён без игровой части: ни одна программа не может его прочитать. Удалите его в настройках Bluetooth и выполните сопряжение снова.
+Avisos	Уведомления
+Ao conectar e desconectar	При подключении и отключении
+Bateria baixa	Низкий заряд
+Variação acima de	Разброс выше
+Avisa quando o intervalo entre relatórios do controle passa desse valor (p99). 0 desliga.	Предупреждает, когда интервал между отчётами геймпада превышает это значение (p99). 0 — выключено.
+Steam aberto: o Steam Input pode trocar os botões que o jogo recebe.	Steam открыт: Steam Input может менять кнопки, которые получает игра.
+reWASD aberto: ele pode esconder ou remapear o controle.	reWASD открыт: он может скрыть геймпад или переназначить кнопки.
+DS4Windows aberto: ele pode esconder o controle e criar um Xbox virtual.	DS4Windows открыт: он может скрыть геймпад и создать виртуальный Xbox.
+DSX aberto: ele pode mudar o modo do controle e criar um controle virtual.	DSX открыт: он может менять режим геймпада и создать виртуальный геймпад.
+Medir sticks e gatilhos	Измерить стики и триггеры
+Começar	Начать
+Solte os sticks e os gatilhos e não toque no controle.	Отпустите стики и триггеры и не трогайте геймпад.
+Gire os dois sticks devagar, encostando na borda, algumas voltas.	Медленно покрутите оба стика, прижимая к краю, несколько оборотов.
+Aperte os dois gatilhos até o fim algumas vezes.	Нажмите оба триггера до конца несколько раз.
+Etapa	Этап
+Mede o desvio dos sticks parados, a tremida, o alcance, o quanto o contorno foge de um círculo e o curso dos gatilhos. Leva 13 segundos.	Измеряет дрейф стиков в покое, дрожание, охват, насколько контур отличается от круга, и ход триггеров. Занимает 13 секунд.
+carregando	заряжается
+vazia	разряжен
+baixa	низкий
+pela metade	наполовину
+cheia	полный
+desconhecida	неизвестно
+taxa a medir	частота не измерена
+bateria	заряд
+Cruz	Крест
+Círculo	Круг
+Quadrado	Квадрат
+Triângulo	Треугольник
+Stick esquerdo	Левый стик
+Stick direito	Правый стик
+Desvio parado	Дрейф в покое
+Tremida	Дрожание
+Alcance	Охват
+Fora do círculo	Отклонение от круга
+Voltas cobertas	Покрытие оборота
+Gire mais para medir	Покрутите больше для измерения
+Gatilhos	Триггеры
+Esquerdo	Левый
+Direito	Правый
+Controle Xbox	Геймпад Xbox
+Controle Xbox {}	Геймпад Xbox {}
+{} conectado por USB	{} подключён по USB
+{} conectado por Bluetooth	{} подключён по Bluetooth
+{} desconectado	{} отключён
+Bateria do {} em {}%	Заряд {}: {}%
+Bateria do {} baixa	Низкий заряд {}
+{}: variação de {} ms entre relatórios	{}: разброс {} мс между отчётами

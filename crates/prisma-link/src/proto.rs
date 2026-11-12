@@ -71,6 +71,8 @@ pub enum Request {
     RecordWindow {
         pid: u32,
     },
+    /// Controles ligados agora (`controllers`).
+    Controllers,
     #[serde(other)]
     Unknown,
 }
@@ -91,6 +93,23 @@ pub enum VolumeChange {
     /// Volume de 0 a 100.
     Set(u32),
     ToggleMute,
+}
+
+/// Um controle ligado, como a tela Controles mostra.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Controller {
+    pub name: String,
+    /// `usb` ou `bluetooth`.
+    pub link: String,
+    /// Bateria em %, quando o controle informa. Os que só dão níveis (Xbox) vêm em 0, 33, 67 ou 100.
+    pub battery: Option<u32>,
+    pub charging: bool,
+    /// No cabo, sem bateria a informar.
+    pub wired: bool,
+    /// Relatórios por segundo; `None` quando o Windows não entrega os relatórios.
+    pub rate_hz: Option<u32>,
+    /// p99 do intervalo entre relatórios, em microssegundos.
+    pub p99_us: Option<u32>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -143,7 +162,7 @@ pub enum Page {
     Hdr,
     Nvidia,
     Capture,
-    /// Reservada para a tela Controles, que ainda não existe no Prisma (`page.controllers`).
+    /// Tela Controles (`page.controllers`).
     Controllers,
     #[serde(other)]
     Unknown,
@@ -201,6 +220,9 @@ pub enum Reply {
     },
     Shot {
         path: String,
+    },
+    Controllers {
+        pads: Vec<Controller>,
     },
     #[serde(other)]
     Unknown,
@@ -363,6 +385,9 @@ mod tests {
             },
             Reply::NvidiaValues { values: vec![NvidiaValue { id: 1, value: None, now: Some(0) }, NvidiaValue { id: 2, value: Some(60), now: Some(60) }] },
             Reply::Shot { path: r"C:\V\a.png".into() },
+            Reply::Controllers {
+                pads: vec![Controller { name: "DualSense".into(), link: "usb".into(), battery: Some(15), charging: true, wired: false, rate_hz: Some(250), p99_us: Some(4100) }],
+            },
         ];
         for r in replies {
             let json = serde_json::to_string(&r).unwrap();

@@ -287,6 +287,12 @@ pub struct Config {
     pub shot_hdr: bool,
     pub replay_on: bool,
     pub replay_secs: u32,
+    /// Avisos do Prisma ao conectar e desconectar controle.
+    pub pad_notify: bool,
+    /// Aviso de bateria baixa do controle, em %; 0 desliga.
+    pub pad_low: u8,
+    /// Aviso quando o p99 do intervalo do controle passa deste valor, em ms; 0 desliga.
+    pub pad_jitter_ms: u32,
     /// Idioma: `crate::i18n::PT`, `EN`, `ES`, `RU` ou `ZH`.
     pub lang: u8,
     pub update_auto: bool,
@@ -391,6 +397,9 @@ impl Default for Config {
             shot_hdr: false,
             replay_on: false,
             replay_secs: 30,
+            pad_notify: true,
+            pad_low: 10,
+            pad_jitter_ms: 0,
             lang: crate::i18n::system_lang(),
             update_auto: true,
             upd_checked: 0,
@@ -598,6 +607,9 @@ impl Config {
                 "shot_hdr" => c.shot_hdr = b,
                 "replay_on" => c.replay_on = b,
                 "replay_secs" => c.replay_secs = v.parse().unwrap_or(30),
+                "pad_notify" => c.pad_notify = b,
+                "pad_low" => c.pad_low = v.parse::<u8>().unwrap_or(10).min(50),
+                "pad_jitter_ms" => c.pad_jitter_ms = v.parse::<u32>().unwrap_or(0).min(100),
                 // Antes só havia português e inglês.
                 "lang_en" => c.lang = if b { crate::i18n::EN } else { crate::i18n::PT },
                 "lang" => c.lang = v.parse().unwrap_or(crate::i18n::EN),
@@ -701,6 +713,9 @@ impl Config {
         let _ = writeln!(s, "shot_hdr={}", b(self.shot_hdr));
         let _ = writeln!(s, "replay_on={}", b(self.replay_on));
         let _ = writeln!(s, "replay_secs={}", self.replay_secs);
+        let _ = writeln!(s, "pad_notify={}", b(self.pad_notify));
+        let _ = writeln!(s, "pad_low={}", self.pad_low);
+        let _ = writeln!(s, "pad_jitter_ms={}", self.pad_jitter_ms);
         let _ = writeln!(s, "lang={}", self.lang);
         let _ = writeln!(s, "update_auto={}", b(self.update_auto));
         let _ = writeln!(s, "upd_checked={}", self.upd_checked);

@@ -242,6 +242,21 @@ In testing. Shows and controls another PC over the internet, for remote access o
 - **Safety:** Ctrl + Alt + Shift + Q, on the host, disconnects everyone at once. **Forget** removes a device, which only comes back with a new invite.
 - **It cannot:** work without Prisma open on the host (unless you use the service); capture protected content, which comes out black; hear the viewer's microphone.
 
+## Controllers
+
+Shows the controllers connected over USB or Bluetooth, live, without changing anything on them. Reads DualSense, DualShock 4, Xbox controllers and the ones that present themselves as Xbox, and generic controllers, with numbered buttons. With no controller connected, Prisma spends nothing on them.
+
+- **List:** name, connection (USB or Bluetooth), battery and report rate of each controller. Click one to see it live.
+- **Live:** the sticks with their dot, the triggers as bars and the buttons, which light up when pressed.
+- **Battery:** in % on DualSense and DualShock 4 over USB, in four levels on Xbox, and "wired" on controllers without a battery. Over Bluetooth, DualSense and DualShock 4 only send the battery in a mode that needs writing to the controller, so it shows "unknown".
+- **Rate:** how many reports per second the controller sends, with the average, p99 and maximum interval between them, measured every 2 seconds. On Xbox over Bluetooth, Windows doesn't hand over the reports, and it shows "rate not measured".
+- **Measure sticks and triggers:** **Start** takes 13 seconds, in three stages: let go of the controller, turn the sticks against the edge and press the triggers all the way. It shows drift at rest, noise, reach, how far the outline is from a circle, turn coverage and each trigger's travel. Bad values turn orange.
+- **Notices:** Prisma's own notice (the same as the volume one) shows when a controller connects or disconnects, when the battery drops below the limit (10% by default, once per discharge; 0 turns it off) and, if you turn it on, when the jitter between reports goes above the value you pick.
+- **Conflicts:** with Steam, reWASD, DS4Windows or DSX open, the page explains in one sentence what each one can change on the controller.
+- **Paired without the controller part:** if a Bluetooth controller shows as connected but Windows didn't turn on its controller part, the page tells you to remove it and pair again.
+- **Copy diagnostics:** copies a text with the controllers, connection, battery, rate and conflicts, to paste in a report.
+- **Can't:** change buttons, light, rumble or triggers. That comes in the next versions.
+
 ## Widget
 
 Shows CPU, GPU, RAM and VRAM on top of everything, in four styles. Drag it to move it. Shortcut: Ctrl + Alt + W.
@@ -258,7 +273,8 @@ Prisma Launcher, the games launcher, talks to Prisma running on the same PC thro
 - **NVIDIA driver:** read and change driver options in the game profile or the global one, with the same values as the NVIDIA driver page. The game joins the page list. Only with an NVIDIA card.
 - **Capture:** take a photo of the game window only, even with the launcher on top (it goes straight to the capture folder and the clipboard, without opening the editor), and start or stop recording the game window. Saving the replay works too.
 - **Share screen:** create an invite, lasting what the launcher picks (from 1 minute to 24 hours) or what the page says.
-- **Open a page:** Meter, Power, Fullscreenizer, Sound, HDR, NVIDIA driver, Capture or Share screen.
+- **Controllers:** see the connected controllers, with connection, battery and report rate.
+- **Open a page:** Meter, Power, Fullscreenizer, Sound, HDR, NVIDIA driver, Capture, Share screen or Controllers.
 
 The game the launcher opens also enters game mode at once, without waiting for detection. Nothing opens over the game: Prisma only shows a notice, as with the shortcuts. With Prisma closed, the launcher reaches none of this.
 
