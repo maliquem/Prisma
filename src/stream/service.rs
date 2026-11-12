@@ -138,8 +138,18 @@ unsafe fn my_sid() -> Option<String> {
     out
 }
 
+/// Junção ou atalho: o instalador, elevado, daria permissão e gravaria na pasta para onde ele aponta.
+fn is_link(p: &std::path::Path) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    std::fs::symlink_metadata(p).is_ok_and(|m| m.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT.0 != 0)
+}
+
 /// Pasta só para SYSTEM, administradores e ela (alterar, sem mudar permissões), sem herdar de cima.
 unsafe fn protect_dir(dir: &std::path::Path, sid: &str) -> std::result::Result<(), String> {
+    // ProgramData\Prisma aceita pastas novas de qualquer usuário: alguém pode ter posto uma junção lá antes.
+    if let Some(p) = dir.ancestors().take(2).find(|p| is_link(p)) {
+        return Err(format!("{} é um atalho para outra pasta; apague-o e instale de novo", p.display()));
+    }
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     let sddl = format!("D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1301bf;;;{sid})");
     let mut sd = PSECURITY_DESCRIPTOR::default();

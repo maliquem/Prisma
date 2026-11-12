@@ -195,12 +195,27 @@ fn save(list: &[Device]) -> io::Result<()> {
         );
     }
     std::fs::create_dir_all(dir())?;
-    let tmp = devices_path().with_extension("tmp");
-    std::fs::write(&tmp, s)?;
-    std::fs::rename(tmp, devices_path())
+    crate::config::write_safe(&devices_path(), s)
+}
+
+/// O Prisma, o host e o ajudante do serviço mexem na lista ao mesmo tempo: sem trava, um apaga o
+/// aparelho que o outro acabou de parear. Arquivo aberto sem compartilhar serve de trava.
+/// shortcut: quem não pega a trava em 2 s segue sem ela; trocar por um mutex nomeado se isso aparecer no log.
+fn devices_lock() -> Option<std::fs::File> {
+    use std::os::windows::fs::OpenOptionsExt;
+    let _ = std::fs::create_dir_all(dir());
+    let t = Instant::now();
+    loop {
+        match std::fs::OpenOptions::new().write(true).create(true).truncate(false).share_mode(0).open(dir().join("aparelhos.lock")) {
+            Ok(f) => return Some(f),
+            Err(_) if t.elapsed() < Duration::from_secs(2) => std::thread::sleep(Duration::from_millis(20)),
+            Err(_) => return None,
+        }
+    }
 }
 
 fn remember(dev: Device) -> io::Result<()> {
+    let _lock = devices_lock();
     let mut list = load();
     list.retain(|d| !(d.role == dev.role && d.id == dev.id));
     list.push(dev);
@@ -860,6 +875,7 @@ pub fn allow(arg: &str) {
     let Some(perms) = parse_perms(value) else {
         return eprintln!("permissão desconhecida: «{value}» (use total, jogar, teclado-mouse, ver, video, ou uma lista de som, controle, teclado, mouse)");
     };
+    let _lock = devices_lock();
     let mut list = load();
     let Some(dev) = find(&list, Role::Viewer, key) else {
         return eprintln!("nenhum aparelho que assiste com o nome «{key}» (veja --stream-devices)");
@@ -890,6 +906,7 @@ pub fn device_rows() -> Vec<DeviceRow> {
 
 /// Muda permissões e confiança de um aparelho que assiste a este PC.
 pub fn set_device(id: &str, perms: u8, ask: bool) -> io::Result<()> {
+    let _lock = devices_lock();
     let mut list = load();
     for d in list.iter_mut().filter(|d| d.role == Role::Viewer && hex(&d.id) == id) {
         d.perms = perms;
@@ -899,6 +916,7 @@ pub fn set_device(id: &str, perms: u8, ask: bool) -> io::Result<()> {
 }
 
 pub fn forget_device(viewer: bool, id: &str) -> io::Result<()> {
+    let _lock = devices_lock();
     let mut list = load();
     list.retain(|d| !((d.role == Role::Viewer) == viewer && hex(&d.id) == id));
     save(&list)
@@ -911,6 +929,7 @@ pub fn me() -> Option<(String, String)> {
 }
 
 pub fn forget(key: &str) {
+    let _lock = devices_lock();
     let mut list = load();
     let before = list.len();
     let names: Vec<String> = [Role::Viewer, Role::Host].iter().filter_map(|&r| find(&list, r, key)).map(|d| hex(&d.id)).collect();

@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Share screen: installing the service refuses a junction or link in place of its folder in ProgramData, which would have sent its files and permissions somewhere else. / Compartilhar tela: instalar o serviço recusa uma junção ou atalho no lugar da pasta dele em ProgramData, que mandaria os arquivos e as permissões para outro lugar.
+- Share screen: with the service installed, the cursor hidden by Mouse and keyboard comes back even if the helper crashes. / Compartilhar tela: com o serviço instalado, o cursor escondido pelo Mouse e teclado volta mesmo se o ajudante cair.
+- Share screen: pairing, changing access and forgetting a device at the same time no longer undo each other. / Compartilhar tela: parear, mudar o acesso e esquecer um aparelho ao mesmo tempo não desfazem mais um ao outro.
+- Settings and Host options are written to a temporary file first, so a crash or power loss can't leave them half written. / As configurações e as opções do Host são gravadas antes num arquivo temporário, então um travamento ou queda de energia não as deixa pela metade.
+- Frame limiter: the hook DLL is checked by content, not just size. / Limitador de quadros: a DLL do gancho é conferida pelo conteúdo, não só pelo tamanho.
+- Uninstall: an install date with accented letters in the registry no longer crashes the page. / Desinstalar: uma data de instalação com letras acentuadas no registro não derruba mais a página.
+
 ## 0.16.0
 
 - Prisma Launcher: the games launcher now drives Prisma directly, without opening its window: shows or hides the meter, picks a fixed power plan or automatic switching, makes the game window borderless, changes the game volume, turns Windows HDR on or off, reads and changes NVIDIA driver options per game, takes a photo of the game window (even with the launcher on top) and starts or stops recording it, opens the Power, Fullscreenizer, Sound, HDR, NVIDIA driver and Capture pages, and creates screen-share invites with the time they last. / Prisma Launcher: o lançador de jogos agora aciona o Prisma direto, sem abrir a janela dele: mostra ou esconde o medidor, escolhe um plano de energia fixo ou a troca automática, deixa a janela do jogo sem bordas, muda o volume do jogo, liga ou desliga o HDR do Windows, lê e muda as opções do driver NVIDIA por jogo, tira uma foto da janela do jogo (mesmo com o launcher por cima) e começa ou para a gravação dela, abre as telas Energia, Fullscreenizer, Som, HDR, Driver NVIDIA e Captura, e cria convites do Compartilhar tela com a validade escolhida.

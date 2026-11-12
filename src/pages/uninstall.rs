@@ -16,7 +16,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
 }
 
 fn fmt_date(d: &str) -> String {
-    if d.len() == 8 {
+    if d.len() == 8 && d.is_ascii() {
         format!("{}/{}/{}", &d[6..8], &d[4..6], &d[..4])
     } else {
         String::new()

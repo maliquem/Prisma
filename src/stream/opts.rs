@@ -302,7 +302,7 @@ sem_cadeia={}\nporta={}\nupnp={}\natalho_emergencia={}\ngpu={}\nsom_saida={}\nso
         }
         let text = self.text();
         let own: Vec<&str> = text.lines().filter(|l| l.split_once('=').is_some_and(|(k, _)| PER_CLIENT.contains(&k))).collect();
-        std::fs::write(p, own.join("\n") + "\n")
+        crate::config::write_safe(&p, own.join("\n") + "\n")
     }
 
     /// Tira a configuração própria: o aparelho volta a seguir a de todos.
@@ -327,7 +327,7 @@ sem_cadeia={}\nporta={}\nupnp={}\natalho_emergencia={}\ngpu={}\nsom_saida={}\nso
         if let Some(d) = p.parent() {
             std::fs::create_dir_all(d)?;
         }
-        std::fs::write(p, self.text())
+        crate::config::write_safe(&p, self.text())
     }
 }
 
@@ -476,7 +476,7 @@ quadros={}\natalho_menu={}\natalho_tela_cheia={}\natalho_ctrl_alt_del={}\natalho
         if let Some(d) = p.parent() {
             std::fs::create_dir_all(d)?;
         }
-        std::fs::write(p, self.text())
+        crate::config::write_safe(&p, self.text())
     }
 }
 

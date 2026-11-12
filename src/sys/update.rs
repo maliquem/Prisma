@@ -514,3 +514,40 @@ pub fn file_version(path: &std::path::Path) -> Option<String> {
         Some(format!("{}.{}.{}", f.dwProductVersionMS >> 16, f.dwProductVersionMS & 0xffff, f.dwProductVersionLS >> 16))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const HASH: &str = "360cfbae370949f89925285793bd26beec8e113d3200fc33136e05a5ce08eacf";
+    const SIG: &str = "ed191d9aa7a18fa89809eaabdf41739d5d5d95d8618dd301699f819c4b37fdab6ab830320d59d662afa632cf91a8319bd08e505c39aa89737558003ddc4e6123";
+
+    fn sig() -> Vec<u8> {
+        (0..SIG.len()).step_by(2).map(|i| u8::from_str_radix(&SIG[i..i + 2], 16).unwrap()).collect()
+    }
+
+    #[test]
+    fn assinatura_da_016() {
+        let s = sig();
+        assert!(signed("0.16.0", HASH, &s));
+        assert!(!signed("0.16.1", HASH, &s), "versão errada passou");
+        assert!(!signed("0.16.0", &HASH.replace('3', "4"), &s), "arquivo trocado passou");
+        let mut bent = s.clone();
+        bent[10] ^= 1;
+        assert!(!signed("0.16.0", HASH, &bent), "assinatura alterada passou");
+        assert!(!signed("0.16.0", HASH, &s[..63]));
+        assert!(!signed("0.16.0", HASH, &[]));
+    }
+
+    #[test]
+    fn versao_nova() {
+        assert!(is_newer("v0.16.1", "0.16.0"));
+        assert!(is_newer("0.17.0", "0.16.9"));
+        assert!(is_newer("1.0.0", "0.99.99"));
+        assert!(is_newer("0.10.0", "0.9.0"));
+        assert!(!is_newer("0.16.0", "0.16.0"));
+        assert!(!is_newer("0.15.9", "0.16.0"));
+        assert!(!is_newer("lixo", "0.16.0"));
+        assert!(!is_newer("0.17", "0.16.0"));
+    }
+}

@@ -58,7 +58,7 @@ fn dll_path() -> Option<std::path::PathBuf> {
     let dir = crate::config::data_dir().join("limiter");
     std::fs::create_dir_all(&dir).ok()?;
     let path = dir.join(format!("prisma_hook_{sum:016x}.dll"));
-    if std::fs::metadata(&path).map_or(true, |m| m.len() != DLL.len() as u64) {
+    if std::fs::read(&path).map_or(true, |d| d != DLL) {
         std::fs::write(&path, DLL).ok()?;
     }
     Some(path)

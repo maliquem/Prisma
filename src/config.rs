@@ -412,6 +412,13 @@ fn default_capture_dir() -> String {
 }
 
 /// Instalado guarda em %APPDATA%; portátil guarda ao lado do programa.
+/// Grava num temporário ao lado e troca: o arquivo nunca fica pela metade se o PC cair no meio.
+pub fn write_safe(path: &std::path::Path, data: impl AsRef<[u8]>) -> std::io::Result<()> {
+    let tmp = path.with_extension("tmp");
+    std::fs::write(&tmp, data)?;
+    std::fs::rename(tmp, path)
+}
+
 pub fn data_dir() -> PathBuf {
     if crate::startup::is_installed() {
         crate::sys::known_folder(&windows::Win32::UI::Shell::FOLDERID_RoamingAppData).join("Prisma")
@@ -751,7 +758,7 @@ impl Config {
         let _ = writeln!(s, "tm_hook={}", b(self.tm_hook));
         let path = config_path();
         let _ = std::fs::create_dir_all(path.parent().unwrap());
-        let _ = std::fs::write(path, s);
+        let _ = write_safe(&path, s);
     }
 
     /// Entrada do programa na lista de som, criada se ainda não existir.
