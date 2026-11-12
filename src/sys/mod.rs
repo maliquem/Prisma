@@ -32,6 +32,7 @@ pub mod patterns;
 pub mod power;
 pub mod powerplan;
 pub mod procs;
+pub mod radial;
 pub mod quick;
 pub mod cmds;
 pub mod reg;

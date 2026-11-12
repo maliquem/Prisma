@@ -419,6 +419,11 @@ impl Canvas {
         self.text_ex(r, &t, sz, c, align, weight, false)
     }
 
+    /// Como `text_wrap`, com as linhas centradas.
+    pub fn text_wrap_center(&self, r: Rect, s: &str, size: f32, c: Color, weight: Weight) {
+        self.text_ex(r, &crate::i18n::tr(s), size, c, Align::Center, weight, true)
+    }
+
     pub fn text_wrap(&self, r: Rect, s: &str, size: f32, c: Color, weight: Weight) {
         self.text_ex(r, &crate::i18n::tr(s), size, c, Align::Left, weight, true)
     }

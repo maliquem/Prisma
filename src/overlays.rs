@@ -453,6 +453,34 @@ impl Hud {
 }
 
 /// Teclado do Prisma para controle (`sys::osk`): só desenha, quem digita é o controle.
+/// A seta anda 45% do caminho até o stick a cada quadro; devolve se mexeu o bastante para redesenhar.
+fn ease(arrow: &mut (f32, f32), (tx, ty): (f32, f32)) -> bool {
+    let (ax, ay) = *arrow;
+    let (nx, ny) = (ax + (tx - ax) * 0.45, ay + (ty - ay) * 0.45);
+    if (nx - ax).abs() + (ny - ay).abs() < 0.002 {
+        return false;
+    }
+    *arrow = (nx, ny);
+    true
+}
+
+/// Círculo do meio e a seta para onde o stick aponta, mais comprida quanto mais inclinado.
+fn stick_arrow(c: &Canvas, cx: f32, cy: f32, (ax, ay): (f32, f32)) {
+    let len = (ax * ax + ay * ay).sqrt();
+    let m = len.min(1.0);
+    c.circle(cx, cy, 30.0, WHITE.alpha(0.08));
+    c.circle_line(cx, cy, 30.0, ACCENT.alpha(0.15 + 0.6 * m), 2.0);
+    if m > 0.08 {
+        let (ux, uy) = (ax / len, -ay / len);
+        let (r0, r1) = (32.0, 34.0 + 34.0 * m);
+        let (tx, ty) = (cx + ux * r1, cy + uy * r1);
+        c.line(cx + ux * r0, cy + uy * r0, tx, ty, ACCENT, 4.0);
+        for side in [1.0, -1.0] {
+            c.line(tx, ty, tx - ux * 10.0 - uy * 7.0 * side, ty - uy * 10.0 + ux * 7.0 * side, ACCENT, 4.0);
+        }
+    }
+}
+
 pub struct Keyboard {
     surface: Layered,
     /// Seta desenhada agora: corre atrás do analógico a cada quadro, para andar suave.
@@ -527,14 +555,9 @@ impl Keyboard {
 
     /// Um quadro: a seta anda 45% do caminho até o analógico e só redesenha se mexeu.
     pub fn tick(&mut self) {
-        let (tx, ty) = crate::sys::osk::stick();
-        let (ax, ay) = self.arrow;
-        let (nx, ny) = (ax + (tx - ax) * 0.45, ay + (ty - ay) * 0.45);
-        if (nx - ax).abs() + (ny - ay).abs() < 0.002 {
-            return;
+        if ease(&mut self.arrow, crate::sys::osk::stick()) {
+            self.paint();
         }
-        self.arrow = (nx, ny);
-        self.paint();
     }
 
     fn paint(&mut self) {
@@ -550,20 +573,7 @@ impl Keyboard {
         self.surface.paint(self.at.0, self.at.1, KB_W, KB_H, |c, r| {
             c.round(r, 18.0, rgb(0x0d0f14).alpha(0.92));
             let (cx, cy, ring, pr) = (r.w / 2.0, 176.0, 116.0, 42.0);
-            let len = (ax * ax + ay * ay).sqrt();
-            let m = len.min(1.0);
-            c.circle(cx, cy, 30.0, WHITE.alpha(0.08));
-            c.circle_line(cx, cy, 30.0, ACCENT.alpha(0.15 + 0.6 * m), 2.0);
-            // Seta do centro para onde o analógico aponta, mais comprida quanto mais inclinado.
-            if m > 0.08 {
-                let (ux, uy) = (ax / len, -ay / len);
-                let (r0, r1) = (32.0, 34.0 + 34.0 * m);
-                let (tx, ty) = (cx + ux * r1, cy + uy * r1);
-                c.line(cx + ux * r0, cy + uy * r0, tx, ty, ACCENT, 4.0);
-                for side in [1.0, -1.0] {
-                    c.line(tx, ty, tx - ux * 10.0 - uy * 7.0 * side, ty - uy * 10.0 + ux * 7.0 * side, ACCENT, 4.0);
-                }
-            }
+            stick_arrow(c, cx, cy, (ax, ay));
             c.text_raw(rect(cx - 30.0, cy - 12.0, 60.0, 24.0), mode, 15.0, TEXT2, Align::Center, Weight::Semibold);
             for p in 0..8 {
                 let a = (p as f32 * 45.0).to_radians();
@@ -578,6 +588,130 @@ impl Keyboard {
             }
             c.text_fit(rect(16.0, 342.0, r.w - 32.0, 20.0), line1, 12.0, MUTED, Align::Center, Weight::Regular);
             c.text_fit(rect(16.0, 362.0, r.w - 32.0, 20.0), line2, 12.0, MUTED, Align::Center, Weight::Regular);
+        });
+    }
+}
+
+/// Radial do Prisma (`sys::radial`): oito ações em volta, no meio da tela.
+pub struct Radial {
+    surface: Layered,
+    /// Setas do stick direito e do esquerdo.
+    arrow: [(f32, f32); 2],
+    at: (i32, i32),
+    names: [String; crate::sys::radial::SLOTS],
+    icons: [u8; crate::sys::radial::SLOTS],
+    two: bool,
+    left: bool,
+    hint: String,
+    ticking: bool,
+}
+
+/// Largura de um círculo; com dois, a janela tem os dois lado a lado.
+const RD_W: f32 = 600.0;
+const RD_H: f32 = 460.0;
+
+unsafe extern "system" fn radial_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT {
+    if m == WM_TIMER {
+        crate::app::with(|a| a.radial_tick());
+        return LRESULT(0);
+    }
+    DefWindowProcW(h, m, w, l)
+}
+
+impl Radial {
+    pub fn new() -> Self {
+        register(w!("PrismaRadial"), radial_proc);
+        let hwnd = create_overlay(w!("PrismaRadial"), true);
+        Self { surface: Layered::new(hwnd), arrow: [(0.0, 0.0); 2], at: (0, 0), names: Default::default(), icons: [0; crate::sys::radial::SLOTS], two: false, left: false, hint: String::new(), ticking: false }
+    }
+
+    /// Mostra o estado de agora, ou esconde se fechou. As ações e os programas vêm da configuração.
+    pub fn update(&mut self, cfg: &crate::config::Config) {
+        use crate::sys::pads;
+        let hwnd = self.surface.hwnd;
+        let v = crate::sys::radial::view();
+        if !v.open {
+            unsafe {
+                let _ = KillTimer(Some(hwnd), 1);
+                let _ = ShowWindow(hwnd, SW_HIDE);
+            }
+            self.ticking = false;
+            return;
+        }
+        if !self.ticking {
+            let mon = focus_monitor();
+            let scale = unsafe { windows::Win32::UI::HiDpi::GetDpiForWindow(hwnd) } as f32 / 96.0;
+            self.two = v.two;
+            self.left = v.left;
+            self.at = ((mon.left + mon.right) / 2 - (self.width() * scale / 2.0) as i32, (mon.top + mon.bottom) / 2 - (RD_H * scale / 2.0) as i32);
+            for (i, &a) in cfg.pad_radial.iter().enumerate() {
+                self.names[i] = if a == crate::sys::radial::PROGRAM {
+                    cfg.pad_radial_prog[i].0.clone()
+                } else {
+                    crate::sys::remap::ACTIONS.get(a as usize).map_or(String::new(), |n| crate::i18n::tr(n).into_owned())
+                };
+            }
+            self.icons = cfg.pad_radial;
+            let f = pads::list().first().map_or(pads::Family::Xbox, |p| p.family);
+            let label = |b| crate::pages::pad_profiles::button_label(f, b);
+            self.hint = if v.stay {
+                crate::i18n::tr("{} dispara · {} fecha").replacen("{}", &label(pads::A), 1).replacen("{}", &label(pads::B), 1)
+            } else if v.watch == 0 {
+                crate::i18n::tr("Solte o botão para escolher · com o stick no centro, cancela").into_owned()
+            } else {
+                crate::i18n::tr("Solte {} para escolher · com o stick no centro, cancela").replacen("{}", &label(v.watch), 1)
+            };
+            self.arrow = crate::sys::radial::stick();
+            unsafe {
+                SetTimer(Some(hwnd), 1, KB_FRAME, None);
+            }
+            self.ticking = true;
+        }
+        self.paint();
+        unsafe {
+            let _ = SetWindowPos(hwnd, Some(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+        }
+    }
+
+    pub fn tick(&mut self) {
+        let [r, l] = crate::sys::radial::stick();
+        let (a, b) = (ease(&mut self.arrow[0], r), ease(&mut self.arrow[1], l));
+        if a || b {
+            self.paint();
+        }
+    }
+
+    fn width(&self) -> f32 {
+        if self.two { RD_W * 2.0 - 40.0 } else { RD_W }
+    }
+
+    fn paint(&mut self) {
+        let sel = crate::sys::radial::view().sel;
+        let (names, icons, hint, arrow, two, left) = (&self.names, &self.icons, &self.hint, self.arrow, self.two, self.left);
+        self.surface.paint(self.at.0, self.at.1, self.width(), RD_H, |c, r| {
+            c.round(r, 18.0, rgb(0x0d0f14).alpha(0.92));
+            let cy = 210.0;
+            // Com dois círculos, o do stick esquerdo (lugares 8 a 15) fica à esquerda.
+            let rings: &[(f32, usize)] = if two { &[(RD_W / 2.0 - 10.0, 8), (r.w - RD_W / 2.0 + 10.0, 0)] } else { &[(RD_W / 2.0, 0)] };
+            for &(cx, first) in rings {
+            stick_arrow(c, cx, cy, arrow[if left { 1 } else { first / 8 }]);
+            for (i, name) in names.iter().enumerate().skip(first).take(8) {
+                let a = ((i % 8) as f32 * 45.0).to_radians();
+                let (px, py) = (cx + 210.0 * a.sin(), cy - 160.0 * a.cos());
+                let b = rect(px - 70.0, py - 40.0, 140.0, 80.0);
+                if name.is_empty() {
+                    c.round_line(b, 12.0, WHITE.alpha(0.12), 1.0);
+                    continue;
+                }
+                let on = sel == Some(i);
+                c.round(b, 12.0, if on { ACCENT.alpha(0.35) } else { WHITE.alpha(0.07) });
+                // Ícone em cima, nome embaixo (até três linhas).
+                c.icon(px - 10.0, b.y + 7.0, 20.0, crate::pages::action_icon(icons[i]), if on { WHITE } else { ACCENT });
+                c.text_wrap_center(rect(b.x + 6.0, b.y + 31.0, b.w - 12.0, 46.0), name, 11.0, if on { WHITE } else { TEXT2 }, if on { Weight::Semibold } else { Weight::Regular });
+            }
+            }
+            c.text_fit(rect(16.0, 426.0, r.w - 32.0, 20.0), hint, 12.0, MUTED, Align::Center, Weight::Regular);
         });
     }
 }

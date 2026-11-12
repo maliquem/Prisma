@@ -139,6 +139,8 @@ pub enum Event {
     Turbo { button: u32, on: bool, pad: String },
     /// O teclado do Prisma mudou: abriu, fechou, outro grupo ou outra camada.
     Keyboard,
+    /// O radial do Prisma abriu, fechou ou aponta para outra ação.
+    Radial,
 }
 
 static PADS: Mutex<Vec<Pad>> = Mutex::new(Vec::new());

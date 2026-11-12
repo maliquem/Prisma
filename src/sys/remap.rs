@@ -70,7 +70,7 @@ pub enum Out {
 
 /// Ações do Prisma que um botão pode chamar: todas as que têm atalho, mais HDR, Bluetooth e
 /// bateria. A ordem é a do arquivo: só cresce no fim. `SOUND + n` troca para a combinação de som n.
-pub const ACTIONS: [&str; 27] = [
+pub const ACTIONS: [&str; 28] = [
     "Foto da área",
     "Foto da tela inteira",
     "Foto da janela em foco",
@@ -98,9 +98,12 @@ pub const ACTIONS: [&str; 27] = [
     "Desconectar o Bluetooth",
     "Mostrar a bateria",
     "Abrir e fechar o teclado do Prisma",
+    "Radial do Prisma (segure o botão)",
 ];
 /// Ação que abre e fecha o teclado do Prisma (`sys::osk`).
 pub const KEYBOARD: u8 = 26;
+/// Ação que abre o radial do Prisma enquanto o botão fica segurado (`sys::radial`).
+pub const RADIAL: u8 = 27;
 /// Modelos prontos, na ordem de `Profile::template`. O Acessível vem do assistente.
 pub const TEMPLATES: [&str; 4] = ["Só Mouse", "Jogo sem controle", "Corrida", "Um lado só"];
 
@@ -229,7 +232,6 @@ impl Profile {
             (pads::Y, key(0x0D, 0)),
             (pads::LB, key(0xA6, 0)),
             (pads::RB, key(0xA7, 0)),
-            (pads::BACK, key(0x09, WIN)),
             (pads::START, key(0x5B, 0)),
             (pads::LS, Out::Mouse(3)),
             (pads::RS, Out::Action(KEYBOARD)),
@@ -243,6 +245,8 @@ impl Profile {
         ] {
             l.binds.push(Bind { button, with: 0, when: When::Press, out });
         }
+        // Select: Win + Tab. Segurado, o botão do radial (cartão Radial do Prisma) fica com ele antes.
+        l.binds.push(Bind { button: pads::BACK, with: 0, when: When::Press, out: key(0x09, WIN) });
         p
     }
 
@@ -1113,13 +1117,14 @@ pub fn latency() -> Option<(u32, u32)> {
 /// Um relatório novo do controle `key`, que chegou em `arrived`.
 pub fn feed(key: &str, inp: &Input, arrived: Instant) {
     // Teclado aberto: o controle digita nele, mesmo com o mapeamento desligado.
-    if super::osk::feed(key, inp, arrived) {
+    if super::osk::feed(key, inp, arrived) || super::radial::feed(key, inp, arrived) {
         return;
     }
     if !ON.load(Ordering::Relaxed) {
         return;
     }
     let mut events = vec![];
+    let mut radial = None;
     let acts = {
         let mut g = RUN.lock().unwrap();
         let Some(r) = g.as_mut() else { return };
@@ -1143,10 +1148,17 @@ pub fn feed(key: &str, inp: &Input, arrived: Instant) {
             events.push(pads::Event::Stopped { on });
         }
         if !STOPPED.load(Ordering::Relaxed) {
+            // Botão que abre o radial: o perfil não o vê; o toque (ou o segurar) volta como aperto.
+            let trig = super::radial::trigger(key, inp.buttons, arrived, r.profiles[r.cur].name == BASE);
+            radial = trig.open;
+            if trig.win_g {
+                acts.extend([Act::Down(Out::Key(0x47, WIN)), Act::Up(Out::Key(0x47, WIN))]);
+            }
+            for buttons in trig.steps {
             let p = &r.profiles[r.cur];
             let e = r.engines.get_mut(key).unwrap();
             e.0.safe = r.ac;
-            let step = e.0.step(p, inp, arrived);
+            let step = e.0.step(p, &Input { buttons, ..*inp }, arrived);
             let strings = p.strings.clone();
             for a in step {
                 match a {
@@ -1173,6 +1185,7 @@ pub fn feed(key: &str, inp: &Input, arrived: Instant) {
                     a => acts.push(a),
                 }
             }
+            }
             if let Some((to, at)) = r.want {
                 if arrived >= at && r.engines.values().all(|e| e.0.idle()) {
                     acts.extend(switch(r, to));
@@ -1193,6 +1206,9 @@ pub fn feed(key: &str, inp: &Input, arrived: Instant) {
         }
     }
     events.into_iter().for_each(pads::emit);
+    if let Some(o) = radial {
+        super::radial::open_from(o);
+    }
     focus_tick(arrived);
 }
 
@@ -1712,7 +1728,7 @@ mod tests {
             "prisma-profile 1\nname x\nlayer - B\nzone ls 0.9 0.1",
             "prisma-profile 1\nname x\nlayer - B\nstick 0 ls mouse NaN",
             "prisma-profile 1\nname x\nlayer - B\nrun calc.exe",
-            "prisma-profile 1\nname x\nlayer - B\nbind 0 A press action 27",
+            "prisma-profile 1\nname x\nlayer - B\nbind 0 A press action 28",
             "prisma-profile 1\nname x\nlayer - B\nbind 0 A press action 112",
             "prisma-profile 1\nname x\nlayer - B\nturbo A 1 500 on",
             "prisma-profile 1\nname x\nlayer - B\nturbo A 2 500 maybe",

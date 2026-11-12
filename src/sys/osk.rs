@@ -146,7 +146,7 @@ impl Osk {
 }
 
 /// Grupo apontado pelo analógico: 0 em cima, no sentido do relógio. Perto do centro, nenhum.
-fn petal(x: f32, y: f32) -> Option<usize> {
+pub(super) fn petal(x: f32, y: f32) -> Option<usize> {
     if x * x + y * y < 0.25 {
         return None;
     }

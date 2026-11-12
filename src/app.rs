@@ -24,7 +24,7 @@ use crate::config::{Config, Hotkey, MOD_ALT, MOD_CTRL, MOD_SHIFT, MOD_WIN};
 use crate::optimizer::{self, Candidate, Usage};
 use crate::capture::engine::{self, Cmd, Handle, Settings, Target};
 use crate::capture::mux::Codec;
-use crate::overlays::{Hud, Keyboard, Prompt, PromptAnswer, Toast, Widget};
+use crate::overlays::{Hud, Keyboard, Prompt, PromptAnswer, Radial, Toast, Widget};
 use crate::pages::{self, Page};
 use crate::sys::audio::{self, Session};
 use crate::sys::fullscreen::Fullscreenizer;
@@ -59,6 +59,8 @@ const WM_PICK_NV: u32 = WM_APP + 91;
 const WM_PICK_PAD: u32 = WM_APP + 94;
 const WM_PAD_IN: u32 = WM_APP + 95;
 const WM_PAD_OUT: u32 = WM_APP + 96;
+/// Escolher o .exe de um lugar do radial; WPARAM é o lugar.
+const WM_PICK_RADIAL: u32 = WM_APP + 97;
 const WM_POW_OUT: u32 = WM_APP + 82;
 const WM_REPORT_PHOTO: u32 = WM_APP + 84;
 const WM_REPORT_DONE: u32 = WM_APP + 85;
@@ -204,6 +206,7 @@ pub struct App {
     pub widget: Widget,
     pub toast: Toast,
     keyboard: Keyboard,
+    radial: Radial,
     pub pads: crate::pages::controllers::State,
     /// Quem estava na sala do compartilhamento na última olhada (chave, nome).
     room_seen: Option<Vec<(String, String)>>,
@@ -413,6 +416,7 @@ pub fn start(background: bool) {
             widget: Widget::new(),
             toast: Toast::new(),
             keyboard: Keyboard::new(),
+            radial: Radial::new(),
             pads: Default::default(),
             room_seen: None,
             notices_since: 0,
@@ -2534,6 +2538,11 @@ impl App {
                     crate::sys::osk::show_for_test(1);
                     self.keyboard_refresh();
                 }
+                Some("radial") => {
+                    self.apply_pads();
+                    crate::sys::radial::show_for_test(1);
+                    self.radial.update(&self.cfg);
+                }
                 Some("meter") => self.page = Page::Meter,
                 Some("sound") => self.page = Page::Volume,
                 Some("guide") => self.page = Page::Guide,
@@ -2675,9 +2684,11 @@ impl App {
             Target::MeterGame => WM_PICK_METER,
             Target::NvGame => WM_PICK_NV,
             Target::PadProgram => WM_PICK_PAD,
+            Target::RadialProgram(_) => WM_PICK_RADIAL,
         };
+        let slot = if let Target::RadialProgram(i) = target { i as usize } else { 0 };
         unsafe {
-            let _ = PostMessageW(Some(self.hub), msg, WPARAM(0), LPARAM(0));
+            let _ = PostMessageW(Some(self.hub), msg, WPARAM(slot), LPARAM(0));
         }
     }
 
@@ -2973,6 +2984,10 @@ impl App {
                     self.keyboard_refresh();
                     continue;
                 }
+                Event::Radial => {
+                    self.radial.update(&self.cfg);
+                    continue;
+                }
                 Event::Turbo { button, on, pad } => {
                     let f = crate::sys::pads::list().into_iter().find(|p| p.key == pad).map_or(crate::sys::pads::Family::Generic, |p| p.family);
                     let b = crate::pages::pad_profiles::button_label(f, button);
@@ -3005,6 +3020,11 @@ impl App {
         }
     }
 
+    /// Quadro da seta do radial do Prisma.
+    pub fn radial_tick(&mut self) {
+        self.radial.tick();
+    }
+
     /// Quadro da seta do teclado do Prisma (relógio da janela dele).
     pub fn keyboard_tick(&mut self) {
         self.keyboard.tick();
@@ -3024,10 +3044,10 @@ impl App {
     fn pad_action(&mut self, id: u8, pad: &str) -> Option<String> {
         let name = crate::sys::pads::list().into_iter().find(|p| p.key == pad);
         // Mesma ordem de `remap::ACTIONS`; 0 marca as que não são atalho.
-        const HK: [i32; 27] = [
+        const HK: [i32; 28] = [
             HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_REPLAY, HK_METER_C, HK_METER_F, HK_METER_O, HK_METER_KEYS, HK_LOG,
             HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, 0, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE, HK_FULL, HK_WIDGET, HK_OPT, HK_FORCE, HK_EXPLORER,
-            HK_FIND, 0, 0, 0,
+            HK_FIND, 0, 0, 0, 0,
         ];
         match id {
             14 => {
@@ -3042,6 +3062,10 @@ impl App {
             24 => {
                 let n = name.map(|p| p.name).unwrap_or_default();
                 return Some(if crate::sys::pads::disconnect(pad) { format!("{n} desconectado") } else { format!("{n} não está no Bluetooth ou não desconectou") });
+            }
+            crate::sys::remap::RADIAL => {
+                crate::sys::radial::open_action();
+                self.radial.update(&self.cfg);
             }
             crate::sys::remap::KEYBOARD => {
                 let open = crate::sys::osk::view().open;
@@ -3063,6 +3087,18 @@ impl App {
     pub fn apply_pads(&self) {
         crate::sys::pads::set_limits(self.cfg.pad_low, self.cfg.pad_jitter_ms);
         crate::sys::remap::configure(self.cfg.pad_map, self.cfg.meter_games.iter().map(|g| g.exe.clone()).collect());
+        let c = &self.cfg;
+        crate::sys::radial::set_programs(c.pad_radial_prog.clone().map(|(_, p)| p));
+        crate::sys::radial::configure(crate::sys::radial::Config {
+            slots: c.pad_radial,
+            two: c.pad_radial_two,
+            left: c.pad_radial_left,
+            button: [0, crate::sys::pads::BACK, crate::sys::pads::GUIDE][c.pad_radial_btn.min(2) as usize],
+            hold: std::time::Duration::from_millis(c.pad_radial_ms as u64),
+            tap_opens: c.pad_radial_tap,
+            stay: c.pad_radial_stay,
+            guide_normal: c.pad_guide,
+        });
     }
 
     pub fn refresh_page(&mut self) {
@@ -3516,6 +3552,15 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                         Some(p) => crate::pages::pad_profiles::imported(a, p),
                         None => a.toast.info("Esse arquivo não é um perfil de controle do Prisma"),
                     }
+                    a.invalidate();
+                });
+            }
+            LRESULT(0)
+        }
+        WM_PICK_RADIAL => {
+            if let Some(path) = capture::choose_exe(h) {
+                with(|a| {
+                    crate::pages::controllers::set_radial_program(a, w.0.min(7), &path);
                     a.invalidate();
                 });
             }

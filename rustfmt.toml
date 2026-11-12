@@ -1,0 +1,2 @@
+# O código do Prisma não segue o rustfmt: `cargo fmt` reformataria o projeto inteiro.
+disable_all_formatting = true

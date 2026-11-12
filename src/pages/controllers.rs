@@ -231,6 +231,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     }
     y += r.h + 12.0;
     y = mapping(ui, app, rect(x, y, lw, 0.0));
+    y = radial(ui, app, rect(x, y, lw, 0.0));
     for t in &app.pads.conflicts {
         let r = rect(x, y, lw, 64.0);
         ui.card(r);
@@ -414,6 +415,135 @@ fn mapping(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
         }
     }
     r.bottom() + 12.0
+}
+
+/// Radial do Prisma: as 8 ações, de cima no sentido do relógio.
+fn radial(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
+    use super::picker::Target;
+    use crate::sys::radial::{EMPTY, PROGRAM};
+    use crate::sys::remap;
+    const DIRS: [&str; 8] = ["↑", "↗", "→", "↘", "↓", "↙", "←", "↖"];
+    let two = app.cfg.pad_radial_two;
+    let r = rect(at.x, at.y, at.w, if two { 794.0 } else { 618.0 });
+    ui.card(r);
+    ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Radial do Prisma");
+    ui.c.text_wrap(rect(r.x + 16.0, r.y + 40.0, r.w - 32.0, 58.0), "O stick direito aponta. Segurando, soltar o botão dispara; aberto para ficar, A dispara e B fecha.", 12.0, TEXT2, Weight::Regular);
+    let tr = |s: &str| crate::i18n::tr(s).into_owned();
+    let mut changed = false;
+    let row = |i: usize| (rect(r.x + 16.0, r.y + 104.0 + i as f32 * 42.0, 108.0, 34.0), rect(r.x + 128.0, r.y + 104.0 + i as f32 * 42.0, r.w - 144.0, 34.0));
+    let (l, c) = row(0);
+    ui.c.text_fit(l, &tr("Botão"), 12.0, TEXT2, Align::Left, Weight::Regular);
+    let mut b = app.cfg.pad_radial_btn.min(2) as usize;
+    if ui.select("pad-radial-btn", c, &[tr("Nenhum"), "Select".into(), tr("Guia")], &mut b) {
+        app.cfg.pad_radial_btn = b as u8;
+        changed = true;
+    }
+    ui.tip(rect(l.x, l.y, r.w - 32.0, 34.0), "Vale com o controle como teclado e mouse ligado. Nos jogos (perfil Base) o Select fica só com o jogo; o Guia abre em qualquer perfil. Também dá para ligar qualquer botão de um perfil a Radial do Prisma.");
+    let (l, c) = row(1);
+    ui.c.text_fit(l, &tr("Abrir com"), 12.0, TEXT2, Align::Left, Weight::Regular);
+    let mut t = app.cfg.pad_radial_tap as usize;
+    if ui.select("pad-radial-tap", c, &[tr("Segurar"), tr("Toque")], &mut t) {
+        app.cfg.pad_radial_tap = t == 1;
+        changed = true;
+    }
+    ui.tip(rect(l.x, l.y, r.w - 32.0, 34.0), "O outro jeito faz a função normal do botão.");
+    let (l, _) = row(2);
+    ui.c.text_fit(rect(l.x, l.y, r.w - 172.0, 34.0), &tr("Segurar por"), 12.0, TEXT2, Align::Left, Weight::Regular);
+    if ui.stepper("pad-radial-ms", rect(r.right() - 140.0, l.y, 124.0, 34.0), &mut app.cfg.pad_radial_ms, (200, 2000), 50, "ms") {
+        changed = true;
+    }
+    let (l, c) = row(3);
+    ui.c.text_fit(l, &tr("Depois"), 12.0, TEXT2, Align::Left, Weight::Regular);
+    // Com dois círculos ele sempre fica aberto: a escolha fica parada em Fica aberto.
+    let mut s = (app.cfg.pad_radial_stay || two) as usize;
+    if ui.select("pad-radial-stay", c, &[tr("Soltar escolhe"), tr("Fica aberto")], &mut s) && !two {
+        app.cfg.pad_radial_stay = s == 1;
+        changed = true;
+    }
+    ui.tip(rect(l.x, l.y, r.w - 32.0, 34.0), "Aberto por toque, ou com dois círculos, ele sempre fica aberto.");
+    let check = rect(r.x + 10.0, r.y + 272.0, r.w - 20.0, 36.0);
+    let mut guide = app.cfg.pad_guide;
+    if ui.check("pad-guide", check, "O Prisma cuida do botão Guia", &mut guide) {
+        if guide {
+            app.cfg.pad_gamebar_prev = crate::sys::radial::gamebar_take();
+        } else {
+            crate::sys::radial::gamebar_restore(app.cfg.pad_gamebar_prev);
+            app.cfg.pad_gamebar_prev = -1;
+        }
+        app.cfg.pad_guide = guide;
+        changed = true;
+    }
+    ui.tip(check, "A Xbox Game Bar deixa de abrir pelo botão Guia do controle, e o Prisma faz a função normal dele (Win + G). Desligar devolve a opção da Game Bar como estava.");
+    ui.c.text_wrap(rect(r.x + 16.0, r.y + 310.0, r.w - 32.0, 46.0), "Com o Steam aberto, desligue nele a opção do botão Guia.", 12.0, MUTED, Weight::Regular);
+    let check = rect(r.x + 10.0, r.y + 356.0, r.w - 20.0, 36.0);
+    if ui.check("pad-radial-two", check, "Dois círculos (16 lugares)", &mut app.cfg.pad_radial_two) {
+        changed = true;
+    }
+    ui.tip(check, "Um círculo em cada stick, com 8 lugares cada. O stick que apontar por último escolhe, e o radial sempre fica aberto: A dispara e B fecha.");
+    // Nada, e todas as ações menos o próprio radial.
+    let ids: Vec<u8> = std::iter::once(EMPTY).chain((0..remap::ACTIONS.len() as u8).filter(|&a| a != remap::RADIAL)).collect();
+    let names: Vec<String> = ids.iter().map(|&a| crate::i18n::tr(remap::ACTIONS.get(a as usize).copied().unwrap_or("Nada")).into_owned()).collect();
+    let col = (r.w - 40.0) / 2.0;
+    // Lugares 0 a 7 no stick direito; com dois círculos, 8 a 15 no esquerdo.
+    // Um círculo: escolher o stick que aponta; dois: um título para cada stick.
+    if !two {
+        let (l, c) = row(7);
+        ui.c.text_fit(l, &tr("Stick"), 12.0, TEXT2, Align::Left, Weight::Regular);
+        let mut s = app.cfg.pad_radial_left as usize;
+        if ui.select("pad-radial-left", c, &[tr("Direito"), tr("Esquerdo")], &mut s) {
+            app.cfg.pad_radial_left = s == 1;
+            changed = true;
+        }
+    }
+    for i in 0..if two { 16 } else { 8 } {
+        let top = r.y + if two { 398.0 + (i / 8) as f32 * 196.0 } else { 418.0 };
+        if two && i % 8 == 0 {
+            ui.c.text_fit(rect(r.x + 16.0, top, r.w - 32.0, 20.0), &tr(if i == 0 { "Stick direito" } else { "Stick esquerdo" }), 12.0, MUTED, Align::Left, Weight::Semibold);
+        }
+        let (cx, cy) = (r.x + 16.0 + (i % 2) as f32 * (col + 8.0), top + 22.0 + (i % 8 / 2) as f32 * 42.0);
+        ui.c.text_raw(rect(cx, cy, 22.0, 34.0), DIRS[i % 8], 16.0, MUTED, Align::Left, Weight::Semibold);
+        // No fim: o programa deste lugar (se houver) e escolher um programa. O lugar só muda quando a escolha volta.
+        let prog = app.cfg.pad_radial[i] == PROGRAM;
+        let mut opts = names.clone();
+        if prog {
+            opts.push(app.cfg.pad_radial_prog[i].0.clone());
+        }
+        let pick_at = opts.len();
+        opts.push(tr(if prog { "Escolher outro programa…" } else { "Abrir um programa…" }));
+        let mut sel = if prog { pick_at - 1 } else { ids.iter().position(|&a| a == app.cfg.pad_radial[i]).unwrap_or(0) };
+        let menu = format!("pad-radial-run-{i}");
+        if ui.select(&format!("pad-radial-{i}"), rect(cx + 24.0, cy, col - 24.0, 34.0), &opts, &mut sel) {
+            if sel == pick_at {
+                ui.menu(&menu, &[("Da lista de programas", true), ("Escolher arquivo .exe", true)]);
+            } else if sel < ids.len() {
+                app.cfg.pad_radial[i] = ids[sel];
+                changed = true;
+            }
+        }
+        match ui.menu_pick(&menu) {
+            Some(0) => app.open_picker(Target::RadialProgram(i as u8)),
+            Some(_) => app.pick_exe_for(Target::RadialProgram(i as u8)),
+            None => {}
+        }
+    }
+    if changed {
+        app.cfg.save();
+        app.apply_pads();
+    }
+    r.bottom() + 12.0
+}
+
+/// Programa escolhido para o lugar `i` do radial (lista de programas ou arquivo .exe).
+pub fn set_radial_program(app: &mut App, i: usize, path: &str) {
+    let exe = crate::sys::procs::exe_name(path);
+    let stem = exe.rsplit_once('.').map_or(exe.as_str(), |(s, _)| s).to_string();
+    let name = crate::sys::fileinfo::description(path).filter(|d| !d.trim().is_empty()).unwrap_or(stem);
+    // `|` e TAB separam os lugares no arquivo de configuração.
+    let name = name.replace(['|', '\t'], " ").trim().to_string();
+    app.cfg.pad_radial[i] = crate::sys::radial::PROGRAM;
+    app.cfg.pad_radial_prog[i] = (name, path.to_string());
+    app.cfg.save();
+    app.apply_pads();
 }
 
 fn diagnostic(list: &[Pad], conflicts: &[&str]) -> String {

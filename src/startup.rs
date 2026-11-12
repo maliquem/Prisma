@@ -370,6 +370,10 @@ pub fn uninstall() {
         set_replace_taskmgr(false);
     }
     crate::sys::autohdr::clear_all();
+    let cfg = crate::config::Config::load();
+    if cfg.pad_guide {
+        crate::sys::radial::gamebar_restore(cfg.pad_gamebar_prev);
+    }
     #[cfg(feature = "stream")]
     crate::stream::weblink::unregister();
     let _ = std::fs::remove_file(shortcut());

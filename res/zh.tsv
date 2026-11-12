@@ -2096,3 +2096,28 @@ Abrir e fechar o teclado do Prisma	打开和关闭 Prisma 键盘
 {} maiúsculas · {} números · os dois: acentos · {} fecha	{} 大写 · {} 数字 · 同时按：重音字母 · {} 关闭
 Teclado ativado	键盘已开启
 Teclado desativado	键盘已关闭
+Radial do Prisma (segure o botão)	Prisma 轮盘（按住按键）
+Radial do Prisma	Prisma 轮盘
+Solte {} para escolher · com o stick no centro, cancela	松开 {} 进行选择 · 摇杆居中则取消
+Nada	无
+O stick direito aponta. Segurando, soltar o botão dispara; aberto para ficar, A dispara e B fecha.	右摇杆指向。按住时，松开按键执行；保持打开时，A 执行，B 关闭。
+Botão	按键
+Abrir com	打开方式
+Toque	轻按
+Segurar por	按住时长
+Depois	之后
+Soltar escolhe	松开即选择
+Fica aberto	保持打开
+Vale com o controle como teclado e mouse ligado. Nos jogos (perfil Base) o Select fica só com o jogo; o Guia abre em qualquer perfil. Também dá para ligar qualquer botão de um perfil a Radial do Prisma.	需开启“手柄作为键盘和鼠标”。游戏中（Base 配置）Select 只给游戏；Guide 在任何配置中都能打开。也可以把配置中的任意按键设为“Prisma 轮盘”。
+O outro jeito faz a função normal do botão.	另一种方式执行按键的原本功能。
+O Prisma cuida do botão Guia	由 Prisma 处理 Guide 键
+A Xbox Game Bar deixa de abrir pelo botão Guia do controle, e o Prisma faz a função normal dele (Win + G). Desligar devolve a opção da Game Bar como estava.	Xbox Game Bar 不再由手柄 Guide 键打开，由 Prisma 执行其原本功能（Win + G）。关闭此项会把 Game Bar 的设置恢复原样。
+Com o Steam aberto, desligue nele a opção do botão Guia.	Steam 打开时，请在 Steam 中关闭 Guide 键选项。
+{} dispara · {} fecha	{} 执行 · {} 关闭
+Solte o botão para escolher · com o stick no centro, cancela	松开按键进行选择 · 摇杆居中则取消
+Abrir um programa…	打开程序…
+Escolher outro programa…	选择其他程序…
+Aberto por toque, ou com dois círculos, ele sempre fica aberto.	轻按打开或使用两个圆环时，始终保持打开。
+Dois círculos (16 lugares)	两个圆环（16 个位置）
+Um círculo em cada stick, com 8 lugares cada. O stick que apontar por último escolhe, e o radial sempre fica aberto: A dispara e B fecha.	每个摇杆一个圆环，各 8 个位置。最后指向的摇杆决定选择，轮盘始终保持打开：A 执行，B 关闭。
+Stick	摇杆
