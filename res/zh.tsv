@@ -2044,3 +2044,48 @@ Nenhum programa escolhido	未选择程序
 Escolher programa	选择程序
 {} não está no Bluetooth ou não desconectou	{} 未通过蓝牙连接或未能断开
 Não consegui abrir {}	无法打开 {}
+Alternar	切换
+Turbo 2x	连发 2x
+Turbo 3x	连发 3x
+Turbo 4x	连发 4x
+Turbo 5x	连发 5x
+Os dois lados	两侧
+Só o lado esquerdo	仅左侧
+Só o lado direito	仅右侧
+Segurar para arrastar	按住拖动
+Clique liga e desliga	点击切换按住
+Mouse devagar	鼠标慢速
+Mouse normal	鼠标正常
+Mouse rápido	鼠标快速
+{} (importado)	{}（导入）
+O perfil {} quer abrir um programa. Permitir?	配置 {} 想打开一个程序。允许吗？
+Perfil {} importado	已导入配置 {}
+Aplicar modelo	应用模板
+Só Mouse	仅鼠标
+Jogo sem controle	不支持手柄的游戏
+Corrida	赛车
+Um lado só	单侧
+Acessível	无障碍
+Acessível: escolha o lado, o clique e a velocidade	无障碍：选择侧边、点击方式和速度
+Aplicar o modelo {}?	应用模板 {}？
+As camadas, ligações e zonas mortas do perfil {} serão trocadas pelas do modelo. Os jogos ligados a ele continuam.	配置 {} 的层、绑定和死区将被模板替换。关联的游戏保持不变。
+Perfis de controle	手柄配置
+Perfil exportado	已导出配置
+Não consegui exportar o perfil	无法导出配置
+Esse arquivo não é um perfil de controle do Prisma	该文件不是 Prisma 手柄配置
+{} tem anti-cheat: o turbo fica parado nele.	{} 有反作弊：在其中连发保持暂停。
+Aplicar	应用
+Cancelar	取消
+Turbo do botão {}	按键 {} 的连发
+Espera, em milissegundos, antes de o turbo começar a repetir.	连发开始重复前的等待时间（毫秒）。
+Atalho do turbo	连发快捷键
+Sem atalho	无快捷键
+Esse atalho já é usado por {}.	此快捷键已被 {} 使用。
+Essa combinação já é usada por {}.	此组合已被 {} 使用。
+Sem atalho: o turbo só muda aqui.	无快捷键：连发只能在这里更改。
+Segure o atalho e aperte o botão para ligar ou desligar o turbo dele.	按住快捷键再按按键即可开关它的连发。
+a parada de emergência	紧急停止
+o atalho do turbo	连发快捷键
+uma ligação da camada {}	层 {} 中的一个绑定
+Turbo ligado no {}	{} 连发已开启
+Turbo desligado no {}	{} 连发已关闭

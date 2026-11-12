@@ -433,6 +433,11 @@ impl<'a> Ui<'a> {
     }
 
     /// Pergunta Sim ou Não. A resposta chega depois por `answered`, com a mesma chave.
+    /// Há uma pergunta aberta (fechada sem `answered`, a resposta foi não).
+    pub fn asking(&self) -> bool {
+        self.s.ask.is_some()
+    }
+
     pub fn ask(&mut self, key: &str, title: &str, body: &str) {
         self.s.ask = Some(Ask { id: hash_id(key), title: title.to_string(), body: body.to_string(), notice: false, check: None });
         self.s.ask_new = true;

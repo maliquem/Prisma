@@ -2044,3 +2044,48 @@ Nenhum programa escolhido	Программа не выбрана
 Escolher programa	Выбрать программу
 {} não está no Bluetooth ou não desconectou	{} не на Bluetooth или не отключился
 Não consegui abrir {}	Не удалось открыть {}
+Alternar	Переключение
+Turbo 2x	Турбо 2x
+Turbo 3x	Турбо 3x
+Turbo 4x	Турбо 4x
+Turbo 5x	Турбо 5x
+Os dois lados	Обе стороны
+Só o lado esquerdo	Только левая сторона
+Só o lado direito	Только правая сторона
+Segurar para arrastar	Удерживать для перетаскивания
+Clique liga e desliga	Щелчок с фиксацией
+Mouse devagar	Медленная мышь
+Mouse normal	Обычная мышь
+Mouse rápido	Быстрая мышь
+{} (importado)	{} (импорт)
+O perfil {} quer abrir um programa. Permitir?	Профиль {} хочет открыть программу. Разрешить?
+Perfil {} importado	Профиль {} импортирован
+Aplicar modelo	Применить шаблон
+Só Mouse	Только мышь
+Jogo sem controle	Игра без геймпада
+Corrida	Гонки
+Um lado só	Одна сторона
+Acessível	Доступный
+Acessível: escolha o lado, o clique e a velocidade	Доступный: выберите сторону, щелчок и скорость
+Aplicar o modelo {}?	Применить шаблон {}?
+As camadas, ligações e zonas mortas do perfil {} serão trocadas pelas do modelo. Os jogos ligados a ele continuam.	Слои, назначения и мёртвые зоны профиля {} заменятся шаблонными. Привязанные к нему игры останутся.
+Perfis de controle	Профили геймпада
+Perfil exportado	Профиль экспортирован
+Não consegui exportar o perfil	Не удалось экспортировать профиль
+Esse arquivo não é um perfil de controle do Prisma	Этот файл не профиль геймпада Prisma
+{} tem anti-cheat: o turbo fica parado nele.	В {} есть античит: турбо в нём на паузе.
+Aplicar	Применить
+Cancelar	Отмена
+Turbo do botão {}	Турбо кнопки {}
+Espera, em milissegundos, antes de o turbo começar a repetir.	Задержка в миллисекундах до начала повторов турбо.
+Atalho do turbo	Сочетание турбо
+Sem atalho	Без сочетания
+Esse atalho já é usado por {}.	Это сочетание уже занято: {}.
+Essa combinação já é usada por {}.	Эта комбинация уже занята: {}.
+Sem atalho: o turbo só muda aqui.	Без сочетания: турбо меняется только здесь.
+Segure o atalho e aperte o botão para ligar ou desligar o turbo dele.	Удерживайте сочетание и нажмите кнопку, чтобы включить или выключить её турбо.
+a parada de emergência	экстренная остановка
+o atalho do turbo	сочетание турбо
+uma ligação da camada {}	назначение в слое {}
+Turbo ligado no {}	Турбо включено для {}
+Turbo desligado no {}	Турбо выключено для {}

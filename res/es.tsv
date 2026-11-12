@@ -2044,3 +2044,48 @@ Nenhum programa escolhido	Ningún programa elegido
 Escolher programa	Elegir programa
 {} não está no Bluetooth ou não desconectou	{} no está por Bluetooth o no se desconectó
 Não consegui abrir {}	No pude abrir {}
+Alternar	Alternar
+Turbo 2x	Turbo 2x
+Turbo 3x	Turbo 3x
+Turbo 4x	Turbo 4x
+Turbo 5x	Turbo 5x
+Os dois lados	Los dos lados
+Só o lado esquerdo	Solo el lado izquierdo
+Só o lado direito	Solo el lado derecho
+Segurar para arrastar	Mantener para arrastrar
+Clique liga e desliga	El clic se activa y desactiva
+Mouse devagar	Ratón lento
+Mouse normal	Ratón normal
+Mouse rápido	Ratón rápido
+{} (importado)	{} (importado)
+O perfil {} quer abrir um programa. Permitir?	El perfil {} quiere abrir un programa. ¿Permitir?
+Perfil {} importado	Perfil {} importado
+Aplicar modelo	Aplicar plantilla
+Só Mouse	Solo ratón
+Jogo sem controle	Juego sin mando
+Corrida	Carreras
+Um lado só	Un solo lado
+Acessível	Accesible
+Acessível: escolha o lado, o clique e a velocidade	Accesible: elige el lado, el clic y la velocidad
+Aplicar o modelo {}?	¿Aplicar la plantilla {}?
+As camadas, ligações e zonas mortas do perfil {} serão trocadas pelas do modelo. Os jogos ligados a ele continuam.	Las capas, asignaciones y zonas muertas del perfil {} se cambiarán por las de la plantilla. Los juegos vinculados se mantienen.
+Perfis de controle	Perfiles de mando
+Perfil exportado	Perfil exportado
+Não consegui exportar o perfil	No pude exportar el perfil
+Esse arquivo não é um perfil de controle do Prisma	Ese archivo no es un perfil de mando de Prisma
+{} tem anti-cheat: o turbo fica parado nele.	{} tiene anti-cheat: el turbo queda en pausa en él.
+Aplicar	Aplicar
+Cancelar	Cancelar
+Turbo do botão {}	Turbo del botón {}
+Espera, em milissegundos, antes de o turbo começar a repetir.	Espera, en milisegundos, antes de que el turbo empiece a repetir.
+Atalho do turbo	Atajo del turbo
+Sem atalho	Sin atajo
+Esse atalho já é usado por {}.	Ese atajo ya lo usa {}.
+Essa combinação já é usada por {}.	Esa combinación ya la usa {}.
+Sem atalho: o turbo só muda aqui.	Sin atajo: el turbo solo cambia aquí.
+Segure o atalho e aperte o botão para ligar ou desligar o turbo dele.	Mantén el atajo y pulsa el botón para activar o desactivar su turbo.
+a parada de emergência	la parada de emergencia
+o atalho do turbo	el atajo del turbo
+uma ligação da camada {}	una asignación de la capa {}
+Turbo ligado no {}	Turbo activado en {}
+Turbo desligado no {}	Turbo desactivado en {}

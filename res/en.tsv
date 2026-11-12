@@ -2050,3 +2050,48 @@ Nenhum programa escolhido	No program chosen
 Escolher programa	Choose program
 {} não está no Bluetooth ou não desconectou	{} isn't on Bluetooth or didn't disconnect
 Não consegui abrir {}	Couldn't open {}
+Alternar	Toggle
+Turbo 2x	Turbo 2x
+Turbo 3x	Turbo 3x
+Turbo 4x	Turbo 4x
+Turbo 5x	Turbo 5x
+Os dois lados	Both sides
+Só o lado esquerdo	Left side only
+Só o lado direito	Right side only
+Segurar para arrastar	Hold to drag
+Clique liga e desliga	Click toggles
+Mouse devagar	Slow mouse
+Mouse normal	Normal mouse
+Mouse rápido	Fast mouse
+{} (importado)	{} (imported)
+O perfil {} quer abrir um programa. Permitir?	Profile {} wants to open a program. Allow?
+Perfil {} importado	Profile {} imported
+Aplicar modelo	Apply template
+Só Mouse	Mouse only
+Jogo sem controle	Game without controller
+Corrida	Racing
+Um lado só	One side
+Acessível	Accessible
+Acessível: escolha o lado, o clique e a velocidade	Accessible: choose the side, the click and the speed
+Aplicar o modelo {}?	Apply the {} template?
+As camadas, ligações e zonas mortas do perfil {} serão trocadas pelas do modelo. Os jogos ligados a ele continuam.	The layers, bindings and dead zones of profile {} will be replaced by the template's. The games linked to it stay.
+Perfis de controle	Controller profiles
+Perfil exportado	Profile exported
+Não consegui exportar o perfil	Couldn't export the profile
+Esse arquivo não é um perfil de controle do Prisma	That file isn't a Prisma controller profile
+{} tem anti-cheat: o turbo fica parado nele.	{} has anti-cheat: turbo stays paused in it.
+Aplicar	Apply
+Cancelar	Cancel
+Turbo do botão {}	Turbo for button {}
+Espera, em milissegundos, antes de o turbo começar a repetir.	Wait, in milliseconds, before turbo starts repeating.
+Atalho do turbo	Turbo shortcut
+Sem atalho	No shortcut
+Esse atalho já é usado por {}.	This shortcut is already used by {}.
+Essa combinação já é usada por {}.	This combination is already used by {}.
+Sem atalho: o turbo só muda aqui.	No shortcut: turbo only changes here.
+Segure o atalho e aperte o botão para ligar ou desligar o turbo dele.	Hold the shortcut and press the button to turn its turbo on or off.
+a parada de emergência	the emergency stop
+o atalho do turbo	the turbo shortcut
+uma ligação da camada {}	a binding in layer {}
+Turbo ligado no {}	Turbo on for {}
+Turbo desligado no {}	Turbo off for {}

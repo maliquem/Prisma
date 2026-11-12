@@ -98,6 +98,9 @@ pub const ACTIONS: [&str; 26] = [
     "Desconectar o Bluetooth",
     "Mostrar a bateria",
 ];
+/// Modelos prontos, na ordem de `Profile::template`. O Acessível vem do assistente.
+pub const TEMPLATES: [&str; 4] = ["Só Mouse", "Jogo sem controle", "Corrida", "Um lado só"];
+
 /// Primeira ação de combinação de som (a combinação n é `SOUND + n`).
 pub const SOUND: u8 = 100;
 
@@ -108,8 +111,40 @@ pub enum When {
     Hold,
     Double,
     Release,
+    /// Assistência: um aperto liga, o próximo desliga (tecla e clique ficam segurados).
+    Latch,
 }
-const WHENS: [(When, &str); 5] = [(When::Press, "press"), (When::Tap, "tap"), (When::Hold, "hold"), (When::Double, "double"), (When::Release, "release")];
+const WHENS: [(When, &str); 6] = [
+    (When::Press, "press"),
+    (When::Tap, "tap"),
+    (When::Hold, "hold"),
+    (When::Double, "double"),
+    (When::Release, "release"),
+    (When::Latch, "latch"),
+];
+/// Turbo 1x: 4 apertos por segundo; 5x: 20, ainda dois quadros por estado num jogo a 60 FPS.
+pub const TURBO_HZ: u32 = 4;
+
+/// Turbo de um botão, à parte das ligações: depois de `delay` ms segurando, o que o botão aperta
+/// (Pressionar) passa a apertar e soltar sozinho, `TURBO_HZ * speed` vezes por segundo. Parado em
+/// jogo com anti-cheat.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct Turbo {
+    pub button: u32,
+    pub speed: u8,
+    pub delay: u16,
+    pub on: bool,
+}
+
+impl Turbo {
+    /// De fábrica: desligado, 2x, 500 ms.
+    pub fn new(button: u32) -> Self {
+        Turbo { button, speed: 2, delay: 500, on: false }
+    }
+}
+
+/// Atalho de fábrica do turbo: RS + RT, mais o botão que liga ou desliga.
+pub const TURBO_KEY: u32 = pads::RS | RT;
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct Bind {
@@ -156,6 +191,10 @@ pub struct Profile {
     pub layers: Vec<Layer>,
     /// Nomes de perfil e programas citados pelas ligações.
     pub strings: Vec<String>,
+    /// Turbo de cada botão que já foi configurado.
+    pub turbo: Vec<Turbo>,
+    /// Botões que, segurados, fazem o próximo botão ligar ou desligar o turbo dele (0: sem atalho).
+    pub turbo_key: u32,
 }
 
 pub const DESKTOP: &str = "Desktop";
@@ -165,7 +204,7 @@ impl Profile {
     fn empty(name: &str) -> Self {
         let stick = Zone { start: 0.15, end: 0.95 };
         let trig = Zone { start: 0.05, end: 0.95 };
-        Profile { name: name.into(), games: vec![], zones: [stick, stick, trig, trig], layers: vec![Layer { name: "Base".into(), parent: None, ls: None, rs: None, binds: vec![] }], strings: vec![] }
+        Profile { name: name.into(), games: vec![], zones: [stick, stick, trig, trig], layers: vec![Layer { name: "Base".into(), parent: None, ls: None, rs: None, binds: vec![] }], strings: vec![], turbo: vec![], turbo_key: TURBO_KEY }
     }
 
     /// Base: nada mapeado, o jogo lê o controle como ele é.
@@ -204,6 +243,112 @@ impl Profile {
         p
     }
 
+    /// Modelo pronto (`TEMPLATES`). Só o conteúdo: quem aplica mantém nome e jogos.
+    pub fn template(i: usize) -> Self {
+        let mut p = Self::empty("");
+        let l = &mut p.layers[0];
+        let key = |vk: u16| Out::Key(vk, 0);
+        let binds: Vec<(u32, Out)> = match i {
+            // Só Mouse: mouse, rolagem e os três cliques.
+            0 => {
+                l.ls = Some(Stick::Mouse(1600.0));
+                l.rs = Some(Stick::Scroll(12.0));
+                vec![(pads::A, Out::Mouse(1)), (pads::B, Out::Mouse(2)), (pads::X, Out::Mouse(3))]
+            }
+            // Jogo sem controle: WASD no stick esquerdo, câmera no direito, tiro nos gatilhos.
+            1 => {
+                l.ls = Some(Stick::Buttons);
+                l.rs = Some(Stick::Mouse(2400.0));
+                vec![
+                    (LSU, key(0x57)),
+                    (LSD, key(0x53)),
+                    (LSL, key(0x41)),
+                    (LSR, key(0x44)),
+                    (RT, Out::Mouse(1)),
+                    (LT, Out::Mouse(2)),
+                    (pads::A, key(0x20)),
+                    (pads::B, key(0x43)),
+                    (pads::X, key(0x52)),
+                    (pads::Y, key(0x45)),
+                    (pads::LB, key(0x51)),
+                    (pads::RB, key(0x46)),
+                    (pads::LS, key(0x10)),
+                    (pads::RS, key(0x56)),
+                    (pads::START, key(0x1B)),
+                    (pads::BACK, key(0x09)),
+                    (pads::UP, key(0x31)),
+                    (pads::RIGHT, key(0x32)),
+                    (pads::DOWN, key(0x33)),
+                    (pads::LEFT, key(0x34)),
+                ]
+            }
+            // Corrida: acelera e freia nos gatilhos, direção no stick esquerdo.
+            2 => {
+                l.ls = Some(Stick::Buttons);
+                vec![
+                    (RT, key(0x57)),
+                    (LT, key(0x53)),
+                    (LSL, key(0x41)),
+                    (LSR, key(0x44)),
+                    (pads::A, key(0x20)),
+                    (pads::B, key(0x43)),
+                    (pads::Y, key(0x52)),
+                    (pads::LB, key(0x51)),
+                    (pads::RB, key(0x45)),
+                    (pads::START, key(0x1B)),
+                    (pads::BACK, key(0x09)),
+                ]
+            }
+            // Um lado só: o lado esquerdo do controle faz tudo do mouse.
+            _ => return Self::accessible(1, false, 1600.0),
+        };
+        l.binds = binds.into_iter().map(|(button, out)| Bind { button, with: 0, when: When::Press, out }).collect();
+        p
+    }
+
+    /// Modelo Acessível, das três respostas: lado (0 os dois, 1 esquerdo, 2 direito), se o clique
+    /// esquerdo liga e desliga em vez de segurar, e a velocidade do mouse.
+    pub fn accessible(side: u8, latch: bool, speed: f32) -> Self {
+        let mut p = if side == 0 { Self::desktop() } else { Self::empty("") };
+        let l = &mut p.layers[0];
+        if side == 0 {
+            l.ls = Some(Stick::Mouse(speed));
+        } else {
+            let left = side == 1;
+            let st = Some(Stick::Mouse(speed));
+            if left {
+                l.ls = st;
+            } else {
+                l.rs = st;
+            }
+            let (up, down, back, fwd, click, right, middle, esc) = if left {
+                (pads::UP, pads::DOWN, pads::LEFT, pads::RIGHT, pads::LB, LT, pads::LS, pads::BACK)
+            } else {
+                (pads::Y, pads::A, pads::X, pads::B, pads::RB, RT, pads::RS, pads::START)
+            };
+            for (button, out) in [
+                (up, Out::Wheel(1)),
+                (down, Out::Wheel(-1)),
+                (back, Out::Key(0xA6, 0)),
+                (fwd, Out::Key(0xA7, 0)),
+                (click, Out::Mouse(1)),
+                (right, Out::Mouse(2)),
+                (middle, Out::Mouse(3)),
+                (esc, Out::Key(0x1B, 0)),
+            ] {
+                l.binds.push(Bind { button, with: 0, when: When::Press, out });
+            }
+        }
+        if latch {
+            for b in &mut l.binds {
+                if b.out == Out::Mouse(1) {
+                    b.when = When::Latch;
+                }
+            }
+        }
+        p
+    }
+
     /// Texto do perfil: o mesmo para guardar, importar e exportar.
     pub fn to_text(&self) -> String {
         use std::fmt::Write;
@@ -214,6 +359,10 @@ impl Profile {
         }
         for (z, n) in self.zones.iter().zip(["ls", "rs", "lt", "rt"]) {
             let _ = writeln!(s, "zone {n} {} {}", z.start, z.end);
+        }
+        let _ = writeln!(s, "turbokey {}", mask_text(self.turbo_key));
+        for t in &self.turbo {
+            let _ = writeln!(s, "turbo {} {} {} {}", button_name(t.button), t.speed, t.delay, if t.on { "on" } else { "off" });
         }
         for (i, l) in self.layers.iter().enumerate() {
             match l.parent {
@@ -256,6 +405,22 @@ impl Profile {
             match cmd {
                 "name" => p.name = rest.chars().filter(|c| !c.is_control()).take(60).collect(),
                 "game" => p.games.push(rest.to_lowercase()),
+                "turbokey" => p.turbo_key = if rest == "-" { 0 } else { mask_of(rest)? },
+                "turbo" => {
+                    let mut it = rest.split(' ');
+                    let button = button_bit(it.next()?)?;
+                    let speed = it.next()?.parse::<u8>().ok().filter(|v| (2..=5).contains(v))?;
+                    let delay = it.next()?.parse::<u16>().ok().filter(|v| *v <= 5000)?;
+                    let on = match it.next()? {
+                        "on" => true,
+                        "off" => false,
+                        _ => return None,
+                    };
+                    if it.next().is_some() || p.turbo.iter().any(|t| t.button == button) {
+                        return None;
+                    }
+                    p.turbo.push(Turbo { button, speed, delay, on });
+                }
                 "zone" => {
                     let mut it = rest.split(' ');
                     let k = it.next()?;
@@ -331,6 +496,43 @@ pub fn button_name(bit: u32) -> &'static str {
 
 fn button_bit(s: &str) -> Option<u32> {
     NAMES.iter().find(|n| n.0 == s).map(|n| n.1)
+}
+
+/// "RS+RT"; "-" sem botão.
+fn mask_text(m: u32) -> String {
+    let v: Vec<&str> = NAMES.iter().filter(|n| m & n.1 != 0).map(|n| n.0).collect();
+    if v.is_empty() { "-".into() } else { v.join("+") }
+}
+
+fn mask_of(s: &str) -> Option<u32> {
+    s.split('+').try_fold(0, |m, n| button_bit(n).map(|b| m | b))
+}
+
+/// O que já usa esta combinação de botões, para avisar antes de dar a mesma a outra coisa: a parada
+/// de emergência, o atalho do turbo ou uma ligação com "junto com", em qualquer camada.
+/// `for_turbo` ao conferir o próprio atalho do turbo (que vale com qualquer botão a mais).
+pub fn combo_conflict(p: &Profile, combo: u32, for_turbo: bool) -> Option<String> {
+    let tr = |s: &str| crate::i18n::tr(s).into_owned();
+    if combo.count_ones() < 2 {
+        return None;
+    }
+    if combo & STOP_COMBO == STOP_COMBO || STOP_COMBO & combo == combo {
+        return Some(tr("a parada de emergência"));
+    }
+    if !for_turbo && p.turbo_key != 0 && combo & p.turbo_key == p.turbo_key {
+        return Some(tr("o atalho do turbo"));
+    }
+    for l in &p.layers {
+        for b in &l.binds {
+            let used = b.button | b.with;
+            // Para o turbo: a ligação usa só botões do atalho, ou o atalho inteiro mais um botão.
+            let hit = b.with != 0 && if for_turbo { used & combo == used || used & combo == combo } else { used == combo };
+            if hit {
+                return Some(tr("uma ligação da camada {}").replace("{}", &l.name));
+            }
+        }
+    }
+    None
 }
 
 fn out_text(o: Out, strings: &[String]) -> String {
@@ -429,6 +631,8 @@ pub enum Act {
     Wheel(i32),
     /// Ação, troca de perfil ou programa: fica para quem chama o motor.
     Cmd(Out),
+    /// O atalho do turbo foi usado com este botão: ligar ou desligar o turbo dele.
+    Turbo(u32),
 }
 
 #[derive(Default)]
@@ -443,6 +647,8 @@ struct Btn {
     released: Option<Instant>,
     /// Toque esperando para ver se vem o duplo.
     tap: Option<(Instant, Vec<Out>)>,
+    /// Turbo: o que repete, a próxima virada, se está apertado agora e meio período.
+    turbo: Option<(Vec<Out>, Instant, bool, Duration)>,
 }
 
 pub struct Engine {
@@ -456,12 +662,28 @@ pub struct Engine {
     my: f32,
     wheel: f32,
     last: Option<Instant>,
+    /// Saídas presas pelo Alternar.
+    latched: Vec<Out>,
+    /// Jogo com anti-cheat em foco: turbo vira Pressionar.
+    pub safe: bool,
 }
 
 impl Default for Engine {
     fn default() -> Self {
         // Começa com tudo "apertado": o que já estava apertado ao ligar não dispara nada.
-        Engine { btn: std::array::from_fn(|_| Btn::default()), prev: ALL, holds: vec![], toggles: vec![], count: HashMap::new(), mx: 0.0, my: 0.0, wheel: 0.0, last: None }
+        Engine {
+            btn: std::array::from_fn(|_| Btn::default()),
+            prev: ALL,
+            holds: vec![],
+            toggles: vec![],
+            count: HashMap::new(),
+            mx: 0.0,
+            my: 0.0,
+            wheel: 0.0,
+            last: None,
+            latched: vec![],
+            safe: false,
+        }
     }
 }
 
@@ -499,9 +721,10 @@ impl Engine {
         self.holds.last().or(self.toggles.last()).copied().unwrap_or(0)
     }
 
-    /// Nada apertado: nem tecla, nem camada, nem botão no meio de um toque.
+    /// Nada apertado: nem tecla, nem camada, nem botão no meio de um toque. O que o Alternar prendeu
+    /// não conta: a troca de perfil solta.
     pub fn idle(&self) -> bool {
-        self.count.is_empty() && self.holds.is_empty() && self.btn.iter().all(|b| b.down.is_none() && b.tap.is_none())
+        self.count.keys().all(|o| self.latched.contains(o)) && self.holds.is_empty() && self.btn.iter().all(|b| b.down.is_none() && b.tap.is_none())
     }
 
     fn down(&mut self, o: Out, acts: &mut Vec<Act>) {
@@ -551,7 +774,8 @@ impl Engine {
     /// Solta tudo e esquece o estado. O que continuar apertado não dispara de novo.
     pub fn release_all(&mut self) -> Vec<Act> {
         let acts: Vec<Act> = self.count.drain().map(|(o, _)| Act::Up(o)).collect();
-        *self = Engine::default();
+        let safe = self.safe;
+        *self = Engine { safe, ..Engine::default() };
         acts
     }
 
@@ -589,6 +813,22 @@ impl Engine {
                         self.down(o, &mut acts);
                         self.btn[i].outs.push(o);
                     }
+                }
+            }
+            if let Some((o, next, down, half)) = self.btn[i].turbo.take() {
+                if now >= next {
+                    for &o in &o {
+                        if down {
+                            self.up(o, &mut acts);
+                        } else {
+                            self.down(o, &mut acts);
+                        }
+                    }
+                    // Atrasou demais (controle que só manda relatório ao mudar): recomeça daqui.
+                    let next = if now.saturating_duration_since(next) > half { now + half } else { next + half };
+                    self.btn[i].turbo = Some((o, next, !down, half));
+                } else {
+                    self.btn[i].turbo = Some((o, next, down, half));
                 }
             }
             if self.btn[i].tap.as_ref().is_some_and(|t| now >= t.0) {
@@ -631,6 +871,18 @@ impl Engine {
         let pending = self.btn[i].tap.take();
         let released = self.btn[i].released;
         self.btn[i] = Btn { down: Some(now), layer, ..Default::default() };
+        let key = p.turbo_key;
+        if key != 0 && bit & key == 0 && cur & key == key {
+            for j in 0..COUNT {
+                if key & (1 << j) != 0 {
+                    self.btn[j].used = true;
+                    self.btn[j].tap = None;
+                }
+            }
+            self.btn[i].used = true;
+            acts.push(Act::Turbo(bit));
+            return;
+        }
         let chord: Vec<Bind> = binds(p, layer, bit, true).into_iter().filter(|b| cur & b.with == b.with).cloned().collect();
         if !chord.is_empty() {
             for b in &chord {
@@ -669,12 +921,39 @@ impl Engine {
             self.down(o, acts);
             self.btn[i].outs.push(o);
         }
+        for o in outs(&all, When::Latch) {
+            if !matches!(o, Out::Key(..) | Out::Mouse(_)) {
+                self.tap(o, acts);
+            } else if let Some(k) = self.latched.iter().position(|&x| x == o) {
+                self.latched.remove(k);
+                self.up(o, acts);
+            } else {
+                self.latched.push(o);
+                self.down(o, acts);
+            }
+        }
+        // Turbo: só o que o botão aperta (teclas e cliques), depois da espera.
+        if let Some(t) = p.turbo.iter().find(|t| t.button == bit && t.on).filter(|_| !self.safe) {
+            let o: Vec<Out> = self.btn[i].outs.iter().copied().filter(|o| matches!(o, Out::Key(..) | Out::Mouse(_))).collect();
+            if !o.is_empty() {
+                let half = Duration::from_micros(500_000 / (TURBO_HZ * t.speed.clamp(2, 5) as u32) as u64);
+                let first = if t.delay == 0 { half } else { Duration::from_millis(t.delay as u64) };
+                self.btn[i].turbo = Some((o, now + first, true, half));
+            }
+        }
     }
 
     fn release(&mut self, p: &Profile, i: usize, now: Instant, acts: &mut Vec<Act>) {
         let b = std::mem::take(&mut self.btn[i]);
+        // O turbo pode estar no meio do "solto": o que já está solto não solta de novo.
+        let loose = match &b.turbo {
+            Some((o, _, false, _)) => o.clone(),
+            _ => vec![],
+        };
         for &o in &b.outs {
-            self.up(o, acts);
+            if !loose.contains(&o) {
+                self.up(o, acts);
+            }
         }
         let Some(t) = b.down else { return };
         if b.used {
@@ -717,6 +996,9 @@ struct Run {
     /// Do relatório chegar até o `SendInput` voltar, em µs, nos últimos envios.
     lat: Vec<u32>,
     warned: HashSet<String>,
+    /// O programa em foco tem anti-cheat: turbo parado. A pasta de cada .exe é lida uma vez.
+    ac: bool,
+    ac_seen: HashMap<String, bool>,
 }
 
 fn profiles_dir() -> std::path::PathBuf {
@@ -787,7 +1069,7 @@ fn reload() {
 pub fn configure(on: bool, games: Vec<String>) {
     let acts = {
         let mut g = RUN.lock().unwrap();
-        let r = g.get_or_insert_with(|| Run { profiles: load_profiles(), cur: 0, games: vec![], engines: HashMap::new(), want: None, lat: vec![], warned: HashSet::new() });
+        let r = g.get_or_insert_with(|| Run { profiles: load_profiles(), cur: 0, games: vec![], engines: HashMap::new(), want: None, lat: vec![], warned: HashSet::new(), ac: false, ac_seen: HashMap::new() });
         r.games = games.into_iter().map(|s| s.to_lowercase()).collect();
         ON.store(on, Ordering::Relaxed);
         if on {
@@ -858,6 +1140,7 @@ pub fn feed(key: &str, inp: &Input, arrived: Instant) {
         if !STOPPED.load(Ordering::Relaxed) {
             let p = &r.profiles[r.cur];
             let e = r.engines.get_mut(key).unwrap();
+            e.0.safe = r.ac;
             let step = e.0.step(p, inp, arrived);
             let strings = p.strings.clone();
             for a in step {
@@ -874,6 +1157,17 @@ pub fn feed(key: &str, inp: &Input, arrived: Instant) {
                             }
                             events.push(pads::Event::Profile { name: r.profiles[to].name.clone() });
                         }
+                    }
+                    Act::Turbo(bit) => {
+                        // Vale para o perfil em uso até o editor gravar de novo ou o Prisma fechar.
+                        let p = &mut r.profiles[r.cur];
+                        let i = p.turbo.iter().position(|t| t.button == bit).unwrap_or_else(|| {
+                            p.turbo.push(Turbo::new(bit));
+                            p.turbo.len() - 1
+                        });
+                        p.turbo[i].on = !p.turbo[i].on;
+                        let on = p.turbo[i].on;
+                        events.push(pads::Event::Turbo { button: bit, on, pad: key.to_string() });
                     }
                     a => acts.push(a),
                 }
@@ -938,12 +1232,21 @@ fn on_focus(pid: u32, full: bool) {
     let Some(path) = super::procs::image_path(pid) else { return };
     let exe = super::procs::exe_name(&path).to_lowercase();
     let elevated = !crate::startup::is_elevated() && is_elevated(pid);
+    let seen = RUN.lock().unwrap().as_ref().and_then(|r| r.ac_seen.get(&exe).copied());
+    // Fora da trava: ler a pasta do jogo pode demorar.
+    let ac = seen.unwrap_or_else(|| crate::meter::anti_cheat(&path));
     let mut events = vec![];
     if let Some(r) = RUN.lock().unwrap().as_mut() {
+        r.ac_seen.insert(exe.clone(), ac);
+        r.ac = ac;
         let named = |n: &str| r.profiles.iter().position(|p| p.name == n).unwrap_or(0);
         let game = r.games.contains(&exe) || (full && exe != "explorer.exe");
         let to = r.profiles.iter().position(|p| p.games.contains(&exe)).unwrap_or_else(|| if game { named(BASE) } else { named(DESKTOP) });
         r.want = (to != r.cur).then(|| (to, Instant::now() + SWITCH_DELAY));
+        let turbo = r.profiles[to].turbo.iter().any(|t| t.on);
+        if ac && turbo && r.warned.insert(format!("ac:{exe}")) {
+            events.push(pads::Event::Notice { text: format!("{exe} tem anti-cheat: o turbo fica parado nele.") });
+        }
         if elevated && r.warned.insert(exe.clone()) {
             events.push(pads::Event::Elevated { exe });
         }
@@ -1063,6 +1366,94 @@ mod tests {
         assert_eq!(e.step(&p, &btn(pads::A), at(10, t0)), vec![Act::Down(K1)]);
         assert_eq!(e.step(&p, &btn(0), at(20, t0)), vec![Act::Up(K1)]);
         assert!(e.idle());
+    }
+
+    #[test]
+    fn latch_holds_until_the_next_press() {
+        let t0 = Instant::now();
+        let mut p = Profile::base();
+        one(&mut p.layers[0], pads::A, When::Latch, K1);
+        let mut e = engine(&p, t0);
+        assert_eq!(e.step(&p, &btn(pads::A), at(10, t0)), vec![Act::Down(K1)]);
+        assert!(e.step(&p, &btn(0), at(20, t0)).is_empty());
+        assert!(e.idle(), "o que o Alternar prende não segura a troca de perfil");
+        assert_eq!(e.release_all(), vec![Act::Up(K1)]);
+        // Do zero: segundo aperto solta.
+        let mut e = engine(&p, t0);
+        e.step(&p, &btn(pads::A), at(10, t0));
+        e.step(&p, &btn(0), at(20, t0));
+        assert_eq!(e.step(&p, &btn(pads::A), at(30, t0)), vec![Act::Up(K1)]);
+        assert!(e.step(&p, &btn(0), at(40, t0)).is_empty());
+    }
+
+    #[test]
+    fn turbo_repeats_and_stops_under_anti_cheat() {
+        let t0 = Instant::now();
+        let mut p = Profile::base();
+        one(&mut p.layers[0], pads::A, When::Press, K1);
+        // 5x: 20 por segundo, meio período de 25 ms, depois de 100 ms segurando.
+        p.turbo.push(Turbo { button: pads::A, speed: 5, delay: 100, on: true });
+        let mut e = engine(&p, t0);
+        assert_eq!(e.step(&p, &btn(pads::A), at(0, t0)), vec![Act::Down(K1)]);
+        assert!(e.step(&p, &btn(pads::A), at(50, t0)).is_empty(), "ainda na espera");
+        assert_eq!(e.step(&p, &btn(pads::A), at(100, t0)), vec![Act::Up(K1)]);
+        assert_eq!(e.step(&p, &btn(pads::A), at(125, t0)), vec![Act::Down(K1)]);
+        assert_eq!(e.step(&p, &btn(0), at(130, t0)), vec![Act::Up(K1)]);
+        assert!(e.idle());
+        // Solto no meio do "solto": nada mais sai.
+        let mut e = engine(&p, t0);
+        e.step(&p, &btn(pads::A), at(0, t0));
+        e.step(&p, &btn(pads::A), at(100, t0));
+        assert!(e.step(&p, &btn(0), at(110, t0)).is_empty());
+        // Desligado: botão comum.
+        p.turbo[0].on = false;
+        let mut e = engine(&p, t0);
+        e.step(&p, &btn(pads::A), at(0, t0));
+        assert!(e.step(&p, &btn(pads::A), at(300, t0)).is_empty());
+        p.turbo[0].on = true;
+        // Com anti-cheat vira Pressionar.
+        let mut e = engine(&p, t0);
+        e.safe = true;
+        assert_eq!(e.step(&p, &btn(pads::A), at(0, t0)), vec![Act::Down(K1)]);
+        assert!(e.step(&p, &btn(pads::A), at(100, t0)).is_empty());
+        assert_eq!(e.step(&p, &btn(0), at(110, t0)), vec![Act::Up(K1)]);
+    }
+
+    #[test]
+    fn turbo_shortcut_toggles_the_next_button_and_conflicts_are_found() {
+        let t0 = Instant::now();
+        let mut p = Profile::desktop();
+        let mut e = engine(&p, t0);
+        let key = pads::RS | RT;
+        let rt = Input { buttons: pads::RS, rt: 1.0, ..Default::default() };
+        e.step(&p, &rt, at(0, t0));
+        let acts = e.step(&p, &Input { buttons: pads::RS | pads::A, rt: 1.0, ..Default::default() }, at(10, t0));
+        assert!(acts.contains(&Act::Turbo(pads::A)));
+        assert!(!acts.contains(&Act::Down(Out::Mouse(1))), "o A não clica quando liga o turbo");
+        assert_eq!(p.turbo_key, key);
+        // Conflitos: ligação "junto com" que usa o atalho, e a parada de emergência.
+        assert_eq!(combo_conflict(&p, key, true), None);
+        p.layers[0].binds.push(Bind { button: RT, with: pads::RS, when: When::Press, out: K1 });
+        assert!(combo_conflict(&p, key, true).is_some());
+        assert!(combo_conflict(&p, pads::A | key, false).is_some(), "atalho do turbo mais um botão");
+        assert!(combo_conflict(&p, pads::GUIDE | pads::START, true).is_some());
+        assert_eq!(combo_conflict(&p, pads::A | pads::B, false), None);
+    }
+
+    #[test]
+    fn templates_survive_the_file() {
+        for i in 0..TEMPLATES.len() {
+            let mut p = Profile::template(i);
+            p.name = "x".into();
+            assert!(!p.layers[0].binds.is_empty());
+            assert_eq!(Profile::parse(&p.to_text()), Some(p));
+        }
+        for side in 0..3 {
+            let mut p = Profile::accessible(side, true, 800.0);
+            p.name = "x".into();
+            assert!(p.layers[0].binds.iter().any(|b| b.when == When::Latch));
+            assert_eq!(Profile::parse(&p.to_text()), Some(p));
+        }
     }
 
     #[test]
@@ -1264,6 +1655,9 @@ mod tests {
         for out in [Out::Action(0), Out::Action(ACTIONS.len() as u8 - 1), Out::Action(SOUND + 2), Out::Profile(base), Out::Run(prog)] {
             one(&mut p.layers[1], pads::B, When::Tap, out);
         }
+        p.turbo.push(Turbo { button: pads::X, speed: 3, delay: 250, on: true });
+        p.turbo.push(Turbo::new(pads::LB));
+        p.turbo_key = pads::LB | LT;
         let text = p.to_text();
         assert_eq!(Profile::parse(&text), Some(p), "{text}");
         for bad in [
@@ -1283,6 +1677,10 @@ mod tests {
             "prisma-profile 1\nname x\nlayer - B\nrun calc.exe",
             "prisma-profile 1\nname x\nlayer - B\nbind 0 A press action 26",
             "prisma-profile 1\nname x\nlayer - B\nbind 0 A press action 112",
+            "prisma-profile 1\nname x\nlayer - B\nturbo A 1 500 on",
+            "prisma-profile 1\nname x\nlayer - B\nturbo A 2 500 maybe",
+            "prisma-profile 1\nname x\nlayer - B\nturbo A 2 9000 on",
+            "prisma-profile 1\nname x\nlayer - B\nturbokey RS+Z",
         ] {
             assert_eq!(Profile::parse(bad), None, "{bad}");
         }

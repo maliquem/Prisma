@@ -135,6 +135,8 @@ pub enum Event {
     Run { path: String },
     /// Aviso pronto, vindo de outra thread.
     Notice { text: String },
+    /// O atalho do turbo ligou ou desligou o turbo de `button` no controle `pad`.
+    Turbo { button: u32, on: bool, pad: String },
 }
 
 static PADS: Mutex<Vec<Pad>> = Mutex::new(Vec::new());

@@ -19,15 +19,54 @@ pub struct Editor {
     game: usize,
     /// Programa escolhido para "Abrir programa".
     run: String,
+    /// Modelo escolhido: 1 a 4 esperam a pergunta; o último é o assistente do Acessível.
+    tpl: usize,
+    /// Respostas do assistente: lado, clique, velocidade.
+    acc: [usize; 3],
+    /// Perfil importado esperando: programas a confirmar, os recusados e se a pergunta está aberta.
+    import: Option<(Profile, Vec<u8>, Vec<u8>, bool)>,
 }
 
-/// Fotos de teste: o formulário já em Ação do Prisma (a mais longa) ou Abrir programa.
-pub fn test_target(app: &mut App, run: bool) {
+/// O perfil aberto no editor, para exportar.
+pub fn current(app: &App) -> Option<Profile> {
+    let ed = app.pads.edit.as_ref()?;
+    remap::profiles().get(ed.prof).cloned()
+}
+
+/// Perfil lido de um arquivo. Vem de fora: cada programa que ele abre é perguntado antes de gravar.
+pub fn imported(app: &mut App, mut p: Profile) {
+    let Some(ed) = app.pads.edit.as_mut() else { return };
+    let list = remap::profiles();
+    while list.iter().any(|x| x.name == p.name) {
+        p.name = tr("{} (importado)").replace("{}", &p.name);
+    }
+    let mut runs: Vec<u8> = vec![];
+    for b in p.layers.iter().flat_map(|l| &l.binds) {
+        if let Out::Run(i) = b.out {
+            if !runs.contains(&i) {
+                runs.push(i);
+            }
+        }
+    }
+    ed.import = Some((p, runs, vec![], false));
+}
+
+/// Fotos de teste: o formulário em Ação do Prisma (a mais longa), Abrir programa ou o assistente.
+pub fn test_target(app: &mut App, what: &str) {
     if let Some(ed) = app.pads.edit.as_mut() {
-        ed.kind = if run { 8 } else { 6 };
-        ed.val = 18;
-        if run {
-            ed.run = "C:/Windows/System32/notepad.exe".into();
+        match what {
+            "run" => {
+                ed.kind = 8;
+                ed.run = "C:/Windows/System32/notepad.exe".into();
+            }
+            "wizard" => {
+                ed.tpl = remap::TEMPLATES.len() + 1;
+                ed.acc = [1, 1, 2];
+            }
+            _ => {
+                ed.kind = 6;
+                ed.val = 18;
+            }
         }
     }
 }
@@ -39,7 +78,18 @@ pub fn set_program(app: &mut App, path: &str) {
     }
 }
 
-const WHENS: [(When, &str); 5] = [(When::Press, "Pressionar"), (When::Tap, "Tocar"), (When::Hold, "Segurar"), (When::Double, "Duplo"), (When::Release, "Soltar")];
+const WHENS: [(When, &str); 6] = [
+    (When::Press, "Pressionar"),
+    (When::Tap, "Tocar"),
+    (When::Hold, "Segurar"),
+    (When::Double, "Duplo"),
+    (When::Release, "Soltar"),
+    (When::Latch, "Alternar"),
+];
+const SPEEDS_T: [&str; 4] = ["Turbo 2x", "Turbo 3x", "Turbo 4x", "Turbo 5x"];
+const SIDES: [&str; 3] = ["Os dois lados", "Só o lado esquerdo", "Só o lado direito"];
+const CLICKS: [&str; 2] = ["Segurar para arrastar", "Clique liga e desliga"];
+const SPEEDS: [(&str, f32); 3] = [("Mouse devagar", 800.0), ("Mouse normal", 1600.0), ("Mouse rápido", 2600.0)];
 const KINDS: [&str; 9] = ["Tecla", "Tecla especial", "Mouse", "Roda", "Camada enquanto segura", "Liga e desliga camada", "Ação do Prisma", "Trocar de perfil", "Abrir programa"];
 /// Teclas que o campo de tecla não pega (Esc cancela) ou que não existem no teclado comum.
 const SPECIAL: [(u16, &str); 12] = [
@@ -81,6 +131,11 @@ fn buttons(f: Family) -> Vec<(u32, String)> {
     v
 }
 
+/// Nome do botão no controle desta família.
+pub fn button_label(f: Family, bit: u32) -> String {
+    buttons(f).into_iter().find(|b| b.0 == bit).map_or_else(|| remap::button_name(bit).to_string(), |b| b.1)
+}
+
 fn key_label(vk: u16, m: u8) -> String {
     if m == 0 {
         if let Some((_, n)) = SPECIAL.iter().find(|s| s.0 == vk) {
@@ -114,13 +169,58 @@ fn describe(o: Out, p: &Profile) -> String {
     }
 }
 
+/// Pergunta antes de trocar o perfil pelo modelo: as ligações dele se perdem.
+fn ask_template(ui: &mut Ui, tpl: &str, prof: &str) {
+    ui.ask(
+        "pp-tpl-ok",
+        &tr("Aplicar o modelo {}?").replace("{}", tpl),
+        &tr("As camadas, ligações e zonas mortas do perfil {} serão trocadas pelas do modelo. Os jogos ligados a ele continuam.").replace("{}", prof),
+    );
+}
+
+/// Troca o conteúdo do perfil pelo do modelo, mantendo nome e jogos.
+fn apply(p: &mut Profile, t: Profile) {
+    *p = Profile { name: std::mem::take(&mut p.name), games: std::mem::take(&mut p.games), ..t };
+}
+
 /// Quanto o editor ocupa, para a rolagem.
-fn content_h(binds: usize, chip_rows: usize) -> f32 {
-    2.0 * 44.0 + 32.0 + 4.0 * 40.0 + 36.0 + chip_rows as f32 * 32.0 + 36.0 + binds.max(1) as f32 * 40.0 + 40.0 + 2.0 * 44.0 + 24.0
+fn content_h(binds: usize, chip_rows: usize, wizard: bool) -> f32 {
+    (if wizard { 3.0 * 44.0 } else { 0.0 }) + 30.0 + 5.0 * 44.0 + 2.0 * 44.0 + 32.0 + 4.0 * 40.0 + 36.0 + chip_rows as f32 * 32.0 + 36.0 + binds.max(1) as f32 * 40.0 + 40.0 + 2.0 * 44.0 + 24.0
 }
 
 pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
     let mut list = remap::profiles();
+    let Some(ed) = app.pads.edit.as_mut() else { return };
+    // Importado: um programa por vez; fechar a pergunta sem Sim recusa aquele programa.
+    if let Some((imp, queue, refused, open)) = ed.import.as_mut() {
+        if *open && !ui.asking() {
+            let i = queue.remove(0);
+            if !ui.answered("pp-imp") {
+                refused.push(i);
+            }
+            *open = false;
+        }
+        if !*open {
+            if let Some(&i) = queue.first() {
+                let path = imp.strings.get(i as usize).cloned().unwrap_or_default();
+                ui.ask("pp-imp", &tr("O perfil {} quer abrir um programa. Permitir?").replace("{}", &imp.name), &path);
+                *open = true;
+            } else {
+                let (mut p, _, refused, _) = ed.import.take().unwrap();
+                for l in &mut p.layers {
+                    l.binds.retain(|b| !matches!(b.out, Out::Run(i) if refused.contains(&i)));
+                }
+                if remap::save(&p) {
+                    ed.prof = remap::profiles().iter().position(|x| x.name == p.name).unwrap_or(0);
+                    ed.layer = 0;
+                    app.toast.info(&format!("Perfil {} importado", p.name));
+                } else {
+                    app.toast.info("Não deu para salvar o perfil.");
+                }
+                return;
+            }
+        }
+    }
     let Some(ed) = app.pads.edit.as_mut() else { return };
     ed.prof = ed.prof.min(list.len() - 1);
     ui.card(r);
@@ -170,6 +270,33 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
         ed.layer = 0;
         return;
     }
+    y += 44.0;
+
+    // Modelos, importar e exportar.
+    let quarter = ((w - 24.0) / 4.0).floor();
+    let mut tpls = vec![tr("Aplicar modelo")];
+    tpls.extend(remap::TEMPLATES.iter().chain(["Acessível"].iter()).map(|t| tr(t)));
+    let acc_i = tpls.len() - 1;
+    if ui.select("pp-tpl", rect(x, y, 2.0 * quarter + 8.0, 34.0), &tpls, &mut ed.tpl) && ed.tpl > 0 && ed.tpl < acc_i {
+        ask_template(ui, &tpls[ed.tpl], &p.name);
+    }
+    if ui.button("pp-in", rect(x + 2.0 * (quarter + 8.0), y, quarter, 34.0), "Importar", false) {
+        app.pad_profile_file(false);
+    }
+    if ui.button("pp-out", rect(x + 3.0 * (quarter + 8.0), y, quarter, 34.0), "Exportar", false) {
+        app.pad_profile_file(true);
+    }
+    let Some(ed) = app.pads.edit.as_mut() else { return };
+    if ed.tpl > 0 && ed.tpl < acc_i && !ui.asking() {
+        if ui.answered("pp-tpl-ok") {
+            apply(&mut p, Profile::template(ed.tpl - 1));
+            if !remap::save(&p) {
+                app.toast.info("Não deu para salvar o perfil.");
+            }
+            ed.layer = 0;
+        }
+        ed.tpl = 0;
+    }
     y += 52.0;
 
     ed.layer = ed.layer.min(p.layers.len() - 1);
@@ -181,12 +308,39 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
     // Linhas de botões: estimativa pela largura média, só para a rolagem.
     let chip_rows = (chips.len() as f32 * 64.0 / w).ceil() as usize + 1;
     let body = rect(r.x, y, r.w - 8.0, r.bottom() - y - 8.0);
-    ui.begin_scroll("pp-body", body, content_h(own.len(), chip_rows));
+    // Partes iguais em três: camada, assistente e o formulário de ligação.
+    let third = ((w - 16.0) / 3.0).floor();
+    let wizard = ed.tpl == acc_i;
+    ui.begin_scroll("pp-body", body, content_h(own.len(), chip_rows, wizard));
     let mut changed = false;
 
-    // Camada.
-    // Camada, em três partes iguais: escolher, criar, apagar.
-    let third = ((w - 16.0) / 3.0).floor();
+    // Assistente do Acessível: três perguntas e Aplicar.
+    if wizard {
+        ui.c.text_fit(rect(x, y, w, 26.0), &tr("Acessível: escolha o lado, o clique e a velocidade"), 14.0, TEXT, Align::Left, Weight::Semibold);
+        y += 34.0;
+        let sides: Vec<String> = SIDES.iter().map(|s| tr(s)).collect();
+        let clicks: Vec<String> = CLICKS.iter().map(|s| tr(s)).collect();
+        let speeds: Vec<String> = SPEEDS.iter().map(|s| tr(s.0)).collect();
+        ui.select("pp-acc0", rect(x, y, third, 34.0), &sides, &mut ed.acc[0]);
+        ui.select("pp-acc1", rect(x + third + 8.0, y, third, 34.0), &clicks, &mut ed.acc[1]);
+        ui.select("pp-acc2", rect(x + 2.0 * (third + 8.0), y, third, 34.0), &speeds, &mut ed.acc[2]);
+        y += 44.0;
+        if ui.button("pp-acc-no", rect(x + third + 8.0, y, third, 34.0), "Cancelar", false) {
+            ed.tpl = 0;
+        }
+        if ui.button_ex("pp-acc-go", rect(x + 2.0 * (third + 8.0), y, third, 34.0), "Aplicar", true, true) {
+            ask_template(ui, &tpls[acc_i], &p.name);
+        }
+        if ui.answered("pp-tpl-ok") {
+            let a = ed.acc;
+            apply(&mut p, Profile::accessible(a[0] as u8, a[1] == 1, SPEEDS[a[2].min(2)].1));
+            ed.tpl = 0;
+            ed.layer = 0;
+            changed = true;
+        }
+        y += 54.0;
+    }
+
     let layers: Vec<String> = p.layers.iter().map(|l| l.name.clone()).collect();
     ui.select("pp-layer", rect(x, y, third, 34.0), &layers, &mut ed.layer);
     if ui.button_ex("pp-layer-add", rect(x + third + 8.0, y, third, 34.0), "Nova camada", false, p.layers.len() < 16) {
@@ -419,6 +573,64 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
             changed = true;
         }
     }
+    // Combinação que já faz outra coisa: avisa, sem impedir.
+    if ed.with != 0 {
+        let combo = ed.button | others[ed.with - 1].0;
+        if let Some(by) = remap::combo_conflict(&p, combo, false) {
+            ui.c.text_fit(rect(x, y + 40.0, w, 20.0), &tr("Essa combinação já é usada por {}.").replace("{}", &by), 12.0, WARN, Align::Left, Weight::Regular);
+        }
+    }
+    y += 70.0;
+
+    // Turbo do botão escolhido: à parte das ligações, vale em todas as camadas do perfil.
+    ui.c.text_fit(rect(x, y, w, 22.0), &tr("Turbo do botão {}").replace("{}", &name), 14.0, TEXT, Align::Left, Weight::Semibold);
+    y += 30.0;
+    let ti = p.turbo.iter().position(|t| t.button == ed.button);
+    let mut t = ti.map_or_else(|| remap::Turbo::new(ed.button), |i| p.turbo[i]);
+    let before = t;
+    ui.check("pp-t-on", rect(x, y, third, 34.0), "Ligado", &mut t.on);
+    let speeds: Vec<String> = SPEEDS_T.iter().map(|s| tr(s)).collect();
+    let mut sp = (t.speed.clamp(2, 5) - 2) as usize;
+    if ui.select("pp-t-speed", rect(x + third + 8.0, y, third, 34.0), &speeds, &mut sp) {
+        t.speed = sp as u8 + 2;
+    }
+    let mut d = t.delay as u32;
+    if ui.stepper("pp-t-delay", rect(x + 2.0 * (third + 8.0), y, third, 34.0), &mut d, (0, 2000), 50, "ms") {
+        t.delay = d as u16;
+    }
+    if t != before {
+        match ti {
+            Some(i) => p.turbo[i] = t,
+            None => p.turbo.push(t),
+        }
+        changed = true;
+    }
+    y += 44.0;
+    ui.c.text_fit(rect(x, y, w, 20.0), &tr("Espera, em milissegundos, antes de o turbo começar a repetir."), 12.0, MUTED, Align::Left, Weight::Regular);
+    y += 28.0;
+
+    // Atalho: segurar estes botões e apertar outro liga ou desliga o turbo dele.
+    ui.c.text_fit(rect(x, y, third, 34.0), &tr("Atalho do turbo"), 13.0, TEXT2, Align::Left, Weight::Regular);
+    let dirs = remap::LSU | remap::LSD | remap::LSL | remap::LSR | remap::RSU | remap::RSD | remap::RSL | remap::RSR;
+    let keyable: Vec<&(u32, String)> = chips.iter().filter(|c| c.0 & dirs == 0).collect();
+    let mut firsts = vec![tr("Sem atalho")];
+    firsts.extend(keyable.iter().map(|c| c.1.clone()));
+    let mut seconds = vec![tr("Nenhum")];
+    seconds.extend(keyable.iter().map(|c| c.1.clone()));
+    let bits: Vec<usize> = keyable.iter().enumerate().filter(|(_, c)| p.turbo_key & c.0 != 0).map(|(i, _)| i + 1).collect();
+    let (mut k1, mut k2) = (bits.first().copied().unwrap_or(0), bits.get(1).copied().unwrap_or(0));
+    let c1 = ui.select("pp-tk1", rect(x + third + 8.0, y, third, 34.0), &firsts, &mut k1);
+    let c2 = ui.select("pp-tk2", rect(x + 2.0 * (third + 8.0), y, third, 34.0), &seconds, &mut k2);
+    if c1 || c2 {
+        let bit = |k: usize| if k == 0 { 0 } else { keyable[k - 1].0 };
+        p.turbo_key = if k1 == 0 { 0 } else { bit(k1) | bit(k2) };
+        changed = true;
+    }
+    y += 40.0;
+    let warn = if p.turbo_key == 0 { None } else { remap::combo_conflict(&p, p.turbo_key, true).map(|by| tr("Esse atalho já é usado por {}.").replace("{}", &by)) };
+    let note = warn.clone().unwrap_or_else(|| if p.turbo_key == 0 { tr("Sem atalho: o turbo só muda aqui.") } else { tr("Segure o atalho e aperte o botão para ligar ou desligar o turbo dele.") });
+    ui.c.text_fit(rect(x, y, w, 20.0), &note, 12.0, if warn.is_some() { WARN } else { MUTED }, Align::Left, Weight::Regular);
+
     // Depois do último uso de `ed`: o botão precisa da App inteira.
     if let Some(r) = pick {
         super::picker::add_button(ui, app, r, super::picker::Target::PadProgram);

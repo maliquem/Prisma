@@ -57,6 +57,8 @@ const WM_POW_IN: u32 = WM_APP + 81;
 const WM_PICK_METER: u32 = WM_APP + 83;
 const WM_PICK_NV: u32 = WM_APP + 91;
 const WM_PICK_PAD: u32 = WM_APP + 94;
+const WM_PAD_IN: u32 = WM_APP + 95;
+const WM_PAD_OUT: u32 = WM_APP + 96;
 const WM_POW_OUT: u32 = WM_APP + 82;
 const WM_REPORT_PHOTO: u32 = WM_APP + 84;
 const WM_REPORT_DONE: u32 = WM_APP + 85;
@@ -2097,6 +2099,13 @@ impl App {
         crate::report::start_direct(&self.report, self.hub.0 as isize, WM_REPORT_DONE);
     }
 
+    /// Exportar (true) ou importar o perfil de controle aberto no editor, pela janela de arquivo.
+    pub fn pad_profile_file(&self, export: bool) {
+        unsafe {
+            let _ = PostMessageW(Some(self.hub), if export { WM_PAD_OUT } else { WM_PAD_IN }, WPARAM(0), LPARAM(0));
+        }
+    }
+
     pub fn import_plan(&self) {
         unsafe {
             let _ = PostMessageW(Some(self.hub), WM_POW_IN, WPARAM(0), LPARAM(0));
@@ -2514,11 +2523,10 @@ impl App {
                     self.page = Page::Controllers;
                     self.pads.open_editor();
                 }
-                Some("controllers-action") | Some("controllers-run") => {
+                Some(p @ ("controllers-action" | "controllers-run" | "controllers-wizard")) => {
                     self.page = Page::Controllers;
                     self.pads.open_editor();
-                    let run = arg("--test-page=").as_deref() == Some("controllers-run");
-                    crate::pages::pad_profiles::test_target(self, run);
+                    crate::pages::pad_profiles::test_target(self, &p[12..]);
                 }
                 Some("meter") => self.page = Page::Meter,
                 Some("sound") => self.page = Page::Volume,
@@ -2955,6 +2963,11 @@ impl App {
                     None => continue,
                 },
                 Event::Notice { text } => text,
+                Event::Turbo { button, on, pad } => {
+                    let f = crate::sys::pads::list().into_iter().find(|p| p.key == pad).map_or(crate::sys::pads::Family::Generic, |p| p.family);
+                    let b = crate::pages::pad_profiles::button_label(f, button);
+                    if on { format!("Turbo ligado no {b}") } else { format!("Turbo desligado no {b}") }
+                }
                 Event::Run { path } => {
                     use windows::Win32::UI::Shell::ShellExecuteW;
                     let r = unsafe { ShellExecuteW(None, w!("open"), &HSTRING::from(path.as_str()), None, None, SW_SHOWNORMAL) };
@@ -3404,7 +3417,7 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
         WM_POW_OUT => {
             let plan = APP.with(|a| a.borrow().as_ref().and_then(|a| a.plans.iter().find(|p| p.id == a.pw_sel).cloned()));
             if let Some(plan) = plan {
-                if let Some(path) = capture::save_file(h, "Planos de energia", w!("*.pow"), &plan.name) {
+                if let Some(path) = capture::save_file(h, "Planos de energia", w!("*.pow"), w!("pow"), &plan.name) {
                     let done = crate::sys::powerplan::export(&path, &plan.id);
                     with(|a| {
                         let failed = if a.elevated { "Não consegui exportar o plano" } else { "Precisa do Prisma como administrador" };
@@ -3436,6 +3449,34 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                         a.cfg.hdr_games.push(crate::config::HdrGame { exe, path, mode: 0 });
                     }
                     a.cfg.save();
+                    a.invalidate();
+                });
+            }
+            LRESULT(0)
+        }
+        WM_PAD_OUT => {
+            let p = APP.with(|a| a.borrow().as_ref().and_then(crate::pages::pad_profiles::current));
+            if let Some(p) = p {
+                if let Some(path) = capture::save_file(h, "Perfis de controle", w!("*.txt"), w!("txt"), &p.name) {
+                    let done = std::fs::write(&path, p.to_text()).is_ok();
+                    with(|a| a.toast.info(if done { "Perfil exportado" } else { "Não consegui exportar o perfil" }));
+                }
+            }
+            LRESULT(0)
+        }
+        WM_PAD_IN => {
+            if let Some(path) = capture::choose_file(h, "Perfis de controle", w!("*.txt")) {
+                // Arquivo de fora: tamanho limitado e tudo conferido pelo `parse`.
+                let p = std::fs::metadata(&path)
+                    .ok()
+                    .filter(|m| m.len() <= 256 * 1024)
+                    .and_then(|_| std::fs::read_to_string(&path).ok())
+                    .and_then(|t| crate::sys::remap::Profile::parse(&t));
+                with(|a| {
+                    match p {
+                        Some(p) => crate::pages::pad_profiles::imported(a, p),
+                        None => a.toast.info("Esse arquivo não é um perfil de controle do Prisma"),
+                    }
                     a.invalidate();
                 });
             }
