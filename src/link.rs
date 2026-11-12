@@ -155,6 +155,7 @@ fn caps_with(nvidia: bool) -> Vec<String> {
         cap::PAGE_CONTROLLERS,
         cap::CONTROLLERS,
         cap::CONTROLLERS_MAPPING,
+        cap::CONTROLLERS_KEYBOARD,
         cap::SAVE_REPLAY,
         cap::METER_VIEW,
         cap::POWER_PLAN,
@@ -379,6 +380,17 @@ impl App {
                 } else {
                     Outcome::Reply(Reply::Toggled { on: remap::set_stopped(on.unwrap_or(!remap::stopped())) })
                 }
+            }
+            Request::PadMap { on } => {
+                self.cfg.pad_map = on.unwrap_or(!self.cfg.pad_map);
+                self.cfg.save();
+                self.apply_pads();
+                Outcome::Reply(Reply::Toggled { on: self.cfg.pad_map })
+            }
+            Request::Keyboard { on } => {
+                let on = on.unwrap_or(!crate::sys::osk::view().open);
+                self.set_keyboard(on);
+                Outcome::Reply(Reply::Toggled { on })
             }
             Request::PowerPlans => Outcome::Reply(Reply::PowerPlans {
                 plans: power::list().into_iter().map(|p| PowerPlan { id: p.id, name: p.name }).collect(),
@@ -611,7 +623,7 @@ mod tests {
                 cap::METER_VIEW, cap::POWER_PLAN, cap::FULLSCREEN, cap::SOUND_VOLUME, cap::HDR,
                 cap::WINDOW_SHOT, cap::RECORD_WINDOW, cap::PAGE_ENERGY, cap::PAGE_FULLSCREEN,
                 cap::PAGE_SOUND, cap::PAGE_HDR, cap::PAGE_CAPTURE, cap::PAGE_CONTROLLERS, cap::CONTROLLERS,
-                cap::CONTROLLERS_MAPPING,
+                cap::CONTROLLERS_MAPPING, cap::CONTROLLERS_KEYBOARD,
             ] {
                 assert!(has(c), "{c}");
             }
@@ -641,6 +653,8 @@ mod tests {
             Request::PadProfiles,
             Request::SetPadProfile { name: String::new() },
             Request::PadStop { on: None },
+            Request::PadMap { on: None },
+            Request::Keyboard { on: None },
         ];
         for r in &answer {
             assert_eq!(wait_of(r), Wait::Answer, "{r:?}");

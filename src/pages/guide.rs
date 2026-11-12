@@ -18,6 +18,8 @@ const IMAGES: &[(&str, &[u8])] = &[
     ("meter-full-en.png", include_bytes!("../../docs/guide/meter-full-en.png")),
     ("limiter-pt.png", include_bytes!("../../docs/guide/limiter-pt.png")),
     ("limiter-en.png", include_bytes!("../../docs/guide/limiter-en.png")),
+    ("keyboard-pt.png", include_bytes!("../../docs/guide/keyboard-pt.png")),
+    ("keyboard-en.png", include_bytes!("../../docs/guide/keyboard-en.png")),
 ];
 const INDEX_W: f32 = 220.0;
 const INDEX_ROW: f32 = 30.0;

@@ -53,8 +53,11 @@ pub mod cap {
     pub const PAGE_CONTROLLERS: &str = "page.controllers";
     /// Lista dos controles ligados, com conexão, bateria e taxa (`Request::Controllers`).
     pub const CONTROLLERS: &str = "controllers";
-    /// Perfis do mapeamento: listar, trocar e parar (`PadProfiles`, `SetPadProfile`, `PadStop`).
+    /// Perfis do mapeamento: listar, trocar, parar, ligar e desligar (`PadProfiles`, `SetPadProfile`,
+    /// `PadStop`, `PadMap`).
     pub const CONTROLLERS_MAPPING: &str = "controllers.mapping";
+    /// Abrir e fechar o teclado do Prisma para controle (`Request::Keyboard`).
+    pub const CONTROLLERS_KEYBOARD: &str = "controllers.keyboard";
 }
 
 /// Códigos estáveis de `Reply::Failed`.

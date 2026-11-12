@@ -2091,3 +2091,8 @@ Turbo ligado no {}	Turbo activado en {}
 Turbo desligado no {}	Turbo desactivado en {}
 O controle como teclado e mouse está desligado	El mando como teclado y ratón está desactivado
 Esse perfil não existe	Ese perfil no existe
+Abrir e fechar o teclado do Prisma	Abrir y cerrar el teclado de Prisma
+{} apaga · {} espaço · {} Enter · direcional: setas	{} borra · {} espacio · {} Enter · cruceta: flechas
+{} maiúsculas · {} números · os dois: acentos · {} fecha	{} mayúsculas · {} números · ambos: acentos · {} cierra
+Teclado ativado	Teclado activado
+Teclado desativado	Teclado desactivado

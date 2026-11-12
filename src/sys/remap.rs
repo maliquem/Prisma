@@ -70,7 +70,7 @@ pub enum Out {
 
 /// Ações do Prisma que um botão pode chamar: todas as que têm atalho, mais HDR, Bluetooth e
 /// bateria. A ordem é a do arquivo: só cresce no fim. `SOUND + n` troca para a combinação de som n.
-pub const ACTIONS: [&str; 26] = [
+pub const ACTIONS: [&str; 27] = [
     "Foto da área",
     "Foto da tela inteira",
     "Foto da janela em foco",
@@ -97,7 +97,10 @@ pub const ACTIONS: [&str; 26] = [
     "Abrir e fechar a busca",
     "Desconectar o Bluetooth",
     "Mostrar a bateria",
+    "Abrir e fechar o teclado do Prisma",
 ];
+/// Ação que abre e fecha o teclado do Prisma (`sys::osk`).
+pub const KEYBOARD: u8 = 26;
 /// Modelos prontos, na ordem de `Profile::template`. O Acessível vem do assistente.
 pub const TEMPLATES: [&str; 4] = ["Só Mouse", "Jogo sem controle", "Corrida", "Um lado só"];
 
@@ -229,7 +232,7 @@ impl Profile {
             (pads::BACK, key(0x09, WIN)),
             (pads::START, key(0x5B, 0)),
             (pads::LS, Out::Mouse(3)),
-            (pads::RS, key(0x4F, CTRL | WIN)),
+            (pads::RS, Out::Action(KEYBOARD)),
             (pads::UP, key(0x26, 0)),
             (pads::DOWN, key(0x28, 0)),
             (pads::LEFT, key(0x25, 0)),
@@ -1109,6 +1112,10 @@ pub fn latency() -> Option<(u32, u32)> {
 
 /// Um relatório novo do controle `key`, que chegou em `arrived`.
 pub fn feed(key: &str, inp: &Input, arrived: Instant) {
+    // Teclado aberto: o controle digita nele, mesmo com o mapeamento desligado.
+    if super::osk::feed(key, inp, arrived) {
+        return;
+    }
     if !ON.load(Ordering::Relaxed) {
         return;
     }
@@ -1241,6 +1248,12 @@ fn focus_tick(now: Instant) {
     }
 }
 
+/// Solta tudo o que os controles seguram (o teclado do Prisma abriu).
+pub fn release_held() {
+    let acts: Vec<Act> = RUN.lock().unwrap().as_mut().map(|r| r.engines.values_mut().flat_map(|e| e.0.release_all()).collect()).unwrap_or_default();
+    send(&acts);
+}
+
 /// O controle saiu: solta o que ele segurava.
 pub fn forget(key: &str) {
     let acts = RUN.lock().unwrap().as_mut().and_then(|r| r.engines.remove(key)).map(|mut e| e.0.release_all()).unwrap_or_default();
@@ -1301,7 +1314,7 @@ fn is_elevated(pid: u32) -> bool {
     }
 }
 
-fn send(acts: &[Act]) {
+pub(super) fn send(acts: &[Act]) {
     use windows::Win32::UI::Input::KeyboardAndMouse::*;
     if acts.is_empty() {
         return;
@@ -1699,7 +1712,7 @@ mod tests {
             "prisma-profile 1\nname x\nlayer - B\nzone ls 0.9 0.1",
             "prisma-profile 1\nname x\nlayer - B\nstick 0 ls mouse NaN",
             "prisma-profile 1\nname x\nlayer - B\nrun calc.exe",
-            "prisma-profile 1\nname x\nlayer - B\nbind 0 A press action 26",
+            "prisma-profile 1\nname x\nlayer - B\nbind 0 A press action 27",
             "prisma-profile 1\nname x\nlayer - B\nbind 0 A press action 112",
             "prisma-profile 1\nname x\nlayer - B\nturbo A 1 500 on",
             "prisma-profile 1\nname x\nlayer - B\nturbo A 2 500 maybe",

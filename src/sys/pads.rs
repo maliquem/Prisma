@@ -137,6 +137,8 @@ pub enum Event {
     Notice { text: String },
     /// O atalho do turbo ligou ou desligou o turbo de `button` no controle `pad`.
     Turbo { button: u32, on: bool, pad: String },
+    /// O teclado do Prisma mudou: abriu, fechou, outro grupo ou outra camada.
+    Keyboard,
 }
 
 static PADS: Mutex<Vec<Pad>> = Mutex::new(Vec::new());

@@ -2091,3 +2091,8 @@ Turbo ligado no {}	{} 连发已开启
 Turbo desligado no {}	{} 连发已关闭
 O controle como teclado e mouse está desligado	手柄作为键盘和鼠标已关闭
 Esse perfil não existe	该配置不存在
+Abrir e fechar o teclado do Prisma	打开和关闭 Prisma 键盘
+{} apaga · {} espaço · {} Enter · direcional: setas	{} 删除 · {} 空格 · {} 回车 · 方向键：光标移动
+{} maiúsculas · {} números · os dois: acentos · {} fecha	{} 大写 · {} 数字 · 同时按：重音字母 · {} 关闭
+Teclado ativado	键盘已开启
+Teclado desativado	键盘已关闭

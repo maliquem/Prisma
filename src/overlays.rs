@@ -251,10 +251,15 @@ impl Toast {
     }
 
     pub fn info(&mut self, text: &str) {
+        self.info_at(text, 56.0);
+    }
+
+    /// Aviso a `bottom` DIPs do pé da tela, para não cobrir outra janela flutuante.
+    pub fn info_at(&mut self, text: &str, bottom: f32) {
         crate::report::note(text);
         let text = text.to_string();
         let tw = measure(&text, 14.0, Weight::Regular, None).0 + 32.0;
-        self.show(tw.max(120.0), 40.0, 56.0, move |c, r| {
+        self.show(tw.max(120.0), 40.0, bottom, move |c, r| {
             c.round(r, 10.0, PANEL);
             c.text(r, &text, 14.0, WHITE, Align::Center, Weight::Regular);
         });
@@ -444,5 +449,135 @@ impl Hud {
             let _ = SetWindowPos(hwnd, Some(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
             let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
         }
+    }
+}
+
+/// Teclado do Prisma para controle (`sys::osk`): só desenha, quem digita é o controle.
+pub struct Keyboard {
+    surface: Layered,
+    /// Seta desenhada agora: corre atrás do analógico a cada quadro, para andar suave.
+    arrow: (f32, f32),
+    /// Canto na tela e as duas linhas de ajuda, fixos enquanto o teclado fica aberto.
+    at: (i32, i32),
+    lines: (String, String),
+    ticking: bool,
+}
+
+const KB_W: f32 = 520.0;
+const KB_H: f32 = 392.0;
+/// Altura, do pé da tela, de um aviso que não cobre o teclado aberto.
+pub const KB_LIFT: f32 = KB_H + 60.0;
+/// Quadro da seta, em ms (cerca de 60 por segundo, só com o teclado aberto).
+const KB_FRAME: u32 = 16;
+
+unsafe extern "system" fn keyboard_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT {
+    if m == WM_TIMER {
+        crate::app::with(|a| a.keyboard_tick());
+        return LRESULT(0);
+    }
+    DefWindowProcW(h, m, w, l)
+}
+
+impl Keyboard {
+    pub fn new() -> Self {
+        register(w!("PrismaKeyboard"), keyboard_proc);
+        let hwnd = create_overlay(w!("PrismaKeyboard"), true);
+        Self { surface: Layered::new(hwnd), arrow: (0.0, 0.0), at: (0, 0), lines: Default::default(), ticking: false }
+    }
+
+    /// Mostra o estado de agora do teclado, ou esconde se ele fechou. Devolve `Some` quando ele
+    /// acabou de abrir (`true`) ou de fechar (`false`).
+    pub fn update(&mut self) -> Option<bool> {
+        use crate::sys::pads;
+        let open = crate::sys::osk::view().open;
+        let hwnd = self.surface.hwnd;
+        if !open {
+            unsafe {
+                let _ = KillTimer(Some(hwnd), 1);
+                let _ = ShowWindow(hwnd, SW_HIDE);
+            }
+            return std::mem::take(&mut self.ticking).then_some(false);
+        }
+        let opened = !self.ticking;
+        if opened {
+            let mon = focus_monitor();
+            let scale = unsafe { windows::Win32::UI::HiDpi::GetDpiForWindow(hwnd) } as f32 / 96.0;
+            self.at = ((mon.left + mon.right) / 2 - (KB_W * scale / 2.0) as i32, mon.bottom - ((KB_H + 48.0) * scale) as i32);
+            // Sem controle na lista (ainda não leu nenhum), os nomes do Xbox.
+            let f = pads::list().first().map_or(pads::Family::Xbox, |p| p.family);
+            let l = |b: u32| crate::pages::pad_profiles::button_label(f, b);
+            let fill = |t: &str, labels: &[String]| labels.iter().fold(crate::i18n::tr(t).into_owned(), |s, b| s.replacen("{}", b, 1));
+            self.lines = (
+                fill("{} apaga · {} espaço · {} Enter · direcional: setas", &[l(pads::LB), l(pads::RB), l(pads::START)]),
+                fill("{} maiúsculas · {} números · os dois: acentos · {} fecha", &[l(crate::sys::remap::RT), l(crate::sys::remap::LT), l(pads::BACK)]),
+            );
+            self.arrow = crate::sys::osk::stick();
+            unsafe {
+                SetTimer(Some(hwnd), 1, KB_FRAME, None);
+            }
+            self.ticking = true;
+        }
+        self.paint();
+        unsafe {
+            let _ = SetWindowPos(hwnd, Some(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+        }
+        opened.then_some(true)
+    }
+
+    /// Um quadro: a seta anda 45% do caminho até o analógico e só redesenha se mexeu.
+    pub fn tick(&mut self) {
+        let (tx, ty) = crate::sys::osk::stick();
+        let (ax, ay) = self.arrow;
+        let (nx, ny) = (ax + (tx - ax) * 0.45, ay + (ty - ay) * 0.45);
+        if (nx - ax).abs() + (ny - ay).abs() < 0.002 {
+            return;
+        }
+        self.arrow = (nx, ny);
+        self.paint();
+    }
+
+    fn paint(&mut self) {
+        let v = crate::sys::osk::view();
+        let (ax, ay) = self.arrow;
+        let (line1, line2) = (&self.lines.0, &self.lines.1);
+        let mode = match (v.sym, v.shift) {
+            (true, true) => "áç",
+            (true, false) => "123",
+            (false, true) => "ABC",
+            (false, false) => "abc",
+        };
+        self.surface.paint(self.at.0, self.at.1, KB_W, KB_H, |c, r| {
+            c.round(r, 18.0, rgb(0x0d0f14).alpha(0.92));
+            let (cx, cy, ring, pr) = (r.w / 2.0, 176.0, 116.0, 42.0);
+            let len = (ax * ax + ay * ay).sqrt();
+            let m = len.min(1.0);
+            c.circle(cx, cy, 30.0, WHITE.alpha(0.08));
+            c.circle_line(cx, cy, 30.0, ACCENT.alpha(0.15 + 0.6 * m), 2.0);
+            // Seta do centro para onde o analógico aponta, mais comprida quanto mais inclinado.
+            if m > 0.08 {
+                let (ux, uy) = (ax / len, -ay / len);
+                let (r0, r1) = (32.0, 34.0 + 34.0 * m);
+                let (tx, ty) = (cx + ux * r1, cy + uy * r1);
+                c.line(cx + ux * r0, cy + uy * r0, tx, ty, ACCENT, 4.0);
+                for side in [1.0, -1.0] {
+                    c.line(tx, ty, tx - ux * 10.0 - uy * 7.0 * side, ty - uy * 10.0 + ux * 7.0 * side, ACCENT, 4.0);
+                }
+            }
+            c.text_raw(rect(cx - 30.0, cy - 12.0, 60.0, 24.0), mode, 15.0, TEXT2, Align::Center, Weight::Semibold);
+            for p in 0..8 {
+                let a = (p as f32 * 45.0).to_radians();
+                let (px, py) = (cx + ring * a.sin(), cy - ring * a.cos());
+                let on = v.petal == Some(p);
+                c.circle(px, py, pr, if on { ACCENT.alpha(0.35) } else { WHITE.alpha(0.07) });
+                // Mesma posição dos botões: X à esquerda, Y em cima, B à direita, A embaixo.
+                for (i, (dx, dy)) in [(-22.0, 0.0), (0.0, -22.0), (22.0, 0.0), (0.0, 22.0)].into_iter().enumerate() {
+                    let (size, color, weight) = if on { (17.0, WHITE, Weight::Semibold) } else { (15.0, TEXT2, Weight::Regular) };
+                    c.text_raw(rect(px + dx - 12.0, py + dy - 11.0, 24.0, 22.0), &v.char_at(p, i).to_string(), size, color, Align::Center, weight);
+                }
+            }
+            c.text_fit(rect(16.0, 342.0, r.w - 32.0, 20.0), line1, 12.0, MUTED, Align::Center, Weight::Regular);
+            c.text_fit(rect(16.0, 362.0, r.w - 32.0, 20.0), line2, 12.0, MUTED, Align::Center, Weight::Regular);
+        });
     }
 }

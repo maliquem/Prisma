@@ -25,6 +25,7 @@ pub mod mft;
 pub mod monitor;
 pub mod nets;
 pub mod nvml;
+pub mod osk;
 pub mod pads;
 pub mod remap;
 pub mod patterns;

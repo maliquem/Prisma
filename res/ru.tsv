@@ -2091,3 +2091,8 @@ Turbo ligado no {}	Турбо включено для {}
 Turbo desligado no {}	Турбо выключено для {}
 O controle como teclado e mouse está desligado	Геймпад как клавиатура и мышь выключен
 Esse perfil não existe	Такого профиля нет
+Abrir e fechar o teclado do Prisma	Открыть и закрыть клавиатуру Prisma
+{} apaga · {} espaço · {} Enter · direcional: setas	{} стирает · {} пробел · {} Enter · крестовина: стрелки
+{} maiúsculas · {} números · os dois: acentos · {} fecha	{} заглавные · {} цифры · оба: диакритика · {} закрывает
+Teclado ativado	Клавиатура включена
+Teclado desativado	Клавиатура выключена

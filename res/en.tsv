@@ -2097,3 +2097,8 @@ Turbo ligado no {}	Turbo on for {}
 Turbo desligado no {}	Turbo off for {}
 O controle como teclado e mouse está desligado	Controller as keyboard and mouse is off
 Esse perfil não existe	That profile doesn't exist
+Abrir e fechar o teclado do Prisma	Open and close the Prisma keyboard
+{} apaga · {} espaço · {} Enter · direcional: setas	{} deletes · {} space · {} Enter · D-pad: arrows
+{} maiúsculas · {} números · os dois: acentos · {} fecha	{} uppercase · {} numbers · both: accents · {} closes
+Teclado ativado	Keyboard on
+Teclado desativado	Keyboard off

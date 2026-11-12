@@ -24,7 +24,7 @@ use crate::config::{Config, Hotkey, MOD_ALT, MOD_CTRL, MOD_SHIFT, MOD_WIN};
 use crate::optimizer::{self, Candidate, Usage};
 use crate::capture::engine::{self, Cmd, Handle, Settings, Target};
 use crate::capture::mux::Codec;
-use crate::overlays::{Hud, Prompt, PromptAnswer, Toast, Widget};
+use crate::overlays::{Hud, Keyboard, Prompt, PromptAnswer, Toast, Widget};
 use crate::pages::{self, Page};
 use crate::sys::audio::{self, Session};
 use crate::sys::fullscreen::Fullscreenizer;
@@ -203,6 +203,7 @@ pub struct App {
     pub detector: Detector,
     pub widget: Widget,
     pub toast: Toast,
+    keyboard: Keyboard,
     pub pads: crate::pages::controllers::State,
     /// Quem estava na sala do compartilhamento na última olhada (chave, nome).
     room_seen: Option<Vec<(String, String)>>,
@@ -411,6 +412,7 @@ pub fn start(background: bool) {
             detector: Detector::new(),
             widget: Widget::new(),
             toast: Toast::new(),
+            keyboard: Keyboard::new(),
             pads: Default::default(),
             room_seen: None,
             notices_since: 0,
@@ -2528,6 +2530,10 @@ impl App {
                     self.pads.open_editor();
                     crate::pages::pad_profiles::test_target(self, &p[12..]);
                 }
+                Some("keyboard") => {
+                    crate::sys::osk::show_for_test(1);
+                    self.keyboard_refresh();
+                }
                 Some("meter") => self.page = Page::Meter,
                 Some("sound") => self.page = Page::Volume,
                 Some("guide") => self.page = Page::Guide,
@@ -2963,6 +2969,10 @@ impl App {
                     None => continue,
                 },
                 Event::Notice { text } => text,
+                Event::Keyboard => {
+                    self.keyboard_refresh();
+                    continue;
+                }
                 Event::Turbo { button, on, pad } => {
                     let f = crate::sys::pads::list().into_iter().find(|p| p.key == pad).map_or(crate::sys::pads::Family::Generic, |p| p.family);
                     let b = crate::pages::pad_profiles::button_label(f, button);
@@ -2985,14 +2995,39 @@ impl App {
         }
     }
 
+    /// Redesenha o teclado do Prisma e avisa quando ele abre ou fecha. Não há aviso de perfil: o
+    /// teclado não troca de perfil, só segura o controle enquanto está aberto.
+    fn keyboard_refresh(&mut self) {
+        match self.keyboard.update() {
+            Some(true) => self.toast.info_at("Teclado ativado", crate::overlays::KB_LIFT),
+            Some(false) => self.toast.info("Teclado desativado"),
+            None => {}
+        }
+    }
+
+    /// Quadro da seta do teclado do Prisma (relógio da janela dele).
+    pub fn keyboard_tick(&mut self) {
+        self.keyboard.tick();
+    }
+
+    /// Abre ou fecha o teclado do Prisma para controle.
+    pub fn set_keyboard(&mut self, on: bool) {
+        if on {
+            crate::sys::osk::open();
+        } else {
+            crate::sys::osk::close();
+        }
+        self.keyboard_refresh();
+    }
+
     /// Botão do controle ligado a uma ação do Prisma. Devolve o aviso a mostrar, se houver.
     fn pad_action(&mut self, id: u8, pad: &str) -> Option<String> {
         let name = crate::sys::pads::list().into_iter().find(|p| p.key == pad);
         // Mesma ordem de `remap::ACTIONS`; 0 marca as que não são atalho.
-        const HK: [i32; 26] = [
+        const HK: [i32; 27] = [
             HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_REPLAY, HK_METER_C, HK_METER_F, HK_METER_O, HK_METER_KEYS, HK_LOG,
             HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, 0, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE, HK_FULL, HK_WIDGET, HK_OPT, HK_FORCE, HK_EXPLORER,
-            HK_FIND, 0, 0,
+            HK_FIND, 0, 0, 0,
         ];
         match id {
             14 => {
@@ -3007,6 +3042,10 @@ impl App {
             24 => {
                 let n = name.map(|p| p.name).unwrap_or_default();
                 return Some(if crate::sys::pads::disconnect(pad) { format!("{n} desconectado") } else { format!("{n} não está no Bluetooth ou não desconectou") });
+            }
+            crate::sys::remap::KEYBOARD => {
+                let open = crate::sys::osk::view().open;
+                self.set_keyboard(!open);
             }
             25 => return name.map(|p| format!("{}: {}", p.name, crate::pages::controllers::battery_label(&p))),
             n if n >= crate::sys::remap::SOUND => self.sound_default((n - crate::sys::remap::SOUND) as usize),

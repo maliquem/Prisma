@@ -85,6 +85,17 @@ pub enum Request {
         #[serde(default)]
         on: Option<bool>,
     },
+    /// Liga ou desliga o controle como teclado e mouse, como a caixa da aba Controles; `None`
+    /// alterna (`controllers.mapping`).
+    PadMap {
+        #[serde(default)]
+        on: Option<bool>,
+    },
+    /// Abre ou fecha o teclado do Prisma para controle; `None` alterna (`controllers.keyboard`).
+    Keyboard {
+        #[serde(default)]
+        on: Option<bool>,
+    },
     #[serde(other)]
     Unknown,
 }
@@ -292,6 +303,13 @@ mod tests {
         assert_eq!(r, Request::Unknown);
         let r: Reply = serde_json::from_str(r#"{"type":"future_thing","x":1}"#).unwrap();
         assert_eq!(r, Reply::Unknown);
+    }
+
+    #[test]
+    fn pad_map_without_on_toggles() {
+        assert_eq!(serde_json::from_str::<Request>(r#"{"type":"pad_map"}"#).unwrap(), Request::PadMap { on: None });
+        assert_eq!(serde_json::from_str::<Request>(r#"{"type":"pad_map","on":false}"#).unwrap(), Request::PadMap { on: Some(false) });
+        assert_eq!(serde_json::from_str::<Request>(r#"{"type":"keyboard"}"#).unwrap(), Request::Keyboard { on: None });
     }
 
     #[test]
