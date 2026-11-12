@@ -571,10 +571,13 @@ pub fn rate_of(gaps: &mut [u32], secs: f32) -> Option<Rate> {
 }
 
 unsafe fn read_loop(d: Dev) {
+    use windows::Win32::System::Threading::{CreateEventW, WaitForSingleObject};
+    use windows::Win32::System::IO::{CancelIoEx, GetOverlappedResult, OVERLAPPED};
     let xinput = is_xinput(&d.path);
     let link = link_of(&d.path);
     let fam = family(d.vid, d.pid);
-    let Some(h) = open(&d.path, FILE_GENERIC_READ.0) else {
+    let h = CreateFileW(&HSTRING::from(d.path.as_str()), FILE_GENERIC_READ.0, FILE_SHARE_READ | FILE_SHARE_WRITE, None, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, None);
+    let (Ok(h), Ok(ev)) = (h, CreateEventW(None, true, false, None)) else {
         if let Some(s) = OPEN.lock().unwrap().as_mut() {
             s.remove(&d.path);
         }
@@ -583,33 +586,67 @@ unsafe fn read_loop(d: Dev) {
     let mut pre = PHIDP_PREPARSED_DATA::default();
     let generic = (fam == Family::Generic && !xinput && HidD_GetPreparsedData(h, &mut pre)).then(|| generic_axes(pre));
     let name = nice_name(fam, &d.name);
-    if !xinput {
-        PADS.lock().unwrap().push(Pad {
-            key: d.path.clone(),
-            name: name.clone(),
-            family: fam,
-            link,
-            vid: d.vid,
-            pid: d.pid,
-            battery: Battery::Unknown,
-            input: Input::default(),
-            rate: None,
-            generic_buttons: generic.as_ref().map_or(0, |g| g.1),
-            low_warned: false,
-            jitter_warned: false,
-        });
-        emit(Event::Connected { name: name.clone(), link });
+    // O DualSense e o DualShock 4 mandam relatórios sem parar, mesmo parados: 2 s de silêncio é
+    // controle desligado. Por Bluetooth o Windows mantém o aparelho HID do controle pareado, e a
+    // leitura não dá erro nenhum: sem isso o controle ficava na lista para sempre.
+    // shortcut: o genérico pode só mandar relatório quando algo muda, então fica na lista até o
+    // Windows tirar o aparelho; um genérico Bluetooth desligado pode ficar, até medir o 8BitDo.
+    let streams = matches!(fam, Family::DualSense | Family::Ds4);
+    let mut shown = false;
+    let show = |on: bool| {
+        if on {
+            PADS.lock().unwrap().push(Pad {
+                key: d.path.clone(),
+                name: name.clone(),
+                family: fam,
+                link,
+                vid: d.vid,
+                pid: d.pid,
+                battery: Battery::Unknown,
+                input: Input::default(),
+                rate: None,
+                generic_buttons: generic.as_ref().map_or(0, |g| g.1),
+                low_warned: false,
+                jitter_warned: false,
+            });
+            emit(Event::Connected { name: name.clone(), link });
+        } else {
+            PADS.lock().unwrap().retain(|p| p.key != d.path);
+            emit(Event::Disconnected { name: name.clone() });
+        }
+    };
+    if !xinput && !streams {
+        show(true);
+        shown = true;
     }
-    let mut buf = vec![0u8; (d.input_len as usize).max(64)];
+    let len = d.input_len.max(1) as usize;
+    let mut buf = vec![0u8; len.max(64)];
     let mut gaps: Vec<u32> = Vec::with_capacity(2048);
     let (mut prev, mut tick) = (Instant::now(), Instant::now());
-    loop {
+    let mut ov = OVERLAPPED { hEvent: ev, ..Default::default() };
+    'read: loop {
         let mut got = 0u32;
-        if ReadFile(h, Some(&mut buf[..d.input_len.max(1) as usize]), Some(&mut got), None).is_err() {
-            break;
+        if let Err(e) = ReadFile(h, Some(&mut buf[..len]), None, Some(&mut ov)) {
+            if e.code() != ERROR_IO_PENDING.to_hresult() {
+                break;
+            }
+            // Espera em fatias de 1 s para notar o silêncio.
+            while WaitForSingleObject(ev, 1000) == WAIT_TIMEOUT {
+                if shown && streams && prev.elapsed() > Duration::from_secs(2) {
+                    show(false);
+                    shown = false;
+                    gaps.clear();
+                }
+            }
+        }
+        if GetOverlappedResult(h, &ov, &mut got, false).is_err() {
+            break 'read;
         }
         let now = Instant::now();
-        gaps.push((now - prev).as_micros() as u32);
+        // Depois de um silêncio, o intervalo longo não entra na taxa.
+        if now - prev < Duration::from_secs(1) {
+            gaps.push((now - prev).as_micros() as u32);
+        }
         prev = now;
         let rate = if tick.elapsed() >= Duration::from_secs(2) {
             let r = rate_of(&mut gaps, tick.elapsed().as_secs_f32());
@@ -631,6 +668,10 @@ unsafe fn read_loop(d: Dev) {
             Some((axes, _)) => Some((generic_input(pre, axes, &mut buf[..got as usize]), None)),
             None => sony(fam, link, &buf[..got as usize]),
         };
+        if !shown {
+            show(true);
+            shown = true;
+        }
         let mut pads = PADS.lock().unwrap();
         let Some(p) = pads.iter_mut().find(|p| p.key == d.path) else { break };
         if let Some((inp, bat)) = parsed {
@@ -646,7 +687,12 @@ unsafe fn read_loop(d: Dev) {
         drop(pads);
         events.into_iter().for_each(emit);
     }
+    // Uma leitura ainda pendente escreve no buffer: cancela e espera antes de soltar.
+    let _ = CancelIoEx(h, Some(&ov));
+    let mut got = 0u32;
+    let _ = GetOverlappedResult(h, &ov, &mut got, true);
     let _ = CloseHandle(h);
+    let _ = CloseHandle(ev);
     if pre.0 != 0 {
         let _ = HidD_FreePreparsedData(pre);
     }
@@ -655,9 +701,8 @@ unsafe fn read_loop(d: Dev) {
     }
     if xinput {
         IG.lock().unwrap().retain(|e| e.0 != d.path);
-    } else {
-        PADS.lock().unwrap().retain(|p| p.key != d.path);
-        emit(Event::Disconnected { name });
+    } else if shown {
+        show(false);
     }
 }
 
