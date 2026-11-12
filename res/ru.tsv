@@ -1911,7 +1911,7 @@ Cada controle ao vivo, a bateria e a taxa de relatório. Só leitura: nada muda 
 Copiar diagnóstico	Копировать диагностику
 Diagnóstico copiado	Диагностика скопирована
 Nenhum controle ligado. Ligue um controle por USB ou Bluetooth e ele aparece aqui.	Геймпады не подключены. Подключите геймпад по USB или Bluetooth, и он появится здесь.
-Pareado sem a parte de controle: nenhum programa consegue ler. Remova nas configurações de Bluetooth e pareie de novo.	Сопряжён без игровой части: ни одна программа не может его прочитать. Удалите его в настройках Bluetooth и выполните сопряжение снова.
+Pareado sem a parte de controle: nenhum programa consegue ler. Remova o controle e pareie de novo pelo assistente clássico (Win + R, devicepairingwizard).	Сопряжён без игровой части: ни одна программа не может его прочитать. Удалите геймпад и выполните сопряжение заново через классический мастер (Win + R, devicepairingwizard).
 Avisos	Уведомления
 Ao conectar e desconectar	При подключении и отключении
 Bateria baixa	Низкий заряд
@@ -1959,3 +1959,4 @@ Controle Xbox {}	Геймпад Xbox {}
 Bateria do {} em {}%	Заряд {}: {}%
 Bateria do {} baixa	Низкий заряд {}
 {}: variação de {} ms entre relatórios	{}: разброс {} мс между отчётами
+em movimento	в движении

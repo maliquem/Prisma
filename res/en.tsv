@@ -1917,7 +1917,7 @@ Cada controle ao vivo, a bateria e a taxa de relatório. Só leitura: nada muda 
 Copiar diagnóstico	Copy diagnostics
 Diagnóstico copiado	Diagnostics copied
 Nenhum controle ligado. Ligue um controle por USB ou Bluetooth e ele aparece aqui.	No controller connected. Connect one over USB or Bluetooth and it shows up here.
-Pareado sem a parte de controle: nenhum programa consegue ler. Remova nas configurações de Bluetooth e pareie de novo.	Paired without the controller part: no program can read it. Remove it in Bluetooth settings and pair again.
+Pareado sem a parte de controle: nenhum programa consegue ler. Remova o controle e pareie de novo pelo assistente clássico (Win + R, devicepairingwizard).	Paired without the controller part: no program can read it. Remove the controller and pair it again with the classic wizard (Win + R, devicepairingwizard).
 Avisos	Notices
 Ao conectar e desconectar	On connect and disconnect
 Bateria baixa	Low battery
@@ -1965,3 +1965,4 @@ Controle Xbox {}	Xbox controller {}
 Bateria do {} em {}%	{} battery at {}%
 Bateria do {} baixa	{} battery low
 {}: variação de {} ms entre relatórios	{}: {} ms jitter between reports
+em movimento	while moving

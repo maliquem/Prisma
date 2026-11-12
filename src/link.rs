@@ -88,7 +88,7 @@ fn controller_of(p: &crate::sys::pads::Pad) -> Controller {
         charging,
         wired: p.battery == Battery::Wired,
         rate_hz: p.rate.map(|r| r.hz.round() as u32),
-        p99_us: p.rate.map(|r| (r.p99_ms * 1000.0).round() as u32),
+        p99_us: p.rate.filter(|r| !r.counted).map(|r| (r.p99_ms * 1000.0).round() as u32),
     }
 }
 

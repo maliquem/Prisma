@@ -106,7 +106,8 @@ pub struct Controller {
     pub charging: bool,
     /// No cabo, sem bateria a informar.
     pub wired: bool,
-    /// Relatórios por segundo; `None` quando o Windows não entrega os relatórios.
+    /// Relatórios por segundo; `None` enquanto não foi medida. No Xbox sai do contador do XInput
+    /// com o controle em movimento, e então não há `p99_us`.
     pub rate_hz: Option<u32>,
     /// p99 do intervalo entre relatórios, em microssegundos.
     pub p99_us: Option<u32>,

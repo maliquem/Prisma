@@ -93,6 +93,9 @@ pub struct Rate {
     pub avg_ms: f32,
     pub p99_ms: f32,
     pub max_ms: f32,
+    /// Só a taxa, contada pelo contador de pacotes do XInput com o controle em movimento: o
+    /// Windows não entrega os relatórios do Xbox, então não há intervalos (média, p99, máximo).
+    pub counted: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -523,7 +526,9 @@ pub fn sony(f: Family, link: Link, r: &[u8]) -> Option<(Input, Option<Battery>)>
             ly: -stick(get(o + 1)?),
             rx: stick(get(o + 2)?),
             ry: -stick(get(o + 3)?),
-            buttons: sony_buttons(get(bt)?, get(bt + 1)?, get(bt + 2)?),
+            // No desenho do DualShock 4 (e no modo simples do Bluetooth) os 6 bits de cima do
+            // terceiro byte são um contador, não botões: só o PS e o touchpad valem.
+            buttons: sony_buttons(get(bt)?, get(bt + 1)?, get(bt + 2)? & if ds { 0xff } else { 0x03 }),
             lt: get(tt)? as f32 / 255.0,
             rt: get(tt + 1)? as f32 / 255.0,
         })
@@ -567,8 +572,20 @@ pub fn rate_of(gaps: &mut [u32], secs: f32) -> Option<Rate> {
         avg_ms: avg as f32 / 1000.0,
         p99_ms: gaps[(gaps.len() * 99 / 100).min(gaps.len() - 1)] as f32 / 1000.0,
         max_ms: gaps[gaps.len() - 1] as f32 / 1000.0,
+        counted: false,
     })
 }
+
+/// Taxa pelo contador de pacotes do XInput, que sobe um a cada relatório que muda o estado.
+/// Com o controle parado ele quase não sobe; só vale quando passa de 20 por segundo (sticks em
+/// movimento), medido no Xbox One S por Bluetooth em 2026-11-12: 122/s, igual lendo a 4 kHz.
+pub fn packet_rate(steps: u32, secs: f32) -> Option<Rate> {
+    let hz = steps as f32 / secs;
+    (secs > 0.0 && hz >= 20.0).then_some(Rate { hz, avg_ms: 1000.0 / hz, p99_ms: 0.0, max_ms: 0.0, counted: true })
+}
+
+/// Por vaga do XInput: último pacote, saltos somados, começo da janela e a última taxa medida.
+static XRATE: Mutex<[(u32, u32, Option<Instant>, Option<Rate>); 4]> = Mutex::new([(0, 0, None, None); 4]);
 
 unsafe fn read_loop(d: Dev) {
     use windows::Win32::System::Threading::{CreateEventW, WaitForSingleObject};
@@ -788,9 +805,27 @@ unsafe fn poll_xinput() {
             };
             // shortcut: com um controle só, o nome, a conexão e a taxa vêm do aparelho HID dele; com
             // vários, o XInput não diz qual lugar é qual, e eles aparecem pelo número.
+            let counted = {
+                let mut xr = XRATE.lock().unwrap();
+                let e = &mut xr[i];
+                let now = Instant::now();
+                match e.2 {
+                    None => *e = (st.dwPacketNumber, 0, Some(now), e.3),
+                    Some(t0) => {
+                        e.1 = e.1.saturating_add(st.dwPacketNumber.wrapping_sub(e.0));
+                        e.0 = st.dwPacketNumber;
+                        if t0.elapsed() >= Duration::from_secs(2) {
+                            // Parado, guarda a última taxa medida: é a do controle.
+                            e.3 = packet_rate(e.1, t0.elapsed().as_secs_f32()).or(e.3);
+                            (e.1, e.2) = (0, Some(now));
+                        }
+                    }
+                }
+                e.3
+            };
             let (name, link, rate) = match ig.as_slice() {
-                [(_, n, l, r)] => (n.clone(), *l, *r),
-                _ => (format!("Controle Xbox {}", i + 1), Link::Usb, None),
+                [(_, n, l, r)] => (n.clone(), *l, r.or(counted)),
+                _ => (format!("Controle Xbox {}", i + 1), Link::Usb, counted),
             };
             let mut pads = PADS.lock().unwrap();
             let events = if let Some(p) = pads.iter_mut().find(|p| p.key == key) {
@@ -817,6 +852,11 @@ unsafe fn poll_xinput() {
             };
             drop(pads);
             events.into_iter().for_each(emit);
+        }
+    }
+    for (i, s) in seen.iter().enumerate() {
+        if !s {
+            XRATE.lock().unwrap()[i] = (0, 0, None, None);
         }
     }
     let gone: Vec<String> = {
@@ -910,7 +950,10 @@ mod tests {
         assert_eq!(bat, None);
         r[5] = 0x20 | 0x02; // Cruz e direcional para a direita
         r[6] = 0x20; // Options
+        r[7] = 0x14; // contador do relatório, visto no DualSense por Bluetooth: não é o Mudo
         assert_eq!(sony(Family::Ds4, Link::Bluetooth, &r).unwrap().0.buttons, A | RIGHT | START);
+        // O DualSense no modo simples do Bluetooth (78 bytes) usa o mesmo desenho.
+        assert_eq!(sony(Family::DualSense, Link::Bluetooth, &r[..78]).unwrap().0.buttons, A | RIGHT | START);
     }
 
     #[test]
@@ -938,6 +981,10 @@ mod tests {
         assert_eq!(r.hz, 250.0);
         assert!((r.max_ms - 5.7).abs() < 1e-3 && (r.p99_ms - 5.7).abs() < 1e-3);
         assert!(rate_of(&mut [1], 1.0).is_none());
+        // Xbox: 244 saltos em 2 s com os sticks em movimento; parado (10 em 2 s) não conta.
+        let x = packet_rate(244, 2.0).unwrap();
+        assert!(x.counted && (x.hz - 122.0).abs() < 1e-3);
+        assert!(packet_rate(10, 2.0).is_none() && packet_rate(5, 0.0).is_none());
     }
 
     #[test]

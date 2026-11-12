@@ -111,6 +111,7 @@ fn battery_text(p: &Pad) -> String {
 
 fn rate_text(p: &Pad) -> String {
     match p.rate {
+        Some(r) if r.counted => format!("{:.0} Hz {}", r.hz, crate::i18n::tr("em movimento")),
         Some(r) => format!("{:.0} Hz · p99 {}", r.hz, ms(r.p99_ms)),
         None => crate::i18n::tr("taxa a medir").into_owned(),
     }
@@ -120,7 +121,7 @@ fn rate_text(p: &Pad) -> String {
 fn button_names(f: Family) -> &'static [(u32, &'static str)] {
     use pads::*;
     match f {
-        Family::DualSense | Family::Ds4 => &[
+        Family::DualSense => &[
             (A, "Cruz"),
             (B, "Círculo"),
             (X, "Quadrado"),
@@ -134,6 +135,20 @@ fn button_names(f: Family) -> &'static [(u32, &'static str)] {
             (GUIDE, "PS"),
             (PAD, "Touchpad"),
             (MUTE, "Mudo"),
+        ],
+        Family::Ds4 => &[
+            (A, "Cruz"),
+            (B, "Círculo"),
+            (X, "Quadrado"),
+            (Y, "Triângulo"),
+            (LB, "L1"),
+            (RB, "R1"),
+            (LS, "L3"),
+            (RS, "R3"),
+            (BACK, "Share"),
+            (START, "Options"),
+            (GUIDE, "PS"),
+            (PAD, "Touchpad"),
         ],
         _ => &[(A, "A"), (B, "B"), (X, "X"), (Y, "Y"), (LB, "LB"), (RB, "RB"), (LS, "LS"), (RS, "RS"), (BACK, "View"), (START, "Menu"), (GUIDE, "Xbox")],
     }
@@ -179,10 +194,10 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     }
     y += 4.0;
     for name in pads::without_hid() {
-        let r = rect(x, y, lw, 104.0);
+        let r = rect(x, y, lw, 122.0);
         ui.card(r);
         ui.c.text_fit(rect(r.x + 16.0, r.y + 10.0, r.w - 32.0, 20.0), &name, 14.0, WARN, Align::Left, Weight::Semibold);
-        ui.c.text_wrap(rect(r.x + 16.0, r.y + 34.0, r.w - 32.0, 62.0), "Pareado sem a parte de controle: nenhum programa consegue ler. Remova nas configurações de Bluetooth e pareie de novo.", 12.0, TEXT2, Weight::Regular);
+        ui.c.text_wrap(rect(r.x + 16.0, r.y + 34.0, r.w - 32.0, 80.0), "Pareado sem a parte de controle: nenhum programa consegue ler. Remova o controle e pareie de novo pelo assistente clássico (Win + R, devicepairingwizard).", 12.0, TEXT2, Weight::Regular);
         y += r.h + 8.0;
     }
     let r = rect(x, y, lw, 176.0);
@@ -251,7 +266,7 @@ fn draw_live(ui: &mut Ui, p: &Pad, r: Rect) {
     let i = p.input;
     let line = format!("{} · {} · {}: {}", crate::i18n::tr(link_text(p.link)), rate_text(p), crate::i18n::tr("bateria"), battery_text(p));
     ui.c.text_fit(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 20.0), &line, 13.0, TEXT2, Align::Left, Weight::Regular);
-    if let Some(rt) = p.rate {
+    if let Some(rt) = p.rate.filter(|r| !r.counted) {
         let detail = format!("{} {} · p99 {} · {} {}", crate::i18n::tr("média"), ms(rt.avg_ms), ms(rt.p99_ms), crate::i18n::tr("máx"), ms(rt.max_ms));
         ui.c.text_fit(rect(r.x + 16.0, r.y + 32.0, r.w - 32.0, 18.0), &detail, 12.0, MUTED, Align::Left, Weight::Regular);
     }
@@ -358,7 +373,7 @@ fn diagnostic(list: &[Pad], conflicts: &[&str]) -> String {
     for p in list {
         let write = pads::WRITE_OK.iter().any(|(v, pid, _)| *v == p.vid && *pid == p.pid);
         let _ = writeln!(s, "- {} ({:?}) {:04x}:{:04x} · {} · bateria {} · {}", p.name, p.family, p.vid, p.pid, link_text(p.link), battery_text(p), rate_text(p));
-        if let Some(r) = p.rate {
+        if let Some(r) = p.rate.filter(|r| !r.counted) {
             let _ = writeln!(s, "  média {:.2} ms · p99 {:.2} ms · máx {:.2} ms", r.avg_ms, r.p99_ms, r.max_ms);
         }
         let _ = writeln!(s, "  escrita futura permitida: {}", if write { "sim" } else { "não" });

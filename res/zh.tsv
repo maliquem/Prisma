@@ -1911,7 +1911,7 @@ Cada controle ao vivo, a bateria e a taxa de relatório. Só leitura: nada muda 
 Copiar diagnóstico	复制诊断
 Diagnóstico copiado	诊断已复制
 Nenhum controle ligado. Ligue um controle por USB ou Bluetooth e ele aparece aqui.	未连接手柄。通过 USB 或蓝牙连接手柄后会显示在这里。
-Pareado sem a parte de controle: nenhum programa consegue ler. Remova nas configurações de Bluetooth e pareie de novo.	已配对但缺少手柄功能：任何程序都无法读取。请在蓝牙设置中删除后重新配对。
+Pareado sem a parte de controle: nenhum programa consegue ler. Remova o controle e pareie de novo pelo assistente clássico (Win + R, devicepairingwizard).	已配对但缺少手柄功能：任何程序都无法读取。请删除手柄，然后用经典向导重新配对（Win + R，devicepairingwizard）。
 Avisos	通知
 Ao conectar e desconectar	连接和断开时
 Bateria baixa	电量低
@@ -1959,3 +1959,4 @@ Controle Xbox {}	Xbox 手柄 {}
 Bateria do {} em {}%	{} 电量 {}%
 Bateria do {} baixa	{} 电量低
 {}: variação de {} ms entre relatórios	{}：报告间隔抖动 {} 毫秒
+em movimento	移动时

@@ -249,11 +249,11 @@ Shows the controllers connected over USB or Bluetooth, live, without changing an
 - **List:** name, connection (USB or Bluetooth), battery and report rate of each controller. Click one to see it live.
 - **Live:** the sticks with their dot, the triggers as bars and the buttons, which light up when pressed.
 - **Battery:** in % on DualSense and DualShock 4 over USB, in four levels on Xbox, and "wired" on controllers without a battery. Over Bluetooth, DualSense and DualShock 4 only send the battery in a mode that needs writing to the controller, so it shows "unknown".
-- **Rate:** how many reports per second the controller sends, with the average, p99 and maximum interval between them, measured every 2 seconds. On Xbox over Bluetooth, Windows doesn't hand over the reports, and it shows "rate not measured".
+- **Rate:** how many reports per second the controller sends, with the average, p99 and maximum interval between them, measured every 2 seconds. On Xbox, Windows doesn't hand over the reports: the rate comes from the XInput counter while you move the controller and shows "while moving", without p99. An Xbox One S over Bluetooth gives about 120 per second.
 - **Measure sticks and triggers:** **Start** takes 13 seconds, in three stages: let go of the controller, turn the sticks against the edge and press the triggers all the way. It shows drift at rest, noise, reach, how far the outline is from a circle, turn coverage and each trigger's travel. Bad values turn orange.
 - **Notices:** Prisma's own notice (the same as the volume one) shows when a controller connects or disconnects, when the battery drops below the limit (10% by default, once per discharge; 0 turns it off) and, if you turn it on, when the jitter between reports goes above the value you pick.
 - **Conflicts:** with Steam, reWASD, DS4Windows or DSX open, the page explains in one sentence what each one can change on the controller.
-- **Paired without the controller part:** if a Bluetooth controller shows as connected but Windows didn't turn on its controller part, the page tells you to remove it and pair again.
+- **Paired without the controller part:** if a Bluetooth controller shows as connected but Windows didn't turn on its controller part, the page tells you to remove it and pair again with the classic Windows wizard (Win + R, `devicepairingwizard`). This happened with a DualSense paired from Settings.
 - **Copy diagnostics:** copies a text with the controllers, connection, battery, rate and conflicts, to paste in a report.
 - **Can't:** change buttons, light, rumble or triggers. That comes in the next versions.
 

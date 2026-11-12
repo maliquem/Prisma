@@ -1911,7 +1911,7 @@ Cada controle ao vivo, a bateria e a taxa de relatório. Só leitura: nada muda 
 Copiar diagnóstico	Copiar diagnóstico
 Diagnóstico copiado	Diagnóstico copiado
 Nenhum controle ligado. Ligue um controle por USB ou Bluetooth e ele aparece aqui.	Ningún mando conectado. Conecta uno por USB o Bluetooth y aparecerá aquí.
-Pareado sem a parte de controle: nenhum programa consegue ler. Remova nas configurações de Bluetooth e pareie de novo.	Emparejado sin la parte de mando: ningún programa puede leerlo. Quítalo en la configuración de Bluetooth y vuelve a emparejarlo.
+Pareado sem a parte de controle: nenhum programa consegue ler. Remova o controle e pareie de novo pelo assistente clássico (Win + R, devicepairingwizard).	Emparejado sin la parte de mando: ningún programa puede leerlo. Quita el mando y vuelve a emparejarlo con el asistente clásico (Win + R, devicepairingwizard).
 Avisos	Avisos
 Ao conectar e desconectar	Al conectar y desconectar
 Bateria baixa	Batería baja
@@ -1959,3 +1959,4 @@ Controle Xbox {}	Mando Xbox {}
 Bateria do {} em {}%	Batería del {} al {}%
 Bateria do {} baixa	Batería del {} baja
 {}: variação de {} ms entre relatórios	{}: variación de {} ms entre informes
+em movimento	en movimiento
