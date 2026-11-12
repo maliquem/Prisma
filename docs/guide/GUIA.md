@@ -260,7 +260,11 @@ Mostra os controles ligados por USB ou Bluetooth, ao vivo, e pode usar o control
 - **Parada de emergência:** segure Guia (ou PS) + Select + Start por 2 segundos e o mapeamento para na hora, soltando tudo. A mesma combinação liga de novo.
 - **Jogo como administrador:** o Windows não deixa as teclas de um programa comum chegarem num programa aberto como administrador. O Prisma avisa uma vez por programa.
 - **Tempo interno:** a página mostra quanto o Prisma leva do relatório do controle chegar até a tecla sair, na mediana e no p99.
-- **Não dá para:** editar os perfis, mudar luz, vibração ou gatilhos. Isso vem nas próximas versões.
+- **Editar perfis:** no cartão Mapeamento, **Editar perfis** troca a coluna da direita pelo editor. Escolha o perfil, ou crie um com **Novo perfil para jogo** (lista os jogos do Medidor; o perfil novo começa sem nada mapeado). **Voltar ao de fábrica** desfaz as mudanças no Desktop e no Base; **Apagar perfil** apaga um perfil seu. Cada mudança vale na hora.
+- **Camadas:** a Base e as que você criar, que herdam dela o que não definirem. Uma ligação "Camada enquanto segura" troca de camada só com o botão apertado; "Liga e desliga camada" troca até apertar de novo. Com Segurar, a camada entra já no aperto, e um Tocar no mesmo botão ainda sai se você soltar rápido. A tecla apertada sempre solta na camada em que foi apertada.
+- **Sticks e zona morta:** em cada camada, cada stick pode virar mouse (com a velocidade), rolar a página ou ter as direções como botões. A zona morta de cada stick e gatilho tem início e fim: abaixo do início conta como parado, a partir do fim como curso todo.
+- **Botões:** clique num botão (com o nome do seu controle) para ver o que ele faz na camada. Uma ligação junta quando (pressionar, tocar, segurar, duplo ou soltar), sozinho ou junto com outro botão, e o destino: uma tecla (clique no campo e aperte a tecla, com Ctrl, Shift, Alt ou Win), uma tecla especial (Esc, volume, mídia, navegador), um clique do mouse, a roda ou uma camada. Tocar e duplo só respondem depois que o botão solta, até 0,3 s a mais, e a página avisa.
+- **Não dá para:** mudar luz, vibração ou gatilhos. Isso vem nas próximas versões.
 
 ## Widget
 

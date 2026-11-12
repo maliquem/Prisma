@@ -260,7 +260,11 @@ Shows the controllers connected over USB or Bluetooth, live, and can use the con
 - **Emergency stop:** hold Guide (or PS) + Select + Start for 2 seconds and mapping stops at once, releasing everything. The same combination turns it back on.
 - **Game as administrator:** Windows doesn't let keys from a regular program reach a program opened as administrator. Prisma warns once per program.
 - **Internal time:** the page shows how long Prisma takes from the controller's report arriving to the key going out, median and p99.
-- **Can't:** edit profiles, change light, rumble or triggers. That comes in the next versions.
+- **Edit profiles:** on the Mapping card, **Edit profiles** turns the right column into the editor. Pick the profile, or create one with **New profile for a game** (lists the Meter games; the new profile starts with nothing mapped). **Back to default** undoes changes to Desktop and Base; **Delete profile** deletes one of yours. Every change applies at once.
+- **Layers:** Base and the ones you create, which inherit from it what they don't define. A "Layer while held" binding switches layer only while the button is held; "Toggle layer" switches until pressed again. With Hold, the layer starts right on the press, and a Tap on the same button still fires if you release quickly. A pressed key always releases in the layer it was pressed in.
+- **Sticks and dead zone:** in each layer, each stick can become the mouse (with its speed), scroll the page or have its directions as buttons. Each stick and trigger dead zone has a start and an end: below the start counts as at rest, from the end on as full travel.
+- **Buttons:** click a button (with your controller's name) to see what it does in the layer. A binding combines when (press, tap, hold, double or release), alone or together with another button, and the target: a key (click the field and press the key, with Ctrl, Shift, Alt or Win), a special key (Esc, volume, media, browser), a mouse click, the wheel or a layer. Tap and double only respond after the button is released, up to 0.3 s later, and the page warns.
+- **Can't:** change light, rumble or triggers. That comes in the next versions.
 
 ## Widget
 

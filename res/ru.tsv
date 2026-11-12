@@ -1972,3 +1972,52 @@ Tempo interno: {} µs na mediana, {} µs no p99	Внутреннее время:
 Mapeamento parado. Segure a mesma combinação para voltar.	Назначение остановлено. Удерживайте ту же комбинацию, чтобы включить снова.
 Mapeamento ligado de novo	Назначение снова включено
 {} roda como administrador: o Windows não deixa as teclas do controle chegarem nele.	{} запущен от имени администратора: Windows не пропускает к нему нажатия с геймпада.
+Editar perfis	Изменить профили
+Fechar perfis	Закрыть профили
+Novo perfil para jogo	Новый профиль для игры
+Voltar ao de fábrica	Вернуть по умолчанию
+Apagar perfil	Удалить профиль
+Camada	Слой
+Nova camada	Новый слой
+Apagar camada	Удалить слой
+Igual à camada mãe	Как в родительском слое
+Direções como botões	Направления как кнопки
+Rolar	Прокрутка
+Zona morta	Мёртвая зона
+Gatilho esquerdo	Левый триггер
+Gatilho direito	Правый триггер
+a	до
+Abaixo do primeiro valor conta como parado; a partir do segundo, como fim do curso.	Ниже первого значения считается покоем; от второго — концом хода.
+{}: o que faz nesta camada	{}: что делает в этом слое
+Nada.	Ничего.
+Vem da camada {}: 	Из слоя {}: 
+, junto com {}	, вместе с {}
+Tocar e duplo só respondem depois que o botão solta: até 0,3 s a mais.	Касание и двойное срабатывают только после отпускания кнопки: до 0,3 с позже.
+Sozinho	Отдельно
+Junto com {}	Вместе с {}
+Pressionar	Нажатие
+Tocar	Касание
+Segurar	Удержание
+Duplo	Двойное
+Soltar	Отпускание
+Tecla	Клавиша
+Tecla especial	Особая клавиша
+Roda	Колесо
+Camada enquanto segura	Слой при удержании
+Liga e desliga camada	Включить или выключить слой
+Sem som	Без звука
+Tocar ou pausar	Воспроизведение или пауза
+Próxima faixa	Следующий трек
+Faixa anterior	Предыдущий трек
+Voltar no navegador	Назад в браузере
+Avançar no navegador	Вперёд в браузере
+Clique esquerdo	Левый щелчок
+Clique direito	Правый щелчок
+Clique do meio	Средний щелчок
+Botão lateral 1	Боковая кнопка 1
+Botão lateral 2	Боковая кнопка 2
+Roda para cima	Колесо вверх
+Roda para baixo	Колесо вниз
+Camada {} enquanto segura	Слой {} при удержании
+Liga e desliga a camada {}	Включает или выключает слой {}
+Não deu para salvar o perfil.	Не удалось сохранить профиль.

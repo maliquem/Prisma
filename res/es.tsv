@@ -1972,3 +1972,52 @@ Tempo interno: {} µs na mediana, {} µs no p99	Tiempo interno: {} µs de median
 Mapeamento parado. Segure a mesma combinação para voltar.	Asignación detenida. Mantén la misma combinación para volver.
 Mapeamento ligado de novo	Asignación activada de nuevo
 {} roda como administrador: o Windows não deixa as teclas do controle chegarem nele.	{} se ejecuta como administrador: Windows no deja que las teclas del mando le lleguen.
+Editar perfis	Editar perfiles
+Fechar perfis	Cerrar perfiles
+Novo perfil para jogo	Nuevo perfil para juego
+Voltar ao de fábrica	Volver al de fábrica
+Apagar perfil	Borrar perfil
+Camada	Capa
+Nova camada	Nueva capa
+Apagar camada	Borrar capa
+Igual à camada mãe	Igual que la capa madre
+Direções como botões	Direcciones como botones
+Rolar	Desplazar
+Zona morta	Zona muerta
+Gatilho esquerdo	Gatillo izquierdo
+Gatilho direito	Gatillo derecho
+a	a
+Abaixo do primeiro valor conta como parado; a partir do segundo, como fim do curso.	Por debajo del primer valor cuenta como en reposo; desde el segundo, como fin del recorrido.
+{}: o que faz nesta camada	{}: qué hace en esta capa
+Nada.	Nada.
+Vem da camada {}: 	Viene de la capa {}: 
+, junto com {}	, junto con {}
+Tocar e duplo só respondem depois que o botão solta: até 0,3 s a mais.	Tocar y doble solo responden después de soltar el botón: hasta 0,3 s más.
+Sozinho	Solo
+Junto com {}	Junto con {}
+Pressionar	Pulsar
+Tocar	Tocar
+Segurar	Mantener
+Duplo	Doble
+Soltar	Soltar
+Tecla	Tecla
+Tecla especial	Tecla especial
+Roda	Rueda
+Camada enquanto segura	Capa mientras se mantiene
+Liga e desliga camada	Activar o desactivar capa
+Sem som	Silencio
+Tocar ou pausar	Reproducir o pausar
+Próxima faixa	Pista siguiente
+Faixa anterior	Pista anterior
+Voltar no navegador	Atrás en el navegador
+Avançar no navegador	Adelante en el navegador
+Clique esquerdo	Clic izquierdo
+Clique direito	Clic derecho
+Clique do meio	Clic central
+Botão lateral 1	Botón lateral 1
+Botão lateral 2	Botón lateral 2
+Roda para cima	Rueda hacia arriba
+Roda para baixo	Rueda hacia abajo
+Camada {} enquanto segura	Capa {} mientras se mantiene
+Liga e desliga a camada {}	Activa o desactiva la capa {}
+Não deu para salvar o perfil.	No se pudo guardar el perfil.

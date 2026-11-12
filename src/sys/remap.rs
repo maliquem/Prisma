@@ -164,7 +164,6 @@ impl Profile {
     }
 
     /// Texto do perfil: o mesmo para guardar, importar e exportar.
-    #[allow(dead_code)] // quem grava é a tela de perfis (2b)
     pub fn to_text(&self) -> String {
         use std::fmt::Write;
         let mut s = String::from("prisma-profile 1\n");
@@ -285,7 +284,6 @@ fn layer_of(p: &Profile, s: &str) -> Option<usize> {
     s.parse::<usize>().ok().filter(|&l| l < p.layers.len())
 }
 
-#[allow(dead_code)]
 pub fn button_name(bit: u32) -> &'static str {
     NAMES.iter().find(|n| n.1 == bit).map_or("?", |n| n.0)
 }
@@ -294,7 +292,6 @@ fn button_bit(s: &str) -> Option<u32> {
     NAMES.iter().find(|n| n.0 == s).map(|n| n.1)
 }
 
-#[allow(dead_code)]
 fn out_text(o: Out) -> String {
     match o {
         Out::Key(vk, m) => {
@@ -515,7 +512,8 @@ impl Engine {
             let b = &self.btn[i];
             if let Some(t) = b.down {
                 if !b.hold_fired && !b.used && now.saturating_duration_since(t) >= HOLD {
-                    let o = outs(&binds(p, b.layer, 1 << i, false), When::Hold);
+                    // A camada de segurar já entrou no aperto (ver `press`).
+                    let o: Vec<Out> = outs(&binds(p, b.layer, 1 << i, false), When::Hold).into_iter().filter(|o| !matches!(o, Out::Layer(_))).collect();
                     self.btn[i].hold_fired = true;
                     for o in o {
                         self.down(o, &mut acts);
@@ -594,7 +592,10 @@ impl Engine {
                 self.tap(o, acts);
             }
         }
-        for o in outs(&all, When::Press) {
+        // Camada em "segurar" entra já no aperto, para o stick e os botões apertados junto usarem a
+        // camada sem esperar 0,4 s; se o botão soltar antes disso, o toque dele sai como sempre.
+        let layers = outs(&all, When::Hold).into_iter().filter(|o| matches!(o, Out::Layer(_)));
+        for o in outs(&all, When::Press).into_iter().chain(layers) {
             self.down(o, acts);
             self.btn[i].outs.push(o);
         }
@@ -632,6 +633,8 @@ impl Engine {
 static ON: AtomicBool = AtomicBool::new(false);
 static STOPPED: AtomicBool = AtomicBool::new(false);
 static RUN: Mutex<Option<Run>> = Mutex::new(None);
+/// Última olhada no foco: quando, a janela e se ela ocupava a tela inteira.
+static FOCUS: Mutex<(Option<Instant>, isize, bool)> = Mutex::new((None, 0, false));
 
 struct Run {
     profiles: Vec<Profile>,
@@ -663,6 +666,51 @@ fn load_profiles() -> Vec<Profile> {
         }
     }
     list
+}
+
+/// Perfis como estão agora: Desktop, Base e os da pasta.
+pub fn profiles() -> Vec<Profile> {
+    RUN.lock().unwrap().as_ref().map_or_else(load_profiles, |r| r.profiles.clone())
+}
+
+/// O perfil tem arquivo próprio (para Desktop e Base: foi mudado e pode voltar ao de fábrica).
+pub fn has_file(name: &str) -> bool {
+    profiles_dir().join(file_name(name)).exists()
+}
+
+fn file_name(name: &str) -> String {
+    let s: String = name.chars().map(|c| if c.is_alphanumeric() || " -_.".contains(c) { c } else { '_' }).collect();
+    format!("{}.txt", s.trim())
+}
+
+/// Grava o perfil e passa a usar a versão nova.
+pub fn save(p: &Profile) -> bool {
+    let dir = profiles_dir();
+    let ok = std::fs::create_dir_all(&dir).is_ok() && crate::config::write_safe(&dir.join(file_name(&p.name)), p.to_text()).is_ok();
+    reload();
+    ok
+}
+
+/// Apaga o arquivo do perfil. Desktop e Base voltam ao de fábrica.
+pub fn remove(name: &str) {
+    let _ = std::fs::remove_file(profiles_dir().join(file_name(name)));
+    reload();
+}
+
+/// Relê os perfis. Solta tudo antes: as camadas e as teclas podem ter mudado.
+fn reload() {
+    let acts = {
+        let mut g = RUN.lock().unwrap();
+        let Some(r) = g.as_mut() else { return };
+        let name = r.profiles[r.cur].name.clone();
+        r.profiles = load_profiles();
+        r.cur = r.profiles.iter().position(|p| p.name == name).unwrap_or(0);
+        r.want = None;
+        r.engines.values_mut().flat_map(|e| e.0.release_all()).collect::<Vec<_>>()
+    };
+    send(&acts);
+    // O programa em foco é conferido de novo: um perfil novo pode ser o dele.
+    *FOCUS.lock().unwrap() = (None, 0, false);
 }
 
 /// Liga ou desliga o mapeamento. `games` são os .exe do Medidor.
@@ -772,8 +820,7 @@ pub fn feed(key: &str, inp: &Input, arrived: Instant) {
 /// jogo que abre em janela e só depois vai para a tela cheia, o que o aviso de foco do Windows não dá.
 fn focus_tick(now: Instant) {
     use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
-    static LAST: Mutex<(Option<Instant>, isize, bool)> = Mutex::new((None, 0, false));
-    let mut last = LAST.lock().unwrap();
+    let mut last = FOCUS.lock().unwrap();
     if last.0.is_some_and(|t| now.saturating_duration_since(t) < Duration::from_millis(250)) {
         return;
     }
@@ -989,6 +1036,31 @@ mod tests {
         assert!(e.step(&p, &btn(pads::A | pads::B), at(60, t0)).is_empty());
         assert_eq!(e.step(&p, &btn(0), at(70, t0)), vec![Act::Up(K2), Act::Up(Out::Mouse(2))]);
         assert!(e.idle());
+    }
+
+    #[test]
+    fn held_layer_changes_stick_mode_at_once() {
+        let t0 = Instant::now();
+        let mut p = Profile::desktop();
+        p.layers.push(Layer { name: "Fn".into(), parent: Some(0), ls: None, rs: Some(Stick::Mouse(1600.0)), binds: vec![] });
+        p.layers[0].binds.retain(|b| b.button != pads::LB);
+        one(&mut p.layers[0], pads::LB, When::Press, Out::Layer(1));
+        let mut e = engine(&p, t0);
+        let i = |b: u32| Input { buttons: b, ry: 1.0, ..Default::default() };
+        assert!(matches!(e.step(&p, &i(0), at(10, t0))[..], [Act::Wheel(_)]));
+        // No mesmo relatório em que o LB desce, o stick direito já é mouse.
+        assert!(matches!(e.step(&p, &i(pads::LB), at(20, t0))[..], [Act::Move(0, -16 | -15)]));
+        // Também com a camada em "segurar" e um toque no mesmo botão: a camada entra no aperto, e o
+        // toque sai se soltar rápido.
+        p.layers[0].binds.retain(|b| b.button != pads::LB);
+        one(&mut p.layers[0], pads::LB, When::Hold, Out::Layer(1));
+        one(&mut p.layers[0], pads::LB, When::Tap, K1);
+        let mut e = engine(&p, t0);
+        assert!(matches!(e.step(&p, &i(pads::LB), at(10, t0))[..], [Act::Move(..)]));
+        assert_eq!(e.layer(), 1);
+        let acts = e.step(&p, &btn(0), at(100, t0));
+        assert_eq!(acts, vec![Act::Down(K1), Act::Up(K1)]);
+        assert_eq!(e.layer(), 0);
     }
 
     #[test]

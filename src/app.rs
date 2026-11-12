@@ -2509,6 +2509,10 @@ impl App {
             match arg("--test-page=").as_deref() {
                 Some("share") => self.page = Page::Share,
                 Some("controllers") => self.page = Page::Controllers,
+                Some("controllers-edit") => {
+                    self.page = Page::Controllers;
+                    self.pads.open_editor();
+                }
                 Some("meter") => self.page = Page::Meter,
                 Some("sound") => self.page = Page::Volume,
                 Some("guide") => self.page = Page::Guide,

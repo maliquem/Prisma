@@ -14,6 +14,14 @@ pub struct State {
     wiz: Option<Wizard>,
     result: Option<(String, Results)>,
     conflicts: Vec<&'static str>,
+    /// Editor de perfis aberto no lugar da coluna da direita.
+    pub(super) edit: Option<super::pad_profiles::Editor>,
+}
+
+impl State {
+    pub fn open_editor(&mut self) {
+        self.edit = Some(Default::default());
+    }
 }
 
 struct Wizard {
@@ -118,7 +126,7 @@ fn rate_text(p: &Pad) -> String {
 }
 
 /// Nomes dos botões no desenho de cada família, com o bit comum.
-fn button_names(f: Family) -> &'static [(u32, &'static str)] {
+pub(super) fn button_names(f: Family) -> &'static [(u32, &'static str)] {
     use pads::*;
     match f {
         Family::DualSense => &[
@@ -226,9 +234,14 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         y += r.h + 8.0;
     }
 
-    // Coluna direita: o controle escolhido.
-    let Some(p) = list.get(app.pads.sel) else { return };
+    // Coluna direita: o editor de perfis, ou o controle escolhido.
     let rx = x + lw + 12.0;
+    if app.pads.edit.is_some() {
+        let family = list.get(app.pads.sel).map_or(Family::Xbox, |p| p.family);
+        super::pad_profiles::draw(ui, app, rect(rx, top, rw, a.h - top - 24.0), family);
+        return;
+    }
+    let Some(p) = list.get(app.pads.sel) else { return };
     let live = rect(rx, top, rw, 300.0);
     ui.card(live);
     draw_live(ui, p, live);
@@ -368,7 +381,7 @@ fn rows_draw(ui: &mut Ui, x: f32, y: f32, w: f32, rows: &[(&str, String, bool)])
 /// Mapeamento: liga e desliga, perfil ativo, parada de emergência e o tempo interno.
 fn mapping(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
     use crate::sys::remap;
-    let r = rect(at.x, at.y, at.w, 214.0);
+    let r = rect(at.x, at.y, at.w, 262.0);
     ui.card(r);
     ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Mapeamento");
     let check = rect(r.x + 10.0, r.y + 38.0, r.w - 20.0, 36.0);
@@ -387,6 +400,14 @@ fn mapping(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
     if let Some((med, p99)) = remap::latency() {
         let t = crate::i18n::tr("Tempo interno: {} µs na mediana, {} µs no p99").replacen("{}", &med.to_string(), 1).replacen("{}", &p99.to_string(), 1);
         ui.c.text_fit(rect(r.x + 16.0, r.y + 184.0, r.w - 32.0, 20.0), &t, 12.0, MUTED, Align::Left, Weight::Regular);
+    }
+    let editing = app.pads.edit.is_some();
+    if ui.button_ex("pad-edit", rect(r.x + 16.0, r.y + 212.0, r.w - 32.0, 36.0), if editing { "Fechar perfis" } else { "Editar perfis" }, false, true) {
+        if editing {
+            app.pads.edit = None;
+        } else {
+            app.pads.open_editor();
+        }
     }
     r.bottom() + 12.0
 }

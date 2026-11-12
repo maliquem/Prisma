@@ -1978,3 +1978,52 @@ Tempo interno: {} µs na mediana, {} µs no p99	Internal time: {} µs median, {}
 Mapeamento parado. Segure a mesma combinação para voltar.	Mapping stopped. Hold the same combination to turn it back on.
 Mapeamento ligado de novo	Mapping on again
 {} roda como administrador: o Windows não deixa as teclas do controle chegarem nele.	{} runs as administrator: Windows doesn't let the controller's keys reach it.
+Editar perfis	Edit profiles
+Fechar perfis	Close profiles
+Novo perfil para jogo	New profile for a game
+Voltar ao de fábrica	Back to default
+Apagar perfil	Delete profile
+Camada	Layer
+Nova camada	New layer
+Apagar camada	Delete layer
+Igual à camada mãe	Same as parent layer
+Direções como botões	Directions as buttons
+Rolar	Scroll
+Zona morta	Dead zone
+Gatilho esquerdo	Left trigger
+Gatilho direito	Right trigger
+a	to
+Abaixo do primeiro valor conta como parado; a partir do segundo, como fim do curso.	Below the first value counts as at rest; from the second on, as the end of travel.
+{}: o que faz nesta camada	{}: what it does in this layer
+Nada.	Nothing.
+Vem da camada {}: 	Comes from layer {}: 
+, junto com {}	, together with {}
+Tocar e duplo só respondem depois que o botão solta: até 0,3 s a mais.	Tap and double only respond after the button is released: up to 0.3 s later.
+Sozinho	Alone
+Junto com {}	Together with {}
+Pressionar	Press
+Tocar	Tap
+Segurar	Hold
+Duplo	Double
+Soltar	Release
+Tecla	Key
+Tecla especial	Special key
+Roda	Wheel
+Camada enquanto segura	Layer while held
+Liga e desliga camada	Toggle layer
+Sem som	Mute
+Tocar ou pausar	Play or pause
+Próxima faixa	Next track
+Faixa anterior	Previous track
+Voltar no navegador	Browser back
+Avançar no navegador	Browser forward
+Clique esquerdo	Left click
+Clique direito	Right click
+Clique do meio	Middle click
+Botão lateral 1	Side button 1
+Botão lateral 2	Side button 2
+Roda para cima	Wheel up
+Roda para baixo	Wheel down
+Camada {} enquanto segura	Layer {} while held
+Liga e desliga a camada {}	Toggles layer {}
+Não deu para salvar o perfil.	Couldn't save the profile.
