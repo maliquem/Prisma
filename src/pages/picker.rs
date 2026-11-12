@@ -12,6 +12,8 @@ pub enum Target {
     HdrGame,
     MeterGame,
     NvGame,
+    /// Programa que um botão do controle abre (editor de perfis).
+    PadProgram,
 }
 
 pub fn add_button(ui: &mut Ui, app: &mut App, r: Rect, target: Target) {
@@ -21,8 +23,10 @@ pub fn add_button(ui: &mut Ui, app: &mut App, r: Rect, target: Target) {
         Target::HdrGame => ("add-game", "add-game-menu"),
         Target::MeterGame => ("add-meter", "add-meter-menu"),
         Target::NvGame => ("add-nv", "add-nv-menu"),
+        Target::PadProgram => ("add-pad", "add-pad-menu"),
     };
-    if ui.button(key, r, "Adicionar", false) {
+    let label = if target == Target::PadProgram { "Escolher programa" } else { "Adicionar" };
+    if ui.button(key, r, label, false) {
         ui.menu(menu, &[("Da lista de programas", true), ("Escolher arquivo .exe", true)]);
     }
     match ui.menu_pick(menu) {
@@ -41,6 +45,7 @@ fn add(app: &mut App, target: Target, path: &str) {
         Target::Fullscreen => app.cfg.fs_note(&exe, path),
         Target::MeterGame => app.add_meter_game(&exe, path),
         Target::NvGame => super::nvidia::add_game(app, &exe),
+        Target::PadProgram => super::pad_profiles::set_program(app, path),
         Target::HdrGame => {
             if !app.cfg.hdr_games.iter().any(|g| g.exe.eq_ignore_ascii_case(&exe)) {
                 app.cfg.hdr_games.push(crate::config::HdrGame { exe, path: path.to_string(), mode: 0 });

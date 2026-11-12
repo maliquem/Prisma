@@ -2021,3 +2021,26 @@ Roda para baixo	滚轮向下
 Camada {} enquanto segura	按住时切换到层 {}
 Liga e desliga a camada {}	开关层 {}
 Não deu para salvar o perfil.	无法保存配置。
+Esconder o Medidor	隐藏性能监视
+Ligar e desligar o registro do Medidor	开关性能监视记录
+Ligar e desligar o limite de FPS	开关 FPS 限制
+Aumentar o limite de FPS	提高 FPS 限制
+Diminuir o limite de FPS	降低 FPS 限制
+Ligar e desligar o HDR	开关 HDR
+Aumentar o volume	调高音量
+Diminuir o volume	调低音量
+Tela cheia sem bordas na janela em foco	当前窗口无边框全屏
+Mostrar e esconder o widget	显示或隐藏小组件
+Abrir e fechar a busca	打开或关闭搜索
+Desconectar o Bluetooth	断开蓝牙
+Mostrar a bateria	显示电量
+Ação do Prisma	Prisma 操作
+Trocar de perfil	切换配置
+Abrir programa	打开程序
+Combinação de som {}	声音组合 {}
+Trocar para o perfil {}	切换到配置 {}
+Abrir {}	打开 {}
+Nenhum programa escolhido	未选择程序
+Escolher programa	选择程序
+{} não está no Bluetooth ou não desconectou	{} 未通过蓝牙连接或未能断开
+Não consegui abrir {}	无法打开 {}

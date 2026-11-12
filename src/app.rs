@@ -56,6 +56,7 @@ const WM_PICK_GAME: u32 = WM_APP + 80;
 const WM_POW_IN: u32 = WM_APP + 81;
 const WM_PICK_METER: u32 = WM_APP + 83;
 const WM_PICK_NV: u32 = WM_APP + 91;
+const WM_PICK_PAD: u32 = WM_APP + 94;
 const WM_POW_OUT: u32 = WM_APP + 82;
 const WM_REPORT_PHOTO: u32 = WM_APP + 84;
 const WM_REPORT_DONE: u32 = WM_APP + 85;
@@ -2513,6 +2514,12 @@ impl App {
                     self.page = Page::Controllers;
                     self.pads.open_editor();
                 }
+                Some("controllers-action") | Some("controllers-run") => {
+                    self.page = Page::Controllers;
+                    self.pads.open_editor();
+                    let run = arg("--test-page=").as_deref() == Some("controllers-run");
+                    crate::pages::pad_profiles::test_target(self, run);
+                }
                 Some("meter") => self.page = Page::Meter,
                 Some("sound") => self.page = Page::Volume,
                 Some("guide") => self.page = Page::Guide,
@@ -2653,6 +2660,7 @@ impl App {
             Target::HdrGame => WM_PICK_GAME,
             Target::MeterGame => WM_PICK_METER,
             Target::NvGame => WM_PICK_NV,
+            Target::PadProgram => WM_PICK_PAD,
         };
         unsafe {
             let _ = PostMessageW(Some(self.hub), msg, WPARAM(0), LPARAM(0));
@@ -2942,6 +2950,19 @@ impl App {
                 Event::Stopped { on: true } => "Mapeamento parado. Segure a mesma combinação para voltar.".into(),
                 Event::Stopped { on: false } => "Mapeamento ligado de novo".into(),
                 Event::Elevated { exe } => format!("{exe} roda como administrador: o Windows não deixa as teclas do controle chegarem nele."),
+                Event::Action { id, pad } => match self.pad_action(id, &pad) {
+                    Some(t) => t,
+                    None => continue,
+                },
+                Event::Notice { text } => text,
+                Event::Run { path } => {
+                    use windows::Win32::UI::Shell::ShellExecuteW;
+                    let r = unsafe { ShellExecuteW(None, w!("open"), &HSTRING::from(path.as_str()), None, None, SW_SHOWNORMAL) };
+                    if r.0 as isize > 32 {
+                        continue;
+                    }
+                    format!("Não consegui abrir {path}")
+                }
                 _ => continue,
             };
             self.toast.info(&text);
@@ -2949,6 +2970,40 @@ impl App {
         if self.page == Page::Controllers {
             self.invalidate();
         }
+    }
+
+    /// Botão do controle ligado a uma ação do Prisma. Devolve o aviso a mostrar, se houver.
+    fn pad_action(&mut self, id: u8, pad: &str) -> Option<String> {
+        let name = crate::sys::pads::list().into_iter().find(|p| p.key == pad);
+        // Mesma ordem de `remap::ACTIONS`; 0 marca as que não são atalho.
+        const HK: [i32; 26] = [
+            HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_REPLAY, HK_METER_C, HK_METER_F, HK_METER_O, HK_METER_KEYS, HK_LOG,
+            HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, 0, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE, HK_FULL, HK_WIDGET, HK_OPT, HK_FORCE, HK_EXPLORER,
+            HK_FIND, 0, 0,
+        ];
+        match id {
+            14 => {
+                // O Windows leva até alguns segundos para trocar a tela: fora da janela.
+                std::thread::spawn(|| {
+                    let ok = crate::sys::hdr::hdr_output().is_some_and(|(a, o, now)| crate::sys::hdr::set_hdr(a, o, !now));
+                    if !ok {
+                        crate::sys::pads::emit(crate::sys::pads::Event::Notice { text: "O Windows não trocou o HDR".into() });
+                    }
+                });
+            }
+            24 => {
+                let n = name.map(|p| p.name).unwrap_or_default();
+                return Some(if crate::sys::pads::disconnect(pad) { format!("{n} desconectado") } else { format!("{n} não está no Bluetooth ou não desconectou") });
+            }
+            25 => return name.map(|p| format!("{}: {}", p.name, crate::pages::controllers::battery_label(&p))),
+            n if n >= crate::sys::remap::SOUND => self.sound_default((n - crate::sys::remap::SOUND) as usize),
+            n => {
+                if let Some(&hk) = HK.get(n as usize).filter(|&&h| h != 0) {
+                    self.on_hotkey(hk);
+                }
+            }
+        }
+        None
     }
 
     /// Passa ao leitor de controles os limites dos avisos e, ao mapeamento, se está ligado e quais
@@ -3381,6 +3436,15 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                         a.cfg.hdr_games.push(crate::config::HdrGame { exe, path, mode: 0 });
                     }
                     a.cfg.save();
+                    a.invalidate();
+                });
+            }
+            LRESULT(0)
+        }
+        WM_PICK_PAD => {
+            if let Some(path) = capture::choose_exe(h) {
+                with(|a| {
+                    crate::pages::pad_profiles::set_program(a, &path);
                     a.invalidate();
                 });
             }

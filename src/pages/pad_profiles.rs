@@ -17,10 +17,30 @@ pub struct Editor {
     val: usize,
     hk: Hotkey,
     game: usize,
+    /// Programa escolhido para "Abrir programa".
+    run: String,
+}
+
+/// Fotos de teste: o formulário já em Ação do Prisma (a mais longa) ou Abrir programa.
+pub fn test_target(app: &mut App, run: bool) {
+    if let Some(ed) = app.pads.edit.as_mut() {
+        ed.kind = if run { 8 } else { 6 };
+        ed.val = 18;
+        if run {
+            ed.run = "C:/Windows/System32/notepad.exe".into();
+        }
+    }
+}
+
+/// Caminho que o seletor de programa devolveu.
+pub fn set_program(app: &mut App, path: &str) {
+    if let Some(ed) = app.pads.edit.as_mut() {
+        ed.run = path.to_string();
+    }
 }
 
 const WHENS: [(When, &str); 5] = [(When::Press, "Pressionar"), (When::Tap, "Tocar"), (When::Hold, "Segurar"), (When::Double, "Duplo"), (When::Release, "Soltar")];
-const KINDS: [&str; 6] = ["Tecla", "Tecla especial", "Mouse", "Roda", "Camada enquanto segura", "Liga e desliga camada"];
+const KINDS: [&str; 9] = ["Tecla", "Tecla especial", "Mouse", "Roda", "Camada enquanto segura", "Liga e desliga camada", "Ação do Prisma", "Trocar de perfil", "Abrir programa"];
 /// Teclas que o campo de tecla não pega (Esc cancela) ou que não existem no teclado comum.
 const SPECIAL: [(u16, &str); 12] = [
     (0x1B, "Esc"),
@@ -87,6 +107,10 @@ fn describe(o: Out, p: &Profile) -> String {
         Out::Wheel(n) => tr(WHEEL[if n > 0 { 0 } else { 1 }]),
         Out::Layer(n) => tr("Camada {} enquanto segura").replace("{}", &layer_name(p, n)),
         Out::Toggle(n) => tr("Liga e desliga a camada {}").replace("{}", &layer_name(p, n)),
+        Out::Action(n) if n >= remap::SOUND => tr("Combinação de som {}").replace("{}", &(n - remap::SOUND + 1).to_string()),
+        Out::Action(n) => remap::ACTIONS.get(n as usize).map_or_else(String::new, |a| tr(a)),
+        Out::Profile(n) => tr("Trocar para o perfil {}").replace("{}", p.strings.get(n as usize).map_or("", |s| s)),
+        Out::Run(n) => tr("Abrir {}").replace("{}", &p.strings.get(n as usize).map_or_else(String::new, |s| crate::sys::procs::exe_name(s))),
     }
 }
 
@@ -340,15 +364,25 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
     }
     y += 44.0;
     let vr = rect(x, y, 2.0 * third + 8.0, 34.0);
+    let mut pick = None;
+    let sounds = app.cfg.snd_keys.len().min(crate::app::SND_KEYS_MAX);
+    let others_p: Vec<String> = list.iter().map(|o| o.name.clone()).filter(|n| *n != p.name).collect();
     let values: Vec<String> = match ed.kind {
         1 => SPECIAL.iter().map(|s| tr(s.1)).collect(),
         2 => MOUSE.iter().map(|s| tr(s)).collect(),
         3 => WHEEL.iter().map(|s| tr(s)).collect(),
         4 | 5 => layers.clone(),
+        6 => remap::ACTIONS.iter().map(|a| tr(a)).chain((1..=sounds).map(|n| tr("Combinação de som {}").replace("{}", &n.to_string()))).collect(),
+        7 => others_p.clone(),
         _ => vec![],
     };
     if ed.kind == 0 {
         ui.hotkey("pp-key", vr, &mut ed.hk);
+    } else if ed.kind == 8 {
+        let half_v = ((vr.w - 8.0) / 2.0).floor();
+        let shown = if ed.run.is_empty() { tr("Nenhum programa escolhido") } else { crate::sys::procs::exe_name(&ed.run) };
+        ui.c.text_fit(rect(vr.x, vr.y, half_v, vr.h), &shown, 13.0, if ed.run.is_empty() { MUTED } else { TEXT }, Align::Left, Weight::Regular);
+        pick = Some(rect(vr.x + half_v + 8.0, vr.y, half_v, vr.h));
     } else {
         ed.val = ed.val.min(values.len().saturating_sub(1));
         ui.select("pp-val", vr, &values, &mut ed.val);
@@ -367,14 +401,27 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
         2 => Some(Out::Mouse(ed.val as u8 + 1)),
         3 => Some(Out::Wheel(if ed.val == 0 { 1 } else { -1 })),
         4 => Some(Out::Layer(ed.val as u8)),
-        _ => Some(Out::Toggle(ed.val as u8)),
+        5 => Some(Out::Toggle(ed.val as u8)),
+        6 => Some(Out::Action(if ed.val < remap::ACTIONS.len() { ed.val as u8 } else { remap::SOUND + (ed.val - remap::ACTIONS.len()) as u8 })),
+        // Perfil e programa só entram na lista de textos do perfil ao adicionar.
+        7 => others_p.get(ed.val).map(|_| Out::Profile(0)),
+        _ => (!ed.run.is_empty()).then_some(Out::Run(0)),
     };
     if ui.button_ex("pp-add", rect(x + 2.0 * (third + 8.0), y, third, 34.0), "Adicionar", true, out.is_some()) {
+        let out = match out {
+            Some(Out::Profile(_)) => remap::intern(&mut p.strings, &others_p[ed.val]).map(Out::Profile),
+            Some(Out::Run(_)) => remap::intern(&mut p.strings, &ed.run).map(Out::Run),
+            o => o,
+        };
         if let Some(out) = out {
             let with = if ed.with == 0 { 0 } else { others[ed.with - 1].0 };
             p.layers[ed.layer].binds.push(Bind { button: ed.button, with, when: WHENS[ed.when].0, out });
             changed = true;
         }
+    }
+    // Depois do último uso de `ed`: o botão precisa da App inteira.
+    if let Some(r) = pick {
+        super::picker::add_button(ui, app, r, super::picker::Target::PadProgram);
     }
     ui.end_scroll();
 

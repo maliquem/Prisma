@@ -2027,3 +2027,26 @@ Roda para baixo	Wheel down
 Camada {} enquanto segura	Layer {} while held
 Liga e desliga a camada {}	Toggles layer {}
 Não deu para salvar o perfil.	Couldn't save the profile.
+Esconder o Medidor	Hide the Meter
+Ligar e desligar o registro do Medidor	Turn the Meter log on and off
+Ligar e desligar o limite de FPS	Turn the FPS limit on and off
+Aumentar o limite de FPS	Raise the FPS limit
+Diminuir o limite de FPS	Lower the FPS limit
+Ligar e desligar o HDR	Turn HDR on and off
+Aumentar o volume	Volume up
+Diminuir o volume	Volume down
+Tela cheia sem bordas na janela em foco	Borderless full screen on the focused window
+Mostrar e esconder o widget	Show and hide the widget
+Abrir e fechar a busca	Open and close search
+Desconectar o Bluetooth	Disconnect Bluetooth
+Mostrar a bateria	Show the battery
+Ação do Prisma	Prisma action
+Trocar de perfil	Switch profile
+Abrir programa	Open program
+Combinação de som {}	Sound combination {}
+Trocar para o perfil {}	Switch to profile {}
+Abrir {}	Open {}
+Nenhum programa escolhido	No program chosen
+Escolher programa	Choose program
+{} não está no Bluetooth ou não desconectou	{} isn't on Bluetooth or didn't disconnect
+Não consegui abrir {}	Couldn't open {}

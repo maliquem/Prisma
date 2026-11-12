@@ -60,7 +60,46 @@ pub enum Out {
     Layer(u8),
     /// Liga e desliga a camada.
     Toggle(u8),
+    /// Ação do Prisma (`ACTIONS`), feita pela janela principal.
+    Action(u8),
+    /// Troca para o perfil com este nome (índice em `Profile::strings`).
+    Profile(u8),
+    /// Abre este programa (índice em `Profile::strings`).
+    Run(u8),
 }
+
+/// Ações do Prisma que um botão pode chamar: todas as que têm atalho, mais HDR, Bluetooth e
+/// bateria. A ordem é a do arquivo: só cresce no fim. `SOUND + n` troca para a combinação de som n.
+pub const ACTIONS: [&str; 26] = [
+    "Foto da área",
+    "Foto da tela inteira",
+    "Foto da janela em foco",
+    "Gravar Janela e parar",
+    "Gravar Tela e parar",
+    "Salvar replay",
+    "Medidor compacto",
+    "Medidor completo",
+    "Esconder o Medidor",
+    "Controles no medidor",
+    "Ligar e desligar o registro do Medidor",
+    "Ligar e desligar o limite de FPS",
+    "Aumentar o limite de FPS",
+    "Diminuir o limite de FPS",
+    "Ligar e desligar o HDR",
+    "Aumentar o volume",
+    "Diminuir o volume",
+    "Ligar e desligar o som",
+    "Tela cheia sem bordas na janela em foco",
+    "Mostrar e esconder o widget",
+    "Otimizar",
+    "Fechar à força",
+    "Reiniciar o Explorer",
+    "Abrir e fechar a busca",
+    "Desconectar o Bluetooth",
+    "Mostrar a bateria",
+];
+/// Primeira ação de combinação de som (a combinação n é `SOUND + n`).
+pub const SOUND: u8 = 100;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum When {
@@ -115,6 +154,8 @@ pub struct Profile {
     /// Stick esquerdo, direito, gatilho esquerdo, direito.
     pub zones: [Zone; 4],
     pub layers: Vec<Layer>,
+    /// Nomes de perfil e programas citados pelas ligações.
+    pub strings: Vec<String>,
 }
 
 pub const DESKTOP: &str = "Desktop";
@@ -124,7 +165,7 @@ impl Profile {
     fn empty(name: &str) -> Self {
         let stick = Zone { start: 0.15, end: 0.95 };
         let trig = Zone { start: 0.05, end: 0.95 };
-        Profile { name: name.into(), games: vec![], zones: [stick, stick, trig, trig], layers: vec![Layer { name: "Base".into(), parent: None, ls: None, rs: None, binds: vec![] }] }
+        Profile { name: name.into(), games: vec![], zones: [stick, stick, trig, trig], layers: vec![Layer { name: "Base".into(), parent: None, ls: None, rs: None, binds: vec![] }], strings: vec![] }
     }
 
     /// Base: nada mapeado, o jogo lê o controle como ele é.
@@ -196,7 +237,7 @@ impl Profile {
                     }
                 }
                 let when = WHENS.iter().find(|w| w.0 == b.when).map_or("press", |w| w.1);
-                let _ = writeln!(s, "bind {i} {button} {when} {}", out_text(b.out));
+                let _ = writeln!(s, "bind {i} {button} {when} {}", out_text(b.out, &self.strings));
             }
         }
         s
@@ -260,7 +301,7 @@ impl Profile {
                     }
                     let w = it.next()?;
                     let when = WHENS.iter().find(|x| x.1 == w)?.0;
-                    let out = parse_out(it.next()?)?;
+                    let out = parse_out(it.next()?, &mut p.strings)?;
                     if with & button != 0 || p.layers[l].binds.len() >= 256 {
                         return None;
                     }
@@ -292,7 +333,8 @@ fn button_bit(s: &str) -> Option<u32> {
     NAMES.iter().find(|n| n.0 == s).map(|n| n.1)
 }
 
-fn out_text(o: Out) -> String {
+fn out_text(o: Out, strings: &[String]) -> String {
+    let text = |i: u8| strings.get(i as usize).map_or("", |s| s.as_str());
     match o {
         Out::Key(vk, m) => {
             let mut s = format!("key {vk}");
@@ -308,10 +350,34 @@ fn out_text(o: Out) -> String {
         Out::Wheel(n) => format!("wheel {n}"),
         Out::Layer(n) => format!("layer {n}"),
         Out::Toggle(n) => format!("toggle {n}"),
+        Out::Action(n) => format!("action {n}"),
+        Out::Profile(n) => format!("profile {}", text(n)),
+        Out::Run(n) => format!("run {}", text(n)),
     }
 }
 
-fn parse_out(s: &str) -> Option<Out> {
+/// Guarda o texto no perfil e devolve o índice (o mesmo texto não se repete).
+pub fn intern(strings: &mut Vec<String>, s: &str) -> Option<u8> {
+    match strings.iter().position(|x| x == s) {
+        Some(i) => Some(i as u8),
+        None if strings.len() < 255 => {
+            strings.push(s.to_string());
+            Some(strings.len() as u8 - 1)
+        }
+        None => None,
+    }
+}
+
+fn parse_out(s: &str, strings: &mut Vec<String>) -> Option<Out> {
+    // Perfil e programa levam o resto da linha, com espaços.
+    if let Some(rest) = s.strip_prefix("profile ").or_else(|| s.strip_prefix("run ")) {
+        let rest = rest.trim();
+        if rest.is_empty() || rest.chars().any(|c| c.is_control()) || rest.len() > 400 {
+            return None;
+        }
+        let i = intern(strings, rest)?;
+        return Some(if s.starts_with("run ") { Out::Run(i) } else { Out::Profile(i) });
+    }
     let mut it = s.split(' ');
     let kind = it.next()?;
     let n = it.next()?;
@@ -328,6 +394,7 @@ fn parse_out(s: &str) -> Option<Out> {
         "wheel" => Out::Wheel(n.parse::<i8>().ok().filter(|v| *v != 0)?),
         "layer" => Out::Layer(n.parse::<u8>().ok()?),
         "toggle" => Out::Toggle(n.parse::<u8>().ok()?),
+        "action" => Out::Action(n.parse::<u8>().ok().filter(|&a| (a as usize) < ACTIONS.len() || (SOUND..SOUND + crate::app::SND_KEYS_MAX as u8).contains(&a))?),
         _ => return None,
     };
     it.next().is_none().then_some(out)
@@ -360,6 +427,8 @@ pub enum Act {
     Move(i32, i32),
     /// Em unidades do Windows (120 por clique).
     Wheel(i32),
+    /// Ação, troca de perfil ou programa: fica para quem chama o motor.
+    Cmd(Out),
 }
 
 #[derive(Default)]
@@ -443,6 +512,7 @@ impl Engine {
                 None => self.toggles.push(n),
             },
             Out::Wheel(n) => acts.push(Act::Wheel(n as i32 * 120)),
+            Out::Action(_) | Out::Profile(_) | Out::Run(_) => acts.push(Act::Cmd(o)),
             _ => {
                 let c = self.count.entry(o).or_default();
                 *c += 1;
@@ -460,7 +530,7 @@ impl Engine {
                     self.holds.remove(i);
                 }
             }
-            Out::Toggle(_) | Out::Wheel(_) => {}
+            Out::Toggle(_) | Out::Wheel(_) | Out::Action(_) | Out::Profile(_) | Out::Run(_) => {}
             _ => {
                 if let Some(c) = self.count.get_mut(&o) {
                     *c -= 1;
@@ -788,7 +858,26 @@ pub fn feed(key: &str, inp: &Input, arrived: Instant) {
         if !STOPPED.load(Ordering::Relaxed) {
             let p = &r.profiles[r.cur];
             let e = r.engines.get_mut(key).unwrap();
-            acts.extend(e.0.step(p, inp, arrived));
+            let step = e.0.step(p, inp, arrived);
+            let strings = p.strings.clone();
+            for a in step {
+                match a {
+                    Act::Cmd(Out::Action(n)) => events.push(pads::Event::Action { id: n, pad: key.to_string() }),
+                    Act::Cmd(Out::Run(n)) => events.extend(strings.get(n as usize).map(|s| pads::Event::Run { path: s.clone() })),
+                    Act::Cmd(Out::Profile(n)) => {
+                        // Troca na mão: vale até o foco mudar de programa.
+                        if let Some(to) = strings.get(n as usize).and_then(|s| r.profiles.iter().position(|p| p.name == *s)) {
+                            r.want = None;
+                            r.cur = to;
+                            for e in r.engines.values_mut() {
+                                acts.extend(e.0.release_all());
+                            }
+                            events.push(pads::Event::Profile { name: r.profiles[to].name.clone() });
+                        }
+                    }
+                    a => acts.push(a),
+                }
+            }
             if let Some((to, at)) = r.want {
                 if arrived >= at && r.engines.values().all(|e| e.0.idle()) {
                     r.want = None;
@@ -1170,8 +1259,13 @@ mod tests {
         p.layers.push(Layer { name: "Fn".into(), parent: Some(0), ls: Some(Stick::Buttons), rs: None, binds: vec![] });
         one(&mut p.layers[0], pads::LB, When::Hold, Out::Layer(1));
         p.layers[1].binds.push(Bind { button: pads::A, with: pads::LB | pads::RB, when: When::Double, out: Out::Key(0x43, CTRL | SHIFT) });
+        let base = intern(&mut p.strings, "Base").unwrap();
+        let prog = intern(&mut p.strings, "C:/Program Files/App Dir/app.exe").unwrap();
+        for out in [Out::Action(0), Out::Action(ACTIONS.len() as u8 - 1), Out::Action(SOUND + 2), Out::Profile(base), Out::Run(prog)] {
+            one(&mut p.layers[1], pads::B, When::Tap, out);
+        }
         let text = p.to_text();
-        assert_eq!(Profile::parse(&text), Some(p));
+        assert_eq!(Profile::parse(&text), Some(p), "{text}");
         for bad in [
             "",
             "prisma-profile 2\nname x\nlayer - B",
@@ -1187,6 +1281,8 @@ mod tests {
             "prisma-profile 1\nname x\nlayer - B\nzone ls 0.9 0.1",
             "prisma-profile 1\nname x\nlayer - B\nstick 0 ls mouse NaN",
             "prisma-profile 1\nname x\nlayer - B\nrun calc.exe",
+            "prisma-profile 1\nname x\nlayer - B\nbind 0 A press action 26",
+            "prisma-profile 1\nname x\nlayer - B\nbind 0 A press action 112",
         ] {
             assert_eq!(Profile::parse(bad), None, "{bad}");
         }

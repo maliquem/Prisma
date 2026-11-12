@@ -4,7 +4,7 @@ mod adjust;
 mod analyze;
 mod capture;
 pub mod controllers;
-mod pad_profiles;
+pub mod pad_profiles;
 mod energy;
 mod fullscreen;
 pub mod guide;

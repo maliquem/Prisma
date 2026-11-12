@@ -129,6 +129,12 @@ pub enum Event {
     Stopped { on: bool },
     /// Programa em foco roda como administrador: as teclas do Prisma não chegam nele.
     Elevated { exe: String },
+    /// Botão mapeado para uma ação do Prisma (`remap::ACTIONS`), apertado no controle `pad`.
+    Action { id: u8, pad: String },
+    /// Botão mapeado para abrir um programa.
+    Run { path: String },
+    /// Aviso pronto, vindo de outra thread.
+    Notice { text: String },
 }
 
 static PADS: Mutex<Vec<Pad>> = Mutex::new(Vec::new());
@@ -198,6 +204,42 @@ pub(crate) fn poke() {
         unsafe {
             let _ = PostMessageW(Some(HWND(w as *mut _)), WM_APP, WPARAM(0), LPARAM(0));
         }
+    }
+}
+
+/// Desconecta um controle Bluetooth pelo rádio, sem administrador (medido na Fase 0). O endereço
+/// vem do número de série do aparelho HID.
+pub fn disconnect(key: &str) -> bool {
+    let path = match key.strip_prefix("xinput:") {
+        Some(_) => match IG.lock().unwrap().as_slice() {
+            [(p, _, Link::Bluetooth, _)] => p.clone(),
+            _ => return false,
+        },
+        None => key.to_string(),
+    };
+    if link_of(&path) != Link::Bluetooth {
+        return false;
+    }
+    unsafe {
+        let Some(h) = open(&path, 0) else { return false };
+        let serial = hid_string(h, HidD_GetSerialNumberString);
+        let _ = CloseHandle(h);
+        let hex: String = serial.chars().filter(|c| c.is_ascii_hexdigit()).collect();
+        let Ok(addr) = u64::from_str_radix(&hex, 16) else { return false };
+        let params = BLUETOOTH_FIND_RADIO_PARAMS { dwSize: std::mem::size_of::<BLUETOOTH_FIND_RADIO_PARAMS>() as u32 };
+        let mut radio = HANDLE::default();
+        let Ok(f) = BluetoothFindFirstRadio(&params, &mut radio) else { return false };
+        let mut ok;
+        loop {
+            // IOCTL_BTH_DISCONNECT_DEVICE
+            ok = windows::Win32::System::IO::DeviceIoControl(radio, 0x41000c, Some(&addr as *const u64 as *const _), 8, None, 0, None, None).is_ok();
+            let _ = CloseHandle(radio);
+            if ok || BluetoothFindNextRadio(f, &mut radio).is_err() {
+                break;
+            }
+        }
+        let _ = BluetoothFindRadioClose(f);
+        ok
     }
 }
 

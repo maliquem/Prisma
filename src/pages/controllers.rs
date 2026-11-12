@@ -103,6 +103,10 @@ fn link_text(l: Link) -> &'static str {
     }
 }
 
+pub fn battery_label(p: &Pad) -> String {
+    format!("{} {}", crate::i18n::tr("bateria"), battery_text(p))
+}
+
 fn battery_text(p: &Pad) -> String {
     let tr = |s: &str| crate::i18n::tr(s).into_owned();
     match p.battery {
