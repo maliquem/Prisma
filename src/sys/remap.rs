@@ -367,6 +367,30 @@ pub struct Profile {
     pub trig: [Trig; 2],
     /// Vibração de confirmação ao trocar de perfil e ao parar: 0 não, 1 leve, 2 forte.
     pub buzz: u8,
+    /// O que faz o controle vibrar enquanto se joga.
+    pub haptic: Haptic,
+}
+
+/// Háptico pelo perfil: a força (0 desligado, 1 a 8) com que cada fonte faz o controle vibrar.
+#[derive(Clone, Copy, PartialEq, Debug, Default)]
+pub struct Haptic {
+    /// Um toque curto a cada botão apertado.
+    pub buttons: u8,
+    /// Segue o curso dos gatilhos.
+    pub triggers: u8,
+    /// Segue o quanto os sticks saem do centro.
+    pub sticks: u8,
+}
+
+/// A parte contínua do háptico (gatilhos e sticks), de 0 a 255. O toque dos botões precisa de
+/// tempo e fica com quem escreve no controle (`pads::PadOut`).
+pub fn haptic_level(h: Haptic, inp: &pads::Input) -> u8 {
+    let scale = |f: u8| f.min(8) as f32 / 8.0 * 255.0;
+    let t = inp.lt.max(inp.rt) * scale(h.triggers);
+    // Abaixo de 15% o stick conta como parado: a mão em repouso não vibra.
+    let mag = |x: f32, y: f32| ((x * x + y * y).sqrt() - 0.15).max(0.0) / 0.85;
+    let s = mag(inp.lx, inp.ly).max(mag(inp.rx, inp.ry)).min(1.0) * scale(h.sticks);
+    t.max(s).round().min(255.0) as u8
 }
 
 /// Gatilho adaptativo do DualSense. `start` é o ponto do curso (0 a 9) em que o efeito começa e
@@ -426,7 +450,7 @@ impl Profile {
     fn empty(name: &str) -> Self {
         let stick = Zone { start: 0.15, end: 0.95 };
         let trig = Zone { start: 0.05, end: 0.95 };
-        Profile { name: name.into(), games: vec![], zones: [stick, stick, trig, trig], layers: vec![Layer { name: "Base".into(), parent: None, ls: None, rs: None, binds: vec![], keys: vec![], gyro: None, touch: None }], strings: vec![], turbo: vec![], turbo_key: TURBO_KEY, macros: vec![], texts: vec![], gyro_opt: GyroOpt::default(), curve: [2.0; 2], hair: [false; 2], light: None, light_bt: false, trig: [Trig::Off; 2], buzz: 0 }
+        Profile { name: name.into(), games: vec![], zones: [stick, stick, trig, trig], layers: vec![Layer { name: "Base".into(), parent: None, ls: None, rs: None, binds: vec![], keys: vec![], gyro: None, touch: None }], strings: vec![], turbo: vec![], turbo_key: TURBO_KEY, macros: vec![], texts: vec![], gyro_opt: GyroOpt::default(), curve: [2.0; 2], hair: [false; 2], light: None, light_bt: false, trig: [Trig::Off; 2], buzz: 0, haptic: Haptic::default() }
     }
 
     /// Base: nada mapeado, o jogo lê o controle como ele é.
@@ -605,6 +629,10 @@ impl Profile {
         if self.buzz != 0 {
             let _ = writeln!(s, "buzz {}", self.buzz);
         }
+        let h = self.haptic;
+        if h != Haptic::default() {
+            let _ = writeln!(s, "haptic {} {} {}", h.buttons, h.triggers, h.sticks);
+        }
         if let Some(l) = self.light {
             let bt = if self.light_bt { " bt" } else { "" };
             match l {
@@ -728,6 +756,10 @@ impl Profile {
                     };
                 }
                 "buzz" => p.buzz = rest.parse::<u8>().ok()?.min(2),
+                "haptic" => {
+                    let v: Vec<u8> = rest.split(' ').filter_map(|n| n.parse::<u8>().ok()).map(|n| n.min(8)).collect();
+                    p.haptic = Haptic { buttons: *v.first()?, triggers: *v.get(1)?, sticks: *v.get(2)? };
+                }
                 "light" => {
                     let t: Vec<&str> = rest.split(' ').collect();
                     let hex = |h: &str| (h.len() == 6).then(|| u32::from_str_radix(h, 16).ok()).flatten().map(|v| [(v >> 16) as u8, (v >> 8) as u8, v as u8]);
@@ -1781,6 +1813,15 @@ pub fn preview_trig(t: Option<[Trig; 2]>) {
     *PREVIEW_TRIG.lock().unwrap() = t;
 }
 
+/// Háptico do perfil em uso. A parada de emergência desliga.
+pub fn haptic() -> Haptic {
+    if STOPPED.load(Ordering::Relaxed) {
+        return Haptic::default();
+    }
+    let g = RUN.lock().unwrap();
+    g.as_ref().map_or(Haptic::default(), |r| r.profiles[r.cur].haptic)
+}
+
 /// Gatilhos adaptativos do perfil em uso. A parada de emergência os solta.
 pub fn triggers() -> [Trig; 2] {
     if STOPPED.load(Ordering::Relaxed) {
@@ -2349,6 +2390,29 @@ mod tests {
         p.light_bt = true;
         let q = Profile::parse(&p.to_text()).unwrap();
         assert_eq!((q.hair, q.curve, q.light, q.light_bt), ([true, false], [2.0, 3.0], p.light, true));
+    }
+
+    #[test]
+    fn haptic_follows_triggers_and_sticks() {
+        let h = Haptic { buttons: 3, triggers: 8, sticks: 4 };
+        let mut i = Input::default();
+        assert_eq!(haptic_level(h, &i), 0);
+        // Gatilho no fim com força 8: o máximo.
+        i.rt = 1.0;
+        assert_eq!(haptic_level(h, &i), 255);
+        // Stick parado na zona de repouso não vibra; no fim, metade da força (4 de 8).
+        i.rt = 0.0;
+        i.lx = 0.1;
+        assert_eq!(haptic_level(h, &i), 0);
+        i.lx = 1.0;
+        assert_eq!(haptic_level(h, &i), 128);
+        // Fonte desligada não vibra, por mais longe que vá.
+        assert_eq!(haptic_level(Haptic::default(), &i), 0);
+        // O texto vai e volta, e o perfil sem háptico não escreve a linha.
+        let mut p = Profile::base();
+        assert!(!p.to_text().contains("haptic"));
+        p.haptic = h;
+        assert_eq!(Profile::parse(&p.to_text()).unwrap().haptic, h);
     }
 
     #[test]

@@ -609,11 +609,29 @@ struct PadOut {
     sent: Want,
     seq: u8,
     failed: bool,
+    /// Botões da leitura anterior e até quando dura o toque do último aperto (háptico).
+    prev: Buttons,
+    tap: Option<(Instant, u8)>,
 }
 
 impl PadOut {
-    unsafe fn update(&mut self, pct: Option<u8>) {
+    unsafe fn update(&mut self, pct: Option<u8>, inp: Option<&Input>) {
         use super::remap::Light;
+        let h = super::remap::haptic();
+        let mut feel = 0u8;
+        if let Some(inp) = inp {
+            // Toque de 40 ms a cada botão novo: um relatório só (4 ms) não se sente.
+            if h.buttons != 0 && inp.buttons & !self.prev != 0 {
+                self.tap = Some((Instant::now() + Duration::from_millis(40), (h.buttons.min(8) as u16 * 255 / 8) as u8));
+            }
+            self.prev = inp.buttons;
+            feel = super::remap::haptic_level(h, inp);
+        }
+        match self.tap {
+            Some((until, v)) if Instant::now() < until => feel = feel.max(v),
+            Some(_) => self.tap = None,
+            None => {}
+        }
         let want = Want {
             rgb: super::remap::light().filter(|l| self.link == Link::Usb || l.1).and_then(|l| match l.0 {
                 Light::Off => Some([0, 0, 0]),
@@ -622,7 +640,8 @@ impl PadOut {
             }),
             // Gatilho adaptativo só existe no DualSense.
             trig: if self.fam == Family::DualSense { super::remap::triggers() } else { [Trig::Off; 2] },
-            rumble: buzzing(),
+            // O motor fraco é o mais seco: é ele que faz as vezes do háptico.
+            rumble: { let b = buzzing(); [b[0].max(feel), b[1]] },
         };
         if want == self.sent || self.failed {
             return;
@@ -1054,6 +1073,8 @@ unsafe fn read_loop(d: Dev) {
         sent: Want::default(),
         seq: 0,
         failed: false,
+        prev: 0,
+        tap: None,
     });
     let mut pct = None;
     'read: loop {
@@ -1136,7 +1157,7 @@ unsafe fn read_loop(d: Dev) {
             super::remap::feed(&d.path, &inp, now);
         }
         if let Some(l) = light.as_mut() {
-            l.update(pct);
+            l.update(pct, fed.as_ref());
         }
         events.into_iter().for_each(emit);
     }
