@@ -3028,9 +3028,7 @@ impl App {
                     if on { format!("Turbo ligado no {b}") } else { format!("Turbo desligado no {b}") }
                 }
                 Event::Run { path } => {
-                    use windows::Win32::UI::Shell::ShellExecuteW;
-                    let r = unsafe { ShellExecuteW(None, w!("open"), &HSTRING::from(path.as_str()), None, None, SW_SHOWNORMAL) };
-                    if r.0 as isize > 32 {
+                    if crate::sys::quick::open_as_user(&path) {
                         continue;
                     }
                     format!("Não consegui abrir {path}")

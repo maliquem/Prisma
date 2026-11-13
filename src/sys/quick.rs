@@ -317,6 +317,20 @@ fn run_admin(file: &str, args: &str, dir: &str) -> bool {
     unsafe { ShellExecuteExW(&mut info).is_ok() }
 }
 
+/// Abre um programa, arquivo ou link de um perfil ou do radial. Com o Prisma como administrador, abre
+/// pelo Explorer, com a permissão da pessoa: o caminho vem de arquivos que qualquer programa da conta
+/// altera, e não pode virar um programa aberto como administrador.
+pub fn open_as_user(path: &str) -> bool {
+    if crate::startup::is_elevated() {
+        let explorer = crate::sys::system_tool("explorer").display().to_string();
+        let dir = crate::sys::windows_dir().display().to_string();
+        return run_as_user(&explorer, &format!("\"{path}\""), &dir);
+    }
+    use windows::Win32::UI::Shell::ShellExecuteW;
+    let r = unsafe { ShellExecuteW(None, windows::core::w!("open"), &HSTRING::from(path), None, None, SW_SHOWNORMAL) };
+    r.0 as isize > 32
+}
+
 /// Com o Prisma como administrador: abre com a permissão do Explorer, a da pessoa.
 fn run_as_user(file: &str, args: &str, dir: &str) -> bool {
     let Some(token) = crate::sys::procs::shell_pid().and_then(crate::sys::procs::shell_token) else { return false };

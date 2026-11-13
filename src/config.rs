@@ -188,6 +188,8 @@ pub struct Profile {
 #[derive(Clone, Debug)]
 pub struct Config {
     pub first_run: bool,
+    /// O config.ini existe, mas não abriu: nesta sessão nada é gravado por cima dele.
+    pub keep_file: bool,
     pub hk_fullscreen: Hotkey,
     pub hk_widget: Hotkey,
     pub hk_optimize: Hotkey,
@@ -353,6 +355,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             first_run: true,
+            keep_file: false,
             hk_fullscreen: Hotkey::new(MOD_CTRL | MOD_ALT, b'F' as u32),
             hk_widget: Hotkey::new(MOD_CTRL | MOD_ALT, b'W' as u32),
             hk_optimize: Hotkey::new(MOD_CTRL | MOD_ALT, b'O' as u32),
@@ -547,6 +550,28 @@ pub fn log(line: &str) {
     }
 }
 
+/// O texto do config.ini, ou None se ele não existe. Bytes fora do UTF-8 (arquivo editado à mão) e
+/// o BOM não fazem perder o resto. Preso por outro programa (antivírus, backup): tenta por meio segundo.
+fn read_text(path: &std::path::Path) -> std::io::Result<Option<String>> {
+    let mut tries = 0;
+    loop {
+        match std::fs::read(path) {
+            Ok(b) => return Ok(Some(text_of(&b))),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) if tries >= 5 => return Err(e),
+            Err(_) => {
+                tries += 1;
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+        }
+    }
+}
+
+fn text_of(b: &[u8]) -> String {
+    let s = String::from_utf8_lossy(b);
+    s.strip_prefix('\u{feff}').unwrap_or(&s).to_string()
+}
+
 fn config_path() -> PathBuf {
     data_dir().join("config.ini")
 }
@@ -554,8 +579,14 @@ fn config_path() -> PathBuf {
 impl Config {
     pub fn load() -> Self {
         let mut c = Config::default();
-        let Ok(text) = std::fs::read_to_string(config_path()) else {
-            return c;
+        let text = match read_text(&config_path()) {
+            Ok(Some(t)) => t,
+            Ok(None) => return c,
+            Err(e) => {
+                log(&format!("o config.ini não abriu ({e}): configurações de fábrica nesta sessão, sem gravar por cima"));
+                (c.first_run, c.welcome, c.keep_file) = (false, false, true);
+                return c;
+            }
         };
         c.first_run = false;
         // Quem já usa não vê as boas-vindas, e a versão instalada sempre abriu como administrador.
@@ -913,6 +944,9 @@ impl Config {
         let _ = writeln!(s, "tw_log={}", b(self.tw_log));
         let _ = writeln!(s, "un_silent={}", b(self.un_silent));
         let _ = writeln!(s, "tm_hook={}", b(self.tm_hook));
+        if self.keep_file {
+            return;
+        }
         let path = config_path();
         let _ = std::fs::create_dir_all(path.parent().unwrap());
         let _ = write_safe(&path, s);
@@ -1081,6 +1115,16 @@ mod tests {
         assert_eq!(parse_radial(&text), Some(v));
         v[crate::sys::radial::sub(2, 0)] = crate::sys::radial::GROUP;
         assert_eq!(parse_radial(&v.map(|a| a.to_string()).join(",")), None);
+    }
+
+    #[test]
+    fn config_text_survives_bom_and_bad_bytes() {
+        assert_eq!(text_of(b"\xef\xbb\xbflang=1\n"), "lang=1\n");
+        // Um byte do Windows-1252 no meio: só ele vira o caractere de troca.
+        let t = text_of(b"x=a\xe7\nlang=2\n");
+        assert!(t.ends_with("\nlang=2\n"));
+        let dir = std::env::temp_dir().join(format!("prisma-cfg-{}", std::process::id()));
+        assert!(read_text(&dir.join("nao-existe.ini")).unwrap().is_none());
     }
 
     #[test]

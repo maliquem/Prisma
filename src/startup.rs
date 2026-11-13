@@ -363,6 +363,12 @@ pub fn open_installed() -> bool {
 }
 
 /// Desfaz tudo. As configurações ficam, para uma reinstalação.
+/// Desinstalar pela lista de programas do Windows: ele abre o Prisma sem administrador, e cada passo
+/// falharia calado. Reabre como administrador; devolve false se o pedido foi recusado.
+pub fn uninstall_as_admin() -> bool {
+    run_elevated("--uninstall")
+}
+
 pub fn uninstall() {
     delete_task(TASK);
     delete_task(TASK_OPEN);

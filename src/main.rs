@@ -37,10 +37,22 @@ fn main() {
     if !stream::weblink::link_alone(&std::env::args().collect::<Vec<_>>()) {
         return;
     }
+    // Teste: abre o caminho como o radial e os perfis abrem (com administrador, pelo Explorer).
+    #[cfg(debug_assertions)]
+    if let Some(p) = std::env::args().find_map(|a| a.strip_prefix("--test-open=").map(str::to_string)) {
+        std::process::exit(if sys::quick::open_as_user(&p) { 0 } else { 1 });
+    }
     let cfg = config::Config::load();
     i18n::set_lang(cfg.lang);
     let background = std::env::args().any(|a| a == "--background");
     if std::env::args().any(|a| a == "--uninstall") {
+        if startup::is_installed() && !startup::is_elevated() {
+            if !startup::uninstall_as_admin() {
+                let msg = HSTRING::from(i18n::tr("Nada foi removido: o Windows não deu a permissão de administrador.").as_ref());
+                unsafe { MessageBoxW(None, &msg, w!("Prisma"), MB_OK | MB_ICONWARNING) };
+            }
+            return;
+        }
         unsafe {
             let msg = HSTRING::from(i18n::tr("Remover o Prisma deste computador? Suas configurações ficam guardadas.").as_ref());
             if MessageBoxW(None, &msg, w!("Prisma"), MB_YESNO | MB_ICONQUESTION) == IDYES {
