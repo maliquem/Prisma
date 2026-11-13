@@ -235,6 +235,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     y += r.h + 12.0;
     y = mapping(ui, app, rect(x, y, lw, 0.0));
     y = radial(ui, app, rect(x, y, lw, 0.0));
+    y = keyboard(ui, app, rect(x, y, lw, 0.0));
     for t in &app.pads.conflicts {
         let r = rect(x, y, lw, 64.0);
         ui.card(r);
@@ -543,6 +544,31 @@ fn radial(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
                 changed |= slot_select(ui, app, &ids, &names, sub(i, d), rect(cx + 48.0, y, r.w - 80.0, 34.0));
                 y += 42.0;
             }
+        }
+    }
+    if changed {
+        app.cfg.save();
+        app.apply_pads();
+    }
+    r.bottom() + 12.0
+}
+
+/// Cartão do teclado do Prisma: um stick só ou os dois, e em qual deles ficam as letras.
+fn keyboard(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
+    let two = app.cfg.pad_osk_two;
+    let r = rect(at.x, at.y, at.w, if two { 136.0 } else { 94.0 });
+    ui.card(r);
+    ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Teclado do Prisma");
+    let check = rect(r.x + 10.0, r.y + 44.0, r.w - 20.0, 36.0);
+    let mut changed = ui.check("pad-osk-two", check, "Usar os dois sticks", &mut app.cfg.pad_osk_two);
+    ui.tip(check, "Um círculo para as letras e outro para os números e símbolos. No stick esquerdo, A, B, X e Y digitam; no direito, o direcional digita, e com ele solto o direcional são as setas.");
+    if two {
+        let (l, c) = (rect(r.x + 16.0, r.y + 88.0, 108.0, 34.0), rect(r.x + 128.0, r.y + 88.0, r.w - 144.0, 34.0));
+        ui.c.text_fit(l, &crate::i18n::tr("Letras no stick"), 12.0, TEXT2, Align::Left, Weight::Regular);
+        let mut s = app.cfg.pad_osk_letters_right as usize;
+        if ui.select("pad-osk-letters", c, &[crate::i18n::tr("Esquerdo").into_owned(), crate::i18n::tr("Direito").into_owned()], &mut s) {
+            app.cfg.pad_osk_letters_right = s == 1;
+            changed = true;
         }
     }
     if changed {

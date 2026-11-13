@@ -3122,6 +3122,7 @@ impl App {
         crate::sys::remap::configure(self.cfg.pad_map, self.cfg.meter_games.iter().map(|g| g.exe.clone()).collect());
         let c = &self.cfg;
         crate::sys::radial::set_programs(c.pad_radial_prog.clone().map(|(_, p)| p));
+        crate::sys::osk::configure(c.pad_osk_two, c.pad_osk_letters_right);
         crate::sys::radial::configure(crate::sys::radial::Config {
             slots: c.pad_radial,
             two: c.pad_radial_two,

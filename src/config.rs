@@ -311,6 +311,10 @@ pub struct Config {
     pub pad_radial_tap: bool,
     /// Com o stick de volta ao centro, o lugar escolhido continua escolhido.
     pub pad_radial_keep: bool,
+    /// Teclado do Prisma com os dois sticks: letras num círculo, números e símbolos no outro.
+    pub pad_osk_two: bool,
+    /// Com os dois sticks, as letras ficam no direito (de fábrica, no esquerdo).
+    pub pad_osk_letters_right: bool,
     /// Botões que confirmam e voltam no radial: posição em `sys::radial::PICK_BUTTONS`.
     pub pad_radial_ok: u8,
     pub pad_radial_back: u8,
@@ -434,6 +438,8 @@ impl Default for Config {
             pad_radial_ms: 400,
             pad_radial_tap: false,
             pad_radial_keep: true,
+            pad_osk_two: false,
+            pad_osk_letters_right: false,
             pad_radial_ok: 0,
             pad_radial_back: 1,
             pad_guide: false,
@@ -694,6 +700,8 @@ impl Config {
                 "pad_radial_ms" => c.pad_radial_ms = (v.parse::<u32>().unwrap_or(400) / 50 * 50).clamp(200, 2000),
                 "pad_radial_tap" => c.pad_radial_tap = b,
                 "pad_radial_keep" => c.pad_radial_keep = b,
+                "pad_osk_two" => c.pad_osk_two = b,
+                "pad_osk_letters_right" => c.pad_osk_letters_right = b,
                 "pad_radial_ok" => c.pad_radial_ok = v.parse::<u8>().unwrap_or(0).min(5),
                 "pad_radial_back" => c.pad_radial_back = v.parse::<u8>().unwrap_or(1).min(5),
                 "pad_guide" => c.pad_guide = b,
@@ -813,6 +821,8 @@ impl Config {
         let _ = writeln!(s, "pad_radial_ms={}", self.pad_radial_ms);
         let _ = writeln!(s, "pad_radial_tap={}", b(self.pad_radial_tap));
         let _ = writeln!(s, "pad_radial_keep={}", b(self.pad_radial_keep));
+        let _ = writeln!(s, "pad_osk_two={}", b(self.pad_osk_two));
+        let _ = writeln!(s, "pad_osk_letters_right={}", b(self.pad_osk_letters_right));
         let _ = writeln!(s, "pad_radial_ok={}", self.pad_radial_ok);
         let _ = writeln!(s, "pad_radial_back={}", self.pad_radial_back);
         let _ = writeln!(s, "pad_guide={}", b(self.pad_guide));

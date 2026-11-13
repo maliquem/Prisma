@@ -483,11 +483,13 @@ fn stick_arrow(c: &Canvas, cx: f32, cy: f32, (ax, ay): (f32, f32)) {
 
 pub struct Keyboard {
     surface: Layered,
-    /// Seta desenhada agora: corre atrás do analógico a cada quadro, para andar suave.
-    arrow: (f32, f32),
-    /// Canto na tela e as duas linhas de ajuda, fixos enquanto o teclado fica aberto.
+    /// Setas desenhadas agora (esquerdo, direito): correm atrás dos analógicos a cada quadro, para
+    /// andar suave.
+    arrow: [(f32, f32); 2],
+    /// Canto na tela, as duas linhas de ajuda e os dois sticks, fixos enquanto o teclado fica aberto.
     at: (i32, i32),
     lines: (String, String),
+    two: bool,
     ticking: bool,
 }
 
@@ -510,7 +512,7 @@ impl Keyboard {
     pub fn new() -> Self {
         register(w!("PrismaKeyboard"), keyboard_proc);
         let hwnd = create_overlay(w!("PrismaKeyboard"), true);
-        Self { surface: Layered::new(hwnd), arrow: (0.0, 0.0), at: (0, 0), lines: Default::default(), ticking: false }
+        Self { surface: Layered::new(hwnd), arrow: [(0.0, 0.0); 2], at: (0, 0), lines: Default::default(), two: false, ticking: false }
     }
 
     /// Mostra o estado de agora do teclado, ou esconde se ele fechou. Devolve `Some` quando ele
@@ -530,13 +532,14 @@ impl Keyboard {
         if opened {
             let mon = focus_monitor();
             let scale = unsafe { windows::Win32::UI::HiDpi::GetDpiForWindow(hwnd) } as f32 / 96.0;
-            self.at = ((mon.left + mon.right) / 2 - (KB_W * scale / 2.0) as i32, mon.bottom - ((KB_H + 48.0) * scale) as i32);
+            self.two = crate::sys::osk::view().two;
+            self.at = ((mon.left + mon.right) / 2 - (self.width() * scale / 2.0) as i32, mon.bottom - ((KB_H + 48.0) * scale) as i32);
             // Sem controle na lista (ainda não leu nenhum), os nomes do Xbox.
             let f = pads::list().first().map_or(pads::Family::Xbox, |p| p.family);
             let l = |b: u32| crate::pages::pad_profiles::button_label(f, b);
             let fill = |t: &str, labels: &[String]| labels.iter().fold(crate::i18n::tr(t).into_owned(), |s, b| s.replacen("{}", b, 1));
             self.lines = (
-                fill("{} apaga · {} espaço · {} Enter · direcional: setas", &[l(pads::LB), l(pads::RB), l(pads::START)]),
+                fill(if self.two { "{} apaga · {} espaço · {} Enter · direcional: digita no círculo da direita, setas com o stick direito solto" } else { "{} apaga · {} espaço · {} Enter · direcional: setas" }, &[l(pads::LB), l(pads::RB), l(pads::START)]),
                 fill("{} maiúsculas · {} números · os dois: acentos · {} fecha", &[l(crate::sys::remap::RT), l(crate::sys::remap::LT), l(pads::BACK)]),
             );
             self.arrow = crate::sys::osk::stick();
@@ -553,16 +556,23 @@ impl Keyboard {
         opened.then_some(true)
     }
 
-    /// Um quadro: a seta anda 45% do caminho até o analógico e só redesenha se mexeu.
+    /// Um quadro: cada seta anda 45% do caminho até o analógico e só redesenha se mexeu.
     pub fn tick(&mut self) {
-        if ease(&mut self.arrow, crate::sys::osk::stick()) {
+        let [l, r] = crate::sys::osk::stick();
+        let (a, b) = (ease(&mut self.arrow[0], l), ease(&mut self.arrow[1], r));
+        if a || b {
             self.paint();
         }
     }
 
+    /// Com os dois sticks, os dois círculos lado a lado.
+    fn width(&self) -> f32 {
+        if self.two { KB_W * 2.0 } else { KB_W }
+    }
+
     fn paint(&mut self) {
         let v = crate::sys::osk::view();
-        let (ax, ay) = self.arrow;
+        let (arrow, two) = (self.arrow, self.two);
         let (line1, line2) = (&self.lines.0, &self.lines.1);
         let mode = match (v.sym, v.shift) {
             (true, true) => "áç",
@@ -570,21 +580,32 @@ impl Keyboard {
             (false, true) => "ABC",
             (false, false) => "abc",
         };
-        self.surface.paint(self.at.0, self.at.1, KB_W, KB_H, |c, r| {
+        self.surface.paint(self.at.0, self.at.1, self.width(), KB_H, |c, r| {
             c.round(r, 18.0, rgb(0x0d0f14).alpha(0.92));
-            let (cx, cy, ring, pr) = (r.w / 2.0, 176.0, 116.0, 42.0);
-            stick_arrow(c, cx, cy, (ax, ay));
-            c.text_raw(rect(cx - 30.0, cy - 12.0, 60.0, 24.0), mode, 15.0, TEXT2, Align::Center, Weight::Semibold);
+            let (cy, ring, pr) = (176.0, 116.0, 42.0);
+            // Esquerdo (A, B, X, Y digitam) à esquerda; com os dois sticks, o direito (o direcional
+            // digita) à direita, com um traço entre os dois.
+            let wheels: &[(f32, bool)] = if two { &[(KB_W / 2.0, false), (KB_W * 1.5, true)] } else { &[(KB_W / 2.0, false)] };
+            if two {
+                c.line(KB_W, 40.0, KB_W, 312.0, WHITE.alpha(0.10), 1.0);
+            }
+            for &(cx, right) in wheels {
+            stick_arrow(c, cx, cy, arrow[right as usize]);
+            let numbers = two && right != v.letters_right;
+            c.text_raw(rect(cx - 30.0, cy - 12.0, 60.0, 24.0), if numbers { "123" } else { mode }, 15.0, TEXT2, Align::Center, Weight::Semibold);
+            let chosen = if right { v.right } else { v.petal };
             for p in 0..8 {
                 let a = (p as f32 * 45.0).to_radians();
                 let (px, py) = (cx + ring * a.sin(), cy - ring * a.cos());
-                let on = v.petal == Some(p);
+                let on = chosen == Some(p);
                 c.circle(px, py, pr, if on { ACCENT.alpha(0.35) } else { WHITE.alpha(0.07) });
-                // Mesma posição dos botões: X à esquerda, Y em cima, B à direita, A embaixo.
+                // Mesma posição dos botões (X à esquerda, Y em cima, B à direita, A embaixo) e
+                // das setas do direcional.
                 for (i, (dx, dy)) in [(-22.0, 0.0), (0.0, -22.0), (22.0, 0.0), (0.0, 22.0)].into_iter().enumerate() {
                     let (size, color, weight) = if on { (17.0, WHITE, Weight::Semibold) } else { (15.0, TEXT2, Weight::Regular) };
-                    c.text_raw(rect(px + dx - 12.0, py + dy - 11.0, 24.0, 22.0), &v.char_at(p, i).to_string(), size, color, Align::Center, weight);
+                    c.text_raw(rect(px + dx - 12.0, py + dy - 11.0, 24.0, 22.0), &v.wheel_char(right, p, i).to_string(), size, color, Align::Center, weight);
                 }
+            }
             }
             c.text_fit(rect(16.0, 342.0, r.w - 32.0, 20.0), line1, 12.0, MUTED, Align::Center, Weight::Regular);
             c.text_fit(rect(16.0, 362.0, r.w - 32.0, 20.0), line2, 12.0, MUTED, Align::Center, Weight::Regular);
