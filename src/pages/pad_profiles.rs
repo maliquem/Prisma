@@ -86,6 +86,7 @@ pub fn test_target(app: &mut App, what: &str) {
                 app.pads.tab = 1;
             }
             "settings" => app.pads.tab = 2,
+            "stick" => ed.button = pads::LS,
             "text" => {
                 app.pads.tab = 1;
                 ed.kind = 11;
@@ -337,6 +338,81 @@ fn ask_template(ui: &mut Ui, tpl: &str, prof: &str) {
     );
 }
 
+/// Uma linha do stick na camada: modo (botões, mouse, rolar ou igual à mãe) e a velocidade.
+fn stick_row(ui: &mut Ui, layer: &mut Layer, base: bool, right: bool, x: f32, y: f32, w: f32) -> bool {
+    // Seletor e velocidade dividem o que sobra depois do nome, sem passar da largura.
+    let sel_w = ((w - 138.0) * 0.56).min(220.0).floor();
+    let speed_w = (w - 138.0 - sel_w - 8.0).min(170.0).floor();
+    let label = if right { "Stick direito" } else { "Stick esquerdo" };
+    let mut changed = false;
+    let cur = if right { layer.rs } else { layer.ls };
+    let mut opts = vec![];
+    if base {
+        opts.push(tr("Igual à camada mãe"));
+    }
+    opts.extend(["Direções como botões", "Mouse", "Rolar"].iter().map(|s| tr(s)));
+    let mut sel = match cur {
+        None => 0,
+        Some(Stick::Buttons) => 0,
+        Some(Stick::Mouse(_)) => 1,
+        Some(Stick::Scroll(_)) => 2,
+    } + if base && cur.is_some() { 1 } else { 0 };
+    ui.label(rect(x, y, 120.0, 34.0), label, TEXT2);
+    if ui.select(if right { "pp-rs" } else { "pp-ls" }, rect(x + 130.0, y, sel_w, 34.0), &opts, &mut sel) {
+        let k = if base { sel as i32 - 1 } else { sel as i32 };
+        let st = match k {
+            -1 => None,
+            0 => Some(Stick::Buttons),
+            1 => Some(Stick::Mouse(1600.0)),
+            _ => Some(Stick::Scroll(12.0)),
+        };
+        if right {
+            layer.rs = st;
+        } else {
+            layer.ls = st;
+        }
+        changed = true;
+    }
+    let key = if right { "pp-rs-v" } else { "pp-ls-v" };
+    let speed = rect(x + 138.0 + sel_w, y, speed_w, 34.0);
+    let slot = if right { &mut layer.rs } else { &mut layer.ls };
+    match slot {
+        Some(Stick::Mouse(v)) => {
+            let mut n = *v as u32;
+            if ui.stepper(key, speed, &mut n, (200, 6000), 100, "px/s") {
+                *v = n as f32;
+                changed = true;
+            }
+        }
+        Some(Stick::Scroll(v)) => {
+            let mut n = *v as u32;
+            if ui.stepper(key, speed, &mut n, (1, 60), 1, "/s") {
+                *v = n as f32;
+                changed = true;
+            }
+        }
+        _ => {}
+    }
+    changed
+}
+
+/// Uma linha de zona morta (0 e 1 sticks, 2 e 3 gatilhos): início e fim do curso.
+fn zone_row(ui: &mut Ui, zones: &mut [Zone; 4], i: usize, label: &str, x: f32, y: f32) -> bool {
+    let z = zones[i];
+    let (mut a, mut b) = ((z.start * 100.0).round() as u32, (z.end * 100.0).round() as u32);
+    ui.label(rect(x, y, 140.0, 34.0), label, TEXT2);
+    let ca = ui.stepper(&format!("pp-z{i}a"), rect(x + 150.0, y, 130.0, 34.0), &mut a, (0, 50), 1, "%");
+    ui.label(rect(x + 290.0, y, 30.0, 34.0), "a", MUTED);
+    let cb = ui.stepper(&format!("pp-z{i}b"), rect(x + 320.0, y, 130.0, 34.0), &mut b, (55, 100), 1, "%");
+    if ca || cb {
+        zones[i] = Zone { start: a as f32 / 100.0, end: b as f32 / 100.0 };
+        return true;
+    }
+    false
+}
+
+const ZONES: [&str; 4] = ["Stick esquerdo", "Stick direito", "Gatilho esquerdo", "Gatilho direito"];
+
 /// Troca o conteúdo do perfil pelo do modelo, mantendo nome e jogos.
 fn apply(p: &mut Profile, t: Profile) {
     *p = Profile { name: std::mem::take(&mut p.name), games: std::mem::take(&mut p.games), ..t };
@@ -536,6 +612,31 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
         changed = true;
     }
     y += 44.0;
+
+    // Stick ou gatilho escolhido (no desenho ou na lista): o modo e a zona morta dele vêm primeiro.
+    let focus = if keys_mode {
+        None
+    } else if ed.button & (pads::LS | remap::LSU | remap::LSD | remap::LSL | remap::LSR) != 0 {
+        Some(0)
+    } else if ed.button & (pads::RS | remap::RSU | remap::RSD | remap::RSL | remap::RSR) != 0 {
+        Some(1)
+    } else if ed.button == remap::LT {
+        Some(2)
+    } else if ed.button == remap::RT {
+        Some(3)
+    } else {
+        None
+    };
+    if let Some(i) = focus {
+        ui.title(rect(x, y + 4.0, w, 22.0), ZONES[i]);
+        y += 32.0;
+        if i < 2 {
+            changed |= stick_row(ui, &mut p.layers[ed.layer], ed.layer > 0, i == 1, x, y, w);
+            y += 44.0;
+        }
+        changed |= zone_row(ui, &mut p.zones, i, "Zona morta", x, y);
+        y += 52.0;
+    }
 
     // Botões: clique em um para ver e mudar o que ele faz nesta camada.
     // Com desenho próprio, cada botão é o ícone dele; no genérico, o número.
@@ -787,75 +888,23 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
     }
     y += 40.0;
 
-    // Sticks da camada.
-    for (right, label) in [(false, "Stick esquerdo"), (true, "Stick direito")] {
-        let layer = &mut p.layers[ed.layer];
-        let cur = if right { layer.rs } else { layer.ls };
-        let base = ed.layer > 0;
-        let mut opts = vec![];
-        if base {
-            opts.push(tr("Igual à camada mãe"));
+    // Sticks da camada e zonas mortas; o que já está no painel de cima não se repete.
+    for right in [false, true] {
+        if focus == Some(right as usize) {
+            continue;
         }
-        opts.extend(["Direções como botões", "Mouse", "Rolar"].iter().map(|s| tr(s)));
-        let mut sel = match cur {
-            None => 0,
-            Some(Stick::Buttons) => 0,
-            Some(Stick::Mouse(_)) => 1,
-            Some(Stick::Scroll(_)) => 2,
-        } + if base && cur.is_some() { 1 } else { 0 };
-        ui.label(rect(x, y, 120.0, 34.0), label, TEXT2);
-        if ui.select(if right { "pp-rs" } else { "pp-ls" }, rect(x + 130.0, y, 220.0, 34.0), &opts, &mut sel) {
-            let k = if base { sel as i32 - 1 } else { sel as i32 };
-            let st = match k {
-                -1 => None,
-                0 => Some(Stick::Buttons),
-                1 => Some(Stick::Mouse(1600.0)),
-                _ => Some(Stick::Scroll(12.0)),
-            };
-            if right {
-                layer.rs = st;
-            } else {
-                layer.ls = st;
-            }
-            changed = true;
-        }
-        let key = if right { "pp-rs-v" } else { "pp-ls-v" };
-        let speed = rect(x + 360.0, y, 170.0, 34.0);
-        let slot = if right { &mut layer.rs } else { &mut layer.ls };
-        match slot {
-            Some(Stick::Mouse(v)) => {
-                let mut n = *v as u32;
-                if ui.stepper(key, speed, &mut n, (200, 6000), 100, "px/s") {
-                    *v = n as f32;
-                    changed = true;
-                }
-            }
-            Some(Stick::Scroll(v)) => {
-                let mut n = *v as u32;
-                if ui.stepper(key, speed, &mut n, (1, 60), 1, "/s") {
-                    *v = n as f32;
-                    changed = true;
-                }
-            }
-            _ => {}
-        }
+        changed |= stick_row(ui, &mut p.layers[ed.layer], ed.layer > 0, right, x, y, w);
         y += 44.0;
     }
 
     // Zonas mortas: valem para o perfil todo.
     ui.title(rect(x, y + 4.0, w, 22.0), "Zona morta");
     y += 32.0;
-    for (i, label) in ["Stick esquerdo", "Stick direito", "Gatilho esquerdo", "Gatilho direito"].iter().enumerate() {
-        let z = p.zones[i];
-        let (mut a, mut b) = ((z.start * 100.0).round() as u32, (z.end * 100.0).round() as u32);
-        ui.label(rect(x, y, 140.0, 34.0), label, TEXT2);
-        let ca = ui.stepper(&format!("pp-z{i}a"), rect(x + 150.0, y, 130.0, 34.0), &mut a, (0, 50), 1, "%");
-        ui.label(rect(x + 290.0, y, 30.0, 34.0), "a", MUTED);
-        let cb = ui.stepper(&format!("pp-z{i}b"), rect(x + 320.0, y, 130.0, 34.0), &mut b, (55, 100), 1, "%");
-        if ca || cb {
-            p.zones[i] = Zone { start: a as f32 / 100.0, end: b as f32 / 100.0 };
-            changed = true;
+    for i in 0..4 {
+        if focus == Some(i) {
+            continue;
         }
+        changed |= zone_row(ui, &mut p.zones, i, ZONES[i], x, y);
         y += 40.0;
     }
     ui.c.text_fit(rect(x, y, w, 20.0), &tr("Abaixo do primeiro valor conta como parado; a partir do segundo, como fim do curso."), 12.0, MUTED, Align::Left, Weight::Regular);
