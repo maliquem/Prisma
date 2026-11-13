@@ -1907,7 +1907,7 @@ O Windows não trocou o HDR	Windows 没有切换 HDR
 Nome de executável inválido	可执行文件名称无效
 O Prisma não conhece essa opção	Prisma 不认识此选项
 Valor fora das opções	值不在选项内
-Cada controle ao vivo, e o controle como teclado e mouse. Nada é gravado no controle.	实时查看每个手柄，并把手柄当作键盘和鼠标。不会向手柄写入任何内容。
+Cada controle ao vivo e o que cada botão faz. Nada é gravado no controle.	实时查看每个手柄以及每个按键的作用。不会向手柄写入任何内容。
 Copiar diagnóstico	复制诊断
 Diagnóstico copiado	诊断已复制
 Nenhum controle ligado. Ligue um controle por USB ou Bluetooth e ele aparece aqui.	未连接手柄。通过 USB 或蓝牙连接手柄后会显示在这里。
@@ -1961,8 +1961,7 @@ Bateria do {} baixa	{} 电量低
 {}: variação de {} ms entre relatórios	{}：报告间隔抖动 {} 毫秒
 em movimento	移动时
 Mapeamento	映射
-Controle como teclado e mouse	手柄作为键盘和鼠标
-Fora dos jogos vale o perfil Desktop: o stick esquerdo mexe o mouse, A e B clicam. Nos jogos (os do Medidor e qualquer programa em tela cheia) vale o perfil Base, que não muda nada: sem driver, o jogo continua vendo o controle.	在游戏外使用 Desktop 配置：左摇杆移动鼠标，A 和 B 点击。在游戏中（性能监视里的游戏和任何全屏程序）使用 Base 配置，不做任何更改：没有驱动时，游戏仍会看到手柄。
+Fora dos jogos vale o perfil Desktop: o stick esquerdo mexe o mouse, A e B clicam. Nos jogos (os do Medidor e qualquer programa em tela cheia) vale o perfil do jogo, ou o Base, que não muda nada: sem driver, o jogo continua vendo o controle.	在游戏外使用 Desktop 配置：左摇杆移动鼠标，A 和 B 点击。在游戏中（性能监视里的游戏和任何全屏程序）使用该游戏的配置，或不做任何更改的 Base 配置：没有驱动时，游戏仍会看到手柄。
 Parado pela combinação	已被组合键停止
 Perfil {}	配置 {}
 Para parar tudo sem teclado, segure Guia (ou PS) + Select + Start por 2 segundos. A mesma combinação liga de novo.	无需键盘即可全部停止：按住 Guide（或 PS）+ Select + Start 2 秒。同样的组合键可重新开启。
@@ -1972,8 +1971,6 @@ Tempo interno: {} µs na mediana, {} µs no p99	内部耗时：中位数 {} 微�
 Mapeamento parado. Segure a mesma combinação para voltar.	映射已停止。按住同样的组合键即可恢复。
 Mapeamento ligado de novo	映射已重新开启
 {} roda como administrador: o Windows não deixa as teclas do controle chegarem nele.	{} 以管理员身份运行：Windows 不允许手柄的按键到达它。
-Editar perfis	编辑配置
-Fechar perfis	关闭配置
 Novo perfil para jogo	为游戏新建配置
 Voltar ao de fábrica	恢复默认
 Apagar perfil	删除配置
@@ -2209,3 +2206,10 @@ Nenhum texto: crie um em Texto rápido, mais abaixo	没有文本：请在下方�
 Essa abreviação já existe neste perfil.	此配置中已有该缩写。
 A abreviação tem de 2 a 16 letras e números.	缩写为 2 到 16 个字母和数字。
 Em qualquer programa, a abreviação seguida de espaço, Enter ou Tab vira o texto. Sem abreviação, o texto sai por um botão ou tecla (destino Texto rápido).	在任何程序中，输入缩写后按空格、Enter 或 Tab 会变成该文本。没有缩写时，文本由按键或按钮输出（目标为快速文本）。
+Como o jogo vê este controle	游戏如何识别此手柄
+Nativo: {}	原生：{}
+Virar controle Xbox	变成 Xbox 手柄
+Chega numa fase futura, com o controle virtual.	将在后续阶段随虚拟手柄推出。
+Fora dos jogos, mouse e teclado. Nos jogos, o perfil do jogo ou o Base, que não muda nada.	游戏外为鼠标和键盘。游戏中使用该游戏的配置，或不做任何更改的 Base。
+O jogo recebe o controle como ele é. Vale para todos os controles.	游戏按原样接收手柄。对所有手柄生效。
+Ajustes	设置

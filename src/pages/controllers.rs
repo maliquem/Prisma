@@ -19,9 +19,11 @@ pub struct State {
     wiz: Option<Wizard>,
     result: Option<(String, Results)>,
     conflicts: Vec<&'static str>,
-    /// Editor de perfis aberto no lugar da coluna da direita.
+    /// Editor de perfis: abre na primeira vez que a página é desenhada.
     pub(super) edit: Option<super::pad_profiles::Editor>,
-    /// Altura da coluna da esquerda no quadro anterior, para a rolagem.
+    /// Aba aberta: 0 Mapeamento, 1 Macros, 2 Ajustes.
+    pub(super) tab: usize,
+    /// Altura da coluna da esquerda de Ajustes no quadro anterior, para a rolagem.
     left_h: f32,
 }
 
@@ -179,45 +181,127 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         crate::ui::glyph::sheet(ui.c, rect(a.x + 28.0, 40.0, a.w - 56.0, a.h), TEXT);
         return;
     }
-    header_room(ui, a, "Controles", "Cada controle ao vivo, e o controle como teclado e mouse. Nada é gravado no controle.", 220.0);
+    header_room(ui, a, "Controles", "Cada controle ao vivo e o que cada botão faz. Nada é gravado no controle.", 0.0);
+    if app.pads.edit.is_none() {
+        app.pads.open_editor();
+    }
     let list = pads::list();
-    if ui.button("pads-copy", rect(a.right() - 208.0, 28.0, 180.0, 36.0), "Copiar diagnóstico", false) {
-        let ok = crate::capture::copy_text(app.hub, &diagnostic(&list, &app.pads.conflicts));
-        app.toast.info(if ok { "Diagnóstico copiado" } else { "Não consegui copiar" });
-    }
-    let x = a.x + 28.0;
-    let top = 88.0;
-    let lw = 300.0;
-    let rw = a.w - 56.0 - lw - 12.0;
-
-    // Coluna esquerda: controles, avisos, conflitos. Rola: o cartão do radial passa da janela.
-    ui.begin_scroll("pads-left", rect(x, top, lw, a.h - top - 12.0), app.pads.left_h);
-    let mut y = top;
-    if list.is_empty() {
-        let r = rect(x, y, lw, 96.0);
-        ui.card(r);
-        ui.c.text_wrap(rect(r.x + 16.0, r.y + 14.0, r.w - 32.0, r.h - 24.0), "Nenhum controle ligado. Ligue um controle por USB ou Bluetooth e ele aparece aqui.", 13.0, MUTED, Weight::Regular);
-        y += r.h + 12.0;
-    }
     app.pads.sel = app.pads.sel.min(list.len().saturating_sub(1));
+    let x = a.x + 28.0;
+    let fw = a.w - 56.0;
+    super::pad_profiles::top(ui, app, rect(x, 88.0, fw, 34.0));
+    let y = pad_card(ui, app, &list, rect(x, 134.0, fw, 0.0));
+    // Gravando uma macro, a aba não troca: o botão Parar fica na aba Macros.
+    tabs(ui, x, y, &mut app.pads.tab, !crate::sys::macros::recording());
+    let top = y + 46.0;
+    let h = a.h - top - 12.0;
+    let family = list.get(app.pads.sel).map_or(Family::Xbox, |p| p.family);
+    match app.pads.tab {
+        0 => {
+            // Sem controle ligado, o editor ocupa a largura toda.
+            let mut lw = 0.0;
+            if let Some(p) = list.get(app.pads.sel) {
+                let live = rect(x, top, 340.0, 300.0);
+                ui.card(live);
+                draw_live(ui, p, live);
+                lw = 352.0;
+            }
+            super::pad_profiles::draw(ui, app, rect(x + lw, top, fw - lw, h), family, 0);
+        }
+        1 => super::pad_profiles::draw(ui, app, rect(x, top, fw, h), family, 1),
+        _ => settings(ui, app, &list, rect(x, top, fw, h)),
+    }
+}
+
+/// Cartão do controle: um chip por controle ligado e como o jogo vê o controle.
+fn pad_card(ui: &mut Ui, app: &mut App, list: &[Pad], at: Rect) -> f32 {
+    let tr = |s: &str| crate::i18n::tr(s).into_owned();
+    let r = rect(at.x, at.y, at.w, 140.0);
+    ui.card(r);
+    if list.is_empty() {
+        ui.c.text_wrap(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 48.0), "Nenhum controle ligado. Ligue um controle por USB ou Bluetooth e ele aparece aqui.", 13.0, MUTED, Weight::Regular);
+    }
+    let mut cx = r.x + 12.0;
     for (i, p) in list.iter().enumerate() {
-        let r = rect(x, y, lw, 64.0);
+        let sub = format!("{} · {} · {}", tr(link_text(p.link)), battery_text(p), rate_text(p));
+        let cw = (measure(&p.name, 15.0, Weight::Semibold, None).0.max(measure(&sub, 13.0, Weight::Regular, None).0) + 28.0).min(340.0);
+        if cx + cw > r.right() - 12.0 {
+            break;
+        }
+        let c = rect(cx, r.y + 10.0, cw, 52.0);
         let on = i == app.pads.sel;
         if on {
-            ui.card_on(r);
-        } else {
-            ui.card(r);
+            ui.c.round(c, 8.0, CARD2);
         }
-        ui.c.text_fit(rect(r.x + 16.0, r.y + 10.0, r.w - 32.0, 22.0), &p.name, 15.0, TEXT, Align::Left, Weight::Semibold);
-        let sub = format!("{} · {} · {}", crate::i18n::tr(link_text(p.link)), battery_text(p), rate_text(p));
-        ui.c.text_fit(rect(r.x + 16.0, r.y + 34.0, r.w - 32.0, 20.0), &sub, 13.0, MUTED, Align::Left, Weight::Regular);
-        if ui.hit(&format!("pad-{}", p.key), r) && !on {
+        ui.c.round_line(c, 8.0, if on { ACCENT } else { BORDER }, 1.0);
+        ui.c.text_fit(rect(c.x + 14.0, c.y + 6.0, c.w - 28.0, 22.0), &p.name, 15.0, TEXT, Align::Left, Weight::Semibold);
+        ui.c.text_fit(rect(c.x + 14.0, c.y + 28.0, c.w - 28.0, 18.0), &sub, 13.0, MUTED, Align::Left, Weight::Regular);
+        if ui.hit(&format!("pad-{}", p.key), c) && !on {
             app.pads.sel = i;
             ui.s.needs_redraw = true;
         }
-        y += r.h + 8.0;
+        cx += cw + 8.0;
     }
-    y += 4.0;
+    // Como o jogo vê o controle: como ele é, ou teclado e mouse. Virar Xbox vem com o controle virtual.
+    let ry = r.y + 72.0;
+    let label = tr("Como o jogo vê este controle");
+    let lw = measure(&label, 13.0, Weight::Regular, None).0 + 16.0;
+    ui.c.text_raw(rect(r.x + 16.0, ry, lw, 34.0), &label, 13.0, TEXT2, Align::Left, Weight::Regular);
+    let bw = ((r.w - 32.0 - lw - 16.0) / 3.0).min(220.0).floor();
+    let name = list.get(app.pads.sel).map_or_else(|| tr("Controle"), |p| p.name.clone());
+    let b = |i: f32| rect(r.x + 16.0 + lw + i * (bw + 8.0), ry, bw, 34.0);
+    let map = app.cfg.pad_map;
+    let mut want = map;
+    if ui.button_ex("pad-native", b(0.0), &tr("Nativo: {}").replace("{}", &name), !map, true) {
+        want = false;
+    }
+    if ui.button_ex("pad-kbm", b(1.0), "Teclado e mouse", map, true) {
+        want = true;
+    }
+    ui.tip(b(1.0), "Fora dos jogos vale o perfil Desktop: o stick esquerdo mexe o mouse, A e B clicam. Nos jogos (os do Medidor e qualquer programa em tela cheia) vale o perfil do jogo, ou o Base, que não muda nada: sem driver, o jogo continua vendo o controle.");
+    ui.button_ex("pad-xbox", b(2.0), "Virar controle Xbox", false, false);
+    ui.tip(b(2.0), "Chega numa fase futura, com o controle virtual.");
+    if want != map {
+        app.cfg.pad_map = want;
+        app.cfg.save();
+        app.apply_pads();
+    }
+    let note = if map { "Fora dos jogos, mouse e teclado. Nos jogos, o perfil do jogo ou o Base, que não muda nada." } else { "O jogo recebe o controle como ele é. Vale para todos os controles." };
+    ui.c.text_fit(rect(r.x + 16.0, ry + 40.0, r.w - 32.0, 20.0), &tr(note), 12.0, MUTED, Align::Left, Weight::Regular);
+    r.bottom() + 12.0
+}
+
+/// Abas da página; `on` falso deixa trocar de aba desligado (gravando macro).
+fn tabs(ui: &mut Ui, x: f32, y: f32, sel: &mut usize, on: bool) {
+    const TABS: [&str; 3] = ["Mapeamento", "Macros", "Ajustes"];
+    if on {
+        ui.tab_step(sel, TABS.len());
+    }
+    let mut cx = x;
+    for (i, name) in TABS.iter().enumerate() {
+        let name = crate::i18n::tr(name);
+        let w = measure(&name, 14.0, Weight::Semibold, None).0 + 28.0;
+        let r = rect(cx, y, w, 34.0);
+        let cur = *sel == i;
+        if cur {
+            ui.c.round(r, 8.0, CARD2);
+        }
+        if on && ui.hit(&format!("pad-tab{i}"), r) {
+            *sel = i;
+        }
+        let color = if cur { TEXT } else { MUTED };
+        ui.c.text_raw(r, &name, 14.0, color, Align::Center, if cur { Weight::Semibold } else { Weight::Regular });
+        cx += w + 4.0;
+    }
+}
+
+/// Aba Ajustes: avisos, estado do mapeamento, radial, teclado, conflitos à esquerda; diagnóstico e
+/// a medida dos sticks à direita.
+fn settings(ui: &mut Ui, app: &mut App, list: &[Pad], a: Rect) {
+    let (x, top, lw) = (a.x, a.y, 340.0);
+    // Coluna esquerda: rola, o cartão do radial passa da janela.
+    ui.begin_scroll("pads-left", rect(x, top, lw, a.h), app.pads.left_h);
+    let mut y = top;
     for name in pads::without_hid() {
         let r = rect(x, y, lw, 122.0);
         ui.card(r);
@@ -258,19 +342,15 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         ui.s.needs_redraw = true;
     }
 
-    // Coluna direita: o editor de perfis, ou o controle escolhido.
+    // Coluna direita: copiar o diagnóstico e medir os sticks do controle escolhido.
     let rx = x + lw + 12.0;
-    if app.pads.edit.is_some() {
-        let family = list.get(app.pads.sel).map_or(Family::Xbox, |p| p.family);
-        super::pad_profiles::draw(ui, app, rect(rx, top, rw, a.h - top - 24.0), family);
-        return;
+    let rw = a.w - lw - 12.0;
+    if ui.button("pads-copy", rect(rx, top, 200.0, 36.0), "Copiar diagnóstico", false) {
+        let ok = crate::capture::copy_text(app.hub, &diagnostic(list, &app.pads.conflicts));
+        app.toast.info(if ok { "Diagnóstico copiado" } else { "Não consegui copiar" });
     }
     let Some(p) = list.get(app.pads.sel) else { return };
-    let live = rect(rx, top, rw, 300.0);
-    ui.card(live);
-    draw_live(ui, p, live);
-
-    let m = rect(rx, live.bottom() + 12.0, rw, (a.h - live.bottom() - 36.0).max(160.0));
+    let m = rect(rx, top + 48.0, rw, 220.0);
     ui.card(m);
     ui.title(rect(m.x + 16.0, m.y + 12.0, m.w - 220.0, 22.0), "Medir sticks e gatilhos");
     let running = app.pads.wiz.is_some();
@@ -412,33 +492,19 @@ fn rows_draw(ui: &mut Ui, x: f32, y: f32, w: f32, rows: &[(&str, String, bool)])
 /// Mapeamento: liga e desliga, perfil ativo, parada de emergência e o tempo interno.
 fn mapping(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
     use crate::sys::remap;
-    let r = rect(at.x, at.y, at.w, 262.0);
+    let r = rect(at.x, at.y, at.w, 180.0);
     ui.card(r);
     ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Mapeamento");
-    let check = rect(r.x + 10.0, r.y + 38.0, r.w - 20.0, 36.0);
-    if ui.check("pad-map", check, "Controle como teclado e mouse", &mut app.cfg.pad_map) {
-        app.cfg.save();
-        app.apply_pads();
-    }
-    ui.tip(check, "Fora dos jogos vale o perfil Desktop: o stick esquerdo mexe o mouse, A e B clicam. Nos jogos (os do Medidor e qualquer programa em tela cheia) vale o perfil Base, que não muda nada: sem driver, o jogo continua vendo o controle.");
     let state = match (app.cfg.pad_map, remap::stopped(), remap::active()) {
         (false, ..) => (crate::i18n::tr("Desligado").into_owned(), MUTED),
         (true, true, _) => (crate::i18n::tr("Parado pela combinação").into_owned(), WARN),
         (true, false, p) => (crate::i18n::tr("Perfil {}").replace("{}", &crate::i18n::tr(&p.unwrap_or_default())), TEXT),
     };
-    ui.c.text_fit(rect(r.x + 16.0, r.y + 80.0, r.w - 32.0, 20.0), &state.0, 13.0, state.1, Align::Left, Weight::Semibold);
-    ui.c.text_wrap(rect(r.x + 16.0, r.y + 106.0, r.w - 32.0, 72.0), "Para parar tudo sem teclado, segure Guia (ou PS) + Select + Start por 2 segundos. A mesma combinação liga de novo.", 12.0, TEXT2, Weight::Regular);
+    ui.c.text_fit(rect(r.x + 16.0, r.y + 42.0, r.w - 32.0, 20.0), &state.0, 13.0, state.1, Align::Left, Weight::Semibold);
+    ui.c.text_wrap(rect(r.x + 16.0, r.y + 68.0, r.w - 32.0, 72.0), "Para parar tudo sem teclado, segure Guia (ou PS) + Select + Start por 2 segundos. A mesma combinação liga de novo.", 12.0, TEXT2, Weight::Regular);
     if let Some((med, p99)) = remap::latency() {
         let t = crate::i18n::tr("Tempo interno: {} µs na mediana, {} µs no p99").replacen("{}", &med.to_string(), 1).replacen("{}", &p99.to_string(), 1);
-        ui.c.text_fit(rect(r.x + 16.0, r.y + 184.0, r.w - 32.0, 20.0), &t, 12.0, MUTED, Align::Left, Weight::Regular);
-    }
-    let editing = app.pads.edit.is_some();
-    if ui.button_ex("pad-edit", rect(r.x + 16.0, r.y + 212.0, r.w - 32.0, 36.0), if editing { "Fechar perfis" } else { "Editar perfis" }, false, true) {
-        if editing {
-            app.pads.edit = None;
-        } else {
-            app.pads.open_editor();
-        }
+        ui.c.text_fit(rect(r.x + 16.0, r.y + 148.0, r.w - 32.0, 20.0), &t, 12.0, MUTED, Align::Left, Weight::Regular);
     }
     r.bottom() + 12.0
 }

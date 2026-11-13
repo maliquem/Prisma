@@ -1907,7 +1907,7 @@ O Windows não trocou o HDR	Windows no cambió el HDR
 Nome de executável inválido	Nombre de ejecutable no válido
 O Prisma não conhece essa opção	Prisma no conoce esta opción
 Valor fora das opções	Valor fuera de las opciones
-Cada controle ao vivo, e o controle como teclado e mouse. Nada é gravado no controle.	Cada mando en vivo, y el mando como teclado y ratón. No se graba nada en el mando.
+Cada controle ao vivo e o que cada botão faz. Nada é gravado no controle.	Cada mando en vivo y lo que hace cada botón. No se graba nada en el mando.
 Copiar diagnóstico	Copiar diagnóstico
 Diagnóstico copiado	Diagnóstico copiado
 Nenhum controle ligado. Ligue um controle por USB ou Bluetooth e ele aparece aqui.	Ningún mando conectado. Conecta uno por USB o Bluetooth y aparecerá aquí.
@@ -1961,8 +1961,7 @@ Bateria do {} baixa	Batería del {} baja
 {}: variação de {} ms entre relatórios	{}: variación de {} ms entre informes
 em movimento	en movimiento
 Mapeamento	Asignación
-Controle como teclado e mouse	Mando como teclado y ratón
-Fora dos jogos vale o perfil Desktop: o stick esquerdo mexe o mouse, A e B clicam. Nos jogos (os do Medidor e qualquer programa em tela cheia) vale o perfil Base, que não muda nada: sem driver, o jogo continua vendo o controle.	Fuera de los juegos vale el perfil Desktop: el stick izquierdo mueve el ratón, A y B hacen clic. En los juegos (los del Medidor y cualquier programa a pantalla completa) vale el perfil Base, que no cambia nada: sin driver, el juego sigue viendo el mando.
+Fora dos jogos vale o perfil Desktop: o stick esquerdo mexe o mouse, A e B clicam. Nos jogos (os do Medidor e qualquer programa em tela cheia) vale o perfil do jogo, ou o Base, que não muda nada: sem driver, o jogo continua vendo o controle.	Fuera de los juegos vale el perfil Desktop: el stick izquierdo mueve el ratón, A y B hacen clic. En los juegos (los del Medidor y cualquier programa a pantalla completa) vale el perfil del juego, o el Base, que no cambia nada: sin driver, el juego sigue viendo el mando.
 Parado pela combinação	Detenido por la combinación
 Perfil {}	Perfil {}
 Para parar tudo sem teclado, segure Guia (ou PS) + Select + Start por 2 segundos. A mesma combinação liga de novo.	Para detener todo sin teclado, mantén Guía (o PS) + Select + Start durante 2 segundos. La misma combinación lo vuelve a activar.
@@ -1972,8 +1971,6 @@ Tempo interno: {} µs na mediana, {} µs no p99	Tiempo interno: {} µs de median
 Mapeamento parado. Segure a mesma combinação para voltar.	Asignación detenida. Mantén la misma combinación para volver.
 Mapeamento ligado de novo	Asignación activada de nuevo
 {} roda como administrador: o Windows não deixa as teclas do controle chegarem nele.	{} se ejecuta como administrador: Windows no deja que las teclas del mando le lleguen.
-Editar perfis	Editar perfiles
-Fechar perfis	Cerrar perfiles
 Novo perfil para jogo	Nuevo perfil para juego
 Voltar ao de fábrica	Volver al de fábrica
 Apagar perfil	Borrar perfil
@@ -2209,3 +2206,10 @@ Nenhum texto: crie um em Texto rápido, mais abaixo	Ningún texto: crea uno en T
 Essa abreviação já existe neste perfil.	Esa abreviatura ya existe en este perfil.
 A abreviação tem de 2 a 16 letras e números.	La abreviatura tiene de 2 a 16 letras y números.
 Em qualquer programa, a abreviação seguida de espaço, Enter ou Tab vira o texto. Sem abreviação, o texto sai por um botão ou tecla (destino Texto rápido).	En cualquier programa, la abreviatura seguida de espacio, Enter o Tab se convierte en el texto. Sin abreviatura, el texto sale con un botón o tecla (destino Texto rápido).
+Como o jogo vê este controle	Cómo ve el juego este mando
+Nativo: {}	Nativo: {}
+Virar controle Xbox	Convertir en mando Xbox
+Chega numa fase futura, com o controle virtual.	Llega en una fase futura, con el mando virtual.
+Fora dos jogos, mouse e teclado. Nos jogos, o perfil do jogo ou o Base, que não muda nada.	Fuera de los juegos, ratón y teclado. En los juegos, el perfil del juego o el Base, que no cambia nada.
+O jogo recebe o controle como ele é. Vale para todos os controles.	El juego recibe el mando tal como es. Vale para todos los mandos.
+Ajustes	Ajustes

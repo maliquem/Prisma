@@ -81,8 +81,13 @@ pub fn test_target(app: &mut App, what: &str) {
                 ed.run = "C:/Windows/System32/notepad.exe".into();
             }
             "keyboard" => ed.kind = 9,
-            "macro" => ed.kind = 10,
+            "macro" => {
+                ed.kind = 10;
+                app.pads.tab = 1;
+            }
+            "settings" => app.pads.tab = 2,
             "text" => {
+                app.pads.tab = 1;
                 ed.kind = 11;
                 ed.tabbr = "vlw".into();
                 ed.ttext = "Valeu, até a próxima!".into();
@@ -303,7 +308,8 @@ fn apply(p: &mut Profile, t: Profile) {
     *p = Profile { name: std::mem::take(&mut p.name), games: std::mem::take(&mut p.games), ..t };
 }
 
-pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
+/// Linha do perfil no topo da página: escolher, novo para um jogo, apagar, modelo, importar e exportar.
+pub fn top(ui: &mut Ui, app: &mut App, r: Rect) {
     let mut list = remap::profiles();
     let Some(ed) = app.pads.edit.as_mut() else { return };
     // Importado: um programa por vez; fechar a pergunta sem Sim recusa aquele programa.
@@ -338,33 +344,26 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
     }
     let Some(ed) = app.pads.edit.as_mut() else { return };
     ed.prof = ed.prof.min(list.len() - 1);
-    ui.card(r);
-    let x = r.x + 16.0;
-    let w = r.w - 32.0;
-
-    // Cabeçalho: perfil e fechar; embaixo, novo perfil para um jogo e apagar.
-    let mut y = r.y + 12.0;
-    let close_w = 96.0;
     let title_w = crate::ui::gfx::measure(&tr("Perfis"), 15.0, Weight::Semibold, None).0 + 16.0;
-    ui.title(rect(x, y + 6.0, title_w, 22.0), "Perfis");
+    // Larguras em partes: o novo perfil para jogo e o modelo têm os textos mais longos.
+    const PARTS: [f32; 6] = [0.9, 1.45, 1.1, 1.25, 0.65, 0.65];
+    let unit = (r.w - title_w - 40.0) / 6.0;
+    let at = |i: usize| {
+        let left: f32 = PARTS[..i].iter().sum();
+        rect((r.x + title_w + left * unit + i as f32 * 8.0).floor(), r.y, (PARTS[i] * unit).floor(), 34.0)
+    };
+    ui.title(rect(r.x, r.y + 6.0, title_w, 22.0), "Perfis");
     let names: Vec<String> = list.iter().map(|p| p.name.clone()).collect();
-    if ui.select("pp-prof", rect(x + title_w, y, (w - title_w - close_w - 8.0).min(260.0), 34.0), &names, &mut ed.prof) {
+    // Gravando uma macro, o perfil não troca: os passos iriam para outro perfil.
+    if ed.rec {
+        ui.c.text_fit(at(0), &names[ed.prof], 14.0, TEXT, Align::Left, Weight::Regular);
+    } else if ui.select("pp-prof", at(0), &names, &mut ed.prof) {
         ed.layer = 0;
     }
-    if ui.button("pp-close", rect(r.right() - 16.0 - close_w, y, close_w, 34.0), "Fechar", false) {
-        if ed.rec {
-            macros::record_stop();
-            app.toast.hide();
-        }
-        app.pads.edit = None;
-        return;
-    }
-    y += 44.0;
-    let half = ((w - 8.0) / 2.0).floor();
     let free: Vec<&crate::config::MeterGame> = app.cfg.meter_games.iter().filter(|g| !list.iter().any(|p| p.games.iter().any(|e| e.eq_ignore_ascii_case(&g.exe)))).collect();
     let mut games = vec![tr("Novo perfil para jogo")];
     games.extend(free.iter().map(|g| g.exe.clone()));
-    if ui.select("pp-game", rect(x, y, half, 34.0), &games, &mut ed.game) && ed.game > 0 {
+    if ui.select("pp-game", at(1), &games, &mut ed.game) && ed.game > 0 {
         let g = free[ed.game - 1];
         let mut p = Profile::base();
         p.name = g.exe.trim_end_matches(".exe").trim_end_matches(".EXE").to_string();
@@ -381,7 +380,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
     let mut p = list[ed.prof].clone();
     let builtin = p.name == remap::DESKTOP || p.name == remap::BASE;
     let del = if builtin { "Voltar ao de fábrica" } else { "Apagar perfil" };
-    if ui.button_ex("pp-del", rect(x + half + 8.0, y, half, 34.0), del, false, !builtin || remap::has_file(&p.name)) {
+    if ui.button_ex("pp-del", at(2), del, false, !ed.rec && (!builtin || remap::has_file(&p.name))) {
         remap::remove(&p.name);
         if !builtin {
             ed.prof = 0;
@@ -389,20 +388,16 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
         ed.layer = 0;
         return;
     }
-    y += 44.0;
-
-    // Modelos, importar e exportar.
-    let quarter = ((w - 24.0) / 4.0).floor();
     let mut tpls = vec![tr("Aplicar modelo")];
     tpls.extend(remap::TEMPLATES.iter().chain(["Acessível"].iter()).map(|t| tr(t)));
     let acc_i = tpls.len() - 1;
-    if ui.select("pp-tpl", rect(x, y, 2.0 * quarter + 8.0, 34.0), &tpls, &mut ed.tpl) && ed.tpl > 0 && ed.tpl < acc_i {
+    if ui.select("pp-tpl", at(3), &tpls, &mut ed.tpl) && ed.tpl > 0 && ed.tpl < acc_i {
         ask_template(ui, &tpls[ed.tpl], &p.name);
     }
-    if ui.button("pp-in", rect(x + 2.0 * (quarter + 8.0), y, quarter, 34.0), "Importar", false) {
+    if ui.button_ex("pp-in", at(4), "Importar", false, !ed.rec) {
         app.pad_profile_file(false);
     }
-    if ui.button("pp-out", rect(x + 3.0 * (quarter + 8.0), y, quarter, 34.0), "Exportar", false) {
+    if ui.button("pp-out", at(5), "Exportar", false) {
         app.pad_profile_file(true);
     }
     let Some(ed) = app.pads.edit.as_mut() else { return };
@@ -416,7 +411,24 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
         }
         ed.tpl = 0;
     }
-    y += 52.0;
+    // O assistente do Acessível fica na aba Mapeamento.
+    if ed.tpl == acc_i {
+        app.pads.tab = 0;
+    }
+}
+
+/// O editor do perfil escolhido em `top`: a aba 0 (Mapeamento) tem camadas, sticks, ligações e
+/// turbo; a 1 (Macros), as macros e o texto rápido.
+pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
+    let list = remap::profiles();
+    let Some(ed) = app.pads.edit.as_mut() else { return };
+    ed.prof = ed.prof.min(list.len() - 1);
+    let mut p = list[ed.prof].clone();
+    let acc_i = remap::TEMPLATES.len() + 1;
+    ui.card(r);
+    let x = r.x + 16.0;
+    let w = r.w - 32.0;
+    let mut y = r.y + 12.0;
 
     ed.layer = ed.layer.min(p.layers.len() - 1);
     let chips = buttons(family);
@@ -440,6 +452,9 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
     ed.mac = ed.mac.min(p.macros.len().saturating_sub(1));
     ui.begin_scroll("pp-body", body, ed.body_h);
     let mut changed = false;
+    let mut pick = None;
+    let mut rec_note = None;
+    if tab == 0 {
 
     // Assistente do Acessível: três perguntas e Aplicar.
     if wizard {
@@ -456,7 +471,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
             ed.tpl = 0;
         }
         if ui.button_ex("pp-acc-go", rect(x + 2.0 * (third + 8.0), y, third, 34.0), "Aplicar", true, true) {
-            ask_template(ui, &tpls[acc_i], &p.name);
+            ask_template(ui, &tr("Acessível"), &p.name);
         }
         if ui.answered("pp-tpl-ok") {
             let a = ed.acc;
@@ -682,7 +697,6 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
     }
     y += 44.0;
     let vr = rect(x, y, 2.0 * third + 8.0, 34.0);
-    let mut pick = None;
     let sounds = app.cfg.snd_keys.len().min(crate::app::SND_KEYS_MAX);
     let others_p: Vec<String> = list.iter().map(|o| o.name.clone()).filter(|n| *n != p.name).collect();
     let values: Vec<String> = match ed.kind {
@@ -812,9 +826,10 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
     ui.c.text_fit(rect(x, y, w, 20.0), &note, 12.0, if warn.is_some() { WARN } else { MUTED }, Align::Left, Weight::Regular);
     }
     y += 40.0;
+    }
 
+    if tab == 1 {
     // Macros do perfil: escolher, criar, apagar, o modo, gravar e os passos.
-    let mut rec_note = None;
     if ed.rec && !macros::recording() {
         ed.rec = false;
     }
@@ -957,7 +972,9 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
         ("Em qualquer programa, a abreviação seguida de espaço, Enter ou Tab vira o texto. Sem abreviação, o texto sai por um botão ou tecla (destino Texto rápido).", false)
     };
     ui.c.text_wrap(rect(x, y, w, 36.0), &tr(note), 12.0, if warn { WARN } else { MUTED }, Weight::Regular);
-    let h = y + 52.0 - body.y;
+    y += 40.0;
+    }
+    let h = y + 12.0 - body.y;
     if (h - ed.body_h).abs() > 0.5 {
         ed.body_h = h;
         ui.s.needs_redraw = true;
