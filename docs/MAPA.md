@@ -201,7 +201,7 @@ As flags de teste ficam em `src/app.rs` (`start`, linha 366, e as checagens de `
 | Abrir a pasta instalada | Botão | `open_installed` `src/startup.rs:361` | |
 | Desinstalar | Botão de remover em Configurações; `--uninstall` | `startup::uninstall` `src/startup.rs:372`; `main.rs` (`--uninstall`); sem administrador numa instalação, `startup::uninstall_as_admin` `src/startup.rs:368` reabre como administrador | Pergunta antes; as configurações ficam guardadas. |
 | Abrir programa (radial e ligação dos perfis) | **Abrir um programa…** | `sys/quick.rs:323` `open_as_user`, chamado em `app.rs:3031` (`Event::Run`) | Com o Prisma como administrador, abre pelo Explorer com a permissão da pessoa. |
-| Iniciar com o Windows | Opção em Configurações | `startup::is_enabled` `src/startup.rs:11`; `set_enabled` `startup.rs:22`; `create_task` `startup.rs:71`; `autostart::set_enabled` `src/sys/autostart.rs:195` | Tarefa do Agendador com `--background`. |
+| Iniciar com o Windows | Opção em Configurações | `startup::is_enabled` `src/startup.rs:11`; `set_enabled` `startup.rs:22`; `create_task` `startup.rs:71`; `autostart::set_enabled` `src/sys/autostart.rs:204` | Tarefa do Agendador com `--background`. |
 | Abrir como administrador | Opção em Configurações | `sync_admin` `startup.rs:89`; `open_as_admin` `startup.rs:106`; `is_elevated` `startup.rs:116`; `run_elevated` `startup.rs:140`; `relaunch_elevated` `startup.rs:179` | Cria a tarefa só se a opção está ligada. |
 | Atualizar | Botão de atualizar em Configurações (`pages/adjust.rs:151` `draw_update`); `--update` | `update_now` `src/app.rs:1573`; `update_tick` `app.rs:1522`; `sys/update.rs:358` `check`; `:159` `download`; `:420` `install`; `:473` `wait_exit`; `:484` `after_update` | Baixa só ferramentas, nunca toca em saves. Teste: `--test-update=` (`app.rs:744`). 2 testes em `sys/update.rs`. |
 | Confirmar assinatura | Automático | `sys/update.rs:336` `signed`; `--test-sign=` (`app.rs:749`) | |
@@ -278,9 +278,9 @@ A barra lateral é `NAV` (`src/pages/mod.rs:273-295`), na ordem abaixo. Cada pá
 
 | Função | Como é chamada | Onde no código | Observações |
 |---|---|---|---|
-| Listar programas que iniciam com o Windows | Página | `sys/autostart.rs:149` `list`; `:117` `exe_of` | |
-| Ligar ou desligar um item | Caixa de seleção | `sys/autostart.rs:195` `set_enabled`; `select_boot` `app.rs:1607`; `sort_boot` `app.rs:1587` | |
-| Adicionar ou remover um item | Botões | `sys/autostart.rs:210` `add`; `:228` `remove` | |
+| Listar programas que iniciam com o Windows | Página | `sys/autostart.rs:158` `list`; `:126` `exe_of` | |
+| Ligar ou desligar um item | Caixa de seleção | `sys/autostart.rs:204` `set_enabled`; `select_boot` `app.rs:1607`; `sort_boot` `app.rs:1587` | |
+| Adicionar ou remover um item | Botões | `sys/autostart.rs:219` `add`; `:237` `remove` | |
 
 ### 4.7 Serviços (`src/pages/services.rs`, `draw` linha 27)
 

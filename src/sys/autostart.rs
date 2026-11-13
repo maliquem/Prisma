@@ -66,10 +66,11 @@ fn values(root: HKEY, sub: &str, access: REG_SAM_FLAGS) -> Vec<(String, Vec<u8>)
             return out;
         }
         let mut i = 0;
+        // O nome de um valor vai até 16383 letras; o dado cresce quando não cabe.
+        let mut name = vec![0u16; 16384];
+        let mut data = vec![0u8; 8192];
         loop {
-            let mut name = [0u16; 512];
             let mut nlen = name.len() as u32;
-            let mut data = vec![0u8; 8192];
             let mut dlen = data.len() as u32;
             let r = RegEnumValueW(
                 key,
@@ -81,11 +82,19 @@ fn values(root: HKEY, sub: &str, access: REG_SAM_FLAGS) -> Vec<(String, Vec<u8>)
                 Some(data.as_mut_ptr()),
                 Some(&mut dlen),
             );
+            if r == ERROR_MORE_DATA && dlen as usize > data.len() {
+                data.resize(dlen as usize, 0);
+                continue;
+            }
+            if r == ERROR_MORE_DATA {
+                // Não devia acontecer: pula este valor em vez de parar a lista.
+                i += 1;
+                continue;
+            }
             if r.is_err() {
                 break;
             }
-            data.truncate(dlen as usize);
-            out.push((String::from_utf16_lossy(&name[..nlen as usize]), data));
+            out.push((String::from_utf16_lossy(&name[..nlen as usize]), data[..dlen as usize].to_vec()));
             i += 1;
         }
         let _ = RegCloseKey(key);
@@ -243,5 +252,31 @@ pub fn remove(item: &Item) -> bool {
         let ok = RegDeleteValueW(key, PCWSTR(n.as_ptr())) == ERROR_SUCCESS;
         let _ = RegCloseKey(key);
         ok
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Um valor maior que o buffer do começo não para a lista: o de depois também aparece.
+    #[test]
+    fn big_value_does_not_stop_the_list() {
+        let sub = format!("Software\\PrismaTeste-{}", std::process::id());
+        unsafe {
+            let mut key = HKEY::default();
+            let s = wide(&sub);
+            assert!(RegCreateKeyExW(HKEY_CURRENT_USER, PCWSTR(s.as_ptr()), None, None, REG_OPTION_VOLATILE, KEY_WRITE, None, &mut key, None).is_ok());
+            let big: Vec<u8> = wide(&"x".repeat(20_000)).iter().flat_map(|c| c.to_le_bytes()).collect();
+            let small: Vec<u8> = wide("ok").iter().flat_map(|c| c.to_le_bytes()).collect();
+            let _ = RegSetValueExW(key, w!("a"), None, REG_SZ, Some(&big));
+            let _ = RegSetValueExW(key, w!("b"), None, REG_SZ, Some(&small));
+            let _ = RegCloseKey(key);
+            let list = values(HKEY_CURRENT_USER, &sub, REG_SAM_FLAGS(0));
+            let _ = RegDeleteTreeW(HKEY_CURRENT_USER, PCWSTR(s.as_ptr()));
+            assert_eq!(list.len(), 2);
+            assert!(list.iter().any(|(n, d)| n == "a" && reg_text(d).len() == 20_000));
+            assert!(list.iter().any(|(n, d)| n == "b" && reg_text(d) == "ok"));
+        }
     }
 }
