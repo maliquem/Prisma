@@ -577,7 +577,8 @@ pub fn start(background: bool) {
                     _ => capture::mux::Codec::Av1,
                 };
                 let h = start(Settings {
-                    target: Target::Monitor(mon.0 as isize),
+                    // PRISMA_TEST_WINDOW=<hwnd> grava uma janela em vez do monitor.
+                    target: std::env::var("PRISMA_TEST_WINDOW").ok().and_then(|v| v.parse().ok()).map_or(Target::Monitor(mon.0 as isize), Target::Window),
                     out_h: 0,
                     fps: 60,
                     codec,

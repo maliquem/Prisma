@@ -48,15 +48,13 @@ unsafe fn find(c: Codec, input: GUID, dev: &ID3D11Device) -> Result<(IMFTransfor
         &mut list,
         &mut n,
     )?;
-    if n == 0 || list.is_null() {
+    let items = super::mft_list(list, n);
+    if items.is_empty() {
         return Err(Error::new(E_FAIL, "sem codificador de hardware"));
     }
-    let items = std::slice::from_raw_parts(list, n as usize);
-    let act = items[super::mft_for_device(items, dev)].as_ref().unwrap();
+    let act = items[super::mft_for_device(&items, dev)].as_ref().unwrap();
     let name = friendly(act);
-    let r = act.ActivateObject::<IMFTransform>();
-    CoTaskMemFree(Some(list as *const _));
-    r.map(|t| (t, name))
+    act.ActivateObject::<IMFTransform>().map(|t| (t, name))
 }
 
 pub(super) unsafe fn friendly(act: &IMFActivate) -> String {

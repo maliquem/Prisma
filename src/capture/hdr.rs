@@ -186,7 +186,8 @@ pub struct ToneMap {
     rtv: ID3D11RenderTargetView,
     smp: ID3D11SamplerState,
     cb: ID3D11Buffer,
-    cached: std::cell::RefCell<Option<(*mut std::ffi::c_void, ID3D11ShaderResourceView)>>,
+    /// Uma vista por textura da captura: o pool gira por até 3, e criar a vista a cada quadro custa.
+    cached: std::cell::RefCell<Vec<(*mut std::ffi::c_void, ID3D11ShaderResourceView)>>,
 }
 
 impl ToneMap {
@@ -225,7 +226,7 @@ impl ToneMap {
                 rtv: rtv.unwrap(),
                 smp: smp.unwrap(),
                 cb: cb.unwrap(),
-                cached: std::cell::RefCell::new(None),
+                cached: std::cell::RefCell::new(Vec::new()),
             })
         }
     }
@@ -234,14 +235,18 @@ impl ToneMap {
         unsafe {
             let mut cache = self.cached.borrow_mut();
             let key = src.as_raw();
-            let hit = cache.as_ref().filter(|c| c.0 == key).map(|c| c.1.clone());
+            // A vista segura a textura: o endereço não é reaproveitado enquanto ela está aqui.
+            let hit = cache.iter().find(|c| c.0 == key).map(|c| c.1.clone());
             let srv = match hit {
                 Some(s) => s,
                 None => {
                     let mut s = None;
                     dev.CreateShaderResourceView(src, None, Some(&mut s))?;
                     let s = s.unwrap();
-                    *cache = Some((key, s.clone()));
+                    if cache.len() >= 3 {
+                        cache.remove(0);
+                    }
+                    cache.push((key, s.clone()));
                     s
                 }
             };

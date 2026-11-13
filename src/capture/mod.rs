@@ -132,6 +132,16 @@ pub fn same_adapter(a: &IDXGIAdapter1, dev: &ID3D11Device) -> bool {
 
 /// Na lista do Media Foundation, o primeiro codificador ou decodificador da placa do dispositivo
 /// (num notebook com duas placas, o primeiro da lista pode ser da outra). Sem marca: o primeiro.
+/// Toma posse da lista do `MFTEnumEx`: libera a lista aqui, e cada ativação é solta quando o Vec cai.
+pub(crate) unsafe fn mft_list(list: *mut Option<windows::Win32::Media::MediaFoundation::IMFActivate>, n: u32) -> Vec<Option<windows::Win32::Media::MediaFoundation::IMFActivate>> {
+    if list.is_null() {
+        return Vec::new();
+    }
+    let v = (0..n as usize).map(|i| std::ptr::read(list.add(i))).collect();
+    windows::Win32::System::Com::CoTaskMemFree(Some(list as *const _));
+    v
+}
+
 pub(crate) unsafe fn mft_for_device(items: &[Option<windows::Win32::Media::MediaFoundation::IMFActivate>], dev: &ID3D11Device) -> usize {
     use windows::Win32::Media::MediaFoundation::MFT_ENUM_ADAPTER_LUID;
     let Some(l) = device_luid(dev) else { return 0 };
@@ -486,6 +496,13 @@ pub fn clipboard_text(owner: HWND) -> Option<String> {
     }
 }
 
+/// O bloco de `size` bytes tem o cabeçalho e as `h` linhas de `w` pixels de `bytes` bytes?
+fn dib_fits(size: usize, head: usize, w: usize, h: usize, bytes: usize) -> bool {
+    let row = w.checked_mul(bytes).and_then(|r| r.checked_add(3)).map(|r| r & !3);
+    let need = row.and_then(|r| r.checked_mul(h)).and_then(|n| n.checked_add(head));
+    head >= 40 && need.is_some_and(|n| n <= size)
+}
+
 /// Lê a imagem copiada, em BGRA de cima para baixo.
 pub fn clipboard_image() -> Option<(u32, u32, Vec<u8>)> {
     use windows::Win32::System::DataExchange::*;
@@ -499,14 +516,20 @@ pub fn clipboard_image() -> Option<(u32, u32, Vec<u8>)> {
             if p.is_null() {
                 return None;
             }
-            let bi = &*(p as *const BITMAPINFOHEADER);
-            let (w, h) = (bi.biWidth as usize, bi.biHeight.unsigned_abs() as usize);
-            let bytes = bi.biBitCount as usize / 8;
-            let bitfields = bi.biCompression == BI_BITFIELDS.0 && bi.biSize == 40;
-            let fine = w > 0 && h > 0 && matches!(bytes, 3 | 4) && (bi.biCompression == BI_RGB.0 || bi.biCompression == BI_BITFIELDS.0);
+            let size = GlobalSize(mem);
             let mut out = None;
-            if fine {
-                let start = p.add(bi.biSize as usize + if bitfields { 12 } else { 0 });
+            // Outro programa pode pôr um cabeçalho que promete mais do que o bloco tem.
+            let bi = (size >= std::mem::size_of::<BITMAPINFOHEADER>()).then(|| &*(p as *const BITMAPINFOHEADER));
+            let fine = bi.and_then(|bi| {
+                let (w, h) = (usize::try_from(bi.biWidth).ok()?, bi.biHeight.unsigned_abs() as usize);
+                let bytes = bi.biBitCount as usize / 8;
+                let bitfields = bi.biCompression == BI_BITFIELDS.0 && bi.biSize == 40;
+                let ok = w > 0 && h > 0 && matches!(bytes, 3 | 4) && (bi.biCompression == BI_RGB.0 || bi.biCompression == BI_BITFIELDS.0);
+                let head = bi.biSize as usize + if bitfields { 12 } else { 0 };
+                (ok && dib_fits(size, head, w, h, bytes)).then_some((bi, w, h, bytes, head))
+            });
+            if let Some((bi, w, h, bytes, head)) = fine {
+                let start = p.add(head);
                 let row = (w * bytes + 3) & !3;
                 let mut px = vec![255u8; w * h * 4];
                 for y in 0..h {
@@ -614,5 +637,18 @@ pub fn choose_exe(owner: HWND) -> Option<String> {
 pub fn hide_from_capture(h: HWND) {
     unsafe {
         let _ = SetWindowDisplayAffinity(h, WDA_EXCLUDEFROMCAPTURE);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn cut_bitmap_is_refused() {
+        // 3x2 em 24 bits: linhas de 12 bytes (9 com o enchimento até 4).
+        assert!(super::dib_fits(40 + 24, 40, 3, 2, 3));
+        assert!(!super::dib_fits(40 + 23, 40, 3, 2, 3));
+        // Cabeçalho que se diz menor que o de verdade, e tamanhos que estouram a conta.
+        assert!(!super::dib_fits(1000, 12, 3, 2, 3));
+        assert!(!super::dib_fits(usize::MAX, 40, usize::MAX / 2, 3, 4));
     }
 }

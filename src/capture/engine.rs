@@ -131,9 +131,9 @@ impl Ring {
         }
     }
 
-    fn save(&self, path: &str, cfg: &Settings, w: u32, h: u32) -> std::io::Result<()> {
+    fn save(&self, path: &str, codec: Codec, w: u32, h: u32, fps: u32, hdr10: bool) -> std::io::Result<()> {
         let audio = !self.audio.is_empty();
-        let mut m = Mp4::create(path, cfg.codec, w, h, cfg.fps, cfg.hdr10, audio)?;
+        let mut m = Mp4::create(path, codec, w, h, fps, hdr10, audio)?;
         for a in &self.audio {
             m.push_audio(a);
         }
@@ -369,6 +369,10 @@ fn run(mut cfg: Settings, rx: Receiver<Cmd>, status: &Status, info: &std::sync::
         // Quadro intermediário: BGRA em SDR, ou PQ de 10 bits ao gravar em HDR.
         let mid_fmt = if hdr10 { DXGI_FORMAT_R10G10B10A2_UNORM } else { DXGI_FORMAT_B8G8R8A8_UNORM };
         let mid = bgra_texture(&d.dev, src_w, src_h, mid_fmt)?;
+        let mut mid_rtv = None;
+        d.dev.CreateRenderTargetView(&mid, None, Some(&mut mid_rtv))?;
+        let mid_rtv = mid_rtv.unwrap();
+        let mut content = size;
         let tone = if color.hdr { Some(ToneMap::new(&d.dev, &mid, hdr10, color.white_nits)?) } else { None };
         let mut conv = Converter::new(&d.dev, &d.ctx, src_w, src_h, out_w, out_h, cfg.fps, hdr10)?;
         let in_view = conv.input_view(&mid)?;
@@ -437,7 +441,14 @@ fn run(mut cfg: Settings, rx: Receiver<Cmd>, status: &Status, info: &std::sync::
                         status.recording.store(false, Ordering::Relaxed);
                     }
                     Cmd::SaveReplay(path) => {
-                        let _ = ring.save(&path, &cfg, out_w, out_h);
+                        // Gravar o MP4 leva tempo: a captura não pode parar esperando o disco.
+                        let copy = Ring { video: ring.video.clone(), audio: ring.audio.clone() };
+                        let (codec, fps) = (cfg.codec, cfg.fps);
+                        std::thread::spawn(move || {
+                            if let Err(e) = copy.save(&path, codec, out_w, out_h, fps, hdr10) {
+                                eprintln!("replay: {e}");
+                            }
+                        });
                     }
                     Cmd::Quit => quit = true,
                 }
@@ -468,36 +479,56 @@ fn run(mut cfg: Settings, rx: Receiver<Cmd>, status: &Status, info: &std::sync::
                 }
             }
 
-            while let Ok(frame) = pool.TryGetNextFrame() {
-                let pts = frame.SystemRelativeTime()?.Duration;
-                if pts - last_fed < interval * 9 / 10 {
+            // Um erro aqui sai do laço como o do pump: o som para e o MP4 fecha lá embaixo.
+            let mut frames = || -> Result<()> {
+                while let Ok(frame) = pool.TryGetNextFrame() {
+                    let pts = frame.SystemRelativeTime()?.Duration;
+                    if pts - last_fed < interval * 9 / 10 {
+                        let _ = frame.Close();
+                        continue;
+                    }
+                    if enc.need == 0 {
+                        status.dropped.fetch_add(1, Ordering::Relaxed);
+                        let _ = frame.Close();
+                        continue;
+                    }
+                    // A janela mudou de tamanho: o pool passa a ter o tamanho novo, e o vídeo
+                    // continua com o do começo, com a janela no canto e o resto preto.
+                    let cs = frame.ContentSize()?;
+                    if (cs.Width, cs.Height) != (content.Width, content.Height) && cs.Width > 0 && cs.Height > 0 {
+                        content = cs;
+                        pool.Recreate(&d.rt, fmt, 3, cs)?;
+                        d.ctx.ClearRenderTargetView(&mid_rtv, &[0.0, 0.0, 0.0, 1.0]);
+                    }
+                    let surf = frame.Surface()?;
+                    let access: IDirect3DDxgiInterfaceAccess = surf.cast()?;
+                    let tex: ID3D11Texture2D = access.GetInterface()?;
+                    let mut td = D3D11_TEXTURE2D_DESC::default();
+                    tex.GetDesc(&mut td);
+                    if let Some(t) = &tone {
+                        // Um para um: o que passa do quadro fica de fora.
+                        t.draw(&d.ctx, &d.dev, &tex, td.Width, td.Height)?;
+                    } else {
+                        let (cw, ch) = (td.Width.min(cs.Width as u32).min(src_w), td.Height.min(cs.Height as u32).min(src_h));
+                        let bx = D3D11_BOX { left: 0, top: 0, front: 0, right: cw, bottom: ch, back: 1 };
+                        d.ctx.CopySubresourceRegion(&mid, 0, 0, 0, 0, &tex, 0, Some(&bx));
+                    }
+                    let t = conv.convert(&in_view)?;
                     let _ = frame.Close();
-                    continue;
+                    enc.feed(&t, pts)?;
+                    last_fed = pts;
+                    status.frames.fetch_add(1, Ordering::Relaxed);
                 }
-                if enc.need == 0 {
-                    status.dropped.fetch_add(1, Ordering::Relaxed);
-                    let _ = frame.Close();
-                    continue;
-                }
-                let surf = frame.Surface()?;
-                let access: IDirect3DDxgiInterfaceAccess = surf.cast()?;
-                let tex: ID3D11Texture2D = access.GetInterface()?;
-                if let Some(t) = &tone {
-                    t.draw(&d.ctx, &d.dev, &tex, src_w, src_h)?;
-                } else {
-                    let bx = D3D11_BOX { left: 0, top: 0, front: 0, right: src_w, bottom: src_h, back: 1 };
-                    d.ctx.CopySubresourceRegion(&mid, 0, 0, 0, 0, &tex, 0, Some(&bx));
-                }
-                let t = conv.convert(&in_view)?;
-                let _ = frame.Close();
-                enc.feed(&t, pts)?;
-                last_fed = pts;
-                status.frames.fetch_add(1, Ordering::Relaxed);
+                Ok(())
+            };
+            if let Err(e) = frames() {
+                failed = Some(e);
+                break;
             }
         }
 
         stop_audio.store(true, Ordering::Relaxed);
-        pool.RemoveFrameArrived(token)?;
+        let _ = pool.RemoveFrameArrived(token);
         let _ = session.Close();
         let _ = pool.Close();
         enc.drain(&mut out);

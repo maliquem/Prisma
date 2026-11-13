@@ -7,7 +7,6 @@ use windows::core::*;
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Direct3D11::*;
 use windows::Win32::Media::MediaFoundation::*;
-use windows::Win32::System::Com::*;
 
 use super::encoder::friendly;
 use super::mux::{Codec, Pkt};
@@ -32,15 +31,10 @@ pub fn can_decode(c: Codec) -> bool {
         let mut list = std::ptr::null_mut();
         let mut n = 0u32;
         let flags = MFT_ENUM_FLAG_SYNCMFT | MFT_ENUM_FLAG_ASYNCMFT | MFT_ENUM_FLAG_HARDWARE | MFT_ENUM_FLAG_SORTANDFILTER;
-        if MFTEnumEx(MFT_CATEGORY_VIDEO_DECODER, flags, Some(&i), Some(&o), &mut list, &mut n).is_err() || list.is_null() {
+        if MFTEnumEx(MFT_CATEGORY_VIDEO_DECODER, flags, Some(&i), Some(&o), &mut list, &mut n).is_err() {
             return false;
         }
-        // Solta cada ativação antes de liberar a lista.
-        for i in 0..n as usize {
-            drop(std::ptr::read(list.add(i)));
-        }
-        CoTaskMemFree(Some(list as *const _));
-        n > 0
+        !super::mft_list(list, n).is_empty()
     }
 }
 
@@ -95,15 +89,13 @@ impl Decoder {
             &mut list,
             &mut n,
         )?;
-        if n == 0 || list.is_null() {
+        let items = super::mft_list(list, n);
+        if items.is_empty() {
             return Err(Error::new(E_FAIL, "sem decodificador"));
         }
-        let items = std::slice::from_raw_parts(list, n as usize);
-        let act = items[super::mft_for_device(items, dev)].as_ref().unwrap();
+        let act = items[super::mft_for_device(&items, dev)].as_ref().unwrap();
         let name = friendly(act);
-        let mft = act.ActivateObject::<IMFTransform>();
-        CoTaskMemFree(Some(list as *const _));
-        let mft = mft?;
+        let mft = act.ActivateObject::<IMFTransform>()?;
 
         let attrs = mft.GetAttributes()?;
         let is_async = attrs.GetUINT32(&MF_TRANSFORM_ASYNC).unwrap_or(0) != 0;
