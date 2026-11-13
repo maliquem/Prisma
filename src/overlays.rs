@@ -502,7 +502,7 @@ pub struct Keyboard {
     arrow: [(f32, f32); 2],
     /// Canto na tela, as duas linhas de ajuda e os dois sticks, fixos enquanto o teclado fica aberto.
     at: (i32, i32),
-    lines: [Vec<(Vec<u32>, String)>; 2],
+    lines: [Vec<(Vec<crate::sys::pads::Buttons>, String)>; 2],
     style: crate::ui::glyph::Style,
     two: bool,
     ticking: bool,
@@ -737,7 +737,7 @@ pub struct Radial {
     /// Algum lugar tem 4 opções: a janela cresce para a faixa delas, embaixo do círculo.
     groups: bool,
     left: bool,
-    hint: Vec<(Vec<u32>, String)>,
+    hint: Vec<(Vec<crate::sys::pads::Buttons>, String)>,
     style: crate::ui::glyph::Style,
     ticking: bool,
 }

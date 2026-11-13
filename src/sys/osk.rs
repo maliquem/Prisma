@@ -55,11 +55,11 @@ pub const ACCENTS: [[char; 4]; 8] = [
     ['Ü', 'Ñ', 'È', 'Ò'],
 ];
 /// Botões na ordem das letras de cada grupo.
-pub const FACE: [u32; 4] = [pads::X, pads::Y, pads::B, pads::A];
+pub const FACE: [pads::Buttons; 4] = [pads::X, pads::Y, pads::B, pads::A];
 /// Com os dois sticks, o direcional digita no círculo do stick direito, na mesma ordem.
-pub const DPAD: [u32; 4] = [pads::LEFT, pads::UP, pads::RIGHT, pads::DOWN];
+pub const DPAD: [pads::Buttons; 4] = [pads::LEFT, pads::UP, pads::RIGHT, pads::DOWN];
 /// Apagar e as setas: repetem enquanto o botão fica apertado mesmo com "Repetir ao segurar" desligado.
-const REPEATS: [(u32, u16); 5] = [(pads::LB, 0x08), (pads::UP, 0x26), (pads::DOWN, 0x28), (pads::LEFT, 0x25), (pads::RIGHT, 0x27)];
+const REPEATS: [(pads::Buttons, u16); 5] = [(pads::LB, 0x08), (pads::UP, 0x26), (pads::DOWN, 0x28), (pads::LEFT, 0x25), (pads::RIGHT, 0x27)];
 const REPEAT_EVERY: Duration = Duration::from_millis(60);
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -111,9 +111,9 @@ struct Osk {
     view: View,
     /// Só o controle que mexeu primeiro digita: dois controles misturariam os botões.
     pad: Option<String>,
-    prev: u32,
+    prev: pads::Buttons,
     /// Botão segurado, a tecla que ele digitou e quando ela sai de novo.
-    repeat: Option<(u32, Key, Instant)>,
+    repeat: Option<(pads::Buttons, Key, Instant)>,
     /// "Repetir ao segurar": toda tecla repete (senão, só apagar e as setas), depois de `after`.
     repeat_all: bool,
     after: Duration,
@@ -121,18 +121,18 @@ struct Osk {
     /// pede aviso à janela, que lê as setas no próprio relógio dela.
     stick: [(f32, f32); 2],
     /// Botões que chamam o teclado (ligação do perfil, botão do radial): apertados de novo, fecham.
-    close_on: u32,
+    close_on: pads::Buttons,
 }
 
 /// Botões que o teclado usa: nunca fecham, mesmo ligados a ele.
-const USED: u32 = pads::A | pads::B | pads::X | pads::Y | pads::LB | pads::RB | pads::START | pads::BACK | pads::UP | pads::DOWN | pads::LEFT | pads::RIGHT;
+const USED: pads::Buttons = pads::A | pads::B | pads::X | pads::Y | pads::LB | pads::RB | pads::START | pads::BACK | pads::UP | pads::DOWN | pads::LEFT | pads::RIGHT;
 
 impl Osk {
-    fn new(close_on: u32) -> Self {
+    fn new(close_on: pads::Buttons) -> Self {
         // Tudo conta como já apertado: o botão que abriu o teclado só vale depois de solto.
         let (two, letters_right) = (TWO.load(Ordering::Relaxed), LETTERS_RIGHT.load(Ordering::Relaxed));
         let (repeat_all, after) = (REPEAT_ALL.load(Ordering::Relaxed), Duration::from_millis(REPEAT_MS.load(Ordering::Relaxed) as u64));
-        Osk { view: View { open: true, two, letters_right, ..Default::default() }, pad: None, prev: u32::MAX, repeat: None, repeat_all, after, stick: [(0.0, 0.0); 2], close_on: close_on & !USED }
+        Osk { view: View { open: true, two, letters_right, ..Default::default() }, pad: None, prev: pads::Buttons::MAX, repeat: None, repeat_all, after, stick: [(0.0, 0.0); 2], close_on: close_on & !USED }
     }
 
     /// Um relatório do controle: as teclas a digitar e se é para fechar.
@@ -151,7 +151,7 @@ impl Osk {
             return (keys, true);
         }
         // Cada botão apertado agora e a tecla que ele digita.
-        let mut typed: Vec<(u32, Key)> = vec![];
+        let mut typed: Vec<(pads::Buttons, Key)> = vec![];
         if let Some(p) = self.view.petal {
             typed.extend(FACE.iter().enumerate().filter(|(_, b)| down & **b != 0).map(|(i, b)| (*b, Key::Char(self.view.wheel_char(false, p, i)))));
         }
@@ -330,7 +330,7 @@ pub fn type_text(s: &str) {
 mod tests {
     use super::*;
 
-    fn inp(buttons: u32, lx: f32, ly: f32) -> Input {
+    fn inp(buttons: pads::Buttons, lx: f32, ly: f32) -> Input {
         Input { buttons, lx, ly, ..Default::default() }
     }
 
@@ -415,7 +415,7 @@ mod tests {
         let mut o = Osk::new(0);
         o.view.two = true;
         o.step(&inp(0, 0.0, 0.0), t);
-        let right_up = |b: u32| Input { buttons: b, ry: 1.0, ..Default::default() };
+        let right_up = |b: pads::Buttons| Input { buttons: b, ry: 1.0, ..Default::default() };
         // Direito em cima, direcional para baixo (posição do A): "3" do círculo dos números.
         assert_eq!(o.step(&right_up(pads::DOWN), t).0, vec![Key::Char('3')]);
         // Segurar repete o caractere, não vira seta.

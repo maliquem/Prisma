@@ -7,24 +7,24 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use super::pads::{self, Input};
+use super::pads::{self, Buttons, Input};
 
 // Botões virtuais, depois dos físicos de `pads`: gatilhos e direções dos sticks viram botões.
-pub const LT: u32 = 1 << 17;
-pub const RT: u32 = 1 << 18;
-pub const LSU: u32 = 1 << 19;
-pub const LSD: u32 = 1 << 20;
-pub const LSL: u32 = 1 << 21;
-pub const LSR: u32 = 1 << 22;
-pub const RSU: u32 = 1 << 23;
-pub const RSD: u32 = 1 << 24;
-pub const RSL: u32 = 1 << 25;
-pub const RSR: u32 = 1 << 26;
+pub const LT: Buttons = 1 << 17;
+pub const RT: Buttons = 1 << 18;
+pub const LSU: Buttons = 1 << 19;
+pub const LSD: Buttons = 1 << 20;
+pub const LSL: Buttons = 1 << 21;
+pub const LSR: Buttons = 1 << 22;
+pub const RSU: Buttons = 1 << 23;
+pub const RSD: Buttons = 1 << 24;
+pub const RSL: Buttons = 1 << 25;
+pub const RSR: Buttons = 1 << 26;
 const COUNT: usize = 27;
-const ALL: u32 = (1 << COUNT) - 1;
+const ALL: Buttons = (1 << COUNT) - 1;
 
 /// Nome de cada botão no arquivo do perfil.
-pub const NAMES: [(&str, u32); COUNT] = [
+pub const NAMES: [(&str, Buttons); COUNT] = [
     ("A", pads::A), ("B", pads::B), ("X", pads::X), ("Y", pads::Y), ("LB", pads::LB), ("RB", pads::RB),
     ("BACK", pads::BACK), ("START", pads::START), ("LS", pads::LS), ("RS", pads::RS), ("UP", pads::UP),
     ("DOWN", pads::DOWN), ("LEFT", pads::LEFT), ("RIGHT", pads::RIGHT), ("GUIDE", pads::GUIDE), ("PAD", pads::PAD),
@@ -40,7 +40,7 @@ pub const DOUBLE: Duration = Duration::from_millis(300);
 /// teclado de verdade.
 pub const MARK: usize = 0x5052_4953;
 
-pub const STOP_COMBO: u32 = pads::GUIDE | pads::BACK | pads::START;
+pub const STOP_COMBO: Buttons = pads::GUIDE | pads::BACK | pads::START;
 const STOP_HOLD: Duration = Duration::from_secs(2);
 /// Folga antes de trocar de perfil pelo foco.
 const SWITCH_DELAY: Duration = Duration::from_millis(400);
@@ -223,7 +223,7 @@ pub const TURBO_HZ: u32 = 4;
 /// jogo com anti-cheat.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Turbo {
-    pub button: u32,
+    pub button: Buttons,
     pub speed: u8,
     pub delay: u16,
     pub on: bool,
@@ -231,19 +231,19 @@ pub struct Turbo {
 
 impl Turbo {
     /// De fábrica: desligado, 2x, 500 ms.
-    pub fn new(button: u32) -> Self {
+    pub fn new(button: Buttons) -> Self {
         Turbo { button, speed: 2, delay: 500, on: false }
     }
 }
 
 /// Atalho de fábrica do turbo: RS + RT, mais o botão que liga ou desliga.
-pub const TURBO_KEY: u32 = pads::RS | RT;
+pub const TURBO_KEY: Buttons = pads::RS | RT;
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct Bind {
-    pub button: u32,
+    pub button: Buttons,
     /// Combinação: só vale com estes botões já apertados, e no lugar da ação normal do botão.
-    pub with: u32,
+    pub with: Buttons,
     pub when: When,
     pub out: Out,
 }
@@ -328,7 +328,7 @@ pub struct Profile {
     /// Turbo de cada botão que já foi configurado.
     pub turbo: Vec<Turbo>,
     /// Botões que, segurados, fazem o próximo botão ligar ou desligar o turbo dele (0: sem atalho).
-    pub turbo_key: u32,
+    pub turbo_key: Buttons,
     pub macros: Vec<Macro>,
     pub texts: Vec<Snip>,
     pub gyro_opt: GyroOpt,
@@ -386,7 +386,7 @@ impl Profile {
         let mut p = Self::empty("");
         let l = &mut p.layers[0];
         let key = |vk: u16| Out::Key(vk, 0);
-        let binds: Vec<(u32, Out)> = match i {
+        let binds: Vec<(Buttons, Out)> = match i {
             // Só Mouse: mouse, rolagem e os três cliques.
             0 => {
                 l.ls = Some(Stick::Mouse(1600.0));
@@ -672,7 +672,7 @@ impl Profile {
                 "kbind" => {
                     let mut it = rest.splitn(4, ' ');
                     let l = layer_of(&p, it.next()?)?;
-                    let vk = |s: &str| s.parse::<u32>().ok().filter(|v| (1..=254).contains(v));
+                    let vk = |s: &str| s.parse::<Buttons>().ok().filter(|v| (1..=254).contains(v));
                     let src = it.next()?;
                     let (button, with) = match src.split_once('+') {
                         Some((a, b)) => (vk(a)?, vk(b)?),
@@ -745,28 +745,28 @@ fn layer_of(p: &Profile, s: &str) -> Option<usize> {
     s.parse::<usize>().ok().filter(|&l| l < p.layers.len())
 }
 
-pub fn button_name(bit: u32) -> &'static str {
+pub fn button_name(bit: Buttons) -> &'static str {
     NAMES.iter().find(|n| n.1 == bit).map_or("?", |n| n.0)
 }
 
-fn button_bit(s: &str) -> Option<u32> {
+fn button_bit(s: &str) -> Option<Buttons> {
     NAMES.iter().find(|n| n.0 == s).map(|n| n.1)
 }
 
 /// "RS+RT"; "-" sem botão.
-fn mask_text(m: u32) -> String {
+fn mask_text(m: Buttons) -> String {
     let v: Vec<&str> = NAMES.iter().filter(|n| m & n.1 != 0).map(|n| n.0).collect();
     if v.is_empty() { "-".into() } else { v.join("+") }
 }
 
-fn mask_of(s: &str) -> Option<u32> {
+fn mask_of(s: &str) -> Option<Buttons> {
     s.split('+').try_fold(0, |m, n| button_bit(n).map(|b| m | b))
 }
 
 /// O que já usa esta combinação de botões, para avisar antes de dar a mesma a outra coisa: a parada
 /// de emergência, o atalho do turbo ou uma ligação com "junto com", em qualquer camada.
 /// `for_turbo` ao conferir o próprio atalho do turbo (que vale com qualquer botão a mais).
-pub fn combo_conflict(p: &Profile, combo: u32, for_turbo: bool) -> Option<String> {
+pub fn combo_conflict(p: &Profile, combo: Buttons, for_turbo: bool) -> Option<String> {
     let tr = |s: &str| crate::i18n::tr(s).into_owned();
     if combo.count_ones() < 2 {
         return None;
@@ -891,7 +891,7 @@ pub enum Act {
     /// Ação, troca de perfil ou programa: fica para quem chama o motor.
     Cmd(Out),
     /// O atalho do turbo foi usado com este botão: ligar ou desligar o turbo dele.
-    Turbo(u32),
+    Turbo(Buttons),
 }
 
 #[derive(Default)]
@@ -912,7 +912,7 @@ struct Btn {
 
 pub struct Engine {
     btn: [Btn; COUNT],
-    prev: u32,
+    prev: Buttons,
     holds: Vec<u8>,
     toggles: Vec<u8>,
     /// Quantos botões seguram cada saída: a tecla só solta quando o último soltar.
@@ -954,7 +954,7 @@ impl Default for Engine {
     }
 }
 
-fn binds(p: &Profile, layer: u8, bit: u32, chord: bool) -> Vec<&Bind> {
+fn binds(p: &Profile, layer: u8, bit: Buttons, chord: bool) -> Vec<&Bind> {
     let mut l = Some(layer);
     while let Some(i) = l {
         let Some(ly) = p.layers.get(i as usize) else { break };
@@ -1073,7 +1073,7 @@ impl Engine {
         let (lt, rt) = (linear(inp.lt, p.zones[2]), linear(inp.rt, p.zones[3]));
         let prev = self.prev;
         // Com folga: liga em 0,5 e só desliga abaixo de 0,4, para não piscar na borda.
-        let on = |v: f32, bit: u32| if v > 0.5 || (v > 0.4 && prev & bit != 0) { bit } else { 0 };
+        let on = |v: f32, bit: Buttons| if v > 0.5 || (v > 0.4 && prev & bit != 0) { bit } else { 0 };
         let cur = (inp.buttons & 0x1ffff) | on(lt, LT) | on(rt, RT) | on(ly, LSU) | on(-ly, LSD) | on(-lx, LSL) | on(lx, LSR) | on(ry, RSU) | on(-ry, RSD) | on(-rx, RSL) | on(rx, RSR);
         let changed = cur ^ prev;
         // Soltar antes de apertar: uma troca de botões no mesmo relatório solta a tecla velha antes.
@@ -1190,8 +1190,8 @@ impl Engine {
         acts
     }
 
-    fn press(&mut self, p: &Profile, i: usize, cur: u32, now: Instant, acts: &mut Vec<Act>) {
-        let bit = 1u32 << i;
+    fn press(&mut self, p: &Profile, i: usize, cur: Buttons, now: Instant, acts: &mut Vec<Act>) {
+        let bit: Buttons = 1 << i;
         let layer = self.layer();
         let pending = self.btn[i].tap.take();
         let released = self.btn[i].released;
@@ -1335,8 +1335,8 @@ struct Run {
     /// Ligações de teclado e mouse do perfil em uso, como perfil de botões, e a tecla de cada bit.
     kbd: Option<(Profile, Vec<u16>)>,
     /// Teclas apertadas (bits) e as que o Prisma engoliu ao apertar (a soltura também fica com ele).
-    kheld: u32,
-    kswallow: u32,
+    kheld: Buttons,
+    kswallow: Buttons,
     /// Palavra sendo digitada, para a abreviação do texto rápido ("#": longa demais, não vale).
     typed: String,
 }
@@ -1354,7 +1354,7 @@ fn key_profile(p: &Profile) -> Option<(Profile, Vec<u16>)> {
     if slots.is_empty() {
         return None;
     }
-    let bit = |vk: u32| slots.iter().position(|&s| s as u32 == vk).map(|i| 1u32 << i);
+    let bit = |vk: Buttons| slots.iter().position(|&s| s as Buttons == vk).map(|i| 1 << i);
     let layers = p
         .layers
         .iter()
@@ -1480,7 +1480,7 @@ pub fn enabled() -> bool {
 }
 
 /// Botões ligados sozinhos, no perfil em uso, a abrir e fechar o teclado do Prisma.
-pub fn keyboard_buttons() -> u32 {
+pub fn keyboard_buttons() -> Buttons {
     let g = RUN.lock().unwrap();
     let Some(r) = g.as_ref().filter(|_| enabled()) else { return 0 };
     r.profiles[r.cur].layers.iter().flat_map(|l| &l.binds).filter(|b| b.out == Out::Action(KEYBOARD) && b.with == 0).fold(0, |m, b| m | b.button)
@@ -1653,7 +1653,7 @@ pub fn key_event(vk: u16, down: bool) -> bool {
         let mut g = RUN.lock().unwrap();
         let Some(r) = g.as_mut() else { return false };
         let Some(i) = r.kbd.as_ref().and_then(|k| k.1.iter().position(|&s| s == vk)) else { return false };
-        let bit = 1u32 << i;
+        let bit: Buttons = 1 << i;
         let kp = r.kbd.as_ref().unwrap().0.clone();
         let live = ON.load(Ordering::Relaxed) && !STOPPED.load(Ordering::Relaxed) && !super::nav::front() && !FRONT_ADMIN.load(Ordering::Relaxed) && !r.ac;
         let e = r.engines.entry(KBD.into()).or_insert_with(|| (Engine { prev: 0, ..Engine::default() }, None));
@@ -1971,7 +1971,7 @@ mod tests {
         p.layers.push(Layer { name: "Mira".into(), parent: Some(0), ls: None, rs: None, binds: vec![], keys: vec![], gyro: Some(Motion::Mouse(10.0)), touch: None });
         one(&mut p.layers[0], pads::LB, When::Press, Out::Layer(1));
         let mut e = Engine::default();
-        let turn = |b: u32| Input { buttons: b, gyro: [0.0, -90.0, 0.0], accel: [0.0, 1.0, 0.0], motion: true, ..Default::default() };
+        let turn = |b: Buttons| Input { buttons: b, gyro: [0.0, -90.0, 0.0], accel: [0.0, 1.0, 0.0], motion: true, ..Default::default() };
         e.step(&p, &Input::default(), at(0, t0));
         // Na Base o gyro está desligado.
         assert!(e.step(&p, &turn(0), at(10, t0)).is_empty());
@@ -2026,11 +2026,11 @@ mod tests {
         t0 + Duration::from_millis(ms)
     }
 
-    fn btn(b: u32) -> Input {
+    fn btn(b: Buttons) -> Input {
         Input { buttons: b, ..Default::default() }
     }
 
-    fn one(layer: &mut Layer, button: u32, when: When, out: Out) {
+    fn one(layer: &mut Layer, button: Buttons, when: When, out: Out) {
         layer.binds.push(Bind { button, with: 0, when, out });
     }
 
@@ -2213,7 +2213,7 @@ mod tests {
         p.layers[0].binds.retain(|b| b.button != pads::LB);
         one(&mut p.layers[0], pads::LB, When::Press, Out::Layer(1));
         let mut e = engine(&p, t0);
-        let i = |b: u32| Input { buttons: b, ry: 1.0, ..Default::default() };
+        let i = |b: Buttons| Input { buttons: b, ry: 1.0, ..Default::default() };
         assert!(matches!(e.step(&p, &i(0), at(10, t0))[..], [Act::Wheel(_)]));
         // No mesmo relatório em que o LB desce, o stick direito já é mouse.
         assert!(matches!(e.step(&p, &i(pads::LB), at(20, t0))[..], [Act::Move(0, -16 | -15)]));

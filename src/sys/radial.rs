@@ -19,7 +19,7 @@ pub const SLOTS: usize = 16;
 /// Os 16 lugares e, depois deles, as 4 opções de cada um (`sub`).
 pub const ALL: usize = SLOTS * 5;
 /// Botões do direcional na ordem das opções: cima, direita, baixo, esquerda.
-pub const DPAD: [u32; 4] = [pads::UP, pads::RIGHT, pads::DOWN, pads::LEFT];
+pub const DPAD: [pads::Buttons; 4] = [pads::UP, pads::RIGHT, pads::DOWN, pads::LEFT];
 
 /// Posição da opção `d` (0 a 3, a ordem de `DPAD`) do lugar `i`.
 pub const fn sub(i: usize, d: usize) -> usize {
@@ -44,15 +44,15 @@ pub struct Config {
     /// Com um círculo só, o stick esquerdo aponta em vez do direito.
     pub left: bool,
     /// Botão que abre (`pads::BACK`, `pads::GUIDE`), ou 0 para só a ação ligada no perfil.
-    pub button: u32,
+    pub button: pads::Buttons,
     pub hold: Duration,
     /// Toque abre o radial e segurar faz a função normal do botão (o padrão é o contrário).
     pub tap_opens: bool,
     /// Com o stick de volta ao centro, o lugar escolhido continua escolhido.
     pub keep: bool,
     /// Botão que dispara (aberto para ficar) e botão que fecha sem escolher.
-    pub ok: u32,
-    pub back: u32,
+    pub ok: pads::Buttons,
+    pub back: pads::Buttons,
     /// O Prisma faz a função normal do Guia (Win + G), com a Game Bar sem o botão do controle.
     pub guide_normal: bool,
 }
@@ -71,7 +71,7 @@ pub const DEFAULT: Config = Config {
 };
 
 /// Botões que dá para escolher para confirmar e voltar.
-pub const PICK_BUTTONS: [u32; 6] = [pads::A, pads::B, pads::X, pads::Y, pads::LB, pads::RB];
+pub const PICK_BUTTONS: [pads::Buttons; 6] = [pads::A, pads::B, pads::X, pads::Y, pads::LB, pads::RB];
 
 static CFG: Mutex<Config> = Mutex::new(DEFAULT);
 
@@ -98,11 +98,11 @@ struct Radial {
     /// Stick direito e esquerdo.
     stick: [(f32, f32); 2],
     keep: bool,
-    ok: u32,
-    back: u32,
+    ok: pads::Buttons,
+    back: pads::Buttons,
     /// Botão que abriu: apertado de novo, fecha. 0: aberto por uma ligação do perfil.
-    watch: u32,
-    prev: u32,
+    watch: pads::Buttons,
+    prev: pads::Buttons,
 }
 
 enum State {
@@ -122,7 +122,7 @@ pub struct View {
     pub sub: Option<usize>,
     pub two: bool,
     pub left: bool,
-    pub watch: u32,
+    pub watch: pads::Buttons,
 }
 
 pub fn view() -> View {
@@ -148,7 +148,7 @@ pub fn stick() -> [(f32, f32); 2] {
 }
 
 /// Abre. O que o perfil segurava é solto antes. Não chamar com o mapeamento travado (`remap::RUN`).
-fn open(watch: u32) {
+fn open(watch: pads::Buttons) {
     let (slots, two, left, keep, ok, back) = { let c = CFG.lock().unwrap(); (c.slots, c.two, c.left && !c.two, c.keep, c.ok, c.back) };
     let mut s = STATE.lock().unwrap();
     if !matches!(*s, State::Open(_)) {
@@ -166,7 +166,7 @@ fn open(watch: u32) {
             ok,
             back,
             watch,
-            prev: u32::MAX,
+            prev: pads::Buttons::MAX,
         });
         drop(s);
         // Aberto, a soltura do botão vai para o radial e não para o gatilho: ele recomeça do zero.
@@ -176,7 +176,7 @@ fn open(watch: u32) {
 }
 
 /// Botão que abre o radial (0: nenhum).
-pub fn button() -> u32 {
+pub fn button() -> pads::Buttons {
     CFG.lock().unwrap().button
 }
 
@@ -309,7 +309,7 @@ enum Normal {
 }
 
 /// Um relatório no botão que abre: abre o radial agora, e o que fazer com a função normal.
-fn trig_step(t: &mut Trig, c: &Config, buttons: u32, now: Instant) -> (bool, Normal) {
+fn trig_step(t: &mut Trig, c: &Config, buttons: pads::Buttons, now: Instant) -> (bool, Normal) {
     let held = buttons & c.button != 0;
     if held && buttons & super::remap::STOP_COMBO == super::remap::STOP_COMBO {
         t.aborted = true;
@@ -357,15 +357,15 @@ static TRIG: Mutex<Option<HashMap<String, Trig>>> = Mutex::new(None);
 /// O que o mapeamento faz com um relatório por causa do botão que abre o radial.
 pub struct Trigger {
     /// Abrir o radial (depois de soltar a trava do mapeamento).
-    pub open: Option<u32>,
+    pub open: Option<pads::Buttons>,
     /// Botões que o perfil vê, um passo por item (o toque vira aperto e soltura).
-    pub steps: Vec<u32>,
+    pub steps: Vec<pads::Buttons>,
     /// Mandar Win + G: a função normal do Guia feita pelo Prisma.
     pub win_g: bool,
 }
 
 /// Botão que abre o radial no controle `key`. `game`: o perfil é o Base, e o Select fica só com o jogo.
-pub fn trigger(key: &str, buttons: u32, now: Instant, game: bool) -> Trigger {
+pub fn trigger(key: &str, buttons: pads::Buttons, now: Instant, game: bool) -> Trigger {
     let c = *CFG.lock().unwrap();
     if c.button == 0 || (game && c.button != pads::GUIDE) {
         return Trigger {
@@ -397,7 +397,7 @@ pub fn trigger(key: &str, buttons: u32, now: Instant, game: bool) -> Trigger {
 }
 
 /// Abre o radial pedido por `trigger`.
-pub fn open_from(button: u32) {
+pub fn open_from(button: pads::Buttons) {
     self::open(button);
     pads::emit(pads::Event::Radial);
 }
@@ -428,7 +428,7 @@ const GAMEBAR_NAME: &str = "UseNexusForGameBarEnabled";
 mod tests {
     use super::*;
 
-    fn inp(buttons: u32, rx: f32, ry: f32) -> Input {
+    fn inp(buttons: pads::Buttons, rx: f32, ry: f32) -> Input {
         Input {
             buttons,
             rx,
@@ -437,7 +437,7 @@ mod tests {
         }
     }
 
-    fn radial(watch: u32) -> Radial {
+    fn radial(watch: pads::Buttons) -> Radial {
         Radial {
             slots: {
                 let mut s = [EMPTY; ALL];
@@ -456,7 +456,7 @@ mod tests {
             ok: pads::A,
             back: pads::B,
             watch,
-            prev: u32::MAX,
+            prev: pads::Buttons::MAX,
         }
     }
 

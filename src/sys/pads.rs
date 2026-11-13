@@ -28,25 +28,27 @@ use windows::Win32::UI::Input::XboxController::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
 // Botões no mesmo desenho para todos os controles (nomes do Xbox; no Sony, Cruz é A e assim por diante).
-pub const A: u32 = 1;
-pub const B: u32 = 1 << 1;
-pub const X: u32 = 1 << 2;
-pub const Y: u32 = 1 << 3;
-pub const LB: u32 = 1 << 4;
-pub const RB: u32 = 1 << 5;
-pub const BACK: u32 = 1 << 6;
-pub const START: u32 = 1 << 7;
-pub const LS: u32 = 1 << 8;
-pub const RS: u32 = 1 << 9;
-pub const UP: u32 = 1 << 10;
-pub const DOWN: u32 = 1 << 11;
-pub const LEFT: u32 = 1 << 12;
-pub const RIGHT: u32 = 1 << 13;
-pub const GUIDE: u32 = 1 << 14;
+/// Máscara de botões: os físicos aqui e os virtuais do remapeamento (gatilhos, direções, gestos).
+pub type Buttons = u64;
+pub const A: Buttons = 1;
+pub const B: Buttons = 1 << 1;
+pub const X: Buttons = 1 << 2;
+pub const Y: Buttons = 1 << 3;
+pub const LB: Buttons = 1 << 4;
+pub const RB: Buttons = 1 << 5;
+pub const BACK: Buttons = 1 << 6;
+pub const START: Buttons = 1 << 7;
+pub const LS: Buttons = 1 << 8;
+pub const RS: Buttons = 1 << 9;
+pub const UP: Buttons = 1 << 10;
+pub const DOWN: Buttons = 1 << 11;
+pub const LEFT: Buttons = 1 << 12;
+pub const RIGHT: Buttons = 1 << 13;
+pub const GUIDE: Buttons = 1 << 14;
 /// Clique do touchpad (DualSense e DualShock 4).
-pub const PAD: u32 = 1 << 15;
+pub const PAD: Buttons = 1 << 15;
 /// Botão de mudo do DualSense.
-pub const MUTE: u32 = 1 << 16;
+pub const MUTE: Buttons = 1 << 16;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Family {
@@ -76,7 +78,7 @@ pub enum Battery {
 
 #[derive(Clone, Copy, Default, PartialEq, Debug)]
 pub struct Input {
-    pub buttons: u32,
+    pub buttons: Buttons,
     /// Analógicos de -1 a 1, com Y para cima positivo.
     pub lx: f32,
     pub ly: f32,
@@ -193,7 +195,7 @@ pub enum Event {
     /// Aviso pronto, vindo de outra thread.
     Notice { text: String },
     /// O atalho do turbo ligou ou desligou o turbo de `button` no controle `pad`.
-    Turbo { button: u32, on: bool, pad: String },
+    Turbo { button: Buttons, on: bool, pad: String },
     /// O teclado do Prisma mudou: abriu, fechou, outro grupo ou outra camada.
     Keyboard,
     /// O radial do Prisma abriu, fechou ou aponta para outra ação.
@@ -622,7 +624,7 @@ unsafe fn generic_input(pre: PHIDP_PREPARSED_DATA, axes: &[Axis], report: &mut [
     inp
 }
 
-fn hat_bits(h: u8) -> u32 {
+fn hat_bits(h: u8) -> Buttons {
     match h {
         0 => UP,
         1 => UP | RIGHT,
@@ -641,7 +643,7 @@ fn stick(b: u8) -> f32 {
 }
 
 /// Botões dos Sony: `b0` direcional e símbolos, `b1` ombros e menus, `b2` PS, touchpad e mudo.
-fn sony_buttons(b0: u8, b1: u8, b2: u8) -> u32 {
+fn sony_buttons(b0: u8, b1: u8, b2: u8) -> Buttons {
     let mut b = hat_bits(b0 & 0x0f);
     for (bit, v) in [(0x10, X), (0x20, A), (0x40, B), (0x80, Y)] {
         if b0 & bit != 0 {

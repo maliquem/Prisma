@@ -11,7 +11,7 @@ use crate::sys::remap::{self, Bind, Motion, Layer, Macro, Mode, Out, Profile, St
 pub struct Editor {
     prof: usize,
     layer: usize,
-    button: u32,
+    button: pads::Buttons,
     when: usize,
     with: usize,
     kind: usize,
@@ -117,12 +117,12 @@ pub fn test_target(app: &mut App, what: &str) {
 }
 
 /// Botão escolhido no editor (0 com a origem Teclado e mouse), para o desenho contornar.
-pub fn chosen(app: &App) -> u32 {
+pub fn chosen(app: &App) -> pads::Buttons {
     app.pads.edit.as_ref().map_or(0, |e| if e.src == 0 { e.button } else { 0 })
 }
 
 /// Clique num botão do desenho: o editor passa para ele, com a origem nos botões do controle.
-pub fn choose(app: &mut App, bit: u32) {
+pub fn choose(app: &mut App, bit: pads::Buttons) {
     if let Some(e) = app.pads.edit.as_mut() {
         e.src = 0;
         e.button = bit;
@@ -278,8 +278,8 @@ const KEY_SOURCES: [(u16, &str); 13] = [
 ];
 
 /// Nome de uma tecla de origem (ou botão do mouse).
-fn src_name(vk: u32) -> String {
-    match KEY_SOURCES.iter().skip(1).find(|s| s.0 as u32 == vk) {
+fn src_name(vk: pads::Buttons) -> String {
+    match KEY_SOURCES.iter().skip(1).find(|s| s.0 as pads::Buttons == vk) {
         Some(s) => tr(s.1),
         None if vk == 0 => tr("Nenhuma tecla"),
         None => key_label(vk as u16, 0),
@@ -308,8 +308,8 @@ fn tr(s: &str) -> String {
 }
 
 /// Botões que o editor mostra, com o nome do controle escolhido.
-fn buttons(f: Family) -> Vec<(u32, String)> {
-    let mut v: Vec<(u32, String)> = [(pads::UP, "↑"), (pads::DOWN, "↓"), (pads::LEFT, "←"), (pads::RIGHT, "→")].iter().map(|(b, n)| (*b, n.to_string())).collect();
+fn buttons(f: Family) -> Vec<(pads::Buttons, String)> {
+    let mut v: Vec<(pads::Buttons, String)> = [(pads::UP, "↑"), (pads::DOWN, "↓"), (pads::LEFT, "←"), (pads::RIGHT, "→")].iter().map(|(b, n)| (*b, n.to_string())).collect();
     if f == Family::Generic {
         let order = [pads::A, pads::B, pads::X, pads::Y, pads::LB, pads::RB, pads::BACK, pads::START, pads::LS, pads::RS];
         v.extend(order.iter().enumerate().map(|(i, b)| (*b, (i + 1).to_string())));
@@ -326,7 +326,7 @@ fn buttons(f: Family) -> Vec<(u32, String)> {
 }
 
 /// Nome do botão no controle desta família.
-pub fn button_label(f: Family, bit: u32) -> String {
+pub fn button_label(f: Family, bit: pads::Buttons) -> String {
     buttons(f).into_iter().find(|b| b.0 == bit).map_or_else(|| remap::button_name(bit).to_string(), |b| b.1)
 }
 
@@ -676,11 +676,11 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
         ed.button = chips[4].0;
     }
     let keys_mode = ed.src == 1;
-    let kvk = if ed.ksrc == 0 { ed.khk.vk } else { KEY_SOURCES[ed.ksrc.min(KEY_SOURCES.len() - 1)].0 as u32 };
+    let kvk = if ed.ksrc == 0 { ed.khk.vk as pads::Buttons } else { KEY_SOURCES[ed.ksrc.min(KEY_SOURCES.len() - 1)].0 as pads::Buttons };
     let kwvk = match ed.kwith {
         0 => 0,
-        1 => ed.kwhk.vk,
-        n => KEY_SOURCES.get(n - 1).map_or(0, |s| s.0 as u32),
+        1 => ed.kwhk.vk as pads::Buttons,
+        n => KEY_SOURCES.get(n - 1).map_or(0, |s| s.0 as pads::Buttons),
     };
     let target = if keys_mode { kvk } else { ed.button };
     let list_of = |l: &Layer| if keys_mode { l.keys.clone() } else { l.binds.clone() };
@@ -873,7 +873,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
     // Nova ligação: quando, junto com qual botão, e o destino.
     let whens: Vec<String> = WHENS.iter().map(|w| tr(w.1)).collect();
     ui.select("pp-when", rect(x, y, third, 34.0), &whens, &mut ed.when);
-    let others: Vec<&(u32, String)> = chips.iter().filter(|c| c.0 != ed.button && c.0 & 0x1ffff != 0).collect();
+    let others: Vec<&(pads::Buttons, String)> = chips.iter().filter(|c| c.0 != ed.button && c.0 & 0x1ffff != 0).collect();
     let mut withs = vec![tr("Sozinho")];
     withs.extend(others.iter().map(|c| tr("Junto com {}").replace("{}", &c.1)));
     ed.with = ed.with.min(withs.len() - 1);
@@ -943,7 +943,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
         _ => (!ed.run.is_empty()).then_some(Out::Run(0)),
     };
     // Teclado: cada tecla diferente do perfil ocupa um dos `KEY_SLOTS` lugares do motor.
-    let mut used: Vec<u32> = p.layers.iter().flat_map(|l| &l.keys).flat_map(|b| [b.button, b.with]).filter(|&v| v != 0).collect();
+    let mut used: Vec<pads::Buttons> = p.layers.iter().flat_map(|l| &l.keys).flat_map(|b| [b.button, b.with]).filter(|&v| v != 0).collect();
     used.extend([kvk, kwvk].into_iter().filter(|&v| v != 0));
     used.sort_unstable();
     used.dedup();
@@ -1007,7 +1007,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
     // Atalho: segurar estes botões e apertar outro liga ou desliga o turbo dele.
     ui.c.text_fit(rect(x, y, third, 34.0), &tr("Atalho do turbo"), 13.0, TEXT2, Align::Left, Weight::Regular);
     let dirs = remap::LSU | remap::LSD | remap::LSL | remap::LSR | remap::RSU | remap::RSD | remap::RSL | remap::RSR;
-    let keyable: Vec<&(u32, String)> = chips.iter().filter(|c| c.0 & dirs == 0).collect();
+    let keyable: Vec<&(pads::Buttons, String)> = chips.iter().filter(|c| c.0 & dirs == 0).collect();
     let mut firsts = vec![tr("Sem atalho")];
     firsts.extend(keyable.iter().map(|c| c.1.clone()));
     let mut seconds = vec![tr("Nenhum")];

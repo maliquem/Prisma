@@ -70,12 +70,12 @@ pub fn refresh(app: &mut App) {
 #[derive(Default)]
 struct Test {
     key: String,
-    prev: u32,
-    seen: u32,
-    down: Vec<(u32, Instant)>,
-    up: Vec<(u32, Instant)>,
+    prev: pads::Buttons,
+    seen: pads::Buttons,
+    down: Vec<(pads::Buttons, Instant)>,
+    up: Vec<(pads::Buttons, Instant)>,
     /// Do mais novo ao mais velho: botão, duração em ms e se veio colado ao aperto anterior.
-    hist: Vec<(u32, u32, bool)>,
+    hist: Vec<(pads::Buttons, u32, bool)>,
 }
 
 /// Soltar e apertar de novo em menos que isso é aperto duplo: o botão pode estar falhando.
@@ -95,7 +95,7 @@ fn test_feed(t: &mut Test, key: &str, i: pads::Input, now: Instant) {
         cur |= remap::RT;
     }
     for n in 0..32 {
-        let bit = 1u32 << n;
+        let bit: pads::Buttons = 1 << n;
         let (was, is) = (t.prev & bit != 0, cur & bit != 0);
         if is && !was {
             t.seen |= bit;
@@ -193,7 +193,7 @@ fn rate_text(p: &Pad) -> String {
 }
 
 /// Nomes dos botões no desenho de cada família, com o bit comum.
-pub(super) fn button_names(f: Family) -> &'static [(u32, &'static str)] {
+pub(super) fn button_names(f: Family) -> &'static [(pads::Buttons, &'static str)] {
     use pads::*;
     match f {
         Family::DualSense => &[
@@ -458,7 +458,7 @@ fn settings(ui: &mut Ui, app: &mut App, list: &[Pad], a: Rect) {
 
 /// Área de um botão no desenho: bit, x, y, largura e altura em % da imagem, e o raio da borda em
 /// pixels do desenho de 640 (-1 é redondo). Vem do `hits.json` dos desenhos do mock-up.
-type Hit = (u32, f32, f32, f32, f32, f32);
+type Hit = (pads::Buttons, f32, f32, f32, f32, f32);
 
 const HITS_DS: &[Hit] = &[
     (pads::PAD, 31.60, 13.10, 36.79, 26.90, 10.0),
@@ -600,7 +600,7 @@ fn draw_art(ui: &mut Ui, app: &mut App, p: &Pad, r: Rect) -> bool {
 fn draw_test(ui: &mut Ui, app: &mut App, p: &Pad, at: Rect) -> f32 {
     let tr = |s: &str| crate::i18n::tr(s).into_owned();
     let Some((_, _, hits)) = art(p.family) else { return at.y };
-    let name = |bit: u32| super::pad_profiles::button_label(p.family, bit);
+    let name = |bit: pads::Buttons| super::pad_profiles::button_label(p.family, bit);
     let t = &app.pads.test;
     let x = at.x + 16.0;
     let w = at.w - 32.0;
@@ -615,7 +615,7 @@ fn draw_test(ui: &mut Ui, app: &mut App, p: &Pad, at: Rect) -> f32 {
         _ => tr("Aperte um botão no controle."),
     };
     ui.c.text_fit(rect(x, r.y + 44.0, w, 20.0), &last, 13.0, TEXT, Align::Left, Weight::Regular);
-    let all: Vec<u32> = hits.iter().map(|h| h.0).collect();
+    let all: Vec<pads::Buttons> = hits.iter().map(|h| h.0).collect();
     let ok = all.iter().filter(|b| t.seen & **b != 0).count();
     let count = tr("Responderam {} de {}").replacen("{}", &ok.to_string(), 1).replacen("{}", &all.len().to_string(), 1);
     ui.c.text_fit(rect(x, r.y + 68.0, w, 20.0), &count, 13.0, TEXT2, Align::Left, Weight::Semibold);
@@ -757,7 +757,7 @@ fn draw_live(ui: &mut Ui, p: &Pad, r: Rect) {
     // Com desenho próprio, cada botão é o ícone dele; no genérico, o número.
     let glyphs = p.family != Family::Generic;
     let style = crate::ui::glyph::Style::of(p.family, p.vid);
-    let mut chips: Vec<(u32, bool, String)> = [(pads::UP, "↑"), (pads::DOWN, "↓"), (pads::LEFT, "←"), (pads::RIGHT, "→")].iter().map(|(b, n)| (*b, i.buttons & b != 0, n.to_string())).collect();
+    let mut chips: Vec<(pads::Buttons, bool, String)> = [(pads::UP, "↑"), (pads::DOWN, "↓"), (pads::LEFT, "←"), (pads::RIGHT, "→")].iter().map(|(b, n)| (*b, i.buttons & b != 0, n.to_string())).collect();
     if p.family == Family::Generic {
         chips.extend((0..p.generic_buttons.min(10)).map(|n| (0, i.buttons & (1 << n) != 0, (n + 1).to_string())));
     } else {
@@ -1114,7 +1114,7 @@ mod tests {
         let t0 = Instant::now();
         let ms = |n: u64| t0 + Duration::from_millis(n);
         let mut t = Test::default();
-        let press = |b: u32, lt: f32| pads::Input { buttons: b, lt, ..Default::default() };
+        let press = |b: pads::Buttons, lt: f32| pads::Input { buttons: b, lt, ..Default::default() };
         test_feed(&mut t, "a", press(pads::A, 0.0), ms(0));
         test_feed(&mut t, "a", press(0, 0.0), ms(120));
         // Apertou de novo 30 ms depois de soltar: aperto duplo.

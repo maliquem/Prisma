@@ -41,7 +41,7 @@ pub enum Cmd {
 
 #[derive(Default)]
 struct Pad {
-    buttons: u32,
+    buttons: pads::Buttons,
     lt: bool,
     rt: bool,
     dir: Option<u8>,

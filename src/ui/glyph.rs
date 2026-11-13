@@ -34,7 +34,7 @@ impl Style {
 
 /// Letra ou número do botão de face `bit` (pela posição: A embaixo, B à direita, X à esquerda,
 /// Y em cima), fora do PlayStation, que usa formas.
-fn face_text(s: Style, bit: u32) -> &'static str {
+fn face_text(s: Style, bit: pads::Buttons) -> &'static str {
     let i = [pads::A, pads::B, pads::X, pads::Y].iter().position(|&b| b == bit).unwrap_or(0);
     match s {
         Style::Nintendo => ["B", "A", "Y", "X"][i],
@@ -44,7 +44,7 @@ fn face_text(s: Style, bit: u32) -> &'static str {
 }
 
 /// Texto dentro dos ombros, gatilhos e sticks.
-fn side_text(s: Style, bit: u32) -> &'static str {
+fn side_text(s: Style, bit: pads::Buttons) -> &'static str {
     let left = matches!(bit, pads::LB | remap::LT | pads::LS);
     let k = match bit {
         pads::LB | pads::RB => 0,
@@ -61,10 +61,10 @@ fn side_text(s: Style, bit: u32) -> &'static str {
 }
 
 /// O direcional inteiro, sem braço aceso.
-pub const DPAD_ANY: u32 = pads::UP | pads::DOWN | pads::LEFT | pads::RIGHT;
+pub const DPAD_ANY: pads::Buttons = pads::UP | pads::DOWN | pads::LEFT | pads::RIGHT;
 
 /// Largura do ícone de `bit` com altura `h`.
-pub fn width(bit: u32, h: f32) -> f32 {
+pub fn width(bit: pads::Buttons, h: f32) -> f32 {
     match bit {
         pads::LB | pads::RB | remap::LT | remap::RT | pads::PAD => h * 1.7,
         remap::LSU | remap::LSD | remap::LSL | remap::LSR | remap::RSU | remap::RSD | remap::RSL | remap::RSR => h * 1.6,
@@ -77,7 +77,7 @@ fn stroke(h: f32) -> f32 {
 }
 
 /// Desenha o botão `bit` com o canto esquerdo em `x` e o meio em `cy`. Devolve a largura.
-pub fn draw(c: &Canvas, x: f32, cy: f32, h: f32, s: Style, bit: u32, col: Color) -> f32 {
+pub fn draw(c: &Canvas, x: f32, cy: f32, h: f32, s: Style, bit: pads::Buttons, col: Color) -> f32 {
     let (w, r, sw) = (width(bit, h), h / 2.0, stroke(h));
     let cx = x + r;
     let label = |t: &str, size: f32, at: Rect| c.text_raw(at, t, size, col, Align::Center, Weight::Semibold);
@@ -147,7 +147,7 @@ pub fn draw(c: &Canvas, x: f32, cy: f32, h: f32, s: Style, bit: u32, col: Color)
 }
 
 /// Cruz, círculo, quadrado e triângulo do PlayStation, pela posição do botão.
-fn ps_shape(c: &Canvas, cx: f32, cy: f32, k: f32, bit: u32, col: Color, sw: f32) {
+fn ps_shape(c: &Canvas, cx: f32, cy: f32, k: f32, bit: pads::Buttons, col: Color, sw: f32) {
     match bit {
         pads::A => {
             c.line(cx - k, cy - k, cx + k, cy + k, col, sw);
@@ -164,7 +164,7 @@ fn ps_shape(c: &Canvas, cx: f32, cy: f32, k: f32, bit: u32, col: Color, sw: f32)
     }
 }
 
-fn stick(c: &Canvas, cx: f32, cy: f32, r: f32, s: Style, bit: u32, col: Color, sw: f32) {
+fn stick(c: &Canvas, cx: f32, cy: f32, r: f32, s: Style, bit: pads::Buttons, col: Color, sw: f32) {
     c.circle_line(cx, cy, r - sw / 2.0, col, sw);
     c.circle_line(cx, cy, r * 0.62, col, sw * 0.7);
     c.text_raw(rect(cx - r, cy - r, r * 2.0, r * 2.0), side_text(s, bit), r * 0.85, col, Align::Center, Weight::Semibold);
@@ -231,7 +231,7 @@ pub fn sheet(c: &Canvas, r: Rect, col: Color) {
 
 /// Uma linha de dicas centrada em `r`: para cada item, os ícones dos botões e o texto. Diminui
 /// tudo junto quando não cabe.
-pub fn hints(c: &Canvas, r: Rect, s: Style, items: &[(Vec<u32>, String)], size: f32, col: Color) {
+pub fn hints(c: &Canvas, r: Rect, s: Style, items: &[(Vec<pads::Buttons>, String)], size: f32, col: Color) {
     let line_w = |k: f32| -> f32 {
         let gap = 16.0 * k;
         let h = size * 1.45 * k;
