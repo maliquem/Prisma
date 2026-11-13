@@ -195,11 +195,18 @@ enum State {
 static STATE: Mutex<State> = Mutex::new(State::Closed);
 static TWO: AtomicBool = AtomicBool::new(false);
 static LETTERS_RIGHT: AtomicBool = AtomicBool::new(false);
+static DODGE: AtomicBool = AtomicBool::new(true);
 
 /// Opções da configuração: vale na próxima vez que o teclado abrir.
-pub fn configure(two: bool, letters_right: bool) {
+pub fn configure(two: bool, letters_right: bool, dodge: bool) {
     TWO.store(two, Ordering::Relaxed);
     LETTERS_RIGHT.store(letters_right, Ordering::Relaxed);
+    DODGE.store(dodge, Ordering::Relaxed);
+}
+
+/// O teclado foge do cursor de texto (`overlays::Keyboard`).
+pub fn dodge() -> bool {
+    DODGE.load(Ordering::Relaxed)
 }
 
 pub fn view() -> View {

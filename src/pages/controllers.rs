@@ -568,14 +568,17 @@ fn radial(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
 /// Cartão do teclado do Prisma: um stick só ou os dois, e em qual deles ficam as letras.
 fn keyboard(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
     let two = app.cfg.pad_osk_two;
-    let r = rect(at.x, at.y, at.w, if two { 136.0 } else { 94.0 });
+    let r = rect(at.x, at.y, at.w, if two { 172.0 } else { 130.0 });
     ui.card(r);
     ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Teclado do Prisma");
     let check = rect(r.x + 10.0, r.y + 44.0, r.w - 20.0, 36.0);
     let mut changed = ui.check("pad-osk-two", check, "Usar os dois sticks", &mut app.cfg.pad_osk_two);
     ui.tip(check, "Um círculo para as letras e outro para os números e símbolos. No stick esquerdo, A, B, X e Y digitam; no direito, o direcional digita, e com ele solto o direcional são as setas.");
+    let dodge = rect(r.x + 10.0, r.y + 80.0, r.w - 20.0, 36.0);
+    changed |= ui.check("pad-osk-dodge", dodge, "Fugir do cursor", &mut app.cfg.pad_osk_dodge);
+    ui.tip(dodge, "Quando o cursor de texto fica atrás do teclado, ele sobe para o alto da tela, e desce de novo quando o cursor sai dali.");
     if two {
-        let (l, c) = (rect(r.x + 16.0, r.y + 88.0, 108.0, 34.0), rect(r.x + 128.0, r.y + 88.0, r.w - 144.0, 34.0));
+        let (l, c) = (rect(r.x + 16.0, r.y + 124.0, 108.0, 34.0), rect(r.x + 128.0, r.y + 124.0, r.w - 144.0, 34.0));
         ui.c.text_fit(l, &crate::i18n::tr("Letras no stick"), 12.0, TEXT2, Align::Left, Weight::Regular);
         let mut s = app.cfg.pad_osk_letters_right as usize;
         if ui.select("pad-osk-letters", c, &[crate::i18n::tr("Esquerdo").into_owned(), crate::i18n::tr("Direito").into_owned()], &mut s) {

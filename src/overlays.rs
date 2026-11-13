@@ -492,6 +492,69 @@ pub struct Keyboard {
     style: crate::ui::glyph::Style,
     two: bool,
     ticking: bool,
+    /// Fugir do cursor: altura em pixels embaixo e no alto da tela, e a de agora, que corre atrás
+    /// da escolhida.
+    rows: (i32, i32),
+    y: f32,
+}
+
+/// Cursor de texto do programa em foco, na tela, lido por `watch_caret`.
+static CARET: std::sync::Mutex<Option<RECT>> = std::sync::Mutex::new(None);
+static WATCHING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Cursor de texto do programa em foco: o do Windows (Bloco de Notas, campos clássicos) ou, sem
+/// ele, o da acessibilidade (navegadores e a maioria dos programas atuais).
+/// shortcut: programas que só têm UI Automation (alguns WinUI) não mostram o cursor e o teclado
+/// fica embaixo; ler o TextPattern2 se faltar em algum programa usado.
+fn caret() -> Option<RECT> {
+    use windows::Win32::UI::Accessibility::{AccessibleObjectFromWindow, IAccessible};
+    unsafe {
+        let fg = GetForegroundWindow();
+        let tid = GetWindowThreadProcessId(fg, None);
+        let mut gi = GUITHREADINFO { cbSize: std::mem::size_of::<GUITHREADINFO>() as u32, ..Default::default() };
+        if tid != 0 && GetGUIThreadInfo(tid, &mut gi).is_ok() {
+            let r = gi.rcCaret;
+            if !gi.hwndCaret.is_invalid() && r.bottom > r.top {
+                let mut pts = [POINT { x: r.left, y: r.top }, POINT { x: r.right, y: r.bottom }];
+                MapWindowPoints(Some(gi.hwndCaret), None, &mut pts);
+                return Some(RECT { left: pts[0].x, top: pts[0].y, right: pts[1].x, bottom: pts[1].y });
+            }
+        }
+        let h = if gi.hwndFocus.is_invalid() { fg } else { gi.hwndFocus };
+        let mut p: *mut core::ffi::c_void = std::ptr::null_mut();
+        AccessibleObjectFromWindow(h, OBJID_CARET.0 as u32, &IAccessible::IID, &mut p).ok()?;
+        let acc = IAccessible::from_raw(p);
+        let (mut x, mut y, mut w, mut hh) = (0, 0, 0, 0);
+        acc.accLocation(&mut x, &mut y, &mut w, &mut hh, &windows::Win32::System::Variant::VARIANT::from(0i32)).ok()?;
+        (hh > 0 && (x, y) != (0, 0)).then_some(RECT { left: x, top: y, right: x + w.max(1), bottom: y + hh })
+    }
+}
+
+/// Lê o cursor de texto 5 vezes por segundo enquanto o teclado está aberto, numa thread à parte:
+/// um programa travado prende só ela.
+fn watch_caret() {
+    *CARET.lock().unwrap() = None;
+    if WATCHING.swap(true, std::sync::atomic::Ordering::Relaxed) {
+        return;
+    }
+    std::thread::spawn(|| {
+        unsafe {
+            let _ = windows::Win32::System::Com::CoInitializeEx(None, windows::Win32::System::Com::COINIT_MULTITHREADED);
+        }
+        while crate::sys::osk::view().open {
+            let c = caret();
+            *CARET.lock().unwrap() = c;
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+        *CARET.lock().unwrap() = None;
+        WATCHING.store(false, std::sync::atomic::Ordering::Relaxed);
+    });
+}
+
+/// Sobe para o alto da tela se o cursor `c` está atrás do teclado embaixo (`x`, `bottom`, `w` × `h`).
+fn dodge_up(c: RECT, x: i32, bottom: i32, w: i32, h: i32) -> bool {
+    let m = 16;
+    c.right > x - m && c.left < x + w + m && c.bottom > bottom - m && c.top < bottom + h + m
 }
 
 const KB_W: f32 = 520.0;
@@ -513,7 +576,7 @@ impl Keyboard {
     pub fn new() -> Self {
         register(w!("PrismaKeyboard"), keyboard_proc);
         let hwnd = create_overlay(w!("PrismaKeyboard"), true);
-        Self { surface: Layered::new(hwnd), arrow: [(0.0, 0.0); 2], at: (0, 0), lines: Default::default(), style: crate::ui::glyph::Style::Xbox, two: false, ticking: false }
+        Self { surface: Layered::new(hwnd), arrow: [(0.0, 0.0); 2], at: (0, 0), lines: Default::default(), style: crate::ui::glyph::Style::Xbox, two: false, ticking: false, rows: (0, 0), y: 0.0 }
     }
 
     /// Mostra o estado de agora do teclado, ou esconde se ele fechou. Devolve `Some` quando ele
@@ -535,6 +598,11 @@ impl Keyboard {
             let scale = unsafe { windows::Win32::UI::HiDpi::GetDpiForWindow(hwnd) } as f32 / 96.0;
             self.two = crate::sys::osk::view().two;
             self.at = ((mon.left + mon.right) / 2 - (self.width() * scale / 2.0) as i32, mon.bottom - ((KB_H + 48.0) * scale) as i32);
+            self.rows = (self.at.1, mon.top + (48.0 * scale) as i32);
+            self.y = self.at.1 as f32;
+            if crate::sys::osk::dodge() {
+                watch_caret();
+            }
             // Sem controle na lista (ainda não leu nenhum), os ícones do Xbox.
             self.style = crate::ui::glyph::Style::current();
             let t = |s: &str| crate::i18n::tr(s).into_owned();
@@ -562,11 +630,25 @@ impl Keyboard {
         opened.then_some(true)
     }
 
-    /// Um quadro: cada seta anda 45% do caminho até o analógico e só redesenha se mexeu.
+    /// Um quadro: cada seta anda 45% do caminho até o analógico, o teclado anda 35% do caminho até
+    /// a altura escolhida (embaixo, ou no alto com o cursor de texto atrás dele), e só redesenha se
+    /// algo mexeu.
     pub fn tick(&mut self) {
         let [l, r] = crate::sys::osk::stick();
         let (a, b) = (ease(&mut self.arrow[0], l), ease(&mut self.arrow[1], r));
-        if a || b {
+        let scale = unsafe { windows::Win32::UI::HiDpi::GetDpiForWindow(self.surface.hwnd) } as f32 / 96.0;
+        let (w, h) = ((self.width() * scale) as i32, (KB_H * scale) as i32);
+        let up = CARET.lock().unwrap().is_some_and(|c| dodge_up(c, self.at.0, self.rows.0, w, h));
+        let goal = if up { self.rows.1 } else { self.rows.0 } as f32;
+        let moved = (goal - self.y).abs() >= 1.0;
+        if moved {
+            self.y += (goal - self.y) * 0.35;
+            if (goal - self.y).abs() < 2.0 {
+                self.y = goal;
+            }
+            self.at.1 = self.y.round() as i32;
+        }
+        if a || b || moved {
             self.paint();
         }
     }
@@ -792,5 +874,30 @@ impl Radial {
             }
             crate::ui::glyph::hints(c, rect(16.0, r.h - 36.0, r.w - 32.0, 22.0), style, hint, 12.0, MUTED);
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dodge_only_when_behind() {
+        let r = |l, t| RECT { left: l, top: t, right: l + 2, bottom: t + 20 };
+        // Teclado em x 700, de y 600 a 992, 520 de largura.
+        assert!(dodge_up(r(900, 700), 700, 600, 520, 392));
+        assert!(dodge_up(r(690, 590), 700, 600, 520, 392));
+        assert!(!dodge_up(r(900, 300), 700, 600, 520, 392));
+        assert!(!dodge_up(r(100, 700), 700, 600, 520, 392));
+    }
+
+    /// Lê o cursor de texto da janela em foco agora: `cargo test caret_now -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn caret_now() {
+        let c = caret();
+        let mut name = [0u16; 128];
+        let n = unsafe { GetClassNameW(GetForegroundWindow(), &mut name) } as usize;
+        println!("janela: {} cursor: {:?}", String::from_utf16_lossy(&name[..n]), c.map(|r| (r.left, r.top, r.right, r.bottom)));
     }
 }

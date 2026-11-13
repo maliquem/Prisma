@@ -315,6 +315,8 @@ pub struct Config {
     pub pad_osk_two: bool,
     /// Com os dois sticks, as letras ficam no direito (de fábrica, no esquerdo).
     pub pad_osk_letters_right: bool,
+    /// O teclado do Prisma sobe para o alto da tela quando o cursor de texto fica atrás dele.
+    pub pad_osk_dodge: bool,
     /// Botões que confirmam e voltam no radial: posição em `sys::radial::PICK_BUTTONS`.
     pub pad_radial_ok: u8,
     pub pad_radial_back: u8,
@@ -440,6 +442,7 @@ impl Default for Config {
             pad_radial_keep: true,
             pad_osk_two: false,
             pad_osk_letters_right: false,
+            pad_osk_dodge: true,
             pad_radial_ok: 0,
             pad_radial_back: 1,
             pad_guide: false,
@@ -702,6 +705,7 @@ impl Config {
                 "pad_radial_keep" => c.pad_radial_keep = b,
                 "pad_osk_two" => c.pad_osk_two = b,
                 "pad_osk_letters_right" => c.pad_osk_letters_right = b,
+                "pad_osk_dodge" => c.pad_osk_dodge = b,
                 "pad_radial_ok" => c.pad_radial_ok = v.parse::<u8>().unwrap_or(0).min(5),
                 "pad_radial_back" => c.pad_radial_back = v.parse::<u8>().unwrap_or(1).min(5),
                 "pad_guide" => c.pad_guide = b,
@@ -823,6 +827,7 @@ impl Config {
         let _ = writeln!(s, "pad_radial_keep={}", b(self.pad_radial_keep));
         let _ = writeln!(s, "pad_osk_two={}", b(self.pad_osk_two));
         let _ = writeln!(s, "pad_osk_letters_right={}", b(self.pad_osk_letters_right));
+        let _ = writeln!(s, "pad_osk_dodge={}", b(self.pad_osk_dodge));
         let _ = writeln!(s, "pad_radial_ok={}", self.pad_radial_ok);
         let _ = writeln!(s, "pad_radial_back={}", self.pad_radial_back);
         let _ = writeln!(s, "pad_guide={}", b(self.pad_guide));

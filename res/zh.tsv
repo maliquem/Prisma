@@ -2161,3 +2161,5 @@ Página	页面
 Aba	标签页
 Clique	点击
 Esconder	隐藏
+Fugir do cursor	避开光标
+Quando o cursor de texto fica atrás do teclado, ele sobe para o alto da tela, e desce de novo quando o cursor sai dali.	文本光标被键盘挡住时，键盘移到屏幕顶部；光标离开后再移回底部。
