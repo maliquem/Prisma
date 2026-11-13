@@ -343,7 +343,13 @@ fn pad_card(ui: &mut Ui, app: &mut App, list: &[Pad], at: Rect) -> f32 {
     let b = |i: f32| rect(r.x + 16.0 + lw + i * (bw + 8.0), ry, bw, 34.0);
     let map = app.cfg.pad_map;
     let mut want = map;
-    if ui.button_ex("pad-native", b(0.0), &tr("Nativo: {}").replace("{}", &name), !map, true) {
+    // Nome que o Windows dá ao controle pode ser longo: sem caber nem a 11 px, fica só "Nativo"
+    // (o nome já aparece na lista de controles).
+    let mut native = tr("Nativo: {}").replace("{}", &name);
+    if measure_raw(&native, 11.0, Weight::Semibold) > bw - 12.0 {
+        native = tr("Nativo: {}").replace("{}", "").trim_end().trim_end_matches([':', '：']).to_string();
+    }
+    if ui.button_ex("pad-native", b(0.0), &native, !map, true) {
         want = false;
     }
     if ui.button_ex("pad-kbm", b(1.0), "Teclado e mouse", map, true) {

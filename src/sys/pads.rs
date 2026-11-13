@@ -477,6 +477,8 @@ fn trig_block(t: Trig) -> [u8; 11] {
         (start.min(9)..10).fold(0u32, |a, i| a | v << (3 * i))
     };
     match t {
+        // Passar ao jogo não manda bloco nenhum: o bit do gatilho fica desligado.
+        Trig::Pass => {}
         Trig::Off => b[0] = 0x05,
         Trig::Rigid { start, power } => {
             b[0] = 0x21;
@@ -504,7 +506,7 @@ fn trig_block(t: Trig) -> [u8; 11] {
 const LIGHT_DEFAULT: [u8; 3] = [0, 0, 128];
 /// Controles em que o Prisma mexeu (caminho, modelo, conexão, tamanho do relatório, se mexeu na
 /// luz): ao fechar o Prisma soltam os gatilhos e voltam à cor padrão.
-static LIT: Mutex<Vec<(String, Family, Link, usize, bool)>> = Mutex::new(Vec::new());
+static LIT: Mutex<Vec<(String, Family, Link, usize, bool, [Trig; 2])>> = Mutex::new(Vec::new());
 
 /// CRC-32 dos relatórios de saída pelo Bluetooth: conta um byte de cabeçalho (`seed`) e os dados.
 fn crc32(seed: u8, data: &[u8]) -> u32 {
@@ -542,10 +544,11 @@ pub fn out_report(f: Family, link: Link, rgb: Option<[u8; 3]>, trig: [Trig; 2], 
             r[at + 2] = rumble[0];
             r[at + 3] = rumble[1];
         }
-        if trig[1] != Trig::Off {
+        // Só os gatilhos que o Prisma manda: os de passar ao jogo ficam com o bit desligado.
+        if trig[1] != Trig::Pass {
             r[at] |= 0x04;
         }
-        if trig[0] != Trig::Off {
+        if trig[0] != Trig::Pass {
             r[at] |= 0x08;
         }
         r[at + 10..at + 21].copy_from_slice(&trig_block(trig[1]));
@@ -717,7 +720,7 @@ impl PadOut {
                 Light::Battery(b) => pct.map(|p| super::remap::battery_color(b, p)),
             }),
             // Gatilho adaptativo só existe no DualSense.
-            trig: if self.fam == Family::DualSense { super::remap::triggers() } else { [Trig::Off; 2] },
+            trig: if self.fam == Family::DualSense { super::remap::triggers() } else { [Trig::Pass; 2] },
             // O motor fraco é o mais seco: é ele que faz as vezes do háptico.
             rumble: { let b = buzzing(); [b[0].max(feel), b[1]] },
         };
@@ -727,7 +730,9 @@ impl PadOut {
         self.seq = (self.seq + 1) & 15;
         // A luz que o perfil deixou de mandar volta ao padrão nesta mesma escrita.
         let rgb = want.rgb.or_else(|| self.sent.rgb.map(|_| LIGHT_DEFAULT));
-        let Some(r) = out_report(self.fam, self.link, rgb, want.trig, want.rumble, self.seq) else { return };
+        // Gatilho que passa ao jogo depois de um efeito do Prisma: solta uma vez, e daí não mexe mais.
+        let trig = [0, 1].map(|i| if want.trig[i] == Trig::Pass && self.sent.trig[i] != Trig::Pass { Trig::Off } else { want.trig[i] });
+        let Some(r) = out_report(self.fam, self.link, rgb, trig, want.rumble, self.seq) else { return };
         if !write_report(&self.path, &r, self.out_len) {
             self.failed = true;
             return;
@@ -736,7 +741,7 @@ impl PadOut {
         let mut lit = LIT.lock().unwrap();
         lit.retain(|l| l.0 != self.path);
         if want != Want::default() {
-            lit.push((self.path.clone(), self.fam, self.link, self.out_len, want.rgb.is_some()));
+            lit.push((self.path.clone(), self.fam, self.link, self.out_len, want.rgb.is_some(), want.trig));
         }
     }
 }
@@ -744,8 +749,10 @@ impl PadOut {
 /// Ao fechar o Prisma: os controles em que ele mexeu soltam os gatilhos e param de vibrar; os de
 /// luz mudada voltam à cor padrão.
 pub fn release_pads() {
-    for (path, f, link, len, lit) in LIT.lock().unwrap().drain(..) {
-        if let Some(r) = out_report(f, link, lit.then_some(LIGHT_DEFAULT), [Trig::Off; 2], [0, 0], 0) {
+    for (path, f, link, len, lit, trig) in LIT.lock().unwrap().drain(..) {
+        // Solta só o gatilho que o Prisma mandava; o de passar ao jogo fica com o jogo.
+        let trig = trig.map(|t| if t == Trig::Pass { Trig::Pass } else { Trig::Off });
+        if let Some(r) = out_report(f, link, lit.then_some(LIGHT_DEFAULT), trig, [0, 0], 0) {
             unsafe { write_report(&path, &r, len) };
         }
     }
@@ -1553,7 +1560,7 @@ mod tests {
 
     #[test]
     fn light_reports() {
-        let off = [Trig::Off; 2];
+        let off = [Trig::Pass; 2];
         // CRC-32 de referência: "123456789" dá 0xCBF43926.
         assert_eq!(crc32(b'1', b"23456789"), 0xCBF4_3926);
         let ds = out_report(Family::DualSense, Link::Usb, Some([1, 2, 3]), off, [0, 0], 0).unwrap();
@@ -1589,22 +1596,25 @@ mod tests {
     #[test]
     fn triggers_and_rumble_in_the_report() {
         // Vibração: os dois bits e os dois motores, cada um no seu byte.
-        let r = out_report(Family::DualSense, Link::Usb, None, [Trig::Off; 2], [0x40, 0x80], 0).unwrap();
+        let r = out_report(Family::DualSense, Link::Usb, None, [Trig::Pass; 2], [0x40, 0x80], 0).unwrap();
         assert_eq!((r[1], r[3], r[4]), (0x03, 0x40, 0x80));
-        let d4 = out_report(Family::Ds4, Link::Usb, None, [Trig::Off; 2], [0x40, 0x80], 0).unwrap();
+        let d4 = out_report(Family::Ds4, Link::Usb, None, [Trig::Pass; 2], [0x40, 0x80], 0).unwrap();
         assert_eq!((d4[1], d4[4], d4[5]), (0x01, 0x40, 0x80));
-        // L2 resiste da metade do curso, R2 solto: só o bit do L2 liga.
-        let t = [Trig::Rigid { start: 5, power: 8 }, Trig::Off];
+        // Solto liga o bit e manda o modo 0x05: é o que tira um efeito que já estava no gatilho.
+        let r = out_report(Family::DualSense, Link::Usb, None, [Trig::Off, Trig::Pass], [0, 0], 0).unwrap();
+        assert_eq!((r[1], r[22]), (0x08, 0x05));
+        // L2 resiste da metade do curso, R2 passa ao jogo: só o bit do L2 liga.
+        let t = [Trig::Rigid { start: 5, power: 8 }, Trig::Pass];
         let r = out_report(Family::DualSense, Link::Usb, None, t, [0, 0], 0).unwrap();
-        assert_eq!((r[1], r[11], r[22]), (0x08, 0x05, 0x21));
+        assert_eq!((r[1], r[11], r[22]), (0x08, 0x00, 0x21));
         // Zonas 5 a 9 ligadas, com 3 bits de força (8 vira 7) em cada uma.
         assert_eq!(u16::from_le_bytes(r[23..25].try_into().unwrap()), 0b11_1110_0000);
         let f = u32::from_le_bytes(r[25..29].try_into().unwrap());
         assert!((5..10).all(|i| (f >> (3 * i)) & 7 == 7) && (0..5).all(|i| (f >> (3 * i)) & 7 == 0));
         // A arma resiste numa zona e cede na seguinte; a vibração leva a frequência.
-        let r = out_report(Family::DualSense, Link::Usb, None, [Trig::Off, Trig::Click { start: 3, power: 1 }], [0, 0], 0).unwrap();
+        let r = out_report(Family::DualSense, Link::Usb, None, [Trig::Pass, Trig::Click { start: 3, power: 1 }], [0, 0], 0).unwrap();
         assert_eq!((r[1], r[11], u16::from_le_bytes(r[12..14].try_into().unwrap()), r[14]), (0x04, 0x25, 0b1_1000, 0));
-        let r = out_report(Family::DualSense, Link::Usb, None, [Trig::Off, Trig::Buzz { start: 0, power: 4, hz: 60 }], [0, 0], 0).unwrap();
+        let r = out_report(Family::DualSense, Link::Usb, None, [Trig::Pass, Trig::Buzz { start: 0, power: 4, hz: 60 }], [0, 0], 0).unwrap();
         assert_eq!((r[11], r[20]), (0x26, 40));
     }
 

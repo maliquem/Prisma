@@ -397,7 +397,10 @@ pub fn haptic_level(h: Haptic, inp: &pads::Input) -> u8 {
 /// `power` a força (1 a 8).
 #[derive(Clone, Copy, PartialEq, Debug, Default)]
 pub enum Trig {
+    /// O Prisma não mexe no gatilho: o jogo com suporte próprio manda nele.
     #[default]
+    Pass,
+    /// O Prisma solta o gatilho: nenhum efeito, mesmo que o jogo tenha posto um.
     Off,
     /// Resiste do ponto escolhido até o fim do curso.
     Rigid { start: u8, power: u8 },
@@ -450,7 +453,7 @@ impl Profile {
     fn empty(name: &str) -> Self {
         let stick = Zone { start: 0.15, end: 0.95 };
         let trig = Zone { start: 0.05, end: 0.95 };
-        Profile { name: name.into(), games: vec![], zones: [stick, stick, trig, trig], layers: vec![Layer { name: "Base".into(), parent: None, ls: None, rs: None, binds: vec![], keys: vec![], gyro: None, touch: None }], strings: vec![], turbo: vec![], turbo_key: TURBO_KEY, macros: vec![], texts: vec![], gyro_opt: GyroOpt::default(), curve: [2.0; 2], hair: [false; 2], light: None, light_bt: false, trig: [Trig::Off; 2], buzz: 0, haptic: Haptic::default() }
+        Profile { name: name.into(), games: vec![], zones: [stick, stick, trig, trig], layers: vec![Layer { name: "Base".into(), parent: None, ls: None, rs: None, binds: vec![], keys: vec![], gyro: None, touch: None }], strings: vec![], turbo: vec![], turbo_key: TURBO_KEY, macros: vec![], texts: vec![], gyro_opt: GyroOpt::default(), curve: [2.0; 2], hair: [false; 2], light: None, light_bt: false, trig: [Trig::Pass; 2], buzz: 0, haptic: Haptic::default() }
     }
 
     /// Base: nada mapeado, o jogo lê o controle como ele é.
@@ -620,7 +623,8 @@ impl Profile {
         }
         for (t, n) in self.trig.iter().zip(["lt", "rt"]) {
             match *t {
-                Trig::Off => {}
+                Trig::Pass => {}
+                Trig::Off => _ = writeln!(s, "trig {n} off"),
                 Trig::Rigid { start, power } => _ = writeln!(s, "trig {n} rigid {start} {power}"),
                 Trig::Click { start, power } => _ = writeln!(s, "trig {n} click {start} {power}"),
                 Trig::Buzz { start, power, hz } => _ = writeln!(s, "trig {n} buzz {start} {power} {hz}"),
@@ -747,12 +751,17 @@ impl Profile {
                     let name = *t.first()?;
                     let i = ["lt", "rt"].iter().position(|n| *n == name)?;
                     let n = |k: usize, max: u8| t.get(k).and_then(|v| v.parse::<u8>().ok()).map(|v| v.min(max));
-                    let (start, power) = (n(2, 9)?, n(3, 8)?.max(1));
-                    p.trig[i] = match *t.get(1)? {
-                        "rigid" => Trig::Rigid { start, power },
-                        "click" => Trig::Click { start, power },
-                        "buzz" => Trig::Buzz { start, power, hz: n(4, 40)?.max(1) },
-                        _ => return None,
+                    let kind = *t.get(1)?;
+                    p.trig[i] = if kind == "off" {
+                        Trig::Off
+                    } else {
+                        let (start, power) = (n(2, 9)?, n(3, 8)?.max(1));
+                        match kind {
+                            "rigid" => Trig::Rigid { start, power },
+                            "click" => Trig::Click { start, power },
+                            "buzz" => Trig::Buzz { start, power, hz: n(4, 40)?.max(1) },
+                            _ => return None,
+                        }
                     };
                 }
                 "buzz" => p.buzz = rest.parse::<u8>().ok()?.min(2),
@@ -1822,16 +1831,17 @@ pub fn haptic() -> Haptic {
     g.as_ref().map_or(Haptic::default(), |r| r.profiles[r.cur].haptic)
 }
 
-/// Gatilhos adaptativos do perfil em uso. A parada de emergência os solta.
+/// Gatilhos adaptativos do perfil em uso. Na parada de emergência o Prisma larga os dois: o que ele
+/// tinha posto sai, e o jogo volta a mandar.
 pub fn triggers() -> [Trig; 2] {
     if STOPPED.load(Ordering::Relaxed) {
-        return [Trig::Off; 2];
+        return [Trig::Pass; 2];
     }
     if let Some(t) = *PREVIEW_TRIG.lock().unwrap() {
         return t;
     }
     let g = RUN.lock().unwrap();
-    g.as_ref().map_or([Trig::Off; 2], |r| r.profiles[r.cur].trig)
+    g.as_ref().map_or([Trig::Pass; 2], |r| r.profiles[r.cur].trig)
 }
 
 /// O editor de perfis mostra esta luz no controle enquanto está aberto; `None` solta a mostra.
@@ -2424,6 +2434,9 @@ mod tests {
         p.buzz = 2;
         let q = Profile::parse(&p.to_text()).unwrap();
         assert_eq!((q.trig, q.buzz), (p.trig, 2));
+        // Solto é diferente de passar ao jogo, e também vai e volta.
+        p.trig = [Trig::Off, Trig::Pass];
+        assert_eq!(Profile::parse(&p.to_text()).unwrap().trig, [Trig::Off, Trig::Pass]);
         // Valores fora da conta são aparados, e a arma volta inteira.
         let r = Profile::parse(&(Profile::base().to_text() + "trig lt click 99 0
 buzz 9

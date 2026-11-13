@@ -855,33 +855,35 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
             // Gatilho adaptativo: só o DualSense tem os motores do gatilho.
             if family == Family::DualSense {
                 let t = i - 2;
-                let opts = vec![tr("Solto"), tr("Resistência"), tr("Arma"), tr("Vibração")];
+                let opts = vec![tr("Passa ao jogo"), tr("Solto"), tr("Resistência"), tr("Arma"), tr("Vibração")];
                 let mut sel = match p.trig[t] {
-                    Trig::Off => 0,
-                    Trig::Rigid { .. } => 1,
-                    Trig::Click { .. } => 2,
-                    Trig::Buzz { .. } => 3,
+                    Trig::Pass => 0,
+                    Trig::Off => 1,
+                    Trig::Rigid { .. } => 2,
+                    Trig::Click { .. } => 3,
+                    Trig::Buzz { .. } => 4,
                 };
                 ui.label(rect(x, y, 140.0, 34.0), "Gatilho adaptativo", TEXT2);
                 if ui.select(&format!("pp-trig{t}"), rect(x + 150.0, y, ((w - 150.0) * 0.56).min(220.0).floor(), 34.0), &opts, &mut sel) {
                     let (start, power) = match p.trig[t] {
                         Trig::Rigid { start, power } | Trig::Click { start, power } | Trig::Buzz { start, power, .. } => (start, power),
-                        Trig::Off => (3, 5),
+                        Trig::Pass | Trig::Off => (3, 5),
                     };
                     p.trig[t] = match sel {
-                        1 => Trig::Rigid { start, power },
-                        2 => Trig::Click { start, power },
-                        3 => Trig::Buzz { start, power, hz: 10 },
-                        _ => Trig::Off,
+                        1 => Trig::Off,
+                        2 => Trig::Rigid { start, power },
+                        3 => Trig::Click { start, power },
+                        4 => Trig::Buzz { start, power, hz: 10 },
+                        _ => Trig::Pass,
                     };
                     changed = true;
                 }
                 y += 44.0;
-                if p.trig[t] != Trig::Off {
+                if !matches!(p.trig[t], Trig::Pass | Trig::Off) {
                     let (mut s0, mut pw, mut hz) = match p.trig[t] {
                         Trig::Rigid { start, power } | Trig::Click { start, power } => (start as u32 * 10, power as u32, 10),
                         Trig::Buzz { start, power, hz } => (start as u32 * 10, power as u32, hz as u32),
-                        Trig::Off => (0, 0, 0),
+                        Trig::Pass | Trig::Off => (0, 0, 0),
                     };
                     ui.label(rect(x, y, 140.0, 34.0), "Começa em", TEXT2);
                     let mut c = ui.stepper(&format!("pp-trs{t}"), rect(x + 150.0, y, 130.0, 34.0), &mut s0, (0, 90), 10, "%");

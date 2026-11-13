@@ -379,7 +379,8 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
     };
     let cx = chip.x + 12.0;
     ui.c.text(rect(cx, chip.y + 8.0, chip.w - 24.0, 18.0), "Energia automática", 12.0, MUTED, Align::Left, Weight::Regular);
-    ui.c.text(rect(cx, chip.y + 27.0, chip.w - 24.0, 20.0), plan, 14.0, TEXT, Align::Left, Weight::Semibold);
+    // O nome do plano vem do Windows (e pode ser traduzido): diminui até caber.
+    ui.c.text_fit(rect(cx, chip.y + 27.0, chip.w - 24.0, 20.0), plan, 14.0, TEXT, Align::Left, Weight::Semibold);
     ui.c.text(rect(cx, chip.y + 48.0, chip.w - 24.0, 18.0), state, 12.0, ACCENT, Align::Left, Weight::Regular);
 
     let area = rect(SIDE_W, 0.0, full.w - SIDE_W, full.h);
