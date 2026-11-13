@@ -5,7 +5,7 @@ use super::*;
 use crate::config::{Hotkey, MOD_ALT, MOD_CTRL, MOD_SHIFT, MOD_WIN};
 use crate::sys::pads::{self, Family};
 use crate::sys::macros;
-use crate::sys::remap::{self, Bind, Gyro, Layer, Macro, Mode, Out, Profile, Step, Stick, When, Zone};
+use crate::sys::remap::{self, Bind, Motion, Layer, Macro, Mode, Out, Profile, Step, Stick, When, Zone};
 
 #[derive(Default)]
 pub struct Editor {
@@ -488,8 +488,13 @@ fn stick_row(ui: &mut Ui, layer: &mut Layer, base: bool, right: bool, x: f32, y:
     changed
 }
 
-/// Gyro na camada: igual à mãe, desligado ou mouse, com pixels por grau girado.
-fn gyro_row(ui: &mut Ui, layer: &mut Layer, base: bool, x: f32, y: f32, w: f32) -> bool {
+/// Gyro ou touchpad na camada: igual à mãe, desligado ou mouse, com a sensibilidade.
+fn motion_row(ui: &mut Ui, layer: &mut Layer, touch: bool, base: bool, x: f32, y: f32, w: f32) -> bool {
+    let (key, label, slot, def, range, step, unit) = if touch {
+        ("pp-touch", "Touchpad", &mut layer.touch, 1200.0, (200, 4000), 100, "px")
+    } else {
+        ("pp-gyro", "Gyro", &mut layer.gyro, 10.0, (1, 60), 1, "px/°")
+    };
     let sel_w = ((w - 138.0) * 0.56).min(220.0).floor();
     let speed_w = (w - 138.0 - sel_w - 8.0).min(170.0).floor();
     let mut opts = vec![];
@@ -497,21 +502,21 @@ fn gyro_row(ui: &mut Ui, layer: &mut Layer, base: bool, x: f32, y: f32, w: f32) 
         opts.push(tr("Igual à camada mãe"));
     }
     opts.extend(["Desligado", "Mouse"].iter().map(|s| tr(s)));
-    let mut sel = usize::from(matches!(layer.gyro, Some(Gyro::Mouse(_)))) + usize::from(base && layer.gyro.is_some());
-    ui.label(rect(x, y, 120.0, 34.0), "Gyro", TEXT2);
+    let mut sel = usize::from(matches!(slot, Some(Motion::Mouse(_)))) + usize::from(base && slot.is_some());
+    ui.label(rect(x, y, 120.0, 34.0), label, TEXT2);
     let mut changed = false;
-    if ui.select("pp-gyro", rect(x + 130.0, y, sel_w, 34.0), &opts, &mut sel) {
+    if ui.select(key, rect(x + 130.0, y, sel_w, 34.0), &opts, &mut sel) {
         let k = if base { sel as i32 - 1 } else { sel as i32 };
-        layer.gyro = match k {
+        *slot = match k {
             -1 => None,
-            0 => Some(Gyro::Off),
-            _ => Some(Gyro::Mouse(10.0)),
+            0 => Some(Motion::Off),
+            _ => Some(Motion::Mouse(def)),
         };
         changed = true;
     }
-    if let Some(Gyro::Mouse(v)) = &mut layer.gyro {
+    if let Some(Motion::Mouse(v)) = slot {
         let mut n = v.round() as u32;
-        if ui.stepper("pp-gyro-v", rect(x + 138.0 + sel_w, y, speed_w, 34.0), &mut n, (1, 60), 1, "px/°") {
+        if ui.stepper(&format!("{key}-v"), rect(x + 138.0 + sel_w, y, speed_w, 34.0), &mut n, range, step, unit) {
             *v = n as f32;
             changed = true;
         }
@@ -722,7 +727,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
     ui.select("pp-layer", rect(x, y, third, 34.0), &layers, &mut ed.layer);
     if ui.button_ex("pp-layer-add", rect(x + third + 8.0, y, third, 34.0), "Nova camada", false, p.layers.len() < 16) {
         let n = p.layers.len();
-        p.layers.push(Layer { name: format!("{} {n}", tr("Camada")), parent: Some(0), ls: None, rs: None, binds: vec![], keys: vec![], gyro: None });
+        p.layers.push(Layer { name: format!("{} {n}", tr("Camada")), parent: Some(0), ls: None, rs: None, binds: vec![], keys: vec![], gyro: None, touch: None });
         ed.layer = n;
         changed = true;
     }
@@ -1029,9 +1034,9 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
         y += 44.0;
     }
     // Gyro desta camada e, se alguma camada usa o gyro, as opções do perfil.
-    changed |= gyro_row(ui, &mut p.layers[ed.layer], ed.layer > 0, x, y, w);
+    changed |= motion_row(ui, &mut p.layers[ed.layer], false, ed.layer > 0, x, y, w);
     y += 44.0;
-    if p.layers.iter().any(|l| matches!(l.gyro, Some(Gyro::Mouse(_)))) {
+    if p.layers.iter().any(|l| matches!(l.gyro, Some(Motion::Mouse(_)))) {
         let o = &mut p.gyro_opt;
         let spaces = vec![tr("Espaço local"), tr("Espaço do jogador")];
         let mut sp = usize::from(o.player);
@@ -1047,6 +1052,9 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
         changed |= ui.check("pp-gyro-sm", rect(x + 2.0 * (cw + 8.0), y, cw, 34.0), "Suavizar tremor", &mut o.smooth);
         y += 44.0;
     }
+    // Touchpad desta camada: um dedo move o mouse, dois rolam.
+    changed |= motion_row(ui, &mut p.layers[ed.layer], true, ed.layer > 0, x, y, w);
+    y += 44.0;
 
     // Zonas mortas: valem para o perfil todo.
     ui.title(rect(x, y + 4.0, w, 22.0), "Zona morta");
