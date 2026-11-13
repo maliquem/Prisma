@@ -8,6 +8,11 @@ description = "Utilitário leve para Windows: fullscreen, volume por programa, m
 [dependencies]
 windows-numerics = "0.3"
 windows-core = "0.62"
+# Alto-falante do controle pelo Bluetooth: Opus para o DualSense (libopus, BSD, compilada do
+# código pelo CMake) e SBC para o DualShock 4 (Rust puro, MIT).
+opus-head-sys = { version = "0.3.3", default-features = false }
+nanoaudio-sbc = "0.1.1"
+nanoaudio-core = "0.1.1"
 # Ponte com o Prisma Launcher (pipe nomeado local).
 prisma-link = { path = "crates/prisma-link" }
 # Compartilhar tela pela internet (em teste): ligado por padrão; `--no-default-features` compila sem ele.

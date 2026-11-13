@@ -512,7 +512,7 @@ const LIGHT_DEFAULT: [u8; 3] = [0, 0, 128];
 static LIT: Mutex<Vec<(String, Family, Link, usize, bool, [Trig; 2])>> = Mutex::new(Vec::new());
 
 /// CRC-32 dos relatórios de saída pelo Bluetooth: conta um byte de cabeçalho (`seed`) e os dados.
-fn crc32(seed: u8, data: &[u8]) -> u32 {
+pub(crate) fn crc32(seed: u8, data: &[u8]) -> u32 {
     let mut c = !0u32;
     for &b in std::iter::once(&seed).chain(data) {
         c ^= b as u32;
@@ -587,7 +587,7 @@ pub fn out_report(f: Family, link: Link, rgb: Option<[u8; 3]>, trig: [Trig; 2], 
 
 /// Manda um relatório de saída: pela escrita comum (completada até o tamanho que o Windows pede) e,
 /// se falhar, pelo pedido de controle do HID.
-unsafe fn write_report(path: &str, r: &[u8], out_len: usize) -> bool {
+pub(crate) unsafe fn write_report(path: &str, r: &[u8], out_len: usize) -> bool {
     let Some(h) = open(path, (FILE_GENERIC_READ | FILE_GENERIC_WRITE).0) else { return false };
     let mut full = r.to_vec();
     full.resize(out_len.max(r.len()), 0);

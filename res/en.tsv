@@ -2337,7 +2337,7 @@ Nada foi removido: o Windows não deu a permissão de administrador.	Nothing was
 Piscar	Blink
 Arco-íris	Rainbow
 Som no alto-falante do controle	Controller speaker sound
-Um som curto no controle ligado pelo cabo (DualSense e DualShock 4) ao conectar, desconectar, trocar de perfil, com bateria baixa e com variação alta. Pelo Bluetooth o controle não tem saída de som.	A short sound on the controller connected by cable (DualSense and DualShock 4) on connect, disconnect, profile switch, low battery and high jitter. Over Bluetooth the controller has no sound output.
+Um som curto no alto-falante do DualSense e do DualShock 4, no cabo e no Bluetooth, ao conectar, desconectar, trocar de perfil, com bateria baixa e com variação alta.	A short sound from the speaker of the DualSense and DualShock 4, over cable and Bluetooth, on connect, disconnect, profile switch, low battery and high jitter.
 Vibrar com o som do PC	PC sound rumble
 Mods do DSX	DSX mods
 Aceitar mods pela porta UDP 6969	Accept mods on UDP port 6969

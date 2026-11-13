@@ -1,7 +1,8 @@
 //! Avisos pelo alto-falante do controle (DualSense e DualShock 4 no cabo). No cabo o controle é
 //! também uma saída de som do Windows: o aviso toca nela em modo compartilhado, misturado ao que
 //! já estiver tocando. No DualSense os canais 1 e 2 vão ao alto-falante e ao fone; os 3 e 4
-//! (háptico) ficam calados. Pelo Bluetooth o controle não tem saída de som, e o aviso não toca.
+//! (háptico) ficam calados. Pelo Bluetooth não há saída de som no Windows: o aviso vai em
+//! relatórios HID com o som codificado (`bt_audio`).
 
 use std::time::Duration;
 
@@ -65,7 +66,8 @@ pub(crate) fn is_pad_endpoint(name: &str) -> bool {
     n.contains("wireless controller") || n.contains("dualsense") || n.contains("dualshock")
 }
 
-/// Toca o aviso em todos os controles ligados pelo cabo, numa linha própria. Ao conectar, a saída
+/// Toca o aviso em todos os controles: os do cabo pela saída de som e os do Bluetooth pelo HID,
+/// numa linha própria. Ao conectar, a saída
 /// de som do controle aparece um pouco depois do controle: tenta por até 3 s.
 pub fn play(c: Chime) {
     let _ = std::thread::Builder::new().name("aviso do controle".into()).spawn(move || unsafe {
@@ -79,6 +81,12 @@ pub fn play(c: Chime) {
             }
         }
         CoUninitialize();
+        // Pelo Bluetooth: um controle de cada vez, cada um no formato dele.
+        for p in super::pads::list() {
+            if p.link == super::pads::Link::Bluetooth && matches!(p.family, super::pads::Family::DualSense | super::pads::Family::Ds4) {
+                super::bt_audio::play(&p.key, p.family, &samples(c, super::bt_audio::rate_of(p.family)));
+            }
+        }
     });
 }
 
