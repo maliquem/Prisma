@@ -359,7 +359,32 @@ pub struct Profile {
     pub curve: [f32; 2],
     /// Hair trigger em cada gatilho: aperta e solta com um movimento curto, em qualquer ponto.
     pub hair: [bool; 2],
+    /// Barra de luz do DualSense e do DualShock 4; `None` não mexe na luz.
+    pub light: Option<Light>,
+    /// A luz vale também pelo Bluetooth (por padrão, só no cabo).
+    pub light_bt: bool,
 }
+
+/// Barra de luz no perfil.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Light {
+    Off,
+    /// Verde, amarela ou vermelha, pela carga.
+    Battery,
+    Color([u8; 3]),
+}
+
+/// Cores da barra de luz que o editor oferece.
+pub const COLORS: [(&str, [u8; 3]); 8] = [
+    ("Azul", [0, 0, 255]),
+    ("Vermelho", [255, 0, 0]),
+    ("Verde", [0, 255, 0]),
+    ("Roxo", [128, 0, 255]),
+    ("Rosa", [255, 0, 128]),
+    ("Laranja", [255, 96, 0]),
+    ("Ciano", [0, 255, 255]),
+    ("Branco", [255, 255, 255]),
+];
 
 pub const DESKTOP: &str = "Desktop";
 pub const BASE: &str = "Base";
@@ -368,7 +393,7 @@ impl Profile {
     fn empty(name: &str) -> Self {
         let stick = Zone { start: 0.15, end: 0.95 };
         let trig = Zone { start: 0.05, end: 0.95 };
-        Profile { name: name.into(), games: vec![], zones: [stick, stick, trig, trig], layers: vec![Layer { name: "Base".into(), parent: None, ls: None, rs: None, binds: vec![], keys: vec![], gyro: None, touch: None }], strings: vec![], turbo: vec![], turbo_key: TURBO_KEY, macros: vec![], texts: vec![], gyro_opt: GyroOpt::default(), curve: [2.0; 2], hair: [false; 2] }
+        Profile { name: name.into(), games: vec![], zones: [stick, stick, trig, trig], layers: vec![Layer { name: "Base".into(), parent: None, ls: None, rs: None, binds: vec![], keys: vec![], gyro: None, touch: None }], strings: vec![], turbo: vec![], turbo_key: TURBO_KEY, macros: vec![], texts: vec![], gyro_opt: GyroOpt::default(), curve: [2.0; 2], hair: [false; 2], light: None, light_bt: false }
     }
 
     /// Base: nada mapeado, o jogo lê o controle como ele é.
@@ -536,6 +561,14 @@ impl Profile {
                 let _ = writeln!(s, "hair {n}");
             }
         }
+        if let Some(l) = self.light {
+            let bt = if self.light_bt { " bt" } else { "" };
+            match l {
+                Light::Off => _ = writeln!(s, "light off{bt}"),
+                Light::Battery => _ = writeln!(s, "light battery{bt}"),
+                Light::Color([r, g, b]) => _ = writeln!(s, "light color {r:02x}{g:02x}{b:02x}{bt}"),
+            }
+        }
         let o = self.gyro_opt;
         if o != GyroOpt::default() {
             let flags: Vec<&str> = [(o.inv_x, "invx"), (o.inv_y, "invy"), (o.smooth, "smooth")].iter().filter(|f| f.0).map(|f| f.1).collect();
@@ -634,6 +667,20 @@ impl Profile {
                     p.curve[["ls", "rs"].iter().position(|n| *n == k)?] = num(v)?.clamp(1.0, 3.0);
                 }
                 "hair" => p.hair[["lt", "rt"].iter().position(|n| *n == rest)?] = true,
+                "light" => {
+                    let mut it = rest.split(' ');
+                    p.light = Some(match it.next()? {
+                        "off" => Light::Off,
+                        "battery" => Light::Battery,
+                        "color" => {
+                            let h = it.next().filter(|h| h.len() == 6)?;
+                            let v = u32::from_str_radix(h, 16).ok()?;
+                            Light::Color([(v >> 16) as u8, (v >> 8) as u8, v as u8])
+                        }
+                        _ => return None,
+                    });
+                    p.light_bt = it.next() == Some("bt");
+                }
                 "zone" => {
                     let mut it = rest.split(' ');
                     let k = it.next()?;
@@ -1662,6 +1709,18 @@ pub fn stopped() -> bool {
     STOPPED.load(Ordering::Relaxed)
 }
 
+/// Luz do perfil em uso e se vale pelo Bluetooth; `None` com o mapeamento desligado ou parado.
+pub fn light() -> Option<(Light, bool)> {
+    if STOPPED.load(Ordering::Relaxed) {
+        return None;
+    }
+    let g = RUN.lock().unwrap();
+    g.as_ref().filter(|_| enabled()).and_then(|r| {
+        let p = &r.profiles[r.cur];
+        p.light.map(|l| (l, p.light_bt))
+    })
+}
+
 pub fn active() -> Option<String> {
     let g = RUN.lock().unwrap();
     g.as_ref().filter(|_| enabled()).map(|r| r.profiles[r.cur].name.clone())
@@ -2191,8 +2250,10 @@ mod tests {
         assert!(run(1.0, 50).contains(&Act::Down(Out::Key(0x42, 0))));
         assert!(run(0.85, 60).contains(&Act::Up(Out::Key(0x42, 0))));
         p.curve[1] = 3.0;
+        p.light = Some(Light::Color([255, 96, 0]));
+        p.light_bt = true;
         let q = Profile::parse(&p.to_text()).unwrap();
-        assert_eq!((q.hair, q.curve), ([true, false], [2.0, 3.0]));
+        assert_eq!((q.hair, q.curve, q.light, q.light_bt), ([true, false], [2.0, 3.0], p.light, true));
     }
 
     #[test]

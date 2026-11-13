@@ -407,6 +407,7 @@ struct Dev {
     name: String,
     serial: String,
     input_len: u16,
+    output_len: u16,
 }
 
 fn link_of(path: &str) -> Link {
@@ -432,6 +433,127 @@ unsafe fn full_mode(path: &str) -> bool {
     let ok = HidD_GetFeature(h, buf.as_mut_ptr() as *mut _, buf.len() as u32);
     let _ = CloseHandle(h);
     ok
+}
+
+/// Cor que o Prisma devolve ao controle quando deixa de mandar na luz.
+const LIGHT_DEFAULT: [u8; 3] = [0, 0, 128];
+/// Controles em que o Prisma mudou a luz (caminho, modelo, conexão, tamanho do relatório): voltam à
+/// cor padrão ao fechar o Prisma.
+static LIT: Mutex<Vec<(String, Family, Link, usize)>> = Mutex::new(Vec::new());
+
+/// CRC-32 dos relatórios de saída pelo Bluetooth: conta um byte de cabeçalho (`seed`) e os dados.
+fn crc32(seed: u8, data: &[u8]) -> u32 {
+    let mut c = !0u32;
+    for &b in std::iter::once(&seed).chain(data) {
+        c ^= b as u32;
+        for _ in 0..8 {
+            c = if c & 1 != 0 { (c >> 1) ^ 0xEDB8_8320 } else { c >> 1 };
+        }
+    }
+    !c
+}
+
+/// Relatório de saída que só muda a barra de luz, no formato de cada modelo e conexão (o mesmo que
+/// o driver do Linux usa). `seq` é a sequência de 0 a 15 que o DualSense pede no Bluetooth.
+pub fn light_report(f: Family, link: Link, rgb: [u8; 3], seq: u8) -> Option<Vec<u8>> {
+    let (mut r, at) = match (f, link) {
+        (Family::DualSense, Link::Usb) => (vec![0u8; 48], 1),
+        (Family::DualSense, Link::Bluetooth) => (vec![0u8; 78], 3),
+        (Family::Ds4, Link::Usb) => (vec![0u8; 32], 1),
+        (Family::Ds4, Link::Bluetooth) => (vec![0u8; 78], 3),
+        _ => return None,
+    };
+    if f == Family::DualSense {
+        r[0] = if link == Link::Usb { 0x02 } else { 0x31 };
+        if link == Link::Bluetooth {
+            r[1] = (seq & 15) << 4;
+            r[2] = 0x10;
+        }
+        // Liga o controle da luz, encerra a animação azul do começo e põe a cor.
+        r[at + 1] = 0x04;
+        r[at + 38] = 0x02;
+        r[at + 41] = 0x02;
+        r[at + 44..at + 47].copy_from_slice(&rgb);
+    } else {
+        r[0] = if link == Link::Usb { 0x05 } else { 0x11 };
+        if link == Link::Bluetooth {
+            r[1] = 0xC0;
+        }
+        r[at] = 0x02;
+        r[at + 5..at + 8].copy_from_slice(&rgb);
+    }
+    if link == Link::Bluetooth {
+        let c = crc32(0xA2, &r[..74]);
+        r[74..].copy_from_slice(&c.to_le_bytes());
+    }
+    Some(r)
+}
+
+/// Manda um relatório de saída: pela escrita comum (completada até o tamanho que o Windows pede) e,
+/// se falhar, pelo pedido de controle do HID.
+unsafe fn write_report(path: &str, r: &[u8], out_len: usize) -> bool {
+    let Some(h) = open(path, (FILE_GENERIC_READ | FILE_GENERIC_WRITE).0) else { return false };
+    let mut full = r.to_vec();
+    full.resize(out_len.max(r.len()), 0);
+    let mut n = 0u32;
+    let ok = WriteFile(h, Some(&full), Some(&mut n), None).is_ok() || HidD_SetOutputReport(h, r.as_ptr() as *const _, r.len() as u32);
+    let _ = CloseHandle(h);
+    ok
+}
+
+fn battery_color(pct: u8) -> [u8; 3] {
+    match pct {
+        51.. => [0, 255, 0],
+        21..=50 => [255, 160, 0],
+        _ => [255, 0, 0],
+    }
+}
+
+/// Barra de luz de um controle: manda a cor do perfil só quando ela muda, e a cor padrão quando o
+/// perfil deixa de mandar. Uma escrita que falha não se repete até o controle reconectar.
+struct LightOut {
+    path: String,
+    fam: Family,
+    link: Link,
+    out_len: usize,
+    sent: Option<[u8; 3]>,
+    seq: u8,
+    failed: bool,
+}
+
+impl LightOut {
+    unsafe fn update(&mut self, pct: Option<u8>) {
+        use super::remap::Light;
+        let want = super::remap::light().filter(|l| self.link == Link::Usb || l.1).and_then(|l| match l.0 {
+            Light::Off => Some([0, 0, 0]),
+            Light::Color(c) => Some(c),
+            Light::Battery => pct.map(battery_color),
+        });
+        if want == self.sent || self.failed {
+            return;
+        }
+        self.seq = (self.seq + 1) & 15;
+        let Some(r) = light_report(self.fam, self.link, want.unwrap_or(LIGHT_DEFAULT), self.seq) else { return };
+        if !write_report(&self.path, &r, self.out_len) {
+            self.failed = true;
+            return;
+        }
+        self.sent = want;
+        let mut lit = LIT.lock().unwrap();
+        lit.retain(|l| l.0 != self.path);
+        if want.is_some() {
+            lit.push((self.path.clone(), self.fam, self.link, self.out_len));
+        }
+    }
+}
+
+/// Ao fechar o Prisma: os controles com luz mudada voltam à cor padrão.
+pub fn release_lights() {
+    for (path, f, link, len) in LIT.lock().unwrap().drain(..) {
+        if let Some(r) = light_report(f, link, LIGHT_DEFAULT, 0) {
+            unsafe { write_report(&path, &r, len) };
+        }
+    }
 }
 
 unsafe fn open(path: &str, access: u32) -> Option<HANDLE> {
@@ -473,7 +595,7 @@ unsafe fn devices() -> Vec<Dev> {
         if ok && caps.UsagePage == 1 && (caps.Usage == 4 || caps.Usage == 5) {
             let mut a = HIDD_ATTRIBUTES { Size: std::mem::size_of::<HIDD_ATTRIBUTES>() as u32, ..Default::default() };
             let _ = HidD_GetAttributes(h, &mut a);
-            out.push(Dev { path, vid: a.VendorID, pid: a.ProductID, name: hid_string(h, HidD_GetProductString), serial: hid_string(h, HidD_GetSerialNumberString), input_len: caps.InputReportByteLength });
+            out.push(Dev { path, vid: a.VendorID, pid: a.ProductID, name: hid_string(h, HidD_GetProductString), serial: hid_string(h, HidD_GetSerialNumberString), input_len: caps.InputReportByteLength, output_len: caps.OutputReportByteLength });
         }
         let _ = CloseHandle(h);
     }
@@ -825,6 +947,17 @@ unsafe fn read_loop(d: Dev) {
     let (mut prev, mut tick) = (Instant::now(), Instant::now());
     let mut ov = OVERLAPPED { hEvent: ev, ..Default::default() };
     let mut cal = GyroCal::default();
+    // Só os modelos da lista de escrita recebem a luz.
+    let mut light = (streams && WRITE_OK.iter().any(|w| w.0 == d.vid && w.1 == d.pid)).then(|| LightOut {
+        path: d.path.clone(),
+        fam,
+        link,
+        out_len: d.output_len as usize,
+        sent: None,
+        seq: 0,
+        failed: false,
+    });
+    let mut pct = None;
     'read: loop {
         let mut got = 0u32;
         if let Err(e) = ReadFile(h, Some(&mut buf[..len]), None, Some(&mut ov)) {
@@ -893,6 +1026,9 @@ unsafe fn read_loop(d: Dev) {
                 p.battery = b;
             }
         }
+        if let Battery::Percent { pct: v, .. } = p.battery {
+            pct = Some(v);
+        }
         if rate.is_some() {
             p.rate = rate;
         }
@@ -900,6 +1036,9 @@ unsafe fn read_loop(d: Dev) {
         drop(pads);
         if let Some(inp) = fed {
             super::remap::feed(&d.path, &inp, now);
+        }
+        if let Some(l) = light.as_mut() {
+            l.update(pct);
         }
         events.into_iter().for_each(emit);
     }
@@ -1212,6 +1351,22 @@ mod tests {
     fn short_report_is_ignored() {
         assert!(sony(Family::DualSense, Link::Usb, &[1, 2, 3]).is_none());
         assert!(sony(Family::Generic, Link::Usb, &[1; 64]).is_none());
+    }
+
+    #[test]
+    fn light_reports() {
+        // CRC-32 de referência: "123456789" dá 0xCBF43926.
+        assert_eq!(crc32(b'1', b"23456789"), 0xCBF4_3926);
+        let ds = light_report(Family::DualSense, Link::Usb, [1, 2, 3], 0).unwrap();
+        assert_eq!((ds.len(), ds[0], ds[2], &ds[45..48]), (48, 0x02, 0x04, &[1u8, 2, 3][..]));
+        let bt = light_report(Family::DualSense, Link::Bluetooth, [1, 2, 3], 5).unwrap();
+        assert_eq!((bt.len(), bt[0], bt[1], bt[2], &bt[47..50]), (78, 0x31, 0x50, 0x10, &[1u8, 2, 3][..]));
+        assert_eq!(u32::from_le_bytes(bt[74..].try_into().unwrap()), crc32(0xA2, &bt[..74]));
+        let ds4 = light_report(Family::Ds4, Link::Usb, [1, 2, 3], 0).unwrap();
+        assert_eq!((ds4.len(), ds4[0], ds4[1], &ds4[6..9]), (32, 0x05, 0x02, &[1u8, 2, 3][..]));
+        let ds4bt = light_report(Family::Ds4, Link::Bluetooth, [1, 2, 3], 0).unwrap();
+        assert_eq!((ds4bt[0], ds4bt[1], ds4bt[3], &ds4bt[8..11]), (0x11, 0xC0, 0x02, &[1u8, 2, 3][..]));
+        assert!(light_report(Family::Xbox, Link::Usb, [0; 3], 0).is_none());
     }
 
     #[test]

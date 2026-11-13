@@ -5,7 +5,7 @@ use super::*;
 use crate::config::{Hotkey, MOD_ALT, MOD_CTRL, MOD_SHIFT, MOD_WIN};
 use crate::sys::pads::{self, Family};
 use crate::sys::macros;
-use crate::sys::remap::{self, Bind, Motion, Layer, Macro, Mode, Out, Profile, Step, Stick, When, Zone};
+use crate::sys::remap::{self, Bind, Light, Motion, Layer, Macro, Mode, Out, Profile, Step, Stick, When, Zone};
 
 #[derive(Default)]
 pub struct Editor {
@@ -1120,6 +1120,32 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
     // Touchpad desta camada: um dedo move o mouse, dois rolam.
     changed |= motion_row(ui, &mut p.layers[ed.layer], true, ed.layer > 0, x, y, w);
     y += 44.0;
+    // Barra de luz do perfil: só DualSense e DualShock 4.
+    if matches!(family, Family::DualSense | Family::Ds4) {
+        let mut opts = vec![tr("Não mexer"), tr("Desligada"), tr("Pela bateria")];
+        opts.extend(remap::COLORS.iter().map(|c| tr(c.0)));
+        let mut sel = match p.light {
+            None => 0,
+            Some(Light::Off) => 1,
+            Some(Light::Battery) => 2,
+            Some(Light::Color(c)) => 3 + remap::COLORS.iter().position(|k| k.1 == c).unwrap_or(0),
+        };
+        ui.label(rect(x, y, 120.0, 34.0), "Barra de luz", TEXT2);
+        if ui.select("pp-light", rect(x + 130.0, y, ((w - 138.0) * 0.56).min(220.0).floor(), 34.0), &opts, &mut sel) {
+            p.light = match sel {
+                0 => None,
+                1 => Some(Light::Off),
+                2 => Some(Light::Battery),
+                k => Some(Light::Color(remap::COLORS[k - 3].1)),
+            };
+            changed = true;
+        }
+        y += 44.0;
+        if p.light.is_some() {
+            changed |= ui.check("pp-light-bt", rect(x, y, w.min(360.0), 34.0), "Também pelo Bluetooth", &mut p.light_bt);
+            y += 44.0;
+        }
+    }
 
     // Zonas mortas: valem para o perfil todo.
     ui.title(rect(x, y + 4.0, w, 22.0), "Zona morta");

@@ -937,6 +937,7 @@ pub fn start(background: bool) {
 }
 
 pub fn shutdown() {
+    crate::sys::pads::release_lights();
     crate::pages::share::shutdown();
     with(|a| a.meter.leave(&mut a.cfg));
     with(|a| {
