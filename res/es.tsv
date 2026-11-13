@@ -2256,3 +2256,10 @@ Canto do touchpad	Esquina del touchpad
 Flick stick	Flick stick
 Testar volta	Probar vuelta completa
 Em 3 s, o Prisma move o mouse o valor do flick stick para a direita. Volte ao jogo: a câmera deve dar uma volta inteira e parar onde estava. Se passar, diminua o valor; se faltar, aumente.	En 3 s, Prisma mueve el ratón hacia la derecha el valor de flick stick. Vuelve al juego: la cámara debería dar una vuelta completa y detenerse donde estaba. Si se pasa, reduce el valor; si se queda corta, auméntalo.
+até o fim	hasta el fondo
+Reta	Lineal
+Suave	Suave
+Forte	Fuerte
+Curva do mouse	Curva del ratón
+Hair trigger	Hair trigger
+Hair trigger: um movimento curto aperta e solta, em qualquer ponto do curso. Até o fim é outro botão, para o segundo estágio do gatilho.	Hair trigger: un movimiento corto aprieta y suelta, en cualquier punto del recorrido. Hasta el fondo es otro botón, para la segunda etapa del gatillo.

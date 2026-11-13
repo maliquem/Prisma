@@ -92,6 +92,7 @@ pub fn test_target(app: &mut App, what: &str) {
             }
             "settings" => app.pads.tab = 2,
             "stick" => ed.button = pads::LS,
+            "trigger" => ed.button = remap::LT,
             "gyro" => ed.layer = 1,
             "text" => {
                 app.pads.tab = 1;
@@ -319,6 +320,9 @@ fn buttons(f: Family) -> Vec<(pads::Buttons, String)> {
     let sony = matches!(f, Family::DualSense | Family::Ds4);
     v.push((remap::LT, if sony { "L2" } else { "LT" }.into()));
     v.push((remap::RT, if sony { "R2" } else { "RT" }.into()));
+    for (b, n) in [(remap::LTF, if sony { "L2" } else { "LT" }), (remap::RTF, if sony { "R2" } else { "RT" })] {
+        v.push((b, format!("{n} {}", tr("até o fim"))));
+    }
     for (b, n) in [(remap::LSU, "LS ↑"), (remap::LSD, "LS ↓"), (remap::LSL, "LS ←"), (remap::LSR, "LS →"), (remap::RSU, "RS ↑"), (remap::RSD, "RS ↓"), (remap::RSL, "RS ←"), (remap::RSR, "RS →")] {
         v.push((b, n.into()));
     }
@@ -779,9 +783,9 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
         Some(0)
     } else if ed.button & (pads::RS | remap::RSU | remap::RSD | remap::RSL | remap::RSR) != 0 {
         Some(1)
-    } else if ed.button == remap::LT {
+    } else if ed.button & (remap::LT | remap::LTF) != 0 {
         Some(2)
-    } else if ed.button == remap::RT {
+    } else if ed.button & (remap::RT | remap::RTF) != 0 {
         Some(3)
     } else {
         None
@@ -795,6 +799,24 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
         }
         changed |= zone_row(ui, &mut p.zones, i, "Zona morta", x, y);
         y += 52.0;
+        if i < 2 {
+            // Curva do stick como mouse: vale para o perfil todo.
+            let opts = vec![tr("Reta"), tr("Suave"), tr("Forte")];
+            let mut sel = (p.curve[i].round() as usize).clamp(1, 3) - 1;
+            ui.label(rect(x, y, 140.0, 34.0), "Curva do mouse", TEXT2);
+            if ui.select(&format!("pp-curve{i}"), rect(x + 150.0, y, ((w - 150.0) * 0.56).min(220.0).floor(), 34.0), &opts, &mut sel) {
+                p.curve[i] = sel as f32 + 1.0;
+                changed = true;
+            }
+            y += 44.0;
+        } else {
+            changed |= ui.check(&format!("pp-hair{i}"), rect(x, y, w.min(320.0), 34.0), "Hair trigger", &mut p.hair[i - 2]);
+            y += 40.0;
+            let note = tr("Hair trigger: um movimento curto aperta e solta, em qualquer ponto do curso. Até o fim é outro botão, para o segundo estágio do gatilho.");
+            let nh = crate::ui::gfx::measure(&note, 12.0, Weight::Regular, Some(w)).1.ceil();
+            ui.c.text_wrap(rect(x, y, w, nh), &note, 12.0, MUTED, Weight::Regular);
+            y += nh + 16.0;
+        }
     }
 
     // Botões: clique em um para ver e mudar o que ele faz nesta camada.

@@ -2262,3 +2262,10 @@ Canto do touchpad	Touchpad corner
 Flick stick	Flick stick
 Testar volta	Test full turn
 Em 3 s, o Prisma move o mouse o valor do flick stick para a direita. Volte ao jogo: a câmera deve dar uma volta inteira e parar onde estava. Se passar, diminua o valor; se faltar, aumente.	In 3 s, Prisma moves the mouse to the right by the flick stick value. Return to the game: the camera should make a full turn and stop where it started. If it overshoots, lower the value; if it falls short, raise it.
+até o fim	full pull
+Reta	Linear
+Suave	Smooth
+Forte	Strong
+Curva do mouse	Mouse curve
+Hair trigger	Hair trigger
+Hair trigger: um movimento curto aperta e solta, em qualquer ponto do curso. Até o fim é outro botão, para o segundo estágio do gatilho.	Hair trigger: a short movement presses and releases, at any point of the travel. Full pull is a separate button, for the second stage of the trigger.

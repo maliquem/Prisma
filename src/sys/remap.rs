@@ -33,7 +33,10 @@ pub const TPUL: Buttons = 1 << 34;
 pub const TPUR: Buttons = 1 << 35;
 pub const TPDL: Buttons = 1 << 36;
 pub const TPDR: Buttons = 1 << 37;
-const COUNT: usize = 38;
+/// Gatilho apertado até o fim: o segundo estágio do gatilho.
+pub const LTF: Buttons = 1 << 38;
+pub const RTF: Buttons = 1 << 39;
+const COUNT: usize = 40;
 const ALL: Buttons = (1 << COUNT) - 1;
 
 /// Nome de cada botão no arquivo do perfil.
@@ -44,6 +47,7 @@ pub const NAMES: [(&str, Buttons); COUNT] = [
     ("MUTE", pads::MUTE), ("LT", LT), ("RT", RT), ("LSU", LSU), ("LSD", LSD), ("LSL", LSL), ("LSR", LSR),
     ("RSU", RSU), ("RSD", RSD), ("RSL", RSL), ("RSR", RSR), ("TPU", TPU), ("TPD", TPD), ("TPL", TPL), ("TPR", TPR),
     ("TPTAP", TPTAP), ("TPCL", TPCL), ("TPCR", TPCR), ("TPUL", TPUL), ("TPUR", TPUR), ("TPDL", TPDL), ("TPDR", TPDR),
+    ("LTF", LTF), ("RTF", RTF),
 ];
 
 /// Segurar a partir de 400 ms; tocar é soltar antes disso; duplo é apertar de novo em até 300 ms.
@@ -351,6 +355,10 @@ pub struct Profile {
     pub macros: Vec<Macro>,
     pub texts: Vec<Snip>,
     pub gyro_opt: GyroOpt,
+    /// Curva dos sticks como mouse: o expoente (1 reta, 2 suave, 3 forte).
+    pub curve: [f32; 2],
+    /// Hair trigger em cada gatilho: aperta e solta com um movimento curto, em qualquer ponto.
+    pub hair: [bool; 2],
 }
 
 pub const DESKTOP: &str = "Desktop";
@@ -360,7 +368,7 @@ impl Profile {
     fn empty(name: &str) -> Self {
         let stick = Zone { start: 0.15, end: 0.95 };
         let trig = Zone { start: 0.05, end: 0.95 };
-        Profile { name: name.into(), games: vec![], zones: [stick, stick, trig, trig], layers: vec![Layer { name: "Base".into(), parent: None, ls: None, rs: None, binds: vec![], keys: vec![], gyro: None, touch: None }], strings: vec![], turbo: vec![], turbo_key: TURBO_KEY, macros: vec![], texts: vec![], gyro_opt: GyroOpt::default() }
+        Profile { name: name.into(), games: vec![], zones: [stick, stick, trig, trig], layers: vec![Layer { name: "Base".into(), parent: None, ls: None, rs: None, binds: vec![], keys: vec![], gyro: None, touch: None }], strings: vec![], turbo: vec![], turbo_key: TURBO_KEY, macros: vec![], texts: vec![], gyro_opt: GyroOpt::default(), curve: [2.0; 2], hair: [false; 2] }
     }
 
     /// Base: nada mapeado, o jogo lê o controle como ele é.
@@ -518,6 +526,16 @@ impl Profile {
             let _ = writeln!(s, "zone {n} {} {}", z.start, z.end);
         }
         let _ = writeln!(s, "turbokey {}", mask_text(self.turbo_key));
+        for (c, n) in self.curve.iter().zip(["ls", "rs"]) {
+            if *c != 2.0 {
+                let _ = writeln!(s, "curve {n} {c}");
+            }
+        }
+        for (h, n) in self.hair.iter().zip(["lt", "rt"]) {
+            if *h {
+                let _ = writeln!(s, "hair {n}");
+            }
+        }
         let o = self.gyro_opt;
         if o != GyroOpt::default() {
             let flags: Vec<&str> = [(o.inv_x, "invx"), (o.inv_y, "invy"), (o.smooth, "smooth")].iter().filter(|f| f.0).map(|f| f.1).collect();
@@ -611,6 +629,11 @@ impl Profile {
                     }
                     p.turbo.push(Turbo { button, speed, delay, on });
                 }
+                "curve" => {
+                    let (k, v) = rest.split_once(' ')?;
+                    p.curve[["ls", "rs"].iter().position(|n| *n == k)?] = num(v)?.clamp(1.0, 3.0);
+                }
+                "hair" => p.hair[["lt", "rt"].iter().position(|n| *n == rest)?] = true,
                 "zone" => {
                     let mut it = rest.split(' ');
                     let k = it.next()?;
@@ -960,6 +983,9 @@ pub struct Engine {
     /// que ainda falta do flick, em pixels, com o tempo que ainda tem.
     flick: [Option<f32>; 2],
     flick_go: [(f32, f32); 2],
+    /// Hair trigger: se o gatilho está apertado, e o ponto mais fundo (apertado) ou mais raso
+    /// (solto) desde a última troca.
+    hair: [(bool, f32); 2],
     /// Jogo com anti-cheat em foco: turbo vira Pressionar.
     pub safe: bool,
 }
@@ -986,6 +1012,7 @@ impl Default for Engine {
             half: 0,
             flick: [None; 2],
             flick_go: [(0.0, 0.0); 2],
+            hair: [(false, 0.0); 2],
         }
     }
 }
@@ -1013,6 +1040,24 @@ fn stick(p: &Profile, layer: u8, right: bool) -> Stick {
         l = ly.parent;
     }
     Stick::Buttons
+}
+
+/// Hair trigger: aperta quando o gatilho desce 4% do ponto mais raso, solta quando sobe 4% do
+/// mais fundo; solto de todo sempre solta.
+fn hair(s: &mut (bool, f32), v: f32) -> bool {
+    const STEP: f32 = 0.04;
+    if s.0 {
+        s.1 = s.1.max(v);
+        if v <= 0.0 || v < s.1 - STEP {
+            *s = (false, v);
+        }
+    } else {
+        s.1 = s.1.min(v);
+        if v > s.1 + STEP {
+            *s = (true, v);
+        }
+    }
+    s.0
 }
 
 /// Stick virtual no touchpad: o desvio do dedo desde onde encostou, cheio a um quarto da largura;
@@ -1129,7 +1174,15 @@ impl Engine {
         let (lt, rt) = (linear(inp.lt, p.zones[2]), linear(inp.rt, p.zones[3]));
         // Com folga: liga em 0,5 e só desliga abaixo de 0,4, para não piscar na borda.
         let on = |v: f32, bit: Buttons| if v > 0.5 || (v > 0.4 && prev & bit != 0) { bit } else { 0 };
-        let cur = (inp.buttons & 0x1ffff) | gest | on(lt, LT) | on(rt, RT) | on(ly, LSU) | on(-ly, LSD) | on(-lx, LSL) | on(lx, LSR) | on(ry, RSU) | on(-ry, RSD) | on(-rx, RSL) | on(rx, RSR);
+        let mut trig = [on(lt, LT), on(rt, RT)];
+        for (i, v) in [lt, rt].into_iter().enumerate() {
+            if p.hair[i] {
+                trig[i] = if hair(&mut self.hair[i], v) { [LT, RT][i] } else { 0 };
+            }
+        }
+        // Até o fim: liga em 0,95 e só desliga abaixo de 0,9.
+        let full = |v: f32, bit: Buttons| if v > 0.95 || (v > 0.9 && prev & bit != 0) { bit } else { 0 };
+        let cur = (inp.buttons & 0x1ffff) | gest | trig[0] | trig[1] | full(lt, LTF) | full(rt, RTF) | on(ly, LSU) | on(-ly, LSD) | on(-lx, LSL) | on(lx, LSR) | on(ry, RSU) | on(-ry, RSD) | on(-rx, RSL) | on(rx, RSR);
         let changed = cur ^ prev;
         // Soltar antes de apertar: uma troca de botões no mesmo relatório solta a tecla velha antes.
         for i in 0..COUNT {
@@ -1184,8 +1237,9 @@ impl Engine {
             match stick(p, layer, right) {
                 Stick::Mouse(v) => {
                     // Curva: devagar perto do centro, rápido no fim.
-                    self.mx += x * x.abs() * v * dt;
-                    self.my -= y * y.abs() * v * dt;
+                    let c = p.curve[usize::from(right)];
+                    self.mx += x * x.abs().powf(c - 1.0) * v * dt;
+                    self.my -= y * y.abs().powf(c - 1.0) * v * dt;
                 }
                 Stick::Scroll(v) => self.wheel += y * v * 120.0 * dt,
                 Stick::Flick(px) => {
@@ -2114,6 +2168,31 @@ mod tests {
         let text = p.to_text();
         assert!(text.contains("gyro 1 mouse 10"));
         assert_eq!(Profile::parse(&text).unwrap().layers[1].gyro, Some(Motion::Mouse(10.0)));
+    }
+
+    #[test]
+    fn triggers_hair_and_full_pull() {
+        let t0 = Instant::now();
+        let mut p = Profile::base();
+        p.zones[2] = Zone { start: 0.0, end: 1.0 };
+        p.hair[0] = true;
+        one(&mut p.layers[0], LT, When::Press, Out::Key(0x41, 0));
+        one(&mut p.layers[0], LTF, When::Press, Out::Key(0x42, 0));
+        let mut e = Engine::default();
+        let f = |lt: f32| Input { lt, ..Default::default() };
+        let mut run = |v: f32, ms: u64| e.step(&p, &f(v), at(ms, t0));
+        run(0.0, 0);
+        // Hair: 10% já aperta; voltar de 50% para 44% solta; descer de novo aperta.
+        assert!(run(0.1, 10).contains(&Act::Down(Out::Key(0x41, 0))));
+        run(0.5, 20);
+        assert!(run(0.44, 30).contains(&Act::Up(Out::Key(0x41, 0))));
+        assert!(run(0.5, 40).contains(&Act::Down(Out::Key(0x41, 0))));
+        // Até o fim: o segundo estágio.
+        assert!(run(1.0, 50).contains(&Act::Down(Out::Key(0x42, 0))));
+        assert!(run(0.85, 60).contains(&Act::Up(Out::Key(0x42, 0))));
+        p.curve[1] = 3.0;
+        let q = Profile::parse(&p.to_text()).unwrap();
+        assert_eq!((q.hair, q.curve), ([true, false], [2.0, 3.0]));
     }
 
     #[test]

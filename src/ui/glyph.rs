@@ -45,10 +45,10 @@ fn face_text(s: Style, bit: pads::Buttons) -> &'static str {
 
 /// Texto dentro dos ombros, gatilhos e sticks.
 fn side_text(s: Style, bit: pads::Buttons) -> &'static str {
-    let left = matches!(bit, pads::LB | remap::LT | pads::LS);
+    let left = matches!(bit, pads::LB | remap::LT | remap::LTF | pads::LS);
     let k = match bit {
         pads::LB | pads::RB => 0,
-        remap::LT | remap::RT => 1,
+        remap::LT | remap::RT | remap::LTF | remap::RTF => 1,
         _ => 2,
     };
     let t: [[&str; 2]; 3] = match s {
@@ -66,7 +66,7 @@ pub const DPAD_ANY: pads::Buttons = pads::UP | pads::DOWN | pads::LEFT | pads::R
 /// Largura do ícone de `bit` com altura `h`.
 pub fn width(bit: pads::Buttons, h: f32) -> f32 {
     match bit {
-        pads::LB | pads::RB | remap::LT | remap::RT | pads::PAD => h * 1.7,
+        pads::LB | pads::RB | remap::LT | remap::RT | remap::LTF | remap::RTF | pads::PAD => h * 1.7,
         remap::LSU | remap::LSD | remap::LSL | remap::LSR | remap::RSU | remap::RSD | remap::RSL | remap::RSR => h * 1.6,
         remap::TPU | remap::TPD | remap::TPL | remap::TPR | remap::TPTAP | remap::TPCL | remap::TPCR | remap::TPUL | remap::TPUR | remap::TPDL | remap::TPDR => h * 1.7,
         _ => h,
@@ -92,11 +92,16 @@ pub fn draw(c: &Canvas, x: f32, cy: f32, h: f32, s: Style, bit: pads::Buttons, c
                 label(face_text(s, bit), h * 0.52, rect(x, cy - r, h, h));
             }
         }
-        pads::LB | pads::RB | remap::LT | remap::RT => {
+        pads::LB | pads::RB | remap::LT | remap::RT | remap::LTF | remap::RTF => {
             // Ombro reto; gatilho mais redondo, como a peça.
             let rad = if matches!(bit, pads::LB | pads::RB) { h * 0.22 } else { h * 0.48 };
             c.round_line(rect(x, cy - r, w, h), rad, col, sw);
-            label(side_text(s, bit), h * 0.46, rect(x, cy - r, w, h));
+            let up = if matches!(bit, remap::LTF | remap::RTF) { r * 0.15 } else { 0.0 };
+            label(side_text(s, bit), h * 0.46, rect(x, cy - r - up, w, h));
+            // Até o fim: um traço embaixo do nome, o gatilho no fundo.
+            if matches!(bit, remap::LTF | remap::RTF) {
+                c.line(x + w * 0.3, cy + r * 0.62, x + w * 0.7, cy + r * 0.62, col, sw * 1.6);
+            }
         }
         pads::LS | pads::RS => stick(c, cx, cy, r, s, bit, col, sw),
         pads::UP | pads::RIGHT | pads::DOWN | pads::LEFT => {

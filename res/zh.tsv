@@ -2256,3 +2256,10 @@ Canto do touchpad	触摸板角落
 Flick stick	Flick stick
 Testar volta	测试整圈转动
 Em 3 s, o Prisma move o mouse o valor do flick stick para a direita. Volte ao jogo: a câmera deve dar uma volta inteira e parar onde estava. Se passar, diminua o valor; se faltar, aumente.	3 秒后，Prisma 会将鼠标向右移动 flick stick 的数值。请回到游戏：镜头应转满一整圈并停在原位。如果转过头，请调小该数值；如果不够，请调大。
+até o fim	到底
+Reta	线性
+Suave	平滑
+Forte	强
+Curva do mouse	鼠标曲线
+Hair trigger	Hair trigger
+Hair trigger: um movimento curto aperta e solta, em qualquer ponto do curso. Até o fim é outro botão, para o segundo estágio do gatilho.	Hair trigger：短促的一动即可按下并松开，行程中的任何位置都行。“到底”是另一个按键，对应扳机的第二段。
