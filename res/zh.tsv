@@ -2232,3 +2232,13 @@ Abre sozinho com	自动启用于
 Fora dos jogos	游戏之外
 Jogos sem perfil próprio	没有专属配置的游戏
 Nenhum programa	无程序
+Gyro e touchpad	陀螺仪和触摸板
+Pelo Bluetooth, o controle só manda o gyro e o touchpad no modo completo, que outro programa precisa ligar. No cabo USB eles aparecem aqui.	通过蓝牙连接时，手柄只会在完整模式下发送陀螺仪和触摸板数据，而该模式需要其他程序来开启。通过 USB 线连接时，它们会显示在这里。
+Calibrar	校准
+Deixe o controle parado na mesa.	请将手柄静止放在桌面上。
+Calibrado: o desvio parado sai de toda leitura.	已校准：静止漂移会从每次读数中扣除。
+Ainda sem calibrar: deixe o controle parado por 1 s.	尚未校准：请让手柄静止 1 s。
+Inclinar	俯仰
+Virar	偏航
+Girar	翻滚
+Toque no touchpad	触摸触摸板

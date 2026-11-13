@@ -85,6 +85,62 @@ pub struct Input {
     /// Gatilhos de 0 a 1.
     pub lt: f32,
     pub rt: f32,
+    /// Gyro em graus por segundo (inclinar, virar, girar), já sem o desvio parado, e acelerômetro
+    /// em g. Só DualSense e DualShock 4 no relatório completo (USB, ou Bluetooth com o modo
+    /// completo ligado por outro programa); `motion` diz se veio.
+    pub gyro: [f32; 3],
+    pub accel: [f32; 3],
+    pub motion: bool,
+    /// Touchpad: até dois dedos, de 0 a 1 (x da esquerda, y de cima).
+    pub touch: [Option<(f32, f32)>; 2],
+}
+
+/// Calibração do gyro: com o controle parado (pouca variação por 1 s), a média vira o desvio que
+/// sai de toda leitura. `ask` pede uma calibração já: aceita mais tremor e espera 1,5 s.
+#[derive(Clone, Copy, Default, PartialEq, Debug)]
+pub struct GyroCal {
+    pub bias: [f32; 3],
+    pub ask: bool,
+    /// Já calibrou pelo menos uma vez desde que o controle ligou.
+    pub done: bool,
+    sum: [f32; 3],
+    lo: [f32; 3],
+    hi: [f32; 3],
+    n: u32,
+    start: Option<Instant>,
+}
+
+impl GyroCal {
+    /// Recebe o gyro cru (graus por segundo) e devolve sem o desvio.
+    pub fn feed(&mut self, g: [f32; 3], now: Instant) -> [f32; 3] {
+        let (range, need) = if self.ask { (6.0, Duration::from_millis(1500)) } else { (3.0, Duration::from_secs(1)) };
+        if self.n == 0 {
+            (self.lo, self.hi, self.sum, self.start) = (g, g, [0.0; 3], Some(now));
+        }
+        for i in 0..3 {
+            self.lo[i] = self.lo[i].min(g[i]);
+            self.hi[i] = self.hi[i].max(g[i]);
+            self.sum[i] += g[i];
+        }
+        self.n += 1;
+        let mean = self.sum.map(|v| v / self.n as f32);
+        // Girando devagar e sempre igual não é desvio: o desvio de um controle fica abaixo de 15 °/s.
+        let still = (0..3).all(|i| self.hi[i] - self.lo[i] < range && mean[i].abs() < 15.0);
+        if !still {
+            self.n = 0;
+        } else if self.start.is_some_and(|t| now.saturating_duration_since(t) >= need) {
+            self.bias = mean;
+            (self.ask, self.done, self.n) = (false, true, 0);
+        }
+        [g[0] - self.bias[0], g[1] - self.bias[1], g[2] - self.bias[2]]
+    }
+}
+
+/// Pedido da tela: calibrar o gyro de todos os controles na próxima vez que ficarem parados.
+static CAL_ASK: AtomicBool = AtomicBool::new(false);
+
+pub fn calibrate_gyro() {
+    CAL_ASK.store(true, Ordering::Relaxed);
 }
 
 /// Intervalo entre relatórios, medido nos últimos 2 segundos.
@@ -116,6 +172,7 @@ pub struct Pad {
     pub generic_buttons: u8,
     low_warned: bool,
     jitter_warned: bool,
+    pub gyro_cal: GyroCal,
 }
 
 pub enum Event {
@@ -200,8 +257,8 @@ pub fn fake(kind: &str) {
         "ds4" => Family::Ds4,
         _ => Family::Xbox,
     };
-    let input = Input { buttons: A | RB, lt: 0.6, lx: 0.6, ly: 0.4, ..Default::default() };
-    let pad = Pad { key: "test".into(), name: nice_name(family, ""), family, link: Link::Usb, vid: 0, pid: 0, battery: Battery::Percent { pct: 82, charging: false }, input, rate: None, generic_buttons: 0, low_warned: false, jitter_warned: false };
+    let input = Input { buttons: A | RB, lt: 0.6, lx: 0.6, ly: 0.4, gyro: [24.0, -90.0, 6.0], motion: family != Family::Xbox, touch: [Some((0.3, 0.45)), None], ..Default::default() };
+    let pad = Pad { key: "test".into(), name: nice_name(family, ""), family, link: Link::Usb, vid: 0, pid: 0, battery: Battery::Percent { pct: 82, charging: false }, input, rate: None, generic_buttons: 0, low_warned: false, jitter_warned: false, gyro_cal: GyroCal::default() };
     *FAKE.lock().unwrap() = Some(pad);
 }
 
@@ -598,6 +655,28 @@ fn sony_buttons(b0: u8, b1: u8, b2: u8) -> u32 {
 /// Posições da bateria e fórmula como o driver do Linux (hid-playstation).
 pub fn sony(f: Family, link: Link, r: &[u8]) -> Option<(Input, Option<Battery>)> {
     let get = |i: usize| r.get(i).copied();
+    let le = |i: usize| -> Option<f32> { Some(i16::from_le_bytes([get(i)?, get(i + 1)?]) as f32) };
+    // Relatório completo: gyro, acelerômetro e o primeiro relatório do touchpad. Posições como o
+    // driver do Linux (hid-playstation). shortcut: escala nominal (±2000 °/s e 8192 por g), sem a
+    // calibração de fábrica do controle (ler ela pede um relatório de recurso); medir com o
+    // controle na mão se 90° viram 90°.
+    let full = |mut i: Input, o: usize, ds: bool| -> Option<Input> {
+        let (g, a, t, h) = if ds { (o + 15, o + 21, o + 32, 1080.0) } else { (o + 12, o + 18, o + 34, 942.0) };
+        i.gyro = [le(g)? / 16.384, le(g + 2)? / 16.384, le(g + 4)? / 16.384];
+        i.accel = [le(a)? / 8192.0, le(a + 2)? / 8192.0, le(a + 4)? / 8192.0];
+        i.motion = true;
+        for f in 0..2 {
+            let p = t + f * 4;
+            let (c, b1, b2, b3) = (get(p)?, get(p + 1)? as u16, get(p + 2)? as u16, get(p + 3)? as u16);
+            // Bit de cima ligado: dedo fora.
+            if c & 0x80 == 0 {
+                let x = b1 | (b2 & 0x0f) << 8;
+                let y = (b2 >> 4) | b3 << 4;
+                i.touch[f] = Some(((x as f32 / 1920.0).min(1.0), (y as f32 / h).min(1.0)));
+            }
+        }
+        Some(i)
+    };
     let at = |o: usize, ds: bool| -> Option<Input> {
         // DualSense no USB e no modo completo: gatilhos logo depois dos analógicos, botões 3 bytes adiante.
         let (bt, tt) = if ds { (o + 7, o + 4) } else { (o + 4, o + 7) };
@@ -611,14 +690,20 @@ pub fn sony(f: Family, link: Link, r: &[u8]) -> Option<(Input, Option<Battery>)>
             buttons: sony_buttons(get(bt)?, get(bt + 1)?, get(bt + 2)? & if ds { 0xff } else { 0x03 }),
             lt: get(tt)? as f32 / 255.0,
             rt: get(tt + 1)? as f32 / 255.0,
+            ..Default::default()
         })
     };
+    // Sem o resto do relatório completo, fica a entrada sem gyro.
+    let at_full = |o: usize, ds: bool| -> Option<Input> {
+        let i = at(o, ds)?;
+        Some(full(i, o, ds).unwrap_or(i))
+    };
     match (f, link, *r.first()?) {
-        (Family::DualSense, Link::Usb, 0x01) => Some((at(1, true)?, Some(ds_battery(get(53)?)))),
-        (Family::DualSense, _, 0x31) => Some((at(2, true)?, Some(ds_battery(get(54)?)))),
+        (Family::DualSense, Link::Usb, 0x01) => Some((at_full(1, true)?, Some(ds_battery(get(53)?)))),
+        (Family::DualSense, _, 0x31) => Some((at_full(2, true)?, Some(ds_battery(get(54)?)))),
         (Family::DualSense | Family::Ds4, Link::Bluetooth, 0x01) => Some((at(1, false)?, None)),
-        (Family::Ds4, Link::Usb, 0x01) => Some((at(1, false)?, Some(ds4_battery(get(30)?)))),
-        (Family::Ds4, _, 0x11) => Some((at(3, false)?, Some(ds4_battery(get(32)?)))),
+        (Family::Ds4, Link::Usb, 0x01) => Some((at_full(1, false)?, Some(ds4_battery(get(30)?)))),
+        (Family::Ds4, _, 0x11) => Some((at_full(3, false)?, Some(ds4_battery(get(32)?)))),
         _ => None,
     }
 }
@@ -704,7 +789,7 @@ unsafe fn read_loop(d: Dev) {
                 rate: None,
                 generic_buttons: generic.as_ref().map_or(0, |g| g.1),
                 low_warned: false,
-                jitter_warned: false,
+                jitter_warned: false, gyro_cal: GyroCal::default(),
             });
             emit(Event::Connected { name: name.clone(), link });
         } else {
@@ -722,6 +807,7 @@ unsafe fn read_loop(d: Dev) {
     let mut gaps: Vec<u32> = Vec::with_capacity(2048);
     let (mut prev, mut tick) = (Instant::now(), Instant::now());
     let mut ov = OVERLAPPED { hEvent: ev, ..Default::default() };
+    let mut cal = GyroCal::default();
     'read: loop {
         let mut got = 0u32;
         if let Err(e) = ReadFile(h, Some(&mut buf[..len]), None, Some(&mut ov)) {
@@ -762,10 +848,20 @@ unsafe fn read_loop(d: Dev) {
             }
             continue;
         }
-        let parsed = match &generic {
+        let mut parsed = match &generic {
             Some((axes, _)) => Some((generic_input(pre, axes, &mut buf[..got as usize]), None)),
             None => sony(fam, link, &buf[..got as usize]),
         };
+        if let Some((inp, _)) = parsed.as_mut().filter(|p| p.0.motion) {
+            if CAL_ASK.load(Ordering::Relaxed) {
+                cal.ask = true;
+            }
+            inp.gyro = cal.feed(inp.gyro, now);
+            // Pedido atendido por este controle; um segundo controle que ainda mede segue com o dele.
+            if !cal.ask {
+                CAL_ASK.store(false, Ordering::Relaxed);
+            }
+        }
         if !shown {
             show(true);
             shown = true;
@@ -773,6 +869,7 @@ unsafe fn read_loop(d: Dev) {
         let fed = parsed.as_ref().map(|x| x.0);
         let mut pads = PADS.lock().unwrap();
         let Some(p) = pads.iter_mut().find(|p| p.key == d.path) else { break };
+        p.gyro_cal = cal;
         if let Some((inp, bat)) = parsed {
             p.input = inp;
             if let Some(b) = bat {
@@ -863,7 +960,7 @@ fn xinput_input(g: &XINPUT_GAMEPAD) -> Input {
         }
     }
     let s = |v: i16| (v as f32 / 32767.0).clamp(-1.0, 1.0);
-    Input { buttons: b, lx: s(g.sThumbLX), ly: s(g.sThumbLY), rx: s(g.sThumbRX), ry: s(g.sThumbRY), lt: g.bLeftTrigger as f32 / 255.0, rt: g.bRightTrigger as f32 / 255.0 }
+    Input { buttons: b, lx: s(g.sThumbLX), ly: s(g.sThumbLY), rx: s(g.sThumbRX), ry: s(g.sThumbRY), lt: g.bLeftTrigger as f32 / 255.0, rt: g.bRightTrigger as f32 / 255.0, ..Default::default() }
 }
 
 unsafe fn poll_xinput() {
@@ -933,7 +1030,7 @@ unsafe fn poll_xinput() {
                     rate,
                     generic_buttons: 0,
                     low_warned: false,
-                    jitter_warned: false,
+                    jitter_warned: false, gyro_cal: GyroCal::default(),
                 });
                 vec![Event::Connected { name, link }]
             };
@@ -1056,6 +1153,45 @@ mod tests {
     }
 
     #[test]
+    fn dualsense_usb_motion_and_touch() {
+        let mut r = [0u8; 64];
+        r[0] = 1;
+        r[8] = 0x08;
+        // Gyro (o + 15 = 16): virar a 100 °/s; acelerômetro (o + 21 = 22): 1 g no eixo y.
+        r[18..20].copy_from_slice(&1638i16.to_le_bytes());
+        r[24..26].copy_from_slice(&8192i16.to_le_bytes());
+        // Touchpad (o + 32 = 33): dedo 1 no meio (960, 540), dedo 2 fora.
+        r[33..37].copy_from_slice(&[0x01, 0xc0, 0xc3, 0x21]);
+        r[37] = 0x80;
+        let (inp, _) = sony(Family::DualSense, Link::Usb, &r).unwrap();
+        assert!(inp.motion && (inp.gyro[1] - 100.0).abs() < 0.1 && inp.gyro[0] == 0.0);
+        assert!((inp.accel[1] - 1.0).abs() < 1e-3);
+        let (x, y) = inp.touch[0].unwrap();
+        assert!((x - 0.5).abs() < 0.01 && (y - 0.5).abs() < 0.01, "{x} {y}");
+        assert_eq!(inp.touch[1], None);
+        // Modo simples do Bluetooth: sem gyro.
+        assert!(!sony(Family::Ds4, Link::Bluetooth, &r[..10]).unwrap().0.motion);
+    }
+
+    #[test]
+    fn gyro_calibrates_when_still() {
+        let t0 = Instant::now();
+        let mut c = GyroCal::default();
+        // Parado com desvio de 1,5 °/s e um tremor pequeno: depois de 1 s o desvio sai.
+        for k in 0..=110 {
+            let wob = if k % 2 == 0 { 0.4 } else { -0.4 };
+            c.feed([0.0, 1.5 + wob, 0.0], t0 + Duration::from_millis(k * 10));
+        }
+        assert!(c.done && (c.bias[1] - 1.5).abs() < 0.05, "{:?}", c.bias);
+        // Movendo de verdade: o desvio não muda.
+        for k in 0..200 {
+            c.feed([0.0, (k as f32) * 2.0, 0.0], t0 + Duration::from_millis(1110 + k * 10));
+        }
+        assert!((c.bias[1] - 1.5).abs() < 0.05);
+        assert!((c.feed([0.0, 11.5, 0.0], t0 + Duration::from_secs(5))[1] - 10.0).abs() < 0.05);
+    }
+
+    #[test]
     fn short_report_is_ignored() {
         assert!(sony(Family::DualSense, Link::Usb, &[1, 2, 3]).is_none());
         assert!(sony(Family::Generic, Link::Usb, &[1; 64]).is_none());
@@ -1109,7 +1245,7 @@ mod tests {
             rate: None,
             generic_buttons: 0,
             low_warned: false,
-            jitter_warned: false,
+            jitter_warned: false, gyro_cal: GyroCal::default(),
         };
         assert_eq!(check_warnings(&mut p).len(), 1);
         assert_eq!(check_warnings(&mut p).len(), 0);

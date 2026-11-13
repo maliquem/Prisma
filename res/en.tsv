@@ -2238,3 +2238,13 @@ Abre sozinho com	Opens with
 Fora dos jogos	Outside games
 Jogos sem perfil próprio	Games without their own profile
 Nenhum programa	No program
+Gyro e touchpad	Gyro and touchpad
+Pelo Bluetooth, o controle só manda o gyro e o touchpad no modo completo, que outro programa precisa ligar. No cabo USB eles aparecem aqui.	Over Bluetooth, the controller only sends the gyro and touchpad in full mode, which another program has to turn on. Over a USB cable they show up here.
+Calibrar	Calibrate
+Deixe o controle parado na mesa.	Leave the controller still on the table.
+Calibrado: o desvio parado sai de toda leitura.	Calibrated: the drift at rest is removed from every reading.
+Ainda sem calibrar: deixe o controle parado por 1 s.	Not calibrated yet: leave the controller still for 1 s.
+Inclinar	Tilt
+Virar	Turn
+Girar	Roll
+Toque no touchpad	Touch the touchpad

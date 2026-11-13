@@ -268,6 +268,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
                     y = live.bottom() + 12.0;
                 } else {
                     y = draw_test(ui, app, p, rect(x, y, col, 0.0));
+                    y = draw_motion(ui, p, rect(x, y, col, 0.0));
                 }
                 y = draw_changes(ui, app, p.family, rect(x, y, col, 0.0));
                 ui.end_scroll();
@@ -636,6 +637,68 @@ fn draw_test(ui: &mut Ui, app: &mut App, p: &Pad, at: Rect) -> f32 {
     }
     if clear {
         app.pads.test = Test { key: p.key.clone(), prev: app.pads.test.prev, ..Default::default() };
+    }
+    r.bottom() + 12.0
+}
+
+/// Cartão do gyro e do touchpad (DualSense e DualShock 4): os três giros ao vivo, a calibração e
+/// os dedos no touchpad.
+fn draw_motion(ui: &mut Ui, p: &Pad, at: Rect) -> f32 {
+    let tr = |s: &str| crate::i18n::tr(s).into_owned();
+    if !matches!(p.family, Family::DualSense | Family::Ds4) {
+        return at.y;
+    }
+    let x = at.x + 16.0;
+    let w = at.w - 32.0;
+    let i = p.input;
+    if !i.motion {
+        // Modo simples do Bluetooth: o relatório não traz gyro nem touchpad.
+        let r = rect(at.x, at.y, at.w, 92.0);
+        ui.card(r);
+        ui.title(rect(x, r.y + 12.0, w, 22.0), "Gyro e touchpad");
+        ui.c.text_wrap(rect(x, r.y + 42.0, w, 40.0), &tr("Pelo Bluetooth, o controle só manda o gyro e o touchpad no modo completo, que outro programa precisa ligar. No cabo USB eles aparecem aqui."), 12.0, MUTED, Weight::Regular);
+        return r.bottom() + 12.0;
+    }
+    let pad_h = (w * 0.45).floor();
+    let r = rect(at.x, at.y, at.w, 72.0 + 3.0 * 26.0 + 12.0 + pad_h + 16.0);
+    ui.card(r);
+    ui.title(rect(x, r.y + 12.0, w - 124.0, 22.0), "Gyro e touchpad");
+    let c = p.gyro_cal;
+    if ui.button_ex("pad-gyro-cal", rect(r.right() - 132.0, r.y + 8.0, 116.0, 32.0), "Calibrar", false, !c.ask) {
+        pads::calibrate_gyro();
+    }
+    let state = if c.ask {
+        tr("Deixe o controle parado na mesa.")
+    } else if c.done {
+        tr("Calibrado: o desvio parado sai de toda leitura.")
+    } else {
+        tr("Ainda sem calibrar: deixe o controle parado por 1 s.")
+    };
+    ui.c.text_fit(rect(x, r.y + 44.0, w, 20.0), &state, 12.0, if c.ask { WARN } else { MUTED }, Align::Left, Weight::Regular);
+    // Barras de -360 a 360 °/s, com o zero no meio.
+    let mut y = r.y + 72.0;
+    let lw = (w * 0.3).floor();
+    for (k, name) in ["Inclinar", "Virar", "Girar"].iter().enumerate() {
+        let v = i.gyro[k];
+        ui.c.text_fit(rect(x, y, lw, 20.0), &tr(name), 12.0, TEXT2, Align::Left, Weight::Regular);
+        let bar = rect(x + lw + 8.0, y + 6.0, w - lw - 8.0 - 76.0, 8.0);
+        ui.c.round(bar, 4.0, CARD2);
+        let mid = bar.x + bar.w / 2.0;
+        let len = (v / 360.0).clamp(-1.0, 1.0) * bar.w / 2.0;
+        ui.c.round(rect(mid.min(mid + len), bar.y, len.abs().max(2.0), bar.h), 4.0, ACCENT);
+        ui.c.text_raw(rect(bar.right() + 8.0, y, 68.0, 20.0), &format!("{v:.0} °/s"), 12.0, MUTED, Align::Right, Weight::Regular);
+        y += 26.0;
+    }
+    // Touchpad: o retângulo com um ponto por dedo.
+    let tp = rect(x, y + 12.0, w, pad_h);
+    ui.c.round_line(tp, 8.0, BORDER2, 1.5);
+    for (f, t) in i.touch.iter().enumerate() {
+        if let Some((tx, ty)) = t {
+            ui.c.circle(tp.x + tx * tp.w, tp.y + ty * tp.h, if f == 0 { 7.0 } else { 6.0 }, ACCENT);
+        }
+    }
+    if i.touch.iter().all(Option::is_none) {
+        ui.c.text_fit(tp, &tr("Toque no touchpad"), 12.0, MUTED, Align::Center, Weight::Regular);
     }
     r.bottom() + 12.0
 }
