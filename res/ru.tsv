@@ -2163,3 +2163,6 @@ Clique	Клик
 Esconder	Скрыть
 Fugir do cursor	Уходить от курсора
 Quando o cursor de texto fica atrás do teclado, ele sobe para o alto da tela, e desce de novo quando o cursor sai dali.	Когда текстовый курсор оказывается за клавиатурой, она поднимается в верх экрана и опускается обратно, когда курсор уходит оттуда.
+Repetir ao segurar	Повтор при удержании
+Segurar qualquer botão repete a tecla, como num teclado, depois da espera. Desligado, só apagar e as setas repetem.	Удержание любой кнопки повторяет клавишу, как на клавиатуре, после задержки. Если выключено, повторяются только удаление и стрелки.
+Espera para repetir	Задержка повтора

@@ -2169,3 +2169,6 @@ Clique	Click
 Esconder	Hide
 Fugir do cursor	Dodge the cursor
 Quando o cursor de texto fica atrás do teclado, ele sobe para o alto da tela, e desce de novo quando o cursor sai dali.	When the text cursor is behind the keyboard, it moves to the top of the screen, and back down when the cursor leaves that spot.
+Repetir ao segurar	Repeat while held
+Segurar qualquer botão repete a tecla, como num teclado, depois da espera. Desligado, só apagar e as setas repetem.	Holding any button repeats its key, like a keyboard, after the delay. When off, only backspace and the arrows repeat.
+Espera para repetir	Delay before repeating

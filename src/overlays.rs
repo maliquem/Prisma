@@ -614,7 +614,11 @@ impl Keyboard {
                     (vec![pads::START], "Enter".into()),
                     (vec![crate::ui::glyph::DPAD_ANY], t(if self.two { "digita no círculo da direita; com o stick direito solto, setas" } else { "setas" })),
                 ],
-                vec![(vec![rt], t("maiúsculas")), (vec![lt], t("números")), (vec![lt, rt], t("acentos")), (vec![pads::BACK], t("fecha"))],
+                if self.two {
+                    vec![(vec![rt], t("maiúsculas")), (vec![lt], t("acentos")), (vec![pads::BACK], t("fecha"))]
+                } else {
+                    vec![(vec![rt], t("maiúsculas")), (vec![lt], t("números")), (vec![lt, rt], t("acentos")), (vec![pads::BACK], t("fecha"))]
+                },
             ];
             self.arrow = crate::sys::osk::stick();
             unsafe {

@@ -2,7 +2,7 @@
 //! digita a letra do grupo que está na mesma posição do botão. As letras vão como texto (Unicode):
 //! não dependem do idioma do teclado do Windows.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -58,9 +58,8 @@ pub const ACCENTS: [[char; 4]; 8] = [
 pub const FACE: [u32; 4] = [pads::X, pads::Y, pads::B, pads::A];
 /// Com os dois sticks, o direcional digita no círculo do stick direito, na mesma ordem.
 pub const DPAD: [u32; 4] = [pads::LEFT, pads::UP, pads::RIGHT, pads::DOWN];
-/// Teclas que repetem enquanto o botão fica apertado: apagar e as setas.
+/// Apagar e as setas: repetem enquanto o botão fica apertado mesmo com "Repetir ao segurar" desligado.
 const REPEATS: [(u32, u16); 5] = [(pads::LB, 0x08), (pads::UP, 0x26), (pads::DOWN, 0x28), (pads::LEFT, 0x25), (pads::RIGHT, 0x27)];
-const REPEAT_AFTER: Duration = Duration::from_millis(400);
 const REPEAT_EVERY: Duration = Duration::from_millis(60);
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -75,6 +74,7 @@ pub struct View {
     pub open: bool,
     pub petal: Option<usize>,
     /// Como no Steam: RT apertado, maiúsculas (`shift`); LT, números e símbolos (`sym`). Os dois: acentos.
+    /// Com os dois sticks os números já têm o círculo deles, e LT sozinho dá os acentos.
     pub shift: bool,
     pub sym: bool,
     /// Dois sticks: um círculo para as letras e outro para os números e símbolos.
@@ -112,7 +112,11 @@ struct Osk {
     /// Só o controle que mexeu primeiro digita: dois controles misturariam os botões.
     pad: Option<String>,
     prev: u32,
-    repeat: Option<(u32, u16, Instant)>,
+    /// Botão segurado, a tecla que ele digitou e quando ela sai de novo.
+    repeat: Option<(u32, Key, Instant)>,
+    /// "Repetir ao segurar": toda tecla repete (senão, só apagar e as setas), depois de `after`.
+    repeat_all: bool,
+    after: Duration,
     /// Posição dos analógicos (esquerdo, direito), para as setas. Fica fora do `View`: mudar não
     /// pede aviso à janela, que lê as setas no próprio relógio dela.
     stick: [(f32, f32); 2],
@@ -127,7 +131,8 @@ impl Osk {
     fn new(close_on: u32) -> Self {
         // Tudo conta como já apertado: o botão que abriu o teclado só vale depois de solto.
         let (two, letters_right) = (TWO.load(Ordering::Relaxed), LETTERS_RIGHT.load(Ordering::Relaxed));
-        Osk { view: View { open: true, two, letters_right, ..Default::default() }, pad: None, prev: u32::MAX, repeat: None, stick: [(0.0, 0.0); 2], close_on: close_on & !USED }
+        let (repeat_all, after) = (REPEAT_ALL.load(Ordering::Relaxed), Duration::from_millis(REPEAT_MS.load(Ordering::Relaxed) as u64));
+        Osk { view: View { open: true, two, letters_right, ..Default::default() }, pad: None, prev: u32::MAX, repeat: None, repeat_all, after, stick: [(0.0, 0.0); 2], close_on: close_on & !USED }
     }
 
     /// Um relatório do controle: as teclas a digitar e se é para fechar.
@@ -135,8 +140,9 @@ impl Osk {
         let held = inp.buttons;
         let down = held & !self.prev;
         self.prev = held;
-        self.view.shift = inp.rt > 0.5;
-        self.view.sym = inp.lt > 0.5;
+        let (lt, rt) = (inp.lt > 0.5, inp.rt > 0.5);
+        self.view.sym = lt;
+        self.view.shift = rt || (lt && self.view.two);
         self.view.petal = petal(inp.lx, inp.ly);
         self.view.right = if self.view.two { petal(inp.rx, inp.ry) } else { None };
         self.stick = [(inp.lx, inp.ly), (inp.rx, inp.ry)];
@@ -144,32 +150,36 @@ impl Osk {
         if down & (pads::BACK | self.close_on) != 0 || (down & pads::B != 0 && self.view.petal.is_none()) {
             return (keys, true);
         }
+        // Cada botão apertado agora e a tecla que ele digita.
+        let mut typed: Vec<(u32, Key)> = vec![];
         if let Some(p) = self.view.petal {
-            keys.extend(FACE.iter().enumerate().filter(|(_, b)| down & **b != 0).map(|(i, _)| Key::Char(self.view.wheel_char(false, p, i))));
+            typed.extend(FACE.iter().enumerate().filter(|(_, b)| down & **b != 0).map(|(i, b)| (*b, Key::Char(self.view.wheel_char(false, p, i)))));
         }
         // Stick direito apontado: o direcional digita no círculo dele e deixa de ser as setas.
         let dpad_types = self.view.right.is_some();
         if let Some(p) = self.view.right {
-            keys.extend(DPAD.iter().enumerate().filter(|(_, b)| down & **b != 0).map(|(i, _)| Key::Char(self.view.wheel_char(true, p, i))));
+            typed.extend(DPAD.iter().enumerate().filter(|(_, b)| down & **b != 0).map(|(i, b)| (*b, Key::Char(self.view.wheel_char(true, p, i)))));
         }
         if down & pads::RB != 0 {
-            keys.push(Key::Char(' '));
+            typed.push((pads::RB, Key::Char(' ')));
         }
         if down & pads::START != 0 {
-            keys.push(Key::Vk(0x0D));
+            typed.push((pads::START, Key::Vk(0x0D)));
         }
-        if let Some((b, vk, at)) = self.repeat {
-            if held & b == 0 || (dpad_types && b != pads::LB) {
+        let arrow = |k: Key| matches!(k, Key::Vk(0x25..=0x28));
+        typed.extend(REPEATS.iter().filter(|(b, vk)| down & b != 0 && !(dpad_types && arrow(Key::Vk(*vk)))).map(|&(b, vk)| (b, Key::Vk(vk))));
+        if let Some((b, k, at)) = self.repeat {
+            if held & b == 0 || (dpad_types && arrow(k)) {
                 self.repeat = None;
             } else if now >= at {
-                keys.push(Key::Vk(vk));
-                self.repeat = Some((b, vk, now + REPEAT_EVERY));
+                keys.push(k);
+                self.repeat = Some((b, k, now + REPEAT_EVERY));
             }
         }
-        for (b, vk) in REPEATS {
-            if down & b != 0 && !(dpad_types && b != pads::LB) {
-                keys.push(Key::Vk(vk));
-                self.repeat = Some((b, vk, now + REPEAT_AFTER));
+        for (b, k) in typed {
+            keys.push(k);
+            if self.repeat_all || REPEATS.iter().any(|r| r.0 == b) {
+                self.repeat = Some((b, k, now + self.after));
             }
         }
         (keys, false)
@@ -196,12 +206,16 @@ static STATE: Mutex<State> = Mutex::new(State::Closed);
 static TWO: AtomicBool = AtomicBool::new(false);
 static LETTERS_RIGHT: AtomicBool = AtomicBool::new(false);
 static DODGE: AtomicBool = AtomicBool::new(true);
+static REPEAT_ALL: AtomicBool = AtomicBool::new(true);
+static REPEAT_MS: AtomicU32 = AtomicU32::new(500);
 
 /// Opções da configuração: vale na próxima vez que o teclado abrir.
-pub fn configure(two: bool, letters_right: bool, dodge: bool) {
+pub fn configure(two: bool, letters_right: bool, dodge: bool, repeat: bool, repeat_ms: u32) {
     TWO.store(two, Ordering::Relaxed);
     LETTERS_RIGHT.store(letters_right, Ordering::Relaxed);
     DODGE.store(dodge, Ordering::Relaxed);
+    REPEAT_ALL.store(repeat, Ordering::Relaxed);
+    REPEAT_MS.store(repeat_ms, Ordering::Relaxed);
 }
 
 /// O teclado foge do cursor de texto (`overlays::Keyboard`).
@@ -367,12 +381,24 @@ mod tests {
         o.step(&inp(0, 0.0, 0.0), t);
         assert_eq!(o.step(&inp(pads::RB | pads::START, 0.0, 0.0), t).0, vec![Key::Char(' '), Key::Vk(0x0D)]);
         o.step(&inp(0, 0.0, 0.0), t);
-        // Apagar repete depois de 400 ms, a cada 60 ms.
+        // Apagar repete depois da espera (500 ms), a cada 60 ms.
         assert_eq!(o.step(&inp(pads::LB, 0.0, 0.0), t).0, vec![Key::Vk(0x08)]);
-        assert_eq!(o.step(&inp(pads::LB, 0.0, 0.0), t + Duration::from_millis(300)).0, vec![]);
-        assert_eq!(o.step(&inp(pads::LB, 0.0, 0.0), t + Duration::from_millis(400)).0, vec![Key::Vk(0x08)]);
-        assert_eq!(o.step(&inp(pads::LB, 0.0, 0.0), t + Duration::from_millis(430)).0, vec![]);
-        assert_eq!(o.step(&inp(0, 0.0, 0.0), t + Duration::from_millis(500)).0, vec![]);
+        assert_eq!(o.step(&inp(pads::LB, 0.0, 0.0), t + Duration::from_millis(400)).0, vec![]);
+        assert_eq!(o.step(&inp(pads::LB, 0.0, 0.0), t + Duration::from_millis(500)).0, vec![Key::Vk(0x08)]);
+        assert_eq!(o.step(&inp(pads::LB, 0.0, 0.0), t + Duration::from_millis(530)).0, vec![]);
+        assert_eq!(o.step(&inp(0, 0.0, 0.0), t + Duration::from_millis(600)).0, vec![]);
+        // Repetir ao segurar: espaço e letras também repetem; desligado, não.
+        let at = |ms| t + Duration::from_millis(ms);
+        assert_eq!(o.step(&inp(pads::RB, 0.0, 1.0), at(1000)).0, vec![Key::Char(' ')]);
+        assert_eq!(o.step(&inp(pads::RB, 0.0, 1.0), at(1500)).0, vec![Key::Char(' ')]);
+        o.step(&inp(0, 0.0, 1.0), at(1510));
+        assert_eq!(o.step(&inp(pads::A, 0.0, 1.0), at(1520)).0, vec![Key::Char('d')]);
+        assert_eq!(o.step(&inp(pads::A, 0.0, 1.0), at(2020)).0, vec![Key::Char('d')]);
+        o.step(&inp(0, 0.0, 1.0), at(2030));
+        o.repeat_all = false;
+        o.step(&inp(pads::RB, 0.0, 0.0), at(3000));
+        assert_eq!(o.step(&inp(pads::RB, 0.0, 0.0), at(3600)).0, vec![]);
+        o.step(&inp(0, 0.0, 0.0), at(3610));
         // B com o analógico apontado digita; com ele solto, fecha.
         assert_eq!(o.step(&inp(pads::B, 0.0, 1.0), t), (vec![Key::Char('c')], false));
         o.step(&inp(0, 0.0, 0.0), t);
@@ -391,14 +417,16 @@ mod tests {
         let right_up = |b: u32| Input { buttons: b, ry: 1.0, ..Default::default() };
         // Direito em cima, direcional para baixo (posição do A): "3" do círculo dos números.
         assert_eq!(o.step(&right_up(pads::DOWN), t).0, vec![Key::Char('3')]);
-        // Segurar não repete: o direcional está digitando, não é seta.
-        assert_eq!(o.step(&right_up(pads::DOWN), t + Duration::from_millis(500)).0, vec![]);
+        // Segurar repete o caractere, não vira seta.
+        assert_eq!(o.step(&right_up(pads::DOWN), t + Duration::from_millis(500)).0, vec![Key::Char('3')]);
         o.step(&inp(0, 0.0, 0.0), t);
         // Stick direito solto: o direcional volta a ser as setas.
         assert_eq!(o.step(&inp(pads::DOWN, 0.0, 0.0), t).0, vec![Key::Vk(0x28)]);
         o.step(&inp(0, 0.0, 0.0), t);
-        // A com o esquerdo em cima continua digitando letras.
+        // A com o esquerdo em cima continua digitando letras; LT sozinho dá os acentos.
         assert_eq!(o.step(&inp(pads::A, 0.0, 1.0), t).0, vec![Key::Char('d')]);
+        o.step(&inp(0, 0.0, 1.0), t);
+        assert_eq!(o.step(&Input { buttons: pads::A, ly: 1.0, lt: 1.0, ..Default::default() }, t).0, vec![Key::Char('ã')]);
         // Trocados: letras no direito, números no esquerdo.
         o.view.letters_right = true;
         o.step(&inp(0, 0.0, 0.0), t);

@@ -2163,3 +2163,6 @@ Clique	点击
 Esconder	隐藏
 Fugir do cursor	避开光标
 Quando o cursor de texto fica atrás do teclado, ele sobe para o alto da tela, e desce de novo quando o cursor sai dali.	文本光标被键盘挡住时，键盘移到屏幕顶部；光标离开后再移回底部。
+Repetir ao segurar	按住时重复
+Segurar qualquer botão repete a tecla, como num teclado, depois da espera. Desligado, só apagar e as setas repetem.	按住任意按钮会像键盘一样在等待后重复该键。关闭时只有删除和方向键会重复。
+Espera para repetir	重复前等待

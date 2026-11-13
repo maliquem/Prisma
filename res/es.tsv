@@ -2163,3 +2163,6 @@ Clique	Clic
 Esconder	Ocultar
 Fugir do cursor	Esquivar el cursor
 Quando o cursor de texto fica atrás do teclado, ele sobe para o alto da tela, e desce de novo quando o cursor sai dali.	Cuando el cursor de texto queda detrás del teclado, este sube a la parte de arriba de la pantalla y vuelve a bajar cuando el cursor sale de ahí.
+Repetir ao segurar	Repetir al mantener
+Segurar qualquer botão repete a tecla, como num teclado, depois da espera. Desligado, só apagar e as setas repetem.	Mantener cualquier botón repite la tecla, como en un teclado, tras la espera. Desactivado, solo borrar y las flechas se repiten.
+Espera para repetir	Espera para repetir

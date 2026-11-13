@@ -568,7 +568,8 @@ fn radial(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
 /// Cartão do teclado do Prisma: um stick só ou os dois, e em qual deles ficam as letras.
 fn keyboard(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
     let two = app.cfg.pad_osk_two;
-    let r = rect(at.x, at.y, at.w, if two { 172.0 } else { 130.0 });
+    let repeat = app.cfg.pad_osk_repeat;
+    let r = rect(at.x, at.y, at.w, 166.0 + if repeat { 42.0 } else { 0.0 } + if two { 42.0 } else { 0.0 });
     ui.card(r);
     ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Teclado do Prisma");
     let check = rect(r.x + 10.0, r.y + 44.0, r.w - 20.0, 36.0);
@@ -577,8 +578,18 @@ fn keyboard(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
     let dodge = rect(r.x + 10.0, r.y + 80.0, r.w - 20.0, 36.0);
     changed |= ui.check("pad-osk-dodge", dodge, "Fugir do cursor", &mut app.cfg.pad_osk_dodge);
     ui.tip(dodge, "Quando o cursor de texto fica atrás do teclado, ele sobe para o alto da tela, e desce de novo quando o cursor sai dali.");
+    let rep = rect(r.x + 10.0, r.y + 116.0, r.w - 20.0, 36.0);
+    changed |= ui.check("pad-osk-repeat", rep, "Repetir ao segurar", &mut app.cfg.pad_osk_repeat);
+    ui.tip(rep, "Segurar qualquer botão repete a tecla, como num teclado, depois da espera. Desligado, só apagar e as setas repetem.");
+    let mut y = r.y + 160.0;
+    if repeat {
+        let l = rect(r.x + 16.0, y, r.w - 172.0, 34.0);
+        ui.c.text_fit(l, &crate::i18n::tr("Espera para repetir"), 12.0, TEXT2, Align::Left, Weight::Regular);
+        changed |= ui.stepper("pad-osk-repeat-ms", rect(r.right() - 140.0, y, 124.0, 34.0), &mut app.cfg.pad_osk_repeat_ms, (200, 2000), 50, "ms");
+        y += 42.0;
+    }
     if two {
-        let (l, c) = (rect(r.x + 16.0, r.y + 124.0, 108.0, 34.0), rect(r.x + 128.0, r.y + 124.0, r.w - 144.0, 34.0));
+        let (l, c) = (rect(r.x + 16.0, y, 108.0, 34.0), rect(r.x + 128.0, y, r.w - 144.0, 34.0));
         ui.c.text_fit(l, &crate::i18n::tr("Letras no stick"), 12.0, TEXT2, Align::Left, Weight::Regular);
         let mut s = app.cfg.pad_osk_letters_right as usize;
         if ui.select("pad-osk-letters", c, &[crate::i18n::tr("Esquerdo").into_owned(), crate::i18n::tr("Direito").into_owned()], &mut s) {
