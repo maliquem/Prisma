@@ -14,7 +14,7 @@
 
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU32, AtomicU8, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};
 
 use super::remap::Trig;
@@ -591,6 +591,67 @@ unsafe fn write_report(path: &str, r: &[u8], out_len: usize) -> bool {
     ok
 }
 
+/// Háptico de verdade do DualSense pelo Bluetooth: os atuadores recebem áudio de 3 kHz, 8 bits,
+/// estéreo, 32 quadros por relatório 0x32, um relatório a cada 10,67 ms. Formato lido no SAxense
+/// (github.com/egormanga/SAxense, MPL-2.0, de Sdore), a única fonte que o descreve; nada copiado.
+/// `n` é o contador que o controle pede, e a onda é um seno de 170 Hz com a força `level`.
+fn coil_report(n: u8, phase: &mut f32, level: u8) -> [u8; 142] {
+    let mut r = [0u8; 142];
+    r[0] = 0x32;
+    // Pacote 0x11 (cabeçalho fixo, com o contador no fim) e pacote 0x12 com 64 bytes de amostras.
+    r[2..11].copy_from_slice(&[0x91, 0x07, 0xFE, 0, 0, 0, 0, 0xFF, n]);
+    r[11] = 0x92;
+    r[12] = 64;
+    let amp = level as f32 / 255.0 * 127.0;
+    let step = std::f32::consts::TAU * 170.0 / 3000.0;
+    for f in 0..32 {
+        // Com sinal (s8), como o exemplo do ffmpeg do SAxense: o silêncio é zero.
+        let v = (amp * phase.sin()).round() as i8 as u8;
+        r[13 + 2 * f] = v;
+        r[14 + 2 * f] = v;
+        *phase = (*phase + step) % std::f32::consts::TAU;
+    }
+    let c = crc32(0xA2, &r[..138]);
+    r[138..].copy_from_slice(&c.to_le_bytes());
+    r
+}
+
+/// Força pedida aos atuadores e se a escrita falhou (o controle não aceita o 0x32).
+type Coil = (AtomicU8, AtomicBool);
+
+/// Manda o áudio dos atuadores enquanto o leitor do controle existir. Fica numa linha própria:
+/// uma escrita pelo Bluetooth pode levar milissegundos, e a leitura do controle não pode esperar.
+fn coil_thread(path: String, out_len: usize, coil: Weak<Coil>) {
+    let period = Duration::from_nanos(10_666_667);
+    let (mut n, mut phase, mut quiet) = (0u8, 0f32, 0u8);
+    let mut next = Instant::now();
+    while let Some(c) = coil.upgrade() {
+        let level = c.0.load(Ordering::Relaxed);
+        if level == 0 && quiet == 0 {
+            drop(c);
+            std::thread::sleep(Duration::from_millis(15));
+            next = Instant::now();
+            continue;
+        }
+        // Alguns relatórios mudos depois de parar: o atuador termina parado, sem ficar com o resto.
+        quiet = if level > 0 { 8 } else { quiet - 1 };
+        let r = coil_report(n, &mut phase, level);
+        if !unsafe { write_report(&path, &r, out_len) } {
+            c.1.store(true, Ordering::Relaxed);
+            return;
+        }
+        drop(c);
+        n = n.wrapping_add(1);
+        next += period;
+        let now = Instant::now();
+        if next > now {
+            std::thread::sleep(next - now);
+        } else {
+            next = now;
+        }
+    }
+}
+
 /// O que o Prisma quer no controle agora. `rgb` em `None` é a luz que o perfil não mexe.
 #[derive(PartialEq, Clone, Copy, Default)]
 struct Want {
@@ -612,6 +673,8 @@ struct PadOut {
     /// Botões da leitura anterior e até quando dura o toque do último aperto (háptico).
     prev: Buttons,
     tap: Option<(Instant, u8)>,
+    /// Atuadores do DualSense pelo Bluetooth, ligados na primeira vez que o háptico pede.
+    coil: Option<Arc<Coil>>,
 }
 
 impl PadOut {
@@ -631,6 +694,21 @@ impl PadOut {
             Some((until, v)) if Instant::now() < until => feel = feel.max(v),
             Some(_) => self.tap = None,
             None => {}
+        }
+        // DualSense pelo Bluetooth: o háptico vai aos atuadores. Se o controle recusar o
+        // relatório, volta ao motor fraco, como no cabo e no DualShock 4.
+        if self.fam == Family::DualSense && self.link == Link::Bluetooth {
+            if self.coil.is_none() && feel > 0 {
+                let c = Arc::new((AtomicU8::new(0), AtomicBool::new(false)));
+                let (path, len, weak) = (self.path.clone(), self.out_len, Arc::downgrade(&c));
+                if std::thread::Builder::new().name("háptico".into()).spawn(move || coil_thread(path, len, weak)).is_ok() {
+                    self.coil = Some(c);
+                }
+            }
+            if let Some(c) = self.coil.as_ref().filter(|c| !c.1.load(Ordering::Relaxed)) {
+                c.0.store(feel, Ordering::Relaxed);
+                feel = 0;
+            }
         }
         let want = Want {
             rgb: super::remap::light().filter(|l| self.link == Link::Usb || l.1).and_then(|l| match l.0 {
@@ -1075,6 +1153,7 @@ unsafe fn read_loop(d: Dev) {
         failed: false,
         prev: 0,
         tap: None,
+        coil: None,
     });
     let mut pct = None;
     'read: loop {
@@ -1490,6 +1569,21 @@ mod tests {
         // Sem cor, a luz fica como está: nenhum dos bytes dela é mexido.
         let r = out_report(Family::DualSense, Link::Usb, None, off, [0, 0], 0).unwrap();
         assert_eq!((r[2], r[39], r[42], &r[45..48]), (0, 0, 0, &[0u8, 0, 0][..]));
+    }
+
+    #[test]
+    fn coil_report_layout() {
+        let mut ph = 0.0;
+        let r = coil_report(7, &mut ph, 255);
+        assert_eq!((r[0], r[2], r[3], r[10], r[11], r[12]), (0x32, 0x91, 0x07, 7, 0x92, 64));
+        assert_eq!(u32::from_le_bytes(r[138..].try_into().unwrap()), crc32(0xA2, &r[..138]));
+        // Força máxima: a onda chega perto de ±127 e os dois canais andam juntos.
+        let s: Vec<i8> = r[13..77].iter().map(|&b| b as i8).collect();
+        assert!(s.iter().any(|&v| v > 100) && s.iter().any(|&v| v < -100));
+        assert!(s.chunks(2).all(|f| f[0] == f[1]));
+        // Força zero é silêncio, e o resto do relatório fica zerado.
+        let q = coil_report(0, &mut ph, 0);
+        assert!(q[13..138].iter().all(|&b| b == 0));
     }
 
     #[test]
