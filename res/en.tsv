@@ -2334,3 +2334,5 @@ Perfil do programa	Program profile
 Perfil do programa: este controle segue o programa em foco. Um perfil escolhido aqui vale só para este controle.	Program profile: this controller follows the program in focus. A profile chosen here applies only to this controller.
 Desliga o controle do Bluetooth. Pelo cabo, não faz nada.	Disconnects the controller from Bluetooth. Over the cable, it does nothing.
 Nada foi removido: o Windows não deu a permissão de administrador.	Nothing was removed: Windows did not grant administrator permission.
+Piscar	Blink
+Arco-íris	Rainbow

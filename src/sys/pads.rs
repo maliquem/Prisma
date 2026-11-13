@@ -685,7 +685,6 @@ struct PadOut {
 
 impl PadOut {
     unsafe fn update(&mut self, pct: Option<u8>, inp: Option<&Input>) {
-        use super::remap::Light;
         let h = super::remap::haptic(&self.path);
         let mut feel = 0u8;
         if let Some(inp) = inp {
@@ -717,10 +716,10 @@ impl PadOut {
             }
         }
         let want = Want {
-            rgb: super::remap::light(&self.path).filter(|l| self.link == Link::Usb || l.1).and_then(|l| match l.0 {
-                Light::Off => Some([0, 0, 0]),
-                Light::Color(c) => Some(c),
-                Light::Battery(b) => pct.map(|p| super::remap::battery_color(b, p)),
+            rgb: super::remap::light(&self.path).filter(|l| self.link == Link::Usb || l.1).and_then(|l| {
+                // Relógio comum: dois controles piscando ficam no mesmo passo.
+                let ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64);
+                super::remap::light_color(l.0, pct, ms)
             }),
             // Gatilho adaptativo só existe no DualSense.
             trig: if self.fam == Family::DualSense { super::remap::triggers(&self.path) } else { [Trig::Pass; 2] },

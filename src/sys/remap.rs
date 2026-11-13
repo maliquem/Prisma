@@ -419,6 +419,23 @@ pub enum Light {
     /// Pela carga, com as cores e o passo escolhidos.
     Battery(Batt),
     Color([u8; 3]),
+    /// A cor acende e apaga a cada meio segundo.
+    Blink([u8; 3]),
+    /// Dá a volta nas cores a cada 3 segundos.
+    Rainbow,
+}
+
+/// A cor da luz `l` no instante `ms` (em milissegundos de qualquer relógio), com a carga `pct`.
+/// `None` só na luz pela bateria sem carga lida. Os efeitos mudam em degraus de 50 ms: o controle
+/// recebe no máximo 20 escritas por segundo.
+pub fn light_color(l: Light, pct: Option<u8>, ms: u64) -> Option<[u8; 3]> {
+    match l {
+        Light::Off => Some([0, 0, 0]),
+        Light::Color(c) => Some(c),
+        Light::Battery(b) => pct.map(|p| battery_color(b, p)),
+        Light::Blink(c) => Some(if (ms / 500) % 2 == 0 { c } else { [0, 0, 0] }),
+        Light::Rainbow => Some(crate::ui::gfx::hsv_rgb((ms / 50 % 60) as f32 * 6.0, 1.0, 1.0)),
+    }
 }
 
 /// Barra de luz pela carga: a cor com a carga vazia, a do meio e a da carga cheia, e de quantos
@@ -651,6 +668,8 @@ impl Profile {
                     _ = writeln!(s, "light battery {} {} {} {}{bt}", h(b.low), h(b.mid), h(b.full), b.step)
                 }
                 Light::Color([r, g, b]) => _ = writeln!(s, "light color {r:02x}{g:02x}{b:02x}{bt}"),
+                Light::Blink([r, g, b]) => _ = writeln!(s, "light blink {r:02x}{g:02x}{b:02x}{bt}"),
+                Light::Rainbow => _ = writeln!(s, "light rainbow{bt}"),
             }
         }
         let o = self.gyro_opt;
@@ -787,6 +806,8 @@ impl Profile {
                             _ => Batt::default(),
                         }),
                         "color" => Light::Color(t.get(1).and_then(|h| hex(h))?),
+                        "blink" => Light::Blink(t.get(1).and_then(|h| hex(h))?),
+                        "rainbow" => Light::Rainbow,
                         _ => return None,
                     });
                 }
@@ -2605,6 +2626,26 @@ buzz 9
         p.light_bt = false;
         let q = Profile::parse(&p.to_text()).unwrap();
         assert_eq!((q.light, q.light_bt), (Some(Light::Battery(b)), false));
+    }
+
+    #[test]
+    fn light_effects_blink_and_cycle() {
+        let mut p = Profile::base();
+        for l in [Light::Blink([1, 2, 3]), Light::Rainbow] {
+            p.light = Some(l);
+            p.light_bt = true;
+            let q = Profile::parse(&p.to_text()).unwrap();
+            assert_eq!((q.light, q.light_bt), (Some(l), true));
+        }
+        let c = [9, 8, 7];
+        assert_eq!(light_color(Light::Blink(c), None, 100), Some(c));
+        assert_eq!(light_color(Light::Blink(c), None, 600), Some([0, 0, 0]));
+        // Arco-íris: começa no vermelho, passa pelo ciano na metade e volta em 3 s; muda em degraus de 50 ms.
+        assert_eq!(light_color(Light::Rainbow, None, 0), Some([255, 0, 0]));
+        assert_eq!(light_color(Light::Rainbow, None, 1500), Some([0, 255, 255]));
+        assert_eq!(light_color(Light::Rainbow, None, 3000), light_color(Light::Rainbow, None, 0));
+        assert_eq!(light_color(Light::Rainbow, None, 1510), light_color(Light::Rainbow, None, 1549));
+        assert_eq!(light_color(Light::Battery(Batt::default()), None, 0), None);
     }
 
     #[test]

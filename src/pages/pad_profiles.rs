@@ -104,6 +104,14 @@ pub fn test_target(app: &mut App, what: &str) {
             // As duas janelas da barra de luz, para a foto de teste.
             "color" => ed.pick = Some((0, [210.0, 1.0, 1.0])),
             "battery" => ed.batt = true,
+            // Luz em Piscar: a lista fechada mostra o nome do efeito, com a amostra e o botão.
+            "blink" => {
+                let mut list = remap::profiles();
+                if let Some(p) = list.get_mut(ed.prof) {
+                    p.light = Some(Light::Blink(remap::FIRST_COLOR));
+                    remap::save(p);
+                }
+            }
             "stick" => ed.button = pads::LS,
             "trigger" => {
                 ed.button = remap::LT;
@@ -1336,12 +1344,14 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
     y += 44.0;
     // Barra de luz do perfil: só DualSense e DualShock 4.
     if matches!(family, Family::DualSense | Family::Ds4) {
-        let opts = vec![tr("Não mexer"), tr("Desligada"), tr("Pela bateria"), tr("Cor")];
+        let opts = vec![tr("Não mexer"), tr("Desligada"), tr("Pela bateria"), tr("Cor"), tr("Piscar"), tr("Arco-íris")];
         let mut sel = match p.light {
             None => 0,
             Some(Light::Off) => 1,
             Some(Light::Battery(_)) => 2,
             Some(Light::Color(_)) => 3,
+            Some(Light::Blink(_)) => 4,
+            Some(Light::Rainbow) => 5,
         };
         ui.label(rect(x, y, 120.0, 34.0), "Barra de luz", TEXT2);
         let sw = ((w - 138.0) * 0.56).min(220.0).floor();
@@ -1350,17 +1360,19 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
                 0 => None,
                 1 => Some(Light::Off),
                 2 => Some(Light::Battery(Batt::default())),
-                _ => Some(Light::Color(remap::FIRST_COLOR)),
+                3 => Some(Light::Color(remap::FIRST_COLOR)),
+                4 => Some(Light::Blink(remap::FIRST_COLOR)),
+                _ => Some(Light::Rainbow),
             };
             changed = true;
         }
-        // Amostra da cor e o botão que abre a janela de escolher.
+        // Amostra da cor e o botão que abre a janela de escolher; o botão não passa da borda da coluna.
         let bx = x + 130.0 + sw + 12.0;
         match p.light {
-            Some(Light::Color(c)) => {
+            Some(Light::Color(c) | Light::Blink(c)) => {
                 ui.c.round(rect(bx, y, 34.0, 34.0), 8.0, swatch(c));
                 ui.c.round_line(rect(bx, y, 34.0, 34.0), 8.0, BORDER2, 1.0);
-                if ui.button("pp-light-pick", rect(bx + 42.0, y, 150.0, 34.0), "Escolher cor…", false) {
+                if ui.button("pp-light-pick", rect(bx + 42.0, y, (x + w - bx - 42.0).min(150.0), 34.0), "Escolher cor…", false) {
                     ed.pick = Some((0, crate::ui::gfx::rgb_hsv(c)));
                 }
             }
@@ -1369,7 +1381,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
                 for i in 0..34 {
                     ui.c.fill(rect(bx + i as f32 * 3.0, y + 6.0, 3.0, 22.0), swatch(remap::battery_color(b, (i * 3) as u8)));
                 }
-                if ui.button("pp-light-batt", rect(bx + 114.0, y, 150.0, 34.0), "Ajustar cores…", false) {
+                if ui.button("pp-light-batt", rect(bx + 114.0, y, (x + w - bx - 114.0).min(150.0), 34.0), "Ajustar cores…", false) {
                     ed.batt = true;
                 }
             }
@@ -1648,6 +1660,7 @@ fn light_sheets(ui: &mut Ui, app: &mut App, p: &mut Profile) -> bool {
         }
         if ui.button("pp-cp-ok", rect(b.right() - 300.0, b.bottom() - 56.0, 136.0, 38.0), "Confirmar", true) {
             match (what, p.light) {
+                (0, Some(Light::Blink(_))) => p.light = Some(Light::Blink(c)),
                 (0, _) => p.light = Some(Light::Color(c)),
                 (k, Some(Light::Battery(mut bt))) => {
                     *batt_color(&mut bt, k as usize - 1) = c;
