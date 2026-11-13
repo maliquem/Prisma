@@ -124,6 +124,10 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
     let mut clip: Option<super::clip::Clip> = None;
     let mut clip_in = super::clip::Pieces::default();
     let mut clip_id = 0u16;
+    // O texto copiado aqui só vai quando a janela de assistir está na frente (ou esteve até 2 s
+    // antes, para o Ctrl+C dentro dela valer): o host não lê o que se copia com ela atrás.
+    let mut clip_out: Option<String> = None;
+    let mut last_front = Instant::now() - CLIP_FRONT;
 
     let push = |e: Event| {
         sh.queue.lock().unwrap().push_back(e);
@@ -150,6 +154,12 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
         }
         if let Some(c) = &clip {
             while let Ok(t) = c.changed.try_recv() {
+                clip_out = Some(t);
+            }
+            if unsafe { GetForegroundWindow() }.0 as isize == VIEW_HWND.load(Ordering::Relaxed) {
+                last_front = Instant::now();
+            }
+            if let Some(t) = clip_out.take_if(|_| last_front.elapsed() <= CLIP_FRONT) {
                 clip_id = clip_id.wrapping_add(1);
                 let pk = super::clip::packets(&t, clip_id);
                 for p in pk.iter().chain(pk.iter()) {
@@ -498,8 +508,10 @@ static KEYS: Mutex<Keys> = Mutex::new(Keys {
     immersive: 0,
 });
 
-/// A janela de quem assiste, para o gancho do teclado.
+/// A janela de quem assiste, para o gancho do teclado e para a área de transferência.
 static VIEW_HWND: AtomicIsize = AtomicIsize::new(0);
+/// Quanto tempo depois de sair da frente a janela de assistir ainda manda o texto copiado.
+const CLIP_FRONT: Duration = Duration::from_secs(2);
 
 /// Modo imersivo: com a janela em primeiro plano, a tecla Windows, o Alt+Tab, o Alt+Esc e o
 /// Ctrl+Esc vão para o host em vez de agir aqui. O Ctrl+Alt+Del o Windows não deixa pegar.
