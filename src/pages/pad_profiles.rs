@@ -5,7 +5,7 @@ use super::*;
 use crate::config::{Hotkey, MOD_ALT, MOD_CTRL, MOD_SHIFT, MOD_WIN};
 use crate::sys::pads::{self, Family};
 use crate::sys::macros;
-use crate::sys::remap::{self, Batt, Bind, Light, Motion, Layer, Macro, Mode, Out, Profile, Step, Stick, When, Zone};
+use crate::sys::remap::{self, Batt, Bind, Light, Motion, Layer, Macro, Mode, Out, Profile, Step, Stick, Trig, When, Zone};
 
 #[derive(Default)]
 pub struct Editor {
@@ -101,7 +101,16 @@ pub fn test_target(app: &mut App, what: &str) {
             "color" => ed.pick = Some((0, [210.0, 1.0, 1.0])),
             "battery" => ed.batt = true,
             "stick" => ed.button = pads::LS,
-            "trigger" => ed.button = remap::LT,
+            "trigger" => {
+                ed.button = remap::LT;
+                // Com um efeito escolhido, a foto pega também as linhas de ajuste do gatilho.
+                let mut list = remap::profiles();
+                if let Some(p) = list.get_mut(ed.prof) {
+                    p.trig[0] = Trig::Buzz { start: 3, power: 8, hz: 40 };
+                    p.buzz = 2;
+                    remap::save(p);
+                }
+            }
             "gyro" => ed.layer = 1,
             "text" => {
                 app.pads.tab = 1;
@@ -742,8 +751,9 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
     let wizard = ed.tpl == acc_i;
     ed.mac = ed.mac.min(p.macros.len().saturating_sub(1));
     ui.begin_scroll("pp-body", body, ed.body_h);
-    // A luz deste perfil aparece no controle enquanto o editor está aberto.
+    // A luz e os gatilhos deste perfil valem no controle enquanto o editor está aberto: é o teste.
     remap::preview_light(p.light.map(|l| (l, p.light_bt)));
+    remap::preview_trig(Some(p.trig));
     let mut changed = false;
     let mut pick = None;
     let mut rec_note = None;
@@ -842,6 +852,58 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
         } else {
             changed |= ui.check(&format!("pp-hair{i}"), rect(x, y, w.min(320.0), 34.0), "Hair trigger", &mut p.hair[i - 2]);
             y += 40.0;
+            // Gatilho adaptativo: só o DualSense tem os motores do gatilho.
+            if family == Family::DualSense {
+                let t = i - 2;
+                let opts = vec![tr("Solto"), tr("Resistência"), tr("Arma"), tr("Vibração")];
+                let mut sel = match p.trig[t] {
+                    Trig::Off => 0,
+                    Trig::Rigid { .. } => 1,
+                    Trig::Click { .. } => 2,
+                    Trig::Buzz { .. } => 3,
+                };
+                ui.label(rect(x, y, 140.0, 34.0), "Gatilho adaptativo", TEXT2);
+                if ui.select(&format!("pp-trig{t}"), rect(x + 150.0, y, ((w - 150.0) * 0.56).min(220.0).floor(), 34.0), &opts, &mut sel) {
+                    let (start, power) = match p.trig[t] {
+                        Trig::Rigid { start, power } | Trig::Click { start, power } | Trig::Buzz { start, power, .. } => (start, power),
+                        Trig::Off => (3, 5),
+                    };
+                    p.trig[t] = match sel {
+                        1 => Trig::Rigid { start, power },
+                        2 => Trig::Click { start, power },
+                        3 => Trig::Buzz { start, power, hz: 10 },
+                        _ => Trig::Off,
+                    };
+                    changed = true;
+                }
+                y += 44.0;
+                if p.trig[t] != Trig::Off {
+                    let (mut s0, mut pw, mut hz) = match p.trig[t] {
+                        Trig::Rigid { start, power } | Trig::Click { start, power } => (start as u32 * 10, power as u32, 10),
+                        Trig::Buzz { start, power, hz } => (start as u32 * 10, power as u32, hz as u32),
+                        Trig::Off => (0, 0, 0),
+                    };
+                    ui.label(rect(x, y, 140.0, 34.0), "Começa em", TEXT2);
+                    let mut c = ui.stepper(&format!("pp-trs{t}"), rect(x + 150.0, y, 130.0, 34.0), &mut s0, (0, 90), 10, "%");
+                    ui.label(rect(x + 292.0, y, 60.0, 34.0), "Força", TEXT2);
+                    c |= ui.stepper(&format!("pp-trp{t}"), rect(x + 352.0, y, 120.0, 34.0), &mut pw, (1, 8), 1, "");
+                    y += 44.0;
+                    if matches!(p.trig[t], Trig::Buzz { .. }) {
+                        ui.label(rect(x, y, 140.0, 34.0), "Vibra", TEXT2);
+                        c |= ui.stepper(&format!("pp-trh{t}"), rect(x + 150.0, y, 130.0, 34.0), &mut hz, (1, 40), 1, " Hz");
+                        y += 44.0;
+                    }
+                    if c {
+                        let (start, power) = ((s0 / 10) as u8, pw as u8);
+                        p.trig[t] = match p.trig[t] {
+                            Trig::Rigid { .. } => Trig::Rigid { start, power },
+                            Trig::Click { .. } => Trig::Click { start, power },
+                            _ => Trig::Buzz { start, power, hz: hz as u8 },
+                        };
+                        changed = true;
+                    }
+                }
+            }
             let note = tr("Hair trigger: um movimento curto aperta e solta, em qualquer ponto do curso. Até o fim é outro botão, para o segundo estágio do gatilho.");
             let nh = crate::ui::gfx::measure(&note, 12.0, Weight::Regular, Some(w)).1.ceil();
             ui.c.text_wrap(rect(x, y, w, nh), &note, 12.0, MUTED, Weight::Regular);
@@ -1198,6 +1260,24 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
             changed |= ui.check("pp-light-bt", rect(x, y, w.min(360.0), 34.0), "Também pelo Bluetooth", &mut p.light_bt);
             y += 44.0;
         }
+        // Vibração de confirmação: ao passar para este perfil e na parada de emergência.
+        let opts = vec![tr("Não"), tr("Leve"), tr("Forte")];
+        let mut sel = p.buzz.min(2) as usize;
+        // Rótulo mais largo que o da luz: "Vibrar ao confirmar" não cabe em 120 px.
+        ui.label(rect(x, y, 170.0, 34.0), "Vibrar ao confirmar", TEXT2);
+        let sw = ((w - 188.0) * 0.56).min(220.0).floor();
+        if ui.select("pp-buzz", rect(x + 180.0, y, sw, 34.0), &opts, &mut sel) {
+            p.buzz = sel as u8;
+            changed = true;
+        }
+        if p.buzz != 0 && ui.button("pp-buzz-test", rect(x + 180.0 + sw + 12.0, y, 110.0, 34.0), "Testar", false) {
+            pads::buzz(p.buzz);
+        }
+        y += 44.0;
+        let note = tr("O controle vibra ao passar para este perfil e ao ligar ou desligar a parada de emergência.");
+        let nh = crate::ui::gfx::measure(&note, 12.0, Weight::Regular, Some(w)).1.ceil();
+        ui.c.text_wrap(rect(x, y, w, nh), &note, 12.0, MUTED, Weight::Regular);
+        y += nh + 16.0;
     }
 
     // Zonas mortas: valem para o perfil todo.

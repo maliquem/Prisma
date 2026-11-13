@@ -257,6 +257,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let family = list.get(app.pads.sel).map_or(Family::Xbox, |p| p.family);
     // Fora do editor, nenhuma luz de mostra: as abas que o desenham põem a dele de volta.
     remap::preview_light(None);
+    remap::preview_trig(None);
     match app.pads.tab {
         0 => {
             // Sem controle ligado, o editor ocupa a largura toda.

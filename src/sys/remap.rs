@@ -363,6 +363,24 @@ pub struct Profile {
     pub light: Option<Light>,
     /// A luz vale também pelo Bluetooth (por padrão, só no cabo).
     pub light_bt: bool,
+    /// Gatilhos adaptativos do DualSense (L2, R2).
+    pub trig: [Trig; 2],
+    /// Vibração de confirmação ao trocar de perfil e ao parar: 0 não, 1 leve, 2 forte.
+    pub buzz: u8,
+}
+
+/// Gatilho adaptativo do DualSense. `start` é o ponto do curso (0 a 9) em que o efeito começa e
+/// `power` a força (1 a 8).
+#[derive(Clone, Copy, PartialEq, Debug, Default)]
+pub enum Trig {
+    #[default]
+    Off,
+    /// Resiste do ponto escolhido até o fim do curso.
+    Rigid { start: u8, power: u8 },
+    /// Resiste e cede de uma vez, como o gatilho de uma arma.
+    Click { start: u8, power: u8 },
+    /// Vibra do ponto escolhido até o fim, `hz` vezes por segundo (1 a 40).
+    Buzz { start: u8, power: u8, hz: u8 },
 }
 
 /// Barra de luz no perfil.
@@ -408,7 +426,7 @@ impl Profile {
     fn empty(name: &str) -> Self {
         let stick = Zone { start: 0.15, end: 0.95 };
         let trig = Zone { start: 0.05, end: 0.95 };
-        Profile { name: name.into(), games: vec![], zones: [stick, stick, trig, trig], layers: vec![Layer { name: "Base".into(), parent: None, ls: None, rs: None, binds: vec![], keys: vec![], gyro: None, touch: None }], strings: vec![], turbo: vec![], turbo_key: TURBO_KEY, macros: vec![], texts: vec![], gyro_opt: GyroOpt::default(), curve: [2.0; 2], hair: [false; 2], light: None, light_bt: false }
+        Profile { name: name.into(), games: vec![], zones: [stick, stick, trig, trig], layers: vec![Layer { name: "Base".into(), parent: None, ls: None, rs: None, binds: vec![], keys: vec![], gyro: None, touch: None }], strings: vec![], turbo: vec![], turbo_key: TURBO_KEY, macros: vec![], texts: vec![], gyro_opt: GyroOpt::default(), curve: [2.0; 2], hair: [false; 2], light: None, light_bt: false, trig: [Trig::Off; 2], buzz: 0 }
     }
 
     /// Base: nada mapeado, o jogo lê o controle como ele é.
@@ -576,6 +594,17 @@ impl Profile {
                 let _ = writeln!(s, "hair {n}");
             }
         }
+        for (t, n) in self.trig.iter().zip(["lt", "rt"]) {
+            match *t {
+                Trig::Off => {}
+                Trig::Rigid { start, power } => _ = writeln!(s, "trig {n} rigid {start} {power}"),
+                Trig::Click { start, power } => _ = writeln!(s, "trig {n} click {start} {power}"),
+                Trig::Buzz { start, power, hz } => _ = writeln!(s, "trig {n} buzz {start} {power} {hz}"),
+            }
+        }
+        if self.buzz != 0 {
+            let _ = writeln!(s, "buzz {}", self.buzz);
+        }
         if let Some(l) = self.light {
             let bt = if self.light_bt { " bt" } else { "" };
             match l {
@@ -685,6 +714,20 @@ impl Profile {
                     p.curve[["ls", "rs"].iter().position(|n| *n == k)?] = num(v)?.clamp(1.0, 3.0);
                 }
                 "hair" => p.hair[["lt", "rt"].iter().position(|n| *n == rest)?] = true,
+                "trig" => {
+                    let t: Vec<&str> = rest.split(' ').collect();
+                    let name = *t.first()?;
+                    let i = ["lt", "rt"].iter().position(|n| *n == name)?;
+                    let n = |k: usize, max: u8| t.get(k).and_then(|v| v.parse::<u8>().ok()).map(|v| v.min(max));
+                    let (start, power) = (n(2, 9)?, n(3, 8)?.max(1));
+                    p.trig[i] = match *t.get(1)? {
+                        "rigid" => Trig::Rigid { start, power },
+                        "click" => Trig::Click { start, power },
+                        "buzz" => Trig::Buzz { start, power, hz: n(4, 40)?.max(1) },
+                        _ => return None,
+                    };
+                }
+                "buzz" => p.buzz = rest.parse::<u8>().ok()?.min(2),
                 "light" => {
                     let t: Vec<&str> = rest.split(' ').collect();
                     let hex = |h: &str| (h.len() == 6).then(|| u32::from_str_radix(h, 16).ok()).flatten().map(|v| [(v >> 16) as u8, (v >> 8) as u8, v as u8]);
@@ -1730,6 +1773,25 @@ pub fn stopped() -> bool {
 
 /// Luz que o editor de perfis mostra enquanto está aberto, na frente da do perfil em uso.
 static PREVIEW: Mutex<Option<(Light, bool)>> = Mutex::new(None);
+/// Gatilhos que o editor de perfis experimenta enquanto está aberto.
+static PREVIEW_TRIG: Mutex<Option<[Trig; 2]>> = Mutex::new(None);
+
+/// O editor experimenta estes gatilhos no controle enquanto está aberto; `None` solta a mostra.
+pub fn preview_trig(t: Option<[Trig; 2]>) {
+    *PREVIEW_TRIG.lock().unwrap() = t;
+}
+
+/// Gatilhos adaptativos do perfil em uso. A parada de emergência os solta.
+pub fn triggers() -> [Trig; 2] {
+    if STOPPED.load(Ordering::Relaxed) {
+        return [Trig::Off; 2];
+    }
+    if let Some(t) = *PREVIEW_TRIG.lock().unwrap() {
+        return t;
+    }
+    let g = RUN.lock().unwrap();
+    g.as_ref().map_or([Trig::Off; 2], |r| r.profiles[r.cur].trig)
+}
 
 /// O editor de perfis mostra esta luz no controle enquanto está aberto; `None` solta a mostra.
 pub fn preview_light(l: Option<(Light, bool)>) {
@@ -2044,6 +2106,7 @@ fn switch(r: &mut Run, to: usize) -> Vec<Act> {
     super::macros::stop_all();
     r.want = None;
     r.cur = to;
+    pads::buzz(r.profiles[to].buzz);
     set_keys(r);
     r.engines.values_mut().flat_map(|e| e.0.release_all()).collect()
 }
@@ -2052,6 +2115,7 @@ fn switch(r: &mut Run, to: usize) -> Vec<Act> {
 fn stop(r: &mut Run, on: bool) -> Vec<Act> {
     super::macros::stop_all();
     STOPPED.store(on, Ordering::Relaxed);
+    pads::buzz(r.profiles[r.cur].buzz);
     set_keys(r);
     r.engines.values_mut().flat_map(|e| e.0.release_all()).collect()
 }
@@ -2285,6 +2349,22 @@ mod tests {
         p.light_bt = true;
         let q = Profile::parse(&p.to_text()).unwrap();
         assert_eq!((q.hair, q.curve, q.light, q.light_bt), ([true, false], [2.0, 3.0], p.light, true));
+    }
+
+    #[test]
+    fn trigger_and_buzz_text() {
+        let mut p = Profile::base();
+        // Perfil sem efeito nenhum não escreve linha de gatilho nem de vibração.
+        assert!(!p.to_text().contains("trig ") && !p.to_text().contains("buzz "));
+        p.trig = [Trig::Rigid { start: 5, power: 8 }, Trig::Buzz { start: 0, power: 4, hz: 12 }];
+        p.buzz = 2;
+        let q = Profile::parse(&p.to_text()).unwrap();
+        assert_eq!((q.trig, q.buzz), (p.trig, 2));
+        // Valores fora da conta são aparados, e a arma volta inteira.
+        let r = Profile::parse(&(Profile::base().to_text() + "trig lt click 99 0
+buzz 9
+")).unwrap();
+        assert_eq!((r.trig[0], r.buzz), (Trig::Click { start: 9, power: 1 }, 2));
     }
 
     #[test]

@@ -937,7 +937,7 @@ pub fn start(background: bool) {
 }
 
 pub fn shutdown() {
-    crate::sys::pads::release_lights();
+    crate::sys::pads::release_pads();
     crate::pages::share::shutdown();
     with(|a| a.meter.leave(&mut a.cfg));
     with(|a| {
@@ -3542,6 +3542,7 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                     } else {
                         crate::sys::pads::set_live(false);
                         crate::sys::remap::preview_light(None);
+                        crate::sys::remap::preview_trig(None);
                         let _ = KillTimer(Some(a.hub), TIMER_PADS);
                     }
                 } else if w.0 == TIMER_SHARE {

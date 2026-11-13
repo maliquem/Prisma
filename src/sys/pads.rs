@@ -17,6 +17,8 @@ use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU32, AtomicU8, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+use super::remap::Trig;
+
 use windows::core::*;
 use windows::Win32::Devices::Bluetooth::*;
 use windows::Win32::Devices::DeviceAndDriverInstallation::*;
@@ -435,11 +437,74 @@ unsafe fn full_mode(path: &str) -> bool {
     ok
 }
 
+/// Vibração de confirmação: até quando vibrar e com que força (motor fraco, motor forte).
+static BUZZ: Mutex<Option<(Instant, [u8; 2])>> = Mutex::new(None);
+
+/// Vibra de leve para confirmar: 0 não vibra, 1 leve, 2 forte. Curta, para não atrapalhar quem
+/// está jogando.
+pub fn buzz(level: u8) {
+    let v = match level {
+        1 => [0x60, 0x00],
+        2 => [0x00, 0xC0],
+        _ => return,
+    };
+    *BUZZ.lock().unwrap() = Some((Instant::now() + Duration::from_millis(180), v));
+}
+
+fn buzzing() -> [u8; 2] {
+    let mut g = BUZZ.lock().unwrap();
+    match *g {
+        Some((until, v)) if Instant::now() < until => v,
+        Some(_) => {
+            *g = None;
+            [0, 0]
+        }
+        None => [0, 0],
+    }
+}
+
+/// Os 11 bytes de um gatilho adaptativo do DualSense. Os modos são os oficiais do firmware
+/// (0x05 solta, 0x21 resiste, 0x25 arma, 0x26 vibra); os modos simples antigos e os de depuração
+/// (0xFC a 0xFE) ficam de fora: estes deixam o gatilho num estado que só o reset desfaz.
+/// O curso vale por dez zonas, uma por décimo.
+fn trig_block(t: Trig) -> [u8; 11] {
+    let mut b = [0u8; 11];
+    // As zonas do ponto escolhido até o fim do curso.
+    let zones = |start: u8| !((1u16 << start.min(9)) - 1) & 0x03FF;
+    // Três bits de força em cada zona ligada.
+    let forces = |start: u8, power: u8| {
+        let v = (power.clamp(1, 8) - 1) as u32;
+        (start.min(9)..10).fold(0u32, |a, i| a | v << (3 * i))
+    };
+    match t {
+        Trig::Off => b[0] = 0x05,
+        Trig::Rigid { start, power } => {
+            b[0] = 0x21;
+            b[1..3].copy_from_slice(&zones(start).to_le_bytes());
+            b[3..7].copy_from_slice(&forces(start, power).to_le_bytes());
+        }
+        Trig::Click { start, power } => {
+            b[0] = 0x25;
+            // A arma resiste numa zona e cede na seguinte.
+            let s = start.clamp(2, 7);
+            b[1..3].copy_from_slice(&((1u16 << s) | (1u16 << (s + 1))).to_le_bytes());
+            b[3] = power.clamp(1, 8) - 1;
+        }
+        Trig::Buzz { start, power, hz } => {
+            b[0] = 0x26;
+            b[1..3].copy_from_slice(&zones(start).to_le_bytes());
+            b[3..7].copy_from_slice(&forces(start, power).to_le_bytes());
+            b[9] = hz.clamp(1, 40);
+        }
+    }
+    b
+}
+
 /// Cor que o Prisma devolve ao controle quando deixa de mandar na luz.
 const LIGHT_DEFAULT: [u8; 3] = [0, 0, 128];
-/// Controles em que o Prisma mudou a luz (caminho, modelo, conexão, tamanho do relatório): voltam à
-/// cor padrão ao fechar o Prisma.
-static LIT: Mutex<Vec<(String, Family, Link, usize)>> = Mutex::new(Vec::new());
+/// Controles em que o Prisma mexeu (caminho, modelo, conexão, tamanho do relatório, se mexeu na
+/// luz): ao fechar o Prisma soltam os gatilhos e voltam à cor padrão.
+static LIT: Mutex<Vec<(String, Family, Link, usize, bool)>> = Mutex::new(Vec::new());
 
 /// CRC-32 dos relatórios de saída pelo Bluetooth: conta um byte de cabeçalho (`seed`) e os dados.
 fn crc32(seed: u8, data: &[u8]) -> u32 {
@@ -453,9 +518,10 @@ fn crc32(seed: u8, data: &[u8]) -> u32 {
     !c
 }
 
-/// Relatório de saída que só muda a barra de luz, no formato de cada modelo e conexão (o mesmo que
-/// o driver do Linux usa). `seq` é a sequência de 0 a 15 que o DualSense pede no Bluetooth.
-pub fn light_report(f: Family, link: Link, rgb: [u8; 3], seq: u8) -> Option<Vec<u8>> {
+/// Relatório de saída com a barra de luz, os gatilhos adaptativos e a vibração, no formato de cada
+/// modelo e conexão (o mesmo que o driver do Linux usa). `rgb` em `None` não mexe na luz; `trig` é
+/// L2 e R2, só do DualSense. `seq` é a sequência de 0 a 15 que o DualSense pede no Bluetooth.
+pub fn out_report(f: Family, link: Link, rgb: Option<[u8; 3]>, trig: [Trig; 2], rumble: [u8; 2], seq: u8) -> Option<Vec<u8>> {
     let (mut r, at) = match (f, link) {
         (Family::DualSense, Link::Usb) => (vec![0u8; 48], 1),
         (Family::DualSense, Link::Bluetooth) => (vec![0u8; 78], 3),
@@ -469,18 +535,42 @@ pub fn light_report(f: Family, link: Link, rgb: [u8; 3], seq: u8) -> Option<Vec<
             r[1] = (seq & 15) << 4;
             r[2] = 0x10;
         }
-        // Liga o controle da luz, encerra a animação azul do começo e põe a cor.
-        r[at + 1] = 0x04;
-        r[at + 38] = 0x02;
-        r[at + 41] = 0x02;
-        r[at + 44..at + 47].copy_from_slice(&rgb);
+        // Vibração: os dois bits do driver do Linux. Os bits dos gatilhos vêm do DSX e do
+        // pydualsense; o driver do Linux não mexe neles.
+        if rumble != [0, 0] {
+            r[at] |= 0x03;
+            r[at + 2] = rumble[0];
+            r[at + 3] = rumble[1];
+        }
+        if trig[1] != Trig::Off {
+            r[at] |= 0x04;
+        }
+        if trig[0] != Trig::Off {
+            r[at] |= 0x08;
+        }
+        r[at + 10..at + 21].copy_from_slice(&trig_block(trig[1]));
+        r[at + 21..at + 32].copy_from_slice(&trig_block(trig[0]));
+        if let Some(c) = rgb {
+            // Liga o controle da luz, encerra a animação azul do começo e põe a cor.
+            r[at + 1] = 0x04;
+            r[at + 38] = 0x02;
+            r[at + 41] = 0x02;
+            r[at + 44..at + 47].copy_from_slice(&c);
+        }
     } else {
         r[0] = if link == Link::Usb { 0x05 } else { 0x11 };
         if link == Link::Bluetooth {
             r[1] = 0xC0;
         }
-        r[at] = 0x02;
-        r[at + 5..at + 8].copy_from_slice(&rgb);
+        if rumble != [0, 0] {
+            r[at] |= 0x01;
+            r[at + 3] = rumble[0];
+            r[at + 4] = rumble[1];
+        }
+        if let Some(c) = rgb {
+            r[at] |= 0x02;
+            r[at + 5..at + 8].copy_from_slice(&c);
+        }
     }
     if link == Link::Bluetooth {
         let c = crc32(0xA2, &r[..74]);
@@ -501,31 +591,46 @@ unsafe fn write_report(path: &str, r: &[u8], out_len: usize) -> bool {
     ok
 }
 
-/// Barra de luz de um controle: manda a cor do perfil só quando ela muda, e a cor padrão quando o
-/// perfil deixa de mandar. Uma escrita que falha não se repete até o controle reconectar.
-struct LightOut {
+/// O que o Prisma quer no controle agora. `rgb` em `None` é a luz que o perfil não mexe.
+#[derive(PartialEq, Clone, Copy, Default)]
+struct Want {
+    rgb: Option<[u8; 3]>,
+    trig: [Trig; 2],
+    rumble: [u8; 2],
+}
+
+/// Saída de um controle (luz, gatilhos e vibração): escreve só quando algo muda. Uma escrita que
+/// falha não se repete até o controle reconectar.
+struct PadOut {
     path: String,
     fam: Family,
     link: Link,
     out_len: usize,
-    sent: Option<[u8; 3]>,
+    sent: Want,
     seq: u8,
     failed: bool,
 }
 
-impl LightOut {
+impl PadOut {
     unsafe fn update(&mut self, pct: Option<u8>) {
         use super::remap::Light;
-        let want = super::remap::light().filter(|l| self.link == Link::Usb || l.1).and_then(|l| match l.0 {
-            Light::Off => Some([0, 0, 0]),
-            Light::Color(c) => Some(c),
-            Light::Battery(b) => pct.map(|p| super::remap::battery_color(b, p)),
-        });
+        let want = Want {
+            rgb: super::remap::light().filter(|l| self.link == Link::Usb || l.1).and_then(|l| match l.0 {
+                Light::Off => Some([0, 0, 0]),
+                Light::Color(c) => Some(c),
+                Light::Battery(b) => pct.map(|p| super::remap::battery_color(b, p)),
+            }),
+            // Gatilho adaptativo só existe no DualSense.
+            trig: if self.fam == Family::DualSense { super::remap::triggers() } else { [Trig::Off; 2] },
+            rumble: buzzing(),
+        };
         if want == self.sent || self.failed {
             return;
         }
         self.seq = (self.seq + 1) & 15;
-        let Some(r) = light_report(self.fam, self.link, want.unwrap_or(LIGHT_DEFAULT), self.seq) else { return };
+        // A luz que o perfil deixou de mandar volta ao padrão nesta mesma escrita.
+        let rgb = want.rgb.or_else(|| self.sent.rgb.map(|_| LIGHT_DEFAULT));
+        let Some(r) = out_report(self.fam, self.link, rgb, want.trig, want.rumble, self.seq) else { return };
         if !write_report(&self.path, &r, self.out_len) {
             self.failed = true;
             return;
@@ -533,16 +638,17 @@ impl LightOut {
         self.sent = want;
         let mut lit = LIT.lock().unwrap();
         lit.retain(|l| l.0 != self.path);
-        if want.is_some() {
-            lit.push((self.path.clone(), self.fam, self.link, self.out_len));
+        if want != Want::default() {
+            lit.push((self.path.clone(), self.fam, self.link, self.out_len, want.rgb.is_some()));
         }
     }
 }
 
-/// Ao fechar o Prisma: os controles com luz mudada voltam à cor padrão.
-pub fn release_lights() {
-    for (path, f, link, len) in LIT.lock().unwrap().drain(..) {
-        if let Some(r) = light_report(f, link, LIGHT_DEFAULT, 0) {
+/// Ao fechar o Prisma: os controles em que ele mexeu soltam os gatilhos e param de vibrar; os de
+/// luz mudada voltam à cor padrão.
+pub fn release_pads() {
+    for (path, f, link, len, lit) in LIT.lock().unwrap().drain(..) {
+        if let Some(r) = out_report(f, link, lit.then_some(LIGHT_DEFAULT), [Trig::Off; 2], [0, 0], 0) {
             unsafe { write_report(&path, &r, len) };
         }
     }
@@ -939,13 +1045,13 @@ unsafe fn read_loop(d: Dev) {
     let (mut prev, mut tick) = (Instant::now(), Instant::now());
     let mut ov = OVERLAPPED { hEvent: ev, ..Default::default() };
     let mut cal = GyroCal::default();
-    // Só os modelos da lista de escrita recebem a luz.
-    let mut light = (streams && WRITE_OK.iter().any(|w| w.0 == d.vid && w.1 == d.pid)).then(|| LightOut {
+    // Só os modelos da lista de escrita recebem luz, gatilho e vibração.
+    let mut light = (streams && WRITE_OK.iter().any(|w| w.0 == d.vid && w.1 == d.pid)).then(|| PadOut {
         path: d.path.clone(),
         fam,
         link,
         out_len: d.output_len as usize,
-        sent: None,
+        sent: Want::default(),
         seq: 0,
         failed: false,
     });
@@ -1347,18 +1453,44 @@ mod tests {
 
     #[test]
     fn light_reports() {
+        let off = [Trig::Off; 2];
         // CRC-32 de referência: "123456789" dá 0xCBF43926.
         assert_eq!(crc32(b'1', b"23456789"), 0xCBF4_3926);
-        let ds = light_report(Family::DualSense, Link::Usb, [1, 2, 3], 0).unwrap();
+        let ds = out_report(Family::DualSense, Link::Usb, Some([1, 2, 3]), off, [0, 0], 0).unwrap();
         assert_eq!((ds.len(), ds[0], ds[2], &ds[45..48]), (48, 0x02, 0x04, &[1u8, 2, 3][..]));
-        let bt = light_report(Family::DualSense, Link::Bluetooth, [1, 2, 3], 5).unwrap();
+        let bt = out_report(Family::DualSense, Link::Bluetooth, Some([1, 2, 3]), off, [0, 0], 5).unwrap();
         assert_eq!((bt.len(), bt[0], bt[1], bt[2], &bt[47..50]), (78, 0x31, 0x50, 0x10, &[1u8, 2, 3][..]));
         assert_eq!(u32::from_le_bytes(bt[74..].try_into().unwrap()), crc32(0xA2, &bt[..74]));
-        let ds4 = light_report(Family::Ds4, Link::Usb, [1, 2, 3], 0).unwrap();
+        let ds4 = out_report(Family::Ds4, Link::Usb, Some([1, 2, 3]), off, [0, 0], 0).unwrap();
         assert_eq!((ds4.len(), ds4[0], ds4[1], &ds4[6..9]), (32, 0x05, 0x02, &[1u8, 2, 3][..]));
-        let ds4bt = light_report(Family::Ds4, Link::Bluetooth, [1, 2, 3], 0).unwrap();
+        let ds4bt = out_report(Family::Ds4, Link::Bluetooth, Some([1, 2, 3]), off, [0, 0], 0).unwrap();
         assert_eq!((ds4bt[0], ds4bt[1], ds4bt[3], &ds4bt[8..11]), (0x11, 0xC0, 0x02, &[1u8, 2, 3][..]));
-        assert!(light_report(Family::Xbox, Link::Usb, [0; 3], 0).is_none());
+        assert!(out_report(Family::Xbox, Link::Usb, Some([0; 3]), off, [0, 0], 0).is_none());
+        // Sem cor, a luz fica como está: nenhum dos bytes dela é mexido.
+        let r = out_report(Family::DualSense, Link::Usb, None, off, [0, 0], 0).unwrap();
+        assert_eq!((r[2], r[39], r[42], &r[45..48]), (0, 0, 0, &[0u8, 0, 0][..]));
+    }
+
+    #[test]
+    fn triggers_and_rumble_in_the_report() {
+        // Vibração: os dois bits e os dois motores, cada um no seu byte.
+        let r = out_report(Family::DualSense, Link::Usb, None, [Trig::Off; 2], [0x40, 0x80], 0).unwrap();
+        assert_eq!((r[1], r[3], r[4]), (0x03, 0x40, 0x80));
+        let d4 = out_report(Family::Ds4, Link::Usb, None, [Trig::Off; 2], [0x40, 0x80], 0).unwrap();
+        assert_eq!((d4[1], d4[4], d4[5]), (0x01, 0x40, 0x80));
+        // L2 resiste da metade do curso, R2 solto: só o bit do L2 liga.
+        let t = [Trig::Rigid { start: 5, power: 8 }, Trig::Off];
+        let r = out_report(Family::DualSense, Link::Usb, None, t, [0, 0], 0).unwrap();
+        assert_eq!((r[1], r[11], r[22]), (0x08, 0x05, 0x21));
+        // Zonas 5 a 9 ligadas, com 3 bits de força (8 vira 7) em cada uma.
+        assert_eq!(u16::from_le_bytes(r[23..25].try_into().unwrap()), 0b11_1110_0000);
+        let f = u32::from_le_bytes(r[25..29].try_into().unwrap());
+        assert!((5..10).all(|i| (f >> (3 * i)) & 7 == 7) && (0..5).all(|i| (f >> (3 * i)) & 7 == 0));
+        // A arma resiste numa zona e cede na seguinte; a vibração leva a frequência.
+        let r = out_report(Family::DualSense, Link::Usb, None, [Trig::Off, Trig::Click { start: 3, power: 1 }], [0, 0], 0).unwrap();
+        assert_eq!((r[1], r[11], u16::from_le_bytes(r[12..14].try_into().unwrap()), r[14]), (0x04, 0x25, 0b1_1000, 0));
+        let r = out_report(Family::DualSense, Link::Usb, None, [Trig::Off, Trig::Buzz { start: 0, power: 4, hz: 60 }], [0, 0], 0).unwrap();
+        assert_eq!((r[11], r[20]), (0x26, 40));
     }
 
     #[test]
