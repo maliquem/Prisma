@@ -2201,3 +2201,11 @@ Junto com uma tecla	Вместе с клавишей
 Vale fora do Prisma e fora de programas abertos como administrador. Os cliques esquerdo e direito não mudam.	Работает вне Prisma и вне программ администратора. Левый и правый щелчки не меняются.
 Um perfil usa até 17 teclas diferentes.	Профиль может использовать до 17 разных клавиш.
 Ligações	Назначения
+Texto rápido	Быстрый текст
+Digitar {}	Ввести {}
+Sem abreviação	Без сокращения
+Abreviação (opcional)	Сокращение (необязательно)
+Nenhum texto: crie um em Texto rápido, mais abaixo	Нет текста: создайте его в «Быстрый текст» ниже
+Essa abreviação já existe neste perfil.	Это сокращение уже есть в этом профиле.
+A abreviação tem de 2 a 16 letras e números.	Сокращение: от 2 до 16 букв и цифр.
+Em qualquer programa, a abreviação seguida de espaço, Enter ou Tab vira o texto. Sem abreviação, o texto sai por um botão ou tecla (destino Texto rápido).	В любой программе сокращение, за которым следует пробел, Enter или Tab, превращается в текст. Без сокращения текст выводится кнопкой или клавишей (действие «Быстрый текст»).

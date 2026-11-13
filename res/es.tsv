@@ -2201,3 +2201,11 @@ Junto com uma tecla	Junto con una tecla
 Vale fora do Prisma e fora de programas abertos como administrador. Os cliques esquerdo e direito não mudam.	Funciona fuera de Prisma y de programas de administrador. Los clics izquierdo y derecho no cambian.
 Um perfil usa até 17 teclas diferentes.	Un perfil usa hasta 17 teclas distintas.
 Ligações	Asignaciones
+Texto rápido	Texto rápido
+Digitar {}	Escribir {}
+Sem abreviação	Sin abreviatura
+Abreviação (opcional)	Abreviatura (opcional)
+Nenhum texto: crie um em Texto rápido, mais abaixo	Ningún texto: crea uno en Texto rápido, más abajo
+Essa abreviação já existe neste perfil.	Esa abreviatura ya existe en este perfil.
+A abreviação tem de 2 a 16 letras e números.	La abreviatura tiene de 2 a 16 letras y números.
+Em qualquer programa, a abreviação seguida de espaço, Enter ou Tab vira o texto. Sem abreviação, o texto sai por um botão ou tecla (destino Texto rápido).	En cualquier programa, la abreviatura seguida de espacio, Enter o Tab se convierte en el texto. Sin abreviatura, el texto sale con un botón o tecla (destino Texto rápido).

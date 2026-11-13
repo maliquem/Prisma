@@ -2201,3 +2201,11 @@ Junto com uma tecla	与某个键一起
 Vale fora do Prisma e fora de programas abertos como administrador. Os cliques esquerdo e direito não mudam.	在 Prisma 之外以及非管理员程序中生效。鼠标左键和右键不会改变。
 Um perfil usa até 17 teclas diferentes.	一个配置最多使用 17 个不同的键。
 Ligações	按键绑定
+Texto rápido	快速文本
+Digitar {}	输入 {}
+Sem abreviação	无缩写
+Abreviação (opcional)	缩写（可选）
+Nenhum texto: crie um em Texto rápido, mais abaixo	没有文本：请在下方的快速文本中创建
+Essa abreviação já existe neste perfil.	此配置中已有该缩写。
+A abreviação tem de 2 a 16 letras e números.	缩写为 2 到 16 个字母和数字。
+Em qualquer programa, a abreviação seguida de espaço, Enter ou Tab vira o texto. Sem abreviação, o texto sai por um botão ou tecla (destino Texto rápido).	在任何程序中，输入缩写后按空格、Enter 或 Tab 会变成该文本。没有缩写时，文本由按键或按钮输出（目标为快速文本）。

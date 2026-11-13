@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 use windows::Win32::Foundation::{LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::*;
 
-/// O que o perfil em uso precisa: 1 teclado, 2 mouse.
+/// O que o perfil em uso precisa: 1 teclado, 2 mouse, 4 só o relógio (jogo com anti-cheat).
 static NEED: AtomicU8 = AtomicU8::new(0);
 static THREAD: AtomicU32 = AtomicU32::new(0);
 static STARTING: AtomicBool = AtomicBool::new(false);

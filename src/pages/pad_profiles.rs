@@ -41,6 +41,11 @@ pub struct Editor {
     khk: Hotkey,
     kwith: usize,
     kwhk: Hotkey,
+    /// Texto rápido novo: abreviação e texto.
+    tabbr: String,
+    ttext: String,
+    /// Altura que o editor ocupou no desenho anterior, para a rolagem.
+    body_h: f32,
 }
 
 /// O perfil aberto no editor, para exportar.
@@ -77,6 +82,11 @@ pub fn test_target(app: &mut App, what: &str) {
             }
             "keyboard" => ed.kind = 9,
             "macro" => ed.kind = 10,
+            "text" => {
+                ed.kind = 11;
+                ed.tabbr = "vlw".into();
+                ed.ttext = "Valeu, até a próxima!".into();
+            }
             "keys" => {
                 ed.src = 1;
                 ed.ksrc = 8;
@@ -113,7 +123,7 @@ const SPEEDS_T: [&str; 4] = ["Turbo 2x", "Turbo 3x", "Turbo 4x", "Turbo 5x"];
 const SIDES: [&str; 3] = ["Os dois lados", "Só o lado esquerdo", "Só o lado direito"];
 const CLICKS: [&str; 2] = ["Segurar para arrastar", "Clique liga e desliga"];
 const SPEEDS: [(&str, f32); 3] = [("Mouse devagar", 800.0), ("Mouse normal", 1600.0), ("Mouse rápido", 2600.0)];
-const KINDS: [&str; 11] = ["Tecla", "Tecla especial", "Mouse", "Roda", "Camada enquanto segura", "Liga e desliga camada", "Ação do Prisma", "Trocar de perfil", "Abrir programa", "Teclado do Prisma", "Macro"];
+const KINDS: [&str; 12] = ["Tecla", "Tecla especial", "Mouse", "Roda", "Camada enquanto segura", "Liga e desliga camada", "Ação do Prisma", "Trocar de perfil", "Abrir programa", "Teclado do Prisma", "Macro", "Texto rápido"];
 /// Na ordem de `remap::MODES`.
 const MODE_NAMES: [&str; 3] = ["Uma vez", "Repetir enquanto segura", "Repetir até apertar de novo"];
 const STEP_KINDS: [&str; 3] = ["Tecla", "Clique", "Espera"];
@@ -219,7 +229,20 @@ fn describe(o: Out, p: &Profile) -> String {
         Out::Profile(n) => tr("Trocar para o perfil {}").replace("{}", p.strings.get(n as usize).map_or("", |s| s)),
         Out::Run(n) => tr("Abrir {}").replace("{}", &p.strings.get(n as usize).map_or_else(String::new, |s| crate::sys::procs::exe_name(s))),
         Out::Macro(n) => tr("Macro {}").replace("{}", p.macros.get(n as usize).map_or("", |m| &m.name)),
+        Out::Text(n) => tr("Digitar {}").replace("{}", &p.texts.get(n as usize).map_or_else(String::new, short)),
     }
+}
+
+/// Texto rápido numa linha curta: a abreviação, ou o começo do texto.
+fn short(t: &remap::Snip) -> String {
+    if !t.abbr.is_empty() {
+        return t.abbr.clone();
+    }
+    let mut s: String = t.text.chars().take(24).collect();
+    if t.text.chars().count() > 24 {
+        s.push('…');
+    }
+    s
 }
 
 /// Tecla do campo de tecla, com os modificadores do mapeamento.
@@ -247,12 +270,19 @@ fn step_text(s: Step, p: &Profile) -> String {
 /// Apaga a macro `i`: as ligações dela saem e as das macros seguintes descem um número.
 fn remove_macro(p: &mut Profile, i: usize) {
     p.macros.remove(i);
+    drop_out(p, Out::Macro(i as u8));
+}
+
+/// Tira as ligações de botão e de tecla que vão para `gone` (macro ou texto apagado) e faz as que
+/// apontam para os seguintes descerem um número.
+fn drop_out(p: &mut Profile, gone: Out) {
     for l in &mut p.layers {
-        l.binds.retain(|b| b.out != Out::Macro(i as u8));
-        for b in &mut l.binds {
-            if let Out::Macro(n) = &mut b.out {
-                if *n as usize > i {
-                    *n -= 1;
+        for v in [&mut l.binds, &mut l.keys] {
+            v.retain(|b| b.out != gone);
+            for b in v.iter_mut() {
+                match (&mut b.out, gone) {
+                    (Out::Macro(n), Out::Macro(i)) | (Out::Text(n), Out::Text(i)) if *n > i => *n -= 1,
+                    _ => {}
                 }
             }
         }
@@ -271,12 +301,6 @@ fn ask_template(ui: &mut Ui, tpl: &str, prof: &str) {
 /// Troca o conteúdo do perfil pelo do modelo, mantendo nome e jogos.
 fn apply(p: &mut Profile, t: Profile) {
     *p = Profile { name: std::mem::take(&mut p.name), games: std::mem::take(&mut p.games), ..t };
-}
-
-/// Quanto o editor ocupa, para a rolagem.
-fn content_h(binds: usize, chip_rows: usize, wizard: bool, steps: Option<usize>) -> f32 {
-    let macros = 32.0 + 44.0 + steps.map_or(0.0, |n| 44.0 + 28.0 + n as f32 * 40.0 + 44.0);
-    (if wizard { 3.0 * 44.0 } else { 0.0 }) + 30.0 + 5.0 * 44.0 + 2.0 * 44.0 + 32.0 + 4.0 * 40.0 + 36.0 + chip_rows as f32 * 32.0 + 36.0 + binds.max(1) as f32 * 40.0 + 40.0 + 2.0 * 44.0 + 24.0 + 40.0 + macros
 }
 
 pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
@@ -409,14 +433,12 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
     let target = if keys_mode { kvk } else { ed.button };
     let list_of = |l: &Layer| if keys_mode { l.keys.clone() } else { l.binds.clone() };
     let own: Vec<Bind> = list_of(&p.layers[ed.layer]).into_iter().filter(|b| b.button == target && target != 0).collect();
-    // Linhas de botões: estimativa pela largura média, só para a rolagem.
-    let chip_rows = (chips.len() as f32 * 64.0 / w).ceil() as usize + 1;
     let body = rect(r.x, y, r.w - 8.0, r.bottom() - y - 8.0);
     // Partes iguais em três: camada, assistente e o formulário de ligação.
     let third = ((w - 16.0) / 3.0).floor();
     let wizard = ed.tpl == acc_i;
     ed.mac = ed.mac.min(p.macros.len().saturating_sub(1));
-    ui.begin_scroll("pp-body", body, content_h(own.len(), chip_rows, wizard, p.macros.get(ed.mac).map(|m| m.steps.len())));
+    ui.begin_scroll("pp-body", body, ed.body_h);
     let mut changed = false;
 
     // Assistente do Acessível: três perguntas e Aplicar.
@@ -671,6 +693,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
         6 => remap::ACTIONS.iter().map(|a| tr(a)).chain((1..=sounds).map(|n| tr("Combinação de som {}").replace("{}", &n.to_string()))).collect(),
         7 => others_p.clone(),
         10 => p.macros.iter().map(|m| m.name.clone()).collect(),
+        11 => p.texts.iter().map(short).collect(),
         _ => vec![],
     };
     if ed.kind == 0 {
@@ -683,7 +706,8 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
     } else if ed.kind == 9 {
         ui.c.text_fit(vr, &tr("Abre e fecha o teclado na tela"), 13.0, MUTED, Align::Left, Weight::Regular);
     } else if values.is_empty() {
-        ui.c.text_fit(vr, &tr("Nenhuma macro: crie uma em Macros, mais abaixo"), 13.0, MUTED, Align::Left, Weight::Regular);
+        let none = if ed.kind == 11 { "Nenhum texto: crie um em Texto rápido, mais abaixo" } else { "Nenhuma macro: crie uma em Macros, mais abaixo" };
+        ui.c.text_fit(vr, &tr(none), 13.0, MUTED, Align::Left, Weight::Regular);
     } else {
         ed.val = ed.val.min(values.len().saturating_sub(1));
         ui.select("pp-val", vr, &values, &mut ed.val);
@@ -700,6 +724,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
         7 => others_p.get(ed.val).map(|_| Out::Profile(0)),
         9 => Some(Out::Action(remap::KEYBOARD)),
         10 => p.macros.get(ed.val).map(|_| Out::Macro(ed.val as u8)),
+        11 => p.texts.get(ed.val).map(|_| Out::Text(ed.val as u8)),
         _ => (!ed.run.is_empty()).then_some(Out::Run(0)),
     };
     // Teclado: cada tecla diferente do perfil ocupa um dos `KEY_SLOTS` lugares do motor.
@@ -889,6 +914,53 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
             p.macros[ed.mac].steps.extend(add.unwrap_or_default());
             changed = true;
         }
+        y += 44.0;
+    }
+
+    // Texto rápido: sai por uma ligação (destino Texto rápido) ou pela abreviação digitada.
+    y += 12.0;
+    ui.title(rect(x, y + 4.0, w, 22.0), "Texto rápido");
+    y += 32.0;
+    let mut gone = None;
+    for (i, t) in p.texts.iter().enumerate() {
+        let a = if t.abbr.is_empty() { tr("Sem abreviação") } else { t.abbr.clone() };
+        ui.c.text_fit(rect(x, y, third, 34.0), &a, 13.0, TEXT2, Align::Left, Weight::Regular);
+        ui.c.text_fit(rect(x + third + 8.0, y, third, 34.0), &t.text, 13.0, TEXT, Align::Left, Weight::Regular);
+        if ui.button_ex(&format!("pp-trm{i}"), rect(x + 2.0 * (third + 8.0), y, third, 32.0), "Remover", false, true) {
+            gone = Some(i);
+        }
+        y += 40.0;
+    }
+    if let Some(i) = gone {
+        p.texts.remove(i);
+        drop_out(&mut p, Out::Text(i as u8));
+        changed = true;
+    }
+    ui.search("pp-tabbr", rect(x, y, third, 34.0), &mut ed.tabbr, "Abreviação (opcional)");
+    ed.tabbr = ed.tabbr.chars().filter(char::is_ascii_alphanumeric).take(16).collect::<String>().to_ascii_lowercase();
+    ui.search("pp-ttext", rect(x + third + 8.0, y, third, 34.0), &mut ed.ttext, "Texto");
+    ed.ttext = ed.ttext.chars().filter(|c| !c.is_control()).take(remap::MAX_TEXT).collect();
+    let text = ed.ttext.trim().to_string();
+    let dup = !ed.tabbr.is_empty() && p.texts.iter().any(|t| t.abbr == ed.tabbr);
+    let ok = !text.is_empty() && remap::abbr_ok(&ed.tabbr) && !dup && p.texts.len() < remap::MAX_TEXTS;
+    if ui.button_ex("pp-tadd", rect(x + 2.0 * (third + 8.0), y, third, 34.0), "Adicionar", true, ok) {
+        p.texts.push(remap::Snip { abbr: std::mem::take(&mut ed.tabbr), text });
+        ed.ttext.clear();
+        changed = true;
+    }
+    y += 42.0;
+    let (note, warn) = if dup {
+        ("Essa abreviação já existe neste perfil.", true)
+    } else if !remap::abbr_ok(&ed.tabbr) {
+        ("A abreviação tem de 2 a 16 letras e números.", true)
+    } else {
+        ("Em qualquer programa, a abreviação seguida de espaço, Enter ou Tab vira o texto. Sem abreviação, o texto sai por um botão ou tecla (destino Texto rápido).", false)
+    };
+    ui.c.text_wrap(rect(x, y, w, 36.0), &tr(note), 12.0, if warn { WARN } else { MUTED }, Weight::Regular);
+    let h = y + 52.0 - body.y;
+    if (h - ed.body_h).abs() > 0.5 {
+        ed.body_h = h;
+        ui.s.needs_redraw = true;
     }
 
     // Depois do último uso de `ed`: o aviso e o botão precisam da App inteira.

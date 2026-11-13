@@ -72,6 +72,8 @@ pub enum Out {
     Run(u8),
     /// Macro do perfil (índice em `Profile::macros`), feita por `sys::macros`.
     Macro(u8),
+    /// Texto rápido do perfil (índice em `Profile::texts`), digitado como texto.
+    Text(u8),
 }
 
 /// Como a macro roda: uma vez, repetindo enquanto o botão fica apertado, ou repetindo até o
@@ -101,6 +103,21 @@ pub struct Macro {
 pub const MAX_MACROS: usize = 32;
 pub const MAX_STEPS: usize = 2000;
 pub const MAX_WAIT: u32 = 60_000;
+
+/// Texto rápido: sai por uma ligação, ou quando a abreviação é digitada e seguida de espaço,
+/// Enter ou Tab em qualquer programa.
+#[derive(Clone, PartialEq, Debug)]
+pub struct Snip {
+    pub abbr: String,
+    pub text: String,
+}
+pub const MAX_TEXTS: usize = 64;
+pub const MAX_TEXT: usize = 500;
+
+/// Abreviação vazia (o texto só sai por ligação) ou de 2 a 16 letras e números, em minúsculas.
+pub fn abbr_ok(a: &str) -> bool {
+    a.is_empty() || ((2..=16).contains(&a.len()) && a.bytes().all(|b| b.is_ascii_digit() || b.is_ascii_lowercase()))
+}
 
 /// Ações do Prisma que um botão pode chamar: todas as que têm atalho, mais HDR, Bluetooth e
 /// bateria. A ordem é a do arquivo: só cresce no fim. `SOUND + n` troca para a combinação de som n.
@@ -268,6 +285,7 @@ pub struct Profile {
     /// Botões que, segurados, fazem o próximo botão ligar ou desligar o turbo dele (0: sem atalho).
     pub turbo_key: u32,
     pub macros: Vec<Macro>,
+    pub texts: Vec<Snip>,
 }
 
 pub const DESKTOP: &str = "Desktop";
@@ -277,7 +295,7 @@ impl Profile {
     fn empty(name: &str) -> Self {
         let stick = Zone { start: 0.15, end: 0.95 };
         let trig = Zone { start: 0.05, end: 0.95 };
-        Profile { name: name.into(), games: vec![], zones: [stick, stick, trig, trig], layers: vec![Layer { name: "Base".into(), parent: None, ls: None, rs: None, binds: vec![], keys: vec![] }], strings: vec![], turbo: vec![], turbo_key: TURBO_KEY, macros: vec![] }
+        Profile { name: name.into(), games: vec![], zones: [stick, stick, trig, trig], layers: vec![Layer { name: "Base".into(), parent: None, ls: None, rs: None, binds: vec![], keys: vec![] }], strings: vec![], turbo: vec![], turbo_key: TURBO_KEY, macros: vec![], texts: vec![] }
     }
 
     /// Base: nada mapeado, o jogo lê o controle como ele é.
@@ -449,6 +467,9 @@ impl Profile {
                 }
             }
         }
+        for t in &self.texts {
+            let _ = writeln!(s, "text {} {}", if t.abbr.is_empty() { "-" } else { &t.abbr }, t.text);
+        }
         for (i, l) in self.layers.iter().enumerate() {
             match l.parent {
                 Some(p) => _ = writeln!(s, "layer {p} {}", l.name),
@@ -579,6 +600,15 @@ impl Profile {
                     }
                     p.layers[l].keys.push(Bind { button, with, when, out });
                 }
+                "text" => {
+                    let (abbr, text) = rest.split_once(' ')?;
+                    let abbr = if abbr == "-" { String::new() } else { abbr.to_string() };
+                    let dup = !abbr.is_empty() && p.texts.iter().any(|t| t.abbr == abbr);
+                    if !abbr_ok(&abbr) || dup || text.chars().count() > MAX_TEXT || text.chars().any(char::is_control) || p.texts.len() >= MAX_TEXTS {
+                        return None;
+                    }
+                    p.texts.push(Snip { abbr, text: text.into() });
+                }
                 "macro" => {
                     let (mode, name) = rest.split_once(' ').unwrap_or((rest, ""));
                     let mode = MODES.iter().find(|x| x.1 == mode)?.0;
@@ -616,7 +646,7 @@ impl Profile {
         }
         // Camada citada numa ligação tem que existir.
         let n = p.layers.len();
-        let ok = p.layers.iter().flat_map(|l| l.binds.iter().chain(&l.keys)).all(|b| !matches!(b.out, Out::Layer(x) | Out::Toggle(x) if x as usize >= n) && !matches!(b.out, Out::Macro(x) if x as usize >= p.macros.len()));
+        let ok = p.layers.iter().flat_map(|l| l.binds.iter().chain(&l.keys)).all(|b| !matches!(b.out, Out::Layer(x) | Out::Toggle(x) if x as usize >= n) && !matches!(b.out, Out::Macro(x) if x as usize >= p.macros.len()) && !matches!(b.out, Out::Text(x) if x as usize >= p.texts.len()));
         (ok && n > 0 && !p.name.is_empty()).then_some(p)
     }
 }
@@ -695,6 +725,7 @@ fn out_text(o: Out, strings: &[String]) -> String {
         Out::Profile(n) => format!("profile {}", text(n)),
         Out::Run(n) => format!("run {}", text(n)),
         Out::Macro(n) => format!("macro {n}"),
+        Out::Text(n) => format!("text {n}"),
     }
 }
 
@@ -737,6 +768,7 @@ fn parse_out(s: &str, strings: &mut Vec<String>) -> Option<Out> {
         "layer" => Out::Layer(n.parse::<u8>().ok()?),
         "toggle" => Out::Toggle(n.parse::<u8>().ok()?),
         "macro" => Out::Macro(n.parse::<u8>().ok().filter(|&m| (m as usize) < MAX_MACROS)?),
+        "text" => Out::Text(n.parse::<u8>().ok().filter(|&m| (m as usize) < MAX_TEXTS)?),
         "action" => Out::Action(n.parse::<u8>().ok().filter(|&a| (a as usize) < ACTIONS.len() || (SOUND..SOUND + crate::app::SND_KEYS_MAX as u8).contains(&a))?),
         _ => return None,
     };
@@ -876,7 +908,7 @@ impl Engine {
                 None => self.toggles.push(n),
             },
             Out::Wheel(n) => acts.push(Act::Wheel(n as i32 * 120)),
-            Out::Action(_) | Out::Profile(_) | Out::Run(_) => acts.push(Act::Cmd(o)),
+            Out::Action(_) | Out::Profile(_) | Out::Run(_) | Out::Text(_) => acts.push(Act::Cmd(o)),
             _ => {
                 let c = self.count.entry(o).or_default();
                 *c += 1;
@@ -894,7 +926,7 @@ impl Engine {
                     self.holds.remove(i);
                 }
             }
-            Out::Toggle(_) | Out::Wheel(_) | Out::Action(_) | Out::Profile(_) | Out::Run(_) => {}
+            Out::Toggle(_) | Out::Wheel(_) | Out::Action(_) | Out::Profile(_) | Out::Run(_) | Out::Text(_) => {}
             _ => {
                 if let Some(c) = self.count.get_mut(&o) {
                     *c -= 1;
@@ -1158,6 +1190,8 @@ struct Run {
     /// Teclas apertadas (bits) e as que o Prisma engoliu ao apertar (a soltura também fica com ele).
     kheld: u32,
     kswallow: u32,
+    /// Palavra sendo digitada, para a abreviação do texto rápido ("#": longa demais, não vale).
+    typed: String,
 }
 
 /// As ligações de teclado e mouse de `p` como um perfil de botões: cada tecla usada ganha um bit.
@@ -1195,11 +1229,14 @@ fn set_keys(r: &mut Run) {
     r.kbd = key_profile(&r.profiles[r.cur]);
     r.kheld = 0;
     r.kswallow = 0;
-    let need = match (&r.kbd, ON.load(Ordering::Relaxed) && !STOPPED.load(Ordering::Relaxed)) {
-        (Some((_, slots)), true) => slots.iter().fold(0, |n, &vk| n | if (4..=6).contains(&vk) { 2 } else { 1 }),
-        _ => 0,
-    };
-    super::keymap::sync(need);
+    r.typed.clear();
+    let mut need = r.kbd.as_ref().map_or(0, |(_, slots)| slots.iter().fold(0, |n, &vk| n | if (4..=6).contains(&vk) { 2 } else { 1 }));
+    if r.profiles[r.cur].texts.iter().any(|t| !t.abbr.is_empty()) {
+        need |= 1;
+    }
+    // Jogo com anti-cheat: nenhum gancho; a thread fica só com o relógio, para ver o foco mudar.
+    let on = ON.load(Ordering::Relaxed) && !STOPPED.load(Ordering::Relaxed);
+    super::keymap::sync(if !on || need == 0 { 0 } else if r.ac { 4 } else { need });
 }
 
 fn profiles_dir() -> std::path::PathBuf {
@@ -1272,7 +1309,7 @@ fn reload() {
 pub fn configure(on: bool, games: Vec<String>) {
     let acts = {
         let mut g = RUN.lock().unwrap();
-        let r = g.get_or_insert_with(|| Run { profiles: load_profiles(), cur: 0, games: vec![], engines: HashMap::new(), want: None, lat: vec![], warned: HashSet::new(), ac: false, ac_seen: HashMap::new(), kbd: None, kheld: 0, kswallow: 0 });
+        let r = g.get_or_insert_with(|| Run { profiles: load_profiles(), cur: 0, games: vec![], engines: HashMap::new(), want: None, lat: vec![], warned: HashSet::new(), ac: false, ac_seen: HashMap::new(), kbd: None, kheld: 0, kswallow: 0, typed: String::new() });
         r.games = games.into_iter().map(|s| s.to_lowercase()).collect();
         ON.store(on, Ordering::Relaxed);
         set_keys(r);
@@ -1397,6 +1434,11 @@ fn handle(r: &mut Run, key: &str, step: Vec<Act>, acts: &mut Vec<Act>, events: &
     for a in step {
                 match a {
                     Act::Cmd(Out::Action(n)) => events.push(pads::Event::Action { id: n, pad: key.to_string() }),
+                    Act::Cmd(Out::Text(n)) => {
+                        if let Some(t) = r.profiles[r.cur].texts.get(n as usize) {
+                            super::osk::type_text(&t.text);
+                        }
+                    }
                     Act::Cmd(Out::Run(n)) => events.extend(strings.get(n as usize).map(|s| pads::Event::Run { path: s.clone() })),
                     Act::Cmd(Out::Profile(n)) => {
                         // Troca na mão: vale até o foco mudar de programa.
@@ -1446,6 +1488,15 @@ fn apply_want(r: &mut Run, now: Instant, acts: &mut Vec<Act>, events: &mut Vec<p
 /// fica com ela (o programa em foco não a vê). Fora do mapeamento, com o Prisma em foco e com um
 /// programa de administrador em foco, tudo passa direto.
 pub fn key_event(vk: u16, down: bool) -> bool {
+    if down {
+        if let Some((back, text)) = expansion(vk) {
+            // A abreviação sai, o texto entra e a tecla que fechou a palavra vem depois.
+            send(&[Act::Down(Out::Key(0x08, 0)), Act::Up(Out::Key(0x08, 0))].repeat(back));
+            super::osk::type_text(&text);
+            send(&[Act::Down(Out::Key(vk, 0)), Act::Up(Out::Key(vk, 0))]);
+            return true;
+        }
+    }
     let now = Instant::now();
     let mut acts = vec![];
     let mut events = vec![];
@@ -1455,7 +1506,7 @@ pub fn key_event(vk: u16, down: bool) -> bool {
         let Some(i) = r.kbd.as_ref().and_then(|k| k.1.iter().position(|&s| s == vk)) else { return false };
         let bit = 1u32 << i;
         let kp = r.kbd.as_ref().unwrap().0.clone();
-        let live = ON.load(Ordering::Relaxed) && !STOPPED.load(Ordering::Relaxed) && !super::nav::front() && !FRONT_ADMIN.load(Ordering::Relaxed);
+        let live = ON.load(Ordering::Relaxed) && !STOPPED.load(Ordering::Relaxed) && !super::nav::front() && !FRONT_ADMIN.load(Ordering::Relaxed) && !r.ac;
         let e = r.engines.entry(KBD.into()).or_insert_with(|| (Engine { prev: 0, ..Engine::default() }, None));
         if down && r.kheld & bit != 0 {
             // Repetição do Windows: a tecla ligada repete também.
@@ -1492,6 +1543,59 @@ pub fn key_event(vk: u16, down: bool) -> bool {
     send(&acts);
     events.into_iter().for_each(pads::emit);
     swallow
+}
+
+/// Abreviação do texto rápido terminada por esta tecla: quantas letras apagar e o texto.
+fn expansion(vk: u16) -> Option<(usize, String)> {
+    let mut g = RUN.lock().unwrap();
+    let r = g.as_mut()?;
+    let live = ON.load(Ordering::Relaxed) && !STOPPED.load(Ordering::Relaxed) && !super::nav::front() && !FRONT_ADMIN.load(Ordering::Relaxed) && !r.ac;
+    let texts = &r.profiles[r.cur].texts;
+    if !live || texts.iter().all(|t| t.abbr.is_empty()) {
+        r.typed.clear();
+        return None;
+    }
+    let modded = [0x11, 0x12, 0x5B, 0x5C].iter().any(|&k| unsafe { windows::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState(k) } < 0);
+    let i = typed_key(&mut r.typed, vk, modded, texts)?;
+    Some((texts[i].abbr.len(), texts[i].text.clone()))
+}
+
+/// Uma tecla apertada: letras e números fazem a palavra; espaço, Enter ou Tab depois de uma
+/// abreviação devolvem o texto dela; qualquer outra tecla (ou com Ctrl, Alt ou Win) começa outra.
+/// shortcut: clique do mouse não zera a palavra (sem gancho de mouse); a troca de janela zera.
+fn typed_key(word: &mut String, vk: u16, modded: bool, texts: &[Snip]) -> Option<usize> {
+    match vk {
+        // Shift e Caps Lock não mudam a palavra.
+        0x10 | 0x14 | 0xA0 | 0xA1 => None,
+        _ if modded => {
+            word.clear();
+            None
+        }
+        0x08 => {
+            word.pop();
+            None
+        }
+        0x30..=0x39 | 0x41..=0x5A | 0x60..=0x69 => {
+            if word.len() >= 16 {
+                *word = "#".into();
+            } else {
+                word.push(match vk {
+                    0x60..=0x69 => (b'0' + (vk - 0x60) as u8) as char,
+                    _ => (vk as u8 as char).to_ascii_lowercase(),
+                });
+            }
+            None
+        }
+        0x20 | 0x0D | 0x09 => {
+            let hit = texts.iter().position(|t| !t.abbr.is_empty() && t.abbr == *word);
+            word.clear();
+            hit
+        }
+        _ => {
+            word.clear();
+            None
+        }
+    }
 }
 
 /// A cada 30 ms com o gancho ligado: segurar, toque duplo, troca de perfil pelo foco.
@@ -1610,7 +1714,11 @@ fn on_focus(pid: u32, full: bool) {
     let mut events = vec![];
     if let Some(r) = RUN.lock().unwrap().as_mut() {
         r.ac_seen.insert(exe.clone(), ac);
-        r.ac = ac;
+        let was = std::mem::replace(&mut r.ac, ac);
+        r.typed.clear();
+        if was != ac {
+            set_keys(r);
+        }
         let named = |n: &str| r.profiles.iter().position(|p| p.name == n).unwrap_or(0);
         let game = r.games.contains(&exe) || (full && exe != "explorer.exe");
         let to = r.profiles.iter().position(|p| p.games.contains(&exe)).unwrap_or_else(|| if game { named(BASE) } else { named(DESKTOP) });
@@ -2016,6 +2124,28 @@ mod tests {
     }
 
     #[test]
+    fn quick_text_round_trip_and_abbreviation() {
+        let mut p = Profile::base();
+        p.texts.push(Snip { abbr: "obg".into(), text: "Obrigado pela partida!".into() });
+        p.texts.push(Snip { abbr: String::new(), text: "gg wp".into() });
+        p.layers[0].binds.push(Bind { button: pads::A, with: 0, when: When::Press, out: Out::Text(1) });
+        let text = p.to_text();
+        assert_eq!(Profile::parse(&text), Some(p.clone()), "{text}");
+        let mut w = String::new();
+        let mut keys = |list: &[u16], modded: bool| list.iter().map(|&k| typed_key(&mut w, k, modded, &p.texts)).last().flatten();
+        // O, Shift, B, G e espaço: a abreviação vira o texto 0.
+        assert_eq!(keys(&[0x4F, 0xA0, 0x42, 0x47, 0x20], false), Some(0));
+        // Parte de outra palavra, com apagar no meio, ou com Ctrl.
+        assert_eq!(keys(&[0x41, 0x4F, 0x42, 0x47, 0x20], false), None);
+        assert_eq!(keys(&[0x4F, 0x42, 0x58, 0x08, 0x47, 0x0D], false), Some(0));
+        assert_eq!(keys(&[0x4F, 0x42, 0x47], true), None);
+        assert_eq!(keys(&[0x20], false), None);
+        // Palavra longa demais não termina numa abreviação curta.
+        let long: Vec<u16> = std::iter::repeat_n(0x41, 16).chain([0x4F, 0x42, 0x47, 0x09]).collect();
+        assert_eq!(keys(&long, false), None);
+    }
+
+    #[test]
     fn keys_become_buttons_for_the_engine() {
         let t0 = Instant::now();
         let mut p = Profile::base();
@@ -2086,6 +2216,11 @@ mod tests {
             "prisma-profile 1\nname x\nmacro once M\nmstep 0 down action 1\nlayer - B",
             "prisma-profile 1\nname x\nlayer - B\nkbind 0 20+20 press key 65",
             "prisma-profile 1\nname x\nlayer - B\nkbind 0 300 press key 65",
+            "prisma-profile 1\nname x\ntext a Oi\nlayer - B",
+            "prisma-profile 1\nname x\ntext Obg Oi\nlayer - B",
+            "prisma-profile 1\nname x\ntext ob-g Oi\nlayer - B",
+            "prisma-profile 1\nname x\ntext obg Oi\ntext obg Tchau\nlayer - B",
+            "prisma-profile 1\nname x\ntext obg Oi\nlayer - B\nbind 0 A press text 1",
             "prisma-profile 1\nname x\nlayer - B\nbind 0 A press action 54",
             "prisma-profile 1\nname x\nlayer - B\nbind 0 A press action 112",
             "prisma-profile 1\nname x\nlayer - B\nturbo A 1 500 on",

@@ -2207,3 +2207,11 @@ Junto com uma tecla	Together with a key
 Vale fora do Prisma e fora de programas abertos como administrador. Os cliques esquerdo e direito não mudam.	Works outside Prisma and outside programs running as administrator. Left and right clicks never change.
 Um perfil usa até 17 teclas diferentes.	A profile uses up to 17 different keys.
 Ligações	Bindings
+Texto rápido	Quick text
+Digitar {}	Type {}
+Sem abreviação	No abbreviation
+Abreviação (opcional)	Abbreviation (optional)
+Nenhum texto: crie um em Texto rápido, mais abaixo	No text: create one in Quick text, below
+Essa abreviação já existe neste perfil.	This abbreviation already exists in this profile.
+A abreviação tem de 2 a 16 letras e números.	The abbreviation has 2 to 16 letters and numbers.
+Em qualquer programa, a abreviação seguida de espaço, Enter ou Tab vira o texto. Sem abreviação, o texto sai por um botão ou tecla (destino Texto rápido).	In any program, the abbreviation followed by Space, Enter or Tab becomes the text. Without an abbreviation, the text comes out from a button or key (Quick text destination).

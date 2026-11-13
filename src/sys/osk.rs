@@ -308,20 +308,21 @@ pub fn feed(key: &str, inp: &Input, now: Instant) -> bool {
 }
 
 fn type_key(k: &Key) {
-    use windows::Win32::UI::Input::KeyboardAndMouse::*;
     match *k {
         Key::Vk(vk) => super::remap::send(&[Act::Down(Out::Key(vk, 0)), Act::Up(Out::Key(vk, 0))]),
-        Key::Char(c) => {
-            let mut buf = [0u16; 2];
-            let list: Vec<INPUT> = c
-                .encode_utf16(&mut buf)
-                .iter()
-                .flat_map(|&u| [KEYEVENTF_UNICODE, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP].map(|f| INPUT { r#type: INPUT_KEYBOARD, Anonymous: INPUT_0 { ki: KEYBDINPUT { wScan: u, dwFlags: f, dwExtraInfo: super::remap::MARK, ..Default::default() } } }))
-                .collect();
-            unsafe {
-                SendInput(&list, std::mem::size_of::<INPUT>() as i32);
-            }
-        }
+        Key::Char(c) => type_text(&c.to_string()),
+    }
+}
+
+/// Digita como texto, não como teclas: vale com qualquer idioma do teclado do Windows.
+pub fn type_text(s: &str) {
+    use windows::Win32::UI::Input::KeyboardAndMouse::*;
+    let list: Vec<INPUT> = s
+        .encode_utf16()
+        .flat_map(|u| [KEYEVENTF_UNICODE, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP].map(|f| INPUT { r#type: INPUT_KEYBOARD, Anonymous: INPUT_0 { ki: KEYBDINPUT { wScan: u, dwFlags: f, dwExtraInfo: super::remap::MARK, ..Default::default() } } }))
+        .collect();
+    unsafe {
+        SendInput(&list, std::mem::size_of::<INPUT>() as i32);
     }
 }
 
