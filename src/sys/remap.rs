@@ -2080,6 +2080,17 @@ pub fn latency() -> Option<(u32, u32)> {
     Some((v[v.len() / 2], v[v.len() * 99 / 100]))
 }
 
+/// No Nativo, o perfil só age se a pessoa o fez: o Desktop é do Teclado e mouse e o Base de
+/// fábrica não liga nada (o Base mudado por ela vale).
+fn native_runs(p: &Profile) -> bool {
+    p.name != DESKTOP && !(p.name == BASE && *p == Profile::base())
+}
+
+/// O motor age agora no controle em uso: Teclado e mouse, ou Nativo com um perfil da pessoa.
+pub fn live() -> bool {
+    ON.load(Ordering::Relaxed) && (KBM.load(Ordering::Relaxed) || RUN.lock().unwrap().as_ref().is_some_and(|r| native_runs(&r.profiles[r.cur])))
+}
+
 /// Um relatório novo do controle `key`, que chegou em `arrived`.
 pub fn feed(key: &str, inp: &Input, arrived: Instant) {
     // Teclado aberto: o controle digita nele, mesmo com o mapeamento desligado.
@@ -2094,9 +2105,14 @@ pub fn feed(key: &str, inp: &Input, arrived: Instant) {
     }
     let mut events = vec![];
     let mut radial = None;
-    let acts = {
+    let acts = 'feed: {
         let mut g = RUN.lock().unwrap();
         let Some(r) = g.as_mut() else { return };
+        // Nativo: só um perfil feito pela pessoa age; com o Base ou o Desktop, nada (nem o botão
+        // do radial nem o Win + G), como antes do motor valer no Nativo.
+        if !KBM.load(Ordering::Relaxed) && !native_runs(&r.profiles[prof_of(r, key)]) {
+            break 'feed vec![];
+        }
         let mut acts = vec![];
         // Parada de emergência: segurar a combinação liga e desliga; dispara uma vez por aperto.
         let fire = {
@@ -2367,6 +2383,8 @@ fn switch(r: &mut Run, to: usize) -> Vec<Act> {
     }
     pads::buzz(r.profiles[to].buzz);
     set_keys(r);
+    // No Nativo o XInput só lê depressa com um perfil que age (`live`); a mensagem é assíncrona.
+    pads::poke();
     r.engines.values_mut().flat_map(|e| e.0.release_all()).collect()
 }
 
@@ -2721,6 +2739,19 @@ buzz 9
         p.light_bt = false;
         let q = Profile::parse(&p.to_text()).unwrap();
         assert_eq!((q.light, q.light_bt), (Some(Light::Battery(b)), false));
+    }
+
+    #[test]
+    fn native_runs_only_profiles_the_person_made() {
+        // O Desktop tem PS + Start para desconectar e o stick como mouse: no Nativo, nunca.
+        assert!(!native_runs(&Profile::desktop()));
+        assert!(!native_runs(&Profile::base()));
+        let mut edited = Profile::base();
+        edited.layers[0].binds.push(Bind { button: pads::A, with: pads::GUIDE, when: When::Press, out: Out::Action(0) });
+        assert!(native_runs(&edited));
+        let mut game = Profile::base();
+        game.name = "Elden Ring".into();
+        assert!(native_runs(&game));
     }
 
     #[test]

@@ -399,7 +399,7 @@ unsafe fn set_timer(h: HWND) {
         let _ = KillTimer(Some(h), TIMER_X);
         poll_xinput();
     } else {
-        let ms = if super::remap::enabled() { 4 } else if LIVE.load(Ordering::Relaxed) || super::nav::window_open() { 8 } else { 1000 };
+        let ms = if super::remap::live() { 4 } else if LIVE.load(Ordering::Relaxed) || super::nav::window_open() { 8 } else { 1000 };
         SetTimer(Some(h), TIMER_X, ms, None);
     }
 }
