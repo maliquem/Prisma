@@ -269,6 +269,41 @@ pub struct Layer {
     /// Teclado e mouse: `button` e `with` são teclas virtuais do Windows (botões do mouse: 4 meio,
     /// 5 e 6 laterais), não bits de botão.
     pub keys: Vec<Bind>,
+    /// Gyro nesta camada; `None` é igual à mãe (na Base, desligado). Uma camada de segurar com o
+    /// gyro ligado ou desligado é o botão de soltar.
+    pub gyro: Option<Gyro>,
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Gyro {
+    Off,
+    /// Pixels por grau girado.
+    Mouse(f32),
+}
+
+/// Opções do gyro no perfil todo.
+#[derive(Clone, Copy, PartialEq, Debug, Default)]
+pub struct GyroOpt {
+    /// Espaço do jogador: virar é sempre em volta da vertical, com o controle deitado ou em pé.
+    /// Desligado é o espaço local (o eixo do próprio controle).
+    pub player: bool,
+    pub inv_x: bool,
+    pub inv_y: bool,
+    /// Suaviza só os giros pequenos (tremor da mão); os grandes passam direto.
+    pub smooth: bool,
+}
+
+/// Virar e inclinar, em graus por segundo, do gyro (`g`) e da gravidade medida (`grav`, em g).
+pub fn gyro_axes(o: GyroOpt, g: [f32; 3], grav: [f32; 3]) -> (f32, f32) {
+    let n = (grav[0] * grav[0] + grav[1] * grav[1] + grav[2] * grav[2]).sqrt();
+    if !o.player || n < 0.5 {
+        return (g[1], g[0]);
+    }
+    // Espaço do jogador (como o JoyShockMapper): o giro em volta da vertical real, sem passar do
+    // giro que existe nos dois eixos que podem ser essa vertical.
+    let world = (grav[1] * g[1] + grav[2] * g[2]) / n;
+    let most = (g[1] * g[1] + g[2] * g[2]).sqrt();
+    (world.signum() * (world.abs() * 1.41).min(most), g[0])
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -293,6 +328,7 @@ pub struct Profile {
     pub turbo_key: u32,
     pub macros: Vec<Macro>,
     pub texts: Vec<Snip>,
+    pub gyro_opt: GyroOpt,
 }
 
 pub const DESKTOP: &str = "Desktop";
@@ -302,7 +338,7 @@ impl Profile {
     fn empty(name: &str) -> Self {
         let stick = Zone { start: 0.15, end: 0.95 };
         let trig = Zone { start: 0.05, end: 0.95 };
-        Profile { name: name.into(), games: vec![], zones: [stick, stick, trig, trig], layers: vec![Layer { name: "Base".into(), parent: None, ls: None, rs: None, binds: vec![], keys: vec![] }], strings: vec![], turbo: vec![], turbo_key: TURBO_KEY, macros: vec![], texts: vec![] }
+        Profile { name: name.into(), games: vec![], zones: [stick, stick, trig, trig], layers: vec![Layer { name: "Base".into(), parent: None, ls: None, rs: None, binds: vec![], keys: vec![], gyro: None }], strings: vec![], turbo: vec![], turbo_key: TURBO_KEY, macros: vec![], texts: vec![], gyro_opt: GyroOpt::default() }
     }
 
     /// Base: nada mapeado, o jogo lê o controle como ele é.
@@ -460,6 +496,11 @@ impl Profile {
             let _ = writeln!(s, "zone {n} {} {}", z.start, z.end);
         }
         let _ = writeln!(s, "turbokey {}", mask_text(self.turbo_key));
+        let o = self.gyro_opt;
+        if o != GyroOpt::default() {
+            let flags: Vec<&str> = [(o.inv_x, "invx"), (o.inv_y, "invy"), (o.smooth, "smooth")].iter().filter(|f| f.0).map(|f| f.1).collect();
+            let _ = writeln!(s, "gyroopt {}{}{}", if o.player { "player" } else { "local" }, if flags.is_empty() { "" } else { " " }, flags.join(" "));
+        }
         for t in &self.turbo {
             let _ = writeln!(s, "turbo {} {} {} {}", button_name(t.button), t.speed, t.delay, if t.on { "on" } else { "off" });
         }
@@ -489,6 +530,11 @@ impl Profile {
                     Some(Stick::Scroll(v)) => _ = writeln!(s, "stick {i} {side} scroll {v}"),
                     None => {}
                 }
+            }
+            match l.gyro {
+                Some(Gyro::Off) => _ = writeln!(s, "gyro {i} off"),
+                Some(Gyro::Mouse(v)) => _ = writeln!(s, "gyro {i} mouse {v}"),
+                None => {}
             }
             for b in &l.binds {
                 let mut button = button_name(b.button).to_string();
@@ -555,7 +601,29 @@ impl Profile {
                     if p.layers.len() >= MAX_LAYERS {
                         return None;
                     }
-                    p.layers.push(Layer { name: name.chars().filter(|c| !c.is_control()).take(40).collect(), parent, ls: None, rs: None, binds: vec![], keys: vec![] });
+                    p.layers.push(Layer { name: name.chars().filter(|c| !c.is_control()).take(40).collect(), parent, ls: None, rs: None, binds: vec![], keys: vec![], gyro: None });
+                }
+                "gyroopt" => {
+                    let mut it = rest.split(' ');
+                    let mut o = GyroOpt { player: it.next()? == "player", ..Default::default() };
+                    for f in it {
+                        match f {
+                            "invx" => o.inv_x = true,
+                            "invy" => o.inv_y = true,
+                            "smooth" => o.smooth = true,
+                            _ => return None,
+                        }
+                    }
+                    p.gyro_opt = o;
+                }
+                "gyro" => {
+                    let mut it = rest.split(' ');
+                    let l = layer_of(&p, it.next()?)?;
+                    p.layers[l].gyro = Some(match it.next()? {
+                        "off" => Gyro::Off,
+                        "mouse" => Gyro::Mouse(num(it.next()?)?.clamp(0.5, 200.0)),
+                        _ => return None,
+                    });
                 }
                 "stick" => {
                     let mut it = rest.split(' ');
@@ -844,6 +912,9 @@ pub struct Engine {
     last: Option<Instant>,
     /// Saídas presas pelo Alternar.
     latched: Vec<Out>,
+    /// Gravidade medida pelo acelerômetro (média lenta) e a média curta do gyro para suavizar.
+    grav: [f32; 3],
+    soft: [f32; 2],
     /// Jogo com anti-cheat em foco: turbo vira Pressionar.
     pub safe: bool,
 }
@@ -863,6 +934,8 @@ impl Default for Engine {
             last: None,
             latched: vec![],
             safe: false,
+            grav: [0.0; 3],
+            soft: [0.0; 2],
         }
     }
 }
@@ -890,6 +963,18 @@ fn stick(p: &Profile, layer: u8, right: bool) -> Stick {
         l = ly.parent;
     }
     Stick::Buttons
+}
+
+fn gyro(p: &Profile, layer: u8) -> Gyro {
+    let mut l = Some(layer);
+    while let Some(i) = l {
+        let Some(ly) = p.layers.get(i as usize) else { break };
+        if let Some(g) = ly.gyro {
+            return g;
+        }
+        l = ly.parent;
+    }
+    Gyro::Off
 }
 
 fn outs(v: &[&Bind], when: When) -> Vec<Out> {
@@ -1034,6 +1119,28 @@ impl Engine {
                 }
                 Stick::Scroll(v) => self.wheel += y * v * 120.0 * dt,
                 Stick::Buttons => {}
+            }
+        }
+        if inp.motion {
+            // Gravidade: média de uns 0,25 s, que o tremor da mão não mexe.
+            let k = (dt * 4.0).min(1.0);
+            for a in 0..3 {
+                self.grav[a] += (inp.accel[a] - self.grav[a]) * k;
+            }
+            if let Gyro::Mouse(px) = gyro(p, layer) {
+                let o = p.gyro_opt;
+                let (mut yaw, mut pitch) = gyro_axes(o, inp.gyro, self.grav);
+                if o.smooth {
+                    // Abaixo de 5 °/s vale a média curta; acima de 10 °/s, o valor cru; no meio, a mistura.
+                    for (v, s) in [(&mut yaw, 0), (&mut pitch, 1)] {
+                        self.soft[s] += (*v - self.soft[s]) * (dt * 25.0).min(1.0);
+                        let w = ((v.abs() - 5.0) / 5.0).clamp(0.0, 1.0);
+                        *v = w * *v + (1.0 - w) * self.soft[s];
+                    }
+                }
+                // Virar para a direita leva o cursor para a direita; inclinar para cima, para cima.
+                self.mx += if o.inv_x { yaw } else { -yaw } * px * dt;
+                self.my += if o.inv_y { pitch } else { -pitch } * px * dt;
             }
         }
         let (dx, dy) = (self.mx.trunc(), self.my.trunc());
@@ -1225,6 +1332,7 @@ fn key_profile(p: &Profile) -> Option<(Profile, Vec<u16>)> {
             rs: None,
             binds: l.keys.iter().filter_map(|b| Some(Bind { button: bit(b.button)?, with: if b.with == 0 { 0 } else { bit(b.with)? }, when: b.when, out: b.out })).collect(),
             keys: vec![],
+            gyro: None,
         })
         .collect();
     Some((Profile { layers, turbo: vec![], turbo_key: 0, ..p.clone() }, slots))
@@ -1823,6 +1931,39 @@ mod tests {
     use super::*;
 
     #[test]
+    fn gyro_moves_mouse_only_where_the_layer_turns_it_on() {
+        let t0 = Instant::now();
+        let mut p = Profile::base();
+        p.layers.push(Layer { name: "Mira".into(), parent: Some(0), ls: None, rs: None, binds: vec![], keys: vec![], gyro: Some(Gyro::Mouse(10.0)) });
+        one(&mut p.layers[0], pads::LB, When::Press, Out::Layer(1));
+        let mut e = Engine::default();
+        let turn = |b: u32| Input { buttons: b, gyro: [0.0, -90.0, 0.0], accel: [0.0, 1.0, 0.0], motion: true, ..Default::default() };
+        e.step(&p, &Input::default(), at(0, t0));
+        // Na Base o gyro está desligado.
+        assert!(e.step(&p, &turn(0), at(10, t0)).is_empty());
+        e.step(&p, &turn(pads::LB), at(20, t0));
+        // Virando para a direita a 90 °/s, 10 px por grau, 10 ms: 9 px para a direita.
+        assert!(matches!(e.step(&p, &turn(pads::LB), at(30, t0))[..], [Act::Move(8 | 9, 0)]), "{:?}", e.step(&p, &turn(pads::LB), at(40, t0)));
+        let text = p.to_text();
+        assert!(text.contains("gyro 1 mouse 10"));
+        assert_eq!(Profile::parse(&text).unwrap().layers[1].gyro, Some(Gyro::Mouse(10.0)));
+    }
+
+    #[test]
+    fn player_space_follows_gravity() {
+        let o = GyroOpt { player: true, ..Default::default() };
+        // Deitado (gravidade no y): igual ao local.
+        assert_eq!(gyro_axes(o, [5.0, 30.0, 0.0], [0.0, 1.0, 0.0]), (30.0, 5.0));
+        // Em pé, com a face para quem joga: virar em volta da vertical é o giro do eixo z.
+        let (yaw, _) = gyro_axes(o, [0.0, 0.0, 40.0], [0.0, 0.0, 1.0]);
+        assert!((yaw - 40.0).abs() < 1e-3);
+        let opt = GyroOpt { player: true, inv_y: true, smooth: true, inv_x: false };
+        let mut p = Profile::base();
+        p.gyro_opt = opt;
+        assert_eq!(Profile::parse(&p.to_text()).unwrap().gyro_opt, opt);
+    }
+
+    #[test]
     fn link_only_http() {
         assert!(link_ok("https://example.com/a?b=1"));
         assert!(link_ok("HTTP://x.org"));
@@ -1994,7 +2135,7 @@ mod tests {
     fn key_releases_in_the_layer_it_was_pressed() {
         let t0 = Instant::now();
         let mut p = Profile::base();
-        p.layers.push(Layer { name: "Fn".into(), parent: Some(0), ls: None, rs: None, binds: vec![], keys: vec![] });
+        p.layers.push(Layer { name: "Fn".into(), parent: Some(0), ls: None, rs: None, binds: vec![], keys: vec![], gyro: None });
         one(&mut p.layers[0], pads::LB, When::Press, Out::Layer(1));
         one(&mut p.layers[0], pads::A, When::Press, K1);
         one(&mut p.layers[1], pads::A, When::Press, K2);
@@ -2018,7 +2159,7 @@ mod tests {
     fn held_layer_changes_stick_mode_at_once() {
         let t0 = Instant::now();
         let mut p = Profile::desktop();
-        p.layers.push(Layer { name: "Fn".into(), parent: Some(0), ls: None, rs: Some(Stick::Mouse(1600.0)), binds: vec![], keys: vec![] });
+        p.layers.push(Layer { name: "Fn".into(), parent: Some(0), ls: None, rs: Some(Stick::Mouse(1600.0)), binds: vec![], keys: vec![], gyro: None });
         p.layers[0].binds.retain(|b| b.button != pads::LB);
         one(&mut p.layers[0], pads::LB, When::Press, Out::Layer(1));
         let mut e = engine(&p, t0);
@@ -2043,7 +2184,7 @@ mod tests {
     fn toggle_layer() {
         let t0 = Instant::now();
         let mut p = Profile::base();
-        p.layers.push(Layer { name: "Fn".into(), parent: Some(0), ls: None, rs: None, binds: vec![], keys: vec![] });
+        p.layers.push(Layer { name: "Fn".into(), parent: Some(0), ls: None, rs: None, binds: vec![], keys: vec![], gyro: None });
         one(&mut p.layers[0], pads::RB, When::Press, Out::Toggle(1));
         let mut e = engine(&p, t0);
         e.step(&p, &btn(pads::RB), at(10, t0));
@@ -2192,7 +2333,7 @@ mod tests {
     fn profile_text_round_trip_and_rejects_bad_input() {
         let mut p = Profile::desktop();
         p.games.push("jogo.exe".into());
-        p.layers.push(Layer { name: "Fn".into(), parent: Some(0), ls: Some(Stick::Buttons), rs: None, binds: vec![], keys: vec![] });
+        p.layers.push(Layer { name: "Fn".into(), parent: Some(0), ls: Some(Stick::Buttons), rs: None, binds: vec![], keys: vec![], gyro: None });
         one(&mut p.layers[0], pads::LB, When::Hold, Out::Layer(1));
         p.layers[1].binds.push(Bind { button: pads::A, with: pads::LB | pads::RB, when: When::Double, out: Out::Key(0x43, CTRL | SHIFT) });
         let base = intern(&mut p.strings, "Base").unwrap();
