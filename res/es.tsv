@@ -2092,8 +2092,6 @@ Turbo desligado no {}	Turbo desactivado en {}
 O controle como teclado e mouse está desligado	El mando como teclado y ratón está desactivado
 Esse perfil não existe	Ese perfil no existe
 Abrir e fechar o teclado do Prisma	Abrir y cerrar el teclado de Prisma
-{} apaga · {} espaço · {} Enter · direcional: setas	{} borra · {} espacio · {} Enter · cruceta: flechas
-{} maiúsculas · {} números · os dois: acentos · {} fecha	{} mayúsculas · {} números · ambos: acentos · {} cierra
 Teclado ativado	Teclado activado
 Teclado desativado	Teclado desactivado
 Radial do Prisma	Radial de Prisma
@@ -2107,7 +2105,6 @@ O outro jeito faz a função normal do botão.	La otra forma hace la función no
 O Prisma cuida do botão Guia	Prisma se encarga del botón Guía
 A Xbox Game Bar deixa de abrir pelo botão Guia do controle, e o Prisma faz a função normal dele (Win + G). Desligar devolve a opção da Game Bar como estava.	La Xbox Game Bar deja de abrirse con el botón Guía del mando, y Prisma hace su función normal (Win + G). Al desactivarlo, la opción de la Game Bar vuelve a como estaba.
 Com o Steam aberto, desligue nele a opção do botão Guia.	Con Steam abierto, desactiva en él la opción del botón Guía.
-{} dispara · {} fecha	{} ejecuta · {} cierra
 Abrir um programa…	Abrir un programa…
 Escolher outro programa…	Elegir otro programa…
 Dois círculos (16 lugares)	Dos círculos (16 lugares)
@@ -2149,4 +2146,13 @@ Página Configurações	Página Configuración
 Usar os dois sticks	Usar los dos sticks
 Letras no stick	Letras en el stick
 Um círculo para as letras e outro para os números e símbolos. No stick esquerdo, A, B, X e Y digitam; no direito, o direcional digita, e com ele solto o direcional são as setas.	Un círculo para las letras y otro para los números y símbolos. En el stick izquierdo, A, B, X e Y escriben; en el derecho, la cruceta escribe, y con él suelto la cruceta son las flechas.
-{} apaga · {} espaço · {} Enter · direcional: digita no círculo da direita, setas com o stick direito solto	{} borra · {} espacio · {} Enter · cruceta: escribe en el círculo derecho, flechas con el stick derecho suelto
+apaga	borra
+espaço	espacio
+setas	flechas
+digita no círculo da direita; com o stick direito solto, setas	escribe en el círculo derecho; con el stick derecho suelto, flechas
+maiúsculas	mayúsculas
+números	números
+acentos	acentos
+fecha	cierra
+dispara	ejecuta
+escolhe entre as 4 opções	elige una de las 4 opciones

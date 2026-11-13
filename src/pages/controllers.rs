@@ -169,6 +169,11 @@ pub(super) fn button_names(f: Family) -> &'static [(u32, &'static str)] {
 }
 
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
+    #[cfg(debug_assertions)]
+    if crate::ui::glyph::SHEET.load(std::sync::atomic::Ordering::Relaxed) {
+        crate::ui::glyph::sheet(ui.c, rect(a.x + 28.0, 40.0, a.w - 56.0, a.h), TEXT);
+        return;
+    }
     header_room(ui, a, "Controles", "Cada controle ao vivo, e o controle como teclado e mouse. Nada é gravado no controle.", 220.0);
     let list = pads::list();
     if ui.button("pads-copy", rect(a.right() - 208.0, 28.0, 180.0, 36.0), "Copiar diagnóstico", false) {
@@ -321,15 +326,18 @@ fn draw_live(ui: &mut Ui, p: &Pad, r: Rect) {
         ui.c.text_raw(rect(bar.x - 10.0, bar.bottom() + 4.0, 32.0, 16.0), name, 11.0, MUTED, Align::Center, Weight::Regular);
     }
     // Botões: os do desenho da família, ou numerados no controle genérico, e o direcional.
-    let mut chips: Vec<(bool, String)> = [(pads::UP, "↑"), (pads::DOWN, "↓"), (pads::LEFT, "←"), (pads::RIGHT, "→")].iter().map(|(b, n)| (i.buttons & b != 0, n.to_string())).collect();
+    // Com desenho próprio, cada botão é o ícone dele; no genérico, o número.
+    let glyphs = p.family != Family::Generic;
+    let style = crate::ui::glyph::Style::of(p.family, p.vid);
+    let mut chips: Vec<(u32, bool, String)> = [(pads::UP, "↑"), (pads::DOWN, "↓"), (pads::LEFT, "←"), (pads::RIGHT, "→")].iter().map(|(b, n)| (*b, i.buttons & b != 0, n.to_string())).collect();
     if p.family == Family::Generic {
-        chips.extend((0..p.generic_buttons.min(10)).map(|n| (i.buttons & (1 << n) != 0, (n + 1).to_string())));
+        chips.extend((0..p.generic_buttons.min(10)).map(|n| (0, i.buttons & (1 << n) != 0, (n + 1).to_string())));
     } else {
-        chips.extend(button_names(p.family).iter().map(|(b, n)| (i.buttons & b != 0, crate::i18n::tr(n).into_owned())));
+        chips.extend(button_names(p.family).iter().map(|(b, n)| (*b, i.buttons & b != 0, crate::i18n::tr(n).into_owned())));
     }
     let (mut bx, mut by) = (r.x + 16.0, cy + rad + 32.0);
-    for (on, label) in chips {
-        let w = measure(&label, 12.0, Weight::Semibold, None).0 + 20.0;
+    for (bit, on, label) in chips {
+        let w = if glyphs { crate::ui::glyph::width(bit, 16.0) + 16.0 } else { measure(&label, 12.0, Weight::Semibold, None).0 + 20.0 };
         if bx + w > r.right() - 16.0 {
             bx = r.x + 16.0;
             by += 30.0;
@@ -339,7 +347,11 @@ fn draw_live(ui: &mut Ui, p: &Pad, r: Rect) {
         }
         let c = rect(bx, by, w, 24.0);
         ui.c.round(c, 6.0, if on { ACCENT } else { CARD2 });
-        ui.c.text_raw(c, &label, 12.0, if on { ON_ACCENT } else { TEXT2 }, Align::Center, Weight::Semibold);
+        if glyphs {
+            crate::ui::glyph::draw(ui.c, c.x + 8.0, c.y + 12.0, 16.0, style, bit, if on { ON_ACCENT } else { TEXT2 });
+        } else {
+            ui.c.text_raw(c, &label, 12.0, if on { ON_ACCENT } else { TEXT2 }, Align::Center, Weight::Semibold);
+        }
         bx += w + 6.0;
     }
 }

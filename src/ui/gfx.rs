@@ -195,7 +195,7 @@ fn note_overflow(f: &IDWriteTextFormat, t: &[u16], s: &str, r: Rect, wrap: bool)
 }
 
 /// Largura de uma linha já traduzida.
-fn measure_raw(text: &str, size: f32, weight: Weight) -> f32 {
+pub fn measure_raw(text: &str, size: f32, weight: Weight) -> f32 {
     let f = format(size, weight, false);
     let t = wide(text);
     shared(|s| unsafe {

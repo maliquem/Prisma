@@ -2092,8 +2092,6 @@ Turbo desligado no {}	{} 连发已关闭
 O controle como teclado e mouse está desligado	手柄作为键盘和鼠标已关闭
 Esse perfil não existe	该配置不存在
 Abrir e fechar o teclado do Prisma	打开和关闭 Prisma 键盘
-{} apaga · {} espaço · {} Enter · direcional: setas	{} 删除 · {} 空格 · {} 回车 · 方向键：光标移动
-{} maiúsculas · {} números · os dois: acentos · {} fecha	{} 大写 · {} 数字 · 同时按：重音字母 · {} 关闭
 Teclado ativado	键盘已开启
 Teclado desativado	键盘已关闭
 Radial do Prisma	Prisma 轮盘
@@ -2107,7 +2105,6 @@ O outro jeito faz a função normal do botão.	另一种方式执行按键的原
 O Prisma cuida do botão Guia	由 Prisma 处理 Guide 键
 A Xbox Game Bar deixa de abrir pelo botão Guia do controle, e o Prisma faz a função normal dele (Win + G). Desligar devolve a opção da Game Bar como estava.	Xbox Game Bar 不再由手柄 Guide 键打开，由 Prisma 执行其原本功能（Win + G）。关闭此项会把 Game Bar 的设置恢复原样。
 Com o Steam aberto, desligue nele a opção do botão Guia.	Steam 打开时，请在 Steam 中关闭 Guide 键选项。
-{} dispara · {} fecha	{} 执行 · {} 关闭
 Abrir um programa…	打开程序…
 Escolher outro programa…	选择其他程序…
 Dois círculos (16 lugares)	两个圆环（16 个位置）
@@ -2149,4 +2146,13 @@ Página Configurações	设置页面
 Usar os dois sticks	使用两个摇杆
 Letras no stick	字母所在摇杆
 Um círculo para as letras e outro para os números e símbolos. No stick esquerdo, A, B, X e Y digitam; no direito, o direcional digita, e com ele solto o direcional são as setas.	一个圆环放字母，另一个放数字和符号。左摇杆用 A、B、X、Y 输入；右摇杆用方向键输入，松开右摇杆时方向键是光标键。
-{} apaga · {} espaço · {} Enter · direcional: digita no círculo da direita, setas com o stick direito solto	{} 删除 · {} 空格 · {} 回车 · 方向键：在右侧圆环输入，松开右摇杆时移动光标
+apaga	删除
+espaço	空格
+setas	光标移动
+digita no círculo da direita; com o stick direito solto, setas	在右侧圆环输入；松开右摇杆时移动光标
+maiúsculas	大写
+números	数字
+acentos	重音字母
+fecha	关闭
+dispara	执行
+escolhe entre as 4 opções	在 4 个选项中选择

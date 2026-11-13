@@ -3,6 +3,7 @@
 
 pub mod edit;
 pub mod gfx;
+pub mod glyph;
 pub mod icons;
 pub mod layered;
 

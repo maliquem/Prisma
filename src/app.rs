@@ -2521,6 +2521,14 @@ impl App {
             }
         }
         if el >= delay {
+            // O idioma vem antes da página: o teclado e o radial montam as dicas ao abrir.
+            if args.iter().any(|a| a == "--test-en") {
+                crate::i18n::set_english(true);
+            }
+            // `--test-lang=N`: um idioma pelo número (2 espanhol, 3 russo, 4 chinês).
+            if let Some(n) = arg("--test-lang=").and_then(|v| v.parse().ok()) {
+                crate::i18n::set_lang(n);
+            }
             // `--test-page=share`: a página Compartilhar tela por cima das Novidades; `--test-en`: inglês.
             match arg("--test-page=").as_deref() {
                 Some("share") => self.page = Page::Share,
@@ -2533,6 +2541,11 @@ impl App {
                     self.page = Page::Controllers;
                     self.pads.open_editor();
                     crate::pages::pad_profiles::test_target(self, &p[12..]);
+                }
+                #[cfg(debug_assertions)]
+                Some("glyphs") => {
+                    self.page = Page::Controllers;
+                    crate::ui::glyph::SHEET.store(true, std::sync::atomic::Ordering::Relaxed);
                 }
                 Some("keyboard") => {
                     crate::sys::osk::show_for_test(1);
@@ -2567,13 +2580,6 @@ impl App {
                 Some("adjust") => self.page = Page::Adjust,
                 Some("report") => self.page = Page::Report,
                 _ => {}
-            }
-            if args.iter().any(|a| a == "--test-en") {
-                crate::i18n::set_english(true);
-            }
-            // `--test-lang=N`: um idioma pelo número (2 espanhol, 3 russo, 4 chinês).
-            if let Some(n) = arg("--test-lang=").and_then(|v| v.parse().ok()) {
-                crate::i18n::set_lang(n);
             }
             // Uma foto só: refazer a cada aviso do relógio deixava a fila sempre cheia, e o
             // pedido de saída nunca chegava.

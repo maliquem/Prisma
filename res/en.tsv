@@ -2098,8 +2098,6 @@ Turbo desligado no {}	Turbo off for {}
 O controle como teclado e mouse está desligado	Controller as keyboard and mouse is off
 Esse perfil não existe	That profile doesn't exist
 Abrir e fechar o teclado do Prisma	Open and close the Prisma keyboard
-{} apaga · {} espaço · {} Enter · direcional: setas	{} deletes · {} space · {} Enter · D-pad: arrows
-{} maiúsculas · {} números · os dois: acentos · {} fecha	{} uppercase · {} numbers · both: accents · {} closes
 Teclado ativado	Keyboard on
 Teclado desativado	Keyboard off
 Radial do Prisma	Prisma radial
@@ -2113,7 +2111,6 @@ O outro jeito faz a função normal do botão.	The other way does the button's n
 O Prisma cuida do botão Guia	Prisma handles the Guide button
 A Xbox Game Bar deixa de abrir pelo botão Guia do controle, e o Prisma faz a função normal dele (Win + G). Desligar devolve a opção da Game Bar como estava.	Xbox Game Bar stops opening from the controller's Guide button, and Prisma does its normal function (Win + G). Turning this off puts the Game Bar option back as it was.
 Com o Steam aberto, desligue nele a opção do botão Guia.	With Steam open, turn off its Guide button option.
-{} dispara · {} fecha	{} runs · {} closes
 Abrir um programa…	Open a program…
 Escolher outro programa…	Pick another program…
 Dois círculos (16 lugares)	Two circles (16 slots)
@@ -2155,4 +2152,13 @@ Página Configurações	Settings page
 Usar os dois sticks	Use both sticks
 Letras no stick	Letters on stick
 Um círculo para as letras e outro para os números e símbolos. No stick esquerdo, A, B, X e Y digitam; no direito, o direcional digita, e com ele solto o direcional são as setas.	One circle for letters and another for numbers and symbols. On the left stick, A, B, X and Y type; on the right one, the D-pad types, and with it released the D-pad is the arrows.
-{} apaga · {} espaço · {} Enter · direcional: digita no círculo da direita, setas com o stick direito solto	{} deletes · {} space · {} Enter · D-pad: types on the right circle, arrows with the right stick released
+apaga	deletes
+espaço	space
+setas	arrows
+digita no círculo da direita; com o stick direito solto, setas	types on the right circle; with the right stick released, arrows
+maiúsculas	uppercase
+números	numbers
+acentos	accents
+fecha	closes
+dispara	runs
+escolhe entre as 4 opções	picks one of the 4 options

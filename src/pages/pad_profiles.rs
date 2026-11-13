@@ -437,9 +437,12 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
     y += 36.0;
 
     // Botões: clique em um para ver e mudar o que ele faz nesta camada.
+    // Com desenho próprio, cada botão é o ícone dele; no genérico, o número.
+    let glyphs = family != Family::Generic;
+    let style = crate::ui::glyph::Style::of(family, 0);
     let (mut bx, mut by) = (x, y);
     for (bit, label) in &chips {
-        let cw = crate::ui::gfx::measure(label, 12.0, Weight::Semibold, None).0 + 22.0;
+        let cw = if glyphs { crate::ui::glyph::width(*bit, 18.0) + 18.0 } else { crate::ui::gfx::measure(label, 12.0, Weight::Semibold, None).0 + 22.0 };
         if bx + cw > x + w {
             bx = x;
             by += 32.0;
@@ -451,7 +454,12 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
         if used && !on {
             ui.c.round_line(c, 6.0, ACCENT, 1.0);
         }
-        ui.c.text_raw(c, label, 12.0, if on { ON_ACCENT } else { TEXT2 }, Align::Center, Weight::Semibold);
+        if glyphs {
+            crate::ui::glyph::draw(ui.c, c.x + 9.0, c.y + 13.0, 18.0, style, *bit, if on { ON_ACCENT } else { TEXT2 });
+        } else {
+            ui.c.text_raw(c, label, 12.0, if on { ON_ACCENT } else { TEXT2 }, Align::Center, Weight::Semibold);
+        }
+        ui.tip(c, label);
         if ui.hit(&format!("pp-b{bit}"), c) {
             ed.button = *bit;
             ui.s.needs_redraw = true;

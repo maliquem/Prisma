@@ -488,7 +488,8 @@ pub struct Keyboard {
     arrow: [(f32, f32); 2],
     /// Canto na tela, as duas linhas de ajuda e os dois sticks, fixos enquanto o teclado fica aberto.
     at: (i32, i32),
-    lines: (String, String),
+    lines: [Vec<(Vec<u32>, String)>; 2],
+    style: crate::ui::glyph::Style,
     two: bool,
     ticking: bool,
 }
@@ -512,7 +513,7 @@ impl Keyboard {
     pub fn new() -> Self {
         register(w!("PrismaKeyboard"), keyboard_proc);
         let hwnd = create_overlay(w!("PrismaKeyboard"), true);
-        Self { surface: Layered::new(hwnd), arrow: [(0.0, 0.0); 2], at: (0, 0), lines: Default::default(), two: false, ticking: false }
+        Self { surface: Layered::new(hwnd), arrow: [(0.0, 0.0); 2], at: (0, 0), lines: Default::default(), style: crate::ui::glyph::Style::Xbox, two: false, ticking: false }
     }
 
     /// Mostra o estado de agora do teclado, ou esconde se ele fechou. Devolve `Some` quando ele
@@ -534,14 +535,19 @@ impl Keyboard {
             let scale = unsafe { windows::Win32::UI::HiDpi::GetDpiForWindow(hwnd) } as f32 / 96.0;
             self.two = crate::sys::osk::view().two;
             self.at = ((mon.left + mon.right) / 2 - (self.width() * scale / 2.0) as i32, mon.bottom - ((KB_H + 48.0) * scale) as i32);
-            // Sem controle na lista (ainda não leu nenhum), os nomes do Xbox.
-            let f = pads::list().first().map_or(pads::Family::Xbox, |p| p.family);
-            let l = |b: u32| crate::pages::pad_profiles::button_label(f, b);
-            let fill = |t: &str, labels: &[String]| labels.iter().fold(crate::i18n::tr(t).into_owned(), |s, b| s.replacen("{}", b, 1));
-            self.lines = (
-                fill(if self.two { "{} apaga · {} espaço · {} Enter · direcional: digita no círculo da direita, setas com o stick direito solto" } else { "{} apaga · {} espaço · {} Enter · direcional: setas" }, &[l(pads::LB), l(pads::RB), l(pads::START)]),
-                fill("{} maiúsculas · {} números · os dois: acentos · {} fecha", &[l(crate::sys::remap::RT), l(crate::sys::remap::LT), l(pads::BACK)]),
-            );
+            // Sem controle na lista (ainda não leu nenhum), os ícones do Xbox.
+            self.style = crate::ui::glyph::Style::current();
+            let t = |s: &str| crate::i18n::tr(s).into_owned();
+            let (lt, rt) = (crate::sys::remap::LT, crate::sys::remap::RT);
+            self.lines = [
+                vec![
+                    (vec![pads::LB], t("apaga")),
+                    (vec![pads::RB], t("espaço")),
+                    (vec![pads::START], "Enter".into()),
+                    (vec![crate::ui::glyph::DPAD_ANY], t(if self.two { "digita no círculo da direita; com o stick direito solto, setas" } else { "setas" })),
+                ],
+                vec![(vec![rt], t("maiúsculas")), (vec![lt], t("números")), (vec![lt, rt], t("acentos")), (vec![pads::BACK], t("fecha"))],
+            ];
             self.arrow = crate::sys::osk::stick();
             unsafe {
                 SetTimer(Some(hwnd), 1, KB_FRAME, None);
@@ -572,8 +578,8 @@ impl Keyboard {
 
     fn paint(&mut self) {
         let v = crate::sys::osk::view();
-        let (arrow, two) = (self.arrow, self.two);
-        let (line1, line2) = (&self.lines.0, &self.lines.1);
+        let (arrow, two, style) = (self.arrow, self.two, self.style);
+        let lines = &self.lines;
         let mode = match (v.sym, v.shift) {
             (true, true) => "áç",
             (true, false) => "123",
@@ -592,7 +598,13 @@ impl Keyboard {
             for &(cx, right) in wheels {
             stick_arrow(c, cx, cy, arrow[right as usize]);
             let numbers = two && right != v.letters_right;
-            c.text_raw(rect(cx - 30.0, cy - 12.0, 60.0, 24.0), if numbers { "123" } else { mode }, 15.0, TEXT2, Align::Center, Weight::Semibold);
+            // No centro, os botões que digitam neste círculo; o modo logo abaixo.
+            if right {
+                crate::ui::glyph::dpad(c, cx, cy, 26.0, None, TEXT2);
+            } else {
+                crate::ui::glyph::face(c, cx, cy, 40.0, style, TEXT2);
+            }
+            c.text_raw(rect(cx - 30.0, cy + 34.0, 60.0, 20.0), if numbers { "123" } else { mode }, 13.0, MUTED, Align::Center, Weight::Semibold);
             let chosen = if right { v.right } else { v.petal };
             for p in 0..8 {
                 let a = (p as f32 * 45.0).to_radians();
@@ -607,8 +619,8 @@ impl Keyboard {
                 }
             }
             }
-            c.text_fit(rect(16.0, 342.0, r.w - 32.0, 20.0), line1, 12.0, MUTED, Align::Center, Weight::Regular);
-            c.text_fit(rect(16.0, 362.0, r.w - 32.0, 20.0), line2, 12.0, MUTED, Align::Center, Weight::Regular);
+            crate::ui::glyph::hints(c, rect(16.0, 336.0, r.w - 32.0, 22.0), style, &lines[0], 12.0, MUTED);
+            crate::ui::glyph::hints(c, rect(16.0, 362.0, r.w - 32.0, 22.0), style, &lines[1], 12.0, MUTED);
         });
     }
 }
@@ -625,7 +637,8 @@ pub struct Radial {
     /// Algum lugar tem 4 opções: a janela cresce para a faixa delas, embaixo do círculo.
     groups: bool,
     left: bool,
-    hint: String,
+    hint: Vec<(Vec<u32>, String)>,
+    style: crate::ui::glyph::Style,
     ticking: bool,
 }
 
@@ -647,12 +660,11 @@ impl Radial {
     pub fn new() -> Self {
         register(w!("PrismaRadial"), radial_proc);
         let hwnd = create_overlay(w!("PrismaRadial"), true);
-        Self { surface: Layered::new(hwnd), arrow: [(0.0, 0.0); 2], at: (0, 0), names: std::array::from_fn(|_| String::new()), icons: [0; crate::sys::radial::ALL], two: false, groups: false, left: false, hint: String::new(), ticking: false }
+        Self { surface: Layered::new(hwnd), arrow: [(0.0, 0.0); 2], at: (0, 0), names: std::array::from_fn(|_| String::new()), icons: [0; crate::sys::radial::ALL], two: false, groups: false, left: false, hint: Vec::new(), style: crate::ui::glyph::Style::Xbox, ticking: false }
     }
 
     /// Mostra o estado de agora, ou esconde se fechou. As ações e os programas vêm da configuração.
     pub fn update(&mut self, cfg: &crate::config::Config) {
-        use crate::sys::pads;
         let hwnd = self.surface.hwnd;
         let v = crate::sys::radial::view();
         if !v.open {
@@ -678,10 +690,13 @@ impl Radial {
                 };
             }
             self.icons = cfg.pad_radial;
-            let f = pads::list().first().map_or(pads::Family::Xbox, |p| p.family);
-            let label = |b| crate::pages::pad_profiles::button_label(f, b);
-            let b = |i: u8| label(crate::sys::radial::PICK_BUTTONS[i.min(5) as usize]);
-            self.hint = crate::i18n::tr("{} dispara · {} fecha").replacen("{}", &b(cfg.pad_radial_ok), 1).replacen("{}", &b(cfg.pad_radial_back), 1);
+            self.style = crate::ui::glyph::Style::current();
+            let b = |i: u8| crate::sys::radial::PICK_BUTTONS[i.min(5) as usize];
+            let t = |s: &str| crate::i18n::tr(s).into_owned();
+            self.hint = vec![(vec![b(cfg.pad_radial_ok)], t("dispara")), (vec![b(cfg.pad_radial_back)], t("fecha"))];
+            if self.groups {
+                self.hint.insert(1, (vec![crate::ui::glyph::DPAD_ANY], t("escolhe entre as 4 opções")));
+            }
             self.arrow = crate::sys::radial::stick();
             unsafe {
                 SetTimer(Some(hwnd), 1, KB_FRAME, None);
@@ -715,7 +730,7 @@ impl Radial {
         use crate::sys::radial::{sub, EMPTY, GROUP};
         let v = crate::sys::radial::view();
         let sel = v.sel;
-        let (names, icons, hint, arrow, two, left, groups) = (&self.names, &self.icons, &self.hint, self.arrow, self.two, self.left, self.groups);
+        let (names, icons, hint, arrow, two, left, groups, style) = (&self.names, &self.icons, &self.hint, self.arrow, self.two, self.left, self.groups, self.style);
         self.surface.paint(self.at.0, self.at.1, self.width(), self.height(), |c, r| {
             c.round(r, 18.0, rgb(0x0d0f14).alpha(0.92));
             let cy = 210.0;
@@ -726,7 +741,10 @@ impl Radial {
                 c.line(r.w / 2.0, 40.0, r.w / 2.0, 380.0, WHITE.alpha(0.10), 1.0);
             }
             for &(cx, first) in rings {
-            stick_arrow(c, cx, cy, arrow[if left { 1 } else { first / 8 }]);
+            let stick = if left { 1 } else { first / 8 };
+            stick_arrow(c, cx, cy, arrow[stick]);
+            // No centro, o stick que aponta neste círculo.
+            crate::ui::glyph::draw(c, cx - 11.0, cy, 22.0, style, if stick == 1 { crate::sys::pads::LS } else { crate::sys::pads::RS }, TEXT2);
             for (i, name) in names.iter().enumerate().skip(first).take(8) {
                 let a = ((i % 8) as f32 * 45.0).to_radians();
                 let (px, py) = (cx + 210.0 * a.sin(), cy - 160.0 * a.cos());
@@ -758,7 +776,7 @@ impl Radial {
                 let cx = if two && i < 8 { r.w - RD_W / 2.0 } else { RD_W / 2.0 };
                 let (w, gap) = (134.0, 8.0);
                 let x0 = cx - (4.0 * w + 3.0 * gap) / 2.0;
-                for (d, arrow) in ["↑", "→", "↓", "←"].into_iter().enumerate() {
+                for d in 0..4 {
                     let k = sub(i, d);
                     let b = rect(x0 + d as f32 * (w + gap), RD_H - 40.0, w, 80.0);
                     if icons[k] == EMPTY {
@@ -767,12 +785,12 @@ impl Radial {
                     }
                     let on = v.sub == Some(d);
                     c.round(b, 12.0, if on { ACCENT.alpha(0.35) } else { WHITE.alpha(0.07) });
-                    c.text_raw(rect(b.x + 8.0, b.y + 6.0, 20.0, 20.0), arrow, 14.0, if on { WHITE } else { MUTED }, Align::Left, Weight::Semibold);
+                    crate::ui::glyph::dpad(c, b.x + 17.0, b.y + 17.0, 18.0, Some(d), if on { WHITE } else { MUTED });
                     c.icon(b.x + b.w / 2.0 - 10.0, b.y + 7.0, 20.0, crate::pages::action_icon(icons[k]), if on { WHITE } else { ACCENT });
                     c.text_wrap_center(rect(b.x + 6.0, b.y + 31.0, b.w - 12.0, 46.0), &names[k], 11.0, if on { WHITE } else { TEXT2 }, if on { Weight::Semibold } else { Weight::Regular });
                 }
             }
-            c.text_fit(rect(16.0, r.h - 34.0, r.w - 32.0, 20.0), hint, 12.0, MUTED, Align::Center, Weight::Regular);
+            crate::ui::glyph::hints(c, rect(16.0, r.h - 36.0, r.w - 32.0, 22.0), style, hint, 12.0, MUTED);
         });
     }
 }
