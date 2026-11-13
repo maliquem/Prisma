@@ -599,12 +599,15 @@ unsafe fn write_report(path: &str, r: &[u8], out_len: usize) -> bool {
 
 /// Háptico de verdade do DualSense pelo Bluetooth: os atuadores recebem áudio de 3 kHz, 8 bits,
 /// estéreo, 32 quadros por relatório 0x32, um relatório a cada 10,67 ms. Formato lido no SAxense
-/// (github.com/egormanga/SAxense, MPL-2.0, de Sdore), a única fonte que o descreve; nada copiado.
+/// (github.com/egormanga/SAxense, MPL-2.0, de Sdore) e conferido no dsz (MaximumFreak/dsz, MIT),
+/// que também usa amostras com sinal; nada copiado.
 /// `n` é o contador que o controle pede, e a onda é um seno de 170 Hz com a força `level`, somado
 /// ao som do PC (`audio`, já em 3 kHz).
 fn coil_report(n: u8, phase: &mut f32, level: u8, audio: &[i8; 32]) -> [u8; 142] {
     let mut r = [0u8; 142];
     r[0] = 0x32;
+    // Sequência de 0 a 15 na metade alta, como o 0x31 (SAxense e dsz, MIT, concordam).
+    r[1] = (n & 15) << 4;
     // Pacote 0x11 (cabeçalho fixo, com o contador no fim) e pacote 0x12 com 64 bytes de amostras.
     r[2..11].copy_from_slice(&[0x91, 0x07, 0xFE, 0, 0, 0, 0, 0xFF, n]);
     r[11] = 0x92;
@@ -1603,7 +1606,8 @@ mod tests {
     fn coil_report_layout() {
         let mut ph = 0.0;
         let r = coil_report(7, &mut ph, 255, &[0; 32]);
-        assert_eq!((r[0], r[2], r[3], r[10], r[11], r[12]), (0x32, 0x91, 0x07, 7, 0x92, 64));
+        assert_eq!((r[0], r[1], r[2], r[3], r[10], r[11], r[12]), (0x32, 0x70, 0x91, 0x07, 7, 0x92, 64));
+        assert_eq!(coil_report(18, &mut 0.0, 0, &[0; 32])[1], 0x20);
         assert_eq!(u32::from_le_bytes(r[138..].try_into().unwrap()), crc32(0xA2, &r[..138]));
         // Força máxima: a onda chega perto de ±127 e os dois canais andam juntos.
         let s: Vec<i8> = r[13..77].iter().map(|&b| b as i8).collect();
