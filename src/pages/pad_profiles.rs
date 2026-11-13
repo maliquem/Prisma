@@ -1412,7 +1412,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
         y += nh + 16.0;
         // Háptico: o motor fraco responde ao que se faz no controle, com a força de cada fonte.
         let h = &mut p.haptic;
-        for (i, (label, v)) in [("Vibrar com os botões", &mut h.buttons), ("Vibrar com os gatilhos", &mut h.triggers), ("Vibrar com os sticks", &mut h.sticks)].into_iter().enumerate() {
+        for (i, (label, v)) in [("Vibrar com os botões", &mut h.buttons), ("Vibrar com os gatilhos", &mut h.triggers), ("Vibrar com os sticks", &mut h.sticks), ("Vibrar com o som do PC", &mut h.audio)].into_iter().enumerate() {
             let mut n = *v as u32;
             ui.label(rect(x, y, 170.0, 34.0), label, TEXT2);
             if ui.stepper(&format!("pp-hap{i}"), rect(x + 180.0, y, 130.0, 34.0), &mut n, (0, 8), 1, "") {
@@ -1421,7 +1421,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
             }
             y += 44.0;
         }
-        let note = tr("0 desliga. Os botões dão um toque curto a cada aperto; os gatilhos e os sticks vibram mais quanto mais longe vão.");
+        let note = tr("0 desliga. Os botões dão um toque curto a cada aperto; os gatilhos e os sticks vibram mais quanto mais longe vão. O som do PC vibra com o que o Windows toca: no DualSense, nos atuadores; no DualShock 4, no motor.");
         let nh = crate::ui::gfx::measure(&note, 12.0, Weight::Regular, Some(w)).1.ceil();
         ui.c.text_wrap(rect(x, y, w, nh), &note, 12.0, MUTED, Weight::Regular);
         y += nh + 16.0;

@@ -2302,7 +2302,7 @@ Solto	Libre
 Vibra	Vibra a
 Vibrar ao confirmar	Vibrar al confirmar
 Vibração	Vibración
-0 desliga. Os botões dão um toque curto a cada aperto; os gatilhos e os sticks vibram mais quanto mais longe vão.	0 lo desactiva. Los botones dan un toque corto al pulsar; los gatillos y los sticks vibran más cuanto más lejos llegan.
+0 desliga. Os botões dão um toque curto a cada aperto; os gatilhos e os sticks vibram mais quanto mais longe vão. O som do PC vibra com o que o Windows toca: no DualSense, nos atuadores; no DualShock 4, no motor.	0 lo desactiva. Los botones dan un toque corto al pulsar; los gatillos y los sticks vibran más cuanto más lejos llegan. El sonido del PC vibra con lo que reproduce Windows: en el DualSense, en los actuadores; en el DualShock 4, en el motor.
 Vibrar com os botões	Vibrar con botones
 Vibrar com os gatilhos	Vibrar con gatillos
 Vibrar com os sticks	Vibrar con sticks
@@ -2332,3 +2332,4 @@ Piscar	Parpadeo
 Arco-íris	Arcoíris
 Som no alto-falante do controle	Sonido en el altavoz del mando
 Um som curto no controle ligado pelo cabo (DualSense e DualShock 4) ao conectar, desconectar, trocar de perfil, com bateria baixa e com variação alta. Pelo Bluetooth o controle não tem saída de som.	Un sonido corto en el mando conectado por cable (DualSense y DualShock 4) al conectar, desconectar, cambiar de perfil, con batería baja y con variación alta. Por Bluetooth el mando no tiene salida de sonido.
+Vibrar com o som do PC	Vibrar con audio PC

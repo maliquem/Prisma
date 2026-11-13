@@ -382,6 +382,8 @@ pub struct Haptic {
     pub triggers: u8,
     /// Segue o quanto os sticks saem do centro.
     pub sticks: u8,
+    /// Segue o som que o PC toca (`audio_haptic`).
+    pub audio: u8,
 }
 
 /// A parte contínua do háptico (gatilhos e sticks), de 0 a 255. O toque dos botões precisa de
@@ -657,7 +659,9 @@ impl Profile {
         }
         let h = self.haptic;
         if h != Haptic::default() {
-            let _ = writeln!(s, "haptic {} {} {}", h.buttons, h.triggers, h.sticks);
+            // O som do PC é o quarto número, só quando ligado: o perfil antigo continua igual.
+            let a = if h.audio != 0 { format!(" {}", h.audio) } else { String::new() };
+            let _ = writeln!(s, "haptic {} {} {}{a}", h.buttons, h.triggers, h.sticks);
         }
         if let Some(l) = self.light {
             let bt = if self.light_bt { " bt" } else { "" };
@@ -792,7 +796,7 @@ impl Profile {
                 "buzz" => p.buzz = rest.parse::<u8>().ok()?.min(2),
                 "haptic" => {
                     let v: Vec<u8> = rest.split(' ').filter_map(|n| n.parse::<u8>().ok()).map(|n| n.min(8)).collect();
-                    p.haptic = Haptic { buttons: *v.first()?, triggers: *v.get(1)?, sticks: *v.get(2)? };
+                    p.haptic = Haptic { buttons: *v.first()?, triggers: *v.get(1)?, sticks: *v.get(2)?, audio: v.get(3).copied().unwrap_or(0) };
                 }
                 "light" => {
                     let t: Vec<&str> = rest.split(' ').collect();
@@ -2529,7 +2533,7 @@ mod tests {
 
     #[test]
     fn haptic_follows_triggers_and_sticks() {
-        let h = Haptic { buttons: 3, triggers: 8, sticks: 4 };
+        let h = Haptic { buttons: 3, triggers: 8, sticks: 4, audio: 0 };
         let mut i = Input::default();
         assert_eq!(haptic_level(h, &i), 0);
         // Gatilho no fim com força 8: o máximo.
@@ -2546,6 +2550,11 @@ mod tests {
         // O texto vai e volta, e o perfil sem háptico não escreve a linha.
         let mut p = Profile::base();
         assert!(!p.to_text().contains("haptic"));
+        p.haptic = h;
+        assert!(p.to_text().contains("haptic 3 8 4
+"));
+        assert_eq!(Profile::parse(&p.to_text()).unwrap().haptic, h);
+        let h = Haptic { audio: 6, ..h };
         p.haptic = h;
         assert_eq!(Profile::parse(&p.to_text()).unwrap().haptic, h);
     }

@@ -60,7 +60,7 @@ fn samples(c: Chime, rate: u32) -> Vec<f32> {
 }
 
 /// Saída de som de um controle: o nome que o Windows dá ao DualSense e ao DualShock 4 no cabo.
-fn is_pad_endpoint(name: &str) -> bool {
+pub(crate) fn is_pad_endpoint(name: &str) -> bool {
     let n = name.to_ascii_lowercase();
     n.contains("wireless controller") || n.contains("dualsense") || n.contains("dualshock")
 }

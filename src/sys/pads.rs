@@ -600,8 +600,9 @@ unsafe fn write_report(path: &str, r: &[u8], out_len: usize) -> bool {
 /// Háptico de verdade do DualSense pelo Bluetooth: os atuadores recebem áudio de 3 kHz, 8 bits,
 /// estéreo, 32 quadros por relatório 0x32, um relatório a cada 10,67 ms. Formato lido no SAxense
 /// (github.com/egormanga/SAxense, MPL-2.0, de Sdore), a única fonte que o descreve; nada copiado.
-/// `n` é o contador que o controle pede, e a onda é um seno de 170 Hz com a força `level`.
-fn coil_report(n: u8, phase: &mut f32, level: u8) -> [u8; 142] {
+/// `n` é o contador que o controle pede, e a onda é um seno de 170 Hz com a força `level`, somado
+/// ao som do PC (`audio`, já em 3 kHz).
+fn coil_report(n: u8, phase: &mut f32, level: u8, audio: &[i8; 32]) -> [u8; 142] {
     let mut r = [0u8; 142];
     r[0] = 0x32;
     // Pacote 0x11 (cabeçalho fixo, com o contador no fim) e pacote 0x12 com 64 bytes de amostras.
@@ -612,7 +613,7 @@ fn coil_report(n: u8, phase: &mut f32, level: u8) -> [u8; 142] {
     let step = std::f32::consts::TAU * 170.0 / 3000.0;
     for f in 0..32 {
         // Com sinal (s8), como o exemplo do ffmpeg do SAxense: o silêncio é zero.
-        let v = (amp * phase.sin()).round() as i8 as u8;
+        let v = (amp * phase.sin() + audio[f] as f32).round().clamp(-127.0, 127.0) as i8 as u8;
         r[13 + 2 * f] = v;
         r[14 + 2 * f] = v;
         *phase = (*phase + step) % std::f32::consts::TAU;
@@ -622,26 +623,34 @@ fn coil_report(n: u8, phase: &mut f32, level: u8) -> [u8; 142] {
     r
 }
 
-/// Força pedida aos atuadores e se a escrita falhou (o controle não aceita o 0x32).
-type Coil = (AtomicU8, AtomicBool);
+/// Força pedida aos atuadores, se a escrita falhou (o controle não aceita o 0x32) e se o perfil
+/// pede o som do PC.
+type Coil = (AtomicU8, AtomicBool, AtomicBool);
 
 /// Manda o áudio dos atuadores enquanto o leitor do controle existir. Fica numa linha própria:
 /// uma escrita pelo Bluetooth pode levar milissegundos, e a leitura do controle não pode esperar.
 fn coil_thread(path: String, out_len: usize, coil: Weak<Coil>) {
     let period = Duration::from_nanos(10_666_667);
-    let (mut n, mut phase, mut quiet) = (0u8, 0f32, 0u8);
+    let (mut n, mut phase, mut quiet, mut cursor) = (0u8, 0f32, 0u8, 0u64);
+    let mut audio = [0i8; 32];
     let mut next = Instant::now();
     while let Some(c) = coil.upgrade() {
         let level = c.0.load(Ordering::Relaxed);
-        if level == 0 && quiet == 0 {
+        let sound = c.2.load(Ordering::Relaxed);
+        if level == 0 && !sound && quiet == 0 {
             drop(c);
             std::thread::sleep(Duration::from_millis(15));
             next = Instant::now();
             continue;
         }
         // Alguns relatórios mudos depois de parar: o atuador termina parado, sem ficar com o resto.
-        quiet = if level > 0 { 8 } else { quiet - 1 };
-        let r = coil_report(n, &mut phase, level);
+        quiet = if level > 0 || sound { 8 } else { quiet - 1 };
+        if sound {
+            super::audio_haptic::take(&mut cursor, &mut audio);
+        } else {
+            audio = [0; 32];
+        }
+        let r = coil_report(n, &mut phase, level, &audio);
         if !unsafe { write_report(&path, &r, out_len) } {
             c.1.store(true, Ordering::Relaxed);
             return;
@@ -695,16 +704,19 @@ impl PadOut {
             self.prev = inp.buttons;
             feel = super::remap::haptic_level(h, inp);
         }
+        // Som do PC: a linha do som corre enquanto algum controle pede.
+        super::audio_haptic::demand(h.audio);
         match self.tap {
             Some((until, v)) if Instant::now() < until => feel = feel.max(v),
             Some(_) => self.tap = None,
             None => {}
         }
+        let mut sound_done = false;
         // DualSense pelo Bluetooth: o háptico vai aos atuadores. Se o controle recusar o
         // relatório, volta ao motor fraco, como no cabo e no DualShock 4.
         if self.fam == Family::DualSense && self.link == Link::Bluetooth {
-            if self.coil.is_none() && feel > 0 {
-                let c = Arc::new((AtomicU8::new(0), AtomicBool::new(false)));
+            if self.coil.is_none() && (feel > 0 || h.audio > 0) {
+                let c = Arc::new((AtomicU8::new(0), AtomicBool::new(false), AtomicBool::new(false)));
                 let (path, len, weak) = (self.path.clone(), self.out_len, Arc::downgrade(&c));
                 if std::thread::Builder::new().name("háptico".into()).spawn(move || coil_thread(path, len, weak)).is_ok() {
                     self.coil = Some(c);
@@ -712,8 +724,15 @@ impl PadOut {
             }
             if let Some(c) = self.coil.as_ref().filter(|c| !c.1.load(Ordering::Relaxed)) {
                 c.0.store(feel, Ordering::Relaxed);
+                c.2.store(h.audio > 0, Ordering::Relaxed);
                 feel = 0;
+                sound_done = true;
             }
+        }
+        // Sem os atuadores pelo Bluetooth: o DualSense no cabo recebe o som nos canais do háptico;
+        // o resto sente a força do som no motor fraco.
+        if h.audio > 0 && !sound_done && !(self.fam == Family::DualSense && self.link == Link::Usb && super::audio_haptic::usb_active()) {
+            feel = feel.max(super::audio_haptic::envelope());
         }
         let want = Want {
             rgb: super::remap::light(&self.path).filter(|l| self.link == Link::Usb || l.1).and_then(|l| {
@@ -1583,7 +1602,7 @@ mod tests {
     #[test]
     fn coil_report_layout() {
         let mut ph = 0.0;
-        let r = coil_report(7, &mut ph, 255);
+        let r = coil_report(7, &mut ph, 255, &[0; 32]);
         assert_eq!((r[0], r[2], r[3], r[10], r[11], r[12]), (0x32, 0x91, 0x07, 7, 0x92, 64));
         assert_eq!(u32::from_le_bytes(r[138..].try_into().unwrap()), crc32(0xA2, &r[..138]));
         // Força máxima: a onda chega perto de ±127 e os dois canais andam juntos.
@@ -1591,8 +1610,16 @@ mod tests {
         assert!(s.iter().any(|&v| v > 100) && s.iter().any(|&v| v < -100));
         assert!(s.chunks(2).all(|f| f[0] == f[1]));
         // Força zero é silêncio, e o resto do relatório fica zerado.
-        let q = coil_report(0, &mut ph, 0);
+        let q = coil_report(0, &mut ph, 0, &[0; 32]);
         assert!(q[13..138].iter().all(|&b| b == 0));
+        // O som do PC entra como veio, e a soma com a onda não passa de ±127.
+        let mut a = [0i8; 32];
+        a[0] = -50;
+        a[1] = 127;
+        let q = coil_report(0, &mut ph, 0, &a);
+        assert_eq!((q[13] as i8, q[14] as i8, q[15] as i8), (-50, -50, 127));
+        let q = coil_report(0, &mut ph, 255, &[127; 32]);
+        assert!(q[13..77].iter().all(|&b| (b as i8) >= -1));
     }
 
     #[test]

@@ -2308,7 +2308,7 @@ Solto	Free
 Vibra	Vibrate at
 Vibrar ao confirmar	Rumble on confirm
 Vibração	Vibration
-0 desliga. Os botões dão um toque curto a cada aperto; os gatilhos e os sticks vibram mais quanto mais longe vão.	0 turns it off. Buttons give a short tap on each press; triggers and sticks vibrate more the farther they go.
+0 desliga. Os botões dão um toque curto a cada aperto; os gatilhos e os sticks vibram mais quanto mais longe vão. O som do PC vibra com o que o Windows toca: no DualSense, nos atuadores; no DualShock 4, no motor.	0 turns it off. Buttons give a short tap on each press; triggers and sticks vibrate more the farther they go. PC sound vibrates with what Windows plays: on the DualSense, in the actuators; on the DualShock 4, in the motor.
 Vibrar com os botões	Button rumble
 Vibrar com os gatilhos	Trigger rumble
 Vibrar com os sticks	Stick rumble
@@ -2338,3 +2338,4 @@ Piscar	Blink
 Arco-íris	Rainbow
 Som no alto-falante do controle	Controller speaker sound
 Um som curto no controle ligado pelo cabo (DualSense e DualShock 4) ao conectar, desconectar, trocar de perfil, com bateria baixa e com variação alta. Pelo Bluetooth o controle não tem saída de som.	A short sound on the controller connected by cable (DualSense and DualShock 4) on connect, disconnect, profile switch, low battery and high jitter. Over Bluetooth the controller has no sound output.
+Vibrar com o som do PC	PC sound rumble

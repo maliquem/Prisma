@@ -31,6 +31,7 @@ pub mod macros;
 pub mod keymap;
 pub mod pads;
 pub mod pad_sound;
+pub mod audio_haptic;
 pub mod remap;
 pub mod patterns;
 pub mod power;

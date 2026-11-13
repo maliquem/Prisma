@@ -2302,7 +2302,7 @@ Solto	Свободно
 Vibra	Частота
 Vibrar ao confirmar	Вибро-отклик
 Vibração	Вибрация
-0 desliga. Os botões dão um toque curto a cada aperto; os gatilhos e os sticks vibram mais quanto mais longe vão.	0 отключает. Кнопки дают короткий толчок при каждом нажатии; триггеры и стики вибрируют сильнее, чем дальше они отклонены.
+0 desliga. Os botões dão um toque curto a cada aperto; os gatilhos e os sticks vibram mais quanto mais longe vão. O som do PC vibra com o que o Windows toca: no DualSense, nos atuadores; no DualShock 4, no motor.	0 отключает. Кнопки дают короткий толчок при каждом нажатии; триггеры и стики вибрируют сильнее, чем дальше они отклонены. Звук ПК вибрирует вместе с тем, что воспроизводит Windows: в DualSense — в актуаторах, в DualShock 4 — в моторе.
 Vibrar com os botões	Вибро: кнопки
 Vibrar com os gatilhos	Вибро: триггеры
 Vibrar com os sticks	Вибро: стики
@@ -2332,3 +2332,4 @@ Piscar	Мигание
 Arco-íris	Радуга
 Som no alto-falante do controle	Звук в динамике геймпада
 Um som curto no controle ligado pelo cabo (DualSense e DualShock 4) ao conectar, desconectar, trocar de perfil, com bateria baixa e com variação alta. Pelo Bluetooth o controle não tem saída de som.	Короткий звук на геймпаде, подключённом по кабелю (DualSense и DualShock 4), при подключении, отключении, смене профиля, низком заряде и высоком разбросе. По Bluetooth у геймпада нет звукового выхода.
+Vibrar com o som do PC	Вибро: звук ПК
