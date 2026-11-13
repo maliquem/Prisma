@@ -6,9 +6,11 @@
 //!   registro pela mesma chave;
 //! - o segredo do pareamento, que o host confere como o do convite longo.
 //!
-//! São 40 bits: adivinhar pelos relés levaria séculos, e o host recusa o convite depois de 5
-//! tentativas erradas, de 10 minutos ou do primeiro pareamento. O código de confirmação de seis
-//! dígitos continua valendo contra quem se meter no meio.
+//! São 40 bits, e o código vale no máximo 60 minutos. Quem tenta pelos relés só testa um palpite
+//! depois de derivar a chave dele, e cada derivação repete o hash 4 milhões de vezes (perto de um
+//! quarto de segundo): achar o registro de um código vivo nesse prazo pede milhares de PCs. Quem
+//! tenta pelo host tem 5 tentativas por aparelho e 50 no total, e o convite morre no primeiro
+//! pareamento. O código de confirmação de seis dígitos continua valendo contra quem se meter no meio.
 
 use std::time::Duration;
 
@@ -56,17 +58,29 @@ pub fn normalize(s: &str) -> Option<String> {
     (out.len() == LEN).then_some(out)
 }
 
-fn derive(context: &str, raw: &str) -> [u8; 32] {
-    blake3::derive_key(context, raw.as_bytes())
+const ROUNDS: u32 = 1 << 22;
+
+/// A raiz de onde saem a chave e o segredo: o hash repetido, para cada palpite custar caro. O
+/// contexto mudou de 2026-11 para 2026-12 junto com isso, e as versões antigas não acham o código.
+pub fn stretch(raw: &str) -> [u8; 32] {
+    stretch_n(raw, ROUNDS)
 }
 
-fn key(raw: &str) -> SecretKey {
-    SecretKey::from_bytes(&derive("Prisma 2026-11 convite curto, chave do registro", raw))
+fn stretch_n(raw: &str, rounds: u32) -> [u8; 32] {
+    let mut h = blake3::derive_key("Prisma 2026-12 convite curto, raiz", raw.as_bytes());
+    for _ in 0..rounds {
+        h = *blake3::hash(&h).as_bytes();
+    }
+    h
+}
+
+fn key(root: &[u8; 32]) -> SecretKey {
+    SecretKey::from_bytes(&blake3::derive_key("Prisma 2026-12 convite curto, chave do registro", root))
 }
 
 /// O segredo que o host confere no pareamento.
-pub fn secret(raw: &str) -> [u8; 16] {
-    derive("Prisma 2026-11 convite curto, segredo", raw)[..16].try_into().unwrap()
+pub fn secret(root: &[u8; 32]) -> [u8; 16] {
+    blake3::derive_key("Prisma 2026-12 convite curto, segredo", root)[..16].try_into().unwrap()
 }
 
 fn client(url: &str) -> std::result::Result<PkarrRelayClient, String> {
@@ -76,9 +90,9 @@ fn client(url: &str) -> std::result::Result<PkarrRelayClient, String> {
 }
 
 /// Publica o id do host nos relés, ao mesmo tempo. Devolve em quantos deu certo.
-pub async fn publish(raw: &str, host: &EndpointId, until: u64) -> usize {
+pub async fn publish(root: &[u8; 32], host: &EndpointId, until: u64) -> usize {
     let values = [format!("id={}", data_encoding::HEXLOWER.encode(host.as_bytes())), format!("ate={until}")];
-    let packet = match SignedPacket::from_txt_strings(&key(raw), NAME, values, 600) {
+    let packet = match SignedPacket::from_txt_strings(&key(root), NAME, values, 600) {
         Ok(p) => p,
         Err(e) => {
             eprintln!("não deu para montar o registro do código: {e}");
@@ -111,8 +125,8 @@ pub async fn publish(raw: &str, host: &EndpointId, until: u64) -> usize {
 }
 
 /// Acha o id do host pelo código. Pergunta aos relés ao mesmo tempo e fica com a primeira resposta.
-pub async fn resolve(raw: &str) -> std::result::Result<EndpointId, String> {
-    let public = key(raw).public();
+pub async fn resolve(root: &[u8; 32]) -> std::result::Result<EndpointId, String> {
+    let public = key(root).public();
     let (tx, mut rx) = tokio::sync::mpsc::channel(RELAYS.len());
     for url in RELAYS {
         let tx = tx.clone();
@@ -174,13 +188,28 @@ mod tests {
 
     #[test]
     fn code_derives_everything() {
-        let a = normalize("K7M2-QX9P").unwrap();
-        let b = normalize("K7M2-QX9Q").unwrap();
+        let a = stretch(&normalize("K7M2-QX9P").unwrap());
+        let b = stretch(&normalize("K7M2-QX9Q").unwrap());
         assert_ne!(secret(&a), secret(&b));
         assert_ne!(key(&a).public(), key(&b).public());
-        assert_eq!(key(&a).public(), key("K7M2QX9P").public());
         // O segredo não é a chave.
         assert_ne!(&secret(&a)[..], &key(&a).to_bytes()[..16]);
+        // Valor conhecido: mudar o contexto ou as voltas quebra o código entre versões.
+        assert_eq!(data_encoding::HEXLOWER.encode(&a[..8]), "dc90b15df09aa0c8");
+        // O hash repetido é o que dá o custo: uma volta a menos dá outra raiz.
+        assert_ne!(stretch_n("K7M2QX9P", ROUNDS - 1), a);
+        // E a derivação da versão antiga (sem repetir) dá outro segredo.
+        let old: [u8; 16] = blake3::derive_key("Prisma 2026-11 convite curto, segredo", b"K7M2QX9P")[..16].try_into().unwrap();
+        assert_ne!(secret(&a), old);
+    }
+
+    /// Quanto custa uma derivação: `cargo test stretch_time -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn stretch_time() {
+        let t = std::time::Instant::now();
+        stretch("K7M2QX9P");
+        eprintln!("{} ms", t.elapsed().as_millis());
     }
 
     /// Pela internet, nos relés de verdade: `cargo test live_relays -- --ignored --nocapture`.
@@ -188,7 +217,7 @@ mod tests {
     #[ignore]
     fn live_relays() {
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let raw = normalize(&new_code()).unwrap();
+        let raw = stretch(&normalize(&new_code()).unwrap());
         let host = SecretKey::generate().public();
         let n = rt.block_on(publish(&raw, &host, super::super::net::unix_now() + 120));
         eprintln!("publicado em {n} de 3");
@@ -203,8 +232,9 @@ mod tests {
     fn record_round_trip() {
         let host = SecretKey::from_bytes(&[7; 32]).public();
         let values = [format!("id={}", data_encoding::HEXLOWER.encode(host.as_bytes())), format!("ate={}", super::super::net::unix_now() + 600)];
-        let p = SignedPacket::from_txt_strings(&key("K7M2QX9P"), NAME, values, 600).unwrap();
-        let back = SignedPacket::from_relay_payload(&key("K7M2QX9P").public(), &p.to_relay_payload()).unwrap();
+        let k = key(&[9; 32]);
+        let p = SignedPacket::from_txt_strings(&k, NAME, values, 600).unwrap();
+        let back = SignedPacket::from_relay_payload(&k.public(), &p.to_relay_payload()).unwrap();
         assert_eq!(read(&back.txt_records(NAME)).unwrap(), host);
         assert_eq!(read(&["id=00".into()]).is_err(), true);
         assert_eq!(read(&[format!("id={}", data_encoding::HEXLOWER.encode(host.as_bytes())), "ate=5".into()]).unwrap_err(), "o convite venceu");

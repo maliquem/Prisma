@@ -67,9 +67,8 @@ fn clock(s: u64) -> String {
 
 /// Nomes da lista de validade do convite.
 fn minutes_name(m: u32) -> String {
-    if m >= 60 && m % 60 == 0 {
-        let h = m / 60;
-        crate::i18n::tr(if h == 1 { "1 hora" } else if h == 24 { "24 horas" } else { "{} horas" }).replace("{}", &h.to_string())
+    if m == 60 {
+        crate::i18n::tr("1 hora").into_owned()
     } else {
         crate::i18n::tr("{} minutos").replace("{}", &m.to_string())
     }
@@ -218,7 +217,7 @@ pub(crate) fn invite_of(lines: &[String]) -> Option<Shown> {
 /// Cria um convite como o botão "Criar convite": liga o host se nem o serviço nem o host
 /// estiverem ligados, para o convite anterior e abre o novo. Devolve o registro do convite e o
 /// processo que o escreve. `minutes` troca a validade da página só neste convite (o
-/// `--stream-invite` limita de 1 a 1440).
+/// `--stream-invite` limita de 1 a 60).
 pub fn create_invite(_app: &mut App, minutes: Option<u32>) -> Option<(PathBuf, u32)> {
     let mut guard = STATE.lock().unwrap_or_else(|e| e.into_inner());
     let st = guard.get_or_insert_with(test_setup);

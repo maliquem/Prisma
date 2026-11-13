@@ -102,7 +102,7 @@ Convenção: `arquivo:linha nome`. "Atalho" é a combinação global (chaves `hk
 |---|---|---|
 | OpenPage | 317 | `go(page)` (`app.rs:1414`) |
 | SaveReplay | 334 | `save_replay` (`app.rs:1355`) |
-| ShareInvite | 339 | `pages::share::create_invite` (`share.rs:222`) |
+| ShareInvite | 339 | `pages::share::create_invite` (`share.rs:221`) |
 | CaptureDirs | 349 | devolve `cap_dir` |
 | GameStarted / GameStopped | 350 / 354 | registra e tira jogo do Medidor e do Fullscreen |
 | MeterView | 358 | `set_meter_view` (`app.rs:2136`) |
@@ -182,7 +182,7 @@ As flags de teste ficam em `src/app.rs` (`start`, linha 366, e as checagens de `
 | Pedido de outra cópia para abrir a janela | Abrir o .exe de novo | `WM_SHOW` `src/app.rs:3485` | Nome único `Local\PrismaApp` (`main.rs`). |
 | Busca de programas e arquivos (barra) | Atalho HK_FIND; ação 23 | `toggle_find` `src/app.rs:2371`, `show_find` `app.rs:2380`, `close_find` `app.rs:2427` | |
 | Teclado e navegação | Teclado | `on_key` `src/app.rs:3400`; `nav_key` `app.rs:3795`; `typed_char` `app.rs:3806` | |
-| Navegar com o controle | Prisma em foco: direcional, A, B, LB/RB, LT/RT, X, Y e os dois sticks (esquerdo mouse, direito rolagem, como no Desktop) | Controle: `sys/nav.rs:171` `feed`, `:43` `Pad` (`step`), `:142` `dir_of`, `:195` `rest`, `:207` `point_to`, `:220` `click`, `:147` `set_window` (em `show_main` `app.rs:3298` e `WM_DESTROY` `app.rs:4139`). Janela: `pad_nav` `app.rs:3076` (evento `Event::Nav`, `app.rs:3014`); `pad_off` `app.rs:3776`; `nav_step` `pages/mod.rs:267`. Interface: `Target` `src/ui/mod.rs:72`, `pick` `:98`, `pad_move` `:190`, `scroll_by` `:227`, `pad_field` `:244`, `cancel` `:249`, `target` `:316` (chamado em `clickable`, nas linhas da lista aberta e nos botões da pergunta), `tab_step` `:918` (abas em `pages/nvidia.rs:68`, `pages/share.rs:309` e `pages/controllers.rs:402`), `pad_bar` `:1436` | O foco é o próprio cursor: o direcional leva o cursor ao centro do próximo alvo e A manda um clique de verdade. Entradas do Prisma levam a marca `remap::MARK` (`remap.rs:59`); mouse e teclado sem ela apagam o anel e a faixa (`pad_off`). Com a faixa, a página encolhe `PAD_BAR` (`ui/mod.rs:80`). XInput a 8 ms com a janela aberta (`window_open`, `nav.rs:158`). Testes: `nav.rs` 2, `ui/mod.rs` 1. Pausa: `nav::pause` (`sys/nav.rs:154`), chamado a cada desenho em `paint` (`app.rs:3360`) com campo de tecla esperando, macro gravando, medição ou teste dos botões rodando (`pages/controllers.rs:10` `measuring`, que inclui `State.testing` `:35`); pausado, `feed` só deixa passar a parada de emergência. |
+| Navegar com o controle | Prisma em foco: direcional, A, B, LB/RB, LT/RT, X, Y e os dois sticks (esquerdo mouse, direito rolagem, como no Desktop) | Controle: `sys/nav.rs:171` `feed`, `:43` `Pad` (`step`), `:142` `dir_of`, `:195` `rest`, `:207` `point_to`, `:220` `click`, `:147` `set_window` (em `show_main` `app.rs:3298` e `WM_DESTROY` `app.rs:4139`). Janela: `pad_nav` `app.rs:3076` (evento `Event::Nav`, `app.rs:3014`); `pad_off` `app.rs:3776`; `nav_step` `pages/mod.rs:267`. Interface: `Target` `src/ui/mod.rs:72`, `pick` `:98`, `pad_move` `:190`, `scroll_by` `:227`, `pad_field` `:244`, `cancel` `:249`, `target` `:316` (chamado em `clickable`, nas linhas da lista aberta e nos botões da pergunta), `tab_step` `:918` (abas em `pages/nvidia.rs:68`, `pages/share.rs:308` e `pages/controllers.rs:402`), `pad_bar` `:1436` | O foco é o próprio cursor: o direcional leva o cursor ao centro do próximo alvo e A manda um clique de verdade. Entradas do Prisma levam a marca `remap::MARK` (`remap.rs:59`); mouse e teclado sem ela apagam o anel e a faixa (`pad_off`). Com a faixa, a página encolhe `PAD_BAR` (`ui/mod.rs:80`). XInput a 8 ms com a janela aberta (`window_open`, `nav.rs:158`). Testes: `nav.rs` 2, `ui/mod.rs` 1. Pausa: `nav::pause` (`sys/nav.rs:154`), chamado a cada desenho em `paint` (`app.rs:3360`) com campo de tecla esperando, macro gravando, medição ou teste dos botões rodando (`pages/controllers.rs:10` `measuring`, que inclui `State.testing` `:35`); pausado, `feed` só deixa passar a parada de emergência. |
 | Rolagem e clique do mouse | Mouse | `mouse_xy` `src/app.rs:3785`; `find_mouse` `app.rs:3827`; `picker_mouse` `app.rs:3916` | |
 | Pintura da janela | Automático | `paint` `src/app.rs:3360`; `invalidate` `app.rs:3352` | |
 | Seletor de programa (.exe) | Botões que pedem um programa | `open_picker` `src/app.rs:1924`; `show_picker` `app.rs:1933`; `paint_picker` `app.rs:1990`; `pick_exe_for` `app.rs:2697`; `close_picker` `app.rs:2691`; página `pages/picker.rs:67` `draw` | |
@@ -416,15 +416,15 @@ A barra lateral é `NAV` (`src/pages/mod.rs:273-295`), na ordem abaixo. Cada pá
 
 | Função | Como é chamada | Onde no código | Observações |
 |---|---|---|---|
-| Tela principal e abas | Página | `pages/share.rs:436` `draw`; `:592` `main_tab`; `:301` `tabs` | |
-| Criar convite (código ou link) | Botão; Launcher `ShareInvite` | `create_invite` `pages/share.rs:222`; `invite_in` `:232`; `invite_of` `:201`; `link.rs:339` | Validade em minutos (`share_invite.minutes`). |
-| Quem transmite (host) | Aba Host | `pages/share.rs:1066` `host_tab`; `stream/host.rs` (70 funções, não listadas) | Config `share_names`, `cap_target`. |
-| Quem assiste (cliente) | Aba Cliente | `pages/share.rs:1319` `client_tab`; `stream/view.rs`; `stream/mod.rs:633` `sane_video` (recusa vídeo com 0 FPS ou tamanho impossível) | |
-| Rede | Aba Rede | `pages/share.rs:1411` `net_tab`; `stream/net.rs` | |
-| Teclas e controle remoto | Aba Teclas | `pages/share.rs:1468` `keys_tab`; `:1459` `hotkey_row`; `stream/kvm.rs` | |
-| Controles locais repassados | Aba Controles | `pages/share.rs:1515` `local_pads`; `:1541` `pads_tab`; `stream/pads.rs` | |
-| Parar transmissão | Botão | `pages/share.rs:242` `stop`; `:250` `stop_kvm`; `:272` `stop_ear` | |
-| Trabalho em segundo plano | Automático | `pages/share.rs:277` `service_job`; `stream/service.rs`; `stream/mod.rs:163` `service_dir`; `stream/mod.rs:665` `run_args` | `main.rs` chama `run_args` antes do nome único. |
+| Tela principal e abas | Página | `pages/share.rs:435` `draw`; `:591` `main_tab`; `:300` `tabs` | |
+| Criar convite (código ou link) | Botão; Launcher `ShareInvite` | `create_invite` `pages/share.rs:221`; `invite_in` `:231`; `invite_of` `:200`; `link.rs:339` | Validade em minutos (`share_invite.minutes`). |
+| Quem transmite (host) | Aba Host | `pages/share.rs:1065` `host_tab`; `stream/host.rs` (70 funções, não listadas) | Config `share_names`, `cap_target`. |
+| Quem assiste (cliente) | Aba Cliente | `pages/share.rs:1318` `client_tab`; `stream/view.rs`; `stream/mod.rs:633` `sane_video` (recusa vídeo com 0 FPS ou tamanho impossível) | |
+| Rede | Aba Rede | `pages/share.rs:1410` `net_tab`; `stream/net.rs` | |
+| Teclas e controle remoto | Aba Teclas | `pages/share.rs:1467` `keys_tab`; `:1458` `hotkey_row`; `stream/kvm.rs` | |
+| Controles locais repassados | Aba Controles | `pages/share.rs:1514` `local_pads`; `:1540` `pads_tab`; `stream/pads.rs` | |
+| Parar transmissão | Botão | `pages/share.rs:241` `stop`; `:249` `stop_kvm`; `:271` `stop_ear` | |
+| Trabalho em segundo plano | Automático | `pages/share.rs:276` `service_job`; `stream/service.rs`; `stream/mod.rs:163` `service_dir`; `stream/mod.rs:665` `run_args` | `main.rs` chama `run_args` antes do nome único. |
 | Abrir convite recebido (`prisma://`) | Clique no link | `stream/weblink.rs` `take_arg`; `main.rs` (variável `link`); `stream/weblink.rs:26` `link_alone`, chamado no começo de `main` | Link com outros argumentos junto: nada abre. |
 | Testes | `--test-stream=` | `app.rs:603`; testes em `src/stream/*.rs` | 34 testes no total em `stream/`. |
 

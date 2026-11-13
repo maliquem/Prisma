@@ -190,7 +190,7 @@ impl Opts {
                 "pessoas" => o.guests = v.parse().unwrap_or(3usize).clamp(1, 8),
                 "controles" if matches!(v, "auto" | "vigem" | "viiper") => o.pads = v.into(),
                 "convite" => o.invite = parse_perms(v).unwrap_or(SOUND),
-                "convite_minutos" => o.invite_min = v.parse::<u32>().unwrap_or(10).clamp(1, 1440),
+                "convite_minutos" => o.invite_min = v.parse::<u32>().unwrap_or(10).clamp(1, 60),
                 "nome" => o.name = clean(v, 40),
                 "resolucao" => o.res = v.parse().unwrap_or(0),
                 "quadros" => o.fps = v.parse::<u32>().unwrap_or(0).min(480),

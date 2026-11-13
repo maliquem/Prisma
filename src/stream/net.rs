@@ -33,7 +33,9 @@ use super::code;
 const ALPN_STREAM: &[u8] = b"prisma/stream/1";
 const ALPN_PAIR: &[u8] = b"prisma/pair/1";
 const INVITE_TTL: Duration = Duration::from_secs(600);
-const INVITE_TRIES: u32 = 5;
+/// Tentativas por aparelho que tenta, e no total: quem erra de propósito não gasta o convite dos outros.
+const INVITE_TRIES: usize = 5;
+const INVITE_TRIES_ALL: usize = 50;
 const INVITE_PREFIX: &str = "PRISMA-";
 /// Datagrama que cabe em qualquer caminho do iroh (o QUIC garante 1200 bytes de UDP).
 const SAFE_DATAGRAM: usize = 1150;
@@ -289,7 +291,8 @@ struct Invite {
     secret: [u8; 16],
     /// Até quando vale, em segundos desde 1970. 0: revogado.
     until: u64,
-    tries: u32,
+    /// Quem tentou, uma vez por tentativa.
+    tries: Vec<EndpointId>,
     used: bool,
     /// Permissões de quem parear com este convite.
     perms: u8,
@@ -310,11 +313,12 @@ fn load_invite_file() -> Option<Invite> {
     let secret: [u8; 16] = data_encoding::HEXLOWER_PERMISSIVE.decode(f.next()?.as_bytes()).ok()?.try_into().ok()?;
     let perms = parse_perms(f.next()?)?;
     let until = f.next()?.parse::<u64>().ok()?;
-    Some(Invite { secret, until, tries: 0, used: false, perms })
+    Some(Invite { secret, until, tries: Vec::new(), used: false, perms })
 }
 
 /// Quanto um convite da página pode valer, em minutos.
-pub const INVITE_MINUTES: [u32; 5] = [5, 10, 30, 60, 1440];
+/// No máximo 60: o código curto tem 40 bits, e o tempo vivo é o que quem tenta adivinhar tem.
+pub const INVITE_MINUTES: [u32; 4] = [5, 10, 30, 60];
 
 /// A linha do registro do convite com a hora em que ele vence (segundos desde 1970).
 pub const EXPIRES_LINE: &str = "vence em: ";
@@ -338,9 +342,9 @@ pub fn make_invite(perms: u8, minutes: u32) {
         Err(e) => return eprintln!("{e}"),
     };
     let shown = code::new_code();
-    let raw = code::normalize(&shown).unwrap_or_default();
-    let secret = code::secret(&raw);
-    let minutes = minutes.clamp(1, 1440);
+    let root = code::stretch(&code::normalize(&shown).unwrap_or_default());
+    let secret = code::secret(&root);
+    let minutes = minutes.clamp(1, 60);
     let until = unix_now() + minutes as u64 * 60;
     let line = format!("{}\t{}\t{}\n", data_encoding::HEXLOWER.encode(&secret), perms_key(perms), until);
     if let Err(e) = crate::config::write_safe(&invite_path(), line) {
@@ -351,7 +355,7 @@ pub fn make_invite(perms: u8, minutes: u32) {
     eprintln!("{CODE_LINE}{shown}");
     eprintln!("Convite longo, se o código não for achado:\n\n{}\n", invite_text(&sk.public(), &secret));
     eprintln!("A pergunta de confirmação aparece na tela deste PC.");
-    let n = rt().block_on(code::publish(&raw, &sk.public(), until));
+    let n = rt().block_on(code::publish(&root, &sk.public(), until));
     published(n);
 }
 
@@ -396,12 +400,14 @@ pub(super) fn copy_from_service(src: &std::path::Path) -> std::result::Result<()
 }
 
 impl Invite {
-    /// Confere o segredo, contando a tentativa. Depois de usado, vencido ou de 5 tentativas, recusa.
-    fn check(&mut self, secret: &[u8]) -> bool {
-        if self.used || unix_now() >= self.until || self.tries >= INVITE_TRIES {
+    /// Confere o segredo, contando a tentativa de `who`. Depois de usado, vencido, de 5 tentativas
+    /// deste aparelho ou de 50 no total, recusa.
+    fn check(&mut self, secret: &[u8], who: EndpointId) -> bool {
+        let mine = self.tries.iter().filter(|t| **t == who).count();
+        if self.used || unix_now() >= self.until || mine >= INVITE_TRIES || self.tries.len() >= INVITE_TRIES_ALL {
             return false;
         }
-        self.tries += 1;
+        self.tries.push(who);
         // Comparação em tempo constante.
         blake3::hash(secret) == blake3::hash(&self.secret)
     }
@@ -630,7 +636,7 @@ async fn pair_host(conn: Connection, me: EndpointId, invite: Arc<Mutex<Invite>>)
         let (secret, name) = msg.split_at(16);
         let name = clean_name(&String::from_utf8_lossy(name));
         let perms = invite.lock().unwrap().perms;
-        if !invite.lock().unwrap().check(secret) {
+        if !invite.lock().unwrap().check(secret, who) {
             eprintln!("pedido de pareamento de «{name}» recusado: convite errado, usado ou vencido");
             let _ = send.write_all(&[0]).await;
             let _ = send.finish();
@@ -753,10 +759,10 @@ fn host_with(invite_perms: Option<u8>, service: bool) {
         eprintln!("sem resposta do relé da n0 em 10 s: só a rede local e a VPN vão funcionar por enquanto");
     }
     let shown = code::new_code();
-    let raw = code::normalize(&shown).unwrap_or_default();
-    let secret = if invite_perms.is_some() { code::secret(&raw) } else { random::<16>() };
+    let root = code::stretch(&code::normalize(&shown).unwrap_or_default());
+    let secret = if invite_perms.is_some() { code::secret(&root) } else { random::<16>() };
     // Sem convite na partida, ele começa usado: só vale o do arquivo.
-    let invite = Arc::new(Mutex::new(Invite { secret, until: unix_now() + INVITE_TTL.as_secs(), tries: 0, used: invite_perms.is_none(), perms: invite_perms.unwrap_or(SOUND) }));
+    let invite = Arc::new(Mutex::new(Invite { secret, until: unix_now() + INVITE_TTL.as_secs(), tries: Vec::new(), used: invite_perms.is_none(), perms: invite_perms.unwrap_or(SOUND) }));
     match invite_perms {
         Some(perms) => {
             eprintln!("Prisma compartilhando pela internet. Quem parear agora: {}. Este PC: «{}», id {}", perms_text(perms), my_name(), ep.id().fmt_short());
@@ -765,7 +771,7 @@ fn host_with(invite_perms: Option<u8>, service: bool) {
             eprintln!("Convite longo, se o código não for achado:\n\n{}\n", invite_text(&ep.id(), &secret));
             let id = ep.id();
             let until = unix_now() + INVITE_TTL.as_secs();
-            rt().spawn(async move { published(code::publish(&raw, &id, until).await) });
+            rt().spawn(async move { published(code::publish(&root, &id, until).await) });
         }
         None if service => eprintln!("serviço compartilhando pela internet. Este PC: «{}», id {}", my_name(), ep.id().fmt_short()),
         None => eprintln!("compartilhando pela internet. Este PC: «{}», id {}", my_name(), ep.id().fmt_short()),
@@ -847,8 +853,9 @@ pub fn pair(text: &str) {
     eprintln!("{NOTICE}");
     let (host_id, secret) = if let Some(raw) = code::normalize(text) {
         eprintln!("procurando o código {}", code::show(&raw));
-        match rt().block_on(code::resolve(&raw)) {
-            Ok(id) => (id, code::secret(&raw)),
+        let root = code::stretch(&raw);
+        match rt().block_on(code::resolve(&root)) {
+            Ok(id) => (id, code::secret(&root)),
             Err(e) => return eprintln!("não achei o código ({e}): confira o código, ou peça o convite longo"),
         }
     } else if let Some(x) = parse_invite(text) {
@@ -1053,18 +1060,26 @@ mod tests {
 
     #[test]
     fn invite_limits() {
-        let mut inv = Invite { secret: [5; 16], until: unix_now() + 600, tries: 0, used: false, perms: SOUND };
+        let (a, b) = (SecretKey::from_bytes(&[1; 32]).public(), SecretKey::from_bytes(&[2; 32]).public());
+        let new = |until| Invite { secret: [5; 16], until, tries: Vec::new(), used: false, perms: SOUND };
+        let mut inv = new(unix_now() + 600);
         for _ in 0..4 {
-            assert!(!inv.check(&[6; 16]));
+            assert!(!inv.check(&[6; 16], a));
         }
-        assert!(inv.check(&[5; 16]));
-        // Quinta tentativa gasta: nem o certo passa mais.
-        assert!(!inv.check(&[5; 16]));
-        let mut old = Invite { secret: [5; 16], until: unix_now() - 1, tries: 0, used: false, perms: SOUND };
-        assert!(!old.check(&[5; 16]));
+        assert!(inv.check(&[5; 16], a));
+        // Quinta tentativa de a gasta: nem o certo passa mais para ele.
+        assert!(!inv.check(&[5; 16], a));
+        // Os erros de a não gastam as tentativas de b.
+        assert!(inv.check(&[5; 16], b));
+        // Teto geral: 50 tentativas de aparelhos diferentes.
+        let mut many = new(unix_now() + 600);
+        for i in 0..50u8 {
+            assert!(!many.check(&[6; 16], SecretKey::from_bytes(&[i + 10; 32]).public()));
+        }
+        assert!(!many.check(&[5; 16], b));
+        assert!(!new(unix_now() - 1).check(&[5; 16], a));
         // Revogado: validade zerada.
-        let mut revoked = Invite { secret: [5; 16], until: 0, tries: 0, used: false, perms: SOUND };
-        assert!(!revoked.check(&[5; 16]));
+        assert!(!new(0).check(&[5; 16], a));
     }
 
     /// Dois pontos do iroh neste PC, sem relé: o canal entrega os pacotes, inclusive uma rajada do
@@ -1128,7 +1143,7 @@ mod tests {
         let r = rt().block_on(async {
             let a = Endpoint::builder(presets::Minimal).relay_mode(iroh::RelayMode::Disabled).alpns(vec![ALPN_PAIR.to_vec()]).bind().await.unwrap();
             let b = Endpoint::builder(presets::Minimal).relay_mode(iroh::RelayMode::Disabled).bind().await.unwrap();
-            let invite = Arc::new(Mutex::new(Invite { secret: [1; 16], until: unix_now() + 600, tries: 0, used: false, perms: SOUND }));
+            let invite = Arc::new(Mutex::new(Invite { secret: [1; 16], until: unix_now() + 600, tries: Vec::new(), used: false, perms: SOUND }));
             let (a2, inv2) = (a.clone(), invite.clone());
             let host = tokio::spawn(async move {
                 let conn = a2.accept().await.unwrap().accept().unwrap().await.unwrap();
@@ -1137,7 +1152,7 @@ mod tests {
             let r = ask_pair(&b, a.addr(), &[2; 16]).await;
             let _ = host.await;
             let inv = invite.lock().unwrap();
-            assert_eq!((inv.tries, inv.used), (1, false));
+            assert_eq!((inv.tries.len(), inv.used), (1, false));
             drop(inv);
             a.close().await;
             b.close().await;
