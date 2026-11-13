@@ -1420,6 +1420,8 @@ fn light_sheets(ui: &mut Ui, app: &mut App, p: &mut Profile) -> bool {
             ed.pick = Some((what, hsv));
         }
         let c = crate::ui::gfx::hsv_rgb(hsv[0], hsv[1], hsv[2]);
+        // A barra de luz do controle já acompanha a escolha, antes de confirmar.
+        remap::preview_light(Some((Light::Color(c), p.light_bt)));
         let px = b.x + 336.0;
         ui.c.round(rect(px, b.y + 60.0, 120.0, 72.0), 10.0, swatch(c));
         ui.c.round_line(rect(px, b.y + 60.0, 120.0, 72.0), 10.0, BORDER2, 1.0);

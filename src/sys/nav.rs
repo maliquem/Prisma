@@ -186,7 +186,21 @@ pub fn feed(key: &str, inp: &Input, now: Instant) -> Option<Input> {
     for c in cmds {
         pads::emit(pads::Event::Nav(c));
     }
-    Some(Input { buttons: inp.buttons & (remap::STOP_COMBO | super::radial::button()), ..Default::default() })
+    Some(rest(inp))
+}
+
+/// O que o mapeamento ainda vê com o Prisma na frente: a parada de emergência, o botão do radial,
+/// e o gyro e o touchpad inteiros. A navegação não usa nenhum dos dois, e sem isso eles deixavam de
+/// mexer o mouse sempre que a janela do Prisma estava na frente.
+fn rest(inp: &Input) -> Input {
+    Input {
+        buttons: inp.buttons & (remap::STOP_COMBO | super::radial::button()),
+        gyro: inp.gyro,
+        accel: inp.accel,
+        motion: inp.motion,
+        touch: inp.touch,
+        ..Default::default()
+    }
 }
 
 /// Leva o cursor ao ponto (`x`, `y`) da tela, com a marca do Prisma: a janela não confunde com o mouse.
@@ -210,6 +224,24 @@ pub fn click() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn prisma_in_front_still_passes_the_touchpad_and_the_gyro() {
+        let inp = Input {
+            buttons: pads::A | pads::LB | remap::STOP_COMBO,
+            lx: 0.8,
+            gyro: [10.0, 20.0, 30.0],
+            motion: true,
+            touch: [Some((0.3, 0.4)), None],
+            ..Default::default()
+        };
+        let r = rest(&inp);
+        // O stick e os botões comuns ficam com a navegação.
+        assert_eq!((r.lx, r.buttons & pads::A), (0.0, 0));
+        assert_eq!(r.buttons & remap::STOP_COMBO, remap::STOP_COMBO);
+        // O gyro e o touchpad seguem para o mapeamento.
+        assert_eq!((r.gyro, r.motion, r.touch), (inp.gyro, true, inp.touch));
+    }
 
     #[test]
     fn edges_repeat_and_mouse() {
