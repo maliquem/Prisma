@@ -322,6 +322,14 @@ fn buttons(f: Family) -> Vec<(pads::Buttons, String)> {
     for (b, n) in [(remap::LSU, "LS ↑"), (remap::LSD, "LS ↓"), (remap::LSL, "LS ←"), (remap::LSR, "LS →"), (remap::RSU, "RS ↑"), (remap::RSD, "RS ↓"), (remap::RSL, "RS ←"), (remap::RSR, "RS →")] {
         v.push((b, n.into()));
     }
+    if sony {
+        for (b, n) in [(remap::TPU, "Touchpad ↑"), (remap::TPD, "Touchpad ↓"), (remap::TPL, "Touchpad ←"), (remap::TPR, "Touchpad →")] {
+            v.push((b, n.into()));
+        }
+        for (b, n) in [(remap::TPTAP, "Toque no touchpad"), (remap::TPCL, "Clique na metade esquerda"), (remap::TPCR, "Clique na metade direita")] {
+            v.push((b, tr(n)));
+        }
+    }
     v
 }
 

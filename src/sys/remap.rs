@@ -20,7 +20,15 @@ pub const RSU: Buttons = 1 << 23;
 pub const RSD: Buttons = 1 << 24;
 pub const RSL: Buttons = 1 << 25;
 pub const RSR: Buttons = 1 << 26;
-const COUNT: usize = 27;
+/// Gestos do touchpad: deslizar um dedo nas 4 direções, tocar sem apertar, e o clique em cada metade.
+pub const TPU: Buttons = 1 << 27;
+pub const TPD: Buttons = 1 << 28;
+pub const TPL: Buttons = 1 << 29;
+pub const TPR: Buttons = 1 << 30;
+pub const TPTAP: Buttons = 1 << 31;
+pub const TPCL: Buttons = 1 << 32;
+pub const TPCR: Buttons = 1 << 33;
+const COUNT: usize = 34;
 const ALL: Buttons = (1 << COUNT) - 1;
 
 /// Nome de cada botão no arquivo do perfil.
@@ -29,7 +37,8 @@ pub const NAMES: [(&str, Buttons); COUNT] = [
     ("BACK", pads::BACK), ("START", pads::START), ("LS", pads::LS), ("RS", pads::RS), ("UP", pads::UP),
     ("DOWN", pads::DOWN), ("LEFT", pads::LEFT), ("RIGHT", pads::RIGHT), ("GUIDE", pads::GUIDE), ("PAD", pads::PAD),
     ("MUTE", pads::MUTE), ("LT", LT), ("RT", RT), ("LSU", LSU), ("LSD", LSD), ("LSL", LSL), ("LSR", LSR),
-    ("RSU", RSU), ("RSD", RSD), ("RSL", RSL), ("RSR", RSR),
+    ("RSU", RSU), ("RSD", RSD), ("RSL", RSL), ("RSR", RSR), ("TPU", TPU), ("TPD", TPD), ("TPL", TPL), ("TPR", TPR),
+    ("TPTAP", TPTAP), ("TPCL", TPCL), ("TPCR", TPCR),
 ];
 
 /// Segurar a partir de 400 ms; tocar é soltar antes disso; duplo é apertar de novo em até 300 ms.
@@ -928,6 +937,11 @@ pub struct Engine {
     soft: [f32; 2],
     /// Dedos no touchpad no relatório anterior.
     fingers: [Option<(f32, f32)>; 2],
+    /// Gesto em curso: quando o dedo encostou, onde, onde está, e se já não vale (apertou ou pôs
+    /// outro dedo).
+    swipe: Option<(Instant, (f32, f32), (f32, f32), bool)>,
+    /// Metade do clique do touchpad em curso (TPCL ou TPCR), escolhida ao apertar.
+    half: Buttons,
     /// Jogo com anti-cheat em foco: turbo vira Pressionar.
     pub safe: bool,
 }
@@ -950,6 +964,8 @@ impl Default for Engine {
             grav: [0.0; 3],
             soft: [0.0; 2],
             fingers: [None; 2],
+            swipe: None,
+            half: 0,
         }
     }
 }
@@ -1072,9 +1088,10 @@ impl Engine {
         let (rx, ry) = radial(inp.rx, inp.ry, p.zones[1]);
         let (lt, rt) = (linear(inp.lt, p.zones[2]), linear(inp.rt, p.zones[3]));
         let prev = self.prev;
+        let gest = self.gesture(inp, now, matches!(motion(p, self.layer(), true), Motion::Mouse(_)));
         // Com folga: liga em 0,5 e só desliga abaixo de 0,4, para não piscar na borda.
         let on = |v: f32, bit: Buttons| if v > 0.5 || (v > 0.4 && prev & bit != 0) { bit } else { 0 };
-        let cur = (inp.buttons & 0x1ffff) | on(lt, LT) | on(rt, RT) | on(ly, LSU) | on(-ly, LSD) | on(-lx, LSL) | on(lx, LSR) | on(ry, RSU) | on(-ry, RSD) | on(-rx, RSL) | on(rx, RSR);
+        let cur = (inp.buttons & 0x1ffff) | gest | on(lt, LT) | on(rt, RT) | on(ly, LSU) | on(-ly, LSD) | on(-lx, LSL) | on(lx, LSR) | on(ry, RSU) | on(-ry, RSD) | on(-rx, RSL) | on(rx, RSR);
         let changed = cur ^ prev;
         // Soltar antes de apertar: uma troca de botões no mesmo relatório solta a tecla velha antes.
         for i in 0..COUNT {
@@ -1188,6 +1205,43 @@ impl Engine {
             self.wheel -= w;
         }
         acts
+    }
+
+    /// Gestos do touchpad como botões: o deslizar e o toque valem um relatório (aperta e solta no
+    /// seguinte); a metade do clique fica apertada junto com o clique. Com o touchpad como mouse, só
+    /// o toque vale (o deslizar é o mouse).
+    fn gesture(&mut self, inp: &Input, now: Instant, mouse: bool) -> Buttons {
+        let click = inp.buttons & pads::PAD != 0;
+        let first = inp.touch[0].or(inp.touch[1]);
+        if !click {
+            self.half = 0;
+        } else if self.half == 0 {
+            self.half = if first.map_or(true, |t| t.0 < 0.5) { TPCL } else { TPCR };
+        }
+        let n = inp.touch.iter().flatten().count();
+        match (&mut self.swipe, first) {
+            (None, Some(at)) => self.swipe = Some((now, at, at, click || n > 1)),
+            (Some(s), Some(at)) => {
+                s.2 = at;
+                s.3 |= click || n > 1;
+            }
+            (Some(_), None) => {
+                let (t0, from, to, spoiled) = self.swipe.take().unwrap();
+                // Em larguras do touchpad: a altura é uns 0,55 da largura.
+                let (dx, dy) = (to.0 - from.0, (to.1 - from.1) * 0.55);
+                let t = now.saturating_duration_since(t0);
+                if spoiled || t > Duration::from_millis(800) {
+                } else if dx.abs().max(dy.abs()) < 0.03 && t < Duration::from_millis(250) {
+                    return self.half | TPTAP;
+                } else if !mouse && dx.abs() > 0.2 && dx.abs() > dy.abs() * 1.5 {
+                    return self.half | if dx > 0.0 { TPR } else { TPL };
+                } else if !mouse && dy.abs() > 0.12 && dy.abs() > dx.abs() * 1.5 {
+                    return self.half | if dy > 0.0 { TPD } else { TPU };
+                }
+            }
+            (None, None) => {}
+        }
+        self.half
     }
 
     fn press(&mut self, p: &Profile, i: usize, cur: Buttons, now: Instant, acts: &mut Vec<Act>) {
@@ -1981,6 +2035,33 @@ mod tests {
         let text = p.to_text();
         assert!(text.contains("gyro 1 mouse 10"));
         assert_eq!(Profile::parse(&text).unwrap().layers[1].gyro, Some(Motion::Mouse(10.0)));
+    }
+
+    #[test]
+    fn touchpad_gestures_are_buttons() {
+        let t0 = Instant::now();
+        let mut p = Profile::base();
+        one(&mut p.layers[0], TPR, When::Press, Out::Key(0x27, 0));
+        one(&mut p.layers[0], TPTAP, When::Press, Out::Mouse(1));
+        one(&mut p.layers[0], TPCR, When::Press, Out::Key(0x20, 0));
+        let mut e = Engine::default();
+        let f = |a: Option<(f32, f32)>, b: Buttons| Input { touch: [a, None], buttons: b, ..Default::default() };
+        let mut run = |inp: Input, ms: u64| e.step(&p, &inp, at(ms, t0));
+        run(f(None, 0), 0);
+        // Deslizar para a direita: aperta e solta a seta.
+        run(f(Some((0.2, 0.5)), 0), 10);
+        run(f(Some((0.6, 0.5)), 0), 100);
+        assert!(run(f(None, 0), 150).iter().any(|a| *a == Act::Down(Out::Key(0x27, 0))));
+        assert!(run(f(None, 0), 160).iter().any(|a| *a == Act::Up(Out::Key(0x27, 0))));
+        // Tocar sem mexer: clique esquerdo.
+        run(f(Some((0.5, 0.5)), 0), 200);
+        assert!(run(f(None, 0), 260).iter().any(|a| *a == Act::Down(Out::Mouse(1))));
+        run(f(None, 0), 270);
+        // Clique na metade direita: espaço, sem contar como toque.
+        run(f(Some((0.8, 0.5)), 0), 300);
+        assert!(run(f(Some((0.8, 0.5)), pads::PAD), 320).iter().any(|a| *a == Act::Down(Out::Key(0x20, 0))));
+        assert!(run(f(None, 0), 340).iter().all(|a| *a != Act::Down(Out::Mouse(1))));
+        assert_eq!(Profile::parse(&p.to_text()).unwrap().layers[0].binds.len(), 3);
     }
 
     #[test]

@@ -68,6 +68,7 @@ pub fn width(bit: pads::Buttons, h: f32) -> f32 {
     match bit {
         pads::LB | pads::RB | remap::LT | remap::RT | pads::PAD => h * 1.7,
         remap::LSU | remap::LSD | remap::LSL | remap::LSR | remap::RSU | remap::RSD | remap::RSL | remap::RSR => h * 1.6,
+        remap::TPU | remap::TPD | remap::TPL | remap::TPR | remap::TPTAP | remap::TPCL | remap::TPCR => h * 1.7,
         _ => h,
     }
 }
@@ -136,6 +137,21 @@ pub fn draw(c: &Canvas, x: f32, cy: f32, h: f32, s: Style, bit: pads::Buttons, c
         pads::PAD => {
             c.round_line(rect(x, cy - r * 0.8, w, h * 0.8), h * 0.18, col, sw);
             c.line(x + w / 2.0, cy - r * 0.8, x + w / 2.0, cy + r * 0.8, col, sw * 0.6);
+        }
+        // Gestos: o touchpad com a seta, o ponto do toque ou a metade apertada.
+        remap::TPU | remap::TPD | remap::TPL | remap::TPR | remap::TPTAP | remap::TPCL | remap::TPCR => {
+            let pad = rect(x, cy - r * 0.8, w, h * 0.8);
+            c.round_line(pad, h * 0.18, col, sw);
+            let mid = x + w / 2.0;
+            match bit {
+                remap::TPTAP => c.circle(mid, cy, h * 0.12, col),
+                remap::TPCL => c.round(rect(x + sw, pad.y + sw, w / 2.0 - sw, pad.h - 2.0 * sw), h * 0.12, col),
+                remap::TPCR => c.round(rect(mid, pad.y + sw, w / 2.0 - sw, pad.h - 2.0 * sw), h * 0.12, col),
+                _ => {
+                    let d = [remap::TPU, remap::TPR, remap::TPD, remap::TPL].iter().position(|&b| b == bit).unwrap_or(0);
+                    arrow(c, mid, cy, h * 0.22, d, col, sw);
+                }
+            }
         }
         _ => {
             // Mudo e o que mais vier: uma pílula com um ponto.
