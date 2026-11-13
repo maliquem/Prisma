@@ -329,6 +329,9 @@ fn buttons(f: Family) -> Vec<(pads::Buttons, String)> {
         for (b, n) in [(remap::TPTAP, "Toque no touchpad"), (remap::TPCL, "Clique na metade esquerda"), (remap::TPCR, "Clique na metade direita")] {
             v.push((b, tr(n)));
         }
+        for (b, a) in [(remap::TPUL, "↖"), (remap::TPUR, "↗"), (remap::TPDL, "↙"), (remap::TPDR, "↘")] {
+            v.push((b, format!("{} {a}", tr("Canto do touchpad"))));
+        }
     }
     v
 }
@@ -510,7 +513,14 @@ fn motion_row(ui: &mut Ui, layer: &mut Layer, touch: bool, base: bool, x: f32, y
         opts.push(tr("Igual à camada mãe"));
     }
     opts.extend(["Desligado", "Mouse"].iter().map(|s| tr(s)));
-    let mut sel = usize::from(matches!(slot, Some(Motion::Mouse(_)))) + usize::from(base && slot.is_some());
+    if touch {
+        opts.extend(["Stick esquerdo", "Stick direito"].iter().map(|s| tr(s)));
+    }
+    let mut sel = match slot {
+        Some(Motion::Mouse(_)) => 1,
+        Some(Motion::Stick(s)) => 2 + *s as usize,
+        _ => 0,
+    } + usize::from(base && slot.is_some());
     ui.label(rect(x, y, 120.0, 34.0), label, TEXT2);
     let mut changed = false;
     if ui.select(key, rect(x + 130.0, y, sel_w, 34.0), &opts, &mut sel) {
@@ -518,7 +528,8 @@ fn motion_row(ui: &mut Ui, layer: &mut Layer, touch: bool, base: bool, x: f32, y
         *slot = match k {
             -1 => None,
             0 => Some(Motion::Off),
-            _ => Some(Motion::Mouse(def)),
+            1 => Some(Motion::Mouse(def)),
+            k => Some(Motion::Stick(k as u8 - 2)),
         };
         changed = true;
     }

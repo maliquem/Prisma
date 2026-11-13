@@ -28,7 +28,12 @@ pub const TPR: Buttons = 1 << 30;
 pub const TPTAP: Buttons = 1 << 31;
 pub const TPCL: Buttons = 1 << 32;
 pub const TPCR: Buttons = 1 << 33;
-const COUNT: usize = 34;
+/// Regiões do touchpad: um dedo parado em cada quarto segura o botão.
+pub const TPUL: Buttons = 1 << 34;
+pub const TPUR: Buttons = 1 << 35;
+pub const TPDL: Buttons = 1 << 36;
+pub const TPDR: Buttons = 1 << 37;
+const COUNT: usize = 38;
 const ALL: Buttons = (1 << COUNT) - 1;
 
 /// Nome de cada botão no arquivo do perfil.
@@ -38,7 +43,7 @@ pub const NAMES: [(&str, Buttons); COUNT] = [
     ("DOWN", pads::DOWN), ("LEFT", pads::LEFT), ("RIGHT", pads::RIGHT), ("GUIDE", pads::GUIDE), ("PAD", pads::PAD),
     ("MUTE", pads::MUTE), ("LT", LT), ("RT", RT), ("LSU", LSU), ("LSD", LSD), ("LSL", LSL), ("LSR", LSR),
     ("RSU", RSU), ("RSD", RSD), ("RSL", RSL), ("RSR", RSR), ("TPU", TPU), ("TPD", TPD), ("TPL", TPL), ("TPR", TPR),
-    ("TPTAP", TPTAP), ("TPCL", TPCL), ("TPCR", TPCR),
+    ("TPTAP", TPTAP), ("TPCL", TPCL), ("TPCR", TPCR), ("TPUL", TPUL), ("TPUR", TPUR), ("TPDL", TPDL), ("TPDR", TPDR),
 ];
 
 /// Segurar a partir de 400 ms; tocar é soltar antes disso; duplo é apertar de novo em até 300 ms.
@@ -291,6 +296,8 @@ pub enum Motion {
     Off,
     /// Gyro: pixels por grau girado. Touchpad: pixels pela largura toda.
     Mouse(f32),
+    /// Só touchpad: stick virtual, 0 esquerdo e 1 direito. O dedo desvia o stick desde onde encostou.
+    Stick(u8),
 }
 
 /// Opções do gyro no perfil todo.
@@ -547,6 +554,7 @@ impl Profile {
                 match m {
                     Some(Motion::Off) => _ = writeln!(s, "{key} {i} off"),
                     Some(Motion::Mouse(v)) => _ = writeln!(s, "{key} {i} mouse {v}"),
+                    Some(Motion::Stick(side)) => _ = writeln!(s, "{key} {i} stick {side}"),
                     None => {}
                 }
             }
@@ -637,6 +645,7 @@ impl Profile {
                     let m = Some(match it.next()? {
                         "off" => Motion::Off,
                         "mouse" => Motion::Mouse(num(it.next()?)?.clamp(0.5, max)),
+                        "stick" if cmd == "touch" => Motion::Stick(it.next()?.parse::<u8>().ok().filter(|s| *s < 2)?),
                         _ => return None,
                     });
                     if cmd == "gyro" {
@@ -995,6 +1004,14 @@ fn stick(p: &Profile, layer: u8, right: bool) -> Stick {
     Stick::Buttons
 }
 
+/// Stick virtual no touchpad: o desvio do dedo desde onde encostou, cheio a um quarto da largura;
+/// para cima é positivo, como no stick.
+fn touch_stick(from: (f32, f32), to: (f32, f32)) -> (f32, f32) {
+    let (x, y) = ((to.0 - from.0) / 0.25, (from.1 - to.1) * 0.55 / 0.25);
+    let m = x.hypot(y).max(1.0);
+    (x / m, y / m)
+}
+
 /// Gyro (`touch` falso) ou touchpad da camada, herdado da mãe; na Base, desligado.
 fn motion(p: &Profile, layer: u8, touch: bool) -> Motion {
     let mut l = Some(layer);
@@ -1084,11 +1101,21 @@ impl Engine {
         let mut acts = vec![];
         let dt = self.last.map_or(0.0, |t| now.saturating_duration_since(t).as_secs_f32().min(0.05));
         self.last = Some(now);
-        let (lx, ly) = radial(inp.lx, inp.ly, p.zones[0]);
-        let (rx, ry) = radial(inp.rx, inp.ry, p.zones[1]);
-        let (lt, rt) = (linear(inp.lt, p.zones[2]), linear(inp.rt, p.zones[3]));
         let prev = self.prev;
-        let gest = self.gesture(inp, now, matches!(motion(p, self.layer(), true), Motion::Mouse(_)));
+        let tm = motion(p, self.layer(), true);
+        let gest = self.gesture(inp, now, tm != Motion::Off);
+        // Stick virtual: vale o mais desviado entre o stick de verdade e o dedo.
+        let (mut l, mut r) = ((inp.lx, inp.ly), (inp.rx, inp.ry));
+        if let (Motion::Stick(side), Some((_, from, to, _))) = (tm, self.swipe) {
+            let t = touch_stick(from, to);
+            let s = if side == 0 { &mut l } else { &mut r };
+            if t.0.hypot(t.1) > s.0.hypot(s.1) {
+                *s = t;
+            }
+        }
+        let (lx, ly) = radial(l.0, l.1, p.zones[0]);
+        let (rx, ry) = radial(r.0, r.1, p.zones[1]);
+        let (lt, rt) = (linear(inp.lt, p.zones[2]), linear(inp.rt, p.zones[3]));
         // Com folga: liga em 0,5 e só desliga abaixo de 0,4, para não piscar na borda.
         let on = |v: f32, bit: Buttons| if v > 0.5 || (v > 0.4 && prev & bit != 0) { bit } else { 0 };
         let cur = (inp.buttons & 0x1ffff) | gest | on(lt, LT) | on(rt, RT) | on(ly, LSU) | on(-ly, LSD) | on(-lx, LSL) | on(lx, LSR) | on(ry, RSU) | on(-ry, RSD) | on(-rx, RSL) | on(rx, RSR);
@@ -1208,10 +1235,11 @@ impl Engine {
     }
 
     /// Gestos do touchpad como botões: o deslizar e o toque valem um relatório (aperta e solta no
-    /// seguinte); a metade do clique fica apertada junto com o clique. Com o touchpad como mouse, só
-    /// o toque vale (o deslizar é o mouse).
+    /// seguinte); a metade do clique e as regiões ficam apertadas enquanto duram. Com o touchpad
+    /// como mouse ou stick, o deslizar não vale (o dedo é o mouse ou o stick).
     fn gesture(&mut self, inp: &Input, now: Instant, mouse: bool) -> Buttons {
         let click = inp.buttons & pads::PAD != 0;
+        let quads = inp.touch.iter().flatten().fold(0, |b, t| b | [TPUL, TPUR, TPDL, TPDR][usize::from(t.0 >= 0.5) + 2 * usize::from(t.1 >= 0.5)]);
         let first = inp.touch[0].or(inp.touch[1]);
         if !click {
             self.half = 0;
@@ -1232,16 +1260,16 @@ impl Engine {
                 let t = now.saturating_duration_since(t0);
                 if spoiled || t > Duration::from_millis(800) {
                 } else if dx.abs().max(dy.abs()) < 0.03 && t < Duration::from_millis(250) {
-                    return self.half | TPTAP;
+                    return quads | self.half | TPTAP;
                 } else if !mouse && dx.abs() > 0.2 && dx.abs() > dy.abs() * 1.5 {
-                    return self.half | if dx > 0.0 { TPR } else { TPL };
+                    return quads | self.half | if dx > 0.0 { TPR } else { TPL };
                 } else if !mouse && dy.abs() > 0.12 && dy.abs() > dx.abs() * 1.5 {
-                    return self.half | if dy > 0.0 { TPD } else { TPU };
+                    return quads | self.half | if dy > 0.0 { TPD } else { TPU };
                 }
             }
             (None, None) => {}
         }
-        self.half
+        quads | self.half
     }
 
     fn press(&mut self, p: &Profile, i: usize, cur: Buttons, now: Instant, acts: &mut Vec<Act>) {
@@ -2035,6 +2063,27 @@ mod tests {
         let text = p.to_text();
         assert!(text.contains("gyro 1 mouse 10"));
         assert_eq!(Profile::parse(&text).unwrap().layers[1].gyro, Some(Motion::Mouse(10.0)));
+    }
+
+    #[test]
+    fn touchpad_regions_and_stick() {
+        let t0 = Instant::now();
+        let mut p = Profile::base();
+        one(&mut p.layers[0], TPUR, When::Press, Out::Key(0x51, 0));
+        one(&mut p.layers[0], LSU, When::Press, Out::Key(0x57, 0));
+        let mut e = Engine::default();
+        let f = |a: Option<(f32, f32)>| Input { touch: [a, None], ..Default::default() };
+        // Dedo no quarto de cima à direita: segura a tecla até soltar.
+        e.step(&p, &f(None), t0);
+        assert!(e.step(&p, &f(Some((0.8, 0.2))), at(10, t0)).contains(&Act::Down(Out::Key(0x51, 0))));
+        assert!(e.step(&p, &f(None), at(20, t0)).contains(&Act::Up(Out::Key(0x51, 0))));
+        // Touchpad como stick esquerdo: subir o dedo é o stick para cima.
+        p.layers[0].touch = Some(Motion::Stick(0));
+        e.step(&p, &f(Some((0.3, 0.9))), at(30, t0));
+        assert!(e.step(&p, &f(Some((0.3, 0.5))), at(40, t0)).contains(&Act::Down(Out::Key(0x57, 0))));
+        assert!(e.step(&p, &f(None), at(50, t0)).contains(&Act::Up(Out::Key(0x57, 0))));
+        assert_eq!(Profile::parse(&p.to_text()).unwrap().layers[0].touch, Some(Motion::Stick(0)));
+        assert_eq!(touch_stick((0.5, 0.5), (1.0, 0.5)), (1.0, 0.0));
     }
 
     #[test]
