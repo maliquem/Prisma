@@ -65,6 +65,7 @@ fn shown<'a>(who: &'a Profile, group: &'static [Setting]) -> impl Iterator<Item 
 }
 
 fn tabs(ui: &mut Ui, x: f32, y: f32, sel: &mut usize) {
+    ui.tab_step(sel, nvset::GROUPS.len());
     let mut cx = x;
     for (i, (name, _)) in nvset::GROUPS.iter().enumerate() {
         let name = crate::i18n::tr(name);

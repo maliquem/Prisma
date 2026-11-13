@@ -261,6 +261,14 @@ pub fn action_icon(id: u8) -> Icon {
     }
 }
 
+/// Página seguinte (`d` = 1) ou anterior (-1) da barra lateral, dando a volta; de fora dela (Guia,
+/// Reportar bug), a primeira ou a última.
+pub fn nav_step(page: Page, d: i8) -> Page {
+    let nav: Vec<Page> = NAV.iter().map(|n| n.0).filter(|&p| p != Page::Nvidia || nvidia::available()).collect();
+    let i = nav.iter().position(|&p| p == page).map_or(if d > 0 { -1 } else { 0 }, |i| i as isize);
+    nav[(i + d as isize).rem_euclid(nav.len() as isize) as usize]
+}
+
 const NAV: &[(Page, &str, Icon)] = &[
     (Page::Monitor, "Monitor", ICON_MON),
     (Page::Meter, "Medidor", ICON_METER),

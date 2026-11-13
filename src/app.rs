@@ -2660,6 +2660,8 @@ impl App {
                     pages::search::draw_popup(&mut ui, self, rect(0.0, 0.0, w, h));
                     ui.end();
                 } else {
+                    let h = if ui.s.pad { h - crate::ui::PAD_BAR } else { h };
+                    ui.s.view_h = h;
                     pages::draw(ui, self, rect(0.0, 0.0, w, h));
                 }
                 let _ = rt.EndDraw(None, None);
@@ -3000,6 +3002,10 @@ impl App {
                     self.radial.update(&self.cfg);
                     continue;
                 }
+                Event::Nav(c) => {
+                    self.pad_nav(c);
+                    continue;
+                }
                 Event::Turbo { button, on, pad } => {
                     let f = crate::sys::pads::list().into_iter().find(|p| p.key == pad).map_or(crate::sys::pads::Family::Generic, |p| p.family);
                     let b = crate::pages::pad_profiles::button_label(f, button);
@@ -3050,6 +3056,48 @@ impl App {
             crate::sys::osk::close();
         }
         self.keyboard_refresh();
+    }
+
+    /// Botão de navegação do controle, com o Prisma em foco (`sys::nav`).
+    fn pad_nav(&mut self, c: crate::sys::nav::Cmd) {
+        use crate::sys::nav::{self, Cmd};
+        let Some(m) = &mut self.main else { return };
+        let woke = !std::mem::replace(&mut m.ui.pad, true);
+        let (mut to, mut keyboard, mut page) = (None, false, None);
+        match c {
+            Cmd::Move(d) => to = m.ui.pad_move(Some(d)),
+            // O primeiro A só mostra onde está o foco: nada é clicado sem ver onde.
+            Cmd::Ok if woke => to = m.ui.pad_move(None),
+            Cmd::Ok => {
+                keyboard = m.ui.pad_field();
+                nav::click();
+            }
+            Cmd::Back => {
+                m.ui.cancel();
+            }
+            Cmd::Page(d) => page = Some(crate::pages::nav_step(self.page, d)),
+            Cmd::Tab(d) => m.ui.pad_tab = Some(d),
+            Cmd::Hide => unsafe {
+                m.ui.pad = false;
+                let _ = ShowWindow(m.hwnd, SW_MINIMIZE);
+            },
+            Cmd::Wake => {}
+        }
+        if let Some((x, y)) = to {
+            let mut p = POINT { x: (x * m.scale) as i32, y: (y * m.scale) as i32 };
+            unsafe {
+                let _ = ClientToScreen(m.hwnd, &mut p);
+            }
+            nav::point_to(p.x, p.y);
+        }
+        if let Some(p) = page.filter(|&p| p != self.page) {
+            self.page = p;
+            self.refresh_page();
+        }
+        if keyboard {
+            self.set_keyboard(true);
+        }
+        self.invalidate();
     }
 
     /// Botão do controle ligado a uma ação do Prisma. Devolve o aviso a mostrar, se houver.
@@ -3256,6 +3304,7 @@ impl App {
                 None,
             )
             .expect("janela principal");
+            crate::sys::nav::set_window(h.0 as isize);
             dark_caption(h);
             let dpi = GetDpiForWindow(h);
             let scale = dpi as f32 / 96.0;
@@ -3299,9 +3348,11 @@ impl App {
         let mut lost = false;
         unsafe {
             m.rt.BeginDraw();
-            m.ui.view_h = h;
             m.ui.view_w = w;
             let ui = crate::ui::Ui::begin(&m.canvas, &mut m.ui);
+            // A faixa de dicas do controle fica embaixo, fora da página.
+            let h = if ui.s.pad { h - crate::ui::PAD_BAR } else { h };
+            ui.s.view_h = h;
             m.canvas.clear(BG);
             pages::draw(ui, self, rect(0.0, 0.0, w, h));
             if m.rt.EndDraw(None, None).is_err() {
@@ -3697,6 +3748,16 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
     }
 }
 
+/// Mouse ou teclado de verdade (sem a marca do Prisma): some o anel e a faixa do controle.
+fn pad_off(a: &mut App) {
+    if unsafe { GetMessageExtraInfo() }.0 as usize == crate::sys::remap::MARK {
+        return;
+    }
+    if a.main.as_mut().is_some_and(|mw| std::mem::take(&mut mw.ui.pad)) {
+        a.invalidate();
+    }
+}
+
 fn mouse_xy(a: &mut App, l: LPARAM) {
     if let Some(mw) = &mut a.main {
         let (x, y) = ((l.0 & 0xffff) as i16 as f32, ((l.0 >> 16) & 0xffff) as i16 as f32);
@@ -3978,11 +4039,17 @@ unsafe extern "system" fn main_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
                 Some(0)
             }
             WM_MOUSEMOVE => {
+                let before = a.main.as_ref().map(|mw| (mw.ui.mx, mw.ui.my));
                 mouse_xy(a, l);
+                // Mexer no mouse de verdade esconde as dicas do controle; o Windows repete a posição às vezes.
+                if before != a.main.as_ref().map(|mw| (mw.ui.mx, mw.ui.my)) {
+                    pad_off(a);
+                }
                 a.invalidate();
                 Some(0)
             }
             WM_LBUTTONDOWN => {
+                pad_off(a);
                 mouse_xy(a, l);
                 if let Some(mw) = &mut a.main {
                     mw.ui.down = true;
@@ -4003,6 +4070,7 @@ unsafe extern "system" fn main_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
                 Some(0)
             }
             WM_RBUTTONUP => {
+                pad_off(a);
                 mouse_xy(a, l);
                 if let Some(mw) = &mut a.main {
                     mw.ui.right_released = true;
@@ -4012,6 +4080,7 @@ unsafe extern "system" fn main_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
             }
             WM_MOUSEWHEEL => {
                 let d = ((w.0 >> 16) & 0xffff) as i16 as f32 / 120.0;
+                pad_off(a);
                 if let Some(mw) = &mut a.main {
                     mw.ui.wheel += d;
                 }
@@ -4019,6 +4088,7 @@ unsafe extern "system" fn main_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
                 Some(0)
             }
             WM_KEYDOWN | WM_SYSKEYDOWN => {
+                pad_off(a);
                 a.on_key(w.0 as u32);
                 None
             }
@@ -4042,6 +4112,7 @@ unsafe extern "system" fn main_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
                 Some(0)
             }
             WM_DESTROY => {
+                crate::sys::nav::set_window(0);
                 a.report.window_closed();
                 a.main = None;
                 a.sessions.clear();

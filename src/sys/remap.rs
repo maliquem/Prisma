@@ -36,6 +36,10 @@ pub const NAMES: [(&str, u32); COUNT] = [
 pub const HOLD: Duration = Duration::from_millis(400);
 pub const DOUBLE: Duration = Duration::from_millis(300);
 /// Guia (ou PS) + Select + Start por 2 s liga e desliga tudo, sem teclado.
+/// Marca das entradas que o Prisma manda (`dwExtraInfo`): a janela dele não as toma pelo mouse ou
+/// teclado de verdade.
+pub const MARK: usize = 0x5052_4953;
+
 pub const STOP_COMBO: u32 = pads::GUIDE | pads::BACK | pads::START;
 const STOP_HOLD: Duration = Duration::from_secs(2);
 /// Folga antes de trocar de perfil pelo foco.
@@ -1156,6 +1160,9 @@ pub fn feed(key: &str, inp: &Input, arrived: Instant) {
     if super::osk::feed(key, inp, arrived) || super::radial::feed(key, inp, arrived) {
         return;
     }
+    // Prisma em foco: o controle navega por ele.
+    let rest = super::nav::feed(key, inp, arrived);
+    let inp = rest.as_ref().unwrap_or(inp);
     if !ON.load(Ordering::Relaxed) {
         return;
     }
@@ -1380,11 +1387,11 @@ pub(super) fn send(acts: &[Act]) {
         if ext {
             f |= KEYEVENTF_EXTENDEDKEY;
         }
-        INPUT { r#type: INPUT_KEYBOARD, Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: VIRTUAL_KEY(vk), wScan: scan, dwFlags: f, ..Default::default() } } }
+        INPUT { r#type: INPUT_KEYBOARD, Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: VIRTUAL_KEY(vk), wScan: scan, dwFlags: f, dwExtraInfo: MARK, ..Default::default() } } }
     };
     let mouse = |flags: MOUSE_EVENT_FLAGS, dx: i32, dy: i32, data: i32| INPUT {
         r#type: INPUT_MOUSE,
-        Anonymous: INPUT_0 { mi: MOUSEINPUT { dx, dy, mouseData: data as u32, dwFlags: flags, ..Default::default() } },
+        Anonymous: INPUT_0 { mi: MOUSEINPUT { dx, dy, mouseData: data as u32, dwFlags: flags, dwExtraInfo: MARK, ..Default::default() } },
     };
     let button = |n: u8, up: bool| match (n, up) {
         (1, false) => mouse(MOUSEEVENTF_LEFTDOWN, 0, 0, 0),

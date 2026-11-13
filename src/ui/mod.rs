@@ -60,6 +60,53 @@ struct Ask {
     check: Option<(String, bool)>,
 }
 
+/// Controle clicável deste desenho, para o controle (gamepad) andar entre eles. `r` já está em
+/// coordenadas da janela; `clip` é a parte visível da lista dele; `area` é a lista (0: fora de lista).
+#[derive(Clone, Copy, Debug)]
+struct Target {
+    r: Rect,
+    clip: Rect,
+    area: u64,
+    field: bool,
+}
+
+/// Altura da faixa de dicas do controle, embaixo da página.
+pub const PAD_BAR: f32 = 40.0;
+
+/// Área das opções de uma lista aberta (as ids de `hash_id` são ímpares).
+const POPUP: u64 = 2;
+
+impl Target {
+    fn center(&self) -> (f32, f32) {
+        (self.r.x + self.r.w / 2.0, self.r.y + self.r.h / 2.0)
+    }
+
+    fn shown(&self) -> bool {
+        let (x, y) = self.center();
+        self.clip.contains(x, y)
+    }
+}
+
+/// O alvo mais perto de `from` na direção `dir` (0 esquerda, 1 cima, 2 direita, 3 baixo): andar de
+/// lado pesa o dobro.
+fn pick(ts: &[Target], from: (f32, f32), dir: u8, ok: impl Fn(&Target) -> bool) -> Option<usize> {
+    ts.iter()
+        .enumerate()
+        .filter(|(_, t)| ok(t))
+        .filter_map(|(i, t)| {
+            let (dx, dy) = (t.center().0 - from.0, t.center().1 - from.1);
+            let (along, side) = match dir {
+                0 => (-dx, dy),
+                1 => (-dy, dx),
+                2 => (dx, dy),
+                _ => (dy, dx),
+            };
+            (along > 4.0).then_some((i, along + side.abs() * 2.0))
+        })
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(i, _)| i)
+}
+
 struct Bar {
     r: Rect,
     y: f32,
@@ -105,6 +152,13 @@ pub struct UiState {
     pub kill_word: u32,
     /// Setas, Enter, Esc e Ctrl+C com um campo de texto em foco: (tecla, Ctrl apertado).
     pub nav: Vec<(u32, u8)>,
+    /// Navegação pelo controle: anel no controle sob o cursor e faixa de dicas embaixo.
+    pub pad: bool,
+    /// LT/RT: aba anterior (-1) ou seguinte (1), para a página que tiver abas.
+    pub pad_tab: Option<i8>,
+    /// Controles clicáveis do desenho em curso e do último.
+    targets: Vec<Target>,
+    last: Vec<Target>,
 }
 
 impl UiState {
@@ -124,6 +178,81 @@ impl UiState {
         self.ask.take().is_some()
     }
 
+    /// Controle: leva o cursor ao próximo controle na direção `dir` (0 esquerda, 1 cima, 2 direita,
+    /// 3 baixo), rolando a lista se ele estiver fora da vista; sem direção, ao controle mais perto,
+    /// se o cursor não estiver sobre um. Devolve onde pôr o cursor.
+    pub fn pad_move(&mut self, dir: Option<u8>) -> Option<(f32, f32)> {
+        let (mx, my) = (self.mx, self.my);
+        let ts = &self.last;
+        let cur = ts.iter().rposition(|t| t.shown() && t.r.contains(mx, my));
+        let Some(dir) = dir else {
+            let d = |t: &Target| (t.center().0 - mx).hypot(t.center().1 - my);
+            return if cur.is_some() { None } else { ts.iter().filter(|t| t.shown()).min_by(|a, b| d(a).total_cmp(&d(b))).map(Target::center) };
+        };
+        let from = cur.map_or((mx, my), |i| ts[i].center());
+        let area = cur.map_or(0, |i| ts[i].area);
+        if let Some(c) = cur.filter(|_| area != 0) {
+            if let Some(i) = pick(ts, from, dir, |t| t.area == area) {
+                let t = ts[i];
+                let want = if t.r.y < t.clip.y {
+                    t.r.y - t.clip.y - 8.0
+                } else if t.r.bottom() > t.clip.bottom() {
+                    t.r.bottom() - t.clip.bottom() + 8.0
+                } else {
+                    0.0
+                };
+                let moved = if want != 0.0 { self.scroll_by(area, want) } else { 0.0 };
+                let (x, y) = t.center();
+                return Some((x, (y - moved).clamp(t.clip.y + 2.0, t.clip.bottom() - 2.0)));
+            }
+            // Lista que só desenha as linhas à vista: rola um pedaço e as próximas aparecem.
+            if dir & 1 == 1 {
+                let h = ts[c].clip.h * 0.6;
+                if self.scroll_by(area, if dir == 1 { -h } else { h }) != 0.0 {
+                    return None;
+                }
+            }
+        }
+        let ts = &self.last;
+        pick(ts, from, dir, |t| t.shown()).map(|i| ts[i].center())
+    }
+
+    /// Rola a lista `area` em `d` e devolve quanto andou de fato.
+    fn scroll_by(&mut self, area: u64, d: f32) -> f32 {
+        self.needs_redraw = true;
+        if area == POPUP {
+            let Some(p) = &mut self.popup else { return 0.0 };
+            let max = (p.options.len() as f32 * ROW + 8.0 - p.rect.h).max(0.0);
+            let v = p.top;
+            p.top = (v + d).clamp(0.0, max);
+            return p.top - v;
+        }
+        let max = self.scroll_max.get(&area).copied().unwrap_or(0.0);
+        let v = self.scroll.get(&area).copied().unwrap_or(0.0);
+        let to = (v + d).clamp(0.0, max);
+        self.scroll.insert(area, to);
+        to - v
+    }
+
+    /// O cursor está sobre um campo de texto.
+    pub fn pad_field(&self) -> bool {
+        self.last.iter().rev().find(|t| t.shown() && t.r.contains(self.mx, self.my)).is_some_and(|t| t.field)
+    }
+
+    /// Botão de voltar do controle: fecha a lista, a pergunta ou o campo de texto aberto.
+    pub fn cancel(&mut self) -> bool {
+        if self.popup.take().is_some() {
+            self.popup_new = false;
+        } else if !self.close_ask() {
+            if self.focus == 0 {
+                return false;
+            }
+            self.focus = 0;
+        }
+        self.needs_redraw = true;
+        true
+    }
+
     fn end_frame(&mut self) {
         self.pressed = false;
         self.released = false;
@@ -132,6 +261,8 @@ impl UiState {
         self.key_event = None;
         self.key_cancel = false;
         self.nav.clear();
+        self.pad_tab = None;
+        self.last = std::mem::take(&mut self.targets);
     }
 }
 
@@ -141,6 +272,8 @@ pub struct Ui<'a> {
     dy: f32,
     blocked: bool,
     clip: Option<Rect>,
+    /// Lista rolável em curso (0: nenhuma), para os alvos do controle.
+    area: u64,
     bar: Option<Bar>,
     tip: Option<(Rect, String)>,
 }
@@ -153,7 +286,12 @@ impl<'a> Ui<'a> {
         if let Some((x, y)) = std::env::var("PRISMA_TEST_MOUSE").ok().and_then(|v| v.split_once(',').and_then(|(a, b)| Some((a.parse().ok()?, b.parse().ok()?)))) {
             (s.mx, s.my) = (x, y);
         }
-        Self { c, s, dy: 0.0, blocked, clip: None, bar: None, tip: None }
+        // Teste: `PRISMA_TEST_PAD=1` mostra o anel e as dicas do controle.
+        #[cfg(debug_assertions)]
+        if std::env::var_os("PRISMA_TEST_PAD").is_some() {
+            s.pad = true;
+        }
+        Self { c, s, dy: 0.0, blocked, clip: None, area: 0, bar: None, tip: None }
     }
 
     fn hover(&self, r: Rect) -> bool {
@@ -168,8 +306,17 @@ impl<'a> Ui<'a> {
         r.contains(self.s.mx, self.s.my + self.dy)
     }
 
+    /// Guarda um alvo para o controle andar até ele.
+    fn target(&mut self, r: Rect, clip: Option<Rect>, area: u64) {
+        let view = rect(0.0, 0.0, self.s.view_w, self.s.view_h);
+        self.s.targets.push(Target { r, clip: clip.unwrap_or(view), area, field: false });
+    }
+
     /// Devolve true no clique que começou e terminou sobre este controle.
     fn clickable(&mut self, id: u64, r: Rect) -> bool {
+        if !self.blocked {
+            self.target(rect(r.x, r.y - self.dy, r.w, r.h), self.clip, self.area);
+        }
         let hover = self.hover(r);
         if hover && self.s.pressed {
             self.s.active = id;
@@ -226,6 +373,7 @@ impl<'a> Ui<'a> {
         self.s.scroll.insert(id, v);
         self.dy = v;
         self.clip = Some(r);
+        self.area = id;
         self.c.push_clip(r);
         self.c.translate(0.0, -v);
     }
@@ -235,6 +383,7 @@ impl<'a> Ui<'a> {
         self.c.pop_clip();
         self.dy = 0.0;
         self.clip = None;
+        self.area = 0;
         if let Some(b) = self.bar.take() {
             let hot = self.s.active == b.id;
             let near = !self.blocked
@@ -443,6 +592,7 @@ impl<'a> Ui<'a> {
         self.c.translate(0.0, 0.0);
         self.dy = 0.0;
         self.clip = None;
+        self.area = 0;
         self.c.fill(rect(0.0, 0.0, vw, vh), rgb(0x000000).alpha(0.6));
         let w = w.min(vw - 48.0);
         let b = rect(((vw - w) / 2.0).floor(), ((vh - h) / 2.0).floor(), w, h);
@@ -629,7 +779,12 @@ impl<'a> Ui<'a> {
     /// Campo de busca. Clique dá o foco; digitação chega pela janela.
     pub fn search(&mut self, key: &str, r: Rect, text: &mut String, hint: &str) -> bool {
         let id = hash_id(key);
-        if self.clickable(id, r) {
+        let n = self.s.targets.len();
+        let clicked = self.clickable(id, r);
+        if let Some(t) = self.s.targets.get_mut(n) {
+            t.field = true;
+        }
+        if clicked {
             self.s.focus = id;
         } else if self.s.released && !self.hover(r) && self.s.focus == id {
             self.s.focus = 0;
@@ -674,6 +829,14 @@ impl<'a> Ui<'a> {
         self.s.right_released && self.hover(r)
     }
 
+    /// LT/RT do controle: aba anterior ou seguinte entre `n`, dando a volta.
+    pub fn tab_step(&mut self, sel: &mut usize, n: usize) {
+        if let Some(d) = self.s.pad_tab.take().filter(|_| n > 0) {
+            *sel = (*sel as isize + d as isize).rem_euclid(n as isize) as usize;
+            self.s.needs_redraw = true;
+        }
+    }
+
     /// Botão com área invisível, para linhas clicáveis.
     pub fn hit(&mut self, key: &str, r: Rect) -> bool {
         self.clickable(hash_id(key), r)
@@ -694,6 +857,7 @@ impl<'a> Ui<'a> {
             self.c.round(shadow, 10.0, CARD2);
             self.c.round_line(shadow, 10.0, BORDER2, 1.0);
             let inner = p.rect.inset_xy(0.0, 4.0);
+            let mut rows = vec![];
             self.c.push_clip(inner);
             for (i, o) in p.options.iter().enumerate() {
                 let r = rect(p.rect.x + 4.0, p.rect.y + 4.0 + i as f32 * ROW - p.top, p.rect.w - (if max > 0.0 { 16.0 } else { 8.0 }), ROW);
@@ -701,6 +865,9 @@ impl<'a> Ui<'a> {
                     continue;
                 }
                 let off = p.off.get(i).copied().unwrap_or(false);
+                if !off {
+                    rows.push(r);
+                }
                 let hover = !off && r.contains(self.s.mx, self.s.my) && inner.contains(self.s.mx, self.s.my);
                 if hover {
                     self.c.round(r, 6.0, BORDER);
@@ -728,6 +895,9 @@ impl<'a> Ui<'a> {
                 close = true;
             }
             self.s.popup_new = false;
+            for r in rows {
+                self.target(r, Some(inner), POPUP);
+            }
         }
         if close {
             self.s.popup = None;
@@ -752,8 +922,38 @@ impl<'a> Ui<'a> {
             }
         }
         self.draw_ask();
+        if self.s.pad {
+            self.pad_bar();
+        }
         self.blocked = false;
         self.s.end_frame();
+    }
+
+    /// Controle em uso: anel no controle sob o cursor e, embaixo, o que cada botão faz.
+    fn pad_bar(&mut self) {
+        use crate::sys::{pads, remap};
+        let (mx, my) = (self.s.mx, self.s.my);
+        if let Some(t) = self.s.targets.iter().rev().find(|t| t.shown() && t.r.contains(mx, my)) {
+            self.c.round_line(t.r.inset(-3.0), 10.0, ACCENT, 2.0);
+        }
+        let t = |s: &str| crate::i18n::tr(s).into_owned();
+        let mut items = vec![(vec![glyph::DPAD_ANY], t("Mover")), (vec![pads::A], t("Escolher"))];
+        if self.s.popup.is_some() || self.s.ask.is_some() {
+            items.push((vec![pads::B], t("Fechar")));
+        } else {
+            items.extend([
+                (vec![pads::B], t("Voltar")),
+                (vec![pads::LB, pads::RB], t("Página")),
+                (vec![remap::LT, remap::RT], t("Aba")),
+                (vec![pads::RS], t("Mouse")),
+                (vec![pads::X], t("Clique")),
+                (vec![pads::Y], t("Esconder")),
+            ]);
+        }
+        let r = rect(0.0, self.s.view_h, self.s.view_w, PAD_BAR);
+        self.c.fill(r, SIDE);
+        self.c.line(r.x, r.y, r.right(), r.y, BORDER, 1.0);
+        glyph::hints(self.c, r.inset_xy(16.0, 9.0), glyph::Style::current(), &items, 13.0, TEXT2);
     }
 
     fn draw_ask(&mut self) {
@@ -772,6 +972,7 @@ impl<'a> Ui<'a> {
         let yes = rect(b.right() - 24.0 - 112.0, by, 112.0, 40.0);
         let no = rect(yes.x - 120.0, by, 112.0, 40.0);
         let (mx, my) = (self.s.mx, self.s.my);
+        let check_row = a.check.as_ref().map(|_| rect(b.x + 24.0, by - 38.0, b.w - 48.0, 28.0));
         let mut toggle = false;
         if let Some((label, on)) = &a.check {
             let row = rect(b.x + 24.0, by - 38.0, b.w - 48.0, 28.0);
@@ -818,5 +1019,37 @@ impl<'a> Ui<'a> {
             }
         }
         self.s.ask_new = false;
+        let notice = self.s.ask.as_ref().is_some_and(|a| a.notice);
+        for r in [check_row, (!notice).then_some(no), Some(yes)].into_iter().flatten() {
+            self.target(r, None, 0);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn t(x: f32, y: f32, area: u64, clip: Rect) -> Target {
+        Target { r: rect(x, y, 100.0, 30.0), clip, area, field: false }
+    }
+
+    #[test]
+    fn pad_moves_and_scrolls() {
+        let (view, list, id) = (rect(0.0, 0.0, 800.0, 600.0), rect(0.0, 100.0, 400.0, 200.0), 7);
+        let mut s = UiState::default();
+        s.scroll_max.insert(id, 500.0);
+        // Botão à direita, três linhas da lista (a última fora da vista) e um botão embaixo.
+        s.last = vec![t(500.0, 120.0, 0, view), t(10.0, 110.0, id, list), t(10.0, 150.0, id, list), t(10.0, 320.0, id, list), t(10.0, 400.0, 0, view)];
+        (s.mx, s.my) = (20.0, 160.0);
+        // Para baixo: a linha seguinte está fora da vista, a lista rola até ela caber.
+        assert_eq!(s.pad_move(Some(3)), Some((60.0, 277.0)));
+        assert_eq!(s.scroll[&id], 58.0);
+        assert_eq!(s.pad_move(Some(2)), Some((550.0, 135.0)));
+        assert_eq!(s.pad_move(Some(1)), Some((60.0, 125.0)));
+        assert_eq!(s.pad_move(Some(0)), None);
+        // Fora de qualquer controle: vai ao mais perto.
+        (s.mx, s.my) = (700.0, 500.0);
+        assert_eq!(s.pad_move(None), Some((550.0, 135.0)));
     }
 }

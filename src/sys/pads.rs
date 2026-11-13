@@ -141,6 +141,8 @@ pub enum Event {
     Keyboard,
     /// O radial do Prisma abriu, fechou ou aponta para outra ação.
     Radial,
+    /// Prisma em foco: botão de navegação (`nav`).
+    Nav(super::nav::Cmd),
 }
 
 static PADS: Mutex<Vec<Pad>> = Mutex::new(Vec::new());
@@ -305,14 +307,14 @@ unsafe fn watch() {
     }
 }
 
-/// XInput: a cada 4 ms com o mapeamento ligado, 8 ms com a tela aberta, a cada segundo para bateria
+/// XInput: a cada 4 ms com o mapeamento ligado, 8 ms com a tela Controles ou o Prisma aberto, a cada segundo para bateria
 /// e avisos, e nada sem controle.
 unsafe fn set_timer(h: HWND) {
     if IG.lock().unwrap().is_empty() {
         let _ = KillTimer(Some(h), TIMER_X);
         poll_xinput();
     } else {
-        let ms = if super::remap::enabled() { 4 } else if LIVE.load(Ordering::Relaxed) { 8 } else { 1000 };
+        let ms = if super::remap::enabled() { 4 } else if LIVE.load(Ordering::Relaxed) || super::nav::window_open() { 8 } else { 1000 };
         SetTimer(Some(h), TIMER_X, ms, None);
     }
 }

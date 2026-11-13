@@ -295,7 +295,7 @@ fn type_key(k: &Key) {
             let list: Vec<INPUT> = c
                 .encode_utf16(&mut buf)
                 .iter()
-                .flat_map(|&u| [KEYEVENTF_UNICODE, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP].map(|f| INPUT { r#type: INPUT_KEYBOARD, Anonymous: INPUT_0 { ki: KEYBDINPUT { wScan: u, dwFlags: f, ..Default::default() } } }))
+                .flat_map(|&u| [KEYEVENTF_UNICODE, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP].map(|f| INPUT { r#type: INPUT_KEYBOARD, Anonymous: INPUT_0 { ki: KEYBDINPUT { wScan: u, dwFlags: f, dwExtraInfo: super::remap::MARK, ..Default::default() } } }))
                 .collect();
             unsafe {
                 SendInput(&list, std::mem::size_of::<INPUT>() as i32);
