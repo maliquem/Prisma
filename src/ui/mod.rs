@@ -945,7 +945,8 @@ impl<'a> Ui<'a> {
                 (vec![pads::B], t("Voltar")),
                 (vec![pads::LB, pads::RB], t("Página")),
                 (vec![remap::LT, remap::RT], t("Aba")),
-                (vec![pads::RS], t("Mouse")),
+                (vec![pads::LS], t("Mouse")),
+                (vec![pads::RS], t("Rolar")),
                 (vec![pads::X], t("Clique")),
                 (vec![pads::Y], t("Esconder")),
             ]);

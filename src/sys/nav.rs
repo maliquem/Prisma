@@ -1,7 +1,7 @@
-//! Prisma em foco: o controle navega pela janela principal. Direcional ou analógico esquerdo levam
-//! o cursor de controle em controle, A escolhe, B volta, LB/RB trocam de página, LT/RT de aba e Y
-//! esconde o Prisma; o analógico direito é o mouse e X é o clique. O mapeamento só vê a parada de
-//! emergência e o botão do radial.
+//! Prisma em foco: o controle navega pela janela principal. O direcional leva o cursor de controle
+//! em controle, A escolhe, B volta, LB/RB trocam de página, LT/RT de aba e Y esconde o Prisma; como
+//! no perfil Desktop, o analógico esquerdo é o mouse (X é o clique) e o direito rola. O mapeamento só
+//! vê a parada de emergência e o botão do radial.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicIsize, Ordering};
@@ -18,9 +18,11 @@ static STATE: Mutex<Option<HashMap<String, Pad>>> = Mutex::new(None);
 /// Repetição de quem segura uma direção.
 const FIRST: Duration = Duration::from_millis(400);
 const REPEAT: Duration = Duration::from_millis(110);
-/// Analógico direito: zona morta e velocidade máxima do cursor, em pixels por segundo.
+/// Analógicos: zona morta, velocidade máxima do cursor (pixels por segundo) e da rolagem (cliques da
+/// roda por segundo), as mesmas do perfil Desktop.
 const DEAD: f32 = 0.15;
-const SPEED: f32 = 1500.0;
+const SPEED: f32 = 1600.0;
+const SCROLL: f32 = 12.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Cmd {
@@ -31,7 +33,7 @@ pub enum Cmd {
     Page(i8),
     Tab(i8),
     Hide,
-    /// Controle em uso (clique ou mouse pelo analógico): mostra as dicas.
+    /// Controle em uso (clique, mouse ou rolagem pelos analógicos): mostra as dicas.
     Wake,
 }
 
@@ -44,6 +46,7 @@ struct Pad {
     next: Option<Instant>,
     last: Option<Instant>,
     acc: (f32, f32),
+    wheel: f32,
     moving: bool,
 }
 
@@ -93,16 +96,22 @@ impl Pad {
         self.dir = dir;
         let dt = self.last.map_or(0.0, |l| now.saturating_duration_since(l).as_secs_f32().min(0.05));
         self.last = Some(now);
-        let m = inp.rx.hypot(inp.ry);
-        if m > DEAD {
+        let m = inp.lx.hypot(inp.ly);
+        let scroll = inp.ry.abs() > DEAD;
+        if m > DEAD || scroll {
             if !self.moving {
                 cmds.push(Cmd::Wake);
                 self.moving = true;
             }
+        } else {
+            self.moving = false;
+        }
+        if m > DEAD {
+            // Curva: devagar perto do centro, rápido no fim.
             let k = ((m - DEAD) / (1.0 - DEAD)).min(1.0);
             let v = SPEED * k * k / m * dt;
-            self.acc.0 += inp.rx * v;
-            self.acc.1 -= inp.ry * v;
+            self.acc.0 += inp.lx * v;
+            self.acc.1 -= inp.ly * v;
             let (dx, dy) = (self.acc.0.trunc(), self.acc.1.trunc());
             self.acc.0 -= dx;
             self.acc.1 -= dy;
@@ -110,28 +119,26 @@ impl Pad {
                 acts.push(Act::Move(dx as i32, dy as i32));
             }
         } else {
-            self.moving = false;
             self.acc = (0.0, 0.0);
+        }
+        if scroll {
+            let k = (inp.ry.abs() - DEAD) / (1.0 - DEAD);
+            self.wheel += inp.ry.signum() * k * SCROLL * 120.0 * dt;
+            let w = self.wheel.trunc();
+            if w != 0.0 {
+                acts.push(Act::Wheel(w as i32));
+                self.wheel -= w;
+            }
+        } else {
+            self.wheel = 0.0;
         }
         (cmds, acts)
     }
 }
 
-/// Direção do direcional ou, sem ele, do analógico esquerdo bem inclinado.
+/// Direção do direcional.
 fn dir_of(inp: &Input) -> Option<u8> {
-    if let Some(i) = [pads::LEFT, pads::UP, pads::RIGHT, pads::DOWN].iter().position(|&b| inp.buttons & b != 0) {
-        return Some(i as u8);
-    }
-    if inp.lx.hypot(inp.ly) < 0.6 {
-        return None;
-    }
-    Some(if inp.lx.abs() > inp.ly.abs() {
-        if inp.lx < 0.0 { 0 } else { 2 }
-    } else if inp.ly > 0.0 {
-        1
-    } else {
-        3
-    })
+    [pads::LEFT, pads::UP, pads::RIGHT, pads::DOWN].iter().position(|&b| inp.buttons & b != 0).map(|i| i as u8)
 }
 
 /// A janela principal abriu (`h`) ou fechou (0). Com ela aberta o XInput é lido a cada 8 ms.
@@ -201,14 +208,17 @@ mod tests {
         assert_eq!(c, vec![Cmd::Page(1), Cmd::Tab(-1), Cmd::Move(3)]);
         assert!(p.step(&Input { buttons: pads::DOWN, lt: 0.9, ..Default::default() }, t0 + Duration::from_millis(300)).0.is_empty());
         assert_eq!(p.step(&Input { buttons: pads::DOWN, ..Default::default() }, t0 + Duration::from_millis(420)).0, vec![Cmd::Move(3)]);
-        // Analógico esquerdo para a esquerda; X aperta e solta o clique.
-        let (c, a) = p.step(&Input { buttons: pads::X, lx: -0.9, ..Default::default() }, t0 + Duration::from_millis(500));
+        // Direcional para a esquerda; X aperta e solta o clique.
+        let (c, a) = p.step(&Input { buttons: pads::X | pads::LEFT, ..Default::default() }, t0 + Duration::from_millis(500));
         assert_eq!(c, vec![Cmd::Wake, Cmd::Move(0)]);
         assert!(matches!(a[..], [Act::Down(Out::Mouse(1))]));
         assert!(matches!(p.step(&Input::default(), t0 + Duration::from_millis(510)).1[..], [Act::Up(Out::Mouse(1))]));
-        // Analógico direito para cima e à direita: o cursor sobe (y negativo) e vai para a direita.
-        p.step(&Input { rx: 0.7, ry: 0.7, ..Default::default() }, t0 + Duration::from_millis(520));
-        let (_, a) = p.step(&Input { rx: 0.7, ry: 0.7, ..Default::default() }, t0 + Duration::from_millis(560));
-        assert!(matches!(a[..], [Act::Move(dx, dy)] if dx > 0 && dy < 0));
+        // Analógico esquerdo para cima e à direita: o cursor sobe (y negativo) e vai para a direita,
+        // e o analógico direito para cima rola para cima (roda positiva). Nenhum dos dois anda o foco.
+        let s = Input { lx: 0.7, ly: 0.7, ry: 0.9, ..Default::default() };
+        assert_eq!(p.step(&s, t0 + Duration::from_millis(520)).0, vec![Cmd::Wake]);
+        let (c, a) = p.step(&s, t0 + Duration::from_millis(560));
+        assert!(c.is_empty());
+        assert!(matches!(a[..], [Act::Move(dx, dy), Act::Wheel(w)] if dx > 0 && dy < 0 && w > 0), "{}", a.len());
     }
 }
