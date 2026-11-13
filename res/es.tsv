@@ -2056,6 +2056,9 @@ Mouse normal	Ratón normal
 Mouse rápido	Ratón rápido
 {} (importado)	{} (importado)
 O perfil {} quer abrir um programa. Permitir?	El perfil {} quiere abrir un programa. ¿Permitir?
+Abrir link	Abrir enlace
+O link começa com https:// ou http://.	El enlace empieza con https:// o http://.
+O perfil {} quer abrir um link. Permitir?	El perfil {} quiere abrir un enlace. ¿Permitir?
 Perfil {} importado	Perfil {} importado
 Aplicar modelo	Aplicar plantilla
 Só Mouse	Solo ratón

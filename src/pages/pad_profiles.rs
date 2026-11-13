@@ -18,8 +18,9 @@ pub struct Editor {
     val: usize,
     hk: Hotkey,
     game: usize,
-    /// Programa escolhido para "Abrir programa".
+    /// Programa escolhido para "Abrir programa" e o link de "Abrir link".
     run: String,
+    url: String,
     /// Modelo escolhido: 1 a 4 esperam a pergunta; o último é o assistente do Acessível.
     tpl: usize,
     /// Respostas do assistente: lado, clique, velocidade.
@@ -62,7 +63,7 @@ pub fn imported(app: &mut App, mut p: Profile) {
         p.name = tr("{} (importado)").replace("{}", &p.name);
     }
     let mut runs: Vec<u8> = vec![];
-    for b in p.layers.iter().flat_map(|l| &l.binds) {
+    for b in p.layers.iter().flat_map(|l| l.binds.iter().chain(&l.keys)) {
         if let Out::Run(i) = b.out {
             if !runs.contains(&i) {
                 runs.push(i);
@@ -81,6 +82,10 @@ pub fn test_target(app: &mut App, what: &str) {
                 ed.run = "C:/Windows/System32/notepad.exe".into();
             }
             "keyboard" => ed.kind = 9,
+            "link" => {
+                ed.kind = 12;
+                ed.url = "https://github.com/maliquem/Prisma".into();
+            }
             "macro" => {
                 ed.kind = 10;
                 app.pads.tab = 1;
@@ -163,7 +168,7 @@ const SPEEDS_T: [&str; 4] = ["Turbo 2x", "Turbo 3x", "Turbo 4x", "Turbo 5x"];
 const SIDES: [&str; 3] = ["Os dois lados", "Só o lado esquerdo", "Só o lado direito"];
 const CLICKS: [&str; 2] = ["Segurar para arrastar", "Clique liga e desliga"];
 const SPEEDS: [(&str, f32); 3] = [("Mouse devagar", 800.0), ("Mouse normal", 1600.0), ("Mouse rápido", 2600.0)];
-const KINDS: [&str; 12] = ["Tecla", "Tecla especial", "Mouse", "Roda", "Camada enquanto segura", "Liga e desliga camada", "Ação do Prisma", "Trocar de perfil", "Abrir programa", "Teclado do Prisma", "Macro", "Texto rápido"];
+const KINDS: [&str; 13] = ["Tecla", "Tecla especial", "Mouse", "Roda", "Camada enquanto segura", "Liga e desliga camada", "Ação do Prisma", "Trocar de perfil", "Abrir programa", "Teclado do Prisma", "Macro", "Texto rápido", "Abrir link"];
 /// Na ordem de `remap::MODES`.
 const MODE_NAMES: [&str; 3] = ["Uma vez", "Repetir enquanto segura", "Repetir até apertar de novo"];
 const STEP_KINDS: [&str; 3] = ["Tecla", "Clique", "Espera"];
@@ -267,7 +272,7 @@ fn describe(o: Out, p: &Profile) -> String {
         Out::Action(n) if n >= remap::SOUND => tr("Combinação de som {}").replace("{}", &(n - remap::SOUND + 1).to_string()),
         Out::Action(n) => remap::ACTIONS.get(n as usize).map_or_else(String::new, |a| tr(a)),
         Out::Profile(n) => tr("Trocar para o perfil {}").replace("{}", p.strings.get(n as usize).map_or("", |s| s)),
-        Out::Run(n) => tr("Abrir {}").replace("{}", &p.strings.get(n as usize).map_or_else(String::new, |s| crate::sys::procs::exe_name(s))),
+        Out::Run(n) => tr("Abrir {}").replace("{}", &p.strings.get(n as usize).map_or_else(String::new, |s| if remap::link_ok(s) { s.clone() } else { crate::sys::procs::exe_name(s) })),
         Out::Macro(n) => tr("Macro {}").replace("{}", p.macros.get(n as usize).map_or("", |m| &m.name)),
         Out::Text(n) => tr("Digitar {}").replace("{}", &p.texts.get(n as usize).map_or_else(String::new, short)),
     }
@@ -434,12 +439,14 @@ pub fn top(ui: &mut Ui, app: &mut App, r: Rect) {
         if !*open {
             if let Some(&i) = queue.first() {
                 let path = imp.strings.get(i as usize).cloned().unwrap_or_default();
-                ui.ask("pp-imp", &tr("O perfil {} quer abrir um programa. Permitir?").replace("{}", &imp.name), &path);
+                let q = if remap::link_ok(&path) { "O perfil {} quer abrir um link. Permitir?" } else { "O perfil {} quer abrir um programa. Permitir?" };
+                ui.ask("pp-imp", &tr(q).replace("{}", &imp.name), &path);
                 *open = true;
             } else {
                 let (mut p, _, refused, _) = ed.import.take().unwrap();
                 for l in &mut p.layers {
                     l.binds.retain(|b| !matches!(b.out, Out::Run(i) if refused.contains(&i)));
+                    l.keys.retain(|b| !matches!(b.out, Out::Run(i) if refused.contains(&i)));
                 }
                 if remap::save(&p) {
                     ed.prof = remap::profiles().iter().position(|x| x.name == p.name).unwrap_or(0);
@@ -778,6 +785,12 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
         let shown = if ed.run.is_empty() { tr("Nenhum programa escolhido") } else { crate::sys::procs::exe_name(&ed.run) };
         ui.c.text_fit(rect(vr.x, vr.y, half_v, vr.h), &shown, 13.0, if ed.run.is_empty() { MUTED } else { TEXT }, Align::Left, Weight::Regular);
         pick = Some(rect(vr.x + half_v + 8.0, vr.y, half_v, vr.h));
+    } else if ed.kind == 12 {
+        ui.search("pp-url", vr, &mut ed.url, "https://");
+        ed.url = ed.url.trim().chars().take(500).collect();
+        if !ed.url.is_empty() && !remap::link_ok(&ed.url) {
+            ui.c.text_fit(rect(x, y + 40.0, w, 20.0), &tr("O link começa com https:// ou http://."), 12.0, WARN, Align::Left, Weight::Regular);
+        }
     } else if ed.kind == 9 {
         ui.c.text_fit(vr, &tr("Abre e fecha o teclado na tela"), 13.0, MUTED, Align::Left, Weight::Regular);
     } else if values.is_empty() {
@@ -800,6 +813,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
         9 => Some(Out::Action(remap::KEYBOARD)),
         10 => p.macros.get(ed.val).map(|_| Out::Macro(ed.val as u8)),
         11 => p.texts.get(ed.val).map(|_| Out::Text(ed.val as u8)),
+        12 => remap::link_ok(&ed.url).then_some(Out::Run(0)),
         _ => (!ed.run.is_empty()).then_some(Out::Run(0)),
     };
     // Teclado: cada tecla diferente do perfil ocupa um dos `KEY_SLOTS` lugares do motor.
@@ -814,7 +828,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
     if ui.button_ex("pp-add", rect(x + 2.0 * (third + 8.0), y, third, 34.0), "Adicionar", true, out.is_some() && (!keys_mode || key_ok)) {
         let out = match out {
             Some(Out::Profile(_)) => remap::intern(&mut p.strings, &others_p[ed.val]).map(Out::Profile),
-            Some(Out::Run(_)) => remap::intern(&mut p.strings, &ed.run).map(Out::Run),
+            Some(Out::Run(_)) => remap::intern(&mut p.strings, if ed.kind == 12 { &ed.url } else { &ed.run }).map(Out::Run),
             o => o,
         };
         if let Some(out) = out {

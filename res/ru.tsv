@@ -2056,6 +2056,9 @@ Mouse normal	Обычная мышь
 Mouse rápido	Быстрая мышь
 {} (importado)	{} (импорт)
 O perfil {} quer abrir um programa. Permitir?	Профиль {} хочет открыть программу. Разрешить?
+Abrir link	Открыть ссылку
+O link começa com https:// ou http://.	Ссылка начинается с https:// или http://.
+O perfil {} quer abrir um link. Permitir?	Профиль {} хочет открыть ссылку. Разрешить?
 Perfil {} importado	Профиль {} импортирован
 Aplicar modelo	Применить шаблон
 Só Mouse	Только мышь

@@ -114,6 +114,13 @@ pub struct Snip {
 pub const MAX_TEXTS: usize = 64;
 pub const MAX_TEXT: usize = 500;
 
+/// Link que "Abrir link" aceita: só http ou https, sem espaço, até 500 letras. O resto o Windows
+/// poderia tratar como programa ou arquivo.
+pub fn link_ok(s: &str) -> bool {
+    let l = s.to_ascii_lowercase();
+    (l.starts_with("https://") || l.starts_with("http://")) && s.len() > l.find("//").unwrap() + 2 && s.len() <= 500 && !s.chars().any(|c| c.is_whitespace() || c.is_control() || c == '"')
+}
+
 /// Abreviação vazia (o texto só sai por ligação) ou de 2 a 16 letras e números, em minúsculas.
 pub fn abbr_ok(a: &str) -> bool {
     a.is_empty() || ((2..=16).contains(&a.len()) && a.bytes().all(|b| b.is_ascii_digit() || b.is_ascii_lowercase()))
@@ -1814,6 +1821,15 @@ pub(super) fn send(acts: &[Act]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn link_only_http() {
+        assert!(link_ok("https://example.com/a?b=1"));
+        assert!(link_ok("HTTP://x.org"));
+        for bad in ["", "https://", "file:///C:/x.exe", "C:/Windows/notepad.exe", "https://a b", "javascript:alert(1)", "https://a\"b"] {
+            assert!(!link_ok(bad), "{bad}");
+        }
+    }
 
     fn at(ms: u64, t0: Instant) -> Instant {
         t0 + Duration::from_millis(ms)

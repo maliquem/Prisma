@@ -2056,6 +2056,9 @@ Mouse normal	鼠标正常
 Mouse rápido	鼠标快速
 {} (importado)	{}（导入）
 O perfil {} quer abrir um programa. Permitir?	配置 {} 想打开一个程序。允许吗？
+Abrir link	打开链接
+O link começa com https:// ou http://.	链接以 https:// 或 http:// 开头。
+O perfil {} quer abrir um link. Permitir?	配置 {} 想打开一个链接。允许吗？
 Perfil {} importado	已导入配置 {}
 Aplicar modelo	应用模板
 Só Mouse	仅鼠标

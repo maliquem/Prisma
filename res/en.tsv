@@ -2062,6 +2062,9 @@ Mouse normal	Normal mouse
 Mouse rápido	Fast mouse
 {} (importado)	{} (imported)
 O perfil {} quer abrir um programa. Permitir?	Profile {} wants to open a program. Allow?
+Abrir link	Open link
+O link começa com https:// ou http://.	The link starts with https:// or http://.
+O perfil {} quer abrir um link. Permitir?	Profile {} wants to open a link. Allow?
 Perfil {} importado	Profile {} imported
 Aplicar modelo	Apply template
 Só Mouse	Mouse only
