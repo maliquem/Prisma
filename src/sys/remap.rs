@@ -270,6 +270,9 @@ pub enum Stick {
     Mouse(f32),
     /// Cliques de roda por segundo com o stick no fim.
     Scroll(f32),
+    /// Flick stick: empurrar o stick vira a câmera para aquela direção, girar o stick gira a
+    /// câmera. O valor é quantos pixels de mouse dão uma volta inteira no jogo.
+    Flick(f32),
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -547,6 +550,7 @@ impl Profile {
                     Some(Stick::Buttons) => _ = writeln!(s, "stick {i} {side} buttons"),
                     Some(Stick::Mouse(v)) => _ = writeln!(s, "stick {i} {side} mouse {v}"),
                     Some(Stick::Scroll(v)) => _ = writeln!(s, "stick {i} {side} scroll {v}"),
+                    Some(Stick::Flick(v)) => _ = writeln!(s, "stick {i} {side} flick {v}"),
                     None => {}
                 }
             }
@@ -662,6 +666,7 @@ impl Profile {
                         "buttons" => Stick::Buttons,
                         "mouse" => Stick::Mouse(num(it.next()?)?.min(20000.0)),
                         "scroll" => Stick::Scroll(num(it.next()?)?.min(200.0)),
+                        "flick" => Stick::Flick(num(it.next()?)?.clamp(100.0, 100000.0)),
                         _ => return None,
                     };
                     match side {
@@ -951,6 +956,10 @@ pub struct Engine {
     swipe: Option<(Instant, (f32, f32), (f32, f32), bool)>,
     /// Metade do clique do touchpad em curso (TPCL ou TPCR), escolhida ao apertar.
     half: Buttons,
+    /// Flick stick de cada lado: o ângulo do stick no relatório anterior (fora do centro), e o giro
+    /// que ainda falta do flick, em pixels, com o tempo que ainda tem.
+    flick: [Option<f32>; 2],
+    flick_go: [(f32, f32); 2],
     /// Jogo com anti-cheat em foco: turbo vira Pressionar.
     pub safe: bool,
 }
@@ -975,6 +984,8 @@ impl Default for Engine {
             fingers: [None; 2],
             swipe: None,
             half: 0,
+            flick: [None; 2],
+            flick_go: [(0.0, 0.0); 2],
         }
     }
 }
@@ -1177,7 +1188,32 @@ impl Engine {
                     self.my -= y * y.abs() * v * dt;
                 }
                 Stick::Scroll(v) => self.wheel += y * v * 120.0 * dt,
+                Stick::Flick(px) => {
+                    let s = usize::from(right);
+                    // Com folga: liga no fim do curso (0,9) e só solta abaixo de 0,8.
+                    let r = x.hypot(y);
+                    if r > 0.9 || (r > 0.8 && self.flick[s].is_some()) {
+                        // Para cima é 0°, para a direita é positivo, como virar a câmera.
+                        let a = x.atan2(y).to_degrees();
+                        match self.flick[s] {
+                            // Flick: a câmera vira para onde o stick aponta, em 0,1 s.
+                            None => self.flick_go[s] = (self.flick_go[s].0 + a / 360.0 * px, 0.1),
+                            // Girar o stick gira a câmera junto, pelo caminho mais curto.
+                            Some(b) => self.mx += ((a - b + 540.0).rem_euclid(360.0) - 180.0) / 360.0 * px,
+                        }
+                        self.flick[s] = Some(a);
+                    } else {
+                        self.flick[s] = None;
+                    }
+                }
                 Stick::Buttons => {}
+            }
+        }
+        for g in &mut self.flick_go {
+            if g.0 != 0.0 {
+                let part = if g.1 <= dt { g.0 } else { g.0 * dt / g.1 };
+                self.mx += part;
+                *g = (g.0 - part, (g.1 - dt).max(0.0));
             }
         }
         if inp.motion {
@@ -1988,6 +2024,21 @@ fn is_elevated(pid: u32) -> bool {
     }
 }
 
+/// Teste do flick stick: depois de 3 s (tempo de voltar ao jogo), move o mouse `px` para a direita
+/// em 1 s. Se a câmera der uma volta inteira e parar onde estava, o valor está certo.
+pub fn test_turn(px: f32) {
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(3));
+        let mut done = 0;
+        for i in 1..=100 {
+            let to = (px * i as f32 / 100.0) as i32;
+            send(&[Act::Move(to - done, 0)]);
+            done = to;
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    });
+}
+
 pub(super) fn send(acts: &[Act]) {
     use windows::Win32::UI::Input::KeyboardAndMouse::*;
     if acts.is_empty() {
@@ -2063,6 +2114,33 @@ mod tests {
         let text = p.to_text();
         assert!(text.contains("gyro 1 mouse 10"));
         assert_eq!(Profile::parse(&text).unwrap().layers[1].gyro, Some(Motion::Mouse(10.0)));
+    }
+
+    #[test]
+    fn flick_stick_turns_and_rotates() {
+        let t0 = Instant::now();
+        let mut p = Profile::base();
+        p.layers[0].rs = Some(Stick::Flick(3600.0));
+        let mut e = Engine::default();
+        let moved = |acts: Vec<Act>| acts.iter().map(|a| if let Act::Move(x, _) = a { *x } else { 0 }).sum::<i32>();
+        let f = |rx: f32, ry: f32| Input { rx, ry, ..Default::default() };
+        e.step(&p, &f(0.0, 0.0), t0);
+        // Stick todo para a direita: vira 90° (900 px) em 0,1 s.
+        let mut sum = 0;
+        for i in 1..=10 {
+            sum += moved(e.step(&p, &f(1.0, 0.0), at(i * 20, t0)));
+        }
+        assert_eq!(sum, 900);
+        // Girar o stick para baixo (mais 90°) gira a câmera junto.
+        assert_eq!(moved(e.step(&p, &f(0.0, -1.0), at(220, t0))), 900);
+        // Soltar não mexe; o próximo flick para a esquerda vira -90°.
+        assert_eq!(moved(e.step(&p, &f(0.0, 0.0), at(240, t0))), 0);
+        let mut sum = 0;
+        for i in 13..=20 {
+            sum += moved(e.step(&p, &f(-1.0, 0.0), at(i * 20, t0)));
+        }
+        assert_eq!(sum, -900);
+        assert_eq!(Profile::parse(&p.to_text()).unwrap().layers[0].rs, Some(Stick::Flick(3600.0)));
     }
 
     #[test]

@@ -2253,3 +2253,6 @@ Touchpad	触控板
 Clique na metade esquerda	点击左半部分
 Clique na metade direita	点击右半部分
 Canto do touchpad	触摸板角落
+Flick stick	Flick stick
+Testar volta	测试整圈转动
+Em 3 s, o Prisma move o mouse o valor do flick stick para a direita. Volte ao jogo: a câmera deve dar uma volta inteira e parar onde estava. Se passar, diminua o valor; se faltar, aumente.	3 秒后，Prisma 会将鼠标向右移动 flick stick 的数值。请回到游戏：镜头应转满一整圈并停在原位。如果转过头，请调小该数值；如果不够，请调大。

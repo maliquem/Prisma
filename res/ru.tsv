@@ -2253,3 +2253,6 @@ Touchpad	Тачпад
 Clique na metade esquerda	Клик по левой половине
 Clique na metade direita	Клик по правой половине
 Canto do touchpad	Угол тачпада
+Flick stick	Flick stick
+Testar volta	Проверить оборот
+Em 3 s, o Prisma move o mouse o valor do flick stick para a direita. Volte ao jogo: a câmera deve dar uma volta inteira e parar onde estava. Se passar, diminua o valor; se faltar, aumente.	Через 3 с Prisma сдвинет мышь вправо на значение flick stick. Вернитесь в игру: камера должна сделать полный оборот и остановиться там, где была. Если перелетела — уменьшите значение; если не дошла — увеличьте.

@@ -453,12 +453,13 @@ fn stick_row(ui: &mut Ui, layer: &mut Layer, base: bool, right: bool, x: f32, y:
     if base {
         opts.push(tr("Igual à camada mãe"));
     }
-    opts.extend(["Direções como botões", "Mouse", "Rolar"].iter().map(|s| tr(s)));
+    opts.extend(["Direções como botões", "Mouse", "Rolar", "Flick stick"].iter().map(|s| tr(s)));
     let mut sel = match cur {
         None => 0,
         Some(Stick::Buttons) => 0,
         Some(Stick::Mouse(_)) => 1,
         Some(Stick::Scroll(_)) => 2,
+        Some(Stick::Flick(_)) => 3,
     } + if base && cur.is_some() { 1 } else { 0 };
     ui.label(rect(x, y, 120.0, 34.0), label, TEXT2);
     if ui.select(if right { "pp-rs" } else { "pp-ls" }, rect(x + 130.0, y, sel_w, 34.0), &opts, &mut sel) {
@@ -467,7 +468,8 @@ fn stick_row(ui: &mut Ui, layer: &mut Layer, base: bool, right: bool, x: f32, y:
             -1 => None,
             0 => Some(Stick::Buttons),
             1 => Some(Stick::Mouse(1600.0)),
-            _ => Some(Stick::Scroll(12.0)),
+            2 => Some(Stick::Scroll(12.0)),
+            _ => Some(Stick::Flick(6000.0)),
         };
         if right {
             layer.rs = st;
@@ -490,6 +492,14 @@ fn stick_row(ui: &mut Ui, layer: &mut Layer, base: bool, right: bool, x: f32, y:
         Some(Stick::Scroll(v)) => {
             let mut n = *v as u32;
             if ui.stepper(key, speed, &mut n, (1, 60), 1, "/s") {
+                *v = n as f32;
+                changed = true;
+            }
+        }
+        // Pixels por volta inteira: acha-se com o botão Testar volta.
+        Some(Stick::Flick(v)) => {
+            let mut n = *v as u32;
+            if ui.stepper(key, speed, &mut n, (500, 60000), 50, "px") {
                 *v = n as f32;
                 changed = true;
             }
@@ -1054,6 +1064,17 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
         }
         changed |= stick_row(ui, &mut p.layers[ed.layer], ed.layer > 0, right, x, y, w);
         y += 44.0;
+    }
+    // Flick stick nesta camada: o teste da volta de 360° com o valor dela.
+    if let Some(px) = [p.layers[ed.layer].ls, p.layers[ed.layer].rs].iter().find_map(|s| if let Some(Stick::Flick(v)) = s { Some(*v) } else { None }) {
+        if ui.button("pp-flick-test", rect(x, y, 200.0_f32.min(w), 34.0), "Testar volta", false) {
+            remap::test_turn(px);
+        }
+        y += 42.0;
+        let note = tr("Em 3 s, o Prisma move o mouse o valor do flick stick para a direita. Volte ao jogo: a câmera deve dar uma volta inteira e parar onde estava. Se passar, diminua o valor; se faltar, aumente.");
+        let nh = crate::ui::gfx::measure(&note, 12.0, Weight::Regular, Some(w)).1.ceil();
+        ui.c.text_wrap(rect(x, y, w, nh), &note, 12.0, MUTED, Weight::Regular);
+        y += nh + 16.0;
     }
     // Gyro desta camada e, se alguma camada usa o gyro, as opções do perfil.
     changed |= motion_row(ui, &mut p.layers[ed.layer], false, ed.layer > 0, x, y, w);

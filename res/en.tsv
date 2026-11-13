@@ -2259,3 +2259,6 @@ Touchpad	Touchpad
 Clique na metade esquerda	Click left half
 Clique na metade direita	Click right half
 Canto do touchpad	Touchpad corner
+Flick stick	Flick stick
+Testar volta	Test full turn
+Em 3 s, o Prisma move o mouse o valor do flick stick para a direita. Volte ao jogo: a câmera deve dar uma volta inteira e parar onde estava. Se passar, diminua o valor; se faltar, aumente.	In 3 s, Prisma moves the mouse to the right by the flick stick value. Return to the game: the camera should make a full turn and stop where it started. If it overshoots, lower the value; if it falls short, raise it.

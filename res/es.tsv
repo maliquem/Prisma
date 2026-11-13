@@ -2253,3 +2253,6 @@ Touchpad	Panel táctil
 Clique na metade esquerda	Clic en la mitad izquierda
 Clique na metade direita	Clic en la mitad derecha
 Canto do touchpad	Esquina del touchpad
+Flick stick	Flick stick
+Testar volta	Probar vuelta completa
+Em 3 s, o Prisma move o mouse o valor do flick stick para a direita. Volte ao jogo: a câmera deve dar uma volta inteira e parar onde estava. Se passar, diminua o valor; se faltar, aumente.	En 3 s, Prisma mueve el ratón hacia la derecha el valor de flick stick. Vuelve al juego: la cámara debería dar una vuelta completa y detenerse donde estaba. Si se pasa, reduce el valor; si se queda corta, auméntalo.
