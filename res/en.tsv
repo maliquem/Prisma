@@ -2314,3 +2314,15 @@ Vibração	Vibration
 Vibrar com os botões	Button rumble
 Vibrar com os gatilhos	Trigger rumble
 Vibrar com os sticks	Stick rumble
+Nome do perfil	Profile name
+Esse nome já existe	That name already exists
+Criar	Create
+Novo perfil	New profile
+Copia o perfil aberto com outro nome, ligado aos mesmos programas.	Copies the open profile under another name, linked to the same programs.
+Mais ▾	More ▾
+Modelo: {}	Template: {}
+Padrão do programa	Program default
+O programa tem mais de um perfil: o padrão é o que abre com ele.	The program has more than one profile: the default is the one that opens with it.
+Abre com o padrão	Opens with default
+Abre com o último usado	Opens with last used
+Trocar perfil	Switch profile

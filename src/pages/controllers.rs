@@ -911,7 +911,7 @@ fn mapping(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
 
 /// Radial do Prisma: as 8 ações, de cima no sentido do relógio.
 fn radial(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
-    use crate::sys::radial::{sub, EMPTY, GROUP};
+    use crate::sys::radial::{sub, EMPTY, GROUP, PROFILES};
     const DIRS: [&str; 8] = ["↑", "↗", "→", "↘", "↓", "↙", "←", "↖"];
     let two = app.cfg.pad_radial_two;
     // Cada lugar de 4 opções ganha 4 linhas, uma por direção do direcional.
@@ -982,13 +982,16 @@ fn radial(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
     ui.c.text_wrap(rect(r.x + 16.0, r.y + 392.0, r.w - 32.0, 46.0), "Com o Steam aberto, desligue nele a opção do botão Guia.", 12.0, MUTED, Weight::Regular);
     let check = rect(r.x + 10.0, r.y + 438.0, r.w - 20.0, 36.0);
     if ui.check("pad-radial-two", check, "Dois círculos (16 lugares)", &mut app.cfg.pad_radial_two) {
-        app.cfg.pad_radial_keep |= app.cfg.pad_radial_two && app.cfg.pad_radial[8..16].contains(&GROUP);
+        app.cfg.pad_radial_keep |= app.cfg.pad_radial_two && app.cfg.pad_radial[8..16].iter().any(|&a| a == GROUP || a == PROFILES);
         changed = true;
     }
     ui.tip(check, "Um círculo em cada stick, com 8 lugares cada. O stick que apontar por último escolhe.");
     // Nada, e todas as ações menos o próprio radial.
     let ids: Vec<u8> = std::iter::once(EMPTY).chain((0..remap::ACTIONS.len() as u8).filter(|&a| a != remap::RADIAL)).collect();
     let names: Vec<String> = ids.iter().map(|&a| crate::i18n::tr(remap::ACTIONS.get(a as usize).copied().unwrap_or("Nada")).into_owned()).collect();
+    // Nos lugares (não nas 4 opções), também a troca de perfil.
+    let top_ids: Vec<u8> = ids.iter().copied().chain([PROFILES]).collect();
+    let top_names: Vec<String> = names.iter().cloned().chain([tr("Trocar perfil")]).collect();
     // Lugares 0 a 7 no stick direito; com dois círculos, 8 a 15 no esquerdo.
     // Um círculo: escolher o stick que aponta; dois: um título para cada stick.
     if !two {
@@ -998,7 +1001,7 @@ fn radial(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
         if ui.select("pad-radial-left", c, &[tr("Direito"), tr("Esquerdo")], &mut s) {
             app.cfg.pad_radial_left = s == 1;
             // Lugares de 4 opções passam para o stick esquerdo: a escolha fica com ele solto.
-            app.cfg.pad_radial_keep |= s == 1 && app.cfg.pad_radial[..8].contains(&GROUP);
+            app.cfg.pad_radial_keep |= s == 1 && app.cfg.pad_radial[..8].iter().any(|&a| a == GROUP || a == PROFILES);
             changed = true;
         }
     }
@@ -1017,7 +1020,7 @@ fn radial(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
         // Caixa que liga as 4 opções do direcional neste lugar.
         let gw = 136.0_f32.min((r.w - 80.0) * 0.4);
         let sw = r.w - 56.0 - gw - 8.0;
-        changed |= slot_select(ui, app, &ids, &names, i, rect(cx + 24.0, y, sw, 34.0));
+        changed |= slot_select(ui, app, &top_ids, &top_names, i, rect(cx + 24.0, y, sw, 34.0));
         let gr = rect(cx + 24.0 + sw + 8.0, y, gw, 34.0);
         let mut g = was == GROUP;
         if ui.check(&format!("pad-radial-g{i}"), gr, "4 opções", &mut g) {
@@ -1027,7 +1030,7 @@ fn radial(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
         ui.tip(gr, "O direcional escolhe uma de quatro ações dentro deste lugar. Ligado, o lugar deixa de ter ação própria.");
         // Ficou de 4 opções num lugar do stick esquerdo: a escolha precisa ficar com o stick solto,
         // senão o polegar não chega ao direcional.
-        if was != GROUP && app.cfg.pad_radial[i] == GROUP && (i >= 8 || app.cfg.pad_radial_left) {
+        if was != app.cfg.pad_radial[i] && matches!(app.cfg.pad_radial[i], GROUP | PROFILES) && (i >= 8 || app.cfg.pad_radial_left) {
             app.cfg.pad_radial_keep = true;
         }
         y += 42.0;

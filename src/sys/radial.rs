@@ -14,6 +14,8 @@ pub const EMPTY: u8 = u8::MAX;
 pub const PROGRAM: u8 = u8::MAX - 1;
 /// Lugar com 4 opções, escolhidas pelo direcional (`sub`).
 pub const GROUP: u8 = u8::MAX - 2;
+/// Lugar que troca de perfil: o direcional escolhe entre os perfis do programa em foco (`choices`).
+pub const PROFILES: u8 = u8::MAX - 3;
 /// Lugares: 8 do stick direito e, com dois círculos, mais 8 do esquerdo.
 pub const SLOTS: usize = 16;
 /// Os 16 lugares e, depois deles, as 4 opções de cada um (`sub`).
@@ -27,6 +29,13 @@ pub const fn sub(i: usize, d: usize) -> usize {
 }
 
 static PROGRAMS: Mutex<[String; ALL]> = Mutex::new([const { String::new() }; ALL]);
+/// Perfis que o lugar `PROFILES` oferece, lidos ao abrir.
+static CHOICES: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// Perfis oferecidos no radial aberto, na ordem do direcional.
+pub fn choices() -> Vec<String> {
+    CHOICES.lock().unwrap().clone()
+}
 
 /// Caminho do programa de cada lugar ou opção marcado com `PROGRAM`.
 pub fn set_programs(paths: [String; ALL]) {
@@ -89,8 +98,10 @@ struct Radial {
     left: bool,
     pad: Option<String>,
     sel: Option<usize>,
-    /// Opção do direcional escolhida no lugar `GROUP` escolhido.
+    /// Opção do direcional escolhida no lugar `GROUP` ou `PROFILES` escolhido.
     sub: Option<usize>,
+    /// Quantos perfis o lugar `PROFILES` oferece.
+    profiles: usize,
     /// O que Confirmar disparou: lugar ou opção (`sub`), para achar o programa.
     fired: Option<usize>,
     /// Para onde cada stick apontava no relatório anterior: direito, esquerdo.
@@ -150,6 +161,9 @@ pub fn stick() -> [(f32, f32); 2] {
 /// Abre. O que o perfil segurava é solto antes. Não chamar com o mapeamento travado (`remap::RUN`).
 fn open(watch: pads::Buttons) {
     let (slots, two, left, keep, ok, back) = { let c = CFG.lock().unwrap(); (c.slots, c.two, c.left && !c.two, c.keep, c.ok, c.back) };
+    let names = if slots[..SLOTS].contains(&PROFILES) { super::remap::program_profiles() } else { vec![] };
+    let profiles = names.len();
+    *CHOICES.lock().unwrap() = names;
     let mut s = STATE.lock().unwrap();
     if !matches!(*s, State::Open(_)) {
         *s = State::Open(Radial {
@@ -159,6 +173,7 @@ fn open(watch: pads::Buttons) {
             pad: None,
             sel: None,
             sub: None,
+            profiles,
             fired: None,
             last: [None; 2],
             stick: [(0.0, 0.0); 2],
@@ -222,20 +237,22 @@ fn step(r: &mut Radial, inp: &Input) -> (Option<u8>, bool, bool) {
     r.sel = sel;
     let down = inp.buttons & !r.prev;
     r.prev = inp.buttons;
-    // Lugar de 4 opções: o direcional escolhe uma (só as que não estão vazias).
-    if let Some(i) = sel.filter(|&i| r.slots[i] == GROUP) {
-        if let Some(d) = (0..4).find(|&d| down & DPAD[d] != 0 && r.slots[sub(i, d)] != EMPTY) {
+    // Lugar de 4 opções ou de perfis: o direcional escolhe uma (só as que existem).
+    let opt = |i: usize, d: usize| if r.slots[i] == PROFILES { d < r.profiles } else { r.slots[sub(i, d)] != EMPTY };
+    if let Some(i) = sel.filter(|&i| r.slots[i] == GROUP || r.slots[i] == PROFILES) {
+        if let Some(d) = (0..4).find(|&d| down & DPAD[d] != 0 && opt(i, d)) {
             changed |= r.sub != Some(d);
             r.sub = Some(d);
         }
     }
     let target = match sel {
-        Some(i) if r.slots[i] == GROUP => r.sub.map(|d| sub(i, d)),
+        Some(i) if r.slots[i] == GROUP || r.slots[i] == PROFILES => r.sub.map(|d| sub(i, d)),
         s => s,
     };
     if down & r.ok != 0 && target.is_some() {
         r.fired = target;
-        return (target.map(|i| r.slots[i]), true, true);
+        let pick = if sel.is_some_and(|i| r.slots[i] == PROFILES) { PROFILES } else { target.map_or(EMPTY, |i| r.slots[i]) };
+        return (Some(pick), true, true);
     }
     if down & (r.back | r.watch) != 0 {
         return (None, true, true);
@@ -275,7 +292,13 @@ pub fn feed(key: &str, inp: &Input, _now: Instant) -> bool {
     if changed {
         pads::emit(pads::Event::Radial);
     }
-    if pick == Some(PROGRAM) {
+    if pick == Some(PROFILES) {
+        // Fora da trava do radial: trocar o perfil passa pelo mapeamento.
+        let name = slot.and_then(|i| CHOICES.lock().unwrap().get((i - SLOTS) % 4).cloned());
+        if let Some(n) = name {
+            super::remap::switch_to(&n);
+        }
+    } else if pick == Some(PROGRAM) {
         let path = slot.map(|i| PROGRAMS.lock().unwrap()[i].clone()).unwrap_or_default();
         if !path.is_empty() {
             pads::emit(pads::Event::Run { path });
@@ -449,6 +472,7 @@ mod tests {
             pad: None,
             sel: None,
             sub: None,
+            profiles: 0,
             fired: None,
             last: [None; 2],
             stick: [(0.0, 0.0); 2],

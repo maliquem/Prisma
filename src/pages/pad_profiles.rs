@@ -17,7 +17,8 @@ pub struct Editor {
     kind: usize,
     val: usize,
     hk: Hotkey,
-    game: usize,
+    /// Dando nome a um perfil: renomear o aberto (`true`) ou criar uma cópia dele, e o texto.
+    naming: Option<(bool, String)>,
     /// Programa escolhido para "Abrir programa" e o link de "Abrir link".
     run: String,
     url: String,
@@ -112,6 +113,10 @@ pub fn test_target(app: &mut App, what: &str) {
                 }
             }
             "gyro" => ed.layer = 1,
+            // A linha de perfis dando nome a um perfil novo, e com o primeiro perfil da pasta aberto
+            // (a foto põe dois perfis no mesmo programa para mostrar o padrão).
+            "naming" => ed.naming = Some((false, "Corrida".into())),
+            "shared" => ed.prof = 2,
             "text" => {
                 app.pads.tab = 1;
                 ed.kind = 11;
@@ -193,9 +198,10 @@ pub fn opens_with(ui: &mut Ui, app: &mut App, r: Rect) {
     // shortcut: mostra e troca só o primeiro programa; um perfil com vários (vindo de arquivo) fica com o escolhido.
     let cur = p.games.first().cloned();
     let mut exes: Vec<String> = cur.iter().cloned().collect();
+    // Todos os jogos do Medidor: um programa pode ter vários perfis.
     for g in &app.cfg.meter_games {
         let e = g.exe.to_lowercase();
-        if !exes.contains(&e) && !list.iter().any(|o| o.games.iter().any(|x| x.eq_ignore_ascii_case(&e))) {
+        if !exes.contains(&e) {
             exes.push(e);
         }
     }
@@ -217,26 +223,14 @@ pub fn opens_with(ui: &mut Ui, app: &mut App, r: Rect) {
     }
 }
 
-/// Jogo escolhido na lista para "Abre sozinho com": passa para o perfil aberto e sai de qualquer outro.
+/// Programa escolhido para "Abre sozinho com": passa a abrir o perfil aberto (sem sair dos outros).
 pub fn set_game(app: &mut App, path: &str) {
     let Some(ed) = app.pads.edit.as_ref() else { return };
     let exe = crate::sys::procs::exe_name(path).to_lowercase();
-    let list = remap::profiles();
-    let Some(cur) = list.get(ed.prof).map(|p| p.name.clone()) else { return };
-    let mut ok = true;
-    for mut p in list {
-        let had = p.games.len();
-        if p.name == cur {
-            p.games = vec![exe.clone()];
-        } else {
-            p.games.retain(|g| !g.eq_ignore_ascii_case(&exe));
-            if p.games.len() == had {
-                continue;
-            }
-        }
-        ok &= remap::save(&p);
-    }
-    if !ok {
+    let Some(mut p) = remap::profiles().get(ed.prof).cloned() else { return };
+    // Os outros perfis do programa continuam com ele: um programa pode ter vários perfis.
+    p.games = vec![exe];
+    if !remap::save(&p) {
         app.toast.info("Não deu para salvar o perfil.");
     }
 }
@@ -602,7 +596,7 @@ fn apply(p: &mut Profile, t: Profile) {
 
 /// Linha do perfil no topo da página: escolher, novo para um jogo, apagar, modelo, importar e exportar.
 pub fn top(ui: &mut Ui, app: &mut App, r: Rect) {
-    let mut list = remap::profiles();
+    let list = remap::profiles();
     let Some(ed) = app.pads.edit.as_mut() else { return };
     // Importado: um programa por vez; fechar a pergunta sem Sim recusa aquele programa.
     if let Some((imp, queue, refused, open)) = ed.import.as_mut() {
@@ -639,62 +633,100 @@ pub fn top(ui: &mut Ui, app: &mut App, r: Rect) {
     let Some(ed) = app.pads.edit.as_mut() else { return };
     ed.prof = ed.prof.min(list.len() - 1);
     let title_w = crate::ui::gfx::measure(&tr("Perfis"), 15.0, Weight::Semibold, None).0 + 16.0;
-    // Larguras em partes: o novo perfil para jogo e o modelo têm os textos mais longos.
-    const PARTS: [f32; 6] = [0.9, 1.45, 1.1, 1.25, 0.65, 0.65];
-    let unit = (r.w - title_w - 40.0) / 6.0;
+    // Larguras em partes: a lista dos perfis e o jeito de abrir o programa têm os textos mais longos.
+    const PARTS: [f32; 5] = [1.3, 0.9, 0.8, 1.2, 1.3];
+    let unit = (r.w - title_w - 32.0) / PARTS.iter().sum::<f32>();
     let at = |i: usize| {
         let left: f32 = PARTS[..i].iter().sum();
         rect((r.x + title_w + left * unit + i as f32 * 8.0).floor(), r.y, (PARTS[i] * unit).floor(), 34.0)
     };
     ui.title(rect(r.x, r.y + 6.0, title_w, 22.0), "Perfis");
     let names: Vec<String> = list.iter().map(|p| p.name.clone()).collect();
+    let mut p = list[ed.prof].clone();
+    let builtin = p.name == remap::DESKTOP || p.name == remap::BASE;
+    // Dando nome a um perfil novo (cópia do aberto) ou ao aberto: campo, confirmar e cancelar.
+    if let Some((rename, mut text)) = ed.naming.take() {
+        let (a, b) = (at(0), at(1));
+        ui.search("pp-name", rect(a.x, a.y, b.right() - a.x, 34.0), &mut text, "Nome do perfil");
+        let name: String = text.trim().chars().filter(|c| !c.is_control()).take(60).collect();
+        let taken = list.iter().any(|x| x.name.eq_ignore_ascii_case(&name) && !(rename && x.name == p.name));
+        let mut done = ui.button("pp-name-no", at(3), "Cancelar", false);
+        if taken {
+            ui.c.text_fit(at(4), &tr("Esse nome já existe"), 12.0, WARN, Align::Left, Weight::Regular);
+        }
+        if ui.button_ex("pp-name-ok", at(2), if rename { "Renomear" } else { "Criar" }, true, !name.is_empty() && !taken) {
+            let old = std::mem::replace(&mut p.name, name.clone());
+            // A cópia não herda o padrão do programa: o padrão continua sendo um só.
+            p.main &= rename;
+            let mut ok = remap::save(&p);
+            if ok && rename {
+                // Ligações que trocam para o nome antigo passam para o novo.
+                for mut o in remap::profiles() {
+                    if let Some(x) = o.strings.iter_mut().find(|x| **x == old) {
+                        *x = name.clone();
+                        ok &= remap::save(&o);
+                    }
+                }
+                remap::remove(&old);
+            }
+            if !ok {
+                app.toast.info("Não deu para salvar o perfil.");
+            }
+            let Some(ed) = app.pads.edit.as_mut() else { return };
+            ed.prof = remap::profiles().iter().position(|x| x.name == name).unwrap_or(0);
+            ed.layer = 0;
+            done = true;
+        }
+        if !done {
+            if let Some(ed) = app.pads.edit.as_mut() {
+                ed.naming = Some((rename, text));
+            }
+        }
+        return;
+    }
     // Gravando uma macro, o perfil não troca: os passos iriam para outro perfil.
     if ed.rec {
         ui.c.text_fit(at(0), &names[ed.prof], 14.0, TEXT, Align::Left, Weight::Regular);
-    } else if ui.select("pp-prof", at(0), &names, &mut ed.prof) {
-        ed.layer = 0;
-    }
-    let free: Vec<&crate::config::MeterGame> = app.cfg.meter_games.iter().filter(|g| !list.iter().any(|p| p.games.iter().any(|e| e.eq_ignore_ascii_case(&g.exe)))).collect();
-    let mut games = vec![tr("Novo perfil para jogo")];
-    games.extend(free.iter().map(|g| g.exe.clone()));
-    if ui.select("pp-game", at(1), &games, &mut ed.game) && ed.game > 0 {
-        let g = free[ed.game - 1];
-        let mut p = Profile::base();
-        p.name = g.exe.trim_end_matches(".exe").trim_end_matches(".EXE").to_string();
-        p.games = vec![g.exe.to_lowercase()];
-        if remap::save(&p) {
-            list = remap::profiles();
-            ed.prof = list.iter().position(|x| x.name == p.name).unwrap_or(0);
-            ed.layer = 0;
-        } else {
-            app.toast.info("Não deu para salvar o perfil.");
-        }
-        ed.game = 0;
-    }
-    let mut p = list[ed.prof].clone();
-    let builtin = p.name == remap::DESKTOP || p.name == remap::BASE;
-    let del = if builtin { "Voltar ao de fábrica" } else { "Apagar perfil" };
-    if ui.button_ex("pp-del", at(2), del, false, !ed.rec && (!builtin || remap::has_file(&p.name))) {
-        remap::remove(&p.name);
-        if !builtin {
-            ed.prof = 0;
-        }
-        ed.layer = 0;
         return;
     }
-    let mut tpls = vec![tr("Aplicar modelo")];
-    tpls.extend(remap::TEMPLATES.iter().chain(["Acessível"].iter()).map(|t| tr(t)));
-    let acc_i = tpls.len() - 1;
-    if ui.select("pp-tpl", at(3), &tpls, &mut ed.tpl) && ed.tpl > 0 && ed.tpl < acc_i {
-        ask_template(ui, &tpls[ed.tpl], &p.name);
+    if ui.select("pp-prof", at(0), &names, &mut ed.prof) {
+        ed.layer = 0;
     }
-    if ui.button_ex("pp-in", at(4), "Importar", false, !ed.rec) {
-        app.pad_profile_file(false);
+    if ui.button("pp-new", at(1), "Novo perfil", false) {
+        ed.naming = Some((false, String::new()));
     }
-    if ui.button("pp-out", at(5), "Exportar", false) {
-        app.pad_profile_file(true);
+    ui.tip(at(1), "Copia o perfil aberto com outro nome, ligado aos mesmos programas.");
+    // Mais: o que se faz com o perfil aberto, e os modelos (trocam as ligações pelas do modelo).
+    let del = if builtin { "Voltar ao de fábrica" } else { "Apagar perfil" };
+    let mut items: Vec<(String, bool)> = vec![(tr("Renomear"), !builtin), (tr("Importar"), true), (tr("Exportar"), true), (tr(del), !builtin || remap::has_file(&p.name))];
+    let first_tpl = items.len();
+    let tpls: Vec<String> = remap::TEMPLATES.iter().chain(["Acessível"].iter()).map(|t| tr(t)).collect();
+    items.extend(tpls.iter().map(|t| (tr("Modelo: {}").replace("{}", t), true)));
+    let acc_i = tpls.len();
+    if ui.button("pp-more", at(2), "Mais ▾", false) {
+        let refs: Vec<(&str, bool)> = items.iter().map(|(t, on)| (t.as_str(), *on)).collect();
+        ui.menu("pp-more-menu", &refs);
     }
-    let Some(ed) = app.pads.edit.as_mut() else { return };
+    match ui.menu_pick("pp-more-menu") {
+        Some(0) => ed.naming = Some((true, p.name.clone())),
+        Some(1) => return app.pad_profile_file(false),
+        Some(2) => return app.pad_profile_file(true),
+        Some(3) => {
+            remap::remove(&p.name);
+            if !builtin {
+                ed.prof = 0;
+            }
+            ed.layer = 0;
+            return;
+        }
+        Some(i) if i >= first_tpl => {
+            ed.tpl = i - first_tpl + 1;
+            if ed.tpl < acc_i {
+                ask_template(ui, &tpls[ed.tpl - 1], &p.name);
+            }
+        }
+        _ => {}
+    }
     if ed.tpl > 0 && ed.tpl < acc_i && !ui.asking() {
         if ui.answered("pp-tpl-ok") {
             apply(&mut p, Profile::template(ed.tpl - 1));
@@ -708,6 +740,38 @@ pub fn top(ui: &mut Ui, app: &mut App, r: Rect) {
     // O assistente do Acessível fica na aba Mapeamento.
     if ed.tpl == acc_i {
         app.pads.tab = 0;
+    }
+    // O programa do perfil aberto tem outros perfis: qual é o padrão dele e com qual ele abre.
+    if p.games.iter().any(|g| list.iter().any(|o| o.name != p.name && o.games.contains(g))) {
+        let mut main = p.main;
+        if ui.check("pp-main", at(3), "Padrão do programa", &mut main) {
+            set_main(app, &p.name, main);
+        }
+        ui.tip(at(3), "O programa tem mais de um perfil: o padrão é o que abre com ele.");
+        let mut v = app.cfg.pad_reopen_last as usize;
+        if ui.select("pp-reopen", at(4), &[tr("Abre com o padrão"), tr("Abre com o último usado")], &mut v) {
+            app.cfg.pad_reopen_last = v == 1;
+            app.cfg.save();
+            app.apply_pads();
+        }
+    }
+}
+
+/// Liga (`on`) ou desliga o perfil `name` como padrão dos seus programas; os outros perfis desses
+/// programas deixam de ser o padrão.
+fn set_main(app: &mut App, name: &str, on: bool) {
+    let list = remap::profiles();
+    let Some(games) = list.iter().find(|p| p.name == name).map(|p| p.games.clone()) else { return };
+    let mut ok = true;
+    for mut p in list {
+        let was = p.main;
+        p.main = if p.name == name { on } else { p.main && !(on && p.games.iter().any(|g| games.contains(g))) };
+        if p.main != was {
+            ok &= remap::save(&p);
+        }
+    }
+    if !ok {
+        app.toast.info("Não deu para salvar o perfil.");
     }
 }
 

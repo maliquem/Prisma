@@ -2542,7 +2542,7 @@ impl App {
                     self.page = Page::Controllers;
                     self.pads.open_editor();
                 }
-                Some(p @ ("controllers-action" | "controllers-run" | "controllers-wizard" | "controllers-keyboard" | "controllers-macro" | "controllers-keys" | "controllers-text" | "controllers-settings" | "controllers-radial" | "controllers-color" | "controllers-battery" | "controllers-stick" | "controllers-trigger" | "controllers-link" | "controllers-opens" | "controllers-gyro")) => {
+                Some(p @ ("controllers-action" | "controllers-run" | "controllers-wizard" | "controllers-keyboard" | "controllers-macro" | "controllers-keys" | "controllers-text" | "controllers-settings" | "controllers-radial" | "controllers-color" | "controllers-battery" | "controllers-stick" | "controllers-trigger" | "controllers-link" | "controllers-opens" | "controllers-gyro" | "controllers-naming" | "controllers-shared")) => {
                     self.page = Page::Controllers;
                     self.pads.open_editor();
                     crate::pages::pad_profiles::test_target(self, &p[12..]);
@@ -3183,6 +3183,7 @@ impl App {
     pub fn apply_pads(&self) {
         crate::sys::pads::set_limits(self.cfg.pad_low, self.cfg.pad_jitter_ms);
         crate::sys::remap::configure(self.cfg.pad_map, self.cfg.meter_games.iter().map(|g| g.exe.clone()).collect());
+        crate::sys::remap::set_reopen_last(self.cfg.pad_reopen_last);
         let c = &self.cfg;
         crate::sys::radial::set_programs(c.pad_radial_prog.clone().map(|(_, p)| p));
         crate::sys::osk::configure(c.pad_osk_two, c.pad_osk_letters_right, c.pad_osk_dodge, c.pad_osk_repeat, c.pad_osk_repeat_ms);

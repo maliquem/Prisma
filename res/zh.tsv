@@ -2308,3 +2308,15 @@ Vibração	振动
 Vibrar com os botões	按键振动
 Vibrar com os gatilhos	扳机振动
 Vibrar com os sticks	摇杆振动
+Nome do perfil	配置名称
+Esse nome já existe	该名称已存在
+Criar	创建
+Novo perfil	新建配置
+Copia o perfil aberto com outro nome, ligado aos mesmos programas.	以另一个名称复制当前配置，并关联到相同的程序。
+Mais ▾	更多 ▾
+Modelo: {}	模板：{}
+Padrão do programa	程序默认
+O programa tem mais de um perfil: o padrão é o que abre com ele.	该程序有多个配置：默认配置会随程序一起打开。
+Abre com o padrão	用默认配置打开
+Abre com o último usado	用上次使用的打开
+Trocar perfil	切换配置

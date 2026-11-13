@@ -311,6 +311,8 @@ pub struct Config {
     pub pad_radial_tap: bool,
     /// Com o stick de volta ao centro, o lugar escolhido continua escolhido.
     pub pad_radial_keep: bool,
+    /// Programa com vários perfis abre com o último usado nele (desligado: com o padrão dele).
+    pub pad_reopen_last: bool,
     /// Teclado do Prisma com os dois sticks: letras num círculo, números e símbolos no outro.
     pub pad_osk_two: bool,
     /// Com os dois sticks, as letras ficam no direito (de fábrica, no esquerdo).
@@ -443,6 +445,7 @@ impl Default for Config {
             pad_radial_ms: 400,
             pad_radial_tap: false,
             pad_radial_keep: true,
+            pad_reopen_last: false,
             pad_osk_two: false,
             pad_osk_letters_right: false,
             pad_osk_dodge: true,
@@ -496,8 +499,8 @@ pub fn radial_default() -> [u8; crate::sys::radial::ALL] {
 /// fábrica; dezesseis: sem opções de direcional); qualquer valor fora da lista invalida tudo.
 /// `GROUP` só vale nos 16 lugares.
 fn parse_radial(v: &str) -> Option<[u8; crate::sys::radial::ALL]> {
-    use crate::sys::{radial::{ALL, EMPTY, GROUP, PROGRAM, SLOTS}, remap};
-    let list: Vec<u8> = v.split(',').enumerate().map(|(i, x)| x.trim().parse::<u8>().ok().filter(|&a| a == EMPTY || a == PROGRAM || (a == GROUP && i < SLOTS) || ((a as usize) < remap::ACTIONS.len() && a != remap::RADIAL))).collect::<Option<_>>()?;
+    use crate::sys::{radial::{ALL, EMPTY, GROUP, PROFILES, PROGRAM, SLOTS}, remap};
+    let list: Vec<u8> = v.split(',').enumerate().map(|(i, x)| x.trim().parse::<u8>().ok().filter(|&a| a == EMPTY || a == PROGRAM || ((a == GROUP || a == PROFILES) && i < SLOTS) || ((a as usize) < remap::ACTIONS.len() && a != remap::RADIAL))).collect::<Option<_>>()?;
     let mut out = radial_default();
     match list.len() {
         8 | SLOTS | ALL => out[..list.len()].copy_from_slice(&list),
@@ -708,6 +711,7 @@ impl Config {
                 "pad_radial_ms" => c.pad_radial_ms = (v.parse::<u32>().unwrap_or(400) / 50 * 50).clamp(200, 2000),
                 "pad_radial_tap" => c.pad_radial_tap = b,
                 "pad_radial_keep" => c.pad_radial_keep = b,
+                "pad_reopen_last" => c.pad_reopen_last = b,
                 "pad_osk_two" => c.pad_osk_two = b,
                 "pad_osk_letters_right" => c.pad_osk_letters_right = b,
                 "pad_osk_dodge" => c.pad_osk_dodge = b,
@@ -832,6 +836,7 @@ impl Config {
         let _ = writeln!(s, "pad_radial_ms={}", self.pad_radial_ms);
         let _ = writeln!(s, "pad_radial_tap={}", b(self.pad_radial_tap));
         let _ = writeln!(s, "pad_radial_keep={}", b(self.pad_radial_keep));
+        let _ = writeln!(s, "pad_reopen_last={}", b(self.pad_reopen_last));
         let _ = writeln!(s, "pad_osk_two={}", b(self.pad_osk_two));
         let _ = writeln!(s, "pad_osk_letters_right={}", b(self.pad_osk_letters_right));
         let _ = writeln!(s, "pad_osk_dodge={}", b(self.pad_osk_dodge));

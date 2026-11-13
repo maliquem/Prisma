@@ -341,8 +341,10 @@ pub struct Zone {
 #[derive(Clone, PartialEq, Debug)]
 pub struct Profile {
     pub name: String,
-    /// Programas (.exe) que usam este perfil.
+    /// Programas (.exe) que usam este perfil. Um programa pode estar em vários perfis.
     pub games: Vec<String>,
+    /// Perfil padrão dos seus programas: o que abre com eles quando têm mais de um.
+    pub main: bool,
     /// Stick esquerdo, direito, gatilho esquerdo, direito.
     pub zones: [Zone; 4],
     pub layers: Vec<Layer>,
@@ -453,7 +455,7 @@ impl Profile {
     fn empty(name: &str) -> Self {
         let stick = Zone { start: 0.15, end: 0.95 };
         let trig = Zone { start: 0.05, end: 0.95 };
-        Profile { name: name.into(), games: vec![], zones: [stick, stick, trig, trig], layers: vec![Layer { name: "Base".into(), parent: None, ls: None, rs: None, binds: vec![], keys: vec![], gyro: None, touch: None }], strings: vec![], turbo: vec![], turbo_key: TURBO_KEY, macros: vec![], texts: vec![], gyro_opt: GyroOpt::default(), curve: [2.0; 2], hair: [false; 2], light: None, light_bt: false, trig: [Trig::Pass; 2], buzz: 0, haptic: Haptic::default() }
+        Profile { name: name.into(), games: vec![], main: false, zones: [stick, stick, trig, trig], layers: vec![Layer { name: "Base".into(), parent: None, ls: None, rs: None, binds: vec![], keys: vec![], gyro: None, touch: None }], strings: vec![], turbo: vec![], turbo_key: TURBO_KEY, macros: vec![], texts: vec![], gyro_opt: GyroOpt::default(), curve: [2.0; 2], hair: [false; 2], light: None, light_bt: false, trig: [Trig::Pass; 2], buzz: 0, haptic: Haptic::default() }
     }
 
     /// Base: nada mapeado, o jogo lê o controle como ele é.
@@ -607,6 +609,9 @@ impl Profile {
         for g in &self.games {
             let _ = writeln!(s, "game {g}");
         }
+        if self.main {
+            s.push_str("main 1\n");
+        }
         for (z, n) in self.zones.iter().zip(["ls", "rs", "lt", "rt"]) {
             let _ = writeln!(s, "zone {n} {} {}", z.start, z.end);
         }
@@ -725,6 +730,7 @@ impl Profile {
             match cmd {
                 "name" => p.name = rest.chars().filter(|c| !c.is_control()).take(60).collect(),
                 "game" => p.games.push(rest.to_lowercase()),
+                "main" => p.main = rest == "1",
                 "turbokey" => p.turbo_key = if rest == "-" { 0 } else { mask_of(rest)? },
                 "turbo" => {
                     let mut it = rest.split(' ');
@@ -1661,6 +1667,48 @@ struct Run {
     kswallow: Buttons,
     /// Palavra sendo digitada, para a abreviação do texto rápido ("#": longa demais, não vale).
     typed: String,
+    /// Programa em foco (.exe, minúsculo) e o último perfil usado em cada programa.
+    exe: String,
+    last: HashMap<String, String>,
+    /// Processo de cada programa visto em foco: o mesmo processo é o jogo que só voltou ao foco.
+    pids: HashMap<String, u32>,
+}
+
+/// Ao abrir um programa com vários perfis: o último usado nele (ligado) ou o padrão dele.
+static REOPEN_LAST: AtomicBool = AtomicBool::new(false);
+
+pub fn set_reopen_last(on: bool) {
+    REOPEN_LAST.store(on, Ordering::Relaxed);
+}
+
+/// Perfil do programa `exe`, entre os que o têm: o de agora (`keep`, o programa não mudou), o
+/// último usado nele (`last`), o padrão dele ou o primeiro. Nenhum: o programa não tem perfil.
+fn pick_for(profiles: &[Profile], exe: &str, keep: Option<usize>, last: Option<&str>) -> Option<usize> {
+    let mine: Vec<usize> = (0..profiles.len()).filter(|&i| profiles[i].games.iter().any(|g| g == exe)).collect();
+    keep.filter(|k| mine.contains(k))
+        .or_else(|| last.and_then(|n| mine.iter().copied().find(|&i| profiles[i].name == n)))
+        .or_else(|| mine.iter().copied().find(|&i| profiles[i].main))
+        .or(mine.first().copied())
+}
+
+/// Último perfil usado em cada programa: uma linha "exe<TAB>perfil" (fora da pasta dos perfis).
+fn last_path() -> std::path::PathBuf {
+    crate::config::data_dir().join("pad_last.txt")
+}
+
+fn load_last() -> HashMap<String, String> {
+    let text = std::fs::read_to_string(last_path()).unwrap_or_default();
+    text.lines().filter_map(|l| l.split_once('\t')).map(|(e, n)| (e.to_string(), n.to_string())).collect()
+}
+
+/// Perfis para o radial trocar: os do programa em foco ou, sem nenhum, todos.
+/// shortcut: só os 4 primeiros, um por direção do direcional; mais pede outra tela no radial.
+pub fn program_profiles() -> Vec<String> {
+    let g = RUN.lock().unwrap();
+    let Some(r) = g.as_ref() else { return vec![] };
+    let mine: Vec<String> = r.profiles.iter().filter(|p| p.games.contains(&r.exe)).map(|p| p.name.clone()).collect();
+    let list = if mine.is_empty() { r.profiles.iter().map(|p| p.name.clone()).collect() } else { mine };
+    list.into_iter().take(4).collect()
 }
 
 /// As ligações de teclado e mouse de `p` como um perfil de botões: cada tecla usada ganha um bit.
@@ -1780,7 +1828,7 @@ fn reload() {
 pub fn configure(on: bool, games: Vec<String>) {
     let acts = {
         let mut g = RUN.lock().unwrap();
-        let r = g.get_or_insert_with(|| Run { profiles: load_profiles(), cur: 0, games: vec![], engines: HashMap::new(), want: None, lat: vec![], warned: HashSet::new(), ac: false, ac_seen: HashMap::new(), kbd: None, kheld: 0, kswallow: 0, typed: String::new() });
+        let r = g.get_or_insert_with(|| Run { profiles: load_profiles(), cur: 0, games: vec![], engines: HashMap::new(), want: None, lat: vec![], warned: HashSet::new(), ac: false, ac_seen: HashMap::new(), kbd: None, kheld: 0, kswallow: 0, typed: String::new(), exe: String::new(), last: load_last(), pids: HashMap::new() });
         r.games = games.into_iter().map(|s| s.to_lowercase()).collect();
         ON.store(on, Ordering::Relaxed);
         set_keys(r);
@@ -2157,6 +2205,13 @@ fn switch(r: &mut Run, to: usize) -> Vec<Act> {
     super::macros::stop_all();
     r.want = None;
     r.cur = to;
+    // Perfil do programa em foco: fica como o último usado nele.
+    let name = &r.profiles[to].name;
+    if r.profiles[to].games.contains(&r.exe) && r.last.get(&r.exe) != Some(name) {
+        r.last.insert(r.exe.clone(), name.clone());
+        let text: String = r.last.iter().map(|(e, n)| format!("{e}\t{n}\n")).collect();
+        let _ = crate::config::write_safe(&last_path(), text);
+    }
     pads::buzz(r.profiles[to].buzz);
     set_keys(r);
     r.engines.values_mut().flat_map(|e| e.0.release_all()).collect()
@@ -2247,7 +2302,14 @@ fn on_focus(pid: u32, full: bool) {
         }
         let named = |n: &str| r.profiles.iter().position(|p| p.name == n).unwrap_or(0);
         let game = r.games.contains(&exe) || (full && exe != "explorer.exe");
-        let to = r.profiles.iter().position(|p| p.games.contains(&exe)).unwrap_or_else(|| if game { named(BASE) } else { named(DESKTOP) });
+        // O mesmo programa (só voltou o foco, ou o perfil foi gravado): fica o perfil de agora.
+        let keep = (r.exe == exe).then_some(r.cur);
+        // O último usado vale sempre que o jogo só voltou ao foco (Alt+Tab); ao abrir de novo, só
+        // com a opção ligada.
+        let same_run = r.pids.insert(exe.clone(), pid) == Some(pid);
+        let last = if same_run || REOPEN_LAST.load(Ordering::Relaxed) { r.last.get(&exe).map(String::as_str) } else { None };
+        let to = pick_for(&r.profiles, &exe, keep, last).unwrap_or_else(|| if game { named(BASE) } else { named(DESKTOP) });
+        r.exe = exe.clone();
         r.want = (to != r.cur).then(|| (to, Instant::now() + SWITCH_DELAY));
         let turbo = r.profiles[to].turbo.iter().any(|t| t.on);
         if ac && turbo && r.warned.insert(format!("ac:{exe}")) {
@@ -2423,6 +2485,32 @@ mod tests {
         assert!(!p.to_text().contains("haptic"));
         p.haptic = h;
         assert_eq!(Profile::parse(&p.to_text()).unwrap().haptic, h);
+    }
+
+    #[test]
+    fn program_with_several_profiles() {
+        let mk = |name: &str, games: &[&str], main: bool| {
+            let mut p = Profile::base();
+            p.name = name.into();
+            p.games = games.iter().map(|g| g.to_string()).collect();
+            p.main = main;
+            p
+        };
+        let list = [mk("Desktop", &[], false), mk("Corrida", &["fh5.exe"], false), mk("Volante", &["fh5.exe"], true), mk("Outro", &["x.exe"], false)];
+        // Padrão do programa; sem padrão, o primeiro; sem perfil, nenhum.
+        assert_eq!(pick_for(&list, "fh5.exe", None, None), Some(2));
+        assert_eq!(pick_for(&list[..2], "fh5.exe", None, None), Some(1));
+        assert_eq!(pick_for(&list, "y.exe", None, None), None);
+        // O último usado vence o padrão; um nome que não é do programa não conta.
+        assert_eq!(pick_for(&list, "fh5.exe", None, Some("Corrida")), Some(1));
+        assert_eq!(pick_for(&list, "fh5.exe", None, Some("Outro")), Some(2));
+        // O mesmo programa fica com o perfil de agora, se ele é do programa.
+        assert_eq!(pick_for(&list, "fh5.exe", Some(1), None), Some(1));
+        assert_eq!(pick_for(&list, "fh5.exe", Some(3), None), Some(2));
+        // "main" vai e volta no texto.
+        let p = Profile::parse(&list[2].to_text()).unwrap();
+        assert!(p.main && p.games == ["fh5.exe"]);
+        assert!(!Profile::parse(&list[1].to_text()).unwrap().main);
     }
 
     #[test]

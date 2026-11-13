@@ -780,16 +780,27 @@ impl Radial {
             let scale = unsafe { windows::Win32::UI::HiDpi::GetDpiForWindow(hwnd) } as f32 / 96.0;
             self.two = v.two;
             self.left = v.left;
-            self.groups = cfg.pad_radial[..crate::sys::radial::SLOTS].contains(&crate::sys::radial::GROUP);
+            self.groups = cfg.pad_radial[..crate::sys::radial::SLOTS].iter().any(|&a| a == crate::sys::radial::GROUP || a == crate::sys::radial::PROFILES);
             self.at = ((mon.left + mon.right) / 2 - (self.width() * scale / 2.0) as i32, (mon.top + mon.bottom) / 2 - (self.height() * scale / 2.0) as i32);
             for (i, &a) in cfg.pad_radial.iter().enumerate() {
                 self.names[i] = if a == crate::sys::radial::PROGRAM {
                     cfg.pad_radial_prog[i].0.clone()
+                } else if a == crate::sys::radial::PROFILES {
+                    crate::i18n::tr("Trocar perfil").into_owned()
                 } else {
                     crate::sys::remap::ACTIONS.get(a as usize).map_or(String::new(), |n| crate::i18n::tr(n).into_owned())
                 };
             }
             self.icons = cfg.pad_radial;
+            // Lugar de perfis: as opções são os perfis lidos ao abrir.
+            let choices = crate::sys::radial::choices();
+            for i in (0..crate::sys::radial::SLOTS).filter(|&i| cfg.pad_radial[i] == crate::sys::radial::PROFILES) {
+                for d in 0..4 {
+                    let k = crate::sys::radial::sub(i, d);
+                    self.names[k] = choices.get(d).cloned().unwrap_or_default();
+                    self.icons[k] = if d < choices.len() { crate::sys::radial::PROFILES } else { crate::sys::radial::EMPTY };
+                }
+            }
             self.style = crate::ui::glyph::Style::current();
             let b = |i: u8| crate::sys::radial::PICK_BUTTONS[i.min(5) as usize];
             let t = |s: &str| crate::i18n::tr(s).into_owned();
@@ -827,7 +838,7 @@ impl Radial {
     }
 
     fn paint(&mut self) {
-        use crate::sys::radial::{sub, EMPTY, GROUP};
+        use crate::sys::radial::{sub, EMPTY, GROUP, PROFILES};
         let v = crate::sys::radial::view();
         let sel = v.sel;
         let (names, icons, hint, arrow, two, left, groups, style) = (&self.names, &self.icons, &self.hint, self.arrow, self.two, self.left, self.groups, self.style);
@@ -872,7 +883,7 @@ impl Radial {
             }
             }
             // Faixa das 4 opções do lugar escolhido, embaixo do círculo dele: seta do direcional, ícone e nome.
-            if let Some(i) = sel.filter(|&i| groups && icons[i] == GROUP) {
+            if let Some(i) = sel.filter(|&i| groups && (icons[i] == GROUP || icons[i] == PROFILES)) {
                 let cx = if two && i < 8 { r.w - RD_W / 2.0 } else { RD_W / 2.0 };
                 let (w, gap) = (134.0, 8.0);
                 let x0 = cx - (4.0 * w + 3.0 * gap) / 2.0;
