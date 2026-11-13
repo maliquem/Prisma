@@ -62,9 +62,12 @@ fn restore_at(mark: &std::path::Path) {
 }
 
 /// Para o Prisma: se o processo que escondeu o cursor não roda mais, devolve o cursor.
+///
+/// Com o serviço, a marca é do ajudante, e a pasta dele é só leitura para a conta: quem devolve é o
+/// ajudante, quando abre de novo (sem isso, o Prisma tentaria a cada segundo).
 pub fn restore_orphan() {
-    for dir in [super::user_dir(), super::service_dir()] {
-        restore_orphan_at(&dir.join(MARK));
+    if super::dir() == super::user_dir() || super::SERVICE.load(Ordering::Relaxed) {
+        restore_orphan_at(&mark());
     }
 }
 

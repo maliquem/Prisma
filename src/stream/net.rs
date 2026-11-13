@@ -114,7 +114,7 @@ fn identity() -> io::Result<SecretKey> {
     let machine = dir() != user_dir();
     let blob = unsafe { dpapi(&sk.to_bytes(), true, machine) }.ok_or_else(|| io::Error::other("a DPAPI do Windows recusou proteger a chave"))?;
     std::fs::create_dir_all(dir())?;
-    std::fs::write(&p, blob)?;
+    crate::config::write_safe(&p, blob)?;
     Ok(sk)
 }
 
@@ -158,13 +158,53 @@ fn id_from_hex(s: &str) -> Option<EndpointId> {
     EndpointId::from_bytes(b.as_slice().try_into().ok()?).ok()
 }
 
-fn devices_path() -> PathBuf {
-    dir().join("aparelhos.tsv")
+/// Quem assiste a este PC fica na pasta do compartilhamento (a do serviço, que só administrador
+/// altera); os PCs que este assiste, na pasta do usuário, para parear com eles sem administrador.
+/// Sem o serviço, as duas são a mesma.
+fn devices_path(role: Role) -> PathBuf {
+    match role {
+        Role::Viewer => dir(),
+        Role::Host => user_dir(),
+    }
+    .join("aparelhos.tsv")
+}
+
+/// Marca de que os PCs que este assiste já saíram do arquivo do serviço (versões antigas os
+/// guardavam lá).
+fn moved_mark() -> PathBuf {
+    user_dir().join("aparelhos-movidos.txt")
+}
+
+/// Os dois papéis. Com o serviço, cada arquivo vale só para o seu papel.
+fn load() -> Vec<Device> {
+    let (shared, mine) = (devices_path(Role::Viewer), devices_path(Role::Host));
+    if shared == mine {
+        return read_list(&shared);
+    }
+    let migrate = !moved_mark().exists();
+    let (list, extra) = join_lists(read_list(&shared), read_list(&mine), migrate);
+    if migrate {
+        let own: Vec<Device> = read_list(&mine).into_iter().chain(extra).collect();
+        if write_list(&mine, &own).is_ok() {
+            let _ = std::fs::write(moved_mark(), "");
+        }
+    }
+    list
+}
+
+/// Quem assiste vem do arquivo do serviço; os PCs que este assiste, do arquivo do usuário. Com
+/// `migrate`, os PCs que este assiste que só estão no arquivo do serviço entram também e voltam em
+/// `extra`, para gravar no do usuário.
+fn join_lists(shared: Vec<Device>, mine: Vec<Device>, migrate: bool) -> (Vec<Device>, Vec<Device>) {
+    let hosts: Vec<Device> = mine.into_iter().filter(|d| d.role == Role::Host).collect();
+    let extra: Vec<Device> = if migrate { shared.iter().filter(|d| d.role == Role::Host && !hosts.iter().any(|h| h.id == d.id)).cloned().collect() } else { Vec::new() };
+    let list = shared.into_iter().filter(|d| d.role == Role::Viewer).chain(hosts).chain(extra.iter().cloned()).collect();
+    (list, extra)
 }
 
 /// Uma linha por aparelho: papel, id, permissão, se pergunta e nome.
-fn load() -> Vec<Device> {
-    let Ok(s) = std::fs::read_to_string(devices_path()) else { return Vec::new() };
+fn read_list(path: &std::path::Path) -> Vec<Device> {
+    let Ok(s) = std::fs::read_to_string(path) else { return Vec::new() };
     s.lines()
         .filter_map(|l| {
             let mut f = l.split('\t');
@@ -182,7 +222,14 @@ fn load() -> Vec<Device> {
         .collect()
 }
 
-fn save(list: &[Device]) -> io::Result<()> {
+/// Grava a lista de um papel (sem o serviço, os dois papéis moram no mesmo arquivo).
+fn save(list: &[Device], role: Role) -> io::Result<()> {
+    let same = devices_path(Role::Viewer) == devices_path(Role::Host);
+    let rows: Vec<Device> = list.iter().filter(|d| same || d.role == role).cloned().collect();
+    write_list(&devices_path(role), &rows)
+}
+
+fn write_list(path: &std::path::Path, list: &[Device]) -> io::Result<()> {
     let mut s = String::from("# Aparelhos pareados do Prisma: papel, id, permissão, conexão, nome\n");
     for d in list {
         s += &format!(
@@ -194,19 +241,22 @@ fn save(list: &[Device]) -> io::Result<()> {
             d.name
         );
     }
-    std::fs::create_dir_all(dir())?;
-    crate::config::write_safe(&devices_path(), s)
+    if let Some(d) = path.parent() {
+        std::fs::create_dir_all(d)?;
+    }
+    crate::config::write_safe(path, s)
 }
 
 /// O Prisma, o host e o ajudante do serviço mexem na lista ao mesmo tempo: sem trava, um apaga o
 /// aparelho que o outro acabou de parear. Arquivo aberto sem compartilhar serve de trava.
 /// shortcut: quem não pega a trava em 2 s segue sem ela; trocar por um mutex nomeado se isso aparecer no log.
-fn devices_lock() -> Option<std::fs::File> {
+fn devices_lock(role: Role) -> Option<std::fs::File> {
     use std::os::windows::fs::OpenOptionsExt;
-    let _ = std::fs::create_dir_all(dir());
+    let path = devices_path(role).with_file_name("aparelhos.lock");
+    let _ = std::fs::create_dir_all(path.parent()?);
     let t = Instant::now();
     loop {
-        match std::fs::OpenOptions::new().write(true).create(true).truncate(false).share_mode(0).open(dir().join("aparelhos.lock")) {
+        match std::fs::OpenOptions::new().write(true).create(true).truncate(false).share_mode(0).open(&path) {
             Ok(f) => return Some(f),
             Err(_) if t.elapsed() < Duration::from_secs(2) => std::thread::sleep(Duration::from_millis(20)),
             Err(_) => return None,
@@ -215,11 +265,12 @@ fn devices_lock() -> Option<std::fs::File> {
 }
 
 fn remember(dev: Device) -> io::Result<()> {
-    let _lock = devices_lock();
+    let role = dev.role;
+    let _lock = devices_lock(role);
     let mut list = load();
     list.retain(|d| !(d.role == dev.role && d.id == dev.id));
     list.push(dev);
-    save(&list)
+    save(&list, role)
 }
 
 /// Acha um aparelho pelo nome (sem diferença de maiúsculas) ou pelo começo do id.
@@ -276,7 +327,7 @@ pub fn revoke_invite() -> std::io::Result<()> {
         return Ok(());
     }
     f[2] = "0".into();
-    std::fs::write(invite_path(), f.join("\t") + "\n")
+    crate::config::write_safe(&invite_path(), f.join("\t") + "\n")
 }
 
 /// `--stream-invite`: um convite novo vai para o arquivo que o host lê no pedido de pareamento (o
@@ -292,7 +343,7 @@ pub fn make_invite(perms: u8, minutes: u32) {
     let minutes = minutes.clamp(1, 1440);
     let until = unix_now() + minutes as u64 * 60;
     let line = format!("{}\t{}\t{}\n", data_encoding::HEXLOWER.encode(&secret), perms_key(perms), until);
-    if let Err(e) = std::fs::write(invite_path(), line) {
+    if let Err(e) = crate::config::write_safe(&invite_path(), line) {
         return eprintln!("não deu para gravar o convite: {e}");
     }
     eprintln!("Convite novo ({}; vale {minutes} minutos e uma vez).", perms_text(perms));
@@ -315,7 +366,7 @@ pub(super) fn copy_to_service(dst: &std::path::Path) -> std::result::Result<(), 
         Err(_) => SecretKey::generate(),
     };
     let blob = unsafe { dpapi(&sk.to_bytes(), true, true) }.ok_or("a DPAPI recusou proteger a chave")?;
-    std::fs::write(dst.join("identidade.bin"), blob).map_err(|e| e.to_string())?;
+    crate::config::write_safe(&dst.join("identidade.bin"), blob).map_err(|e| e.to_string())?;
     // Numa reinstalação, a pasta do serviço já tem os aparelhos mais novos.
     let list = src.join("aparelhos.tsv");
     if list.exists() && !dst.join("aparelhos.tsv").exists() {
@@ -328,14 +379,17 @@ pub(super) fn copy_to_service(dst: &std::path::Path) -> std::result::Result<(), 
 pub(super) fn copy_from_service(src: &std::path::Path) -> std::result::Result<(), String> {
     let dst = user_dir();
     std::fs::create_dir_all(&dst).map_err(|e| e.to_string())?;
+    // Quem assiste vem do serviço; os PCs que este assiste já estão na pasta do usuário.
     if src.join("aparelhos.tsv").exists() {
-        std::fs::copy(src.join("aparelhos.tsv"), dst.join("aparelhos.tsv")).map_err(|e| e.to_string())?;
+        let mine = dst.join("aparelhos.tsv");
+        let (list, _) = join_lists(read_list(&src.join("aparelhos.tsv")), read_list(&mine), !moved_mark().exists());
+        write_list(&mine, &list).map_err(|e| e.to_string())?;
     }
     if !dst.join("identidade.bin").exists() {
         if let Ok(blob) = std::fs::read(src.join("identidade.bin")) {
             let key = unsafe { dpapi(&blob, false, true) }.ok_or("a identidade do serviço não abriu")?;
             let mine = unsafe { dpapi(&key, true, false) }.ok_or("a DPAPI recusou proteger a chave")?;
-            std::fs::write(dst.join("identidade.bin"), mine).map_err(|e| e.to_string())?;
+            crate::config::write_safe(&dst.join("identidade.bin"), mine).map_err(|e| e.to_string())?;
         }
     }
     Ok(())
@@ -680,6 +734,11 @@ pub fn host_quiet() {
 /// `invite`: permissões do convite que aparece no terminal; None sem convite na partida.
 fn host_with(invite_perms: Option<u8>, service: bool) {
     eprintln!("{NOTICE}");
+    // Uma sessão do ajudante que caiu: só ele apaga as marcas dela (a pasta é só leitura para a conta).
+    if service {
+        host::restore_hdr();
+        super::cursor::restore_orphan();
+    }
     host::emergency_key();
     let _ = std::fs::write(host::room_path(), "");
     let sk = match identity() {
@@ -875,7 +934,7 @@ pub fn allow(arg: &str) {
     let Some(perms) = parse_perms(value) else {
         return eprintln!("permissão desconhecida: «{value}» (use total, jogar, teclado-mouse, ver, video, ou uma lista de som, controle, teclado, mouse)");
     };
-    let _lock = devices_lock();
+    let _lock = devices_lock(Role::Viewer);
     let mut list = load();
     let Some(dev) = find(&list, Role::Viewer, key) else {
         return eprintln!("nenhum aparelho que assiste com o nome «{key}» (veja --stream-devices)");
@@ -883,7 +942,7 @@ pub fn allow(arg: &str) {
     for d in list.iter_mut().filter(|d| d.role == Role::Viewer && d.id == dev.id) {
         d.perms = perms;
     }
-    match save(&list) {
+    match save(&list, Role::Viewer) {
         Ok(()) => eprintln!("«{}» agora: {} (vale na próxima conexão)", dev.name, perms_text(perms)),
         Err(e) => eprintln!("não deu para salvar: {e}"),
     }
@@ -906,20 +965,21 @@ pub fn device_rows() -> Vec<DeviceRow> {
 
 /// Muda permissões e confiança de um aparelho que assiste a este PC.
 pub fn set_device(id: &str, perms: u8, ask: bool) -> io::Result<()> {
-    let _lock = devices_lock();
+    let _lock = devices_lock(Role::Viewer);
     let mut list = load();
     for d in list.iter_mut().filter(|d| d.role == Role::Viewer && hex(&d.id) == id) {
         d.perms = perms;
         d.ask = ask;
     }
-    save(&list)
+    save(&list, Role::Viewer)
 }
 
 pub fn forget_device(viewer: bool, id: &str) -> io::Result<()> {
-    let _lock = devices_lock();
+    let role = if viewer { Role::Viewer } else { Role::Host };
+    let _lock = devices_lock(role);
     let mut list = load();
-    list.retain(|d| !((d.role == Role::Viewer) == viewer && hex(&d.id) == id));
-    save(&list)
+    list.retain(|d| !(d.role == role && hex(&d.id) == id));
+    save(&list, role)
 }
 
 /// Nome e id curto deste PC, para a página.
@@ -929,17 +989,21 @@ pub fn me() -> Option<(String, String)> {
 }
 
 pub fn forget(key: &str) {
-    let _lock = devices_lock();
-    let mut list = load();
-    let before = list.len();
-    let names: Vec<String> = [Role::Viewer, Role::Host].iter().filter_map(|&r| find(&list, r, key)).map(|d| hex(&d.id)).collect();
-    list.retain(|d| !names.contains(&hex(&d.id)));
-    if list.len() == before {
-        return eprintln!("nenhum aparelho com o nome «{key}»");
+    let mut found = false;
+    // Um papel de cada vez: com o serviço, cada um tem o seu arquivo (e a sua trava).
+    for role in [Role::Viewer, Role::Host] {
+        let _lock = devices_lock(role);
+        let mut list = load();
+        let Some(dev) = find(&list, role, key) else { continue };
+        found = true;
+        list.retain(|d| !(d.role == role && d.id == dev.id));
+        match save(&list, role) {
+            Ok(()) => eprintln!("esquecido: «{}»", dev.name),
+            Err(e) => eprintln!("não deu para salvar: {e}"),
+        }
     }
-    match save(&list) {
-        Ok(()) => eprintln!("esquecido: «{key}»"),
-        Err(e) => eprintln!("não deu para salvar: {e}"),
+    if !found {
+        eprintln!("nenhum aparelho com o nome «{key}»");
     }
 }
 
@@ -957,6 +1021,23 @@ mod tests {
         assert_eq!(id2, id);
         assert_eq!(s2, secret);
         assert!(parse_invite("PRISMA-ABC").is_none());
+    }
+
+    #[test]
+    fn lists_split_by_role() {
+        let dev = |role, n: u8| Device { role, id: SecretKey::from_bytes(&[n; 32]).public(), name: n.to_string(), perms: SOUND, ask: true };
+        // Arquivo do serviço de uma versão antiga: quem assiste (1) e um PC que este assiste (2).
+        let shared = vec![dev(Role::Viewer, 1), dev(Role::Host, 2)];
+        // Arquivo do usuário com uma cópia velha de quem assiste (3) e um PC que este assiste (4).
+        let mine = vec![dev(Role::Viewer, 3), dev(Role::Host, 4)];
+        let (list, extra) = join_lists(shared.clone(), mine.clone(), true);
+        let names: Vec<&str> = list.iter().map(|d| d.name.as_str()).collect();
+        assert_eq!(names, ["1", "4", "2"]);
+        assert_eq!(extra.len(), 1);
+        // Depois de passar uma vez, o PC esquecido no arquivo do usuário não volta do serviço.
+        let (list, extra) = join_lists(shared, mine, false);
+        assert_eq!(list.iter().map(|d| d.name.as_str()).collect::<Vec<_>>(), ["1", "4"]);
+        assert!(extra.is_empty());
     }
 
     #[test]

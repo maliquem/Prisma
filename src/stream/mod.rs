@@ -64,7 +64,12 @@ pub fn notice(key: &str, arg: &str) {
     let ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis());
     let d = dir();
     let _ = std::fs::create_dir_all(&d);
-    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(d.join("avisos.txt")) {
+    let p = d.join("avisos.txt");
+    // Recomeça aqui: com o serviço, a página não consegue esvaziar o arquivo.
+    if std::fs::metadata(&p).is_ok_and(|m| m.len() > 64 * 1024) {
+        let _ = std::fs::write(&p, "");
+    }
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&p) {
         let _ = writeln!(f, "{ms}\t{}\t{}", clean(key), clean(arg));
     }
 }

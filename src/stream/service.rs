@@ -151,16 +151,21 @@ unsafe fn protect_dir(dir: &std::path::Path, sid: &str) -> std::result::Result<(
         return Err(format!("{} é um atalho para outra pasta; apague-o e instale de novo", p.display()));
     }
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    let sddl = format!("D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1301bf;;;{sid})");
+    // Ela só lê: quem assiste a este PC, o convite e os pedidos da sala mudam só como administrador
+    // (antes, qualquer programa dela podia se pôr na lista com Acesso total).
+    let sddl = format!("D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;{sid})");
     let mut sd = PSECURITY_DESCRIPTOR::default();
     ConvertStringSecurityDescriptorToSecurityDescriptorW(&HSTRING::from(sddl), SDDL_REVISION_1, &mut sd, None).map_err(|e| e.message())?;
-    let path = HSTRING::from(dir.as_os_str());
-    let ok = SetFileSecurityW(&path, DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION, sd).as_bool();
+    let (mut present, mut defaulted) = (BOOL(0), BOOL(0));
+    let mut dacl: *mut ACL = std::ptr::null_mut();
+    let got = GetSecurityDescriptorDacl(sd, &mut present, &mut dacl, &mut defaulted);
+    // SetNamedSecurityInfo leva as permissões também aos arquivos que já estão na pasta.
+    let r = got.map(|_| SetNamedSecurityInfoW(&HSTRING::from(dir.as_os_str()), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION, None, None, Some(dacl), None));
     let _ = LocalFree(Some(HLOCAL(sd.0)));
-    if ok {
-        Ok(())
-    } else {
-        Err(Error::from_thread().message())
+    match r {
+        Ok(e) if e == ERROR_SUCCESS => Ok(()),
+        Ok(e) => Err(Error::from(e.to_hresult()).message()),
+        Err(e) => Err(e.message()),
     }
 }
 
@@ -313,6 +318,8 @@ fn remove() {
             }
         }
     }
+    // Uma sessão que caiu com o HDR desligado: a marca some com a pasta, então liga agora.
+    super::host::restore_hdr();
     if let Err(e) = super::net::copy_from_service(&data_dir()) {
         eprintln!("aviso: os aparelhos pareados não voltaram ({e}); eles ficam em {}", data_dir().display());
         return;
@@ -435,6 +442,13 @@ pub fn refresh_copy() -> Option<String> {
     }
     if !crate::startup::is_elevated() {
         return Some("a cópia do serviço é de outra versão, e trocar pede administrador".into());
+    }
+    // Instalações de antes deixavam a conta dela alterar a pasta dos dados: volta a só leitura.
+    let m = std::fs::read_to_string(marker()).unwrap_or_default();
+    if let Some(sid) = m.lines().find_map(|l| l.strip_prefix("usuario\t")) {
+        if let Err(e) = unsafe { protect_dir(&data_dir(), sid) } {
+            log(&format!("a pasta dos dados não ficou só leitura: {e}"));
+        }
     }
     let r = unsafe { swap_copy(&dst, &mine) };
     let line = match &r {

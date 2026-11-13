@@ -481,8 +481,14 @@ fn default_capture_dir() -> String {
 /// Instalado guarda em %APPDATA%; portátil guarda ao lado do programa.
 /// Grava num temporário ao lado e troca: o arquivo nunca fica pela metade se o PC cair no meio.
 pub fn write_safe(path: &std::path::Path, data: impl AsRef<[u8]>) -> std::io::Result<()> {
+    use std::io::Write;
     let tmp = path.with_extension("tmp");
-    std::fs::write(&tmp, data)?;
+    {
+        let mut f = std::fs::File::create(&tmp)?;
+        f.write_all(data.as_ref())?;
+        // No disco antes de trocar: uma queda logo depois não deixa o arquivo vazio.
+        f.sync_all()?;
+    }
     std::fs::rename(tmp, path)
 }
 
