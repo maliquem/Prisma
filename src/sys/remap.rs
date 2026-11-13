@@ -242,6 +242,9 @@ pub struct Layer {
     pub ls: Option<Stick>,
     pub rs: Option<Stick>,
     pub binds: Vec<Bind>,
+    /// Teclado e mouse: `button` e `with` são teclas virtuais do Windows (botões do mouse: 4 meio,
+    /// 5 e 6 laterais), não bits de botão.
+    pub keys: Vec<Bind>,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -274,7 +277,7 @@ impl Profile {
     fn empty(name: &str) -> Self {
         let stick = Zone { start: 0.15, end: 0.95 };
         let trig = Zone { start: 0.05, end: 0.95 };
-        Profile { name: name.into(), games: vec![], zones: [stick, stick, trig, trig], layers: vec![Layer { name: "Base".into(), parent: None, ls: None, rs: None, binds: vec![] }], strings: vec![], turbo: vec![], turbo_key: TURBO_KEY, macros: vec![] }
+        Profile { name: name.into(), games: vec![], zones: [stick, stick, trig, trig], layers: vec![Layer { name: "Base".into(), parent: None, ls: None, rs: None, binds: vec![], keys: vec![] }], strings: vec![], turbo: vec![], turbo_key: TURBO_KEY, macros: vec![] }
     }
 
     /// Base: nada mapeado, o jogo lê o controle como ele é.
@@ -470,6 +473,11 @@ impl Profile {
                 let when = WHENS.iter().find(|w| w.0 == b.when).map_or("press", |w| w.1);
                 let _ = writeln!(s, "bind {i} {button} {when} {}", out_text(b.out, &self.strings));
             }
+            for b in &l.keys {
+                let when = WHENS.iter().find(|w| w.0 == b.when).map_or("press", |w| w.1);
+                let src = if b.with == 0 { b.button.to_string() } else { format!("{}+{}", b.button, b.with) };
+                let _ = writeln!(s, "kbind {i} {src} {when} {}", out_text(b.out, &self.strings));
+            }
         }
         s
     }
@@ -519,7 +527,7 @@ impl Profile {
                     if p.layers.len() >= MAX_LAYERS {
                         return None;
                     }
-                    p.layers.push(Layer { name: name.chars().filter(|c| !c.is_control()).take(40).collect(), parent, ls: None, rs: None, binds: vec![] });
+                    p.layers.push(Layer { name: name.chars().filter(|c| !c.is_control()).take(40).collect(), parent, ls: None, rs: None, binds: vec![], keys: vec![] });
                 }
                 "stick" => {
                     let mut it = rest.split(' ');
@@ -553,6 +561,23 @@ impl Profile {
                         return None;
                     }
                     p.layers[l].binds.push(Bind { button, with, when, out });
+                }
+                "kbind" => {
+                    let mut it = rest.splitn(4, ' ');
+                    let l = layer_of(&p, it.next()?)?;
+                    let vk = |s: &str| s.parse::<u32>().ok().filter(|v| (1..=254).contains(v));
+                    let src = it.next()?;
+                    let (button, with) = match src.split_once('+') {
+                        Some((a, b)) => (vk(a)?, vk(b)?),
+                        None => (vk(src)?, 0),
+                    };
+                    let w = it.next()?;
+                    let when = WHENS.iter().find(|x| x.1 == w)?.0;
+                    let out = parse_out(it.next()?, &mut p.strings)?;
+                    if with == button || p.layers[l].keys.len() >= 256 {
+                        return None;
+                    }
+                    p.layers[l].keys.push(Bind { button, with, when, out });
                 }
                 "macro" => {
                     let (mode, name) = rest.split_once(' ').unwrap_or((rest, ""));
@@ -591,7 +616,7 @@ impl Profile {
         }
         // Camada citada numa ligação tem que existir.
         let n = p.layers.len();
-        let ok = p.layers.iter().flat_map(|l| &l.binds).all(|b| !matches!(b.out, Out::Layer(x) | Out::Toggle(x) if x as usize >= n) && !matches!(b.out, Out::Macro(x) if x as usize >= p.macros.len()));
+        let ok = p.layers.iter().flat_map(|l| l.binds.iter().chain(&l.keys)).all(|b| !matches!(b.out, Out::Layer(x) | Out::Toggle(x) if x as usize >= n) && !matches!(b.out, Out::Macro(x) if x as usize >= p.macros.len()));
         (ok && n > 0 && !p.name.is_empty()).then_some(p)
     }
 }
@@ -887,6 +912,11 @@ impl Engine {
         self.up(o, acts);
     }
 
+    /// Teclas que o botão `i` segura agora (a repetição do teclado manda de novo).
+    fn held_keys(&self, i: usize) -> Vec<Out> {
+        self.btn[i].outs.iter().copied().filter(|o| matches!(o, Out::Key(..))).collect()
+    }
+
     /// Solta tudo e esquece o estado. O que continuar apertado não dispara de novo.
     pub fn release_all(&mut self) -> Vec<Act> {
         let acts: Vec<Act> = self.count.drain().map(|(o, _)| Act::Up(o)).collect();
@@ -1100,6 +1130,14 @@ static STOPPED: AtomicBool = AtomicBool::new(false);
 static RUN: Mutex<Option<Run>> = Mutex::new(None);
 /// Última olhada no foco: quando, a janela e se ela ocupava a tela inteira.
 static FOCUS: Mutex<(Option<Instant>, isize, bool)> = Mutex::new((None, 0, false));
+/// O programa em foco é de administrador: o Windows não deixa mandar teclas a ele, então o teclado
+/// e o mouse passam direto.
+static FRONT_ADMIN: AtomicBool = AtomicBool::new(false);
+/// Motor do teclado e do mouse, entre os dos controles.
+const KBD: &str = "teclado";
+/// Teclas do perfil que o motor vê como botões (um bit cada).
+/// shortcut: até 17 teclas diferentes por perfil, os bits de botão que o motor lê; mais pede máscara maior.
+pub const KEY_SLOTS: usize = 17;
 
 struct Run {
     profiles: Vec<Profile>,
@@ -1115,6 +1153,53 @@ struct Run {
     /// O programa em foco tem anti-cheat: turbo parado. A pasta de cada .exe é lida uma vez.
     ac: bool,
     ac_seen: HashMap<String, bool>,
+    /// Ligações de teclado e mouse do perfil em uso, como perfil de botões, e a tecla de cada bit.
+    kbd: Option<(Profile, Vec<u16>)>,
+    /// Teclas apertadas (bits) e as que o Prisma engoliu ao apertar (a soltura também fica com ele).
+    kheld: u32,
+    kswallow: u32,
+}
+
+/// As ligações de teclado e mouse de `p` como um perfil de botões: cada tecla usada ganha um bit.
+fn key_profile(p: &Profile) -> Option<(Profile, Vec<u16>)> {
+    let mut slots: Vec<u16> = vec![];
+    for b in p.layers.iter().flat_map(|l| &l.keys) {
+        for vk in [b.button, b.with] {
+            if vk != 0 && !slots.contains(&(vk as u16)) && slots.len() < KEY_SLOTS {
+                slots.push(vk as u16);
+            }
+        }
+    }
+    if slots.is_empty() {
+        return None;
+    }
+    let bit = |vk: u32| slots.iter().position(|&s| s as u32 == vk).map(|i| 1u32 << i);
+    let layers = p
+        .layers
+        .iter()
+        .map(|l| Layer {
+            name: l.name.clone(),
+            parent: l.parent,
+            ls: None,
+            rs: None,
+            binds: l.keys.iter().filter_map(|b| Some(Bind { button: bit(b.button)?, with: if b.with == 0 { 0 } else { bit(b.with)? }, when: b.when, out: b.out })).collect(),
+            keys: vec![],
+        })
+        .collect();
+    Some((Profile { layers, turbo: vec![], turbo_key: 0, ..p.clone() }, slots))
+}
+
+/// Perfil em uso mudou (ou o mapeamento ligou, desligou ou parou): refaz as teclas e diz ao gancho
+/// se ele é preciso (1 teclado, 2 mouse).
+fn set_keys(r: &mut Run) {
+    r.kbd = key_profile(&r.profiles[r.cur]);
+    r.kheld = 0;
+    r.kswallow = 0;
+    let need = match (&r.kbd, ON.load(Ordering::Relaxed) && !STOPPED.load(Ordering::Relaxed)) {
+        (Some((_, slots)), true) => slots.iter().fold(0, |n, &vk| n | if (4..=6).contains(&vk) { 2 } else { 1 }),
+        _ => 0,
+    };
+    super::keymap::sync(need);
 }
 
 fn profiles_dir() -> std::path::PathBuf {
@@ -1175,6 +1260,7 @@ fn reload() {
         r.profiles = load_profiles();
         r.cur = r.profiles.iter().position(|p| p.name == name).unwrap_or(0);
         r.want = None;
+        set_keys(r);
         r.engines.values_mut().flat_map(|e| e.0.release_all()).collect::<Vec<_>>()
     };
     send(&acts);
@@ -1186,9 +1272,10 @@ fn reload() {
 pub fn configure(on: bool, games: Vec<String>) {
     let acts = {
         let mut g = RUN.lock().unwrap();
-        let r = g.get_or_insert_with(|| Run { profiles: load_profiles(), cur: 0, games: vec![], engines: HashMap::new(), want: None, lat: vec![], warned: HashSet::new(), ac: false, ac_seen: HashMap::new() });
+        let r = g.get_or_insert_with(|| Run { profiles: load_profiles(), cur: 0, games: vec![], engines: HashMap::new(), want: None, lat: vec![], warned: HashSet::new(), ac: false, ac_seen: HashMap::new(), kbd: None, kheld: 0, kswallow: 0 });
         r.games = games.into_iter().map(|s| s.to_lowercase()).collect();
         ON.store(on, Ordering::Relaxed);
+        set_keys(r);
         if on {
             vec![]
         } else {
@@ -1276,12 +1363,38 @@ pub fn feed(key: &str, inp: &Input, arrived: Instant) {
                 acts.extend([Act::Down(Out::Key(0x47, WIN)), Act::Up(Out::Key(0x47, WIN))]);
             }
             for buttons in trig.steps {
-            let p = &r.profiles[r.cur];
-            let e = r.engines.get_mut(key).unwrap();
-            e.0.safe = r.ac;
-            let step = e.0.step(p, &Input { buttons, ..*inp }, arrived);
-            let strings = p.strings.clone();
-            for a in step {
+                let p = &r.profiles[r.cur];
+                let e = r.engines.get_mut(key).unwrap();
+                e.0.safe = r.ac;
+                let step = e.0.step(p, &Input { buttons, ..*inp }, arrived);
+                handle(r, key, step, &mut acts, &mut events);
+            }
+            apply_want(r, arrived, &mut acts, &mut events);
+        }
+        acts
+    };
+    if !acts.is_empty() {
+        send(&acts);
+        let us = arrived.elapsed().as_micros().min(u32::MAX as u128) as u32;
+        if let Some(r) = RUN.lock().unwrap().as_mut() {
+            if r.lat.len() >= 4096 {
+                r.lat.drain(..2048);
+            }
+            r.lat.push(us);
+        }
+    }
+    events.into_iter().for_each(pads::emit);
+    if let Some(o) = radial {
+        super::radial::open_from(o);
+    }
+    focus_tick(arrived);
+}
+
+/// O que o motor do controle (ou do teclado) `key` pediu: ações, programas, perfis e macros saem
+/// como eventos; teclas e cliques vão para `acts`.
+fn handle(r: &mut Run, key: &str, step: Vec<Act>, acts: &mut Vec<Act>, events: &mut Vec<pads::Event>) {
+    let strings = r.profiles[r.cur].strings.clone();
+    for a in step {
                 match a {
                     Act::Cmd(Out::Action(n)) => events.push(pads::Event::Action { id: n, pad: key.to_string() }),
                     Act::Cmd(Out::Run(n)) => events.extend(strings.get(n as usize).map(|s| pads::Event::Run { path: s.clone() })),
@@ -1316,32 +1429,99 @@ pub fn feed(key: &str, inp: &Input, arrived: Instant) {
                     }
                     a => acts.push(a),
                 }
-            }
-            }
-            if let Some((to, at)) = r.want {
-                if arrived >= at && r.engines.values().all(|e| e.0.idle()) {
-                    acts.extend(switch(r, to));
-                    events.push(pads::Event::Profile { name: r.profiles[to].name.clone() });
-                }
-            }
+    }
+}
+
+/// Troca de perfil pelo foco, esperando a folga e nada apertado.
+fn apply_want(r: &mut Run, now: Instant, acts: &mut Vec<Act>, events: &mut Vec<pads::Event>) {
+    if let Some((to, at)) = r.want {
+        if now >= at && r.engines.values().all(|e| e.0.idle()) {
+            acts.extend(switch(r, to));
+            events.push(pads::Event::Profile { name: r.profiles[to].name.clone() });
         }
-        acts
+    }
+}
+
+/// Tecla `vk` (ou botão do mouse 4 a 6) apertada ou solta, vinda do gancho. Devolve se o Prisma
+/// fica com ela (o programa em foco não a vê). Fora do mapeamento, com o Prisma em foco e com um
+/// programa de administrador em foco, tudo passa direto.
+pub fn key_event(vk: u16, down: bool) -> bool {
+    let now = Instant::now();
+    let mut acts = vec![];
+    let mut events = vec![];
+    let swallow = {
+        let mut g = RUN.lock().unwrap();
+        let Some(r) = g.as_mut() else { return false };
+        let Some(i) = r.kbd.as_ref().and_then(|k| k.1.iter().position(|&s| s == vk)) else { return false };
+        let bit = 1u32 << i;
+        let kp = r.kbd.as_ref().unwrap().0.clone();
+        let live = ON.load(Ordering::Relaxed) && !STOPPED.load(Ordering::Relaxed) && !super::nav::front() && !FRONT_ADMIN.load(Ordering::Relaxed);
+        let e = r.engines.entry(KBD.into()).or_insert_with(|| (Engine { prev: 0, ..Engine::default() }, None));
+        if down && r.kheld & bit != 0 {
+            // Repetição do Windows: a tecla ligada repete também.
+            let mine = r.kswallow & bit != 0;
+            let again: Vec<Act> = if mine { e.0.held_keys(i).into_iter().map(Act::Down).collect() } else { vec![] };
+            drop(g);
+            send(&again);
+            return mine;
+        }
+        if down {
+            if !live {
+                return false;
+            }
+            r.kheld |= bit;
+            let layer = e.0.layer();
+            let held = r.kheld;
+            if !binds(&kp, layer, bit, false).is_empty() || binds(&kp, layer, bit, true).iter().any(|b| held & b.with == b.with) {
+                r.kswallow |= bit;
+            }
+        } else if r.kheld & bit == 0 {
+            return false;
+        } else {
+            r.kheld &= !bit;
+        }
+        let held = r.kheld;
+        let step = r.engines.get_mut(KBD).unwrap().0.step(&kp, &Input { buttons: held, ..Default::default() }, now);
+        handle(r, KBD, step, &mut acts, &mut events);
+        let mine = r.kswallow & bit != 0;
+        if !down {
+            r.kswallow &= !bit;
+        }
+        mine
     };
-    if !acts.is_empty() {
-        send(&acts);
-        let us = arrived.elapsed().as_micros().min(u32::MAX as u128) as u32;
-        if let Some(r) = RUN.lock().unwrap().as_mut() {
-            if r.lat.len() >= 4096 {
-                r.lat.drain(..2048);
-            }
-            r.lat.push(us);
-        }
-    }
+    send(&acts);
     events.into_iter().for_each(pads::emit);
-    if let Some(o) = radial {
-        super::radial::open_from(o);
+    swallow
+}
+
+/// A cada 30 ms com o gancho ligado: segurar, toque duplo, troca de perfil pelo foco.
+pub fn key_tick() {
+    let now = Instant::now();
+    let mut acts = vec![];
+    let mut events = vec![];
+    {
+        let mut g = RUN.lock().unwrap();
+        let Some(r) = g.as_mut() else { return };
+        if let Some(kp) = r.kbd.as_ref().map(|k| k.0.clone()) {
+            let held = r.kheld;
+            if let Some(e) = r.engines.get_mut(KBD) {
+                let step = e.0.step(&kp, &Input { buttons: held, ..Default::default() }, now);
+                handle(r, KBD, step, &mut acts, &mut events);
+            }
+        }
+        apply_want(r, now, &mut acts, &mut events);
     }
-    focus_tick(arrived);
+    send(&acts);
+    events.into_iter().for_each(pads::emit);
+    // Sem controle mandando relatórios, o foco é olhado daqui, fora da thread do gancho (ler a
+    // pasta de um jogo pode demorar).
+    static LOOKING: AtomicBool = AtomicBool::new(false);
+    if !LOOKING.swap(true, Ordering::Relaxed) {
+        std::thread::spawn(move || {
+            focus_tick(now);
+            LOOKING.store(false, Ordering::Relaxed);
+        });
+    }
 }
 
 /// Passa ao perfil `to` e solta tudo dos controles: as teclas da camada velha não ficam presas.
@@ -1349,6 +1529,7 @@ fn switch(r: &mut Run, to: usize) -> Vec<Act> {
     super::macros::stop_all();
     r.want = None;
     r.cur = to;
+    set_keys(r);
     r.engines.values_mut().flat_map(|e| e.0.release_all()).collect()
 }
 
@@ -1356,6 +1537,7 @@ fn switch(r: &mut Run, to: usize) -> Vec<Act> {
 fn stop(r: &mut Run, on: bool) -> Vec<Act> {
     super::macros::stop_all();
     STOPPED.store(on, Ordering::Relaxed);
+    set_keys(r);
     r.engines.values_mut().flat_map(|e| e.0.release_all()).collect()
 }
 
@@ -1421,6 +1603,7 @@ fn on_focus(pid: u32, full: bool) {
     let Some(path) = super::procs::image_path(pid) else { return };
     let exe = super::procs::exe_name(&path).to_lowercase();
     let elevated = !crate::startup::is_elevated() && is_elevated(pid);
+    FRONT_ADMIN.store(elevated, Ordering::Relaxed);
     let seen = RUN.lock().unwrap().as_ref().and_then(|r| r.ac_seen.get(&exe).copied());
     // Fora da trava: ler a pasta do jogo pode demorar.
     let ac = seen.unwrap_or_else(|| crate::meter::anti_cheat(&path));
@@ -1687,7 +1870,7 @@ mod tests {
     fn key_releases_in_the_layer_it_was_pressed() {
         let t0 = Instant::now();
         let mut p = Profile::base();
-        p.layers.push(Layer { name: "Fn".into(), parent: Some(0), ls: None, rs: None, binds: vec![] });
+        p.layers.push(Layer { name: "Fn".into(), parent: Some(0), ls: None, rs: None, binds: vec![], keys: vec![] });
         one(&mut p.layers[0], pads::LB, When::Press, Out::Layer(1));
         one(&mut p.layers[0], pads::A, When::Press, K1);
         one(&mut p.layers[1], pads::A, When::Press, K2);
@@ -1711,7 +1894,7 @@ mod tests {
     fn held_layer_changes_stick_mode_at_once() {
         let t0 = Instant::now();
         let mut p = Profile::desktop();
-        p.layers.push(Layer { name: "Fn".into(), parent: Some(0), ls: None, rs: Some(Stick::Mouse(1600.0)), binds: vec![] });
+        p.layers.push(Layer { name: "Fn".into(), parent: Some(0), ls: None, rs: Some(Stick::Mouse(1600.0)), binds: vec![], keys: vec![] });
         p.layers[0].binds.retain(|b| b.button != pads::LB);
         one(&mut p.layers[0], pads::LB, When::Press, Out::Layer(1));
         let mut e = engine(&p, t0);
@@ -1736,7 +1919,7 @@ mod tests {
     fn toggle_layer() {
         let t0 = Instant::now();
         let mut p = Profile::base();
-        p.layers.push(Layer { name: "Fn".into(), parent: Some(0), ls: None, rs: None, binds: vec![] });
+        p.layers.push(Layer { name: "Fn".into(), parent: Some(0), ls: None, rs: None, binds: vec![], keys: vec![] });
         one(&mut p.layers[0], pads::RB, When::Press, Out::Toggle(1));
         let mut e = engine(&p, t0);
         e.step(&p, &btn(pads::RB), at(10, t0));
@@ -1833,10 +2016,37 @@ mod tests {
     }
 
     #[test]
+    fn keys_become_buttons_for_the_engine() {
+        let t0 = Instant::now();
+        let mut p = Profile::base();
+        // Caps Lock: tocar é Esc, segurar é Ctrl; Caps + H é a seta esquerda.
+        p.layers[0].keys.push(Bind { button: 0x14, with: 0, when: When::Tap, out: Out::Key(0x1B, 0) });
+        p.layers[0].keys.push(Bind { button: 0x14, with: 0, when: When::Hold, out: Out::Key(0xA2, 0) });
+        p.layers[0].keys.push(Bind { button: 0x48, with: 0x14, when: When::Press, out: Out::Key(0x25, 0) });
+        let text = p.to_text();
+        assert_eq!(Profile::parse(&text), Some(p.clone()), "{text}");
+        let (kp, slots) = key_profile(&p).unwrap();
+        assert_eq!(slots, vec![0x14, 0x48]);
+        let mut e = Engine { prev: 0, ..Engine::default() };
+        let caps = Input { buttons: 1, ..Default::default() };
+        assert!(e.step(&kp, &caps, at(0, t0)).is_empty());
+        // Caps + H: a seta, e o Caps não toca Esc ao soltar.
+        assert_eq!(e.step(&kp, &Input { buttons: 3, ..Default::default() }, at(50, t0)), vec![Act::Down(Out::Key(0x25, 0))]);
+        assert_eq!(e.step(&kp, &caps, at(80, t0)), vec![Act::Up(Out::Key(0x25, 0))]);
+        assert!(e.step(&kp, &Input::default(), at(100, t0)).is_empty());
+        // Toque: Esc. Segurar: Ctrl depois de 0,4 s.
+        e.step(&kp, &caps, at(1000, t0));
+        assert_eq!(e.step(&kp, &Input::default(), at(1100, t0)), vec![Act::Down(Out::Key(0x1B, 0)), Act::Up(Out::Key(0x1B, 0))]);
+        e.step(&kp, &caps, at(2000, t0));
+        assert_eq!(e.step(&kp, &caps, at(2450, t0)), vec![Act::Down(Out::Key(0xA2, 0))]);
+        assert!(key_profile(&Profile::base()).is_none());
+    }
+
+    #[test]
     fn profile_text_round_trip_and_rejects_bad_input() {
         let mut p = Profile::desktop();
         p.games.push("jogo.exe".into());
-        p.layers.push(Layer { name: "Fn".into(), parent: Some(0), ls: Some(Stick::Buttons), rs: None, binds: vec![] });
+        p.layers.push(Layer { name: "Fn".into(), parent: Some(0), ls: Some(Stick::Buttons), rs: None, binds: vec![], keys: vec![] });
         one(&mut p.layers[0], pads::LB, When::Hold, Out::Layer(1));
         p.layers[1].binds.push(Bind { button: pads::A, with: pads::LB | pads::RB, when: When::Double, out: Out::Key(0x43, CTRL | SHIFT) });
         let base = intern(&mut p.strings, "Base").unwrap();
@@ -1874,6 +2084,8 @@ mod tests {
             "prisma-profile 1\nname x\nmacro once M\nmstep 0 up wheel 1\nlayer - B",
             "prisma-profile 1\nname x\nmacro once M\nmstep 0 wait 60001\nlayer - B",
             "prisma-profile 1\nname x\nmacro once M\nmstep 0 down action 1\nlayer - B",
+            "prisma-profile 1\nname x\nlayer - B\nkbind 0 20+20 press key 65",
+            "prisma-profile 1\nname x\nlayer - B\nkbind 0 300 press key 65",
             "prisma-profile 1\nname x\nlayer - B\nbind 0 A press action 54",
             "prisma-profile 1\nname x\nlayer - B\nbind 0 A press action 112",
             "prisma-profile 1\nname x\nlayer - B\nturbo A 1 500 on",

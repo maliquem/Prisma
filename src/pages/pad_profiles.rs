@@ -33,6 +33,14 @@ pub struct Editor {
     shk: Hotkey,
     sval: usize,
     swait: u32,
+    /// Origem das ligações: 0 botões do controle, 1 teclado e mouse; a tecla escolhida
+    /// (`KEY_SOURCES`, 0 é a do campo `khk`) e o "junto com" dela (0 sozinho, 1 a tecla do campo
+    /// `kwhk`, depois `KEY_SOURCES`).
+    src: usize,
+    ksrc: usize,
+    khk: Hotkey,
+    kwith: usize,
+    kwhk: Hotkey,
 }
 
 /// O perfil aberto no editor, para exportar.
@@ -69,6 +77,11 @@ pub fn test_target(app: &mut App, what: &str) {
             }
             "keyboard" => ed.kind = 9,
             "macro" => ed.kind = 10,
+            "keys" => {
+                ed.src = 1;
+                ed.ksrc = 8;
+                ed.kind = 6;
+            }
             "wizard" => {
                 ed.tpl = remap::TEMPLATES.len() + 1;
                 ed.acc = [1, 1, 2];
@@ -104,6 +117,32 @@ const KINDS: [&str; 11] = ["Tecla", "Tecla especial", "Mouse", "Roda", "Camada e
 /// Na ordem de `remap::MODES`.
 const MODE_NAMES: [&str; 3] = ["Uma vez", "Repetir enquanto segura", "Repetir até apertar de novo"];
 const STEP_KINDS: [&str; 3] = ["Tecla", "Clique", "Espera"];
+/// Origens que o campo de tecla não pega (modificadores sozinhos, Esc, apagar) e os botões do mouse
+/// que podem mudar. A primeira é "a tecla do campo".
+const KEY_SOURCES: [(u16, &str); 13] = [
+    (0, "Tecla"),
+    (0xA2, "Ctrl esquerdo"),
+    (0xA3, "Ctrl direito"),
+    (0xA0, "Shift esquerdo"),
+    (0xA1, "Shift direito"),
+    (0xA4, "Alt esquerdo"),
+    (0xA5, "Alt direito"),
+    (0x5B, "Windows"),
+    (0x1B, "Esc"),
+    (0x08, "Backspace"),
+    (4, "Botão do meio do mouse"),
+    (5, "Botão lateral 1 do mouse"),
+    (6, "Botão lateral 2 do mouse"),
+];
+
+/// Nome de uma tecla de origem (ou botão do mouse).
+fn src_name(vk: u32) -> String {
+    match KEY_SOURCES.iter().skip(1).find(|s| s.0 as u32 == vk) {
+        Some(s) => tr(s.1),
+        None if vk == 0 => tr("Nenhuma tecla"),
+        None => key_label(vk as u16, 0),
+    }
+}
 /// Teclas que o campo de tecla não pega (Esc cancela) ou que não existem no teclado comum.
 const SPECIAL: [(u16, &str); 12] = [
     (0x1B, "Esc"),
@@ -360,7 +399,16 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
     if !chips.iter().any(|c| c.0 == ed.button) {
         ed.button = chips[4].0;
     }
-    let own: Vec<Bind> = p.layers[ed.layer].binds.iter().filter(|b| b.button == ed.button).cloned().collect();
+    let keys_mode = ed.src == 1;
+    let kvk = if ed.ksrc == 0 { ed.khk.vk } else { KEY_SOURCES[ed.ksrc.min(KEY_SOURCES.len() - 1)].0 as u32 };
+    let kwvk = match ed.kwith {
+        0 => 0,
+        1 => ed.kwhk.vk,
+        n => KEY_SOURCES.get(n - 1).map_or(0, |s| s.0 as u32),
+    };
+    let target = if keys_mode { kvk } else { ed.button };
+    let list_of = |l: &Layer| if keys_mode { l.keys.clone() } else { l.binds.clone() };
+    let own: Vec<Bind> = list_of(&p.layers[ed.layer]).into_iter().filter(|b| b.button == target && target != 0).collect();
     // Linhas de botões: estimativa pela largura média, só para a rolagem.
     let chip_rows = (chips.len() as f32 * 64.0 / w).ceil() as usize + 1;
     let body = rect(r.x, y, r.w - 8.0, r.bottom() - y - 8.0);
@@ -402,7 +450,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
     ui.select("pp-layer", rect(x, y, third, 34.0), &layers, &mut ed.layer);
     if ui.button_ex("pp-layer-add", rect(x + third + 8.0, y, third, 34.0), "Nova camada", false, p.layers.len() < 16) {
         let n = p.layers.len();
-        p.layers.push(Layer { name: format!("{} {n}", tr("Camada")), parent: Some(0), ls: None, rs: None, binds: vec![] });
+        p.layers.push(Layer { name: format!("{} {n}", tr("Camada")), parent: Some(0), ls: None, rs: None, binds: vec![], keys: vec![] });
         ed.layer = n;
         changed = true;
     }
@@ -496,6 +544,23 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
     // Com desenho próprio, cada botão é o ícone dele; no genérico, o número.
     let glyphs = family != Family::Generic;
     let style = crate::ui::glyph::Style::of(family, 0);
+    // Origem: botões do controle, ou teclas e botões do mouse.
+    let srcs = [tr("Botões do controle"), tr("Teclado e mouse")];
+    ui.select("pp-src", rect(x, y, third, 34.0), &srcs, &mut ed.src);
+    y += 44.0;
+    if keys_mode {
+        let kinds: Vec<String> = KEY_SOURCES.iter().map(|s| tr(s.1)).collect();
+        ui.select("pp-ksrc", rect(x, y, third, 34.0), &kinds, &mut ed.ksrc);
+        if ed.ksrc == 0 {
+            ui.hotkey("pp-khk", rect(x + third + 8.0, y, third, 34.0), &mut ed.khk);
+        }
+        if ed.kwith == 1 {
+            ui.hotkey("pp-kwhk", rect(x + 2.0 * (third + 8.0), y, third, 34.0), &mut ed.kwhk);
+        }
+        y += 40.0;
+        ui.c.text_fit(rect(x, y, w, 20.0), &tr("Vale fora do Prisma e fora de programas abertos como administrador. Os cliques esquerdo e direito não mudam."), 12.0, MUTED, Align::Left, Weight::Regular);
+        y += 36.0;
+    } else {
     let (mut bx, mut by) = (x, y);
     for (bit, label) in &chips {
         let cw = if glyphs { crate::ui::glyph::width(*bit, 18.0) + 18.0 } else { crate::ui::gfx::measure(label, 12.0, Weight::Semibold, None).0 + 22.0 };
@@ -523,9 +588,10 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
         bx += cw + 6.0;
     }
     y = by + 40.0;
+    }
 
     // O que o botão escolhido faz.
-    let name = chips.iter().find(|c| c.0 == ed.button).map_or(String::new(), |c| c.1.clone());
+    let name = if keys_mode { src_name(kvk) } else { chips.iter().find(|c| c.0 == ed.button).map_or(String::new(), |c| c.1.clone()) };
     ui.c.text_fit(rect(x, y, w, 22.0), &tr("{}: o que faz nesta camada").replace("{}", &name), 14.0, TEXT, Align::Left, Weight::Semibold);
     y += 30.0;
     if own.is_empty() {
@@ -533,7 +599,8 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
         let mut from = p.layers[ed.layer].parent;
         let mut text = tr("Nada.");
         while let Some(l) = from {
-            let got: Vec<&Bind> = p.layers[l as usize].binds.iter().filter(|b| b.button == ed.button && b.with == 0).collect();
+            let all = list_of(&p.layers[l as usize]);
+            let got: Vec<&Bind> = all.iter().filter(|b| b.button == target && target != 0 && b.with == 0).collect();
             if !got.is_empty() {
                 let what: Vec<String> = got.iter().map(|b| format!("{} → {}", tr(WHENS.iter().find(|w| w.0 == b.when).map_or("", |w| w.1)), describe(b.out, &p))).collect();
                 text = tr("Vem da camada {}: ").replace("{}", &p.layers[l as usize].name) + &what.join(", ");
@@ -548,7 +615,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
     for (i, b) in own.iter().enumerate() {
         let mut t = format!("{} → {}", tr(WHENS.iter().find(|w| w.0 == b.when).map_or("", |w| w.1)), describe(b.out, &p));
         if b.with != 0 {
-            let with: Vec<String> = chips.iter().filter(|c| b.with & c.0 != 0).map(|c| c.1.clone()).collect();
+            let with: Vec<String> = if keys_mode { vec![src_name(b.with)] } else { chips.iter().filter(|c| b.with & c.0 != 0).map(|c| c.1.clone()).collect() };
             t += &tr(", junto com {}").replace("{}", &with.join(" + "));
         }
         ui.c.text_fit(rect(x, y, w - 130.0, 34.0), &t, 13.0, TEXT, Align::Left, Weight::Regular);
@@ -559,8 +626,9 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
     }
     if let Some(d) = drop {
         let l = &mut p.layers[ed.layer];
-        if let Some(i) = l.binds.iter().position(|b| *b == d) {
-            l.binds.remove(i);
+        let v = if keys_mode { &mut l.keys } else { &mut l.binds };
+        if let Some(i) = v.iter().position(|b| *b == d) {
+            v.remove(i);
             changed = true;
         }
     }
@@ -576,7 +644,14 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
     let mut withs = vec![tr("Sozinho")];
     withs.extend(others.iter().map(|c| tr("Junto com {}").replace("{}", &c.1)));
     ed.with = ed.with.min(withs.len() - 1);
-    ui.select("pp-with", rect(x + third + 8.0, y, third, 34.0), &withs, &mut ed.with);
+    if keys_mode {
+        let mut kw = vec![tr("Sozinho"), tr("Junto com uma tecla")];
+        kw.extend(KEY_SOURCES.iter().skip(1).map(|s| tr("Junto com {}").replace("{}", &tr(s.1))));
+        ed.kwith = ed.kwith.min(kw.len() - 1);
+        ui.select("pp-kwith", rect(x + third + 8.0, y, third, 34.0), &kw, &mut ed.kwith);
+    } else {
+        ui.select("pp-with", rect(x + third + 8.0, y, third, 34.0), &withs, &mut ed.with);
+    }
     let kinds: Vec<String> = KINDS.iter().map(|k| tr(k)).collect();
     if ui.select("pp-kind", rect(x + 2.0 * (third + 8.0), y, third, 34.0), &kinds, &mut ed.kind) {
         ed.val = 0;
@@ -625,20 +700,33 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
         10 => p.macros.get(ed.val).map(|_| Out::Macro(ed.val as u8)),
         _ => (!ed.run.is_empty()).then_some(Out::Run(0)),
     };
-    if ui.button_ex("pp-add", rect(x + 2.0 * (third + 8.0), y, third, 34.0), "Adicionar", true, out.is_some()) {
+    // Teclado: cada tecla diferente do perfil ocupa um dos `KEY_SLOTS` lugares do motor.
+    let mut used: Vec<u32> = p.layers.iter().flat_map(|l| &l.keys).flat_map(|b| [b.button, b.with]).filter(|&v| v != 0).collect();
+    used.extend([kvk, kwvk].into_iter().filter(|&v| v != 0));
+    used.sort_unstable();
+    used.dedup();
+    let key_ok = kvk != 0 && kwvk != kvk && (ed.kwith != 1 || kwvk != 0) && used.len() <= remap::KEY_SLOTS;
+    if keys_mode && !key_ok && used.len() > remap::KEY_SLOTS {
+        ui.c.text_fit(rect(x, y + 40.0, w, 20.0), &tr("Um perfil usa até 17 teclas diferentes."), 12.0, WARN, Align::Left, Weight::Regular);
+    }
+    if ui.button_ex("pp-add", rect(x + 2.0 * (third + 8.0), y, third, 34.0), "Adicionar", true, out.is_some() && (!keys_mode || key_ok)) {
         let out = match out {
             Some(Out::Profile(_)) => remap::intern(&mut p.strings, &others_p[ed.val]).map(Out::Profile),
             Some(Out::Run(_)) => remap::intern(&mut p.strings, &ed.run).map(Out::Run),
             o => o,
         };
         if let Some(out) = out {
-            let with = if ed.with == 0 { 0 } else { others[ed.with - 1].0 };
-            p.layers[ed.layer].binds.push(Bind { button: ed.button, with, when: WHENS[ed.when].0, out });
+            if keys_mode {
+                p.layers[ed.layer].keys.push(Bind { button: kvk, with: kwvk, when: WHENS[ed.when].0, out });
+            } else {
+                let with = if ed.with == 0 { 0 } else { others[ed.with - 1].0 };
+                p.layers[ed.layer].binds.push(Bind { button: ed.button, with, when: WHENS[ed.when].0, out });
+            }
             changed = true;
         }
     }
     // Combinação que já faz outra coisa: avisa, sem impedir.
-    if ed.with != 0 {
+    if !keys_mode && ed.with != 0 {
         let combo = ed.button | others[ed.with - 1].0;
         if let Some(by) = remap::combo_conflict(&p, combo, false) {
             ui.c.text_fit(rect(x, y + 40.0, w, 20.0), &tr("Essa combinação já é usada por {}.").replace("{}", &by), 12.0, WARN, Align::Left, Weight::Regular);
@@ -647,6 +735,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
     y += 70.0;
 
     // Turbo do botão escolhido: à parte das ligações, vale em todas as camadas do perfil.
+    if !keys_mode {
     ui.c.text_fit(rect(x, y, w, 22.0), &tr("Turbo do botão {}").replace("{}", &name), 14.0, TEXT, Align::Left, Weight::Semibold);
     y += 30.0;
     let ti = p.turbo.iter().position(|t| t.button == ed.button);
@@ -694,6 +783,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
     let warn = if p.turbo_key == 0 { None } else { remap::combo_conflict(&p, p.turbo_key, true).map(|by| tr("Esse atalho já é usado por {}.").replace("{}", &by)) };
     let note = warn.clone().unwrap_or_else(|| if p.turbo_key == 0 { tr("Sem atalho: o turbo só muda aqui.") } else { tr("Segure o atalho e aperte o botão para ligar ou desligar o turbo dele.") });
     ui.c.text_fit(rect(x, y, w, 20.0), &note, 12.0, if warn.is_some() { WARN } else { MUTED }, Align::Left, Weight::Regular);
+    }
     y += 40.0;
 
     // Macros do perfil: escolher, criar, apagar, o modo, gravar e os passos.
