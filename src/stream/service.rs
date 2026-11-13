@@ -49,6 +49,15 @@ pub fn run_args(a: &str) -> bool {
         "--stream-service-remove" => remove(),
         "--stream-service-status" => status(),
         _ => {
+            // Teste: aplica as permissões da pasta do serviço numa pasta qualquer (como administrador)
+            // e grava o resultado em `<pasta>.resultado.txt`.
+            #[cfg(debug_assertions)]
+            if let Some(d) = a.strip_prefix("--test-protect=") {
+                let dir = std::path::Path::new(d);
+                let r = unsafe { my_sid().ok_or_else(|| "sem usuário".to_string()).and_then(|sid| protect_dir(dir, &sid)) };
+                let _ = std::fs::write(dir.with_extension("resultado.txt"), format!("{r:?}"));
+                return true;
+            }
             // `--stream-invite=permissões[,minutos]`.
             if a == "--stream-invite" || a.starts_with("--stream-invite=") {
                 let v = a.strip_prefix("--stream-invite=").unwrap_or("ver");
@@ -152,8 +161,9 @@ unsafe fn protect_dir(dir: &std::path::Path, sid: &str) -> std::result::Result<(
     }
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     // Ela só lê: quem assiste a este PC, o convite e os pedidos da sala mudam só como administrador
-    // (antes, qualquer programa dela podia se pôr na lista com Acesso total).
-    let sddl = format!("D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;{sid})");
+    // (antes, qualquer programa dela podia se pôr na lista com Acesso total). O OW tira do dono de um
+    // arquivo o direito de mudar as permissões dele: um arquivo que ela criou antes voltaria a gravável.
+    let sddl = format!("D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;{sid})(A;OICI;0x1200a9;;;OW)");
     let mut sd = PSECURITY_DESCRIPTOR::default();
     ConvertStringSecurityDescriptorToSecurityDescriptorW(&HSTRING::from(sddl), SDDL_REVISION_1, &mut sd, None).map_err(|e| e.message())?;
     let (mut present, mut defaulted) = (BOOL(0), BOOL(0));
