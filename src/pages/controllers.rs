@@ -8,7 +8,7 @@ use std::time::Instant;
 
 /// A medição dos sticks está rodando (a navegação do Prisma fica pausada).
 pub fn measuring(s: &State) -> bool {
-    s.wiz.is_some()
+    s.wiz.is_some() || s.testing
 }
 
 /// Passos do assistente, em segundos: parado, girando os sticks, apertando os gatilhos.
@@ -26,9 +26,13 @@ pub struct State {
     pub(super) tab: usize,
     /// Altura da coluna da esquerda de Ajustes no quadro anterior, para a rolagem.
     left_h: f32,
+    /// O mesmo para a aba do Menu radial.
+    radial_h: f32,
     /// O mesmo para a coluna do desenho, na aba Mapeamento.
     art_h: f32,
     test: Test,
+    /// Teste dos botões ligado: o controle para de navegar pelo Prisma.
+    testing: bool,
 }
 
 impl State {
@@ -251,6 +255,8 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let top = y + 46.0;
     let h = a.h - top - 12.0;
     let family = list.get(app.pads.sel).map_or(Family::Xbox, |p| p.family);
+    // Fora do editor, nenhuma luz de mostra: as abas que o desenham põem a dele de volta.
+    remap::preview_light(None);
     match app.pads.tab {
         0 => {
             // Sem controle ligado, o editor ocupa a largura toda.
@@ -281,6 +287,16 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
             super::pad_profiles::draw(ui, app, rect(x + lw, top, fw - lw, h), family, 0);
         }
         1 => super::pad_profiles::draw(ui, app, rect(x, top, fw, h), family, 1),
+        // O radial tem muitas opções: uma aba só dele, na largura toda.
+        2 => {
+            ui.begin_scroll("pads-radial", rect(x, top, fw, h), app.pads.radial_h);
+            let used = radial(ui, app, rect(x, top, fw.min(900.0), 0.0)) - top;
+            ui.end_scroll();
+            if (used - app.pads.radial_h).abs() > 0.5 {
+                app.pads.radial_h = used;
+                ui.s.needs_redraw = true;
+            }
+        }
         _ => settings(ui, app, &list, rect(x, top, fw, h)),
     }
 }
@@ -348,7 +364,7 @@ fn pad_card(ui: &mut Ui, app: &mut App, list: &[Pad], at: Rect) -> f32 {
 /// Abas da página; `on` falso deixa trocar de aba desligado (gravando macro).
 /// Devolve onde as abas terminam.
 fn tabs(ui: &mut Ui, x: f32, y: f32, sel: &mut usize, on: bool) -> f32 {
-    const TABS: [&str; 3] = ["Mapeamento", "Macros", "Ajustes"];
+    const TABS: [&str; 4] = ["Mapeamento", "Macros", "Menu radial", "Ajustes"];
     if on {
         ui.tab_step(sel, TABS.len());
     }
@@ -404,7 +420,6 @@ fn settings(ui: &mut Ui, app: &mut App, list: &[Pad], a: Rect) {
     }
     y += r.h + 12.0;
     y = mapping(ui, app, rect(x, y, lw, 0.0));
-    y = radial(ui, app, rect(x, y, lw, 0.0));
     y = keyboard(ui, app, rect(x, y, lw, 0.0));
     for t in &app.pads.conflicts {
         let r = rect(x, y, lw, 64.0);
@@ -607,11 +622,15 @@ fn draw_test(ui: &mut Ui, app: &mut App, p: &Pad, at: Rect) -> f32 {
     let rows = t.hist.len();
     let r = rect(at.x, at.y, at.w, 140.0 + if rows > 0 { 26.0 + rows as f32 * 22.0 } else { 0.0 });
     ui.card(r);
-    ui.title(rect(x, r.y + 12.0, w - 108.0, 22.0), "Teste dos botões");
+    let on = app.pads.testing;
+    ui.title(rect(x, r.y + 12.0, w - 216.0, 22.0), "Teste dos botões");
+    let start = ui.button_ex("pad-test-on", rect(r.right() - 224.0, r.y + 8.0, 100.0, 32.0), if on { "Parar" } else { "Testar" }, on, true);
     let clear = ui.button_ex("pad-test-clear", rect(r.right() - 116.0, r.y + 8.0, 100.0, 32.0), "Limpar", false, t.seen != 0);
-    let last = match (t.down.last(), t.hist.first()) {
-        (Some(&(bit, _)), _) => tr("Último botão: {}, apertado").replace("{}", &name(bit)),
-        (None, Some(&(bit, ms, _))) => tr("Último botão: {} ({} ms)").replacen("{}", &name(bit), 1).replacen("{}", &ms.to_string(), 1),
+    let last = match (on, t.down.last(), t.hist.first()) {
+        // Sem o teste ligado, os botões navegam pelo Prisma e não dá para apertá-los à vontade.
+        (false, ..) => tr("Clique em Testar: o controle para de navegar pelo Prisma."),
+        (_, Some(&(bit, _)), _) => tr("Último botão: {}, apertado").replace("{}", &name(bit)),
+        (_, None, Some(&(bit, ms, _))) => tr("Último botão: {} ({} ms)").replacen("{}", &name(bit), 1).replacen("{}", &ms.to_string(), 1),
         _ => tr("Aperte um botão no controle."),
     };
     ui.c.text_fit(rect(x, r.y + 44.0, w, 20.0), &last, 13.0, TEXT, Align::Left, Weight::Regular);
@@ -637,6 +656,9 @@ fn draw_test(ui: &mut Ui, app: &mut App, p: &Pad, at: Rect) -> f32 {
     }
     if clear {
         app.pads.test = Test { key: p.key.clone(), prev: app.pads.test.prev, ..Default::default() };
+    }
+    if start {
+        app.pads.testing = !on;
     }
     r.bottom() + 12.0
 }

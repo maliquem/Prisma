@@ -2272,3 +2272,11 @@ Rosa	Розовый
 Laranja	Оранжевый
 Ciano	Голубой
 Branco	Белый
+Testar	Проверить
+Clique em Testar: o controle para de navegar pelo Prisma.	Нажмите «Проверить»: геймпад не управляет Prisma.
+O controle está em Nativo: o jogo o recebe como ele é, e nada deste perfil vale, menos a barra de luz. Para as ligações, o gyro e o touchpad valerem, mude para Teclado e mouse.	Геймпад в режиме «Как есть»: игра получает его без изменений, и ничего из этого профиля не действует, кроме световой панели. Чтобы действовали привязки, гироскоп и тачпад, переключитесь на «Клавиатура и мышь».
+Passa ao jogo	Читает игра
+Passa ao jogo: o Prisma não usa nem esconde, e o jogo lê direto do controle (suporte nativo ao DualSense).	Читает игра: Prisma его не использует и не скрывает, игра читает данные прямо с геймпада (встроенная поддержка DualSense).
+Gravando: vá a outro programa e use o teclado e o mouse; volte aqui para parar. Nada do que você faz dentro do Prisma entra, o movimento do mouse não entra, e os botões do controle ainda não são gravados.	Запись: перейдите в другую программу и работайте клавиатурой и мышью; вернитесь сюда, чтобы остановить. Всё, что делается внутри Prisma, не записывается, движение мыши не записывается, кнопки геймпада пока тоже не записываются.
+Cor	Цвет
+Menu radial	Радиальное меню

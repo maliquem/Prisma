@@ -90,7 +90,8 @@ pub fn test_target(app: &mut App, what: &str) {
                 ed.kind = 10;
                 app.pads.tab = 1;
             }
-            "settings" => app.pads.tab = 2,
+            "settings" => app.pads.tab = 3,
+            "radial" => app.pads.tab = 2,
             "stick" => ed.button = pads::LS,
             "trigger" => ed.button = remap::LT,
             "gyro" => ed.layer = 1,
@@ -526,7 +527,9 @@ fn motion_row(ui: &mut Ui, layer: &mut Layer, touch: bool, base: bool, x: f32, y
     if base {
         opts.push(tr("Igual à camada mãe"));
     }
-    opts.extend(["Desligado", "Mouse"].iter().map(|s| tr(s)));
+    // "Passa ao jogo" em vez de "Desligado": o jogo lê o gyro e o touchpad direto do controle,
+    // que o Prisma não esconde; é o que os jogos com suporte nativo ao DualSense usam.
+    opts.extend(["Passa ao jogo", "Mouse"].iter().map(|s| tr(s)));
     if touch {
         opts.extend(["Stick esquerdo", "Stick direito"].iter().map(|s| tr(s)));
     }
@@ -537,6 +540,7 @@ fn motion_row(ui: &mut Ui, layer: &mut Layer, touch: bool, base: bool, x: f32, y
     } + usize::from(base && slot.is_some());
     ui.label(rect(x, y, 120.0, 34.0), label, TEXT2);
     let mut changed = false;
+    ui.tip(rect(x + 130.0, y, sel_w, 34.0), "Passa ao jogo: o Prisma não usa nem esconde, e o jogo lê direto do controle (suporte nativo ao DualSense).");
     if ui.select(key, rect(x + 130.0, y, sel_w, 34.0), &opts, &mut sel) {
         let k = if base { sel as i32 - 1 } else { sel as i32 };
         *slot = match k {
@@ -724,9 +728,21 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
     let wizard = ed.tpl == acc_i;
     ed.mac = ed.mac.min(p.macros.len().saturating_sub(1));
     ui.begin_scroll("pp-body", body, ed.body_h);
+    // A luz deste perfil aparece no controle enquanto o editor está aberto.
+    remap::preview_light(p.light.map(|l| (l, p.light_bt)));
     let mut changed = false;
     let mut pick = None;
     let mut rec_note = None;
+    let mut turn_map_on = false;
+    // Em Nativo nada deste perfil vale: sem este aviso, mudar uma ligação parece não funcionar.
+    if !app.cfg.pad_map {
+        let note = tr("O controle está em Nativo: o jogo o recebe como ele é, e nada deste perfil vale, menos a barra de luz. Para as ligações, o gyro e o touchpad valerem, mude para Teclado e mouse.");
+        let nh = crate::ui::gfx::measure(&note, 12.0, Weight::Regular, Some(w)).1.ceil();
+        ui.c.text_wrap(rect(x, y, w, nh), &note, 12.0, WARN, Weight::Regular);
+        y += nh + 8.0;
+        turn_map_on = ui.button("pp-map-on", rect(x, y, 220.0_f32.min(w), 34.0), "Teclado e mouse", false);
+        y += 44.0;
+    }
     if tab == 0 {
 
     // Assistente do Acessível: três perguntas e Aplicar.
@@ -1122,13 +1138,12 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
     y += 44.0;
     // Barra de luz do perfil: só DualSense e DualShock 4.
     if matches!(family, Family::DualSense | Family::Ds4) {
-        let mut opts = vec![tr("Não mexer"), tr("Desligada"), tr("Pela bateria")];
-        opts.extend(remap::COLORS.iter().map(|c| tr(c.0)));
+        let opts = vec![tr("Não mexer"), tr("Desligada"), tr("Pela bateria"), tr("Cor")];
         let mut sel = match p.light {
             None => 0,
             Some(Light::Off) => 1,
             Some(Light::Battery) => 2,
-            Some(Light::Color(c)) => 3 + remap::COLORS.iter().position(|k| k.1 == c).unwrap_or(0),
+            Some(Light::Color(_)) => 3,
         };
         ui.label(rect(x, y, 120.0, 34.0), "Barra de luz", TEXT2);
         if ui.select("pp-light", rect(x + 130.0, y, ((w - 138.0) * 0.56).min(220.0).floor(), 34.0), &opts, &mut sel) {
@@ -1136,11 +1151,33 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
                 0 => None,
                 1 => Some(Light::Off),
                 2 => Some(Light::Battery),
-                k => Some(Light::Color(remap::COLORS[k - 3].1)),
+                _ => Some(Light::Color(remap::FIRST_COLOR)),
             };
             changed = true;
         }
         y += 44.0;
+        // Seletor da cor: a amostra e um controle deslizante por canal, de 0 a 255.
+        if let Some(Light::Color(c)) = p.light {
+            let mut c = c;
+            let mut moved = false;
+            ui.c.round(rect(x, y, 34.0, 34.0), 8.0, crate::ui::gfx::Color { r: c[0] as f32 / 255.0, g: c[1] as f32 / 255.0, b: c[2] as f32 / 255.0, a: 1.0 });
+            let each = ((w - 42.0) / 3.0).floor().min(220.0);
+            for (i, n) in ["R", "G", "B"].iter().enumerate() {
+                let cx = x + 42.0 + i as f32 * each;
+                ui.label(rect(cx, y, 16.0, 34.0), n, TEXT2);
+                let mut v = c[i] as f32 / 255.0;
+                if ui.slider(&format!("pp-light-{n}"), rect(cx + 20.0, y, each - 66.0, 34.0), &mut v) {
+                    c[i] = (v * 255.0).round() as u8;
+                    moved = true;
+                }
+                ui.c.text_raw(rect(cx + each - 44.0, y, 36.0, 34.0), &c[i].to_string(), 12.0, MUTED, Align::Right, Weight::Regular);
+            }
+            if moved {
+                p.light = Some(Light::Color(c));
+                changed = true;
+            }
+            y += 44.0;
+        }
         if p.light.is_some() {
             changed |= ui.check("pp-light-bt", rect(x, y, w.min(360.0), 34.0), "Também pelo Bluetooth", &mut p.light_bt);
             y += 44.0;
@@ -1213,7 +1250,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
         }
         y += 44.0;
         let n = p.macros[ed.mac].steps.len();
-        let status = if ed.rec { tr("Gravando: use o teclado e o mouse em outro programa e volte aqui para parar. O movimento do mouse não entra.") } else { tr("{} passos. Gravar troca os passos pelos novos.").replace("{}", &n.to_string()) };
+        let status = if ed.rec { tr("Gravando: vá a outro programa e use o teclado e o mouse; volte aqui para parar. Nada do que você faz dentro do Prisma entra, o movimento do mouse não entra, e os botões do controle ainda não são gravados.") } else { tr("{} passos. Gravar troca os passos pelos novos.").replace("{}", &n.to_string()) };
         ui.c.text_fit(rect(x, y, w, 20.0), &status, 12.0, if ed.rec { WARN } else { MUTED }, Align::Left, Weight::Regular);
         y += 28.0;
         let mut drop = None;
@@ -1328,6 +1365,11 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
     }
     ui.end_scroll();
 
+    if turn_map_on {
+        app.cfg.pad_map = true;
+        app.cfg.save();
+        app.apply_pads();
+    }
     if changed && !remap::save(&p) {
         app.toast.info("Não deu para salvar o perfil.");
     }

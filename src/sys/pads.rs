@@ -501,12 +501,14 @@ unsafe fn write_report(path: &str, r: &[u8], out_len: usize) -> bool {
     ok
 }
 
+/// Cor da carga, mudando a cada 1%: vermelha vazia, amarela na metade, verde cheia.
 fn battery_color(pct: u8) -> [u8; 3] {
-    match pct {
-        51.. => [0, 255, 0],
-        21..=50 => [255, 160, 0],
-        _ => [255, 0, 0],
-    }
+    let (from, to, t) = if pct < 50 {
+        ([255, 0, 0], [255, 190, 0], pct as f32 / 50.0)
+    } else {
+        ([255, 190, 0], [0, 255, 0], (pct - 50) as f32 / 50.0)
+    };
+    [0, 1, 2].map(|i| (from[i] as f32 + (to[i] as f32 - from[i] as f32) * t).round() as u8)
 }
 
 /// Barra de luz de um controle: manda a cor do perfil só quando ela muda, e a cor padrão quando o
@@ -1367,6 +1369,15 @@ mod tests {
         let ds4bt = light_report(Family::Ds4, Link::Bluetooth, [1, 2, 3], 0).unwrap();
         assert_eq!((ds4bt[0], ds4bt[1], ds4bt[3], &ds4bt[8..11]), (0x11, 0xC0, 0x02, &[1u8, 2, 3][..]));
         assert!(light_report(Family::Xbox, Link::Usb, [0; 3], 0).is_none());
+    }
+
+    #[test]
+    fn battery_colors_slide() {
+        assert_eq!((battery_color(0), battery_color(50), battery_color(100)), ([255, 0, 0], [255, 190, 0], [0, 255, 0]));
+        // Muda de 1 em 1%, sempre para um lado.
+        let v: Vec<[u8; 3]> = (0..=100).map(|p| battery_color(p)).collect();
+        assert!(v.windows(2).all(|w| w[0] != w[1]));
+        assert!(v.windows(2).all(|w| w[1][1] >= w[0][1]));
     }
 
     #[test]

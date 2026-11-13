@@ -2542,7 +2542,7 @@ impl App {
                     self.page = Page::Controllers;
                     self.pads.open_editor();
                 }
-                Some(p @ ("controllers-action" | "controllers-run" | "controllers-wizard" | "controllers-keyboard" | "controllers-macro" | "controllers-keys" | "controllers-text" | "controllers-settings" | "controllers-stick" | "controllers-trigger" | "controllers-link" | "controllers-opens" | "controllers-gyro")) => {
+                Some(p @ ("controllers-action" | "controllers-run" | "controllers-wizard" | "controllers-keyboard" | "controllers-macro" | "controllers-keys" | "controllers-text" | "controllers-settings" | "controllers-radial" | "controllers-stick" | "controllers-trigger" | "controllers-link" | "controllers-opens" | "controllers-gyro")) => {
                     self.page = Page::Controllers;
                     self.pads.open_editor();
                     crate::pages::pad_profiles::test_target(self, &p[12..]);
@@ -3541,6 +3541,7 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                         a.invalidate();
                     } else {
                         crate::sys::pads::set_live(false);
+                        crate::sys::remap::preview_light(None);
                         let _ = KillTimer(Some(a.hub), TIMER_PADS);
                     }
                 } else if w.0 == TIMER_SHARE {

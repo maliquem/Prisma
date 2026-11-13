@@ -328,7 +328,7 @@ impl State {
     }
 
     /// O atalho de travar: liga e desliga a trava, e não vai para lugar nenhum.
-    fn lock_key_event(&mut self, vk: u32, up: bool, mods: u32) -> bool {
+    fn lock_key_event(&mut self, vk: u32, up: bool, mods: u32, injected: bool) -> bool {
         if vk != self.lock_key.1 {
             return false;
         }
@@ -338,7 +338,9 @@ impl State {
         if self.lock_held {
             return true;
         }
-        if mods != self.lock_key.0 {
+        // Só a pessoa trava: programas que acertam o LED do Scroll Lock mandam a tecla sozinhos,
+        // e cada toque deles acendia e apagava o aviso sem ninguém ter apertado nada.
+        if injected || mods != self.lock_key.0 {
             return false;
         }
         self.lock_held = true;
@@ -352,7 +354,7 @@ impl State {
         let up = k.flags.0 & LLKHF_UP.0 != 0;
         let vk = k.vkCode;
         let mods = mods_now(down(VK_CONTROL.0), down(VK_MENU.0), down(VK_SHIFT.0));
-        if self.lock_key_event(vk, up, mods) {
+        if self.lock_key_event(vk, up, mods, k.flags.0 & LLKHF_INJECTED.0 != 0) {
             return true;
         }
         let Screen::Remote(i) = self.at else {
@@ -904,14 +906,17 @@ mod tests {
         s.park = POINT { x: 100, y: 100 };
         s.enter(Screen::Remote(0), false, 0.5);
         // Sem o Ctrl, a tecla não é o atalho.
-        assert!(!s.lock_key_event(0x4C, false, 0));
-        assert!(s.lock_key_event(0x4C, false, MOD_CTRL));
-        assert!(s.lock_key_event(0x4C, true, MOD_CTRL));
+        assert!(!s.lock_key_event(0x4C, false, 0, false));
+        // Mandada por um programa: não trava nada.
+        assert!(!s.lock_key_event(0x4C, false, MOD_CTRL, true));
+        assert!(!s.locked);
+        assert!(s.lock_key_event(0x4C, false, MOD_CTRL, false));
+        assert!(s.lock_key_event(0x4C, true, MOD_CTRL, false));
         assert!(s.locked);
         s.moved(POINT { x: 100 + 3000, y: 100 });
         assert_eq!((s.at, s.rx), (Screen::Remote(0), 1919));
-        s.lock_key_event(0x4C, false, MOD_CTRL);
-        s.lock_key_event(0x4C, true, MOD_CTRL);
+        s.lock_key_event(0x4C, false, MOD_CTRL, false);
+        s.lock_key_event(0x4C, true, MOD_CTRL, false);
         s.moved(POINT { x: 100 + 10, y: 100 });
         assert_eq!(s.at, Screen::Local);
     }

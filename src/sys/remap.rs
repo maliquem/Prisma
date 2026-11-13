@@ -374,17 +374,8 @@ pub enum Light {
     Color([u8; 3]),
 }
 
-/// Cores da barra de luz que o editor oferece.
-pub const COLORS: [(&str, [u8; 3]); 8] = [
-    ("Azul", [0, 0, 255]),
-    ("Vermelho", [255, 0, 0]),
-    ("Verde", [0, 255, 0]),
-    ("Roxo", [128, 0, 255]),
-    ("Rosa", [255, 0, 128]),
-    ("Laranja", [255, 96, 0]),
-    ("Ciano", [0, 255, 255]),
-    ("Branco", [255, 255, 255]),
-];
+/// Cor com que a barra de luz começa quando o perfil passa a mandar nela.
+pub const FIRST_COLOR: [u8; 3] = [0, 128, 255];
 
 pub const DESKTOP: &str = "Desktop";
 pub const BASE: &str = "Base";
@@ -1709,13 +1700,25 @@ pub fn stopped() -> bool {
     STOPPED.load(Ordering::Relaxed)
 }
 
-/// Luz do perfil em uso e se vale pelo Bluetooth; `None` com o mapeamento desligado ou parado.
+/// Luz que o editor de perfis mostra enquanto está aberto, na frente da do perfil em uso.
+static PREVIEW: Mutex<Option<(Light, bool)>> = Mutex::new(None);
+
+/// O editor de perfis mostra esta luz no controle enquanto está aberto; `None` solta a mostra.
+pub fn preview_light(l: Option<(Light, bool)>) {
+    *PREVIEW.lock().unwrap() = l;
+}
+
+/// Luz do perfil em uso e se vale pelo Bluetooth. Vale com o mapeamento em Nativo (a luz não mexe
+/// no que o jogo recebe); só a parada de emergência apaga tudo.
 pub fn light() -> Option<(Light, bool)> {
     if STOPPED.load(Ordering::Relaxed) {
         return None;
     }
+    if let Some(l) = *PREVIEW.lock().unwrap() {
+        return Some(l);
+    }
     let g = RUN.lock().unwrap();
-    g.as_ref().filter(|_| enabled()).and_then(|r| {
+    g.as_ref().and_then(|r| {
         let p = &r.profiles[r.cur];
         p.light.map(|l| (l, p.light_bt))
     })
