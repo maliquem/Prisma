@@ -2342,3 +2342,18 @@ Vibrar com o som do PC	PC sound rumble
 Mods do DSX	DSX mods
 Aceitar mods pela porta UDP 6969	Accept mods on UDP port 6969
 Mods de jogos feitos para o DSX mudam a luz e os gatilhos do DualSense. Só aceita mensagens deste PC. O que o mod pedir fica até ele soltar, até desligar aqui ou até fechar o Prisma.	Game mods made for DSX change the DualSense light bar and triggers. Only accepts messages from this PC. What a mod asks for stays until it lets go, until you turn this off here, or until Prisma is closed.
+Testar alto-falante	Test speaker
+Nenhum DualSense ou DualShock 4 ligado	No DualSense or DualShock 4 connected
+Abre o radial enquanto o botão fica segurado	Opens the radial while the button is held
+Desconecta este controle do Bluetooth	Disconnects this controller from Bluetooth
+Mostra a bateria deste controle	Shows this controller's battery
+Perfil de {}	{} profile
+Marcar como perfil de {}	Mark as {} profile
+Perfil {} de {}: o {} não tem {}	Profile {} is for {}: {} has no {}
+touchpad	touchpad
+giroscópio	gyroscope
+barra de luz	light bar
+botão de mute	mute button
+gatilhos adaptativos	adaptive triggers
+Fullscreenizer	Fullscreenizer
+O jogo vê o controle como ele é, e o perfil vale junto. Fora dos jogos, o Base.	The game sees the real controller, and the profile applies on top. Outside games, Base.

@@ -2336,3 +2336,18 @@ Vibrar com o som do PC	Вибро: звук ПК
 Mods do DSX	Моды DSX
 Aceitar mods pela porta UDP 6969	Принимать моды по UDP-порту 6969
 Mods de jogos feitos para o DSX mudam a luz e os gatilhos do DualSense. Só aceita mensagens deste PC. O que o mod pedir fica até ele soltar, até desligar aqui ou até fechar o Prisma.	Игровые моды, сделанные для DSX, меняют световую панель и триггеры DualSense. Принимаются только сообщения с этого ПК. То, что запросил мод, действует, пока он не отпустит, пока вы не отключите это здесь или пока не закроете Prisma.
+Testar alto-falante	Проверить динамик
+Nenhum DualSense ou DualShock 4 ligado	DualSense или DualShock 4 не подключён
+Abre o radial enquanto o botão fica segurado	Открывает радиальное меню, пока кнопка зажата
+Desconecta este controle do Bluetooth	Отключает этот геймпад от Bluetooth
+Mostra a bateria deste controle	Показывает заряд этого геймпада
+Perfil de {}	Профиль для {}
+Marcar como perfil de {}	Сделать профилем для {}
+Perfil {} de {}: o {} não tem {}	Профиль {} для {}: у {} нет {}
+touchpad	тачпад
+giroscópio	гироскоп
+barra de luz	световая панель
+botão de mute	кнопка отключения звука
+gatilhos adaptativos	адаптивные триггеры
+Fullscreenizer	Fullscreenizer
+O jogo vê o controle como ele é, e o perfil vale junto. Fora dos jogos, o Base.	Игра видит настоящий геймпад, профиль действует поверх. Вне игр — Base.

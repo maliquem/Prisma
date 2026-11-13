@@ -20,6 +20,8 @@ pub enum Chime {
     Profile,
     BatteryLow,
     Latency,
+    /// Botão Testar alto-falante.
+    Test,
 }
 
 /// O aviso de cada acontecimento do controle; os outros não tocam nada.
@@ -37,7 +39,7 @@ pub fn for_event(e: &Event) -> Option<Chime> {
 /// As notas do aviso: (frequência em Hz, duração em ms); frequência 0 é pausa.
 fn notes(c: Chime) -> &'static [(f32, u32)] {
     match c {
-        Chime::Connected => &[(660.0, 90), (0.0, 30), (990.0, 140)],
+        Chime::Connected | Chime::Test => &[(660.0, 90), (0.0, 30), (990.0, 140)],
         Chime::Disconnected => &[(990.0, 90), (0.0, 30), (660.0, 140)],
         Chime::Profile => &[(880.0, 80)],
         Chime::BatteryLow => &[(440.0, 120), (0.0, 80), (440.0, 120), (0.0, 80), (440.0, 120)],
@@ -152,7 +154,7 @@ mod tests {
 
     #[test]
     fn chimes_are_short_and_soft() {
-        for c in [Chime::Connected, Chime::Disconnected, Chime::Profile, Chime::BatteryLow, Chime::Latency] {
+        for c in [Chime::Connected, Chime::Disconnected, Chime::Profile, Chime::BatteryLow, Chime::Latency, Chime::Test] {
             let s = samples(c, 48_000);
             let ms: u32 = notes(c).iter().map(|n| n.1).sum();
             assert_eq!(s.len(), (48 * ms) as usize);

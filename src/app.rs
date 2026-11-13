@@ -2980,6 +2980,20 @@ impl App {
         }
     }
 
+    /// Perfil `prof` num controle (dos que `on` aceita) sem alguma parte que ele usa: o aviso diz
+    /// quais. O perfil carrega do mesmo jeito; essas ligações só não fazem nada nele.
+    fn profile_loss(prof: &str, on: impl Fn(&crate::sys::pads::Pad) -> bool) -> Option<String> {
+        use crate::sys::remap;
+        let p = remap::profiles().into_iter().find(|p| p.name == prof)?;
+        crate::sys::pads::list().into_iter().filter(|d| on(d)).find_map(|d| {
+            let lost = p.lost_on(d.family);
+            (!lost.is_empty()).then(|| {
+                let list: Vec<String> = lost.iter().map(|l| crate::i18n::tr(l).into_owned()).collect();
+                format!("Perfil {} de {}: o {} não tem {}", p.name, remap::made_for_name(p.made_for), d.name, list.join(", "))
+            })
+        })
+    }
+
     /// Avisos dos controles, pelo aviso do próprio Prisma (como o do volume).
     fn pad_events(&mut self) {
         use crate::sys::pads::{Battery, Event, Link};
@@ -2990,17 +3004,28 @@ impl App {
                 }
             }
             let text = match e {
-                Event::Connected { name, link } if self.cfg.pad_notify => match (link, crate::sys::remap::active()) {
-                    (Link::Usb, None) => format!("{name} conectado por USB"),
-                    (Link::Bluetooth, None) => format!("{name} conectado por Bluetooth"),
-                    (Link::Usb, Some(p)) => format!("{name} conectado por USB, perfil {p}"),
-                    (Link::Bluetooth, Some(p)) => format!("{name} conectado por Bluetooth, perfil {p}"),
-                },
+                // Perfil em uso com partes que este controle não tem: o aviso diz quais, mesmo sem os
+                // avisos de conexão.
+                Event::Connected { name, link } => {
+                    let active = crate::sys::remap::active();
+                    let via = if link == Link::Usb { "USB" } else { "Bluetooth" };
+                    match active.as_deref().and_then(|p| Self::profile_loss(p, |d| d.name == name)) {
+                        Some(t) => t,
+                        None if !self.cfg.pad_notify => continue,
+                        None => match active {
+                            Some(p) => format!("{name} conectado por {via}, perfil {p}"),
+                            None => format!("{name} conectado por {via}"),
+                        },
+                    }
+                }
                 Event::Disconnected { name } if self.cfg.pad_notify => format!("{name} desconectado"),
                 Event::BatteryLow { name, battery: Battery::Percent { pct, .. } } => format!("Bateria do {name} em {pct}%"),
                 Event::BatteryLow { name, .. } => format!("Bateria do {name} baixa"),
                 Event::Jitter { name, p99_ms } => format!("{name}: variação de {} ms entre relatórios", p99_ms.round()),
-                Event::Profile { name } => format!("Perfil {name}"),
+                Event::Profile { name } => {
+                    let fixed: Vec<String> = self.cfg.pad_fixed.iter().map(|e| e.0.clone()).collect();
+                    Self::profile_loss(&name, |p| !fixed.contains(&p.key)).unwrap_or_else(|| format!("Perfil {name}"))
+                }
                 Event::Stopped { on: true } => "Mapeamento parado. Segure a mesma combinação para voltar.".into(),
                 Event::Stopped { on: false } => "Mapeamento ligado de novo".into(),
                 Event::Elevated { exe } => format!("{exe} roda como administrador: o Windows não deixa as teclas do controle chegarem nele."),
@@ -3026,7 +3051,7 @@ impl App {
                         e.1 = name.clone();
                         self.cfg.save();
                     }
-                    format!("Perfil {name}")
+                    Self::profile_loss(&name, |p| p.key == key).unwrap_or_else(|| format!("Perfil {name}"))
                 }
                 Event::Turbo { button, on, pad } => {
                     let f = crate::sys::pads::list().into_iter().find(|p| p.key == pad).map_or(crate::sys::pads::Family::Generic, |p| p.family);

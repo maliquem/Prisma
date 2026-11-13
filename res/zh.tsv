@@ -2336,3 +2336,18 @@ Vibrar com o som do PC	声音振动
 Mods do DSX	DSX 模组
 Aceitar mods pela porta UDP 6969	通过 UDP 端口 6969 接收模组
 Mods de jogos feitos para o DSX mudam a luz e os gatilhos do DualSense. Só aceita mensagens deste PC. O que o mod pedir fica até ele soltar, até desligar aqui ou até fechar o Prisma.	为 DSX 制作的游戏模组可以改变 DualSense 的灯条和扳机。只接收来自本机的消息。模组的请求会一直保持，直到它释放、你在此关闭，或关闭 Prisma。
+Testar alto-falante	测试扬声器
+Nenhum DualSense ou DualShock 4 ligado	未连接 DualSense 或 DualShock 4
+Abre o radial enquanto o botão fica segurado	按住按钮时打开轮盘
+Desconecta este controle do Bluetooth	断开此手柄的蓝牙连接
+Mostra a bateria deste controle	显示此手柄的电量
+Perfil de {}	{} 配置
+Marcar como perfil de {}	设为 {} 配置
+Perfil {} de {}: o {} não tem {}	配置 {} 属于 {}：{} 没有{}
+touchpad	触摸板
+giroscópio	陀螺仪
+barra de luz	灯条
+botão de mute	静音键
+gatilhos adaptativos	自适应扳机
+Fullscreenizer	Fullscreenizer
+O jogo vê o controle como ele é, e o perfil vale junto. Fora dos jogos, o Base.	游戏看到的是真实手柄，配置在其上生效。游戏之外使用 Base。

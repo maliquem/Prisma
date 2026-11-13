@@ -279,7 +279,23 @@ const SPEEDS_T: [&str; 4] = ["Turbo 2x", "Turbo 3x", "Turbo 4x", "Turbo 5x"];
 const SIDES: [&str; 3] = ["Os dois lados", "Só o lado esquerdo", "Só o lado direito"];
 const CLICKS: [&str; 2] = ["Segurar para arrastar", "Clique liga e desliga"];
 const SPEEDS: [(&str, f32); 3] = [("Mouse devagar", 800.0), ("Mouse normal", 1600.0), ("Mouse rápido", 2600.0)];
-const KINDS: [&str; 13] = ["Tecla", "Tecla especial", "Mouse", "Roda", "Camada enquanto segura", "Liga e desliga camada", "Ação do Prisma", "Trocar de perfil", "Abrir programa", "Teclado do Prisma", "Macro", "Texto rápido", "Abrir link"];
+const KINDS: [&str; 16] = ["Tecla", "Tecla especial", "Mouse", "Roda", "Camada enquanto segura", "Liga e desliga camada", "Ação do Prisma", "Trocar de perfil", "Abrir programa", "Teclado do Prisma", "Macro", "Texto rápido", "Abrir link", "Radial do Prisma", "Desconectar o Bluetooth", "Mostrar a bateria"];
+/// Destinos 9 e 13 a 15: ações da seção Controles, com a frase que fica no lugar da lista.
+const PAD_KINDS: [(usize, u8, &str); 4] = [
+    (9, remap::KEYBOARD, "Abre e fecha o teclado na tela"),
+    (13, remap::RADIAL, "Abre o radial enquanto o botão fica segurado"),
+    (14, 24, "Desconecta este controle do Bluetooth"),
+    (15, 25, "Mostra a bateria deste controle"),
+];
+
+/// Nome de uma ação do Prisma nas listas, com a página de onde vem antes: "(Medidor) Medidor compacto".
+pub fn action_choice(n: u8) -> String {
+    let name = if n >= remap::SOUND { tr("Combinação de som {}").replace("{}", &(n - remap::SOUND + 1).to_string()) } else { remap::ACTIONS.get(n as usize).map_or_else(String::new, |a| tr(a)) };
+    match remap::action_section(n) {
+        Some(sec) => format!("({}) {name}", tr(sec)),
+        None => name,
+    }
+}
 /// Na ordem de `remap::MODES`.
 const MODE_NAMES: [&str; 3] = ["Uma vez", "Repetir enquanto segura", "Repetir até apertar de novo"];
 const STEP_KINDS: [&str; 3] = ["Tecla", "Clique", "Espera"];
@@ -606,7 +622,8 @@ fn apply(p: &mut Profile, t: Profile) {
 }
 
 /// Linha do perfil no topo da página: escolher, novo para um jogo, apagar, modelo, importar e exportar.
-pub fn top(ui: &mut Ui, app: &mut App, r: Rect) {
+/// `family`: o controle escolhido na página; perfil novo fica marcado como feito para ele.
+pub fn top(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
     let list = remap::profiles();
     let Some(ed) = app.pads.edit.as_mut() else { return };
     // Importado: um programa por vez; fechar a pergunta sem Sim recusa aquele programa.
@@ -683,6 +700,9 @@ pub fn top(ui: &mut Ui, app: &mut App, r: Rect) {
             let old = std::mem::replace(&mut p.name, name.clone());
             // A cópia não herda o padrão do programa: o padrão continua sendo um só.
             p.main &= rename;
+            if !rename {
+                p.made_for = if family == Family::Generic { Family::Xbox } else { family };
+            }
             let mut ok = remap::save(&p);
             if ok && rename {
                 // Ligações que trocam para o nome antigo passam para o novo.
@@ -735,6 +755,14 @@ pub fn top(ui: &mut Ui, app: &mut App, r: Rect) {
         (tr("Voltar ao de fábrica"), !builtin || remap::has_file(&p.name)),
         (tr("Apagar perfil"), !builtin),
     ];
+    // Para qual controle o perfil foi feito: o atual fica apagado na lista.
+    const KINDS_FOR: [Family; 3] = [Family::DualSense, Family::Ds4, Family::Xbox];
+    let first_for = items.len();
+    for f in KINDS_FOR {
+        let name = remap::made_for_name(f);
+        let t = if f == p.made_for { tr("Perfil de {}").replace("{}", name) } else { tr("Marcar como perfil de {}").replace("{}", name) };
+        items.push((t, f != p.made_for && !builtin));
+    }
     let first_tpl = items.len();
     let tpls: Vec<String> = remap::TEMPLATES.iter().chain(["Acessível"].iter()).map(|t| tr(t)).collect();
     items.extend(tpls.iter().map(|t| (tr("Modelo: {}").replace("{}", t), true)));
@@ -762,6 +790,12 @@ pub fn top(ui: &mut Ui, app: &mut App, r: Rect) {
             }
             ed.layer = 0;
             return;
+        }
+        Some(i) if (first_for..first_tpl).contains(&i) => {
+            p.made_for = KINDS_FOR[i - first_for];
+            if !remap::save(&p) {
+                app.toast.info("Não deu para salvar o perfil.");
+            }
         }
         Some(i) if i >= first_tpl => {
             ed.tpl = i - first_tpl + 1;
@@ -883,16 +917,6 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
     let mut changed = false;
     let mut pick = None;
     let mut rec_note = None;
-    let mut turn_map_on = false;
-    // Em Nativo nada deste perfil vale: sem este aviso, mudar uma ligação parece não funcionar.
-    if !app.cfg.pad_map {
-        let note = tr("O controle está em Nativo: o jogo o recebe como ele é, e nada deste perfil vale, menos a barra de luz. Para as ligações, o gyro e o touchpad valerem, mude para Teclado e mouse.");
-        let nh = crate::ui::gfx::measure(&note, 12.0, Weight::Regular, Some(w)).1.ceil();
-        ui.c.text_wrap(rect(x, y, w, nh), &note, 12.0, WARN, Weight::Regular);
-        y += nh + 8.0;
-        turn_map_on = ui.button("pp-map-on", rect(x, y, 220.0_f32.min(w), 34.0), "Teclado e mouse", false);
-        y += 44.0;
-    }
     if tab == 0 {
 
     // Assistente do Acessível: três perguntas e Aplicar.
@@ -1165,12 +1189,14 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
     let vr = rect(x, y, 2.0 * third + 8.0, 34.0);
     let sounds = app.cfg.snd_keys.len().min(crate::app::SND_KEYS_MAX);
     let others_p: Vec<String> = list.iter().map(|o| o.name.clone()).filter(|n| *n != p.name).collect();
+    // Ações do Prisma fora da seção Controles, mais as combinações de som.
+    let prisma_ids: Vec<u8> = (0..remap::ACTIONS.len() as u8).filter(|a| !remap::PAD_ACTIONS.contains(a)).chain((0..sounds as u8).map(|n| remap::SOUND + n)).collect();
     let values: Vec<String> = match ed.kind {
         1 => SPECIAL.iter().map(|s| tr(s.1)).collect(),
         2 => MOUSE.iter().map(|s| tr(s)).collect(),
         3 => WHEEL.iter().map(|s| tr(s)).collect(),
         4 | 5 => layers.clone(),
-        6 => remap::ACTIONS.iter().map(|a| tr(a)).chain((1..=sounds).map(|n| tr("Combinação de som {}").replace("{}", &n.to_string()))).collect(),
+        6 => prisma_ids.iter().map(|&a| action_choice(a)).collect(),
         7 => others_p.clone(),
         10 => p.macros.iter().map(|m| m.name.clone()).collect(),
         11 => p.texts.iter().map(short).collect(),
@@ -1189,8 +1215,8 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
         if !ed.url.is_empty() && !remap::link_ok(&ed.url) {
             ui.c.text_fit(rect(x, y + 40.0, w, 20.0), &tr("O link começa com https:// ou http://."), 12.0, WARN, Align::Left, Weight::Regular);
         }
-    } else if ed.kind == 9 {
-        ui.c.text_fit(vr, &tr("Abre e fecha o teclado na tela"), 13.0, MUTED, Align::Left, Weight::Regular);
+    } else if let Some(k) = PAD_KINDS.iter().find(|k| k.0 == ed.kind) {
+        ui.c.text_fit(vr, &tr(k.2), 13.0, MUTED, Align::Left, Weight::Regular);
     } else if values.is_empty() {
         let none = if ed.kind == 11 { "Nenhum texto: crie um em Texto rápido, mais abaixo" } else { "Nenhuma macro: crie uma em Macros, mais abaixo" };
         ui.c.text_fit(vr, &tr(none), 13.0, MUTED, Align::Left, Weight::Regular);
@@ -1205,10 +1231,10 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
         3 => Some(Out::Wheel(if ed.val == 0 { 1 } else { -1 })),
         4 => Some(Out::Layer(ed.val as u8)),
         5 => Some(Out::Toggle(ed.val as u8)),
-        6 => Some(Out::Action(if ed.val < remap::ACTIONS.len() { ed.val as u8 } else { remap::SOUND + (ed.val - remap::ACTIONS.len()) as u8 })),
+        6 => prisma_ids.get(ed.val).map(|&a| Out::Action(a)),
         // Perfil e programa só entram na lista de textos do perfil ao adicionar.
         7 => others_p.get(ed.val).map(|_| Out::Profile(0)),
-        9 => Some(Out::Action(remap::KEYBOARD)),
+        9 | 13..=15 => PAD_KINDS.iter().find(|k| k.0 == ed.kind).map(|k| Out::Action(k.1)),
         10 => p.macros.get(ed.val).map(|_| Out::Macro(ed.val as u8)),
         11 => p.texts.get(ed.val).map(|_| Out::Text(ed.val as u8)),
         12 => remap::link_ok(&ed.url).then_some(Out::Run(0)),
@@ -1608,11 +1634,6 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
     }
     ui.end_scroll();
 
-    if turn_map_on {
-        app.cfg.pad_map = true;
-        app.cfg.save();
-        app.apply_pads();
-    }
     changed |= light_sheets(ui, app, &mut p);
     if changed && !remap::save(&p) {
         app.toast.info("Não deu para salvar o perfil.");

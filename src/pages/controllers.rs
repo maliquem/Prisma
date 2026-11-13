@@ -247,14 +247,14 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     app.pads.sel = app.pads.sel.min(list.len().saturating_sub(1));
     let x = a.x + 28.0;
     let fw = a.w - 56.0;
-    super::pad_profiles::top(ui, app, rect(x, 88.0, fw, 34.0));
+    let family = list.get(app.pads.sel).map_or(Family::Xbox, |p| p.family);
+    super::pad_profiles::top(ui, app, rect(x, 88.0, fw, 34.0), family);
     let y = pad_card(ui, app, &list, rect(x, 134.0, fw, 0.0));
     // Gravando uma macro, a aba não troca: o botão Parar fica na aba Macros.
     let end = tabs(ui, x, y, &mut app.pads.tab, !crate::sys::macros::recording());
     super::pad_profiles::opens_with(ui, app, rect(end + 16.0, y, x + fw - end - 16.0, 34.0));
     let top = y + 46.0;
     let h = a.h - top - 12.0;
-    let family = list.get(app.pads.sel).map_or(Family::Xbox, |p| p.family);
     // Fora do editor, nenhuma luz de mostra: as abas que o desenham põem a dele de volta.
     remap::preview_light(None);
     remap::preview_trig(None);
@@ -363,7 +363,7 @@ fn pad_card(ui: &mut Ui, app: &mut App, list: &[Pad], at: Rect) -> f32 {
         app.cfg.save();
         app.apply_pads();
     }
-    let note = if map { "Fora dos jogos, mouse e teclado. Nos jogos, o perfil do jogo ou o Base, que não muda nada." } else { "O jogo recebe o controle como ele é. Vale para todos os controles." };
+    let note = if map { "Fora dos jogos, mouse e teclado. Nos jogos, o perfil do jogo ou o Base, que não muda nada." } else { "O jogo vê o controle como ele é, e o perfil vale junto. Fora dos jogos, o Base." };
     ui.c.text_fit(rect(r.x + 16.0, ry + 40.0, r.w - 32.0, 20.0), &tr(note), 12.0, MUTED, Align::Left, Weight::Regular);
     // O perfil deste controle e o botão de desconectar.
     if let Some(p) = list.get(app.pads.sel) {
@@ -437,7 +437,7 @@ fn settings(ui: &mut Ui, app: &mut App, list: &[Pad], a: Rect) {
         ui.c.text_wrap(rect(r.x + 16.0, r.y + 34.0, r.w - 32.0, 80.0), "Pareado sem a parte de controle: nenhum programa consegue ler. Remova o controle e pareie de novo pelo assistente clássico (Win + R, devicepairingwizard).", 12.0, TEXT2, Weight::Regular);
         y += r.h + 8.0;
     }
-    let r = rect(x, y, lw, 220.0);
+    let r = rect(x, y, lw, 262.0);
     ui.card(r);
     ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Avisos");
     let mut changed = ui.check("pad-notify", rect(r.x + 10.0, r.y + 38.0, r.w - 20.0, 36.0), "Ao conectar e desconectar", &mut app.cfg.pad_notify);
@@ -452,12 +452,20 @@ fn settings(ui: &mut Ui, app: &mut App, list: &[Pad], a: Rect) {
     ui.tip(rect(r.x + 16.0, r.y + 124.0, r.w - 156.0, 36.0), "Avisa quando o intervalo entre relatórios do controle passa desse valor (p99). 0 desliga.");
     changed |= ui.check("pad-speaker", rect(r.x + 10.0, r.y + 168.0, r.w - 20.0, 36.0), "Som no alto-falante do controle", &mut app.cfg.pad_speaker);
     ui.tip(rect(r.x + 10.0, r.y + 168.0, r.w - 20.0, 36.0), "Um som curto no alto-falante do DualSense e do DualShock 4, no cabo e no Bluetooth, ao conectar, desconectar, trocar de perfil, com bateria baixa e com variação alta.");
+    // Toca mesmo com a caixa desligada: serve para ver se o alto-falante funciona.
+    if ui.button("pad-speaker-test", rect(r.x + 16.0, r.y + 212.0, r.w - 32.0, 34.0), "Testar alto-falante", false) {
+        if list.iter().any(|p| matches!(p.family, pads::Family::DualSense | pads::Family::Ds4)) {
+            crate::sys::pad_sound::play(crate::sys::pad_sound::Chime::Test);
+        } else {
+            app.toast.info("Nenhum DualSense ou DualShock 4 ligado");
+        }
+    }
     if changed {
         app.cfg.save();
         app.apply_pads();
     }
     y += r.h + 12.0;
-    y = mapping(ui, app, rect(x, y, lw, 0.0));
+    y = mapping(ui, rect(x, y, lw, 0.0));
     y = dsx(ui, app, rect(x, y, lw, 0.0));
     for t in &app.pads.conflicts {
         let r = rect(x, y, lw, 64.0);
@@ -910,26 +918,16 @@ fn rows_draw(ui: &mut Ui, x: f32, y: f32, w: f32, rows: &[(&str, String, bool)])
 
 /// Texto para colar num relatório: controles, conexão, taxa, bateria, conflitos.
 /// Mapeamento: liga e desliga, perfil ativo, parada de emergência e o tempo interno.
-fn mapping(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
-    let r = rect(at.x, at.y, at.w, if app.cfg.pad_map { 180.0 } else { 220.0 });
+fn mapping(ui: &mut Ui, at: Rect) -> f32 {
+    let r = rect(at.x, at.y, at.w, 180.0);
     ui.card(r);
     ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Mapeamento");
-    let state = match (app.cfg.pad_map, remap::stopped(), remap::active()) {
-        (false, ..) => (crate::i18n::tr("Desligado").into_owned(), MUTED),
-        (true, true, _) => (crate::i18n::tr("Parado pela combinação").into_owned(), WARN),
-        (true, false, p) => (crate::i18n::tr("Perfil {}").replace("{}", &crate::i18n::tr(&p.unwrap_or_default())), TEXT),
+    let state = match (remap::stopped(), remap::active()) {
+        (true, _) => (crate::i18n::tr("Parado pela combinação").into_owned(), WARN),
+        (false, p) => (crate::i18n::tr("Perfil {}").replace("{}", &crate::i18n::tr(&p.unwrap_or_default())), TEXT),
     };
-    ui.c.text_fit(rect(r.x + 16.0, r.y + 42.0, r.w - 236.0, 20.0), &state.0, 13.0, state.1, Align::Left, Weight::Semibold);
-    // Desligado, nada de perfil vale: o botão de ligar fica aqui, onde o estado aparece.
-    if !app.cfg.pad_map {
-        if ui.button("pad-map-on2", rect(r.right() - 212.0, r.y + 34.0, 196.0, 34.0), "Ligar: teclado e mouse", false) {
-            app.cfg.pad_map = true;
-            app.cfg.save();
-            app.apply_pads();
-        }
-        ui.c.text_wrap(rect(r.x + 16.0, r.y + 68.0, r.w - 32.0, 36.0), "Em Nativo, o jogo recebe o controle como ele é: perfis, gyro e touchpad não valem, só a barra de luz.", 12.0, WARN, Weight::Regular);
-    }
-    let ny = if app.cfg.pad_map { 68.0 } else { 108.0 };
+    ui.c.text_fit(rect(r.x + 16.0, r.y + 42.0, r.w - 32.0, 20.0), &state.0, 13.0, state.1, Align::Left, Weight::Semibold);
+    let ny = 68.0;
     ui.c.text_wrap(rect(r.x + 16.0, r.y + ny, r.w - 32.0, 72.0), "Para parar tudo sem teclado, segure Guia (ou PS) + Select + Start por 2 segundos. A mesma combinação liga de novo.", 12.0, TEXT2, Weight::Regular);
     if let Some((med, p99)) = remap::latency() {
         let t = crate::i18n::tr("Tempo interno: {} µs na mediana, {} µs no p99").replacen("{}", &med.to_string(), 1).replacen("{}", &p99.to_string(), 1);
@@ -1032,7 +1030,7 @@ fn radial(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
     ui.tip(check, "Um círculo em cada stick, com 8 lugares cada. O stick que apontar por último escolhe.");
     // Nada, e todas as ações menos o próprio radial.
     let ids: Vec<u8> = std::iter::once(EMPTY).chain((0..remap::ACTIONS.len() as u8).filter(|&a| a != remap::RADIAL)).collect();
-    let names: Vec<String> = ids.iter().map(|&a| crate::i18n::tr(remap::ACTIONS.get(a as usize).copied().unwrap_or("Nada")).into_owned()).collect();
+    let names: Vec<String> = ids.iter().map(|&a| if a == EMPTY { crate::i18n::tr("Nada").into_owned() } else { super::pad_profiles::action_choice(a) }).collect();
     // Nos lugares (não nas 4 opções), também a troca de perfil.
     // Logo depois de "Nada", para não sumir no fim da lista das ações.
     let top_ids: Vec<u8> = [EMPTY, PROFILES].into_iter().chain(ids[1..].iter().copied()).collect();

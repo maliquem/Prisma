@@ -80,7 +80,8 @@ fn pad_profiles() -> Reply {
     Reply::PadProfiles {
         profiles: remap::profiles().into_iter().map(|p| p.name).collect(),
         active: remap::active().unwrap_or_default(),
-        mapping: remap::enabled(),
+        // O Launcher chama o modo Teclado e mouse de mapeamento; o motor roda nos dois modos.
+        mapping: remap::kbm(),
         stopped: remap::stopped(),
     }
 }

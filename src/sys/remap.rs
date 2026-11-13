@@ -209,6 +209,39 @@ pub const KEYBOARD: u8 = 26;
 pub const RADIAL: u8 = 27;
 /// Primeira ação "Página ...": abre a página `n - PAGES` da barra lateral.
 pub const PAGES: u8 = 33;
+/// Nome do controle para o qual um perfil foi feito (`Profile.made_for`).
+pub fn made_for_name(f: pads::Family) -> &'static str {
+    match f {
+        pads::Family::DualSense => "DualSense",
+        pads::Family::Ds4 => "DualShock 4",
+        _ => "Xbox",
+    }
+}
+
+/// Ações da própria seção Controles: no editor de perfis têm destino próprio, fora de "Ação do Prisma".
+pub const PAD_ACTIONS: [u8; 4] = [24, 25, KEYBOARD, RADIAL];
+
+/// Página de onde vem a ação `n` (nome da barra lateral), para pôr antes do nome nas listas.
+/// As "Página ..." e "Abrir o Prisma" já dizem de onde vêm.
+pub fn action_section(n: u8) -> Option<&'static str> {
+    Some(match n {
+        0..=5 => "Captura",
+        6..=13 => "Medidor",
+        14 => "HDR",
+        15..=17 => "Som",
+        18 => "Fullscreenizer",
+        19 => "Widget",
+        20 => "Otimizar",
+        21 => "Configurações",
+        22 => "Monitor",
+        23 => "Pesquisar",
+        24..=27 => "Controles",
+        29..=31 => "Energia",
+        32 => "Compartilhar tela",
+        n if n >= SOUND => "Som",
+        _ => return None,
+    })
+}
 /// Modelos prontos, na ordem de `Profile::template`. O Acessível vem do assistente.
 pub const TEMPLATES: [&str; 4] = ["Só Mouse", "Jogo sem controle", "Corrida", "Um lado só"];
 
@@ -371,6 +404,8 @@ pub struct Profile {
     pub buzz: u8,
     /// O que faz o controle vibrar enquanto se joga.
     pub haptic: Haptic,
+    /// Controle para o qual o perfil foi feito: DualSense, Ds4 ou Xbox (os outros contam como Xbox).
+    pub made_for: pads::Family,
 }
 
 /// Háptico pelo perfil: a força (0 desligado, 1 a 8) com que cada fonte faz o controle vibrar.
@@ -474,7 +509,7 @@ impl Profile {
     fn empty(name: &str) -> Self {
         let stick = Zone { start: 0.15, end: 0.95 };
         let trig = Zone { start: 0.05, end: 0.95 };
-        Profile { name: name.into(), games: vec![], main: false, zones: [stick, stick, trig, trig], layers: vec![Layer { name: "Base".into(), parent: None, ls: None, rs: None, binds: vec![], keys: vec![], gyro: None, touch: None }], strings: vec![], turbo: vec![], turbo_key: TURBO_KEY, macros: vec![], texts: vec![], gyro_opt: GyroOpt::default(), curve: [2.0; 2], hair: [false; 2], light: None, light_bt: false, trig: [Trig::Pass; 2], buzz: 0, haptic: Haptic::default() }
+        Profile { name: name.into(), games: vec![], main: false, zones: [stick, stick, trig, trig], layers: vec![Layer { name: "Base".into(), parent: None, ls: None, rs: None, binds: vec![], keys: vec![], gyro: None, touch: None }], strings: vec![], turbo: vec![], turbo_key: TURBO_KEY, macros: vec![], texts: vec![], gyro_opt: GyroOpt::default(), curve: [2.0; 2], hair: [false; 2], light: None, light_bt: false, trig: [Trig::Pass; 2], buzz: 0, haptic: Haptic::default(), made_for: pads::Family::Xbox }
     }
 
     /// Base: nada mapeado, o jogo lê o controle como ele é.
@@ -625,6 +660,11 @@ impl Profile {
         use std::fmt::Write;
         let mut s = String::from("prisma-profile 1\n");
         let _ = writeln!(s, "name {}", self.name);
+        let _ = writeln!(s, "for {}", match self.made_for {
+            pads::Family::DualSense => "dualsense",
+            pads::Family::Ds4 => "ds4",
+            _ => "xbox",
+        });
         for g in &self.games {
             let _ = writeln!(s, "game {g}");
         }
@@ -748,9 +788,17 @@ impl Profile {
             return None;
         }
         let mut p = Profile { layers: vec![], ..Self::empty("") };
+        let mut made_for = None;
         for line in lines {
             let (cmd, rest) = line.split_once(' ')?;
             match cmd {
+                "for" => {
+                    made_for = Some(match rest {
+                        "dualsense" => pads::Family::DualSense,
+                        "ds4" => pads::Family::Ds4,
+                        _ => pads::Family::Xbox,
+                    })
+                }
                 "name" => p.name = rest.chars().filter(|c| !c.is_control()).take(60).collect(),
                 "game" => p.games.push(rest.to_lowercase()),
                 "main" => p.main = rest == "1",
@@ -960,7 +1008,29 @@ impl Profile {
         // Camada citada numa ligação tem que existir.
         let n = p.layers.len();
         let ok = p.layers.iter().flat_map(|l| l.binds.iter().chain(&l.keys)).all(|b| !matches!(b.out, Out::Layer(x) | Out::Toggle(x) if x as usize >= n) && !matches!(b.out, Out::Macro(x) if x as usize >= p.macros.len()) && !matches!(b.out, Out::Text(x) if x as usize >= p.texts.len()));
+        // Perfil de antes da marca: de DualSense se usa alguma parte que o Xbox não tem.
+        p.made_for = made_for.unwrap_or(if p.lost_on(pads::Family::Xbox).is_empty() { pads::Family::Xbox } else { pads::Family::DualSense });
         (ok && n > 0 && !p.name.is_empty()).then_some(p)
+    }
+
+    /// Partes do controle que o perfil usa e que um controle da família `fam` não tem.
+    pub fn lost_on(&self, fam: pads::Family) -> Vec<&'static str> {
+        let sony = matches!(fam, pads::Family::DualSense | pads::Family::Ds4);
+        let binds = || self.layers.iter().flat_map(|l| &l.binds);
+        let on = |m: &Option<Motion>| matches!(m, Some(Motion::Mouse(_) | Motion::Stick(_)));
+        let touch = binds().any(|b| (b.button | b.with) & (TPU | TPD | TPL | TPR | TPTAP | TPCL | TPCR | TPUL | TPUR | TPDL | TPDR) != 0) || self.layers.iter().any(|l| on(&l.touch));
+        let mut v = vec![];
+        let mut lose = |used: bool, kept: bool, name| {
+            if used && !kept {
+                v.push(name);
+            }
+        };
+        lose(touch, sony, "touchpad");
+        lose(self.layers.iter().any(|l| on(&l.gyro)), sony, "giroscópio");
+        lose(self.light.is_some(), sony, "barra de luz");
+        lose(binds().any(|b| (b.button | b.with) & pads::MUTE != 0), fam == pads::Family::DualSense, "botão de mute");
+        lose(self.trig != [Trig::Pass; 2], fam == pads::Family::DualSense, "gatilhos adaptativos");
+        v
     }
 }
 
@@ -1658,6 +1728,8 @@ impl Engine {
 // ---------- No Windows ----------
 
 static ON: AtomicBool = AtomicBool::new(false);
+/// Modo Teclado e mouse (fora dos jogos vale o Desktop); desligado é o Nativo.
+static KBM: AtomicBool = AtomicBool::new(false);
 static STOPPED: AtomicBool = AtomicBool::new(false);
 static RUN: Mutex<Option<Run>> = Mutex::new(None);
 /// Última olhada no foco: quando, a janela e se ela ocupava a tela inteira.
@@ -1890,27 +1962,34 @@ fn reload() {
     *FOCUS.lock().unwrap() = (None, 0, false);
 }
 
-/// Liga ou desliga o mapeamento. `games` são os .exe do Medidor.
-pub fn configure(on: bool, games: Vec<String>) {
-    let acts = {
+/// O motor do perfil roda nos dois modos. `kbm` é o modo Teclado e mouse: fora dos jogos vale o
+/// Desktop; em Nativo, o Base. `games` são os .exe do Medidor.
+pub fn configure(kbm: bool, games: Vec<String>) {
+    {
         let mut g = RUN.lock().unwrap();
         let r = g.get_or_insert_with(|| Run { profiles: load_profiles(), cur: 0, games: vec![], engines: HashMap::new(), want: None, lat: vec![], warned: HashSet::new(), ac: false, ac_seen: HashMap::new(), kbd: None, kheld: 0, kswallow: 0, typed: String::new(), exe: String::new(), last: load_last(), pids: HashMap::new(), fixed: HashMap::new() });
         r.games = games.into_iter().map(|s| s.to_lowercase()).collect();
-        ON.store(on, Ordering::Relaxed);
-        set_keys(r);
-        if on {
-            vec![]
-        } else {
-            super::macros::stop_all();
-            let acts: Vec<Act> = r.engines.values_mut().flat_map(|e| e.0.release_all()).collect();
-            r.engines.clear();
-            acts
+        let first = !ON.swap(true, Ordering::Relaxed);
+        if first || KBM.swap(kbm, Ordering::Relaxed) != kbm {
+            KBM.store(kbm, Ordering::Relaxed);
+            // Em Nativo o Desktop não vale: até o programa em foco escolher de novo, fica o Base.
+            if !kbm && r.profiles[r.cur].name == DESKTOP {
+                r.cur = r.profiles.iter().position(|p| p.name == BASE).unwrap_or(r.cur);
+            }
+            r.exe.clear();
+            *FOCUS.lock().unwrap() = (None, 0, false);
         }
-    };
-    send(&acts);
+        set_keys(r);
+    }
     super::pads::poke();
 }
 
+/// Modo Teclado e mouse ligado (desligado é o Nativo).
+pub fn kbm() -> bool {
+    KBM.load(Ordering::Relaxed)
+}
+
+/// O motor do perfil já começou (roda nos dois modos, Nativo e Teclado e mouse).
 pub fn enabled() -> bool {
     ON.load(Ordering::Relaxed)
 }
@@ -2382,7 +2461,7 @@ fn on_focus(pid: u32, full: bool) {
         // com a opção ligada.
         let same_run = r.pids.insert(exe.clone(), pid) == Some(pid);
         let last = if same_run || REOPEN_LAST.load(Ordering::Relaxed) { r.last.get(&exe).map(String::as_str) } else { None };
-        let to = pick_for(&r.profiles, &exe, keep, last).unwrap_or_else(|| if game { named(BASE) } else { named(DESKTOP) });
+        let to = pick_for(&r.profiles, &exe, keep, last).unwrap_or_else(|| if game || !KBM.load(Ordering::Relaxed) { named(BASE) } else { named(DESKTOP) });
         r.exe = exe.clone();
         r.want = (to != r.cur).then(|| (to, Instant::now() + SWITCH_DELAY));
         let turbo = r.profiles[to].turbo.iter().any(|t| t.on);
@@ -2642,6 +2721,26 @@ buzz 9
         p.light_bt = false;
         let q = Profile::parse(&p.to_text()).unwrap();
         assert_eq!((q.light, q.light_bt), (Some(Light::Battery(b)), false));
+    }
+
+    #[test]
+    fn profile_knows_its_controller() {
+        use pads::Family::*;
+        let mut p = Profile::base();
+        p.name = "X".into();
+        assert!(p.lost_on(Xbox).is_empty());
+        p.trig[1] = Trig::Rigid { start: 2, power: 5 };
+        p.layers[0].gyro = Some(Motion::Mouse(10.0));
+        p.layers[0].binds.push(Bind { button: TPTAP, with: 0, when: When::Press, out: Out::Mouse(1) });
+        assert_eq!(p.lost_on(Xbox), ["touchpad", "giroscópio", "gatilhos adaptativos"]);
+        assert_eq!(p.lost_on(Ds4), ["gatilhos adaptativos"]);
+        assert!(p.lost_on(DualSense).is_empty());
+        // Sem a linha "for": perfil antigo com partes do DualSense conta como de DualSense.
+        let old: String = p.to_text().lines().filter(|l| !l.starts_with("for ")).map(|l| format!("{l}
+")).collect();
+        assert_eq!(Profile::parse(&old).unwrap().made_for, DualSense);
+        p.made_for = Ds4;
+        assert_eq!(Profile::parse(&p.to_text()).unwrap().made_for, Ds4);
     }
 
     #[test]
