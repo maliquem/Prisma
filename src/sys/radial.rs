@@ -12,21 +12,33 @@ use super::pads::{self, Input};
 pub const EMPTY: u8 = u8::MAX;
 /// Lugar que abre um programa (o caminho vem de `set_programs`).
 pub const PROGRAM: u8 = u8::MAX - 1;
+/// Lugar com 4 opções, escolhidas pelo direcional (`sub`).
+pub const GROUP: u8 = u8::MAX - 2;
 /// Lugares: 8 do stick direito e, com dois círculos, mais 8 do esquerdo.
 pub const SLOTS: usize = 16;
+/// Os 16 lugares e, depois deles, as 4 opções de cada um (`sub`).
+pub const ALL: usize = SLOTS * 5;
+/// Botões do direcional na ordem das opções: cima, direita, baixo, esquerda.
+pub const DPAD: [u32; 4] = [pads::UP, pads::RIGHT, pads::DOWN, pads::LEFT];
 
-static PROGRAMS: Mutex<[String; SLOTS]> = Mutex::new([const { String::new() }; SLOTS]);
+/// Posição da opção `d` (0 a 3, a ordem de `DPAD`) do lugar `i`.
+pub const fn sub(i: usize, d: usize) -> usize {
+    SLOTS + i * 4 + d
+}
 
-/// Caminho do programa de cada lugar marcado com `PROGRAM`.
-pub fn set_programs(paths: [String; SLOTS]) {
+static PROGRAMS: Mutex<[String; ALL]> = Mutex::new([const { String::new() }; ALL]);
+
+/// Caminho do programa de cada lugar ou opção marcado com `PROGRAM`.
+pub fn set_programs(paths: [String; ALL]) {
     *PROGRAMS.lock().unwrap() = paths;
 }
 
 /// O que vem da configuração (aba Controles, cartão Radial do Prisma).
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Config {
-    /// Ações em cada direção, de cima no sentido do relógio: 0 a 7 no stick direito, 8 a 15 no esquerdo.
-    pub slots: [u8; SLOTS],
+    /// Ações em cada direção, de cima no sentido do relógio: 0 a 7 no stick direito, 8 a 15 no
+    /// esquerdo; depois, as 4 opções de cada lugar `GROUP` (`sub`).
+    pub slots: [u8; ALL],
     /// Dois círculos, um em cada stick (16 lugares). Sempre fica aberto.
     pub two: bool,
     /// Com um círculo só, o stick esquerdo aponta em vez do direito.
@@ -46,7 +58,7 @@ pub struct Config {
 }
 
 pub const DEFAULT: Config = Config {
-    slots: [EMPTY; SLOTS],
+    slots: [EMPTY; ALL],
     two: false,
     left: false,
     button: 0,
@@ -72,11 +84,15 @@ pub fn configure(mut c: Config) {
 }
 
 struct Radial {
-    slots: [u8; SLOTS],
+    slots: [u8; ALL],
     two: bool,
     left: bool,
     pad: Option<String>,
     sel: Option<usize>,
+    /// Opção do direcional escolhida no lugar `GROUP` escolhido.
+    sub: Option<usize>,
+    /// O que Confirmar disparou: lugar ou opção (`sub`), para achar o programa.
+    fired: Option<usize>,
     /// Para onde cada stick apontava no relatório anterior: direito, esquerdo.
     last: [Option<usize>; 2],
     /// Stick direito e esquerdo.
@@ -103,6 +119,7 @@ static STATE: Mutex<State> = Mutex::new(State::Closed);
 pub struct View {
     pub open: bool,
     pub sel: Option<usize>,
+    pub sub: Option<usize>,
     pub two: bool,
     pub left: bool,
     pub watch: u32,
@@ -113,6 +130,7 @@ pub fn view() -> View {
         State::Open(r) => View {
             open: true,
             sel: r.sel,
+            sub: r.sub,
             two: r.two,
             left: r.left,
             watch: r.watch,
@@ -140,6 +158,8 @@ fn open(watch: u32) {
             left,
             pad: None,
             sel: None,
+            sub: None,
+            fired: None,
             last: [None; 2],
             stick: [(0.0, 0.0); 2],
             keep,
@@ -166,10 +186,11 @@ pub fn open_action() {
 }
 
 /// Só para as fotos do manual: aberto, apontando para `sel`.
-pub fn show_for_test(sel: usize) {
+pub fn show_for_test(sel: usize, sub: Option<usize>) {
     open(pads::BACK);
     if let State::Open(r) = &mut *STATE.lock().unwrap() {
         r.sel = Some(sel);
+        r.sub = sub;
         let a = ((sel % 8) as f32 * 45.0).to_radians();
         r.stick[if r.left { 1 } else { sel / 8 }] = (a.sin() * 0.9, a.cos() * 0.9);
     }
@@ -194,12 +215,27 @@ fn step(r: &mut Radial, inp: &Input) -> (Option<u8>, bool, bool) {
         right.or(left).or(if r.keep { r.sel } else { None })
     };
     r.last = [right, left];
-    let changed = sel != r.sel;
+    let mut changed = sel != r.sel;
+    if changed {
+        r.sub = None;
+    }
     r.sel = sel;
     let down = inp.buttons & !r.prev;
     r.prev = inp.buttons;
-    if down & r.ok != 0 && sel.is_some() {
-        return (sel.map(|i| r.slots[i]), true, true);
+    // Lugar de 4 opções: o direcional escolhe uma (só as que não estão vazias).
+    if let Some(i) = sel.filter(|&i| r.slots[i] == GROUP) {
+        if let Some(d) = (0..4).find(|&d| down & DPAD[d] != 0 && r.slots[sub(i, d)] != EMPTY) {
+            changed |= r.sub != Some(d);
+            r.sub = Some(d);
+        }
+    }
+    let target = match sel {
+        Some(i) if r.slots[i] == GROUP => r.sub.map(|d| sub(i, d)),
+        s => s,
+    };
+    if down & r.ok != 0 && target.is_some() {
+        r.fired = target;
+        return (target.map(|i| r.slots[i]), true, true);
     }
     if down & (r.back | r.watch) != 0 {
         return (None, true, true);
@@ -224,7 +260,7 @@ pub fn feed(key: &str, inp: &Input, _now: Instant) -> bool {
                     return true;
                 }
                 let (pick, close, changed) = step(r, inp);
-                let slot = r.sel;
+                let slot = r.fired;
                 if close {
                     *s = if inp.buttons == 0 {
                         State::Closed
@@ -403,11 +439,17 @@ mod tests {
 
     fn radial(watch: u32) -> Radial {
         Radial {
-            slots: [10, 11, EMPTY, 13, 14, 15, 16, 17, 20, 21, 22, 23, 24, 25, 26, EMPTY],
+            slots: {
+                let mut s = [EMPTY; ALL];
+                s[..SLOTS].copy_from_slice(&[10, 11, EMPTY, 13, 14, 15, 16, 17, 20, 21, 22, 23, 24, 25, 26, EMPTY]);
+                s
+            },
             two: false,
             left: false,
             pad: None,
             sel: None,
+            sub: None,
+            fired: None,
             last: [None; 2],
             stick: [(0.0, 0.0); 2],
             keep: false,
@@ -416,6 +458,35 @@ mod tests {
             watch,
             prev: u32::MAX,
         }
+    }
+
+    #[test]
+    fn dpad_picks_one_of_four_options_and_confirm_fires_it() {
+        let mut r = radial(pads::GUIDE);
+        r.slots[2] = GROUP;
+        r.slots[sub(2, 0)] = 30;
+        r.slots[sub(2, 2)] = PROGRAM;
+        step(&mut r, &inp(0, 1.0, 0.0));
+        assert_eq!(r.sel, Some(2));
+        // Sem opção escolhida, Confirmar não faz nada; direção vazia (direita) não escolhe.
+        assert_eq!(step(&mut r, &inp(pads::A, 1.0, 0.0)).1, false);
+        step(&mut r, &inp(0, 1.0, 0.0));
+        assert_eq!(step(&mut r, &inp(pads::RIGHT, 1.0, 0.0)), (None, false, false));
+        assert_eq!(step(&mut r, &inp(pads::DOWN, 1.0, 0.0)), (None, false, true));
+        assert_eq!(r.sub, Some(2));
+        step(&mut r, &inp(0, 1.0, 0.0));
+        assert_eq!(step(&mut r, &inp(pads::UP, 1.0, 0.0)), (None, false, true));
+        step(&mut r, &inp(0, 1.0, 0.0));
+        assert_eq!(step(&mut r, &inp(pads::A, 1.0, 0.0)), (Some(30), true, true));
+        assert_eq!(r.fired, Some(sub(2, 0)));
+        // Outro lugar desfaz a opção escolhida.
+        let mut r = radial(pads::GUIDE);
+        r.slots[2] = GROUP;
+        r.slots[sub(2, 0)] = 30;
+        step(&mut r, &inp(0, 1.0, 0.0));
+        step(&mut r, &inp(pads::UP, 1.0, 0.0));
+        step(&mut r, &inp(0, 0.0, 1.0));
+        assert_eq!(r.sub, None);
     }
 
     #[test]
@@ -522,7 +593,7 @@ mod tests {
         let t0 = Instant::now();
         configure(Config {
             button: pads::BACK,
-            slots: [1; SLOTS],
+            slots: [1; ALL],
             ..DEFAULT
         });
         let key = "teste-gatilho";

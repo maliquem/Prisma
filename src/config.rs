@@ -296,13 +296,13 @@ pub struct Config {
     /// Aviso quando o p99 do intervalo do controle passa deste valor, em ms; 0 desliga.
     pub pad_jitter_ms: u32,
     /// Ações do radial do Prisma, de cima no sentido do relógio (`sys::radial::EMPTY`: vazio).
-    pub pad_radial: [u8; crate::sys::radial::SLOTS],
+    pub pad_radial: [u8; crate::sys::radial::ALL],
     /// Dois círculos no radial, um em cada stick (16 lugares); sempre fica aberto.
     pub pad_radial_two: bool,
     /// Com um círculo só, o stick esquerdo escolhe em vez do direito.
     pub pad_radial_left: bool,
     /// Nome e caminho do programa de cada lugar do radial marcado com `sys::radial::PROGRAM`.
-    pub pad_radial_prog: [(String, String); crate::sys::radial::SLOTS],
+    pub pad_radial_prog: [(String, String); crate::sys::radial::ALL],
     /// Botão que abre o radial: 0 nenhum, 1 Select, 2 Guia.
     pub pad_radial_btn: u8,
     /// Tempo de segurar o botão do radial, em ms (200 a 2000).
@@ -426,8 +426,8 @@ impl Default for Config {
             pad_map: false,
             pad_low: 10,
             pad_jitter_ms: 0,
-            pad_radial: RADIAL_DEFAULT,
-            pad_radial_prog: Default::default(),
+            pad_radial: radial_default(),
+            pad_radial_prog: std::array::from_fn(|_| Default::default()),
             pad_radial_two: false,
             pad_radial_left: false,
             pad_radial_btn: 1,
@@ -471,22 +471,30 @@ pub fn write_safe(path: &std::path::Path, data: impl AsRef<[u8]>) -> std::io::Re
 /// busca, mais volume, HDR, Medidor completo, menos volume, widget, foto da área e gravar a janela.
 pub const RADIAL_DEFAULT: [u8; crate::sys::radial::SLOTS] = [26, 1, 5, 6, 17, 25, 20, 4, 23, 15, 14, 7, 16, 19, 0, 3];
 
-/// Oito ou dezesseis ações separadas por vírgula (oito: o stick esquerdo fica com o de fábrica);
-/// qualquer valor fora da lista invalida tudo.
-fn parse_radial(v: &str) -> Option<[u8; crate::sys::radial::SLOTS]> {
-    use crate::sys::{radial::{EMPTY, PROGRAM}, remap};
-    let list: Vec<u8> = v.split(',').map(|x| x.trim().parse::<u8>().ok().filter(|&a| a == EMPTY || a == PROGRAM || ((a as usize) < remap::ACTIONS.len() && a != remap::RADIAL))).collect::<Option<_>>()?;
-    let mut out = RADIAL_DEFAULT;
+/// Os 16 lugares de fábrica, sem opções de direcional.
+pub fn radial_default() -> [u8; crate::sys::radial::ALL] {
+    let mut out = [crate::sys::radial::EMPTY; crate::sys::radial::ALL];
+    out[..RADIAL_DEFAULT.len()].copy_from_slice(&RADIAL_DEFAULT);
+    out
+}
+
+/// Oito, dezesseis ou todas as ações separadas por vírgula (oito: o stick esquerdo fica com o de
+/// fábrica; dezesseis: sem opções de direcional); qualquer valor fora da lista invalida tudo.
+/// `GROUP` só vale nos 16 lugares.
+fn parse_radial(v: &str) -> Option<[u8; crate::sys::radial::ALL]> {
+    use crate::sys::{radial::{ALL, EMPTY, GROUP, PROGRAM, SLOTS}, remap};
+    let list: Vec<u8> = v.split(',').enumerate().map(|(i, x)| x.trim().parse::<u8>().ok().filter(|&a| a == EMPTY || a == PROGRAM || (a == GROUP && i < SLOTS) || ((a as usize) < remap::ACTIONS.len() && a != remap::RADIAL))).collect::<Option<_>>()?;
+    let mut out = radial_default();
     match list.len() {
-        8 | 16 => out[..list.len()].copy_from_slice(&list),
+        8 | SLOTS | ALL => out[..list.len()].copy_from_slice(&list),
         _ => return None,
     }
     Some(out)
 }
 
-/// "nome<TAB>caminho" de cada lugar, separados por `|` (nenhum dos dois cabe num caminho do Windows).
-fn parse_radial_prog(v: &str) -> [(String, String); crate::sys::radial::SLOTS] {
-    let mut out: [(String, String); crate::sys::radial::SLOTS] = Default::default();
+/// "nome<TAB>caminho" de cada lugar e opção, separados por `|` (nenhum dos dois cabe num caminho do Windows).
+fn parse_radial_prog(v: &str) -> [(String, String); crate::sys::radial::ALL] {
+    let mut out: [(String, String); crate::sys::radial::ALL] = std::array::from_fn(|_| Default::default());
     for (o, x) in out.iter_mut().zip(v.split('|')) {
         if let Some((n, p)) = x.split_once('\t') {
             *o = (n.to_string(), p.to_string());
@@ -678,7 +686,7 @@ impl Config {
                 "pad_map" => c.pad_map = b,
                 "pad_low" => c.pad_low = v.parse::<u8>().unwrap_or(10).min(50),
                 "pad_jitter_ms" => c.pad_jitter_ms = v.parse::<u32>().unwrap_or(0).min(100),
-                "pad_radial" => c.pad_radial = parse_radial(v).unwrap_or(RADIAL_DEFAULT),
+                "pad_radial" => c.pad_radial = parse_radial(v).unwrap_or_else(radial_default),
                 "pad_radial_prog" => c.pad_radial_prog = parse_radial_prog(v),
                 "pad_radial_two" => c.pad_radial_two = b,
                 "pad_radial_left" => c.pad_radial_left = b,
@@ -1010,7 +1018,7 @@ mod tests {
 
     #[test]
     fn radial_parses_eight_valid_actions() {
-        assert_eq!(parse_radial("26,1,5,6,17,25,20,4"), Some(RADIAL_DEFAULT));
+        assert_eq!(parse_radial("26,1,5,6,17,25,20,4"), Some(radial_default()));
         assert_eq!(parse_radial("255,1,5,6,17,25,20,4").map(|r| r[0]), Some(crate::sys::radial::EMPTY));
         assert_eq!(parse_radial("1,2,3"), None);
         // Dezesseis: o stick esquerdo também vem do arquivo.
@@ -1024,6 +1032,14 @@ mod tests {
         let p = parse_radial_prog("Bloco de Notas\tC:\\Windows\\notepad.exe|||");
         assert_eq!(p[0], ("Bloco de Notas".to_string(), "C:\\Windows\\notepad.exe".to_string()));
         assert_eq!(p[1], Default::default());
+        // Lugar de 4 opções e as opções dele voltam; nas opções, `GROUP` não vale.
+        let mut v = radial_default();
+        v[2] = crate::sys::radial::GROUP;
+        v[crate::sys::radial::sub(2, 3)] = 7;
+        let text = v.map(|a| a.to_string()).join(",");
+        assert_eq!(parse_radial(&text), Some(v));
+        v[crate::sys::radial::sub(2, 0)] = crate::sys::radial::GROUP;
+        assert_eq!(parse_radial(&v.map(|a| a.to_string()).join(",")), None);
     }
 
     #[test]

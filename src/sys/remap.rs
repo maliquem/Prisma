@@ -70,7 +70,7 @@ pub enum Out {
 
 /// Ações do Prisma que um botão pode chamar: todas as que têm atalho, mais HDR, Bluetooth e
 /// bateria. A ordem é a do arquivo: só cresce no fim. `SOUND + n` troca para a combinação de som n.
-pub const ACTIONS: [&str; 28] = [
+pub const ACTIONS: [&str; 54] = [
     "Foto da área",
     "Foto da tela inteira",
     "Foto da janela em foco",
@@ -99,11 +99,40 @@ pub const ACTIONS: [&str; 28] = [
     "Mostrar a bateria",
     "Abrir e fechar o teclado do Prisma",
     "Abrir o radial do Prisma",
+    "Abrir o Prisma",
+    "Plano de energia automático",
+    "Plano de energia de jogo",
+    "Plano de energia de repouso",
+    "Criar convite do Compartilhar tela",
+    // Uma por página da barra lateral, na ordem dela (`pages::nav_page`).
+    "Página Monitor",
+    "Página Medidor",
+    "Página Discos e redes",
+    "Página Espaço em disco",
+    "Página Pesquisar",
+    "Página Inicialização",
+    "Página Serviços",
+    "Página Desinstalar",
+    "Página Ajustes do Windows",
+    "Página Ferramentas",
+    "Página Otimizar",
+    "Página Energia",
+    "Página Fullscreenizer",
+    "Página Som",
+    "Página HDR",
+    "Página Driver NVIDIA",
+    "Página Captura",
+    "Página Compartilhar tela",
+    "Página Controles",
+    "Página Widget",
+    "Página Configurações",
 ];
 /// Ação que abre e fecha o teclado do Prisma (`sys::osk`).
 pub const KEYBOARD: u8 = 26;
 /// Ação que abre o radial do Prisma enquanto o botão fica segurado (`sys::radial`).
 pub const RADIAL: u8 = 27;
+/// Primeira ação "Página ...": abre a página `n - PAGES` da barra lateral.
+pub const PAGES: u8 = 33;
 /// Modelos prontos, na ordem de `Profile::template`. O Acessível vem do assistente.
 pub const TEMPLATES: [&str; 4] = ["Só Mouse", "Jogo sem controle", "Corrida", "Um lado só"];
 
@@ -1735,7 +1764,7 @@ mod tests {
             "prisma-profile 1\nname x\nlayer - B\nzone ls 0.9 0.1",
             "prisma-profile 1\nname x\nlayer - B\nstick 0 ls mouse NaN",
             "prisma-profile 1\nname x\nlayer - B\nrun calc.exe",
-            "prisma-profile 1\nname x\nlayer - B\nbind 0 A press action 28",
+            "prisma-profile 1\nname x\nlayer - B\nbind 0 A press action 54",
             "prisma-profile 1\nname x\nlayer - B\nbind 0 A press action 112",
             "prisma-profile 1\nname x\nlayer - B\nturbo A 1 500 on",
             "prisma-profile 1\nname x\nlayer - B\nturbo A 2 500 maybe",

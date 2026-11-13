@@ -229,6 +229,11 @@ const ICON_APP: Icon = &[
     &[(11.5, 12.), (15., 12.), (15., 15.5)],
 ];
 
+/// Página `i` da barra lateral, para as ações "Página ..." (`sys::remap::PAGES`).
+pub fn nav_page(i: usize) -> Option<(Page, Icon)> {
+    NAV.get(i).map(|n| (n.0, n.2))
+}
+
 /// Ícone de uma ação do Prisma (`sys::remap::ACTIONS`), ou de abrir um programa (`sys::radial::PROGRAM`).
 pub fn action_icon(id: u8) -> Icon {
     match id {
@@ -247,6 +252,10 @@ pub fn action_icon(id: u8) -> Icon {
         24 => ICON_BT,
         25 => ICON_BAT,
         26 => ICON_KEYS,
+        28 => ICON_ADJ,
+        29..=31 => ICON_POW,
+        32 => ICON_SHARE,
+        n if n >= crate::sys::remap::PAGES && n != crate::sys::radial::PROGRAM => nav_page((n - crate::sys::remap::PAGES) as usize).map_or(ICON_PAD, |p| p.1),
         crate::sys::radial::PROGRAM => ICON_APP,
         _ => ICON_PAD,
     }
@@ -521,4 +530,17 @@ pub fn log_view(ui: &mut Ui, key: &str, r: Rect, lines: &[String]) {
         ui.c.text(rect(r.x, r.y + i as f32 * ROW, r.w, ROW), s, 12.0, *color, Align::Left, *weight);
     }
     ui.end_scroll();
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn page_actions_follow_the_sidebar() {
+        use crate::sys::remap::{ACTIONS, PAGES};
+        let pages = &ACTIONS[PAGES as usize..];
+        assert_eq!(pages.len(), super::NAV.len());
+        for (a, n) in pages.iter().zip(super::NAV) {
+            assert_eq!(*a, format!("Página {}", n.1));
+        }
+    }
 }

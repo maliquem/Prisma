@@ -2540,7 +2540,10 @@ impl App {
                 }
                 Some("radial") => {
                     self.apply_pads();
-                    crate::sys::radial::show_for_test(1);
+                    // `--test-radial=lugar,opção`: outro lugar escolhido, e a opção do direcional.
+                    let pick = arg("--test-radial=").unwrap_or_default();
+                    let mut it = pick.split(',').map(|v| v.parse::<usize>().ok());
+                    crate::sys::radial::show_for_test(it.next().flatten().unwrap_or(1), it.next().flatten());
                     self.radial.update(&self.cfg);
                 }
                 Some("meter") => self.page = Page::Meter,
@@ -3075,6 +3078,33 @@ impl App {
                 self.set_keyboard(!open);
             }
             25 => return name.map(|p| format!("{}: {}", p.name, crate::pages::controllers::battery_label(&p))),
+            28 => self.show_main(),
+            29..=31 => {
+                let plan = match id {
+                    29 => String::new(),
+                    30 => self.cfg.plan_game.clone(),
+                    _ => self.cfg.plan_rest.clone(),
+                };
+                let ok = matches!(self.link_power(&plan), crate::link::Outcome::Done);
+                return Some(crate::i18n::tr(if ok { crate::sys::remap::ACTIONS[id as usize] } else { "O Windows não trocou o plano" }).into_owned());
+            }
+            32 => {
+                #[cfg(feature = "stream")]
+                {
+                    // O convite aparece na página: é lá que se lê e se copia o código.
+                    crate::pages::share::create_invite(self, None);
+                    self.go(Page::Share);
+                    self.show_main();
+                }
+            }
+            n if n >= crate::sys::remap::PAGES && n < crate::sys::remap::SOUND => {
+                if let Some((page, _)) = crate::pages::nav_page((n - crate::sys::remap::PAGES) as usize) {
+                    if page != Page::Nvidia || crate::pages::nvidia::available() {
+                        self.go(page);
+                        self.show_main();
+                    }
+                }
+            }
             n if n >= crate::sys::remap::SOUND => self.sound_default((n - crate::sys::remap::SOUND) as usize),
             n => {
                 if let Some(&hk) = HK.get(n as usize).filter(|&&h| h != 0) {
@@ -3565,7 +3595,7 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
         WM_PICK_RADIAL => {
             if let Some(path) = capture::choose_exe(h) {
                 with(|a| {
-                    crate::pages::controllers::set_radial_program(a, w.0.min(crate::sys::radial::SLOTS - 1), &path);
+                    crate::pages::controllers::set_radial_program(a, w.0.min(crate::sys::radial::ALL - 1), &path);
                     a.invalidate();
                 });
             }

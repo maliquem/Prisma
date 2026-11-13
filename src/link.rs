@@ -478,7 +478,7 @@ impl App {
     }
 
     /// Plano fixo, como a página Energia com a troca automática desligada; vazio volta à troca.
-    fn link_power(&mut self, id: &str) -> Outcome {
+    pub(crate) fn link_power(&mut self, id: &str) -> Outcome {
         let plans = power::list();
         let fixed = match fixed_plan(id, &plans) {
             Ok(f) => f,

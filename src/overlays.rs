@@ -598,9 +598,11 @@ pub struct Radial {
     /// Setas do stick direito e do esquerdo.
     arrow: [(f32, f32); 2],
     at: (i32, i32),
-    names: [String; crate::sys::radial::SLOTS],
-    icons: [u8; crate::sys::radial::SLOTS],
+    names: [String; crate::sys::radial::ALL],
+    icons: [u8; crate::sys::radial::ALL],
     two: bool,
+    /// Algum lugar tem 4 opções: a janela cresce para a faixa delas, embaixo do círculo.
+    groups: bool,
     left: bool,
     hint: String,
     ticking: bool,
@@ -609,6 +611,8 @@ pub struct Radial {
 /// Largura de um círculo; com dois, a janela tem os dois lado a lado.
 const RD_W: f32 = 600.0;
 const RD_H: f32 = 460.0;
+/// Faixa das 4 opções do direcional, entre o círculo e a dica.
+const RD_SUB: f32 = 96.0;
 
 unsafe extern "system" fn radial_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT {
     if m == WM_TIMER {
@@ -622,7 +626,7 @@ impl Radial {
     pub fn new() -> Self {
         register(w!("PrismaRadial"), radial_proc);
         let hwnd = create_overlay(w!("PrismaRadial"), true);
-        Self { surface: Layered::new(hwnd), arrow: [(0.0, 0.0); 2], at: (0, 0), names: Default::default(), icons: [0; crate::sys::radial::SLOTS], two: false, left: false, hint: String::new(), ticking: false }
+        Self { surface: Layered::new(hwnd), arrow: [(0.0, 0.0); 2], at: (0, 0), names: std::array::from_fn(|_| String::new()), icons: [0; crate::sys::radial::ALL], two: false, groups: false, left: false, hint: String::new(), ticking: false }
     }
 
     /// Mostra o estado de agora, ou esconde se fechou. As ações e os programas vêm da configuração.
@@ -643,7 +647,8 @@ impl Radial {
             let scale = unsafe { windows::Win32::UI::HiDpi::GetDpiForWindow(hwnd) } as f32 / 96.0;
             self.two = v.two;
             self.left = v.left;
-            self.at = ((mon.left + mon.right) / 2 - (self.width() * scale / 2.0) as i32, (mon.top + mon.bottom) / 2 - (RD_H * scale / 2.0) as i32);
+            self.groups = cfg.pad_radial[..crate::sys::radial::SLOTS].contains(&crate::sys::radial::GROUP);
+            self.at = ((mon.left + mon.right) / 2 - (self.width() * scale / 2.0) as i32, (mon.top + mon.bottom) / 2 - (self.height() * scale / 2.0) as i32);
             for (i, &a) in cfg.pad_radial.iter().enumerate() {
                 self.names[i] = if a == crate::sys::radial::PROGRAM {
                     cfg.pad_radial_prog[i].0.clone()
@@ -681,10 +686,16 @@ impl Radial {
         if self.two { RD_W * 2.0 + 40.0 } else { RD_W }
     }
 
+    fn height(&self) -> f32 {
+        if self.groups { RD_H + RD_SUB } else { RD_H }
+    }
+
     fn paint(&mut self) {
-        let sel = crate::sys::radial::view().sel;
-        let (names, icons, hint, arrow, two, left) = (&self.names, &self.icons, &self.hint, self.arrow, self.two, self.left);
-        self.surface.paint(self.at.0, self.at.1, self.width(), RD_H, |c, r| {
+        use crate::sys::radial::{sub, EMPTY, GROUP};
+        let v = crate::sys::radial::view();
+        let sel = v.sel;
+        let (names, icons, hint, arrow, two, left, groups) = (&self.names, &self.icons, &self.hint, self.arrow, self.two, self.left, self.groups);
+        self.surface.paint(self.at.0, self.at.1, self.width(), self.height(), |c, r| {
             c.round(r, 18.0, rgb(0x0d0f14).alpha(0.92));
             let cy = 210.0;
             // Com dois círculos, o do stick esquerdo (lugares 8 a 15) fica à esquerda.
@@ -699,18 +710,48 @@ impl Radial {
                 let a = ((i % 8) as f32 * 45.0).to_radians();
                 let (px, py) = (cx + 210.0 * a.sin(), cy - 160.0 * a.cos());
                 let b = rect(px - 70.0, py - 40.0, 140.0, 80.0);
+                let on = sel == Some(i);
+                if icons[i] == GROUP {
+                    // As 4 opções em cruz, na posição do direcional, sem nome: os nomes ficam na faixa.
+                    c.round(b, 12.0, if on { ACCENT.alpha(0.35) } else { WHITE.alpha(0.07) });
+                    for (d, (dx, dy)) in [(0.0, -1.0), (1.0, 0.0), (0.0, 1.0), (-1.0, 0.0)].into_iter().enumerate() {
+                        let k = icons[sub(i, d)];
+                        if k != EMPTY {
+                            c.icon(px - 9.0 + dx * 26.0, py - 9.0 + dy * 22.0, 18.0, crate::pages::action_icon(k), if on { WHITE } else { ACCENT });
+                        }
+                    }
+                    continue;
+                }
                 if name.is_empty() {
                     c.round_line(b, 12.0, WHITE.alpha(0.12), 1.0);
                     continue;
                 }
-                let on = sel == Some(i);
                 c.round(b, 12.0, if on { ACCENT.alpha(0.35) } else { WHITE.alpha(0.07) });
                 // Ícone em cima, nome embaixo (até três linhas).
                 c.icon(px - 10.0, b.y + 7.0, 20.0, crate::pages::action_icon(icons[i]), if on { WHITE } else { ACCENT });
                 c.text_wrap_center(rect(b.x + 6.0, b.y + 31.0, b.w - 12.0, 46.0), name, 11.0, if on { WHITE } else { TEXT2 }, if on { Weight::Semibold } else { Weight::Regular });
             }
             }
-            c.text_fit(rect(16.0, 426.0, r.w - 32.0, 20.0), hint, 12.0, MUTED, Align::Center, Weight::Regular);
+            // Faixa das 4 opções do lugar escolhido, embaixo do círculo dele: seta do direcional, ícone e nome.
+            if let Some(i) = sel.filter(|&i| groups && icons[i] == GROUP) {
+                let cx = if two && i < 8 { r.w - RD_W / 2.0 } else { RD_W / 2.0 };
+                let (w, gap) = (134.0, 8.0);
+                let x0 = cx - (4.0 * w + 3.0 * gap) / 2.0;
+                for (d, arrow) in ["↑", "→", "↓", "←"].into_iter().enumerate() {
+                    let k = sub(i, d);
+                    let b = rect(x0 + d as f32 * (w + gap), RD_H - 40.0, w, 80.0);
+                    if icons[k] == EMPTY {
+                        c.round_line(b, 12.0, WHITE.alpha(0.12), 1.0);
+                        continue;
+                    }
+                    let on = v.sub == Some(d);
+                    c.round(b, 12.0, if on { ACCENT.alpha(0.35) } else { WHITE.alpha(0.07) });
+                    c.text_raw(rect(b.x + 8.0, b.y + 6.0, 20.0, 20.0), arrow, 14.0, if on { WHITE } else { MUTED }, Align::Left, Weight::Semibold);
+                    c.icon(b.x + b.w / 2.0 - 10.0, b.y + 7.0, 20.0, crate::pages::action_icon(icons[k]), if on { WHITE } else { ACCENT });
+                    c.text_wrap_center(rect(b.x + 6.0, b.y + 31.0, b.w - 12.0, 46.0), &names[k], 11.0, if on { WHITE } else { TEXT2 }, if on { Weight::Semibold } else { Weight::Regular });
+                }
+            }
+            c.text_fit(rect(16.0, r.h - 34.0, r.w - 32.0, 20.0), hint, 12.0, MUTED, Align::Center, Weight::Regular);
         });
     }
 }
