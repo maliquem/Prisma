@@ -2320,3 +2320,12 @@ O programa tem mais de um perfil: o padrão é o que abre com ele.	该程序有�
 Abre com o padrão	用默认配置打开
 Abre com o último usado	用上次使用的打开
 Trocar perfil	切换配置
+Cópia de {}	{} 的副本
+De fábrica	出厂设置
+Voltar o perfil {} ao de fábrica?	将配置 {} 恢复默认？
+Camadas, ligações, macros e ajustes voltam ao de fábrica. Os programas ligados a ele continuam.	层、按键绑定、宏和设置将恢复默认。与它关联的程序保持不变。
+Cria um perfil: cópia do aberto, ligada aos mesmos programas, ou de fábrica.	新建配置：复制当前打开的配置并关联相同程序，或使用默认配置。
+Perfil deste controle	此手柄的配置
+Perfil do programa	程序配置
+Perfil do programa: este controle segue o programa em foco. Um perfil escolhido aqui vale só para este controle.	程序配置：此手柄跟随当前焦点程序。在此选择的配置只对此手柄生效。
+Desliga o controle do Bluetooth. Pelo cabo, não faz nada.	断开手柄的蓝牙连接。使用线缆时不起作用。

@@ -17,8 +17,11 @@ pub struct Editor {
     kind: usize,
     val: usize,
     hk: Hotkey,
-    /// Dando nome a um perfil: renomear o aberto (`true`) ou criar uma cópia dele, e o texto.
-    naming: Option<(bool, String)>,
+    /// Dando nome a um perfil: 0 renomeia o aberto, 1 cria uma cópia dele, 2 cria um de fábrica;
+    /// e o texto.
+    naming: Option<(u8, String)>,
+    /// "Voltar ao de fábrica" esperando a resposta da pergunta.
+    reset: bool,
     /// Programa escolhido para "Abrir programa" e o link de "Abrir link".
     run: String,
     url: String,
@@ -115,7 +118,7 @@ pub fn test_target(app: &mut App, what: &str) {
             "gyro" => ed.layer = 1,
             // A linha de perfis dando nome a um perfil novo, e com o primeiro perfil da pasta aberto
             // (a foto põe dois perfis no mesmo programa para mostrar o padrão).
-            "naming" => ed.naming = Some((false, "Corrida".into())),
+            "naming" => ed.naming = Some((1, "Corrida".into())),
             "shared" => ed.prof = 2,
             "text" => {
                 app.pads.tab = 1;
@@ -644,10 +647,20 @@ pub fn top(ui: &mut Ui, app: &mut App, r: Rect) {
     let names: Vec<String> = list.iter().map(|p| p.name.clone()).collect();
     let mut p = list[ed.prof].clone();
     let builtin = p.name == remap::DESKTOP || p.name == remap::BASE;
-    // Dando nome a um perfil novo (cópia do aberto) ou ao aberto: campo, confirmar e cancelar.
-    if let Some((rename, mut text)) = ed.naming.take() {
+    // Dando nome a um perfil novo (cópia do aberto ou de fábrica) ou ao aberto: campo, de onde o
+    // novo começa, confirmar e cancelar.
+    if let Some((mut mode, mut text)) = ed.naming.take() {
+        let rename = mode == 0;
         let (a, b) = (at(0), at(1));
-        ui.search("pp-name", rect(a.x, a.y, b.right() - a.x, 34.0), &mut text, "Nome do perfil");
+        if rename {
+            ui.search("pp-name", rect(a.x, a.y, b.right() - a.x, 34.0), &mut text, "Nome do perfil");
+        } else {
+            ui.search("pp-name", a, &mut text, "Nome do perfil");
+            let mut from = (mode - 1) as usize;
+            if ui.select("pp-from", b, &[tr("Cópia de {}").replace("{}", &p.name), tr("De fábrica")], &mut from) {
+                mode = from as u8 + 1;
+            }
+        }
         let name: String = text.trim().chars().filter(|c| !c.is_control()).take(60).collect();
         let taken = list.iter().any(|x| x.name.eq_ignore_ascii_case(&name) && !(rename && x.name == p.name));
         let mut done = ui.button("pp-name-no", at(3), "Cancelar", false);
@@ -655,6 +668,10 @@ pub fn top(ui: &mut Ui, app: &mut App, r: Rect) {
             ui.c.text_fit(at(4), &tr("Esse nome já existe"), 12.0, WARN, Align::Left, Weight::Regular);
         }
         if ui.button_ex("pp-name-ok", at(2), if rename { "Renomear" } else { "Criar" }, true, !name.is_empty() && !taken) {
+            // De fábrica: o Base, sem programa ligado.
+            if mode == 2 {
+                p = Profile::base();
+            }
             let old = std::mem::replace(&mut p.name, name.clone());
             // A cópia não herda o padrão do programa: o padrão continua sendo um só.
             p.main &= rename;
@@ -668,6 +685,12 @@ pub fn top(ui: &mut Ui, app: &mut App, r: Rect) {
                     }
                 }
                 remap::remove(&old);
+                // Controles com este perfil próprio continuam com ele.
+                for e in app.cfg.pad_fixed.iter_mut().filter(|e| e.1 == old) {
+                    e.1 = name.clone();
+                }
+                app.cfg.save();
+                app.apply_pads();
             }
             if !ok {
                 app.toast.info("Não deu para salvar o perfil.");
@@ -679,7 +702,7 @@ pub fn top(ui: &mut Ui, app: &mut App, r: Rect) {
         }
         if !done {
             if let Some(ed) = app.pads.edit.as_mut() {
-                ed.naming = Some((rename, text));
+                ed.naming = Some((mode, text));
             }
         }
         return;
@@ -693,12 +716,17 @@ pub fn top(ui: &mut Ui, app: &mut App, r: Rect) {
         ed.layer = 0;
     }
     if ui.button("pp-new", at(1), "Novo perfil", false) {
-        ed.naming = Some((false, String::new()));
+        ed.naming = Some((1, String::new()));
     }
-    ui.tip(at(1), "Copia o perfil aberto com outro nome, ligado aos mesmos programas.");
+    ui.tip(at(1), "Cria um perfil: cópia do aberto, ligada aos mesmos programas, ou de fábrica.");
     // Mais: o que se faz com o perfil aberto, e os modelos (trocam as ligações pelas do modelo).
-    let del = if builtin { "Voltar ao de fábrica" } else { "Apagar perfil" };
-    let mut items: Vec<(String, bool)> = vec![(tr("Renomear"), !builtin), (tr("Importar"), true), (tr("Exportar"), true), (tr(del), !builtin || remap::has_file(&p.name))];
+    let mut items: Vec<(String, bool)> = vec![
+        (tr("Renomear"), !builtin),
+        (tr("Importar"), true),
+        (tr("Exportar"), true),
+        (tr("Voltar ao de fábrica"), !builtin || remap::has_file(&p.name)),
+        (tr("Apagar perfil"), !builtin),
+    ];
     let first_tpl = items.len();
     let tpls: Vec<String> = remap::TEMPLATES.iter().chain(["Acessível"].iter()).map(|t| tr(t)).collect();
     items.extend(tpls.iter().map(|t| (tr("Modelo: {}").replace("{}", t), true)));
@@ -708,10 +736,18 @@ pub fn top(ui: &mut Ui, app: &mut App, r: Rect) {
         ui.menu("pp-more-menu", &refs);
     }
     match ui.menu_pick("pp-more-menu") {
-        Some(0) => ed.naming = Some((true, p.name.clone())),
+        Some(0) => ed.naming = Some((0, p.name.clone())),
         Some(1) => return app.pad_profile_file(false),
         Some(2) => return app.pad_profile_file(true),
         Some(3) => {
+            ed.reset = true;
+            ui.ask(
+                "pp-reset-ok",
+                &tr("Voltar o perfil {} ao de fábrica?").replace("{}", &p.name),
+                &tr("Camadas, ligações, macros e ajustes voltam ao de fábrica. Os programas ligados a ele continuam."),
+            );
+        }
+        Some(4) => {
             remap::remove(&p.name);
             if !builtin {
                 ed.prof = 0;
@@ -726,6 +762,24 @@ pub fn top(ui: &mut Ui, app: &mut App, r: Rect) {
             }
         }
         _ => {}
+    }
+    if ed.reset && !ui.asking() {
+        if ui.answered("pp-reset-ok") {
+            // Desktop e Base: o arquivo sai e volta o de fábrica deles; um perfil seu vira o Base,
+            // com o nome e os programas dele.
+            if builtin {
+                remap::remove(&p.name);
+            } else {
+                let mut f = Profile::base();
+                (f.name, f.games, f.main) = (p.name.clone(), p.games.clone(), p.main);
+                if !remap::save(&f) {
+                    app.toast.info("Não deu para salvar o perfil.");
+                }
+            }
+        }
+        let Some(ed) = app.pads.edit.as_mut() else { return };
+        (ed.reset, ed.layer) = (false, 0);
+        return;
     }
     if ed.tpl > 0 && ed.tpl < acc_i && !ui.asking() {
         if ui.answered("pp-tpl-ok") {

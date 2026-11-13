@@ -3015,6 +3015,13 @@ impl App {
                     self.pad_nav(c);
                     continue;
                 }
+                Event::PadProfile { key, name } => {
+                    if let Some(e) = self.cfg.pad_fixed.iter_mut().find(|e| e.0 == key) {
+                        e.1 = name.clone();
+                        self.cfg.save();
+                    }
+                    format!("Perfil {name}")
+                }
                 Event::Turbo { button, on, pad } => {
                     let f = crate::sys::pads::list().into_iter().find(|p| p.key == pad).map_or(crate::sys::pads::Family::Generic, |p| p.family);
                     let b = crate::pages::pad_profiles::button_label(f, button);
@@ -3184,6 +3191,7 @@ impl App {
         crate::sys::pads::set_limits(self.cfg.pad_low, self.cfg.pad_jitter_ms);
         crate::sys::remap::configure(self.cfg.pad_map, self.cfg.meter_games.iter().map(|g| g.exe.clone()).collect());
         crate::sys::remap::set_reopen_last(self.cfg.pad_reopen_last);
+        crate::sys::remap::set_fixed(&self.cfg.pad_fixed);
         let c = &self.cfg;
         crate::sys::radial::set_programs(c.pad_radial_prog.clone().map(|(_, p)| p));
         crate::sys::osk::configure(c.pad_osk_two, c.pad_osk_letters_right, c.pad_osk_dodge, c.pad_osk_repeat, c.pad_osk_repeat_ms);

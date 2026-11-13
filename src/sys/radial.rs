@@ -296,7 +296,7 @@ pub fn feed(key: &str, inp: &Input, _now: Instant) -> bool {
         // Fora da trava do radial: trocar o perfil passa pelo mapeamento.
         let name = slot.and_then(|i| CHOICES.lock().unwrap().get((i - SLOTS) % 4).cloned());
         if let Some(n) = name {
-            super::remap::switch_to(&n);
+            super::remap::switch_pad(key, &n);
         }
     } else if pick == Some(PROGRAM) {
         let path = slot.map(|i| PROGRAMS.lock().unwrap()[i].clone()).unwrap_or_default();

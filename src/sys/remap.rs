@@ -1672,6 +1672,47 @@ struct Run {
     last: HashMap<String, String>,
     /// Processo de cada programa visto em foco: o mesmo processo é o jogo que só voltou ao foco.
     pids: HashMap<String, u32>,
+    /// Controles com perfil próprio (chave do controle → nome do perfil): não seguem o programa.
+    fixed: HashMap<String, String>,
+}
+
+/// Perfil que o controle `key` usa: o próprio dele ou, sem um (ou apagado), o do programa.
+fn prof_of(r: &Run, key: &str) -> usize {
+    r.fixed.get(key).and_then(|n| r.profiles.iter().position(|p| p.name == *n)).unwrap_or(r.cur)
+}
+
+/// Perfis próprios de cada controle, vindos da configuração.
+pub fn set_fixed(list: &[(String, String)]) {
+    if let Some(r) = RUN.lock().unwrap().as_mut() {
+        r.fixed = list.iter().cloned().collect();
+    }
+}
+
+/// Troca pedida por um controle (radial ou ligação). Com perfil próprio, troca só o dele e avisa
+/// para gravar; senão, o de todos, até o foco mudar de programa.
+fn pad_switch(r: &mut Run, key: &str, to: usize, acts: &mut Vec<Act>, events: &mut Vec<pads::Event>) {
+    let name = r.profiles[to].name.clone();
+    if r.fixed.contains_key(key) {
+        r.fixed.insert(key.to_string(), name.clone());
+        acts.extend(r.engines.get_mut(key).map(|e| e.0.release_all()).unwrap_or_default());
+        pads::buzz(r.profiles[to].buzz);
+        events.push(pads::Event::PadProfile { key: key.to_string(), name });
+    } else {
+        acts.extend(switch(r, to));
+        events.push(pads::Event::Profile { name });
+    }
+}
+
+/// Troca de perfil pedida pelo radial aberto no controle `key`.
+pub fn switch_pad(key: &str, name: &str) {
+    let (mut acts, mut events) = (vec![], vec![]);
+    if let Some(r) = RUN.lock().unwrap().as_mut() {
+        if let Some(to) = r.profiles.iter().position(|p| p.name == name) {
+            pad_switch(r, key, to, &mut acts, &mut events);
+        }
+    }
+    send(&acts);
+    events.into_iter().for_each(pads::emit);
 }
 
 /// Ao abrir um programa com vários perfis: o último usado nele (ligado) ou o padrão dele.
@@ -1828,7 +1869,7 @@ fn reload() {
 pub fn configure(on: bool, games: Vec<String>) {
     let acts = {
         let mut g = RUN.lock().unwrap();
-        let r = g.get_or_insert_with(|| Run { profiles: load_profiles(), cur: 0, games: vec![], engines: HashMap::new(), want: None, lat: vec![], warned: HashSet::new(), ac: false, ac_seen: HashMap::new(), kbd: None, kheld: 0, kswallow: 0, typed: String::new(), exe: String::new(), last: load_last(), pids: HashMap::new() });
+        let r = g.get_or_insert_with(|| Run { profiles: load_profiles(), cur: 0, games: vec![], engines: HashMap::new(), want: None, lat: vec![], warned: HashSet::new(), ac: false, ac_seen: HashMap::new(), kbd: None, kheld: 0, kswallow: 0, typed: String::new(), exe: String::new(), last: load_last(), pids: HashMap::new(), fixed: HashMap::new() });
         r.games = games.into_iter().map(|s| s.to_lowercase()).collect();
         ON.store(on, Ordering::Relaxed);
         set_keys(r);
@@ -1870,18 +1911,18 @@ pub fn preview_trig(t: Option<[Trig; 2]>) {
     *PREVIEW_TRIG.lock().unwrap() = t;
 }
 
-/// Háptico do perfil em uso. A parada de emergência desliga.
-pub fn haptic() -> Haptic {
+/// Háptico do perfil que o controle `key` usa. A parada de emergência desliga.
+pub fn haptic(key: &str) -> Haptic {
     if STOPPED.load(Ordering::Relaxed) {
         return Haptic::default();
     }
     let g = RUN.lock().unwrap();
-    g.as_ref().map_or(Haptic::default(), |r| r.profiles[r.cur].haptic)
+    g.as_ref().map_or(Haptic::default(), |r| r.profiles[prof_of(r, key)].haptic)
 }
 
 /// Gatilhos adaptativos do perfil em uso. Na parada de emergência o Prisma larga os dois: o que ele
 /// tinha posto sai, e o jogo volta a mandar.
-pub fn triggers() -> [Trig; 2] {
+pub fn triggers(key: &str) -> [Trig; 2] {
     if STOPPED.load(Ordering::Relaxed) {
         return [Trig::Pass; 2];
     }
@@ -1889,7 +1930,7 @@ pub fn triggers() -> [Trig; 2] {
         return t;
     }
     let g = RUN.lock().unwrap();
-    g.as_ref().map_or([Trig::Pass; 2], |r| r.profiles[r.cur].trig)
+    g.as_ref().map_or([Trig::Pass; 2], |r| r.profiles[prof_of(r, key)].trig)
 }
 
 /// O editor de perfis mostra esta luz no controle enquanto está aberto; `None` solta a mostra.
@@ -1899,7 +1940,7 @@ pub fn preview_light(l: Option<(Light, bool)>) {
 
 /// Luz do perfil em uso e se vale pelo Bluetooth. Vale com o mapeamento em Nativo (a luz não mexe
 /// no que o jogo recebe); só a parada de emergência apaga tudo.
-pub fn light() -> Option<(Light, bool)> {
+pub fn light(key: &str) -> Option<(Light, bool)> {
     if STOPPED.load(Ordering::Relaxed) {
         return None;
     }
@@ -1908,7 +1949,7 @@ pub fn light() -> Option<(Light, bool)> {
     }
     let g = RUN.lock().unwrap();
     g.as_ref().and_then(|r| {
-        let p = &r.profiles[r.cur];
+        let p = &r.profiles[prof_of(r, key)];
         p.light.map(|l| (l, p.light_bt))
     })
 }
@@ -1966,13 +2007,14 @@ pub fn feed(key: &str, inp: &Input, arrived: Instant) {
         }
         if !STOPPED.load(Ordering::Relaxed) {
             // Botão que abre o radial: o perfil não o vê; o toque (ou o segurar) volta como aperto.
-            let trig = super::radial::trigger(key, inp.buttons, arrived, r.profiles[r.cur].name == BASE);
+            let mine = prof_of(r, key);
+            let trig = super::radial::trigger(key, inp.buttons, arrived, r.profiles[mine].name == BASE);
             radial = trig.open;
             if trig.win_g {
                 acts.extend([Act::Down(Out::Key(0x47, WIN)), Act::Up(Out::Key(0x47, WIN))]);
             }
             for buttons in trig.steps {
-                let p = &r.profiles[r.cur];
+                let p = &r.profiles[mine];
                 let e = r.engines.get_mut(key).unwrap();
                 e.0.safe = r.ac;
                 let step = e.0.step(p, &Input { buttons, ..*inp }, arrived);
@@ -2002,12 +2044,13 @@ pub fn feed(key: &str, inp: &Input, arrived: Instant) {
 /// O que o motor do controle (ou do teclado) `key` pediu: ações, programas, perfis e macros saem
 /// como eventos; teclas e cliques vão para `acts`.
 fn handle(r: &mut Run, key: &str, step: Vec<Act>, acts: &mut Vec<Act>, events: &mut Vec<pads::Event>) {
-    let strings = r.profiles[r.cur].strings.clone();
+    let mine = prof_of(r, key);
+    let strings = r.profiles[mine].strings.clone();
     for a in step {
                 match a {
                     Act::Cmd(Out::Action(n)) => events.push(pads::Event::Action { id: n, pad: key.to_string() }),
                     Act::Cmd(Out::Text(n)) => {
-                        if let Some(t) = r.profiles[r.cur].texts.get(n as usize) {
+                        if let Some(t) = r.profiles[mine].texts.get(n as usize) {
                             super::osk::type_text(&t.text);
                         }
                     }
@@ -2015,8 +2058,7 @@ fn handle(r: &mut Run, key: &str, step: Vec<Act>, acts: &mut Vec<Act>, events: &
                     Act::Cmd(Out::Profile(n)) => {
                         // Troca na mão: vale até o foco mudar de programa.
                         if let Some(to) = strings.get(n as usize).and_then(|s| r.profiles.iter().position(|p| p.name == *s)) {
-                            acts.extend(switch(r, to));
-                            events.push(pads::Event::Profile { name: r.profiles[to].name.clone() });
+                            pad_switch(r, key, to, acts, events);
                         }
                     }
                     Act::Down(Out::Macro(_)) if r.ac => {
@@ -2025,14 +2067,14 @@ fn handle(r: &mut Run, key: &str, step: Vec<Act>, acts: &mut Vec<Act>, events: &
                         }
                     }
                     Act::Down(Out::Macro(n)) => {
-                        if let Some(m) = r.profiles[r.cur].macros.get(n as usize) {
+                        if let Some(m) = r.profiles[mine].macros.get(n as usize) {
                             super::macros::press(key, n, m);
                         }
                     }
                     Act::Up(Out::Macro(n)) => super::macros::release(key, n),
                     Act::Turbo(bit) => {
                         // Vale para o perfil em uso até o editor gravar de novo ou o Prisma fechar.
-                        let p = &mut r.profiles[r.cur];
+                        let p = &mut r.profiles[mine];
                         let i = p.turbo.iter().position(|t| t.button == bit).unwrap_or_else(|| {
                             p.turbo.push(Turbo::new(bit));
                             p.turbo.len() - 1
@@ -2485,6 +2527,22 @@ mod tests {
         assert!(!p.to_text().contains("haptic"));
         p.haptic = h;
         assert_eq!(Profile::parse(&p.to_text()).unwrap().haptic, h);
+    }
+
+    #[test]
+    fn pad_with_its_own_profile() {
+        let mut r = Run { profiles: vec![Profile::base(), Profile::base()], cur: 0, games: vec![], engines: HashMap::new(), want: None, lat: vec![], warned: HashSet::new(), ac: false, ac_seen: HashMap::new(), kbd: None, kheld: 0, kswallow: 0, typed: String::new(), exe: String::new(), last: HashMap::new(), pids: HashMap::new(), fixed: HashMap::new() };
+        r.profiles[1].name = "Corrida".into();
+        r.fixed.insert("pad2".into(), "Corrida".into());
+        // O controle com perfil próprio usa o dele; os outros, o do programa; um nome apagado volta ao do programa.
+        assert_eq!((prof_of(&r, "pad2"), prof_of(&r, "pad1")), (1, 0));
+        r.fixed.insert("pad3".into(), "Apagado".into());
+        assert_eq!(prof_of(&r, "pad3"), 0);
+        // Trocar pelo controle com perfil próprio muda só o dele e avisa para gravar.
+        let (mut acts, mut events) = (vec![], vec![]);
+        pad_switch(&mut r, "pad2", 0, &mut acts, &mut events);
+        assert_eq!((r.cur, r.fixed["pad2"].as_str()), (0, BASE));
+        assert!(matches!(&events[..], [pads::Event::PadProfile { key, .. }] if key == "pad2"));
     }
 
     #[test]

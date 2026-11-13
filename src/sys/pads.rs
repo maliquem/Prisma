@@ -186,6 +186,8 @@ pub enum Event {
     Jitter { name: String, p99_ms: f32 },
     /// Mapeamento: perfil trocado pelo programa em foco.
     Profile { name: String },
+    /// O controle `key`, com perfil próprio, trocou para `name` (radial ou ligação): gravar.
+    PadProfile { key: String, name: String },
     /// Parada de emergência ligada (`on`) ou desligada.
     Stopped { on: bool },
     /// Programa em foco roda como administrador: as teclas do Prisma não chegam nele.
@@ -301,8 +303,9 @@ pub(crate) fn poke() {
 /// vem do número de série do aparelho HID.
 pub fn disconnect(key: &str) -> bool {
     let path = match key.strip_prefix("xinput:") {
-        Some(_) => match IG.lock().unwrap().as_slice() {
-            [(p, _, Link::Bluetooth, _)] => p.clone(),
+        // O XInput não diz qual controle é qual lugar: só dá para saber quando um só está no Bluetooth.
+        Some(_) => match IG.lock().unwrap().iter().filter(|e| e.2 == Link::Bluetooth).collect::<Vec<_>>().as_slice() {
+            [(p, ..)] => p.clone(),
             _ => return false,
         },
         None => key.to_string(),
@@ -683,7 +686,7 @@ struct PadOut {
 impl PadOut {
     unsafe fn update(&mut self, pct: Option<u8>, inp: Option<&Input>) {
         use super::remap::Light;
-        let h = super::remap::haptic();
+        let h = super::remap::haptic(&self.path);
         let mut feel = 0u8;
         if let Some(inp) = inp {
             // Toque de 40 ms a cada botão novo: um relatório só (4 ms) não se sente.
@@ -714,13 +717,13 @@ impl PadOut {
             }
         }
         let want = Want {
-            rgb: super::remap::light().filter(|l| self.link == Link::Usb || l.1).and_then(|l| match l.0 {
+            rgb: super::remap::light(&self.path).filter(|l| self.link == Link::Usb || l.1).and_then(|l| match l.0 {
                 Light::Off => Some([0, 0, 0]),
                 Light::Color(c) => Some(c),
                 Light::Battery(b) => pct.map(|p| super::remap::battery_color(b, p)),
             }),
             // Gatilho adaptativo só existe no DualSense.
-            trig: if self.fam == Family::DualSense { super::remap::triggers() } else { [Trig::Pass; 2] },
+            trig: if self.fam == Family::DualSense { super::remap::triggers(&self.path) } else { [Trig::Pass; 2] },
             // O motor fraco é o mais seco: é ele que faz as vezes do háptico.
             rumble: { let b = buzzing(); [b[0].max(feel), b[1]] },
         };

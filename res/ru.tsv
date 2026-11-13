@@ -2320,3 +2320,12 @@ O programa tem mais de um perfil: o padrão é o que abre com ele.	У прогр
 Abre com o padrão	Открывать основной
 Abre com o último usado	Открывать последний
 Trocar perfil	Сменить профиль
+Cópia de {}	Копия {}
+De fábrica	По умолчанию
+Voltar o perfil {} ao de fábrica?	Вернуть профиль {} по умолчанию?
+Camadas, ligações, macros e ajustes voltam ao de fábrica. Os programas ligados a ele continuam.	Слои, назначения, макросы и настройки вернутся к значениям по умолчанию. Связанные с ним программы останутся.
+Cria um perfil: cópia do aberto, ligada aos mesmos programas, ou de fábrica.	Создаёт профиль: копию открытого, связанную с теми же программами, или профиль по умолчанию.
+Perfil deste controle	Профиль этого геймпада
+Perfil do programa	Профиль программы
+Perfil do programa: este controle segue o programa em foco. Um perfil escolhido aqui vale só para este controle.	Профиль программы: этот геймпад следует за программой в фокусе. Профиль, выбранный здесь, действует только для этого геймпада.
+Desliga o controle do Bluetooth. Pelo cabo, não faz nada.	Отключает геймпад от Bluetooth. По кабелю ничего не делает.

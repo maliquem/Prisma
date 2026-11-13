@@ -2326,3 +2326,12 @@ O programa tem mais de um perfil: o padrão é o que abre com ele.	The program h
 Abre com o padrão	Opens with default
 Abre com o último usado	Opens with last used
 Trocar perfil	Switch profile
+Cópia de {}	Copy of {}
+De fábrica	Factory
+Voltar o perfil {} ao de fábrica?	Reset profile {} to factory defaults?
+Camadas, ligações, macros e ajustes voltam ao de fábrica. Os programas ligados a ele continuam.	Layers, bindings, macros and settings go back to factory defaults. Programs linked to it stay linked.
+Cria um perfil: cópia do aberto, ligada aos mesmos programas, ou de fábrica.	Creates a profile: a copy of the open one, linked to the same programs, or a factory one.
+Perfil deste controle	This controller's profile
+Perfil do programa	Program profile
+Perfil do programa: este controle segue o programa em foco. Um perfil escolhido aqui vale só para este controle.	Program profile: this controller follows the program in focus. A profile chosen here applies only to this controller.
+Desliga o controle do Bluetooth. Pelo cabo, não faz nada.	Disconnects the controller from Bluetooth. Over the cable, it does nothing.

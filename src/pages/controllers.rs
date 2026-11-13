@@ -305,7 +305,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
 /// Cartão do controle: um chip por controle ligado e como o jogo vê o controle.
 fn pad_card(ui: &mut Ui, app: &mut App, list: &[Pad], at: Rect) -> f32 {
     let tr = |s: &str| crate::i18n::tr(s).into_owned();
-    let r = rect(at.x, at.y, at.w, 140.0);
+    let r = rect(at.x, at.y, at.w, if list.is_empty() { 140.0 } else { 186.0 });
     ui.card(r);
     if list.is_empty() {
         ui.c.text_wrap(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 48.0), "Nenhum controle ligado. Ligue um controle por USB ou Bluetooth e ele aparece aqui.", 13.0, MUTED, Weight::Regular);
@@ -365,6 +365,32 @@ fn pad_card(ui: &mut Ui, app: &mut App, list: &[Pad], at: Rect) -> f32 {
     }
     let note = if map { "Fora dos jogos, mouse e teclado. Nos jogos, o perfil do jogo ou o Base, que não muda nada." } else { "O jogo recebe o controle como ele é. Vale para todos os controles." };
     ui.c.text_fit(rect(r.x + 16.0, ry + 40.0, r.w - 32.0, 20.0), &tr(note), 12.0, MUTED, Align::Left, Weight::Regular);
+    // O perfil deste controle e o botão de desconectar.
+    if let Some(p) = list.get(app.pads.sel) {
+        let py = ry + 72.0;
+        ui.c.text_fit(rect(r.x + 16.0, py, lw - 8.0, 34.0), &tr("Perfil deste controle"), 13.0, TEXT2, Align::Left, Weight::Regular);
+        let profiles = remap::profiles();
+        let mut opts = vec![tr("Perfil do programa")];
+        opts.extend(profiles.iter().map(|x| x.name.clone()));
+        let own = app.cfg.pad_fixed.iter().find(|e| e.0 == p.key).map(|e| e.1.clone());
+        let mut v = own.and_then(|n| profiles.iter().position(|x| x.name == n)).map_or(0, |i| i + 1);
+        let pr = rect(b(0.0).x, py, bw * 2.0 + 8.0, 34.0);
+        if ui.select("pad-own", pr, &opts, &mut v) {
+            app.cfg.pad_fixed.retain(|e| e.0 != p.key);
+            if v > 0 {
+                app.cfg.pad_fixed.push((p.key.clone(), profiles[v - 1].name.clone()));
+            }
+            app.cfg.save();
+            app.apply_pads();
+        }
+        ui.tip(pr, "Perfil do programa: este controle segue o programa em foco. Um perfil escolhido aqui vale só para este controle.");
+        // Sempre ligado: o Xbox no Bluetooth pode aparecer como USB. Se não der, nada acontece.
+        let dr = b(2.0);
+        if ui.button("pad-disc", rect(dr.x, py, dr.w, 34.0), "Desconectar", false) && pads::disconnect(&p.key) {
+            app.toast.info(&format!("{} desconectado", tr(&p.name)));
+        }
+        ui.tip(rect(dr.x, py, dr.w, 34.0), "Desliga o controle do Bluetooth. Pelo cabo, não faz nada.");
+    }
     r.bottom() + 12.0
 }
 
@@ -990,8 +1016,9 @@ fn radial(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
     let ids: Vec<u8> = std::iter::once(EMPTY).chain((0..remap::ACTIONS.len() as u8).filter(|&a| a != remap::RADIAL)).collect();
     let names: Vec<String> = ids.iter().map(|&a| crate::i18n::tr(remap::ACTIONS.get(a as usize).copied().unwrap_or("Nada")).into_owned()).collect();
     // Nos lugares (não nas 4 opções), também a troca de perfil.
-    let top_ids: Vec<u8> = ids.iter().copied().chain([PROFILES]).collect();
-    let top_names: Vec<String> = names.iter().cloned().chain([tr("Trocar perfil")]).collect();
+    // Logo depois de "Nada", para não sumir no fim da lista das ações.
+    let top_ids: Vec<u8> = [EMPTY, PROFILES].into_iter().chain(ids[1..].iter().copied()).collect();
+    let top_names: Vec<String> = [names[0].clone(), tr("Trocar perfil")].into_iter().chain(names[1..].iter().cloned()).collect();
     // Lugares 0 a 7 no stick direito; com dois círculos, 8 a 15 no esquerdo.
     // Um círculo: escolher o stick que aponta; dois: um título para cada stick.
     if !two {
