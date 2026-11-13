@@ -172,24 +172,95 @@ fn format(size: f32, weight: Weight, wrap: bool) -> IDWriteTextFormat {
     })
 }
 
-/// Teste: grava o texto que não cabe no espaço onde foi desenhado (`PRISMA_OVERFLOW`).
+/// Teste (`PRISMA_OVERFLOW`): o arquivo onde vão os textos que não cabem.
 #[cfg(debug_assertions)]
-fn note_overflow(f: &IDWriteTextFormat, t: &[u16], s: &str, r: Rect, wrap: bool) {
+fn overflow_path() -> Option<&'static str> {
+    static P: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    P.get_or_init(|| std::env::var("PRISMA_OVERFLOW").ok()).as_deref()
+}
+
+#[cfg(debug_assertions)]
+thread_local! {
+    /// Teste: as caixas desenhadas neste quadro (a janela, cartões, botões, campos), já na posição
+    /// da tela, o deslocamento em uso (rolagem ou miniatura), os recortes abertos (o recorte e
+    /// quantas caixas já havia quando ele abriu: só as de dentro contam para o texto de dentro) e a
+    /// escala em uso.
+    static BOXES: RefCell<(Vec<Rect>, f32, f32, Vec<(Rect, usize)>, f32)> = const { RefCell::new((Vec::new(), 0.0, 0.0, Vec::new(), 1.0)) };
+}
+
+#[cfg(debug_assertions)]
+fn note_box(r: Rect) {
+    if overflow_path().is_some() {
+        BOXES.with(|b| {
+            let mut b = b.borrow_mut();
+            let (dx, dy, k) = (b.1, b.2, b.4);
+            b.0.push(Rect { x: r.x * k + dx, y: r.y * k + dy, w: r.w * k, h: r.h * k });
+        });
+    }
+}
+
+/// Teste: grava o texto que não cabe no espaço onde foi desenhado, e o que passa da borda da caixa
+/// em volta (a menor caixa desenhada antes que tem o meio do texto e é pelo menos da altura dele).
+/// Mede o que o DirectWrite vai desenhar, sem foto.
+#[cfg(debug_assertions)]
+fn note_overflow(f: &IDWriteTextFormat, t: &[u16], s: &str, r: Rect, a: Align, wrap: bool) {
     use std::io::Write;
-    let Ok(path) = std::env::var("PRISMA_OVERFLOW") else { return };
+    let Some(path) = overflow_path() else { return };
     if r.w < 4.0 || s.trim().is_empty() {
         return;
     }
-    let (w, h) = shared(|sh| unsafe {
-        let Ok(l) = sh.dw.CreateTextLayout(t, f, if wrap { r.w } else { 100000.0 }, 100000.0) else { return (0.0, 0.0) };
+    let (left, w, h) = shared(|sh| unsafe {
+        let Ok(l) = sh.dw.CreateTextLayout(t, f, if wrap { r.w } else { 100000.0 }, 100000.0) else { return (0.0, 0.0, 0.0) };
         let mut m = DWRITE_TEXT_METRICS::default();
         let _ = l.GetMetrics(&mut m);
-        (m.width, m.height)
+        (m.left, m.width, m.height)
     });
+    let mut out = vec![];
     let bad = if wrap { h > r.h + 1.0 && r.h > 0.0 } else { w > r.w + 0.5 };
     if bad {
+        // Numa linha o que não cabe termina em reticências; quebrado, as linhas passam de baixo.
+        let how = if wrap { "needs" } else { "reticências, needs" };
+        out.push(format!("{:.0}x{:.0} at {:.0},{:.0} {how} {:.0}x{:.0}: {s}", r.w, r.h, r.x, r.y, w, h));
+    }
+    let w = if wrap { w } else { w.min(r.w) };
+    // Onde o texto fica de fato: no quebrado o próprio layout alinha; numa linha, o alinhamento
+    // pedido e o meio na vertical.
+    let x = if wrap {
+        r.x + left
+    } else {
+        match a {
+            Align::Left => r.x,
+            Align::Center => r.x + (r.w - w) / 2.0,
+            Align::Right => r.right() - w,
+        }
+    };
+    let y = if wrap { r.y } else { r.y + (r.h - h) / 2.0 };
+    BOXES.with(|b| {
+        let b = b.borrow();
+        let k = b.4;
+        let tb = Rect { x: x * k + b.1, y: y * k + b.2, w: w * k, h: h * k };
+        let (cx, cy) = (tb.x + tb.w / 2.0, tb.y + tb.h / 2.0);
+        // Rolado para fora do recorte: não aparece.
+        let from = match b.3.last() {
+            Some((clip, _)) if !clip.contains(cx, cy) => return,
+            Some((_, n)) => *n,
+            None => 0,
+        };
+        let inner = b.0[from..].iter().filter(|c| c.h + 1.0 >= tb.h && c.contains(cx, cy)).min_by(|p, q| (p.w * p.h).total_cmp(&(q.w * q.h)));
+        if let Some(c) = inner {
+            let over = [c.x - tb.x, tb.right() - c.right(), c.y - tb.y, tb.bottom() - c.bottom()];
+            let worst = over.iter().copied().fold(0.0f32, f32::max);
+            if worst > 1.0 {
+                let side = ["esquerda", "direita", "cima", "baixo"][over.iter().position(|&v| v == worst).unwrap_or(0)];
+                out.push(format!("borda {side} {worst:.0}px: caixa {:.0}x{:.0} at {:.0},{:.0}, texto {:.0}x{:.0} at {:.0},{:.0}: {s}", c.w, c.h, c.x, c.y, w, h, tb.x, tb.y));
+            }
+        }
+    });
+    if !out.is_empty() {
         if let Ok(mut o) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
-            let _ = writeln!(o, "{:.0}x{:.0} at {:.0},{:.0} needs {:.0}x{:.0}: {s}", r.w, r.h, r.x, r.y, w, h);
+            for l in out {
+                let _ = writeln!(o, "{l}");
+            }
         }
     }
 }
@@ -277,6 +348,12 @@ impl Canvas {
     }
 
     pub fn clear(&self, c: Color) {
+        // Quadro novo: a janela é a primeira caixa.
+        #[cfg(debug_assertions)]
+        BOXES.with(|b| {
+            let s = unsafe { self.rt.GetSize() };
+            *b.borrow_mut() = (vec![Rect { x: 0.0, y: 0.0, w: s.width, h: s.height }], 0.0, 0.0, vec![], 1.0);
+        });
         unsafe { self.rt.Clear(Some(&cc(c))) }
     }
 
@@ -285,11 +362,15 @@ impl Canvas {
     }
 
     pub fn round(&self, r: Rect, radius: f32, c: Color) {
+        #[cfg(debug_assertions)]
+        note_box(r);
         let rr = D2D1_ROUNDED_RECT { rect: r.d2d(), radiusX: radius, radiusY: radius };
         unsafe { self.rt.FillRoundedRectangle(&rr, self.b(c)) }
     }
 
     pub fn round_line(&self, r: Rect, radius: f32, c: Color, w: f32) {
+        #[cfg(debug_assertions)]
+        note_box(r);
         let r = r.inset(w / 2.0);
         let rr = D2D1_ROUNDED_RECT { rect: r.d2d(), radiusX: radius, radiusY: radius };
         unsafe { self.rt.DrawRoundedRectangle(&rr, self.b(c), w, None) }
@@ -432,7 +513,7 @@ impl Canvas {
         let f = format(size, wt, wrap);
         let t = wide(s);
         #[cfg(debug_assertions)]
-        note_overflow(&f, &t, s, r, wrap);
+        note_overflow(&f, &t, s, r, a, wrap);
         unsafe {
             let _ = f.SetTextAlignment(match a {
                 Align::Left => DWRITE_TEXT_ALIGNMENT_LEADING,
@@ -482,15 +563,39 @@ impl Canvas {
     }
 
     pub fn push_clip(&self, r: Rect) {
+        #[cfg(debug_assertions)]
+        BOXES.with(|b| {
+            let mut b = b.borrow_mut();
+            let (n, dx, dy, k) = (b.0.len(), b.1, b.2, b.4);
+            b.3.push((Rect { x: r.x * k + dx, y: r.y * k + dy, w: r.w * k, h: r.h * k }, n));
+        });
         unsafe { self.rt.PushAxisAlignedClip(&r.d2d(), D2D1_ANTIALIAS_MODE_ALIASED) }
     }
 
     pub fn pop_clip(&self) {
+        #[cfg(debug_assertions)]
+        BOXES.with(|b| _ = b.borrow_mut().3.pop());
         unsafe { self.rt.PopAxisAlignedClip() }
     }
 
     pub fn translate(&self, dx: f32, dy: f32) {
+        #[cfg(debug_assertions)]
+        BOXES.with(|b| {
+            let mut b = b.borrow_mut();
+            (b.1, b.2, b.4) = (dx, dy, 1.0);
+        });
         let m = windows_numerics::Matrix3x2::translation(dx, dy);
+        unsafe { self.rt.SetTransform(&m) }
+    }
+
+    /// Desenha na escala `k` a partir de `x`,`y` (miniaturas); `translate(0.0, 0.0)` volta ao normal.
+    pub fn scale_at(&self, k: f32, x: f32, y: f32) {
+        #[cfg(debug_assertions)]
+        BOXES.with(|b| {
+            let mut b = b.borrow_mut();
+            (b.1, b.2, b.4) = (x, y, k);
+        });
+        let m = windows_numerics::Matrix3x2::scale(k, k) * windows_numerics::Matrix3x2::translation(x, y);
         unsafe { self.rt.SetTransform(&m) }
     }
 }

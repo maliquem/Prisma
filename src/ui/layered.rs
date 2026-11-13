@@ -117,7 +117,8 @@ impl Layered {
         let Some(c) = self.canvas.as_ref() else { return };
         unsafe {
             c.rt.BeginDraw();
-            c.rt.Clear(Some(&D2D1_COLOR_F { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }));
+            // Pelo Canvas: o teste de borda também começa o quadro aqui.
+            c.clear(crate::ui::gfx::Color { r: 0.0, g: 0.0, b: 0.0, a: 0.0 });
             draw(c, rect(0.0, 0.0, w, h));
             if c.rt.EndDraw(None, None).is_err() {
                 self.dc_rt = None;

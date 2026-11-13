@@ -2233,7 +2233,7 @@ Fora dos jogos	Вне игр
 Jogos sem perfil próprio	Игры без своего профиля
 Nenhum programa	Нет программы
 Gyro e touchpad	Гироскоп и тачпад
-Pelo Bluetooth, o controle só manda o gyro e o touchpad no modo completo, que outro programa precisa ligar. No cabo USB eles aparecem aqui.	По Bluetooth геймпад передаёт гироскоп и тачпад только в полном режиме, который должна включить другая программа. По кабелю USB они видны здесь.
+Pelo Bluetooth, o gyro e o touchpad chegam quando o controle passa ao modo completo, que o Prisma pede ao conectar. Se não aparecerem, desligue e ligue o controle.	По Bluetooth гироскоп и тачпад передаются, когда геймпад переходит в полный режим, который Prisma запрашивает при подключении. Если они не появились, выключите и снова включите геймпад.
 Calibrar	Калибровать
 Deixe o controle parado na mesa.	Положите геймпад неподвижно на стол.
 Calibrado: o desvio parado sai de toda leitura.	Откалибровано: дрейф в покое вычитается из каждого значения.

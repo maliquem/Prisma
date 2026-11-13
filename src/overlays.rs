@@ -167,8 +167,7 @@ pub fn preview(c: &Canvas, style: u8, area: Rect, s: &Snapshot) {
         _ => (316.0, 70.0),
     };
     let k = (area.w / w).min(area.h / h).min(1.0);
-    let t = windows_numerics::Matrix3x2::scale(k, k) * windows_numerics::Matrix3x2::translation(area.x, area.y);
-    unsafe { c.rt.SetTransform(&t) };
+    c.scale_at(k, area.x, area.y);
     let r = rect(0.0, 0.0, w, h);
     match style {
         0 => draw_pill(c, r, &m),

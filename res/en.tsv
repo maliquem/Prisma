@@ -2239,7 +2239,7 @@ Fora dos jogos	Outside games
 Jogos sem perfil próprio	Games without their own profile
 Nenhum programa	No program
 Gyro e touchpad	Gyro and touchpad
-Pelo Bluetooth, o controle só manda o gyro e o touchpad no modo completo, que outro programa precisa ligar. No cabo USB eles aparecem aqui.	Over Bluetooth, the controller only sends the gyro and touchpad in full mode, which another program has to turn on. Over a USB cable they show up here.
+Pelo Bluetooth, o gyro e o touchpad chegam quando o controle passa ao modo completo, que o Prisma pede ao conectar. Se não aparecerem, desligue e ligue o controle.	Over Bluetooth, the gyro and touchpad arrive when the controller switches to full mode, which Prisma requests on connect. If they don't show up, turn the controller off and on again.
 Calibrar	Calibrate
 Deixe o controle parado na mesa.	Leave the controller still on the table.
 Calibrado: o desvio parado sai de toda leitura.	Calibrated: the drift at rest is removed from every reading.

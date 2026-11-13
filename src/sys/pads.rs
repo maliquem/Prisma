@@ -420,6 +420,18 @@ fn is_xinput(path: &str) -> bool {
     path.to_ascii_lowercase().contains("&ig_")
 }
 
+/// DualSense e DualShock 4 no Bluetooth começam no modo simples, sem gyro nem touchpad. Ler o
+/// relatório de recurso 0x05 (a calibração de fábrica) passa o controle ao modo completo, como faz
+/// o driver do Linux. Só lê: nada é gravado no controle. Vale até o controle desligar.
+unsafe fn full_mode(path: &str) -> bool {
+    let Some(h) = open(path, (FILE_GENERIC_READ | FILE_GENERIC_WRITE).0).or_else(|| open(path, FILE_GENERIC_READ.0)) else { return false };
+    let mut buf = [0u8; 41];
+    buf[0] = 0x05;
+    let ok = HidD_GetFeature(h, buf.as_mut_ptr() as *mut _, buf.len() as u32);
+    let _ = CloseHandle(h);
+    ok
+}
+
 unsafe fn open(path: &str, access: u32) -> Option<HANDLE> {
     CreateFileW(&HSTRING::from(path), access, FILE_SHARE_READ | FILE_SHARE_WRITE, None, OPEN_EXISTING, FILE_FLAGS_AND_ATTRIBUTES(0), None).ok()
 }
@@ -774,6 +786,9 @@ unsafe fn read_loop(d: Dev) {
     // shortcut: o genérico pode só mandar relatório quando algo muda, então fica na lista até o
     // Windows tirar o aparelho; um genérico Bluetooth desligado pode ficar, até medir o 8BitDo.
     let streams = matches!(fam, Family::DualSense | Family::Ds4);
+    if streams && link == Link::Bluetooth {
+        full_mode(&d.path);
+    }
     let mut shown = false;
     let show = |on: bool| {
         if on {

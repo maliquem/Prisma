@@ -656,7 +656,7 @@ fn draw_motion(ui: &mut Ui, p: &Pad, at: Rect) -> f32 {
         let r = rect(at.x, at.y, at.w, 92.0);
         ui.card(r);
         ui.title(rect(x, r.y + 12.0, w, 22.0), "Gyro e touchpad");
-        ui.c.text_wrap(rect(x, r.y + 42.0, w, 40.0), &tr("Pelo Bluetooth, o controle só manda o gyro e o touchpad no modo completo, que outro programa precisa ligar. No cabo USB eles aparecem aqui."), 12.0, MUTED, Weight::Regular);
+        ui.c.text_wrap(rect(x, r.y + 42.0, w, 40.0), &tr("Pelo Bluetooth, o gyro e o touchpad chegam quando o controle passa ao modo completo, que o Prisma pede ao conectar. Se não aparecerem, desligue e ligue o controle."), 12.0, MUTED, Weight::Regular);
         return r.bottom() + 12.0;
     }
     let pad_h = (w * 0.45).floor();

@@ -788,8 +788,11 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
             ui.hotkey("pp-kwhk", rect(x + 2.0 * (third + 8.0), y, third, 34.0), &mut ed.kwhk);
         }
         y += 40.0;
-        ui.c.text_fit(rect(x, y, w, 20.0), &tr("Vale fora do Prisma e fora de programas abertos como administrador. Os cliques esquerdo e direito não mudam."), 12.0, MUTED, Align::Left, Weight::Regular);
-        y += 36.0;
+        // Quebra em vez de cortar: em inglês e espanhol a frase passa de uma linha.
+        let note = "Vale fora do Prisma e fora de programas abertos como administrador. Os cliques esquerdo e direito não mudam.";
+        let nh = crate::ui::gfx::measure(note, 12.0, Weight::Regular, Some(w)).1.ceil();
+        ui.c.text_wrap(rect(x, y, w, nh), note, 12.0, MUTED, Weight::Regular);
+        y += nh + 16.0;
     } else {
     let (mut bx, mut by) = (x, y);
     for (bit, label) in &chips {

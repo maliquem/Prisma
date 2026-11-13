@@ -2233,7 +2233,7 @@ Fora dos jogos	游戏之外
 Jogos sem perfil próprio	没有专属配置的游戏
 Nenhum programa	无程序
 Gyro e touchpad	陀螺仪和触摸板
-Pelo Bluetooth, o controle só manda o gyro e o touchpad no modo completo, que outro programa precisa ligar. No cabo USB eles aparecem aqui.	通过蓝牙连接时，手柄只会在完整模式下发送陀螺仪和触摸板数据，而该模式需要其他程序来开启。通过 USB 线连接时，它们会显示在这里。
+Pelo Bluetooth, o gyro e o touchpad chegam quando o controle passa ao modo completo, que o Prisma pede ao conectar. Se não aparecerem, desligue e ligue o controle.	通过蓝牙连接时，手柄切换到完整模式后才会传来陀螺仪和触摸板数据，Prisma 会在连接时请求该模式。如果没有出现，请关闭手柄后再重新开启。
 Calibrar	校准
 Deixe o controle parado na mesa.	请将手柄静止放在桌面上。
 Calibrado: o desvio parado sai de toda leitura.	已校准：静止漂移会从每次读数中扣除。
