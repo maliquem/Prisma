@@ -2339,3 +2339,6 @@ Arco-íris	Rainbow
 Som no alto-falante do controle	Controller speaker sound
 Um som curto no controle ligado pelo cabo (DualSense e DualShock 4) ao conectar, desconectar, trocar de perfil, com bateria baixa e com variação alta. Pelo Bluetooth o controle não tem saída de som.	A short sound on the controller connected by cable (DualSense and DualShock 4) on connect, disconnect, profile switch, low battery and high jitter. Over Bluetooth the controller has no sound output.
 Vibrar com o som do PC	PC sound rumble
+Mods do DSX	DSX mods
+Aceitar mods pela porta UDP 6969	Accept mods on UDP port 6969
+Mods de jogos feitos para o DSX mudam a luz e os gatilhos do DualSense. Só aceita mensagens deste PC. O que o mod pedir fica até ele soltar, até desligar aqui ou até fechar o Prisma.	Game mods made for DSX change the DualSense light bar and triggers. Only accepts messages from this PC. What a mod asks for stays until it lets go, until you turn this off here, or until Prisma is closed.

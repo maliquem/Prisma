@@ -1955,7 +1955,10 @@ pub fn triggers(key: &str) -> [Trig; 2] {
         return t;
     }
     let g = RUN.lock().unwrap();
-    g.as_ref().map_or([Trig::Pass; 2], |r| r.profiles[prof_of(r, key)].trig)
+    let p = g.as_ref().map_or([Trig::Pass; 2], |r| r.profiles[prof_of(r, key)].trig);
+    // Mod do DSX: o gatilho que ele pediu passa na frente do perfil.
+    let m = super::dsx::triggers();
+    [0, 1].map(|i| m[i].unwrap_or(p[i]))
 }
 
 /// O editor de perfis mostra esta luz no controle enquanto está aberto; `None` solta a mostra.
@@ -1971,6 +1974,10 @@ pub fn light(key: &str) -> Option<(Light, bool)> {
     }
     if let Some(l) = *PREVIEW.lock().unwrap() {
         return Some(l);
+    }
+    // Mod do DSX: a cor pedida vale também pelo Bluetooth, como no DSX.
+    if let Some(c) = super::dsx::light() {
+        return Some((Light::Color(c), true));
     }
     let g = RUN.lock().unwrap();
     g.as_ref().and_then(|r| {

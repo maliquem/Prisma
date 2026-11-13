@@ -2333,3 +2333,6 @@ Arco-íris	Arcoíris
 Som no alto-falante do controle	Sonido en el altavoz del mando
 Um som curto no controle ligado pelo cabo (DualSense e DualShock 4) ao conectar, desconectar, trocar de perfil, com bateria baixa e com variação alta. Pelo Bluetooth o controle não tem saída de som.	Un sonido corto en el mando conectado por cable (DualSense y DualShock 4) al conectar, desconectar, cambiar de perfil, con batería baja y con variación alta. Por Bluetooth el mando no tiene salida de sonido.
 Vibrar com o som do PC	Vibrar con audio PC
+Mods do DSX	Mods de DSX
+Aceitar mods pela porta UDP 6969	Aceptar mods por el puerto UDP 6969
+Mods de jogos feitos para o DSX mudam a luz e os gatilhos do DualSense. Só aceita mensagens deste PC. O que o mod pedir fica até ele soltar, até desligar aqui ou até fechar o Prisma.	Los mods de juegos hechos para DSX cambian la barra de luz y los gatillos del DualSense. Solo acepta mensajes de este PC. Lo que pida el mod se mantiene hasta que lo suelte, hasta que lo desactives aquí o hasta que cierres Prisma.

@@ -2333,3 +2333,6 @@ Arco-íris	彩虹
 Som no alto-falante do controle	手柄扬声器声音
 Um som curto no controle ligado pelo cabo (DualSense e DualShock 4) ao conectar, desconectar, trocar de perfil, com bateria baixa e com variação alta. Pelo Bluetooth o controle não tem saída de som.	通过线缆连接的手柄（DualSense 和 DualShock 4）会在连接、断开、切换配置、电量低和抖动高时发出一声短促的声音。通过蓝牙连接时手柄没有声音输出。
 Vibrar com o som do PC	声音振动
+Mods do DSX	DSX 模组
+Aceitar mods pela porta UDP 6969	通过 UDP 端口 6969 接收模组
+Mods de jogos feitos para o DSX mudam a luz e os gatilhos do DualSense. Só aceita mensagens deste PC. O que o mod pedir fica até ele soltar, até desligar aqui ou até fechar o Prisma.	为 DSX 制作的游戏模组可以改变 DualSense 的灯条和扳机。只接收来自本机的消息。模组的请求会一直保持，直到它释放、你在此关闭，或关闭 Prisma。

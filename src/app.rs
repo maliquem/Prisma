@@ -3196,6 +3196,7 @@ impl App {
         crate::sys::remap::configure(self.cfg.pad_map, self.cfg.meter_games.iter().map(|g| g.exe.clone()).collect());
         crate::sys::remap::set_reopen_last(self.cfg.pad_reopen_last);
         crate::sys::remap::set_fixed(&self.cfg.pad_fixed);
+        crate::sys::dsx::set_enabled(self.cfg.dsx_udp);
         let c = &self.cfg;
         crate::sys::radial::set_programs(c.pad_radial_prog.clone().map(|(_, p)| p));
         crate::sys::osk::configure(c.pad_osk_two, c.pad_osk_letters_right, c.pad_osk_dodge, c.pad_osk_repeat, c.pad_osk_repeat_ms);

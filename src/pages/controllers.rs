@@ -458,6 +458,7 @@ fn settings(ui: &mut Ui, app: &mut App, list: &[Pad], a: Rect) {
     }
     y += r.h + 12.0;
     y = mapping(ui, app, rect(x, y, lw, 0.0));
+    y = dsx(ui, app, rect(x, y, lw, 0.0));
     for t in &app.pads.conflicts {
         let r = rect(x, y, lw, 64.0);
         ui.card(r);
@@ -934,6 +935,21 @@ fn mapping(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
         let t = crate::i18n::tr("Tempo interno: {} µs na mediana, {} µs no p99").replacen("{}", &med.to_string(), 1).replacen("{}", &p99.to_string(), 1);
         ui.c.text_fit(rect(r.x + 16.0, r.y + ny + 80.0, r.w - 32.0, 20.0), &t, 12.0, MUTED, Align::Left, Weight::Regular);
     }
+    r.bottom() + 12.0
+}
+
+/// Mods do DSX: aceitar as mensagens dos mods de jogos pela porta UDP 6969.
+fn dsx(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
+    let note = crate::i18n::tr("Mods de jogos feitos para o DSX mudam a luz e os gatilhos do DualSense. Só aceita mensagens deste PC. O que o mod pedir fica até ele soltar, até desligar aqui ou até fechar o Prisma.");
+    let nh = crate::ui::gfx::measure(&note, 12.0, Weight::Regular, Some(at.w - 32.0)).1.ceil();
+    let r = rect(at.x, at.y, at.w, 90.0 + nh);
+    ui.card(r);
+    ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Mods do DSX");
+    if ui.check("pad-dsx", rect(r.x + 10.0, r.y + 38.0, r.w - 20.0, 36.0), "Aceitar mods pela porta UDP 6969", &mut app.cfg.dsx_udp) {
+        app.cfg.save();
+        app.apply_pads();
+    }
+    ui.c.text_wrap(rect(r.x + 16.0, r.y + 78.0, r.w - 32.0, nh), &note, 12.0, TEXT2, Weight::Regular);
     r.bottom() + 12.0
 }
 
