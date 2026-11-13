@@ -1,6 +1,6 @@
 //! Compartilhar tela: a página Compartilhar tela chama estes modos em processos próprios.
 //!
-//! Rede local, sem pareamento nem criptografia: `--stream-host[=porta]` espera quem assiste; `--stream-control[=porta]` faz o mesmo e aceita mouse
+//! Rede local, sem pareamento nem criptografia (só na versão de desenvolvimento): `--stream-host[=porta]` espera quem assiste; `--stream-control[=porta]` faz o mesmo e aceita mouse
 //! e teclado de quem assiste. `--stream-view=endereço[:porta]|saida.txt|segundos` abre a janela que
 //! assiste (saída e segundos são opcionais, para medir sem ninguém olhando).
 //!
@@ -623,6 +623,12 @@ pub fn read(b: &[u8]) -> Option<Msg<'_>> {
     })
 }
 
+/// Vídeo que um host de verdade manda (10 a 240 FPS, tamanho de uma tela). O resto derrubaria o
+/// decodificador de quem assiste: divisão por zero, textura impossível.
+pub fn sane_video(w: u32, h: u32, fps: u32) -> bool {
+    fps > 0 && fps <= 1000 && (1..=16384).contains(&w) && (1..=16384).contains(&h)
+}
+
 /// Agora em 100 ns, na mesma régua do relógio da captura.
 pub fn now() -> i64 {
     use windows::Win32::System::Performance::{QueryPerformanceCounter, QueryPerformanceFrequency};
@@ -659,6 +665,9 @@ pub fn run_args() -> bool {
             hud::test_menu(dir);
             return true;
         }
+        // Rede local sem pareamento nem criptografia: quem mandar um pacote entra. Só para medir,
+        // na versão de desenvolvimento; a página usa sempre o canal pareado.
+        #[cfg(debug_assertions)]
         for (name, control) in [("--stream-host", false), ("--stream-control", true)] {
             if a == name || a.strip_prefix(name).is_some_and(|r| r.starts_with('=')) {
                 let port = a.strip_prefix(name).and_then(|r| r.strip_prefix('=')).and_then(|p| p.parse().ok()).unwrap_or(PORT);
@@ -814,6 +823,10 @@ mod tests {
         assert_eq!(read(b"PR\x01\x02"), None);
         assert_eq!(read(b"PR\x02\x01\x09"), None);
         assert_eq!(read(b"PR"), None);
+        assert!(sane_video(3840, 2160, 120));
+        assert!(!sane_video(1920, 1080, 0));
+        assert!(!sane_video(0, 1080, 60));
+        assert!(!sane_video(1920, 100_000, 60));
     }
 
     #[test]

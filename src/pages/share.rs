@@ -958,6 +958,10 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
     }
     for d in &rows {
         if ui.answered(&format!("sh-forget-{}", d.id)) {
+            // Se ele está assistindo agora, sai da sala também.
+            if d.viewer && stream::host::room().iter().any(|p| p.key == d.id) {
+                let _ = stream::host::ask_room(&format!("desconectar {}", d.id));
+            }
             if stream::forget_device(d.viewer, &d.id).is_err() {
                 app.toast.info("Não deu para salvar. Com o serviço, abra o Prisma como administrador.");
             } else if !all.iter().any(|o| o.id == d.id && o.viewer != d.viewer) {

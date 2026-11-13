@@ -408,6 +408,7 @@ pub(super) fn serve(d: &D3d, first: Joiner, joins: Option<&mpsc::Receiver<Joiner
     }
 }
 
+#[cfg_attr(not(debug_assertions), allow(dead_code))]
 pub fn run(port: u16, control: bool) {
     let sock = match UdpSocket::bind(("0.0.0.0", port)) {
         Ok(s) => s,

@@ -239,7 +239,7 @@ Em teste. Mostra e controla outro PC pela internet, para acesso remoto ou para j
 - **Aba Conectados:** mostra cada aparelho conectado a este PC, com o caminho e a latência. O tipo de acesso muda na hora e fica salvo para as próximas conexões. **Desconectar** derruba só aquela conexão. **Banir** pergunta antes, derruba e esquece o aparelho, que só volta com um convite novo.
 - **Avisos:** o Windows mostra uma notificação do Prisma quando alguém conecta a este PC ou sai. Clicar nela abre a aba Conectados. Toda opção trocada no menu da conexão ou por atalho aparece por alguns segundos na janela de quem assiste, e quando o host muda o vídeo ou o acesso no meio da conexão, quem assiste também vê. No host, o Prisma avisa quando alguém muda os quadros por segundo ou o 4:4:4, quando as opções do Host são aplicadas, quando o acesso de alguém muda, quando a tecla de emergência desconecta todo mundo e quando o mouse trava ou destrava.
 - **Latência:** com **Assistir**, **Mouse e teclado** ou **Só o som** ligado, o cartão do aparelho mostra a latência de cada modo, e embaixo da lista fica o registro **Latência**, com uma linha a cada 5 segundos: a rede (média, mínima e máxima, ida e volta) e, quando há, o atraso de ponta a ponta do vídeo ou o do som.
-- **Segurança:** Ctrl + Alt + Shift + Q, no host, desconecta todo mundo na hora. **Esquecer** tira um aparelho, que só volta com convite novo.
+- **Segurança:** Ctrl + Alt + Shift + Q, no host, desconecta todo mundo na hora. **Esquecer** tira um aparelho, que só volta com convite novo; se ele estiver assistindo, sai da sala na hora.
 - **Não dá para:** usar sem o Prisma aberto no host (a não ser com o serviço); capturar conteúdo protegido, que sai preto; ouvir o microfone de quem assiste.
 
 ## Controles

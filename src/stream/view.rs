@@ -185,6 +185,10 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
                 break;
             }
             Some(Msg::Info { codec, w, h, fps, perms, recover: r, hdr10, yuv444, priority }) => {
+                if !sane_video(w, h, fps) {
+                    eprintln!("vídeo do host recusado: {w}x{h} a {fps} FPS");
+                    continue;
+                }
                 recover = r;
                 wave = codec == VideoCodec::Wave;
                 sh.got_info.store(true, Ordering::Relaxed);

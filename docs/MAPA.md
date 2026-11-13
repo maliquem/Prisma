@@ -417,14 +417,14 @@ A barra lateral é `NAV` (`src/pages/mod.rs:273-295`), na ordem abaixo. Cada pá
 |---|---|---|---|
 | Tela principal e abas | Página | `pages/share.rs:436` `draw`; `:592` `main_tab`; `:301` `tabs` | |
 | Criar convite (código ou link) | Botão; Launcher `ShareInvite` | `create_invite` `pages/share.rs:222`; `invite_in` `:232`; `invite_of` `:201`; `link.rs:339` | Validade em minutos (`share_invite.minutes`). |
-| Quem transmite (host) | Aba Host | `pages/share.rs:1062` `host_tab`; `stream/host.rs` (70 funções, não listadas) | Config `share_names`, `cap_target`. |
-| Quem assiste (cliente) | Aba Cliente | `pages/share.rs:1315` `client_tab`; `stream/view.rs` | |
-| Rede | Aba Rede | `pages/share.rs:1407` `net_tab`; `stream/net.rs` | |
-| Teclas e controle remoto | Aba Teclas | `pages/share.rs:1464` `keys_tab`; `:1455` `hotkey_row`; `stream/kvm.rs` | |
-| Controles locais repassados | Aba Controles | `pages/share.rs:1511` `local_pads`; `:1537` `pads_tab`; `stream/pads.rs` | |
+| Quem transmite (host) | Aba Host | `pages/share.rs:1066` `host_tab`; `stream/host.rs` (70 funções, não listadas) | Config `share_names`, `cap_target`. |
+| Quem assiste (cliente) | Aba Cliente | `pages/share.rs:1319` `client_tab`; `stream/view.rs`; `stream/mod.rs:628` `sane_video` (recusa vídeo com 0 FPS ou tamanho impossível) | |
+| Rede | Aba Rede | `pages/share.rs:1411` `net_tab`; `stream/net.rs` | |
+| Teclas e controle remoto | Aba Teclas | `pages/share.rs:1468` `keys_tab`; `:1459` `hotkey_row`; `stream/kvm.rs` | |
+| Controles locais repassados | Aba Controles | `pages/share.rs:1515` `local_pads`; `:1541` `pads_tab`; `stream/pads.rs` | |
 | Parar transmissão | Botão | `pages/share.rs:242` `stop`; `:250` `stop_kvm`; `:272` `stop_ear` | |
-| Trabalho em segundo plano | Automático | `pages/share.rs:277` `service_job`; `stream/service.rs`; `stream/mod.rs:158` `service_dir`; `stream/mod.rs:654` `run_args` | `main.rs` chama `run_args` antes do nome único. |
-| Abrir convite recebido (`prisma://`) | Clique no link | `stream/weblink.rs` `take_arg`; `main.rs` (variável `link`) | |
+| Trabalho em segundo plano | Automático | `pages/share.rs:277` `service_job`; `stream/service.rs`; `stream/mod.rs:158` `service_dir`; `stream/mod.rs:660` `run_args` | `main.rs` chama `run_args` antes do nome único. |
+| Abrir convite recebido (`prisma://`) | Clique no link | `stream/weblink.rs` `take_arg`; `main.rs` (variável `link`); `stream/weblink.rs:26` `link_alone`, chamado no começo de `main` | Link com outros argumentos junto: nada abre. |
 | Testes | `--test-stream=` | `app.rs:603`; testes em `src/stream/*.rs` | 34 testes no total em `stream/`. |
 
 ### 4.19 Controles (`src/pages/controllers.rs`, `draw` linha 179)

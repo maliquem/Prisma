@@ -21,6 +21,12 @@ fn pending_path() -> std::path::PathBuf {
     super::user_dir().join("link.txt")
 }
 
+/// O Windows abre o link como `prisma.exe "%1"`: o link chega sozinho. Falso quando ele veio com
+/// outros argumentos, de um link com aspas no meio.
+pub fn link_alone(args: &[String]) -> bool {
+    args.len() == 2 || !args.iter().skip(1).any(|a| a.to_ascii_lowercase().starts_with("prisma:"))
+}
+
 /// Na abertura: um argumento `prisma://...` vira um pedido para a página. Devolve true se havia.
 pub fn take_arg() -> bool {
     let Some(arg) = std::env::args().skip(1).find(|a| a.to_ascii_lowercase().starts_with("prisma:")) else { return false };
@@ -111,4 +117,18 @@ pub fn share_sheet(hwnd: windows::Win32::Foundation::HWND, title: &str, text: &s
         unsafe { interop.ShowShareUIForWindow(hwnd) }
     };
     run().is_ok()
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn link_comes_alone() {
+        let v = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert!(super::link_alone(&v(&["prisma.exe", "prisma://parear/K7M2-QX9P"])));
+        assert!(super::link_alone(&v(&["prisma.exe", "--background"])));
+        assert!(super::link_alone(&v(&["prisma.exe"])));
+        // Aspas no link: o resto vira argumento.
+        assert!(!super::link_alone(&v(&["prisma.exe", "prisma://x", "--stream-control"])));
+        assert!(!super::link_alone(&v(&["prisma.exe", "--uninstall", "PRISMA://x"])));
+    }
 }

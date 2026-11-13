@@ -32,6 +32,11 @@ fn main() {
         use windows::Win32::System::LibraryLoader::*;
         let _ = SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32);
     }
+    // Um link prisma:// com outros argumentos é um link com aspas para acrescentar opções: nada abre.
+    #[cfg(feature = "stream")]
+    if !stream::weblink::link_alone(&std::env::args().collect::<Vec<_>>()) {
+        return;
+    }
     let cfg = config::Config::load();
     i18n::set_lang(cfg.lang);
     let background = std::env::args().any(|a| a == "--background");
