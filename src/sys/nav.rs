@@ -152,12 +152,17 @@ pub fn window_open() -> bool {
     MAIN.load(Ordering::Relaxed) != 0
 }
 
+/// A janela principal do Prisma está em foco.
+pub fn front() -> bool {
+    use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+    let h = MAIN.load(Ordering::Relaxed);
+    h != 0 && unsafe { GetForegroundWindow() }.0 as isize == h
+}
+
 /// Relatório do controle `key`. Com o Prisma em foco, faz a navegação e devolve o que o mapeamento
 /// ainda vê; fora dele, None.
 pub fn feed(key: &str, inp: &Input, now: Instant) -> Option<Input> {
-    use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
-    let h = MAIN.load(Ordering::Relaxed);
-    let front = h != 0 && unsafe { GetForegroundWindow() }.0 as isize == h;
+    let front = front();
     let mut g = STATE.lock().unwrap();
     let map = g.get_or_insert_with(HashMap::new);
     if !front {

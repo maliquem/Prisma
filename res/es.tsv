@@ -2166,3 +2166,22 @@ Quando o cursor de texto fica atrás do teclado, ele sobe para o alto da tela, e
 Repetir ao segurar	Repetir al mantener
 Segurar qualquer botão repete a tecla, como num teclado, depois da espera. Desligado, só apagar e as setas repetem.	Mantener cualquier botón repite la tecla, como en un teclado, tras la espera. Desactivado, solo borrar y las flechas se repiten.
 Espera para repetir	Espera para repetir
+Macro	Macro
+Macros	Macros
+Uma vez	Una vez
+Repetir enquanto segura	Repetir mientras se mantiene
+Repetir até apertar de novo	Repetir hasta volver a pulsar
+Espera	Espera
+Macro {}	Macro {}
+Aperta {}	Pulsa {}
+Solta {}	Suelta {}
+Nenhuma macro: crie uma em Macros, mais abaixo	Ninguna macro: crea una en Macros, más abajo
+Nenhuma macro.	Ninguna macro.
+Nova macro	Nueva macro
+Apagar macro	Borrar macro
+Gravando: use o teclado e o mouse em outro programa e volte aqui para parar. O movimento do mouse não entra.	Grabando: usa el teclado y el ratón en otro programa y vuelve aquí para parar. El movimiento del ratón no se graba.
+{} passos. Gravar troca os passos pelos novos.	{} pasos. Grabar cambia los pasos por los nuevos.
+Adicionar passo	Añadir paso
+Gravando macro: volte ao Prisma e clique em Parar	Grabando macro: vuelve a Prisma y haz clic en Parar
+Macro gravada	Macro grabada
+Jogo com anti-cheat: as macros ficam paradas nele.	Juego con anti-cheat: las macros quedan en pausa en él.

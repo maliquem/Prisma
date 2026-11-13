@@ -2166,3 +2166,22 @@ Quando o cursor de texto fica atrás do teclado, ele sobe para o alto da tela, e
 Repetir ao segurar	按住时重复
 Segurar qualquer botão repete a tecla, como num teclado, depois da espera. Desligado, só apagar e as setas repetem.	按住任意按钮会像键盘一样在等待后重复该键。关闭时只有删除和方向键会重复。
 Espera para repetir	重复前等待
+Macro	宏
+Macros	宏
+Uma vez	一次
+Repetir enquanto segura	按住时重复
+Repetir até apertar de novo	重复直到再次按下
+Espera	等待
+Macro {}	宏 {}
+Aperta {}	按下 {}
+Solta {}	松开 {}
+Nenhuma macro: crie uma em Macros, mais abaixo	没有宏：在下方的“宏”中创建
+Nenhuma macro.	没有宏。
+Nova macro	新建宏
+Apagar macro	删除宏
+Gravando: use o teclado e o mouse em outro programa e volte aqui para parar. O movimento do mouse não entra.	正在录制：在其他程序中使用键盘和鼠标，然后回到这里停止。鼠标移动不会被录制。
+{} passos. Gravar troca os passos pelos novos.	{} 个步骤。录制会用新步骤替换。
+Adicionar passo	添加步骤
+Gravando macro: volte ao Prisma e clique em Parar	正在录制宏：回到 Prisma 并点击停止
+Macro gravada	宏已录制
+Jogo com anti-cheat: as macros ficam paradas nele.	游戏有反作弊：宏在其中暂停。

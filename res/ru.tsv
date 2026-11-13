@@ -2166,3 +2166,22 @@ Quando o cursor de texto fica atrás do teclado, ele sobe para o alto da tela, e
 Repetir ao segurar	Повтор при удержании
 Segurar qualquer botão repete a tecla, como num teclado, depois da espera. Desligado, só apagar e as setas repetem.	Удержание любой кнопки повторяет клавишу, как на клавиатуре, после задержки. Если выключено, повторяются только удаление и стрелки.
 Espera para repetir	Задержка повтора
+Macro	Макрос
+Macros	Макросы
+Uma vez	Один раз
+Repetir enquanto segura	Повторять, пока удерживается
+Repetir até apertar de novo	Повторять до следующего нажатия
+Espera	Пауза
+Macro {}	Макрос {}
+Aperta {}	Нажать {}
+Solta {}	Отпустить {}
+Nenhuma macro: crie uma em Macros, mais abaixo	Нет макросов: создайте их в разделе «Макросы» ниже
+Nenhuma macro.	Нет макросов.
+Nova macro	Новый макрос
+Apagar macro	Удалить макрос
+Gravando: use o teclado e o mouse em outro programa e volte aqui para parar. O movimento do mouse não entra.	Запись: работайте клавиатурой и мышью в другой программе и вернитесь сюда, чтобы остановить. Движение мыши не записывается.
+{} passos. Gravar troca os passos pelos novos.	Шагов: {}. Запись заменяет шаги новыми.
+Adicionar passo	Добавить шаг
+Gravando macro: volte ao Prisma e clique em Parar	Запись макроса: вернитесь в Prisma и нажмите «Стоп»
+Macro gravada	Макрос записан
+Jogo com anti-cheat: as macros ficam paradas nele.	Игра с античитом: макросы в ней не работают.

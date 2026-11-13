@@ -70,7 +70,37 @@ pub enum Out {
     Profile(u8),
     /// Abre este programa (índice em `Profile::strings`).
     Run(u8),
+    /// Macro do perfil (índice em `Profile::macros`), feita por `sys::macros`.
+    Macro(u8),
 }
+
+/// Como a macro roda: uma vez, repetindo enquanto o botão fica apertado, ou repetindo até o
+/// próximo aperto.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Mode {
+    Once,
+    Held,
+    Toggle,
+}
+pub const MODES: [(Mode, &str); 3] = [(Mode::Once, "once"), (Mode::Held, "held"), (Mode::Toggle, "toggle")];
+
+/// Passo de macro: aperta ou solta uma tecla, um botão do mouse ou gira a roda (só `Down`), ou espera.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Step {
+    Down(Out),
+    Up(Out),
+    Wait(u32),
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct Macro {
+    pub name: String,
+    pub mode: Mode,
+    pub steps: Vec<Step>,
+}
+pub const MAX_MACROS: usize = 32;
+pub const MAX_STEPS: usize = 2000;
+pub const MAX_WAIT: u32 = 60_000;
 
 /// Ações do Prisma que um botão pode chamar: todas as que têm atalho, mais HDR, Bluetooth e
 /// bateria. A ordem é a do arquivo: só cresce no fim. `SOUND + n` troca para a combinação de som n.
@@ -234,6 +264,7 @@ pub struct Profile {
     pub turbo: Vec<Turbo>,
     /// Botões que, segurados, fazem o próximo botão ligar ou desligar o turbo dele (0: sem atalho).
     pub turbo_key: u32,
+    pub macros: Vec<Macro>,
 }
 
 pub const DESKTOP: &str = "Desktop";
@@ -243,7 +274,7 @@ impl Profile {
     fn empty(name: &str) -> Self {
         let stick = Zone { start: 0.15, end: 0.95 };
         let trig = Zone { start: 0.05, end: 0.95 };
-        Profile { name: name.into(), games: vec![], zones: [stick, stick, trig, trig], layers: vec![Layer { name: "Base".into(), parent: None, ls: None, rs: None, binds: vec![] }], strings: vec![], turbo: vec![], turbo_key: TURBO_KEY }
+        Profile { name: name.into(), games: vec![], zones: [stick, stick, trig, trig], layers: vec![Layer { name: "Base".into(), parent: None, ls: None, rs: None, binds: vec![] }], strings: vec![], turbo: vec![], turbo_key: TURBO_KEY, macros: vec![] }
     }
 
     /// Base: nada mapeado, o jogo lê o controle como ele é.
@@ -404,6 +435,17 @@ impl Profile {
         for t in &self.turbo {
             let _ = writeln!(s, "turbo {} {} {} {}", button_name(t.button), t.speed, t.delay, if t.on { "on" } else { "off" });
         }
+        for (i, m) in self.macros.iter().enumerate() {
+            let mode = MODES.iter().find(|x| x.0 == m.mode).map_or("once", |x| x.1);
+            let _ = writeln!(s, "macro {mode} {}", m.name);
+            for st in &m.steps {
+                match st {
+                    Step::Down(o) => _ = writeln!(s, "mstep {i} down {}", out_text(*o, &self.strings)),
+                    Step::Up(o) => _ = writeln!(s, "mstep {i} up {}", out_text(*o, &self.strings)),
+                    Step::Wait(ms) => _ = writeln!(s, "mstep {i} wait {ms}"),
+                }
+            }
+        }
         for (i, l) in self.layers.iter().enumerate() {
             match l.parent {
                 Some(p) => _ = writeln!(s, "layer {p} {}", l.name),
@@ -512,12 +554,44 @@ impl Profile {
                     }
                     p.layers[l].binds.push(Bind { button, with, when, out });
                 }
+                "macro" => {
+                    let (mode, name) = rest.split_once(' ').unwrap_or((rest, ""));
+                    let mode = MODES.iter().find(|x| x.1 == mode)?.0;
+                    let name: String = name.chars().filter(|c| !c.is_control()).take(40).collect();
+                    if p.macros.len() >= MAX_MACROS || name.is_empty() {
+                        return None;
+                    }
+                    p.macros.push(Macro { name, mode, steps: vec![] });
+                }
+                "mstep" => {
+                    let mut it = rest.splitn(3, ' ');
+                    let m = it.next()?.parse::<usize>().ok().filter(|&m| m < p.macros.len())?;
+                    let kind = it.next()?;
+                    let arg = it.next()?;
+                    let step = match kind {
+                        "wait" => Step::Wait(arg.parse::<u32>().ok().filter(|v| *v <= MAX_WAIT)?),
+                        "down" | "up" => {
+                            // Só tecla, mouse e roda (a roda só aperta).
+                            let o = parse_out(arg, &mut p.strings)?;
+                            match (o, kind) {
+                                (Out::Key(..) | Out::Mouse(_) | Out::Wheel(_), "down") => Step::Down(o),
+                                (Out::Key(..) | Out::Mouse(_), _) => Step::Up(o),
+                                _ => return None,
+                            }
+                        }
+                        _ => return None,
+                    };
+                    if p.macros[m].steps.len() >= MAX_STEPS {
+                        return None;
+                    }
+                    p.macros[m].steps.push(step);
+                }
                 _ => return None,
             }
         }
         // Camada citada numa ligação tem que existir.
         let n = p.layers.len();
-        let ok = p.layers.iter().flat_map(|l| &l.binds).all(|b| !matches!(b.out, Out::Layer(x) | Out::Toggle(x) if x as usize >= n));
+        let ok = p.layers.iter().flat_map(|l| &l.binds).all(|b| !matches!(b.out, Out::Layer(x) | Out::Toggle(x) if x as usize >= n) && !matches!(b.out, Out::Macro(x) if x as usize >= p.macros.len()));
         (ok && n > 0 && !p.name.is_empty()).then_some(p)
     }
 }
@@ -595,6 +669,7 @@ fn out_text(o: Out, strings: &[String]) -> String {
         Out::Action(n) => format!("action {n}"),
         Out::Profile(n) => format!("profile {}", text(n)),
         Out::Run(n) => format!("run {}", text(n)),
+        Out::Macro(n) => format!("macro {n}"),
     }
 }
 
@@ -636,6 +711,7 @@ fn parse_out(s: &str, strings: &mut Vec<String>) -> Option<Out> {
         "wheel" => Out::Wheel(n.parse::<i8>().ok().filter(|v| *v != 0)?),
         "layer" => Out::Layer(n.parse::<u8>().ok()?),
         "toggle" => Out::Toggle(n.parse::<u8>().ok()?),
+        "macro" => Out::Macro(n.parse::<u8>().ok().filter(|&m| (m as usize) < MAX_MACROS)?),
         "action" => Out::Action(n.parse::<u8>().ok().filter(|&a| (a as usize) < ACTIONS.len() || (SOUND..SOUND + crate::app::SND_KEYS_MAX as u8).contains(&a))?),
         _ => return None,
     };
@@ -1091,6 +1167,7 @@ pub fn remove(name: &str) {
 
 /// Relê os perfis. Solta tudo antes: as camadas e as teclas podem ter mudado.
 fn reload() {
+    super::macros::stop_all();
     let acts = {
         let mut g = RUN.lock().unwrap();
         let Some(r) = g.as_mut() else { return };
@@ -1115,6 +1192,7 @@ pub fn configure(on: bool, games: Vec<String>) {
         if on {
             vec![]
         } else {
+            super::macros::stop_all();
             let acts: Vec<Act> = r.engines.values_mut().flat_map(|e| e.0.release_all()).collect();
             r.engines.clear();
             acts
@@ -1214,6 +1292,17 @@ pub fn feed(key: &str, inp: &Input, arrived: Instant) {
                             events.push(pads::Event::Profile { name: r.profiles[to].name.clone() });
                         }
                     }
+                    Act::Down(Out::Macro(_)) if r.ac => {
+                        if r.warned.insert("ac:macro".into()) {
+                            events.push(pads::Event::Notice { text: "Jogo com anti-cheat: as macros ficam paradas nele.".into() });
+                        }
+                    }
+                    Act::Down(Out::Macro(n)) => {
+                        if let Some(m) = r.profiles[r.cur].macros.get(n as usize) {
+                            super::macros::press(key, n, m);
+                        }
+                    }
+                    Act::Up(Out::Macro(n)) => super::macros::release(key, n),
                     Act::Turbo(bit) => {
                         // Vale para o perfil em uso até o editor gravar de novo ou o Prisma fechar.
                         let p = &mut r.profiles[r.cur];
@@ -1257,6 +1346,7 @@ pub fn feed(key: &str, inp: &Input, arrived: Instant) {
 
 /// Passa ao perfil `to` e solta tudo dos controles: as teclas da camada velha não ficam presas.
 fn switch(r: &mut Run, to: usize) -> Vec<Act> {
+    super::macros::stop_all();
     r.want = None;
     r.cur = to;
     r.engines.values_mut().flat_map(|e| e.0.release_all()).collect()
@@ -1264,6 +1354,7 @@ fn switch(r: &mut Run, to: usize) -> Vec<Act> {
 
 /// Para (`on`) ou volta o mapeamento, soltando tudo.
 fn stop(r: &mut Run, on: bool) -> Vec<Act> {
+    super::macros::stop_all();
     STOPPED.store(on, Ordering::Relaxed);
     r.engines.values_mut().flat_map(|e| e.0.release_all()).collect()
 }
@@ -1309,12 +1400,14 @@ fn focus_tick(now: Instant) {
 
 /// Solta tudo o que os controles seguram (o teclado do Prisma abriu).
 pub fn release_held() {
+    super::macros::stop_all();
     let acts: Vec<Act> = RUN.lock().unwrap().as_mut().map(|r| r.engines.values_mut().flat_map(|e| e.0.release_all()).collect()).unwrap_or_default();
     send(&acts);
 }
 
 /// O controle saiu: solta o que ele segurava.
 pub fn forget(key: &str) {
+    super::macros::stop_pad(key);
     let acts = RUN.lock().unwrap().as_mut().and_then(|r| r.engines.remove(key)).map(|mut e| e.0.release_all()).unwrap_or_default();
     send(&acts);
 }
@@ -1754,6 +1847,10 @@ mod tests {
         p.turbo.push(Turbo { button: pads::X, speed: 3, delay: 250, on: true });
         p.turbo.push(Turbo::new(pads::LB));
         p.turbo_key = pads::LB | LT;
+        let k = Out::Key(0x41, 0);
+        p.macros.push(Macro { name: "Combo 1".into(), mode: Mode::Held, steps: vec![Step::Down(k), Step::Wait(120), Step::Up(k), Step::Down(Out::Wheel(-2)), Step::Down(Out::Mouse(4)), Step::Up(Out::Mouse(4))] });
+        p.macros.push(Macro { name: "Vazia".into(), mode: Mode::Toggle, steps: vec![] });
+        one(&mut p.layers[0], pads::Y, When::Press, Out::Macro(1));
         let text = p.to_text();
         assert_eq!(Profile::parse(&text), Some(p), "{text}");
         for bad in [
@@ -1771,6 +1868,12 @@ mod tests {
             "prisma-profile 1\nname x\nlayer - B\nzone ls 0.9 0.1",
             "prisma-profile 1\nname x\nlayer - B\nstick 0 ls mouse NaN",
             "prisma-profile 1\nname x\nlayer - B\nrun calc.exe",
+            // Macro: ligação para macro que não existe, passo sem macro, roda soltando, espera longa demais, ação.
+            "prisma-profile 1\nname x\nlayer - B\nbind 0 A press macro 0",
+            "prisma-profile 1\nname x\nlayer - B\nmstep 0 wait 10",
+            "prisma-profile 1\nname x\nmacro once M\nmstep 0 up wheel 1\nlayer - B",
+            "prisma-profile 1\nname x\nmacro once M\nmstep 0 wait 60001\nlayer - B",
+            "prisma-profile 1\nname x\nmacro once M\nmstep 0 down action 1\nlayer - B",
             "prisma-profile 1\nname x\nlayer - B\nbind 0 A press action 54",
             "prisma-profile 1\nname x\nlayer - B\nbind 0 A press action 112",
             "prisma-profile 1\nname x\nlayer - B\nturbo A 1 500 on",

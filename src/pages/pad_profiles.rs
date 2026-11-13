@@ -4,7 +4,8 @@
 use super::*;
 use crate::config::{Hotkey, MOD_ALT, MOD_CTRL, MOD_SHIFT, MOD_WIN};
 use crate::sys::pads::{self, Family};
-use crate::sys::remap::{self, Bind, Layer, Out, Profile, Stick, When, Zone};
+use crate::sys::macros;
+use crate::sys::remap::{self, Bind, Layer, Macro, Mode, Out, Profile, Step, Stick, When, Zone};
 
 #[derive(Default)]
 pub struct Editor {
@@ -25,6 +26,13 @@ pub struct Editor {
     acc: [usize; 3],
     /// Perfil importado esperando: programas a confirmar, os recusados e se a pergunta está aberta.
     import: Option<(Profile, Vec<u8>, Vec<u8>, bool)>,
+    /// Macro escolhida, se o gravador está ligado para ela, e o passo novo (tipo, tecla, clique, espera).
+    mac: usize,
+    rec: bool,
+    skind: usize,
+    shk: Hotkey,
+    sval: usize,
+    swait: u32,
 }
 
 /// O perfil aberto no editor, para exportar.
@@ -60,6 +68,7 @@ pub fn test_target(app: &mut App, what: &str) {
                 ed.run = "C:/Windows/System32/notepad.exe".into();
             }
             "keyboard" => ed.kind = 9,
+            "macro" => ed.kind = 10,
             "wizard" => {
                 ed.tpl = remap::TEMPLATES.len() + 1;
                 ed.acc = [1, 1, 2];
@@ -91,7 +100,10 @@ const SPEEDS_T: [&str; 4] = ["Turbo 2x", "Turbo 3x", "Turbo 4x", "Turbo 5x"];
 const SIDES: [&str; 3] = ["Os dois lados", "Só o lado esquerdo", "Só o lado direito"];
 const CLICKS: [&str; 2] = ["Segurar para arrastar", "Clique liga e desliga"];
 const SPEEDS: [(&str, f32); 3] = [("Mouse devagar", 800.0), ("Mouse normal", 1600.0), ("Mouse rápido", 2600.0)];
-const KINDS: [&str; 10] = ["Tecla", "Tecla especial", "Mouse", "Roda", "Camada enquanto segura", "Liga e desliga camada", "Ação do Prisma", "Trocar de perfil", "Abrir programa", "Teclado do Prisma"];
+const KINDS: [&str; 11] = ["Tecla", "Tecla especial", "Mouse", "Roda", "Camada enquanto segura", "Liga e desliga camada", "Ação do Prisma", "Trocar de perfil", "Abrir programa", "Teclado do Prisma", "Macro"];
+/// Na ordem de `remap::MODES`.
+const MODE_NAMES: [&str; 3] = ["Uma vez", "Repetir enquanto segura", "Repetir até apertar de novo"];
+const STEP_KINDS: [&str; 3] = ["Tecla", "Clique", "Espera"];
 /// Teclas que o campo de tecla não pega (Esc cancela) ou que não existem no teclado comum.
 const SPECIAL: [(u16, &str); 12] = [
     (0x1B, "Esc"),
@@ -167,6 +179,44 @@ fn describe(o: Out, p: &Profile) -> String {
         Out::Action(n) => remap::ACTIONS.get(n as usize).map_or_else(String::new, |a| tr(a)),
         Out::Profile(n) => tr("Trocar para o perfil {}").replace("{}", p.strings.get(n as usize).map_or("", |s| s)),
         Out::Run(n) => tr("Abrir {}").replace("{}", &p.strings.get(n as usize).map_or_else(String::new, |s| crate::sys::procs::exe_name(s))),
+        Out::Macro(n) => tr("Macro {}").replace("{}", p.macros.get(n as usize).map_or("", |m| &m.name)),
+    }
+}
+
+/// Tecla do campo de tecla, com os modificadores do mapeamento.
+fn key_out(hk: &Hotkey) -> Option<Out> {
+    (hk.vk != 0).then(|| {
+        let mut m = 0;
+        for (a, b) in [(MOD_CTRL, remap::CTRL), (MOD_SHIFT, remap::SHIFT), (MOD_ALT, remap::ALT), (MOD_WIN, remap::WIN)] {
+            if hk.mods & a != 0 {
+                m |= b;
+            }
+        }
+        Out::Key(hk.vk as u16, m)
+    })
+}
+
+fn step_text(s: Step, p: &Profile) -> String {
+    match s {
+        Step::Down(o @ Out::Wheel(_)) => describe(o, p),
+        Step::Down(o) => tr("Aperta {}").replace("{}", &describe(o, p)),
+        Step::Up(o) => tr("Solta {}").replace("{}", &describe(o, p)),
+        Step::Wait(_) => tr("Espera"),
+    }
+}
+
+/// Apaga a macro `i`: as ligações dela saem e as das macros seguintes descem um número.
+fn remove_macro(p: &mut Profile, i: usize) {
+    p.macros.remove(i);
+    for l in &mut p.layers {
+        l.binds.retain(|b| b.out != Out::Macro(i as u8));
+        for b in &mut l.binds {
+            if let Out::Macro(n) = &mut b.out {
+                if *n as usize > i {
+                    *n -= 1;
+                }
+            }
+        }
     }
 }
 
@@ -185,8 +235,9 @@ fn apply(p: &mut Profile, t: Profile) {
 }
 
 /// Quanto o editor ocupa, para a rolagem.
-fn content_h(binds: usize, chip_rows: usize, wizard: bool) -> f32 {
-    (if wizard { 3.0 * 44.0 } else { 0.0 }) + 30.0 + 5.0 * 44.0 + 2.0 * 44.0 + 32.0 + 4.0 * 40.0 + 36.0 + chip_rows as f32 * 32.0 + 36.0 + binds.max(1) as f32 * 40.0 + 40.0 + 2.0 * 44.0 + 24.0
+fn content_h(binds: usize, chip_rows: usize, wizard: bool, steps: Option<usize>) -> f32 {
+    let macros = 32.0 + 44.0 + steps.map_or(0.0, |n| 44.0 + 28.0 + n as f32 * 40.0 + 44.0);
+    (if wizard { 3.0 * 44.0 } else { 0.0 }) + 30.0 + 5.0 * 44.0 + 2.0 * 44.0 + 32.0 + 4.0 * 40.0 + 36.0 + chip_rows as f32 * 32.0 + 36.0 + binds.max(1) as f32 * 40.0 + 40.0 + 2.0 * 44.0 + 24.0 + 40.0 + macros
 }
 
 pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
@@ -238,6 +289,10 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
         ed.layer = 0;
     }
     if ui.button("pp-close", rect(r.right() - 16.0 - close_w, y, close_w, 34.0), "Fechar", false) {
+        if ed.rec {
+            macros::record_stop();
+            app.toast.hide();
+        }
         app.pads.edit = None;
         return;
     }
@@ -312,7 +367,8 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
     // Partes iguais em três: camada, assistente e o formulário de ligação.
     let third = ((w - 16.0) / 3.0).floor();
     let wizard = ed.tpl == acc_i;
-    ui.begin_scroll("pp-body", body, content_h(own.len(), chip_rows, wizard));
+    ed.mac = ed.mac.min(p.macros.len().saturating_sub(1));
+    ui.begin_scroll("pp-body", body, content_h(own.len(), chip_rows, wizard, p.macros.get(ed.mac).map(|m| m.steps.len())));
     let mut changed = false;
 
     // Assistente do Acessível: três perguntas e Aplicar.
@@ -537,6 +593,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
         4 | 5 => layers.clone(),
         6 => remap::ACTIONS.iter().map(|a| tr(a)).chain((1..=sounds).map(|n| tr("Combinação de som {}").replace("{}", &n.to_string()))).collect(),
         7 => others_p.clone(),
+        10 => p.macros.iter().map(|m| m.name.clone()).collect(),
         _ => vec![],
     };
     if ed.kind == 0 {
@@ -548,20 +605,14 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
         pick = Some(rect(vr.x + half_v + 8.0, vr.y, half_v, vr.h));
     } else if ed.kind == 9 {
         ui.c.text_fit(vr, &tr("Abre e fecha o teclado na tela"), 13.0, MUTED, Align::Left, Weight::Regular);
+    } else if values.is_empty() {
+        ui.c.text_fit(vr, &tr("Nenhuma macro: crie uma em Macros, mais abaixo"), 13.0, MUTED, Align::Left, Weight::Regular);
     } else {
         ed.val = ed.val.min(values.len().saturating_sub(1));
         ui.select("pp-val", vr, &values, &mut ed.val);
     }
     let out = match ed.kind {
-        0 => (ed.hk.vk != 0).then(|| {
-            let mut m = 0;
-            for (a, b) in [(MOD_CTRL, remap::CTRL), (MOD_SHIFT, remap::SHIFT), (MOD_ALT, remap::ALT), (MOD_WIN, remap::WIN)] {
-                if ed.hk.mods & a != 0 {
-                    m |= b;
-                }
-            }
-            Out::Key(ed.hk.vk as u16, m)
-        }),
+        0 => key_out(&ed.hk),
         1 => Some(Out::Key(SPECIAL[ed.val.min(SPECIAL.len() - 1)].0, 0)),
         2 => Some(Out::Mouse(ed.val as u8 + 1)),
         3 => Some(Out::Wheel(if ed.val == 0 { 1 } else { -1 })),
@@ -571,6 +622,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
         // Perfil e programa só entram na lista de textos do perfil ao adicionar.
         7 => others_p.get(ed.val).map(|_| Out::Profile(0)),
         9 => Some(Out::Action(remap::KEYBOARD)),
+        10 => p.macros.get(ed.val).map(|_| Out::Macro(ed.val as u8)),
         _ => (!ed.run.is_empty()).then_some(Out::Run(0)),
     };
     if ui.button_ex("pp-add", rect(x + 2.0 * (third + 8.0), y, third, 34.0), "Adicionar", true, out.is_some()) {
@@ -642,8 +694,120 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
     let warn = if p.turbo_key == 0 { None } else { remap::combo_conflict(&p, p.turbo_key, true).map(|by| tr("Esse atalho já é usado por {}.").replace("{}", &by)) };
     let note = warn.clone().unwrap_or_else(|| if p.turbo_key == 0 { tr("Sem atalho: o turbo só muda aqui.") } else { tr("Segure o atalho e aperte o botão para ligar ou desligar o turbo dele.") });
     ui.c.text_fit(rect(x, y, w, 20.0), &note, 12.0, if warn.is_some() { WARN } else { MUTED }, Align::Left, Weight::Regular);
+    y += 40.0;
 
-    // Depois do último uso de `ed`: o botão precisa da App inteira.
+    // Macros do perfil: escolher, criar, apagar, o modo, gravar e os passos.
+    let mut rec_note = None;
+    if ed.rec && !macros::recording() {
+        ed.rec = false;
+    }
+    ui.title(rect(x, y + 4.0, w, 22.0), "Macros");
+    y += 32.0;
+    let names: Vec<String> = p.macros.iter().map(|m| m.name.clone()).collect();
+    if names.is_empty() {
+        ui.c.text_fit(rect(x, y, third, 34.0), &tr("Nenhuma macro."), 13.0, MUTED, Align::Left, Weight::Regular);
+    } else if !ed.rec {
+        ui.select("pp-mac", rect(x, y, third, 34.0), &names, &mut ed.mac);
+    } else {
+        ui.c.text_fit(rect(x, y, third, 34.0), &names[ed.mac], 13.0, TEXT, Align::Left, Weight::Regular);
+    }
+    if ui.button_ex("pp-mac-add", rect(x + third + 8.0, y, third, 34.0), "Nova macro", false, !ed.rec && p.macros.len() < remap::MAX_MACROS) {
+        let mut n = p.macros.len() + 1;
+        while p.macros.iter().any(|m| m.name == format!("{} {n}", tr("Macro"))) {
+            n += 1;
+        }
+        p.macros.push(Macro { name: format!("{} {n}", tr("Macro")), mode: Mode::Once, steps: vec![] });
+        ed.mac = p.macros.len() - 1;
+        changed = true;
+    }
+    if ui.button_ex("pp-mac-del", rect(x + 2.0 * (third + 8.0), y, third, 34.0), "Apagar macro", false, !ed.rec && !p.macros.is_empty()) {
+        remove_macro(&mut p, ed.mac);
+        ed.mac = 0;
+        changed = true;
+    }
+    y += 44.0;
+    if ed.mac < p.macros.len() {
+        let modes: Vec<String> = MODE_NAMES.iter().map(|s| tr(s)).collect();
+        let mut mi = remap::MODES.iter().position(|x| x.0 == p.macros[ed.mac].mode).unwrap_or(0);
+        if ui.select("pp-mac-mode", rect(x, y, 2.0 * third + 8.0, 34.0), &modes, &mut mi) {
+            p.macros[ed.mac].mode = remap::MODES[mi].0;
+            changed = true;
+        }
+        if ui.button_ex("pp-mac-rec", rect(x + 2.0 * (third + 8.0), y, third, 34.0), if ed.rec { "Parar" } else { "Gravar" }, ed.rec, true) {
+            if ed.rec {
+                p.macros[ed.mac].steps = macros::record_stop();
+                ed.rec = false;
+                rec_note = Some(false);
+                changed = true;
+            } else {
+                macros::record_start();
+                ed.rec = true;
+                rec_note = Some(true);
+            }
+        }
+        y += 44.0;
+        let n = p.macros[ed.mac].steps.len();
+        let status = if ed.rec { tr("Gravando: use o teclado e o mouse em outro programa e volte aqui para parar. O movimento do mouse não entra.") } else { tr("{} passos. Gravar troca os passos pelos novos.").replace("{}", &n.to_string()) };
+        ui.c.text_fit(rect(x, y, w, 20.0), &status, 12.0, if ed.rec { WARN } else { MUTED }, Align::Left, Weight::Regular);
+        y += 28.0;
+        let mut drop = None;
+        for i in 0..n {
+            let s = p.macros[ed.mac].steps[i];
+            ui.c.text_fit(rect(x, y, 2.0 * third + 8.0 - 150.0, 34.0), &step_text(s, &p), 13.0, TEXT, Align::Left, Weight::Regular);
+            if let Step::Wait(ms) = s {
+                let mut v = ms;
+                if ui.stepper(&format!("pp-ms{i}"), rect(x + 2.0 * third + 8.0 - 140.0, y, 140.0, 34.0), &mut v, (10, remap::MAX_WAIT), 10, "ms") {
+                    p.macros[ed.mac].steps[i] = Step::Wait(v);
+                    changed = true;
+                }
+            }
+            if ui.button_ex(&format!("pp-mrm{i}"), rect(x + 2.0 * (third + 8.0), y, third, 32.0), "Remover", false, !ed.rec) {
+                drop = Some(i);
+            }
+            y += 40.0;
+        }
+        if let Some(i) = drop {
+            p.macros[ed.mac].steps.remove(i);
+            changed = true;
+        }
+        // Passo novo no fim: tecla ou clique (aperta e solta) ou espera.
+        let kinds: Vec<String> = STEP_KINDS.iter().map(|s| tr(s)).collect();
+        ui.select("pp-skind", rect(x, y, third, 34.0), &kinds, &mut ed.skind);
+        let vr = rect(x + third + 8.0, y, third, 34.0);
+        let add = match ed.skind {
+            0 => {
+                ui.hotkey("pp-skey", vr, &mut ed.shk);
+                key_out(&ed.shk).map(|o| vec![Step::Down(o), Step::Up(o)])
+            }
+            1 => {
+                let clicks: Vec<String> = MOUSE.iter().map(|s| tr(s)).collect();
+                ed.sval = ed.sval.min(clicks.len() - 1);
+                ui.select("pp-sclick", vr, &clicks, &mut ed.sval);
+                let o = Out::Mouse(ed.sval as u8 + 1);
+                Some(vec![Step::Down(o), Step::Up(o)])
+            }
+            _ => {
+                ed.swait = ed.swait.clamp(10, remap::MAX_WAIT);
+                ui.stepper("pp-swait", vr, &mut ed.swait, (10, remap::MAX_WAIT), 10, "ms");
+                Some(vec![Step::Wait(ed.swait)])
+            }
+        };
+        let room = n + 2 <= remap::MAX_STEPS;
+        if ui.button_ex("pp-sadd", rect(x + 2.0 * (third + 8.0), y, third, 34.0), "Adicionar passo", true, !ed.rec && room && add.is_some()) {
+            p.macros[ed.mac].steps.extend(add.unwrap_or_default());
+            changed = true;
+        }
+    }
+
+    // Depois do último uso de `ed`: o aviso e o botão precisam da App inteira.
+    match rec_note {
+        Some(true) => app.toast.keep("Gravando macro: volte ao Prisma e clique em Parar"),
+        Some(false) => {
+            app.toast.hide();
+            app.toast.info("Macro gravada");
+        }
+        None => {}
+    }
     if let Some(r) = pick {
         super::picker::add_button(ui, app, r, super::picker::Target::PadProgram);
     }

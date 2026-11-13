@@ -25,7 +25,7 @@ Convenção: `arquivo:linha nome`. "Atalho" é a combinação global (chaves `hk
 | `src/i18n.rs` | Idioma. `tr` traduz textos. |
 | `src/selftest.rs` | Testes de fumaça das flags `--test-*` (só build de debug). |
 | `src/pages/` | Uma página por arquivo (seção 4). `pages/mod.rs` tem a barra lateral (`NAV`, linha 255) e o desenho geral (`draw`, linha 286). |
-| `src/sys/` | Módulos de sistema: controles (`pads`, `remap`, `osk`, `radial`, `nav`), Windows (`hdr`, `power`, `powerplan`, `audio`, `services`, `autostart`, `procs`, `disks`, `index`), atualização (`update`), desinstalação (`uninstall`), registro (`reg`), NVIDIA (`drs`, `nvset`, `nvml`) e outros. |
+| `src/sys/` | Módulos de sistema: controles (`pads`, `remap`, `osk`, `radial`, `nav`, `macros`), Windows (`hdr`, `power`, `powerplan`, `audio`, `services`, `autostart`, `procs`, `disks`, `index`), atualização (`update`), desinstalação (`uninstall`), registro (`reg`), NVIDIA (`drs`, `nvset`, `nvml`) e outros. |
 | `src/capture/` | Foto (`shot`), gravação (`engine`, `live`, `live_enc`), codificadores (`nvenc`, `encoder`, `decoder`, `nvdec`), HDR (`hdr`), áudio (`sound`), arquivo (`mux`). `capture/mod.rs` tem `grab`, `save_png`, `copy_to_clipboard`, `choose_folder` etc. |
 | `src/stream/` | Compartilhar tela: `host` (quem transmite), `view` (quem assiste), `service` (serviço), `kvm` (controle remoto), `pads` (controle remoto do controle), `net`, `opts`, `clip`, `ear` (áudio), `hud`, `weblink` (convite `prisma://`). `stream/mod.rs` tem `run_args`. |
 | `src/ui/` | Desenho próprio: `mod.rs` (`Ui`, botões, cartões, menus, rolagem), `gfx.rs` (Direct2D e DirectWrite), `layered.rs` (janela em camadas), `edit.rs` (caixa de texto), `icons.rs`, `glyph.rs` (ícones dos botões do controle). |
@@ -46,12 +46,12 @@ Convenção: `arquivo:linha nome`. "Atalho" é a combinação global (chaves `hk
 
 ### 2.2 Controle (do controle físico até a ação)
 1. Leitura: `src/sys/pads.rs` (`start` linha 176, `list` 181, leitura HID e XInput). Cada leitura vai para o mapeamento em `sys/pads.rs:767` (HID) e `sys/pads.rs:895` (XInput), ambos chamando `remap::feed`.
-2. `remap::feed` (`src/sys/remap.rs:1158`) primeiro entrega a leitura ao teclado do Prisma (`osk::feed`, `src/sys/osk.rs:278`) e ao radial (`radial::feed`, `src/sys/radial.rs:247`). Com a janela do Prisma em foco, `nav::feed` (`src/sys/nav.rs:157`, chamado em `remap.rs:1164`) faz a navegação e devolve ao mapeamento só a parada de emergência e o botão do radial. Se nenhum deles pegar, o mapeamento (`Engine::step`, `remap.rs:822`) gera ações.
-3. As ações saem como `Act` e vão para `remap::send` (`remap.rs:1376`), que manda teclas e cliques ao Windows.
+2. `remap::feed` (`src/sys/remap.rs:1236`) primeiro entrega a leitura ao teclado do Prisma (`osk::feed`, `src/sys/osk.rs:278`) e ao radial (`radial::feed`, `src/sys/radial.rs:247`). Com a janela do Prisma em foco, `nav::feed` (`src/sys/nav.rs:164`, chamado em `remap.rs:1242`) faz a navegação e devolve ao mapeamento só a parada de emergência e o botão do radial. Se nenhum deles pegar, o mapeamento (`Engine::step`, `remap.rs:898`) gera ações.
+3. As ações saem como `Act` e vão para `remap::send` (`remap.rs:1469`), que manda teclas e cliques ao Windows. A ligação de macro sai como `Act::Down`/`Act::Up(Out::Macro(n))` e `feed` (`remap.rs:1300`) a passa a `macros::press` e `macros::release`.
 4. Eventos para a janela principal entram por `pads::emit` (`pads.rs:254`) e saem por `pads::take_events` (`pads.rs:187`). Quem consome é `pad_events` (`src/app.rs:2974`).
 5. `Event::Action { id, pad }` vai para `pad_action` (`src/app.rs:3104`): `RADIAL` abre o radial, `KEYBOARD` abre ou fecha o teclado, `SOUND + n` troca a combinação de som, e o resto é atalho (tabela `HK`, `src/app.rs:3107`) que chama `on_hotkey`.
 6. `Event::Keyboard` chama `keyboard_refresh` (`app.rs:3033`). `Event::Radial` chama `self.radial.update` dentro de `pad_events` (`app.rs:2974`).
-7. `apply_pads` (`src/app.rs:3174`) manda ao leitor os limites de aviso e o mapeamento ligado (`pads::set_limits` `pads.rs:197`, `remap::configure` `remap.rs:1109`).
+7. `apply_pads` (`src/app.rs:3174`) manda ao leitor os limites de aviso e o mapeamento ligado (`pads::set_limits` `pads.rs:197`, `remap::configure` `remap.rs:1186`).
 
 ### 2.3 Ações do Prisma (`remap::ACTIONS`)
 `ACTIONS` tem 54 itens (`src/sys/remap.rs:73-129`). O índice é o número salvo no perfil do controle, e a ordem não pode mudar (só cresce no fim). Quem despacha é `pad_action` (`src/app.rs:3104`), com a tabela `HK` (`src/app.rs:3107`) na mesma ordem.
@@ -84,13 +84,13 @@ Convenção: `arquivo:linha nome`. "Atalho" é a combinação global (chaves `hk
 | 23 | Abrir e fechar a busca | `toggle_find` (`app.rs:2370`) | `HK_FIND` |
 | 24 | Desconectar o Bluetooth | `pads::disconnect` (`pads.rs:220`) em `pad_action` | sem atalho |
 | 25 | Mostrar a bateria | `battery_label` (`pages/controllers.rs:108`) em `pad_action` | sem atalho |
-| 26 | Abrir e fechar o teclado do Prisma | `set_keyboard` (`app.rs:3052`); constante `KEYBOARD` (`remap.rs:135`) | sem atalho |
-| 27 | Abrir o radial do Prisma | `radial::open_action` (`radial.rs:184`); constante `RADIAL` (`remap.rs:137`) | sem atalho |
+| 26 | Abrir e fechar o teclado do Prisma | `set_keyboard` (`app.rs:3052`); constante `KEYBOARD` (`remap.rs:165`) | sem atalho |
+| 27 | Abrir o radial do Prisma | `radial::open_action` (`radial.rs:184`); constante `RADIAL` (`remap.rs:167`) | sem atalho |
 | 28 | Abrir o Prisma | `show_main` em `pad_action` (`app.rs:3135`) | sem atalho |
 | 29 a 31 | Plano de energia automático, de jogo e de repouso | `link_power` (`link.rs:481`), o mesmo do Launcher `SetPowerPlan`, em `pad_action` (`app.rs:3136`); aviso com o nome da ação ou "O Windows não trocou o plano" | sem atalho |
 | 32 | Criar convite do Compartilhar tela | `create_invite` e abre a página Compartilhar tela (`app.rs:3145`), só com a feature `stream` | sem atalho |
-| 33 a 53 | Página X (uma por item da barra lateral) | `nav_page(n - PAGES)` (`pages/mod.rs:233`) dá a página e o ícone; `go` + `show_main` (`app.rs:3154`). `PAGES` = 33 (`remap.rs:139`). Ícone de cada ação: `action_icon` (`pages/mod.rs:238`) | sem atalho |
-| 100+ | Combinação de som n | `sound_default(n)` (`app.rs:1812`); `SOUND` = 100 (`remap.rs:144`) | `HK_SND` (100+) |
+| 33 a 53 | Página X (uma por item da barra lateral) | `nav_page(n - PAGES)` (`pages/mod.rs:233`) dá a página e o ícone; `go` + `show_main` (`app.rs:3154`). `PAGES` = 33 (`remap.rs:169`). Ícone de cada ação: `action_icon` (`pages/mod.rs:238`) | sem atalho |
+| 100+ | Combinação de som n | `sound_default(n)` (`app.rs:1812`); `SOUND` = 100 (`remap.rs:174`) | `HK_SND` (100+) |
 
 ### 2.4 Prisma Launcher (`prisma-link`)
 1. Capacidades anunciadas: constantes em `crates/prisma-link/src/lib.rs:30-60` (ex.: `PAGE_METER`, linha 31; `HDR`, linha 43). A lista enviada é `caps_with` em `src/link.rs:144`, chamada por `caps` (`link.rs:139`).
@@ -182,14 +182,14 @@ As flags de teste ficam em `src/app.rs` (`start`, linha 366, e as checagens de `
 | Pedido de outra cópia para abrir a janela | Abrir o .exe de novo | `WM_SHOW` `src/app.rs:3467` | Nome único `Local\PrismaApp` (`main.rs`). |
 | Busca de programas e arquivos (barra) | Atalho HK_FIND; ação 23 | `toggle_find` `src/app.rs:2370`, `show_find` `app.rs:2379`, `close_find` `app.rs:2426` | |
 | Teclado e navegação | Teclado | `on_key` `src/app.rs:3382`; `nav_key` `app.rs:3771`; `typed_char` `app.rs:3782` | |
-| Navegar com o controle | Prisma em foco: direcional, A, B, LB/RB, LT/RT, X, Y e os dois sticks (esquerdo mouse, direito rolagem, como no Desktop) | Controle: `sys/nav.rs:157` `feed`, `:41` `Pad` (`step`), `:140` `dir_of`, `:180` `point_to`, `:193` `click`, `:145` `set_window` (em `show_main` `app.rs:3307` e `WM_DESTROY` `app.rs:4115`). Janela: `pad_nav` `app.rs:3062` (evento `Event::Nav`, `app.rs:3005`); `pad_off` `app.rs:3752`; `nav_step` `pages/mod.rs:266`. Interface: `Target` `src/ui/mod.rs:66`, `pick` `:92`, `pad_move` `:184`, `scroll_by` `:221`, `pad_field` `:238`, `cancel` `:243`, `target` `:310` (chamado em `clickable`, nas linhas da lista aberta e nos botões da pergunta), `tab_step` `:833` (abas em `pages/nvidia.rs:68` e `pages/share.rs:309`), `pad_bar` `:933` | O foco é o próprio cursor: o direcional leva o cursor ao centro do próximo alvo e A manda um clique de verdade. Entradas do Prisma levam a marca `remap::MARK` (`remap.rs:41`); mouse e teclado sem ela apagam o anel e a faixa (`pad_off`). Com a faixa, a página encolhe `PAD_BAR` (`ui/mod.rs:74`). XInput a 8 ms com a janela aberta (`window_open`, `nav.rs:151`). Testes: `nav.rs` 1, `ui/mod.rs` 1. |
+| Navegar com o controle | Prisma em foco: direcional, A, B, LB/RB, LT/RT, X, Y e os dois sticks (esquerdo mouse, direito rolagem, como no Desktop) | Controle: `sys/nav.rs:164` `feed`, `:41` `Pad` (`step`), `:140` `dir_of`, `:185` `point_to`, `:198` `click`, `:145` `set_window` (em `show_main` `app.rs:3307` e `WM_DESTROY` `app.rs:4115`). Janela: `pad_nav` `app.rs:3062` (evento `Event::Nav`, `app.rs:3005`); `pad_off` `app.rs:3752`; `nav_step` `pages/mod.rs:266`. Interface: `Target` `src/ui/mod.rs:66`, `pick` `:92`, `pad_move` `:184`, `scroll_by` `:221`, `pad_field` `:238`, `cancel` `:243`, `target` `:310` (chamado em `clickable`, nas linhas da lista aberta e nos botões da pergunta), `tab_step` `:833` (abas em `pages/nvidia.rs:68` e `pages/share.rs:309`), `pad_bar` `:933` | O foco é o próprio cursor: o direcional leva o cursor ao centro do próximo alvo e A manda um clique de verdade. Entradas do Prisma levam a marca `remap::MARK` (`remap.rs:41`); mouse e teclado sem ela apagam o anel e a faixa (`pad_off`). Com a faixa, a página encolhe `PAD_BAR` (`ui/mod.rs:74`). XInput a 8 ms com a janela aberta (`window_open`, `nav.rs:151`). Testes: `nav.rs` 1, `ui/mod.rs` 1. |
 | Rolagem e clique do mouse | Mouse | `mouse_xy` `src/app.rs:3761`; `find_mouse` `app.rs:3803`; `picker_mouse` `app.rs:3892` | |
 | Pintura da janela | Automático | `paint` `src/app.rs:3344`; `invalidate` `app.rs:3336` | |
 | Seletor de programa (.exe) | Botões que pedem um programa | `open_picker` `src/app.rs:1923`; `show_picker` `app.rs:1932`; `paint_picker` `app.rs:1989`; `pick_exe_for` `app.rs:2692`; `close_picker` `app.rs:2686`; página `pages/picker.rs:63` `draw` | |
 | Escolher um .exe | Botão | `pick_exe` `src/app.rs:1731` | |
 | Registro de ações (log) | Automático | `log` `src/app.rs:1738`; `crate::config::log` `src/config.rs:530` | |
 | Foto do relatório | Botão | `pick_report_photo` `src/app.rs:2058`; `copy_report_photo` `app.rs:2071` | |
-| Avisos (mensagens rápidas) | Automático | `Toast::info` `src/overlays.rs:253`; `Toast::info_at` `overlays.rs:258`; `Toast::volume` `overlays.rs:240` | Ver seção 5. |
+| Avisos (mensagens rápidas) | Automático | `Toast::info` `src/overlays.rs:253`; `Toast::info_at` `overlays.rs:273`; `Toast::keep` `overlays.rs:258` e `hide` `:265` (aviso fixo); `Toast::volume` `overlays.rs:240` | Ver seção 5. |
 
 ### 3.1 Instalação, atualização e desinstalação
 
@@ -407,7 +407,7 @@ A barra lateral é `NAV` (`src/pages/mod.rs:272-293`), na ordem abaixo. Cada pá
 | Gravar janela ou tela | Atalho `HK_REC` (janela, `app.rs:146`) ou `HK_REC_FULL` (tela, `app.rs:150`); ações 3 e 4; Launcher `RecordWindow` | `toggle_record` `src/app.rs:1323`; `toggle_record_of` `app.rs:1328`; `start_engine` `app.rs:1301`; `stop_engine` `app.rs:1308`; motor em `src/capture/engine.rs` | Config `cap_mode`, `cap_codec`, `cap_sys_audio`, `cap_mic`, `cap_cursor`, `cap_hdr`. |
 | Replay (últimos segundos) | Atalho `HK_REPLAY` (`app.rs:147`); ação 5; Launcher `SaveReplay` | `save_replay` `src/app.rs:1354`; `replay_changed` `app.rs:2947` | Config `replay_on`, `replay_secs`. |
 | Pasta de destino | Botão | `pick_folder` `app.rs:1257`; `capture/mod.rs:548` `choose_folder`; `:564` `choose_file`; `:579` `save_file` | Config `cap_dir`. |
-| Indicador de gravação | Automático | `is_recording` `app.rs:1263`; `hud_update` `app.rs:1368`; `hud_stop` `app.rs:1383`; `overlays::Hud` `src/overlays.rs:396` | |
+| Indicador de gravação | Automático | `is_recording` `app.rs:1263`; `hud_update` `app.rs:1368`; `hud_stop` `app.rs:1383`; `overlays::Hud` `src/overlays.rs:411` | |
 | Codificação de vídeo | Automático | `capture/live_enc.rs:95` `feed`; `capture/nvenc.rs`, `capture/encoder.rs`, `capture/mux.rs` | Funções desses arquivos não mapeadas uma a uma. |
 | Teste de gravação | `--test-rec=` | `app.rs:571`; `PRISMA_CODEC` (`app.rs:574`); `PRISMA_HDR10` (`app.rs:588`) | |
 
@@ -433,18 +433,19 @@ A barra lateral é `NAV` (`src/pages/mod.rs:272-293`), na ordem abaixo. Cada pá
 |---|---|---|---|
 | Lista de controles ligados (conexão, bateria, taxa) | Página; Launcher `Controllers` | `pages/controllers.rs:171` `draw`; `sys/pads.rs:183` `list`; `controllers.rs:53` `refresh`; `:59` `tick` | Bateria: `battery_label` `controllers.rs:108`. |
 | Editor de mapeamento | Botão "Editar" | `open_editor` `pages/controllers.rs:24`; `mapping` `controllers.rs:408` | Launcher `PadMap`. |
-| Perfis de controle | Página | `pages/pad_profiles.rs:192` `draw`; `pad_profiles.rs:31` `current`; `:76` `set_program`; `:183` `apply` | Launcher `PadProfiles`, `SetPadProfile`. |
-| Modelos prontos | Assistente | `sys/remap.rs:141` `TEMPLATES`; `:287` `template`; `:351` `accessible` | |
+| Perfis de controle | Página | `pages/pad_profiles.rs:243` `draw`; `pad_profiles.rs:39` `current`; `:85` `set_program`; `:233` `apply` | Launcher `PadProfiles`, `SetPadProfile`. |
+| Modelos prontos | Assistente | `sys/remap.rs:171` `TEMPLATES`; `:318` `template`; `:382` `accessible` | |
 | Importar e exportar perfil | Botões | `app.rs:2109` `pad_profile_file` | |
 | Radial do controle | Botão | `pages/controllers.rs:442` `radial`; `:651` `set_radial_program`; `sys/radial.rs:32` `set_programs`; `:78` `configure`; `pages/controllers.rs:609` `slot_select` (ação, programa ou "4 opções…" de cada lugar e opção) | Config `pad_radial*`. Lugar com 4 opções: valor `GROUP` (`sys/radial.rs:16`); as opções ficam depois dos 16 lugares, em `sub(i, d)` (`:25`), num total de `ALL` = 80 (`:20`). Pôr `GROUP` num lugar do stick esquerdo liga `pad_radial_keep` (em `radial`). |
-| Desenho do radial aberto | Botão segurado (ação 27) | `overlays::Radial` `src/overlays.rs:715`; `sys/radial.rs:128` `view`; `:151` `open`; `:200` `step`; `:247` `feed` | Em `step`, o direcional (`DPAD`, `sys/radial.rs:22`) marca a opção (`sub`) de um lugar `GROUP`, e Confirmar só dispara com uma marcada. O desenho põe a cruz de 4 ícones no lugar e a faixa das 4 opções embaixo (`RD_SUB`, `overlays.rs:735`; `height` `:811`). Foto: `--test-page=radial --test-radial=lugar,opção` (`show_for_test`, `sys/radial.rs:189`). |
-| Teclado do Prisma | Ação 26; Launcher `Keyboard` | `sys/osk.rs:226` `view`; `:242` `open`; `:270` `close`; `:278` `feed`; `overlays::Keyboard` `overlays.rs:484`; `set_keyboard` `app.rs:3052` | 6 testes em `sys/osk.rs`. Dois sticks (config `pad_osk_two`, `pad_osk_letters_right`): `configure` (`sys/osk.rs:213`, chamado por `apply_pads`); o círculo de cada stick vem de `wheel_char` (`:101`), e o direcional digita no círculo do direito pela ordem `DPAD` (`:60`); com o stick direito solto, o direcional são as setas (`step`). Fugir do cursor (config `pad_osk_dodge`, ligado de fábrica): `configure` guarda e `dodge` (`sys/osk.rs:222`) lê; o resto fica no desenho (linha abaixo, seção 5). Repetir ao segurar (config `pad_osk_repeat`, `pad_osk_repeat_ms`, 500 ms de fábrica): `configure` guarda, `Osk::new` lê, e `step` (`:139`) repete a tecla de qualquer botão segurado; desligado, só as de `REPEATS` (`sys/osk.rs:62`). Com os dois sticks, LT sozinho dá os acentos (`step`). Cartão: `keyboard` (`pages/controllers.rs:569`). |
-| Turbo (repetir o botão) | Controle | `sys/remap.rs:171` `Turbo`; `:180` `new`; `:186` `TURBO_KEY` | 17 testes em `sys/remap.rs`. |
-| Parar o mapeamento | Combinação de parada (Guia, Voltar e Start) | `remap::set_stopped` `sys/remap.rs:1285`; `STOP_COMBO` `remap.rs:43` | Launcher `PadStop`. |
+| Desenho do radial aberto | Botão segurado (ação 27) | `overlays::Radial` `src/overlays.rs:730`; `sys/radial.rs:128` `view`; `:151` `open`; `:200` `step`; `:247` `feed` | Em `step`, o direcional (`DPAD`, `sys/radial.rs:22`) marca a opção (`sub`) de um lugar `GROUP`, e Confirmar só dispara com uma marcada. O desenho põe a cruz de 4 ícones no lugar e a faixa das 4 opções embaixo (`RD_SUB`, `overlays.rs:750`; `height` `:826`). Foto: `--test-page=radial --test-radial=lugar,opção` (`show_for_test`, `sys/radial.rs:189`). |
+| Teclado do Prisma | Ação 26; Launcher `Keyboard` | `sys/osk.rs:226` `view`; `:242` `open`; `:270` `close`; `:278` `feed`; `overlays::Keyboard` `overlays.rs:499`; `set_keyboard` `app.rs:3052` | 6 testes em `sys/osk.rs`. Dois sticks (config `pad_osk_two`, `pad_osk_letters_right`): `configure` (`sys/osk.rs:213`, chamado por `apply_pads`); o círculo de cada stick vem de `wheel_char` (`:101`), e o direcional digita no círculo do direito pela ordem `DPAD` (`:60`); com o stick direito solto, o direcional são as setas (`step`). Fugir do cursor (config `pad_osk_dodge`, ligado de fábrica): `configure` guarda e `dodge` (`sys/osk.rs:222`) lê; o resto fica no desenho (linha abaixo, seção 5). Repetir ao segurar (config `pad_osk_repeat`, `pad_osk_repeat_ms`, 500 ms de fábrica): `configure` guarda, `Osk::new` lê, e `step` (`:139`) repete a tecla de qualquer botão segurado; desligado, só as de `REPEATS` (`sys/osk.rs:62`). Com os dois sticks, LT sozinho dá os acentos (`step`). Cartão: `keyboard` (`pages/controllers.rs:569`). |
+| Turbo (repetir o botão) | Controle | `sys/remap.rs:201` `Turbo`; `:210` `new`; `:216` `TURBO_KEY` | 17 testes em `sys/remap.rs`. |
+| Macros | Ligação com destino Macro; editor de perfis, seção Macros | Dados: `sys/remap.rs:74` `Out::Macro`, `:80` `Mode`, `:96` `Macro` (passos `Step`, texto `macro`/`mstep` em `to_text` e `parse`). Rodar: `sys/macros.rs:17` `press`, `:44` `release`, `:54` `stop_all`, `:61` `stop_pad`, `:74` `run` (uma thread por macro). Gravar: `:182` `record_start`, `:192` `record_stop`, `:121` `Rec`, `:260` `hooks` (ganchos de teclado e mouse só enquanto grava; ignora o que o Prisma manda e o que acontece com ele em foco, por `nav::front` `sys/nav.rs:156`). Editor: `pages/pad_profiles.rs:699` (seção Macros), `:209` `remove_macro`, `:199` `step_text`, `:187` `key_out` | 2 testes em `sys/macros.rs`. Para com a parada de emergência, a troca de perfil, o teclado do Prisma e a saída do controle (`stop_all`/`stop_pad` em `remap.rs`). Anti-cheat: não roda, com aviso (`feed`). Aviso fixo da gravação: `Toast::keep` `overlays.rs:258`, `hide` `:265`. Foto: `--test-page=controllers-macro`. |
+| Parar o mapeamento | Combinação de parada (Guia, Voltar e Start) | `remap::set_stopped` `sys/remap.rs:1376`; `STOP_COMBO` `remap.rs:43` | Launcher `PadStop`. |
 | Diagnóstico do controle | Página | `pages/controllers.rs:663` `diagnostic`; `sys/pads.rs:623` `rate_of`; `:641` `packet_rate` | |
 | Avisos de desconexão, bateria baixa e variação | Automático | `pads::check_warnings` `sys/pads.rs:791`; `pad_events` `app.rs:2974` | Config `pad_notify`, `pad_low`, `pad_jitter_ms`. |
-| Trocar o perfil conforme a janela em foco | Automático | `remap::on_focus` `sys/remap.rs:1324`; `focus_tick` `remap.rs:1294` | |
-| Enviar teclas e cliques | Automático | `remap::send` `sys/remap.rs:1376` | |
+| Trocar o perfil conforme a janela em foco | Automático | `remap::on_focus` `sys/remap.rs:1417`; `focus_tick` `remap.rs:1385` | |
+| Enviar teclas e cliques | Automático | `remap::send` `sys/remap.rs:1469` | |
 | Calibrar stick e gatilho | Automático | `sys/pads.rs:943` `rest`; `:957` `outer`; `:978` `trigger` | |
 | Desconectar controle Bluetooth | Ação 24 | `pads::disconnect` `sys/pads.rs:220` | |
 
@@ -483,12 +484,12 @@ A barra lateral é `NAV` (`src/pages/mod.rs:272-293`), na ordem abaixo. Cada pá
 |---|---|---|---|
 | Medidor (compacto e completo) | Atalhos ou controle | `src/meter.rs:1169` `paint`; `src/app.rs:2307` `meter_paint` | Ver 4.2. |
 | Widget | Atalho `HK_WIDGET` | `src/overlays.rs:38` `Widget` | Ver 4.20. |
-| Aviso (toast) | Automático | `src/overlays.rs:204` `Toast`; `:253` `info`; `:240` `volume`; `:258` `info_at` | Mensagens do controle, do Medidor, do HDR etc. |
-| Pergunta com botões | Automático | `src/overlays.rs:270` `Prompt`; `:280` `PromptAnswer`; `:319` `ask`; `:331` `hide`; `:338` `mouse`; `PROMPT_MS` `overlays.rs:287` (10 s) | |
-| Registro (gravação) | Durante a gravação | `src/overlays.rs:396` `Hud`; `:431` `update`; `src/stream/hud.rs` | |
-| Teclado do Prisma | Ação 26 | `src/overlays.rs:484` `Keyboard`; `:584` `update`; `:640` `tick`; `src/sys/osk.rs` | Com os dois sticks, a janela dobra de largura (`width`, `overlays.rs:661`). Fugir do cursor: `watch_caret` (`overlays.rs:535`) lê o cursor de texto 5 vezes por segundo numa thread à parte com `caret` (`:509`: `GetGUIThreadInfo`, senão `OBJID_CARET` da acessibilidade) e guarda em `CARET` (`:502`); `tick` sobe o teclado para o alto da tela quando `dodge_up` (`:555`) diz que o cursor está atrás dele embaixo, com 35% do caminho por quadro. Testes: `dodge_only_when_behind` e `caret_now` (ignorado; lê a janela em foco). |
+| Aviso (toast) | Automático | `src/overlays.rs:204` `Toast`; `:253` `info`; `:240` `volume`; `:273` `info_at` | Mensagens do controle, do Medidor, do HDR etc. |
+| Pergunta com botões | Automático | `src/overlays.rs:285` `Prompt`; `:295` `PromptAnswer`; `:334` `ask`; `:346` `hide`; `:353` `mouse`; `PROMPT_MS` `overlays.rs:302` (10 s) | |
+| Registro (gravação) | Durante a gravação | `src/overlays.rs:411` `Hud`; `:446` `update`; `src/stream/hud.rs` | |
+| Teclado do Prisma | Ação 26 | `src/overlays.rs:499` `Keyboard`; `:599` `update`; `:655` `tick`; `src/sys/osk.rs` | Com os dois sticks, a janela dobra de largura (`width`, `overlays.rs:676`). Fugir do cursor: `watch_caret` (`overlays.rs:550`) lê o cursor de texto 5 vezes por segundo numa thread à parte com `caret` (`:524`: `GetGUIThreadInfo`, senão `OBJID_CARET` da acessibilidade) e guarda em `CARET` (`:517`); `tick` sobe o teclado para o alto da tela quando `dodge_up` (`:570`) diz que o cursor está atrás dele embaixo, com 35% do caminho por quadro. Testes: `dodge_only_when_behind` e `caret_now` (ignorado; lê a janela em foco). |
 | Ícones dos botões do controle | Aba Controles, teclado, radial | `src/ui/glyph.rs`: `Style` (`:10`, Xbox, PlayStation, Nintendo pelo vid 0x057e, números no genérico) com `of` (`:20`) e `current` (`:30`, o primeiro controle); `draw` (`:80`) desenha um botão e devolve a largura (`width` `:67`); `dpad` (`:184`, braço aceso), `face` (`:200`, os quatro em losango), `hints` (`:234`, linha de dicas com ícone e texto, que encolhe para caber); `DPAD_ANY` (`:64`) é o direcional sem braço aceso. Folha de teste: `--test-page=glyphs` (`sheet` `:212`, só no debug) | Sem cor própria: a cor vem de quem desenha. 1 teste. |
-| Radial | Botão segurado (ação 27) | `src/overlays.rs:715` `Radial`; `:753` `update`; `:799` `tick`; `src/sys/radial.rs` | |
+| Radial | Botão segurado (ação 27) | `src/overlays.rs:730` `Radial`; `:768` `update`; `:814` `tick`; `src/sys/radial.rs` | |
 | Foto (editor) | Depois do atalho de foto | `src/capture/shot.rs:728` `open` | |
 | Seletor de programa | Botão | `src/app.rs:1932` `show_picker` | |
 
@@ -496,7 +497,7 @@ A barra lateral é `NAV` (`src/pages/mod.rs:272-293`), na ordem abaixo. Cada pá
 
 ## 6. Números e testes de apoio
 
-- Testes `#[test]` por área (contagem feita com grep): `sys/remap.rs` 17; `link.rs` 19; `sys/pads.rs` 8; `sys/osk.rs` 6; `sys/radial.rs` 6; `sys/power.rs` 5; `sys/index.rs` 4; `sys/cmds.rs` 4; `config.rs` 2; `sys/update.rs` 2; `sys/quick.rs` 2; `sys/stores.rs` 2; `app.rs` 1; `i18n.rs` 1; `sys/nvset.rs` 1; `pages/nvidia.rs` 1; `pages/mod.rs` 1; `ui/glyph.rs` 1; `sys/nav.rs` 1; `ui/mod.rs` 1; `overlays.rs` 2 (1 ignorado); `stream/` 34 no total.
+- Testes `#[test]` por área (contagem feita com grep): `sys/remap.rs` 17; `sys/macros.rs` 2; `link.rs` 19; `sys/pads.rs` 8; `sys/osk.rs` 6; `sys/radial.rs` 6; `sys/power.rs` 5; `sys/index.rs` 4; `sys/cmds.rs` 4; `config.rs` 2; `sys/update.rs` 2; `sys/quick.rs` 2; `sys/stores.rs` 2; `app.rs` 1; `i18n.rs` 1; `sys/nvset.rs` 1; `pages/nvidia.rs` 1; `pages/mod.rs` 1; `ui/glyph.rs` 1; `sys/nav.rs` 1; `ui/mod.rs` 1; `overlays.rs` 2 (1 ignorado); `stream/` 34 no total.
 - `src/selftest.rs` (só debug): `run` (linha 5), `misc` (23), `fake_uninstall` (55), `tweaks` (110), `audit` (162), `toolrun` (189), `tweak_log` (223).
 
 ---

@@ -27,6 +27,7 @@ pub mod nets;
 pub mod nvml;
 pub mod nav;
 pub mod osk;
+pub mod macros;
 pub mod pads;
 pub mod remap;
 pub mod patterns;
