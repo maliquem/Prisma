@@ -30,6 +30,7 @@ pub mod osk;
 pub mod macros;
 pub mod keymap;
 pub mod pads;
+pub mod pad_sound;
 pub mod remap;
 pub mod patterns;
 pub mod power;

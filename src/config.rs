@@ -297,6 +297,8 @@ pub struct Config {
     pub pad_low: u8,
     /// Aviso quando o p99 do intervalo do controle passa deste valor, em ms; 0 desliga.
     pub pad_jitter_ms: u32,
+    /// Avisos também pelo alto-falante do controle (só no cabo). Desligado de fábrica.
+    pub pad_speaker: bool,
     /// Ações do radial do Prisma, de cima no sentido do relógio (`sys::radial::EMPTY`: vazio).
     pub pad_radial: [u8; crate::sys::radial::ALL],
     /// Dois círculos no radial, um em cada stick (16 lugares); sempre fica aberto.
@@ -442,6 +444,7 @@ impl Default for Config {
             pad_map: false,
             pad_low: 10,
             pad_jitter_ms: 0,
+            pad_speaker: false,
             pad_radial: radial_default(),
             pad_radial_prog: std::array::from_fn(|_| Default::default()),
             pad_fixed: vec![],
@@ -743,6 +746,7 @@ impl Config {
                 "pad_map" => c.pad_map = b,
                 "pad_low" => c.pad_low = v.parse::<u8>().unwrap_or(10).min(50),
                 "pad_jitter_ms" => c.pad_jitter_ms = v.parse::<u32>().unwrap_or(0).min(100),
+                "pad_speaker" => c.pad_speaker = b,
                 "pad_radial" => c.pad_radial = parse_radial(v).unwrap_or_else(radial_default),
                 "pad_radial_prog" => c.pad_radial_prog = parse_radial_prog(v),
                 // "chave<TAB>perfil" separados por `|`, como nos programas do radial.
@@ -870,6 +874,7 @@ impl Config {
         let _ = writeln!(s, "pad_map={}", b(self.pad_map));
         let _ = writeln!(s, "pad_low={}", self.pad_low);
         let _ = writeln!(s, "pad_jitter_ms={}", self.pad_jitter_ms);
+        let _ = writeln!(s, "pad_speaker={}", b(self.pad_speaker));
         let _ = writeln!(s, "pad_radial={}", self.pad_radial.map(|a| a.to_string()).join(","));
         let _ = writeln!(s, "pad_fixed={}", self.pad_fixed.iter().map(|(k, n)| format!("{k}\t{n}")).collect::<Vec<_>>().join("|"));
         let _ = writeln!(s, "pad_radial_prog={}", self.pad_radial_prog.iter().map(|(n, p)| format!("{n}\t{p}")).collect::<Vec<_>>().join("|"));

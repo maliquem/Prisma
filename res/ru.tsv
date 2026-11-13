@@ -2330,3 +2330,5 @@ Desliga o controle do Bluetooth. Pelo cabo, não faz nada.	Отключает г
 Nada foi removido: o Windows não deu a permissão de administrador.	Ничего не удалено: Windows не выдал разрешение администратора.
 Piscar	Мигание
 Arco-íris	Радуга
+Som no alto-falante do controle	Звук в динамике геймпада
+Um som curto no controle ligado pelo cabo (DualSense e DualShock 4) ao conectar, desconectar, trocar de perfil, com bateria baixa e com variação alta. Pelo Bluetooth o controle não tem saída de som.	Короткий звук на геймпаде, подключённом по кабелю (DualSense и DualShock 4), при подключении, отключении, смене профиля, низком заряде и высоком разбросе. По Bluetooth у геймпада нет звукового выхода.

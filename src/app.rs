@@ -2984,6 +2984,11 @@ impl App {
     fn pad_events(&mut self) {
         use crate::sys::pads::{Battery, Event, Link};
         for e in crate::sys::pads::take_events() {
+            if self.cfg.pad_speaker {
+                if let Some(c) = crate::sys::pad_sound::for_event(&e) {
+                    crate::sys::pad_sound::play(c);
+                }
+            }
             let text = match e {
                 Event::Connected { name, link } if self.cfg.pad_notify => match (link, crate::sys::remap::active()) {
                     (Link::Usb, None) => format!("{name} conectado por USB"),

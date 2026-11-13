@@ -437,7 +437,7 @@ fn settings(ui: &mut Ui, app: &mut App, list: &[Pad], a: Rect) {
         ui.c.text_wrap(rect(r.x + 16.0, r.y + 34.0, r.w - 32.0, 80.0), "Pareado sem a parte de controle: nenhum programa consegue ler. Remova o controle e pareie de novo pelo assistente clássico (Win + R, devicepairingwizard).", 12.0, TEXT2, Weight::Regular);
         y += r.h + 8.0;
     }
-    let r = rect(x, y, lw, 176.0);
+    let r = rect(x, y, lw, 220.0);
     ui.card(r);
     ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Avisos");
     let mut changed = ui.check("pad-notify", rect(r.x + 10.0, r.y + 38.0, r.w - 20.0, 36.0), "Ao conectar e desconectar", &mut app.cfg.pad_notify);
@@ -450,6 +450,8 @@ fn settings(ui: &mut Ui, app: &mut App, list: &[Pad], a: Rect) {
     ui.label(rect(r.x + 16.0, r.y + 124.0, r.w - 156.0, 36.0), "Variação acima de", TEXT2);
     changed |= ui.stepper("pad-jitter", rect(r.right() - 140.0, r.y + 124.0, 124.0, 36.0), &mut app.cfg.pad_jitter_ms, (0, 100), 1, "ms");
     ui.tip(rect(r.x + 16.0, r.y + 124.0, r.w - 156.0, 36.0), "Avisa quando o intervalo entre relatórios do controle passa desse valor (p99). 0 desliga.");
+    changed |= ui.check("pad-speaker", rect(r.x + 10.0, r.y + 168.0, r.w - 20.0, 36.0), "Som no alto-falante do controle", &mut app.cfg.pad_speaker);
+    ui.tip(rect(r.x + 10.0, r.y + 168.0, r.w - 20.0, 36.0), "Um som curto no controle ligado pelo cabo (DualSense e DualShock 4) ao conectar, desconectar, trocar de perfil, com bateria baixa e com variação alta. Pelo Bluetooth o controle não tem saída de som.");
     if changed {
         app.cfg.save();
         app.apply_pads();

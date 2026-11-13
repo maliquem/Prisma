@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Controllers: **Controller speaker sound** (Notices card in the Settings tab, off by default) plays short sounds on a cable-connected DualSense or DualShock 4 speaker: connect, disconnect, profile switch, low battery and high jitter; not over Bluetooth. / Controles: **Som no alto-falante do controle** (cartão Avisos na aba Ajustes, desligada de fábrica) toca sons curtos no alto-falante de um DualSense ou DualShock 4 no cabo: conectar, desconectar, trocar de perfil, bateria baixa e variação alta; não toca pelo Bluetooth.
+
 - Controllers: the DualSense and DualShock 4 light bar gets **Blink** and **Rainbow** after Color (Blink uses the Color picker, Rainbow cycles every 3 s). / Controles: a barra de luz do DualSense e do DualShock 4 ganhou **Piscar** e **Arco-íris** depois de Cor (o Piscar usa o seletor de Cor, o Arco-íris dá a volta a cada 3 s).
 
 - Startup apps: a Run entry with a very long command no longer hides every entry after it in the list. / Aplicativos de inicialização: um item da chave Run com um comando muito longo não esconde mais todos os itens depois dele na lista.

@@ -2336,3 +2336,5 @@ Desliga o controle do Bluetooth. Pelo cabo, não faz nada.	Disconnects the contr
 Nada foi removido: o Windows não deu a permissão de administrador.	Nothing was removed: Windows did not grant administrator permission.
 Piscar	Blink
 Arco-íris	Rainbow
+Som no alto-falante do controle	Controller speaker sound
+Um som curto no controle ligado pelo cabo (DualSense e DualShock 4) ao conectar, desconectar, trocar de perfil, com bateria baixa e com variação alta. Pelo Bluetooth o controle não tem saída de som.	A short sound on the controller connected by cable (DualSense and DualShock 4) on connect, disconnect, profile switch, low battery and high jitter. Over Bluetooth the controller has no sound output.
