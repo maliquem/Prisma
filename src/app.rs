@@ -2541,7 +2541,7 @@ impl App {
                     self.page = Page::Controllers;
                     self.pads.open_editor();
                 }
-                Some(p @ ("controllers-action" | "controllers-run" | "controllers-wizard" | "controllers-keyboard" | "controllers-macro" | "controllers-keys" | "controllers-text" | "controllers-settings" | "controllers-stick" | "controllers-link")) => {
+                Some(p @ ("controllers-action" | "controllers-run" | "controllers-wizard" | "controllers-keyboard" | "controllers-macro" | "controllers-keys" | "controllers-text" | "controllers-settings" | "controllers-stick" | "controllers-link" | "controllers-opens")) => {
                     self.page = Page::Controllers;
                     self.pads.open_editor();
                     crate::pages::pad_profiles::test_target(self, &p[12..]);
@@ -2701,10 +2701,14 @@ impl App {
             Target::HdrGame => WM_PICK_GAME,
             Target::MeterGame => WM_PICK_METER,
             Target::NvGame => WM_PICK_NV,
-            Target::PadProgram => WM_PICK_PAD,
+            Target::PadProgram | Target::PadGame => WM_PICK_PAD,
             Target::RadialProgram(_) => WM_PICK_RADIAL,
         };
-        let slot = if let Target::RadialProgram(i) = target { i as usize } else { 0 };
+        let slot = match target {
+            Target::RadialProgram(i) => i as usize,
+            Target::PadGame => 1,
+            _ => 0,
+        };
         unsafe {
             let _ = PostMessageW(Some(self.hub), msg, WPARAM(slot), LPARAM(0));
         }
@@ -3668,7 +3672,11 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
         WM_PICK_PAD => {
             if let Some(path) = capture::choose_exe(h) {
                 with(|a| {
-                    crate::pages::pad_profiles::set_program(a, &path);
+                    if w.0 == 1 {
+                        crate::pages::pad_profiles::set_game(a, &path);
+                    } else {
+                        crate::pages::pad_profiles::set_program(a, &path);
+                    }
                     a.invalidate();
                 });
             }

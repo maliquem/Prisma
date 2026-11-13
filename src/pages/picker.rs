@@ -16,6 +16,8 @@ pub enum Target {
     PadProgram,
     /// Programa que um lugar do radial do Prisma abre.
     RadialProgram(u8),
+    /// Jogo que troca para o perfil aberto no editor ("Abre sozinho com").
+    PadGame,
 }
 
 pub fn add_button(ui: &mut Ui, app: &mut App, r: Rect, target: Target) {
@@ -27,6 +29,7 @@ pub fn add_button(ui: &mut Ui, app: &mut App, r: Rect, target: Target) {
         Target::NvGame => ("add-nv", "add-nv-menu"),
         Target::PadProgram => ("add-pad", "add-pad-menu"),
         Target::RadialProgram(_) => ("add-radial", "add-radial-menu"),
+        Target::PadGame => ("add-padgame", "add-padgame-menu"),
     };
     let label = if target == Target::PadProgram { "Escolher programa" } else { "Adicionar" };
     if ui.button(key, r, label, false) {
@@ -49,6 +52,7 @@ fn add(app: &mut App, target: Target, path: &str) {
         Target::MeterGame => app.add_meter_game(&exe, path),
         Target::NvGame => super::nvidia::add_game(app, &exe),
         Target::PadProgram => super::pad_profiles::set_program(app, path),
+        Target::PadGame => super::pad_profiles::set_game(app, path),
         Target::RadialProgram(i) => super::controllers::set_radial_program(app, i as usize, path),
         Target::HdrGame => {
             if !app.cfg.hdr_games.iter().any(|g| g.exe.eq_ignore_ascii_case(&exe)) {

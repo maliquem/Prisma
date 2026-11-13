@@ -149,6 +149,92 @@ pub fn layer_changes(app: &App, f: Family) -> Option<(String, Vec<String>)> {
     Some((layer_name(p, ed.layer as u8), lines))
 }
 
+/// "Abre sozinho com", na linha das abas: o jogo cujo foco troca para o perfil aberto no editor.
+/// Desktop e Base não têm jogo: dizem quando valem.
+pub fn opens_with(ui: &mut Ui, app: &mut App, r: Rect) {
+    let list = remap::profiles();
+    let Some(ed) = app.pads.edit.as_mut() else { return };
+    let Some(p) = list.get(ed.prof) else { return };
+    let label = tr("Abre sozinho com");
+    let sw = (r.w * 0.55).min(260.0);
+    let sr = rect(r.right() - sw, r.y, sw, r.h);
+    ui.c.text_fit(rect(r.x, r.y, r.w - sw - 8.0, r.h), &label, 13.0, MUTED, Align::Right, Weight::Regular);
+    let fixed = match p.name.as_str() {
+        n if n == remap::DESKTOP => Some("Fora dos jogos"),
+        n if n == remap::BASE => Some("Jogos sem perfil próprio"),
+        _ if ed.rec => Some(""),
+        _ => None,
+    };
+    if let Some(f) = fixed {
+        let shown = if f.is_empty() { p.games.first().cloned().unwrap_or_else(|| tr("Nenhum programa")) } else { tr(f) };
+        ui.c.text_fit(sr, &shown, 13.0, TEXT, Align::Left, Weight::Regular);
+        return;
+    }
+    // shortcut: mostra e troca só o primeiro programa; um perfil com vários (vindo de arquivo) fica com o escolhido.
+    let cur = p.games.first().cloned();
+    let mut exes: Vec<String> = cur.iter().cloned().collect();
+    for g in &app.cfg.meter_games {
+        let e = g.exe.to_lowercase();
+        if !exes.contains(&e) && !list.iter().any(|o| o.games.iter().any(|x| x.eq_ignore_ascii_case(&e))) {
+            exes.push(e);
+        }
+    }
+    let mut opts = vec![tr("Nenhum programa")];
+    opts.extend(exes.iter().cloned());
+    opts.push(tr("Escolher programa"));
+    let mut sel = usize::from(cur.is_some());
+    if !ui.select("pp-opens", sr, &opts, &mut sel) {
+        return;
+    }
+    if sel == opts.len() - 1 {
+        app.open_picker(super::picker::Target::PadGame);
+        return;
+    }
+    let mut p = p.clone();
+    p.games = if sel == 0 { vec![] } else { vec![exes[sel - 1].clone()] };
+    if !remap::save(&p) {
+        app.toast.info("Não deu para salvar o perfil.");
+    }
+}
+
+/// Jogo escolhido na lista para "Abre sozinho com": passa para o perfil aberto e sai de qualquer outro.
+pub fn set_game(app: &mut App, path: &str) {
+    let Some(ed) = app.pads.edit.as_ref() else { return };
+    let exe = crate::sys::procs::exe_name(path).to_lowercase();
+    let list = remap::profiles();
+    let Some(cur) = list.get(ed.prof).map(|p| p.name.clone()) else { return };
+    let mut ok = true;
+    for mut p in list {
+        let had = p.games.len();
+        if p.name == cur {
+            p.games = vec![exe.clone()];
+        } else {
+            p.games.retain(|g| !g.eq_ignore_ascii_case(&exe));
+            if p.games.len() == had {
+                continue;
+            }
+        }
+        ok &= remap::save(&p);
+    }
+    if !ok {
+        app.toast.info("Não deu para salvar o perfil.");
+    }
+}
+
+/// Nomes das camadas do perfil aberto e a escolhida, para as fichas do desenho; só com mais de uma.
+pub fn layers(app: &App) -> Option<(Vec<String>, usize)> {
+    let ed = app.pads.edit.as_ref()?;
+    let list = remap::profiles();
+    let p = list.get(ed.prof)?;
+    (p.layers.len() > 1).then(|| (p.layers.iter().map(|l| l.name.clone()).collect(), ed.layer.min(p.layers.len() - 1)))
+}
+
+pub fn set_layer(app: &mut App, i: usize) {
+    if let Some(ed) = app.pads.edit.as_mut() {
+        ed.layer = i;
+    }
+}
+
 /// Caminho que o seletor de programa devolveu.
 pub fn set_program(app: &mut App, path: &str) {
     if let Some(ed) = app.pads.edit.as_mut() {

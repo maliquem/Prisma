@@ -246,7 +246,8 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     super::pad_profiles::top(ui, app, rect(x, 88.0, fw, 34.0));
     let y = pad_card(ui, app, &list, rect(x, 134.0, fw, 0.0));
     // Gravando uma macro, a aba não troca: o botão Parar fica na aba Macros.
-    tabs(ui, x, y, &mut app.pads.tab, !crate::sys::macros::recording());
+    let end = tabs(ui, x, y, &mut app.pads.tab, !crate::sys::macros::recording());
+    super::pad_profiles::opens_with(ui, app, rect(end + 16.0, y, x + fw - end - 16.0, 34.0));
     let top = y + 46.0;
     let h = a.h - top - 12.0;
     let family = list.get(app.pads.sel).map_or(Family::Xbox, |p| p.family);
@@ -258,7 +259,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
                 // Coluna esquerda: desenho, teste e o que a camada muda. Rola: passa da janela.
                 let col: f32 = 380.0;
                 ui.begin_scroll("pads-art", rect(x, top, col, h), app.pads.art_h);
-                let art_h = 40.0 + ((col - 24.0) * 470.0 / 640.0).floor() + 12.0;
+                let art_h = art_head(app) + ((col - 24.0) * 470.0 / 640.0).floor() + 12.0;
                 let mut y = top + art_h + 12.0;
                 if !draw_art(ui, app, p, rect(x, top, col, art_h)) {
                     let live = rect(x, top, col, 300.0);
@@ -344,7 +345,8 @@ fn pad_card(ui: &mut Ui, app: &mut App, list: &[Pad], at: Rect) -> f32 {
 }
 
 /// Abas da página; `on` falso deixa trocar de aba desligado (gravando macro).
-fn tabs(ui: &mut Ui, x: f32, y: f32, sel: &mut usize, on: bool) {
+/// Devolve onde as abas terminam.
+fn tabs(ui: &mut Ui, x: f32, y: f32, sel: &mut usize, on: bool) -> f32 {
     const TABS: [&str; 3] = ["Mapeamento", "Macros", "Ajustes"];
     if on {
         ui.tab_step(sel, TABS.len());
@@ -365,6 +367,7 @@ fn tabs(ui: &mut Ui, x: f32, y: f32, sel: &mut usize, on: bool) {
         ui.c.text_raw(r, &name, 14.0, color, Align::Center, if cur { Weight::Semibold } else { Weight::Regular });
         cx += w + 4.0;
     }
+    cx
 }
 
 /// Aba Ajustes: avisos, estado do mapeamento, radial, teclado, conflitos à esquerda; diagnóstico e
@@ -529,13 +532,35 @@ fn art(f: Family) -> Option<(&'static str, &'static [u8], &'static [Hit])> {
 
 /// Cartão do desenho: o botão apertado acende, o escolhido no editor fica contornado, e clicar
 /// num botão escolhe ele. Devolve false sem desenho para a família (o genérico usa `draw_live`).
+/// Altura acima do desenho: a linha do estado e, com mais de uma camada no perfil, as fichas delas.
+fn art_head(app: &App) -> f32 {
+    if super::pad_profiles::layers(app).is_some() { 74.0 } else { 40.0 }
+}
+
 fn draw_art(ui: &mut Ui, app: &mut App, p: &Pad, r: Rect) -> bool {
     let Some((key, png, hits)) = art(p.family) else { return false };
     ui.card(r);
     let line = format!("{} · {} · {}: {}", crate::i18n::tr(link_text(p.link)), rate_text(p), crate::i18n::tr("bateria"), battery_text(p));
     ui.c.text_fit(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 20.0), &line, 13.0, TEXT2, Align::Left, Weight::Regular);
+    // Fichas das camadas: a escolhida é a que o editor e o desenho mostram.
+    if let Some((names, cur)) = super::pad_profiles::layers(app) {
+        let mut cx = r.x + 16.0;
+        for (i, n) in names.iter().enumerate() {
+            let cw = (measure(n, 13.0, Weight::Regular, None).0 + 24.0).min(140.0);
+            if cx + cw > r.right() - 16.0 {
+                break; // shortcut: as que não cabem ficam só na lista do editor.
+            }
+            let c = rect(cx, r.y + 38.0, cw, 26.0);
+            ui.c.round(c, 13.0, if i == cur { ACCENT.alpha(0.25) } else { CARD2 });
+            ui.c.text_fit(rect(c.x + 10.0, c.y, c.w - 20.0, c.h), n, 13.0, if i == cur { TEXT } else { TEXT2 }, Align::Center, Weight::Regular);
+            if ui.hit(&format!("pad-layer{i}"), c) {
+                super::pad_profiles::set_layer(app, i);
+            }
+            cx += cw + 6.0;
+        }
+    }
     let w = r.w - 24.0;
-    let img = rect(r.x + 12.0, r.y + 40.0, w, (w * 470.0 / 640.0).floor());
+    let img = rect(r.x + 12.0, r.y + art_head(app), w, (w * 470.0 / 640.0).floor());
     ui.png(key, png, img);
     let i = p.input;
     let chosen = super::pad_profiles::chosen(app);
