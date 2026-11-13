@@ -26,6 +26,9 @@ pub struct State {
     pub(super) tab: usize,
     /// Altura da coluna da esquerda de Ajustes no quadro anterior, para a rolagem.
     left_h: f32,
+    /// O mesmo para a coluna do desenho, na aba Mapeamento.
+    art_h: f32,
+    test: Test,
 }
 
 impl State {
@@ -63,8 +66,58 @@ pub fn refresh(app: &mut App) {
     app.pads.conflicts = CONFLICTS.iter().filter(|(exe, _)| run.contains(*exe)).map(|(_, t)| *t).collect();
 }
 
-/// A cada quadro com a aba aberta: o assistente junta as amostras do controle escolhido.
+/// Teste embaixo do desenho: os botões que já responderam e quanto durou cada aperto.
+#[derive(Default)]
+struct Test {
+    key: String,
+    prev: u32,
+    seen: u32,
+    down: Vec<(u32, Instant)>,
+    up: Vec<(u32, Instant)>,
+    /// Do mais novo ao mais velho: botão, duração em ms e se veio colado ao aperto anterior.
+    hist: Vec<(u32, u32, bool)>,
+}
+
+/// Soltar e apertar de novo em menos que isso é aperto duplo: o botão pode estar falhando.
+const DOUBLE_MS: u128 = 60;
+const HIST: usize = 6;
+
+/// Um relatório do controle `key`: os gatilhos contam como botão passando da metade.
+fn test_feed(t: &mut Test, key: &str, i: pads::Input, now: Instant) {
+    if t.key != key {
+        *t = Test { key: key.to_string(), ..Default::default() };
+    }
+    let mut cur = i.buttons;
+    if i.lt > 0.5 {
+        cur |= remap::LT;
+    }
+    if i.rt > 0.5 {
+        cur |= remap::RT;
+    }
+    for n in 0..32 {
+        let bit = 1u32 << n;
+        let (was, is) = (t.prev & bit != 0, cur & bit != 0);
+        if is && !was {
+            t.seen |= bit;
+            t.down.push((bit, now));
+        } else if was && !is {
+            let Some(k) = t.down.iter().position(|d| d.0 == bit) else { continue };
+            let (_, at) = t.down.remove(k);
+            let double = t.up.iter().any(|u| u.0 == bit && at.saturating_duration_since(u.1).as_millis() < DOUBLE_MS);
+            t.up.retain(|u| u.0 != bit);
+            t.up.push((bit, now));
+            t.hist.insert(0, (bit, now.saturating_duration_since(at).as_millis() as u32, double));
+            t.hist.truncate(HIST);
+        }
+    }
+    t.prev = cur;
+}
+
+/// A cada quadro com a aba aberta: o teste e o assistente leem o controle escolhido.
 pub fn tick(app: &mut App) {
+    if let Some(p) = pads::list().get(app.pads.sel) {
+        test_feed(&mut app.pads.test, &p.key, p.input, Instant::now());
+    }
     let Some(w) = &mut app.pads.wiz else { return };
     let Some(p) = pads::list().into_iter().find(|p| p.key == w.key) else {
         app.pads.wiz = None;
@@ -202,12 +255,24 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
             // Sem controle ligado, o editor ocupa a largura toda.
             let mut lw = 0.0;
             if let Some(p) = list.get(app.pads.sel) {
+                // Coluna esquerda: desenho, teste e o que a camada muda. Rola: passa da janela.
                 let col: f32 = 380.0;
+                ui.begin_scroll("pads-art", rect(x, top, col, h), app.pads.art_h);
                 let art_h = 40.0 + ((col - 24.0) * 470.0 / 640.0).floor() + 12.0;
+                let mut y = top + art_h + 12.0;
                 if !draw_art(ui, app, p, rect(x, top, col, art_h)) {
                     let live = rect(x, top, col, 300.0);
                     ui.card(live);
                     draw_live(ui, p, live);
+                    y = live.bottom() + 12.0;
+                } else {
+                    y = draw_test(ui, app, p, rect(x, y, col, 0.0));
+                }
+                y = draw_changes(ui, app, p.family, rect(x, y, col, 0.0));
+                ui.end_scroll();
+                if (y - top - app.pads.art_h).abs() > 0.5 {
+                    app.pads.art_h = y - top;
+                    ui.s.needs_redraw = true;
                 }
                 lw = col + 12.0;
             }
@@ -503,6 +568,71 @@ fn draw_art(ui: &mut Ui, app: &mut App, p: &Pad, r: Rect) -> bool {
         }
     }
     true
+}
+
+/// Cartão do teste: último botão, quantos responderam, os que faltam e o histórico.
+fn draw_test(ui: &mut Ui, app: &mut App, p: &Pad, at: Rect) -> f32 {
+    let tr = |s: &str| crate::i18n::tr(s).into_owned();
+    let Some((_, _, hits)) = art(p.family) else { return at.y };
+    let name = |bit: u32| super::pad_profiles::button_label(p.family, bit);
+    let t = &app.pads.test;
+    let x = at.x + 16.0;
+    let w = at.w - 32.0;
+    let rows = t.hist.len();
+    let r = rect(at.x, at.y, at.w, 140.0 + if rows > 0 { 26.0 + rows as f32 * 22.0 } else { 0.0 });
+    ui.card(r);
+    ui.title(rect(x, r.y + 12.0, w - 108.0, 22.0), "Teste dos botões");
+    let clear = ui.button_ex("pad-test-clear", rect(r.right() - 116.0, r.y + 8.0, 100.0, 32.0), "Limpar", false, t.seen != 0);
+    let last = match (t.down.last(), t.hist.first()) {
+        (Some(&(bit, _)), _) => tr("Último botão: {}, apertado").replace("{}", &name(bit)),
+        (None, Some(&(bit, ms, _))) => tr("Último botão: {} ({} ms)").replacen("{}", &name(bit), 1).replacen("{}", &ms.to_string(), 1),
+        _ => tr("Aperte um botão no controle."),
+    };
+    ui.c.text_fit(rect(x, r.y + 44.0, w, 20.0), &last, 13.0, TEXT, Align::Left, Weight::Regular);
+    let all: Vec<u32> = hits.iter().map(|h| h.0).collect();
+    let ok = all.iter().filter(|b| t.seen & **b != 0).count();
+    let count = tr("Responderam {} de {}").replacen("{}", &ok.to_string(), 1).replacen("{}", &all.len().to_string(), 1);
+    ui.c.text_fit(rect(x, r.y + 68.0, w, 20.0), &count, 13.0, TEXT2, Align::Left, Weight::Semibold);
+    let missing: Vec<String> = all.iter().filter(|b| t.seen & **b == 0).map(|b| name(*b)).collect();
+    let rest = if missing.is_empty() { tr("Todos responderam.") } else { tr("Faltam: {}").replace("{}", &missing.join(", ")) };
+    ui.c.text_wrap(rect(x, r.y + 92.0, w, 40.0), &rest, 12.0, MUTED, Weight::Regular);
+    let mut y = r.y + 140.0;
+    if rows > 0 {
+        ui.c.text_fit(rect(x, y, w, 20.0), &tr("Histórico"), 13.0, TEXT2, Align::Left, Weight::Semibold);
+        y += 26.0;
+        for &(bit, ms, double) in &t.hist {
+            ui.c.text_fit(rect(x, y, w * 0.4, 20.0), &name(bit), 12.0, TEXT, Align::Left, Weight::Regular);
+            if double {
+                ui.c.text_fit(rect(x + w * 0.4, y, w * 0.4, 20.0), &tr("aperto duplo"), 12.0, WARN, Align::Left, Weight::Regular);
+            }
+            ui.c.text_raw(rect(x + w * 0.8, y, w * 0.2, 20.0), &format!("{ms} ms"), 12.0, MUTED, Align::Right, Weight::Regular);
+            y += 22.0;
+        }
+    }
+    if clear {
+        app.pads.test = Test { key: p.key.clone(), prev: app.pads.test.prev, ..Default::default() };
+    }
+    r.bottom() + 12.0
+}
+
+/// Cartão "O que mudou nesta camada": as ligações da camada escolhida no editor.
+fn draw_changes(ui: &mut Ui, app: &App, f: Family, at: Rect) -> f32 {
+    let Some((layer, lines)) = super::pad_profiles::layer_changes(app, f) else { return at.y };
+    let x = at.x + 16.0;
+    let w = at.w - 32.0;
+    let r = rect(at.x, at.y, at.w, 48.0 + lines.len().max(1) as f32 * 22.0 + 8.0);
+    ui.card(r);
+    let title = crate::i18n::tr("O que mudou na camada {}").replace("{}", &layer);
+    ui.c.text_fit(rect(x, r.y + 12.0, w, 22.0), &title, 15.0, TEXT, Align::Left, Weight::Semibold);
+    let mut y = r.y + 44.0;
+    if lines.is_empty() {
+        ui.c.text_fit(rect(x, y, w, 20.0), &crate::i18n::tr("Nada: os botões fazem o que o jogo manda."), 12.0, MUTED, Align::Left, Weight::Regular);
+    }
+    for l in &lines {
+        ui.c.text_fit(rect(x, y, w, 20.0), l, 12.0, TEXT2, Align::Left, Weight::Regular);
+        y += 22.0;
+    }
+    r.bottom() + 12.0
 }
 
 fn draw_live(ui: &mut Ui, p: &Pad, r: Rect) {
@@ -884,4 +1014,29 @@ fn diagnostic(list: &[Pad], conflicts: &[&str]) -> String {
         let _ = writeln!(s, "  tempo interno: mediana {med} µs, p99 {p99} µs");
     }
     s
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn test_counts_presses_and_flags_double() {
+        let t0 = Instant::now();
+        let ms = |n: u64| t0 + Duration::from_millis(n);
+        let mut t = Test::default();
+        let press = |b: u32, lt: f32| pads::Input { buttons: b, lt, ..Default::default() };
+        test_feed(&mut t, "a", press(pads::A, 0.0), ms(0));
+        test_feed(&mut t, "a", press(0, 0.0), ms(120));
+        // Apertou de novo 30 ms depois de soltar: aperto duplo.
+        test_feed(&mut t, "a", press(pads::A, 0.0), ms(150));
+        test_feed(&mut t, "a", press(0, 0.9), ms(200));
+        test_feed(&mut t, "a", press(0, 0.0), ms(300));
+        assert_eq!(t.seen, pads::A | remap::LT);
+        assert_eq!(t.hist, vec![(remap::LT, 100, false), (pads::A, 50, true), (pads::A, 120, false)]);
+        // Outro controle começa do zero.
+        test_feed(&mut t, "b", press(0, 0.0), ms(400));
+        assert_eq!((t.seen, t.hist.len()), (0, 0));
+    }
 }

@@ -2213,3 +2213,15 @@ Chega numa fase futura, com o controle virtual.	将在后续阶段随虚拟手�
 Fora dos jogos, mouse e teclado. Nos jogos, o perfil do jogo ou o Base, que não muda nada.	游戏外为鼠标和键盘。游戏中使用该游戏的配置，或不做任何更改的 Base。
 O jogo recebe o controle como ele é. Vale para todos os controles.	游戏按原样接收手柄。对所有手柄生效。
 Ajustes	设置
+Teste dos botões	按键测试
+Limpar	清除
+Último botão: {}, apertado	上一个按键：{}，按住中
+Último botão: {} ({} ms)	上一个按键：{}（{} 毫秒）
+Aperte um botão no controle.	请按下手柄上的按键。
+Responderam {} de {}	已响应 {} / {}
+Todos responderam.	全部已响应。
+Faltam: {}	未按：{}
+Histórico	历史
+aperto duplo	重复触发
+O que mudou na camada {}	层 {} 的改动
+Nada: os botões fazem o que o jogo manda.	无：按键按游戏的设定执行。

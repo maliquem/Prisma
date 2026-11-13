@@ -2213,3 +2213,15 @@ Chega numa fase futura, com o controle virtual.	Появится позже, в�
 Fora dos jogos, mouse e teclado. Nos jogos, o perfil do jogo ou o Base, que não muda nada.	Вне игр — мышь и клавиатура. В играх — профиль игры или Base, который ничего не меняет.
 O jogo recebe o controle como ele é. Vale para todos os controles.	Игра получает геймпад как есть. Для всех геймпадов.
 Ajustes	Настройки
+Teste dos botões	Проверка кнопок
+Limpar	Очистить
+Último botão: {}, apertado	Последняя кнопка: {}, нажата
+Último botão: {} ({} ms)	Последняя кнопка: {} ({} мс)
+Aperte um botão no controle.	Нажмите кнопку на геймпаде.
+Responderam {} de {}	Откликнулись {} из {}
+Todos responderam.	Откликнулись все.
+Faltam: {}	Не хватает: {}
+Histórico	История
+aperto duplo	двойное нажатие
+O que mudou na camada {}	Что изменено в слое {}
+Nada: os botões fazem o que o jogo manda.	Ничего: кнопки работают так, как задано игрой.

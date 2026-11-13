@@ -2213,3 +2213,15 @@ Chega numa fase futura, com o controle virtual.	Llega en una fase futura, con el
 Fora dos jogos, mouse e teclado. Nos jogos, o perfil do jogo ou o Base, que não muda nada.	Fuera de los juegos, ratón y teclado. En los juegos, el perfil del juego o el Base, que no cambia nada.
 O jogo recebe o controle como ele é. Vale para todos os controles.	El juego recibe el mando tal como es. Vale para todos los mandos.
 Ajustes	Ajustes
+Teste dos botões	Prueba de botones
+Limpar	Limpiar
+Último botão: {}, apertado	Último botón: {}, pulsado
+Último botão: {} ({} ms)	Último botón: {} ({} ms)
+Aperte um botão no controle.	Pulsa un botón del mando.
+Responderam {} de {}	Han respondido {} de {}
+Todos responderam.	Todos han respondido.
+Faltam: {}	Faltan: {}
+Histórico	Historial
+aperto duplo	doble pulsación
+O que mudou na camada {}	Qué cambió en la capa {}
+Nada: os botões fazem o que o jogo manda.	Nada: los botones hacen lo que ordena el juego.

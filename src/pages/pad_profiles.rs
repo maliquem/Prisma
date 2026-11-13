@@ -122,6 +122,27 @@ pub fn choose(app: &mut App, bit: u32) {
     }
 }
 
+/// A camada escolhida no editor: o nome e uma linha por ligação (botão, quando e o que faz).
+pub fn layer_changes(app: &App, f: Family) -> Option<(String, Vec<String>)> {
+    let ed = app.pads.edit.as_ref()?;
+    let list = remap::profiles();
+    let p = list.get(ed.prof)?;
+    let l = p.layers.get(ed.layer)?;
+    let lines = l
+        .binds
+        .iter()
+        .map(|b| {
+            let mut who = button_label(f, b.button);
+            if b.with != 0 {
+                who = format!("{} + {who}", button_label(f, b.with));
+            }
+            let when = tr(WHENS.iter().find(|w| w.0 == b.when).map_or("", |w| w.1));
+            format!("{who}: {when} → {}", describe(b.out, p))
+        })
+        .collect();
+    Some((layer_name(p, ed.layer as u8), lines))
+}
+
 /// Caminho que o seletor de programa devolveu.
 pub fn set_program(app: &mut App, path: &str) {
     if let Some(ed) = app.pads.edit.as_mut() {

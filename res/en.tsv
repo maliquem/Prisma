@@ -2219,3 +2219,15 @@ Chega numa fase futura, com o controle virtual.	Comes in a later phase, with the
 Fora dos jogos, mouse e teclado. Nos jogos, o perfil do jogo ou o Base, que não muda nada.	Outside games, mouse and keyboard. In games, the game's profile or Base, which changes nothing.
 O jogo recebe o controle como ele é. Vale para todos os controles.	The game gets the controller as it is. Applies to all controllers.
 Ajustes	Settings
+Teste dos botões	Button test
+Limpar	Clear
+Último botão: {}, apertado	Last button: {}, held
+Último botão: {} ({} ms)	Last button: {} ({} ms)
+Aperte um botão no controle.	Press a button on the controller.
+Responderam {} de {}	{} of {} responded
+Todos responderam.	All responded.
+Faltam: {}	Missing: {}
+Histórico	History
+aperto duplo	double press
+O que mudou na camada {}	What changed in layer {}
+Nada: os botões fazem o que o jogo manda.	Nothing: buttons do what the game says.
