@@ -2142,7 +2142,6 @@ Página Compartilhar tela	Página Compartir pantalla
 Página Controles	Página Mandos
 Página Widget	Página Widget
 Página Configurações	Página Configuración
-4 opções…	4 opciones…
 Usar os dois sticks	Usar los dos sticks
 Letras no stick	Letras en el stick
 Um círculo para as letras e outro para os números e símbolos. No stick esquerdo, A, B, X e Y digitam; no direito, o direcional digita, e com ele solto o direcional são as setas.	Un círculo para las letras y otro para los números y símbolos. En el stick izquierdo, A, B, X e Y escriben; en el derecho, la cruceta escribe, y con él suelto la cruceta son las flechas.
@@ -2280,3 +2279,18 @@ Passa ao jogo: o Prisma não usa nem esconde, e o jogo lê direto do controle (s
 Gravando: vá a outro programa e use o teclado e o mouse; volte aqui para parar. Nada do que você faz dentro do Prisma entra, o movimento do mouse não entra, e os botões do controle ainda não são gravados.	Grabando: ve a otro programa y usa el teclado y el ratón; vuelve aquí para parar. Nada de lo que hagas dentro de Prisma se graba, el movimiento del ratón no se graba y los botones del mando todavía no se graban.
 Cor	Color
 Menu radial	Menú radial
+Ligar: teclado e mouse	Activar: teclado y ratón
+Em Nativo, o jogo recebe o controle como ele é: perfis, gyro e touchpad não valem, só a barra de luz.	En Nativo, el juego recibe el mando tal cual: los perfiles, el giroscopio y el panel táctil no valen, solo la barra de luz.
+4 opções	4 opciones
+4 opções no direcional	4 opciones en la cruceta
+O direcional escolhe uma de quatro ações dentro deste lugar. Ligado, o lugar deixa de ter ação própria.	La cruceta elige una de cuatro acciones dentro de este lugar. Activado, el lugar deja de tener acción propia.
+Escolher cor…	Elegir color…
+Ajustar cores…	Ajustar colores…
+Cor da barra de luz	Color de la barra de luz
+Carga vazia	Carga vacía
+Metade da carga	Media carga
+Carga cheia	Carga llena
+Barra de luz pela bateria	Barra de luz según la batería
+A cor acompanha a carga. Escolha as três cores e de quantos em quantos por cento ela muda.	El color sigue la carga. Elige los tres colores y cada cuántos por ciento cambia.
+Mudar…	Cambiar…
+Passo da cor	Paso del color

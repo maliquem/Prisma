@@ -5,7 +5,7 @@ use super::*;
 use crate::config::{Hotkey, MOD_ALT, MOD_CTRL, MOD_SHIFT, MOD_WIN};
 use crate::sys::pads::{self, Family};
 use crate::sys::macros;
-use crate::sys::remap::{self, Bind, Light, Motion, Layer, Macro, Mode, Out, Profile, Step, Stick, When, Zone};
+use crate::sys::remap::{self, Batt, Bind, Light, Motion, Layer, Macro, Mode, Out, Profile, Step, Stick, When, Zone};
 
 #[derive(Default)]
 pub struct Editor {
@@ -47,6 +47,11 @@ pub struct Editor {
     ttext: String,
     /// Altura que o editor ocupou no desenho anterior, para a rolagem.
     body_h: f32,
+    /// Janela da barra de luz pela bateria, aberta.
+    batt: bool,
+    /// Janela do seletor de cor: qual cor está sendo mexida e a matiz, saturação e brilho dela.
+    /// 0 é a cor do perfil; 1, 2 e 3 são a carga vazia, a metade e a cheia.
+    pick: Option<(u8, [f32; 3])>,
 }
 
 /// O perfil aberto no editor, para exportar.
@@ -92,6 +97,9 @@ pub fn test_target(app: &mut App, what: &str) {
             }
             "settings" => app.pads.tab = 3,
             "radial" => app.pads.tab = 2,
+            // As duas janelas da barra de luz, para a foto de teste.
+            "color" => ed.pick = Some((0, [210.0, 1.0, 1.0])),
+            "battery" => ed.batt = true,
             "stick" => ed.button = pads::LS,
             "trigger" => ed.button = remap::LT,
             "gyro" => ed.layer = 1,
@@ -700,6 +708,10 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
     let list = remap::profiles();
     let Some(ed) = app.pads.edit.as_mut() else { return };
     ed.prof = ed.prof.min(list.len() - 1);
+    // Com uma janela aberta, a página atrás dela para de receber cliques.
+    if ed.batt || ed.pick.is_some() {
+        ui.block();
+    }
     let mut p = list[ed.prof].clone();
     let acc_i = remap::TEMPLATES.len() + 1;
     ui.card(r);
@@ -709,6 +721,8 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
 
     ed.layer = ed.layer.min(p.layers.len() - 1);
     let chips = buttons(family);
+    // Ícones das listas de botões: o estilo vem do controle escolhido (o Nintendo depende do vid).
+    let gstyle = pads::list().iter().find(|d| d.family == family).map_or_else(|| crate::ui::glyph::Style::of(family, 0), |d| crate::ui::glyph::Style::of(d.family, d.vid));
     if !chips.iter().any(|c| c.0 == ed.button) {
         ed.button = chips[4].0;
     }
@@ -950,7 +964,8 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
         ed.kwith = ed.kwith.min(kw.len() - 1);
         ui.select("pp-kwith", rect(x + third + 8.0, y, third, 34.0), &kw, &mut ed.kwith);
     } else {
-        ui.select("pp-with", rect(x + third + 8.0, y, third, 34.0), &withs, &mut ed.with);
+        let wg: Vec<pads::Buttons> = std::iter::once(0).chain(others.iter().map(|c| c.0)).collect();
+        ui.select_pad("pp-with", rect(x + third + 8.0, y, third, 34.0), &withs, &wg, gstyle, &mut ed.with);
     }
     let kinds: Vec<String> = KINDS.iter().map(|k| tr(k)).collect();
     if ui.select("pp-kind", rect(x + 2.0 * (third + 8.0), y, third, 34.0), &kinds, &mut ed.kind) {
@@ -1081,8 +1096,9 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
     seconds.extend(keyable.iter().map(|c| c.1.clone()));
     let bits: Vec<usize> = keyable.iter().enumerate().filter(|(_, c)| p.turbo_key & c.0 != 0).map(|(i, _)| i + 1).collect();
     let (mut k1, mut k2) = (bits.first().copied().unwrap_or(0), bits.get(1).copied().unwrap_or(0));
-    let c1 = ui.select("pp-tk1", rect(x + third + 8.0, y, third, 34.0), &firsts, &mut k1);
-    let c2 = ui.select("pp-tk2", rect(x + 2.0 * (third + 8.0), y, third, 34.0), &seconds, &mut k2);
+    let kg: Vec<pads::Buttons> = std::iter::once(0).chain(keyable.iter().map(|c| c.0)).collect();
+    let c1 = ui.select_pad("pp-tk1", rect(x + third + 8.0, y, third, 34.0), &firsts, &kg, gstyle, &mut k1);
+    let c2 = ui.select_pad("pp-tk2", rect(x + 2.0 * (third + 8.0), y, third, 34.0), &seconds, &kg, gstyle, &mut k2);
     if c1 || c2 {
         let bit = |k: usize| if k == 0 { 0 } else { keyable[k - 1].0 };
         p.turbo_key = if k1 == 0 { 0 } else { bit(k1) | bit(k2) };
@@ -1142,42 +1158,42 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
         let mut sel = match p.light {
             None => 0,
             Some(Light::Off) => 1,
-            Some(Light::Battery) => 2,
+            Some(Light::Battery(_)) => 2,
             Some(Light::Color(_)) => 3,
         };
         ui.label(rect(x, y, 120.0, 34.0), "Barra de luz", TEXT2);
-        if ui.select("pp-light", rect(x + 130.0, y, ((w - 138.0) * 0.56).min(220.0).floor(), 34.0), &opts, &mut sel) {
+        let sw = ((w - 138.0) * 0.56).min(220.0).floor();
+        if ui.select("pp-light", rect(x + 130.0, y, sw, 34.0), &opts, &mut sel) {
             p.light = match sel {
                 0 => None,
                 1 => Some(Light::Off),
-                2 => Some(Light::Battery),
+                2 => Some(Light::Battery(Batt::default())),
                 _ => Some(Light::Color(remap::FIRST_COLOR)),
             };
             changed = true;
         }
-        y += 44.0;
-        // Seletor da cor: a amostra e um controle deslizante por canal, de 0 a 255.
-        if let Some(Light::Color(c)) = p.light {
-            let mut c = c;
-            let mut moved = false;
-            ui.c.round(rect(x, y, 34.0, 34.0), 8.0, crate::ui::gfx::Color { r: c[0] as f32 / 255.0, g: c[1] as f32 / 255.0, b: c[2] as f32 / 255.0, a: 1.0 });
-            let each = ((w - 42.0) / 3.0).floor().min(220.0);
-            for (i, n) in ["R", "G", "B"].iter().enumerate() {
-                let cx = x + 42.0 + i as f32 * each;
-                ui.label(rect(cx, y, 16.0, 34.0), n, TEXT2);
-                let mut v = c[i] as f32 / 255.0;
-                if ui.slider(&format!("pp-light-{n}"), rect(cx + 20.0, y, each - 66.0, 34.0), &mut v) {
-                    c[i] = (v * 255.0).round() as u8;
-                    moved = true;
+        // Amostra da cor e o botão que abre a janela de escolher.
+        let bx = x + 130.0 + sw + 12.0;
+        match p.light {
+            Some(Light::Color(c)) => {
+                ui.c.round(rect(bx, y, 34.0, 34.0), 8.0, swatch(c));
+                ui.c.round_line(rect(bx, y, 34.0, 34.0), 8.0, BORDER2, 1.0);
+                if ui.button("pp-light-pick", rect(bx + 42.0, y, 150.0, 34.0), "Escolher cor…", false) {
+                    ed.pick = Some((0, crate::ui::gfx::rgb_hsv(c)));
                 }
-                ui.c.text_raw(rect(cx + each - 44.0, y, 36.0, 34.0), &c[i].to_string(), 12.0, MUTED, Align::Right, Weight::Regular);
             }
-            if moved {
-                p.light = Some(Light::Color(c));
-                changed = true;
+            Some(Light::Battery(b)) => {
+                // Faixa com o degradê inteiro, de vazia a cheia.
+                for i in 0..34 {
+                    ui.c.fill(rect(bx + i as f32 * 3.0, y + 6.0, 3.0, 22.0), swatch(remap::battery_color(b, (i * 3) as u8)));
+                }
+                if ui.button("pp-light-batt", rect(bx + 114.0, y, 150.0, 34.0), "Ajustar cores…", false) {
+                    ed.batt = true;
+                }
             }
-            y += 44.0;
+            _ => {}
         }
+        y += 44.0;
         if p.light.is_some() {
             changed |= ui.check("pp-light-bt", rect(x, y, w.min(360.0), 34.0), "Também pelo Bluetooth", &mut p.light_bt);
             y += 44.0;
@@ -1370,7 +1386,103 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
         app.cfg.save();
         app.apply_pads();
     }
+    changed |= light_sheets(ui, app, &mut p);
     if changed && !remap::save(&p) {
         app.toast.info("Não deu para salvar o perfil.");
     }
+}
+
+/// A cor da amostra, a partir dos três valores de 0 a 255.
+fn swatch(c: [u8; 3]) -> crate::ui::gfx::Color {
+    crate::ui::gfx::Color { r: c[0] as f32 / 255.0, g: c[1] as f32 / 255.0, b: c[2] as f32 / 255.0, a: 1.0 }
+}
+
+/// As três cores da bateria, na ordem em que a janela mostra.
+const BATT_ROWS: [&str; 3] = ["Carga vazia", "Metade da carga", "Carga cheia"];
+
+fn batt_color(b: &mut Batt, i: usize) -> &mut [u8; 3] {
+    match i {
+        0 => &mut b.low,
+        1 => &mut b.mid,
+        _ => &mut b.full,
+    }
+}
+
+/// As janelas da barra de luz: o seletor de cor e os ajustes da bateria. Devolve true quando o
+/// perfil mudou. O seletor fica na frente dos ajustes, e voltar dele traz os ajustes de volta.
+fn light_sheets(ui: &mut Ui, app: &mut App, p: &mut Profile) -> bool {
+    let Some(ed) = app.pads.edit.as_mut() else { return false };
+    let mut changed = false;
+    if let Some((what, mut hsv)) = ed.pick {
+        let b = ui.sheet(600.0, 392.0);
+        ui.title(rect(b.x + 24.0, b.y + 20.0, b.w - 48.0, 24.0), if what == 0 { "Cor da barra de luz" } else { BATT_ROWS[what as usize - 1] });
+        if ui.color_picker("pp-cp", rect(b.x + 24.0, b.y + 60.0, 276.0, 240.0), &mut hsv) {
+            ed.pick = Some((what, hsv));
+        }
+        let c = crate::ui::gfx::hsv_rgb(hsv[0], hsv[1], hsv[2]);
+        let px = b.x + 336.0;
+        ui.c.round(rect(px, b.y + 60.0, 120.0, 72.0), 10.0, swatch(c));
+        ui.c.round_line(rect(px, b.y + 60.0, 120.0, 72.0), 10.0, BORDER2, 1.0);
+        ui.c.text_raw(rect(px + 136.0, b.y + 60.0, 120.0, 72.0), &format!("#{:02X}{:02X}{:02X}", c[0], c[1], c[2]), 14.0, TEXT, Align::Left, Weight::Semibold);
+        for (i, n) in ["R", "G", "B"].iter().enumerate() {
+            let ry = b.y + 148.0 + i as f32 * 26.0;
+            ui.c.text_raw(rect(px, ry, 24.0, 22.0), n, 13.0, TEXT2, Align::Left, Weight::Regular);
+            ui.c.text_raw(rect(px + 28.0, ry, 60.0, 22.0), &c[i].to_string(), 13.0, TEXT, Align::Left, Weight::Semibold);
+        }
+        if ui.button("pp-cp-ok", rect(b.right() - 300.0, b.bottom() - 56.0, 136.0, 38.0), "Confirmar", true) {
+            match (what, p.light) {
+                (0, _) => p.light = Some(Light::Color(c)),
+                (k, Some(Light::Battery(mut bt))) => {
+                    *batt_color(&mut bt, k as usize - 1) = c;
+                    p.light = Some(Light::Battery(bt));
+                }
+                _ => {}
+            }
+            changed = true;
+            ed.pick = None;
+        }
+        if ui.button("pp-cp-no", rect(b.right() - 156.0, b.bottom() - 56.0, 136.0, 38.0), "Cancelar", false) {
+            ed.pick = None;
+        }
+        return changed;
+    }
+    if !ed.batt {
+        return false;
+    }
+    // O botão que abre esta janela só aparece com a luz pela bateria; o padrão é só a rede de
+    // segurança (e a foto de teste).
+    let mut bt = match p.light {
+        Some(Light::Battery(b)) => b,
+        _ => Batt::default(),
+    };
+    let b = ui.sheet(560.0, 396.0);
+    ui.title(rect(b.x + 24.0, b.y + 20.0, b.w - 48.0, 24.0), "Barra de luz pela bateria");
+    ui.c.text_wrap(rect(b.x + 24.0, b.y + 50.0, b.w - 48.0, 36.0), "A cor acompanha a carga. Escolha as três cores e de quantos em quantos por cento ela muda.", 12.0, TEXT2, Weight::Regular);
+    // Prévia: o degradê inteiro, de vazia a cheia.
+    let bar = rect(b.x + 24.0, b.y + 94.0, b.w - 48.0, 26.0);
+    for i in 0..=100 {
+        ui.c.fill(rect(bar.x + bar.w * i as f32 / 101.0, bar.y, bar.w / 101.0 + 1.0, bar.h), swatch(remap::battery_color(bt, i)));
+    }
+    ui.c.round_line(bar, 4.0, BORDER2, 1.0);
+    for (i, name) in BATT_ROWS.iter().enumerate() {
+        let ry = b.y + 136.0 + i as f32 * 44.0;
+        let c = *batt_color(&mut bt, i);
+        ui.c.round(rect(b.x + 24.0, ry, 34.0, 34.0), 8.0, swatch(c));
+        ui.c.round_line(rect(b.x + 24.0, ry, 34.0, 34.0), 8.0, BORDER2, 1.0);
+        ui.label(rect(b.x + 68.0, ry, 220.0, 34.0), name, TEXT);
+        if ui.button(&format!("pp-batt-{i}"), rect(b.right() - 160.0, ry, 136.0, 34.0), "Mudar…", false) {
+            ed.pick = Some((i as u8 + 1, crate::ui::gfx::rgb_hsv(c)));
+        }
+    }
+    ui.label(rect(b.x + 24.0, b.y + 274.0, 240.0, 36.0), "Passo da cor", TEXT2);
+    let mut step = bt.step.max(1) as u32;
+    if ui.stepper("pp-batt-step", rect(b.x + 280.0, b.y + 274.0, 140.0, 36.0), &mut step, (1, 25), 1, "%") {
+        bt.step = step as u8;
+        p.light = Some(Light::Battery(bt));
+        changed = true;
+    }
+    if ui.button("pp-batt-ok", rect(b.right() - 160.0, b.bottom() - 56.0, 136.0, 38.0), "Fechar", true) {
+        ed.batt = false;
+    }
+    changed
 }

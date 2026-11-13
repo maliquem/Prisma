@@ -501,16 +501,6 @@ unsafe fn write_report(path: &str, r: &[u8], out_len: usize) -> bool {
     ok
 }
 
-/// Cor da carga, mudando a cada 1%: vermelha vazia, amarela na metade, verde cheia.
-fn battery_color(pct: u8) -> [u8; 3] {
-    let (from, to, t) = if pct < 50 {
-        ([255, 0, 0], [255, 190, 0], pct as f32 / 50.0)
-    } else {
-        ([255, 190, 0], [0, 255, 0], (pct - 50) as f32 / 50.0)
-    };
-    [0, 1, 2].map(|i| (from[i] as f32 + (to[i] as f32 - from[i] as f32) * t).round() as u8)
-}
-
 /// Barra de luz de um controle: manda a cor do perfil só quando ela muda, e a cor padrão quando o
 /// perfil deixa de mandar. Uma escrita que falha não se repete até o controle reconectar.
 struct LightOut {
@@ -529,7 +519,7 @@ impl LightOut {
         let want = super::remap::light().filter(|l| self.link == Link::Usb || l.1).and_then(|l| match l.0 {
             Light::Off => Some([0, 0, 0]),
             Light::Color(c) => Some(c),
-            Light::Battery => pct.map(battery_color),
+            Light::Battery(b) => pct.map(|p| super::remap::battery_color(b, p)),
         });
         if want == self.sent || self.failed {
             return;
@@ -1373,11 +1363,19 @@ mod tests {
 
     #[test]
     fn battery_colors_slide() {
-        assert_eq!((battery_color(0), battery_color(50), battery_color(100)), ([255, 0, 0], [255, 190, 0], [0, 255, 0]));
-        // Muda de 1 em 1%, sempre para um lado.
-        let v: Vec<[u8; 3]> = (0..=100).map(|p| battery_color(p)).collect();
+        use super::super::remap::{battery_color, Batt};
+        let d = Batt::default();
+        assert_eq!((battery_color(d, 0), battery_color(d, 50), battery_color(d, 100)), ([255, 0, 0], [255, 190, 0], [0, 255, 0]));
+        // Passo de 1%: muda a cada por cento, sempre para um lado.
+        let v: Vec<[u8; 3]> = (0..=100).map(|p| battery_color(d, p)).collect();
         assert!(v.windows(2).all(|w| w[0] != w[1]));
         assert!(v.windows(2).all(|w| w[1][1] >= w[0][1]));
+        // Passo de 20%: só muda de 20 em 20, e as cores escolhidas valem.
+        let b = Batt { low: [0, 0, 0], mid: [128, 128, 128], full: [255, 255, 255], step: 20 };
+        assert_eq!(battery_color(b, 0), [0, 0, 0]);
+        assert_eq!(battery_color(b, 100), [255, 255, 255]);
+        assert_eq!(battery_color(b, 52), battery_color(b, 59));
+        assert_ne!(battery_color(b, 52), battery_color(b, 72));
     }
 
     #[test]

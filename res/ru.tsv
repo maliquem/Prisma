@@ -2142,7 +2142,6 @@ Página Compartilhar tela	Страница «Общий экран»
 Página Controles	Страница «Геймпады»
 Página Widget	Страница «Widget»
 Página Configurações	Страница «Настройки»
-4 opções…	4 варианта…
 Usar os dois sticks	Оба стика
 Letras no stick	Буквы на стике
 Um círculo para as letras e outro para os números e símbolos. No stick esquerdo, A, B, X e Y digitam; no direito, o direcional digita, e com ele solto o direcional são as setas.	Один круг для букв, другой для цифр и символов. На левом стике печатают A, B, X и Y; на правом печатает крестовина, а когда он отпущен, крестовина работает как стрелки.
@@ -2280,3 +2279,18 @@ Passa ao jogo: o Prisma não usa nem esconde, e o jogo lê direto do controle (s
 Gravando: vá a outro programa e use o teclado e o mouse; volte aqui para parar. Nada do que você faz dentro do Prisma entra, o movimento do mouse não entra, e os botões do controle ainda não são gravados.	Запись: перейдите в другую программу и работайте клавиатурой и мышью; вернитесь сюда, чтобы остановить. Всё, что делается внутри Prisma, не записывается, движение мыши не записывается, кнопки геймпада пока тоже не записываются.
 Cor	Цвет
 Menu radial	Радиальное меню
+Ligar: teclado e mouse	Включить: клавиатура и мышь
+Em Nativo, o jogo recebe o controle como ele é: perfis, gyro e touchpad não valem, só a barra de luz.	В «Родном» режиме игра получает геймпад как есть: профили, гироскоп и тачпад не действуют, только световая панель.
+4 opções	4 варианта
+4 opções no direcional	4 варианта на крестовине
+O direcional escolhe uma de quatro ações dentro deste lugar. Ligado, o lugar deixa de ter ação própria.	Крестовина выбирает одно из четырёх действий внутри этого места. Когда включено, у места нет собственного действия.
+Escolher cor…	Выбрать цвет…
+Ajustar cores…	Настроить цвета…
+Cor da barra de luz	Цвет световой панели
+Carga vazia	Заряд пуст
+Metade da carga	Половина заряда
+Carga cheia	Полный заряд
+Barra de luz pela bateria	Световая панель по батарее
+A cor acompanha a carga. Escolha as três cores e de quantos em quantos por cento ela muda.	Цвет следует за зарядом. Выберите три цвета и через сколько процентов он меняется.
+Mudar…	Изменить…
+Passo da cor	Шаг цвета

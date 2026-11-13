@@ -121,6 +121,41 @@ fn shared<T>(f: impl FnOnce(&mut Shared) -> T) -> T {
     })
 }
 
+/// Matiz (0 a 360), saturação e brilho (0 a 1) em R, G e B de 0 a 255.
+pub fn hsv_rgb(h: f32, s: f32, v: f32) -> [u8; 3] {
+    let h = h.rem_euclid(360.0);
+    let c = v * s;
+    let x = c * (1.0 - ((h / 60.0) % 2.0 - 1.0).abs());
+    let m = v - c;
+    let (r, g, b) = match (h / 60.0) as u32 % 6 {
+        0 => (c, x, 0.0),
+        1 => (x, c, 0.0),
+        2 => (0.0, c, x),
+        3 => (0.0, x, c),
+        4 => (x, 0.0, c),
+        _ => (c, 0.0, x),
+    };
+    [r, g, b].map(|v| ((v + m) * 255.0).round().clamp(0.0, 255.0) as u8)
+}
+
+/// O contrário: R, G e B de 0 a 255 em matiz, saturação e brilho.
+pub fn rgb_hsv(c: [u8; 3]) -> [f32; 3] {
+    let [r, g, b] = c.map(|v| v as f32 / 255.0);
+    let max = r.max(g).max(b);
+    let min = r.min(g).min(b);
+    let d = max - min;
+    let h = if d == 0.0 {
+        0.0
+    } else if max == r {
+        60.0 * (((g - b) / d) % 6.0)
+    } else if max == g {
+        60.0 * ((b - r) / d + 2.0)
+    } else {
+        60.0 * ((r - g) / d + 4.0)
+    };
+    [h.rem_euclid(360.0), if max == 0.0 { 0.0 } else { d / max }, max]
+}
+
 pub fn factory() -> ID2D1Factory {
     shared(|s| s.d2d.clone())
 }
@@ -186,6 +221,15 @@ thread_local! {
     /// quantas caixas já havia quando ele abriu: só as de dentro contam para o texto de dentro) e a
     /// escala em uso.
     static BOXES: RefCell<(Vec<Rect>, f32, f32, Vec<(Rect, usize)>, f32)> = const { RefCell::new((Vec::new(), 0.0, 0.0, Vec::new(), 1.0)) };
+}
+
+/// Teste: uma janela própria cobre a página, então as caixas de trás deixam de valer para o texto
+/// desenhado em cima dela (senão o texto da janela é medido contra uma caixinha do fundo).
+#[cfg(debug_assertions)]
+pub fn forget_boxes() {
+    if overflow_path().is_some() {
+        BOXES.with(|b| b.borrow_mut().0.clear());
+    }
 }
 
 #[cfg(debug_assertions)]

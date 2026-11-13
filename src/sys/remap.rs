@@ -369,9 +369,33 @@ pub struct Profile {
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Light {
     Off,
-    /// Verde, amarela ou vermelha, pela carga.
-    Battery,
+    /// Pela carga, com as cores e o passo escolhidos.
+    Battery(Batt),
     Color([u8; 3]),
+}
+
+/// Barra de luz pela carga: a cor com a carga vazia, a do meio e a da carga cheia, e de quantos
+/// em quantos por cento ela muda.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct Batt {
+    pub low: [u8; 3],
+    pub mid: [u8; 3],
+    pub full: [u8; 3],
+    pub step: u8,
+}
+
+impl Default for Batt {
+    fn default() -> Self {
+        Self { low: [255, 0, 0], mid: [255, 190, 0], full: [0, 255, 0], step: 1 }
+    }
+}
+
+/// A cor da carga `pct`, com o passo arredondando antes de misturar.
+pub fn battery_color(b: Batt, pct: u8) -> [u8; 3] {
+    let step = b.step.max(1) as f32;
+    let p = (pct as f32 / step).round() * step;
+    let (from, to, t) = if p < 50.0 { (b.low, b.mid, p / 50.0) } else { (b.mid, b.full, (p - 50.0) / 50.0) };
+    [0, 1, 2].map(|i| (from[i] as f32 + (to[i] as f32 - from[i] as f32) * t.clamp(0.0, 1.0)).round() as u8)
 }
 
 /// Cor com que a barra de luz começa quando o perfil passa a mandar nela.
@@ -556,7 +580,10 @@ impl Profile {
             let bt = if self.light_bt { " bt" } else { "" };
             match l {
                 Light::Off => _ = writeln!(s, "light off{bt}"),
-                Light::Battery => _ = writeln!(s, "light battery{bt}"),
+                Light::Battery(b) => {
+                    let h = |c: [u8; 3]| format!("{:02x}{:02x}{:02x}", c[0], c[1], c[2]);
+                    _ = writeln!(s, "light battery {} {} {} {}{bt}", h(b.low), h(b.mid), h(b.full), b.step)
+                }
                 Light::Color([r, g, b]) => _ = writeln!(s, "light color {r:02x}{g:02x}{b:02x}{bt}"),
             }
         }
@@ -659,18 +686,19 @@ impl Profile {
                 }
                 "hair" => p.hair[["lt", "rt"].iter().position(|n| *n == rest)?] = true,
                 "light" => {
-                    let mut it = rest.split(' ');
-                    p.light = Some(match it.next()? {
+                    let t: Vec<&str> = rest.split(' ').collect();
+                    let hex = |h: &str| (h.len() == 6).then(|| u32::from_str_radix(h, 16).ok()).flatten().map(|v| [(v >> 16) as u8, (v >> 8) as u8, v as u8]);
+                    p.light_bt = t.last() == Some(&"bt");
+                    p.light = Some(match *t.first()? {
                         "off" => Light::Off,
-                        "battery" => Light::Battery,
-                        "color" => {
-                            let h = it.next().filter(|h| h.len() == 6)?;
-                            let v = u32::from_str_radix(h, 16).ok()?;
-                            Light::Color([(v >> 16) as u8, (v >> 8) as u8, v as u8])
-                        }
+                        // `light battery` sem cores é o formato antigo: fica no padrão.
+                        "battery" => Light::Battery(match (t.get(1).and_then(|h| hex(h)), t.get(2).and_then(|h| hex(h)), t.get(3).and_then(|h| hex(h)), t.get(4).and_then(|n| n.parse::<u8>().ok())) {
+                            (Some(low), Some(mid), Some(full), Some(step)) => Batt { low, mid, full, step: step.clamp(1, 50) },
+                            _ => Batt::default(),
+                        }),
+                        "color" => Light::Color(t.get(1).and_then(|h| hex(h))?),
                         _ => return None,
                     });
-                    p.light_bt = it.next() == Some("bt");
                 }
                 "zone" => {
                     let mut it = rest.split(' ');
@@ -2257,6 +2285,23 @@ mod tests {
         p.light_bt = true;
         let q = Profile::parse(&p.to_text()).unwrap();
         assert_eq!((q.hair, q.curve, q.light, q.light_bt), ([true, false], [2.0, 3.0], p.light, true));
+    }
+
+    #[test]
+    fn battery_light_text_keeps_the_old_format() {
+        // Formato antigo, sem cores: fica no padrão, e o "bt" continua sendo lido.
+        let mut p = Profile::base();
+        p.light = Some(Light::Battery(Batt::default()));
+        p.light_bt = true;
+        let old = p.to_text().replace("light battery ff0000 ffbe00 00ff00 1 bt", "light battery bt");
+        assert_eq!(Profile::parse(&old).unwrap().light, Some(Light::Battery(Batt::default())));
+        assert!(Profile::parse(&old).unwrap().light_bt);
+        // Formato novo: as cores e o passo vão e voltam.
+        let b = Batt { low: [1, 2, 3], mid: [4, 5, 6], full: [7, 8, 9], step: 20 };
+        p.light = Some(Light::Battery(b));
+        p.light_bt = false;
+        let q = Profile::parse(&p.to_text()).unwrap();
+        assert_eq!((q.light, q.light_bt), (Some(Light::Battery(b)), false));
     }
 
     #[test]

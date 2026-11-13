@@ -37,7 +37,13 @@ struct Popup {
     off: Vec<bool>,
     /// Lista mais alta que a caixa: quanto já desceu.
     top: f32,
+    /// Lista de botões do controle: o ícone de cada opção (0 é sem ícone).
+    glyphs: Vec<crate::sys::pads::Buttons>,
+    style: glyph::Style,
 }
+
+/// Altura do ícone de botão do controle dentro de uma lista.
+const GLYPH_H: f32 = 16.0;
 
 /// Altura de uma opção da lista, e quantas cabem antes de rolar.
 const ROW: f32 = 36.0;
@@ -498,6 +504,16 @@ impl<'a> Ui<'a> {
     }
 
     pub fn select(&mut self, key: &str, r: Rect, options: &[String], sel: &mut usize) -> bool {
+        self.select_in(key, r, options, &[], glyph::Style::Xbox, sel)
+    }
+
+    /// Lista de botões do controle: cada opção mostra o ícone do botão antes do nome. `glyphs` tem
+    /// um bit por opção, na mesma ordem; 0 é opção sem ícone ("Nenhum", "Sozinho").
+    pub fn select_pad(&mut self, key: &str, r: Rect, options: &[String], glyphs: &[crate::sys::pads::Buttons], style: glyph::Style, sel: &mut usize) -> bool {
+        self.select_in(key, r, options, glyphs, style, sel)
+    }
+
+    fn select_in(&mut self, key: &str, r: Rect, options: &[String], glyphs: &[crate::sys::pads::Buttons], style: glyph::Style, sel: &mut usize) -> bool {
         let id = hash_id(key);
         let mut changed = false;
         if let Some((pid, v)) = self.s.popup_pick {
@@ -512,7 +528,8 @@ impl<'a> Ui<'a> {
             let h = popup_h(options.len(), self.s.view_h);
             // Larga só o bastante para a opção mais longa: uma caixa larga não abre uma lista enorme.
             let widest = options.iter().map(|o| measure(o, 14.0, Weight::Regular, None).0).fold(0.0, f32::max);
-            let w = r.w.min((widest + 40.0).max(200.0));
+            let icon = if glyphs.iter().any(|&g| g != 0) { GLYPH_H + 8.0 } else { 0.0 };
+            let w = r.w.min((widest + icon + 40.0).max(200.0));
             let y = r.y - self.dy;
             let mut top = y + r.h + 4.0;
             // Sem espaço embaixo, a lista abre para cima.
@@ -528,6 +545,8 @@ impl<'a> Ui<'a> {
                 selected: *sel,
                 off: Vec::new(),
                 top: ((*sel as f32 - (ROWS_MAX / 2.0).floor()).max(0.0) * ROW).min(max),
+                glyphs: glyphs.to_vec(),
+                style,
             });
             self.s.popup_new = true;
             self.s.needs_redraw = true;
@@ -535,7 +554,11 @@ impl<'a> Ui<'a> {
         self.c.round(r, 8.0, SIDE);
         self.c.round_line(r, 8.0, if hover { BORDER2 } else { BORDER }, 1.0);
         let label = options.get(*sel).map(String::as_str).unwrap_or("");
-        let t = rect(r.x + 10.0, r.y, r.w - 34.0, r.h);
+        let gap = match glyphs.get(*sel).copied().unwrap_or(0) {
+            0 => 0.0,
+            bit => glyph::draw(self.c, r.x + 10.0, r.y + r.h / 2.0, GLYPH_H, style, bit, TEXT) + 6.0,
+        };
+        let t = rect(r.x + 10.0 + gap, r.y, r.w - 34.0 - gap, r.h);
         self.c.text_fit(t, label, 14.0, TEXT, Align::Left, Weight::Regular);
         let (ax, ay) = (r.right() - 24.0, r.y + r.h / 2.0 - 2.0);
         self.c.line(ax, ay, ax + 5.0, ay + 5.0, MUTED, 1.5);
@@ -562,6 +585,8 @@ impl<'a> Ui<'a> {
             selected: usize::MAX,
             off: items.iter().map(|i| !i.1).collect(),
             top: 0.0,
+            glyphs: Vec::new(),
+            style: glyph::Style::Xbox,
         });
         self.s.popup_new = true;
         self.s.needs_redraw = true;
@@ -594,6 +619,8 @@ impl<'a> Ui<'a> {
         self.clip = None;
         self.area = 0;
         self.c.fill(rect(0.0, 0.0, vw, vh), rgb(0x000000).alpha(0.6));
+        #[cfg(debug_assertions)]
+        gfx::forget_boxes();
         let w = w.min(vw - 48.0);
         let b = rect(((vw - w) / 2.0).floor(), ((vh - h) / 2.0).floor(), w, h);
         self.c.round(b, 14.0, CARD2);
@@ -669,6 +696,66 @@ impl<'a> Ui<'a> {
             self.c.text(b, s, 16.0, color, Align::Center, Weight::Semibold);
         }
         self.c.text(r, &format!("{val}{unit}"), 13.0, TEXT, Align::Center, Weight::Regular);
+        changed
+    }
+
+    /// Seletor de cor: o quadrado de saturação e brilho da matiz atual, e a faixa de matiz à
+    /// direita. `r.h` é o lado do quadrado; a faixa ocupa mais 36 px de largura. Devolve true
+    /// enquanto a pessoa arrasta.
+    pub fn color_picker(&mut self, key: &str, r: Rect, hsv: &mut [f32; 3]) -> bool {
+        const N: u32 = 64;
+        let sq = rect(r.x, r.y, r.h, r.h);
+        let hue = rect(r.x + r.h + 12.0, r.y, 24.0, r.h);
+        // O quadrado é redesenhado a cada quadro porque muda junto com a matiz.
+        let mut px = vec![0u8; (N * N * 4) as usize];
+        for yy in 0..N {
+            for xx in 0..N {
+                let c = hsv_rgb(hsv[0], xx as f32 / (N - 1) as f32, 1.0 - yy as f32 / (N - 1) as f32);
+                let i = ((yy * N + xx) * 4) as usize;
+                px[i..i + 4].copy_from_slice(&[c[2], c[1], c[0], 255]);
+            }
+        }
+        if let Some(b) = self.c.bitmap(N, N, &px) {
+            self.c.draw_bitmap(&b, sq);
+        }
+        let mut hpx = vec![0u8; (N * 4) as usize];
+        for yy in 0..N {
+            let c = hsv_rgb(yy as f32 / (N - 1) as f32 * 360.0, 1.0, 1.0);
+            let i = (yy * 4) as usize;
+            hpx[i..i + 4].copy_from_slice(&[c[2], c[1], c[0], 255]);
+        }
+        if let Some(b) = self.c.bitmap(1, N, &hpx) {
+            self.c.draw_bitmap(&b, hue);
+        }
+        let mut changed = false;
+        let drag = |ui: &mut Self, name: &str, area: Rect| -> Option<(f32, f32)> {
+            let id = hash_id(&format!("{key}{name}"));
+            if ui.hover(area) && ui.s.pressed {
+                ui.s.active = id;
+            }
+            if ui.s.active != id {
+                return None;
+            }
+            if ui.s.released || !ui.s.down {
+                ui.s.active = 0;
+            }
+            Some((((ui.s.mx - area.x) / area.w).clamp(0.0, 1.0), ((ui.s.my + ui.dy - area.y) / area.h).clamp(0.0, 1.0)))
+        };
+        if let Some((fx, fy)) = drag(self, "-sv", sq) {
+            (hsv[1], hsv[2]) = (fx, 1.0 - fy);
+            changed = true;
+        }
+        if let Some((_, fy)) = drag(self, "-h", hue) {
+            hsv[0] = fy * 360.0;
+            changed = true;
+        }
+        self.c.round_line(sq, 2.0, BORDER2, 1.0);
+        self.c.round_line(hue, 2.0, BORDER2, 1.0);
+        // Marcas: um anel no quadrado e uma barra na faixa.
+        let (mx, my) = (sq.x + hsv[1] * sq.w, sq.y + (1.0 - hsv[2]) * sq.h);
+        self.c.circle_line(mx, my, 6.0, if hsv[2] > 0.6 { rgb(0x000000) } else { WHITE }, 2.0);
+        let hy = hue.y + hsv[0] / 360.0 * hue.h;
+        self.c.round_line(rect(hue.x - 2.0, hy - 3.0, hue.w + 4.0, 6.0), 3.0, WHITE, 2.0);
         changed
     }
 
@@ -879,7 +966,12 @@ impl<'a> Ui<'a> {
                 } else {
                     TEXT
                 };
-                self.c.text_fit(r.inset_xy(8.0, 0.0), o, 14.0, color, Align::Left, Weight::Regular);
+                let gap = match p.glyphs.get(i).copied().unwrap_or(0) {
+                    0 => 0.0,
+                    bit => glyph::draw(self.c, r.x + 8.0, r.y + r.h / 2.0, GLYPH_H, p.style, bit, color) + 6.0,
+                };
+                let tr = r.inset_xy(8.0, 0.0);
+                self.c.text_fit(rect(tr.x + gap, tr.y, tr.w - gap, tr.h), o, 14.0, color, Align::Left, Weight::Regular);
                 if hover && self.s.released && !self.s.popup_new {
                     pick = Some((p.id, i));
                 }

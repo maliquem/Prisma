@@ -2148,7 +2148,6 @@ Página Compartilhar tela	Share screen page
 Página Controles	Controllers page
 Página Widget	Widget page
 Página Configurações	Settings page
-4 opções…	4 options…
 Usar os dois sticks	Use both sticks
 Letras no stick	Letters on stick
 Um círculo para as letras e outro para os números e símbolos. No stick esquerdo, A, B, X e Y digitam; no direito, o direcional digita, e com ele solto o direcional são as setas.	One circle for letters and another for numbers and symbols. On the left stick, A, B, X and Y type; on the right one, the D-pad types, and with it released the D-pad is the arrows.
@@ -2286,3 +2285,18 @@ Passa ao jogo: o Prisma não usa nem esconde, e o jogo lê direto do controle (s
 Gravando: vá a outro programa e use o teclado e o mouse; volte aqui para parar. Nada do que você faz dentro do Prisma entra, o movimento do mouse não entra, e os botões do controle ainda não são gravados.	Recording: switch to another program and use the keyboard and mouse; come back here to stop. Nothing you do inside Prisma is recorded, mouse movement is not recorded, and controller buttons are not recorded yet.
 Cor	Color
 Menu radial	Radial menu
+Ligar: teclado e mouse	Turn on: keyboard and mouse
+Em Nativo, o jogo recebe o controle como ele é: perfis, gyro e touchpad não valem, só a barra de luz.	In Native, the game gets the controller as it is: profiles, gyro and touchpad don't apply, only the light bar.
+4 opções	4 options
+4 opções no direcional	4 options on the D-pad
+O direcional escolhe uma de quatro ações dentro deste lugar. Ligado, o lugar deixa de ter ação própria.	The D-pad picks one of four actions inside this spot. When on, the spot has no action of its own.
+Escolher cor…	Pick color…
+Ajustar cores…	Adjust colors…
+Cor da barra de luz	Light bar color
+Carga vazia	Empty charge
+Metade da carga	Half charge
+Carga cheia	Full charge
+Barra de luz pela bateria	Light bar by battery
+A cor acompanha a carga. Escolha as três cores e de quantos em quantos por cento ela muda.	The color follows the charge. Pick the three colors and how many percent apart it changes.
+Mudar…	Change…
+Passo da cor	Color step

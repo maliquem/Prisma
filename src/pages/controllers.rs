@@ -390,9 +390,12 @@ fn tabs(ui: &mut Ui, x: f32, y: f32, sel: &mut usize, on: bool) -> f32 {
 /// Aba Ajustes: avisos, estado do mapeamento, radial, teclado, conflitos à esquerda; diagnóstico e
 /// a medida dos sticks à direita.
 fn settings(ui: &mut Ui, app: &mut App, list: &[Pad], a: Rect) {
-    let (x, top, lw) = (a.x, a.y, 340.0);
-    // Coluna esquerda: rola, o cartão do radial passa da janela.
-    ui.begin_scroll("pads-left", rect(x, top, lw, a.h), app.pads.left_h);
+    let (x, top) = (a.x, a.y);
+    // Duas colunas que rolam juntas: o lado direito leva os cartões largos, para a esquerda não
+    // ficar com barra de rolagem enquanto sobra espaço do outro lado.
+    let lw = 340.0_f32.min(a.w - 24.0);
+    let rw = (a.w - lw - 12.0).clamp(0.0, 680.0);
+    ui.begin_scroll("pads-set", a, app.pads.left_h);
     let mut y = top;
     for name in pads::without_hid() {
         let r = rect(x, y, lw, 122.0);
@@ -420,28 +423,39 @@ fn settings(ui: &mut Ui, app: &mut App, list: &[Pad], a: Rect) {
     }
     y += r.h + 12.0;
     y = mapping(ui, app, rect(x, y, lw, 0.0));
-    y = keyboard(ui, app, rect(x, y, lw, 0.0));
     for t in &app.pads.conflicts {
         let r = rect(x, y, lw, 64.0);
         ui.card(r);
         ui.c.text_wrap(rect(r.x + 16.0, r.y + 10.0, r.w - 32.0, r.h - 16.0), t, 12.0, TEXT2, Weight::Regular);
         y += r.h + 8.0;
     }
-    ui.end_scroll();
-    if (y - top - app.pads.left_h).abs() > 0.5 {
-        app.pads.left_h = y - top;
-        ui.s.needs_redraw = true;
-    }
 
-    // Coluna direita: copiar o diagnóstico e medir os sticks do controle escolhido.
+    // Coluna direita: diagnóstico, medir os sticks do controle escolhido e o teclado do Prisma.
     let rx = x + lw + 12.0;
-    let rw = a.w - lw - 12.0;
-    if ui.button("pads-copy", rect(rx, top, 200.0, 36.0), "Copiar diagnóstico", false) {
+    let mut ry = top;
+    if rw < 300.0 {
+        // Janela estreita: tudo numa coluna só.
+        ry = keyboard(ui, app, rect(x, y, lw, 0.0));
+        y = ry;
+    }
+    if ui.button("pads-copy", rect(rx, ry, 200.0, 36.0), "Copiar diagnóstico", false) {
         let ok = crate::capture::copy_text(app.hub, &diagnostic(list, &app.pads.conflicts));
         app.toast.info(if ok { "Diagnóstico copiado" } else { "Não consegui copiar" });
     }
-    let Some(p) = list.get(app.pads.sel) else { return };
-    let m = rect(rx, top + 48.0, rw, 220.0);
+    let done = |ui: &mut Ui, app: &mut App, y: f32| {
+        if (y - top - app.pads.left_h).abs() > 0.5 {
+            app.pads.left_h = y - top;
+            ui.s.needs_redraw = true;
+        }
+        ui.end_scroll();
+    };
+    let Some(p) = list.get(app.pads.sel) else {
+        done(ui, app, y);
+        return;
+    };
+    // O cartão só fica alto enquanto está medindo ou mostrando o resultado.
+    let mh = if app.pads.wiz.is_some() || app.pads.result.is_some() { 220.0 } else { 150.0 };
+    let m = rect(rx, ry + 48.0, rw, mh);
     ui.card(m);
     ui.title(rect(m.x + 16.0, m.y + 12.0, m.w - 220.0, 22.0), "Medir sticks e gatilhos");
     let running = app.pads.wiz.is_some();
@@ -469,6 +483,11 @@ fn settings(ui: &mut Ui, app: &mut App, list: &[Pad], a: Rect) {
     } else {
         ui.c.text_wrap(rect(body.x, body.y, body.w, 60.0), "Mede o desvio dos sticks parados, a tremida, o alcance, o quanto o contorno foge de um círculo e o curso dos gatilhos. Leva 13 segundos.", 13.0, MUTED, Weight::Regular);
     }
+    if rw >= 300.0 {
+        let ry = keyboard(ui, app, rect(rx, m.bottom() + 12.0, rw, 0.0));
+        y = y.max(ry);
+    }
+    done(ui, app, y);
 }
 
 /// Área de um botão no desenho: bit, x, y, largura e altura em % da imagem, e o raio da borda em
@@ -856,7 +875,7 @@ fn rows_draw(ui: &mut Ui, x: f32, y: f32, w: f32, rows: &[(&str, String, bool)])
 /// Texto para colar num relatório: controles, conexão, taxa, bateria, conflitos.
 /// Mapeamento: liga e desliga, perfil ativo, parada de emergência e o tempo interno.
 fn mapping(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
-    let r = rect(at.x, at.y, at.w, 180.0);
+    let r = rect(at.x, at.y, at.w, if app.cfg.pad_map { 180.0 } else { 220.0 });
     ui.card(r);
     ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Mapeamento");
     let state = match (app.cfg.pad_map, remap::stopped(), remap::active()) {
@@ -864,11 +883,21 @@ fn mapping(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
         (true, true, _) => (crate::i18n::tr("Parado pela combinação").into_owned(), WARN),
         (true, false, p) => (crate::i18n::tr("Perfil {}").replace("{}", &crate::i18n::tr(&p.unwrap_or_default())), TEXT),
     };
-    ui.c.text_fit(rect(r.x + 16.0, r.y + 42.0, r.w - 32.0, 20.0), &state.0, 13.0, state.1, Align::Left, Weight::Semibold);
-    ui.c.text_wrap(rect(r.x + 16.0, r.y + 68.0, r.w - 32.0, 72.0), "Para parar tudo sem teclado, segure Guia (ou PS) + Select + Start por 2 segundos. A mesma combinação liga de novo.", 12.0, TEXT2, Weight::Regular);
+    ui.c.text_fit(rect(r.x + 16.0, r.y + 42.0, r.w - 236.0, 20.0), &state.0, 13.0, state.1, Align::Left, Weight::Semibold);
+    // Desligado, nada de perfil vale: o botão de ligar fica aqui, onde o estado aparece.
+    if !app.cfg.pad_map {
+        if ui.button("pad-map-on2", rect(r.right() - 212.0, r.y + 34.0, 196.0, 34.0), "Ligar: teclado e mouse", false) {
+            app.cfg.pad_map = true;
+            app.cfg.save();
+            app.apply_pads();
+        }
+        ui.c.text_wrap(rect(r.x + 16.0, r.y + 68.0, r.w - 32.0, 36.0), "Em Nativo, o jogo recebe o controle como ele é: perfis, gyro e touchpad não valem, só a barra de luz.", 12.0, WARN, Weight::Regular);
+    }
+    let ny = if app.cfg.pad_map { 68.0 } else { 108.0 };
+    ui.c.text_wrap(rect(r.x + 16.0, r.y + ny, r.w - 32.0, 72.0), "Para parar tudo sem teclado, segure Guia (ou PS) + Select + Start por 2 segundos. A mesma combinação liga de novo.", 12.0, TEXT2, Weight::Regular);
     if let Some((med, p99)) = remap::latency() {
         let t = crate::i18n::tr("Tempo interno: {} µs na mediana, {} µs no p99").replacen("{}", &med.to_string(), 1).replacen("{}", &p99.to_string(), 1);
-        ui.c.text_fit(rect(r.x + 16.0, r.y + 148.0, r.w - 32.0, 20.0), &t, 12.0, MUTED, Align::Left, Weight::Regular);
+        ui.c.text_fit(rect(r.x + 16.0, r.y + ny + 80.0, r.w - 32.0, 20.0), &t, 12.0, MUTED, Align::Left, Weight::Regular);
     }
     r.bottom() + 12.0
 }
@@ -911,13 +940,14 @@ fn radial(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
     }
     // Confirmar e Voltar: escolher no outro o botão de um troca os dois.
     let f = pads::list().get(app.pads.sel).map_or(Family::Xbox, |p| p.family);
+    let gstyle = pads::list().get(app.pads.sel).map_or(crate::ui::glyph::Style::Xbox, |p| crate::ui::glyph::Style::of(p.family, p.vid));
     let btns: Vec<String> = crate::sys::radial::PICK_BUTTONS.iter().map(|&b| super::pad_profiles::button_label(f, b)).collect();
     for (i, key, label) in [(3, "pad-radial-ok", "Confirmar"), (4, "pad-radial-back", "Voltar")] {
         let (l, c) = row(i);
         ui.c.text_fit(l, &tr(label), 12.0, TEXT2, Align::Left, Weight::Regular);
         let (mine, other) = if i == 3 { (app.cfg.pad_radial_ok, app.cfg.pad_radial_back) } else { (app.cfg.pad_radial_back, app.cfg.pad_radial_ok) };
         let mut v = mine.min(5) as usize;
-        if ui.select(key, c, &btns, &mut v) && v as u8 != mine {
+        if ui.select_pad(key, c, &btns, &crate::sys::radial::PICK_BUTTONS, gstyle, &mut v) && v as u8 != mine {
             let (m, o) = (v as u8, if v as u8 == other { mine } else { other });
             (app.cfg.pad_radial_ok, app.cfg.pad_radial_back) = if i == 3 { (m, o) } else { (o, m) };
             changed = true;
@@ -977,7 +1007,17 @@ fn radial(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
         let cx = r.x + 16.0;
         ui.c.text_raw(rect(cx, y, 22.0, 34.0), DIRS[i % 8], 16.0, MUTED, Align::Left, Weight::Semibold);
         let was = app.cfg.pad_radial[i];
-        changed |= slot_select(ui, app, &ids, &names, i, rect(cx + 24.0, y, r.w - 56.0, 34.0));
+        // Caixa que liga as 4 opções do direcional neste lugar.
+        let gw = 136.0_f32.min((r.w - 80.0) * 0.4);
+        let sw = r.w - 56.0 - gw - 8.0;
+        changed |= slot_select(ui, app, &ids, &names, i, rect(cx + 24.0, y, sw, 34.0));
+        let gr = rect(cx + 24.0 + sw + 8.0, y, gw, 34.0);
+        let mut g = was == GROUP;
+        if ui.check(&format!("pad-radial-g{i}"), gr, "4 opções", &mut g) {
+            app.cfg.pad_radial[i] = if g { GROUP } else { EMPTY };
+            changed = true;
+        }
+        ui.tip(gr, "O direcional escolhe uma de quatro ações dentro deste lugar. Ligado, o lugar deixa de ter ação própria.");
         // Ficou de 4 opções num lugar do stick esquerdo: a escolha precisa ficar com o stick solto,
         // senão o polegar não chega ao direcional.
         if was != GROUP && app.cfg.pad_radial[i] == GROUP && (i >= 8 || app.cfg.pad_radial_left) {
@@ -1042,22 +1082,24 @@ fn keyboard(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
 /// programa. Devolve se mudou; o programa só muda quando a escolha volta da lista ou do arquivo.
 fn slot_select(ui: &mut Ui, app: &mut App, ids: &[u8], names: &[String], i: usize, at: Rect) -> bool {
     use super::picker::Target;
-    use crate::sys::radial::{GROUP, PROGRAM, SLOTS};
+    use crate::sys::radial::{GROUP, PROGRAM};
     let tr = |s: &str| crate::i18n::tr(s).into_owned();
     let cur = app.cfg.pad_radial[i];
+    // Com as 4 opções ligadas, o lugar não tem ação própria: a caixa fica parada.
+    if cur == GROUP {
+        ui.c.round(at, 8.0, CARD2);
+        ui.c.round_line(at, 8.0, BORDER, 1.0);
+        ui.c.text_fit(rect(at.x + 10.0, at.y, at.w - 20.0, at.h), &tr("4 opções no direcional"), 14.0, MUTED, Align::Left, Weight::Regular);
+        return false;
+    }
     let mut opts = names.to_vec();
     if cur == PROGRAM {
         opts.push(app.cfg.pad_radial_prog[i].0.clone());
     }
-    let group_at = (i < SLOTS).then(|| {
-        opts.push(tr("4 opções…"));
-        opts.len() - 1
-    });
     let pick_at = opts.len();
     opts.push(tr(if cur == PROGRAM { "Escolher outro programa…" } else { "Abrir um programa…" }));
     let mut sel = match cur {
-        PROGRAM => pick_at - 1 - group_at.is_some() as usize,
-        GROUP => group_at.unwrap_or(0),
+        PROGRAM => pick_at - 1,
         a => ids.iter().position(|&x| x == a).unwrap_or(0),
     };
     let menu = format!("pad-radial-run-{i}");
@@ -1065,9 +1107,6 @@ fn slot_select(ui: &mut Ui, app: &mut App, ids: &[u8], names: &[String], i: usiz
     if ui.select(&format!("pad-radial-{i}"), at, &opts, &mut sel) {
         if sel == pick_at {
             ui.menu(&menu, &[("Da lista de programas", true), ("Escolher arquivo .exe", true)]);
-        } else if Some(sel) == group_at {
-            changed = cur != GROUP;
-            app.cfg.pad_radial[i] = GROUP;
         } else if sel < ids.len() {
             changed = cur != ids[sel];
             app.cfg.pad_radial[i] = ids[sel];
