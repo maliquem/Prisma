@@ -4,7 +4,7 @@
 //! vê a parada de emergência e o botão do radial.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicIsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -13,6 +13,8 @@ use super::remap::{self, Act, Out};
 
 /// Janela principal do Prisma (0: fechada).
 static MAIN: AtomicIsize = AtomicIsize::new(0);
+/// Uma tela do Prisma lê o controle (campo de tecla, gravação de macro, medição): não navega.
+static PAUSED: AtomicBool = AtomicBool::new(false);
 static STATE: Mutex<Option<HashMap<String, Pad>>> = Mutex::new(None);
 
 /// Repetição de quem segura uma direção.
@@ -148,6 +150,11 @@ pub fn set_window(h: isize) {
     }
 }
 
+/// Chamado a cada desenho da janela principal.
+pub fn pause(on: bool) {
+    PAUSED.store(on, Ordering::Relaxed);
+}
+
 pub fn window_open() -> bool {
     MAIN.load(Ordering::Relaxed) != 0
 }
@@ -165,12 +172,13 @@ pub fn feed(key: &str, inp: &Input, now: Instant) -> Option<Input> {
     let front = front();
     let mut g = STATE.lock().unwrap();
     let map = g.get_or_insert_with(HashMap::new);
-    if !front {
-        // Saiu do Prisma com X apertado: solta o clique.
+    if !front || PAUSED.load(Ordering::Relaxed) {
+        // Saiu do Prisma (ou parou de navegar) com X apertado: solta o clique.
         if map.remove(key).is_some_and(|p| p.buttons & pads::X != 0) {
             remap::send(&[Act::Up(Out::Mouse(1))]);
         }
-        return None;
+        // Pausado: o mapeamento só vê a parada de emergência.
+        return front.then(|| Input { buttons: inp.buttons & remap::STOP_COMBO, ..Default::default() });
     }
     let (cmds, acts) = map.entry(key.to_string()).or_insert_with(|| Pad::new(inp)).step(inp, now);
     drop(g);

@@ -545,6 +545,8 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
     let glyphs = family != Family::Generic;
     let style = crate::ui::glyph::Style::of(family, 0);
     // Origem: botões do controle, ou teclas e botões do mouse.
+    ui.title(rect(x, y + 4.0, w, 22.0), "Ligações");
+    y += 32.0;
     let srcs = [tr("Botões do controle"), tr("Teclado e mouse")];
     ui.select("pp-src", rect(x, y, third, 34.0), &srcs, &mut ed.src);
     y += 44.0;

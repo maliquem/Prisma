@@ -3369,6 +3369,8 @@ impl App {
             }
         }
         self.pause_hotkeys(m.ui.capturing != 0);
+        // Onde o controle é lido (campo de tecla, gravação, medição), ele não navega pelo Prisma.
+        crate::sys::nav::pause(m.ui.capturing != 0 || crate::sys::macros::recording() || crate::pages::controllers::measuring(&self.pads));
         let again = std::mem::take(&mut m.ui.needs_redraw);
         let hwnd = m.hwnd;
         self.main = Some(m);

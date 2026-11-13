@@ -5,6 +5,11 @@ use super::*;
 use crate::sys::pads::{self, Battery, Family, Link, Pad};
 use std::time::Instant;
 
+/// A medição dos sticks está rodando (a navegação do Prisma fica pausada).
+pub fn measuring(s: &State) -> bool {
+    s.wiz.is_some()
+}
+
 /// Passos do assistente, em segundos: parado, girando os sticks, apertando os gatilhos.
 const STEPS: [f32; 3] = [3.0, 6.0, 4.0];
 
