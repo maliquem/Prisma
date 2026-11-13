@@ -3,6 +3,7 @@
 
 use super::*;
 use crate::sys::pads::{self, Battery, Family, Link, Pad};
+use crate::sys::remap;
 use std::time::Instant;
 
 /// A medição dos sticks está rodando (a navegação do Prisma fica pausada).
@@ -201,10 +202,14 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
             // Sem controle ligado, o editor ocupa a largura toda.
             let mut lw = 0.0;
             if let Some(p) = list.get(app.pads.sel) {
-                let live = rect(x, top, 340.0, 300.0);
-                ui.card(live);
-                draw_live(ui, p, live);
-                lw = 352.0;
+                let col: f32 = 380.0;
+                let art_h = 40.0 + ((col - 24.0) * 470.0 / 640.0).floor() + 12.0;
+                if !draw_art(ui, app, p, rect(x, top, col, art_h)) {
+                    let live = rect(x, top, col, 300.0);
+                    ui.card(live);
+                    draw_live(ui, p, live);
+                }
+                lw = col + 12.0;
             }
             super::pad_profiles::draw(ui, app, rect(x + lw, top, fw - lw, h), family, 0);
         }
@@ -224,7 +229,9 @@ fn pad_card(ui: &mut Ui, app: &mut App, list: &[Pad], at: Rect) -> f32 {
     let mut cx = r.x + 12.0;
     for (i, p) in list.iter().enumerate() {
         let sub = format!("{} · {} · {}", tr(link_text(p.link)), battery_text(p), rate_text(p));
-        let cw = (measure(&p.name, 15.0, Weight::Semibold, None).0.max(measure(&sub, 13.0, Weight::Regular, None).0) + 28.0).min(340.0);
+        // O nome vem do aparelho; sem nome é "Controle", que se traduz.
+        let pname = tr(&p.name);
+        let cw = (measure(&pname, 15.0, Weight::Semibold, None).0.max(measure(&sub, 13.0, Weight::Regular, None).0) + 28.0).min(340.0);
         if cx + cw > r.right() - 12.0 {
             break;
         }
@@ -234,7 +241,7 @@ fn pad_card(ui: &mut Ui, app: &mut App, list: &[Pad], at: Rect) -> f32 {
             ui.c.round(c, 8.0, CARD2);
         }
         ui.c.round_line(c, 8.0, if on { ACCENT } else { BORDER }, 1.0);
-        ui.c.text_fit(rect(c.x + 14.0, c.y + 6.0, c.w - 28.0, 22.0), &p.name, 15.0, TEXT, Align::Left, Weight::Semibold);
+        ui.c.text_fit(rect(c.x + 14.0, c.y + 6.0, c.w - 28.0, 22.0), &pname, 15.0, TEXT, Align::Left, Weight::Semibold);
         ui.c.text_fit(rect(c.x + 14.0, c.y + 28.0, c.w - 28.0, 18.0), &sub, 13.0, MUTED, Align::Left, Weight::Regular);
         if ui.hit(&format!("pad-{}", p.key), c) && !on {
             app.pads.sel = i;
@@ -248,7 +255,7 @@ fn pad_card(ui: &mut Ui, app: &mut App, list: &[Pad], at: Rect) -> f32 {
     let lw = measure(&label, 13.0, Weight::Regular, None).0 + 16.0;
     ui.c.text_raw(rect(r.x + 16.0, ry, lw, 34.0), &label, 13.0, TEXT2, Align::Left, Weight::Regular);
     let bw = ((r.w - 32.0 - lw - 16.0) / 3.0).min(220.0).floor();
-    let name = list.get(app.pads.sel).map_or_else(|| tr("Controle"), |p| p.name.clone());
+    let name = list.get(app.pads.sel).map_or_else(|| tr("Controle"), |p| tr(&p.name));
     let b = |i: f32| rect(r.x + 16.0 + lw + i * (bw + 8.0), ry, bw, 34.0);
     let map = app.cfg.pad_map;
     let mut want = map;
@@ -380,6 +387,124 @@ fn settings(ui: &mut Ui, app: &mut App, list: &[Pad], a: Rect) {
     }
 }
 
+/// Área de um botão no desenho: bit, x, y, largura e altura em % da imagem, e o raio da borda em
+/// pixels do desenho de 640 (-1 é redondo). Vem do `hits.json` dos desenhos do mock-up.
+type Hit = (u32, f32, f32, f32, f32, f32);
+
+const HITS_DS: &[Hit] = &[
+    (pads::PAD, 31.60, 13.10, 36.79, 26.90, 10.0),
+    (pads::BACK, 25.95, 16.22, 4.06, 9.36, 13.0),
+    (pads::START, 69.98, 16.22, 4.06, 9.36, 13.0),
+    (pads::UP, 17.32, 23.16, 6.56, 8.94, 10.0),
+    (pads::DOWN, 17.32, 38.05, 6.56, 8.94, 10.0),
+    (pads::LEFT, 11.85, 30.60, 6.56, 8.94, 10.0),
+    (pads::RIGHT, 22.79, 30.60, 6.56, 8.94, 10.0),
+    (pads::Y, 75.35, 19.90, 7.81, 10.64, -1.0),
+    (pads::B, 82.43, 29.75, 7.81, 10.64, -1.0),
+    (pads::A, 75.35, 39.40, 7.81, 10.64, -1.0),
+    (pads::X, 68.26, 29.75, 7.81, 10.64, -1.0),
+    (pads::LS, 27.28, 42.33, 14.38, 19.57, -1.0),
+    (pads::RS, 58.34, 42.33, 14.38, 19.57, -1.0),
+    (pads::GUIDE, 46.56, 48.50, 6.88, 6.81, 12.0),
+    (pads::MUTE, 46.56, 57.38, 6.88, 3.83, 8.0),
+    (remap::LT, 14.38, 0.85, 16.56, 4.89, 10.0),
+    (pads::LB, 14.06, 5.96, 16.56, 4.89, 8.0),
+    (remap::RT, 69.38, 0.85, 16.56, 4.89, 10.0),
+    (pads::RB, 69.38, 5.96, 16.56, 4.89, 8.0),
+];
+const HITS_DS4: &[Hit] = &[
+    (pads::PAD, 33.09, 13.28, 33.81, 21.57, 10.0),
+    (pads::UP, 18.22, 18.60, 5.62, 7.87, 9.0),
+    (pads::DOWN, 18.22, 31.57, 5.62, 7.87, 9.0),
+    (pads::LEFT, 13.38, 25.19, 5.78, 7.66, 9.0),
+    (pads::RIGHT, 22.91, 25.19, 5.78, 7.66, 9.0),
+    (pads::Y, 76.56, 16.89, 5.94, 8.09, -1.0),
+    (pads::B, 82.50, 24.98, 5.94, 8.09, -1.0),
+    (pads::A, 76.56, 33.06, 5.94, 8.09, -1.0),
+    (pads::X, 70.62, 24.98, 5.94, 8.09, -1.0),
+    (pads::BACK, 28.72, 14.51, 3.75, 6.81, 10.0),
+    (pads::START, 68.09, 14.51, 3.75, 6.81, 10.0),
+    (pads::LS, 27.34, 36.85, 14.38, 19.57, -1.0),
+    (pads::RS, 58.84, 36.85, 14.38, 19.57, -1.0),
+    (pads::GUIDE, 47.47, 45.11, 5.62, 7.66, -1.0),
+    (remap::LT, 17.50, 0.85, 13.44, 4.89, 10.0),
+    (pads::LB, 17.19, 5.96, 13.44, 4.89, 8.0),
+    (remap::RT, 69.38, 0.85, 13.44, 4.89, 10.0),
+    (pads::RB, 69.38, 5.96, 13.44, 4.89, 8.0),
+];
+const HITS_XBOX: &[Hit] = &[
+    (pads::GUIDE, 45.78, 13.23, 8.44, 11.49, -1.0),
+    (pads::LS, 17.85, 21.70, 14.69, 20.00, -1.0),
+    (pads::RS, 55.21, 40.46, 14.69, 20.00, -1.0),
+    (pads::UP, 34.79, 43.80, 5.31, 6.81, 8.0),
+    (pads::DOWN, 34.79, 57.41, 5.31, 6.81, 8.0),
+    (pads::LEFT, 29.94, 50.39, 5.00, 7.23, 8.0),
+    (pads::RIGHT, 39.94, 50.39, 5.00, 7.23, 8.0),
+    (pads::BACK, 40.30, 28.70, 5.62, 7.66, -1.0),
+    (pads::START, 54.23, 28.70, 5.62, 7.66, -1.0),
+    (pads::Y, 70.90, 18.66, 7.81, 10.64, -1.0),
+    (pads::B, 77.33, 27.84, 7.81, 10.64, -1.0),
+    (pads::A, 70.90, 36.39, 7.81, 10.64, -1.0),
+    (pads::X, 64.16, 27.42, 7.81, 10.64, -1.0),
+    (remap::LT, 15.62, 0.85, 17.19, 4.89, 10.0),
+    (pads::LB, 15.31, 5.96, 17.19, 4.89, 8.0),
+    (remap::RT, 67.50, 0.85, 17.19, 4.89, 10.0),
+    (pads::RB, 67.50, 5.96, 17.19, 4.89, 8.0),
+];
+
+/// Desenho da família (PNG feito dos vetores do Prisma) e as áreas dos botões. O genérico não tem.
+fn art(f: Family) -> Option<(&'static str, &'static [u8], &'static [Hit])> {
+    match f {
+        Family::DualSense => Some(("pad-ds", include_bytes!("../../res/pads/ds.png"), HITS_DS)),
+        Family::Ds4 => Some(("pad-ds4", include_bytes!("../../res/pads/ds4.png"), HITS_DS4)),
+        Family::Xbox => Some(("pad-xbox", include_bytes!("../../res/pads/xbox.png"), HITS_XBOX)),
+        Family::Generic => None,
+    }
+}
+
+/// Cartão do desenho: o botão apertado acende, o escolhido no editor fica contornado, e clicar
+/// num botão escolhe ele. Devolve false sem desenho para a família (o genérico usa `draw_live`).
+fn draw_art(ui: &mut Ui, app: &mut App, p: &Pad, r: Rect) -> bool {
+    let Some((key, png, hits)) = art(p.family) else { return false };
+    ui.card(r);
+    let line = format!("{} · {} · {}: {}", crate::i18n::tr(link_text(p.link)), rate_text(p), crate::i18n::tr("bateria"), battery_text(p));
+    ui.c.text_fit(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 20.0), &line, 13.0, TEXT2, Align::Left, Weight::Regular);
+    let w = r.w - 24.0;
+    let img = rect(r.x + 12.0, r.y + 40.0, w, (w * 470.0 / 640.0).floor());
+    ui.png(key, png, img);
+    let i = p.input;
+    let chosen = super::pad_profiles::chosen(app);
+    let k = img.w / 640.0;
+    for &(bit, x, y, hw, hh, rad) in hits {
+        let b = rect(img.x + img.w * x / 100.0, img.y + img.h * y / 100.0, img.w * hw / 100.0, img.h * hh / 100.0);
+        let radius = if rad < 0.0 { b.w.min(b.h) / 2.0 } else { rad * k };
+        let on = match bit {
+            remap::LT => i.lt > 0.1,
+            remap::RT => i.rt > 0.1,
+            _ => i.buttons & bit != 0,
+        };
+        if on {
+            ui.c.round(b, radius, ACCENT.alpha(0.55));
+        }
+        // O stick mostra onde está: um ponto que anda dentro da área dele.
+        if bit == pads::LS || bit == pads::RS {
+            let (sx, sy) = if bit == pads::LS { (i.lx, i.ly) } else { (i.rx, i.ry) };
+            ui.c.circle(b.x + b.w / 2.0 + sx.clamp(-1.0, 1.0) * b.w / 4.0, b.y + b.h / 2.0 - sy.clamp(-1.0, 1.0) * b.h / 4.0, 4.0, ACCENT);
+        }
+        if bit == chosen {
+            ui.c.round_line(b, radius, ACCENT, 2.0);
+        } else if ui.is_hover(b) {
+            ui.c.round_line(b, radius, BORDER2, 1.5);
+        }
+        let name = super::pad_profiles::button_label(p.family, bit);
+        ui.tip(b, &name);
+        if ui.hit(&format!("pad-art{bit}"), b) {
+            super::pad_profiles::choose(app, bit);
+        }
+    }
+    true
+}
+
 fn draw_live(ui: &mut Ui, p: &Pad, r: Rect) {
     let i = p.input;
     let line = format!("{} · {} · {}: {}", crate::i18n::tr(link_text(p.link)), rate_text(p), crate::i18n::tr("bateria"), battery_text(p));
@@ -491,7 +616,6 @@ fn rows_draw(ui: &mut Ui, x: f32, y: f32, w: f32, rows: &[(&str, String, bool)])
 /// Texto para colar num relatório: controles, conexão, taxa, bateria, conflitos.
 /// Mapeamento: liga e desliga, perfil ativo, parada de emergência e o tempo interno.
 fn mapping(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
-    use crate::sys::remap;
     let r = rect(at.x, at.y, at.w, 180.0);
     ui.card(r);
     ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Mapeamento");
@@ -512,7 +636,6 @@ fn mapping(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
 /// Radial do Prisma: as 8 ações, de cima no sentido do relógio.
 fn radial(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
     use crate::sys::radial::{sub, EMPTY, GROUP};
-    use crate::sys::remap;
     const DIRS: [&str; 8] = ["↑", "↗", "→", "↘", "↓", "↙", "←", "↖"];
     let two = app.cfg.pad_radial_two;
     // Cada lugar de 4 opções ganha 4 linhas, uma por direção do direcional.

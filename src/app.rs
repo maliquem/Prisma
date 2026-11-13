@@ -2525,6 +2525,10 @@ impl App {
             if args.iter().any(|a| a == "--test-en") {
                 crate::i18n::set_english(true);
             }
+            #[cfg(debug_assertions)]
+            if let Some(k) = arg("--test-pad=") {
+                crate::sys::pads::fake(&k);
+            }
             // `--test-lang=N`: um idioma pelo número (2 espanhol, 3 russo, 4 chinês).
             if let Some(n) = arg("--test-lang=").and_then(|v| v.parse().ok()) {
                 crate::i18n::set_lang(n);

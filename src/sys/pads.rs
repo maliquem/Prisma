@@ -181,7 +181,28 @@ pub fn start(hub: HWND) {
 }
 
 pub fn list() -> Vec<Pad> {
-    PADS.lock().unwrap().clone()
+    #[allow(unused_mut)]
+    let mut v = PADS.lock().unwrap().clone();
+    #[cfg(debug_assertions)]
+    v.extend(FAKE.lock().unwrap().clone());
+    v
+}
+
+/// Fotos de teste (`--test-pad=ds|ds4|xbox`, só no build de depuração): um controle de mentira com
+/// Cruz/A e R1/RB apertados, o gatilho esquerdo no meio e o stick esquerdo fora do centro.
+#[cfg(debug_assertions)]
+static FAKE: Mutex<Option<Pad>> = Mutex::new(None);
+
+#[cfg(debug_assertions)]
+pub fn fake(kind: &str) {
+    let family = match kind {
+        "ds" => Family::DualSense,
+        "ds4" => Family::Ds4,
+        _ => Family::Xbox,
+    };
+    let input = Input { buttons: A | RB, lt: 0.6, lx: 0.6, ly: 0.4, ..Default::default() };
+    let pad = Pad { key: "test".into(), name: nice_name(family, ""), family, link: Link::Usb, vid: 0, pid: 0, battery: Battery::Percent { pct: 82, charging: false }, input, rate: None, generic_buttons: 0, low_warned: false, jitter_warned: false };
+    *FAKE.lock().unwrap() = Some(pad);
 }
 
 pub fn take_events() -> Vec<Event> {
