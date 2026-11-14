@@ -179,6 +179,7 @@ pub struct Pad {
     pub gyro_cal: GyroCal,
 }
 
+#[derive(Debug)]
 pub enum Event {
     Connected { name: String, link: Link },
     Disconnected { name: String },
@@ -336,7 +337,26 @@ pub fn disconnect(key: &str) -> bool {
     }
 }
 
+/// Só na versão de depuração: com `PRISMA_PAD_TRACE=<arquivo>`, grava os botões que chegam, as
+/// teclas e ações que saem e os eventos dos controles, com a hora, para ver o que dispara o quê.
+pub fn trace(line: impl FnOnce() -> String) {
+    #[cfg(debug_assertions)]
+    {
+        use std::io::Write;
+        static PATH: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+        if let Some(p) = PATH.get_or_init(|| std::env::var("PRISMA_PAD_TRACE").ok()) {
+            let t = unsafe { windows::Win32::System::SystemInformation::GetLocalTime() };
+            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(p) {
+                let _ = writeln!(f, "{:02}:{:02}:{:02}.{:03} {}", t.wHour, t.wMinute, t.wSecond, t.wMilliseconds, line());
+            }
+        }
+    }
+    #[cfg(not(debug_assertions))]
+    let _ = line;
+}
+
 pub(crate) fn emit(e: Event) {
+    trace(|| format!("evento {e:?}"));
     if QUIET.load(Ordering::Relaxed) {
         return;
     }
@@ -586,13 +606,37 @@ pub fn out_report(f: Family, link: Link, rgb: Option<[u8; 3]>, trig: [Trig; 2], 
 }
 
 /// Manda um relatório de saída: pela escrita comum (completada até o tamanho que o Windows pede) e,
-/// se falhar, pelo pedido de controle do HID.
+/// se ela falhar na hora, pelo pedido de controle do HID. A escrita espera no máximo meio segundo:
+/// pelo Bluetooth, um controle que acabou de desligar deixa a escrita parada sem fim, e quem
+/// escreve é a mesma linha que lê e nota o controle desligado.
 pub(crate) unsafe fn write_report(path: &str, r: &[u8], out_len: usize) -> bool {
-    let Some(h) = open(path, (FILE_GENERIC_READ | FILE_GENERIC_WRITE).0) else { return false };
+    use windows::Win32::System::Threading::{CreateEventW, WaitForSingleObject};
+    use windows::Win32::System::IO::{CancelIoEx, GetOverlappedResult, OVERLAPPED};
+    trace(|| format!("escreve {:#04x} de {} bytes", r.first().copied().unwrap_or(0), r.len()));
+    let Ok(h) = CreateFileW(&HSTRING::from(path), (FILE_GENERIC_READ | FILE_GENERIC_WRITE).0, FILE_SHARE_READ | FILE_SHARE_WRITE, None, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, None) else { return false };
+    let Ok(ev) = CreateEventW(None, true, false, None) else {
+        let _ = CloseHandle(h);
+        return false;
+    };
     let mut full = r.to_vec();
     full.resize(out_len.max(r.len()), 0);
+    let mut ov = OVERLAPPED { hEvent: ev, ..Default::default() };
     let mut n = 0u32;
-    let ok = WriteFile(h, Some(&full), Some(&mut n), None).is_ok() || HidD_SetOutputReport(h, r.as_ptr() as *const _, r.len() as u32);
+    let ok = match WriteFile(h, Some(&full), None, Some(&mut ov)) {
+        Ok(()) => true,
+        Err(e) if e.code() == ERROR_IO_PENDING.to_hresult() => {
+            if WaitForSingleObject(ev, 500) == WAIT_OBJECT_0 {
+                GetOverlappedResult(h, &ov, &mut n, false).is_ok()
+            } else {
+                trace(|| "escrita sem resposta em 500 ms: cancelada".into());
+                let _ = CancelIoEx(h, Some(&ov));
+                let _ = GetOverlappedResult(h, &ov, &mut n, true);
+                false
+            }
+        }
+        Err(_) => HidD_SetOutputReport(h, r.as_ptr() as *const _, r.len() as u32),
+    };
+    let _ = CloseHandle(ev);
     let _ = CloseHandle(h);
     ok
 }
@@ -1062,7 +1106,10 @@ pub fn sony(f: Family, link: Link, r: &[u8]) -> Option<(Input, Option<Battery>)>
     };
     match (f, link, *r.first()?) {
         (Family::DualSense, Link::Usb, 0x01) => Some((at_full(1, true)?, Some(ds_battery(get(53)?)))),
-        (Family::DualSense, _, 0x31) => Some((at_full(2, true)?, Some(ds_battery(get(54)?)))),
+        // No Bluetooth, o 0x31 também traz outros pacotes: com o alto-falante tocando, o controle
+        // manda alguns com a marca 2 na metade baixa do byte 1, e lidos como entrada viram botões
+        // aleatórios. A entrada de verdade tem a marca 1.
+        (Family::DualSense, _, 0x31) if get(1)? & 0x0f == 0x01 => Some((at_full(2, true)?, Some(ds_battery(get(54)?)))),
         (Family::DualSense | Family::Ds4, Link::Bluetooth, 0x01) => Some((at(1, false)?, None)),
         (Family::Ds4, Link::Usb, 0x01) => Some((at_full(1, false)?, Some(ds4_battery(get(30)?)))),
         (Family::Ds4, _, 0x11) => Some((at_full(3, false)?, Some(ds4_battery(get(32)?)))),
@@ -1231,6 +1278,12 @@ unsafe fn read_loop(d: Dev) {
             Some((axes, _)) => Some((generic_input(pre, axes, &mut buf[..got as usize]), None)),
             None => sony(fam, link, &buf[..got as usize]),
         };
+        #[cfg(debug_assertions)]
+        {
+            let r = &buf[..got as usize];
+            let b = parsed.as_ref().map(|p| p.0.buttons);
+            trace(|| format!("{} relatório {:#04x} de {} bytes, botões {:?}, começo {:02x?}", d.name, r.first().copied().unwrap_or(0), r.len(), b.map(|x| format!("{x:#x}")), &r[..r.len().min(16)]));
+        }
         if let Some((inp, _)) = parsed.as_mut().filter(|p| p.0.motion) {
             if CAL_ASK.load(Ordering::Relaxed) {
                 cal.ask = true;
@@ -1524,6 +1577,17 @@ mod tests {
         assert_eq!(sony(Family::Ds4, Link::Bluetooth, &r).unwrap().0.buttons, A | RIGHT | START);
         // O DualSense no modo simples do Bluetooth (78 bytes) usa o mesmo desenho.
         assert_eq!(sony(Family::DualSense, Link::Bluetooth, &r[..78]).unwrap().0.buttons, A | RIGHT | START);
+    }
+
+    /// Começos reais vistos com o alto-falante tocando pelo Bluetooth (rastro de 2026-11-13): a
+    /// entrada (marca 1) vale; o outro pacote (marca 2) não vira botão nem bateria.
+    #[test]
+    fn dualsense_bt_ignores_non_input_0x31() {
+        let mut r = vec![0u8; 78];
+        r[..14].copy_from_slice(&[0x31, 0x51, 0x81, 0x7b, 0x7f, 0x7b, 0x00, 0x00, 0x01, 0x08, 0x00, 0x00, 0x00, 0x03]);
+        assert_eq!(sony(Family::DualSense, Link::Bluetooth, &r).unwrap().0.buttons, 0);
+        r[..16].copy_from_slice(&[0x31, 0x32, 0x00, 0xd4, 0x7d, 0x7e, 0xc4, 0xf5, 0x1f, 0x09, 0x86, 0x59, 0xa5, 0x64, 0x29, 0x7d]);
+        assert!(sony(Family::DualSense, Link::Bluetooth, &r).is_none());
     }
 
     #[test]

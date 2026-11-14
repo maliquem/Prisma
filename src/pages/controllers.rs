@@ -451,11 +451,14 @@ fn settings(ui: &mut Ui, app: &mut App, list: &[Pad], a: Rect) {
     changed |= ui.stepper("pad-jitter", rect(r.right() - 140.0, r.y + 124.0, 124.0, 36.0), &mut app.cfg.pad_jitter_ms, (0, 100), 1, "ms");
     ui.tip(rect(r.x + 16.0, r.y + 124.0, r.w - 156.0, 36.0), "Avisa quando o intervalo entre relatórios do controle passa desse valor (p99). 0 desliga.");
     changed |= ui.check("pad-speaker", rect(r.x + 10.0, r.y + 168.0, r.w - 20.0, 36.0), "Som no alto-falante do controle", &mut app.cfg.pad_speaker);
-    ui.tip(rect(r.x + 10.0, r.y + 168.0, r.w - 20.0, 36.0), "Um som curto no alto-falante do DualSense e do DualShock 4, no cabo e no Bluetooth, ao conectar, desconectar, trocar de perfil, com bateria baixa e com variação alta.");
+    ui.tip(rect(r.x + 10.0, r.y + 168.0, r.w - 20.0, 36.0), "Um som curto no alto-falante do DualSense e do DualShock 4 ligados pelo cabo, ao conectar, desconectar, trocar de perfil, com bateria baixa e com variação alta.");
     // Toca mesmo com a caixa desligada: serve para ver se o alto-falante funciona.
     if ui.button("pad-speaker-test", rect(r.x + 16.0, r.y + 212.0, r.w - 32.0, 34.0), "Testar alto-falante", false) {
-        if list.iter().any(|p| matches!(p.family, pads::Family::DualSense | pads::Family::Ds4)) {
+        let sony = |p: &&pads::Pad| matches!(p.family, pads::Family::DualSense | pads::Family::Ds4);
+        if list.iter().filter(sony).any(|p| p.link == pads::Link::Usb) {
             crate::sys::pad_sound::play(crate::sys::pad_sound::Chime::Test);
+        } else if list.iter().any(|p| sony(&p)) {
+            app.toast.info("O alto-falante pelo Bluetooth está desligado por enquanto: ligue o controle pelo cabo");
         } else {
             app.toast.info("Nenhum DualSense ou DualShock 4 ligado");
         }

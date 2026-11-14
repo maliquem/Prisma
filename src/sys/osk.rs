@@ -240,6 +240,7 @@ pub fn stick() -> [(f32, f32); 2] {
 
 /// Abre o teclado. O que o mapeamento segurava é solto antes.
 pub fn open() {
+    super::pads::trace(|| "abre o teclado do Prisma".into());
     let close_on = super::remap::keyboard_buttons() | super::radial::button();
     let mut s = STATE.lock().unwrap();
     if !matches!(*s, State::Open(_)) {

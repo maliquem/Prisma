@@ -2093,6 +2093,22 @@ pub fn live() -> bool {
 
 /// Um relatório novo do controle `key`, que chegou em `arrived`.
 pub fn feed(key: &str, inp: &Input, arrived: Instant) {
+    #[cfg(debug_assertions)]
+    {
+        static LAST: Mutex<Vec<(String, pads::Buttons)>> = Mutex::new(Vec::new());
+        let mut l = LAST.lock().unwrap();
+        match l.iter_mut().find(|(k, _)| k == key) {
+            Some((_, b)) if *b == inp.buttons => {}
+            Some((_, b)) => {
+                *b = inp.buttons;
+                pads::trace(|| format!("{key} botões {:#x}", inp.buttons));
+            }
+            None => {
+                l.push((key.to_string(), inp.buttons));
+                pads::trace(|| format!("{key} primeiro relatório, botões {:#x}", inp.buttons));
+            }
+        }
+    }
     // Teclado aberto: o controle digita nele, mesmo com o mapeamento desligado.
     if super::osk::feed(key, inp, arrived) || super::radial::feed(key, inp, arrived) {
         return;
@@ -2163,6 +2179,7 @@ pub fn feed(key: &str, inp: &Input, arrived: Instant) {
     }
     events.into_iter().for_each(pads::emit);
     if let Some(o) = radial {
+        pads::trace(|| format!("abre o radial pelo botão {o:#x}"));
         super::radial::open_from(o);
     }
     focus_tick(arrived);
@@ -2536,6 +2553,7 @@ pub(super) fn send(acts: &[Act]) {
     if acts.is_empty() {
         return;
     }
+    pads::trace(|| format!("manda {acts:?}"));
     let key = |vk: u16, up: bool| -> INPUT {
         let scan = unsafe { MapVirtualKeyW(vk as u32, MAPVK_VK_TO_VSC) } as u16;
         // Setas, Insert, Delete, Home, End, PgUp, PgDn, Windows, menu, divisão, NumLock, Ctrl e Alt
