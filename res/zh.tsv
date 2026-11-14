@@ -2352,3 +2352,16 @@ botão de mute	静音键
 gatilhos adaptativos	自适应扳机
 Fullscreenizer	Fullscreenizer
 O jogo vê o controle como ele é, e o perfil vale junto. Fora dos jogos, o Base.	游戏看到的是真实手柄，配置在其上生效。游戏之外使用 Base。
+Também no DualSense e no DualShock 4 ligados pelo Bluetooth. Pede o Steam Input dos controles PlayStation desligado.	蓝牙连接的 DualSense 和 DualShock 4 也适用。需要关闭 PlayStation 手柄的 Steam Input。
+Desligar o Steam Input dos controles PlayStation?	关闭 PlayStation 手柄的 Steam Input？
+Com som pelo Bluetooth, o DualSense manda pacotes que o Steam lê como botões apertados. O Prisma fecha o Steam, desliga o Steam Input dos controles PlayStation e abre o Steam de novo.	通过蓝牙发声时，DualSense 会发送被 Steam 当作按键按下的数据包。Prisma 会关闭 Steam，关闭 PlayStation 手柄的 Steam Input，然后重新打开 Steam。
+Fechando o Steam para desligar o Steam Input dos controles PlayStation	正在关闭 Steam 以关闭 PlayStation 手柄的 Steam Input
+Steam Input dos controles PlayStation desligado	PlayStation 手柄的 Steam Input 已关闭
+O alto-falante pelo Bluetooth precisa do Steam Input dos controles PlayStation desligado	蓝牙扬声器需要关闭 PlayStation 手柄的 Steam Input
+Para o controle no Bluetooth, ligue Também pelo Bluetooth	蓝牙连接的手柄请开启“蓝牙下也生效”
+Não achei o Steam	未找到 Steam
+Não consegui pedir para o Steam fechar	无法请求 Steam 关闭
+O Steam não fechou em 45 s; nada foi mudado	Steam 在 45 秒内未关闭；未做任何更改
+Não consegui ler a configuração do Steam	无法读取 Steam 配置
+Não consegui guardar uma cópia da configuração do Steam	无法保存 Steam 配置的副本
+Não consegui gravar a configuração do Steam	无法写入 Steam 配置

@@ -2358,3 +2358,16 @@ botão de mute	mute button
 gatilhos adaptativos	adaptive triggers
 Fullscreenizer	Fullscreenizer
 O jogo vê o controle como ele é, e o perfil vale junto. Fora dos jogos, o Base.	The game sees the real controller, and the profile applies on top. Outside games, Base.
+Também no DualSense e no DualShock 4 ligados pelo Bluetooth. Pede o Steam Input dos controles PlayStation desligado.	Also on DualSense and DualShock 4 connected over Bluetooth. Needs Steam Input for PlayStation controllers turned off.
+Desligar o Steam Input dos controles PlayStation?	Turn off Steam Input for PlayStation controllers?
+Com som pelo Bluetooth, o DualSense manda pacotes que o Steam lê como botões apertados. O Prisma fecha o Steam, desliga o Steam Input dos controles PlayStation e abre o Steam de novo.	With sound over Bluetooth, the DualSense sends packets that Steam reads as pressed buttons. Prisma closes Steam, turns off Steam Input for PlayStation controllers and opens Steam again.
+Fechando o Steam para desligar o Steam Input dos controles PlayStation	Closing Steam to turn off Steam Input for PlayStation controllers
+Steam Input dos controles PlayStation desligado	Steam Input for PlayStation controllers turned off
+O alto-falante pelo Bluetooth precisa do Steam Input dos controles PlayStation desligado	Speaker over Bluetooth needs Steam Input for PlayStation controllers turned off
+Para o controle no Bluetooth, ligue Também pelo Bluetooth	For the controller on Bluetooth, turn on Also over Bluetooth
+Não achei o Steam	Couldn't find Steam
+Não consegui pedir para o Steam fechar	Couldn't ask Steam to close
+O Steam não fechou em 45 s; nada foi mudado	Steam didn't close in 45 s; nothing was changed
+Não consegui ler a configuração do Steam	Couldn't read the Steam configuration
+Não consegui guardar uma cópia da configuração do Steam	Couldn't save a copy of the Steam configuration
+Não consegui gravar a configuração do Steam	Couldn't write the Steam configuration

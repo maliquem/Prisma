@@ -33,6 +33,8 @@ pub struct State {
     test: Test,
     /// Teste dos botões ligado: o controle para de navegar pelo Prisma.
     testing: bool,
+    /// Perguntando se desliga o Steam Input dos PlayStation para o alto-falante pelo Bluetooth.
+    steam_ask: bool,
 }
 
 impl State {
@@ -437,7 +439,7 @@ fn settings(ui: &mut Ui, app: &mut App, list: &[Pad], a: Rect) {
         ui.c.text_wrap(rect(r.x + 16.0, r.y + 34.0, r.w - 32.0, 80.0), "Pareado sem a parte de controle: nenhum programa consegue ler. Remova o controle e pareie de novo pelo assistente clássico (Win + R, devicepairingwizard).", 12.0, TEXT2, Weight::Regular);
         y += r.h + 8.0;
     }
-    let r = rect(x, y, lw, 262.0);
+    let r = rect(x, y, lw, 306.0);
     ui.card(r);
     ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Avisos");
     let mut changed = ui.check("pad-notify", rect(r.x + 10.0, r.y + 38.0, r.w - 20.0, 36.0), "Ao conectar e desconectar", &mut app.cfg.pad_notify);
@@ -452,13 +454,46 @@ fn settings(ui: &mut Ui, app: &mut App, list: &[Pad], a: Rect) {
     ui.tip(rect(r.x + 16.0, r.y + 124.0, r.w - 156.0, 36.0), "Avisa quando o intervalo entre relatórios do controle passa desse valor (p99). 0 desliga.");
     changed |= ui.check("pad-speaker", rect(r.x + 10.0, r.y + 168.0, r.w - 20.0, 36.0), "Som no alto-falante do controle", &mut app.cfg.pad_speaker);
     ui.tip(rect(r.x + 10.0, r.y + 168.0, r.w - 20.0, 36.0), "Um som curto no alto-falante do DualSense e do DualShock 4 ligados pelo cabo, ao conectar, desconectar, trocar de perfil, com bateria baixa e com variação alta.");
+    let bt_r = rect(r.x + 10.0, r.y + 212.0, r.w - 20.0, 36.0);
+    let mut bt = app.cfg.pad_speaker_bt;
+    if ui.check("pad-speaker-bt", bt_r, "Também pelo Bluetooth", &mut bt) {
+        if !bt {
+            app.cfg.pad_speaker_bt = false;
+            changed = true;
+        } else if crate::sys::steam::ps_input_on() == Some(true) {
+            // O Steam lê como botões os pacotes que o som pelo Bluetooth provoca: antes, a pergunta.
+            app.pads.steam_ask = true;
+            ui.ask("pad-steam", &crate::i18n::tr("Desligar o Steam Input dos controles PlayStation?"), &crate::i18n::tr("Com som pelo Bluetooth, o DualSense manda pacotes que o Steam lê como botões apertados. O Prisma fecha o Steam, desliga o Steam Input dos controles PlayStation e abre o Steam de novo."));
+        } else {
+            app.cfg.pad_speaker_bt = true;
+            changed = true;
+        }
+    }
+    ui.tip(bt_r, "Também no DualSense e no DualShock 4 ligados pelo Bluetooth. Pede o Steam Input dos controles PlayStation desligado.");
+    if app.pads.steam_ask && !ui.asking() {
+        app.pads.steam_ask = false;
+        if ui.answered("pad-steam") {
+            app.cfg.pad_speaker_bt = true;
+            changed = true;
+            app.toast.info("Fechando o Steam para desligar o Steam Input dos controles PlayStation");
+            let _ = std::thread::Builder::new().name("steam input".into()).spawn(|| {
+                let text = match crate::sys::steam::disable_ps_input() {
+                    Ok(()) => "Steam Input dos controles PlayStation desligado".to_string(),
+                    Err(e) => e.to_string(),
+                };
+                pads::emit(pads::Event::Notice { text });
+            });
+        } else {
+            app.toast.info("O alto-falante pelo Bluetooth precisa do Steam Input dos controles PlayStation desligado");
+        }
+    }
     // Toca mesmo com a caixa desligada: serve para ver se o alto-falante funciona.
-    if ui.button("pad-speaker-test", rect(r.x + 16.0, r.y + 212.0, r.w - 32.0, 34.0), "Testar alto-falante", false) {
+    if ui.button("pad-speaker-test", rect(r.x + 16.0, r.y + 256.0, r.w - 32.0, 34.0), "Testar alto-falante", false) {
         let sony = |p: &&pads::Pad| matches!(p.family, pads::Family::DualSense | pads::Family::Ds4);
-        if list.iter().filter(sony).any(|p| p.link == pads::Link::Usb) {
+        if list.iter().filter(sony).any(|p| p.link == pads::Link::Usb || app.cfg.pad_speaker_bt) {
             crate::sys::pad_sound::play(crate::sys::pad_sound::Chime::Test);
         } else if list.iter().any(|p| sony(&p)) {
-            app.toast.info("O alto-falante pelo Bluetooth está desligado por enquanto: ligue o controle pelo cabo");
+            app.toast.info("Para o controle no Bluetooth, ligue Também pelo Bluetooth");
         } else {
             app.toast.info("Nenhum DualSense ou DualShock 4 ligado");
         }
