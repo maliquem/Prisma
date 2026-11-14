@@ -96,6 +96,15 @@ pub enum Request {
         #[serde(default)]
         on: Option<bool>,
     },
+    /// Alguém pede para entrar no compartilhamento de tela (`share.ask`): o Prisma pergunta e
+    /// responde `ShareAnswer` quando ela escolher, sem prazo. `perms` são os bits das permissões;
+    /// `code` vem só no pareamento, para ela conferir com o outro PC.
+    ShareAsk {
+        name: String,
+        perms: u8,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        code: Option<String>,
+    },
     #[serde(other)]
     Unknown,
 }
@@ -257,6 +266,12 @@ pub enum Reply {
         /// Parado pela combinação no controle ou pelo `PadStop`.
         stopped: bool,
     },
+    /// Resposta ao `ShareAsk`. `trust`: no pareamento, confiar no aparelho e não perguntar mais.
+    ShareAnswer {
+        allow: bool,
+        #[serde(default)]
+        trust: bool,
+    },
     #[serde(other)]
     Unknown,
 }
@@ -391,6 +406,8 @@ mod tests {
             (Request::NvidiaSet { exe: "g.exe".into(), id: 5, value: None }, r#"{"type":"nvidia_set","exe":"g.exe","id":5,"value":null}"#),
             (Request::WindowShot { pid: 7 }, r#"{"type":"window_shot","pid":7}"#),
             (Request::RecordWindow { pid: 7 }, r#"{"type":"record_window","pid":7}"#),
+            (Request::ShareAsk { name: "PC".into(), perms: 3, code: None }, r#"{"type":"share_ask","name":"PC","perms":3}"#),
+            (Request::ShareAsk { name: "PC".into(), perms: 3, code: Some("12 34".into()) }, r#"{"type":"share_ask","name":"PC","perms":3,"code":"12 34"}"#),
         ];
         for (req, json) in cases {
             assert_eq!(serde_json::to_string(&req).unwrap(), json);
@@ -429,12 +446,15 @@ mod tests {
                 pads: vec![Controller { name: "DualSense".into(), link: "usb".into(), battery: Some(15), charging: true, wired: false, rate_hz: Some(250), p99_us: Some(4100) }],
             },
             Reply::PadProfiles { profiles: vec!["Desktop".into(), "Base".into()], active: "Desktop".into(), mapping: true, stopped: false },
+            Reply::ShareAnswer { allow: true, trust: false },
         ];
         for r in replies {
             let json = serde_json::to_string(&r).unwrap();
             assert_eq!(serde_json::from_str::<Reply>(&json).unwrap(), r, "{json}");
         }
         assert_eq!(serde_json::to_string(&Reply::Done).unwrap(), r#"{"type":"done"}"#);
+        // Sem `trust`, a resposta não confia no aparelho.
+        assert_eq!(serde_json::from_str::<Reply>(r#"{"type":"share_answer","allow":true}"#).unwrap(), Reply::ShareAnswer { allow: true, trust: false });
         assert_eq!(
             serde_json::to_string(&Reply::Failed { code: "busy".into(), reason: "r".into() }).unwrap(),
             r#"{"type":"failed","code":"busy","reason":"r"}"#

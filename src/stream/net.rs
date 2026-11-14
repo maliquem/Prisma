@@ -69,7 +69,7 @@ fn viewing_now() -> bool {
 }
 
 /// Nome de aparelho sem tabulação nem quebra de linha, até 40 letras.
-fn clean_name(s: &str) -> String {
+pub(crate) fn clean_name(s: &str) -> String {
     let t: String = s.chars().filter(|c| !c.is_control()).take(40).collect();
     let t = t.trim().to_string();
     if t.is_empty() {
@@ -606,8 +606,62 @@ fn message(text: &str, flags: MESSAGEBOX_STYLE) -> MESSAGEBOX_RESULT {
     unsafe { MessageBoxW(None, &HSTRING::from(text.join("\n")), w!("Prisma: compartilhar tela"), flags | MB_TOPMOST | MB_SETFOREGROUND) }
 }
 
+/// Pergunta pelo Prisma da bandeja da sessão, no visual dele: (permitir, confiar). None quando
+/// não há Prisma desta sessão e deste usuário para perguntar; aí fica a caixa antiga, e ninguém
+/// entra sem pergunta.
+fn ask_tray(name: &str, perms: u8, code: Option<&str>) -> Option<(bool, bool)> {
+    use prisma_link::{cap, Client, Reply, Request};
+    use windows::Win32::Security::{ImpersonateLoggedOnUser, RevertToSelf, TOKEN_QUERY};
+    use windows::Win32::System::RemoteDesktop::{ProcessIdToSessionId, WTSQueryUserToken};
+    use windows::Win32::System::Threading::{GetCurrentProcess, GetCurrentProcessId, OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION};
+    unsafe {
+        let mut session = 0;
+        ProcessIdToSessionId(GetCurrentProcessId(), &mut session).ok()?;
+        // O ajudante do serviço é SYSTEM: pergunta ao usuário da sessão, com o token dele. Fora do
+        // serviço (página, terminal), o processo já é dela.
+        let mut user = HANDLE::default();
+        let system = WTSQueryUserToken(session, &mut user).is_ok();
+        if !system {
+            OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut user).ok()?;
+        }
+        let user = Owned::new(user);
+        let sid = prisma_link::token_user_sid(*user).ok()?;
+        let pipe = prisma_link::share_pipe_name(&sid);
+        // O pipe só abre para o usuário dele.
+        if system {
+            ImpersonateLoggedOnUser(*user).ok()?;
+        }
+        let client = Client::connect(&pipe, env!("CARGO_PKG_VERSION"));
+        if system {
+            let _ = RevertToSelf();
+        }
+        let mut client = client.ok()?;
+        // Quem criou o pipe tem de ser esse usuário, nesta sessão: outro poderia ter criado o nome antes.
+        let pid = client.server_pid().ok()?;
+        let mut there = 0;
+        ProcessIdToSessionId(pid, &mut there).ok()?;
+        let owner = Owned::new(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?);
+        let mut tok = HANDLE::default();
+        OpenProcessToken(*owner, TOKEN_QUERY, &mut tok).ok()?;
+        let tok = Owned::new(tok);
+        if there != session || prisma_link::token_user_sid(*tok).ok()? != sid || !client.capabilities().has(cap::SHARE_ASK) {
+            eprintln!("pergunta pela caixa do Windows: o Prisma da bandeja não pôde ser conferido");
+            return None;
+        }
+        client.send(&Request::ShareAsk { name: name.to_string(), perms, code: code.map(str::to_string) }).ok()?;
+        // Sem prazo, como a caixa: a pergunta fica até ela escolher. Pipe fechado volta à caixa.
+        match client.recv().ok()? {
+            Reply::ShareAnswer { allow, trust } => Some((allow, trust)),
+            _ => None,
+        }
+    }
+}
+
 /// Pergunta se pareia. Devolve se deve perguntar a cada conexão, ou None se recusou.
 fn approve_pair(name: &str, code: &str, perms: u8) -> Option<bool> {
+    if let Some((allow, trust)) = ask_tray(name, perms, Some(code)) {
+        return allow.then_some(!trust);
+    }
     let text = format!(
         "«{name}» quer parear com este PC.\nPermissões: {}.\n\nCódigo de confirmação: {code}\nConfira se o outro PC mostra o mesmo código. Se não mostrar, clique em Cancelar.\n\nSim: parear e perguntar a cada conexão (recomendado).\nNão: parear e confiar neste aparelho, sem perguntar.\nCancelar: recusar.",
         perms_text(perms)
@@ -619,7 +673,20 @@ fn approve_pair(name: &str, code: &str, perms: u8) -> Option<bool> {
     }
 }
 
+/// `--test-share-ask=Nome` pergunta da conexão; `Nome|código`, do pareamento. Mostra a resposta.
+#[cfg(debug_assertions)]
+pub fn test_ask(v: &str) {
+    let perms = TOTAL;
+    match v.split_once('|') {
+        Some((name, code)) => eprintln!("pareamento: {:?}", approve_pair(name, code, perms)),
+        None => eprintln!("conexão: {}", approve_connect(v, perms)),
+    }
+}
+
 fn approve_connect(name: &str, perms: u8) -> bool {
+    if let Some((allow, _)) = ask_tray(name, perms, None) {
+        return allow;
+    }
     message(&format!("«{name}» quer se conectar a este PC.\nPermissões: {}.\n\nPermitir?", perms_text(perms)), MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2) == IDYES
 }
 

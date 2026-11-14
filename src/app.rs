@@ -24,7 +24,7 @@ use crate::config::{Config, Hotkey, MOD_ALT, MOD_CTRL, MOD_SHIFT, MOD_WIN};
 use crate::optimizer::{self, Candidate, Usage};
 use crate::capture::engine::{self, Cmd, Handle, Settings, Target};
 use crate::capture::mux::Codec;
-use crate::overlays::{Hud, Keyboard, Prompt, PromptAnswer, Radial, Toast, Widget};
+use crate::overlays::{Hud, Keyboard, Prompt, Radial, Toast, Widget, PROMPT_MS};
 use crate::pages::{self, Page};
 use crate::sys::audio::{self, Session};
 use crate::sys::fullscreen::Fullscreenizer;
@@ -213,6 +213,9 @@ pub struct App {
     /// Até onde os avisos do compartilhamento já foram mostrados (ms desde 1970; 0 antes da primeira olhada).
     notices_since: u128,
     pub prompt: Prompt,
+    /// Pergunta do compartilhamento aberta no `prompt`: para onde vai a escolha (permitir,
+    /// confiar) e se é um pareamento.
+    pub share_ask: Option<(std::sync::mpsc::SyncSender<(bool, bool)>, bool)>,
     pub usage: Usage,
     pub hk_errors: Vec<String>,
     pub sessions: Vec<Session>,
@@ -421,6 +424,7 @@ pub fn start(background: bool) {
             room_seen: None,
             notices_since: 0,
             prompt: Prompt::new(),
+            share_ask: None,
             usage: Usage::load(),
             hk_errors: Vec::new(),
             sessions: Vec::new(),
@@ -2791,6 +2795,10 @@ impl App {
 
     /// Mostra a pergunta de otimização. `manual` mostra mesmo sem nada a fechar.
     fn optimize_prompt(&mut self, manual: bool) {
+        // A pergunta do compartilhamento espera resposta: não é trocada por esta.
+        if self.share_ask.is_some() {
+            return;
+        }
         self.refresh_candidates();
         let selected: Vec<&Candidate> = self.cands.iter().filter(|c| c.on).collect();
         if selected.is_empty() {
@@ -2809,26 +2817,60 @@ impl App {
         };
         let plural = if n == 1 { "programa" } else { "programas" };
         let gap = self.meter.corner_gap(&self.cfg);
-        self.prompt.ask(title, format!("Fechar {n} {plural} e liberar {gb} GB?"), gap);
+        let buttons = [("Fechar", true), ("Ver lista", false), ("Agora não", false)];
+        self.prompt.ask(title, vec![format!("Fechar {n} {plural} e liberar {gb} GB?")], &buttons, gap, Some(PROMPT_MS));
+    }
+
+    /// Alguém pede para entrar no compartilhamento de tela (pedido `ShareAsk` do serviço ou do
+    /// host): aviso de 5 s e a pergunta no canto, até ela escolher. `code` só no pareamento.
+    /// Devolve por onde chega a escolha (permitir, confiar).
+    #[cfg_attr(not(feature = "stream"), allow(dead_code))]
+    pub fn share_ask(&mut self, name: &str, perms: &str, code: Option<&str>) -> std::sync::mpsc::Receiver<(bool, bool)> {
+        let (tx, rx) = std::sync::mpsc::sync_channel(1);
+        self.toast.info_for(&format!("«{name}» está pedindo para entrar no compartilhamento de tela"), 56.0, 5000);
+        let mut body = vec![format!("Permissões: {perms}.")];
+        let (title, buttons): (String, &[(&'static str, bool)]) = match code {
+            Some(code) => {
+                body.push(format!("Código de confirmação: {code}"));
+                body.push("Confira se o outro PC mostra o mesmo código. Se não mostrar, recuse.".to_string());
+                (format!("«{name}» quer parear com este PC."), &[("Parear", false), ("Parear e confiar", false), ("Recusar", false)])
+            }
+            None => (format!("«{name}» quer se conectar a este PC."), &[("Permitir", false), ("Recusar", false)]),
+        };
+        let gap = self.meter.corner_gap(&self.cfg);
+        // Uma pergunta nova toma o lugar da anterior: a anterior perde o canal e vale como recusa.
+        self.share_ask = Some((tx, code.is_some()));
+        self.prompt.ask(title, body, buttons, gap, None);
+        rx
     }
 
     pub fn prompt_mouse(&mut self, msg: u32, x: f32, y: f32) {
-        match self.prompt.mouse(msg, x, y) {
-            Some(PromptAnswer::Close) => {
-                self.prompt.hide();
-                self.close_selected();
-            }
-            Some(PromptAnswer::List) => {
-                self.prompt.hide();
+        let Some(i) = self.prompt.mouse(msg, x, y) else { return };
+        self.prompt.hide();
+        if let Some((tx, pairing)) = self.share_ask.take() {
+            // Pareamento: Parear (pergunta a cada conexão), Parear e confiar, Recusar.
+            // Conexão: Permitir, Recusar.
+            let choice = match (pairing, i) {
+                (_, 0) => (true, false),
+                (true, 1) => (true, true),
+                _ => (false, false),
+            };
+            let _ = tx.send(choice);
+            return;
+        }
+        match i {
+            0 => self.close_selected(),
+            1 => {
                 self.page = Page::Optimize;
                 self.show_main();
             }
-            Some(PromptAnswer::Dismiss) => self.prompt.hide(),
-            None => {}
+            _ => {}
         }
     }
 
     pub fn prompt_hide(&mut self) {
+        // Pergunta do compartilhamento fechada sem escolha vale como recusa (canal perdido).
+        self.share_ask = None;
         self.prompt.hide();
     }
 

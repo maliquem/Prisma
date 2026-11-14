@@ -11,6 +11,12 @@ pub fn pipe_name(sid: &str) -> String {
     format!(r"\\.\pipe\prisma-link-{sid}")
 }
 
+/// `\\.\pipe\prisma-link-{sid}-share`: o pipe do serviço de compartilhar tela. Fica separado
+/// porque o launcher ocupa o principal enquanto está aberto.
+pub fn share_pipe_name(sid: &str) -> String {
+    format!("{}-share", pipe_name(sid))
+}
+
 /// Nome do pipe para o usuário do processo atual.
 pub fn default_pipe_name() -> io::Result<String> {
     current_user_sid().map(|sid| pipe_name(&sid))
@@ -21,10 +27,14 @@ pub fn current_user_sid() -> io::Result<String> {
     let mut token = HANDLE::default();
     unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) }?;
     let token = Token(token);
+    token_user_sid(token.0)
+}
 
+/// SID do usuário de um token aberto com `TOKEN_QUERY`, como texto.
+pub fn token_user_sid(token: HANDLE) -> io::Result<String> {
     let mut len = 0u32;
     // A primeira chamada só informa o tamanho; falha com ERROR_INSUFFICIENT_BUFFER.
-    let _ = unsafe { GetTokenInformation(token.0, TokenUser, None, 0, &mut len) };
+    let _ = unsafe { GetTokenInformation(token, TokenUser, None, 0, &mut len) };
     if len == 0 {
         return Err(io::Error::last_os_error());
     }
@@ -32,7 +42,7 @@ pub fn current_user_sid() -> io::Result<String> {
     let mut buf = vec![0u64; (len as usize).div_ceil(8)];
     unsafe {
         GetTokenInformation(
-            token.0,
+            token,
             TokenUser,
             Some(buf.as_mut_ptr().cast()),
             len,

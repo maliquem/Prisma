@@ -169,6 +169,7 @@ fn caps_with(nvidia: bool) -> Vec<String> {
     if cfg!(feature = "stream") {
         caps.push(cap::SHARE_INVITE);
         caps.push(cap::SHARE_INVITE_MINUTES);
+        caps.push(cap::SHARE_ASK);
     }
     if nvidia {
         caps.push(cap::NVIDIA);
@@ -178,17 +179,22 @@ fn caps_with(nvidia: bool) -> Vec<String> {
 }
 
 /// Abre a thread do pipe. Se o pipe não puder ser criado (outro Prisma já o tem), registra e
-/// a thread termina; o resto do Prisma segue normal.
+/// a thread termina; o resto do Prisma segue normal. Com o compartilhar tela, abre também o pipe
+/// das perguntas do serviço: o launcher prende o principal enquanto está aberto.
 pub fn start(hub: HWND) {
+    let sid = match prisma_link::current_user_sid() {
+        Ok(s) => s,
+        Err(e) => return crate::config::log(&format!("ponte com o launcher: sem nome do pipe ({e})")),
+    };
+    serve_on(prisma_link::pipe_name(&sid), hub);
+    if cfg!(feature = "stream") {
+        serve_on(prisma_link::share_pipe_name(&sid), hub);
+    }
+}
+
+fn serve_on(name: String, hub: HWND) {
     let hub = hub.0 as isize;
     std::thread::spawn(move || {
-        let name = match prisma_link::default_pipe_name() {
-            Ok(n) => n,
-            Err(e) => {
-                crate::config::log(&format!("ponte com o launcher: sem nome do pipe ({e})"));
-                return;
-            }
-        };
         let info = ServerInfo {
             app_version: env!("CARGO_PKG_VERSION").to_string(),
             caps: caps(),
@@ -209,7 +215,7 @@ pub fn start(hub: HWND) {
             }
         });
         if let Err(e) = res {
-            crate::config::log(&format!("ponte com o launcher: pipe indisponível ({e})"));
+            crate::config::log(&format!("ponte com o launcher: pipe {name} indisponível ({e})"));
         }
     });
 }
@@ -464,6 +470,17 @@ impl App {
                 self.toggle_record_of(true, Some(h));
                 Outcome::Reply(Reply::Toggled { on: self.is_recording() })
             }
+            #[cfg(feature = "stream")]
+            Request::ShareAsk { name, perms, code } => {
+                let rx = self.share_ask(&crate::stream::net::clean_name(&name), &crate::stream::perms_text(perms), code.as_deref());
+                // Espera na thread do pipe, sem prazo, como a caixa antiga. Canal perdido é recusa.
+                Outcome::Later(Box::new(move || {
+                    let (allow, trust) = rx.recv().unwrap_or((false, false));
+                    Reply::ShareAnswer { allow, trust }
+                }))
+            }
+            #[cfg(not(feature = "stream"))]
+            Request::ShareAsk { .. } => Outcome::Failed(code::NOT_SUPPORTED, "indisponível".into()),
             Request::Hello { .. } | Request::Unknown => Outcome::Done,
         }
     }
@@ -630,6 +647,7 @@ mod tests {
             }
             assert_eq!(has(cap::SHARE_INVITE), cfg!(feature = "stream"));
             assert_eq!(has(cap::SHARE_INVITE_MINUTES), cfg!(feature = "stream"));
+            assert_eq!(has(cap::SHARE_ASK), cfg!(feature = "stream"));
             assert_eq!(has(cap::NVIDIA), nvidia);
             assert_eq!(has(cap::PAGE_NVIDIA), nvidia);
             assert!(!has(cap::PAGE_GAME_PROFILE));
@@ -656,6 +674,7 @@ mod tests {
             Request::PadStop { on: None },
             Request::PadMap { on: None },
             Request::Keyboard { on: None },
+            Request::ShareAsk { name: String::new(), perms: 0, code: None },
         ];
         for r in &answer {
             assert_eq!(wait_of(r), Wait::Answer, "{r:?}");

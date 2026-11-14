@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 use prisma_link::{
     Client, PROTOCOL, Page, Reply, Request, ServerInfo, current_user_sid, pipe_name, read_frame,
-    serve, write_frame,
+    serve, share_pipe_name, write_frame,
 };
 
 const WAIT: Duration = Duration::from_secs(2);
@@ -71,6 +71,29 @@ fn raw_connect(name: &str) -> File {
 #[test]
 fn pipe_name_uses_sid() {
     assert_eq!(pipe_name("S-1-5-21-1"), r"\\.\pipe\prisma-link-S-1-5-21-1");
+}
+
+#[test]
+fn share_pipe_is_apart_from_the_launcher_pipe() {
+    assert_eq!(share_pipe_name("S-1-5-21-1"), r"\\.\pipe\prisma-link-S-1-5-21-1-share");
+}
+
+/// A pergunta do serviço vai e a escolha volta; o cliente sabe qual processo criou o pipe.
+#[test]
+fn share_ask_round_trip() {
+    let (name, rx) = spawn_server(|req| match req {
+        Request::ShareAsk { code: Some(_), .. } => Some(Reply::ShareAnswer { allow: true, trust: true }),
+        Request::ShareAsk { .. } => Some(Reply::ShareAnswer { allow: false, trust: false }),
+        _ => None,
+    });
+    let mut c = connect(&name);
+    assert_eq!(c.server_pid().unwrap(), std::process::id());
+    let ask = Request::ShareAsk { name: "Sala".into(), perms: 7, code: None };
+    c.send(&ask).unwrap();
+    assert_eq!(c.recv().unwrap(), Reply::ShareAnswer { allow: false, trust: false });
+    assert_eq!(rx.recv_timeout(WAIT).unwrap(), ask);
+    c.send(&Request::ShareAsk { name: "Sala".into(), perms: 7, code: Some("1234".into()) }).unwrap();
+    assert_eq!(c.recv().unwrap(), Reply::ShareAnswer { allow: true, trust: true });
 }
 
 #[test]

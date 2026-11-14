@@ -6,7 +6,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use windows::Win32::Foundation::HANDLE;
-use windows::Win32::System::Pipes::PeekNamedPipe;
+use windows::Win32::System::Pipes::{GetNamedPipeServerProcessId, PeekNamedPipe};
 
 use crate::{Capabilities, PROTOCOL, Reply, Request, read_frame, write_frame};
 
@@ -93,6 +93,14 @@ impl Client {
                 None => return Err(ErrorKind::UnexpectedEof.into()),
             }
         }
+    }
+
+    /// Processo que criou o pipe, para conferir de quem é antes de confiar na resposta.
+    pub fn server_pid(&self) -> io::Result<u32> {
+        let h = HANDLE(self.pipe.as_raw_handle());
+        let mut pid = 0u32;
+        unsafe { GetNamedPipeServerProcessId(h, &mut pid) }?;
+        Ok(pid)
     }
 
     /// `false` quando o servidor fechou o pipe.
