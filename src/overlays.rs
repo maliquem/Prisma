@@ -131,8 +131,10 @@ unsafe extern "system" fn widget_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> 
                 a.cfg.widget_x = r.left;
                 a.cfg.widget_y = r.top;
                 a.cfg.save();
-                // Pode ter ido para outra tela: o HDR é lido de novo.
+                // Pode ter ido para outra tela: HDR e VRR são lidos de novo, e o VRR da tela antiga sai.
                 a.widget.status_at = None;
+                a.widget.vrr_at = None;
+                a.widget.vrr.store(0, std::sync::atomic::Ordering::Relaxed);
             });
             LRESULT(0)
         }
@@ -167,7 +169,7 @@ impl Widget {
         }
     }
 
-    /// Plano, HDR e VRR: só os itens ligados, no máximo a cada 5 s (VRR a cada 30 s, fora desta thread).
+    /// Plano, HDR e VRR: só os itens ligados, no máximo a cada 5 s (VRR fora desta thread).
     pub fn refresh(&mut self, items: u16) {
         use std::sync::atomic::Ordering::Relaxed;
         self.status.vrr = match self.vrr.load(Relaxed) {
@@ -187,12 +189,12 @@ impl Widget {
         if has(items, HDR) {
             self.status.hdr = crate::sys::hdr::hdr_on(&monitor_name(self.surface.hwnd));
         }
-        // O banco de perfis da NVIDIA demora para abrir; outras placas nem tentam.
-        if has(items, VRR) && self.vrr_at.is_none_or(|t| t.elapsed().as_secs() >= 30) && crate::sys::drs::driver_version().is_some() {
+        // Carregar a NVAPI leva um tempo; outras placas nem tentam e ficam em —.
+        if has(items, VRR) && self.vrr_at.is_none_or(|t| t.elapsed().as_secs() >= 5) && crate::sys::drs::driver_version().is_some() {
             self.vrr_at = Some(std::time::Instant::now());
-            let out = self.vrr.clone();
+            let (out, gdi) = (self.vrr.clone(), monitor_name(self.surface.hwnd));
             let _ = std::thread::Builder::new().name("vrr".into()).spawn(move || {
-                out.store(crate::sys::drs::gsync().map_or(0, |on| 1 + on as u8), Relaxed);
+                out.store(crate::sys::drs::vrr_active(&gdi).map_or(0, |on| 1 + on as u8), Relaxed);
             });
         }
     }

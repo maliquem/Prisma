@@ -50,6 +50,7 @@ fn u32_at(b: &[u8], at: usize) -> u32 {
 }
 
 struct Api {
+    query: Query,
     create: unsafe extern "C" fn(*mut H) -> i32,
     destroy: unsafe extern "C" fn(H) -> i32,
     load: unsafe extern "C" fn(H) -> i32,
@@ -85,6 +86,7 @@ unsafe fn api(query: Query) -> Option<Api> {
         return None;
     }
     Some(Api {
+        query,
         create: f!(0x0694_d52e),
         destroy: f!(0xdad9_cff8),
         load: f!(0x375d_bd6b),
@@ -265,9 +267,52 @@ pub fn snapshot(who: &Profile, ids: &[u32]) -> Option<Snapshot> {
     })
 }
 
-/// G-SYNC ligado na placa toda (perfil global). None sem placa NVIDIA.
-pub fn gsync() -> Option<bool> {
-    snapshot(&Profile::Global, &[0x1094_F157])?.values.first().copied().flatten().map(|v| v.now != 0)
+/// VRR de fato em uso na tela com este nome GDI (o `szDevice` do monitor), pelo driver NVIDIA (NvAPI_Disp_GetVRRInfo).
+/// O G-SYNC do perfil global é só a preferência do painel: fica ligado mesmo com a tela fora do VRR.
+/// None sem placa NVIDIA, com driver sem a função ou com a tela em outra placa.
+pub fn vrr_active(gdi: &str) -> Option<bool> {
+    let name = std::ffi::CString::new(gdi).ok()?;
+    with_api(|a| unsafe {
+        let by_name = (a.query)(0xae45_7190);
+        let vrr_info = (a.query)(0xdf8f_da57);
+        if by_name.is_null() || vrr_info.is_null() {
+            return None;
+        }
+        let by_name: unsafe extern "C" fn(*const i8, *mut u32) -> i32 = std::mem::transmute(by_name);
+        let vrr_info: unsafe extern "C" fn(u32, *mut [u32; 6]) -> i32 = std::mem::transmute(vrr_info);
+        let mut id = 0u32;
+        if by_name(name.as_ptr(), &mut id) != 0 {
+            return None;
+        }
+        // NV_GET_VRR_INFO_V1: versão, campo de bits e 4 reservados (24 bytes).
+        let mut info = [24u32 | 1 << 16, 0, 0, 0, 0, 0];
+        vrr_state(vrr_info(id, &mut info) == 0, info[1])
+    })
+}
+
+/// Bits do NV_GET_VRR_INFO: 0 VRR habilitado, 1 possível nesta tela, 4 tela em modo VRR agora.
+/// Ligado só com a tela em modo VRR; possível mas parado é desligado; sem leitura ou sem suporte, None (—).
+fn vrr_state(ok: bool, bits: u32) -> Option<bool> {
+    match (ok, bits & 1 << 4 != 0, bits & 1 << 1 != 0) {
+        (false, ..) => None,
+        (true, true, _) => Some(true),
+        (true, false, true) => Some(false),
+        (true, false, false) => None,
+    }
+}
+
+#[cfg(test)]
+mod vrr_tests {
+    use super::vrr_state;
+
+    #[test]
+    fn vrr_only_on_when_display_in_vrr_mode() {
+        assert_eq!(vrr_state(false, 0b1_0011), None); // a chamada falhou: não afirma nada
+        assert_eq!(vrr_state(true, 0b1_0011), Some(true)); // tela em modo VRR
+        assert_eq!(vrr_state(true, 0b0_0011), Some(false)); // habilitado e possível, mas parado
+        assert_eq!(vrr_state(true, 0b0_0001), None); // G-SYNC ligado, tela sem suporte
+        assert_eq!(vrr_state(true, 0), None);
+    }
 }
 
 static BACKED_UP: AtomicBool = AtomicBool::new(false);
