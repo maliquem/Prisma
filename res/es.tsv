@@ -2363,3 +2363,7 @@ Acelerador	Acelerador
 Freio	Freno
 Embreagem	Embrague
 Volante	Volante
+Trocar o atalho?	¿Cambiar el atajo?
+{} já é o atalho de {}. Sim tira de lá e coloca aqui.	{} ya es el atajo de {}. Sí lo quita de allí y lo pone aquí.
+Escolher outro atalho?	¿Elegir otro atajo?
+{} já é usado por outro programa, e o Windows não diz qual. Com essa combinação, o atalho não funciona no Prisma.	{} ya lo usa otro programa, y Windows no dice cuál. Con esa combinación, el atajo no funciona en Prisma.

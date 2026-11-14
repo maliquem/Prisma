@@ -355,7 +355,7 @@ Click the bug button at the top of the window. Choose the feature, the severity,
 
 ## Shortcuts
 
-All of them can be changed in the program.
+All of them can be changed in the program. If the new combination already belongs to another Prisma function, it says which one and asks whether to swap; Yes removes it from there. If another program already uses it, it says so and offers to pick another.
 
 - **Ctrl + Alt + F:** Fullscreenizer
 - **Ctrl + volume and mute keys:** volume of the program in focus

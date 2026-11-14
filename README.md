@@ -69,7 +69,7 @@ Actions that change something ask for confirmation in a pop-up, every list has a
 
 ## Default shortcuts
 
-All of them can be changed in the program.
+All of them can be changed in the program. If the new combination already belongs to another Prisma function, it says which one and asks whether to swap; Yes removes it from there. If another program already uses it, it says so and offers to pick another.
 
 | Action | Shortcut |
 | --- | --- |

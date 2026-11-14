@@ -417,7 +417,34 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
         Page::News => news::draw(&mut ui, app, area),
     }
     update_prompt(&mut ui, app);
+    hotkey_prompt(&mut ui, app);
     ui.end();
+}
+
+/// Atalho recém-gravado que já tinha dono: outra função do Prisma ou outro programa.
+fn hotkey_prompt(ui: &mut Ui, app: &mut App) {
+    use crate::app::HkAsk;
+    if let Some(a) = app.hk_ask.take() {
+        match a {
+            HkAsk::Swap { hk, other, .. } => {
+                ui.ask("hk-swap", "Trocar o atalho?", &format!("{} já é o atalho de {}. Sim tira de lá e coloca aqui.", hk.label(), app.hk_name(other)));
+            }
+            HkAsk::Taken(hk) => {
+                ui.ask("hk-taken", "Escolher outro atalho?", &format!("{} já é usado por outro programa, e o Windows não diz qual. Com essa combinação, o atalho não funciona no Prisma.", hk.label()));
+            }
+        }
+        app.hk_asked = Some(a);
+    }
+    if ui.answered("hk-swap") {
+        if let Some(HkAsk::Swap { id, hk, other }) = app.hk_asked {
+            app.hk_swap(id, hk, other);
+        }
+    }
+    if ui.answered("hk-taken") {
+        // Abre de novo o campo que acabou de gravar.
+        ui.s.capturing = ui.s.last_hotkey;
+        ui.s.needs_redraw = true;
+    }
 }
 
 /// Só chega aqui com a janela aberta: é a única hora em que o programa pergunta.

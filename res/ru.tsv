@@ -2363,3 +2363,7 @@ Acelerador	Газ
 Freio	Тормоз
 Embreagem	Сцепление
 Volante	Руль
+Trocar o atalho?	Заменить сочетание?
+{} já é o atalho de {}. Sim tira de lá e coloca aqui.	{} уже назначено для функции «{}». «Да» уберёт его оттуда и поставит сюда.
+Escolher outro atalho?	Выбрать другое сочетание?
+{} já é usado por outro programa, e o Windows não diz qual. Com essa combinação, o atalho não funciona no Prisma.	{} уже занято другой программой, и Windows не сообщает, какой. С этим сочетанием оно не будет работать в Prisma.

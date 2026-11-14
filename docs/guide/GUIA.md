@@ -355,7 +355,7 @@ Clique no botão do inseto, no alto da janela. Escolha a função, a gravidade, 
 
 ## Atalhos
 
-Todos podem ser trocados no programa.
+Todos podem ser trocados no programa. Se a combinação nova já é de outra função do Prisma, ele diz qual e pergunta se quer trocar; Sim tira o atalho de lá. Se outro programa já a usa, ele avisa e oferece escolher outra.
 
 - **Ctrl + Alt + F:** Fullscreenizer
 - **Ctrl + teclas de volume e mudo:** volume do programa em foco

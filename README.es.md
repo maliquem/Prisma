@@ -69,7 +69,7 @@ Las acciones que cambian algo piden confirmación en una ventana, cada lista tie
 
 ## Atajos predeterminados
 
-Todos se pueden cambiar en el programa.
+Todos se pueden cambiar en el programa. Si la combinación nueva ya es de otra función de Prisma, dice cuál y pregunta si quieres cambiarla; Sí la quita de allí. Si otro programa ya la usa, avisa y ofrece elegir otra.
 
 | Acción | Atajo |
 | --- | --- |
