@@ -308,7 +308,7 @@ Shows the controllers connected over USB or Bluetooth, live, and can use the con
 
 ## Widget
 
-Shows on top of everything, in four styles: CPU and GPU usage, RAM, VRAM, CPU and GPU temperature, the active power plan, HDR on the screen the widget is on and VRR (G-SYNC on NVIDIA cards). In **What to show**, on the Widget page, you pick the items; the widget resizes to fit what is on. An item with no reading shows "—": CPU temperature needs PawnIO (the same one the Meter uses) and VRR is only read on NVIDIA cards. Drag it to move it. Shortcut: Ctrl + Alt + W.
+Shows on top of everything, in four styles: CPU and GPU usage, RAM, VRAM, CPU and GPU temperature, the active power plan, HDR on the screen the widget is on and VRR in use on that screen. In **What to show**, on the Widget page, you pick the items; the widget resizes to fit what is on. An item with no reading shows "—": CPU temperature needs PawnIO (the same one the Meter uses) and VRR is only read on NVIDIA cards. VRR "On" means the screen is running in VRR right now; "Off", that the screen supports VRR but is not using it; "—", that the screen has no VRR or it cannot be told. Drag it to move it. Shortcut: Ctrl + Alt + W.
 
 ## Prisma Launcher
 
