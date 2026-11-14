@@ -102,7 +102,7 @@ pub static FAST: AtomicBool = AtomicBool::new(false);
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
-struct CpuTimes {
+pub struct CpuTimes {
     idle: i64,
     kernel: i64,
     user: i64,
@@ -172,7 +172,8 @@ fn read_processes(buf: &mut Vec<u8>, threads: Option<&mut HashMap<u32, u32>>) ->
     }
 }
 
-fn read_cpu(prev: &mut Vec<CpuTimes>, threads: &mut Vec<f32>) -> f32 {
+/// % de CPU desde a leitura anterior (`prev` guarda a anterior; a primeira dá 0).
+pub fn read_cpu(prev: &mut Vec<CpuTimes>, threads: &mut Vec<f32>) -> f32 {
     let n = unsafe {
         let mut si = SYSTEM_INFO::default();
         GetSystemInfo(&mut si);
@@ -288,6 +289,50 @@ impl Drop for GpuCounters {
             PdhCloseQuery(self.query);
         }
     }
+}
+
+/// Tempo ativo de cada disco físico, como no Gerenciador de Tarefas (100 menos o "% Idle Time").
+pub struct DiskBusy {
+    query: PDH_HQUERY,
+    idle: PDH_HCOUNTER,
+    buf: Vec<u8>,
+}
+
+impl DiskBusy {
+    pub fn new() -> Option<Self> {
+        unsafe {
+            let mut query = PDH_HQUERY::default();
+            if PdhOpenQueryW(None, 0, &mut query) != 0 {
+                return None;
+            }
+            let mut idle = PDH_HCOUNTER::default();
+            if PdhAddEnglishCounterW(query, w!("\\PhysicalDisk(*)\\% Idle Time"), 0, &mut idle) != 0 {
+                PdhCloseQuery(query);
+                return None;
+            }
+            PdhCollectQueryData(query);
+            Some(Self { query, idle, buf: Vec::new() })
+        }
+    }
+
+    /// (instância, % ativo) desde a leitura anterior. A instância é "0 C: D:": número e letras.
+    pub fn read(&mut self) -> Vec<(String, f32)> {
+        unsafe { PdhCollectQueryData(self.query) };
+        GpuCounters::array(self.idle, &mut self.buf).into_iter().map(|(n, idle)| (n, (100.0 - idle as f32).clamp(0.0, 100.0))).collect()
+    }
+}
+
+impl Drop for DiskBusy {
+    fn drop(&mut self) {
+        unsafe {
+            PdhCloseQuery(self.query);
+        }
+    }
+}
+
+/// Qual instância do PhysicalDisk tem a letra `drive` ("C:").
+pub fn disk_of(disks: &[(String, f32)], drive: &str) -> Option<usize> {
+    disks.iter().position(|(n, _)| n.split_whitespace().any(|t| t.eq_ignore_ascii_case(drive)))
 }
 
 /// Instâncias têm a forma `pid_1234_luid_0x..._phys_0...`.
@@ -514,5 +559,16 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
         }
         let fast = detail || FAST.load(Ordering::Relaxed);
         std::thread::sleep(Duration::from_millis(if fast { 1000 } else { 2000 }));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn disk_by_letter() {
+        let disks = vec![("0 C: D:".to_string(), 10.0), ("1 E:".to_string(), 80.0), ("_Total".to_string(), 45.0)];
+        assert_eq!(super::disk_of(&disks, "D:"), Some(0));
+        assert_eq!(super::disk_of(&disks, "e:"), Some(1));
+        assert_eq!(super::disk_of(&disks, "F:"), None);
     }
 }

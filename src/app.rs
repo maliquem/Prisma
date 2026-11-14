@@ -3745,7 +3745,9 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
             // Explorer, que cola do jeito dele. O gancho deixa passar teclas enviadas por programa.
             match crate::sys::copy::explorer_folder(HWND(l.0 as *mut _)) {
                 Some(dir) => {
-                    let _ = std::process::Command::new(std::env::current_exe().unwrap_or_default()).arg(format!("--paste={}", dir.display())).spawn();
+                    if let Ok(ch) = std::process::Command::new(std::env::current_exe().unwrap_or_default()).arg(format!("--paste={}", dir.display())).spawn() {
+                        let _ = unsafe { AllowSetForegroundWindow(ch.id()) };
+                    }
                 }
                 None => crate::sys::copy::send_paste(),
             }

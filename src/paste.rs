@@ -18,6 +18,7 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 use crate::i18n::tr;
 use crate::sys::copy::{self, State};
 use crate::sys::copylist::{self, Record};
+use crate::sys::monitor::{self, CpuTimes, DiskBusy};
 use crate::ui::gfx::{measure_raw, rect, Align, Canvas, Rect, Weight, ACCENT, BG, BORDER, BORDER2, CARD, CARD2, LINE, MUTED, ON_ACCENT, TEXT, TEXT2, WARN};
 use crate::ui::layered::Layered;
 
@@ -27,7 +28,7 @@ const MAX_ERRORS: usize = 5;
 /// Pontos do gráfico de velocidade, um a cada meio segundo; os mais velhos saem.
 const SAMPLES: usize = 120;
 /// Onde começa a lista de erros.
-const BODY: f32 = 344.0;
+const BODY: f32 = 384.0;
 
 #[derive(Clone, Copy, PartialEq)]
 enum Pick {
@@ -62,6 +63,14 @@ struct View {
     free: u64,
     errors: Vec<(String, String)>,
     can_retry: bool,
+    /// Bytes lidos na conferência, de `check_total`.
+    checked: u64,
+    check_total: u64,
+    /// Segundos desde o começo, parado ao terminar.
+    elapsed: u64,
+    cpu: Option<f32>,
+    /// (rótulo, letra, % de tempo ativo): um disco quando origem e destino são o mesmo.
+    disks: Vec<(&'static str, String, f32)>,
 }
 
 /// Como a janela abre: o que já vem escolhido e se pode tirar o foco de quem está usando o PC.
@@ -92,6 +101,17 @@ struct Win {
     last: (Instant, u64),
     worker: Option<std::thread::JoinHandle<()>>,
     done_at: Option<Instant>,
+    started: Instant,
+    /// Fase vista no quadro anterior: ao passar para a conferência, a velocidade recomeça.
+    seen: u8,
+    cpu_prev: Vec<CpuTimes>,
+    cpu_threads: Vec<f32>,
+    cpu: Option<f32>,
+    disk: Option<DiskBusy>,
+    /// Letras do disco de origem e de destino.
+    drives: (Option<String>, Option<String>),
+    disks: Vec<(&'static str, String, f32)>,
+    meter_at: Instant,
 }
 
 thread_local! {
@@ -143,9 +163,11 @@ fn title(v: &View) -> String {
         copy::PREPARING => tr("Preparando a lista de arquivos…").into_owned(),
         copy::NO_SPACE => tr("Falta espaço no destino").into_owned(),
         copy::CANCELED => tr("Cancelado").into_owned(),
+        copy::DONE if v.errors.is_empty() && v.check_total > 0 => tr("Pronto, tudo conferido").into_owned(),
         copy::DONE if v.errors.is_empty() => tr("Pronto").into_owned(),
         copy::DONE => tr(&format!("Pronto, com {} erros", v.errors.len())).into_owned(),
         _ if v.paused => tr("Pausado").into_owned(),
+        copy::VERIFYING => tr("Conferindo as cópias…").into_owned(),
         _ if v.mv => tr(&format!("Movendo para {}", v.dest)).into_owned(),
         _ => tr(&format!("Copiando para {}", v.dest)).into_owned(),
     }
@@ -159,6 +181,24 @@ fn from_text(items: &[PathBuf]) -> String {
         s.push_str(&p.file_name().map_or(p.display().to_string(), |n| n.to_string_lossy().into_owned()));
     }
     s
+}
+
+/// 0:42, 12:05 ou 1:02:03.
+fn clock(s: u64) -> String {
+    if s >= 3600 {
+        format!("{}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60)
+    } else {
+        format!("{}:{:02}", s / 60, s % 60)
+    }
+}
+
+/// O que a barra mede: a conferência na fase dela, a cópia no resto.
+fn progress(v: &View) -> (u64, u64) {
+    if v.phase == copy::VERIFYING {
+        (v.checked, v.check_total)
+    } else {
+        (v.done, v.total)
+    }
 }
 
 fn check(c: &Canvas, b: Rect, on: bool) {
@@ -178,7 +218,8 @@ fn draw(c: &Canvas, r: Rect, v: &View, hover: Option<usize>) -> Vec<(Rect, Pick)
     c.round_line(r, 12.0, BORDER, 1.0);
     let x = r.x + PAD;
     let w = r.w - 2.0 * PAD;
-    let frac = if v.total == 0 { if v.phase == copy::DONE { 1.0 } else { 0.0 } } else { (v.done as f64 / v.total as f64).min(1.0) as f32 };
+    let (cur, all) = progress(v);
+    let frac = if all == 0 { if v.phase == copy::DONE { 1.0 } else { 0.0 } } else { (cur as f64 / all as f64).min(1.0) as f32 };
     let pct = format!("{:.1}%", frac * 100.0).replace('.', crate::i18n::comma());
     c.text_raw(rect(x + w - 110.0, 10.0, 110.0, 32.0), &pct, 24.0, ACCENT, Align::Right, Weight::Semibold);
     c.text_raw(rect(x, 16.0, w - 120.0, 24.0), &title(v), 15.0, if v.phase == copy::NO_SPACE { WARN } else { TEXT }, Align::Left, Weight::Semibold);
@@ -197,14 +238,9 @@ fn draw(c: &Canvas, r: Rect, v: &View, hover: Option<usize>) -> Vec<(Rect, Pick)
         c.round(rect(bar.x, bar.y, (bar.w * frac).max(8.0), bar.h), 4.0, if v.paused { MUTED } else { ACCENT });
     }
 
-    let running = matches!(v.phase, copy::PREPARING | copy::COPYING);
-    let live = v.phase == copy::COPYING && !v.paused && v.speed > 1.0;
-    let eta = if live {
-        let left = (v.total.saturating_sub(v.done) as f64 / v.speed) as u64;
-        if left >= 3600 { format!("{}:{:02}:{:02}", left / 3600, left / 60 % 60, left % 60) } else { format!("{}:{:02}", left / 60, left % 60) }
-    } else {
-        "—".into()
-    };
+    let running = matches!(v.phase, copy::PREPARING | copy::COPYING | copy::VERIFYING);
+    let live = matches!(v.phase, copy::COPYING | copy::VERIFYING) && !v.paused && v.speed > 1.0;
+    let eta = if live { clock((all.saturating_sub(cur) as f64 / v.speed) as u64) } else { "—".into() };
     let speed = if live { format!("{}/s", size_text(v.speed as u64)) } else { "—".into() };
     let stats = [
         ("Copiado", format!("{} / {}", size_text(v.done), size_text(v.total))),
@@ -218,9 +254,20 @@ fn draw(c: &Canvas, r: Rect, v: &View, hover: Option<usize>) -> Vec<(Rect, Pick)
         c.text_fit(rect(cx, 108.0, cw, 16.0), label, 11.0, MUTED, Align::Left, Weight::Regular);
         c.text_raw(rect(cx, 124.0, cw, 20.0), value, 14.0, TEXT, Align::Left, Weight::Semibold);
     }
+    // CPU e discos como no Gerenciador de Tarefas; o tempo decorrido fica embaixo do restante.
+    let mut meters: Vec<(usize, &str, String)> = vec![(0, "CPU", v.cpu.map_or("—".into(), |p| format!("{p:.0}%")))];
+    for (i, (label, letter, p)) in v.disks.iter().enumerate() {
+        meters.push((1 + i, *label, format!("{letter} {p:.0}%")));
+    }
+    meters.push((3, "Tempo decorrido", clock(v.elapsed)));
+    for (i, label, value) in &meters {
+        let cx = x + *i as f32 * (cw + 8.0);
+        c.text_fit(rect(cx, 148.0, cw, 16.0), label, 11.0, MUTED, Align::Left, Weight::Regular);
+        c.text_raw(rect(cx, 164.0, cw, 20.0), value, 14.0, TEXT, Align::Left, Weight::Semibold);
+    }
 
     // Gráfico de velocidade: o pico manda na altura.
-    let g = rect(x, 152.0, w, 56.0);
+    let g = rect(x, 192.0, w, 56.0);
     c.round(g, 8.0, BG.alpha(0.55));
     let peak = v.samples.iter().cloned().fold(0.0f32, f32::max);
     if v.samples.len() >= 2 && peak > 0.0 {
@@ -241,16 +288,16 @@ fn draw(c: &Canvas, r: Rect, v: &View, hover: Option<usize>) -> Vec<(Rect, Pick)
     } else {
         v.current.clone()
     };
-    c.text_raw(rect(x, 216.0, w, 18.0), &sub, 12.0, if v.phase == copy::NO_SPACE { WARN } else { TEXT2 }, Align::Left, Weight::Regular);
+    c.text_raw(rect(x, 256.0, w, 18.0), &sub, 12.0, if v.phase == copy::NO_SPACE { WARN } else { TEXT2 }, Align::Left, Weight::Regular);
 
     let hovered = |hits: &Vec<(Rect, Pick)>| hover == Some(hits.len());
     // Arquivo que já existe: uma escolha para o lote todo.
     let (label, col) = if v.asking { ("Já existe um arquivo com esse nome. Escolha para todos:", WARN) } else { ("Arquivos que já existem no destino", TEXT2) };
-    c.text_fit(rect(x, 242.0, w, 20.0), label, 13.0, col, Align::Left, Weight::Regular);
+    c.text_fit(rect(x, 282.0, w, 20.0), label, 13.0, col, Align::Left, Weight::Regular);
     let gap = 6.0;
     let sw = ((w - 2.0 * gap) / 3.0).floor();
     for (i, (t, p)) in [("Pular", copy::SKIP), ("Substituir", copy::REPLACE), ("Manter os dois", copy::KEEP_BOTH)].into_iter().enumerate() {
-        let s = rect(x + i as f32 * (sw + gap), 264.0, sw, 30.0);
+        let s = rect(x + i as f32 * (sw + gap), 304.0, sw, 30.0);
         let on = v.policy == p;
         let (bg, fg) = if on { (ACCENT, ON_ACCENT) } else if hovered(&hits) { (CARD2, TEXT) } else { (LINE.alpha(0.6), TEXT2) };
         c.round(s, 7.0, bg);
@@ -264,7 +311,7 @@ fn draw(c: &Canvas, r: Rect, v: &View, hover: Option<usize>) -> Vec<(Rect, Pick)
     // Conferir e fechar sozinha ao terminar, lado a lado.
     let half = (r.w - 16.0) / 2.0;
     for (i, (t, on, p)) in [("Conferir com hash (SHA-256)", v.verify, Pick::Verify), ("Fechar ao terminar", v.close_done, Pick::CloseDone)].into_iter().enumerate() {
-        let row = rect(r.x + 8.0 + i as f32 * half, 304.0, half, 30.0);
+        let row = rect(r.x + 8.0 + i as f32 * half, 344.0, half, 30.0);
         if hovered(&hits) {
             c.round(row, 8.0, CARD2);
         }
@@ -339,6 +386,11 @@ fn view(o: &Win) -> View {
         free: st.free.load(Relaxed),
         can_retry: phase == copy::DONE && !running(o) && !copy::retry_pairs(&o.items, &o.dest_path, &errors).is_empty(),
         errors,
+        checked: st.checked.load(Relaxed),
+        check_total: st.check_total.load(Relaxed),
+        elapsed: o.done_at.unwrap_or_else(Instant::now).duration_since(o.started).as_secs(),
+        cpu: o.cpu,
+        disks: o.disks.clone(),
     }
 }
 
@@ -390,7 +442,38 @@ fn retry(o: &mut Win) {
     o.speed = 0.0;
     o.last = (Instant::now(), 0);
     o.done_at = None;
+    o.started = Instant::now();
     o.worker = Some(spawn(st, pairs, o.mv, record(o)));
+}
+
+/// Lê a CPU e o tempo ativo dos discos de origem e destino (uma vez por segundo).
+fn meter(o: &mut Win) {
+    o.cpu = Some(monitor::read_cpu(&mut o.cpu_prev, &mut o.cpu_threads));
+    let Some(d) = o.disk.as_mut() else { return };
+    let all = d.read();
+    let find = |l: &Option<String>| l.as_ref().and_then(|l| monitor::disk_of(&all, l).map(|i| (l.clone(), all[i].1, i)));
+    o.disks = match (find(&o.drives.0), find(&o.drives.1)) {
+        (Some(a), Some(b)) if a.2 == b.2 => vec![("Disco de origem e destino", a.0, a.1)],
+        (a, b) => [("Disco de origem", a), ("Disco de destino", b)].into_iter().filter_map(|(k, x)| x.map(|(l, p, _)| (k, l, p))).collect(),
+    };
+}
+
+/// Na frente das outras janelas. Aberta pelo Ctrl+V, quem abre é o Prisma em segundo plano e o
+/// Windows recusa o SetForegroundWindow: ligar a entrada à da janela em foco (o Explorer) libera.
+unsafe fn to_front(h: HWND) {
+    use windows::Win32::System::Threading::GetCurrentThreadId;
+    let fg = GetForegroundWindow();
+    let fg_thread = GetWindowThreadProcessId(fg, None);
+    let me = GetCurrentThreadId();
+    let attached = fg_thread != 0 && fg_thread != me && AttachThreadInput(me, fg_thread, true).as_bool();
+    // Mesmo se a ativação for recusada, a janela sobe para cima das outras.
+    let _ = SetWindowPos(h, Some(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+    let _ = SetWindowPos(h, Some(HWND_NOTOPMOST), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+    let _ = BringWindowToTop(h);
+    let _ = SetForegroundWindow(h);
+    if attached {
+        let _ = AttachThreadInput(me, fg_thread, false);
+    }
 }
 
 /// Fecha: cancela e espera o Windows apagar o arquivo pela metade antes de sair.
@@ -476,26 +559,39 @@ unsafe extern "system" fn proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT
             }
             WM_TIMER => {
                 let now = Instant::now();
-                let done = o.st.done.load(Relaxed);
+                let phase = o.st.phase.load(Relaxed);
+                let done = if phase == copy::VERIFYING { o.st.checked.load(Relaxed) } else { o.st.done.load(Relaxed) };
+                if phase != o.seen {
+                    o.seen = phase;
+                    o.speed = 0.0;
+                    o.last = (now, done);
+                }
                 let dt = now.duration_since(o.last.0).as_secs_f64();
                 if dt >= 0.5 {
                     let rate = done.saturating_sub(o.last.1) as f64 / dt;
                     o.speed = if o.speed == 0.0 { rate } else { o.speed * 0.7 + rate * 0.3 };
                     o.last = (now, done);
-                    if running(o) && o.st.phase.load(Relaxed) == copy::COPYING && !o.st.paused.load(Relaxed) {
+                    if running(o) && phase == copy::COPYING && !o.st.paused.load(Relaxed) {
                         if o.samples.len() == SAMPLES {
                             o.samples.remove(0);
                         }
                         o.samples.push(rate as f32);
                     }
                 }
+                if now.duration_since(o.meter_at).as_millis() >= 1000 {
+                    o.meter_at = now;
+                    meter(o);
+                }
+                let finished = !running(o);
+                if finished {
+                    o.done_at.get_or_insert(now);
+                }
                 repaint(o);
-                // Terminou sem erro: fecha sozinha, como a cópia do Windows (se "Fechar ao terminar" estiver marcado).
-                if o.close_done && !running(o) && o.st.phase.load(Relaxed) == copy::DONE && o.st.errors.lock().unwrap().is_empty() {
-                    let at = *o.done_at.get_or_insert(now);
-                    if now.duration_since(at).as_millis() > 1500 {
-                        let _ = DestroyWindow(h);
-                    }
+                // Terminou sem erro (e conferida, com o hash ligado): fecha sozinha depois de mostrar o
+                // "Pronto". Com erro, conflito ou hash que não bate, fica aberta com o aviso.
+                let ok = phase == copy::DONE && o.st.errors.lock().unwrap().is_empty();
+                if o.close_done && finished && ok && o.done_at.is_some_and(|at| now.duration_since(at).as_millis() >= 1200) {
+                    close(h, o);
                 }
                 Some(LRESULT(0))
             }
@@ -530,7 +626,7 @@ fn open(items: Vec<PathBuf>, dest: PathBuf, mv: bool, opts: Opts) {
         let _ = GetMonitorInfoW(MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST), &mut mi);
         let scale = windows::Win32::UI::HiDpi::GetDpiForWindow(h) as f32 / 96.0;
         let wa = mi.rcWork;
-        let pos = ((wa.left + wa.right - (W * scale) as i32) / 2, (wa.top + wa.bottom - (420.0 * scale) as i32) / 2);
+        let pos = ((wa.left + wa.right - (W * scale) as i32) / 2, (wa.top + wa.bottom - (460.0 * scale) as i32) / 2);
 
         let st = Arc::new(State::default());
         st.policy.store(opts.policy, Relaxed);
@@ -554,7 +650,19 @@ fn open(items: Vec<PathBuf>, dest: PathBuf, mv: bool, opts: Opts) {
             last: (Instant::now(), 0),
             worker: None,
             done_at: None,
+            started: Instant::now(),
+            seen: copy::PREPARING,
+            cpu_prev: Vec::new(),
+            cpu_threads: Vec::new(),
+            cpu: None,
+            disk: DiskBusy::new(),
+            drives: (None, None),
+            disks: Vec::new(),
+            meter_at: Instant::now(),
         };
+        o.drives = (o.items.first().and_then(|p| copy::drive(p)), copy::drive(&o.dest_path));
+        // A primeira leitura da CPU só guarda a base.
+        monitor::read_cpu(&mut o.cpu_prev, &mut o.cpu_threads);
         let pairs = o.items.iter().map(|i| (i.clone(), o.dest_path.clone())).collect();
         o.worker = Some(spawn(st, pairs, mv, record(&o)));
         repaint(&mut o);
@@ -563,7 +671,7 @@ fn open(items: Vec<PathBuf>, dest: PathBuf, mv: bool, opts: Opts) {
             let _ = ShowWindow(h, SW_SHOWNOACTIVATE);
         } else {
             let _ = ShowWindow(h, SW_SHOW);
-            let _ = SetForegroundWindow(h);
+            to_front(h);
         }
         SetTimer(Some(h), 1, 100, None);
         let mut msg = MSG::default();
@@ -583,7 +691,7 @@ fn open(items: Vec<PathBuf>, dest: PathBuf, mv: bool, opts: Opts) {
     }
 }
 
-/// Teste: a janela em quatro momentos, salva como `copia_<n>.png` na pasta.
+/// Teste: a janela em cinco momentos, salva como `copia_<n>.png` na pasta.
 #[cfg(debug_assertions)]
 fn test(dir: &str) {
     let args: Vec<String> = std::env::args().collect();
@@ -639,12 +747,18 @@ fn test(dir: &str) {
             free: 0,
             errors: Vec::new(),
             can_retry: false,
+            checked: 0,
+            check_total: 0,
+            elapsed: 15,
+            cpu: Some(12.0),
+            disks: vec![("Disco de origem", "D:".into(), 64.0), ("Disco de destino", "E:".into(), 97.0)],
         };
         let views = [
             View { asking: true, ..base() },
             View { mv: true, policy: copy::KEEP_BOTH, paused: true, errors: errors[..2].to_vec(), ..base() },
             View { phase: copy::DONE, policy: copy::REPLACE, current: String::new(), done: 3_650_722_201, files_done: 1208, errors, can_retry: true, ..base() },
             View { phase: copy::NO_SPACE, need: 3_650_722_201, free: 1_288_490_188, done: 0, files_done: 0, samples: Vec::new(), ..base() },
+            View { phase: copy::VERIFYING, done: 3_650_722_201, files_done: 1208, checked: 2_400_000_000, check_total: 7_301_444_402, elapsed: 3725, disks: vec![("Disco de origem e destino", "D:".into(), 88.0)], ..base() },
         ];
         std::env::set_var("PRISMA_LAYER_DUMP", dir);
         for (i, v) in views.iter().enumerate() {
