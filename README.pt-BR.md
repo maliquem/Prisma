@@ -69,7 +69,7 @@ Ações que mudam algo pedem confirmação em um popup, todas as listas têm bar
 
 ## Atalhos padrão
 
-Todos podem ser trocados no programa.
+Todos podem ser trocados no programa. Se a combinação nova já é de outra função do Prisma, ele diz qual e pergunta se quer trocar; Sim tira o atalho de lá. Se outro programa já a usa, ele avisa e oferece escolher outra.
 
 | Ação | Atalho |
 | --- | --- |

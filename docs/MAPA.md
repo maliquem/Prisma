@@ -40,7 +40,7 @@ Convenção: `arquivo:linha nome`. "Atalho" é a combinação global (chaves `hk
 ### 2.1 Atalho global
 1. O Windows manda `WM_HOTKEY` para `hub_proc` (`src/app.rs:3503`).
 2. `on_hotkey` (`src/app.rs:1143`) escolhe a ação pelo número `HK_*` (`src/app.rs:141-165`).
-3. Os números são registrados por `register_hotkeys` (`src/app.rs:1043`), que lê os campos `hk_*` de `Config` (`src/config.rs:191-267`).
+3. Os números são registrados por `register_hotkeys` (`src/app.rs:1074`), que lê os campos `hk_*` de `Config` (`src/config.rs:191-267`).
 4. O atalho de fechar à força tem gancho próprio: `hook_force_key` e `sync_hook` (`src/app.rs:1174`, `1187`).
 5. Os atalhos ficam pausados enquanto o teclado do Prisma ou a captura de atalho está aberta (`pause_hotkeys`, `src/app.rs:1114`).
 
@@ -179,6 +179,7 @@ As flags de teste ficam em `src/app.rs` (`start`, linha 366, e as checagens de `
 | Relógio e atualização das telas | Automático | `on_tick` `src/app.rs:2854` (`WM_TICK` `app.rs:3514`) | |
 | Notícias | Automático | `check_news` `src/app.rs:1020` | |
 | Registrar atalhos | Ao abrir e ao salvar | `register_hotkeys` `src/app.rs:1043` | Erros de atalho ficam em `hk_errors`. |
+| Atalho repetido ao gravar | Campo de tecla de atalho global | `register_hotkeys` `src/app.rs:1074` compara com `hk_last` (`hk_keys` `:152`, `hk_conflict` `:157`); lista `hotkey_list` `:1137`, campo no config `hk_slot` `:1174`, nome `hk_name` `:1202`, troca `hk_swap` `:1207`; pergunta `HkAsk` `:143` mostrada por `hotkey_prompt` `src/pages/mod.rs:425` com `ui.ask`; reabrir o campo usa `UiState.last_hotkey` (`ui/mod.rs`, gravado em `hotkey` `:787`) | Já de outra função: volta ao valor antigo e pergunta Trocar o atalho? (Sim tira da outra). Outro programa (RegisterHotKey falha): pergunta Escolher outro atalho?; o Windows não diz qual programa. Volume fica fora (vem de `vol_mods`). Teste `hotkey_conflict_between_functions` `app.rs:4325`. |
 | Pedido de outra cópia para abrir a janela | Abrir o .exe de novo | `WM_SHOW` `src/app.rs:3521` | Nome único `Local\PrismaApp` (`main.rs`). |
 | Busca de programas e arquivos (barra) | Atalho HK_FIND; ação 23 | `toggle_find` `src/app.rs:2376`, `show_find` `app.rs:2385`, `close_find` `app.rs:2432` | |
 | Teclado e navegação | Teclado | `on_key` `src/app.rs:3436`; `nav_key` `app.rs:3830`; `typed_char` `app.rs:3841` | |

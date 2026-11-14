@@ -138,6 +138,28 @@ pub const ACT_SHOT: i32 = HK_SHOT;
 pub const ACT_RECORD: i32 = HK_REC;
 pub const ACT_RECORD_FULL: i32 = HK_REC_FULL;
 
+/// O que perguntar depois de gravar um atalho.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum HkAsk {
+    /// A combinação já era de outra função do Prisma (`other`).
+    Swap { id: i32, hk: Hotkey, other: i32 },
+    /// O Windows recusou: outro programa já usa.
+    Taken(Hotkey),
+}
+
+/// Atalhos que podem trocar de dono. shortcut: os de volume saem porque vêm de `vol_mods`, sem campo
+/// próprio; repetir um deles cai no aviso de outro programa.
+fn hk_keys(list: &[(i32, Hotkey, &str, bool)]) -> Vec<(i32, Hotkey)> {
+    list.iter().filter(|e| !matches!(e.0, HK_VOL_UP | HK_VOL_DOWN | HK_MUTE)).map(|e| (e.0, e.1)).collect()
+}
+
+/// Atalho que mudou desde `old` e repete o de outra função: (o que mudou, o dono).
+fn hk_conflict(old: &[(i32, Hotkey)], now: &[(i32, Hotkey)]) -> Option<(i32, i32)> {
+    now.iter()
+        .filter(|(id, hk)| hk.vk != 0 && old.iter().any(|(o, ohk)| o == id && ohk != hk))
+        .find_map(|(id, hk)| now.iter().find(|(o, ohk)| o != id && ohk == hk).map(|(o, _)| (*id, *o)))
+}
+
 const HK_FULL: i32 = 1;
 const HK_WIDGET: i32 = 2;
 const HK_OPT: i32 = 3;
@@ -215,6 +237,12 @@ pub struct App {
     pub prompt: Prompt,
     pub usage: Usage,
     pub hk_errors: Vec<String>,
+    /// Pergunta pendente sobre o atalho que acabou de ser gravado.
+    pub hk_ask: Option<HkAsk>,
+    /// A que está na tela, até a resposta.
+    pub hk_asked: Option<HkAsk>,
+    /// Atalhos como estavam no último registro, para saber qual mudou.
+    hk_last: Vec<(i32, Hotkey)>,
     pub sessions: Vec<Session>,
     pub plans: Vec<Plan>,
     pub plan_values: Vec<PlanValues>,
@@ -423,6 +451,9 @@ pub fn start(background: bool) {
             prompt: Prompt::new(),
             usage: Usage::load(),
             hk_errors: Vec::new(),
+            hk_ask: None,
+            hk_asked: None,
+            hk_last: Vec::new(),
             sessions: Vec::new(),
             plans: Vec::new(),
             plan_values: Vec::new(),
@@ -1051,8 +1082,61 @@ impl App {
             }
         }
         self.hk_errors.clear();
+        let mut list = self.hotkey_list();
+        let mut now = hk_keys(&list);
+        if let Some((id, other)) = hk_conflict(&self.hk_last, &now) {
+            // Volta ao que estava até a resposta: Não mantém como antes.
+            let hk = now.iter().find(|e| e.0 == id).map_or(Hotkey::default(), |e| e.1);
+            let old = self.hk_last.iter().find(|e| e.0 == id).map_or(Hotkey::default(), |e| e.1);
+            if let Some(s) = self.hk_slot(id) {
+                *s = old;
+            }
+            self.cfg.save();
+            self.hk_ask = Some(HkAsk::Swap { id, hk, other });
+            list = self.hotkey_list();
+            now = hk_keys(&list);
+        }
+        let mut errors = Vec::new();
+        let mut taken = None;
+        let mut force_hook = None;
+        for &(id, hk, name, norepeat) in &list {
+            if hk.vk == 0 {
+                continue;
+            }
+            // A versão de teste não pega o Alt+F4 do PC: ela roda junto com programas de verdade.
+            #[cfg(debug_assertions)]
+            if id == HK_FORCE && !std::env::args().any(|a| a.starts_with("--test-force-key=")) {
+                continue;
+            }
+            let mut m = HOT_KEY_MODIFIERS(hk.mods);
+            if norepeat {
+                m |= MOD_NOREPEAT;
+            }
+            if unsafe { RegisterHotKey(Some(self.hub), id, m, hk.vk) }.is_err() {
+                if id == HK_FORCE {
+                    force_hook = Some(hk);
+                } else {
+                    errors.push(format!("{name}: {} já está em uso", hk.label()));
+                    if self.hk_last.iter().any(|e| e.0 == id && e.1 != hk) {
+                        taken = Some(hk);
+                    }
+                }
+            }
+        }
+        if let (Some(hk), None) = (taken, self.hk_ask) {
+            self.hk_ask = Some(HkAsk::Taken(hk));
+        }
+        self.hk_last = now;
+        self.hk_errors = errors;
+        if let Some(hk) = force_hook {
+            self.hook_force_key(hk);
+        }
+    }
+
+    /// Atalhos globais: número, combinação, nome da função e se ignora a repetição da tecla.
+    fn hotkey_list(&self) -> Vec<(i32, Hotkey, &'static str, bool)> {
         let c = &self.cfg;
-        let list = [
+        let mut list = vec![
             (HK_FULL, c.hk_fullscreen, "Fullscreenizer", true),
             (HK_WIDGET, c.hk_widget, "Widget", true),
             (HK_OPT, c.hk_optimize, "Otimizar", true),
@@ -1072,43 +1156,63 @@ impl App {
             (HK_REPLAY, c.hk_replay, "Replay", true),
             (HK_FORCE, c.hk_force, "Fechar à força", true),
             (HK_EXPLORER, c.hk_explorer, "Reiniciar o Explorer", true),
-            (HK_FIND, if c.search_on { c.hk_find } else { Hotkey::new(0, 0) }, "Pesquisar arquivos", true),
             (HK_VOL_UP, Hotkey::new(c.vol_mods, VK_VOL_UP), "Aumentar volume", false),
             (HK_VOL_DOWN, Hotkey::new(c.vol_mods, VK_VOL_DOWN), "Diminuir volume", false),
             (HK_MUTE, Hotkey::new(c.vol_mods, VK_MUTE), "Mudo", true),
         ];
-        let mut errors = Vec::new();
-        for (i, k) in self.cfg.snd_keys.iter().take(SND_KEYS_MAX).enumerate() {
-            if k.key.vk != 0 && unsafe { RegisterHotKey(Some(self.hub), HK_SND + i as i32, HOT_KEY_MODIFIERS(k.key.mods) | MOD_NOREPEAT, k.key.vk) }.is_err() {
-                errors.push(format!("{}: {} já está em uso", crate::i18n::tr("Aparelho padrão"), k.key.label()));
-            }
+        // Pesquisa desligada: o atalho fica guardado, mas não conta.
+        if c.search_on {
+            list.push((HK_FIND, c.hk_find, "Pesquisar arquivos", true));
         }
-        let mut force_hook = None;
-        for (id, hk, name, norepeat) in list {
-            if hk.vk == 0 {
-                continue;
-            }
-            // A versão de teste não pega o Alt+F4 do PC: ela roda junto com programas de verdade.
-            #[cfg(debug_assertions)]
-            if id == HK_FORCE && !std::env::args().any(|a| a.starts_with("--test-force-key=")) {
-                continue;
-            }
-            let mut m = HOT_KEY_MODIFIERS(hk.mods);
-            if norepeat {
-                m |= MOD_NOREPEAT;
-            }
-            if unsafe { RegisterHotKey(Some(self.hub), id, m, hk.vk) }.is_err() {
-                if id == HK_FORCE {
-                    force_hook = Some(hk);
-                } else {
-                    errors.push(format!("{name}: {} já está em uso", hk.label()));
-                }
-            }
+        for (i, k) in c.snd_keys.iter().take(SND_KEYS_MAX).enumerate() {
+            list.push((HK_SND + i as i32, k.key, "Aparelho padrão", true));
         }
-        self.hk_errors = errors;
-        if let Some(hk) = force_hook {
-            self.hook_force_key(hk);
+        list
+    }
+
+    /// Onde fica no config o atalho de número `id`.
+    fn hk_slot(&mut self, id: i32) -> Option<&mut Hotkey> {
+        let c = &mut self.cfg;
+        Some(match id {
+            HK_FULL => &mut c.hk_fullscreen,
+            HK_WIDGET => &mut c.hk_widget,
+            HK_OPT => &mut c.hk_optimize,
+            HK_SHOT => &mut c.hk_shot,
+            HK_SHOT_FULL => &mut c.hk_shot_full,
+            HK_SHOT_WIN => &mut c.hk_shot_win,
+            HK_REC => &mut c.hk_record,
+            HK_REC_FULL => &mut c.hk_record_full,
+            HK_METER_C => &mut c.hk_meter_compact,
+            HK_METER_F => &mut c.hk_meter_full,
+            HK_METER_O => &mut c.hk_meter_off,
+            HK_LOG => &mut c.hk_log,
+            HK_METER_KEYS => &mut c.hk_meter_keys,
+            HK_LIMIT_T => &mut c.hk_limit_toggle,
+            HK_LIMIT_UP => &mut c.hk_limit_up,
+            HK_LIMIT_DOWN => &mut c.hk_limit_down,
+            HK_REPLAY => &mut c.hk_replay,
+            HK_FORCE => &mut c.hk_force,
+            HK_EXPLORER => &mut c.hk_explorer,
+            HK_FIND => &mut c.hk_find,
+            id if id >= HK_SND => &mut c.snd_keys.get_mut((id - HK_SND) as usize)?.key,
+            _ => return None,
+        })
+    }
+
+    pub fn hk_name(&self, id: i32) -> &'static str {
+        self.hotkey_list().into_iter().find(|e| e.0 == id).map_or("", |e| e.2)
+    }
+
+    /// Resposta Sim à troca: a combinação sai da outra função e fica nesta.
+    pub fn hk_swap(&mut self, id: i32, hk: Hotkey, other: i32) {
+        if let Some(s) = self.hk_slot(other) {
+            *s = Hotkey::default();
         }
+        if let Some(s) = self.hk_slot(id) {
+            *s = hk;
+        }
+        self.cfg.save();
+        self.register_hotkeys();
     }
 
     fn pause_hotkeys(&mut self, on: bool) {
@@ -4216,6 +4320,24 @@ fn centered(wa: RECT, want_w: i32, want_h: i32, margin: i32) -> (i32, i32, i32, 
 #[cfg(test)]
 mod window_tests {
     use super::*;
+
+    #[test]
+    fn hotkey_conflict_between_functions() {
+        let f = Hotkey::new(3, 0x46);
+        let old = [(HK_FULL, f), (HK_FIND, Hotkey::new(3, 0x20)), (HK_WIDGET, Hotkey::default())];
+        // Nada mudou, ou a primeira leitura: sem pergunta, mesmo com repetição já gravada.
+        assert_eq!(hk_conflict(&old, &old), None);
+        assert_eq!(hk_conflict(&[], &[(HK_FULL, f), (HK_FIND, f)]), None);
+        // A Busca ganhou a combinação do Fullscreenizer; o campo vazio que ganha também conta.
+        assert_eq!(hk_conflict(&old, &[(HK_FULL, f), (HK_FIND, f), (HK_WIDGET, Hotkey::default())]), Some((HK_FIND, HK_FULL)));
+        assert_eq!(hk_conflict(&old, &[(HK_FULL, f), (HK_FIND, Hotkey::new(3, 0x20)), (HK_WIDGET, f)]), Some((HK_WIDGET, HK_FULL)));
+        // Combinação nova e livre, ou campo apagado: sem pergunta.
+        assert_eq!(hk_conflict(&old, &[(HK_FULL, f), (HK_FIND, Hotkey::new(3, 0x47)), (HK_WIDGET, Hotkey::default())]), None);
+        assert_eq!(hk_conflict(&old, &[(HK_FULL, Hotkey::default()), (HK_FIND, Hotkey::new(3, 0x20)), (HK_WIDGET, Hotkey::default())]), None);
+        // Volume não tem campo próprio: fica fora.
+        let list = [(HK_VOL_UP, f, "", false), (HK_FULL, f, "", true)];
+        assert_eq!(hk_keys(&list), vec![(HK_FULL, f)]);
+    }
 
     /// Resoluções comuns com a barra de tarefas embaixo (48 px a 100%) e escalas usuais.
     #[test]

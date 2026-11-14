@@ -2372,3 +2372,7 @@ Uso da GPU	GPU usage
 O que aparece	What to show
 Mostra uso, temperatura, plano de energia, HDR e VRR por cima de tudo. Arraste para mudar de lugar.	Shows usage, temperature, power plan, HDR and VRR on top of everything. Drag to move it.
 Volta o atalho, o estilo, os itens e a posição do widget ao padrão, e esconde o widget.	Resets the widget shortcut, style, items and position to default, and hides the widget.
+Trocar o atalho?	Replace the shortcut?
+{} já é o atalho de {}. Sim tira de lá e coloca aqui.	{} is already the shortcut for {}. Yes removes it there and puts it here.
+Escolher outro atalho?	Choose another shortcut?
+{} já é usado por outro programa, e o Windows não diz qual. Com essa combinação, o atalho não funciona no Prisma.	{} is already used by another program, and Windows doesn't say which. With this combination, the shortcut won't work in Prisma.
