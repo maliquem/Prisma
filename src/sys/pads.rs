@@ -51,6 +51,11 @@ pub const GUIDE: Buttons = 1 << 14;
 pub const PAD: Buttons = 1 << 15;
 /// Botão de mudo do DualSense.
 pub const MUTE: Buttons = 1 << 16;
+/// Botões de trás e extras (8BitDo: L4, R4 e as duas pás). Depois dos virtuais do `remap`.
+pub const L4: Buttons = 1 << 40;
+pub const R4: Buttons = 1 << 41;
+pub const PL: Buttons = 1 << 42;
+pub const PR: Buttons = 1 << 43;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Family {
@@ -58,6 +63,8 @@ pub enum Family {
     Ds4,
     /// Pelo XInput: Xbox e os que se apresentam como Xbox.
     Xbox,
+    /// 8BitDo pelo canal do fabricante (modo D): botões com nome, botões de trás, gyro e bateria.
+    EightBitDo,
     /// HID genérico: botões numerados e eixos na ordem do controle.
     Generic,
 }
@@ -90,8 +97,8 @@ pub struct Input {
     pub lt: f32,
     pub rt: f32,
     /// Gyro em graus por segundo (inclinar, virar, girar), já sem o desvio parado, e acelerômetro
-    /// em g. Só DualSense e DualShock 4 no relatório completo (USB, ou Bluetooth com o modo
-    /// completo ligado por outro programa); `motion` diz se veio.
+    /// em g. DualSense e DualShock 4 no relatório completo e o 8BitDo no relatório do fabricante;
+    /// `motion` diz se veio.
     pub gyro: [f32; 3],
     pub accel: [f32; 3],
     pub motion: bool,
@@ -233,6 +240,7 @@ pub const WRITE_OK: &[(u16, u16, &str)] = &[
     (0x054c, 0x0df2, "DualSense Edge"),
     (0x054c, 0x05c4, "DualShock 4"),
     (0x054c, 0x09cc, "DualShock 4 (2ª versão)"),
+    (0x2dc8, 0x6009, "8BitDo Pro 3"),
 ];
 
 pub const WM_PADS: u32 = WM_APP + 93;
@@ -262,9 +270,11 @@ pub fn fake(kind: &str) {
     let family = match kind {
         "ds" => Family::DualSense,
         "ds4" => Family::Ds4,
+        "8bitdo" => Family::EightBitDo,
         _ => Family::Xbox,
     };
-    let input = Input { buttons: A | RB, lt: 0.6, lx: 0.6, ly: 0.4, gyro: [24.0, -90.0, 6.0], motion: family != Family::Xbox, touch: [Some((0.3, 0.45)), None], ..Default::default() };
+    let extra = if family == Family::EightBitDo { L4 | PR } else { 0 };
+    let input = Input { buttons: A | RB | extra, lt: 0.6, lx: 0.6, ly: 0.4, gyro: [24.0, -90.0, 6.0], motion: family != Family::Xbox, touch: [Some((0.3, 0.45)), None], ..Default::default() };
     let pad = Pad { key: "test".into(), name: nice_name(family, ""), family, link: Link::Usb, vid: 0, pid: 0, battery: Battery::Percent { pct: 82, charging: false }, input, rate: None, generic_buttons: 0, low_warned: false, jitter_warned: false, gyro_cal: GyroCal::default() };
     *FAKE.lock().unwrap() = Some(pad);
 }
@@ -451,6 +461,19 @@ fn is_xinput(path: &str) -> bool {
 /// DualSense e DualShock 4 no Bluetooth começam no modo simples, sem gyro nem touchpad. Ler o
 /// relatório de recurso 0x05 (a calibração de fábrica) passa o controle ao modo completo, como faz
 /// o driver do Linux. Só lê: nada é gravado no controle. Vale até o controle desligar.
+/// 8BitDo: ler o relatório de recurso 0x06 (0x30 no Ultimate 3) liga o relatório completo, com
+/// gyro e bateria, como o driver do SDL faz ao abrir. O Ultimate 2 e o 2C já mandam sem pedir.
+unsafe fn eightbitdo_mode(path: &str, pid: u16) {
+    if matches!(pid, 0x6012 | 0x301b) {
+        return;
+    }
+    let Some(h) = open(path, FILE_GENERIC_READ.0) else { return };
+    let mut buf = [0u8; 64];
+    buf[0] = if pid == 0x202f { 0x30 } else { 0x06 };
+    let _ = HidD_GetFeature(h, buf.as_mut_ptr() as *mut _, buf.len() as u32);
+    let _ = CloseHandle(h);
+}
+
 unsafe fn full_mode(path: &str) -> bool {
     let Some(h) = open(path, (FILE_GENERIC_READ | FILE_GENERIC_WRITE).0).or_else(|| open(path, FILE_GENERIC_READ.0)) else { return false };
     let mut buf = [0u8; 41];
@@ -554,6 +577,8 @@ pub fn out_report(f: Family, link: Link, rgb: Option<[u8; 3]>, trig: [Trig; 2], 
         (Family::DualSense, Link::Bluetooth) => (vec![0u8; 78], 3),
         (Family::Ds4, Link::Usb) => (vec![0u8; 32], 1),
         (Family::Ds4, Link::Bluetooth) => (vec![0u8; 78], 3),
+        // 8BitDo: só vibração, relatório 0x05 de 5 bytes (fraco, forte e os dos gatilhos), como o SDL.
+        (Family::EightBitDo, _) => return Some(vec![0x05, rumble[0], rumble[1], 0, 0]),
         _ => return None,
     };
     if f == Family::DualSense {
@@ -886,6 +911,9 @@ fn family(vid: u16, pid: u16) -> Family {
     match (vid, pid) {
         (0x054c, 0x0ce6 | 0x0df2) => Family::DualSense,
         (0x054c, 0x05c4 | 0x09cc | 0x0ba0) => Family::Ds4,
+        // Os do driver do SDL com o relatório novo (Pro 2, Pro 3, Ultimate 2, 2C e 3). SF30 e
+        // SN30 Pro têm firmware com outro formato e seguem como genéricos.
+        (0x2dc8, 0x6003 | 0x6006 | 0x6009 | 0x6012 | 0x301b | 0x202f) => Family::EightBitDo,
         _ => Family::Generic,
     }
 }
@@ -895,6 +923,7 @@ fn nice_name(f: Family, name: &str) -> String {
     match f {
         Family::DualSense => "DualSense".into(),
         Family::Ds4 => "DualShock 4".into(),
+        Family::EightBitDo if name.is_empty() => "8BitDo".into(),
         _ if name.is_empty() => "Controle".into(),
         _ => name.to_string(),
     }
@@ -1126,6 +1155,45 @@ pub fn sony(f: Family, link: Link, r: &[u8]) -> Option<(Input, Option<Battery>)>
     }
 }
 
+/// Relatório do 8BitDo (driver do SDL, zlib): 0x04 no USB e no Pro 3 pelo Bluetooth, 0x01 no
+/// Bluetooth dos outros, 0x03 no firmware sem o modo completo. Byte 1 direcional; 2 a 5 sticks; 6 RT
+/// e 7 LT; 8 a 10 botões; 14 bateria (bit 7 carregando); 15 a 26 acelerômetro e gyro (x, y, z),
+/// ±2000 °/s e 4096 por g, com os eixos do controle virados para os do DualSense.
+pub fn eightbitdo(pid: u16, r: &[u8]) -> Option<(Input, Option<Battery>)> {
+    if !matches!(r.first()?, 0x01 | 0x03 | 0x04) || r.len() < 10 {
+        return None;
+    }
+    let mut b = hat_bits(r[1]);
+    // O Ultimate 2C troca as pás pelos L4 e R4 nos mesmos bits.
+    let (p4, p20) = if pid == 0x301b { (L4, R4) } else { (PR, PL) };
+    for (bit, v) in [(0x01, A), (0x02, B), (0x08, X), (0x10, Y), (0x40, LB), (0x80, RB), (0x04, p4), (0x20, p20)] {
+        if r[8] & bit != 0 {
+            b |= v;
+        }
+    }
+    for (bit, v) in [(0x10, GUIDE), (0x04, BACK), (0x08, START), (0x20, LS), (0x40, RS)] {
+        if r[9] & bit != 0 {
+            b |= v;
+        }
+    }
+    if let Some(&x) = r.get(10) {
+        b |= if x & 0x01 != 0 { L4 } else { 0 } | if x & 0x02 != 0 { R4 } else { 0 };
+    }
+    let mut i = Input { buttons: b, lx: stick(r[2]), ly: -stick(r[3]), rx: stick(r[4]), ry: -stick(r[5]), rt: r[6] as f32 / 255.0, lt: r[7] as f32 / 255.0, ..Default::default() };
+    let le = |at: usize| Some(i16::from_le_bytes([*r.get(at)?, *r.get(at + 1)?]) as f32);
+    if let (Some(ax), Some(ay), Some(az), Some(gx), Some(gy), Some(gz)) = (le(15), le(17), le(19), le(21), le(23), le(25)) {
+        let dps = 2000.0 / 32767.0;
+        i.gyro = [-gy * dps, gz * dps, -gx * dps];
+        i.accel = [-ay / 4096.0, az / 4096.0, -ax / 4096.0];
+        i.motion = true;
+    }
+    let bat = r.get(14).filter(|_| pid != 0x301b).map(|&v| {
+        let pct = (v & 0x7f).min(100);
+        Battery::Percent { pct, charging: v & 0x80 != 0 && pct < 100 }
+    });
+    Some((i, bat))
+}
+
 fn ds_battery(b: u8) -> Battery {
     let level = b & 0x0f;
     match b >> 4 {
@@ -1191,8 +1259,10 @@ unsafe fn read_loop(d: Dev) {
     // leitura não dá erro nenhum: sem isso o controle ficava na lista para sempre.
     // shortcut: o genérico pode só mandar relatório quando algo muda, então fica na lista até o
     // Windows tirar o aparelho; um genérico Bluetooth desligado pode ficar, até medir o 8BitDo.
-    let streams = matches!(fam, Family::DualSense | Family::Ds4);
-    if streams && link == Link::Bluetooth {
+    let streams = matches!(fam, Family::DualSense | Family::Ds4 | Family::EightBitDo);
+    if fam == Family::EightBitDo {
+        eightbitdo_mode(&d.path, d.pid);
+    } else if streams && link == Link::Bluetooth {
         full_mode(&d.path);
     }
     let mut shown = false;
@@ -1286,6 +1356,7 @@ unsafe fn read_loop(d: Dev) {
         }
         let mut parsed = match &generic {
             Some((axes, _)) => Some((generic_input(pre, axes, &mut buf[..got as usize]), None)),
+            None if fam == Family::EightBitDo => eightbitdo(d.pid, &buf[..got as usize]),
             None => sony(fam, link, &buf[..got as usize]),
         };
         #[cfg(debug_assertions)]
@@ -1590,6 +1661,29 @@ mod tests {
 
     /// Começos reais vistos com o alto-falante tocando pelo Bluetooth (rastro de 2026-11-13): a
     /// entrada (marca 1) vale; o outro pacote (marca 2) não vira botão nem bateria.
+    #[test]
+    fn eightbitdo_pro3_report() {
+        // Relatório 0x04 do Pro 3 pelo Bluetooth, parado na mesa, com a bateria cheia.
+        let mut r = [0x04, 0x0f, 0x80, 0x7f, 0x80, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09, 0x60, 0x64, 0x5a, 0xfc, 0x68, 0x00, 0x7b, 0x0f, 0xfa, 0xff, 0x06, 0x00, 0xff, 0xff, 0x6d, 0xcc, 0xe8, 0x05, 0x05];
+        let (i, bat) = eightbitdo(0x6009, &r).unwrap();
+        assert_eq!((i.buttons, bat), (0, Some(Battery::Percent { pct: 100, charging: false })));
+        assert!(i.motion && i.lx.abs() < 0.01 && i.ly.abs() < 0.01);
+        // Parado: perto de 1 g no total, gyro perto de zero.
+        let g = (i.accel[0].powi(2) + i.accel[1].powi(2) + i.accel[2].powi(2)).sqrt();
+        assert!((g - 1.0).abs() < 0.15, "{g}");
+        assert!(i.gyro.iter().all(|v| v.abs() < 1.0), "{:?}", i.gyro);
+        // Direcional para baixo, B (embaixo), L, as pás, Home e o L4.
+        (r[1], r[8], r[9], r[10], r[14], r[6]) = (4, 0x01 | 0x40 | 0x04 | 0x20, 0x10, 0x01, 0x80 | 40, 255);
+        let (i, bat) = eightbitdo(0x6009, &r).unwrap();
+        assert_eq!(i.buttons, DOWN | A | LB | PR | PL | GUIDE | L4);
+        assert_eq!((i.rt, bat), (1.0, Some(Battery::Percent { pct: 40, charging: true })));
+        // O 2C não tem as pás: os mesmos bits são L4 e R4, e não informa bateria.
+        r[10] = 0;
+        let (i, bat) = eightbitdo(0x301b, &r[..11]).unwrap();
+        assert_eq!((i.buttons & (L4 | R4 | PL | PR), bat), (L4 | R4, None));
+        assert!(eightbitdo(0x6009, &[0x02; 32]).is_none());
+    }
+
     #[test]
     fn dualsense_bt_ignores_non_input_0x31() {
         let mut r = vec![0u8; 78];

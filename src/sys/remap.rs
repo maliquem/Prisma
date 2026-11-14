@@ -36,7 +36,8 @@ pub const TPDR: Buttons = 1 << 37;
 /// Gatilho apertado até o fim: o segundo estágio do gatilho.
 pub const LTF: Buttons = 1 << 38;
 pub const RTF: Buttons = 1 << 39;
-const COUNT: usize = 40;
+// Os botões de trás (`pads::L4` a `pads::PR`) vêm depois dos virtuais.
+const COUNT: usize = 44;
 const ALL: Buttons = (1 << COUNT) - 1;
 
 /// Nome de cada botão no arquivo do perfil.
@@ -47,7 +48,7 @@ pub const NAMES: [(&str, Buttons); COUNT] = [
     ("MUTE", pads::MUTE), ("LT", LT), ("RT", RT), ("LSU", LSU), ("LSD", LSD), ("LSL", LSL), ("LSR", LSR),
     ("RSU", RSU), ("RSD", RSD), ("RSL", RSL), ("RSR", RSR), ("TPU", TPU), ("TPD", TPD), ("TPL", TPL), ("TPR", TPR),
     ("TPTAP", TPTAP), ("TPCL", TPCL), ("TPCR", TPCR), ("TPUL", TPUL), ("TPUR", TPUR), ("TPDL", TPDL), ("TPDR", TPDR),
-    ("LTF", LTF), ("RTF", RTF),
+    ("LTF", LTF), ("RTF", RTF), ("L4", pads::L4), ("R4", pads::R4), ("PL", pads::PL), ("PR", pads::PR),
 ];
 
 /// Segurar a partir de 400 ms; tocar é soltar antes disso; duplo é apertar de novo em até 300 ms.
@@ -1016,6 +1017,7 @@ impl Profile {
     /// Partes do controle que o perfil usa e que um controle da família `fam` não tem.
     pub fn lost_on(&self, fam: pads::Family) -> Vec<&'static str> {
         let sony = matches!(fam, pads::Family::DualSense | pads::Family::Ds4);
+        let gyro = sony || fam == pads::Family::EightBitDo;
         let binds = || self.layers.iter().flat_map(|l| &l.binds);
         let on = |m: &Option<Motion>| matches!(m, Some(Motion::Mouse(_) | Motion::Stick(_)));
         let touch = binds().any(|b| (b.button | b.with) & (TPU | TPD | TPL | TPR | TPTAP | TPCL | TPCR | TPUL | TPUR | TPDL | TPDR) != 0) || self.layers.iter().any(|l| on(&l.touch));
@@ -1026,7 +1028,8 @@ impl Profile {
             }
         };
         lose(touch, sony, "touchpad");
-        lose(self.layers.iter().any(|l| on(&l.gyro)), sony, "giroscópio");
+        lose(self.layers.iter().any(|l| on(&l.gyro)), gyro, "giroscópio");
+        lose(binds().any(|b| (b.button | b.with) & (pads::L4 | pads::R4 | pads::PL | pads::PR) != 0), fam == pads::Family::EightBitDo, "botões de trás");
         lose(self.light.is_some(), sony, "barra de luz");
         lose(binds().any(|b| (b.button | b.with) & pads::MUTE != 0), fam == pads::Family::DualSense, "botão de mute");
         lose(self.trig != [Trig::Pass; 2], fam == pads::Family::DualSense, "gatilhos adaptativos");

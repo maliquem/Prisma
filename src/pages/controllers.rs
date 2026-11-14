@@ -229,6 +229,24 @@ pub(super) fn button_names(f: Family) -> &'static [(pads::Buttons, &'static str)
             (GUIDE, "PS"),
             (PAD, "Touchpad"),
         ],
+        // Nomes impressos no 8BitDo (letras na posição da Nintendo).
+        Family::EightBitDo => &[
+            (A, "B"),
+            (B, "A"),
+            (X, "Y"),
+            (Y, "X"),
+            (LB, "L"),
+            (RB, "R"),
+            (LS, "L3"),
+            (RS, "R3"),
+            (BACK, "Select"),
+            (START, "Start"),
+            (GUIDE, "Home"),
+            (L4, "L4"),
+            (R4, "R4"),
+            (PL, "PL"),
+            (PR, "PR"),
+        ],
         _ => &[(A, "A"), (B, "B"), (X, "X"), (Y, "Y"), (LB, "LB"), (RB, "RB"), (LS, "LS"), (RS, "RS"), (BACK, "View"), (START, "Menu"), (GUIDE, "Xbox")],
     }
 }
@@ -614,7 +632,7 @@ fn art(f: Family) -> Option<(&'static str, &'static [u8], &'static [Hit])> {
         Family::DualSense => Some(("pad-ds", include_bytes!("../../res/pads/ds.png"), HITS_DS)),
         Family::Ds4 => Some(("pad-ds4", include_bytes!("../../res/pads/ds4.png"), HITS_DS4)),
         Family::Xbox => Some(("pad-xbox", include_bytes!("../../res/pads/xbox.png"), HITS_XBOX)),
-        Family::Generic => None,
+        Family::EightBitDo | Family::Generic => None,
     }
 }
 

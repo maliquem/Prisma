@@ -21,6 +21,8 @@ impl Style {
         match f {
             Family::DualSense | Family::Ds4 => Style::PlayStation,
             Family::Xbox => Style::Xbox,
+            // O 8BitDo vem com as letras na posição da Nintendo (B embaixo, A à direita).
+            Family::EightBitDo => Style::Nintendo,
             Family::Generic if vid == 0x057e => Style::Nintendo,
             Family::Generic => Style::Numbers,
         }
@@ -67,6 +69,7 @@ pub const DPAD_ANY: pads::Buttons = pads::UP | pads::DOWN | pads::LEFT | pads::R
 pub fn width(bit: pads::Buttons, h: f32) -> f32 {
     match bit {
         pads::LB | pads::RB | remap::LT | remap::RT | remap::LTF | remap::RTF | pads::PAD => h * 1.7,
+        pads::L4 | pads::R4 | pads::PL | pads::PR => h * 1.6,
         remap::LSU | remap::LSD | remap::LSL | remap::LSR | remap::RSU | remap::RSD | remap::RSL | remap::RSR => h * 1.6,
         remap::TPU | remap::TPD | remap::TPL | remap::TPR | remap::TPTAP | remap::TPCL | remap::TPCR | remap::TPUL | remap::TPUR | remap::TPDL | remap::TPDR => h * 1.7,
         _ => h,
@@ -165,6 +168,17 @@ pub fn draw(c: &Canvas, x: f32, cy: f32, h: f32, s: Style, bit: pads::Buttons, c
                     arrow(c, mid, cy, h * 0.22, d, col, sw);
                 }
             }
+        }
+        // Botões de trás: a pílula com o nome.
+        pads::L4 | pads::R4 | pads::PL | pads::PR => {
+            c.round_line(rect(x, cy - r, w, h), h * 0.3, col, sw);
+            let t = match bit {
+                pads::L4 => "L4",
+                pads::R4 => "R4",
+                pads::PL => "PL",
+                _ => "PR",
+            };
+            label(t, h * 0.5, rect(x, cy - r, w, h));
         }
         _ => {
             // Mudo e o que mais vier: uma pílula com um ponto.
