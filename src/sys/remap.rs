@@ -2009,10 +2009,28 @@ pub fn stopped() -> bool {
 static PREVIEW: Mutex<Option<(Light, bool)>> = Mutex::new(None);
 /// Gatilhos que o editor de perfis experimenta enquanto está aberto.
 static PREVIEW_TRIG: Mutex<Option<[Trig; 2]>> = Mutex::new(None);
+/// O que o quadro da página Controles está pedindo: só vale em `preview_commit`, no fim do quadro.
+/// Mudar a mostra no meio do quadro (soltar no começo, pôr de volta no editor) fazia a linha do
+/// controle ver "sem luz" entre um e outro e escrever a cor padrão: a luz piscava.
+static NEXT: Mutex<(Option<(Light, bool)>, Option<[Trig; 2]>)> = Mutex::new((None, None));
+
+/// Fim do quadro da página Controles: a mostra passa a ser a que o quadro pediu (nada, se o
+/// editor não foi desenhado).
+pub fn preview_commit() {
+    let (l, t) = std::mem::take(&mut *NEXT.lock().unwrap());
+    *PREVIEW.lock().unwrap() = l;
+    *PREVIEW_TRIG.lock().unwrap() = t;
+}
+
+/// Sai da página Controles: solta a mostra na hora.
+pub fn preview_clear() {
+    *NEXT.lock().unwrap() = (None, None);
+    preview_commit();
+}
 
 /// O editor experimenta estes gatilhos no controle enquanto está aberto; `None` solta a mostra.
 pub fn preview_trig(t: Option<[Trig; 2]>) {
-    *PREVIEW_TRIG.lock().unwrap() = t;
+    NEXT.lock().unwrap().1 = t;
 }
 
 /// Háptico do perfil que o controle `key` usa. A parada de emergência desliga.
@@ -2042,7 +2060,7 @@ pub fn triggers(key: &str) -> [Trig; 2] {
 
 /// O editor de perfis mostra esta luz no controle enquanto está aberto; `None` solta a mostra.
 pub fn preview_light(l: Option<(Light, bool)>) {
-    *PREVIEW.lock().unwrap() = l;
+    NEXT.lock().unwrap().0 = l;
 }
 
 /// Luz do perfil em uso e se vale pelo Bluetooth. Vale com o mapeamento em Nativo (a luz não mexe
@@ -2757,6 +2775,23 @@ buzz 9
         p.light_bt = false;
         let q = Profile::parse(&p.to_text()).unwrap();
         assert_eq!((q.light, q.light_bt), (Some(Light::Battery(b)), false));
+    }
+
+    #[test]
+    fn preview_changes_only_at_the_end_of_the_frame() {
+        let c = (Light::Color([1, 2, 3]), true);
+        preview_light(Some(c));
+        preview_commit();
+        // Quadro seguinte: solta no começo e põe de volta no editor; no meio, a mostra não muda.
+        preview_light(None);
+        assert_eq!(*PREVIEW.lock().unwrap(), Some(c));
+        preview_light(Some(c));
+        preview_commit();
+        assert_eq!(*PREVIEW.lock().unwrap(), Some(c));
+        // Quadro sem o editor: a mostra sai.
+        preview_light(None);
+        preview_commit();
+        assert_eq!(*PREVIEW.lock().unwrap(), None);
     }
 
     #[test]

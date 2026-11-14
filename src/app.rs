@@ -3581,8 +3581,7 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                         a.invalidate();
                     } else {
                         crate::sys::pads::set_live(false);
-                        crate::sys::remap::preview_light(None);
-                        crate::sys::remap::preview_trig(None);
+                        crate::sys::remap::preview_clear();
                         let _ = KillTimer(Some(a.hub), TIMER_PADS);
                     }
                 } else if w.0 == TIMER_SHARE {

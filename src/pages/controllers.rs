@@ -236,6 +236,11 @@ pub(super) fn button_names(f: Family) -> &'static [(pads::Buttons, &'static str)
 }
 
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
+    draw_page(ui, app, a);
+    remap::preview_commit();
+}
+
+fn draw_page(ui: &mut Ui, app: &mut App, a: Rect) {
     #[cfg(debug_assertions)]
     if crate::ui::glyph::SHEET.load(std::sync::atomic::Ordering::Relaxed) {
         crate::ui::glyph::sheet(ui.c, rect(a.x + 28.0, 40.0, a.w - 56.0, a.h), TEXT);
@@ -257,7 +262,8 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     super::pad_profiles::opens_with(ui, app, rect(end + 16.0, y, x + fw - end - 16.0, 34.0));
     let top = y + 46.0;
     let h = a.h - top - 12.0;
-    // Fora do editor, nenhuma luz de mostra: as abas que o desenham põem a dele de volta.
+    // Fora do editor, nenhuma luz de mostra: as abas que o desenham põem a dele de volta, e a
+    // mostra só muda no fim do quadro (`preview_commit`).
     remap::preview_light(None);
     remap::preview_trig(None);
     match app.pads.tab {
