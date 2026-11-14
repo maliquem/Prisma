@@ -1785,7 +1785,7 @@ Padrão ({})	Predeterminado ({})
 Mudar	Cambiar
 Driver NVIDIA	Driver NVIDIA
 Driver {}. As mudanças valem na próxima vez que o jogo abrir.	Driver {}. Los cambios se aplican la próxima vez que se abra el juego.
-Cópias	Copias
+Backups	Copias
 Ainda não há cópias. O Prisma guarda uma antes da primeira mudança.	Todavía no hay copias. Prisma guarda una antes del primer cambio.
 Voltar a esta cópia?	¿Volver a esta copia?
 Os perfis do driver voltam como estavam em {}. O que mudou depois, aqui ou em outro programa, se perde.	Los perfiles del driver vuelven a como estaban el {}. Lo que cambió después, aquí o en otro programa, se pierde.
@@ -2396,3 +2396,71 @@ O hash da cópia não confere	El hash de la copia no coincide
 Uma pasta não pode ir para dentro dela mesma	Una carpeta no puede ir dentro de sí misma
 Ligado: botão direito numa pasta, em Mostrar mais opções.	Activado: clic derecho en una carpeta, en Mostrar más opciones.
 Desligado. Cola o que foi copiado no Explorer com pausa, hash e lista de erros.	Desactivado. Pega lo copiado en el Explorador con pausa, hash y lista de errores.
+Só quando eu mandar	Solo cuando yo lo indique
+Todo dia	Todos los días
+Dias da semana	Días de la semana
+Dom	Dom
+Seg	Lun
+Ter	Mar
+Qua	Mié
+Qui	Jue
+Sex	Vie
+Sáb	Sáb
+Escolha o que copiar e para onde	Elige qué copiar y a dónde
+Escolha pelo menos um dia	Elige al menos un día
+Nova cópia	Nueva copia
+O que foi copiado de onde para onde, e listas de cópia para rodar quando quiser ou na hora marcada.	Qué se copió y de dónde a dónde, y listas de copia para ejecutar cuando quieras o a la hora indicada.
+Listas de cópia	Listas de copia
+Conferido	Verificado
+Sem espaço	Sin espacio
+Procurar no histórico	Buscar en el historial
+Nenhuma cópia ainda. As cópias feitas pela janela do Prisma aparecem aqui.	Aún no hay copias. Las copias hechas con la ventana de Prisma aparecen aquí.
+Movido	Movido
+Copiado	Copiado
+Abrir o destino	Abrir el destino
+Copiar de novo	Copiar de nuevo
+Guarda as últimas 500 cópias: caminhos, tamanhos e resultado, na pasta de dados do Prisma.	Guarda las últimas 500 copias: rutas, tamaños y resultado, en la carpeta de datos de Prisma.
+Limpar histórico	Limpiar historial
+Limpar o histórico?	¿Limpiar el historial?
+As cópias somem desta lista. Os arquivos copiados não mudam.	Las copias desaparecen de esta lista. Los archivos copiados no cambian.
+Próxima: {}	Siguiente: {}
+Já rodou	Ya se ejecutó
+Nenhuma lista ainda. Uma lista junta arquivos e pastas de vários lugares para copiar juntos.	Aún no hay listas. Una lista reúne archivos y carpetas de varios lugares para copiarlos juntos.
+Lista sem nome	Lista sin nombre
+Nova lista	Nueva lista
+Escolha uma lista para ver e mudar, ou crie uma nova.	Elige una lista para verla y cambiarla, o crea una nueva.
+Ex.: Backup das fotos	Ej.: Copia de las fotos
+O que copiar	Qué copiar
+Nada ainda.	Aún nada.
+Adicionar arquivos	Añadir archivos
+Adicionar pasta	Añadir carpeta
+Para onde	A dónde
+Nenhuma pasta escolhida	Ninguna carpeta elegida
+Quando	Cuándo
+Dia	Día
+Mês	Mes
+Hora	Hora
+Minuto	Minuto
+Se o arquivo já existir no destino	Si el archivo ya existe en el destino
+Conferir com hash (SHA-256)	Verificar con hash (SHA-256)
+Mover em vez de copiar	Mover en lugar de copiar
+A cópia agendada roda com o Prisma aberto na bandeja. Se o PC estiver desligado na hora, ela roda assim que o Prisma abrir.	La copia programada se ejecuta con Prisma abierto en la bandeja. Si el PC está apagado a esa hora, se ejecuta en cuanto Prisma se abra.
+Apagar lista	Eliminar lista
+Apagar esta lista?	¿Eliminar esta lista?
+A lista e a agenda dela somem. Os arquivos não mudam.	La lista y su programación desaparecen. Los archivos no cambian.
+Copiar agora	Copiar ahora
+De	De
+Para	A
+Arquivos	Archivos
+Velocidade	Velocidad
+Tempo restante	Tiempo restante
+Pico: {}/s	Pico: {}/s
+Fechar ao terminar	Cerrar al terminar
+Tentar de novo	Reintentar
+Cópia do Prisma	Copia de Prisma
+Ctrl+V nas pastas do Explorer cola pelo Prisma	Ctrl+V en las carpetas del Explorador pega con Prisma
+Substituir a cópia do Windows?	¿Reemplazar la copia de Windows?
+Com o Prisma aberto, o Ctrl+V nas pastas do Explorer cola pela janela de cópia do Prisma. Arrastar com o mouse e o Colar do menu continuam com o Windows. Dá para desligar aqui a qualquer hora.	Con Prisma abierto, Ctrl+V en las carpetas del Explorador pega con la ventana de copia de Prisma. Arrastrar con el ratón y Pegar del menú siguen con Windows. Se puede desactivar aquí en cualquier momento.
+Arrastar com o mouse continua com o Windows.	Arrastrar con el ratón sigue con Windows.
+Página Cópias	Página Copias
+Cópias	Copias

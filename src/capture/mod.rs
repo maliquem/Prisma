@@ -583,6 +583,30 @@ pub fn choose_folder(owner: HWND) -> Option<String> {
     }
 }
 
+/// Janela do Windows para escolher arquivos (um ou vários) ou pastas, de qualquer tipo.
+pub fn choose_many(owner: HWND, folders: bool) -> Vec<String> {
+    use windows::Win32::UI::Shell::*;
+    let pick = || -> Option<Vec<String>> {
+        unsafe {
+            let d: IFileOpenDialog = CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER).ok()?;
+            let o = d.GetOptions().ok()?;
+            d.SetOptions(o | FOS_ALLOWMULTISELECT | if folders { FOS_PICKFOLDERS } else { FILEOPENDIALOGOPTIONS(0) }).ok()?;
+            d.Show(Some(owner)).ok()?;
+            let items = d.GetResults().ok()?;
+            let mut out = Vec::new();
+            for i in 0..items.GetCount().ok()? {
+                let Ok(p) = items.GetItemAt(i).and_then(|it| it.GetDisplayName(SIGDN_FILESYSPATH)) else { continue };
+                if let Ok(s) = p.to_string() {
+                    out.push(s);
+                }
+                CoTaskMemFree(Some(p.0 as *const _));
+            }
+            Some(out)
+        }
+    };
+    pick().unwrap_or_default()
+}
+
 /// Janela do Windows para escolher um programa.
 pub fn choose_file(owner: HWND, kind: &str, spec: PCWSTR) -> Option<String> {
     use windows::Win32::UI::Shell::Common::COMDLG_FILTERSPEC;

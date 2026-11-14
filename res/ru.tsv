@@ -1785,7 +1785,7 @@ Padrão ({})	По умолчанию ({})
 Mudar	Изменить
 Driver NVIDIA	Драйвер NVIDIA
 Driver {}. As mudanças valem na próxima vez que o jogo abrir.	Драйвер {}. Изменения вступят в силу при следующем запуске игры.
-Cópias	Копии
+Backups	Копии
 Ainda não há cópias. O Prisma guarda uma antes da primeira mudança.	Копий пока нет. Prisma сохраняет копию перед первым изменением.
 Voltar a esta cópia?	Вернуться к этой копии?
 Os perfis do driver voltam como estavam em {}. O que mudou depois, aqui ou em outro programa, se perde.	Профили драйвера вернутся к состоянию на {}. Всё, что менялось позже, здесь или в другой программе, пропадёт.
@@ -2396,3 +2396,71 @@ O hash da cópia não confere	Хеш копии не совпадает
 Uma pasta não pode ir para dentro dela mesma	Папку нельзя поместить в саму себя
 Ligado: botão direito numa pasta, em Mostrar mais opções.	Включено: правый щелчок по папке, в пункте «Показать дополнительные параметры».
 Desligado. Cola o que foi copiado no Explorer com pausa, hash e lista de erros.	Выключено. Вставляет скопированное в Проводнике с паузой, хешем и списком ошибок.
+Só quando eu mandar	Только по запуску
+Todo dia	Каждый день
+Dias da semana	Дни недели
+Dom	Вс
+Seg	Пн
+Ter	Вт
+Qua	Ср
+Qui	Чт
+Sex	Пт
+Sáb	Сб
+Escolha o que copiar e para onde	Выберите, что копировать и куда
+Escolha pelo menos um dia	Выберите хотя бы один день
+Nova cópia	Новое копирование
+O que foi copiado de onde para onde, e listas de cópia para rodar quando quiser ou na hora marcada.	Что и откуда куда копировалось, а также списки копирования для запуска в любое время или по расписанию.
+Listas de cópia	Списки копирования
+Conferido	Проверено
+Sem espaço	Нет места
+Procurar no histórico	Поиск в истории
+Nenhuma cópia ainda. As cópias feitas pela janela do Prisma aparecem aqui.	Копирований пока нет. Копирования через окно Prisma появятся здесь.
+Movido	Перемещено
+Copiado	Скопировано
+Abrir o destino	Открыть папку назначения
+Copiar de novo	Копировать снова
+Guarda as últimas 500 cópias: caminhos, tamanhos e resultado, na pasta de dados do Prisma.	Хранит последние 500 копирований: пути, размеры и результат, в папке данных Prisma.
+Limpar histórico	Очистить историю
+Limpar o histórico?	Очистить историю?
+As cópias somem desta lista. Os arquivos copiados não mudam.	Записи исчезнут из этого списка. Скопированные файлы не изменятся.
+Próxima: {}	Следующее: {}
+Já rodou	Уже выполнялось
+Nenhuma lista ainda. Uma lista junta arquivos e pastas de vários lugares para copiar juntos.	Списков пока нет. Список объединяет файлы и папки из разных мест, чтобы копировать их вместе.
+Lista sem nome	Список без названия
+Nova lista	Новый список
+Escolha uma lista para ver e mudar, ou crie uma nova.	Выберите список, чтобы просмотреть и изменить его, или создайте новый.
+Ex.: Backup das fotos	Напр.: Резервная копия фото
+O que copiar	Что копировать
+Nada ainda.	Пока ничего.
+Adicionar arquivos	Добавить файлы
+Adicionar pasta	Добавить папку
+Para onde	Куда
+Nenhuma pasta escolhida	Папка не выбрана
+Quando	Когда
+Dia	День
+Mês	Месяц
+Hora	Час
+Minuto	Минута
+Se o arquivo já existir no destino	Если файл уже есть в папке назначения
+Conferir com hash (SHA-256)	Проверять хешем (SHA-256)
+Mover em vez de copiar	Перемещать вместо копирования
+A cópia agendada roda com o Prisma aberto na bandeja. Se o PC estiver desligado na hora, ela roda assim que o Prisma abrir.	Копирование по расписанию выполняется, пока Prisma открыт в трее. Если в это время ПК выключен, оно запустится, как только откроется Prisma.
+Apagar lista	Удалить список
+Apagar esta lista?	Удалить этот список?
+A lista e a agenda dela somem. Os arquivos não mudam.	Список и его расписание будут удалены. Файлы не изменятся.
+Copiar agora	Копировать сейчас
+De	Откуда
+Para	Куда
+Arquivos	Файлы
+Velocidade	Скорость
+Tempo restante	Осталось
+Pico: {}/s	Пик: {}/с
+Fechar ao terminar	Закрыть по завершении
+Tentar de novo	Повторить
+Cópia do Prisma	Копирование Prisma
+Ctrl+V nas pastas do Explorer cola pelo Prisma	Ctrl+V в папках Проводника вставляет через Prisma
+Substituir a cópia do Windows?	Заменить копирование Windows?
+Com o Prisma aberto, o Ctrl+V nas pastas do Explorer cola pela janela de cópia do Prisma. Arrastar com o mouse e o Colar do menu continuam com o Windows. Dá para desligar aqui a qualquer hora.	Пока Prisma открыт, Ctrl+V в папках Проводника вставляет через окно копирования Prisma. Перетаскивание мышью и «Вставить» в меню остаются за Windows. Это можно отключить здесь в любой момент.
+Arrastar com o mouse continua com o Windows.	Перетаскивание мышью остаётся за Windows.
+Página Cópias	Страница «Копирование»
+Cópias	Копирование

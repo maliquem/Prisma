@@ -353,6 +353,8 @@ pub struct Config {
     pub un_silent: bool,
     /// O Windows recusou a troca do Gerenciador: o Prisma pega o Ctrl+Shift+Esc ele mesmo.
     pub tm_hook: bool,
+    /// Ctrl+V nas pastas do Explorer cola pela janela de cópia do Prisma (desligado até a pessoa ligar).
+    pub paste_key: bool,
 }
 
 impl Default for Config {
@@ -478,6 +480,7 @@ impl Default for Config {
             tw_log: false,
             un_silent: true,
             tm_hook: false,
+            paste_key: false,
         }
     }
 }
@@ -784,6 +787,7 @@ impl Config {
                 "tw_log" => c.tw_log = b,
                 "un_silent" => c.un_silent = b,
                 "tm_hook" => c.tm_hook = b,
+                "paste_key" => c.paste_key = b,
                 _ => {}
             }
         }
@@ -954,6 +958,7 @@ impl Config {
         let _ = writeln!(s, "tw_log={}", b(self.tw_log));
         let _ = writeln!(s, "un_silent={}", b(self.un_silent));
         let _ = writeln!(s, "tm_hook={}", b(self.tm_hook));
+        let _ = writeln!(s, "paste_key={}", b(self.paste_key));
         if self.keep_file {
             return;
         }

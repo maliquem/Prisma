@@ -1791,7 +1791,7 @@ Padrão ({})	Default ({})
 Mudar	Change
 Driver NVIDIA	NVIDIA driver
 Driver {}. As mudanças valem na próxima vez que o jogo abrir.	Driver {}. Changes apply the next time the game opens.
-Cópias	Backups
+Backups	Backups
 Ainda não há cópias. O Prisma guarda uma antes da primeira mudança.	There are no backups yet. Prisma saves one before the first change.
 Voltar a esta cópia?	Go back to this backup?
 Os perfis do driver voltam como estavam em {}. O que mudou depois, aqui ou em outro programa, se perde.	The driver profiles go back to how they were on {}. Anything changed since, here or in another program, is lost.
@@ -2402,3 +2402,71 @@ O hash da cópia não confere	The copy's hash doesn't match
 Uma pasta não pode ir para dentro dela mesma	A folder can't go inside itself
 Ligado: botão direito numa pasta, em Mostrar mais opções.	On: right-click a folder, under Show more options.
 Desligado. Cola o que foi copiado no Explorer com pausa, hash e lista de erros.	Off. Pastes what was copied in Explorer with pause, hash and error list.
+Só quando eu mandar	Only when I start it
+Todo dia	Every day
+Dias da semana	Days of the week
+Dom	Sun
+Seg	Mon
+Ter	Tue
+Qua	Wed
+Qui	Thu
+Sex	Fri
+Sáb	Sat
+Escolha o que copiar e para onde	Choose what to copy and where to
+Escolha pelo menos um dia	Choose at least one day
+Nova cópia	New copy
+O que foi copiado de onde para onde, e listas de cópia para rodar quando quiser ou na hora marcada.	What was copied from where to where, and copy lists to run whenever you want or at a set time.
+Listas de cópia	Copy lists
+Conferido	Verified
+Sem espaço	No space
+Procurar no histórico	Search history
+Nenhuma cópia ainda. As cópias feitas pela janela do Prisma aparecem aqui.	No copies yet. Copies made through the Prisma window show up here.
+Movido	Moved
+Copiado	Copied
+Abrir o destino	Open destination
+Copiar de novo	Copy again
+Guarda as últimas 500 cópias: caminhos, tamanhos e resultado, na pasta de dados do Prisma.	Keeps the last 500 copies: paths, sizes and result, in Prisma's data folder.
+Limpar histórico	Clear history
+Limpar o histórico?	Clear the history?
+As cópias somem desta lista. Os arquivos copiados não mudam.	Copies disappear from this list. The copied files are not changed.
+Próxima: {}	Next: {}
+Já rodou	Already ran
+Nenhuma lista ainda. Uma lista junta arquivos e pastas de vários lugares para copiar juntos.	No lists yet. A list gathers files and folders from several places to copy together.
+Lista sem nome	Unnamed list
+Nova lista	New list
+Escolha uma lista para ver e mudar, ou crie uma nova.	Choose a list to view and edit, or create a new one.
+Ex.: Backup das fotos	E.g.: Photo backup
+O que copiar	What to copy
+Nada ainda.	Nothing yet.
+Adicionar arquivos	Add files
+Adicionar pasta	Add folder
+Para onde	Where to
+Nenhuma pasta escolhida	No folder chosen
+Quando	When
+Dia	Day
+Mês	Month
+Hora	Hour
+Minuto	Minute
+Se o arquivo já existir no destino	If the file already exists at the destination
+Conferir com hash (SHA-256)	Verify with hash (SHA-256)
+Mover em vez de copiar	Move instead of copy
+A cópia agendada roda com o Prisma aberto na bandeja. Se o PC estiver desligado na hora, ela roda assim que o Prisma abrir.	The scheduled copy runs while Prisma is open in the tray. If the PC is off at that time, it runs as soon as Prisma opens.
+Apagar lista	Delete list
+Apagar esta lista?	Delete this list?
+A lista e a agenda dela somem. Os arquivos não mudam.	The list and its schedule go away. The files are not changed.
+Copiar agora	Copy now
+De	From
+Para	To
+Arquivos	Files
+Velocidade	Speed
+Tempo restante	Time left
+Pico: {}/s	Peak: {}/s
+Fechar ao terminar	Close when done
+Tentar de novo	Try again
+Cópia do Prisma	Prisma copy
+Ctrl+V nas pastas do Explorer cola pelo Prisma	Ctrl+V in Explorer folders pastes through Prisma
+Substituir a cópia do Windows?	Replace the Windows copy?
+Com o Prisma aberto, o Ctrl+V nas pastas do Explorer cola pela janela de cópia do Prisma. Arrastar com o mouse e o Colar do menu continuam com o Windows. Dá para desligar aqui a qualquer hora.	With Prisma open, Ctrl+V in Explorer folders pastes through Prisma's copy window. Dragging with the mouse and the menu's Paste stay with Windows. You can turn this off here at any time.
+Arrastar com o mouse continua com o Windows.	Dragging with the mouse stays with Windows.
+Página Cópias	Copies page
+Cópias	Copies

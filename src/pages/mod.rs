@@ -3,6 +3,7 @@
 mod adjust;
 mod analyze;
 mod capture;
+pub mod copies;
 pub mod controllers;
 pub mod pad_profiles;
 mod energy;
@@ -61,6 +62,7 @@ pub enum Page {
     Uninstall,
     Tweaks,
     Tools,
+    Copies,
     Optimize,
     Energy,
     Fullscreen,
@@ -198,6 +200,7 @@ const ICON_TOOL: Icon = &[
     &[(5., 19.), (13., 11.)],
     &[(13., 11.), (12., 7.), (15., 4.), (19., 4.), (16., 7.), (17., 8.), (20., 5.), (20., 9.), (17., 12.), (13., 11.)],
 ];
+const ICON_COPY: Icon = &[&[(8., 8.), (20., 8.), (20., 20.), (8., 20.), (8., 8.)], &[(16., 8.), (16., 4.), (4., 4.), (4., 16.), (8., 16.)]];
 const ICON_BOOT: Icon = &[&[(12., 4.), (12., 16.)], &[(7., 9.), (12., 4.), (17., 9.)], &[(5., 20.), (19., 20.)]];
 const ICON_SVC: Icon = &[
     &[(4., 5.), (20., 5.), (20., 10.), (4., 10.), (4., 5.)],
@@ -231,7 +234,13 @@ const ICON_APP: Icon = &[
 
 /// Página `i` da barra lateral, para as ações "Página ..." (`sys::remap::PAGES`).
 pub fn nav_page(i: usize) -> Option<(Page, Icon)> {
-    NAV.get(i).map(|n| (n.0, n.2))
+    action_nav().nth(i).map(|n| (n.0, n.2))
+}
+
+/// A barra lateral na ordem das ações "Página ...": Cópias entrou depois, então fica no fim e os
+/// números das ações já gravadas não mudam.
+fn action_nav() -> impl Iterator<Item = &'static (Page, &'static str, Icon)> {
+    NAV.iter().filter(|n| n.0 != Page::Copies).chain(NAV.iter().filter(|n| n.0 == Page::Copies))
 }
 
 /// Ícone de uma ação do Prisma (`sys::remap::ACTIONS`), ou de abrir um programa (`sys::radial::PROGRAM`).
@@ -281,6 +290,7 @@ const NAV: &[(Page, &str, Icon)] = &[
     (Page::Uninstall, "Desinstalar", ICON_DEL),
     (Page::Tweaks, "Ajustes do Windows", ICON_TW),
     (Page::Tools, "Ferramentas", ICON_TOOL),
+    (Page::Copies, "Cópias", ICON_COPY),
     (Page::Optimize, "Otimizar", ICON_OPT),
     (Page::Energy, "Energia", ICON_POW),
     (Page::Fullscreen, "Fullscreenizer", ICON_WIN),
@@ -401,6 +411,7 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
         Page::Uninstall => uninstall::draw(&mut ui, app, area),
         Page::Tweaks => tweaks::draw(&mut ui, app, area),
         Page::Tools => tools::draw(&mut ui, app, area),
+        Page::Copies => copies::draw(&mut ui, app, area),
         Page::Optimize => optimize::draw(&mut ui, app, area),
         Page::Energy => energy::draw(&mut ui, app, area),
         Page::Fullscreen => fullscreen::draw(&mut ui, app, area),
@@ -549,7 +560,7 @@ mod tests {
         use crate::sys::remap::{ACTIONS, PAGES};
         let pages = &ACTIONS[PAGES as usize..];
         assert_eq!(pages.len(), super::NAV.len());
-        for (a, n) in pages.iter().zip(super::NAV) {
+        for (a, n) in pages.iter().zip(super::action_nav()) {
             assert_eq!(*a, format!("Página {}", n.1));
         }
     }

@@ -165,7 +165,7 @@ fn draw_with(ui: &mut Ui, app: &mut App, a: Rect, st: &mut State) {
     let ver = drs::driver_version().unwrap_or(0);
     let ver = format!("{}{}{:02}", ver / 100, crate::i18n::comma(), ver % 100);
     header_room(ui, a, "Driver NVIDIA", &format!("Driver {ver}. As mudanças valem na próxima vez que o jogo abrir."), 200.0);
-    if ui.button("nv-bk", rect(a.right() - 28.0 - 160.0, 30.0, 160.0, 36.0), "Cópias", false) {
+    if ui.button("nv-bk", rect(a.right() - 28.0 - 160.0, 30.0, 160.0, 36.0), "Backups", false) {
         st.backups = drs::backups();
         if st.backups.is_empty() {
             app.toast.info("Ainda não há cópias. O Prisma guarda uma antes da primeira mudança.");
