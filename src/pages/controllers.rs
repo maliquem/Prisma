@@ -295,7 +295,7 @@ fn draw_page(ui: &mut Ui, app: &mut App, a: Rect) {
                 let art_h = art_head(app) + ((col - 24.0) * 470.0 / 640.0).floor() + 12.0;
                 let mut y = top + art_h + 12.0;
                 if !draw_art(ui, app, p, rect(x, top, col, art_h)) {
-                    let live = rect(x, top, col, 300.0);
+                    let live = rect(x, top, col, live_h(p, col));
                     ui.card(live);
                     draw_live(ui, p, live);
                     y = live.bottom() + 12.0;
@@ -869,35 +869,86 @@ fn draw_live(ui: &mut Ui, p: &Pad, r: Rect) {
         };
         ui.c.text_raw(rect(bar.x - 10.0, bar.bottom() + 4.0, 32.0, 16.0), name, 11.0, MUTED, Align::Center, Weight::Regular);
     }
-    // Botões: os do desenho da família, ou numerados no controle genérico, e o direcional.
-    // Com desenho próprio, cada botão é o ícone dele; no genérico, o número.
-    let glyphs = p.family != Family::Generic;
     let style = crate::ui::glyph::Style::of(p.family, p.vid);
-    let mut chips: Vec<(pads::Buttons, bool, String)> = [(pads::UP, "↑"), (pads::DOWN, "↓"), (pads::LEFT, "←"), (pads::RIGHT, "→")].iter().map(|(b, n)| (*b, i.buttons & b != 0, n.to_string())).collect();
-    if p.family == Family::Generic {
-        chips.extend((0..p.generic_buttons.min(10)).map(|n| (0, i.buttons & (1 << n) != 0, (n + 1).to_string())));
-    } else {
-        chips.extend(button_names(p.family).iter().map(|(b, n)| (*b, i.buttons & b != 0, crate::i18n::tr(n).into_owned())));
-    }
-    let (mut bx, mut by) = (r.x + 16.0, cy + rad + 32.0);
-    for (bit, on, label) in chips {
-        let w = if glyphs { crate::ui::glyph::width(bit, 16.0) + 16.0 } else { measure(&label, 12.0, Weight::Semibold, None).0 + 20.0 };
-        if bx + w > r.right() - 16.0 {
-            bx = r.x + 16.0;
-            by += 30.0;
-        }
-        if by + 24.0 > r.bottom() - 8.0 {
-            break;
-        }
-        let c = rect(bx, by, w, 24.0);
+    let mut bottom = cy + rad + 32.0;
+    for (c, bit, on, label) in live_chips(p, r) {
         ui.c.round(c, 6.0, if on { ACCENT } else { CARD2 });
-        if glyphs {
+        if p.family != Family::Generic {
             crate::ui::glyph::draw(ui.c, c.x + 8.0, c.y + 12.0, 16.0, style, bit, if on { ON_ACCENT } else { TEXT2 });
         } else {
             ui.c.text_raw(c, &label, 12.0, if on { ON_ACCENT } else { TEXT2 }, Align::Center, Weight::Semibold);
         }
+        bottom = c.bottom();
+    }
+    // Eixos do controle genérico, crus: manete, leme, pedais e o que mais vier.
+    for (k, &(page, usage)) in p.generic_axes.iter().enumerate() {
+        let y = bottom + 12.0 + k as f32 * AXIS_ROW;
+        let lw = 110.0;
+        ui.c.text_fit(rect(r.x + 16.0, y, lw, 18.0), &axis_name(page, usage), 12.0, MUTED, Align::Left, Weight::Regular);
+        let bar = rect(r.x + 24.0 + lw, y + 5.0, r.w - lw - 40.0, 8.0);
+        ui.c.round(bar, 4.0, CARD2);
+        ui.c.round(rect(bar.x, bar.y, bar.w * i.axes[k].clamp(0.0, 1.0), bar.h), 4.0, ACCENT);
+    }
+}
+
+const AXIS_ROW: f32 = 22.0;
+
+/// Botões do teste ao vivo, já no lugar: os do desenho da família, ou numerados no genérico, e o
+/// direcional. Começam embaixo dos sticks.
+fn live_chips(p: &Pad, r: Rect) -> Vec<(Rect, pads::Buttons, bool, String)> {
+    let i = p.input;
+    let mut chips: Vec<(pads::Buttons, bool, String)> = [(pads::UP, "↑"), (pads::DOWN, "↓"), (pads::LEFT, "←"), (pads::RIGHT, "→")].iter().map(|(b, n)| (*b, i.buttons & b != 0, n.to_string())).collect();
+    if p.family == Family::Generic {
+        chips.extend((0..p.generic_buttons).map(|n| pads::generic_bit(n)).enumerate().map(|(n, b)| (b, i.buttons & b != 0, (n + 1).to_string())));
+    } else {
+        chips.extend(button_names(p.family).iter().map(|(b, n)| (*b, i.buttons & b != 0, crate::i18n::tr(n).into_owned())));
+    }
+    let (mut bx, mut by) = (r.x + 16.0, r.y + LIVE_CHIPS);
+    let mut out = vec![];
+    for (bit, on, label) in chips {
+        // O genérico tem largura fixa: 32 botões com número de dois dígitos cabem em linhas iguais.
+        let w = if p.family == Family::Generic { 36.0 } else { crate::ui::glyph::width(bit, 16.0) + 16.0 };
+        if bx + w > r.right() - 16.0 {
+            bx = r.x + 16.0;
+            by += 30.0;
+        }
+        out.push((rect(bx, by, w, 24.0), bit, on, label));
         bx += w + 6.0;
     }
+    out
+}
+
+/// Onde os botões começam: abaixo da linha de estado e dos sticks.
+const LIVE_CHIPS: f32 = 62.0 + 2.0 * 46.0 + 32.0;
+
+/// Altura do cartão do teste ao vivo com largura `w`: cresce com os botões e eixos do controle.
+fn live_h(p: &Pad, w: f32) -> f32 {
+    let r = rect(0.0, 0.0, w, 0.0);
+    let chips = live_chips(p, r).last().map_or(LIVE_CHIPS, |c| c.0.bottom());
+    let axes = p.generic_axes.len() as f32 * AXIS_ROW;
+    (chips + if axes > 0.0 { 12.0 + axes } else { 0.0 } + 16.0).max(300.0)
+}
+
+/// Nome de um eixo HID: X, Y, Z e as rotações ficam como estão; os outros, pelo uso.
+fn axis_name(page: u16, usage: u16) -> String {
+    let n = match (page, usage) {
+        (1, 0x30) => "X",
+        (1, 0x31) => "Y",
+        (1, 0x32) => "Z",
+        (1, 0x33) => "Rx",
+        (1, 0x34) => "Ry",
+        (1, 0x35) => "Rz",
+        (1, 0x36) => "Deslizante",
+        (1, 0x37) => "Roda",
+        (2, 0xBA) => "Leme",
+        (2, 0xBB) => "Manete",
+        (2, 0xC4) => "Acelerador",
+        (2, 0xC5) => "Freio",
+        (2, 0xC6) => "Embreagem",
+        (2, 0xC8) => "Volante",
+        _ => return format!("{page:X}:{usage:02X}"),
+    };
+    crate::i18n::tr(n).into_owned()
 }
 
 fn draw_results(ui: &mut Ui, r: &Results, b: Rect) {

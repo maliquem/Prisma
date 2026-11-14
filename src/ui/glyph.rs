@@ -85,6 +85,12 @@ pub fn draw(c: &Canvas, x: f32, cy: f32, h: f32, s: Style, bit: pads::Buttons, c
     let (w, r, sw) = (width(bit, h), h / 2.0, stroke(h));
     let cx = x + r;
     let label = |t: &str, size: f32, at: Rect| c.text_raw(at, t, size, col, Align::Center, Weight::Semibold);
+    // Genérico: os botões são números, até o 32 (os do 11 ao 14 usam os bits dos botões de trás).
+    if let Some(n) = (0..32).find(|&n| s == Style::Numbers && pads::generic_bit(n) == bit) {
+        c.round_line(rect(x, cy - r, w, h), r, col, sw);
+        label(&(n + 1).to_string(), h * 0.5, rect(x, cy - r, w, h));
+        return w;
+    }
     match bit {
         DPAD_ANY => dpad(c, cx, cy, h, None, col),
         pads::A | pads::B | pads::X | pads::Y => {

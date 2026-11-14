@@ -36,8 +36,11 @@ pub const TPDR: Buttons = 1 << 37;
 /// Gatilho apertado até o fim: o segundo estágio do gatilho.
 pub const LTF: Buttons = 1 << 38;
 pub const RTF: Buttons = 1 << 39;
-// Os botões de trás (`pads::L4` a `pads::PR`) vêm depois dos virtuais.
-const COUNT: usize = 44;
+// Os botões de trás (`pads::L4` a `pads::PR`) vêm depois dos virtuais; os botões 15 a 32 dos
+// controles genéricos (`pads::generic_bit`), depois deles.
+const COUNT: usize = 62;
+/// Botões 15 a 32 dos controles genéricos.
+const EXTRA: Buttons = ((1 << 18) - 1) << 44;
 const ALL: Buttons = (1 << COUNT) - 1;
 
 /// Nome de cada botão no arquivo do perfil.
@@ -49,6 +52,9 @@ pub const NAMES: [(&str, Buttons); COUNT] = [
     ("RSU", RSU), ("RSD", RSD), ("RSL", RSL), ("RSR", RSR), ("TPU", TPU), ("TPD", TPD), ("TPL", TPL), ("TPR", TPR),
     ("TPTAP", TPTAP), ("TPCL", TPCL), ("TPCR", TPCR), ("TPUL", TPUL), ("TPUR", TPUR), ("TPDL", TPDL), ("TPDR", TPDR),
     ("LTF", LTF), ("RTF", RTF), ("L4", pads::L4), ("R4", pads::R4), ("PL", pads::PL), ("PR", pads::PR),
+    ("B15", 1 << 44), ("B16", 1 << 45), ("B17", 1 << 46), ("B18", 1 << 47), ("B19", 1 << 48), ("B20", 1 << 49),
+    ("B21", 1 << 50), ("B22", 1 << 51), ("B23", 1 << 52), ("B24", 1 << 53), ("B25", 1 << 54), ("B26", 1 << 55),
+    ("B27", 1 << 56), ("B28", 1 << 57), ("B29", 1 << 58), ("B30", 1 << 59), ("B31", 1 << 60), ("B32", 1 << 61),
 ];
 
 /// Segurar a partir de 400 ms; tocar é soltar antes disso; duplo é apertar de novo em até 300 ms.
@@ -1029,7 +1035,8 @@ impl Profile {
         };
         lose(touch, sony, "touchpad");
         lose(self.layers.iter().any(|l| on(&l.gyro)), gyro, "giroscópio");
-        lose(binds().any(|b| (b.button | b.with) & (pads::L4 | pads::R4 | pads::PL | pads::PR) != 0), fam == pads::Family::EightBitDo, "botões de trás");
+        lose(binds().any(|b| (b.button | b.with) & (pads::L4 | pads::R4 | pads::PL | pads::PR) != 0), matches!(fam, pads::Family::EightBitDo | pads::Family::Generic), "botões de trás");
+        lose(binds().any(|b| (b.button | b.with) & EXTRA != 0), fam == pads::Family::Generic, "botões extras");
         lose(self.light.is_some(), sony, "barra de luz");
         lose(binds().any(|b| (b.button | b.with) & pads::MUTE != 0), fam == pads::Family::DualSense, "botão de mute");
         lose(self.trig != [Trig::Pass; 2], fam == pads::Family::DualSense, "gatilhos adaptativos");
@@ -1436,7 +1443,7 @@ impl Engine {
         }
         // Até o fim: liga em 0,95 e só desliga abaixo de 0,9.
         let full = |v: f32, bit: Buttons| if v > 0.95 || (v > 0.9 && prev & bit != 0) { bit } else { 0 };
-        let cur = (inp.buttons & 0x1ffff) | gest | trig[0] | trig[1] | full(lt, LTF) | full(rt, RTF) | on(ly, LSU) | on(-ly, LSD) | on(-lx, LSL) | on(lx, LSR) | on(ry, RSU) | on(-ry, RSD) | on(-rx, RSL) | on(rx, RSR);
+        let cur = (inp.buttons & pads::PHYSICAL) | gest | trig[0] | trig[1] | full(lt, LTF) | full(rt, RTF) | on(ly, LSU) | on(-ly, LSD) | on(-lx, LSL) | on(lx, LSR) | on(ry, RSU) | on(-ry, RSD) | on(-rx, RSL) | on(rx, RSR);
         let changed = cur ^ prev;
         // Soltar antes de apertar: uma troca de botões no mesmo relatório solta a tecla velha antes.
         for i in 0..COUNT {

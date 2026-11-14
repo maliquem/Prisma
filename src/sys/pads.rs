@@ -56,6 +56,20 @@ pub const L4: Buttons = 1 << 40;
 pub const R4: Buttons = 1 << 41;
 pub const PL: Buttons = 1 << 42;
 pub const PR: Buttons = 1 << 43;
+/// Botões que vêm do controle (o resto é virtual, do `remap`): até o 17, e do 40 em diante, onde
+/// ficam os de trás e os botões 15 a 32 do controle genérico.
+pub const PHYSICAL: Buttons = 0x1ffff | !((1 << 40) - 1);
+
+/// Bit do botão `n` (de 0) do controle genérico: 1 a 10 nos botões do desenho comum, 11 a 14 nos
+/// de trás (L4, R4, PL, PR) e 15 a 32 do bit 44 em diante.
+pub fn generic_bit(n: u8) -> Buttons {
+    match n {
+        0..=9 => 1 << n,
+        10..=13 => L4 << (n - 10),
+        14..=31 => 1 << (44 + n as u32 - 14),
+        _ => 0,
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Family {
@@ -107,6 +121,8 @@ pub struct Input {
     pub motion: bool,
     /// Touchpad: até dois dedos, de 0 a 1 (x da esquerda, y de cima).
     pub touch: [Option<(f32, f32)>; 2],
+    /// Controle genérico: cada eixo de 0 a 1, na ordem de `Pad::generic_axes`.
+    pub axes: [f32; 8],
 }
 
 /// Calibração do gyro: com o controle parado (pouca variação por 1 s), a média vira o desvio que
@@ -184,6 +200,8 @@ pub struct Pad {
     pub rate: Option<Rate>,
     /// Quantos botões o controle genérico declara.
     pub generic_buttons: u8,
+    /// Eixos do controle genérico, como (página, uso) do HID, até 8; os hats não entram.
+    pub generic_axes: Vec<(u16, u16)>,
     low_warned: bool,
     jitter_warned: bool,
     pub gyro_cal: GyroCal,
@@ -263,7 +281,13 @@ pub fn list() -> Vec<Pad> {
     v
 }
 
-/// Fotos de teste (`--test-pad=ds|ds4|xbox`, só no build de depuração): um controle de mentira com
+/// Quantos botões numerados o editor de perfis oferece para controles genéricos: o maior entre os
+/// conectados, ou 32 quando nenhum está.
+pub fn generic_buttons() -> u8 {
+    list().iter().filter(|p| p.family == Family::Generic).map(|p| p.generic_buttons).max().filter(|n| *n > 0).unwrap_or(32)
+}
+
+/// Fotos de teste (`--test-pad=ds|ds4|xbox|8bitdo|switch|generic`, só no build de depuração): um controle de mentira com
 /// Cruz/A e R1/RB apertados, o gatilho esquerdo no meio e o stick esquerdo fora do centro.
 #[cfg(debug_assertions)]
 static FAKE: Mutex<Option<Pad>> = Mutex::new(None);
@@ -275,11 +299,19 @@ pub fn fake(kind: &str) {
         "ds4" => Family::Ds4,
         "8bitdo" => Family::EightBitDo,
         "switch" => Family::Switch,
+        "generic" => Family::Generic,
         _ => Family::Xbox,
     };
     let extra = if family == Family::EightBitDo { L4 | PR } else { 0 };
     let input = Input { buttons: A | RB | extra, lt: 0.6, lx: 0.6, ly: 0.4, gyro: [24.0, -90.0, 6.0], motion: family != Family::Xbox, touch: [Some((0.3, 0.45)), None], ..Default::default() };
-    let pad = Pad { key: "test".into(), name: nice_name(family, ""), family, link: Link::Usb, vid: 0, pid: 0, battery: Battery::Percent { pct: 82, charging: false }, input, rate: None, generic_buttons: 0, low_warned: false, jitter_warned: false, gyro_cal: GyroCal::default() };
+    let pad = Pad { key: "test".into(), name: nice_name(family, ""), family, link: Link::Usb, vid: 0, pid: 0, battery: Battery::Percent { pct: 82, charging: false }, input, rate: None, generic_buttons: 0, generic_axes: vec![], low_warned: false, jitter_warned: false, gyro_cal: GyroCal::default() };
+    let pad = if family != Family::Generic {
+        pad
+    } else {
+        // Um manche: 16 botões, X e Y, manete, leme e um eixo de disco.
+        let input = Input { buttons: generic_bit(0) | generic_bit(14) | UP, axes: [0.8, 0.3, 0.65, 0.5, 0.1, 0.0, 0.0, 0.0], ..pad.input };
+        Pad { generic_buttons: 16, generic_axes: vec![(1, 0x30), (1, 0x31), (2, 0xBB), (2, 0xBA), (1, 0x37)], input, ..pad }
+    };
     *FAKE.lock().unwrap() = Some(pad);
 }
 
@@ -996,11 +1028,72 @@ unsafe fn check_bluetooth() {
 
 // ---------- Leitura HID ----------
 
-/// Escala de um eixo do HID genérico.
+/// Eixo do HID genérico e o lugar dele no desenho comum.
 struct Axis {
+    page: u16,
     usage: u16,
+    link: u16,
     min: i32,
     max: i32,
+    role: Option<Role>,
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Role {
+    Lx,
+    Ly,
+    Rx,
+    Ry,
+    Lt,
+    Rt,
+    /// O primeiro hat vai nas setas; o segundo, no stick direito até o fim.
+    Hat,
+    Hat2,
+}
+
+/// Lugar de cada eixo (página, uso): X e Y no analógico esquerdo, Z e Rz no direito, Rx e Ry nos
+/// gatilhos (a ordem mais comum no DirectInput). Volante e manche ocupam o que sobrou: o volante no
+/// stick esquerdo, acelerador e manete no gatilho direito, freio no esquerdo, leme no stick direito.
+/// shortcut: um controle com outra ordem (pedais em Y e Rz, por exemplo) aparece trocado nos
+/// sticks; todos os eixos aparecem crus na lista do teste e o perfil pode ler os botões.
+fn roles(axes: &[(u16, u16)]) -> Vec<Option<Role>> {
+    use Role::*;
+    let mut out: Vec<Option<Role>> = axes
+        .iter()
+        .map(|a| match a {
+            (1, 0x30) => Some(Lx),
+            (1, 0x31) => Some(Ly),
+            (1, 0x32) => Some(Rx),
+            (1, 0x35) => Some(Ry),
+            (1, 0x33) => Some(Lt),
+            (1, 0x34) => Some(Rt),
+            _ => None,
+        })
+        .collect();
+    let mut hats = 0;
+    for (i, a) in axes.iter().enumerate() {
+        if *a == (1, 0x39) {
+            out[i] = [Some(Hat), Some(Hat2)].get(hats).copied().flatten();
+            hats += 1;
+        }
+    }
+    let spare: [((u16, u16), &[Role]); 7] = [
+        ((2, 0xC8), &[Lx]),
+        ((2, 0xC4), &[Rt]),
+        ((2, 0xC5), &[Lt]),
+        ((2, 0xBB), &[Rt, Lt]),
+        ((1, 0x36), &[Rt, Lt]),
+        ((1, 0x37), &[Lt, Rt]),
+        ((2, 0xBA), &[Rx]),
+    ];
+    for (usage, want) in spare {
+        for i in 0..axes.len() {
+            if axes[i] == usage && out[i].is_none() {
+                out[i] = want.iter().copied().find(|w| !out.contains(&Some(*w)));
+            }
+        }
+    }
+    out
 }
 
 unsafe fn generic_axes(pre: PHIDP_PREPARSED_DATA) -> (Vec<Axis>, u8) {
@@ -1011,19 +1104,27 @@ unsafe fn generic_axes(pre: PHIDP_PREPARSED_DATA) -> (Vec<Axis>, u8) {
     let mut axes = vec![];
     if n > 0 && HidP_GetValueCaps(HidP_Input, vc.as_mut_ptr(), &mut n, pre).is_ok() {
         for v in &vc[..n as usize] {
-            if v.UsagePage == 1 && !v.IsRange {
-                axes.push(Axis { usage: v.Anonymous.NotRange.Usage, min: v.LogicalMin, max: v.LogicalMax });
+            // Generic Desktop (sticks, hats) e Simulation (volante, pedais, leme, manete).
+            if (v.UsagePage == 1 || v.UsagePage == 2) && !v.IsRange {
+                axes.push(Axis { page: v.UsagePage, usage: v.Anonymous.NotRange.Usage, link: v.LinkCollection, min: v.LogicalMin, max: v.LogicalMax, role: None });
             }
         }
+    }
+    let r = roles(&axes.iter().map(|a| (a.page, a.usage)).collect::<Vec<_>>());
+    for (a, r) in axes.iter_mut().zip(r) {
+        a.role = r;
     }
     let buttons = HidP_MaxUsageListLength(HidP_Input, Some(9), pre).min(32) as u8;
     (axes, buttons)
 }
 
-/// Relatório de um controle genérico: botões numerados (bit 0 é o botão 1), X e Y no analógico
-/// esquerdo, Z e Rz no direito, Rx e Ry nos gatilhos, e o direcional (hat) nas setas.
-/// shortcut: é a ordem mais comum no DirectInput; um controle com outra ordem aparece trocado na
-/// tela, e o mapeamento por controle fica para a Fase 2.
+/// Eixos que a lista do teste mostra: todos menos os hats, até 8.
+fn raw_axes(axes: &[Axis]) -> impl Iterator<Item = &Axis> {
+    axes.iter().filter(|a| (a.page, a.usage) != (1, 0x39)).take(8)
+}
+
+/// Relatório de um controle genérico: botões numerados (`generic_bit`), eixos pelo `roles` e cada
+/// eixo cru de 0 a 1 em `Input::axes`.
 unsafe fn generic_input(pre: PHIDP_PREPARSED_DATA, axes: &[Axis], report: &mut [u8]) -> Input {
     let mut inp = Input::default();
     let mut usages = [0u16; 32];
@@ -1031,32 +1132,43 @@ unsafe fn generic_input(pre: PHIDP_PREPARSED_DATA, axes: &[Axis], report: &mut [
     if HidP_GetUsages(HidP_Input, 9, None, usages.as_mut_ptr(), &mut n, pre, report).is_ok() {
         for u in &usages[..n as usize] {
             if (1..=32).contains(u) {
-                inp.buttons |= 1 << (u - 1);
+                inp.buttons |= generic_bit((u - 1) as u8);
             }
         }
     }
-    let mut hat = None;
+    let mut raw = 0;
     for a in axes {
         let mut v = 0u32;
-        if HidP_GetUsageValue(HidP_Input, 1, None, a.usage, &mut v, pre, report).is_err() {
+        if HidP_GetUsageValue(HidP_Input, a.page, Some(a.link), a.usage, &mut v, pre, report).is_err() {
             continue;
         }
         let span = (a.max - a.min).max(1) as f32;
         let unit = ((v as i32 - a.min) as f32 / span).clamp(0.0, 1.0);
         let stick = unit * 2.0 - 1.0;
-        match a.usage {
-            0x30 => inp.lx = stick,
-            0x31 => inp.ly = -stick,
-            0x32 => inp.rx = stick,
-            0x35 => inp.ry = -stick,
-            0x33 => inp.lt = unit,
-            0x34 => inp.rt = unit,
-            0x39 => hat = Some(v as i32 - a.min),
-            _ => {}
+        if (a.page, a.usage) != (1, 0x39) && raw < 8 {
+            inp.axes[raw] = unit;
+            raw += 1;
+        }
+        let hat = || hat_bits(u8::try_from(v as i32 - a.min).unwrap_or(u8::MAX));
+        match a.role {
+            Some(Role::Lx) => inp.lx = stick,
+            Some(Role::Ly) => inp.ly = -stick,
+            Some(Role::Rx) => inp.rx = stick,
+            Some(Role::Ry) => inp.ry = -stick,
+            Some(Role::Lt) => inp.lt = unit,
+            Some(Role::Rt) => inp.rt = unit,
+            // O direcional não colide com os botões numerados: o 11 em diante fica nos bits altos.
+            Some(Role::Hat) => inp.buttons |= hat(),
+            Some(Role::Hat2) => {
+                let h = hat();
+                if h != 0 {
+                    let s = |plus: Buttons, minus: Buttons| (h & plus != 0) as i32 as f32 - (h & minus != 0) as i32 as f32;
+                    (inp.rx, inp.ry) = (s(RIGHT, LEFT), s(UP, DOWN));
+                }
+            }
+            None => {}
         }
     }
-    // O direcional entra fora dos botões numerados, para não confundir com o botão 11 em diante.
-    inp.buttons = (inp.buttons & 0x3ff) | hat.map_or(0, |h| hat_bits(h as u8));
     inp
 }
 
@@ -1455,6 +1567,7 @@ unsafe fn read_loop(d: Dev) {
                 input: Input::default(),
                 rate: None,
                 generic_buttons: generic.as_ref().map_or(0, |g| g.1),
+                generic_axes: generic.as_ref().map_or(vec![], |g| raw_axes(&g.0).map(|a| (a.page, a.usage)).collect()),
                 low_warned: false,
                 jitter_warned: false, gyro_cal: GyroCal::default(),
             });
@@ -1724,6 +1837,7 @@ unsafe fn poll_xinput() {
                     input: xinput_input(&st.Gamepad),
                     rate,
                     generic_buttons: 0,
+                    generic_axes: vec![],
                     low_warned: false,
                     jitter_warned: false, gyro_cal: GyroCal::default(),
                 });
@@ -1802,6 +1916,35 @@ pub fn trigger(rest: &[f32], pressed: &[f32]) -> Option<(f32, f32, f32)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn generic_roles() {
+        use Role::*;
+        // Gamepad: o mapeamento direto, dois hats.
+        let pad = [(1, 0x30), (1, 0x31), (1, 0x32), (1, 0x35), (1, 0x39), (1, 0x39), (1, 0x39)];
+        assert_eq!(roles(&pad), [Some(Lx), Some(Ly), Some(Rx), Some(Ry), Some(Hat), Some(Hat2), None]);
+        // Volante: direção no stick esquerdo, acelerador e freio nos gatilhos, embreagem só crua.
+        let wheel = [(2, 0xC8), (2, 0xC4), (2, 0xC5), (2, 0xC6)];
+        assert_eq!(roles(&wheel), [Some(Lx), Some(Rt), Some(Lt), None]);
+        // Manche: manete no gatilho livre, leme no stick direito, dois deslizantes dividem os gatilhos.
+        let stick = [(1, 0x30), (1, 0x31), (1, 0x33), (2, 0xBB), (2, 0xBA), (1, 0x36), (1, 0x36)];
+        assert_eq!(roles(&stick), [Some(Lx), Some(Ly), Some(Lt), Some(Rt), Some(Rx), None, None]);
+        assert_eq!(roles(&[(1, 0x36), (1, 0x36)]), [Some(Rt), Some(Lt)]);
+    }
+
+    #[test]
+    fn generic_bits() {
+        assert_eq!(generic_bit(0), A);
+        assert_eq!(generic_bit(9), RS);
+        assert_eq!(generic_bit(10), L4);
+        assert_eq!(generic_bit(13), PR);
+        assert_eq!(generic_bit(31), 1 << 61);
+        assert_eq!(generic_bit(32), 0);
+        let all = (0..32).fold(0, |b, n| b | generic_bit(n));
+        assert_eq!(all.count_ones(), 32);
+        assert_eq!(all & (UP | DOWN | LEFT | RIGHT), 0);
+        assert_eq!(all & !PHYSICAL, 0);
+    }
 
     #[test]
     fn dualsense_usb() {
@@ -2095,6 +2238,7 @@ mod tests {
             input: Input::default(),
             rate: None,
             generic_buttons: 0,
+            generic_axes: vec![],
             low_warned: false,
             jitter_warned: false, gyro_cal: GyroCal::default(),
         };

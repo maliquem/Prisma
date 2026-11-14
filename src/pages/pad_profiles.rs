@@ -351,8 +351,7 @@ fn tr(s: &str) -> String {
 fn buttons(f: Family) -> Vec<(pads::Buttons, String)> {
     let mut v: Vec<(pads::Buttons, String)> = [(pads::UP, "↑"), (pads::DOWN, "↓"), (pads::LEFT, "←"), (pads::RIGHT, "→")].iter().map(|(b, n)| (*b, n.to_string())).collect();
     if f == Family::Generic {
-        let order = [pads::A, pads::B, pads::X, pads::Y, pads::LB, pads::RB, pads::BACK, pads::START, pads::LS, pads::RS];
-        v.extend(order.iter().enumerate().map(|(i, b)| (*b, (i + 1).to_string())));
+        v.extend((0..pads::generic_buttons()).map(|n| (pads::generic_bit(n), (n + 1).to_string())));
     } else {
         v.extend(super::controllers::button_names(f).iter().map(|(b, n)| (*b, tr(n))));
     }
@@ -1168,7 +1167,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
     // Nova ligação: quando, junto com qual botão, e o destino.
     let whens: Vec<String> = WHENS.iter().map(|w| tr(w.1)).collect();
     ui.select("pp-when", rect(x, y, third, 34.0), &whens, &mut ed.when);
-    let others: Vec<&(pads::Buttons, String)> = chips.iter().filter(|c| c.0 != ed.button && c.0 & 0x1ffff != 0).collect();
+    let others: Vec<&(pads::Buttons, String)> = chips.iter().filter(|c| c.0 != ed.button && c.0 & pads::PHYSICAL != 0).collect();
     let mut withs = vec![tr("Sozinho")];
     withs.extend(others.iter().map(|c| tr("Junto com {}").replace("{}", &c.1)));
     ed.with = ed.with.min(withs.len() - 1);
