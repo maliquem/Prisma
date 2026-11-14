@@ -485,8 +485,10 @@ A barra lateral é `NAV` (`src/pages/mod.rs:273-295`), na ordem abaixo. Cada pá
 | Função | Como é chamada | Onde no código | Observações |
 |---|---|---|---|
 | Mostrar ou esconder o widget | Atalho `HK_WIDGET` (`app.rs:142`); ação 19; bandeja | `toggle_widget` `src/app.rs:2748`; `set_widget` `app.rs:2753` | `hk_widget` em `config.rs:194`. |
-| Janela do widget | Automático | `overlays::Widget` `src/overlays.rs:38`; `update` `overlays.rs:76`; `set_visible` `overlays.rs:69` | Config `widget_on`, `widget_style`, `widget_x`, `widget_y`. |
-| Prévia na página | Página | `overlays.rs:161` `preview` | |
+| Janela do widget | Automático | `overlays::Widget` `src/overlays.rs:112`; `update` `overlays.rs:200`; `set_visible`; `size` `overlays.rs:260` (tamanho conforme o texto) | Config `widget_on`, `widget_style`, `widget_x`, `widget_y`, `widget_items`. |
+| Itens que aparecem (lista "O que aparece") | Página, caixas `wi0`..`wi8` | `ITEMS` `overlays.rs:22`; `parse_items` `:35`; `toggle_item` `:43` (o último ligado não desliga); `items` `:81`; teste `widget_tests` `:374` | `widget_items` em `config.rs:226`, um bit por item. |
+| Leituras novas (só dos itens ligados) | Automático | `Widget::refresh` `overlays.rs:171` (plano e HDR a cada 5 s, VRR a cada 30 s em outra thread); `power::active`; `hdr::hdr_on` `src/sys/hdr.rs:92`; `drs::gsync` `src/sys/drs.rs:269`; `kmt::Kmt::temp` `src/sys/kmt.rs:83`; `monitor::GPU_TEMP` `monitor.rs:101`; `cputemp::WIDGET` `cputemp.rs:41` | VRR = G-SYNC global da NVIDIA; outras placas mostram —. Temperatura da GPU pelo D3DKMT (qualquer placa). |
+| Prévia na página | Página | `overlays.rs:364` `preview` | |
 | Monitor onde ele fica | Automático | `overlays.rs:194` `focus_monitor` | |
 
 ### 4.21 Configurações (`src/pages/adjust.rs`, `draw` linha 4)
@@ -528,7 +530,7 @@ A barra lateral é `NAV` (`src/pages/mod.rs:273-295`), na ordem abaixo. Cada pá
 
 ## 6. Números e testes de apoio
 
-- Testes `#[test]` por área (contagem feita com grep): `sys/remap.rs` 21; `sys/macros.rs` 2; `link.rs` 19; `sys/pads.rs` 14;  `sys/osk.rs` 6; `sys/radial.rs` 6; `sys/power.rs` 5; `sys/index.rs` 4; `sys/cmds.rs` 4; `config.rs` 2; `sys/update.rs` 2; `sys/quick.rs` 2; `sys/stores.rs` 2; `app.rs` 1; `i18n.rs` 2; `sys/nvset.rs` 1; `pages/nvidia.rs` 1; `pages/mod.rs` 1; `ui/glyph.rs` 1; `sys/nav.rs` 2; `ui/mod.rs` 1; `overlays.rs` 2 (1 ignorado); `stream/` 34 no total.
+- Testes `#[test]` por área (contagem feita com grep): `sys/remap.rs` 21; `sys/macros.rs` 2; `link.rs` 19; `sys/pads.rs` 14;  `sys/osk.rs` 6; `sys/radial.rs` 6; `sys/power.rs` 5; `sys/index.rs` 4; `sys/cmds.rs` 4; `config.rs` 2; `sys/update.rs` 2; `sys/quick.rs` 2; `sys/stores.rs` 2; `app.rs` 1; `i18n.rs` 2; `sys/nvset.rs` 1; `pages/nvidia.rs` 1; `pages/mod.rs` 1; `ui/glyph.rs` 1; `sys/nav.rs` 2; `ui/mod.rs` 1; `overlays.rs` 3 (1 ignorado); `stream/` 34 no total.
 - `src/selftest.rs` (só debug): `run` (linha 5), `misc` (23), `fake_uninstall` (55), `tweaks` (110), `audit` (162), `toolrun` (189), `tweak_log` (223).
 
 ---

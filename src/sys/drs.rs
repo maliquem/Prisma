@@ -265,6 +265,11 @@ pub fn snapshot(who: &Profile, ids: &[u32]) -> Option<Snapshot> {
     })
 }
 
+/// G-SYNC ligado na placa toda (perfil global). None sem placa NVIDIA.
+pub fn gsync() -> Option<bool> {
+    snapshot(&Profile::Global, &[0x1094_F157])?.values.first().copied().flatten().map(|v| v.now != 0)
+}
+
 static BACKED_UP: AtomicBool = AtomicBool::new(false);
 
 pub fn backup_dir() -> PathBuf {

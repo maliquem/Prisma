@@ -222,6 +222,8 @@ pub struct Config {
     pub vol_osd: bool,
     pub widget_on: bool,
     pub widget_style: u8,
+    /// Itens que o widget mostra, um bit por item de `overlays::ITEMS`.
+    pub widget_items: u16,
     pub widget_x: i32,
     pub widget_y: i32,
     pub power_auto: bool,
@@ -385,6 +387,7 @@ impl Default for Config {
             vol_osd: true,
             widget_on: false,
             widget_style: 0,
+            widget_items: crate::overlays::ALL_ITEMS,
             widget_x: 24,
             widget_y: 24,
             power_auto: true,
@@ -628,6 +631,7 @@ impl Config {
                 "vol_osd" => c.vol_osd = b,
                 "widget_on" => c.widget_on = b,
                 "widget_style" => c.widget_style = v.parse().unwrap_or(0),
+                "widget_items" => c.widget_items = crate::overlays::parse_items(v),
                 "widget_x" => c.widget_x = v.parse().unwrap_or(24),
                 "widget_y" => c.widget_y = v.parse().unwrap_or(24),
                 "power_auto" => c.power_auto = b,
@@ -832,6 +836,7 @@ impl Config {
         let _ = writeln!(s, "vol_osd={}", b(self.vol_osd));
         let _ = writeln!(s, "widget_on={}", b(self.widget_on));
         let _ = writeln!(s, "widget_style={}", self.widget_style);
+        let _ = writeln!(s, "widget_items={}", self.widget_items);
         let _ = writeln!(s, "widget_x={}", self.widget_x);
         let _ = writeln!(s, "widget_y={}", self.widget_y);
         let _ = writeln!(s, "power_auto={}", b(self.power_auto));
@@ -1058,6 +1063,7 @@ impl Config {
                 self.hk_widget = d.hk_widget;
                 self.widget_on = d.widget_on;
                 self.widget_style = d.widget_style;
+                self.widget_items = d.widget_items;
                 self.widget_x = d.widget_x;
                 self.widget_y = d.widget_y;
             }

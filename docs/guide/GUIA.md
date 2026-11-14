@@ -306,7 +306,7 @@ Mostra os controles ligados por USB ou Bluetooth, ao vivo, e pode usar o control
 
 ## Widget
 
-Mostra CPU, GPU, RAM e VRAM por cima de tudo, em quatro estilos. Arraste para mudar de lugar. Atalho: Ctrl + Alt + W.
+Mostra por cima de tudo, em quatro estilos: uso da CPU e da GPU, RAM, VRAM, temperatura da CPU e da GPU, plano de energia ativo, HDR da tela onde o widget está e VRR (G-SYNC da placa NVIDIA). Em **O que aparece**, na página Widget, você escolhe os itens; o widget muda de tamanho para caber o que estiver ligado. Item sem leitura mostra "—": a temperatura da CPU precisa do PawnIO (o mesmo do Medidor) e o VRR só é lido em placa NVIDIA. Arraste para mudar de lugar. Atalho: Ctrl + Alt + W.
 
 ## Prisma Launcher
 

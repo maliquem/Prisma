@@ -700,7 +700,6 @@ Anéis	Anillos
 Atalho para ligar e desligar	Atajo para activar y desactivar
 Barras finas	Barras finas
 Instrumento	Instrumento
-Mostra CPU, GPU, RAM e VRAM por cima de tudo. Arraste para mudar de lugar.	Muestra CPU, GPU, RAM y VRAM por encima de todo. Arrástralo para moverlo.
 Mostrar widget	Mostrar widget
 Pílula	Píldora
 Idioma	Idioma
@@ -797,7 +796,6 @@ Volta as opções de ponto de restauração e de desinstalar sem janela ao padr�
 Volta as opções Ver log e Restauração ao padrão. Os ajustes aplicados continuam como estão: para reverter, use Desfazer.	Restablece las opciones Mostrar registro y Punto de restauración a lo predeterminado. Los ajustes aplicados siguen igual: usa Deshacer para revertirlos.
 Esvazia as listas de nunca fechar e sempre fechar, e as sugestões recusadas. Essa ação não fecha nenhum programa.	Vacía las listas de nunca cerrar y siempre cerrar y las sugerencias rechazadas. No cierra ningún programa.
 Volta o modificador, o passo e o aviso na tela ao padrão.	Restablece el modificador, el paso y el aviso en pantalla a lo predeterminado.
-Volta o atalho, o estilo e a posição do widget ao padrão, e esconde o widget.	Restablece el atajo, el estilo y la posición del widget a lo predeterminado, y oculta el widget.
 Volta os atalhos de Otimizar, Fechar à força e Reiniciar o Explorer, o idioma e a busca de atualização ao padrão.	Restablece los atajos de Optimizar, Forzar cierre y Reiniciar Explorador, el idioma y la comprobación de actualizaciones a lo predeterminado.
 Fechar à força	Forzar cierre
 Encerra na hora o programa em foco, mesmo travado. O que não foi salvo é perdido.	Termina al instante el programa en foco, aunque esté congelado. Se pierde lo no guardado.
@@ -2363,3 +2361,8 @@ Acelerador	Acelerador
 Freio	Freno
 Embreagem	Embrague
 Volante	Volante
+Uso da CPU	Uso de CPU
+Uso da GPU	Uso de GPU
+O que aparece	Qué mostrar
+Mostra uso, temperatura, plano de energia, HDR e VRR por cima de tudo. Arraste para mudar de lugar.	Muestra uso, temperatura, plan de energía, HDR y VRR por encima de todo. Arrástralo para moverlo.
+Volta o atalho, o estilo, os itens e a posição do widget ao padrão, e esconde o widget.	Restablece el atajo, el estilo, los elementos y la posición del widget a lo predeterminado, y oculta el widget.

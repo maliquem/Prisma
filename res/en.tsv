@@ -706,7 +706,6 @@ Anéis	Rings
 Atalho para ligar e desligar	Shortcut to turn on and off
 Barras finas	Thin bars
 Instrumento	Instrument
-Mostra CPU, GPU, RAM e VRAM por cima de tudo. Arraste para mudar de lugar.	Shows CPU, GPU, RAM and VRAM on top of everything. Drag to move it.
 Mostrar widget	Show widget
 Pílula	Pill
 Idioma	Language
@@ -803,7 +802,6 @@ Volta as opções de ponto de restauração e de desinstalar sem janela ao padr�
 Volta as opções Ver log e Restauração ao padrão. Os ajustes aplicados continuam como estão: para reverter, use Desfazer.	Resets the Show log and Restore point options to default. Applied tweaks stay as they are: use Undo to revert them.
 Esvazia as listas de nunca fechar e sempre fechar, e as sugestões recusadas. Essa ação não fecha nenhum programa.	Empties the never-close and always-close lists and the declined suggestions. This does not close any program.
 Volta o modificador, o passo e o aviso na tela ao padrão.	Resets the modifier, step and on-screen notice to default.
-Volta o atalho, o estilo e a posição do widget ao padrão, e esconde o widget.	Resets the widget shortcut, style and position to default, and hides the widget.
 Volta os atalhos de Otimizar, Fechar à força e Reiniciar o Explorer, o idioma e a busca de atualização ao padrão.	Resets the Optimize, Force close and Restart Explorer shortcuts, language and update check to default.
 Fechar à força	Force close
 Encerra na hora o programa em foco, mesmo travado. O que não foi salvo é perdido.	Ends the focused program at once, even if frozen. Anything unsaved is lost.
@@ -2369,3 +2367,8 @@ Acelerador	Accelerator
 Freio	Brake
 Embreagem	Clutch
 Volante	Steering
+Uso da CPU	CPU usage
+Uso da GPU	GPU usage
+O que aparece	What to show
+Mostra uso, temperatura, plano de energia, HDR e VRR por cima de tudo. Arraste para mudar de lugar.	Shows usage, temperature, power plan, HDR and VRR on top of everything. Drag to move it.
+Volta o atalho, o estilo, os itens e a posição do widget ao padrão, e esconde o widget.	Resets the widget shortcut, style, items and position to default, and hides the widget.

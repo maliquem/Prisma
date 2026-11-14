@@ -700,7 +700,6 @@ Anéis	Кольца
 Atalho para ligar e desligar	Клавиши для включения и выключения
 Barras finas	Тонкие полосы
 Instrumento	Прибор
-Mostra CPU, GPU, RAM e VRAM por cima de tudo. Arraste para mudar de lugar.	Показывает CPU, GPU, ОЗУ и видеопамять поверх всего. Перетащите, чтобы переместить.
 Mostrar widget	Показать виджет
 Pílula	Капсула
 Idioma	Язык
@@ -797,7 +796,6 @@ Volta as opções de ponto de restauração e de desinstalar sem janela ao padr�
 Volta as opções Ver log e Restauração ao padrão. Os ajustes aplicados continuam como estão: para reverter, use Desfazer.	Сбрасывает параметры «Показать журнал» и «Точка восстановления» по умолчанию. Применённые настройки остаются: отмените их кнопкой «Отменить».
 Esvazia as listas de nunca fechar e sempre fechar, e as sugestões recusadas. Essa ação não fecha nenhum programa.	Очищает списки «никогда не закрывать» и «всегда закрывать» и отклонённые предложения. Программы не закрываются.
 Volta o modificador, o passo e o aviso na tela ao padrão.	Сбрасывает модификатор, шаг и уведомление на экране по умолчанию.
-Volta o atalho, o estilo e a posição do widget ao padrão, e esconde o widget.	Сбрасывает клавиши, стиль и положение виджета по умолчанию и скрывает виджет.
 Volta os atalhos de Otimizar, Fechar à força e Reiniciar o Explorer, o idioma e a busca de atualização ao padrão.	Сбрасывает клавиши «Оптимизировать», «Закрыть принудительно» и «Перезапустить Проводник», язык и проверку обновлений по умолчанию.
 Fechar à força	Закрыть принудительно
 Encerra na hora o programa em foco, mesmo travado. O que não foi salvo é perdido.	Сразу завершает активную программу, даже зависшую. Несохранённое пропадёт.
@@ -2363,3 +2361,8 @@ Acelerador	Газ
 Freio	Тормоз
 Embreagem	Сцепление
 Volante	Руль
+Uso da CPU	Загрузка CPU
+Uso da GPU	Загрузка GPU
+O que aparece	Что показывать
+Mostra uso, temperatura, plano de energia, HDR e VRR por cima de tudo. Arraste para mudar de lugar.	Показывает загрузку, температуру, схему питания, HDR и VRR поверх всего. Перетащите, чтобы переместить.
+Volta o atalho, o estilo, os itens e a posição do widget ao padrão, e esconde o widget.	Сбрасывает клавиши, стиль, элементы и положение виджета по умолчанию и скрывает виджет.

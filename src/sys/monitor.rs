@@ -97,6 +97,8 @@ pub static DETAIL: AtomicBool = AtomicBool::new(false);
 pub static GPU_WANTED: AtomicBool = AtomicBool::new(false);
 /// O medidor sobre o jogo também precisa das leituras completas.
 pub static METER: AtomicBool = AtomicBool::new(false);
+/// O widget mostra a temperatura da GPU: lida pelo Windows, sem a biblioteca da NVIDIA.
+pub static GPU_TEMP: AtomicBool = AtomicBool::new(false);
 /// Atualiza a cada segundo, sem as leituras caras do modo detalhado.
 pub static FAST: AtomicBool = AtomicBool::new(false);
 
@@ -382,7 +384,7 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
             nvml = None;
         }
         // O driver só fica aberto enquanto alguém mostra a temperatura; sem ele, tenta de novo a cada 30 s.
-        if detail && super::cputemp::WANTED.load(Ordering::Relaxed) {
+        if (detail && super::cputemp::WANTED.load(Ordering::Relaxed)) || super::cputemp::WIDGET.load(Ordering::Relaxed) {
             if cpu_temp.is_none() && cpu_temp_at.map_or(true, |t| t.elapsed().as_secs() >= 30) {
                 cpu_temp_at = Some(Instant::now());
                 cpu_temp = super::cputemp::CpuTemp::open();
@@ -394,6 +396,9 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
         }
         let cpu_c = cpu_temp.as_ref().and_then(|t| t.read());
         let mut gpu = kmt.as_mut().map(|k| k.read()).unwrap_or_default();
+        if GPU_TEMP.load(Ordering::Relaxed) {
+            gpu.temp = kmt.as_ref().map_or(0, |k| k.temp());
+        }
         if let Some(n) = &nvml {
             // Uso e VRAM em uso vêm do Windows; o resto, só a NVIDIA sabe.
             let (util, used) = (gpu.util, gpu.used);
