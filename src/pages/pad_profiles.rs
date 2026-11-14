@@ -701,7 +701,7 @@ pub fn top(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
             // A cópia não herda o padrão do programa: o padrão continua sendo um só.
             p.main &= rename;
             if !rename {
-                p.made_for = if matches!(family, Family::Generic | Family::EightBitDo) { Family::Xbox } else { family };
+                p.made_for = if matches!(family, Family::Generic | Family::EightBitDo | Family::Switch) { Family::Xbox } else { family };
             }
             let mut ok = remap::save(&p);
             if ok && rename {

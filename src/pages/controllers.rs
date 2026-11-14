@@ -247,6 +247,8 @@ pub(super) fn button_names(f: Family) -> &'static [(pads::Buttons, &'static str)
             (PL, "PL"),
             (PR, "PR"),
         ],
+        // Nomes do Pro Controller do Switch.
+        Family::Switch => &[(A, "B"), (B, "A"), (X, "Y"), (Y, "X"), (LB, "L"), (RB, "R"), (LS, "L3"), (RS, "R3"), (BACK, "-"), (START, "+"), (GUIDE, "Home"), (PAD, "Capture")],
         _ => &[(A, "A"), (B, "B"), (X, "X"), (Y, "Y"), (LB, "LB"), (RB, "RB"), (LS, "LS"), (RS, "RS"), (BACK, "View"), (START, "Menu"), (GUIDE, "Xbox")],
     }
 }
@@ -632,7 +634,7 @@ fn art(f: Family) -> Option<(&'static str, &'static [u8], &'static [Hit])> {
         Family::DualSense => Some(("pad-ds", include_bytes!("../../res/pads/ds.png"), HITS_DS)),
         Family::Ds4 => Some(("pad-ds4", include_bytes!("../../res/pads/ds4.png"), HITS_DS4)),
         Family::Xbox => Some(("pad-xbox", include_bytes!("../../res/pads/xbox.png"), HITS_XBOX)),
-        Family::EightBitDo | Family::Generic => None,
+        Family::EightBitDo | Family::Switch | Family::Generic => None,
     }
 }
 
@@ -860,6 +862,8 @@ fn draw_live(ui: &mut Ui, p: &Pad, r: Rect) {
         let name = match (p.family, k) {
             (Family::DualSense | Family::Ds4, 0) => "L2",
             (Family::DualSense | Family::Ds4, _) => "R2",
+            (Family::Switch, 0) => "ZL",
+            (Family::Switch, _) => "ZR",
             (_, 0) => "LT",
             _ => "RT",
         };

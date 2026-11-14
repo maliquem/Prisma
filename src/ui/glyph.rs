@@ -22,7 +22,7 @@ impl Style {
             Family::DualSense | Family::Ds4 => Style::PlayStation,
             Family::Xbox => Style::Xbox,
             // O 8BitDo vem com as letras na posição da Nintendo (B embaixo, A à direita).
-            Family::EightBitDo => Style::Nintendo,
+            Family::EightBitDo | Family::Switch => Style::Nintendo,
             Family::Generic if vid == 0x057e => Style::Nintendo,
             Family::Generic => Style::Numbers,
         }

@@ -1017,7 +1017,7 @@ impl Profile {
     /// Partes do controle que o perfil usa e que um controle da família `fam` não tem.
     pub fn lost_on(&self, fam: pads::Family) -> Vec<&'static str> {
         let sony = matches!(fam, pads::Family::DualSense | pads::Family::Ds4);
-        let gyro = sony || fam == pads::Family::EightBitDo;
+        let gyro = sony || matches!(fam, pads::Family::EightBitDo | pads::Family::Switch);
         let binds = || self.layers.iter().flat_map(|l| &l.binds);
         let on = |m: &Option<Motion>| matches!(m, Some(Motion::Mouse(_) | Motion::Stick(_)));
         let touch = binds().any(|b| (b.button | b.with) & (TPU | TPD | TPL | TPR | TPTAP | TPCL | TPCR | TPUL | TPUR | TPDL | TPDR) != 0) || self.layers.iter().any(|l| on(&l.touch));

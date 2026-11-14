@@ -65,6 +65,9 @@ pub enum Family {
     Xbox,
     /// 8BitDo pelo canal do fabricante (modo D): botões com nome, botões de trás, gyro e bateria.
     EightBitDo,
+    /// Pro Controller do Switch e os que se passam por ele (o 8BitDo Pro 3 no modo S): relatório
+    /// completo 0x30 com gyro, bateria e sticks calibrados.
+    Switch,
     /// HID genérico: botões numerados e eixos na ordem do controle.
     Generic,
 }
@@ -271,6 +274,7 @@ pub fn fake(kind: &str) {
         "ds" => Family::DualSense,
         "ds4" => Family::Ds4,
         "8bitdo" => Family::EightBitDo,
+        "switch" => Family::Switch,
         _ => Family::Xbox,
     };
     let extra = if family == Family::EightBitDo { L4 | PR } else { 0 };
@@ -914,6 +918,7 @@ fn family(vid: u16, pid: u16) -> Family {
         // Os do driver do SDL com o relatório novo (Pro 2, Pro 3, Ultimate 2, 2C e 3). SF30 e
         // SN30 Pro têm firmware com outro formato e seguem como genéricos.
         (0x2dc8, 0x6003 | 0x6006 | 0x6009 | 0x6012 | 0x301b | 0x202f) => Family::EightBitDo,
+        (0x057e, 0x2009) => Family::Switch,
         _ => Family::Generic,
     }
 }
@@ -924,6 +929,7 @@ fn nice_name(f: Family, name: &str) -> String {
         Family::DualSense => "DualSense".into(),
         Family::Ds4 => "DualShock 4".into(),
         Family::EightBitDo if name.is_empty() => "8BitDo".into(),
+        Family::Switch if name.is_empty() => "Pro Controller".into(),
         _ if name.is_empty() => "Controle".into(),
         _ => name.to_string(),
     }
@@ -1194,6 +1200,173 @@ pub fn eightbitdo(pid: u16, r: &[u8]) -> Option<(Input, Option<Battery>)> {
     Some((i, bat))
 }
 
+/// Calibração dos sticks do Pro Controller (eixos lx, ly, rx, ry): centro e o alcance de cada lado,
+/// que cresce quando o stick passa dele, como no driver do SDL.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct StickCal {
+    center: [f32; 4],
+    lo: [f32; 4],
+    hi: [f32; 4],
+}
+
+impl Default for StickCal {
+    fn default() -> Self {
+        // Sem calibração lida: centro 2048 e 70% de 70% do meio, como o SDL faz com 0xFFF.
+        StickCal { center: [2048.0; 4], lo: [2048.0 * 0.49; 4], hi: [2048.0 * 0.49; 4] }
+    }
+}
+
+impl StickCal {
+    /// Calibração de fábrica (18 bytes do endereço 0x603D da memória do controle): valores de 12
+    /// bits empacotados, em ordens diferentes nos dois sticks. 0xFFF é campo vazio.
+    fn from_spi(b: &[u8]) -> StickCal {
+        let mut c = StickCal::default();
+        if b.len() < 18 {
+            return c;
+        }
+        let six = |p: &[u8]| {
+            let (lo, hi) = (|i: usize| ((p[i + 1] as u16) << 8 & 0xF00) | p[i] as u16, |i: usize| (p[i + 2] as u16) << 4 | (p[i + 1] as u16) >> 4);
+            [lo(0), hi(0), lo(3), hi(3), lo(6), hi(6)]
+        };
+        let (l, r) = (six(&b[..9]), six(&b[9..18]));
+        // Esquerdo: máx x, máx y, centro x, centro y, mín x, mín y. Direito: centro, mín, máx.
+        for (axis, (center, min, max)) in [(0, (l[2], l[4], l[0])), (1, (l[3], l[5], l[1])), (2, (r[0], r[2], r[4])), (3, (r[1], r[3], r[5]))] {
+            let ctr = if center == 0xFFF { 2048.0 } else { center as f32 };
+            let side = |v: u16| if v == 0xFFF { ctr * 0.7 } else { v as f32 } * 0.7;
+            c.center[axis] = ctr;
+            c.lo[axis] = side(min);
+            c.hi[axis] = side(max);
+        }
+        c
+    }
+
+    fn axis(&mut self, axis: usize, raw: u16) -> f32 {
+        let v = raw as f32 - self.center[axis];
+        if v >= 0.0 {
+            self.hi[axis] = self.hi[axis].max(v);
+            v / self.hi[axis]
+        } else {
+            self.lo[axis] = self.lo[axis].max(-v);
+            v / self.lo[axis]
+        }
+    }
+}
+
+/// Pro Controller pelo Bluetooth: liga o relatório completo (0x30) com gyro e lê a calibração dos
+/// sticks, pelos subcomandos do relatório de saída 0x01 (protocolo lido no driver do SDL, zlib;
+/// nada copiado). Cada subcomando espera a resposta 0x21 por até 100 ms, três vezes. Só a
+/// calibração de fábrica é lida.
+/// shortcut: a calibração do usuário (0x8010) fica de fora; ler se algum controle vier descalibrado.
+unsafe fn switch_setup(path: &str, in_len: usize, out_len: usize) -> StickCal {
+    use windows::Win32::System::Threading::{CreateEventW, WaitForSingleObject};
+    use windows::Win32::System::IO::{CancelIoEx, GetOverlappedResult, OVERLAPPED};
+    let mut cal = StickCal::default();
+    let Ok(h) = CreateFileW(&HSTRING::from(path), (FILE_GENERIC_READ | FILE_GENERIC_WRITE).0, FILE_SHARE_READ | FILE_SHARE_WRITE, None, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, None) else { return cal };
+    let Ok(ev) = CreateEventW(None, true, false, None) else {
+        let _ = CloseHandle(h);
+        return cal;
+    };
+    // Uma leitura ou escrita com prazo; devolve os bytes, ou None se não veio a tempo.
+    let io = |write: bool, buf: &mut [u8], ms: u32| -> Option<usize> {
+        let mut ov = OVERLAPPED { hEvent: ev, ..Default::default() };
+        let r = if write { WriteFile(h, Some(buf), None, Some(&mut ov)) } else { ReadFile(h, Some(buf), None, Some(&mut ov)) };
+        if let Err(e) = r {
+            if e.code() != ERROR_IO_PENDING.to_hresult() {
+                return None;
+            }
+        }
+        let mut n = 0u32;
+        if WaitForSingleObject(ev, ms) != WAIT_OBJECT_0 {
+            let _ = CancelIoEx(h, Some(&ov));
+            let _ = GetOverlappedResult(h, &ov, &mut n, true);
+            return None;
+        }
+        GetOverlappedResult(h, &ov, &mut n, false).ok().map(|_| n as usize)
+    };
+    let mut seq = 0u8;
+    let mut ask = |id: u8, args: &[u8]| -> Option<Vec<u8>> {
+        let mut inbuf = vec![0u8; in_len.max(64)];
+        for _ in 0..3 {
+            let mut out = vec![0u8; out_len.max(49)];
+            out[0] = 0x01;
+            out[1] = seq & 0x0F;
+            seq = seq.wrapping_add(1);
+            // Vibração parada nos dois motores.
+            out[2..10].copy_from_slice(&[0x00, 0x01, 0x40, 0x40, 0x00, 0x01, 0x40, 0x40]);
+            out[10] = id;
+            out[11..11 + args.len()].copy_from_slice(args);
+            io(true, &mut out, 500)?;
+            let until = Instant::now() + Duration::from_millis(100);
+            while let Some(left) = until.checked_duration_since(Instant::now()) {
+                match io(false, &mut inbuf, left.as_millis() as u32 + 1) {
+                    Some(n) if n > 15 && inbuf[0] == 0x21 && inbuf[14] == id => return Some(inbuf[15..n].to_vec()),
+                    Some(_) => {}
+                    None => break,
+                }
+            }
+        }
+        trace(|| format!("Pro Controller: subcomando {id:#04x} sem resposta"));
+        None
+    };
+    std::thread::sleep(Duration::from_millis(250));
+    // Resposta da leitura da memória: endereço (4 bytes) e tamanho (1) ecoados, depois os dados.
+    if let Some(r) = ask(0x10, &[0x3D, 0x60, 0, 0, 18]).filter(|r| r.len() >= 23 && r[..4] == [0x3D, 0x60, 0, 0]) {
+        cal = StickCal::from_spi(&r[5..23]);
+    }
+    ask(0x48, &[1]); // vibração ligada
+    ask(0x03, &[0x30]); // relatório completo
+    ask(0x40, &[1]); // gyro e acelerômetro
+    ask(0x30, &[0x01]); // primeira luz de jogador
+    let _ = CloseHandle(ev);
+    let _ = CloseHandle(h);
+    cal
+}
+
+/// Relatório do Pro Controller: 0x30 completo (e 0x21, a resposta de subcomando, com o mesmo
+/// começo) ou 0x3F simples, o de antes de pedir o completo. Letras na posição da Nintendo: o B
+/// de baixo vira o A do Prisma. ZL e ZR são digitais.
+pub fn switch_pro(cal: &mut StickCal, r: &[u8]) -> Option<(Input, Option<Battery>)> {
+    let set = |byte: u8, map: &[(u8, Buttons)]| map.iter().filter(|m| byte & m.0 != 0).fold(0, |b, m| b | m.1);
+    let trig = |on: bool| if on { 1.0 } else { 0.0 };
+    match *r.first()? {
+        0x30 | 0x21 if r.len() >= 12 => {
+            let b = set(r[3], &[(0x01, X), (0x02, Y), (0x04, A), (0x08, B), (0x40, RB)])
+                | set(r[4], &[(0x01, BACK), (0x02, START), (0x04, RS), (0x08, LS), (0x10, GUIDE), (0x20, PAD)])
+                | set(r[5], &[(0x01, DOWN), (0x02, UP), (0x04, RIGHT), (0x08, LEFT), (0x40, LB)]);
+            let x = |p: usize| r[p] as u16 | (r[p + 1] as u16 & 0xF) << 8;
+            let y = |p: usize| (r[p + 1] as u16) >> 4 | (r[p + 2] as u16) << 4;
+            // Y do Switch já cresce para cima, como no Prisma.
+            let mut i = Input { buttons: b, lx: cal.axis(0, x(6)), ly: cal.axis(1, y(6)), rx: cal.axis(2, x(9)), ry: cal.axis(3, y(9)), lt: trig(r[5] & 0x80 != 0), rt: trig(r[3] & 0x80 != 0), ..Default::default() };
+            for v in [&mut i.lx, &mut i.ly, &mut i.rx, &mut i.ry] {
+                *v = v.clamp(-1.0, 1.0);
+            }
+            // Três amostras de 12 bytes a partir do 13; a primeira é a mais nova.
+            if r[0] == 0x30 && r.len() >= 25 {
+                let le = |at: usize| i16::from_le_bytes([r[at], r[at + 1]]) as f32;
+                let (ax, ay, az, gx, gy, gz) = (le(13), le(15), le(17), le(19), le(21), le(23));
+                if ax != 0.0 || ay != 0.0 || az != 0.0 {
+                    let dps = 1.0 / 14.2842;
+                    i.gyro = [-gy * dps, gz * dps, -gx * dps];
+                    i.accel = [-ay / 4096.0, az / 4096.0, -ax / 4096.0];
+                    i.motion = true;
+                }
+            }
+            let level = (r[2] & 0xE0) >> 4;
+            let bat = Battery::Percent { pct: (level as u16 * 100 / 8).min(100) as u8, charging: r[2] & 0x10 != 0 && level < 8 };
+            Some((i, Some(bat)))
+        }
+        0x3F if r.len() >= 12 => {
+            let b = hat_bits(r[3])
+                | set(r[1], &[(0x01, A), (0x02, B), (0x04, X), (0x08, Y), (0x10, LB), (0x20, RB)])
+                | set(r[2], &[(0x01, BACK), (0x02, START), (0x04, LS), (0x08, RS), (0x10, GUIDE), (0x20, PAD)]);
+            // shortcut: alcance fixo de meio curso, sem crescer; dura só até o relatório completo.
+            let s = |p: usize| ((u16::from_le_bytes([r[p], r[p + 1]]) as f32 - 32768.0) / 16384.0).clamp(-1.0, 1.0);
+            Some((Input { buttons: b, lx: s(4), ly: -s(6), rx: s(8), ry: -s(10), lt: trig(r[1] & 0x40 != 0), rt: trig(r[1] & 0x80 != 0), ..Default::default() }, None))
+        }
+        _ => None,
+    }
+}
+
 fn ds_battery(b: u8) -> Battery {
     let level = b & 0x0f;
     match b >> 4 {
@@ -1259,9 +1432,12 @@ unsafe fn read_loop(d: Dev) {
     // leitura não dá erro nenhum: sem isso o controle ficava na lista para sempre.
     // shortcut: o genérico pode só mandar relatório quando algo muda, então fica na lista até o
     // Windows tirar o aparelho; um genérico Bluetooth desligado pode ficar, até medir o 8BitDo.
-    let streams = matches!(fam, Family::DualSense | Family::Ds4 | Family::EightBitDo);
+    let streams = matches!(fam, Family::DualSense | Family::Ds4 | Family::EightBitDo | Family::Switch);
+    let mut sticks = StickCal::default();
     if fam == Family::EightBitDo {
         eightbitdo_mode(&d.path, d.pid);
+    } else if fam == Family::Switch {
+        sticks = switch_setup(&d.path, d.input_len as usize, d.output_len as usize);
     } else if streams && link == Link::Bluetooth {
         full_mode(&d.path);
     }
@@ -1357,6 +1533,7 @@ unsafe fn read_loop(d: Dev) {
         let mut parsed = match &generic {
             Some((axes, _)) => Some((generic_input(pre, axes, &mut buf[..got as usize]), None)),
             None if fam == Family::EightBitDo => eightbitdo(d.pid, &buf[..got as usize]),
+            None if fam == Family::Switch => switch_pro(&mut sticks, &buf[..got as usize]),
             None => sony(fam, link, &buf[..got as usize]),
         };
         #[cfg(debug_assertions)]
@@ -1682,6 +1859,38 @@ mod tests {
         let (i, bat) = eightbitdo(0x301b, &r[..11]).unwrap();
         assert_eq!((i.buttons & (L4 | R4 | PL | PR), bat), (L4 | R4, None));
         assert!(eightbitdo(0x6009, &[0x02; 32]).is_none());
+    }
+
+    #[test]
+    fn switch_pro_report() {
+        // Calibração de fábrica: centro 2000 e 1500 para cada lado nos quatro eixos.
+        let pack = |a: u16, b: u16| [a as u8, (a >> 8) as u8 & 0x0F | (b << 4) as u8, (b >> 4) as u8];
+        let (c, s) = (2000u16, 1500u16);
+        let spi: Vec<u8> = [pack(s, s), pack(c, c), pack(s, s), pack(c, c), pack(s, s), pack(s, s)].concat();
+        let mut cal = StickCal::from_spi(&spi);
+        assert_eq!((cal.center, cal.hi[0]), ([2000.0; 4], 1050.0));
+        // 0x30 com o stick esquerdo todo à direita e para cima, B (embaixo), ZR, + e Home.
+        let mut r = [0u8; 49];
+        r[0] = 0x30;
+        r[2] = 0x50; // nível 4 de 8, carregando
+        (r[3], r[4], r[5]) = (0x04 | 0x80, 0x02 | 0x10, 0x02);
+        r[6..9].copy_from_slice(&pack(3100, 3100));
+        r[9..12].copy_from_slice(&pack(2000, 2000));
+        r[18] = 0x10; // acelerômetro z = 4096: 1 g
+        let (i, bat) = switch_pro(&mut cal, &r).unwrap();
+        assert_eq!(i.buttons, A | START | GUIDE | UP);
+        assert_eq!((i.lx, i.ly, i.rx, i.rt, i.lt), (1.0, 1.0, 0.0, 1.0, 0.0));
+        assert_eq!(cal.hi[0], 1100.0); // o alcance cresceu
+        assert_eq!(bat, Some(Battery::Percent { pct: 50, charging: true }));
+        assert!(i.motion && (i.accel[1] - 1.0).abs() < 1e-6);
+        // 0x3F simples: hat para a esquerda, A (à direita) e o stick esquerdo para baixo.
+        let mut s = [0u8; 12];
+        s[0] = 0x3F;
+        (s[1], s[3]) = (0x02, 6);
+        s[4..12].copy_from_slice(&[0, 0x80, 0xFF, 0xFF, 0, 0x80, 0, 0x80]);
+        let (i, _) = switch_pro(&mut cal, &s).unwrap();
+        assert_eq!((i.buttons, i.lx, i.ly), (B | LEFT, 0.0, -1.0));
+        assert!(switch_pro(&mut cal, &[0x31; 49]).is_none());
     }
 
     #[test]
