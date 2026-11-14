@@ -100,7 +100,8 @@ pub fn launch(job: &Job, quiet: bool) -> bool {
     if quiet {
         c.arg("--quiet");
     }
-    c.spawn().is_ok()
+    // Deixa a janela nova vir para a frente (a página está em foco; a agendada não rouba o foco).
+    c.spawn().map(|ch| quiet || unsafe { windows::Win32::UI::WindowsAndMessaging::AllowSetForegroundWindow(ch.id()) }.is_ok()).is_ok()
 }
 
 fn load_history(d: &mut Data) {

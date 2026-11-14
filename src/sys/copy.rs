@@ -19,6 +19,12 @@ pub const COPYING: u8 = 1;
 pub const DONE: u8 = 2;
 pub const CANCELED: u8 = 3;
 pub const NO_SPACE: u8 = 4;
+/// Conferindo o SHA-256 das cópias, depois de copiar tudo.
+pub const VERIFYING: u8 = 5;
+
+/// Arquivo a partir deste tamanho é copiado sem o cache do Windows, como fazem o Explorer e o
+/// TeraCopy: com cache, um arquivo de vários GB enche a memória e a cópia perde velocidade.
+const NO_CACHE_FROM: u64 = 256 << 20;
 
 #[derive(Default)]
 pub struct State {
@@ -36,6 +42,9 @@ pub struct State {
     /// Bytes que faltam e bytes livres, quando a fase é `NO_SPACE`.
     pub need: AtomicU64,
     pub free: AtomicU64,
+    /// Bytes já lidos na conferência, de `check_total` (origem e destino somados).
+    pub checked: AtomicU64,
+    pub check_total: AtomicU64,
     pub current: Mutex<String>,
     /// (arquivo, motivo). O motivo é a chave em português, traduzida ao desenhar.
     pub errors: Mutex<Vec<(String, String)>>,
@@ -162,6 +171,8 @@ pub fn run_to(pairs: &[(PathBuf, PathBuf)], mv: bool, st: &State, free: impl Fn(
     for (_, d) in pairs {
         let _ = std::fs::create_dir_all(d);
     }
+    // (origem, cópia, tamanho) de cada arquivo que chegou: a conferência e o mover vêm no fim.
+    let mut copied: Vec<(PathBuf, PathBuf, u64)> = Vec::new();
     let mut base = 0u64;
     for e in &plan {
         if !wait_pause(st) {
@@ -178,13 +189,25 @@ pub fn run_to(pairs: &[(PathBuf, PathBuf)], mv: bool, st: &State, free: impl Fn(
         base += e.size;
         st.done.store(base, Relaxed);
         st.files_done.fetch_add(1, Relaxed);
-        if ok == Some(true) && mv {
-            if let Err(err) = std::fs::remove_file(&e.src) {
-                st.error(&e.src, reason(&err));
-            }
+        match ok {
+            Some(Some(dst)) => copied.push((e.src.clone(), dst, e.size)),
+            Some(None) => {}
+            None => break,
         }
-        if ok.is_none() {
-            break;
+    }
+    let verify = st.verify.load(Relaxed);
+    let good = if verify && !st.cancel.load(Relaxed) {
+        check(&copied, st)
+    } else {
+        // Cancelado com a conferência ligada: nada foi conferido, a origem fica.
+        vec![!verify; copied.len()]
+    };
+    if mv {
+        // Mover só apaga a origem do que chegou (e bateu, com a conferência ligada).
+        for ((src, _, _), _) in copied.iter().zip(&good).filter(|g| *g.1) {
+            if let Err(err) = std::fs::remove_file(src) {
+                st.error(src, reason(&err));
+            }
         }
     }
     if mv && !st.cancel.load(Relaxed) {
@@ -222,9 +245,9 @@ fn wait_pause(st: &State) -> bool {
     !st.cancel.load(Relaxed)
 }
 
-/// Some(true): copiado (e conferido). Some(false): pulado ou com erro, segue o próximo.
+/// Some(Some(cópia)): copiado. Some(None): pulado ou com erro, segue o próximo.
 /// None: parar tudo (cancelado ou disco cheio).
-fn copy_file(e: &Entry, st: &State, base: u64) -> Option<bool> {
+fn copy_file(e: &Entry, st: &State, base: u64) -> Option<Option<PathBuf>> {
     let mut dst = e.dst.clone();
     let mut replace = false;
     if dst.symlink_metadata().is_ok() {
@@ -238,36 +261,67 @@ fn copy_file(e: &Entry, st: &State, base: u64) -> Option<bool> {
         }
         st.asking.store(false, Relaxed);
         match st.policy.load(Relaxed) {
-            SKIP => return Some(false),
+            SKIP => return Some(None),
             KEEP_BOTH => dst = unique(&dst),
             _ => replace = true,
         }
     }
-    if let Err(err) = copy_with_progress(&e.src, &dst, replace, st, base) {
+    if let Err(err) = copy_with_progress(&e.src, &dst, e.size, replace, st, base) {
         if st.cancel.load(Relaxed) {
             return None;
         }
         let full = matches!(err.raw_os_error(), Some(39 | 112));
         st.error(&e.src, reason(&err));
-        return if full { None } else { Some(false) };
+        return if full { None } else { Some(None) };
     }
-    if st.verify.load(Relaxed) {
-        match (sha256(&e.src, st), sha256(&dst, st)) {
-            (Ok(a), Ok(b)) if a == b => {}
-            (Ok(_), Ok(_)) => {
-                st.error(&e.src, "O hash da cópia não confere");
-                return Some(false);
+    Some(Some(dst))
+}
+
+/// A letra do disco ("C:"), ou nada num caminho de rede.
+pub fn drive(p: &Path) -> Option<String> {
+    let s = p.to_string_lossy();
+    let s = s.strip_prefix(r"\\?\").unwrap_or(&s);
+    s.get(..2).filter(|d| d.ends_with(':')).map(str::to_uppercase)
+}
+
+/// Confere cada cópia com a origem pelo SHA-256: true onde bate. Em discos diferentes, origem e
+/// cópia são lidas ao mesmo tempo; no mesmo disco, uma depois da outra (num HD, ler as duas ao
+/// mesmo tempo faz a cabeça pular de um lado para o outro).
+fn check(copied: &[(PathBuf, PathBuf, u64)], st: &State) -> Vec<bool> {
+    st.checked.store(0, Relaxed);
+    st.check_total.store(copied.iter().map(|c| c.2).sum::<u64>() * 2, Relaxed);
+    st.phase.store(VERIFYING, Relaxed);
+    copied
+        .iter()
+        .map(|(src, dst, _)| {
+            if st.cancel.load(Relaxed) {
+                return false;
             }
-            (Err(err), _) | (_, Err(err)) => {
-                if st.cancel.load(Relaxed) {
-                    return None;
+            *st.current.lock().unwrap() = dst.display().to_string();
+            let (a, b) = if drive(src) != drive(dst) {
+                std::thread::scope(|s| {
+                    let t = s.spawn(|| sha256(src, st));
+                    let b = sha256(dst, st);
+                    (t.join().unwrap_or_else(|_| Err(std::io::Error::other("hash"))), b)
+                })
+            } else {
+                (sha256(src, st), sha256(dst, st))
+            };
+            match (a, b) {
+                (Ok(a), Ok(b)) if a == b => true,
+                (Ok(_), Ok(_)) => {
+                    st.error(src, "O hash da cópia não confere");
+                    false
                 }
-                st.error(&e.src, reason(&err));
-                return Some(false);
+                (Err(err), _) | (_, Err(err)) => {
+                    if !st.cancel.load(Relaxed) {
+                        st.error(src, reason(&err));
+                    }
+                    false
+                }
             }
-        }
-    }
-    Some(true)
+        })
+        .collect()
 }
 
 struct Ctx<'a> {
@@ -297,16 +351,17 @@ unsafe extern "system" fn progress(
 }
 
 /// Cancelado no meio, o Windows apaga o pedaço já escrito.
-fn copy_with_progress(src: &Path, dst: &Path, replace: bool, st: &State, base: u64) -> std::io::Result<()> {
-    use windows::Win32::Storage::FileSystem::{CopyFileExW, COPYFILE_FLAGS, COPY_FILE_FAIL_IF_EXISTS};
+fn copy_with_progress(src: &Path, dst: &Path, size: u64, replace: bool, st: &State, base: u64) -> std::io::Result<()> {
+    use windows::Win32::Storage::FileSystem::{CopyFileExW, COPYFILE_FLAGS, COPY_FILE_FAIL_IF_EXISTS, COPY_FILE_NO_BUFFERING};
     let ctx = Ctx { st, base };
     let (s, d) = (windows::core::HSTRING::from(src.as_os_str()), windows::core::HSTRING::from(dst.as_os_str()));
     // Sem a escolha de substituir, nunca escreve por cima, nem se o arquivo aparecer agora.
     let flags = if replace { COPYFILE_FLAGS(0) } else { COPY_FILE_FAIL_IF_EXISTS };
+    let flags = if size >= NO_CACHE_FROM { COPYFILE_FLAGS(flags.0 | COPY_FILE_NO_BUFFERING.0) } else { flags };
     unsafe { CopyFileExW(&s, &d, Some(progress), Some(&ctx as *const Ctx as _), None, flags) }.map_err(|e| std::io::Error::from_raw_os_error((e.code().0 & 0xFFFF) as i32))
 }
 
-/// SHA-256 pelo Windows (BCrypt), lido em pedaços de 1 MB.
+/// SHA-256 pelo Windows (BCrypt), lido em pedaços de 4 MB; soma o lido em `st.checked`.
 pub fn sha256(path: &Path, st: &State) -> std::io::Result<[u8; 32]> {
     use std::io::Read;
     use windows::Win32::Security::Cryptography::*;
@@ -314,7 +369,7 @@ pub fn sha256(path: &Path, st: &State) -> std::io::Result<[u8; 32]> {
     let mut h = BCRYPT_HASH_HANDLE::default();
     let fail = |_: windows::core::Error| std::io::Error::other("BCrypt");
     unsafe { BCryptCreateHash(BCRYPT_SHA256_ALG_HANDLE, &mut h, None, None, 0) }.ok().map_err(fail)?;
-    let mut buf = vec![0u8; 1 << 20];
+    let mut buf = vec![0u8; 4 << 20];
     let res = (|| {
         loop {
             if !wait_pause(st) {
@@ -325,6 +380,7 @@ pub fn sha256(path: &Path, st: &State) -> std::io::Result<[u8; 32]> {
                 break;
             }
             unsafe { BCryptHashData(h, &buf[..n], 0) }.ok().map_err(fail)?;
+            st.checked.fetch_add(n as u64, Relaxed);
         }
         let mut out = [0u8; 32];
         unsafe { BCryptFinishHash(h, &mut out, 0) }.ok().map_err(fail)?;
@@ -522,7 +578,17 @@ mod tests {
         assert_eq!(std::fs::read(d.join("dst\\src\\sub\\b.bin")).unwrap().len(), 3 << 20);
         assert_eq!(st.done.load(Relaxed), st.total.load(Relaxed));
         assert_eq!(st.files_done.load(Relaxed), 2);
+        // A conferência leu origem e cópia inteiras.
+        assert_eq!(st.checked.load(Relaxed), st.check_total.load(Relaxed));
+        assert_eq!(st.check_total.load(Relaxed), 2 * (4 + (3 << 20)));
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn drive_letter() {
+        assert_eq!(drive(Path::new(r"c:\x\y")).as_deref(), Some("C:"));
+        assert_eq!(drive(Path::new(r"\\?\D:\x")).as_deref(), Some("D:"));
+        assert_eq!(drive(Path::new(r"\\server\share\x")), None);
     }
 
     #[test]
