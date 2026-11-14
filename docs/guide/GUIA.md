@@ -106,6 +106,7 @@ Mostra velocidade, tempo ativo e espaço de cada disco, com nota de saúde pelo 
 Analisa um disco inteiro e mostra pastas, maiores arquivos, tipos e um mapa visual.
 
 - **Dá para:** abrir no Explorador e, como administrador, mandar para a Lixeira.
+- **Pelo Explorador:** com a opção ligada em Configurações, clique com o botão direito numa pasta, no fundo de uma pasta ou num disco e escolha **Ver o espaço em disco com o Prisma**. O Prisma analisa o disco e abre já nessa pasta. No Windows 11 a entrada fica em **Mostrar mais opções**.
 - **Não dá para:** usar a leitura rápida sem administrador ou em disco que não seja NTFS.
 
 ## Pesquisar
@@ -123,6 +124,7 @@ O Prisma guarda os nomes de todos os arquivos num índice, na memória e no disc
 - **Completar como o terminal:** com os comandos ligados, um PowerShell escondido completa como o terminal, com caminhos, parâmetros e o histórico do PowerShell. Ele fecha sozinho depois de 2 minutos parado. Vem desligado.
 - **Opções:** escolha os discos e o atalho, o que mais aparece na pesquisa, leia os discos de novo ou desligue. Ler os discos de novo também refaz a lista de comandos. Desligar tira o índice da memória e do disco.
 - **Disco com problema:** discos com nota abaixo de Bom em Discos e redes ficam de fora, para o índice não forçar um disco que está falhando. Dá para incluir clicando nele em Opções.
+- **Pelo Explorador:** com a opção ligada em Configurações, o botão direito numa pasta, no fundo de uma pasta ou num disco traz **Pesquisar aqui com o Prisma**, que abre a aba com o caminho da pasta entre aspas no campo: é só digitar o nome depois dele. No Windows 11 a entrada fica em **Mostrar mais opções**.
 - **Abrir:** os arquivos abrem pelo Explorador, com o programa padrão e sem herdar o administrador do Prisma.
 
 ## Inicialização
@@ -329,6 +331,7 @@ O jogo aberto pelo launcher também entra no modo jogo na hora, sem esperar a de
 
 - **Início com o Windows e administrador:** ligue ou desligue quando quiser. Mudar isso na versão instalada pede a permissão do Windows.
 - **Substituir o Gerenciador de Tarefas:** ativa ou devolve. A desinstalação também devolve. Algumas versões do Windows protegem essa troca até de administrador. Nesse caso o Prisma avisa e passa a pegar o Ctrl+Shift+Esc ele mesmo, enquanto estiver aberto, e o cartão mostra "Ligado pelo atalho". O Ctrl+Alt+Del e o menu da barra de tarefas continuam abrindo o Gerenciador do Windows. Na versão portátil só dá para desativar.
+- **Pesquisar e Espaço em disco no botão direito do Explorer:** põe as duas entradas no menu do botão direito do Explorador, em pastas e discos. Vem desligada e existe só na versão instalada. Desligar, ou desinstalar, tira as entradas. No Windows 11 elas ficam em **Mostrar mais opções**: o menu novo de cima só aceita programas empacotados.
 - **Fechar à força:** um atalho, Alt + F4 por padrão, encerra na hora o programa em foco, mesmo travado em tela cheia. O que não foi salvo é perdido. A área de trabalho, a barra de tarefas e os processos do Windows continuam com o Alt + F4 normal.
 - **Reiniciar o Explorer:** escolha um atalho, que vem sem nenhum. Como ele fecha a barra de tarefas, é preciso apertar duas vezes em até 4 segundos: o primeiro toque só avisa. O botão ao lado do nome reinicia na hora, depois de perguntar.
 - **Idioma:** português do Brasil, inglês, espanhol, russo ou chinês simplificado. Este guia e as novidades ficam em inglês nos três últimos.

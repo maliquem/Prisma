@@ -106,6 +106,7 @@ Shows speed, active time and space of each disk, with a SMART health grade: Good
 Scans a whole disk and shows folders, largest files, types and a visual map.
 
 - **You can:** open items in Explorer and, as administrator, send them to the Recycle Bin.
+- **From Explorer:** with the option on in Settings, right-click a folder, the background of a folder or a drive and choose **See disk space with Prisma**. Prisma scans the disk and opens on that folder. On Windows 11 the entry is under **Show more options**.
 - **You can't:** use the fast scan without administrator or on a disk that is not NTFS.
 
 ## Search
@@ -123,6 +124,7 @@ Prisma keeps the names of every file in an index, in memory and on disk, so it a
 - **Complete like the terminal:** with commands on, a hidden PowerShell completes like the terminal, with paths, parameters and PowerShell history. It closes by itself after 2 idle minutes. Off by default.
 - **Options:** choose the disks and the shortcut, what else appears in search, read the disks again or turn it off. Reading the disks again also rebuilds the command list. Turning off removes the index from memory and disk.
 - **Disk with problems:** disks rated below Good in Disks and networks stay out, so the index doesn't strain a failing disk. You can include one by clicking it in Options.
+- **From Explorer:** with the option on in Settings, right-clicking a folder, the background of a folder or a drive offers **Search here with Prisma**, which opens the tab with the folder path in quotes in the field: just type the name after it. On Windows 11 the entry is under **Show more options**.
 - **Opening:** files open through Explorer, with the default program and without inheriting Prisma's administrator rights.
 
 ## Startup
@@ -329,6 +331,7 @@ The game the launcher opens also enters game mode at once, without waiting for d
 
 - **Start with Windows and administrator:** turn them on or off whenever you want. Changing this in the installed version asks for Windows permission.
 - **Replace Task Manager:** turns it on or gives it back. Uninstalling also gives it back. Some Windows versions protect this change even from administrators. Then Prisma tells you and catches Ctrl+Shift+Esc itself while it is open, and the card shows "On through the shortcut". Ctrl+Alt+Del and the taskbar menu still open the Windows Task Manager. In the portable version you can only turn it off.
+- **Search and Disk space in the Explorer right-click menu:** adds both entries to Explorer's right-click menu on folders and drives. Off by default and only in the installed version. Turning it off, or uninstalling, removes the entries. On Windows 11 they are under **Show more options**: the new top menu only takes packaged programs.
 - **Force close:** a shortcut, Alt + F4 by default, ends the program in focus right away, even frozen in fullscreen. Anything unsaved is lost. The desktop, the taskbar and Windows processes keep the normal Alt + F4.
 - **Restart Explorer:** choose a shortcut; there is none by default. Since it closes the taskbar, you press it twice within 4 seconds: the first press only warns you. The button next to the name restarts it right away, after asking.
 - **Language:** Brazilian Portuguese, English, Spanish, Russian or Simplified Chinese. This guide and the version notes stay in English in the last three.
