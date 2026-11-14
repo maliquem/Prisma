@@ -95,7 +95,7 @@ impl Scan {
             return None;
         }
         let mut cur = self.root;
-        for part in rest.split('').filter(|p| !p.is_empty()) {
+        for part in rest.split('\\').filter(|p| !p.is_empty()) {
             let part = part.to_lowercase();
             cur = *self.children(cur).iter().find(|&&k| self.exists(k) && self.nodes[k as usize].is_dir() && self.name(k).to_lowercase() == part)?;
         }
