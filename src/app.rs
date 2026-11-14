@@ -61,6 +61,10 @@ const WM_PAD_IN: u32 = WM_APP + 95;
 const WM_PAD_OUT: u32 = WM_APP + 96;
 /// Escolher o .exe de um lugar do radial; WPARAM é o lugar.
 const WM_PICK_RADIAL: u32 = WM_APP + 97;
+/// Página Cópias: escolher arquivos (0), pastas (1) ou o destino (2) da lista aberta.
+pub const WM_PICK_COPY: u32 = WM_APP + 98;
+/// Ctrl+V numa pasta do Explorer (`PASTE_HOOK`); `lparam` é o controle em foco.
+const WM_PASTE_KEY: u32 = WM_APP + 99;
 const WM_POW_OUT: u32 = WM_APP + 82;
 const WM_REPORT_PHOTO: u32 = WM_APP + 84;
 const WM_REPORT_DONE: u32 = WM_APP + 85;
@@ -80,6 +84,9 @@ static FORCE_HELD: AtomicBool = AtomicBool::new(false);
 /// Ctrl+Shift+Esc pelo gancho, quando o Windows não deixa trocar o Gerenciador no registro.
 static TM_HOOK: AtomicBool = AtomicBool::new(false);
 static TM_HELD: AtomicBool = AtomicBool::new(false);
+/// Ctrl+V nas pastas do Explorer vai para a janela de cópia do Prisma.
+static PASTE_HOOK: AtomicBool = AtomicBool::new(false);
+static PASTE_HELD: AtomicBool = AtomicBool::new(false);
 
 fn apply_route(pid: u32, a: &crate::config::SndApp) -> bool {
     audio::set_route(pid, false, &a.output) && audio::set_route(pid, true, &a.input)
@@ -117,6 +124,22 @@ unsafe extern "system" fn key_hook(code: i32, w: WPARAM, l: LPARAM) -> LRESULT {
                     let _ = PostMessageW(Some(hub), WM_SHOW, WPARAM(1), LPARAM(0));
                 }
                 return LRESULT(1);
+            }
+        }
+        let injected = (*(l.0 as *const KBDLLHOOKSTRUCT)).flags.0 & LLKHF_INJECTED.0 != 0;
+        if vk == 0x56 && !injected && PASTE_HOOK.load(Ordering::Relaxed) {
+            let press = w.0 as u32 == WM_KEYDOWN || w.0 as u32 == WM_SYSKEYDOWN;
+            if !press {
+                PASTE_HELD.store(false, Ordering::Relaxed);
+            } else if held_mods() == MOD_CTRL {
+                if let Some(focus) = crate::sys::copy::explorer_paste_target() {
+                    // Segurar o V não abre uma janela por repetição da tecla.
+                    if !PASTE_HELD.swap(true, Ordering::Relaxed) {
+                        let hub = HWND(FORCE_HUB.load(Ordering::Relaxed) as *mut _);
+                        let _ = PostMessageW(Some(hub), WM_PASTE_KEY, WPARAM(0), LPARAM(focus.0 as isize));
+                    }
+                    return LRESULT(1);
+                }
             }
         }
         if vk == FORCE_VK.load(Ordering::Relaxed) {
@@ -354,6 +377,8 @@ pub struct App {
     pub installed: bool,
     pub boot_items: Vec<autostart::Item>,
     pub boot_sel: Option<usize>,
+    /// Página Cópias: histórico, listas e a lista aberta.
+    pub cp: crate::pages::copies::Data,
     pub boot_sig: Option<String>,
     pub services: Vec<services::Service>,
     pub svc_filter: u8,
@@ -557,6 +582,7 @@ pub fn start(background: bool) {
             installed: crate::startup::is_installed(),
             boot_items: Vec::new(),
             boot_sel: None,
+            cp: Default::default(),
             boot_sig: None,
             services: Vec::new(),
             svc_filter: 0,
@@ -918,6 +944,7 @@ pub fn start(background: bool) {
                 "--page=boot" => Page::Startup,
                 "--page=tweaks" => Page::Tweaks,
                 "--page=tools" => Page::Tools,
+                "--page=copies" => Page::Copies,
                 "--page=uninstall" => Page::Uninstall,
                 "--page=analyze" => Page::Analyze,
                 "--page=search" => Page::Search,
@@ -1309,7 +1336,8 @@ impl App {
             self.cfg.tm_hook && !self.replaces_tm
         };
         TM_HOOK.store(tm, Ordering::Relaxed);
-        let want = tm || FORCE_VK.load(Ordering::Relaxed) != 0;
+        PASTE_HOOK.store(self.cfg.paste_key, Ordering::Relaxed);
+        let want = tm || self.cfg.paste_key || FORCE_VK.load(Ordering::Relaxed) != 0;
         if want && self.force_hook.is_none() {
             let inst = unsafe { GetModuleHandleW(None) }.unwrap_or_default();
             self.force_hook = unsafe { SetWindowsHookExW(WH_KEYBOARD_LL, Some(key_hook), Some(inst.into()), 0) }.ok();
@@ -2696,6 +2724,7 @@ impl App {
                 Some("uninstall") => self.page = Page::Uninstall,
                 Some("tweaks") => self.page = Page::Tweaks,
                 Some("tools") => self.page = Page::Tools,
+                Some("copies") => self.page = Page::Copies,
                 Some("optimize") => self.page = Page::Optimize,
                 Some("energy") => self.page = Page::Energy,
                 Some("fullscreen") => self.page = Page::Fullscreen,
@@ -3437,6 +3466,7 @@ impl App {
             Page::Tools => {
                 self.load_disks();
             }
+            Page::Copies => crate::pages::copies::enter(self),
             Page::Search => {
                 self.load_disks();
                 self.find_drives = crate::sys::mft::drives();
@@ -3797,6 +3827,7 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                     a.meter_paint();
                 } else if w.0 == TIMER_ROOM {
                     a.room_watch();
+                    crate::pages::copies::tick(a);
                 } else if w.0 == TIMER_PADS {
                     if a.page == Page::Controllers && a.main.is_some() {
                         crate::pages::controllers::tick(a);
@@ -3919,6 +3950,31 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                         Some(p) => crate::pages::pad_profiles::imported(a, p),
                         None => a.toast.info("Esse arquivo não é um perfil de controle do Prisma"),
                     }
+                    a.invalidate();
+                });
+            }
+            LRESULT(0)
+        }
+        WM_PASTE_KEY => {
+            // Pasta que não é do disco (dentro de um .zip, Este Computador): o Ctrl+V volta para o
+            // Explorer, que cola do jeito dele. O gancho deixa passar teclas enviadas por programa.
+            match crate::sys::copy::explorer_folder(HWND(l.0 as *mut _)) {
+                Some(dir) => {
+                    let _ = std::process::Command::new(std::env::current_exe().unwrap_or_default()).arg(format!("--paste={}", dir.display())).spawn();
+                }
+                None => crate::sys::copy::send_paste(),
+            }
+            LRESULT(0)
+        }
+        WM_PICK_COPY => {
+            let paths = match w.0 {
+                0 => capture::choose_many(h, false),
+                1 => capture::choose_many(h, true),
+                _ => capture::choose_folder(h).into_iter().collect(),
+            };
+            if !paths.is_empty() {
+                with(|a| {
+                    crate::pages::copies::picked(a, w.0, paths);
                     a.invalidate();
                 });
             }

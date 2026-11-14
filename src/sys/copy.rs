@@ -109,9 +109,16 @@ pub fn free_space(dir: &Path) -> Option<u64> {
 /// Copia (ou move, com `mv`) `items` para dentro da pasta `dest`. `free` diz o espaço livre:
 /// sem espaço para tudo, nada começa.
 pub fn run(items: &[PathBuf], dest: &Path, mv: bool, st: &State, free: impl Fn(&Path) -> Option<u64>) {
+    let pairs: Vec<(PathBuf, PathBuf)> = items.iter().map(|i| (i.clone(), dest.to_path_buf())).collect();
+    run_to(&pairs, mv, st, free);
+}
+
+/// Como `run`, com uma pasta de destino para cada item (Tentar de novo).
+pub fn run_to(pairs: &[(PathBuf, PathBuf)], mv: bool, st: &State, free: impl Fn(&Path) -> Option<u64>) {
     st.phase.store(PREPARING, Relaxed);
     let mut plan = Vec::new();
-    for item in items {
+    for (item, dest) in pairs {
+        let dest = dest.as_path();
         let Some(name) = item.file_name() else { continue };
         if same_path(item, dest) || dest.to_string_lossy().to_lowercase().starts_with(&format!("{}\\", item.to_string_lossy().to_lowercase())) {
             st.error(item, "Uma pasta não pode ir para dentro dela mesma");
@@ -138,6 +145,10 @@ pub fn run(items: &[PathBuf], dest: &Path, mv: bool, st: &State, free: impl Fn(&
     st.total.store(plan.iter().map(|e| e.size).sum(), Relaxed);
     // Um arquivo substituído devolve o espaço do antigo.
     let need: u64 = plan.iter().filter(|e| !e.dir).map(|e| e.size.saturating_sub(e.dst.metadata().map_or(0, |m| m.len()))).sum();
+    let Some(dest) = pairs.first().map(|p| p.1.as_path()) else {
+        st.phase.store(DONE, Relaxed);
+        return;
+    };
     if let Some(f) = free(dest) {
         if need > f {
             st.need.store(need, Relaxed);
@@ -147,6 +158,10 @@ pub fn run(items: &[PathBuf], dest: &Path, mv: bool, st: &State, free: impl Fn(&
         }
     }
     st.phase.store(COPYING, Relaxed);
+    // Uma lista agendada pode apontar para uma pasta que ainda não existe.
+    for (_, d) in pairs {
+        let _ = std::fs::create_dir_all(d);
+    }
     let mut base = 0u64;
     for e in &plan {
         if !wait_pause(st) {
@@ -180,6 +195,23 @@ pub fn run(items: &[PathBuf], dest: &Path, mv: bool, st: &State, free: impl Fn(&
     }
     st.current.lock().unwrap().clear();
     st.phase.store(if st.cancel.load(Relaxed) { CANCELED } else { DONE }, Relaxed);
+}
+
+/// Para tentar de novo só o que falhou: cada arquivo da lista de erros com a pasta onde ele ia.
+/// Erros fora dos itens (uma pasta dentro dela mesma) ficam de fora.
+pub fn retry_pairs(items: &[PathBuf], dest: &Path, errors: &[(String, String)]) -> Vec<(PathBuf, PathBuf)> {
+    let mut out: Vec<(PathBuf, PathBuf)> = Vec::new();
+    for (p, _) in errors {
+        let p = PathBuf::from(p);
+        let Some(item) = items.iter().find(|i| p.starts_with(i)) else { continue };
+        let (Some(name), Ok(rel)) = (item.file_name(), p.strip_prefix(item)) else { continue };
+        let target = dest.join(name).join(rel);
+        let Some(dir) = target.parent() else { continue };
+        if !same_path(&target, &p) && !out.iter().any(|o| o.0 == p) {
+            out.push((p.clone(), dir.to_path_buf()));
+        }
+    }
+    out
 }
 
 /// Espera enquanto pausado. False: cancelado.
@@ -343,6 +375,85 @@ pub fn clipboard() -> Option<(Vec<PathBuf>, bool)> {
     }
 }
 
+/// Ctrl+V do Explorer: o controle em foco quando a lista de arquivos de uma pasta do Explorer
+/// está em foco (não a barra de endereço nem um nome sendo editado) e há arquivos copiados.
+/// Chamado de dentro do gancho de teclado: só perguntas rápidas ao Windows.
+pub fn explorer_paste_target() -> Option<windows::Win32::Foundation::HWND> {
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::System::DataExchange::IsClipboardFormatAvailable;
+    use windows::Win32::System::Ole::CF_HDROP;
+    use windows::Win32::UI::WindowsAndMessaging::*;
+    let class = |h: HWND| {
+        let mut b = [0u16; 64];
+        let n = unsafe { GetClassNameW(h, &mut b) } as usize;
+        String::from_utf16_lossy(&b[..n])
+    };
+    unsafe {
+        let fg = GetForegroundWindow();
+        if class(fg) != "CabinetWClass" {
+            return None;
+        }
+        let mut gi = GUITHREADINFO { cbSize: std::mem::size_of::<GUITHREADINFO>() as u32, ..Default::default() };
+        GetGUIThreadInfo(GetWindowThreadProcessId(fg, None), &mut gi).ok()?;
+        let focus = gi.hwndFocus;
+        if focus.is_invalid() || class(focus) != "DirectUIHWND" || class(GetParent(focus).ok()?) != "SHELLDLL_DefView" {
+            return None;
+        }
+        IsClipboardFormatAvailable(CF_HDROP.0 as u32).ok()?;
+        Some(focus)
+    }
+}
+
+/// Manda o Ctrl+V de volta para o Explorer, como tecla enviada por programa (o gancho deixa passar).
+pub fn send_paste() {
+    use windows::Win32::UI::Input::KeyboardAndMouse::*;
+    let key = |vk: VIRTUAL_KEY, up: bool| INPUT {
+        r#type: INPUT_KEYBOARD,
+        Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: vk, dwFlags: if up { KEYEVENTF_KEYUP } else { KEYBD_EVENT_FLAGS(0) }, ..Default::default() } },
+    };
+    // Com o Ctrl ainda segurado, só o V; senão o Ctrl vai junto e é solto no fim.
+    let held = unsafe { GetAsyncKeyState(VK_CONTROL.0 as i32) } as u16 & 0x8000 != 0;
+    let list: Vec<INPUT> = if held {
+        vec![key(VK_V, false), key(VK_V, true)]
+    } else {
+        vec![key(VK_CONTROL, false), key(VK_V, false), key(VK_V, true), key(VK_CONTROL, true)]
+    };
+    unsafe {
+        SendInput(&list, std::mem::size_of::<INPUT>() as i32);
+    }
+}
+
+/// A pasta aberta na aba do Explorer que contém `focus` (as abas do Windows 11 dividem a janela).
+pub fn explorer_folder(focus: windows::Win32::Foundation::HWND) -> Option<PathBuf> {
+    use windows::core::Interface;
+    use windows::Win32::System::Com::*;
+    use windows::Win32::System::Variant::VARIANT;
+    use windows::Win32::UI::Shell::*;
+    use windows::Win32::UI::WindowsAndMessaging::IsChild;
+    unsafe {
+        let windows: IShellWindows = CoCreateInstance(&ShellWindows, None, CLSCTX_ALL).ok()?;
+        for i in 0..windows.Count().ok()? {
+            let Ok(disp) = windows.Item(&VARIANT::from(i)) else { continue };
+            let Ok(sp) = disp.cast::<IServiceProvider>() else { continue };
+            let Ok(browser) = sp.QueryService::<IShellBrowser>(&SID_STopLevelBrowser) else { continue };
+            let Ok(tab) = browser.GetWindow() else { continue };
+            if tab != focus && !IsChild(tab, focus).as_bool() {
+                continue;
+            }
+            let view: IFolderView = browser.QueryActiveShellView().ok()?.cast().ok()?;
+            let folder: IPersistFolder2 = view.GetFolder().ok()?;
+            let pidl = folder.GetCurFolder().ok()?;
+            let name = SHGetNameFromIDList(pidl, SIGDN_FILESYSPATH);
+            CoTaskMemFree(Some(pidl as *const _));
+            let name = name.ok()?;
+            let path = name.to_string().ok();
+            CoTaskMemFree(Some(name.0 as *const _));
+            return path.map(PathBuf::from);
+        }
+        None
+    }
+}
+
 const BG_KEY: &str = "Software\\Classes\\Directory\\Background\\shell\\PrismaColar";
 const DIR_KEY: &str = "Software\\Classes\\Directory\\shell\\PrismaColar";
 
@@ -494,6 +605,38 @@ mod tests {
         run(&[d.join("src")], &d.join("src\\sub"), false, &st, |_| None);
         assert_eq!(st.errors.lock().unwrap().len(), 1);
         assert!(!d.join("src\\sub\\src").exists());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn retry_copies_only_what_failed() {
+        let d = scratch("tentar");
+        let lock = std::fs::OpenOptions::new().read(true).share_mode(0).open(d.join(r"src\sub\b.bin")).unwrap();
+        let st = state(SKIP, false);
+        run(&[d.join("src")], &d.join("dst"), false, &st, |_| None);
+        drop(lock);
+        let errs = st.errors.lock().unwrap().clone();
+        assert_eq!(errs.len(), 1, "{errs:?}");
+        let pairs = retry_pairs(&[d.join("src")], &d.join("dst"), &errs);
+        assert_eq!(pairs, vec![(d.join(r"src\sub\b.bin"), d.join(r"dst\src\sub"))]);
+        // A cópia boa não é tocada de novo.
+        std::fs::write(d.join(r"dst\src\a.txt"), b"mexido").unwrap();
+        let st = state(REPLACE, false);
+        run_to(&pairs, false, &st, |_| None);
+        assert!(st.errors.lock().unwrap().is_empty());
+        assert_eq!(std::fs::read(d.join(r"dst\src\sub\b.bin")).unwrap().len(), 3 << 20);
+        assert_eq!(std::fs::read(d.join(r"dst\src\a.txt")).unwrap(), b"mexido");
+        // Erro fora dos itens não volta.
+        assert!(retry_pairs(&[d.join("src")], &d.join("dst"), &[(r"Z:\x".into(), "?".into())]).is_empty());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn missing_destination_is_created() {
+        let d = scratch("criar");
+        let st = state(SKIP, false);
+        run(&[d.join(r"src\a.txt")], &d.join(r"dst\nova\pasta"), false, &st, |_| None);
+        assert_eq!(std::fs::read(d.join(r"dst\nova\pasta\a.txt")).unwrap(), b"alfa");
         let _ = std::fs::remove_dir_all(&d);
     }
 
