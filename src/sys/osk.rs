@@ -120,19 +120,20 @@ struct Osk {
     /// Posição dos analógicos (esquerdo, direito), para as setas. Fica fora do `View`: mudar não
     /// pede aviso à janela, que lê as setas no próprio relógio dela.
     stick: [(f32, f32); 2],
-    /// Botões que chamam o teclado (ligação do perfil, botão do radial): apertados de novo, fecham.
-    close_on: pads::Buttons,
+    /// Botões e combinações que chamam o teclado (ligações dos perfis, botão do radial):
+    /// apertados de novo, fecham. Um botão sozinho que o teclado usa não fecha.
+    close_on: Vec<pads::Buttons>,
 }
 
 /// Botões que o teclado usa: nunca fecham, mesmo ligados a ele.
 const USED: pads::Buttons = pads::A | pads::B | pads::X | pads::Y | pads::LB | pads::RB | pads::START | pads::BACK | pads::UP | pads::DOWN | pads::LEFT | pads::RIGHT;
 
 impl Osk {
-    fn new(close_on: pads::Buttons) -> Self {
+    fn new(close_on: Vec<pads::Buttons>) -> Self {
         // Tudo conta como já apertado: o botão que abriu o teclado só vale depois de solto.
         let (two, letters_right) = (TWO.load(Ordering::Relaxed), LETTERS_RIGHT.load(Ordering::Relaxed));
         let (repeat_all, after) = (REPEAT_ALL.load(Ordering::Relaxed), Duration::from_millis(REPEAT_MS.load(Ordering::Relaxed) as u64));
-        Osk { view: View { open: true, two, letters_right, ..Default::default() }, pad: None, prev: pads::Buttons::MAX, repeat: None, repeat_all, after, stick: [(0.0, 0.0); 2], close_on: close_on & !USED }
+        Osk { view: View { open: true, two, letters_right, ..Default::default() }, pad: None, prev: pads::Buttons::MAX, repeat: None, repeat_all, after, stick: [(0.0, 0.0); 2], close_on: close_on.into_iter().filter(|&m| m != 0 && (m.count_ones() > 1 || m & USED == 0)).collect() }
     }
 
     /// Um relatório do controle: as teclas a digitar e se é para fechar.
@@ -147,7 +148,8 @@ impl Osk {
         self.view.right = if self.view.two { petal(inp.rx, inp.ry) } else { None };
         self.stick = [(inp.lx, inp.ly), (inp.rx, inp.ry)];
         let mut keys = vec![];
-        if down & (pads::BACK | self.close_on) != 0 || (down & pads::B != 0 && self.view.petal.is_none()) {
+        let again = self.close_on.iter().any(|&m| held & m == m && down & m != 0);
+        if again || down & pads::BACK != 0 || (down & pads::B != 0 && self.view.petal.is_none()) {
             return (keys, true);
         }
         // Cada botão apertado agora e a tecla que ele digita.
@@ -241,7 +243,8 @@ pub fn stick() -> [(f32, f32); 2] {
 /// Abre o teclado. O que o mapeamento segurava é solto antes.
 pub fn open() {
     super::pads::trace(|| "abre o teclado do Prisma".into());
-    let close_on = super::remap::keyboard_buttons() | super::radial::button();
+    let mut close_on = super::remap::keyboard_buttons();
+    close_on.push(super::radial::button());
     let mut s = STATE.lock().unwrap();
     if !matches!(*s, State::Open(_)) {
         *s = State::Open(Osk::new(close_on));
@@ -362,7 +365,7 @@ mod tests {
     #[test]
     fn types_only_after_the_opening_button_is_released() {
         let t = Instant::now();
-        let mut o = Osk::new(0);
+        let mut o = Osk::new(vec![]);
         // A segurado desde antes de abrir: não digita.
         assert_eq!(o.step(&inp(pads::A, 0.0, 1.0), t).0, vec![]);
         assert_eq!(o.step(&inp(0, 0.0, 1.0), t).0, vec![]);
@@ -379,7 +382,7 @@ mod tests {
     #[test]
     fn space_enter_backspace_repeat_and_close() {
         let t = Instant::now();
-        let mut o = Osk::new(0);
+        let mut o = Osk::new(vec![]);
         o.step(&inp(0, 0.0, 0.0), t);
         assert_eq!(o.step(&inp(pads::RB | pads::START, 0.0, 0.0), t).0, vec![Key::Char(' '), Key::Vk(0x0D)]);
         o.step(&inp(0, 0.0, 0.0), t);
@@ -405,7 +408,7 @@ mod tests {
         assert_eq!(o.step(&inp(pads::B, 0.0, 1.0), t), (vec![Key::Char('c')], false));
         o.step(&inp(0, 0.0, 0.0), t);
         assert!(o.step(&inp(pads::B, 0.0, 0.0), t).1);
-        let mut o = Osk::new(0);
+        let mut o = Osk::new(vec![]);
         o.step(&inp(0, 0.0, 0.0), t);
         assert!(o.step(&inp(pads::BACK, 0.0, 1.0), t).1);
     }
@@ -413,7 +416,7 @@ mod tests {
     #[test]
     fn with_two_sticks_the_dpad_types_on_the_right_wheel_and_is_arrows_when_it_is_centered() {
         let t = Instant::now();
-        let mut o = Osk::new(0);
+        let mut o = Osk::new(vec![]);
         o.view.two = true;
         o.step(&inp(0, 0.0, 0.0), t);
         let right_up = |b: pads::Buttons| Input { buttons: b, ry: 1.0, ..Default::default() };
@@ -441,11 +444,16 @@ mod tests {
     fn the_button_that_calls_it_closes_it_unless_the_keyboard_uses_it() {
         let t = Instant::now();
         // RS ligado ao teclado e A também: RS fecha, A continua digitando.
-        let mut o = Osk::new(pads::RS | pads::A);
+        let mut o = Osk::new(vec![pads::RS, pads::A, pads::GUIDE | pads::START]);
         assert!(!o.step(&inp(pads::RS, 0.0, 0.0), t).1, "o aperto que abriu não fecha");
         o.step(&inp(0, 0.0, 0.0), t);
         assert_eq!(o.step(&inp(pads::A, 0.0, 1.0), t), (vec![Key::Char('d')], false));
         o.step(&inp(0, 0.0, 0.0), t);
         assert!(o.step(&inp(pads::RS, 0.0, 0.0), t).1);
+        // Combinação ligada ao teclado (PS + Start): fecha, mesmo com Start sendo do teclado.
+        let mut o = Osk::new(vec![pads::GUIDE | pads::START]);
+        o.step(&inp(0, 0.0, 0.0), t);
+        assert!(!o.step(&inp(pads::GUIDE, 0.0, 0.0), t).1);
+        assert!(o.step(&inp(pads::GUIDE | pads::START, 0.0, 0.0), t).1);
     }
 }

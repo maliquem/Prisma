@@ -321,6 +321,8 @@ struct Trig {
     aborted: bool,
     /// A função normal está "segurada" (segurar faz a função normal).
     normal_down: bool,
+    /// Virou combinação do perfil (o botão com outro que o perfil liga junto): o perfil vê os dois.
+    combo: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -388,7 +390,10 @@ pub struct Trigger {
 }
 
 /// Botão que abre o radial no controle `key`. `game`: o perfil é o Base, e o Select fica só com o jogo.
-pub fn trigger(key: &str, buttons: pads::Buttons, now: Instant, game: bool) -> Trigger {
+/// `combo`: botões que o perfil liga junto com o botão do radial (PS + Start, por exemplo).
+/// Apertado um deles com o botão segurado, o radial não abre nem faz a função normal, e o perfil
+/// vê a combinação.
+pub fn trigger(key: &str, buttons: pads::Buttons, now: Instant, game: bool, combo: pads::Buttons) -> Trigger {
     let c = *CFG.lock().unwrap();
     if c.button == 0 || (game && c.button != pads::GUIDE) {
         return Trigger {
@@ -403,9 +408,13 @@ pub fn trigger(key: &str, buttons: pads::Buttons, now: Instant, game: bool) -> T
         .entry(key.to_string())
         .or_default();
     let (open, normal) = trig_step(t, &c, buttons, now);
+    if buttons & c.button != 0 && buttons & combo != 0 && !t.fired {
+        (t.aborted, t.combo) = (true, true);
+    }
     let guide = c.button == pads::GUIDE;
-    // O perfil não vê o botão que abre, menos quando a função normal está segurada.
-    let rest = if t.normal_down {
+    // O perfil não vê o botão que abre, menos quando a função normal está segurada ou numa
+    // combinação do perfil.
+    let rest = if t.normal_down || t.combo {
         buttons
     } else {
         buttons & !c.button
@@ -622,15 +631,21 @@ mod tests {
         });
         let key = "teste-gatilho";
         assert_eq!(
-            trigger(key, pads::BACK | pads::A, t0, false).steps,
+            trigger(key, pads::BACK | pads::A, t0, false, 0).steps,
             vec![pads::A]
         );
         assert_eq!(
-            trigger(key, pads::A, t0 + Duration::from_millis(50), false).steps,
+            trigger(key, pads::A, t0 + Duration::from_millis(50), false, 0).steps,
             vec![pads::A | pads::BACK, pads::A]
         );
         // No jogo (perfil Base) o Select fica só com o jogo.
-        assert_eq!(trigger(key, pads::BACK, t0, true).steps, vec![pads::BACK]);
+        assert_eq!(trigger(key, pads::BACK, t0, true, 0).steps, vec![pads::BACK]);
+        // Select + Start ligado no perfil: o perfil vê os dois, e soltar não repete o toque.
+        let k2 = "teste-combinacao";
+        assert_eq!(trigger(k2, pads::BACK, t0, false, pads::START).steps, vec![0]);
+        let both = trigger(k2, pads::BACK | pads::START, t0 + Duration::from_millis(30), false, pads::START);
+        assert_eq!((both.steps, both.open), (vec![pads::BACK | pads::START], None));
+        assert_eq!(trigger(k2, 0, t0 + Duration::from_millis(60), false, pads::START).steps, vec![0]);
         configure(DEFAULT);
     }
 

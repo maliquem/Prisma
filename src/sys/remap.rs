@@ -1994,11 +1994,22 @@ pub fn enabled() -> bool {
     ON.load(Ordering::Relaxed)
 }
 
-/// Botões ligados sozinhos, no perfil em uso, a abrir e fechar o teclado do Prisma.
-pub fn keyboard_buttons() -> Buttons {
+/// Ligações que abrem e fecham o teclado do Prisma, como máscaras de botões (o botão com a
+/// combinação dele), no perfil em uso e nos perfis próprios de cada controle.
+pub fn keyboard_buttons() -> Vec<Buttons> {
     let g = RUN.lock().unwrap();
-    let Some(r) = g.as_ref().filter(|_| enabled()) else { return 0 };
-    r.profiles[r.cur].layers.iter().flat_map(|l| &l.binds).filter(|b| b.out == Out::Action(KEYBOARD) && b.with == 0).fold(0, |m, b| m | b.button)
+    let Some(r) = g.as_ref().filter(|_| enabled()) else { return vec![] };
+    let mut v: Vec<Buttons> = r
+        .profiles
+        .iter()
+        .filter(|p| p.name == r.profiles[r.cur].name || r.fixed.values().any(|n| *n == p.name))
+        .flat_map(|p| p.layers.iter().flat_map(|l| &l.binds))
+        .filter(|b| b.out == Out::Action(KEYBOARD))
+        .map(|b| b.button | b.with)
+        .collect();
+    v.sort_unstable();
+    v.dedup();
+    v
 }
 
 pub fn stopped() -> bool {
@@ -2169,7 +2180,10 @@ pub fn feed(key: &str, inp: &Input, arrived: Instant) {
         if !STOPPED.load(Ordering::Relaxed) {
             // Botão que abre o radial: o perfil não o vê; o toque (ou o segurar) volta como aperto.
             let mine = prof_of(r, key);
-            let trig = super::radial::trigger(key, inp.buttons, arrived, r.profiles[mine].name == BASE);
+            let rb = super::radial::button();
+            // Botões que o perfil liga junto com o do radial: com eles, o radial dá passagem.
+            let combo = r.profiles[mine].layers.iter().flat_map(|l| &l.binds).fold(0, |m, b| if b.with & rb != 0 { m | b.button } else if b.button == rb && b.with != 0 { m | b.with } else { m }) & !rb;
+            let trig = super::radial::trigger(key, inp.buttons, arrived, r.profiles[mine].name == BASE, combo);
             radial = trig.open;
             if trig.win_g {
                 acts.extend([Act::Down(Out::Key(0x47, WIN)), Act::Up(Out::Key(0x47, WIN))]);
