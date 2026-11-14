@@ -83,6 +83,22 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         );
     }
 
+    // Item do botão direito do Explorer: só HKCU, nada roda dentro do Explorer.
+    let rp = rect(x, top + 250.0, w, 76.0);
+    ui.card(rp);
+    ui.c.text(rect(rp.x + 16.0, rp.y + 10.0, rp.w - 260.0, 26.0), "Colar com o Prisma", 15.0, TEXT, Align::Left, Weight::Semibold);
+    let paste_on = crate::sys::copy::menu_on();
+    let paste_state = if paste_on {
+        "Ligado: botão direito numa pasta, em Mostrar mais opções."
+    } else {
+        "Desligado. Cola o que foi copiado no Explorer com pausa, hash e lista de erros."
+    };
+    ui.c.text(rect(rp.x + 16.0, rp.y + 38.0, rp.w - 260.0, 22.0), paste_state, 13.0, if paste_on { ACCENT } else { MUTED }, Align::Left, Weight::Regular);
+    if ui.button_ex("paste", rect(rp.right() - 236.0, rp.y + 18.0, 220.0, 40.0), if paste_on { "Desativar" } else { "Ativar" }, !paste_on, true) {
+        crate::sys::copy::set_menu(!paste_on);
+    }
+
+    let top = top + 88.0;
     let rf = rect(x, top + 250.0, w, 76.0);
     ui.card(rf);
     ui.c.text(rect(rf.x + 16.0, rf.y + 10.0, rf.w - 290.0, 26.0), "Fechar à força", 15.0, TEXT, Align::Left, Weight::Semibold);

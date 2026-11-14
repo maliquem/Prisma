@@ -10,6 +10,7 @@ mod optimizer;
 mod meter;
 mod overlays;
 mod pages;
+mod paste;
 mod report;
 #[cfg(debug_assertions)]
 mod selftest;
@@ -75,6 +76,10 @@ fn main() {
     }
     // Compartilhar tela (host, quem assiste, serviço): roda ao lado de outras cópias, sem o nome único.
     if stream::run_args() {
+        return;
+    }
+    // "Colar com o Prisma" do botão direito do Explorer: a janela de cópia, também sem o nome único.
+    if paste::run_args() {
         return;
     }
     // Um link de convite (prisma://parear/...): a página Compartilhar tela pergunta se pareia.

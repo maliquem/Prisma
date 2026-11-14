@@ -2375,3 +2375,36 @@ Ver o espaço em disco com o Prisma	Показать место на диске 
 Pesquisar e Espaço em disco no botão direito do Explorer	Поиск и Место на диске в контекстном меню Проводника
 Esse disco não pode ser analisado	Этот диск нельзя проанализировать
 Não consegui mudar o menu do Explorer	Не удалось изменить меню Проводника
+Colar com o Prisma	Вставить через Prisma
+Não há arquivos copiados para colar.	Нет скопированных файлов для вставки.
+Preparando a lista de arquivos…	Подготовка списка файлов…
+Falta espaço no destino	Не хватает места в папке назначения
+Cancelado	Отменено
+Pronto	Готово
+Pronto, com {} erros	Готово, ошибок: {}
+Pausado	Пауза
+Movendo para {}	Перемещение в {}
+Copiando para {}	Копирование в {}
+Precisa de {} e há {} livres. Nada foi copiado.	Нужно {}, свободно {}. Ничего не скопировано.
+{} copiados de {}	Скопировано {} из {}
+{} de {} arquivos	{} из {} файлов
+Tempo restante: {}	Осталось: {}
+Já existe um arquivo com esse nome. Escolha para todos:	Файл с таким именем уже есть. Выберите для всех:
+Arquivos que já existem no destino	Файлы, которые уже есть в папке назначения
+Pular	Пропустить
+Substituir	Заменить
+Manter os dois	Оставить оба
+Conferir cada arquivo copiado com hash (SHA-256)	Проверять каждый файл по хешу (SHA-256)
+1 erro	1 ошибка
+{} erros	Ошибок: {}
+e mais {}	и ещё {}
+Pausar	Пауза
+Em uso por outro programa	Занят другой программой
+Acesso negado	Отказано в доступе
+Sem espaço no disco	Нет места на диске
+Não encontrado	Не найдено
+Caminho longo demais	Слишком длинный путь
+O hash da cópia não confere	Хеш копии не совпадает
+Uma pasta não pode ir para dentro dela mesma	Папку нельзя поместить в саму себя
+Ligado: botão direito numa pasta, em Mostrar mais opções.	Включено: правый щелчок по папке, в пункте «Показать дополнительные параметры».
+Desligado. Cola o que foi copiado no Explorer com pausa, hash e lista de erros.	Выключено. Вставляет скопированное в Проводнике с паузой, хешем и списком ошибок.

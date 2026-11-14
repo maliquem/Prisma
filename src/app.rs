@@ -953,6 +953,10 @@ pub fn start(background: bool) {
             SetTimer(Some(hub), TIMER_ROOM, 1000, None);
         }
         let open = !background && !testing;
+        // O .exe pode ter mudado de lugar (atualização, portátil movido): o item aponta para este.
+        if !testing && !cfg!(debug_assertions) && crate::sys::copy::menu_on() {
+            std::thread::spawn(|| crate::sys::copy::set_menu(true));
+        }
         #[cfg(feature = "stream")]
         if !testing {
             if crate::stream::weblink::has_pending() {

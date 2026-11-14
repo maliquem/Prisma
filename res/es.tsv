@@ -2375,3 +2375,36 @@ Ver o espaço em disco com o Prisma	Ver el espacio en disco con Prisma
 Pesquisar e Espaço em disco no botão direito do Explorer	Buscar y Espacio en disco en el menú contextual del Explorador
 Esse disco não pode ser analisado	No se puede analizar este disco
 Não consegui mudar o menu do Explorer	No se pudo cambiar el menú del Explorador
+Colar com o Prisma	Pegar con Prisma
+Não há arquivos copiados para colar.	No hay archivos copiados para pegar.
+Preparando a lista de arquivos…	Preparando la lista de archivos…
+Falta espaço no destino	Falta espacio en el destino
+Cancelado	Cancelado
+Pronto	Listo
+Pronto, com {} erros	Listo, con {} errores
+Pausado	En pausa
+Movendo para {}	Moviendo a {}
+Copiando para {}	Copiando a {}
+Precisa de {} e há {} livres. Nada foi copiado.	Se necesitan {} y hay {} libres. No se copió nada.
+{} copiados de {}	{} copiados de {}
+{} de {} arquivos	{} de {} archivos
+Tempo restante: {}	Tiempo restante: {}
+Já existe um arquivo com esse nome. Escolha para todos:	Ya existe un archivo con ese nombre. Elige para todos:
+Arquivos que já existem no destino	Archivos que ya existen en el destino
+Pular	Omitir
+Substituir	Reemplazar
+Manter os dois	Conservar ambos
+Conferir cada arquivo copiado com hash (SHA-256)	Comprobar cada archivo copiado con hash (SHA-256)
+1 erro	1 error
+{} erros	{} errores
+e mais {}	y {} más
+Pausar	Pausar
+Em uso por outro programa	En uso por otro programa
+Acesso negado	Acceso denegado
+Sem espaço no disco	Sin espacio en el disco
+Não encontrado	No encontrado
+Caminho longo demais	Ruta demasiado larga
+O hash da cópia não confere	El hash de la copia no coincide
+Uma pasta não pode ir para dentro dela mesma	Una carpeta no puede ir dentro de sí misma
+Ligado: botão direito numa pasta, em Mostrar mais opções.	Activado: clic derecho en una carpeta, en Mostrar más opciones.
+Desligado. Cola o que foi copiado no Explorer com pausa, hash e lista de erros.	Desactivado. Pega lo copiado en el Explorador con pausa, hash y lista de errores.
