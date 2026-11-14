@@ -95,7 +95,7 @@ Convenção: `arquivo:linha nome`. "Atalho" é a combinação global (chaves `hk
 
 ### 2.4 Prisma Launcher (`prisma-link`)
 1. Capacidades anunciadas: constantes em `crates/prisma-link/src/lib.rs:30-60` (ex.: `PAGE_METER`, linha 31; `HDR`, linha 43). A lista enviada é `caps_with` em `src/link.rs:145`, chamada por `caps` (`link.rs:140`).
-2. Pedidos chegam como `Request` (`crates/prisma-link/src/proto.rs:5`): `OpenPage`, `SaveReplay`, `ShareInvite`, `CaptureDirs`, `GameStarted`, `GameStopped`, `MeterView`, `PowerPlans`, `SetPowerPlan`, `Fullscreen`, `Volume`, `Hdr`, `NvidiaCatalog`, `NvidiaGet`, `NvidiaSet`, `WindowShot`, `RecordWindow`, `Controllers`, `PadProfiles`, `SetPadProfile`, `PadStop`, `PadMap`, `Keyboard`.
+2. Pedidos chegam como `Request` (`crates/prisma-link/src/proto.rs:5`): `OpenPage`, `SaveReplay`, `ShareInvite`, `CaptureDirs`, `GameStarted`, `GameStopped`, `MeterView`, `PowerPlans`, `SetPowerPlan`, `Fullscreen`, `Volume`, `Hdr`, `NvidiaCatalog`, `NvidiaGet`, `NvidiaSet`, `WindowShot`, `RecordWindow`, `Controllers`, `PadProfiles`, `SetPadProfile`, `PadStop`, `PadMap`, `Keyboard`, `ShareAsk` (`proto.rs:102`; só no pipe `share_pipe_name`, `pipe.rs:16`, aberto por `link.rs:184` `start` / `:195` `serve_on`; atendido em `link.rs:474`).
 3. `wait_of` (`src/link.rs:124`) decide se o Launcher espera resposta (convite, pastas).
 4. `on_link` (`src/link.rs:316`) atende cada `Request`:
 
@@ -193,7 +193,7 @@ As flags de teste ficam em `src/app.rs` (`start`, linha 366, e as checagens de `
 | Escolher um .exe | Botão | `pick_exe` `src/app.rs:1737` | |
 | Registro de ações (log) | Automático | `log` `src/app.rs:1744`; `crate::config::log` `src/config.rs:551` | |
 | Foto do relatório | Botão | `pick_report_photo` `src/app.rs:2064`; `copy_report_photo` `app.rs:2077` | |
-| Avisos (mensagens rápidas) | Automático | `Toast::info` `src/overlays.rs:252`; `Toast::info_at` `overlays.rs:272`; `Toast::keep` `overlays.rs:257` e `hide` `:264` (aviso fixo); `Toast::volume` `overlays.rs:239` | Ver seção 5. |
+| Avisos (mensagens rápidas) | Automático | `Toast::info` `src/overlays.rs:252`; `Toast::info_at` `overlays.rs:272`; `Toast::info_for` `overlays.rs:277` (aviso com tempo); `Toast::keep` `overlays.rs:257` e `hide` `:264` (aviso fixo); `Toast::volume` `overlays.rs:239` | Ver seção 5. |
 
 ### 3.1 Instalação, atualização e desinstalação
 
@@ -338,7 +338,7 @@ A barra lateral é `NAV` (`src/pages/mod.rs:273-295`), na ordem abaixo. Cada pá
 | Não fechar processos do sistema | Automático | `optimizer.rs:32` `is_system` | |
 | Forçar fechamento | Botão | `force_stubborn` `app.rs:2786`; `optimizer::force` `optimizer.rs:122` | |
 | Lembrar o uso do dia | Automático | `optimizer.rs:163` `load`; `:183` `save`; `:196` `note`; `:215` `used_today`; `:220` `suggest` | |
-| Pergunta com o mouse | Janela | `prompt_mouse` `app.rs:2815`; `prompt_hide` `app.rs:2831` | |
+| Pergunta com o mouse | Janela | `prompt_mouse` `app.rs:2847`; `prompt_hide` `app.rs:2871`; `Prompt::ask` `overlays.rs:338` (botões e linhas variáveis, texto quebra) | Também a pergunta do compartilhar tela (`share_ask`). |
 
 ### 4.12 Energia (`src/pages/energy.rs`, `draw` linha 25)
 
@@ -430,6 +430,7 @@ A barra lateral é `NAV` (`src/pages/mod.rs:273-295`), na ordem abaixo. Cada pá
 | Parar transmissão | Botão | `pages/share.rs:241` `stop`; `:249` `stop_kvm`; `:271` `stop_ear` | |
 | Trabalho em segundo plano | Automático | `pages/share.rs:276` `service_job`; `stream/service.rs`; `stream/mod.rs:163` `service_dir`; `stream/mod.rs:665` `run_args` | `main.rs` chama `run_args` antes do nome único. |
 | Abrir convite recebido (`prisma://`) | Clique no link | `stream/weblink.rs` `take_arg`; `main.rs` (variável `link`); `stream/weblink.rs:26` `link_alone`, chamado no começo de `main` | Link com outros argumentos junto: nada abre. |
+| Pergunta de quem entra (parear ou conectar) | Pedido do outro PC | `stream/net.rs:612` `ask_tray` (pergunta ao Prisma da bandeja pelo pipe `-share`, conferindo sessão e usuário do servidor do pipe com `Client::server_pid`, `client.rs:99`); `:661` `approve_pair`; `:686` `approve_connect` (caixa antiga do Windows se a bandeja não responder); `app.rs:2828` `share_ask` (aviso de 5 s e pergunta no canto) | Teste: `--test-share-ask=Nome` ou `Nome\|código` (`stream/mod.rs:697`, `net.rs:678` `test_ask`, só debug). |
 | Testes | `--test-stream=` | `app.rs:604`; testes em `src/stream/*.rs` | 34 testes no total em `stream/`. |
 
 ### 4.19 Controles (`src/pages/controllers.rs`, `draw` linha 179)

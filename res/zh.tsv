@@ -2408,3 +2408,7 @@ O hash da cópia não confere	副本的哈希不一致
 Uma pasta não pode ir para dentro dela mesma	文件夹不能复制到自身内部
 Ligado: botão direito numa pasta, em Mostrar mais opções.	已开启：右键单击文件夹，在“显示更多选项”中。
 Desligado. Cola o que foi copiado no Explorer com pausa, hash e lista de erros.	已关闭。在资源管理器中粘贴已复制的内容，支持暂停、哈希校验和错误列表。
+«{}» está pedindo para entrar no compartilhamento de tela	“{}”请求加入屏幕共享
+Parear e confiar	配对并信任
+Recusar	拒绝
+Confira se o outro PC mostra o mesmo código. Se não mostrar, recuse.	请确认另一台电脑显示的是同一个码。如果不是，请拒绝。

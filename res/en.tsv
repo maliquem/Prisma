@@ -2414,3 +2414,7 @@ O hash da cópia não confere	The copy's hash doesn't match
 Uma pasta não pode ir para dentro dela mesma	A folder can't go inside itself
 Ligado: botão direito numa pasta, em Mostrar mais opções.	On: right-click a folder, under Show more options.
 Desligado. Cola o que foi copiado no Explorer com pausa, hash e lista de erros.	Off. Pastes what was copied in Explorer with pause, hash and error list.
+«{}» está pedindo para entrar no compartilhamento de tela	“{}” is asking to join screen sharing
+Parear e confiar	Pair and trust
+Recusar	Decline
+Confira se o outro PC mostra o mesmo código. Se não mostrar, recuse.	Check that the other PC shows the same code. If it does not, decline.

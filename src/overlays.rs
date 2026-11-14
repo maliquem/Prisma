@@ -442,7 +442,7 @@ impl Toast {
         Self { surface: Layered::new(hwnd), timer: 0 }
     }
 
-    fn show(&mut self, w: f32, h: f32, bottom: f32, draw: impl FnOnce(&Canvas, Rect)) {
+    fn show(&mut self, w: f32, h: f32, bottom: f32, ms: u32, draw: impl FnOnce(&Canvas, Rect)) {
         let mon = focus_monitor();
         let hwnd = self.surface.hwnd;
         let scale = unsafe { windows::Win32::UI::HiDpi::GetDpiForWindow(hwnd) } as f32 / 96.0;
@@ -452,13 +452,13 @@ impl Toast {
         unsafe {
             let _ = SetWindowPos(hwnd, Some(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
             let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
-            self.timer = SetTimer(Some(hwnd), 1, 1500, None);
+            self.timer = SetTimer(Some(hwnd), 1, ms, None);
         }
     }
 
     pub fn volume(&mut self, name: &str, vol: f32, muted: bool) {
         let name = name.to_string();
-        self.show(400.0, 62.0, 56.0, move |c, r| {
+        self.show(400.0, 62.0, 56.0, 1500, move |c, r| {
             c.round(r, 14.0, PANEL);
             c.text(rect(16.0, 10.0, 300.0, 22.0), &name, 14.0, WHITE, Align::Left, Weight::Regular);
             let t = if muted { "Mudo".to_string() } else { format!("{:.0}%", vol * 100.0) };
@@ -490,35 +490,39 @@ impl Toast {
 
     /// Aviso a `bottom` DIPs do pé da tela, para não cobrir outra janela flutuante.
     pub fn info_at(&mut self, text: &str, bottom: f32) {
+        self.info_for(text, bottom, 1500);
+    }
+
+    /// Aviso que fica `ms` na tela.
+    pub fn info_for(&mut self, text: &str, bottom: f32, ms: u32) {
         crate::report::note(text);
         let text = text.to_string();
         let tw = measure(&text, 14.0, Weight::Regular, None).0 + 32.0;
-        self.show(tw.max(120.0), 40.0, bottom, move |c, r| {
+        self.show(tw.max(120.0), 40.0, bottom, ms, move |c, r| {
             c.round(r, 10.0, PANEL);
             c.text(r, &text, 14.0, WHITE, Align::Center, Weight::Regular);
         });
     }
 }
 
-/// Pergunta sobre o jogo: oferece fechar programas sem tirar o foco dele.
+/// Pergunta com botões no canto da tela, sem tirar o foco do jogo: a de fechar programas e a de
+/// quem pede para entrar no compartilhamento de tela.
 pub struct Prompt {
     surface: Layered,
     ui: UiState,
     title: String,
-    body: String,
+    /// Uma linha por item; linha longa quebra, nada é cortado.
+    body: Vec<String>,
+    /// Texto e destaque de cada botão, da esquerda para a direita.
+    buttons: Vec<(&'static str, bool)>,
     /// Distância do canto superior direito, para não cobrir o medidor.
     gap: (f32, f32),
     pub open: bool,
 }
 
-pub enum PromptAnswer {
-    Close,
-    List,
-    Dismiss,
-}
-
-const PROMPT_SIZE: (f32, f32) = (300.0, 110.0);
-const PROMPT_MS: u32 = 10_000;
+/// Sem resposta em 10 s, a pergunta de fechar programas some.
+pub const PROMPT_MS: u32 = 10_000;
+const PROMPT_W: (f32, f32) = (300.0, 440.0);
 
 unsafe extern "system" fn prompt_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT {
     let pt = || {
@@ -547,29 +551,37 @@ impl Prompt {
         register(w!("PrismaPrompt"), prompt_proc);
         let hwnd = create_overlay(w!("PrismaPrompt"), false);
         crate::capture::hide_from_capture(hwnd);
-        Self { surface: Layered::new(hwnd), ui: UiState::default(), title: String::new(), body: String::new(), gap: (24.0, 24.0), open: false }
+        Self { surface: Layered::new(hwnd), ui: UiState::default(), title: String::new(), body: Vec::new(), buttons: Vec::new(), gap: (24.0, 24.0), open: false }
     }
 
-    pub fn ask(&mut self, title: String, body: String, gap: (f32, f32)) {
+    /// `limit`: some sozinha depois desses ms (`prompt_hide`); `None` fica até a resposta.
+    pub fn ask(&mut self, title: String, body: Vec<String>, buttons: &[(&'static str, bool)], gap: (f32, f32), limit: Option<u32>) {
         self.title = title;
         self.body = body;
+        self.buttons = buttons.to_vec();
         self.gap = gap;
         self.open = true;
+        self.ui = UiState::default();
         self.redraw();
         unsafe {
+            let _ = KillTimer(Some(self.surface.hwnd), 1);
             let _ = ShowWindow(self.surface.hwnd, SW_SHOWNOACTIVATE);
-            SetTimer(Some(self.surface.hwnd), 1, PROMPT_MS, None);
+            if let Some(ms) = limit {
+                SetTimer(Some(self.surface.hwnd), 1, ms, None);
+            }
         }
     }
 
     pub fn hide(&mut self) {
         self.open = false;
         unsafe {
+            let _ = KillTimer(Some(self.surface.hwnd), 1);
             let _ = ShowWindow(self.surface.hwnd, SW_HIDE);
         }
     }
 
-    pub fn mouse(&mut self, msg: u32, x: f32, y: f32) -> Option<PromptAnswer> {
+    /// O botão clicado, pela posição em `buttons`.
+    pub fn mouse(&mut self, msg: u32, x: f32, y: f32) -> Option<usize> {
         self.ui.mx = x;
         self.ui.my = y;
         match msg {
@@ -590,35 +602,38 @@ impl Prompt {
         self.redraw()
     }
 
-    fn redraw(&mut self) -> Option<PromptAnswer> {
+    fn redraw(&mut self) -> Option<usize> {
+        const PAD: f32 = 14.0;
         let mon = focus_monitor();
         let scale = unsafe { windows::Win32::UI::HiDpi::GetDpiForWindow(self.surface.hwnd) } as f32 / 96.0;
-        let (w, h) = PROMPT_SIZE;
+        // Botões do tamanho do texto no idioma atual; a caixa cresce até PROMPT_W.1 e o texto quebra.
+        let widths: Vec<f32> = self.buttons.iter().map(|(t, _)| (measure(t, 13.0, Weight::Semibold, None).0 + 28.0).max(84.0)).collect();
+        let row = widths.iter().sum::<f32>() + 10.0 * widths.len().saturating_sub(1) as f32;
+        let widest = std::iter::once(measure(&self.title, 14.0, Weight::Semibold, None).0).chain(self.body.iter().map(|l| measure(l, 13.0, Weight::Regular, None).0)).fold(row, f32::max);
+        let w = (widest + 2.0 * PAD).clamp(PROMPT_W.0, PROMPT_W.1);
+        let room = w - 2.0 * PAD;
+        let th = measure(&self.title, 14.0, Weight::Semibold, Some(room)).1.max(22.0);
+        let lines: Vec<f32> = self.body.iter().map(|l| measure(l, 13.0, Weight::Regular, Some(room)).1.max(18.0)).collect();
+        let h = 10.0 + th + lines.iter().sum::<f32>() + 12.0 + 34.0 + 12.0;
         let (x, y) = (mon.right - ((w + self.gap.0) * scale) as i32, mon.top + (self.gap.1 * scale) as i32);
         let mut answer = None;
-        let (title, body) = (self.title.clone(), self.body.clone());
+        let (title, body, buttons) = (&self.title, &self.body, &self.buttons);
         let ui = &mut self.ui;
         self.surface.paint(x, y, w, h, |c, r| {
             c.round(r, 14.0, rgb(0x14161c).alpha(0.96));
             let mut u = Ui::begin(c, ui);
-            let room = r.w - 28.0;
-            let mut title = crate::i18n::tr(&title).into_owned();
-            while measure(&title, 14.0, Weight::Semibold, None).0 > room && title.chars().count() > 1 {
-                title.pop();
-                title.pop();
-                title.push('…');
+            c.text_wrap(rect(PAD, 10.0, room, th), title, 14.0, WHITE, Weight::Semibold);
+            let mut ty = 10.0 + th;
+            for (l, lh) in body.iter().zip(&lines) {
+                c.text_wrap(rect(PAD, ty, room, *lh), l, 13.0, rgb(0xd3d7df), Weight::Regular);
+                ty += lh;
             }
-            c.text(rect(14.0, 10.0, room, 22.0), &title, 14.0, WHITE, Align::Left, Weight::Semibold);
-            c.text(rect(14.0, 32.0, room, 20.0), &body, 13.0, rgb(0xd3d7df), Align::Left, Weight::Regular);
-            let bw = 84.0;
-            if u.button("pclose", rect(14.0, 64.0, bw, 34.0), "Fechar", true) {
-                answer = Some(PromptAnswer::Close);
-            }
-            if u.button("plist", rect(108.0, 64.0, bw, 34.0), "Ver lista", false) {
-                answer = Some(PromptAnswer::List);
-            }
-            if u.button("pnot", rect(202.0, 64.0, bw, 34.0), "Agora não", false) {
-                answer = Some(PromptAnswer::Dismiss);
+            let mut bx = PAD;
+            for (i, ((label, primary), bw)) in buttons.iter().zip(&widths).enumerate() {
+                if u.button(&format!("p{i}"), rect(bx, h - 46.0, *bw, 34.0), label, *primary) {
+                    answer = Some(i);
+                }
+                bx += bw + 10.0;
             }
             u.end();
         });

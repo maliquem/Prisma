@@ -19,7 +19,7 @@ mod ear;
 mod kvm;
 mod link;
 #[cfg(feature = "stream")]
-mod net;
+pub(crate) mod net;
 #[cfg(feature = "stream")]
 pub use net::{device_rows, forget_device, me, revoke_invite, set_device, DeviceRow, CODE_FAIL, CODE_LINE, CODE_OK, EXPIRES_LINE, INVITE_MINUTES};
 pub use net::unix_now;
@@ -690,6 +690,12 @@ pub fn run_args() -> bool {
         }
         if let Some(v) = a.strip_prefix("--test-wave=") {
             wave::bench(v);
+            return true;
+        }
+        // Teste: a pergunta de quem entra, como o host faz (`Nome` ou `Nome|código`), sem rede.
+        #[cfg(all(debug_assertions, feature = "stream"))]
+        if let Some(v) = a.strip_prefix("--test-share-ask=") {
+            net::test_ask(v);
             return true;
         }
         #[cfg(feature = "stream")]

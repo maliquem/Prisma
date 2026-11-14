@@ -19,7 +19,7 @@ pub use proto::{
 #[cfg(windows)]
 pub use client::{CONNECT_TIMEOUT, Client};
 #[cfg(windows)]
-pub use pipe::{current_user_sid, default_pipe_name, pipe_name};
+pub use pipe::{current_user_sid, default_pipe_name, pipe_name, share_pipe_name, token_user_sid};
 #[cfg(windows)]
 pub use server::{ServerInfo, serve};
 
@@ -58,6 +58,9 @@ pub mod cap {
     pub const CONTROLLERS_MAPPING: &str = "controllers.mapping";
     /// Abrir e fechar o teclado do Prisma para controle (`Request::Keyboard`).
     pub const CONTROLLERS_KEYBOARD: &str = "controllers.keyboard";
+    /// Perguntar se alguém entra no compartilhamento de tela (`Request::ShareAsk`), no pipe
+    /// `share_pipe_name`.
+    pub const SHARE_ASK: &str = "share.ask";
 }
 
 /// Códigos estáveis de `Reply::Failed`.
