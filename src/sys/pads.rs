@@ -546,7 +546,9 @@ pub(crate) fn crc32(seed: u8, data: &[u8]) -> u32 {
 /// Relatório de saída com a barra de luz, os gatilhos adaptativos e a vibração, no formato de cada
 /// modelo e conexão (o mesmo que o driver do Linux usa). `rgb` em `None` não mexe na luz; `trig` é
 /// L2 e R2, só do DualSense. `seq` é a sequência de 0 a 15 que o DualSense pede no Bluetooth.
-pub fn out_report(f: Family, link: Link, rgb: Option<[u8; 3]>, trig: [Trig; 2], rumble: [u8; 2], seq: u8) -> Option<Vec<u8>> {
+/// `setup`: só na primeira cor depois de conectar, encerra a animação azul do começo. Repetido a
+/// cada escrita, o DualSense refaz o apagar da luz e ela pisca (visto no Bluetooth).
+pub fn out_report(f: Family, link: Link, rgb: Option<[u8; 3]>, trig: [Trig; 2], rumble: [u8; 2], seq: u8, setup: bool) -> Option<Vec<u8>> {
     let (mut r, at) = match (f, link) {
         (Family::DualSense, Link::Usb) => (vec![0u8; 48], 1),
         (Family::DualSense, Link::Bluetooth) => (vec![0u8; 78], 3),
@@ -577,10 +579,13 @@ pub fn out_report(f: Family, link: Link, rgb: Option<[u8; 3]>, trig: [Trig; 2], 
         r[at + 10..at + 21].copy_from_slice(&trig_block(trig[1]));
         r[at + 21..at + 32].copy_from_slice(&trig_block(trig[0]));
         if let Some(c) = rgb {
-            // Liga o controle da luz, encerra a animação azul do começo e põe a cor.
+            // Liga o controle da luz e põe a cor; a animação azul do começo só se encerra uma vez,
+            // como no driver do Linux.
             r[at + 1] = 0x04;
-            r[at + 38] = 0x02;
-            r[at + 41] = 0x02;
+            if setup {
+                r[at + 38] = 0x02;
+                r[at + 41] = 0x02;
+            }
             r[at + 44..at + 47].copy_from_slice(&c);
         }
     } else {
@@ -737,6 +742,8 @@ struct PadOut {
     tap: Option<(Instant, u8)>,
     /// Atuadores do DualSense pelo Bluetooth, ligados na primeira vez que o háptico pede.
     coil: Option<Arc<Coil>>,
+    /// A animação azul do começo já foi encerrada nesta conexão (`out_report`, `setup`).
+    light_setup: bool,
 }
 
 impl PadOut {
@@ -800,12 +807,14 @@ impl PadOut {
         let rgb = want.rgb.or_else(|| self.sent.rgb.map(|_| LIGHT_DEFAULT));
         // Gatilho que passa ao jogo depois de um efeito do Prisma: solta uma vez, e daí não mexe mais.
         let trig = [0, 1].map(|i| if want.trig[i] == Trig::Pass && self.sent.trig[i] != Trig::Pass { Trig::Off } else { want.trig[i] });
-        let Some(r) = out_report(self.fam, self.link, rgb, trig, want.rumble, self.seq) else { return };
+        let setup = rgb.is_some() && !self.light_setup;
+        let Some(r) = out_report(self.fam, self.link, rgb, trig, want.rumble, self.seq, setup) else { return };
         if !write_report(&self.path, &r, self.out_len) {
             self.failed = true;
             return;
         }
         self.sent = want;
+        self.light_setup |= setup;
         let mut lit = LIT.lock().unwrap();
         lit.retain(|l| l.0 != self.path);
         if want != Want::default() {
@@ -820,7 +829,7 @@ pub fn release_pads() {
     for (path, f, link, len, lit, trig) in LIT.lock().unwrap().drain(..) {
         // Solta só o gatilho que o Prisma mandava; o de passar ao jogo fica com o jogo.
         let trig = trig.map(|t| if t == Trig::Pass { Trig::Pass } else { Trig::Off });
-        if let Some(r) = out_report(f, link, lit.then_some(LIGHT_DEFAULT), trig, [0, 0], 0) {
+        if let Some(r) = out_report(f, link, lit.then_some(LIGHT_DEFAULT), trig, [0, 0], 0, false) {
             unsafe { write_report(&path, &r, len) };
         }
     }
@@ -1232,6 +1241,7 @@ unsafe fn read_loop(d: Dev) {
         prev: 0,
         tap: None,
         coil: None,
+        light_setup: false,
     });
     let mut pct = None;
     'read: loop {
@@ -1651,18 +1661,22 @@ mod tests {
         let off = [Trig::Pass; 2];
         // CRC-32 de referência: "123456789" dá 0xCBF43926.
         assert_eq!(crc32(b'1', b"23456789"), 0xCBF4_3926);
-        let ds = out_report(Family::DualSense, Link::Usb, Some([1, 2, 3]), off, [0, 0], 0).unwrap();
+        let ds = out_report(Family::DualSense, Link::Usb, Some([1, 2, 3]), off, [0, 0], 0, true).unwrap();
         assert_eq!((ds.len(), ds[0], ds[2], &ds[45..48]), (48, 0x02, 0x04, &[1u8, 2, 3][..]));
-        let bt = out_report(Family::DualSense, Link::Bluetooth, Some([1, 2, 3]), off, [0, 0], 5).unwrap();
+        let bt = out_report(Family::DualSense, Link::Bluetooth, Some([1, 2, 3]), off, [0, 0], 5, true).unwrap();
         assert_eq!((bt.len(), bt[0], bt[1], bt[2], &bt[47..50]), (78, 0x31, 0x50, 0x10, &[1u8, 2, 3][..]));
         assert_eq!(u32::from_le_bytes(bt[74..].try_into().unwrap()), crc32(0xA2, &bt[..74]));
-        let ds4 = out_report(Family::Ds4, Link::Usb, Some([1, 2, 3]), off, [0, 0], 0).unwrap();
+        // A animação azul do começo só se encerra na primeira cor: repetida, a luz pisca.
+        assert_eq!((bt[3 + 38], bt[3 + 41]), (0x02, 0x02));
+        let again = out_report(Family::DualSense, Link::Bluetooth, Some([1, 2, 3]), off, [0, 0], 6, false).unwrap();
+        assert_eq!((again[3 + 1], again[3 + 38], again[3 + 41], &again[47..50]), (0x04, 0, 0, &[1u8, 2, 3][..]));
+        let ds4 = out_report(Family::Ds4, Link::Usb, Some([1, 2, 3]), off, [0, 0], 0, true).unwrap();
         assert_eq!((ds4.len(), ds4[0], ds4[1], &ds4[6..9]), (32, 0x05, 0x02, &[1u8, 2, 3][..]));
-        let ds4bt = out_report(Family::Ds4, Link::Bluetooth, Some([1, 2, 3]), off, [0, 0], 0).unwrap();
+        let ds4bt = out_report(Family::Ds4, Link::Bluetooth, Some([1, 2, 3]), off, [0, 0], 0, true).unwrap();
         assert_eq!((ds4bt[0], ds4bt[1], ds4bt[3], &ds4bt[8..11]), (0x11, 0xC0, 0x02, &[1u8, 2, 3][..]));
-        assert!(out_report(Family::Xbox, Link::Usb, Some([0; 3]), off, [0, 0], 0).is_none());
+        assert!(out_report(Family::Xbox, Link::Usb, Some([0; 3]), off, [0, 0], 0, true).is_none());
         // Sem cor, a luz fica como está: nenhum dos bytes dela é mexido.
-        let r = out_report(Family::DualSense, Link::Usb, None, off, [0, 0], 0).unwrap();
+        let r = out_report(Family::DualSense, Link::Usb, None, off, [0, 0], 0, true).unwrap();
         assert_eq!((r[2], r[39], r[42], &r[45..48]), (0, 0, 0, &[0u8, 0, 0][..]));
     }
 
@@ -1693,25 +1707,25 @@ mod tests {
     #[test]
     fn triggers_and_rumble_in_the_report() {
         // Vibração: os dois bits e os dois motores, cada um no seu byte.
-        let r = out_report(Family::DualSense, Link::Usb, None, [Trig::Pass; 2], [0x40, 0x80], 0).unwrap();
+        let r = out_report(Family::DualSense, Link::Usb, None, [Trig::Pass; 2], [0x40, 0x80], 0, true).unwrap();
         assert_eq!((r[1], r[3], r[4]), (0x03, 0x40, 0x80));
-        let d4 = out_report(Family::Ds4, Link::Usb, None, [Trig::Pass; 2], [0x40, 0x80], 0).unwrap();
+        let d4 = out_report(Family::Ds4, Link::Usb, None, [Trig::Pass; 2], [0x40, 0x80], 0, true).unwrap();
         assert_eq!((d4[1], d4[4], d4[5]), (0x01, 0x40, 0x80));
         // Solto liga o bit e manda o modo 0x05: é o que tira um efeito que já estava no gatilho.
-        let r = out_report(Family::DualSense, Link::Usb, None, [Trig::Off, Trig::Pass], [0, 0], 0).unwrap();
+        let r = out_report(Family::DualSense, Link::Usb, None, [Trig::Off, Trig::Pass], [0, 0], 0, true).unwrap();
         assert_eq!((r[1], r[22]), (0x08, 0x05));
         // L2 resiste da metade do curso, R2 passa ao jogo: só o bit do L2 liga.
         let t = [Trig::Rigid { start: 5, power: 8 }, Trig::Pass];
-        let r = out_report(Family::DualSense, Link::Usb, None, t, [0, 0], 0).unwrap();
+        let r = out_report(Family::DualSense, Link::Usb, None, t, [0, 0], 0, true).unwrap();
         assert_eq!((r[1], r[11], r[22]), (0x08, 0x00, 0x21));
         // Zonas 5 a 9 ligadas, com 3 bits de força (8 vira 7) em cada uma.
         assert_eq!(u16::from_le_bytes(r[23..25].try_into().unwrap()), 0b11_1110_0000);
         let f = u32::from_le_bytes(r[25..29].try_into().unwrap());
         assert!((5..10).all(|i| (f >> (3 * i)) & 7 == 7) && (0..5).all(|i| (f >> (3 * i)) & 7 == 0));
         // A arma resiste numa zona e cede na seguinte; a vibração leva a frequência.
-        let r = out_report(Family::DualSense, Link::Usb, None, [Trig::Pass, Trig::Click { start: 3, power: 1 }], [0, 0], 0).unwrap();
+        let r = out_report(Family::DualSense, Link::Usb, None, [Trig::Pass, Trig::Click { start: 3, power: 1 }], [0, 0], 0, true).unwrap();
         assert_eq!((r[1], r[11], u16::from_le_bytes(r[12..14].try_into().unwrap()), r[14]), (0x04, 0x25, 0b1_1000, 0));
-        let r = out_report(Family::DualSense, Link::Usb, None, [Trig::Pass, Trig::Buzz { start: 0, power: 4, hz: 60 }], [0, 0], 0).unwrap();
+        let r = out_report(Family::DualSense, Link::Usb, None, [Trig::Pass, Trig::Buzz { start: 0, power: 4, hz: 60 }], [0, 0], 0, true).unwrap();
         assert_eq!((r[11], r[20]), (0x26, 40));
     }
 
