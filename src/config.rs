@@ -350,6 +350,8 @@ pub struct Config {
     pub seen_version: String,
     pub welcome: bool,
     pub always_admin: bool,
+    /// Entradas do Prisma no menu do botão direito do Explorer.
+    pub explorer_menu: bool,
     pub un_restore: bool,
     pub tw_log: bool,
     pub un_silent: bool,
@@ -477,6 +479,7 @@ impl Default for Config {
             seen_version: String::new(),
             welcome: true,
             always_admin: false,
+            explorer_menu: false,
             un_restore: true,
             tw_log: false,
             un_silent: true,
@@ -784,6 +787,7 @@ impl Config {
                 "seen_version" => c.seen_version = v.to_string(),
                 "welcome" => c.welcome = b,
                 "always_admin" => c.always_admin = b,
+                "explorer_menu" => c.explorer_menu = b,
                 "un_restore" => c.un_restore = b,
                 "tw_log" => c.tw_log = b,
                 "un_silent" => c.un_silent = b,
@@ -911,6 +915,7 @@ impl Config {
         let _ = writeln!(s, "seen_version={}", self.seen_version);
         let _ = writeln!(s, "welcome={}", b(self.welcome));
         let _ = writeln!(s, "always_admin={}", b(self.always_admin));
+        let _ = writeln!(s, "explorer_menu={}", b(self.explorer_menu));
         let _ = writeln!(s, "un_restore={}", b(self.un_restore));
         let _ = writeln!(s, "load_gpu_pct={}", self.load_gpu_pct);
         let _ = writeln!(s, "load_gpu_secs={}", self.load_gpu_secs);

@@ -345,6 +345,8 @@ pub struct App {
     pub scan_at: Option<u32>,
     pub scan_tab: u8,
     pub scan_sel: Option<u32>,
+    /// Pasta pedida pelo menu do Explorer, aberta quando a análise do disco termina.
+    pub scan_goto: Option<String>,
     pub scan_delete: Option<u32>,
     pub installed: bool,
     pub boot_items: Vec<autostart::Item>,
@@ -431,6 +433,7 @@ pub fn start(background: bool) {
         .expect("janela de controle");
         // Sem isso, uma cópia comum não consegue avisar a cópia aberta como administrador.
         let _ = ChangeWindowMessageFilterEx(hub, WM_SHOW, MSGFLT_ALLOW, None);
+        let _ = ChangeWindowMessageFilterEx(hub, WM_COPYDATA, MSGFLT_ALLOW, None);
         let cfg = Config::load();
         let shared = monitor::spawn(hub.0 as isize, WM_TICK);
         let mut app = App {
@@ -545,6 +548,7 @@ pub fn start(background: bool) {
             scan_at: None,
             scan_tab: 0,
             scan_sel: None,
+            scan_goto: None,
             scan_delete: None,
             installed: crate::startup::is_installed(),
             boot_items: Vec::new(),
@@ -2841,6 +2845,7 @@ impl App {
             }
             Defaults::Settings => {
                 crate::i18n::set_lang(self.cfg.lang);
+                self.sync_explorer_menu();
                 self.register_hotkeys();
             }
             Defaults::Fullscreen => self.register_hotkeys(),
@@ -3435,6 +3440,56 @@ impl App {
             .collect();
     }
 
+    /// Abre Pesquisar ou Espaço em disco já na pasta escolhida no menu do Explorer.
+    pub fn open_folder(&mut self, kind: crate::sys::shellmenu::Open, dir: &str) {
+        use crate::sys::shellmenu::Open;
+        match kind {
+            Open::Search => {
+                self.page = Page::Search;
+                self.find.q = crate::sys::shellmenu::search_query(dir);
+            }
+            Open::Space => {
+                self.page = Page::Analyze;
+                let c = dir.chars().next().unwrap_or('?').to_ascii_uppercase();
+                let drives = mft::drives();
+                match drives.iter().position(|l| *l == c) {
+                    Some(i) => {
+                        self.scan_drive = i;
+                        self.scan_goto = Some(dir.to_string());
+                        let same = self.scan.lock().unwrap().as_ref().is_some_and(|s| s.drive == c);
+                        if !same && !self.scan_progress.running.load(Ordering::Relaxed) {
+                            *self.scan.lock().unwrap() = None;
+                            self.scan_at = None;
+                            self.scan_sel = None;
+                            mft::start(c, self.scan_progress.clone(), self.scan.clone());
+                        }
+                    }
+                    None => self.toast.info("Esse disco não pode ser analisado"),
+                }
+            }
+        }
+        self.show_main();
+        self.invalidate();
+    }
+
+    /// Liga ou desliga as entradas do menu do Explorer. Desligar apaga as chaves.
+    pub fn set_explorer_menu(&mut self, on: bool) {
+        if crate::sys::shellmenu::set(on) {
+            self.cfg.explorer_menu = on;
+            self.cfg.save();
+        } else {
+            crate::sys::shellmenu::set(false);
+            self.toast.info("Não consegui mudar o menu do Explorer");
+        }
+    }
+
+    /// Regrava as entradas do menu do Explorer (caminho e idioma de agora), se estão ligadas.
+    pub fn sync_explorer_menu(&self) {
+        if self.cfg.explorer_menu && self.installed {
+            crate::sys::shellmenu::set(true);
+        }
+    }
+
     pub fn show_main(&mut self) {
         if let Some(m) = &self.main {
             unsafe {
@@ -3632,6 +3687,20 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                 }
                 a.show_main();
             });
+            LRESULT(0)
+        }
+        // Outra cópia, aberta pelo menu do Explorer, manda a pasta (UTF-16) e a página em dwData.
+        WM_COPYDATA => {
+            let cd = &*(l.0 as *const windows::Win32::System::DataExchange::COPYDATASTRUCT);
+            let kind = crate::sys::shellmenu::Open::from(cd.dwData);
+            if let (Some(kind), false) = (kind, cd.lpData.is_null()) {
+                let w = std::slice::from_raw_parts(cd.lpData as *const u16, cd.cbData as usize / 2);
+                let args = [String::new(), format!("{}{}", kind.flag(), String::from_utf16_lossy(w))];
+                if let Some((k, dir)) = crate::sys::shellmenu::from_args(&args) {
+                    with(|a| a.open_folder(k, &dir));
+                    return LRESULT(1);
+                }
+            }
             LRESULT(0)
         }
         crate::link::WM_LINK => {

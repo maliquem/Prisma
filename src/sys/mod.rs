@@ -43,6 +43,7 @@ pub mod radial;
 pub mod quick;
 pub mod cmds;
 pub mod reg;
+pub mod shellmenu;
 pub mod services;
 pub mod tools;
 pub mod tweaks;

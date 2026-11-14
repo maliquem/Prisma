@@ -2370,3 +2370,8 @@ Trocar o atalho?	Заменить сочетание?
 {} já é o atalho de {}. Sim tira de lá e coloca aqui.	{} уже назначено для функции «{}». «Да» уберёт его оттуда и поставит сюда.
 Escolher outro atalho?	Выбрать другое сочетание?
 {} já é usado por outro programa, e o Windows não diz qual. Com essa combinação, o atalho não funciona no Prisma.	{} уже занято другой программой, и Windows не сообщает, какой. С этим сочетанием оно не будет работать в Prisma.
+Pesquisar aqui com o Prisma	Искать здесь с помощью Prisma
+Ver o espaço em disco com o Prisma	Показать место на диске в Prisma
+Pesquisar e Espaço em disco no botão direito do Explorer	Поиск и Место на диске в контекстном меню Проводника
+Esse disco não pode ser analisado	Этот диск нельзя проанализировать
+Não consegui mudar o menu do Explorer	Не удалось изменить меню Проводника

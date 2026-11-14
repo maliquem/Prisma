@@ -2370,3 +2370,8 @@ Trocar o atalho?	更换快捷键？
 {} já é o atalho de {}. Sim tira de lá e coloca aqui.	{} 已是“{}”的快捷键。选“是”会从那里移除，并设到这里。
 Escolher outro atalho?	选择其他快捷键？
 {} já é usado por outro programa, e o Windows não diz qual. Com essa combinação, o atalho não funciona no Prisma.	{} 已被其他程序占用，Windows 不会说明是哪个。使用这个组合，快捷键在 Prisma 中无法使用。
+Pesquisar aqui com o Prisma	用 Prisma 在此处搜索
+Ver o espaço em disco com o Prisma	用 Prisma 查看磁盘空间
+Pesquisar e Espaço em disco no botão direito do Explorer	在资源管理器右键菜单中显示搜索和磁盘空间
+Esse disco não pode ser analisado	无法分析此磁盘
+Não consegui mudar o menu do Explorer	无法更改资源管理器菜单

@@ -25,6 +25,12 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         if !app.elevated && ui.button("elev", rect(r0.x + 16.0, r0.y + 102.0, 240.0, 40.0), "Reabrir como administrador", true) {
             crate::startup::relaunch_elevated("");
         }
+        let mx = if app.elevated { 16.0 } else { 272.0 };
+        let mut on = app.cfg.explorer_menu;
+        let label = "Pesquisar e Espaço em disco no botão direito do Explorer";
+        if ui.check("explorer-menu", rect(r0.x + mx, r0.y + 100.0, r0.w - mx - 16.0, 44.0), label, &mut on) {
+            app.set_explorer_menu(on);
+        }
     } else {
         let t = "Instalar libera o início com o Windows e a troca do Gerenciador de Tarefas.";
         ui.c.text(rect(r0.x + 16.0, r0.y + 62.0, r0.w - 32.0, 22.0), t, 13.0, TEXT2, Align::Left, Weight::Regular);
@@ -138,6 +144,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         app.cfg.lang = v as u8;
         app.cfg.save();
         crate::i18n::set_lang(app.cfg.lang);
+        app.sync_explorer_menu();
     }
 }
 
