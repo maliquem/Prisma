@@ -2363,3 +2363,36 @@ Acelerador	油门
 Freio	刹车
 Embreagem	离合
 Volante	方向盘
+Colar com o Prisma	用 Prisma 粘贴
+Não há arquivos copiados para colar.	没有可粘贴的已复制文件。
+Preparando a lista de arquivos…	正在准备文件列表…
+Falta espaço no destino	目标位置空间不足
+Cancelado	已取消
+Pronto	完成
+Pronto, com {} erros	完成，有 {} 个错误
+Pausado	已暂停
+Movendo para {}	正在移动到 {}
+Copiando para {}	正在复制到 {}
+Precisa de {} e há {} livres. Nada foi copiado.	需要 {}，但只剩 {} 可用。未复制任何内容。
+{} copiados de {}	已复制 {} / {}
+{} de {} arquivos	{} / {} 个文件
+Tempo restante: {}	剩余时间：{}
+Já existe um arquivo com esse nome. Escolha para todos:	已存在同名文件。请为全部选择：
+Arquivos que já existem no destino	目标位置已存在的文件
+Pular	跳过
+Substituir	替换
+Manter os dois	保留两者
+Conferir cada arquivo copiado com hash (SHA-256)	用哈希（SHA-256）校验每个已复制的文件
+1 erro	1 个错误
+{} erros	{} 个错误
+e mais {}	另有 {} 个
+Pausar	暂停
+Em uso por outro programa	被其他程序占用
+Acesso negado	访问被拒绝
+Sem espaço no disco	磁盘空间不足
+Não encontrado	未找到
+Caminho longo demais	路径太长
+O hash da cópia não confere	副本的哈希不一致
+Uma pasta não pode ir para dentro dela mesma	文件夹不能复制到自身内部
+Ligado: botão direito numa pasta, em Mostrar mais opções.	已开启：右键单击文件夹，在“显示更多选项”中。
+Desligado. Cola o que foi copiado no Explorer com pausa, hash e lista de erros.	已关闭。在资源管理器中粘贴已复制的内容，支持暂停、哈希校验和错误列表。

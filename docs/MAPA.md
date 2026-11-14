@@ -23,6 +23,7 @@ Convenção: `arquivo:linha nome`. "Atalho" é a combinação global (chaves `hk
 | `src/report.rs` | Relatório de bug: montagem, limpeza de dados pessoais, envio. |
 | `src/crash.rs` | Registro de queda do programa. |
 | `src/i18n.rs` | Idioma. `tr` traduz textos. |
+| `src/paste.rs` | Janela do "Colar com o Prisma" (`--paste=<pasta>`, processo à parte, antes do nome único em `main.rs:82`). Motor em `src/sys/copy.rs`. |
 | `src/selftest.rs` | Testes de fumaça das flags `--test-*` (só build de debug). |
 | `src/pages/` | Uma página por arquivo (seção 4). `pages/mod.rs` tem a barra lateral (`NAV`, linha 255) e o desenho geral (`draw`, linha 286). |
 | `src/sys/` | Módulos de sistema: controles (`pads`, `pad_sound`, `audio_haptic`, `dsx`, `bt_audio`, `remap`, `osk`, `radial`, `nav`, `macros`, `keymap`), Windows (`hdr`, `power`, `powerplan`, `audio`, `services`, `autostart`, `procs`, `disks`, `index`), atualização (`update`), desinstalação (`uninstall`), registro (`reg`), NVIDIA (`drs`, `nvset`, `nvml`) e outros. |
@@ -152,6 +153,7 @@ As flags de teste ficam em `src/app.rs` (`start`, linha 366, e as checagens de `
 | `--test-grab=`, `--test-rec=`, `--test-stream=`, `--test-uninstall=`, `--test-misc=`, `--test-tweaks=`, `--test-tools=`, `--test-audit=`, `--test-explorer=`, `--test-report=`, `--test-patterns=`, `--test-restore=`, `--test-profile=`, `--test-hdr=`, `--test-autohdr=`, `--test-plan=`, `--test-keep=`, `--test-frames=`, `--test-inject=`, `--test-drs=`, `--test-catalog=`, `--test-index=`, `--test-update=`, `--test-sign=`, `--test-scan=`, `--test-force=`, `--test-route=`, `--test-proc-audio=`, `--test-svc=`, `--test-task=`, `--test-overlay=` | `app.rs:555` a `865`, uma por linha (ex.: `--test-hdr=` em 673, `--test-stream=` em 604, `--test-update=` em 744) | Caso de teste de cada módulo. |
 | `--test-crash`, `--test-panic`, `--test-gpu`, `--test-audio`, `--twlog`, `--profiles`, `--shot-clean`, `--update` | `app.rs:632`, `647`, `828`, `842`, `791`, `795`, `873`, `455` | Casos sem valor. |
 | `--test-force-key=` | `app.rs:1093` e `1214` | Permite a combinação de fechar à força no teste. |
+| `--paste=<pasta>` e `--test-paste=<pasta>` | `src/paste.rs:73` `run_args`; foto em `test` `paste.rs:415` (4 momentos, `copia_0..3.png`, aceita `--test-en` e `--test-lang=n`) | Colar com o Prisma; a foto usa `PRISMA_LAYER_DUMP`. |
 | `PRISMA_OVERFLOW=<arquivo>` | `src/ui/gfx.rs:212` `overflow_path` (lê a variável, `:214`); `note_overflow` `:250`; caixas em `BOXES` `:223`, `note_box` `:227`, registradas por `clear` `:385`, `round` `:399`, `round_line` `:406`, `push_clip` `:600`, `pop_clip` `:610`, `translate` `:616`, `scale_at` `:636`; `clear` chamado por `src/ui/layered.rs:121` | Só build de depuração. Grava o texto que não cabe no próprio espaço (em uma linha marca "reticências") e mede cada texto contra a menor caixa desenhada em volta; quando passa, grava "borda <lado> Npx". |
 | `PRISMA_TEST_PAD=1` | `src/ui/mod.rs:297`, dentro de `Ui::begin` | Foto com o anel e a faixa de dicas do controle. |
 | `PRISMA_LAYER_DUMP=<pasta>` | `src/ui/layered.rs:129`, dentro de `paint` (`layered.rs:108`); definido em `src/stream/hud.rs:575` | Grava as camadas de desenho da janela. |
@@ -497,6 +499,7 @@ A barra lateral é `NAV` (`src/pages/mod.rs:273-295`), na ordem abaixo. Cada pá
 | Restaurar padrões de uma página | Botão | `reset_defaults` `app.rs:2724`; `Config::reset` `src/config.rs:990`; `defaults_button` `pages/mod.rs:443` | |
 | Atualizar | Ver seção 3.1 | `pages/adjust.rs:151` `draw_update` | |
 | Cartões de atalho | Página | `src/ui/mod.rs:785` `hotkey` (desenho do cartão de tecla); `register_hotkeys` `app.rs:1043` | |
+| Colar com o Prisma (botão direito do Explorer, cópia com fila, pausa, hash e erros) | Cartão em Configurações (`pages/adjust.rs:81`, padrão desligado); Explorer "Mostrar mais opções" abre `prisma.exe --paste=<pasta>` | Registro (só HKCU): `sys/copy.rs:350` `menu_on`, `:355` `set_menu` (ligado de novo na abertura em `app.rs:922` para seguir o .exe; desligado em `startup::uninstall` `startup.rs:379`). Área de transferência: `:308` `clipboard` (CF_HDROP; recortar vira mover). Motor: `:111` `run`, `:195` `copy_file`, `:268` `copy_with_progress` (CopyFileExW, pausa no callback `progress` `:246`), `:278` `sha256` (BCrypt), `:101` `free_space`, `:74` `unique`, `:58` `reason`. Janela: `paste.rs:356` `open`, `:119` `draw`, `:279` `proc`, `:253` `close` | 8 testes em `sys/copy.rs` (pasta no %TEMP%, nunca no F:): árvore com hash, arquivo travado, mover, sem espaço, hash, conflitos, pasta dentro dela mesma, cancelar. Nada roda dentro do Explorer; trocar o Ctrl+V não foi feito. |
 
 ### 4.22 Guia e Reportar bug (fora da barra, ao lado do nome)
 

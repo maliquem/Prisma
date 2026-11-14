@@ -2369,3 +2369,36 @@ Acelerador	Accelerator
 Freio	Brake
 Embreagem	Clutch
 Volante	Steering
+Colar com o Prisma	Paste with Prisma
+Não há arquivos copiados para colar.	No copied files to paste.
+Preparando a lista de arquivos…	Preparing the file list…
+Falta espaço no destino	Not enough space at destination
+Cancelado	Canceled
+Pronto	Done
+Pronto, com {} erros	Done, with {} errors
+Pausado	Paused
+Movendo para {}	Moving to {}
+Copiando para {}	Copying to {}
+Precisa de {} e há {} livres. Nada foi copiado.	Needs {} and only {} is free. Nothing was copied.
+{} copiados de {}	{} copied of {}
+{} de {} arquivos	{} of {} files
+Tempo restante: {}	Time left: {}
+Já existe um arquivo com esse nome. Escolha para todos:	A file with that name already exists. Choose for all:
+Arquivos que já existem no destino	Files that already exist at the destination
+Pular	Skip
+Substituir	Replace
+Manter os dois	Keep both
+Conferir cada arquivo copiado com hash (SHA-256)	Verify each copied file with a hash (SHA-256)
+1 erro	1 error
+{} erros	{} errors
+e mais {}	and {} more
+Pausar	Pause
+Em uso por outro programa	In use by another program
+Acesso negado	Access denied
+Sem espaço no disco	No disk space
+Não encontrado	Not found
+Caminho longo demais	Path too long
+O hash da cópia não confere	The copy's hash doesn't match
+Uma pasta não pode ir para dentro dela mesma	A folder can't go inside itself
+Ligado: botão direito numa pasta, em Mostrar mais opções.	On: right-click a folder, under Show more options.
+Desligado. Cola o que foi copiado no Explorer com pausa, hash e lista de erros.	Off. Pastes what was copied in Explorer with pause, hash and error list.

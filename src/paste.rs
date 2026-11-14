@@ -1,0 +1,480 @@
+//! Janela do "Colar com o Prisma" (`--paste=<pasta>`): o Explorer abre o prisma.exe com a pasta,
+//! e esta cópia do programa cola o que está na área de transferência, ao lado do Prisma aberto.
+//! O motor fica em `sys::copy`.
+
+use std::path::PathBuf;
+use std::sync::atomic::Ordering::Relaxed;
+use std::sync::Arc;
+use std::time::Instant;
+
+use windows::core::*;
+use windows::Win32::Foundation::*;
+use windows::Win32::Graphics::Gdi::{GetMonitorInfoW, MonitorFromPoint, MONITORINFO, MONITOR_DEFAULTTONEAREST};
+use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows::Win32::UI::Input::KeyboardAndMouse::{VIRTUAL_KEY, VK_ESCAPE, VK_SPACE};
+use windows::Win32::UI::WindowsAndMessaging::*;
+
+use crate::i18n::tr;
+use crate::sys::copy::{self, State};
+use crate::ui::gfx::{rect, Align, Canvas, Rect, Weight, ACCENT, BORDER, BORDER2, CARD, CARD2, LINE, MUTED, ON_ACCENT, TEXT, TEXT2, WARN};
+use crate::ui::layered::Layered;
+
+const W: f32 = 540.0;
+const PAD: f32 = 20.0;
+const MAX_ERRORS: usize = 5;
+
+#[derive(Clone, Copy, PartialEq)]
+enum Pick {
+    Policy(u8),
+    Verify,
+    Pause,
+    Close,
+}
+
+/// O que a janela mostra, copiado do estado do trabalho a cada quadro.
+struct View {
+    dest: String,
+    mv: bool,
+    phase: u8,
+    current: String,
+    done: u64,
+    total: u64,
+    files_done: u32,
+    files: u32,
+    speed: f64,
+    asking: bool,
+    policy: u8,
+    verify: bool,
+    paused: bool,
+    need: u64,
+    free: u64,
+    errors: Vec<(String, String)>,
+}
+
+struct Win {
+    layer: Layered,
+    hits: Vec<(Rect, Pick)>,
+    hover: Option<usize>,
+    pos: (i32, i32),
+    st: Arc<State>,
+    dest: String,
+    mv: bool,
+    speed: f64,
+    last: (Instant, u64),
+    worker: Option<std::thread::JoinHandle<()>>,
+    done_at: Option<Instant>,
+}
+
+thread_local! {
+    static WIN: std::cell::RefCell<Option<Win>> = const { std::cell::RefCell::new(None) };
+}
+
+/// `--paste=<pasta>`: true quando o argumento veio e esta cópia já fez o seu trabalho.
+pub fn run_args() -> bool {
+    #[cfg(debug_assertions)]
+    if let Some(dir) = std::env::args().find_map(|a| a.strip_prefix("--test-paste=").map(str::to_string)) {
+        test(&dir);
+        return true;
+    }
+    let Some(dest) = std::env::args().find_map(|a| a.strip_prefix("--paste=").map(str::to_string)) else { return false };
+    let dest = PathBuf::from(dest.trim_matches('"'));
+    let Some((items, cut)) = copy::clipboard() else {
+        let msg = HSTRING::from(tr("Não há arquivos copiados para colar.").as_ref());
+        unsafe { MessageBoxW(None, &msg, w!("Prisma"), MB_OK | MB_ICONINFORMATION) };
+        return true;
+    };
+    open(items, dest, cut);
+    true
+}
+
+fn size_text(b: u64) -> String {
+    if b >= 1 << 30 {
+        format!("{:.1} GB", b as f64 / (1u64 << 30) as f64).replace('.', crate::i18n::comma())
+    } else if b >= 1 << 20 {
+        format!("{} MB", b >> 20)
+    } else {
+        format!("{} KB", b.div_ceil(1024))
+    }
+}
+
+fn height(v: &View) -> f32 {
+    let errs = v.errors.len().min(MAX_ERRORS) as f32 * 20.0 + if v.errors.len() > MAX_ERRORS { 20.0 } else { 0.0 };
+    238.0 + if v.errors.is_empty() { 0.0 } else { 26.0 + errs } + 66.0
+}
+
+fn title(v: &View) -> String {
+    match v.phase {
+        copy::PREPARING => tr("Preparando a lista de arquivos…").into_owned(),
+        copy::NO_SPACE => tr("Falta espaço no destino").into_owned(),
+        copy::CANCELED => tr("Cancelado").into_owned(),
+        copy::DONE if v.errors.is_empty() => tr("Pronto").into_owned(),
+        copy::DONE => tr(&format!("Pronto, com {} erros", v.errors.len())).into_owned(),
+        _ if v.paused => tr("Pausado").into_owned(),
+        _ if v.mv => tr(&format!("Movendo para {}", v.dest)).into_owned(),
+        _ => tr(&format!("Copiando para {}", v.dest)).into_owned(),
+    }
+}
+
+/// Desenha a janela e devolve as áreas que se clicam.
+fn draw(c: &Canvas, r: Rect, v: &View, hover: Option<usize>) -> Vec<(Rect, Pick)> {
+    let mut hits = Vec::new();
+    c.round(r, 12.0, CARD);
+    c.round_line(r, 12.0, BORDER, 1.0);
+    let x = r.x + PAD;
+    let w = r.w - 2.0 * PAD;
+    c.text_raw(rect(x, 16.0, w, 24.0), &title(v), 15.0, if v.phase == copy::NO_SPACE { WARN } else { TEXT }, Align::Left, Weight::Semibold);
+    let sub = if v.phase == copy::NO_SPACE {
+        tr(&format!("Precisa de {} e há {} livres. Nada foi copiado.", size_text(v.need), size_text(v.free))).into_owned()
+    } else {
+        v.current.clone()
+    };
+    c.text_raw(rect(x, 42.0, w, 18.0), &sub, 12.0, MUTED, Align::Left, Weight::Regular);
+
+    let bar = rect(x, 70.0, w, 8.0);
+    c.round(bar, 4.0, LINE);
+    let frac = if v.total == 0 { if v.phase == copy::DONE { 1.0 } else { 0.0 } } else { (v.done as f64 / v.total as f64).min(1.0) as f32 };
+    if frac > 0.0 {
+        c.round(rect(bar.x, bar.y, (bar.w * frac).max(8.0), bar.h), 4.0, if v.paused { MUTED } else { ACCENT });
+    }
+    let half = w / 2.0;
+    c.text_raw(rect(x, 86.0, half, 18.0), &tr(&format!("{} copiados de {}", size_text(v.done), size_text(v.total))), 12.0, TEXT2, Align::Left, Weight::Regular);
+    c.text_raw(rect(x, 106.0, half, 18.0), &tr(&format!("{} de {} arquivos", v.files_done, v.files)), 12.0, TEXT2, Align::Left, Weight::Regular);
+    if v.phase == copy::COPYING && !v.paused && v.speed > 1.0 {
+        c.text_raw(rect(x + half, 86.0, half, 18.0), &format!("{}/s", size_text(v.speed as u64)), 12.0, TEXT2, Align::Right, Weight::Regular);
+        let left = (v.total.saturating_sub(v.done) as f64 / v.speed) as u64;
+        let eta = if left >= 3600 { format!("{}:{:02}:{:02}", left / 3600, left / 60 % 60, left % 60) } else { format!("{}:{:02}", left / 60, left % 60) };
+        c.text_raw(rect(x + half, 106.0, half, 18.0), &tr(&format!("Tempo restante: {}", eta)), 12.0, TEXT2, Align::Right, Weight::Regular);
+    }
+
+    let hovered = |hits: &Vec<(Rect, Pick)>| hover == Some(hits.len());
+    // Arquivo que já existe: uma escolha para o lote todo.
+    let (label, col) = if v.asking { ("Já existe um arquivo com esse nome. Escolha para todos:", WARN) } else { ("Arquivos que já existem no destino", TEXT2) };
+    c.text_fit(rect(x, 134.0, w, 20.0), label, 13.0, col, Align::Left, Weight::Regular);
+    let gap = 6.0;
+    let sw = ((w - 2.0 * gap) / 3.0).floor();
+    for (i, (t, p)) in [("Pular", copy::SKIP), ("Substituir", copy::REPLACE), ("Manter os dois", copy::KEEP_BOTH)].into_iter().enumerate() {
+        let s = rect(x + i as f32 * (sw + gap), 158.0, sw, 30.0);
+        let on = v.policy == p;
+        let (bg, fg) = if on { (ACCENT, ON_ACCENT) } else if hovered(&hits) { (CARD2, TEXT) } else { (LINE.alpha(0.6), TEXT2) };
+        c.round(s, 7.0, bg);
+        if v.asking && !on {
+            c.round_line(s, 7.0, WARN.alpha(0.7), 1.0);
+        }
+        c.text_fit(s.inset_xy(6.0, 0.0), t, 13.0, fg, Align::Center, if on { Weight::Semibold } else { Weight::Regular });
+        hits.push((s, Pick::Policy(p)));
+    }
+
+    let row = rect(r.x + 8.0, 198.0, r.w - 16.0, 30.0);
+    if hovered(&hits) {
+        c.round(row, 8.0, CARD2);
+    }
+    let b = rect(x, row.y + 7.0, 16.0, 16.0);
+    if v.verify {
+        c.round(b, 4.0, ACCENT);
+        c.line(b.x + 3.5, b.y + 8.5, b.x + 6.5, b.y + 11.5, ON_ACCENT, 2.0);
+        c.line(b.x + 6.5, b.y + 11.5, b.x + 12.5, b.y + 4.5, ON_ACCENT, 2.0);
+    } else {
+        c.round_line(b, 4.0, BORDER2, 1.5);
+    }
+    c.text_fit(rect(x + 26.0, row.y, w - 26.0, row.h), "Conferir cada arquivo copiado com hash (SHA-256)", 13.0, TEXT, Align::Left, Weight::Regular);
+    hits.push((row, Pick::Verify));
+
+    let mut y = 238.0;
+    if !v.errors.is_empty() {
+        c.line(x, y, x + w, y, LINE, 1.0);
+        let head = if v.errors.len() == 1 { tr("1 erro").into_owned() } else { tr(&format!("{} erros", v.errors.len())).into_owned() };
+        c.text_raw(rect(x, y + 6.0, w, 20.0), &head, 13.0, WARN, Align::Left, Weight::Semibold);
+        y += 26.0;
+        for (path, why) in v.errors.iter().take(MAX_ERRORS) {
+            let name = std::path::Path::new(path).file_name().map_or(path.clone(), |n| n.to_string_lossy().into_owned());
+            c.text_raw(rect(x, y, w * 0.55 - 8.0, 20.0), &name, 12.0, TEXT2, Align::Left, Weight::Regular);
+            c.text_fit(rect(x + w * 0.55, y, w * 0.45, 20.0), why, 12.0, MUTED, Align::Right, Weight::Regular);
+            y += 20.0;
+        }
+        if v.errors.len() > MAX_ERRORS {
+            c.text_raw(rect(x, y, w, 20.0), &tr(&format!("e mais {}", v.errors.len() - MAX_ERRORS)), 12.0, MUTED, Align::Left, Weight::Regular);
+            y += 20.0;
+        }
+    }
+
+    let running = matches!(v.phase, copy::PREPARING | copy::COPYING);
+    let by = y + 16.0;
+    let bw = 150.0;
+    let button = |hits: &mut Vec<(Rect, Pick)>, s: Rect, t: &str, primary: bool, p: Pick| {
+        let hov = hover == Some(hits.len());
+        c.round(s, 8.0, if primary { if hov { ACCENT.alpha(0.85) } else { ACCENT } } else if hov { CARD2 } else { LINE });
+        c.text_fit(s.inset_xy(8.0, 0.0), t, 13.0, if primary { ON_ACCENT } else { TEXT }, Align::Center, Weight::Semibold);
+        hits.push((s, p));
+    };
+    if running {
+        button(&mut hits, rect(r.right() - PAD - 2.0 * bw - 10.0, by, bw, 34.0), if v.paused { "Continuar" } else { "Pausar" }, true, Pick::Pause);
+        button(&mut hits, rect(r.right() - PAD - bw, by, bw, 34.0), "Cancelar", false, Pick::Close);
+    } else {
+        button(&mut hits, rect(r.right() - PAD - bw, by, bw, 34.0), "Fechar", true, Pick::Close);
+    }
+    hits
+}
+
+fn view(o: &Win) -> View {
+    let st = &o.st;
+    View {
+        dest: o.dest.clone(),
+        mv: o.mv,
+        phase: st.phase.load(Relaxed),
+        current: st.current.lock().unwrap().clone(),
+        done: st.done.load(Relaxed),
+        total: st.total.load(Relaxed),
+        files_done: st.files_done.load(Relaxed),
+        files: st.files.load(Relaxed),
+        speed: o.speed,
+        asking: st.asking.load(Relaxed),
+        policy: st.policy.load(Relaxed),
+        verify: st.verify.load(Relaxed),
+        paused: st.paused.load(Relaxed),
+        need: st.need.load(Relaxed),
+        free: st.free.load(Relaxed),
+        errors: st.errors.lock().unwrap().clone(),
+    }
+}
+
+fn repaint(o: &mut Win) {
+    let v = view(o);
+    let hover = o.hover;
+    let mut hits = Vec::new();
+    o.layer.paint(o.pos.0, o.pos.1, W, height(&v), |c, r| hits = draw(c, r, &v, hover));
+    o.hits = hits;
+}
+
+fn running(o: &Win) -> bool {
+    o.worker.as_ref().is_some_and(|t| !t.is_finished())
+}
+
+/// Fecha: cancela e espera o Windows apagar o arquivo pela metade antes de sair.
+fn close(h: HWND, o: &mut Win) {
+    o.st.cancel.store(true, Relaxed);
+    if let Some(t) = o.worker.take() {
+        let _ = t.join();
+    }
+    unsafe {
+        let _ = DestroyWindow(h);
+    }
+}
+
+fn act(h: HWND, o: &mut Win, p: Pick) {
+    match p {
+        Pick::Policy(v) => o.st.policy.store(v, Relaxed),
+        Pick::Verify => {
+            let on = !o.st.verify.load(Relaxed);
+            o.st.verify.store(on, Relaxed);
+        }
+        Pick::Pause => {
+            let on = !o.st.paused.load(Relaxed);
+            o.st.paused.store(on, Relaxed);
+        }
+        Pick::Close => return close(h, o),
+    }
+    repaint(o);
+}
+
+unsafe extern "system" fn proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT {
+    if m == WM_DESTROY {
+        PostQuitMessage(0);
+        return LRESULT(0);
+    }
+    let out = WIN.with(|cell| {
+        let Ok(mut b) = cell.try_borrow_mut() else { return None };
+        let o = b.as_mut()?;
+        let scale = o.layer.scale.max(0.5);
+        let at = |l: LPARAM| ((l.0 & 0xFFFF) as i16 as f32 / scale, ((l.0 >> 16) & 0xFFFF) as i16 as f32 / scale);
+        match m {
+            // Fora dos botões, arrastar move a janela.
+            WM_NCHITTEST => {
+                let (sx, sy) = at(l);
+                let (x, y) = (sx - o.pos.0 as f32 / scale, sy - o.pos.1 as f32 / scale);
+                let ht = if o.hits.iter().any(|t| t.0.contains(x, y)) { HTCLIENT } else { HTCAPTION };
+                Some(LRESULT(ht as isize))
+            }
+            WM_MOVE => {
+                let mut rc = RECT::default();
+                let _ = GetWindowRect(h, &mut rc);
+                o.pos = (rc.left, rc.top);
+                Some(LRESULT(0))
+            }
+            WM_MOUSEMOVE => {
+                let (x, y) = at(l);
+                let hover = o.hits.iter().position(|t| t.0.contains(x, y));
+                if hover != o.hover {
+                    o.hover = hover;
+                    repaint(o);
+                }
+                Some(LRESULT(0))
+            }
+            WM_LBUTTONUP => {
+                let (x, y) = at(l);
+                if let Some(p) = o.hits.iter().find(|t| t.0.contains(x, y)).map(|t| t.1) {
+                    act(h, o, p);
+                }
+                Some(LRESULT(0))
+            }
+            WM_KEYDOWN => {
+                match VIRTUAL_KEY(w.0 as u16) {
+                    VK_ESCAPE => close(h, o),
+                    VK_SPACE if running(o) => act(h, o, Pick::Pause),
+                    _ => {}
+                }
+                Some(LRESULT(0))
+            }
+            WM_CLOSE => {
+                close(h, o);
+                Some(LRESULT(0))
+            }
+            WM_TIMER => {
+                let now = Instant::now();
+                let done = o.st.done.load(Relaxed);
+                let dt = now.duration_since(o.last.0).as_secs_f64();
+                if dt >= 0.5 {
+                    let rate = done.saturating_sub(o.last.1) as f64 / dt;
+                    o.speed = if o.speed == 0.0 { rate } else { o.speed * 0.7 + rate * 0.3 };
+                    o.last = (now, done);
+                }
+                repaint(o);
+                // Terminou sem erro: fecha sozinha, como a cópia do Windows.
+                if !running(o) && o.st.phase.load(Relaxed) == copy::DONE && o.st.errors.lock().unwrap().is_empty() {
+                    let at = *o.done_at.get_or_insert(now);
+                    if now.duration_since(at).as_millis() > 1500 {
+                        let _ = DestroyWindow(h);
+                    }
+                }
+                Some(LRESULT(0))
+            }
+            _ => None,
+        }
+    });
+    out.unwrap_or_else(|| DefWindowProcW(h, m, w, l))
+}
+
+fn open(items: Vec<PathBuf>, dest: PathBuf, mv: bool) {
+    unsafe {
+        let _ = windows::Win32::UI::HiDpi::SetProcessDpiAwarenessContext(windows::Win32::UI::HiDpi::DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+        let Ok(inst) = GetModuleHandleW(None) else { return };
+        let inst: HINSTANCE = inst.into();
+        let class = w!("PrismaColar");
+        let wc = WNDCLASSW {
+            lpfnWndProc: Some(proc),
+            hInstance: inst,
+            lpszClassName: class,
+            hCursor: LoadCursorW(None, IDC_ARROW).unwrap_or_default(),
+            hIcon: LoadIconW(Some(inst), PCWSTR(1 as *const u16)).unwrap_or_default(),
+            ..Default::default()
+        };
+        RegisterClassW(&wc);
+        let name = HSTRING::from(tr("Colar com o Prisma").as_ref());
+        let Ok(h) = CreateWindowExW(WS_EX_LAYERED | WS_EX_APPWINDOW, class, &name, WS_POPUP, 0, 0, 1, 1, None, None, Some(inst), None) else { return };
+        // No meio da tela onde está o mouse.
+        let mut pt = POINT::default();
+        let _ = GetCursorPos(&mut pt);
+        let mut mi = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
+        let _ = GetMonitorInfoW(MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST), &mut mi);
+        let scale = windows::Win32::UI::HiDpi::GetDpiForWindow(h) as f32 / 96.0;
+        let wa = mi.rcWork;
+        let pos = ((wa.left + wa.right - (W * scale) as i32) / 2, (wa.top + wa.bottom - (320.0 * scale) as i32) / 2);
+
+        let st = Arc::new(State::default());
+        let dest_name = dest.file_name().map_or(dest.display().to_string(), |n| n.to_string_lossy().into_owned());
+        let worker = {
+            let st = st.clone();
+            std::thread::spawn(move || copy::run(&items, &dest, mv, &st, copy::free_space))
+        };
+        WIN.with(|cell| {
+            let mut o = Win { layer: Layered::new(h), hits: Vec::new(), hover: None, pos, st, dest: dest_name, mv, speed: 0.0, last: (Instant::now(), 0), worker: Some(worker), done_at: None };
+            repaint(&mut o);
+            *cell.borrow_mut() = Some(o);
+        });
+        let _ = ShowWindow(h, SW_SHOW);
+        let _ = SetForegroundWindow(h);
+        SetTimer(Some(h), 1, 100, None);
+        let mut msg = MSG::default();
+        while GetMessageW(&mut msg, None, 0, 0).as_bool() {
+            let _ = TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+        // Saída por fora da janela (fim de sessão): não deixa arquivo pela metade.
+        WIN.with(|cell| {
+            if let Some(mut o) = cell.borrow_mut().take() {
+                o.st.cancel.store(true, Relaxed);
+                if let Some(t) = o.worker.take() {
+                    let _ = t.join();
+                }
+            }
+        });
+    }
+}
+
+/// Teste: a janela em quatro momentos, salva como `copia_<n>.png` na pasta.
+#[cfg(debug_assertions)]
+fn test(dir: &str) {
+    let args: Vec<String> = std::env::args().collect();
+    if args.iter().any(|a| a == "--test-en") {
+        crate::i18n::set_lang(1);
+    }
+    if let Some(n) = args.iter().find_map(|a| a.strip_prefix("--test-lang=").and_then(|v| v.parse().ok())) {
+        crate::i18n::set_lang(n);
+    }
+    unsafe {
+        let _ = windows::Win32::UI::HiDpi::SetProcessDpiAwarenessContext(windows::Win32::UI::HiDpi::DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+        let Ok(inst) = GetModuleHandleW(None) else { return };
+        let inst: HINSTANCE = inst.into();
+        let class = w!("PrismaColarTeste");
+        unsafe extern "system" fn p(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT {
+            DefWindowProcW(h, m, w, l)
+        }
+        RegisterClassW(&WNDCLASSW { lpfnWndProc: Some(p), hInstance: inst, lpszClassName: class, ..Default::default() });
+        let Ok(h) = CreateWindowExW(WS_EX_LAYERED | WS_EX_TOOLWINDOW, class, w!(""), WS_POPUP, -4000, -4000, 1, 1, None, None, Some(inst), None) else { return };
+        let errors: Vec<(String, String)> = [
+            ("D:\\Projetos\\relatorio_final_versao_revisada_com_comentarios_da_equipe.docx", "Em uso por outro programa"),
+            ("D:\\Projetos\\banco.db", "Acesso negado"),
+            ("D:\\Projetos\\video.mp4", "O hash da cópia não confere"),
+            ("D:\\Projetos\\sistema.sys", "Caminho longo demais"),
+            ("D:\\Projetos\\notas.txt", "Não encontrado"),
+            ("D:\\Projetos\\x.bin", "Sem espaço no disco"),
+            ("D:\\Projetos\\y.bin", "Uma pasta não pode ir para dentro dela mesma"),
+        ]
+        .iter()
+        .map(|(a, b)| (a.to_string(), b.to_string()))
+        .collect();
+        let base = || View {
+            dest: "Documentos do trabalho".into(),
+            mv: false,
+            phase: copy::COPYING,
+            current: "D:\\Fotos\\Viagem 2024\\IMG_2041.jpg".into(),
+            done: 1_342_177_280,
+            total: 3_650_722_201,
+            files_done: 34,
+            files: 1208,
+            speed: 89_128_960.0,
+            asking: false,
+            policy: copy::ASK,
+            verify: true,
+            paused: false,
+            need: 0,
+            free: 0,
+            errors: Vec::new(),
+        };
+        let views = [
+            View { asking: true, ..base() },
+            View { mv: true, policy: copy::KEEP_BOTH, paused: true, errors: errors[..2].to_vec(), ..base() },
+            View { phase: copy::DONE, policy: copy::REPLACE, current: String::new(), done: 3_650_722_201, files_done: 1208, errors, ..base() },
+            View { phase: copy::NO_SPACE, need: 3_650_722_201, free: 1_288_490_188, done: 0, files_done: 0, ..base() },
+        ];
+        std::env::set_var("PRISMA_LAYER_DUMP", dir);
+        for (i, v) in views.iter().enumerate() {
+            let mut layer = Layered::new(h);
+            layer.paint(-4000, -4000, W, height(v), |c, r| {
+                draw(c, r, v, None);
+            });
+            let from = std::path::Path::new(dir).join(format!("camada_{}.png", (W * layer.scale).ceil() as i32));
+            let _ = std::fs::rename(&from, std::path::Path::new(dir).join(format!("copia_{i}.png")));
+        }
+        let _ = DestroyWindow(h);
+    }
+}

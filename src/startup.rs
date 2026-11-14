@@ -376,6 +376,7 @@ pub fn uninstall() {
         set_replace_taskmgr(false);
     }
     crate::sys::autohdr::clear_all();
+    crate::sys::copy::set_menu(false);
     let cfg = crate::config::Config::load();
     if cfg.pad_guide {
         crate::sys::radial::gamebar_restore(cfg.pad_gamebar_prev);
