@@ -56,6 +56,11 @@ fn table(lang: u8) -> &'static Table {
     T[i].get_or_init(|| build(src))
 }
 
+/// O texto em todos os idiomas, o português primeiro: acha o que foi gravado em outro idioma.
+pub fn every(s: &str) -> impl Iterator<Item = &str> {
+    std::iter::once(s).chain([EN, ES, RU, ZH].into_iter().filter_map(move |l| table(l).exact.get(s).copied()))
+}
+
 /// Idioma do Windows, para escolher na primeira abertura.
 pub fn system_lang() -> u8 {
     let id = unsafe { windows::Win32::Globalization::GetUserDefaultUILanguage() };
@@ -213,7 +218,15 @@ fn note_missing(s: &str) {
 
 #[cfg(test)]
 mod tests {
+    use super::every;
 
+    /// O plano de jogo tem nome próprio em cada idioma: é por ele que o Prisma reconhece o plano.
+    #[test]
+    fn plan_names_in_every_language() {
+        let names: Vec<&str> = every("Prisma Jogo").collect();
+        assert_eq!(names.len(), 5, "{names:?}");
+        assert_eq!(every("Prisma Repouso").count(), 5);
+    }
 
     /// Os idiomas novos trazem os mesmos `{}` que o português, para nada se perder no meio.
     #[test]

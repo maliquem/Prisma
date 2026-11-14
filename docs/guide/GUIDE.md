@@ -167,6 +167,7 @@ With **Automatic switching** off, the **Fixed plan** box picks a plan that turns
 A game is the program in focus that covers the screen and uses the GPU itself, or that lives in the Steam, Epic, GOG or Xbox game folders. Browsers, video players, remote access like Parsec, Discord, OBS and launchers never count, even in full screen.
 
 - **You can:** edit a plan with every option Windows registers, including hidden ones, and import or export .pow files. The first edit keeps a copy of the original plan.
+- **Plan names:** Prisma's plans are named in the chosen language and are renamed when it changes, without duplicates.
 - **Limit:** Prisma's plans are created only in the installed version.
 
 ## Fullscreenizer

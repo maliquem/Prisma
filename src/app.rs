@@ -1031,6 +1031,10 @@ impl App {
     }
 
     pub fn refresh_plans(&mut self) {
+        // O nome dos planos do Prisma acompanha o idioma; só grava quando muda, e como a criação, só na versão instalada.
+        if self.installed {
+            power::rename_prisma_plans();
+        }
         self.plans = power::list();
         self.plan_values = self.plans.iter().map(power::values).collect();
         self.active_plan = power::active().unwrap_or_default();

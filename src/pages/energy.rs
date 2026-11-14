@@ -115,7 +115,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     if ui.button("pw-in", rect(bx - 284.0, by2, 92.0, 36.0), "Importar", false) {
         app.import_plan();
     }
-    let has_prisma = app.plans.iter().any(|p| p.name == power::NAME_REST);
+    let has_prisma = app.plans.iter().any(|p| power::is_prisma(&p.name, power::NAME_REST));
     if !has_prisma && ui.button("mk", rect(bx - 462.0, by2, 170.0, 36.0), "Criar planos Prisma", true) {
         let (rest, game) = power::ensure_prisma_plans();
         if let Some(r) = rest {
