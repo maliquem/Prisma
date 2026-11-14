@@ -461,7 +461,7 @@ fn meter(o: &mut Win) {
 /// Na frente das outras janelas. Aberta pelo Ctrl+V, quem abre é o Prisma em segundo plano e o
 /// Windows recusa o SetForegroundWindow: ligar a entrada à da janela em foco (o Explorer) libera.
 unsafe fn to_front(h: HWND) {
-    use windows::Win32::System::Threading::GetCurrentThreadId;
+    use windows::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
     let fg = GetForegroundWindow();
     let fg_thread = GetWindowThreadProcessId(fg, None);
     let me = GetCurrentThreadId();
