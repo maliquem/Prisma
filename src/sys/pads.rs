@@ -1353,7 +1353,8 @@ unsafe fn read_loop(d: Dev) {
     }
 }
 
-/// Bateria baixa uma vez por descarga, e variação alta uma vez até voltar ao normal.
+/// Bateria baixa uma vez por descarga, e variação alta uma vez por conexão (no Bluetooth ela oscila
+/// em volta do limite e o aviso voltava a cada janela de 10 s).
 fn check_warnings(p: &mut Pad) -> Vec<Event> {
     let mut out = vec![];
     let low = LOW_PCT.load(Ordering::Relaxed);
@@ -1378,8 +1379,6 @@ fn check_warnings(p: &mut Pad) -> Vec<Event> {
         if limit > 0.0 && r.p99_ms > limit && !p.jitter_warned {
             p.jitter_warned = true;
             out.push(Event::Jitter { name: p.name.clone(), p99_ms: r.p99_ms });
-        } else if r.p99_ms <= limit * 0.8 {
-            p.jitter_warned = false;
         }
     }
     out

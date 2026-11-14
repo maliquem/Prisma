@@ -71,16 +71,8 @@ pub(crate) fn is_pad_endpoint(name: &str) -> bool {
 /// Toca o aviso em todos os controles: os do cabo pela saída de som e os do Bluetooth pelo HID,
 /// numa linha própria. Ao conectar, a saída
 /// de som do controle aparece um pouco depois do controle: tenta por até 3 s.
-/// Som no alto-falante pelo Bluetooth (config `pad_speaker_bt`, veja o comentário em `play`).
-static BT_SPEAKER: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-pub fn set_bluetooth(on: bool) {
-    BT_SPEAKER.store(on, std::sync::atomic::Ordering::Relaxed);
-}
-
-pub fn bluetooth() -> bool {
-    BT_SPEAKER.load(std::sync::atomic::Ordering::Relaxed)
-}
+/// Som no alto-falante pelo Bluetooth (veja o comentário em `play`).
+const BT_SPEAKER: bool = false;
 
 pub fn play(c: Chime) {
     let _ = std::thread::Builder::new().name("aviso do controle".into()).spawn(move || unsafe {
@@ -95,10 +87,11 @@ pub fn play(c: Chime) {
         }
         CoUninitialize();
         // Pelo Bluetooth: um controle de cada vez, cada um no formato dele.
-        // Só com a opção: o som pelo 0x39 faz o DualSense mandar pacotes 0x31 que não são entrada;
-        // o Prisma os ignora, mas o Steam os lê como botões (Alt+Tab, lupa, barra do Xbox,
-        // controle desligado). Ligar a opção desliga o Steam Input dos PlayStation (`steam`).
-        for p in super::pads::list().into_iter().filter(|_| bluetooth()) {
+        // shortcut: desligado. No teste de 2026-11-13, o som pelo 0x39 fez o DualSense mandar
+        // pacotes 0x31 que não são entrada; o Prisma os ignora, mas o Steam os leu como botões
+        // (Alt+Tab, lupa, barra do Xbox, controle desligado). Religar só depois de achar o
+        // relatório de áudio que não provoca esses pacotes.
+        for p in super::pads::list().into_iter().filter(|_| BT_SPEAKER) {
             if p.link == super::pads::Link::Bluetooth && matches!(p.family, super::pads::Family::DualSense | super::pads::Family::Ds4) {
                 super::bt_audio::play(&p.key, p.family, &samples(c, super::bt_audio::rate_of(p.family)));
             }
