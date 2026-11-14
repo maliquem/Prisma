@@ -19,6 +19,7 @@ const PARK_MIN: GUID = GUID::from_u128(0x0cc5b647_c1df_4637_891a_dec35c318583);
 const BALANCED: GUID = GUID::from_u128(0x381b4222_f694_41f0_9685_ff5bb260df2e);
 const HIGH_PERF: GUID = GUID::from_u128(0x8c5e7fda_e8bf_4a96_9a85_a6e23a8c635c);
 
+/// Nomes dos planos em português; no Windows eles ficam no idioma do Prisma (`res/*.tsv`).
 pub const NAME_REST: &str = "Prisma Repouso";
 pub const NAME_GAME: &str = "Prisma Jogo";
 
@@ -148,9 +149,7 @@ fn create_plan(base: &GUID, name: &str, vals: &[(GUID, u32)]) -> Option<String> 
         }
         let g = *p;
         let _ = LocalFree(Some(HLOCAL(p as *mut _)));
-        let w: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
-        let bytes = std::slice::from_raw_parts(w.as_ptr() as *const u8, w.len() * 2);
-        let _ = PowerWriteFriendlyName(None, &g, None, None, bytes);
+        write_name(&g, name);
         for (setting, v) in vals {
             write_ac(&g, setting, *v);
         }
@@ -158,21 +157,51 @@ fn create_plan(base: &GUID, name: &str, vals: &[(GUID, u32)]) -> Option<String> 
     }
 }
 
+fn write_name(g: &GUID, name: &str) {
+    let w: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
+    unsafe {
+        let bytes = std::slice::from_raw_parts(w.as_ptr() as *const u8, w.len() * 2);
+        let _ = PowerWriteFriendlyName(None, g, None, None, bytes);
+    }
+}
+
+/// O plano do Prisma tem este nome em algum idioma (`pt` é o nome em português).
+pub fn is_prisma(name: &str, pt: &str) -> bool {
+    crate::i18n::every(pt).any(|n| n == name)
+}
+
+/// Acha o plano do Prisma por qualquer nome que ele já teve e põe o do idioma atual, para um
+/// plano criado em outro idioma (ou antes da tradução) não ganhar um irmão.
+fn find_prisma(plans: &[Plan], pt: &str) -> Option<String> {
+    let p = plans.iter().find(|p| is_prisma(&p.name, pt))?;
+    let name = crate::i18n::tr(pt);
+    if p.name != name {
+        write_name(&p.guid, &name);
+    }
+    Some(p.id.clone())
+}
+
+/// Troca o nome dos planos do Prisma que existirem para o idioma atual, sem criar nenhum.
+pub fn rename_prisma_plans() {
+    let plans = list();
+    find_prisma(&plans, NAME_REST);
+    find_prisma(&plans, NAME_GAME);
+}
+
 /// Cria os planos do Prisma que faltam e devolve (repouso, jogo).
 pub fn ensure_prisma_plans() -> (Option<String>, Option<String>) {
     let plans = list();
-    let find = |n: &str| plans.iter().find(|p| p.name == n).map(|p| p.id.clone());
-    let rest = find(NAME_REST).or_else(|| {
+    let rest = find_prisma(&plans, NAME_REST).or_else(|| {
         create_plan(
             &BALANCED,
-            NAME_REST,
+            &crate::i18n::tr(NAME_REST),
             &[(MIN_STATE, 5), (MAX_STATE, 100), (EPP, 50), (BOOST_MODE, 2), (PARK_MIN, 10)],
         )
     });
-    let game = find(NAME_GAME).or_else(|| {
+    let game = find_prisma(&plans, NAME_GAME).or_else(|| {
         create_plan(
             &HIGH_PERF,
-            NAME_GAME,
+            &crate::i18n::tr(NAME_GAME),
             &[(MIN_STATE, 100), (MAX_STATE, 100), (EPP, 0), (BOOST_MODE, 2), (PARK_MIN, 100)],
         )
     });

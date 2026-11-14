@@ -167,6 +167,7 @@ Com a **Troca automática** desligada, o quadro **Plano fixo** escolhe um plano 
 Conta como jogo o programa em foco que cobre a tela e usa a GPU ele mesmo, ou que mora na pasta de jogos da Steam, Epic, GOG ou Xbox. Navegadores, players de vídeo, acesso remoto como o Parsec, Discord, OBS e lançadores nunca contam, mesmo em tela cheia.
 
 - **Dá para:** editar um plano com todas as opções que o Windows registra, inclusive as ocultas, e importar ou exportar arquivos .pow. A primeira edição guarda uma cópia do plano original.
+- **Nome dos planos:** os planos do Prisma levam o nome no idioma escolhido e mudam de nome junto com ele, sem duplicar.
 - **Limite:** os planos do Prisma são criados só na versão instalada.
 
 ## Fullscreenizer

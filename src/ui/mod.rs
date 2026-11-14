@@ -558,7 +558,8 @@ impl<'a> Ui<'a> {
             0 => 0.0,
             bit => glyph::draw(self.c, r.x + 10.0, r.y + r.h / 2.0, GLYPH_H, style, bit, TEXT) + 6.0,
         };
-        let t = rect(r.x + 10.0 + gap, r.y, r.w - 34.0 - gap, r.h);
+        // O texto acaba 8 px antes do chevron (que começa em right - 24), para não encostar nele.
+        let t = rect(r.x + 10.0 + gap, r.y, r.w - 42.0 - gap, r.h);
         self.c.text_fit(t, label, 14.0, TEXT, Align::Left, Weight::Regular);
         let (ax, ay) = (r.right() - 24.0, r.y + r.h / 2.0 - 2.0);
         self.c.line(ax, ay, ax + 5.0, ay + 5.0, MUTED, 1.5);
