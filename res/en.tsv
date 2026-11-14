@@ -2492,4 +2492,7 @@ CPU	CPU
 Tempo decorrido	Elapsed
 Disco de origem	Source disk
 Disco de destino	Destination disk
-Disco de origem e destino	Source and destination disk
+GB	GB
+MB	MB
+KB	KB
+/s	/s

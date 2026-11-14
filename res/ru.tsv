@@ -2486,4 +2486,7 @@ CPU	ЦП
 Tempo decorrido	Прошло
 Disco de origem	Диск-источник
 Disco de destino	Диск назначения
-Disco de origem e destino	Диск источника и назначения
+GB	ГБ
+MB	МБ
+KB	КБ
+/s	/с

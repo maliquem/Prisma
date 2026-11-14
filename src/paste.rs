@@ -145,11 +145,11 @@ pub fn run_args() -> bool {
 
 pub fn size_text(b: u64) -> String {
     if b >= 1 << 30 {
-        format!("{:.1} GB", b as f64 / (1u64 << 30) as f64).replace('.', crate::i18n::comma())
+        format!("{:.1} {}", b as f64 / (1u64 << 30) as f64, tr("GB")).replace('.', crate::i18n::comma())
     } else if b >= 1 << 20 {
-        format!("{} MB", b >> 20)
+        format!("{} {}", b >> 20, tr("MB"))
     } else {
-        format!("{} KB", b.div_ceil(1024))
+        format!("{} {}", b.div_ceil(1024), tr("KB"))
     }
 }
 
@@ -241,7 +241,7 @@ fn draw(c: &Canvas, r: Rect, v: &View, hover: Option<usize>) -> Vec<(Rect, Pick)
     let running = matches!(v.phase, copy::PREPARING | copy::COPYING | copy::VERIFYING);
     let live = matches!(v.phase, copy::COPYING | copy::VERIFYING) && !v.paused && v.speed > 1.0;
     let eta = if live { clock((all.saturating_sub(cur) as f64 / v.speed) as u64) } else { "—".into() };
-    let speed = if live { format!("{}/s", size_text(v.speed as u64)) } else { "—".into() };
+    let speed = if live { format!("{}{}", size_text(v.speed as u64), tr("/s")) } else { "—".into() };
     let stats = [
         ("Copiado", format!("{} / {}", size_text(v.done), size_text(v.total))),
         ("Arquivos", format!("{} / {}", v.files_done, v.files)),
@@ -291,7 +291,8 @@ fn draw(c: &Canvas, r: Rect, v: &View, hover: Option<usize>) -> Vec<(Rect, Pick)
     c.text_raw(rect(x, 256.0, w, 18.0), &sub, 12.0, if v.phase == copy::NO_SPACE { WARN } else { TEXT2 }, Align::Left, Weight::Regular);
 
     let hovered = |hits: &Vec<(Rect, Pick)>| hover == Some(hits.len());
-    // Arquivo que já existe: uma escolha para o lote todo.
+    // Arquivo que já existe: uma escolha para o lote todo. Na conferência não há mais o que escolher.
+    if v.phase != copy::VERIFYING {
     let (label, col) = if v.asking { ("Já existe um arquivo com esse nome. Escolha para todos:", WARN) } else { ("Arquivos que já existem no destino", TEXT2) };
     c.text_fit(rect(x, 282.0, w, 20.0), label, 13.0, col, Align::Left, Weight::Regular);
     let gap = 6.0;
@@ -306,6 +307,7 @@ fn draw(c: &Canvas, r: Rect, v: &View, hover: Option<usize>) -> Vec<(Rect, Pick)
         }
         c.text_fit(s.inset_xy(6.0, 0.0), t, 13.0, fg, Align::Center, if on { Weight::Semibold } else { Weight::Regular });
         hits.push((s, Pick::Policy(p)));
+    }
     }
 
     // Conferir e fechar sozinha ao terminar, lado a lado.
@@ -453,7 +455,7 @@ fn meter(o: &mut Win) {
     let all = d.read();
     let find = |l: &Option<String>| l.as_ref().and_then(|l| monitor::disk_of(&all, l).map(|i| (l.clone(), all[i].1, i)));
     o.disks = match (find(&o.drives.0), find(&o.drives.1)) {
-        (Some(a), Some(b)) if a.2 == b.2 => vec![("Disco de origem e destino", a.0, a.1)],
+        (Some(a), Some(b)) if a.2 == b.2 => vec![("Disco", a.0, a.1)],
         (a, b) => [("Disco de origem", a), ("Disco de destino", b)].into_iter().filter_map(|(k, x)| x.map(|(l, p, _)| (k, l, p))).collect(),
     };
 }
@@ -758,7 +760,7 @@ fn test(dir: &str) {
             View { mv: true, policy: copy::KEEP_BOTH, paused: true, errors: errors[..2].to_vec(), ..base() },
             View { phase: copy::DONE, policy: copy::REPLACE, current: String::new(), done: 3_650_722_201, files_done: 1208, errors, can_retry: true, ..base() },
             View { phase: copy::NO_SPACE, need: 3_650_722_201, free: 1_288_490_188, done: 0, files_done: 0, samples: Vec::new(), ..base() },
-            View { phase: copy::VERIFYING, done: 3_650_722_201, files_done: 1208, checked: 2_400_000_000, check_total: 7_301_444_402, elapsed: 3725, disks: vec![("Disco de origem e destino", "D:".into(), 88.0)], ..base() },
+            View { phase: copy::VERIFYING, done: 3_650_722_201, files_done: 1208, checked: 2_400_000_000, check_total: 7_301_444_402, elapsed: 3725, disks: vec![("Disco", "D:".into(), 88.0)], ..base() },
         ];
         std::env::set_var("PRISMA_LAYER_DUMP", dir);
         for (i, v) in views.iter().enumerate() {

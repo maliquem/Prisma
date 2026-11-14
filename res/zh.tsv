@@ -2486,4 +2486,7 @@ CPU	CPU
 Tempo decorrido	已用时间
 Disco de origem	源磁盘
 Disco de destino	目标磁盘
-Disco de origem e destino	源和目标磁盘
+GB	GB
+MB	MB
+KB	KB
+/s	/秒
