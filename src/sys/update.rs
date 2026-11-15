@@ -327,7 +327,7 @@ fn sha256_raw(data: &[u8]) -> Option<[u8; 32]> {
     Some(out)
 }
 
-fn sha256(data: &[u8]) -> Option<String> {
+pub fn sha256(data: &[u8]) -> Option<String> {
     Some(sha256_raw(data)?.iter().map(|b| format!("{b:02x}")).collect())
 }
 

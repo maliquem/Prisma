@@ -2209,7 +2209,6 @@ Em qualquer programa, a abreviação seguida de espaço, Enter ou Tab vira o tex
 Como o jogo vê este controle	Cómo ve el juego este mando
 Nativo: {}	Nativo: {}
 Virar controle Xbox	Convertir en mando Xbox
-Chega numa fase futura, com o controle virtual.	Llega en una fase futura, con el mando virtual.
 Fora dos jogos, mouse e teclado. Nos jogos, o perfil do jogo ou o Base, que não muda nada.	Fuera de los juegos, ratón y teclado. En los juegos, el perfil del juego o el Base, que no cambia nada.
 O jogo recebe o controle como ele é. Vale para todos os controles.	El juego recibe el mando tal como es. Vale para todos los mandos.
 Ajustes	Ajustes
@@ -2490,3 +2489,32 @@ GB	GB
 MB	MB
 KB	KB
 /s	/s
+A ponte do controle Xbox não está instalada	El puente del mando Xbox no está instalado
+A ponte não deu certo. Veja o motivo em Ajustes.	El puente no funcionó. Consulta el motivo en Ajustes.
+Baixando o VIIPER da página oficial.	Descargando VIIPER de la página oficial.
+Instalando. Aceite a permissão de administrador do Windows.	Instalando. Acepta el permiso de administrador de Windows.
+Instalar a ponte	Instalar el puente
+Instalar a ponte do controle Xbox?	¿Instalar el puente del mando Xbox?
+Juntar todos os controles num Xbox só	Unir todos los mandos en un solo Xbox
+O Prisma vai baixar o VIIPER, programa livre de terceiros, da página oficial dele no GitHub, e rodar o instalador. Ele instala o driver usbip-win2, pede permissão de administrador, começa com o Windows e pode pedir para reiniciar o PC. Para desfazer: Controles, aba Ajustes, cartão Ponte do controle Xbox, Remover a ponte. Sai tudo o que veio com ela.	Prisma descargará VIIPER, un programa libre de terceros, de su página oficial en GitHub y ejecutará el instalador. Instala el controlador usbip-win2, pide permiso de administrador, arranca con Windows y puede pedir reiniciar el PC. Para deshacerlo: Mandos, pestaña Ajustes, tarjeta Puente del mando Xbox, Quitar el puente. Se elimina todo lo que vino con él.
+O jogo vê um controle Xbox no lugar deste, e a vibração do jogo volta a ele. Precisa da ponte VIIPER, um programa de terceiros instalado só com permissão.	El juego ve un mando Xbox en lugar de este, y la vibración del juego vuelve a él. Necesita el puente VIIPER, un programa de terceros que se instala solo con permiso.
+O jogo vê um controle Xbox, e a vibração do jogo volta ao controle.	El juego ve un mando Xbox, y la vibración del juego vuelve al mando.
+Os botões de todos valem juntos; em cada stick e gatilho vale o mais apertado. A vibração do jogo vai a todos.	Los botones de todos valen juntos; en cada stick y gatillo vale el más presionado. La vibración del juego va a todos.
+Pausada pela parada de emergência.	Pausada por la parada de emergencia.
+Pausada: o jogo em foco tem anti-cheat.	Pausada: el juego en foco tiene anti-cheat.
+Ponte do controle Xbox	Puente del mando Xbox
+Ponte instalada. Reinicie o PC para o driver começar.	Puente instalado. Reinicia el PC para que el controlador arranque.
+Ponte não instalada. Sem ela, nada muda no PC.	Puente no instalado. Sin él, nada cambia en el PC.
+Ponte pronta. Escolha Virar controle Xbox no cartão do controle.	Puente listo. Elige Convertir en mando Xbox en la tarjeta del mando.
+Removendo a ponte.	Quitando el puente.
+Remover a ponte	Quitar el puente
+Remover a ponte?	¿Quitar el puente?
+Sai o VIIPER, o início automático dele e, se veio com ele, o driver usbip-win2. O Windows pede permissão de administrador.	Se elimina VIIPER, su inicio automático y, si vino con él, el controlador usbip-win2. Windows pide permiso de administrador.
+a release do VIIPER não traz a soma do arquivo	la release de VIIPER no incluye la suma del archivo
+a release oficial do VIIPER não respondeu	la release oficial de VIIPER no respondió
+o VIIPER não ficou instalado	VIIPER no quedó instalado
+o Windows recusou ou a permissão foi negada	Windows lo rechazó o se negó el permiso
+o arquivo baixado não confere com a release oficial	el archivo descargado no coincide con la release oficial
+o download do VIIPER falhou	la descarga de VIIPER falló
+sem rede	sin red
+usbip-win2 não achado	usbip-win2 no encontrado

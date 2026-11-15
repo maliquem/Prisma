@@ -4,6 +4,7 @@
 use super::*;
 use crate::sys::pads::{self, Battery, Family, Link, Pad};
 use crate::sys::remap;
+use crate::sys::xbridge;
 use std::time::Instant;
 
 /// A medição dos sticks está rodando (a navegação do Prisma fica pausada).
@@ -368,28 +369,51 @@ fn pad_card(ui: &mut Ui, app: &mut App, list: &[Pad], at: Rect) -> f32 {
     let name = list.get(app.pads.sel).map_or_else(|| tr("Controle"), |p| tr(&p.name));
     let b = |i: f32| rect(r.x + 16.0 + lw + i * (bw + 8.0), ry, bw, 34.0);
     let map = app.cfg.pad_map;
-    let mut want = map;
     // Nome que o Windows dá ao controle pode ser longo: sem caber nem a 11 px, fica só "Nativo"
     // (o nome já aparece na lista de controles).
     let mut native = tr("Nativo: {}").replace("{}", &name);
     if measure_raw(&native, 11.0, Weight::Semibold) > bw - 12.0 {
         native = tr("Nativo: {}").replace("{}", "").trim_end().trim_end_matches([':', '：']).to_string();
     }
-    if ui.button_ex("pad-native", b(0.0), &native, !map, true) {
-        want = false;
+    // Os três modos se excluem: (teclado e mouse, Xbox).
+    let xbox = app.cfg.pad_xbox;
+    let mut mode = (map && !xbox, xbox);
+    if ui.button_ex("pad-native", b(0.0), &native, !map && !xbox, true) {
+        mode = (false, false);
     }
-    if ui.button_ex("pad-kbm", b(1.0), "Teclado e mouse", map, true) {
-        want = true;
+    if ui.button_ex("pad-kbm", b(1.0), "Teclado e mouse", map && !xbox, true) {
+        mode = (true, false);
     }
     ui.tip(b(1.0), "Fora dos jogos vale o perfil Desktop: o stick esquerdo mexe o mouse, A e B clicam. Nos jogos (os do Medidor e qualquer programa em tela cheia) vale o perfil do jogo, ou o Base, que não muda nada: sem driver, o jogo continua vendo o controle.");
-    ui.button_ex("pad-xbox", b(2.0), "Virar controle Xbox", false, false);
-    ui.tip(b(2.0), "Chega numa fase futura, com o controle virtual.");
-    if want != map {
-        app.cfg.pad_map = want;
+    let stage = xbridge::stage();
+    if ui.button_ex("pad-xbox", b(2.0), "Virar controle Xbox", xbox, !stage.busy()) {
+        if matches!(stage, xbridge::Stage::Ready | xbridge::Stage::Reboot) {
+            mode = (false, true);
+        } else {
+            ui.ask("pad-xbox", "Instalar a ponte do controle Xbox?", CONSENT);
+        }
+    }
+    ui.tip(b(2.0), "O jogo vê um controle Xbox no lugar deste, e a vibração do jogo volta a ele. Precisa da ponte VIIPER, um programa de terceiros instalado só com permissão.");
+    if ui.answered("pad-xbox") {
+        xbridge::start_install();
+        mode = (false, true);
+    }
+    if let Some(v) = xbridge::take_usbip() {
+        app.cfg.xbridge_usbip = v;
+        app.cfg.save();
+    }
+    if mode != (map && !xbox, xbox) {
+        (app.cfg.pad_map, app.cfg.pad_xbox) = mode;
         app.cfg.save();
         app.apply_pads();
     }
-    let note = if map { "Fora dos jogos, mouse e teclado. Nos jogos, o perfil do jogo ou o Base, que não muda nada." } else { "O jogo vê o controle como ele é, e o perfil vale junto. Fora dos jogos, o Base." };
+    let note = if xbox {
+        bridge_note(&stage)
+    } else if map {
+        "Fora dos jogos, mouse e teclado. Nos jogos, o perfil do jogo ou o Base, que não muda nada."
+    } else {
+        "O jogo vê o controle como ele é, e o perfil vale junto. Fora dos jogos, o Base."
+    };
     ui.c.text_fit(rect(r.x + 16.0, ry + 40.0, r.w - 32.0, 20.0), &tr(note), 12.0, MUTED, Align::Left, Weight::Regular);
     // O perfil deste controle e o botão de desconectar.
     if let Some(p) = list.get(app.pads.sel) {
@@ -496,6 +520,7 @@ fn settings(ui: &mut Ui, app: &mut App, list: &[Pad], a: Rect) {
     y += r.h + 12.0;
     y = mapping(ui, rect(x, y, lw, 0.0));
     y = dsx(ui, app, rect(x, y, lw, 0.0));
+    y = bridge(ui, app, rect(x, y, lw, 0.0));
     for t in &app.pads.conflicts {
         let r = rect(x, y, lw, 64.0);
         ui.card(r);
@@ -1030,6 +1055,75 @@ fn dsx(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
         app.apply_pads();
     }
     ui.c.text_wrap(rect(r.x + 16.0, r.y + 78.0, r.w - 32.0, nh), &note, 12.0, TEXT2, Weight::Regular);
+    r.bottom() + 12.0
+}
+
+/// Aviso antes de baixar e instalar a ponte: o que entra no PC e como desfazer.
+const CONSENT: &str = "O Prisma vai baixar o VIIPER, programa livre de terceiros, da página oficial dele no GitHub, e rodar o instalador. Ele instala o driver usbip-win2, pede permissão de administrador, começa com o Windows e pode pedir para reiniciar o PC. Para desfazer: Controles, aba Ajustes, cartão Ponte do controle Xbox, Remover a ponte. Sai tudo o que veio com ela.";
+
+/// Uma linha sobre a ponte.
+fn bridge_note(s: &xbridge::Stage) -> &'static str {
+    use xbridge::Stage::*;
+    match s {
+        Absent => "Ponte não instalada. Sem ela, nada muda no PC.",
+        Downloading => "Baixando o VIIPER da página oficial.",
+        Installing => "Instalando. Aceite a permissão de administrador do Windows.",
+        Reboot => "Ponte instalada. Reinicie o PC para o driver começar.",
+        Removing => "Removendo a ponte.",
+        Failed(_) => "A ponte não deu certo. Veja o motivo em Ajustes.",
+        Ready if remap::anti_cheat_front() => "Pausada: o jogo em foco tem anti-cheat.",
+        Ready if remap::stopped() => "Pausada pela parada de emergência.",
+        Ready => "O jogo vê um controle Xbox, e a vibração do jogo volta ao controle.",
+    }
+}
+
+/// Ponte do controle Xbox (Fase 8): estado, juntar os controles, instalar e remover.
+fn bridge(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
+    let stage = xbridge::stage();
+    let line = if stage == xbridge::Stage::Ready && !app.cfg.pad_xbox { "Ponte pronta. Escolha Virar controle Xbox no cartão do controle." } else { bridge_note(&stage) };
+    let mut note = crate::i18n::tr(line).into_owned();
+    if let xbridge::Stage::Failed(e) = &stage {
+        note = format!("{note} ({})", crate::i18n::tr(e));
+    }
+    let nh = crate::ui::gfx::measure(&note, 12.0, Weight::Regular, Some(at.w - 32.0)).1.ceil();
+    let r = rect(at.x, at.y, at.w, 140.0 + nh);
+    ui.card(r);
+    ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Ponte do controle Xbox");
+    ui.c.text_wrap(rect(r.x + 16.0, r.y + 40.0, r.w - 32.0, nh), &note, 12.0, TEXT2, Weight::Regular);
+    let y = r.y + 46.0 + nh;
+    if ui.check("pad-xbox-merge", rect(r.x + 10.0, y, r.w - 20.0, 36.0), "Juntar todos os controles num Xbox só", &mut app.cfg.pad_xbox_merge) {
+        app.cfg.save();
+        app.apply_pads();
+    }
+    ui.tip(rect(r.x + 10.0, y, r.w - 20.0, 36.0), "Os botões de todos valem juntos; em cada stick e gatilho vale o mais apertado. A vibração do jogo vai a todos.");
+    let bw = ((r.w - 40.0) / 2.0).floor();
+    let b1 = rect(r.x + 16.0, y + 44.0, bw, 34.0);
+    let b2 = rect(r.x + 24.0 + bw, y + 44.0, bw, 34.0);
+    let busy = stage.busy();
+    let installed = !matches!(stage, xbridge::Stage::Absent);
+    if !installed {
+        if ui.button("xb-install", b1, "Instalar a ponte", true) && !busy {
+            ui.ask("xb-install", "Instalar a ponte do controle Xbox?", CONSENT);
+        }
+    } else if ui.button("xb-check", b1, "Verificar de novo", false) && !busy {
+        xbridge::recheck();
+    }
+    if installed && ui.button("xb-remove", b2, "Remover a ponte", false) && !busy {
+        ui.ask("xb-remove", "Remover a ponte?", "Sai o VIIPER, o início automático dele e, se veio com ele, o driver usbip-win2. O Windows pede permissão de administrador.");
+    }
+    if ui.answered("xb-install") {
+        xbridge::start_install();
+    }
+    if let Some(v) = xbridge::take_usbip() {
+        app.cfg.xbridge_usbip = v;
+        app.cfg.save();
+    }
+    if ui.answered("xb-remove") {
+        app.cfg.pad_xbox = false;
+        app.cfg.save();
+        app.apply_pads();
+        xbridge::start_remove(app.cfg.xbridge_usbip);
+    }
     r.bottom() + 12.0
 }
 

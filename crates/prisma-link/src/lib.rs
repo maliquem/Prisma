@@ -56,6 +56,8 @@ pub mod cap {
     /// Perfis do mapeamento: listar, trocar, parar, ligar e desligar (`PadProfiles`, `SetPadProfile`,
     /// `PadStop`, `PadMap`).
     pub const CONTROLLERS_MAPPING: &str = "controllers.mapping";
+    /// Ligar e desligar a ponte do controle Xbox, já instalada (`Request::PadBridge`).
+    pub const CONTROLLERS_BRIDGE: &str = "controllers.bridge";
     /// Abrir e fechar o teclado do Prisma para controle (`Request::Keyboard`).
     pub const CONTROLLERS_KEYBOARD: &str = "controllers.keyboard";
     /// Perguntar se alguém entra no compartilhamento de tela (`Request::ShareAsk`), no pipe

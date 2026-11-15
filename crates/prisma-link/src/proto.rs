@@ -91,6 +91,13 @@ pub enum Request {
         #[serde(default)]
         on: Option<bool>,
     },
+    /// Liga ou desliga a ponte do controle Xbox (Fase 8), como o botão Virar controle Xbox; `None`
+    /// alterna (`controllers.bridge`). Sem a ponte instalada, `Failed` com `not_supported`: a
+    /// instalação só acontece na tela, com o consentimento.
+    PadBridge {
+        #[serde(default)]
+        on: Option<bool>,
+    },
     /// Abre ou fecha o teclado do Prisma para controle; `None` alterna (`controllers.keyboard`).
     Keyboard {
         #[serde(default)]
@@ -325,6 +332,7 @@ mod tests {
         assert_eq!(serde_json::from_str::<Request>(r#"{"type":"pad_map"}"#).unwrap(), Request::PadMap { on: None });
         assert_eq!(serde_json::from_str::<Request>(r#"{"type":"pad_map","on":false}"#).unwrap(), Request::PadMap { on: Some(false) });
         assert_eq!(serde_json::from_str::<Request>(r#"{"type":"keyboard"}"#).unwrap(), Request::Keyboard { on: None });
+        assert_eq!(serde_json::from_str::<Request>(r#"{"type":"pad_bridge","on":true}"#).unwrap(), Request::PadBridge { on: Some(true) });
     }
 
     #[test]

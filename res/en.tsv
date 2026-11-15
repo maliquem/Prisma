@@ -2215,7 +2215,6 @@ Em qualquer programa, a abreviação seguida de espaço, Enter ou Tab vira o tex
 Como o jogo vê este controle	How the game sees this controller
 Nativo: {}	Native: {}
 Virar controle Xbox	Become an Xbox controller
-Chega numa fase futura, com o controle virtual.	Comes in a later phase, with the virtual controller.
 Fora dos jogos, mouse e teclado. Nos jogos, o perfil do jogo ou o Base, que não muda nada.	Outside games, mouse and keyboard. In games, the game's profile or Base, which changes nothing.
 O jogo recebe o controle como ele é. Vale para todos os controles.	The game gets the controller as it is. Applies to all controllers.
 Ajustes	Settings
@@ -2496,3 +2495,32 @@ GB	GB
 MB	MB
 KB	KB
 /s	/s
+A ponte do controle Xbox não está instalada	Xbox controller bridge is not installed
+A ponte não deu certo. Veja o motivo em Ajustes.	The bridge did not work. See the reason in Settings.
+Baixando o VIIPER da página oficial.	Downloading VIIPER from the official page.
+Instalando. Aceite a permissão de administrador do Windows.	Installing. Accept the Windows administrator permission prompt.
+Instalar a ponte	Install the bridge
+Instalar a ponte do controle Xbox?	Install the Xbox controller bridge?
+Juntar todos os controles num Xbox só	Merge all controllers into one Xbox
+O Prisma vai baixar o VIIPER, programa livre de terceiros, da página oficial dele no GitHub, e rodar o instalador. Ele instala o driver usbip-win2, pede permissão de administrador, começa com o Windows e pode pedir para reiniciar o PC. Para desfazer: Controles, aba Ajustes, cartão Ponte do controle Xbox, Remover a ponte. Sai tudo o que veio com ela.	Prisma will download VIIPER, free third-party software, from its official GitHub page and run the installer. It installs the usbip-win2 driver, asks for administrator permission, starts with Windows and may ask to restart the PC. To undo: Controllers, Settings tab, Xbox controller bridge card, Remove the bridge. Everything that came with it is removed.
+O jogo vê um controle Xbox no lugar deste, e a vibração do jogo volta a ele. Precisa da ponte VIIPER, um programa de terceiros instalado só com permissão.	The game sees an Xbox controller in place of this one, and the game's vibration goes back to it. Needs the VIIPER bridge, third-party software installed only with permission.
+O jogo vê um controle Xbox, e a vibração do jogo volta ao controle.	The game sees an Xbox controller, and the game's vibration goes back to the controller.
+Os botões de todos valem juntos; em cada stick e gatilho vale o mais apertado. A vibração do jogo vai a todos.	Everyone's buttons count together; for each stick and trigger the most pressed one counts. The game's vibration goes to all.
+Pausada pela parada de emergência.	Paused by the emergency stop.
+Pausada: o jogo em foco tem anti-cheat.	Paused: the focused game has anti-cheat.
+Ponte do controle Xbox	Xbox controller bridge
+Ponte instalada. Reinicie o PC para o driver começar.	Bridge installed. Restart the PC for the driver to start.
+Ponte não instalada. Sem ela, nada muda no PC.	Bridge not installed. Without it, nothing changes on the PC.
+Ponte pronta. Escolha Virar controle Xbox no cartão do controle.	Bridge ready. Choose Become an Xbox controller on the controller's card.
+Removendo a ponte.	Removing the bridge.
+Remover a ponte	Remove the bridge
+Remover a ponte?	Remove the bridge?
+Sai o VIIPER, o início automático dele e, se veio com ele, o driver usbip-win2. O Windows pede permissão de administrador.	Removes VIIPER, its autostart and, if it came with it, the usbip-win2 driver. Windows asks for administrator permission.
+a release do VIIPER não traz a soma do arquivo	the VIIPER release does not include the file checksum
+a release oficial do VIIPER não respondeu	the official VIIPER release did not respond
+o VIIPER não ficou instalado	VIIPER did not stay installed
+o Windows recusou ou a permissão foi negada	Windows refused or permission was denied
+o arquivo baixado não confere com a release oficial	the downloaded file does not match the official release
+o download do VIIPER falhou	the VIIPER download failed
+sem rede	no network
+usbip-win2 não achado	usbip-win2 not found

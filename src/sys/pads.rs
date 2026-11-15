@@ -826,6 +826,12 @@ impl PadOut {
             Some(_) => self.tap = None,
             None => {}
         }
+        // Vibração do jogo pela ponte: no DualSense vira háptico (o mesmo caminho do `feel`).
+        let mut game = super::xbridge::rumble(&self.path);
+        if self.fam == Family::DualSense {
+            feel = feel.max(game.0.max(game.1));
+            game = (0, 0);
+        }
         let mut sound_done = false;
         // DualSense pelo Bluetooth: o háptico vai aos atuadores. Se o controle recusar o
         // relatório, volta ao motor fraco, como no cabo e no DualShock 4.
@@ -858,7 +864,8 @@ impl PadOut {
             // Gatilho adaptativo só existe no DualSense.
             trig: if self.fam == Family::DualSense { super::remap::triggers(&self.path) } else { [Trig::Pass; 2] },
             // O motor fraco é o mais seco: é ele que faz as vezes do háptico.
-            rumble: { let b = buzzing(); [b[0].max(feel), b[1]] },
+            // O jogo pede (grave, agudo): o agudo vai ao motor fraco e o grave ao forte.
+            rumble: { let b = buzzing(); [b[0].max(feel).max(game.1), b[1].max(game.0)] },
         };
         if want == self.sent || self.failed {
             return;
@@ -1778,7 +1785,8 @@ unsafe fn poll_xinput() {
     if let Some(get) = get {
         for (i, slot) in seen.iter_mut().enumerate() {
             let mut st = XINPUT_STATE::default();
-            if get(i as u32, &mut st) != 0 {
+            // O Xbox virtual da ponte não é controle de verdade: lido, voltaria para ela mesma.
+            if super::xbridge::own_slot(i) || get(i as u32, &mut st) != 0 {
                 continue;
             }
             *slot = true;

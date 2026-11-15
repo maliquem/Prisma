@@ -23,7 +23,7 @@ pub(crate) mod net;
 #[cfg(feature = "stream")]
 pub use net::{device_rows, forget_device, me, revoke_invite, set_device, DeviceRow, CODE_FAIL, CODE_LINE, CODE_OK, EXPIRES_LINE, INVITE_MINUTES};
 pub use net::unix_now;
-mod pads;
+pub(crate) mod pads;
 mod screen;
 #[cfg(feature = "stream")]
 pub mod service;

@@ -2209,7 +2209,6 @@ Em qualquer programa, a abreviação seguida de espaço, Enter ou Tab vira o tex
 Como o jogo vê este controle	游戏如何识别此手柄
 Nativo: {}	原生：{}
 Virar controle Xbox	变成 Xbox 手柄
-Chega numa fase futura, com o controle virtual.	将在后续阶段随虚拟手柄推出。
 Fora dos jogos, mouse e teclado. Nos jogos, o perfil do jogo ou o Base, que não muda nada.	游戏外为鼠标和键盘。游戏中使用该游戏的配置，或不做任何更改的 Base。
 O jogo recebe o controle como ele é. Vale para todos os controles.	游戏按原样接收手柄。对所有手柄生效。
 Ajustes	设置
@@ -2490,3 +2489,32 @@ GB	GB
 MB	MB
 KB	KB
 /s	/秒
+A ponte do controle Xbox não está instalada	未安装 Xbox 手柄桥接
+A ponte não deu certo. Veja o motivo em Ajustes.	桥接未成功。请在“设置”中查看原因。
+Baixando o VIIPER da página oficial.	正在从官方页面下载 VIIPER。
+Instalando. Aceite a permissão de administrador do Windows.	正在安装。请接受 Windows 的管理员权限请求。
+Instalar a ponte	安装桥接
+Instalar a ponte do controle Xbox?	安装 Xbox 手柄桥接？
+Juntar todos os controles num Xbox só	将所有手柄合并为一个 Xbox
+O Prisma vai baixar o VIIPER, programa livre de terceiros, da página oficial dele no GitHub, e rodar o instalador. Ele instala o driver usbip-win2, pede permissão de administrador, começa com o Windows e pode pedir para reiniciar o PC. Para desfazer: Controles, aba Ajustes, cartão Ponte do controle Xbox, Remover a ponte. Sai tudo o que veio com ela.	Prisma 将从 VIIPER 的官方 GitHub 页面下载这款免费的第三方程序，并运行安装程序。它会安装 usbip-win2 驱动，请求管理员权限，随 Windows 启动，并可能要求重启电脑。撤销方法：手柄，“设置”标签，“Xbox 手柄桥接”卡片，“移除桥接”。随它安装的内容都会被清除。
+O jogo vê um controle Xbox no lugar deste, e a vibração do jogo volta a ele. Precisa da ponte VIIPER, um programa de terceiros instalado só com permissão.	游戏会看到一个 Xbox 手柄来代替这个手柄，游戏的震动会回传给它。需要 VIIPER 桥接，这是仅在获得许可后才安装的第三方程序。
+O jogo vê um controle Xbox, e a vibração do jogo volta ao controle.	游戏会看到一个 Xbox 手柄，游戏的震动会回传给该手柄。
+Os botões de todos valem juntos; em cada stick e gatilho vale o mais apertado. A vibração do jogo vai a todos.	所有手柄的按键一起生效；每个摇杆和扳机取按得最深的值。游戏的震动会发送给所有手柄。
+Pausada pela parada de emergência.	已被紧急停止暂停。
+Pausada: o jogo em foco tem anti-cheat.	已暂停：当前焦点游戏有反作弊。
+Ponte do controle Xbox	Xbox 手柄桥接
+Ponte instalada. Reinicie o PC para o driver começar.	桥接已安装。请重启电脑以启用驱动。
+Ponte não instalada. Sem ela, nada muda no PC.	桥接未安装。没有它，电脑不会有任何变化。
+Ponte pronta. Escolha Virar controle Xbox no cartão do controle.	桥接已就绪。请在手柄卡片上选择“变成 Xbox 手柄”。
+Removendo a ponte.	正在移除桥接。
+Remover a ponte	移除桥接
+Remover a ponte?	移除桥接？
+Sai o VIIPER, o início automático dele e, se veio com ele, o driver usbip-win2. O Windows pede permissão de administrador.	将移除 VIIPER、它的自动启动，以及（若随它安装的）usbip-win2 驱动。Windows 会请求管理员权限。
+a release do VIIPER não traz a soma do arquivo	VIIPER 的发布版没有提供文件校验和
+a release oficial do VIIPER não respondeu	VIIPER 官方发布版没有响应
+o VIIPER não ficou instalado	VIIPER 未能保持安装
+o Windows recusou ou a permissão foi negada	Windows 拒绝了，或权限被拒绝
+o arquivo baixado não confere com a release oficial	下载的文件与官方发布版不一致
+o download do VIIPER falhou	VIIPER 下载失败
+sem rede	无网络
+usbip-win2 não achado	未找到 usbip-win2

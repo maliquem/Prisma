@@ -93,6 +93,12 @@ impl Bridge {
         }
     }
 
+    /// Só o VIIPER: a ponte da aba Controles (`sys::xbridge`).
+    #[cfg(feature = "stream")]
+    pub fn viiper() -> Result<Bridge, String> {
+        viiper::open()
+    }
+
     #[cfg(not(feature = "stream"))]
     pub fn open() -> Result<Bridge, String> {
         Err("os controles só existem compilando com --features stream".to_string())

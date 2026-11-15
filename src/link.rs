@@ -170,6 +170,7 @@ fn caps_with(nvidia: bool) -> Vec<String> {
         caps.push(cap::SHARE_INVITE);
         caps.push(cap::SHARE_INVITE_MINUTES);
         caps.push(cap::SHARE_ASK);
+        caps.push(cap::CONTROLLERS_BRIDGE);
     }
     if nvidia {
         caps.push(cap::NVIDIA);
@@ -390,9 +391,27 @@ impl App {
             }
             Request::PadMap { on } => {
                 self.cfg.pad_map = on.unwrap_or(!self.cfg.pad_map);
+                if self.cfg.pad_map {
+                    self.cfg.pad_xbox = false;
+                }
                 self.cfg.save();
                 self.apply_pads();
                 Outcome::Reply(Reply::Toggled { on: self.cfg.pad_map })
+            }
+            Request::PadBridge { on } => {
+                use crate::sys::xbridge::{stage, Stage};
+                if !matches!(stage(), Stage::Ready | Stage::Reboot) {
+                    Outcome::Failed(code::NOT_SUPPORTED, crate::i18n::tr("A ponte do controle Xbox não está instalada").into_owned())
+                } else {
+                    let on = on.unwrap_or(!self.cfg.pad_xbox);
+                    self.cfg.pad_xbox = on;
+                    if on {
+                        self.cfg.pad_map = false;
+                    }
+                    self.cfg.save();
+                    self.apply_pads();
+                    Outcome::Reply(Reply::Toggled { on })
+                }
             }
             Request::Keyboard { on } => {
                 let on = on.unwrap_or(!crate::sys::osk::view().open);
@@ -648,6 +667,7 @@ mod tests {
             assert_eq!(has(cap::SHARE_INVITE), cfg!(feature = "stream"));
             assert_eq!(has(cap::SHARE_INVITE_MINUTES), cfg!(feature = "stream"));
             assert_eq!(has(cap::SHARE_ASK), cfg!(feature = "stream"));
+            assert_eq!(has(cap::CONTROLLERS_BRIDGE), cfg!(feature = "stream"));
             assert_eq!(has(cap::NVIDIA), nvidia);
             assert_eq!(has(cap::PAGE_NVIDIA), nvidia);
             assert!(!has(cap::PAGE_GAME_PROFILE));
@@ -673,6 +693,7 @@ mod tests {
             Request::SetPadProfile { name: String::new() },
             Request::PadStop { on: None },
             Request::PadMap { on: None },
+            Request::PadBridge { on: None },
             Request::Keyboard { on: None },
             Request::ShareAsk { name: String::new(), perms: 0, code: None },
         ];

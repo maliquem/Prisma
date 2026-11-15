@@ -2209,7 +2209,6 @@ Em qualquer programa, a abreviação seguida de espaço, Enter ou Tab vira o tex
 Como o jogo vê este controle	Как игра видит этот геймпад
 Nativo: {}	Как есть: {}
 Virar controle Xbox	Стать геймпадом Xbox
-Chega numa fase futura, com o controle virtual.	Появится позже, вместе с виртуальным геймпадом.
 Fora dos jogos, mouse e teclado. Nos jogos, o perfil do jogo ou o Base, que não muda nada.	Вне игр — мышь и клавиатура. В играх — профиль игры или Base, который ничего не меняет.
 O jogo recebe o controle como ele é. Vale para todos os controles.	Игра получает геймпад как есть. Для всех геймпадов.
 Ajustes	Настройки
@@ -2490,3 +2489,32 @@ GB	ГБ
 MB	МБ
 KB	КБ
 /s	/с
+A ponte do controle Xbox não está instalada	Мост геймпада Xbox не установлен
+A ponte não deu certo. Veja o motivo em Ajustes.	Мост не сработал. Причина указана в разделе «Настройки».
+Baixando o VIIPER da página oficial.	Загрузка VIIPER с официальной страницы.
+Instalando. Aceite a permissão de administrador do Windows.	Установка. Подтвердите запрос Windows на права администратора.
+Instalar a ponte	Установить мост
+Instalar a ponte do controle Xbox?	Установить мост геймпада Xbox?
+Juntar todos os controles num Xbox só	Объединить все геймпады в один Xbox
+O Prisma vai baixar o VIIPER, programa livre de terceiros, da página oficial dele no GitHub, e rodar o instalador. Ele instala o driver usbip-win2, pede permissão de administrador, começa com o Windows e pode pedir para reiniciar o PC. Para desfazer: Controles, aba Ajustes, cartão Ponte do controle Xbox, Remover a ponte. Sai tudo o que veio com ela.	Prisma скачает VIIPER, свободную стороннюю программу, с её официальной страницы на GitHub и запустит установщик. Он ставит драйвер usbip-win2, запрашивает права администратора, запускается вместе с Windows и может попросить перезагрузить ПК. Чтобы отменить: Геймпады, вкладка «Настройки», карточка «Мост геймпада Xbox», «Удалить мост». Всё, что пришло вместе с ним, будет удалено.
+O jogo vê um controle Xbox no lugar deste, e a vibração do jogo volta a ele. Precisa da ponte VIIPER, um programa de terceiros instalado só com permissão.	Игра видит геймпад Xbox вместо этого, а вибрация игры возвращается на него. Нужен мост VIIPER, сторонняя программа, которая устанавливается только с разрешения.
+O jogo vê um controle Xbox, e a vibração do jogo volta ao controle.	Игра видит геймпад Xbox, а вибрация игры возвращается на геймпад.
+Os botões de todos valem juntos; em cada stick e gatilho vale o mais apertado. A vibração do jogo vai a todos.	Кнопки всех геймпадов работают вместе; для каждого стика и триггера берётся наибольшее нажатие. Вибрация игры идёт на все.
+Pausada pela parada de emergência.	Приостановлено аварийной остановкой.
+Pausada: o jogo em foco tem anti-cheat.	Приостановлено: у игры в фокусе есть античит.
+Ponte do controle Xbox	Мост геймпада Xbox
+Ponte instalada. Reinicie o PC para o driver começar.	Мост установлен. Перезагрузите ПК, чтобы драйвер заработал.
+Ponte não instalada. Sem ela, nada muda no PC.	Мост не установлен. Без него на ПК ничего не меняется.
+Ponte pronta. Escolha Virar controle Xbox no cartão do controle.	Мост готов. Выберите «Стать геймпадом Xbox» в карточке геймпада.
+Removendo a ponte.	Удаление моста.
+Remover a ponte	Удалить мост
+Remover a ponte?	Удалить мост?
+Sai o VIIPER, o início automático dele e, se veio com ele, o driver usbip-win2. O Windows pede permissão de administrador.	Удаляются VIIPER, его автозапуск и, если он пришёл вместе с ним, драйвер usbip-win2. Windows запросит права администратора.
+a release do VIIPER não traz a soma do arquivo	в релизе VIIPER нет контрольной суммы файла
+a release oficial do VIIPER não respondeu	официальный релиз VIIPER не ответил
+o VIIPER não ficou instalado	VIIPER не остался установленным
+o Windows recusou ou a permissão foi negada	Windows отказала или разрешение не было дано
+o arquivo baixado não confere com a release oficial	скачанный файл не совпадает с официальным релизом
+o download do VIIPER falhou	загрузка VIIPER не удалась
+sem rede	нет сети
+usbip-win2 não achado	usbip-win2 не найден

@@ -2028,6 +2028,11 @@ pub fn stopped() -> bool {
     STOPPED.load(Ordering::Relaxed)
 }
 
+/// O programa em foco tem anti-cheat (visto pela troca de foco do motor).
+pub fn anti_cheat_front() -> bool {
+    RUN.lock().unwrap().as_ref().is_some_and(|r| r.ac)
+}
+
 /// Luz que o editor de perfis mostra enquanto está aberto, na frente da do perfil em uso.
 static PREVIEW: Mutex<Option<(Light, bool)>> = Mutex::new(None);
 /// Gatilhos que o editor de perfis experimenta enquanto está aberto.
