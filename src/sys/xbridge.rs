@@ -432,9 +432,17 @@ pub fn rumble(key: &str) -> (u8, u8) {
     RUMBLE.lock().unwrap().iter().find(|r| r.0 == key).map_or((0, 0), |r| r.1)
 }
 
-/// Ponto para esconder do jogo os controles físicos (HidHide, feito em outra parte): sem isso o
+/// Esconde do jogo os controles físicos pelo HidHide (só os que a pessoa marcou): sem isso o
 /// jogo pode ver o físico e o virtual juntos.
-fn hide_physical(_keys: &[String], _on: bool) {}
+fn hide_physical(keys: &[String], on: bool) {
+    for k in keys {
+        if on {
+            super::hidhide::esconder(k);
+        } else {
+            super::hidhide::mostrar(k);
+        }
+    }
+}
 
 /// Vibração do jogo nos controles do XInput (os HID recebem pelo `PadOut`).
 fn xinput_rumble(sent: &mut Vec<(String, (u8, u8))>, now: &[(String, (u8, u8))]) {
