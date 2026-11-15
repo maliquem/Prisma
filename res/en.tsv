@@ -2409,6 +2409,7 @@ Acesso negado	Access denied
 Sem espaço no disco	No disk space
 Não encontrado	Not found
 Caminho longo demais	Path too long
+Link de pasta, não copiado	Folder link, not copied
 O hash da cópia não confere	The copy's hash doesn't match
 Uma pasta não pode ir para dentro dela mesma	A folder can't go inside itself
 Ligado: botão direito numa pasta, em Mostrar mais opções.	On: right-click a folder, under Show more options.

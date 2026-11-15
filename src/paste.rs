@@ -420,7 +420,10 @@ fn spawn(st: Arc<State>, pairs: Vec<(PathBuf, PathBuf)>, mv: bool, rec: Record) 
             _ if st.verify.load(Relaxed) => copylist::VERIFIED,
             _ => copylist::OK,
         };
-        let rec = Record { at: copylist::now(), mv, result, bytes: st.done.load(Relaxed), files: st.files_done.load(Relaxed), errors, ..rec };
+        if mv && matches!(result, copylist::OK | copylist::VERIFIED) {
+            copy::clear_clipboard(&pairs.iter().map(|p| p.0.clone()).collect::<Vec<_>>());
+        }
+        let rec = Record { at: copylist::now(), mv, result, bytes: st.ok_bytes.load(Relaxed), files: st.ok_files.load(Relaxed), errors, ..rec };
         let _ = copylist::append(&copylist::history_path(), &rec);
     })
 }
@@ -585,10 +588,13 @@ unsafe extern "system" fn proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT
                     meter(o);
                 }
                 let finished = !running(o);
+                // Terminada, a tela não muda mais sozinha: desenha uma vez e depois só com o mouse.
+                if !finished || o.done_at.is_none() {
+                    repaint(o);
+                }
                 if finished {
                     o.done_at.get_or_insert(now);
                 }
-                repaint(o);
                 // Terminou sem erro (e conferida, com o hash ligado): fecha sozinha depois de mostrar o
                 // "Pronto". Com erro, conflito ou hash que não bate, fica aberta com o aviso.
                 let ok = phase == copy::DONE && o.st.errors.lock().unwrap().is_empty();

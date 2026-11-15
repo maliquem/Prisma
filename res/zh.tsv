@@ -2403,6 +2403,7 @@ Acesso negado	访问被拒绝
 Sem espaço no disco	磁盘空间不足
 Não encontrado	未找到
 Caminho longo demais	路径太长
+Link de pasta, não copiado	文件夹链接，未复制
 O hash da cópia não confere	副本的哈希不一致
 Uma pasta não pode ir para dentro dela mesma	文件夹不能复制到自身内部
 Ligado: botão direito numa pasta, em Mostrar mais opções.	已开启：右键单击文件夹，在“显示更多选项”中。

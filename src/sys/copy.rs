@@ -32,6 +32,9 @@ pub struct State {
     pub done: AtomicU64,
     pub files: AtomicU32,
     pub files_done: AtomicU32,
+    /// Arquivos e bytes que chegaram ao destino, sem os pulados e os com erro: vão para o histórico.
+    pub ok_files: AtomicU32,
+    pub ok_bytes: AtomicU64,
     pub paused: AtomicBool,
     pub cancel: AtomicBool,
     pub verify: AtomicBool,
@@ -89,7 +92,14 @@ pub fn unique(p: &Path) -> PathBuf {
 }
 
 fn walk(src: &Path, dst: &Path, out: &mut Vec<Entry>, st: &State) {
+    use std::os::windows::fs::MetadataExt;
+    if st.cancel.load(Relaxed) {
+        return;
+    }
     match std::fs::symlink_metadata(src) {
+        // Junção ou link de pasta (pasta com reparse point): seguir copiaria outra pasta inteira, ou
+        // entraria num laço sem fim.
+        Ok(m) if m.file_attributes() & 0x410 == 0x410 => st.error(src, "Link de pasta, não copiado"),
         Ok(m) if m.is_dir() => {
             out.push(Entry { src: src.into(), dst: dst.into(), dir: true, size: 0 });
             match std::fs::read_dir(src) {
@@ -115,18 +125,16 @@ pub fn free_space(dir: &Path) -> Option<u64> {
     Some(free)
 }
 
-/// Copia (ou move, com `mv`) `items` para dentro da pasta `dest`. `free` diz o espaço livre:
-/// sem espaço para tudo, nada começa.
-pub fn run(items: &[PathBuf], dest: &Path, mv: bool, st: &State, free: impl Fn(&Path) -> Option<u64>) {
-    let pairs: Vec<(PathBuf, PathBuf)> = items.iter().map(|i| (i.clone(), dest.to_path_buf())).collect();
-    run_to(&pairs, mv, st, free);
-}
-
-/// Como `run`, com uma pasta de destino para cada item (Tentar de novo).
+/// Copia (ou move, com `mv`) cada item para dentro da sua pasta de destino. `free` diz o espaço
+/// livre: sem espaço para tudo, nada começa.
 pub fn run_to(pairs: &[(PathBuf, PathBuf)], mv: bool, st: &State, free: impl Fn(&Path) -> Option<u64>) {
     st.phase.store(PREPARING, Relaxed);
     let mut plan = Vec::new();
     for (item, dest) in pairs {
+        if st.cancel.load(Relaxed) {
+            st.phase.store(CANCELED, Relaxed);
+            return;
+        }
         let dest = dest.as_path();
         let Some(name) = item.file_name() else { continue };
         if same_path(item, dest) || dest.to_string_lossy().to_lowercase().starts_with(&format!("{}\\", item.to_string_lossy().to_lowercase())) {
@@ -145,15 +153,21 @@ pub fn run_to(pairs: &[(PathBuf, PathBuf)], mv: bool, st: &State, free: impl Fn(
         if mv && dst.symlink_metadata().is_err() && std::fs::rename(item, &dst).is_ok() {
             st.files.fetch_add(1, Relaxed);
             st.files_done.fetch_add(1, Relaxed);
+            st.ok_files.fetch_add(1, Relaxed);
             continue;
         }
         walk(item, &dst, &mut plan, st);
     }
+    if st.cancel.load(Relaxed) {
+        st.phase.store(CANCELED, Relaxed);
+        return;
+    }
     let files = plan.iter().filter(|e| !e.dir).count() as u32;
     st.files.fetch_add(files, Relaxed);
     st.total.store(plan.iter().map(|e| e.size).sum(), Relaxed);
-    // Um arquivo substituído devolve o espaço do antigo.
-    let need: u64 = plan.iter().filter(|e| !e.dir).map(|e| e.size.saturating_sub(e.dst.metadata().map_or(0, |m| m.len()))).sum();
+    // Só substituir devolve o espaço do antigo; perguntar pode virar "manter os dois", que ocupa tudo.
+    let replace = st.policy.load(Relaxed) == REPLACE;
+    let need: u64 = plan.iter().filter(|e| !e.dir).map(|e| if replace { e.size.saturating_sub(e.dst.metadata().map_or(0, |m| m.len())) } else { e.size }).sum();
     let Some(dest) = pairs.first().map(|p| p.1.as_path()) else {
         st.phase.store(DONE, Relaxed);
         return;
@@ -190,7 +204,11 @@ pub fn run_to(pairs: &[(PathBuf, PathBuf)], mv: bool, st: &State, free: impl Fn(
         st.done.store(base, Relaxed);
         st.files_done.fetch_add(1, Relaxed);
         match ok {
-            Some(Some(dst)) => copied.push((e.src.clone(), dst, e.size)),
+            Some(Some(dst)) => {
+                st.ok_files.fetch_add(1, Relaxed);
+                st.ok_bytes.fetch_add(e.size, Relaxed);
+                copied.push((e.src.clone(), dst, e.size));
+            }
             Some(None) => {}
             None => break,
         }
@@ -266,7 +284,17 @@ fn copy_file(e: &Entry, st: &State, base: u64) -> Option<Option<PathBuf>> {
             _ => replace = true,
         }
     }
-    if let Err(err) = copy_with_progress(&e.src, &dst, e.size, replace, st, base) {
+    // Substituir escreve num arquivo ao lado e só troca no fim: cancelado ou com erro no meio, o
+    // antigo continua inteiro.
+    let tmp = replace.then(|| dst.with_file_name(format!("{}.prisma-tmp", dst.file_name().unwrap_or_default().to_string_lossy())));
+    let res = match &tmp {
+        Some(t) => copy_with_progress(&e.src, t, e.size, true, st, base).and_then(|_| std::fs::rename(t, &dst)),
+        None => copy_with_progress(&e.src, &dst, e.size, false, st, base),
+    };
+    if let Err(err) = res {
+        if let Some(t) = &tmp {
+            let _ = std::fs::remove_file(t);
+        }
         if st.cancel.load(Relaxed) {
             return None;
         }
@@ -291,6 +319,8 @@ fn check(copied: &[(PathBuf, PathBuf, u64)], st: &State) -> Vec<bool> {
     st.checked.store(0, Relaxed);
     st.check_total.store(copied.iter().map(|c| c.2).sum::<u64>() * 2, Relaxed);
     st.phase.store(VERIFYING, Relaxed);
+    // Um pedaço para a origem e outro para a cópia, alocados uma vez para todos os arquivos.
+    let (mut va, mut vb) = (chunk(), chunk());
     copied
         .iter()
         .map(|(src, dst, _)| {
@@ -298,14 +328,15 @@ fn check(copied: &[(PathBuf, PathBuf, u64)], st: &State) -> Vec<bool> {
                 return false;
             }
             *st.current.lock().unwrap() = dst.display().to_string();
+            let (ba, bb) = (aligned(&mut va), aligned(&mut vb));
             let (a, b) = if drive(src) != drive(dst) {
                 std::thread::scope(|s| {
-                    let t = s.spawn(|| sha256(src, st));
-                    let b = sha256(dst, st);
+                    let t = s.spawn(|| sha256(src, st, ba));
+                    let b = sha256(dst, st, bb);
                     (t.join().unwrap_or_else(|_| Err(std::io::Error::other("hash"))), b)
                 })
             } else {
-                (sha256(src, st), sha256(dst, st))
+                (sha256(src, st, ba), sha256(dst, st, bb))
             };
             match (a, b) {
                 (Ok(a), Ok(b)) if a == b => true,
@@ -361,21 +392,35 @@ fn copy_with_progress(src: &Path, dst: &Path, size: u64, replace: bool, st: &Sta
     unsafe { CopyFileExW(&s, &d, Some(progress), Some(&ctx as *const Ctx as _), None, flags) }.map_err(|e| std::io::Error::from_raw_os_error((e.code().0 & 0xFFFF) as i32))
 }
 
-/// SHA-256 pelo Windows (BCrypt), lido em pedaços de 4 MB; soma o lido em `st.checked`.
-pub fn sha256(path: &Path, st: &State) -> std::io::Result<[u8; 32]> {
+const CHUNK: usize = 4 << 20;
+
+fn chunk() -> Vec<u8> {
+    vec![0u8; CHUNK + 4096]
+}
+
+/// Os 4 MB de `v` que começam num múltiplo de 4 KB, como pede a leitura sem cache.
+fn aligned(v: &mut [u8]) -> &mut [u8] {
+    let off = v.as_ptr().align_offset(4096);
+    &mut v[off..off + CHUNK]
+}
+
+/// SHA-256 pelo Windows (BCrypt), lido em pedaços de `buf` (de `aligned`) sem o cache do Windows:
+/// a cópia recém-escrita vem do disco, não da memória. Soma o lido em `st.checked`.
+fn sha256(path: &Path, st: &State, buf: &mut [u8]) -> std::io::Result<[u8; 32]> {
     use std::io::Read;
+    use std::os::windows::fs::OpenOptionsExt;
     use windows::Win32::Security::Cryptography::*;
-    let mut f = std::fs::File::open(path)?;
+    // FILE_FLAG_NO_BUFFERING | FILE_FLAG_SEQUENTIAL_SCAN.
+    let mut f = std::fs::OpenOptions::new().read(true).custom_flags(0x2000_0000 | 0x0800_0000).open(path)?;
     let mut h = BCRYPT_HASH_HANDLE::default();
     let fail = |_: windows::core::Error| std::io::Error::other("BCrypt");
     unsafe { BCryptCreateHash(BCRYPT_SHA256_ALG_HANDLE, &mut h, None, None, 0) }.ok().map_err(fail)?;
-    let mut buf = vec![0u8; 4 << 20];
     let res = (|| {
         loop {
             if !wait_pause(st) {
                 return Err(std::io::Error::from_raw_os_error(1223));
             }
-            let n = f.read(&mut buf)?;
+            let n = f.read(buf)?;
             if n == 0 {
                 break;
             }
@@ -421,13 +466,25 @@ pub fn clipboard() -> Option<(Vec<PathBuf>, bool)> {
             });
             Some((items, cut))
         };
+        // Recortar é esvaziado só depois de mover (`clear_clipboard`): falhou, dá para colar de novo.
         let got = read();
-        // Recortar só cola uma vez, como no Explorer.
-        if got.as_ref().is_some_and(|g| g.1) {
-            let _ = EmptyClipboard();
-        }
         let _ = CloseClipboard();
         got.filter(|g| !g.0.is_empty())
+    }
+}
+
+/// Depois de mover sem erro, a área de transferência não guarda mais os itens, como no Explorer.
+/// Se nesse meio-tempo outra coisa foi copiada, ela fica.
+pub fn clear_clipboard(items: &[PathBuf]) {
+    use windows::Win32::System::DataExchange::*;
+    if !clipboard().is_some_and(|(c, cut)| cut && c == items) {
+        return;
+    }
+    unsafe {
+        if OpenClipboard(None).is_ok() {
+            let _ = EmptyClipboard();
+            let _ = CloseClipboard();
+        }
     }
 }
 
@@ -560,6 +617,11 @@ mod tests {
         d
     }
 
+    fn run(items: &[PathBuf], dest: &Path, mv: bool, st: &State, free: impl Fn(&Path) -> Option<u64>) {
+        let pairs: Vec<(PathBuf, PathBuf)> = items.iter().map(|i| (i.clone(), dest.to_path_buf())).collect();
+        run_to(&pairs, mv, st, free);
+    }
+
     fn state(policy: u8, verify: bool) -> State {
         let st = State::default();
         st.policy.store(policy, Relaxed);
@@ -634,7 +696,8 @@ mod tests {
         let st = State::default();
         std::fs::write(d.join("dst\\a.txt"), b"alfa").unwrap();
         std::fs::write(d.join("dst\\c.txt"), b"alfA").unwrap();
-        let h = |p: &str| sha256(&d.join(p), &st).unwrap();
+        let mut v = chunk();
+        let mut h = |p: &str| sha256(&d.join(p), &st, aligned(&mut v)).unwrap();
         assert_eq!(h("src\\a.txt"), h("dst\\a.txt"));
         assert_ne!(h("src\\a.txt"), h("dst\\c.txt"));
         // SHA-256 de "alfa", conferido com outra ferramenta.
@@ -703,6 +766,50 @@ mod tests {
         let st = state(SKIP, false);
         run(&[d.join(r"src\a.txt")], &d.join(r"dst\nova\pasta"), false, &st, |_| None);
         assert_eq!(std::fs::read(d.join(r"dst\nova\pasta\a.txt")).unwrap(), b"alfa");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn free_space_counts_old_files_only_when_replacing() {
+        let d = scratch("espaco2");
+        std::fs::create_dir_all(d.join(r"dst\src\sub")).unwrap();
+        std::fs::write(d.join(r"dst\src\sub\b.bin"), vec![1u8; 3 << 20]).unwrap();
+        let st = state(KEEP_BOTH, false);
+        run(&[d.join("src")], &d.join("dst"), false, &st, |_| Some(1000));
+        assert_eq!(st.need.load(Relaxed), 4 + (3 << 20));
+        let st = state(REPLACE, false);
+        run(&[d.join("src")], &d.join("dst"), false, &st, |_| Some(3)); // need is stored only when short
+        assert_eq!(st.need.load(Relaxed), 4);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn failed_replace_keeps_the_old_file() {
+        let d = scratch("substituir");
+        std::fs::create_dir_all(d.join(r"dst\src")).unwrap();
+        std::fs::write(d.join(r"dst\src\a.txt"), b"velho").unwrap();
+        let lock = std::fs::OpenOptions::new().read(true).share_mode(0).open(d.join(r"src\a.txt")).unwrap();
+        let st = state(REPLACE, false);
+        run(&[d.join("src")], &d.join("dst"), false, &st, |_| None);
+        drop(lock);
+        assert_eq!(std::fs::read(d.join(r"dst\src\a.txt")).unwrap(), b"velho");
+        assert!(!d.join(r"dst\src\a.txt.prisma-tmp").exists());
+        // Só o que chegou vai para o histórico.
+        assert_eq!((st.files_done.load(Relaxed), st.ok_files.load(Relaxed), st.ok_bytes.load(Relaxed)), (2, 1, 3 << 20));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn folder_link_is_not_followed() {
+        let d = scratch("link");
+        let ok = std::process::Command::new("cmd").args(["/c", "mklink", "/J"]).arg(d.join(r"src\sub\volta")).arg(d.join("src")).output().unwrap().status.success();
+        assert!(ok);
+        let st = state(SKIP, false);
+        run(&[d.join("src")], &d.join("dst"), false, &st, |_| None);
+        let errs = st.errors.lock().unwrap().clone();
+        assert!(errs.len() == 1 && errs[0].1 == "Link de pasta, não copiado", "{errs:?}");
+        assert!(d.join(r"dst\src\sub\b.bin").exists() && !d.join(r"dst\src\sub\volta").exists());
+        let _ = std::fs::remove_dir(d.join(r"src\sub\volta"));
         let _ = std::fs::remove_dir_all(&d);
     }
 
