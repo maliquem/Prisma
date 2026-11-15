@@ -392,6 +392,7 @@ impl Runner {
         Ok(out)
     }
 
+    #[cfg(test)]
     pub fn len(&self) -> usize {
         self.live.len()
     }
@@ -434,13 +435,28 @@ pub fn rumble(key: &str) -> (u8, u8) {
 
 /// Esconde do jogo os controles físicos pelo HidHide (só os que a pessoa marcou): sem isso o
 /// jogo pode ver o físico e o virtual juntos.
+/// Numa linha própria e em ordem: o HidHide pode pedir administrador e esperar a pessoa, e a ponte
+/// não pode parar de mandar os controles enquanto isso.
 fn hide_physical(keys: &[String], on: bool) {
-    for k in keys {
-        if on {
-            super::hidhide::esconder(k);
-        } else {
-            super::hidhide::mostrar(k);
-        }
+    use std::sync::mpsc::{channel, Sender};
+    static Q: std::sync::OnceLock<Mutex<Sender<(Vec<String>, bool)>>> = std::sync::OnceLock::new();
+    let q = Q.get_or_init(|| {
+        let (tx, rx) = channel::<(Vec<String>, bool)>();
+        let _ = std::thread::Builder::new().name("esconder".into()).spawn(move || {
+            for (keys, on) in rx {
+                for k in &keys {
+                    if on {
+                        super::hidhide::esconder(k);
+                    } else {
+                        super::hidhide::mostrar(k);
+                    }
+                }
+            }
+        });
+        Mutex::new(tx)
+    });
+    if !keys.is_empty() {
+        let _ = q.lock().unwrap_or_else(|e| e.into_inner()).send((keys.to_vec(), on));
     }
 }
 
@@ -471,16 +487,20 @@ fn run() {
     let mut runner: Option<Runner> = None;
     let mut sent = vec![];
     let mut hidden: Vec<String> = vec![];
+    // Desliga tudo o que a ponte ligou: vagas, vibração e controles escondidos.
+    let stop = |sent: &mut Vec<(String, (u8, u8))>, hidden: &mut Vec<String>| {
+        ACTIVE.store(false, Ordering::Relaxed);
+        OWN.store(0, Ordering::Relaxed);
+        RUMBLE.lock().unwrap().clear();
+        xinput_rumble(sent, &[]);
+        hide_physical(hidden, false);
+        hidden.clear();
+    };
     loop {
         let want = ON.load(Ordering::Relaxed) && stage() == Stage::Ready && !super::remap::stopped() && !super::remap::anti_cheat_front();
         if !want {
-            if runner.take().is_some() {
-                ACTIVE.store(false, Ordering::Relaxed);
-                OWN.store(0, Ordering::Relaxed);
-                RUMBLE.lock().unwrap().clear();
-                xinput_rumble(&mut sent, &[]);
-                hide_physical(&hidden, false);
-                hidden.clear();
+            if runner.take().is_some() || !hidden.is_empty() {
+                stop(&mut sent, &mut hidden);
             }
             std::thread::sleep(Duration::from_millis(250));
             continue;
@@ -512,8 +532,9 @@ fn run() {
                 *RUMBLE.lock().unwrap() = r;
             }
             Err(_) => {
+                // O controle virtual caiu: o jogo não pode ficar sem o físico escondido.
                 runner = None;
-                ACTIVE.store(false, Ordering::Relaxed);
+                stop(&mut sent, &mut hidden);
                 std::thread::sleep(Duration::from_secs(2));
                 continue;
             }
