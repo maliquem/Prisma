@@ -10,6 +10,8 @@ use super::nvml::GpuReading;
 
 pub struct Kmt {
     luid: LUID,
+    /// Aberto só para a temperatura; 0 quando o Windows não abriu.
+    adapter: u32,
     nodes: u32,
     segments: u32,
     last: Vec<i64>,
@@ -59,6 +61,7 @@ impl Kmt {
             if best.as_ref().is_none_or(|b| total > b.0) {
                 let k = Self {
                     luid: a.AdapterLuid,
+                    adapter: 0,
                     nodes: i.NodeCount,
                     segments: i.NbSegments,
                     last: Vec::new(),
@@ -67,7 +70,33 @@ impl Kmt {
                 best = Some((total, k));
             }
         }
-        best.map(|b| b.1)
+        best.map(|mut b| {
+            let mut open = D3DKMT_OPENADAPTERFROMLUID { AdapterLuid: b.1.luid, ..Default::default() };
+            if unsafe { D3DKMTOpenAdapterFromLuid(&mut open) }.0 == 0 {
+                b.1.adapter = open.hAdapter;
+            }
+            b.1
+        })
+    }
+
+    /// Temperatura da placa em °C, como o Gerenciador de Tarefas mostra. 0 quando o driver não informa.
+    pub fn temp(&self) -> u32 {
+        if self.adapter == 0 {
+            return 0;
+        }
+        let mut perf = D3DKMT_ADAPTER_PERFDATA::default();
+        let mut q = D3DKMT_QUERYADAPTERINFO {
+            hAdapter: self.adapter,
+            Type: KMTQAITYPE_ADAPTERPERFDATA,
+            pPrivateDriverData: &mut perf as *mut _ as *mut _,
+            PrivateDriverDataSize: std::mem::size_of::<D3DKMT_ADAPTER_PERFDATA>() as u32,
+        };
+        // O Windows dá décimos de grau.
+        if unsafe { D3DKMTQueryAdapterInfo(&mut q) }.0 == 0 {
+            (perf.Temperature + 5) / 10
+        } else {
+            0
+        }
     }
 
     pub fn read(&mut self) -> GpuReading {
@@ -106,5 +135,16 @@ impl Kmt {
         }
         self.last = now;
         r
+    }
+}
+
+impl Drop for Kmt {
+    fn drop(&mut self) {
+        if self.adapter != 0 {
+            let c = D3DKMT_CLOSEADAPTER { hAdapter: self.adapter };
+            unsafe {
+                let _ = D3DKMTCloseAdapter(&c);
+            }
+        }
     }
 }

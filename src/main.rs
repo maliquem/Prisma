@@ -10,6 +10,7 @@ mod optimizer;
 mod meter;
 mod overlays;
 mod pages;
+mod paste;
 mod report;
 #[cfg(debug_assertions)]
 mod selftest;
@@ -77,17 +78,33 @@ fn main() {
     if stream::run_args() {
         return;
     }
+    // "Colar com o Prisma" do botão direito do Explorer: a janela de cópia, também sem o nome único.
+    if paste::run_args() {
+        return;
+    }
     // Um link de convite (prisma://parear/...): a página Compartilhar tela pergunta se pareia.
     #[cfg(feature = "stream")]
     let link = stream::weblink::take_arg();
     #[cfg(not(feature = "stream"))]
     let link = false;
+    // Pasta escolhida no menu do botão direito do Explorer.
+    let folder = sys::shellmenu::from_args(&std::env::args().collect::<Vec<_>>());
     // Uma sessão que caiu com o HDR desligado (opção do compartilhamento): liga de volta.
     std::thread::spawn(stream::host::restore_hdr);
     unsafe {
         // Antes do nome único: a cópia de administrador precisa encontrar o nome livre.
         let want_admin = cfg.always_admin && !background && updated.is_none() && !cfg!(debug_assertions);
         if want_admin && !startup::is_elevated() && FindWindowW(w!("PrismaHub"), None).is_err() && startup::open_as_admin() {
+            // A cópia de administrador abre sem argumentos: a pasta vai quando a janela dela existir.
+            if let Some((kind, dir)) = &folder {
+                for _ in 0..100 {
+                    if let Ok(h) = FindWindowW(w!("PrismaHub"), None) {
+                        send_folder(h, *kind, dir);
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
+            }
             return;
         }
         // A versão de desenvolvimento roda ao lado da que está em uso.
@@ -96,6 +113,10 @@ fn main() {
         // Acesso negado também quer dizer que existe: a outra cópia roda como administrador.
         if matches!(GetLastError(), ERROR_ALREADY_EXISTS | ERROR_ACCESS_DENIED) {
             if let Ok(h) = FindWindowW(w!("PrismaHub"), None) {
+                if let Some((kind, dir)) = &folder {
+                    send_folder(h, *kind, dir);
+                    return;
+                }
                 let monitor = std::env::args().any(|a| a == "--taskmgr") as usize;
                 let show = if link { app::SHOW_SHARE } else { monitor };
                 let _ = PostMessageW(Some(h), app::WM_SHOW, WPARAM(show), LPARAM(0));
@@ -112,6 +133,12 @@ fn main() {
             app::with(|a| a.apply_pads());
             sys::pads::start(hub);
         }
+        app::with(|a| {
+            a.sync_explorer_menu();
+            if let Some((kind, dir)) = &folder {
+                a.open_folder(*kind, dir);
+            }
+        });
         app::with(|a| a.check_news(before));
         if updated.is_some() {
             app::with(|a| {
@@ -136,4 +163,13 @@ fn main() {
         // de saída do Windows e derrubava o processo aqui, depois de tudo salvo.
         let _ = TerminateProcess(GetCurrentProcess(), 0);
     }
+}
+
+/// Manda à cópia aberta a pasta escolhida no menu do Explorer (WM_COPYDATA, texto em UTF-16).
+unsafe fn send_folder(h: HWND, kind: sys::shellmenu::Open, dir: &str) {
+    let w: Vec<u16> = dir.encode_utf16().collect();
+    let cd = windows::Win32::System::DataExchange::COPYDATASTRUCT { dwData: kind as usize, cbData: (w.len() * 2) as u32, lpData: w.as_ptr() as *mut _ };
+    // A cópia aberta precisa poder vir para a frente: o Explorer deu esse direito a esta.
+    let _ = AllowSetForegroundWindow(ASFW_ANY);
+    let _ = SendMessageTimeoutW(h, WM_COPYDATA, WPARAM(0), LPARAM(&cd as *const _ as isize), SMTO_ABORTIFHUNG, 15000, None);
 }

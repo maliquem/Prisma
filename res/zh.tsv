@@ -700,7 +700,6 @@ Anéis	圆环
 Atalho para ligar e desligar	开关快捷键
 Barras finas	细条
 Instrumento	仪表
-Mostra CPU, GPU, RAM e VRAM por cima de tudo. Arraste para mudar de lugar.	在所有内容上方显示 CPU、GPU、内存和显存。拖动可移动。
 Mostrar widget	显示小组件
 Pílula	胶囊
 Idioma	语言
@@ -797,7 +796,6 @@ Volta as opções de ponto de restauração e de desinstalar sem janela ao padr�
 Volta as opções Ver log e Restauração ao padrão. Os ajustes aplicados continuam como estão: para reverter, use Desfazer.	将“显示日志”和“还原点”选项恢复默认。已应用的调整保持不变：用“撤销”还原。
 Esvazia as listas de nunca fechar e sempre fechar, e as sugestões recusadas. Essa ação não fecha nenhum programa.	清空从不关闭和始终关闭列表以及已拒绝的建议。不会关闭任何程序。
 Volta o modificador, o passo e o aviso na tela ao padrão.	将修饰键、步长和屏幕提示恢复默认。
-Volta o atalho, o estilo e a posição do widget ao padrão, e esconde o widget.	将小组件的快捷键、样式和位置恢复默认，并隐藏小组件。
 Volta os atalhos de Otimizar, Fechar à força e Reiniciar o Explorer, o idioma e a busca de atualização ao padrão.	将“优化”、“强制关闭”和“重启资源管理器”快捷键、语言和更新检查恢复默认。
 Fechar à força	强制关闭
 Encerra na hora o programa em foco, mesmo travado. O que não foi salvo é perdido.	立即结束当前程序，即使它已卡死。未保存的内容会丢失。
@@ -1785,7 +1783,7 @@ Padrão ({})	默认（{}）
 Mudar	更改
 Driver NVIDIA	NVIDIA 驱动
 Driver {}. As mudanças valem na próxima vez que o jogo abrir.	驱动 {}。更改会在游戏下次启动时生效。
-Cópias	备份
+Backups	备份
 Ainda não há cópias. O Prisma guarda uma antes da primeira mudança.	还没有备份。Prisma 会在第一次更改前保存一份。
 Voltar a esta cópia?	恢复到这份备份？
 Os perfis do driver voltam como estavam em {}. O que mudou depois, aqui ou em outro programa, se perde.	驱动配置文件将恢复到 {} 时的状态。之后在这里或其他程序中做的更改都会丢失。
@@ -2363,3 +2361,132 @@ Acelerador	油门
 Freio	刹车
 Embreagem	离合
 Volante	方向盘
+Uso da CPU	CPU 使用率
+Uso da GPU	GPU 使用率
+O que aparece	显示内容
+Mostra uso, temperatura, plano de energia, HDR e VRR por cima de tudo. Arraste para mudar de lugar.	在所有内容上方显示使用率、温度、电源计划、HDR 和 VRR。拖动可移动。
+Volta o atalho, o estilo, os itens e a posição do widget ao padrão, e esconde o widget.	将小组件的快捷键、样式、项目和位置恢复默认，并隐藏小组件。
+Trocar o atalho?	更换快捷键？
+{} já é o atalho de {}. Sim tira de lá e coloca aqui.	{} 已是“{}”的快捷键。选“是”会从那里移除，并设到这里。
+Escolher outro atalho?	选择其他快捷键？
+{} já é usado por outro programa, e o Windows não diz qual. Com essa combinação, o atalho não funciona no Prisma.	{} 已被其他程序占用，Windows 不会说明是哪个。使用这个组合，快捷键在 Prisma 中无法使用。
+Pesquisar aqui com o Prisma	用 Prisma 在此处搜索
+Ver o espaço em disco com o Prisma	用 Prisma 查看磁盘空间
+Pesquisar e Espaço em disco no botão direito do Explorer	在资源管理器右键菜单中显示搜索和磁盘空间
+Esse disco não pode ser analisado	无法分析此磁盘
+Não consegui mudar o menu do Explorer	无法更改资源管理器菜单
+Colar com o Prisma	用 Prisma 粘贴
+Não há arquivos copiados para colar.	没有可粘贴的已复制文件。
+Preparando a lista de arquivos…	正在准备文件列表…
+Falta espaço no destino	目标位置空间不足
+Cancelado	已取消
+Pronto	完成
+Pronto, com {} erros	完成，有 {} 个错误
+Pausado	已暂停
+Movendo para {}	正在移动到 {}
+Copiando para {}	正在复制到 {}
+Precisa de {} e há {} livres. Nada foi copiado.	需要 {}，但只剩 {} 可用。未复制任何内容。
+{} copiados de {}	已复制 {} / {}
+{} de {} arquivos	{} / {} 个文件
+Tempo restante: {}	剩余时间：{}
+Já existe um arquivo com esse nome. Escolha para todos:	已存在同名文件。请为全部选择：
+Arquivos que já existem no destino	目标位置已存在的文件
+Pular	跳过
+Substituir	替换
+Manter os dois	保留两者
+Conferir cada arquivo copiado com hash (SHA-256)	用哈希（SHA-256）校验每个已复制的文件
+1 erro	1 个错误
+{} erros	{} 个错误
+e mais {}	另有 {} 个
+Pausar	暂停
+Em uso por outro programa	被其他程序占用
+Acesso negado	访问被拒绝
+Sem espaço no disco	磁盘空间不足
+Não encontrado	未找到
+Caminho longo demais	路径太长
+O hash da cópia não confere	副本的哈希不一致
+Uma pasta não pode ir para dentro dela mesma	文件夹不能复制到自身内部
+Ligado: botão direito numa pasta, em Mostrar mais opções.	已开启：右键单击文件夹，在“显示更多选项”中。
+Desligado. Cola o que foi copiado no Explorer com pausa, hash e lista de erros.	已关闭。在资源管理器中粘贴已复制的内容，支持暂停、哈希校验和错误列表。
+«{}» está pedindo para entrar no compartilhamento de tela	“{}”请求加入屏幕共享
+Parear e confiar	配对并信任
+Recusar	拒绝
+Confira se o outro PC mostra o mesmo código. Se não mostrar, recuse.	请确认另一台电脑显示的是同一个码。如果不是，请拒绝。
+Só quando eu mandar	仅手动启动时
+Todo dia	每天
+Dias da semana	星期
+Dom	周日
+Seg	周一
+Ter	周二
+Qua	周三
+Qui	周四
+Sex	周五
+Sáb	周六
+Escolha o que copiar e para onde	选择要复制的内容和目标位置
+Escolha pelo menos um dia	请至少选择一天
+Nova cópia	新建复制
+O que foi copiado de onde para onde, e listas de cópia para rodar quando quiser ou na hora marcada.	记录从哪里复制到哪里，以及可随时运行或按设定时间运行的复制列表。
+Listas de cópia	复制列表
+Conferido	已校验
+Sem espaço	空间不足
+Procurar no histórico	搜索历史记录
+Nenhuma cópia ainda. As cópias feitas pela janela do Prisma aparecem aqui.	还没有复制记录。通过 Prisma 窗口进行的复制会显示在这里。
+Movido	已移动
+Copiado	已复制
+Abrir o destino	打开目标位置
+Copiar de novo	重新复制
+Guarda as últimas 500 cópias: caminhos, tamanhos e resultado, na pasta de dados do Prisma.	在 Prisma 数据文件夹中保存最近 500 次复制：路径、大小和结果。
+Limpar histórico	清除历史记录
+Limpar o histórico?	清除历史记录？
+As cópias somem desta lista. Os arquivos copiados não mudam.	这些记录会从列表中消失。已复制的文件不会改变。
+Próxima: {}	下次：{}
+Já rodou	已运行
+Nenhuma lista ainda. Uma lista junta arquivos e pastas de vários lugares para copiar juntos.	还没有列表。列表可把多个位置的文件和文件夹合在一起，一起复制。
+Lista sem nome	未命名列表
+Nova lista	新建列表
+Escolha uma lista para ver e mudar, ou crie uma nova.	选择一个列表来查看和修改，或新建一个。
+Ex.: Backup das fotos	例如：照片备份
+O que copiar	复制内容
+Nada ainda.	暂无内容。
+Adicionar arquivos	添加文件
+Adicionar pasta	添加文件夹
+Para onde	目标位置
+Nenhuma pasta escolhida	未选择文件夹
+Quando	时间
+Dia	日
+Mês	月
+Hora	时
+Minuto	分
+Se o arquivo já existir no destino	目标位置已有同名文件时
+Conferir com hash (SHA-256)	用哈希校验 (SHA-256)
+Mover em vez de copiar	移动而不是复制
+A cópia agendada roda com o Prisma aberto na bandeja. Se o PC estiver desligado na hora, ela roda assim que o Prisma abrir.	定时复制需要 Prisma 在托盘中运行。如果到点时电脑关机，Prisma 启动后会立即运行。
+Apagar lista	删除列表
+Apagar esta lista?	删除此列表？
+A lista e a agenda dela somem. Os arquivos não mudam.	列表及其计划会被删除。文件不会改变。
+Copiar agora	立即复制
+De	来源
+Para	目标
+Arquivos	文件
+Velocidade	速度
+Tempo restante	剩余时间
+Pico: {}/s	峰值：{}/秒
+Fechar ao terminar	完成后关闭
+Tentar de novo	重试
+Cópia do Prisma	Prisma 复制
+Ctrl+V nas pastas do Explorer cola pelo Prisma	在资源管理器文件夹中按 Ctrl+V 通过 Prisma 粘贴
+Substituir a cópia do Windows?	替换 Windows 的复制功能？
+Com o Prisma aberto, o Ctrl+V nas pastas do Explorer cola pela janela de cópia do Prisma. Arrastar com o mouse e o Colar do menu continuam com o Windows. Dá para desligar aqui a qualquer hora.	Prisma 运行时，在资源管理器文件夹中按 Ctrl+V 会通过 Prisma 的复制窗口粘贴。鼠标拖放和菜单中的“粘贴”仍由 Windows 处理。可随时在此关闭。
+Arrastar com o mouse continua com o Windows.	鼠标拖放仍由 Windows 处理。
+Página Cópias	“复制”页面
+Cópias	复制
+Pronto, tudo conferido	完成，全部已校验
+Conferindo as cópias…	正在校验副本…
+CPU	CPU
+Tempo decorrido	已用时间
+Disco de origem	源磁盘
+Disco de destino	目标磁盘
+GB	GB
+MB	MB
+KB	KB
+/s	/秒

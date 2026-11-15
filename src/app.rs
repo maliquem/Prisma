@@ -24,7 +24,7 @@ use crate::config::{Config, Hotkey, MOD_ALT, MOD_CTRL, MOD_SHIFT, MOD_WIN};
 use crate::optimizer::{self, Candidate, Usage};
 use crate::capture::engine::{self, Cmd, Handle, Settings, Target};
 use crate::capture::mux::Codec;
-use crate::overlays::{Hud, Keyboard, Prompt, PromptAnswer, Radial, Toast, Widget};
+use crate::overlays::{Hud, Keyboard, Prompt, Radial, Toast, Widget, PROMPT_MS};
 use crate::pages::{self, Page};
 use crate::sys::audio::{self, Session};
 use crate::sys::fullscreen::Fullscreenizer;
@@ -61,6 +61,10 @@ const WM_PAD_IN: u32 = WM_APP + 95;
 const WM_PAD_OUT: u32 = WM_APP + 96;
 /// Escolher o .exe de um lugar do radial; WPARAM é o lugar.
 const WM_PICK_RADIAL: u32 = WM_APP + 97;
+/// Página Cópias: escolher arquivos (0), pastas (1) ou o destino (2) da lista aberta.
+pub const WM_PICK_COPY: u32 = WM_APP + 98;
+/// Ctrl+V numa pasta do Explorer (`PASTE_HOOK`); `lparam` é o controle em foco.
+const WM_PASTE_KEY: u32 = WM_APP + 99;
 const WM_POW_OUT: u32 = WM_APP + 82;
 const WM_REPORT_PHOTO: u32 = WM_APP + 84;
 const WM_REPORT_DONE: u32 = WM_APP + 85;
@@ -80,6 +84,9 @@ static FORCE_HELD: AtomicBool = AtomicBool::new(false);
 /// Ctrl+Shift+Esc pelo gancho, quando o Windows não deixa trocar o Gerenciador no registro.
 static TM_HOOK: AtomicBool = AtomicBool::new(false);
 static TM_HELD: AtomicBool = AtomicBool::new(false);
+/// Ctrl+V nas pastas do Explorer vai para a janela de cópia do Prisma.
+static PASTE_HOOK: AtomicBool = AtomicBool::new(false);
+static PASTE_HELD: AtomicBool = AtomicBool::new(false);
 
 fn apply_route(pid: u32, a: &crate::config::SndApp) -> bool {
     audio::set_route(pid, false, &a.output) && audio::set_route(pid, true, &a.input)
@@ -119,6 +126,22 @@ unsafe extern "system" fn key_hook(code: i32, w: WPARAM, l: LPARAM) -> LRESULT {
                 return LRESULT(1);
             }
         }
+        let injected = (*(l.0 as *const KBDLLHOOKSTRUCT)).flags.0 & LLKHF_INJECTED.0 != 0;
+        if vk == 0x56 && !injected && PASTE_HOOK.load(Ordering::Relaxed) {
+            let press = w.0 as u32 == WM_KEYDOWN || w.0 as u32 == WM_SYSKEYDOWN;
+            if !press {
+                PASTE_HELD.store(false, Ordering::Relaxed);
+            } else if held_mods() == MOD_CTRL {
+                if let Some(focus) = crate::sys::copy::explorer_paste_target() {
+                    // Segurar o V não abre uma janela por repetição da tecla.
+                    if !PASTE_HELD.swap(true, Ordering::Relaxed) {
+                        let hub = HWND(FORCE_HUB.load(Ordering::Relaxed) as *mut _);
+                        let _ = PostMessageW(Some(hub), WM_PASTE_KEY, WPARAM(0), LPARAM(focus.0 as isize));
+                    }
+                    return LRESULT(1);
+                }
+            }
+        }
         if vk == FORCE_VK.load(Ordering::Relaxed) {
             let press = w.0 as u32 == WM_KEYDOWN || w.0 as u32 == WM_SYSKEYDOWN;
             if !press {
@@ -137,6 +160,28 @@ unsafe extern "system" fn key_hook(code: i32, w: WPARAM, l: LPARAM) -> LRESULT {
 pub const ACT_SHOT: i32 = HK_SHOT;
 pub const ACT_RECORD: i32 = HK_REC;
 pub const ACT_RECORD_FULL: i32 = HK_REC_FULL;
+
+/// O que perguntar depois de gravar um atalho.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum HkAsk {
+    /// A combinação já era de outra função do Prisma (`other`).
+    Swap { id: i32, hk: Hotkey, other: i32 },
+    /// O Windows recusou: outro programa já usa.
+    Taken(Hotkey),
+}
+
+/// Atalhos que podem trocar de dono. shortcut: os de volume saem porque vêm de `vol_mods`, sem campo
+/// próprio; repetir um deles cai no aviso de outro programa.
+fn hk_keys(list: &[(i32, Hotkey, &str, bool)]) -> Vec<(i32, Hotkey)> {
+    list.iter().filter(|e| !matches!(e.0, HK_VOL_UP | HK_VOL_DOWN | HK_MUTE)).map(|e| (e.0, e.1)).collect()
+}
+
+/// Atalho que mudou desde `old` e repete o de outra função: (o que mudou, o dono).
+fn hk_conflict(old: &[(i32, Hotkey)], now: &[(i32, Hotkey)]) -> Option<(i32, i32)> {
+    now.iter()
+        .filter(|(id, hk)| hk.vk != 0 && old.iter().any(|(o, ohk)| o == id && ohk != hk))
+        .find_map(|(id, hk)| now.iter().find(|(o, ohk)| o != id && ohk == hk).map(|(o, _)| (*id, *o)))
+}
 
 const HK_FULL: i32 = 1;
 const HK_WIDGET: i32 = 2;
@@ -213,8 +258,17 @@ pub struct App {
     /// Até onde os avisos do compartilhamento já foram mostrados (ms desde 1970; 0 antes da primeira olhada).
     notices_since: u128,
     pub prompt: Prompt,
+    /// Pergunta do compartilhamento aberta no `prompt`: para onde vai a escolha (permitir,
+    /// confiar) e se é um pareamento.
+    pub share_ask: Option<(std::sync::mpsc::SyncSender<(bool, bool)>, bool)>,
     pub usage: Usage,
     pub hk_errors: Vec<String>,
+    /// Pergunta pendente sobre o atalho que acabou de ser gravado.
+    pub hk_ask: Option<HkAsk>,
+    /// A que está na tela, até a resposta.
+    pub hk_asked: Option<HkAsk>,
+    /// Atalhos como estavam no último registro, para saber qual mudou.
+    hk_last: Vec<(i32, Hotkey)>,
     pub sessions: Vec<Session>,
     pub plans: Vec<Plan>,
     pub plan_values: Vec<PlanValues>,
@@ -317,10 +371,14 @@ pub struct App {
     pub scan_at: Option<u32>,
     pub scan_tab: u8,
     pub scan_sel: Option<u32>,
+    /// Pasta pedida pelo menu do Explorer, aberta quando a análise do disco termina.
+    pub scan_goto: Option<String>,
     pub scan_delete: Option<u32>,
     pub installed: bool,
     pub boot_items: Vec<autostart::Item>,
     pub boot_sel: Option<usize>,
+    /// Página Cópias: histórico, listas e a lista aberta.
+    pub cp: crate::pages::copies::Data,
     pub boot_sig: Option<String>,
     pub services: Vec<services::Service>,
     pub svc_filter: u8,
@@ -403,6 +461,7 @@ pub fn start(background: bool) {
         .expect("janela de controle");
         // Sem isso, uma cópia comum não consegue avisar a cópia aberta como administrador.
         let _ = ChangeWindowMessageFilterEx(hub, WM_SHOW, MSGFLT_ALLOW, None);
+        let _ = ChangeWindowMessageFilterEx(hub, WM_COPYDATA, MSGFLT_ALLOW, None);
         let cfg = Config::load();
         let shared = monitor::spawn(hub.0 as isize, WM_TICK);
         let mut app = App {
@@ -421,8 +480,12 @@ pub fn start(background: bool) {
             room_seen: None,
             notices_since: 0,
             prompt: Prompt::new(),
+            share_ask: None,
             usage: Usage::load(),
             hk_errors: Vec::new(),
+            hk_ask: None,
+            hk_asked: None,
+            hk_last: Vec::new(),
             sessions: Vec::new(),
             plans: Vec::new(),
             plan_values: Vec::new(),
@@ -514,10 +577,12 @@ pub fn start(background: bool) {
             scan_at: None,
             scan_tab: 0,
             scan_sel: None,
+            scan_goto: None,
             scan_delete: None,
             installed: crate::startup::is_installed(),
             boot_items: Vec::new(),
             boot_sel: None,
+            cp: Default::default(),
             boot_sig: None,
             services: Vec::new(),
             svc_filter: 0,
@@ -879,6 +944,7 @@ pub fn start(background: bool) {
                 "--page=boot" => Page::Startup,
                 "--page=tweaks" => Page::Tweaks,
                 "--page=tools" => Page::Tools,
+                "--page=copies" => Page::Copies,
                 "--page=uninstall" => Page::Uninstall,
                 "--page=analyze" => Page::Analyze,
                 "--page=search" => Page::Search,
@@ -918,6 +984,10 @@ pub fn start(background: bool) {
             SetTimer(Some(hub), TIMER_ROOM, 1000, None);
         }
         let open = !background && !testing;
+        // O .exe pode ter mudado de lugar (atualização, portátil movido): o item aponta para este.
+        if !testing && !cfg!(debug_assertions) && crate::sys::copy::menu_on() {
+            std::thread::spawn(|| crate::sys::copy::set_menu(true));
+        }
         #[cfg(feature = "stream")]
         if !testing {
             if crate::stream::weblink::has_pending() {
@@ -1051,8 +1121,61 @@ impl App {
             }
         }
         self.hk_errors.clear();
+        let mut list = self.hotkey_list();
+        let mut now = hk_keys(&list);
+        if let Some((id, other)) = hk_conflict(&self.hk_last, &now) {
+            // Volta ao que estava até a resposta: Não mantém como antes.
+            let hk = now.iter().find(|e| e.0 == id).map_or(Hotkey::default(), |e| e.1);
+            let old = self.hk_last.iter().find(|e| e.0 == id).map_or(Hotkey::default(), |e| e.1);
+            if let Some(s) = self.hk_slot(id) {
+                *s = old;
+            }
+            self.cfg.save();
+            self.hk_ask = Some(HkAsk::Swap { id, hk, other });
+            list = self.hotkey_list();
+            now = hk_keys(&list);
+        }
+        let mut errors = Vec::new();
+        let mut taken = None;
+        let mut force_hook = None;
+        for &(id, hk, name, norepeat) in &list {
+            if hk.vk == 0 {
+                continue;
+            }
+            // A versão de teste não pega o Alt+F4 do PC: ela roda junto com programas de verdade.
+            #[cfg(debug_assertions)]
+            if id == HK_FORCE && !std::env::args().any(|a| a.starts_with("--test-force-key=")) {
+                continue;
+            }
+            let mut m = HOT_KEY_MODIFIERS(hk.mods);
+            if norepeat {
+                m |= MOD_NOREPEAT;
+            }
+            if unsafe { RegisterHotKey(Some(self.hub), id, m, hk.vk) }.is_err() {
+                if id == HK_FORCE {
+                    force_hook = Some(hk);
+                } else {
+                    errors.push(format!("{name}: {} já está em uso", hk.label()));
+                    if self.hk_last.iter().any(|e| e.0 == id && e.1 != hk) {
+                        taken = Some(hk);
+                    }
+                }
+            }
+        }
+        if let (Some(hk), None) = (taken, self.hk_ask) {
+            self.hk_ask = Some(HkAsk::Taken(hk));
+        }
+        self.hk_last = now;
+        self.hk_errors = errors;
+        if let Some(hk) = force_hook {
+            self.hook_force_key(hk);
+        }
+    }
+
+    /// Atalhos globais: número, combinação, nome da função e se ignora a repetição da tecla.
+    fn hotkey_list(&self) -> Vec<(i32, Hotkey, &'static str, bool)> {
         let c = &self.cfg;
-        let list = [
+        let mut list = vec![
             (HK_FULL, c.hk_fullscreen, "Fullscreenizer", true),
             (HK_WIDGET, c.hk_widget, "Widget", true),
             (HK_OPT, c.hk_optimize, "Otimizar", true),
@@ -1072,43 +1195,63 @@ impl App {
             (HK_REPLAY, c.hk_replay, "Replay", true),
             (HK_FORCE, c.hk_force, "Fechar à força", true),
             (HK_EXPLORER, c.hk_explorer, "Reiniciar o Explorer", true),
-            (HK_FIND, if c.search_on { c.hk_find } else { Hotkey::new(0, 0) }, "Pesquisar arquivos", true),
             (HK_VOL_UP, Hotkey::new(c.vol_mods, VK_VOL_UP), "Aumentar volume", false),
             (HK_VOL_DOWN, Hotkey::new(c.vol_mods, VK_VOL_DOWN), "Diminuir volume", false),
             (HK_MUTE, Hotkey::new(c.vol_mods, VK_MUTE), "Mudo", true),
         ];
-        let mut errors = Vec::new();
-        for (i, k) in self.cfg.snd_keys.iter().take(SND_KEYS_MAX).enumerate() {
-            if k.key.vk != 0 && unsafe { RegisterHotKey(Some(self.hub), HK_SND + i as i32, HOT_KEY_MODIFIERS(k.key.mods) | MOD_NOREPEAT, k.key.vk) }.is_err() {
-                errors.push(format!("{}: {} já está em uso", crate::i18n::tr("Aparelho padrão"), k.key.label()));
-            }
+        // Pesquisa desligada: o atalho fica guardado, mas não conta.
+        if c.search_on {
+            list.push((HK_FIND, c.hk_find, "Pesquisar arquivos", true));
         }
-        let mut force_hook = None;
-        for (id, hk, name, norepeat) in list {
-            if hk.vk == 0 {
-                continue;
-            }
-            // A versão de teste não pega o Alt+F4 do PC: ela roda junto com programas de verdade.
-            #[cfg(debug_assertions)]
-            if id == HK_FORCE && !std::env::args().any(|a| a.starts_with("--test-force-key=")) {
-                continue;
-            }
-            let mut m = HOT_KEY_MODIFIERS(hk.mods);
-            if norepeat {
-                m |= MOD_NOREPEAT;
-            }
-            if unsafe { RegisterHotKey(Some(self.hub), id, m, hk.vk) }.is_err() {
-                if id == HK_FORCE {
-                    force_hook = Some(hk);
-                } else {
-                    errors.push(format!("{name}: {} já está em uso", hk.label()));
-                }
-            }
+        for (i, k) in c.snd_keys.iter().take(SND_KEYS_MAX).enumerate() {
+            list.push((HK_SND + i as i32, k.key, "Aparelho padrão", true));
         }
-        self.hk_errors = errors;
-        if let Some(hk) = force_hook {
-            self.hook_force_key(hk);
+        list
+    }
+
+    /// Onde fica no config o atalho de número `id`.
+    fn hk_slot(&mut self, id: i32) -> Option<&mut Hotkey> {
+        let c = &mut self.cfg;
+        Some(match id {
+            HK_FULL => &mut c.hk_fullscreen,
+            HK_WIDGET => &mut c.hk_widget,
+            HK_OPT => &mut c.hk_optimize,
+            HK_SHOT => &mut c.hk_shot,
+            HK_SHOT_FULL => &mut c.hk_shot_full,
+            HK_SHOT_WIN => &mut c.hk_shot_win,
+            HK_REC => &mut c.hk_record,
+            HK_REC_FULL => &mut c.hk_record_full,
+            HK_METER_C => &mut c.hk_meter_compact,
+            HK_METER_F => &mut c.hk_meter_full,
+            HK_METER_O => &mut c.hk_meter_off,
+            HK_LOG => &mut c.hk_log,
+            HK_METER_KEYS => &mut c.hk_meter_keys,
+            HK_LIMIT_T => &mut c.hk_limit_toggle,
+            HK_LIMIT_UP => &mut c.hk_limit_up,
+            HK_LIMIT_DOWN => &mut c.hk_limit_down,
+            HK_REPLAY => &mut c.hk_replay,
+            HK_FORCE => &mut c.hk_force,
+            HK_EXPLORER => &mut c.hk_explorer,
+            HK_FIND => &mut c.hk_find,
+            id if id >= HK_SND => &mut c.snd_keys.get_mut((id - HK_SND) as usize)?.key,
+            _ => return None,
+        })
+    }
+
+    pub fn hk_name(&self, id: i32) -> &'static str {
+        self.hotkey_list().into_iter().find(|e| e.0 == id).map_or("", |e| e.2)
+    }
+
+    /// Resposta Sim à troca: a combinação sai da outra função e fica nesta.
+    pub fn hk_swap(&mut self, id: i32, hk: Hotkey, other: i32) {
+        if let Some(s) = self.hk_slot(other) {
+            *s = Hotkey::default();
         }
+        if let Some(s) = self.hk_slot(id) {
+            *s = hk;
+        }
+        self.cfg.save();
+        self.register_hotkeys();
     }
 
     fn pause_hotkeys(&mut self, on: bool) {
@@ -1193,7 +1336,8 @@ impl App {
             self.cfg.tm_hook && !self.replaces_tm
         };
         TM_HOOK.store(tm, Ordering::Relaxed);
-        let want = tm || FORCE_VK.load(Ordering::Relaxed) != 0;
+        PASTE_HOOK.store(self.cfg.paste_key, Ordering::Relaxed);
+        let want = tm || self.cfg.paste_key || FORCE_VK.load(Ordering::Relaxed) != 0;
         if want && self.force_hook.is_none() {
             let inst = unsafe { GetModuleHandleW(None) }.unwrap_or_default();
             self.force_hook = unsafe { SetWindowsHookExW(WH_KEYBOARD_LL, Some(key_hook), Some(inst.into()), 0) }.ok();
@@ -2580,6 +2724,7 @@ impl App {
                 Some("uninstall") => self.page = Page::Uninstall,
                 Some("tweaks") => self.page = Page::Tweaks,
                 Some("tools") => self.page = Page::Tools,
+                Some("copies") => self.page = Page::Copies,
                 Some("optimize") => self.page = Page::Optimize,
                 Some("energy") => self.page = Page::Energy,
                 Some("fullscreen") => self.page = Page::Fullscreen,
@@ -2737,6 +2882,7 @@ impl App {
             }
             Defaults::Settings => {
                 crate::i18n::set_lang(self.cfg.lang);
+                self.sync_explorer_menu();
                 self.register_hotkeys();
             }
             Defaults::Fullscreen => self.register_hotkeys(),
@@ -2791,6 +2937,10 @@ impl App {
 
     /// Mostra a pergunta de otimização. `manual` mostra mesmo sem nada a fechar.
     fn optimize_prompt(&mut self, manual: bool) {
+        // A pergunta do compartilhamento espera resposta: não é trocada por esta.
+        if self.share_ask.is_some() {
+            return;
+        }
         self.refresh_candidates();
         let selected: Vec<&Candidate> = self.cands.iter().filter(|c| c.on).collect();
         if selected.is_empty() {
@@ -2809,26 +2959,60 @@ impl App {
         };
         let plural = if n == 1 { "programa" } else { "programas" };
         let gap = self.meter.corner_gap(&self.cfg);
-        self.prompt.ask(title, format!("Fechar {n} {plural} e liberar {gb} GB?"), gap);
+        let buttons = [("Fechar", true), ("Ver lista", false), ("Agora não", false)];
+        self.prompt.ask(title, vec![format!("Fechar {n} {plural} e liberar {gb} GB?")], &buttons, gap, Some(PROMPT_MS));
+    }
+
+    /// Alguém pede para entrar no compartilhamento de tela (pedido `ShareAsk` do serviço ou do
+    /// host): aviso de 5 s e a pergunta no canto, até ela escolher. `code` só no pareamento.
+    /// Devolve por onde chega a escolha (permitir, confiar).
+    #[cfg_attr(not(feature = "stream"), allow(dead_code))]
+    pub fn share_ask(&mut self, name: &str, perms: &str, code: Option<&str>) -> std::sync::mpsc::Receiver<(bool, bool)> {
+        let (tx, rx) = std::sync::mpsc::sync_channel(1);
+        self.toast.info_for(&format!("«{name}» está pedindo para entrar no compartilhamento de tela"), 56.0, 5000);
+        let mut body = vec![format!("Permissões: {perms}.")];
+        let (title, buttons): (String, &[(&'static str, bool)]) = match code {
+            Some(code) => {
+                body.push(format!("Código de confirmação: {code}"));
+                body.push("Confira se o outro PC mostra o mesmo código. Se não mostrar, recuse.".to_string());
+                (format!("«{name}» quer parear com este PC."), &[("Parear", false), ("Parear e confiar", false), ("Recusar", false)])
+            }
+            None => (format!("«{name}» quer se conectar a este PC."), &[("Permitir", false), ("Recusar", false)]),
+        };
+        let gap = self.meter.corner_gap(&self.cfg);
+        // Uma pergunta nova toma o lugar da anterior: a anterior perde o canal e vale como recusa.
+        self.share_ask = Some((tx, code.is_some()));
+        self.prompt.ask(title, body, buttons, gap, None);
+        rx
     }
 
     pub fn prompt_mouse(&mut self, msg: u32, x: f32, y: f32) {
-        match self.prompt.mouse(msg, x, y) {
-            Some(PromptAnswer::Close) => {
-                self.prompt.hide();
-                self.close_selected();
-            }
-            Some(PromptAnswer::List) => {
-                self.prompt.hide();
+        let Some(i) = self.prompt.mouse(msg, x, y) else { return };
+        self.prompt.hide();
+        if let Some((tx, pairing)) = self.share_ask.take() {
+            // Pareamento: Parear (pergunta a cada conexão), Parear e confiar, Recusar.
+            // Conexão: Permitir, Recusar.
+            let choice = match (pairing, i) {
+                (_, 0) => (true, false),
+                (true, 1) => (true, true),
+                _ => (false, false),
+            };
+            let _ = tx.send(choice);
+            return;
+        }
+        match i {
+            0 => self.close_selected(),
+            1 => {
                 self.page = Page::Optimize;
                 self.show_main();
             }
-            Some(PromptAnswer::Dismiss) => self.prompt.hide(),
-            None => {}
+            _ => {}
         }
     }
 
     pub fn prompt_hide(&mut self) {
+        // Pergunta do compartilhamento fechada sem escolha vale como recusa (canal perdido).
+        self.share_ask = None;
         self.prompt.hide();
     }
 
@@ -3282,6 +3466,7 @@ impl App {
             Page::Tools => {
                 self.load_disks();
             }
+            Page::Copies => crate::pages::copies::enter(self),
             Page::Search => {
                 self.load_disks();
                 self.find_drives = crate::sys::mft::drives();
@@ -3329,6 +3514,56 @@ impl App {
                 WinInfo { hwnd: h, title: procs::window_title(h), exe, path, size: (r.right, r.bottom) }
             })
             .collect();
+    }
+
+    /// Abre Pesquisar ou Espaço em disco já na pasta escolhida no menu do Explorer.
+    pub fn open_folder(&mut self, kind: crate::sys::shellmenu::Open, dir: &str) {
+        use crate::sys::shellmenu::Open;
+        match kind {
+            Open::Search => {
+                self.page = Page::Search;
+                self.find.q = crate::sys::shellmenu::search_query(dir);
+            }
+            Open::Space => {
+                self.page = Page::Analyze;
+                let c = dir.chars().next().unwrap_or('?').to_ascii_uppercase();
+                let drives = mft::drives();
+                match drives.iter().position(|l| *l == c) {
+                    Some(i) => {
+                        self.scan_drive = i;
+                        self.scan_goto = Some(dir.to_string());
+                        let same = self.scan.lock().unwrap().as_ref().is_some_and(|s| s.drive == c);
+                        if !same && !self.scan_progress.running.load(Ordering::Relaxed) {
+                            *self.scan.lock().unwrap() = None;
+                            self.scan_at = None;
+                            self.scan_sel = None;
+                            mft::start(c, self.scan_progress.clone(), self.scan.clone());
+                        }
+                    }
+                    None => self.toast.info("Esse disco não pode ser analisado"),
+                }
+            }
+        }
+        self.show_main();
+        self.invalidate();
+    }
+
+    /// Liga ou desliga as entradas do menu do Explorer. Desligar apaga as chaves.
+    pub fn set_explorer_menu(&mut self, on: bool) {
+        if crate::sys::shellmenu::set(on) {
+            self.cfg.explorer_menu = on;
+            self.cfg.save();
+        } else {
+            crate::sys::shellmenu::set(false);
+            self.toast.info("Não consegui mudar o menu do Explorer");
+        }
+    }
+
+    /// Regrava as entradas do menu do Explorer (caminho e idioma de agora), se estão ligadas.
+    pub fn sync_explorer_menu(&self) {
+        if self.cfg.explorer_menu && self.installed {
+            crate::sys::shellmenu::set(true);
+        }
     }
 
     pub fn show_main(&mut self) {
@@ -3530,6 +3765,20 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
             });
             LRESULT(0)
         }
+        // Outra cópia, aberta pelo menu do Explorer, manda a pasta (UTF-16) e a página em dwData.
+        WM_COPYDATA => {
+            let cd = &*(l.0 as *const windows::Win32::System::DataExchange::COPYDATASTRUCT);
+            let kind = crate::sys::shellmenu::Open::from(cd.dwData);
+            if let (Some(kind), false) = (kind, cd.lpData.is_null()) {
+                let w = std::slice::from_raw_parts(cd.lpData as *const u16, cd.cbData as usize / 2);
+                let args = [String::new(), format!("{}{}", kind.flag(), String::from_utf16_lossy(w))];
+                if let Some((k, dir)) = crate::sys::shellmenu::from_args(&args) {
+                    with(|a| a.open_folder(k, &dir));
+                    return LRESULT(1);
+                }
+            }
+            LRESULT(0)
+        }
         crate::link::WM_LINK => {
             with(crate::link::drain);
             LRESULT(0)
@@ -3578,6 +3827,7 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                     a.meter_paint();
                 } else if w.0 == TIMER_ROOM {
                     a.room_watch();
+                    crate::pages::copies::tick(a);
                 } else if w.0 == TIMER_PADS {
                     if a.page == Page::Controllers && a.main.is_some() {
                         crate::pages::controllers::tick(a);
@@ -3700,6 +3950,33 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                         Some(p) => crate::pages::pad_profiles::imported(a, p),
                         None => a.toast.info("Esse arquivo não é um perfil de controle do Prisma"),
                     }
+                    a.invalidate();
+                });
+            }
+            LRESULT(0)
+        }
+        WM_PASTE_KEY => {
+            // Pasta que não é do disco (dentro de um .zip, Este Computador): o Ctrl+V volta para o
+            // Explorer, que cola do jeito dele. O gancho deixa passar teclas enviadas por programa.
+            match crate::sys::copy::explorer_folder(HWND(l.0 as *mut _)) {
+                Some(dir) => {
+                    if let Ok(ch) = std::process::Command::new(std::env::current_exe().unwrap_or_default()).arg(format!("--paste={}", dir.display())).spawn() {
+                        let _ = unsafe { AllowSetForegroundWindow(ch.id()) };
+                    }
+                }
+                None => crate::sys::copy::send_paste(),
+            }
+            LRESULT(0)
+        }
+        WM_PICK_COPY => {
+            let paths = match w.0 {
+                0 => capture::choose_many(h, false),
+                1 => capture::choose_many(h, true),
+                _ => capture::choose_folder(h).into_iter().collect(),
+            };
+            if !paths.is_empty() {
+                with(|a| {
+                    crate::pages::copies::picked(a, w.0, paths);
                     a.invalidate();
                 });
             }
@@ -4216,6 +4493,24 @@ fn centered(wa: RECT, want_w: i32, want_h: i32, margin: i32) -> (i32, i32, i32, 
 #[cfg(test)]
 mod window_tests {
     use super::*;
+
+    #[test]
+    fn hotkey_conflict_between_functions() {
+        let f = Hotkey::new(3, 0x46);
+        let old = [(HK_FULL, f), (HK_FIND, Hotkey::new(3, 0x20)), (HK_WIDGET, Hotkey::default())];
+        // Nada mudou, ou a primeira leitura: sem pergunta, mesmo com repetição já gravada.
+        assert_eq!(hk_conflict(&old, &old), None);
+        assert_eq!(hk_conflict(&[], &[(HK_FULL, f), (HK_FIND, f)]), None);
+        // A Busca ganhou a combinação do Fullscreenizer; o campo vazio que ganha também conta.
+        assert_eq!(hk_conflict(&old, &[(HK_FULL, f), (HK_FIND, f), (HK_WIDGET, Hotkey::default())]), Some((HK_FIND, HK_FULL)));
+        assert_eq!(hk_conflict(&old, &[(HK_FULL, f), (HK_FIND, Hotkey::new(3, 0x20)), (HK_WIDGET, f)]), Some((HK_WIDGET, HK_FULL)));
+        // Combinação nova e livre, ou campo apagado: sem pergunta.
+        assert_eq!(hk_conflict(&old, &[(HK_FULL, f), (HK_FIND, Hotkey::new(3, 0x47)), (HK_WIDGET, Hotkey::default())]), None);
+        assert_eq!(hk_conflict(&old, &[(HK_FULL, Hotkey::default()), (HK_FIND, Hotkey::new(3, 0x20)), (HK_WIDGET, Hotkey::default())]), None);
+        // Volume não tem campo próprio: fica fora.
+        let list = [(HK_VOL_UP, f, "", false), (HK_FULL, f, "", true)];
+        assert_eq!(hk_keys(&list), vec![(HK_FULL, f)]);
+    }
 
     /// Resoluções comuns com a barra de tarefas embaixo (48 px a 100%) e escalas usuais.
     #[test]

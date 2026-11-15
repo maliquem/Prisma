@@ -18,13 +18,87 @@ fn fmt_gb(b: u64) -> String {
     format!("{:.1} GB", b as f64 / (1u64 << 30) as f64).replace('.', crate::i18n::comma())
 }
 
-fn metrics(s: &Snapshot) -> [(&'static str, f32, String); 4] {
-    [
-        ("CPU", s.cpu, format!("{:.0}%", s.cpu)),
-        ("GPU", s.gpu.util, format!("{:.0}%", s.gpu.util)),
-        ("RAM", s.ram_pct(), fmt_gb(s.ram_used)),
-        ("VRAM", s.vram_pct(), fmt_gb(s.gpu.used)),
-    ]
+/// Itens que o widget pode mostrar, na ordem dos bits de `widget_items`.
+pub const ITEMS: [&str; 9] = ["Uso da CPU", "Uso da GPU", "RAM", "VRAM", "Temperatura da CPU", "Temperatura da GPU", "Plano de energia", "HDR", "VRR"];
+pub const ALL_ITEMS: u16 = (1 << ITEMS.len()) - 1;
+const CPU_TEMP: usize = 4;
+const GPU_TEMP: usize = 5;
+const PLAN: usize = 6;
+const HDR: usize = 7;
+const VRR: usize = 8;
+
+const fn has(items: u16, i: usize) -> bool {
+    items & (1 << i) != 0
+}
+
+/// Valor do config.ini; sem nenhum item conhecido, volta ao padrão.
+pub fn parse_items(v: &str) -> u16 {
+    match v.trim().parse::<u16>() {
+        Ok(m) if m & ALL_ITEMS != 0 => m & ALL_ITEMS,
+        _ => ALL_ITEMS,
+    }
+}
+
+/// Liga ou desliga um item. O último ligado não sai: o widget nunca fica vazio.
+pub fn toggle_item(items: u16, i: usize) -> u16 {
+    let n = (items ^ (1 << i)) & ALL_ITEMS;
+    if n == 0 {
+        items
+    } else {
+        n
+    }
+}
+
+/// Leituras do widget que não vêm do monitor de desempenho.
+#[derive(Clone, Default)]
+pub struct Status {
+    pub plan: String,
+    pub hdr: Option<bool>,
+    pub vrr: Option<bool>,
+}
+
+/// Um item na tela: os medidores têm `gauge` (0 a 100); os de estado, só texto.
+struct Item {
+    name: &'static str,
+    gauge: Option<f32>,
+    /// Número grande dos anéis e do instrumento.
+    big: String,
+    /// Valor da pílula.
+    small: String,
+    /// Valor das barras e das linhas de estado.
+    detail: String,
+}
+
+fn on_off(v: Option<bool>) -> String {
+    match v {
+        Some(true) => "Ligado",
+        Some(false) => "Desligado",
+        None => "—",
+    }
+    .to_string()
+}
+
+fn items(s: &Snapshot, st: &Status, mask: u16) -> Vec<Item> {
+    let pct = |name, v: f32, detail: String| Item { name, gauge: Some(v), big: format!("{v:.0}"), small: format!("{v:.0}%"), detail };
+    let temp = |name, t: Option<f32>| {
+        let big = t.map_or("—".to_string(), |t| format!("{t:.0}"));
+        Item { name, gauge: Some(t.unwrap_or(0.0)), detail: t.map_or("—".to_string(), |t| format!("{t:.0} °C")), small: big.clone(), big }
+    };
+    let text = |name, v: String| Item { name, gauge: None, big: String::new(), small: v.clone(), detail: v };
+    (0..ITEMS.len())
+        .filter(|i| has(mask, *i))
+        .map(|i| match i {
+            0 => pct("CPU", s.cpu, format!("{:.0}%", s.cpu)),
+            1 => pct("GPU", s.gpu.util, format!("{:.0}%", s.gpu.util)),
+            2 => pct("RAM", s.ram_pct(), fmt_gb(s.ram_used)),
+            3 => pct("VRAM", s.vram_pct(), fmt_gb(s.gpu.used)),
+            CPU_TEMP => temp("CPU °C", s.cpu_temp),
+            GPU_TEMP => temp("GPU °C", (s.gpu.temp > 0).then_some(s.gpu.temp as f32)),
+            PLAN => text("Plano", if st.plan.is_empty() { "—".into() } else { st.plan.clone() }),
+            HDR => text("HDR", on_off(st.hdr)),
+            _ => text("VRR", on_off(st.vrr)),
+        })
+        .collect()
 }
 
 fn hot(v: f32) -> Color {
@@ -38,6 +112,12 @@ fn hot(v: f32) -> Color {
 pub struct Widget {
     pub surface: Layered,
     pub visible: bool,
+    pub status: Status,
+    status_at: Option<std::time::Instant>,
+    status_items: u16,
+    /// G-SYNC lido numa thread: 0 sem leitura, 1 desligado, 2 ligado.
+    vrr: std::sync::Arc<std::sync::atomic::AtomicU8>,
+    vrr_at: Option<std::time::Instant>,
 }
 
 unsafe extern "system" fn widget_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT {
@@ -51,10 +131,25 @@ unsafe extern "system" fn widget_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> 
                 a.cfg.widget_x = r.left;
                 a.cfg.widget_y = r.top;
                 a.cfg.save();
+                // Pode ter ido para outra tela: HDR e VRR são lidos de novo, e o VRR da tela antiga sai.
+                a.widget.status_at = None;
+                a.widget.vrr_at = None;
+                a.widget.vrr.store(0, std::sync::atomic::Ordering::Relaxed);
             });
             LRESULT(0)
         }
         _ => DefWindowProcW(h, m, w, l),
+    }
+}
+
+/// Nome GDI do monitor onde a janela está.
+fn monitor_name(h: HWND) -> String {
+    unsafe {
+        let m = MonitorFromWindow(h, MONITOR_DEFAULTTONEAREST);
+        let mut mi = MONITORINFOEXW::default();
+        mi.monitorInfo.cbSize = std::mem::size_of::<MONITORINFOEXW>() as u32;
+        let _ = GetMonitorInfoW(m, &mut mi as *mut _ as *mut MONITORINFO);
+        String::from_utf16_lossy(&mi.szDevice[..mi.szDevice.iter().position(|c| *c == 0).unwrap_or(0)])
     }
 }
 
@@ -63,34 +158,60 @@ impl Widget {
         register(w!("PrismaWidget"), widget_proc);
         let hwnd = create_overlay(w!("PrismaWidget"), false);
         crate::capture::hide_from_capture(hwnd);
-        Self { surface: Layered::new(hwnd), visible: false }
+        Self { surface: Layered::new(hwnd), visible: false, status: Status::default(), status_at: None, status_items: 0, vrr: Default::default(), vrr_at: None }
     }
 
     pub fn set_visible(&mut self, on: bool) {
         self.visible = on;
+        self.status_at = None;
         unsafe {
             let _ = ShowWindow(self.surface.hwnd, if on { SW_SHOWNOACTIVATE } else { SW_HIDE });
         }
     }
 
+    /// Plano, HDR e VRR: só os itens ligados, no máximo a cada 5 s (VRR fora desta thread).
+    pub fn refresh(&mut self, items: u16) {
+        use std::sync::atomic::Ordering::Relaxed;
+        self.status.vrr = match self.vrr.load(Relaxed) {
+            1 => Some(false),
+            2 => Some(true),
+            _ => None,
+        };
+        if items == self.status_items && self.status_at.is_some_and(|t| t.elapsed().as_secs() < 5) {
+            return;
+        }
+        self.status_at = Some(std::time::Instant::now());
+        self.status_items = items;
+        if has(items, PLAN) {
+            let id = crate::sys::power::active();
+            self.status.plan = crate::sys::power::list().into_iter().find(|p| Some(&p.id) == id.as_ref()).map(|p| p.name).unwrap_or_default();
+        }
+        if has(items, HDR) {
+            self.status.hdr = crate::sys::hdr::hdr_on(&monitor_name(self.surface.hwnd));
+        }
+        // Carregar a NVAPI leva um tempo; outras placas nem tentam e ficam em —.
+        if has(items, VRR) && self.vrr_at.is_none_or(|t| t.elapsed().as_secs() >= 5) && crate::sys::drs::driver_version().is_some() {
+            self.vrr_at = Some(std::time::Instant::now());
+            let (out, gdi) = (self.vrr.clone(), monitor_name(self.surface.hwnd));
+            let _ = std::thread::Builder::new().name("vrr".into()).spawn(move || {
+                out.store(crate::sys::drs::vrr_active(&gdi).map_or(0, |on| 1 + on as u8), Relaxed);
+            });
+        }
+    }
+
     pub fn update(&mut self, cfg: &Config, s: &Snapshot) {
+        use std::sync::atomic::Ordering::Relaxed;
+        let mask = cfg.widget_items;
+        crate::sys::cputemp::WIDGET.store(self.visible && has(mask, CPU_TEMP), Relaxed);
+        crate::sys::monitor::GPU_TEMP.store(self.visible && has(mask, GPU_TEMP), Relaxed);
         if !self.visible {
             return;
         }
-        let m = metrics(s);
-        let (w, h) = match cfg.widget_style {
-            0 => (316.0, 36.0),
-            1 => (220.0, 150.0),
-            2 => (304.0, 100.0),
-            _ => (316.0, 70.0),
-        };
+        self.refresh(mask);
+        let m = items(s, &self.status, mask);
         let style = cfg.widget_style;
-        self.surface.paint(cfg.widget_x, cfg.widget_y, w, h, |c, r| match style {
-            0 => draw_pill(c, r, &m),
-            1 => draw_bars(c, r, &m),
-            2 => draw_rings(c, r, &m),
-            _ => draw_instrument(c, r, &m),
-        });
+        let (w, h) = size(style, &m);
+        self.surface.paint(cfg.widget_x, cfg.widget_y, w, h, |c, r| draw(c, style, r, &m));
         unsafe {
             let _ = SetWindowPos(
                 self.surface.hwnd,
@@ -106,76 +227,177 @@ impl Widget {
 }
 
 const PANEL: Color = Color { r: 0.05, g: 0.06, b: 0.08, a: 0.8 };
+const LABEL: u32 = 0xc5cad6;
 
-fn draw_pill(c: &Canvas, r: Rect, m: &[(&str, f32, String); 4]) {
+fn tw(s: &str, size: f32, weight: Weight) -> f32 {
+    measure(s, size, weight, None).0
+}
+
+/// Largura de uma linha "nome ... valor" de 13 px, sem as margens.
+fn row_w(m: &Item) -> f32 {
+    tw(m.name, 13.0, Weight::Regular) + 12.0 + tw(&m.detail, 13.0, Weight::Semibold)
+}
+
+fn texts(m: &[Item]) -> impl Iterator<Item = &Item> {
+    m.iter().filter(|i| i.gauge.is_none())
+}
+
+fn gauges(m: &[Item]) -> impl Iterator<Item = &Item> {
+    m.iter().filter(|i| i.gauge.is_some())
+}
+
+fn rows_w(m: &[Item]) -> f32 {
+    texts(m).map(row_w).fold(0.0, f32::max) + 28.0
+}
+
+fn ring_col(m: &[Item]) -> f32 {
+    gauges(m).map(|i| tw(i.name, 12.0, Weight::Regular) + 12.0).fold(73.0, f32::max)
+}
+
+fn inst_col(m: &[Item]) -> f32 {
+    gauges(m).map(|i| tw(i.name, 12.0, Weight::Semibold).max(tw(&i.big, 44.0, Weight::Regular)) + 10.0).fold(79.0, f32::max)
+}
+
+/// Tamanho do widget: cresce com os itens e com o texto, para nada sair cortado.
+fn size(style: u8, m: &[Item]) -> (f32, f32) {
+    let (ng, nt) = (gauges(m).count() as f32, texts(m).count() as f32);
+    match style {
+        0 => {
+            let sum: f32 = m.iter().map(|i| tw(i.name, 13.0, Weight::Regular) + 5.0 + tw(&i.small, 13.0, Weight::Semibold) + 14.0).sum();
+            (sum + 18.0, 36.0)
+        }
+        1 => (m.iter().map(row_w).fold(192.0, f32::max) + 28.0, 10.0 + ng * 33.0 + nt * 24.0 + 8.0),
+        2 => {
+            let top = if ng > 0.0 { 100.0 } else { 10.0 };
+            ((12.0 + ng * ring_col(m)).max(rows_w(m)), top + nt * 22.0 + if nt > 0.0 { 8.0 } else { 0.0 })
+        }
+        _ => {
+            let top = if ng > 0.0 { 70.0 } else { 0.0 };
+            ((ng * inst_col(m)).max(rows_w(m) - 28.0), top + nt * 20.0)
+        }
+    }
+}
+
+fn draw(c: &Canvas, style: u8, r: Rect, m: &[Item]) {
+    match style {
+        0 => draw_pill(c, r, m),
+        1 => draw_bars(c, r, m),
+        2 => draw_rings(c, r, m),
+        _ => draw_instrument(c, r, m),
+    }
+}
+
+/// Linha de estado: nome à esquerda, valor à direita.
+fn draw_row(c: &Canvas, x: f32, y: f32, w: f32, h: f32, m: &Item) {
+    c.text(rect(x, y, w, h), m.name, 13.0, rgb(LABEL), Align::Left, Weight::Regular);
+    c.text(rect(x, y, w, h), &m.detail, 13.0, WHITE, Align::Right, Weight::Semibold);
+}
+
+fn draw_pill(c: &Canvas, r: Rect, m: &[Item]) {
     c.round(r, r.h / 2.0, PANEL);
     let mut x = 16.0;
-    for (n, v, _) in m {
-        let t = format!("{v:.0}%");
-        c.text(rect(x, 0.0, 40.0, r.h), n, 13.0, rgb(0xc5cad6), Align::Left, Weight::Regular);
-        let nw = measure(n, 13.0, Weight::Regular, None).0 + 5.0;
-        c.text(rect(x + nw, 0.0, 40.0, r.h), &t, 13.0, hot(*v), Align::Left, Weight::Semibold);
-        x += nw + measure(&t, 13.0, Weight::Semibold, None).0 + 14.0;
+    for i in m {
+        let nw = tw(i.name, 13.0, Weight::Regular) + 5.0;
+        let vw = tw(&i.small, 13.0, Weight::Semibold);
+        c.text(rect(x, 0.0, nw + 2.0, r.h), i.name, 13.0, rgb(LABEL), Align::Left, Weight::Regular);
+        c.text(rect(x + nw, 0.0, vw + 2.0, r.h), &i.small, 13.0, i.gauge.map_or(WHITE, hot), Align::Left, Weight::Semibold);
+        x += nw + vw + 14.0;
     }
 }
 
-fn draw_bars(c: &Canvas, r: Rect, m: &[(&str, f32, String); 4]) {
+fn draw_bars(c: &Canvas, r: Rect, m: &[Item]) {
     c.round(r, 12.0, PANEL);
+    let w = r.w - 28.0;
     let mut y = 10.0;
-    for (n, v, d) in m {
-        c.text(rect(14.0, y, 90.0, 18.0), n, 13.0, rgb(0xc5cad6), Align::Left, Weight::Regular);
-        c.text(rect(100.0, y, 106.0, 18.0), d, 13.0, WHITE, Align::Right, Weight::Semibold);
-        c.round(rect(14.0, y + 20.0, 192.0, 3.0), 1.5, WHITE.alpha(0.16));
-        c.round(rect(14.0, y + 20.0, 192.0 * v / 100.0, 3.0), 1.5, hot(*v));
-        y += 33.0;
+    for i in m {
+        draw_row(c, 14.0, y, w, 18.0, i);
+        if let Some(v) = i.gauge {
+            c.round(rect(14.0, y + 20.0, w, 3.0), 1.5, WHITE.alpha(0.16));
+            c.round(rect(14.0, y + 20.0, w * v.clamp(0.0, 100.0) / 100.0, 3.0), 1.5, hot(v));
+            y += 33.0;
+        } else {
+            y += 24.0;
+        }
     }
 }
 
-fn draw_rings(c: &Canvas, r: Rect, m: &[(&str, f32, String); 4]) {
+fn draw_rings(c: &Canvas, r: Rect, m: &[Item]) {
     c.round(r, 16.0, PANEL);
-    for (i, (n, v, _)) in m.iter().enumerate() {
-        let cx = 42.0 + i as f32 * 73.0;
+    let col = ring_col(m);
+    for (i, it) in gauges(m).enumerate() {
+        let v = it.gauge.unwrap_or(0.0);
+        let cx = 6.0 + col * (i as f32 + 0.5);
         c.circle_line(cx, 40.0, 23.0, WHITE.alpha(0.16), 5.0);
-        c.arc(cx, 40.0, 23.0, v / 100.0, if *v >= HOT { WARN } else { ACCENT }, 5.0);
-        let t = format!("{v:.0}");
-        c.text(rect(cx - 23.0, 17.0, 46.0, 46.0), &t, 14.0, WHITE, Align::Center, Weight::Semibold);
-        c.text(rect(cx - 30.0, 70.0, 60.0, 20.0), n, 12.0, rgb(0xc5cad6), Align::Center, Weight::Regular);
+        c.arc(cx, 40.0, 23.0, v.clamp(0.0, 100.0) / 100.0, if v >= HOT { WARN } else { ACCENT }, 5.0);
+        c.text(rect(cx - 23.0, 17.0, 46.0, 46.0), &it.big, 14.0, WHITE, Align::Center, Weight::Semibold);
+        c.text(rect(cx - col / 2.0, 70.0, col, 20.0), it.name, 12.0, rgb(LABEL), Align::Center, Weight::Regular);
+    }
+    let mut y = if gauges(m).next().is_some() { 100.0 } else { 10.0 };
+    for it in texts(m) {
+        draw_row(c, 14.0, y, r.w - 28.0, 22.0, it);
+        y += 22.0;
     }
 }
 
-fn draw_instrument(c: &Canvas, r: Rect, m: &[(&str, f32, String); 4]) {
-    let w = r.w / 4.0;
-    for (i, (n, v, _)) in m.iter().enumerate() {
+fn draw_instrument(c: &Canvas, r: Rect, m: &[Item]) {
+    let w = inst_col(m);
+    let shadow = rgb(0).alpha(0.75);
+    for (i, it) in gauges(m).enumerate() {
+        let v = it.gauge.unwrap_or(0.0);
         let x = i as f32 * w;
-        let t = format!("{v:.0}");
-        let color = if *v >= HOT { rgb(0xffb000) } else { WHITE };
-        let shadow = rgb(0).alpha(0.75);
-        c.text(rect(x + 1.0, 1.0, w, 18.0), n, 12.0, shadow, Align::Left, Weight::Semibold);
-        c.text(rect(x, 0.0, w, 18.0), n, 12.0, WHITE, Align::Left, Weight::Semibold);
-        c.text(rect(x + 1.0, 19.0, w, 50.0), &t, 44.0, shadow, Align::Left, Weight::Regular);
-        c.text(rect(x, 18.0, w, 50.0), &t, 44.0, color, Align::Left, Weight::Regular);
+        let color = if v >= HOT { rgb(0xffb000) } else { WHITE };
+        c.text(rect(x + 1.0, 1.0, w, 18.0), it.name, 12.0, shadow, Align::Left, Weight::Semibold);
+        c.text(rect(x, 0.0, w, 18.0), it.name, 12.0, WHITE, Align::Left, Weight::Semibold);
+        c.text(rect(x + 1.0, 19.0, w, 50.0), &it.big, 44.0, shadow, Align::Left, Weight::Regular);
+        c.text(rect(x, 18.0, w, 50.0), &it.big, 44.0, color, Align::Left, Weight::Regular);
+    }
+    let mut y = if gauges(m).next().is_some() { 70.0 } else { 0.0 };
+    for it in texts(m) {
+        let nw = tw(it.name, 13.0, Weight::Semibold) + 12.0;
+        for (d, col) in [(1.0, shadow), (0.0, WHITE)] {
+            c.text(rect(d, y + d, nw, 20.0), it.name, 13.0, col, Align::Left, Weight::Semibold);
+            c.text(rect(nw + d, y + d, r.w - nw, 20.0), &it.detail, 13.0, col, Align::Left, Weight::Semibold);
+        }
+        y += 20.0;
     }
 }
 
 /// Desenha um estilo dentro de um cartão da tela Widget.
-pub fn preview(c: &Canvas, style: u8, area: Rect, s: &Snapshot) {
-    let m = metrics(s);
-    let (w, h) = match style {
-        0 => (316.0, 36.0),
-        1 => (220.0, 150.0),
-        2 => (304.0, 100.0),
-        _ => (316.0, 70.0),
-    };
+pub fn preview(c: &Canvas, style: u8, area: Rect, s: &Snapshot, st: &Status, mask: u16) {
+    let m = items(s, st, mask);
+    let (w, h) = size(style, &m);
     let k = (area.w / w).min(area.h / h).min(1.0);
     c.scale_at(k, area.x, area.y);
-    let r = rect(0.0, 0.0, w, h);
-    match style {
-        0 => draw_pill(c, r, &m),
-        1 => draw_bars(c, r, &m),
-        2 => draw_rings(c, r, &m),
-        _ => draw_instrument(c, r, &m),
-    }
+    draw(c, style, rect(0.0, 0.0, w, h), &m);
     c.translate(0.0, 0.0);
+}
+
+#[cfg(test)]
+mod widget_tests {
+    use super::*;
+
+    #[test]
+    fn widget_items_choice_and_file() {
+        // Padrão: os quatro de antes e os novos.
+        assert_eq!(crate::config::Config::default().widget_items, ALL_ITEMS);
+        assert_eq!(parse_items(""), ALL_ITEMS);
+        assert_eq!(parse_items("abc"), ALL_ITEMS);
+        assert_eq!(parse_items("0"), ALL_ITEMS);
+        // O que foi gravado volta igual; bit que não existe sai.
+        assert_eq!(parse_items(&(1u16 << PLAN | 1).to_string()), 1 << PLAN | 1);
+        assert_eq!(parse_items(&(1u16 << 15 | 1 << HDR).to_string()), 1 << HDR);
+        // Liga e desliga; o último não sai.
+        let m = toggle_item(ALL_ITEMS, VRR);
+        assert!(!has(m, VRR) && has(m, HDR));
+        assert_eq!(toggle_item(m, VRR), ALL_ITEMS);
+        assert_eq!(toggle_item(1 << GPU_TEMP, GPU_TEMP), 1 << GPU_TEMP);
+        // Só os itens escolhidos aparecem, na ordem da lista.
+        let s = Snapshot::default();
+        let names: Vec<_> = items(&s, &Status::default(), 1 << 0 | 1 << CPU_TEMP | 1 << HDR).iter().map(|i| i.name).collect();
+        assert_eq!(names, ["CPU", "CPU °C", "HDR"]);
+        let none = items(&s, &Status::default(), 1 << GPU_TEMP | 1 << VRR);
+        assert_eq!((none[0].big.as_str(), none[1].detail.as_str()), ("—", "—"));
+    }
 }
 
 pub fn register(name: PCWSTR, proc_: unsafe extern "system" fn(HWND, u32, WPARAM, LPARAM) -> LRESULT) {
@@ -222,7 +444,7 @@ impl Toast {
         Self { surface: Layered::new(hwnd), timer: 0 }
     }
 
-    fn show(&mut self, w: f32, h: f32, bottom: f32, draw: impl FnOnce(&Canvas, Rect)) {
+    fn show(&mut self, w: f32, h: f32, bottom: f32, ms: u32, draw: impl FnOnce(&Canvas, Rect)) {
         let mon = focus_monitor();
         let hwnd = self.surface.hwnd;
         let scale = unsafe { windows::Win32::UI::HiDpi::GetDpiForWindow(hwnd) } as f32 / 96.0;
@@ -232,13 +454,13 @@ impl Toast {
         unsafe {
             let _ = SetWindowPos(hwnd, Some(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
             let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
-            self.timer = SetTimer(Some(hwnd), 1, 1500, None);
+            self.timer = SetTimer(Some(hwnd), 1, ms, None);
         }
     }
 
     pub fn volume(&mut self, name: &str, vol: f32, muted: bool) {
         let name = name.to_string();
-        self.show(400.0, 62.0, 56.0, move |c, r| {
+        self.show(400.0, 62.0, 56.0, 1500, move |c, r| {
             c.round(r, 14.0, PANEL);
             c.text(rect(16.0, 10.0, 300.0, 22.0), &name, 14.0, WHITE, Align::Left, Weight::Regular);
             let t = if muted { "Mudo".to_string() } else { format!("{:.0}%", vol * 100.0) };
@@ -270,35 +492,39 @@ impl Toast {
 
     /// Aviso a `bottom` DIPs do pé da tela, para não cobrir outra janela flutuante.
     pub fn info_at(&mut self, text: &str, bottom: f32) {
+        self.info_for(text, bottom, 1500);
+    }
+
+    /// Aviso que fica `ms` na tela.
+    pub fn info_for(&mut self, text: &str, bottom: f32, ms: u32) {
         crate::report::note(text);
         let text = text.to_string();
         let tw = measure(&text, 14.0, Weight::Regular, None).0 + 32.0;
-        self.show(tw.max(120.0), 40.0, bottom, move |c, r| {
+        self.show(tw.max(120.0), 40.0, bottom, ms, move |c, r| {
             c.round(r, 10.0, PANEL);
             c.text(r, &text, 14.0, WHITE, Align::Center, Weight::Regular);
         });
     }
 }
 
-/// Pergunta sobre o jogo: oferece fechar programas sem tirar o foco dele.
+/// Pergunta com botões no canto da tela, sem tirar o foco do jogo: a de fechar programas e a de
+/// quem pede para entrar no compartilhamento de tela.
 pub struct Prompt {
     surface: Layered,
     ui: UiState,
     title: String,
-    body: String,
+    /// Uma linha por item; linha longa quebra, nada é cortado.
+    body: Vec<String>,
+    /// Texto e destaque de cada botão, da esquerda para a direita.
+    buttons: Vec<(&'static str, bool)>,
     /// Distância do canto superior direito, para não cobrir o medidor.
     gap: (f32, f32),
     pub open: bool,
 }
 
-pub enum PromptAnswer {
-    Close,
-    List,
-    Dismiss,
-}
-
-const PROMPT_SIZE: (f32, f32) = (300.0, 110.0);
-const PROMPT_MS: u32 = 10_000;
+/// Sem resposta em 10 s, a pergunta de fechar programas some.
+pub const PROMPT_MS: u32 = 10_000;
+const PROMPT_W: (f32, f32) = (300.0, 440.0);
 
 unsafe extern "system" fn prompt_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT {
     let pt = || {
@@ -327,29 +553,37 @@ impl Prompt {
         register(w!("PrismaPrompt"), prompt_proc);
         let hwnd = create_overlay(w!("PrismaPrompt"), false);
         crate::capture::hide_from_capture(hwnd);
-        Self { surface: Layered::new(hwnd), ui: UiState::default(), title: String::new(), body: String::new(), gap: (24.0, 24.0), open: false }
+        Self { surface: Layered::new(hwnd), ui: UiState::default(), title: String::new(), body: Vec::new(), buttons: Vec::new(), gap: (24.0, 24.0), open: false }
     }
 
-    pub fn ask(&mut self, title: String, body: String, gap: (f32, f32)) {
+    /// `limit`: some sozinha depois desses ms (`prompt_hide`); `None` fica até a resposta.
+    pub fn ask(&mut self, title: String, body: Vec<String>, buttons: &[(&'static str, bool)], gap: (f32, f32), limit: Option<u32>) {
         self.title = title;
         self.body = body;
+        self.buttons = buttons.to_vec();
         self.gap = gap;
         self.open = true;
+        self.ui = UiState::default();
         self.redraw();
         unsafe {
+            let _ = KillTimer(Some(self.surface.hwnd), 1);
             let _ = ShowWindow(self.surface.hwnd, SW_SHOWNOACTIVATE);
-            SetTimer(Some(self.surface.hwnd), 1, PROMPT_MS, None);
+            if let Some(ms) = limit {
+                SetTimer(Some(self.surface.hwnd), 1, ms, None);
+            }
         }
     }
 
     pub fn hide(&mut self) {
         self.open = false;
         unsafe {
+            let _ = KillTimer(Some(self.surface.hwnd), 1);
             let _ = ShowWindow(self.surface.hwnd, SW_HIDE);
         }
     }
 
-    pub fn mouse(&mut self, msg: u32, x: f32, y: f32) -> Option<PromptAnswer> {
+    /// O botão clicado, pela posição em `buttons`.
+    pub fn mouse(&mut self, msg: u32, x: f32, y: f32) -> Option<usize> {
         self.ui.mx = x;
         self.ui.my = y;
         match msg {
@@ -370,35 +604,38 @@ impl Prompt {
         self.redraw()
     }
 
-    fn redraw(&mut self) -> Option<PromptAnswer> {
+    fn redraw(&mut self) -> Option<usize> {
+        const PAD: f32 = 14.0;
         let mon = focus_monitor();
         let scale = unsafe { windows::Win32::UI::HiDpi::GetDpiForWindow(self.surface.hwnd) } as f32 / 96.0;
-        let (w, h) = PROMPT_SIZE;
+        // Botões do tamanho do texto no idioma atual; a caixa cresce até PROMPT_W.1 e o texto quebra.
+        let widths: Vec<f32> = self.buttons.iter().map(|(t, _)| (measure(t, 13.0, Weight::Semibold, None).0 + 28.0).max(84.0)).collect();
+        let row = widths.iter().sum::<f32>() + 10.0 * widths.len().saturating_sub(1) as f32;
+        let widest = std::iter::once(measure(&self.title, 14.0, Weight::Semibold, None).0).chain(self.body.iter().map(|l| measure(l, 13.0, Weight::Regular, None).0)).fold(row, f32::max);
+        let w = (widest + 2.0 * PAD).clamp(PROMPT_W.0, PROMPT_W.1);
+        let room = w - 2.0 * PAD;
+        let th = measure(&self.title, 14.0, Weight::Semibold, Some(room)).1.max(22.0);
+        let lines: Vec<f32> = self.body.iter().map(|l| measure(l, 13.0, Weight::Regular, Some(room)).1.max(18.0)).collect();
+        let h = 10.0 + th + lines.iter().sum::<f32>() + 12.0 + 34.0 + 12.0;
         let (x, y) = (mon.right - ((w + self.gap.0) * scale) as i32, mon.top + (self.gap.1 * scale) as i32);
         let mut answer = None;
-        let (title, body) = (self.title.clone(), self.body.clone());
+        let (title, body, buttons) = (&self.title, &self.body, &self.buttons);
         let ui = &mut self.ui;
         self.surface.paint(x, y, w, h, |c, r| {
             c.round(r, 14.0, rgb(0x14161c).alpha(0.96));
             let mut u = Ui::begin(c, ui);
-            let room = r.w - 28.0;
-            let mut title = crate::i18n::tr(&title).into_owned();
-            while measure(&title, 14.0, Weight::Semibold, None).0 > room && title.chars().count() > 1 {
-                title.pop();
-                title.pop();
-                title.push('…');
+            c.text_wrap(rect(PAD, 10.0, room, th), title, 14.0, WHITE, Weight::Semibold);
+            let mut ty = 10.0 + th;
+            for (l, lh) in body.iter().zip(&lines) {
+                c.text_wrap(rect(PAD, ty, room, *lh), l, 13.0, rgb(0xd3d7df), Weight::Regular);
+                ty += lh;
             }
-            c.text(rect(14.0, 10.0, room, 22.0), &title, 14.0, WHITE, Align::Left, Weight::Semibold);
-            c.text(rect(14.0, 32.0, room, 20.0), &body, 13.0, rgb(0xd3d7df), Align::Left, Weight::Regular);
-            let bw = 84.0;
-            if u.button("pclose", rect(14.0, 64.0, bw, 34.0), "Fechar", true) {
-                answer = Some(PromptAnswer::Close);
-            }
-            if u.button("plist", rect(108.0, 64.0, bw, 34.0), "Ver lista", false) {
-                answer = Some(PromptAnswer::List);
-            }
-            if u.button("pnot", rect(202.0, 64.0, bw, 34.0), "Agora não", false) {
-                answer = Some(PromptAnswer::Dismiss);
+            let mut bx = PAD;
+            for (i, ((label, primary), bw)) in buttons.iter().zip(&widths).enumerate() {
+                if u.button(&format!("p{i}"), rect(bx, h - 46.0, *bw, 34.0), label, *primary) {
+                    answer = Some(i);
+                }
+                bx += bw + 10.0;
             }
             u.end();
         });

@@ -222,6 +222,8 @@ pub struct Config {
     pub vol_osd: bool,
     pub widget_on: bool,
     pub widget_style: u8,
+    /// Itens que o widget mostra, um bit por item de `overlays::ITEMS`.
+    pub widget_items: u16,
     pub widget_x: i32,
     pub widget_y: i32,
     pub power_auto: bool,
@@ -348,11 +350,15 @@ pub struct Config {
     pub seen_version: String,
     pub welcome: bool,
     pub always_admin: bool,
+    /// Entradas do Prisma no menu do botão direito do Explorer.
+    pub explorer_menu: bool,
     pub un_restore: bool,
     pub tw_log: bool,
     pub un_silent: bool,
     /// O Windows recusou a troca do Gerenciador: o Prisma pega o Ctrl+Shift+Esc ele mesmo.
     pub tm_hook: bool,
+    /// Ctrl+V nas pastas do Explorer cola pela janela de cópia do Prisma (desligado até a pessoa ligar).
+    pub paste_key: bool,
 }
 
 impl Default for Config {
@@ -385,6 +391,7 @@ impl Default for Config {
             vol_osd: true,
             widget_on: false,
             widget_style: 0,
+            widget_items: crate::overlays::ALL_ITEMS,
             widget_x: 24,
             widget_y: 24,
             power_auto: true,
@@ -474,10 +481,12 @@ impl Default for Config {
             seen_version: String::new(),
             welcome: true,
             always_admin: false,
+            explorer_menu: false,
             un_restore: true,
             tw_log: false,
             un_silent: true,
             tm_hook: false,
+            paste_key: false,
         }
     }
 }
@@ -628,6 +637,7 @@ impl Config {
                 "vol_osd" => c.vol_osd = b,
                 "widget_on" => c.widget_on = b,
                 "widget_style" => c.widget_style = v.parse().unwrap_or(0),
+                "widget_items" => c.widget_items = crate::overlays::parse_items(v),
                 "widget_x" => c.widget_x = v.parse().unwrap_or(24),
                 "widget_y" => c.widget_y = v.parse().unwrap_or(24),
                 "power_auto" => c.power_auto = b,
@@ -780,10 +790,12 @@ impl Config {
                 "seen_version" => c.seen_version = v.to_string(),
                 "welcome" => c.welcome = b,
                 "always_admin" => c.always_admin = b,
+                "explorer_menu" => c.explorer_menu = b,
                 "un_restore" => c.un_restore = b,
                 "tw_log" => c.tw_log = b,
                 "un_silent" => c.un_silent = b,
                 "tm_hook" => c.tm_hook = b,
+                "paste_key" => c.paste_key = b,
                 _ => {}
             }
         }
@@ -832,6 +844,7 @@ impl Config {
         let _ = writeln!(s, "vol_osd={}", b(self.vol_osd));
         let _ = writeln!(s, "widget_on={}", b(self.widget_on));
         let _ = writeln!(s, "widget_style={}", self.widget_style);
+        let _ = writeln!(s, "widget_items={}", self.widget_items);
         let _ = writeln!(s, "widget_x={}", self.widget_x);
         let _ = writeln!(s, "widget_y={}", self.widget_y);
         let _ = writeln!(s, "power_auto={}", b(self.power_auto));
@@ -906,6 +919,7 @@ impl Config {
         let _ = writeln!(s, "seen_version={}", self.seen_version);
         let _ = writeln!(s, "welcome={}", b(self.welcome));
         let _ = writeln!(s, "always_admin={}", b(self.always_admin));
+        let _ = writeln!(s, "explorer_menu={}", b(self.explorer_menu));
         let _ = writeln!(s, "un_restore={}", b(self.un_restore));
         let _ = writeln!(s, "load_gpu_pct={}", self.load_gpu_pct);
         let _ = writeln!(s, "load_gpu_secs={}", self.load_gpu_secs);
@@ -954,6 +968,7 @@ impl Config {
         let _ = writeln!(s, "tw_log={}", b(self.tw_log));
         let _ = writeln!(s, "un_silent={}", b(self.un_silent));
         let _ = writeln!(s, "tm_hook={}", b(self.tm_hook));
+        let _ = writeln!(s, "paste_key={}", b(self.paste_key));
         if self.keep_file {
             return;
         }
@@ -1058,6 +1073,7 @@ impl Config {
                 self.hk_widget = d.hk_widget;
                 self.widget_on = d.widget_on;
                 self.widget_style = d.widget_style;
+                self.widget_items = d.widget_items;
                 self.widget_x = d.widget_x;
                 self.widget_y = d.widget_y;
             }

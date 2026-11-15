@@ -37,6 +37,8 @@ const MSR_PACKAGE_THERM_STATUS: u64 = 0x1B1;
 
 /// Quem quer a temperatura agora: só com o medidor mostrando ela o driver fica em uso.
 pub static WANTED: AtomicBool = AtomicBool::new(false);
+/// O widget mostra a temperatura: o driver fica em uso mesmo sem o medidor.
+pub static WIDGET: AtomicBool = AtomicBool::new(false);
 /// O driver abriu na última tentativa: a tela usa para dizer o que falta.
 pub static OPEN: AtomicBool = AtomicBool::new(false);
 

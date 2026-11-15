@@ -700,7 +700,6 @@ Anéis	Кольца
 Atalho para ligar e desligar	Клавиши для включения и выключения
 Barras finas	Тонкие полосы
 Instrumento	Прибор
-Mostra CPU, GPU, RAM e VRAM por cima de tudo. Arraste para mudar de lugar.	Показывает CPU, GPU, ОЗУ и видеопамять поверх всего. Перетащите, чтобы переместить.
 Mostrar widget	Показать виджет
 Pílula	Капсула
 Idioma	Язык
@@ -797,7 +796,6 @@ Volta as opções de ponto de restauração e de desinstalar sem janela ao padr�
 Volta as opções Ver log e Restauração ao padrão. Os ajustes aplicados continuam como estão: para reverter, use Desfazer.	Сбрасывает параметры «Показать журнал» и «Точка восстановления» по умолчанию. Применённые настройки остаются: отмените их кнопкой «Отменить».
 Esvazia as listas de nunca fechar e sempre fechar, e as sugestões recusadas. Essa ação não fecha nenhum programa.	Очищает списки «никогда не закрывать» и «всегда закрывать» и отклонённые предложения. Программы не закрываются.
 Volta o modificador, o passo e o aviso na tela ao padrão.	Сбрасывает модификатор, шаг и уведомление на экране по умолчанию.
-Volta o atalho, o estilo e a posição do widget ao padrão, e esconde o widget.	Сбрасывает клавиши, стиль и положение виджета по умолчанию и скрывает виджет.
 Volta os atalhos de Otimizar, Fechar à força e Reiniciar o Explorer, o idioma e a busca de atualização ao padrão.	Сбрасывает клавиши «Оптимизировать», «Закрыть принудительно» и «Перезапустить Проводник», язык и проверку обновлений по умолчанию.
 Fechar à força	Закрыть принудительно
 Encerra na hora o programa em foco, mesmo travado. O que não foi salvo é perdido.	Сразу завершает активную программу, даже зависшую. Несохранённое пропадёт.
@@ -1785,7 +1783,7 @@ Padrão ({})	По умолчанию ({})
 Mudar	Изменить
 Driver NVIDIA	Драйвер NVIDIA
 Driver {}. As mudanças valem na próxima vez que o jogo abrir.	Драйвер {}. Изменения вступят в силу при следующем запуске игры.
-Cópias	Копии
+Backups	Копии
 Ainda não há cópias. O Prisma guarda uma antes da primeira mudança.	Копий пока нет. Prisma сохраняет копию перед первым изменением.
 Voltar a esta cópia?	Вернуться к этой копии?
 Os perfis do driver voltam como estavam em {}. O que mudou depois, aqui ou em outro programa, se perde.	Профили драйвера вернутся к состоянию на {}. Всё, что менялось позже, здесь или в другой программе, пропадёт.
@@ -2363,3 +2361,132 @@ Acelerador	Газ
 Freio	Тормоз
 Embreagem	Сцепление
 Volante	Руль
+Uso da CPU	Загрузка CPU
+Uso da GPU	Загрузка GPU
+O que aparece	Что показывать
+Mostra uso, temperatura, plano de energia, HDR e VRR por cima de tudo. Arraste para mudar de lugar.	Загрузка, температура, схема питания, HDR и VRR поверх всего. Перетащите, чтобы переместить.
+Volta o atalho, o estilo, os itens e a posição do widget ao padrão, e esconde o widget.	Сбрасывает клавиши, стиль, элементы и положение виджета по умолчанию и скрывает виджет.
+Trocar o atalho?	Заменить сочетание?
+{} já é o atalho de {}. Sim tira de lá e coloca aqui.	{} уже назначено для функции «{}». «Да» уберёт его оттуда и поставит сюда.
+Escolher outro atalho?	Выбрать другое сочетание?
+{} já é usado por outro programa, e o Windows não diz qual. Com essa combinação, o atalho não funciona no Prisma.	{} уже занято другой программой, и Windows не сообщает, какой. С этим сочетанием оно не будет работать в Prisma.
+Pesquisar aqui com o Prisma	Искать здесь с помощью Prisma
+Ver o espaço em disco com o Prisma	Показать место на диске в Prisma
+Pesquisar e Espaço em disco no botão direito do Explorer	Поиск и Место на диске в контекстном меню Проводника
+Esse disco não pode ser analisado	Этот диск нельзя проанализировать
+Não consegui mudar o menu do Explorer	Не удалось изменить меню Проводника
+Colar com o Prisma	Вставить через Prisma
+Não há arquivos copiados para colar.	Нет скопированных файлов для вставки.
+Preparando a lista de arquivos…	Подготовка списка файлов…
+Falta espaço no destino	Не хватает места в папке назначения
+Cancelado	Отменено
+Pronto	Готово
+Pronto, com {} erros	Готово, ошибок: {}
+Pausado	Пауза
+Movendo para {}	Перемещение в {}
+Copiando para {}	Копирование в {}
+Precisa de {} e há {} livres. Nada foi copiado.	Нужно {}, свободно {}. Ничего не скопировано.
+{} copiados de {}	Скопировано {} из {}
+{} de {} arquivos	{} из {} файлов
+Tempo restante: {}	Осталось: {}
+Já existe um arquivo com esse nome. Escolha para todos:	Файл с таким именем уже есть. Выберите для всех:
+Arquivos que já existem no destino	Файлы, которые уже есть в папке назначения
+Pular	Пропустить
+Substituir	Заменить
+Manter os dois	Оставить оба
+Conferir cada arquivo copiado com hash (SHA-256)	Проверять каждый файл по хешу (SHA-256)
+1 erro	1 ошибка
+{} erros	Ошибок: {}
+e mais {}	и ещё {}
+Pausar	Пауза
+Em uso por outro programa	Занят другой программой
+Acesso negado	Отказано в доступе
+Sem espaço no disco	Нет места на диске
+Não encontrado	Не найдено
+Caminho longo demais	Слишком длинный путь
+O hash da cópia não confere	Хеш копии не совпадает
+Uma pasta não pode ir para dentro dela mesma	Папку нельзя поместить в саму себя
+Ligado: botão direito numa pasta, em Mostrar mais opções.	Включено: правый щелчок по папке, в пункте «Показать дополнительные параметры».
+Desligado. Cola o que foi copiado no Explorer com pausa, hash e lista de erros.	Выключено. Вставляет скопированное в Проводнике с паузой, хешем и списком ошибок.
+«{}» está pedindo para entrar no compartilhamento de tela	«{}» просит подключиться к общему экрану
+Parear e confiar	Сопрячь и доверять
+Recusar	Отклонить
+Confira se o outro PC mostra o mesmo código. Se não mostrar, recuse.	Убедитесь, что на другом ПК тот же код. Если нет, отклоните.
+Só quando eu mandar	Только по запуску
+Todo dia	Каждый день
+Dias da semana	Дни недели
+Dom	Вс
+Seg	Пн
+Ter	Вт
+Qua	Ср
+Qui	Чт
+Sex	Пт
+Sáb	Сб
+Escolha o que copiar e para onde	Выберите, что копировать и куда
+Escolha pelo menos um dia	Выберите хотя бы один день
+Nova cópia	Новое копирование
+O que foi copiado de onde para onde, e listas de cópia para rodar quando quiser ou na hora marcada.	Что и откуда куда копировалось, а также списки копирования для запуска в любое время или по расписанию.
+Listas de cópia	Списки копирования
+Conferido	Проверено
+Sem espaço	Нет места
+Procurar no histórico	Поиск в истории
+Nenhuma cópia ainda. As cópias feitas pela janela do Prisma aparecem aqui.	Копирований пока нет. Копирования через окно Prisma появятся здесь.
+Movido	Перемещено
+Copiado	Скопировано
+Abrir o destino	Открыть папку назначения
+Copiar de novo	Копировать снова
+Guarda as últimas 500 cópias: caminhos, tamanhos e resultado, na pasta de dados do Prisma.	Хранит последние 500 копирований: пути, размеры и результат, в папке данных Prisma.
+Limpar histórico	Очистить историю
+Limpar o histórico?	Очистить историю?
+As cópias somem desta lista. Os arquivos copiados não mudam.	Записи исчезнут из этого списка. Скопированные файлы не изменятся.
+Próxima: {}	Следующее: {}
+Já rodou	Уже выполнялось
+Nenhuma lista ainda. Uma lista junta arquivos e pastas de vários lugares para copiar juntos.	Списков пока нет. Список объединяет файлы и папки из разных мест, чтобы копировать их вместе.
+Lista sem nome	Список без названия
+Nova lista	Новый список
+Escolha uma lista para ver e mudar, ou crie uma nova.	Выберите список, чтобы просмотреть и изменить его, или создайте новый.
+Ex.: Backup das fotos	Напр.: Резервная копия фото
+O que copiar	Что копировать
+Nada ainda.	Пока ничего.
+Adicionar arquivos	Добавить файлы
+Adicionar pasta	Добавить папку
+Para onde	Куда
+Nenhuma pasta escolhida	Папка не выбрана
+Quando	Когда
+Dia	День
+Mês	Месяц
+Hora	Час
+Minuto	Минута
+Se o arquivo já existir no destino	Если файл уже есть в папке назначения
+Conferir com hash (SHA-256)	Проверять хешем (SHA-256)
+Mover em vez de copiar	Перемещать вместо копирования
+A cópia agendada roda com o Prisma aberto na bandeja. Se o PC estiver desligado na hora, ela roda assim que o Prisma abrir.	Копирование по расписанию выполняется, пока Prisma открыт в трее. Если в это время ПК выключен, оно запустится, как только откроется Prisma.
+Apagar lista	Удалить список
+Apagar esta lista?	Удалить этот список?
+A lista e a agenda dela somem. Os arquivos não mudam.	Список и его расписание будут удалены. Файлы не изменятся.
+Copiar agora	Копировать сейчас
+De	Откуда
+Para	Куда
+Arquivos	Файлы
+Velocidade	Скорость
+Tempo restante	Осталось
+Pico: {}/s	Пик: {}/с
+Fechar ao terminar	Закрыть по завершении
+Tentar de novo	Повторить
+Cópia do Prisma	Копирование Prisma
+Ctrl+V nas pastas do Explorer cola pelo Prisma	Ctrl+V в папках Проводника вставляет через Prisma
+Substituir a cópia do Windows?	Заменить копирование Windows?
+Com o Prisma aberto, o Ctrl+V nas pastas do Explorer cola pela janela de cópia do Prisma. Arrastar com o mouse e o Colar do menu continuam com o Windows. Dá para desligar aqui a qualquer hora.	Пока Prisma открыт, Ctrl+V в папках Проводника вставляет через окно копирования Prisma. Перетаскивание мышью и «Вставить» в меню остаются за Windows. Это можно отключить здесь в любой момент.
+Arrastar com o mouse continua com o Windows.	Перетаскивание мышью остаётся за Windows.
+Página Cópias	Страница «Копирование»
+Cópias	Копирование
+Pronto, tudo conferido	Готово, всё проверено
+Conferindo as cópias…	Проверка копий…
+CPU	ЦП
+Tempo decorrido	Прошло
+Disco de origem	Диск-источник
+Disco de destino	Диск назначения
+GB	ГБ
+MB	МБ
+KB	КБ
+/s	/с

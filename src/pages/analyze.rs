@@ -106,6 +106,15 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let h = a.h - top - 20.0;
     let guard = app.scan.clone();
     let lock = guard.lock().unwrap();
+    // A pasta pedida pelo menu do Explorer espera a análise terminar.
+    if let Some(s) = lock.as_ref().filter(|_| app.scan_goto.is_some()) {
+        if let Some(i) = app.scan_goto.take().and_then(|d| s.find(&d)) {
+            app.scan_at = Some(i);
+            app.scan_sel = None;
+            app.scan_tab = 0;
+            ui.reset_scroll("tree");
+        }
+    }
     match lock.as_ref() {
         None => {
             let r = rect(x, top, a.w - 56.0, h);

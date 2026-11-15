@@ -97,12 +97,14 @@ pub static DETAIL: AtomicBool = AtomicBool::new(false);
 pub static GPU_WANTED: AtomicBool = AtomicBool::new(false);
 /// O medidor sobre o jogo também precisa das leituras completas.
 pub static METER: AtomicBool = AtomicBool::new(false);
+/// O widget mostra a temperatura da GPU: lida pelo Windows, sem a biblioteca da NVIDIA.
+pub static GPU_TEMP: AtomicBool = AtomicBool::new(false);
 /// Atualiza a cada segundo, sem as leituras caras do modo detalhado.
 pub static FAST: AtomicBool = AtomicBool::new(false);
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
-struct CpuTimes {
+pub struct CpuTimes {
     idle: i64,
     kernel: i64,
     user: i64,
@@ -172,7 +174,8 @@ fn read_processes(buf: &mut Vec<u8>, threads: Option<&mut HashMap<u32, u32>>) ->
     }
 }
 
-fn read_cpu(prev: &mut Vec<CpuTimes>, threads: &mut Vec<f32>) -> f32 {
+/// % de CPU desde a leitura anterior (`prev` guarda a anterior; a primeira dá 0).
+pub fn read_cpu(prev: &mut Vec<CpuTimes>, threads: &mut Vec<f32>) -> f32 {
     let n = unsafe {
         let mut si = SYSTEM_INFO::default();
         GetSystemInfo(&mut si);
@@ -290,6 +293,50 @@ impl Drop for GpuCounters {
     }
 }
 
+/// Tempo ativo de cada disco físico, como no Gerenciador de Tarefas (100 menos o "% Idle Time").
+pub struct DiskBusy {
+    query: PDH_HQUERY,
+    idle: PDH_HCOUNTER,
+    buf: Vec<u8>,
+}
+
+impl DiskBusy {
+    pub fn new() -> Option<Self> {
+        unsafe {
+            let mut query = PDH_HQUERY::default();
+            if PdhOpenQueryW(None, 0, &mut query) != 0 {
+                return None;
+            }
+            let mut idle = PDH_HCOUNTER::default();
+            if PdhAddEnglishCounterW(query, w!("\\PhysicalDisk(*)\\% Idle Time"), 0, &mut idle) != 0 {
+                PdhCloseQuery(query);
+                return None;
+            }
+            PdhCollectQueryData(query);
+            Some(Self { query, idle, buf: Vec::new() })
+        }
+    }
+
+    /// (instância, % ativo) desde a leitura anterior. A instância é "0 C: D:": número e letras.
+    pub fn read(&mut self) -> Vec<(String, f32)> {
+        unsafe { PdhCollectQueryData(self.query) };
+        GpuCounters::array(self.idle, &mut self.buf).into_iter().map(|(n, idle)| (n, (100.0 - idle as f32).clamp(0.0, 100.0))).collect()
+    }
+}
+
+impl Drop for DiskBusy {
+    fn drop(&mut self) {
+        unsafe {
+            PdhCloseQuery(self.query);
+        }
+    }
+}
+
+/// Qual instância do PhysicalDisk tem a letra `drive` ("C:").
+pub fn disk_of(disks: &[(String, f32)], drive: &str) -> Option<usize> {
+    disks.iter().position(|(n, _)| n.split_whitespace().any(|t| t.eq_ignore_ascii_case(drive)))
+}
+
 /// Instâncias têm a forma `pid_1234_luid_0x..._phys_0...`.
 fn instance_pid(name: &str) -> Option<u32> {
     name.strip_prefix("pid_")?.split('_').next()?.parse().ok()
@@ -382,7 +429,7 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
             nvml = None;
         }
         // O driver só fica aberto enquanto alguém mostra a temperatura; sem ele, tenta de novo a cada 30 s.
-        if detail && super::cputemp::WANTED.load(Ordering::Relaxed) {
+        if (detail && super::cputemp::WANTED.load(Ordering::Relaxed)) || super::cputemp::WIDGET.load(Ordering::Relaxed) {
             if cpu_temp.is_none() && cpu_temp_at.map_or(true, |t| t.elapsed().as_secs() >= 30) {
                 cpu_temp_at = Some(Instant::now());
                 cpu_temp = super::cputemp::CpuTemp::open();
@@ -394,6 +441,9 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
         }
         let cpu_c = cpu_temp.as_ref().and_then(|t| t.read());
         let mut gpu = kmt.as_mut().map(|k| k.read()).unwrap_or_default();
+        if GPU_TEMP.load(Ordering::Relaxed) {
+            gpu.temp = kmt.as_ref().map_or(0, |k| k.temp());
+        }
         if let Some(n) = &nvml {
             // Uso e VRAM em uso vêm do Windows; o resto, só a NVIDIA sabe.
             let (util, used) = (gpu.util, gpu.used);
@@ -514,5 +564,16 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
         }
         let fast = detail || FAST.load(Ordering::Relaxed);
         std::thread::sleep(Duration::from_millis(if fast { 1000 } else { 2000 }));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn disk_by_letter() {
+        let disks = vec![("0 C: D:".to_string(), 10.0), ("1 E:".to_string(), 80.0), ("_Total".to_string(), 45.0)];
+        assert_eq!(super::disk_of(&disks, "D:"), Some(0));
+        assert_eq!(super::disk_of(&disks, "e:"), Some(1));
+        assert_eq!(super::disk_of(&disks, "F:"), None);
     }
 }

@@ -3,8 +3,8 @@ use super::*;
 const STYLES: [&str; 4] = ["Pílula", "Barras finas", "Anéis", "Instrumento"];
 
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
-    header(ui, a, "Widget", "Mostra CPU, GPU, RAM e VRAM por cima de tudo. Arraste para mudar de lugar.");
-    defaults_button(ui, app, a.right() - 124.0, crate::config::Defaults::Widget, "Volta o atalho, o estilo e a posição do widget ao padrão, e esconde o widget.");
+    header(ui, a, "Widget", "Mostra uso, temperatura, plano de energia, HDR e VRR por cima de tudo. Arraste para mudar de lugar.");
+    defaults_button(ui, app, a.right() - 124.0, crate::config::Defaults::Widget, "Volta o atalho, o estilo, os itens e a posição do widget ao padrão, e esconde o widget.");
     let x = a.x + 28.0;
     let w = a.w - 56.0;
     let top = 88.0;
@@ -25,10 +25,14 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
 
     let by = top + 104.0;
     let ch = 176.0;
+    // Estilos em 2 x 2 à esquerda; a lista de itens à direita.
+    let lw = 300.0;
+    let sw = (w - lw - 24.0) / 2.0;
+    app.widget.refresh(app.cfg.widget_items);
     for (i, name) in STYLES.iter().enumerate() {
         let col = (i % 2) as f32;
         let row = (i / 2) as f32;
-        let r = rect(x + col * (cw + 12.0), by + row * (ch + 12.0), cw, ch);
+        let r = rect(x + col * (sw + 12.0), by + row * (ch + 12.0), sw, ch);
         let sel = app.cfg.widget_style == i as u8;
         if sel {
             ui.card_on(r);
@@ -37,9 +41,20 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
             ui.card(r);
         }
         ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), name);
-        crate::overlays::preview(ui.c, i as u8, rect(r.x + 16.0, r.y + 44.0, r.w - 32.0, r.h - 56.0), &app.snap);
+        crate::overlays::preview(ui.c, i as u8, rect(r.x + 16.0, r.y + 44.0, r.w - 32.0, r.h - 56.0), &app.snap, &app.widget.status, app.cfg.widget_items);
         if ui.hit(&format!("st{i}"), r) {
             app.cfg.widget_style = i as u8;
+            app.cfg.save();
+            app.widget.update(&app.cfg, &app.snap);
+        }
+    }
+    let r = rect(x + w - lw, by, lw, ch * 2.0 + 12.0);
+    ui.card(r);
+    ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "O que aparece");
+    for (i, name) in crate::overlays::ITEMS.iter().enumerate() {
+        let mut on = app.cfg.widget_items & (1 << i) != 0;
+        if ui.check(&format!("wi{i}"), rect(r.x + 12.0, r.y + 44.0 + i as f32 * 34.0, r.w - 24.0, 32.0), name, &mut on) {
+            app.cfg.widget_items = crate::overlays::toggle_item(app.cfg.widget_items, i);
             app.cfg.save();
             app.widget.update(&app.cfg, &app.snap);
         }

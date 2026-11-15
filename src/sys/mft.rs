@@ -88,6 +88,20 @@ impl Scan {
         format!("{}:\\{}", self.drive, parts.join("\\"))
     }
 
+    /// Pasta pelo caminho completo, sem diferença de maiúsculas, se ela está neste disco.
+    pub fn find(&self, path: &str) -> Option<u32> {
+        let (letter, rest) = path.split_once(':')?;
+        if !letter.eq_ignore_ascii_case(&self.drive.to_string()) {
+            return None;
+        }
+        let mut cur = self.root;
+        for part in rest.split('\\').filter(|p| !p.is_empty()) {
+            let part = part.to_lowercase();
+            cur = *self.children(cur).iter().find(|&&k| self.exists(k) && self.nodes[k as usize].is_dir() && self.name(k).to_lowercase() == part)?;
+        }
+        Some(cur)
+    }
+
     /// Soma tudo pelas pastas e monta os índices depois de ler os arquivos.
     fn finish(&mut self) {
         let n = self.nodes.len();

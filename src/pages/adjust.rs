@@ -25,6 +25,12 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         if !app.elevated && ui.button("elev", rect(r0.x + 16.0, r0.y + 102.0, 240.0, 40.0), "Reabrir como administrador", true) {
             crate::startup::relaunch_elevated("");
         }
+        let mx = if app.elevated { 16.0 } else { 272.0 };
+        let mut on = app.cfg.explorer_menu;
+        let label = "Pesquisar e Espaço em disco no botão direito do Explorer";
+        if ui.check("explorer-menu", rect(r0.x + mx, r0.y + 100.0, r0.w - mx - 16.0, 44.0), label, &mut on) {
+            app.set_explorer_menu(on);
+        }
     } else {
         let t = "Instalar libera o início com o Windows e a troca do Gerenciador de Tarefas.";
         ui.c.text(rect(r0.x + 16.0, r0.y + 62.0, r0.w - 32.0, 22.0), t, 13.0, TEXT2, Align::Left, Weight::Regular);
@@ -77,6 +83,40 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         );
     }
 
+    // Item do botão direito do Explorer: só HKCU, nada roda dentro do Explorer.
+    let rp = rect(x, top + 250.0, w, 116.0);
+    ui.card(rp);
+    ui.c.text(rect(rp.x + 16.0, rp.y + 10.0, rp.w - 260.0, 26.0), "Colar com o Prisma", 15.0, TEXT, Align::Left, Weight::Semibold);
+    let paste_on = crate::sys::copy::menu_on();
+    let paste_state = if paste_on {
+        "Ligado: botão direito numa pasta, em Mostrar mais opções."
+    } else {
+        "Desligado. Cola o que foi copiado no Explorer com pausa, hash e lista de erros."
+    };
+    ui.c.text(rect(rp.x + 16.0, rp.y + 38.0, rp.w - 260.0, 22.0), paste_state, 13.0, if paste_on { ACCENT } else { MUTED }, Align::Left, Weight::Regular);
+    if ui.button_ex("paste", rect(rp.right() - 236.0, rp.y + 18.0, 220.0, 40.0), if paste_on { "Desativar" } else { "Ativar" }, !paste_on, true) {
+        crate::sys::copy::set_menu(!paste_on);
+    }
+    // Substituir a cópia do Windows: só o Ctrl+V, pelo gancho de teclado do Prisma aberto.
+    ui.c.line(rp.x + 16.0, rp.y + 74.0, rp.right() - 16.0, rp.y + 74.0, LINE, 1.0);
+    let mut key_on = app.cfg.paste_key;
+    if ui.check("paste-key", rect(rp.x + 16.0, rp.y + 78.0, 400.0, 32.0), "Ctrl+V nas pastas do Explorer cola pelo Prisma", &mut key_on) {
+        if key_on {
+            ui.ask("paste-key-on", "Substituir a cópia do Windows?", "Com o Prisma aberto, o Ctrl+V nas pastas do Explorer cola pela janela de cópia do Prisma. Arrastar com o mouse e o Colar do menu continuam com o Windows. Dá para desligar aqui a qualquer hora.");
+        } else {
+            app.cfg.paste_key = false;
+            app.cfg.save();
+            app.sync_hook();
+        }
+    }
+    ui.c.text_fit(rect(rp.x + 426.0, rp.y + 78.0, rp.w - 442.0, 32.0), "Arrastar com o mouse continua com o Windows.", 13.0, MUTED, Align::Left, Weight::Regular);
+    if ui.answered("paste-key-on") {
+        app.cfg.paste_key = true;
+        app.cfg.save();
+        app.sync_hook();
+    }
+
+    let top = top + 128.0;
     let rf = rect(x, top + 250.0, w, 76.0);
     ui.card(rf);
     ui.c.text(rect(rf.x + 16.0, rf.y + 10.0, rf.w - 290.0, 26.0), "Fechar à força", 15.0, TEXT, Align::Left, Weight::Semibold);
@@ -138,6 +178,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         app.cfg.lang = v as u8;
         app.cfg.save();
         crate::i18n::set_lang(app.cfg.lang);
+        app.sync_explorer_menu();
     }
 }
 

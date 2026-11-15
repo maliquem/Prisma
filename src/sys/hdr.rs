@@ -88,6 +88,25 @@ pub fn hdr_output() -> Option<(LUID, u32, bool)> {
     }
 }
 
+/// HDR ligado na tela com este nome GDI (o `szDevice` do monitor). None quando a tela não aparece.
+pub fn hdr_on(gdi: &str) -> Option<bool> {
+    unsafe {
+        let (mut np, mut nm) = (0u32, 0u32);
+        GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &mut np, &mut nm).ok().ok()?;
+        let mut paths = vec![DISPLAYCONFIG_PATH_INFO::default(); np as usize];
+        let mut modes = vec![DISPLAYCONFIG_MODE_INFO::default(); nm as usize];
+        QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &mut np, paths.as_mut_ptr(), &mut nm, modes.as_mut_ptr(), None).ok().ok()?;
+        paths[..np as usize].iter().find_map(|p| {
+            let mut source = DISPLAYCONFIG_SOURCE_DEVICE_NAME::default();
+            let mut color = ColorInfo2::default();
+            (info_type(&mut source, DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME, p.sourceInfo.adapterId, p.sourceInfo.id)
+                && wide_text(&source.viewGdiDeviceName).eq_ignore_ascii_case(gdi)
+                && info_type(&mut color, DISPLAYCONFIG_DEVICE_INFO_TYPE(15), p.targetInfo.adapterId, p.targetInfo.id))
+            .then_some(color.mode == 2)
+        })
+    }
+}
+
 /// Liga ou desliga o HDR e espera a tela chegar lá.
 pub fn set_hdr(adapter: LUID, output: u32, on: bool) -> bool {
     #[repr(C)]

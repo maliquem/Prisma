@@ -143,6 +143,8 @@ pub struct UiState {
     grab: f32,
     popup_pick: Option<(u64, usize)>,
     pub capturing: u64,
+    /// Último campo de tecla que gravou, para reabrir se o atalho não serviu.
+    pub last_hotkey: u64,
     pub key_event: Option<Hotkey>,
     pub key_cancel: bool,
     scroll: HashMap<u64, f32>,
@@ -794,6 +796,7 @@ impl<'a> Ui<'a> {
             if let Some(k) = self.s.key_event {
                 *hk = k;
                 changed = true;
+                self.s.last_hotkey = id;
                 self.s.capturing = 0;
             } else if self.s.key_cancel {
                 self.s.capturing = 0;
