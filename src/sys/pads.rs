@@ -752,7 +752,8 @@ fn coil_thread(path: String, out_len: usize, coil: Weak<Coil>) {
         let sound = c.2.load(Ordering::Relaxed);
         if level == 0 && !sound && quiet == 0 {
             drop(c);
-            std::thread::sleep(Duration::from_millis(15));
+            // Acorda pelo `unpark` de `PadOut::update`; o limite só serve para notar o controle que saiu.
+            std::thread::park_timeout(Duration::from_millis(500));
             next = Instant::now();
             continue;
         }
@@ -789,7 +790,7 @@ struct Want {
 }
 
 /// Saída de um controle (luz, gatilhos e vibração): escreve só quando algo muda. Uma escrita que
-/// falha não se repete até o controle reconectar.
+/// falha só se repete 3 s depois: um controle que recusou uma vez (Bluetooth ocupado) volta sozinho.
 struct PadOut {
     path: String,
     fam: Family,
@@ -797,12 +798,12 @@ struct PadOut {
     out_len: usize,
     sent: Want,
     seq: u8,
-    failed: bool,
+    failed: Option<Instant>,
     /// Botões da leitura anterior e até quando dura o toque do último aperto (háptico).
     prev: Buttons,
     tap: Option<(Instant, u8)>,
     /// Atuadores do DualSense pelo Bluetooth, ligados na primeira vez que o háptico pede.
-    coil: Option<Arc<Coil>>,
+    coil: Option<(Arc<Coil>, std::thread::Thread)>,
     /// A animação azul do começo já foi encerrada nesta conexão (`out_report`, `setup`).
     light_setup: bool,
 }
@@ -839,13 +840,16 @@ impl PadOut {
             if self.coil.is_none() && (feel > 0 || h.audio > 0) {
                 let c = Arc::new((AtomicU8::new(0), AtomicBool::new(false), AtomicBool::new(false)));
                 let (path, len, weak) = (self.path.clone(), self.out_len, Arc::downgrade(&c));
-                if std::thread::Builder::new().name("háptico".into()).spawn(move || coil_thread(path, len, weak)).is_ok() {
-                    self.coil = Some(c);
+                if let Ok(t) = std::thread::Builder::new().name("háptico".into()).spawn(move || coil_thread(path, len, weak)) {
+                    self.coil = Some((c, t.thread().clone()));
                 }
             }
-            if let Some(c) = self.coil.as_ref().filter(|c| !c.1.load(Ordering::Relaxed)) {
+            if let Some((c, t)) = self.coil.as_ref().filter(|(c, _)| !c.1.load(Ordering::Relaxed)) {
                 c.0.store(feel, Ordering::Relaxed);
                 c.2.store(h.audio > 0, Ordering::Relaxed);
+                if feel > 0 || h.audio > 0 {
+                    t.unpark();
+                }
                 feel = 0;
                 sound_done = true;
             }
@@ -867,7 +871,7 @@ impl PadOut {
             // O jogo pede (grave, agudo): o agudo vai ao motor fraco e o grave ao forte.
             rumble: { let b = buzzing(); [b[0].max(feel).max(game.1), b[1].max(game.0)] },
         };
-        if want == self.sent || self.failed {
+        if want == self.sent || self.failed.is_some_and(|t| t.elapsed() < Duration::from_secs(3)) {
             return;
         }
         self.seq = (self.seq + 1) & 15;
@@ -878,10 +882,11 @@ impl PadOut {
         let setup = rgb.is_some() && !self.light_setup;
         let Some(r) = out_report(self.fam, self.link, rgb, trig, want.rumble, self.seq, setup) else { return };
         if !write_report(&self.path, &r, self.out_len) {
-            self.failed = true;
+            self.failed = Some(Instant::now());
             return;
         }
         self.sent = want;
+        self.failed = None;
         self.light_setup |= setup;
         let mut lit = LIT.lock().unwrap();
         lit.retain(|l| l.0 != self.path);
@@ -976,6 +981,7 @@ fn nice_name(f: Family, name: &str) -> String {
 
 unsafe fn scan() {
     let devs = devices();
+    let serials: Vec<String> = devs.iter().map(|d| d.serial.chars().filter(|c| c.is_ascii_hexdigit()).collect::<String>().to_ascii_lowercase()).collect();
     {
         let mut ig = IG.lock().unwrap();
         let rates: Vec<_> = ig.drain(..).map(|(p, _, _, r)| (p, r)).collect();
@@ -992,7 +998,7 @@ unsafe fn scan() {
         }
     }
     drop(open_set);
-    check_bluetooth();
+    check_bluetooth(&serials);
     let w = WATCH.load(Ordering::Relaxed);
     if w != 0 {
         set_timer(HWND(w as *mut _));
@@ -1003,8 +1009,7 @@ unsafe fn scan() {
 /// programa consegue lê-los assim. Visto num DualSense em 2026-11-12; parear de novo resolve às vezes.
 /// shortcut: o endereço é comparado com o número de série HID, que é o endereço nos Sony e Xbox; um
 /// controle de outra marca com série diferente apareceria aqui por engano.
-unsafe fn check_bluetooth() {
-    let serials: Vec<String> = devices().into_iter().map(|d| d.serial.chars().filter(|c| c.is_ascii_hexdigit()).collect::<String>().to_ascii_lowercase()).collect();
+unsafe fn check_bluetooth(serials: &[String]) {
     let params = BLUETOOTH_DEVICE_SEARCH_PARAMS {
         dwSize: std::mem::size_of::<BLUETOOTH_DEVICE_SEARCH_PARAMS>() as u32,
         fReturnConnected: true.into(),
@@ -1363,10 +1368,10 @@ impl StickCal {
         let v = raw as f32 - self.center[axis];
         if v >= 0.0 {
             self.hi[axis] = self.hi[axis].max(v);
-            v / self.hi[axis]
+            v / self.hi[axis].max(1.0)
         } else {
             self.lo[axis] = self.lo[axis].max(-v);
-            v / self.lo[axis]
+            v / self.lo[axis].max(1.0)
         }
     }
 }
@@ -1603,7 +1608,7 @@ unsafe fn read_loop(d: Dev) {
         out_len: d.output_len as usize,
         sent: Want::default(),
         seq: 0,
-        failed: false,
+        failed: None,
         prev: 0,
         tap: None,
         coil: None,

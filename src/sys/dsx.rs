@@ -187,7 +187,8 @@ enum Json {
 
 impl Json {
     fn parse(s: &str) -> Option<Json> {
-        let mut it = s.trim_start_matches('\u{feff}').char_indices().peekable();
+        let s = s.trim_start_matches('\u{feff}');
+        let mut it = s.char_indices().peekable();
         let v = Self::value(s, &mut it, 0)?;
         Self::ws(&mut it);
         it.peek().is_none().then_some(v)
@@ -356,5 +357,7 @@ mod tests {
         }
         assert_eq!(o, Over::default());
         assert_eq!(Json::parse(" {\"a\": [true, null, -1.5e2, \"x\\\"\\u0041\"]} ").unwrap().get("A").unwrap().array().unwrap().len(), 4);
+        // BOM no começo: os índices têm de ser do texto sem ele.
+        assert!(matches!(Json::parse("\u{feff}{\"ab\": \"cd\"}").unwrap().get("ab"), Some(Json::Str(v)) if v == "cd"));
     }
 }

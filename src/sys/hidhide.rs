@@ -243,11 +243,27 @@ fn ledger_path() -> std::path::PathBuf {
     crate::config::data_dir().join("hidhide.txt")
 }
 
+/// A aba desenha a cada quadro: o arquivo e o driver são lidos no máximo uma vez por segundo.
+fn cached<T: Clone>(slot: &Mutex<Option<(std::time::Instant, T)>>, f: impl FnOnce() -> T) -> T {
+    let mut c = slot.lock().unwrap_or_else(|e| e.into_inner());
+    match &*c {
+        Some((t, v)) if t.elapsed() < std::time::Duration::from_secs(1) => v.clone(),
+        _ => {
+            let v = f();
+            *c = Some((std::time::Instant::now(), v.clone()));
+            v
+        }
+    }
+}
+
+static LEDGER: Mutex<Option<(std::time::Instant, Ledger)>> = Mutex::new(None);
+
 pub fn ledger() -> Ledger {
-    Ledger::parse(&std::fs::read_to_string(ledger_path()).unwrap_or_default())
+    cached(&LEDGER, || Ledger::parse(&std::fs::read_to_string(ledger_path()).unwrap_or_default()))
 }
 
 fn save(l: &Ledger) {
+    *LEDGER.lock().unwrap_or_else(|e| e.into_inner()) = None;
     let p = ledger_path();
     if l.clean() && !l.installed {
         let _ = std::fs::remove_file(p);
@@ -259,7 +275,8 @@ fn save(l: &Ledger) {
 
 /// O HidHide está instalado (o dispositivo de controle existe, mesmo pedindo administrador).
 pub fn installed() -> bool {
-    matches!(Device::open(), Ok(_) | Err(true))
+    static C: Mutex<Option<(std::time::Instant, bool)>> = Mutex::new(None);
+    cached(&C, || matches!(Device::open(), Ok(_) | Err(true)))
 }
 
 /// Caminho do Prisma no formato que o HidHide guarda (`\Device\HarddiskVolumeN\...`).
@@ -279,7 +296,12 @@ pub fn instance(key: &str) -> Option<String> {
     if key.starts_with("xinput:") {
         return None;
     }
-    unsafe {
+    // O caminho do controle não muda de instância: guarda o que já achou.
+    static SEEN: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());
+    if let Some((_, i)) = SEEN.lock().unwrap_or_else(|e| e.into_inner()).iter().find(|(k, _)| k == key) {
+        return Some(i.clone());
+    }
+    let found = unsafe {
         let set = SetupDiCreateDeviceInfoList(None, None).ok()?;
         let mut iface = SP_DEVICE_INTERFACE_DATA { cbSize: std::mem::size_of::<SP_DEVICE_INTERFACE_DATA>() as u32, ..Default::default() };
         let mut info = SP_DEVINFO_DATA { cbSize: std::mem::size_of::<SP_DEVINFO_DATA>() as u32, ..Default::default() };
@@ -293,7 +315,9 @@ pub fn instance(key: &str) -> Option<String> {
         }
         let _ = SetupDiDestroyDeviceInfoList(set);
         ok.then(|| String::from_utf16_lossy(&buf[..(n as usize).saturating_sub(1)]))
-    }
+    }?;
+    SEEN.lock().unwrap_or_else(|e| e.into_inner()).push((key.to_string(), found.clone()));
+    Some(found)
 }
 
 /// Controles que a ponte está usando agora (pelo `Pad::key`).
@@ -301,11 +325,15 @@ static BRIDGED: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
 /// Uma operação no driver, com a anotação. Sem administrador, pede pela cópia elevada.
 fn run(op: &str) -> bool {
-    match Device::open() {
+    // A cópia de administrador grava a anotação por fora: relê depois.
+    *LEDGER.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    let ok = match Device::open() {
         Ok(mut d) => apply(&mut d, op),
         Err(true) => crate::startup::run_elevated_wait(&format!("--hidhide={op}")) == Some(0),
         Err(false) => false,
-    }
+    };
+    *LEDGER.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    ok
 }
 
 /// `hide:<instância>`, `show:<instância>` ou `undo`.
