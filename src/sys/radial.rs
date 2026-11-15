@@ -260,6 +260,16 @@ fn step(r: &mut Radial, inp: &Input) -> (Option<u8>, bool, bool) {
     (None, false, changed)
 }
 
+/// O controle `key` saiu: fecha o radial que era dele (sem ele, ninguém mais fecharia).
+pub fn forget(key: &str) {
+    let mut s = STATE.lock().unwrap();
+    if matches!(&*s, State::Open(r) if r.pad.as_deref() == Some(key)) {
+        *s = State::Closed;
+        drop(s);
+        pads::emit(pads::Event::Radial);
+    }
+}
+
 /// Relatório do controle `key`. Devolve se o radial ficou com ele.
 pub fn feed(key: &str, inp: &Input, _now: Instant) -> bool {
     let (pick, slot, changed) = {

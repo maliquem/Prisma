@@ -2512,6 +2512,9 @@ pub fn release_held() {
 /// O controle saiu: solta o que ele segurava.
 pub fn forget(key: &str) {
     super::macros::stop_pad(key);
+    super::nav::forget(key);
+    super::osk::forget(key);
+    super::radial::forget(key);
     let acts = RUN.lock().unwrap().as_mut().and_then(|r| r.engines.remove(key)).map(|mut e| e.0.release_all()).unwrap_or_default();
     send(&acts);
 }
@@ -2530,9 +2533,11 @@ fn on_focus(pid: u32, full: bool) {
     // Fora da trava: ler a pasta do jogo pode demorar.
     let ac = seen.unwrap_or_else(|| crate::meter::anti_cheat(&path));
     let mut events = vec![];
+    let mut entered_ac = false;
     if let Some(r) = RUN.lock().unwrap().as_mut() {
         r.ac_seen.insert(exe.clone(), ac);
         let was = std::mem::replace(&mut r.ac, ac);
+        entered_ac = ac && !was;
         r.typed.clear();
         if was != ac {
             set_keys(r);
@@ -2555,6 +2560,10 @@ fn on_focus(pid: u32, full: bool) {
         if elevated && r.warned.insert(exe.clone()) {
             events.push(pads::Event::Elevated { exe });
         }
+    }
+    // Jogo com anti-cheat na frente: macro que já repetia (turbo, sequência) para aqui.
+    if entered_ac {
+        super::macros::stop_all();
     }
     events.into_iter().for_each(pads::emit);
 }

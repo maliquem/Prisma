@@ -278,6 +278,16 @@ pub fn close() {
     }
 }
 
+/// O controle `key` saiu: fecha o teclado que era dele (sem ele, ninguém mais fecharia).
+pub fn forget(key: &str) {
+    let mut s = STATE.lock().unwrap();
+    if matches!(&*s, State::Open(o) if o.pad.as_deref() == Some(key)) {
+        *s = State::Closed;
+        drop(s);
+        pads::emit(pads::Event::Keyboard);
+    }
+}
+
 /// Relatório do controle `key`. Devolve se o teclado ficou com ele.
 pub fn feed(key: &str, inp: &Input, now: Instant) -> bool {
     let (keys, changed) = {
@@ -349,6 +359,13 @@ mod tests {
         assert!(feed("p", &inp(pads::A, 0.0, 0.0), t), "fechou com A apertado: segura até soltar");
         assert!(feed("p", &inp(0, 0.0, 0.0), t));
         assert!(!feed("p", &inp(0, 0.0, 0.0), t), "solto: volta ao perfil que estava carregado");
+        // O dono saiu: o teclado fecha; outro controle saindo não fecha.
+        open();
+        assert!(feed("p", &inp(0, 0.0, 0.0), t));
+        forget("q");
+        assert!(feed("p", &inp(0, 0.0, 0.0), t));
+        forget("p");
+        assert!(!feed("p", &inp(0, 0.0, 0.0), t));
     }
 
     #[test]

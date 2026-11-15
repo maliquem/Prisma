@@ -166,6 +166,14 @@ pub fn front() -> bool {
     h != 0 && unsafe { GetForegroundWindow() }.0 as isize == h
 }
 
+/// O controle `key` saiu: esquece o estado dele e solta o clique se o X estava apertado.
+pub fn forget(key: &str) {
+    let held = STATE.lock().unwrap().as_mut().and_then(|m| m.remove(key)).is_some_and(|p| p.buttons & pads::X != 0);
+    if held {
+        remap::send(&[Act::Up(Out::Mouse(1))]);
+    }
+}
+
 /// Relatório do controle `key`. Com o Prisma em foco, faz a navegação e devolve o que o mapeamento
 /// ainda vê; fora dele, None.
 pub fn feed(key: &str, inp: &Input, now: Instant) -> Option<Input> {
