@@ -6,6 +6,7 @@ mod capture;
 pub mod copies;
 pub mod controllers;
 pub mod pad_profiles;
+mod pad_hide;
 mod energy;
 mod fullscreen;
 pub mod guide;

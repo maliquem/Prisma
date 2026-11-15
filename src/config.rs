@@ -319,6 +319,8 @@ pub struct Config {
     pub pad_radial_prog: [(String, String); crate::sys::radial::ALL],
     /// Controles com perfil próprio: chave do controle e nome do perfil.
     pub pad_fixed: Vec<(String, String)>,
+    /// Controles que a ponte esconde do jogo com o HidHide (chave do controle).
+    pub pad_hide: Vec<String>,
     /// Botão que abre o radial: 0 nenhum, 1 Select, 2 Guia.
     pub pad_radial_btn: u8,
     /// Tempo de segurar o botão do radial, em ms (200 a 2000).
@@ -467,6 +469,7 @@ impl Default for Config {
             pad_radial: radial_default(),
             pad_radial_prog: std::array::from_fn(|_| Default::default()),
             pad_fixed: vec![],
+            pad_hide: vec![],
             pad_radial_two: false,
             pad_radial_left: false,
             pad_radial_btn: 1,
@@ -777,6 +780,7 @@ impl Config {
                 "pad_radial_prog" => c.pad_radial_prog = parse_radial_prog(v),
                 // "chave<TAB>perfil" separados por `|`, como nos programas do radial.
                 "pad_fixed" => c.pad_fixed = v.split('|').filter_map(|x| x.split_once('\t')).map(|(k, n)| (k.to_string(), n.to_string())).collect(),
+                "pad_hide" => c.pad_hide = v.split('|').filter(|x| !x.is_empty()).map(str::to_string).collect(),
                 "pad_radial_two" => c.pad_radial_two = b,
                 "pad_radial_left" => c.pad_radial_left = b,
                 "pad_radial_btn" =>c.pad_radial_btn = v.parse::<u8>().unwrap_or(1).min(2),
@@ -910,6 +914,7 @@ impl Config {
         let _ = writeln!(s, "xbridge_usbip={}", b(self.xbridge_usbip));
         let _ = writeln!(s, "pad_radial={}", self.pad_radial.map(|a| a.to_string()).join(","));
         let _ = writeln!(s, "pad_fixed={}", self.pad_fixed.iter().map(|(k, n)| format!("{k}\t{n}")).collect::<Vec<_>>().join("|"));
+        let _ = writeln!(s, "pad_hide={}", self.pad_hide.join("|"));
         let _ = writeln!(s, "pad_radial_prog={}", self.pad_radial_prog.iter().map(|(n, p)| format!("{n}\t{p}")).collect::<Vec<_>>().join("|"));
         let _ = writeln!(s, "pad_radial_two={}", b(self.pad_radial_two));
         let _ = writeln!(s, "pad_radial_left={}", b(self.pad_radial_left));

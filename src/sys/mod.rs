@@ -52,6 +52,7 @@ pub mod tweaks;
 pub mod update;
 pub mod uninstall;
 pub mod xbridge;
+pub mod hidhide;
 
 use std::path::PathBuf;
 

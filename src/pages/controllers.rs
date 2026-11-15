@@ -521,6 +521,7 @@ fn settings(ui: &mut Ui, app: &mut App, list: &[Pad], a: Rect) {
     y = mapping(ui, rect(x, y, lw, 0.0));
     y = dsx(ui, app, rect(x, y, lw, 0.0));
     y = bridge(ui, app, rect(x, y, lw, 0.0));
+    y = super::pad_hide::card(ui, app, list, rect(x, y, lw, 0.0));
     for t in &app.pads.conflicts {
         let r = rect(x, y, lw, 64.0);
         ui.card(r);

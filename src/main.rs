@@ -74,6 +74,10 @@ fn main() {
     if let Some(v) = std::env::args().find_map(|a| a.strip_prefix("--set-taskmgr=").map(|v| v == "1")) {
         std::process::exit(if startup::set_replace_taskmgr(v) { 0 } else { 3 });
     }
+    // Cópia de administrador que mexe nas listas do HidHide e sai.
+    if let Some(code) = sys::hidhide::run_arg() {
+        std::process::exit(code);
+    }
     // Compartilhar tela (host, quem assiste, serviço): roda ao lado de outras cópias, sem o nome único.
     if stream::run_args() {
         return;
@@ -147,6 +151,8 @@ fn main() {
                 startup::refresh_version(a.cfg.always_admin);
             });
         }
+        // O Prisma caiu com um controle escondido pelo HidHide: devolve as listas como estavam.
+        std::thread::spawn(|| sys::hidhide::limpar());
         if crash::pending() {
             app::with(|a| {
                 a.log("o Prisma tinha caído: relatório em falha_anterior.dmp");
@@ -159,6 +165,8 @@ fn main() {
             DispatchMessageW(&msg);
         }
         app::shutdown();
+        // O controle escondido volta a aparecer: sem o Prisma, a ponte não existe.
+        sys::hidhide::limpar();
         // Sair sem destruir o que ainda está carregado: o Direct3D não sobrevive à ordem
         // de saída do Windows e derrubava o processo aqui, depois de tudo salvo.
         let _ = TerminateProcess(GetCurrentProcess(), 0);
