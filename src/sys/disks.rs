@@ -146,6 +146,18 @@ fn read_perf(h: HANDLE) -> Option<Perf> {
     })
 }
 
+/// Se a letra fica num SSD. None quando o Windows não diz (disco de rede, sem acesso).
+pub fn is_ssd(letter: char) -> Option<bool> {
+    let h = open(&format!("\\\\.\\{letter}:"), 0)?;
+    let mut b = [0u8; 256];
+    let got = ioctl(h, VOLUME_EXTENTS, &[], &mut b);
+    unsafe {
+        let _ = CloseHandle(h);
+    }
+    got?;
+    describe(u32_at(&b, 8)).map(|d| d.ssd)
+}
+
 fn describe(n: u32) -> Option<Disk> {
     let h = open(&format!("\\\\.\\PhysicalDrive{n}"), 0)?;
     let mut b = [0u8; 1024];

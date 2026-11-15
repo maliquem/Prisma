@@ -3,9 +3,9 @@
 //! lista de erros sem parar o resto. Nada roda dentro do Explorer: ele só abre o prisma.exe.
 
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, Ordering::Relaxed};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, AtomicUsize, Ordering::Relaxed};
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// O que fazer com um arquivo que já existe no destino. `ASK` espera a escolha na janela.
 pub const ASK: u8 = 0;
@@ -64,6 +64,20 @@ struct Entry {
     dst: PathBuf,
     dir: bool,
     size: u64,
+    /// O destino do item não existia no plano: nada aqui dentro pode já existir.
+    new: bool,
+}
+
+/// O que aconteceu com um arquivo.
+enum Done {
+    /// Copiado; com a conferência ligada, leva o SHA-256 da origem lido durante a cópia.
+    Copied(PathBuf, Option<[u8; 32]>),
+    /// Movido no mesmo disco só trocando o nome.
+    Moved,
+    /// Pulado ou com erro: segue o próximo.
+    Skipped,
+    /// Parar tudo: cancelado ou disco cheio.
+    Stop,
 }
 
 /// Motivo curto para os erros mais comuns; o resto vem do Windows, no idioma dele.
@@ -91,7 +105,7 @@ pub fn unique(p: &Path) -> PathBuf {
     (2..).map(|n| p.with_file_name(format!("{stem} ({n}){ext}"))).find(|c| c.symlink_metadata().is_err()).unwrap()
 }
 
-fn walk(src: &Path, dst: &Path, out: &mut Vec<Entry>, st: &State) {
+fn walk(src: &Path, dst: &Path, new: bool, out: &mut Vec<Entry>, st: &State) {
     use std::os::windows::fs::MetadataExt;
     if st.cancel.load(Relaxed) {
         return;
@@ -101,17 +115,17 @@ fn walk(src: &Path, dst: &Path, out: &mut Vec<Entry>, st: &State) {
         // entraria num laço sem fim.
         Ok(m) if m.file_attributes() & 0x410 == 0x410 => st.error(src, "Link de pasta, não copiado"),
         Ok(m) if m.is_dir() => {
-            out.push(Entry { src: src.into(), dst: dst.into(), dir: true, size: 0 });
+            out.push(Entry { src: src.into(), dst: dst.into(), dir: true, size: 0, new });
             match std::fs::read_dir(src) {
                 Ok(rd) => {
                     for e in rd.flatten() {
-                        walk(&e.path(), &dst.join(e.file_name()), out, st);
+                        walk(&e.path(), &dst.join(e.file_name()), new, out, st);
                     }
                 }
                 Err(e) => st.error(src, reason(&e)),
             }
         }
-        Ok(m) => out.push(Entry { src: src.into(), dst: dst.into(), dir: false, size: m.len() }),
+        Ok(m) => out.push(Entry { src: src.into(), dst: dst.into(), dir: false, size: m.len(), new }),
         Err(e) => st.error(src, reason(&e)),
     }
 }
@@ -149,14 +163,15 @@ pub fn run_to(pairs: &[(PathBuf, PathBuf)], mv: bool, st: &State, free: impl Fn(
             // Colar na mesma pasta faz uma cópia ao lado.
             dst = unique(&dst);
         }
+        let new = dst.symlink_metadata().is_err();
         // Mover no mesmo disco é só trocar o nome: instantâneo, sem espaço novo.
-        if mv && dst.symlink_metadata().is_err() && std::fs::rename(item, &dst).is_ok() {
+        if mv && new && std::fs::rename(item, &dst).is_ok() {
             st.files.fetch_add(1, Relaxed);
             st.files_done.fetch_add(1, Relaxed);
             st.ok_files.fetch_add(1, Relaxed);
             continue;
         }
-        walk(item, &dst, &mut plan, st);
+        walk(item, &dst, new, &mut plan, st);
     }
     if st.cancel.load(Relaxed) {
         st.phase.store(CANCELED, Relaxed);
@@ -167,7 +182,7 @@ pub fn run_to(pairs: &[(PathBuf, PathBuf)], mv: bool, st: &State, free: impl Fn(
     st.total.store(plan.iter().map(|e| e.size).sum(), Relaxed);
     // Só substituir devolve o espaço do antigo; perguntar pode virar "manter os dois", que ocupa tudo.
     let replace = st.policy.load(Relaxed) == REPLACE;
-    let need: u64 = plan.iter().filter(|e| !e.dir).map(|e| if replace { e.size.saturating_sub(e.dst.metadata().map_or(0, |m| m.len())) } else { e.size }).sum();
+    let need: u64 = plan.iter().filter(|e| !e.dir).map(|e| if replace && !e.new { e.size.saturating_sub(e.dst.metadata().map_or(0, |m| m.len())) } else { e.size }).sum();
     let Some(dest) = pairs.first().map(|p| p.1.as_path()) else {
         st.phase.store(DONE, Relaxed);
         return;
@@ -185,34 +200,60 @@ pub fn run_to(pairs: &[(PathBuf, PathBuf)], mv: bool, st: &State, free: impl Fn(
     for (_, d) in pairs {
         let _ = std::fs::create_dir_all(d);
     }
-    // (origem, cópia, tamanho) de cada arquivo que chegou: a conferência e o mover vêm no fim.
-    let mut copied: Vec<(PathBuf, PathBuf, u64)> = Vec::new();
-    let mut base = 0u64;
-    for e in &plan {
+    // As pastas primeiro, numa passada: depois os arquivos podem ir vários ao mesmo tempo.
+    for e in plan.iter().filter(|e| e.dir) {
         if !wait_pause(st) {
             break;
         }
-        if e.dir {
-            if let Err(err) = std::fs::create_dir_all(&e.dst) {
-                st.error(&e.src, reason(&err));
-            }
-            continue;
-        }
-        *st.current.lock().unwrap() = e.src.display().to_string();
-        let ok = copy_file(e, st, base);
-        base += e.size;
-        st.done.store(base, Relaxed);
-        st.files_done.fetch_add(1, Relaxed);
-        match ok {
-            Some(Some(dst)) => {
-                st.ok_files.fetch_add(1, Relaxed);
-                st.ok_bytes.fetch_add(e.size, Relaxed);
-                copied.push((e.src.clone(), dst, e.size));
-            }
-            Some(None) => {}
-            None => break,
+        if let Err(err) = std::fs::create_dir_all(&e.dst) {
+            st.error(&e.src, reason(&err));
         }
     }
+    let files: Vec<&Entry> = plan.iter().filter(|e| !e.dir).collect();
+    let next = AtomicUsize::new(0);
+    let stop = AtomicBool::new(false);
+    // (origem, cópia, tamanho, hash da origem) de cada arquivo que chegou: a conferência e o mover
+    // vêm no fim.
+    let copied = Mutex::new(Vec::new());
+    let workers = if files.len() > 1 { workers(pairs) } else { 1 };
+    std::thread::scope(|s| {
+        for _ in 0..workers {
+            s.spawn(|| {
+                let mut buf = Vec::new();
+                let mut shown: Option<Instant> = None;
+                while !stop.load(Relaxed) && wait_pause(st) {
+                    let Some(e) = files.get(next.fetch_add(1, Relaxed)) else { break };
+                    // Com milhares de arquivos pequenos, trocar o nome na tela a cada um só gasta.
+                    if e.size >= 1 << 20 || shown.is_none_or(|t| t.elapsed() >= Duration::from_millis(100)) {
+                        *st.current.lock().unwrap() = e.src.display().to_string();
+                        shown = Some(Instant::now());
+                    }
+                    let verify = st.verify.load(Relaxed);
+                    if verify && buf.is_empty() {
+                        buf = chunk();
+                    }
+                    let mut moved = 0;
+                    let r = copy_file(e, st, mv, verify.then(|| aligned(&mut buf)), &mut moved);
+                    st.done.fetch_add(e.size.saturating_sub(moved), Relaxed);
+                    st.files_done.fetch_add(1, Relaxed);
+                    match r {
+                        Done::Copied(dst, h) => {
+                            st.ok_files.fetch_add(1, Relaxed);
+                            st.ok_bytes.fetch_add(e.size, Relaxed);
+                            copied.lock().unwrap().push((e.src.clone(), dst, e.size, h));
+                        }
+                        Done::Moved => {
+                            st.ok_files.fetch_add(1, Relaxed);
+                            st.ok_bytes.fetch_add(e.size, Relaxed);
+                        }
+                        Done::Skipped => {}
+                        Done::Stop => stop.store(true, Relaxed),
+                    }
+                }
+            });
+        }
+    });
+    let copied = copied.into_inner().unwrap();
     let verify = st.verify.load(Relaxed);
     let good = if verify && !st.cancel.load(Relaxed) {
         check(&copied, st)
@@ -222,7 +263,7 @@ pub fn run_to(pairs: &[(PathBuf, PathBuf)], mv: bool, st: &State, free: impl Fn(
     };
     if mv {
         // Mover só apaga a origem do que chegou (e bateu, com a conferência ligada).
-        for ((src, _, _), _) in copied.iter().zip(&good).filter(|g| *g.1) {
+        for ((src, ..), _) in copied.iter().zip(&good).filter(|g| *g.1) {
             if let Err(err) = std::fs::remove_file(src) {
                 st.error(src, reason(&err));
             }
@@ -263,46 +304,77 @@ fn wait_pause(st: &State) -> bool {
     !st.cancel.load(Relaxed)
 }
 
-/// Some(Some(cópia)): copiado. Some(None): pulado ou com erro, segue o próximo.
-/// None: parar tudo (cancelado ou disco cheio).
-fn copy_file(e: &Entry, st: &State, base: u64) -> Option<Option<PathBuf>> {
+/// Copia (ou move) um arquivo. `buf` (de `aligned`) liga a conferência: a origem é lida uma vez só
+/// e o hash sai junto. `moved` soma os bytes que já foram para `st.done`.
+fn copy_file(e: &Entry, st: &State, mv: bool, buf: Option<&mut [u8]>, moved: &mut u64) -> Done {
     let mut dst = e.dst.clone();
     let mut replace = false;
-    if dst.symlink_metadata().is_ok() {
+    if !e.new && dst.symlink_metadata().is_ok() {
         st.asking.store(st.policy.load(Relaxed) == ASK, Relaxed);
         while st.policy.load(Relaxed) == ASK {
             if st.cancel.load(Relaxed) {
                 st.asking.store(false, Relaxed);
-                return None;
+                return Done::Stop;
             }
             std::thread::sleep(Duration::from_millis(50));
         }
         st.asking.store(false, Relaxed);
         match st.policy.load(Relaxed) {
-            SKIP => return Some(None),
+            SKIP => return Done::Skipped,
             KEEP_BOTH => dst = unique(&dst),
             _ => replace = true,
         }
     }
+    // Mover para uma pasta que já existe, no mesmo disco: troca o nome de cada arquivo, sem copiar.
+    // Em outro disco o Windows recusa e segue a cópia.
+    if mv && drive(&e.src) == drive(&dst) && rename_file(&e.src, &dst, replace) {
+        return Done::Moved;
+    }
     // Substituir escreve num arquivo ao lado e só troca no fim: cancelado ou com erro no meio, o
     // antigo continua inteiro.
     let tmp = replace.then(|| dst.with_file_name(format!("{}.prisma-tmp", dst.file_name().unwrap_or_default().to_string_lossy())));
-    let res = match &tmp {
-        Some(t) => copy_with_progress(&e.src, t, e.size, true, st, base).and_then(|_| std::fs::rename(t, &dst)),
-        None => copy_with_progress(&e.src, &dst, e.size, false, st, base),
+    let target = tmp.as_ref().unwrap_or(&dst);
+    let res = match buf {
+        Some(b) => copy_verified(&e.src, target, e.size, replace, st, b, moved).map(Some),
+        None => copy_with_progress(&e.src, target, e.size, replace, st, moved).map(|_| None),
     };
-    if let Err(err) = res {
-        if let Some(t) = &tmp {
-            let _ = std::fs::remove_file(t);
+    let res = res.and_then(|h| tmp.as_ref().map_or(Ok(()), |t| std::fs::rename(t, &dst)).map(|_| h));
+    match res {
+        Ok(h) => Done::Copied(dst, h),
+        Err(err) => {
+            if let Some(t) = &tmp {
+                let _ = std::fs::remove_file(t);
+            }
+            if st.cancel.load(Relaxed) {
+                return Done::Stop;
+            }
+            st.error(&e.src, reason(&err));
+            if matches!(err.raw_os_error(), Some(39 | 112)) {
+                Done::Stop
+            } else {
+                Done::Skipped
+            }
         }
-        if st.cancel.load(Relaxed) {
-            return None;
-        }
-        let full = matches!(err.raw_os_error(), Some(39 | 112));
-        st.error(&e.src, reason(&err));
-        return if full { None } else { Some(None) };
     }
-    Some(Some(dst))
+}
+
+/// Troca o nome de um arquivo, por cima do destino só com `replace`. False em outro disco ou com erro.
+fn rename_file(src: &Path, dst: &Path, replace: bool) -> bool {
+    use windows::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVE_FILE_FLAGS};
+    let (s, d) = (windows::core::HSTRING::from(src.as_os_str()), windows::core::HSTRING::from(dst.as_os_str()));
+    let flags = if replace { MOVEFILE_REPLACE_EXISTING } else { MOVE_FILE_FLAGS(0) };
+    unsafe { MoveFileExW(&s, &d, flags) }.is_ok()
+}
+
+/// Quantos arquivos ao mesmo tempo: 4 de SSD para SSD, onde muitos arquivos pequenos ganham com
+/// isso; 1 com HD no meio, onde a cabeça pulando entre arquivos deixa tudo mais lento.
+// shortcut: olha só o primeiro item; no Explorer os itens colados vêm de uma pasta só.
+fn workers(pairs: &[(PathBuf, PathBuf)]) -> usize {
+    let ssd = |p: &Path| drive(p).and_then(|d| super::disks::is_ssd(d.chars().next()?)) == Some(true);
+    match pairs.first() {
+        Some((item, dest)) if ssd(item) && ssd(dest) => 4,
+        _ => 1,
+    }
 }
 
 /// A letra do disco ("C:"), ou nada num caminho de rede.
@@ -312,32 +384,25 @@ pub fn drive(p: &Path) -> Option<String> {
     s.get(..2).filter(|d| d.ends_with(':')).map(str::to_uppercase)
 }
 
-/// Confere cada cópia com a origem pelo SHA-256: true onde bate. Em discos diferentes, origem e
-/// cópia são lidas ao mesmo tempo; no mesmo disco, uma depois da outra (num HD, ler as duas ao
-/// mesmo tempo faz a cabeça pular de um lado para o outro).
-fn check(copied: &[(PathBuf, PathBuf, u64)], st: &State) -> Vec<bool> {
+/// Confere cada cópia com a origem pelo SHA-256: true onde bate. O hash da origem já veio da cópia;
+/// só falta quando a conferência foi ligada no meio, e aí a origem é lida aqui também.
+fn check(copied: &[(PathBuf, PathBuf, u64, Option<[u8; 32]>)], st: &State) -> Vec<bool> {
     st.checked.store(0, Relaxed);
-    st.check_total.store(copied.iter().map(|c| c.2).sum::<u64>() * 2, Relaxed);
+    st.check_total.store(copied.iter().map(|c| if c.3.is_some() { c.2 } else { c.2 * 2 }).sum(), Relaxed);
     st.phase.store(VERIFYING, Relaxed);
-    // Um pedaço para a origem e outro para a cópia, alocados uma vez para todos os arquivos.
-    let (mut va, mut vb) = (chunk(), chunk());
+    let mut v = chunk();
     copied
         .iter()
-        .map(|(src, dst, _)| {
+        .map(|(src, dst, _, h)| {
             if st.cancel.load(Relaxed) {
                 return false;
             }
             *st.current.lock().unwrap() = dst.display().to_string();
-            let (ba, bb) = (aligned(&mut va), aligned(&mut vb));
-            let (a, b) = if drive(src) != drive(dst) {
-                std::thread::scope(|s| {
-                    let t = s.spawn(|| sha256(src, st, ba));
-                    let b = sha256(dst, st, bb);
-                    (t.join().unwrap_or_else(|_| Err(std::io::Error::other("hash"))), b)
-                })
-            } else {
-                (sha256(src, st, ba), sha256(dst, st, bb))
+            let a = match h {
+                Some(h) => Ok(*h),
+                None => sha256(src, st, aligned(&mut v)),
             };
+            let b = sha256(dst, st, aligned(&mut v));
             match (a, b) {
                 (Ok(a), Ok(b)) if a == b => true,
                 (Ok(_), Ok(_)) => {
@@ -357,7 +422,9 @@ fn check(copied: &[(PathBuf, PathBuf, u64)], st: &State) -> Vec<bool> {
 
 struct Ctx<'a> {
     st: &'a State,
-    base: u64,
+    /// Bytes deste arquivo já somados em `st.done`; vários arquivos andam ao mesmo tempo, então
+    /// cada um soma só o que andou.
+    moved: std::cell::Cell<u64>,
 }
 
 unsafe extern "system" fn progress(
@@ -377,19 +444,122 @@ unsafe extern "system" fn progress(
     if !wait_pause(ctx.st) {
         return PROGRESS_CANCEL;
     }
-    ctx.st.done.store(ctx.base + moved as u64, Relaxed);
+    let last = ctx.moved.replace(moved as u64);
+    ctx.st.done.fetch_add((moved as u64).saturating_sub(last), Relaxed);
     PROGRESS_CONTINUE
 }
 
-/// Cancelado no meio, o Windows apaga o pedaço já escrito.
-fn copy_with_progress(src: &Path, dst: &Path, size: u64, replace: bool, st: &State, base: u64) -> std::io::Result<()> {
+/// Cancelado no meio, o Windows apaga o pedaço já escrito. `moved` recebe os bytes somados em `st.done`.
+fn copy_with_progress(src: &Path, dst: &Path, size: u64, replace: bool, st: &State, moved: &mut u64) -> std::io::Result<()> {
     use windows::Win32::Storage::FileSystem::{CopyFileExW, COPYFILE_FLAGS, COPY_FILE_FAIL_IF_EXISTS, COPY_FILE_NO_BUFFERING};
-    let ctx = Ctx { st, base };
+    let ctx = Ctx { st, moved: std::cell::Cell::new(0) };
     let (s, d) = (windows::core::HSTRING::from(src.as_os_str()), windows::core::HSTRING::from(dst.as_os_str()));
     // Sem a escolha de substituir, nunca escreve por cima, nem se o arquivo aparecer agora.
     let flags = if replace { COPYFILE_FLAGS(0) } else { COPY_FILE_FAIL_IF_EXISTS };
     let flags = if size >= NO_CACHE_FROM { COPYFILE_FLAGS(flags.0 | COPY_FILE_NO_BUFFERING.0) } else { flags };
-    unsafe { CopyFileExW(&s, &d, Some(progress), Some(&ctx as *const Ctx as _), None, flags) }.map_err(|e| std::io::Error::from_raw_os_error((e.code().0 & 0xFFFF) as i32))
+    let res = unsafe { CopyFileExW(&s, &d, Some(progress), Some(&ctx as *const Ctx as _), None, flags) };
+    *moved = ctx.moved.get();
+    res.map_err(|e| std::io::Error::from_raw_os_error((e.code().0 & 0xFFFF) as i32))
+}
+
+/// Copia lendo a origem uma vez só e devolve o SHA-256 dela, para a conferência ler só a cópia.
+/// `buf` vem de `aligned`. Copia a data de modificação, a marca de arquivo baixado da internet e os
+/// atributos (só leitura, oculto, sistema, arquivo).
+// shortcut: outros fluxos alternativos e as permissões não vêm junto, como no CopyFileExW; se fizer
+// falta, voltar a copiar pelo CopyFileExW e ler a origem duas vezes.
+fn copy_verified(src: &Path, dst: &Path, size: u64, replace: bool, st: &State, buf: &mut [u8], moved: &mut u64) -> std::io::Result<[u8; 32]> {
+    use std::io::{Read, Write};
+    use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
+    let nocache = size >= NO_CACHE_FROM;
+    // FILE_FLAG_NO_BUFFERING e FILE_FLAG_SEQUENTIAL_SCAN.
+    let mut f = std::fs::OpenOptions::new().read(true).custom_flags(if nocache { 0x2000_0000 | 0x0800_0000 } else { 0x0800_0000 }).open(src)?;
+    let meta = f.metadata()?;
+    let mut o = std::fs::OpenOptions::new();
+    o.write(true).custom_flags(if nocache { 0x2000_0000 } else { 0 });
+    // Sem a escolha de substituir, nunca escreve por cima, nem se o arquivo aparecer agora.
+    if replace {
+        o.create(true).truncate(true);
+    } else {
+        o.create_new(true);
+    }
+    let mut out = o.open(dst)?;
+    let res = (|| {
+        let sha = Sha::new()?;
+        loop {
+            if !wait_pause(st) {
+                return Err(std::io::Error::from_raw_os_error(1223));
+            }
+            let mut n = 0;
+            while n < buf.len() {
+                match f.read(&mut buf[n..])? {
+                    0 => break,
+                    r => n += r,
+                }
+            }
+            sha.add(&buf[..n])?;
+            // Sem cache, a escrita vai em blocos inteiros; o excesso do fim sai no set_len.
+            out.write_all(&buf[..if nocache { n.next_multiple_of(4096) } else { n }])?;
+            *moved += n as u64;
+            st.done.fetch_add(n as u64, Relaxed);
+            if n < buf.len() {
+                break;
+            }
+        }
+        if nocache {
+            out.set_len(*moved)?;
+        }
+        out.set_modified(meta.modified()?)?;
+        sha.finish()
+    })();
+    drop(out);
+    let h = match res {
+        Ok(h) => h,
+        Err(e) => {
+            let _ = std::fs::remove_file(dst);
+            return Err(e);
+        }
+    };
+    let zone = |p: &Path| format!("{}:Zone.Identifier", p.display());
+    if let Ok(z) = std::fs::read(zone(src)) {
+        let _ = std::fs::write(zone(dst), z);
+    }
+    // Por último: com só leitura, mais nada escreve nele.
+    let attr = meta.file_attributes() & 0x27;
+    if attr != 0 {
+        use windows::Win32::Storage::FileSystem::{SetFileAttributesW, FILE_FLAGS_AND_ATTRIBUTES};
+        let _ = unsafe { SetFileAttributesW(&windows::core::HSTRING::from(dst.as_os_str()), FILE_FLAGS_AND_ATTRIBUTES(attr)) };
+    }
+    Ok(h)
+}
+
+/// Um SHA-256 do Windows (BCrypt) em andamento; solto ao sair.
+struct Sha(windows::Win32::Security::Cryptography::BCRYPT_HASH_HANDLE);
+
+impl Sha {
+    fn new() -> std::io::Result<Self> {
+        use windows::Win32::Security::Cryptography::*;
+        let mut h = BCRYPT_HASH_HANDLE::default();
+        unsafe { BCryptCreateHash(BCRYPT_SHA256_ALG_HANDLE, &mut h, None, None, 0) }.ok().map_err(|_| std::io::Error::other("BCrypt"))?;
+        Ok(Sha(h))
+    }
+
+    fn add(&self, data: &[u8]) -> std::io::Result<()> {
+        unsafe { windows::Win32::Security::Cryptography::BCryptHashData(self.0, data, 0) }.ok().map_err(|_| std::io::Error::other("BCrypt"))
+    }
+
+    fn finish(&self) -> std::io::Result<[u8; 32]> {
+        let mut out = [0u8; 32];
+        unsafe { windows::Win32::Security::Cryptography::BCryptFinishHash(self.0, &mut out, 0) }.ok().map_err(|_| std::io::Error::other("BCrypt"))?;
+        Ok(out)
+    }
+}
+
+impl Drop for Sha {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = windows::Win32::Security::Cryptography::BCryptDestroyHash(self.0);
+        }
+    }
 }
 
 const CHUNK: usize = 4 << 20;
@@ -409,32 +579,21 @@ fn aligned(v: &mut [u8]) -> &mut [u8] {
 fn sha256(path: &Path, st: &State, buf: &mut [u8]) -> std::io::Result<[u8; 32]> {
     use std::io::Read;
     use std::os::windows::fs::OpenOptionsExt;
-    use windows::Win32::Security::Cryptography::*;
     // FILE_FLAG_NO_BUFFERING | FILE_FLAG_SEQUENTIAL_SCAN.
     let mut f = std::fs::OpenOptions::new().read(true).custom_flags(0x2000_0000 | 0x0800_0000).open(path)?;
-    let mut h = BCRYPT_HASH_HANDLE::default();
-    let fail = |_: windows::core::Error| std::io::Error::other("BCrypt");
-    unsafe { BCryptCreateHash(BCRYPT_SHA256_ALG_HANDLE, &mut h, None, None, 0) }.ok().map_err(fail)?;
-    let res = (|| {
-        loop {
-            if !wait_pause(st) {
-                return Err(std::io::Error::from_raw_os_error(1223));
-            }
-            let n = f.read(buf)?;
-            if n == 0 {
-                break;
-            }
-            unsafe { BCryptHashData(h, &buf[..n], 0) }.ok().map_err(fail)?;
-            st.checked.fetch_add(n as u64, Relaxed);
+    let sha = Sha::new()?;
+    loop {
+        if !wait_pause(st) {
+            return Err(std::io::Error::from_raw_os_error(1223));
         }
-        let mut out = [0u8; 32];
-        unsafe { BCryptFinishHash(h, &mut out, 0) }.ok().map_err(fail)?;
-        Ok(out)
-    })();
-    unsafe {
-        let _ = BCryptDestroyHash(h);
+        let n = f.read(buf)?;
+        if n == 0 {
+            break;
+        }
+        sha.add(&buf[..n])?;
+        st.checked.fetch_add(n as u64, Relaxed);
     }
-    res
+    sha.finish()
 }
 
 /// Os arquivos copiados ou recortados no Explorer: (itens, recortado).
@@ -640,9 +799,68 @@ mod tests {
         assert_eq!(std::fs::read(d.join("dst\\src\\sub\\b.bin")).unwrap().len(), 3 << 20);
         assert_eq!(st.done.load(Relaxed), st.total.load(Relaxed));
         assert_eq!(st.files_done.load(Relaxed), 2);
-        // A conferência leu origem e cópia inteiras.
+        // A origem foi lida na cópia; a conferência leu só a cópia.
         assert_eq!(st.checked.load(Relaxed), st.check_total.load(Relaxed));
-        assert_eq!(st.check_total.load(Relaxed), 2 * (4 + (3 << 20)));
+        assert_eq!(st.check_total.load(Relaxed), 4 + (3 << 20));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn verified_copy_hashes_the_source_and_keeps_readonly() {
+        let d = scratch("hashcopia");
+        let st = State::default();
+        let src = d.join("src\\sub\\b.bin");
+        let mut p = std::fs::metadata(&src).unwrap().permissions();
+        p.set_readonly(true);
+        std::fs::set_permissions(&src, p).unwrap();
+        let mut v = chunk();
+        let mut moved = 0;
+        let h = copy_verified(&src, &d.join("dst\\b.bin"), 3 << 20, false, &st, aligned(&mut v), &mut moved).unwrap();
+        assert_eq!(moved, 3 << 20);
+        assert_eq!(h, sha256(&src, &st, aligned(&mut v)).unwrap());
+        assert_eq!(std::fs::read(d.join("dst\\b.bin")).unwrap(), std::fs::read(&src).unwrap());
+        assert!(std::fs::metadata(d.join("dst\\b.bin")).unwrap().permissions().readonly());
+        // Sem a escolha de substituir, não escreve por cima.
+        assert!(copy_verified(&src, &d.join("dst\\b.bin"), 3 << 20, false, &st, aligned(&mut v), &mut moved).is_err());
+        assert!(std::fs::metadata(d.join("dst\\b.bin")).is_ok());
+        for f in ["src\\sub\\b.bin", "dst\\b.bin"] {
+            let mut p = std::fs::metadata(d.join(f)).unwrap().permissions();
+            #[allow(clippy::permissions_set_readonly_false)]
+            p.set_readonly(false);
+            std::fs::set_permissions(d.join(f), p).unwrap();
+        }
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn many_files_keep_the_counts_right() {
+        let d = scratch("muitos");
+        for i in 0..40 {
+            std::fs::write(d.join(format!("src\\f{i}.txt")), vec![i as u8; 1000 + i]).unwrap();
+        }
+        let st = state(SKIP, true);
+        run(&[d.join("src")], &d.join("dst"), false, &st, |_| None);
+        assert_eq!(st.phase.load(Relaxed), DONE);
+        assert!(st.errors.lock().unwrap().is_empty());
+        assert_eq!(st.files_done.load(Relaxed), 42);
+        assert_eq!(st.done.load(Relaxed), st.total.load(Relaxed));
+        assert_eq!(st.checked.load(Relaxed), st.check_total.load(Relaxed));
+        assert_eq!(std::fs::read(d.join("dst\\src\\f39.txt")).unwrap(), vec![39u8; 1039]);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn move_into_existing_folder_renames_each_file() {
+        let d = scratch("moverpasta");
+        std::fs::create_dir_all(d.join("dst\\sub")).unwrap();
+        std::fs::write(d.join("dst\\sub\\velho.txt"), b"fica").unwrap();
+        let st = state(SKIP, false);
+        run(&[d.join("src\\sub")], &d.join("dst"), true, &st, |_| None);
+        assert_eq!(st.phase.load(Relaxed), DONE);
+        assert_eq!(std::fs::read(d.join("dst\\sub\\b.bin")).unwrap().len(), 3 << 20);
+        assert!(d.join("dst\\sub\\velho.txt").exists());
+        assert!(!d.join("src\\sub").exists());
+        assert_eq!(st.done.load(Relaxed), st.total.load(Relaxed));
         let _ = std::fs::remove_dir_all(&d);
     }
 
