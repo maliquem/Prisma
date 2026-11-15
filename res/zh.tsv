@@ -2490,3 +2490,21 @@ GB	GB
 MB	MB
 KB	KB
 /s	/秒
+Esconder do jogo	对游戏隐藏
+O HidHide é um driver gratuito da Nefarius que esconde o controle físico do jogo, para ele ver só o controle da ponte.	HidHide 是 Nefarius 的免费驱动，可对游戏隐藏实体手柄，让游戏只看到桥接手柄。
+Instalar o HidHide	安装 HidHide
+Instalar o HidHide?	安装 HidHide？
+O Prisma baixa o instalador oficial do GitHub da Nefarius, confere a assinatura e abre o instalador. O Windows pede permissão de administrador e pode pedir para reiniciar. Na desinstalação do Prisma, o HidHide sai junto.	Prisma 会从 Nefarius 的 GitHub 下载官方安装程序，校验签名后打开安装程序。Windows 会请求管理员权限，并可能要求重启。卸载 Prisma 时，HidHide 也会一并卸载。
+HidHide instalado	HidHide 已安装
+Não consegui falar com o GitHub do HidHide	无法连接 HidHide 的 GitHub
+Não achei o instalador na versão mais nova do HidHide	在 HidHide 最新版本中找不到安装程序
+Não consegui baixar o HidHide	无法下载 HidHide
+Não consegui gravar o instalador	无法保存安装程序
+O instalador baixado não tem a assinatura da Nefarius	下载的安装程序没有 Nefarius 的签名
+O HidHide não foi instalado	HidHide 未安装
+Enquanto a ponte estiver ligada, o jogo não vê os controles marcados. O Prisma continua lendo. Sem a ponte, eles voltam a aparecer.	桥接开启时，游戏看不到已勾选的手柄，Prisma 仍可读取。关闭桥接后，它们会重新出现。
+Nenhum controle que dê para esconder	没有可隐藏的手柄
+Mostrar o controle	显示手柄
+O HidHide não aceitou a mudança	HidHide 未接受此更改
+As listas do HidHide voltaram a ser como antes	HidHide 列表已恢复原样
+Tira das listas do HidHide só o que o Prisma acrescentou. O que já estava lá fica.	仅从 HidHide 列表中移除 Prisma 添加的内容，原有内容保留。

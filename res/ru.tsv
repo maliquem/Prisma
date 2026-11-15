@@ -2490,3 +2490,21 @@ GB	ГБ
 MB	МБ
 KB	КБ
 /s	/с
+Esconder do jogo	Скрыть от игры
+O HidHide é um driver gratuito da Nefarius que esconde o controle físico do jogo, para ele ver só o controle da ponte.	HidHide — бесплатный драйвер от Nefarius, который скрывает физический геймпад от игры, чтобы она видела только геймпад моста.
+Instalar o HidHide	Установить HidHide
+Instalar o HidHide?	Установить HidHide?
+O Prisma baixa o instalador oficial do GitHub da Nefarius, confere a assinatura e abre o instalador. O Windows pede permissão de administrador e pode pedir para reiniciar. Na desinstalação do Prisma, o HidHide sai junto.	Prisma скачивает официальный установщик с GitHub Nefarius, проверяет подпись и открывает установщик. Windows запросит права администратора и может попросить перезагрузку. При удалении Prisma HidHide удаляется вместе с ним.
+HidHide instalado	HidHide установлен
+Não consegui falar com o GitHub do HidHide	Не удалось связаться с GitHub HidHide
+Não achei o instalador na versão mais nova do HidHide	В последней версии HidHide установщик не найден
+Não consegui baixar o HidHide	Не удалось скачать HidHide
+Não consegui gravar o instalador	Не удалось сохранить установщик
+O instalador baixado não tem a assinatura da Nefarius	У скачанного установщика нет подписи Nefarius
+O HidHide não foi instalado	HidHide не установлен
+Enquanto a ponte estiver ligada, o jogo não vê os controles marcados. O Prisma continua lendo. Sem a ponte, eles voltam a aparecer.	Пока мост включён, игра не видит отмеченные геймпады. Prisma продолжает их читать. Без моста они снова появятся.
+Nenhum controle que dê para esconder	Нет геймпадов, которые можно скрыть
+Mostrar o controle	Показать геймпад
+O HidHide não aceitou a mudança	HidHide не принял изменение
+As listas do HidHide voltaram a ser como antes	Списки HidHide возвращены к прежнему виду
+Tira das listas do HidHide só o que o Prisma acrescentou. O que já estava lá fica.	Убирает из списков HidHide только то, что добавил Prisma. Остальное остаётся.

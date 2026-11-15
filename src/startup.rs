@@ -148,12 +148,17 @@ pub fn run_elevated(args: &str) -> bool {
 
 /// Mesma confirmação, esperando a cópia terminar. Devolve o código de saída, ou None se a pessoa recusar.
 pub fn run_elevated_wait(args: &str) -> Option<u32> {
+    run_file_elevated_wait(&std::env::current_exe().unwrap_or_default(), args, false)
+}
+
+/// O mesmo para outro programa (o instalador do HidHide, com a janela dele à vista). Espera até 10 minutos.
+pub fn run_file_elevated_wait(file: &std::path::Path, args: &str, show: bool) -> Option<u32> {
     use windows::core::*;
     use windows::Win32::Foundation::*;
     use windows::Win32::System::Threading::*;
     use windows::Win32::UI::Shell::*;
-    use windows::Win32::UI::WindowsAndMessaging::SW_HIDE;
-    let exe = HSTRING::from(std::env::current_exe().unwrap_or_default().as_os_str());
+    use windows::Win32::UI::WindowsAndMessaging::{SW_HIDE, SW_SHOWNORMAL};
+    let exe = HSTRING::from(file.as_os_str());
     let params = HSTRING::from(args);
     let mut info = SHELLEXECUTEINFOW {
         cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
@@ -161,13 +166,13 @@ pub fn run_elevated_wait(args: &str) -> Option<u32> {
         lpVerb: w!("runas"),
         lpFile: PCWSTR(exe.as_ptr()),
         lpParameters: PCWSTR(params.as_ptr()),
-        nShow: SW_HIDE.0,
+        nShow: if show { SW_SHOWNORMAL.0 } else { SW_HIDE.0 },
         ..Default::default()
     };
     unsafe {
         ShellExecuteExW(&mut info).ok()?;
         let mut code = 1;
-        let _ = WaitForSingleObject(info.hProcess, 120_000);
+        let _ = WaitForSingleObject(info.hProcess, 600_000);
         let _ = GetExitCodeProcess(info.hProcess, &mut code);
         let _ = CloseHandle(info.hProcess);
         Some(code)
@@ -376,6 +381,7 @@ pub fn uninstall() {
         set_replace_taskmgr(false);
     }
     crate::sys::autohdr::clear_all();
+    crate::sys::hidhide::uninstall();
     crate::sys::shellmenu::set(false);
     crate::sys::copy::set_menu(false);
     let cfg = crate::config::Config::load();

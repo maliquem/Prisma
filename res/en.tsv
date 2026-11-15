@@ -2496,3 +2496,21 @@ GB	GB
 MB	MB
 KB	KB
 /s	/s
+Esconder do jogo	Hide from game
+O HidHide é um driver gratuito da Nefarius que esconde o controle físico do jogo, para ele ver só o controle da ponte.	HidHide is a free driver by Nefarius that hides the physical controller from the game, so it only sees the bridge controller.
+Instalar o HidHide	Install HidHide
+Instalar o HidHide?	Install HidHide?
+O Prisma baixa o instalador oficial do GitHub da Nefarius, confere a assinatura e abre o instalador. O Windows pede permissão de administrador e pode pedir para reiniciar. Na desinstalação do Prisma, o HidHide sai junto.	Prisma downloads the official installer from Nefarius's GitHub, checks the signature and opens the installer. Windows asks for administrator permission and may ask to restart. When Prisma is uninstalled, HidHide is removed too.
+HidHide instalado	HidHide installed
+Não consegui falar com o GitHub do HidHide	Could not reach the HidHide GitHub
+Não achei o instalador na versão mais nova do HidHide	Could not find the installer in the latest HidHide release
+Não consegui baixar o HidHide	Could not download HidHide
+Não consegui gravar o instalador	Could not save the installer
+O instalador baixado não tem a assinatura da Nefarius	The downloaded installer is not signed by Nefarius
+O HidHide não foi instalado	HidHide was not installed
+Enquanto a ponte estiver ligada, o jogo não vê os controles marcados. O Prisma continua lendo. Sem a ponte, eles voltam a aparecer.	While the bridge is on, the game can't see the checked controllers. Prisma still reads them. Without the bridge, they show up again.
+Nenhum controle que dê para esconder	No controller that can be hidden
+Mostrar o controle	Show controller
+O HidHide não aceitou a mudança	HidHide did not accept the change
+As listas do HidHide voltaram a ser como antes	The HidHide lists are back to how they were
+Tira das listas do HidHide só o que o Prisma acrescentou. O que já estava lá fica.	Removes from the HidHide lists only what Prisma added. Anything already there stays.

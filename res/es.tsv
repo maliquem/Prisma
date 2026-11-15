@@ -2490,3 +2490,21 @@ GB	GB
 MB	MB
 KB	KB
 /s	/s
+Esconder do jogo	Ocultar del juego
+O HidHide é um driver gratuito da Nefarius que esconde o controle físico do jogo, para ele ver só o controle da ponte.	HidHide es un driver gratuito de Nefarius que oculta el mando físico del juego, para que solo vea el mando del puente.
+Instalar o HidHide	Instalar HidHide
+Instalar o HidHide?	¿Instalar HidHide?
+O Prisma baixa o instalador oficial do GitHub da Nefarius, confere a assinatura e abre o instalador. O Windows pede permissão de administrador e pode pedir para reiniciar. Na desinstalação do Prisma, o HidHide sai junto.	Prisma descarga el instalador oficial del GitHub de Nefarius, comprueba la firma y abre el instalador. Windows pide permiso de administrador y puede pedir reiniciar. Al desinstalar Prisma, HidHide se elimina también.
+HidHide instalado	HidHide instalado
+Não consegui falar com o GitHub do HidHide	No se pudo conectar con el GitHub de HidHide
+Não achei o instalador na versão mais nova do HidHide	No se encontró el instalador en la última versión de HidHide
+Não consegui baixar o HidHide	No se pudo descargar HidHide
+Não consegui gravar o instalador	No se pudo guardar el instalador
+O instalador baixado não tem a assinatura da Nefarius	El instalador descargado no tiene la firma de Nefarius
+O HidHide não foi instalado	HidHide no se instaló
+Enquanto a ponte estiver ligada, o jogo não vê os controles marcados. O Prisma continua lendo. Sem a ponte, eles voltam a aparecer.	Mientras el puente esté activo, el juego no ve los mandos marcados. Prisma sigue leyéndolos. Sin el puente, vuelven a aparecer.
+Nenhum controle que dê para esconder	Ningún mando que se pueda ocultar
+Mostrar o controle	Mostrar mando
+O HidHide não aceitou a mudança	HidHide no aceptó el cambio
+As listas do HidHide voltaram a ser como antes	Las listas de HidHide volvieron a como estaban
+Tira das listas do HidHide só o que o Prisma acrescentou. O que já estava lá fica.	Quita de las listas de HidHide solo lo que Prisma añadió. Lo que ya estaba se queda.
