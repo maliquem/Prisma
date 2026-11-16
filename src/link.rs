@@ -201,6 +201,7 @@ fn caps_with(nvidia: bool) -> Vec<String> {
         cap::HDR,
         cap::WINDOW_SHOT,
         cap::RECORD_WINDOW,
+        cap::RECORD_SCREEN,
         cap::OPTIONS,
         cap::METER_FPS_LIMIT,
         cap::HDR_AUTO,
@@ -208,6 +209,9 @@ fn caps_with(nvidia: bool) -> Vec<String> {
         cap::REPLAY_OPTIONS,
         cap::FULLSCREENIZER,
         cap::OPTIMIZE,
+        cap::METER_ON_LAUNCH,
+        cap::HDR_ON_LAUNCH,
+        cap::SOUND_GAME_VOLUME,
     ];
     if cfg!(feature = "stream") {
         caps.push(cap::SHARE_MODE);
@@ -528,6 +532,11 @@ impl App {
                     None => fail(code::FAILED, "Não consegui capturar a janela"),
                 }
             }
+            Request::RecordScreen => {
+                // Com gravação em andamento, para, como o atalho.
+                self.toggle_record_of(false, None);
+                Outcome::Reply(Reply::Toggled { on: self.is_recording() })
+            }
             Request::RecordWindow { pid } => {
                 // Com gravação em andamento, para, como o atalho.
                 if self.is_recording() {
@@ -574,12 +583,24 @@ impl App {
         let c = &self.cfg;
         let snd = c.snd_apps.iter().find(|a| same(&a.exe));
         let (audio_out_id, audio_in_id) = snd.map_or_else(Default::default, |a| (a.output.clone(), a.input.clone()));
-        let meter = match self.meter.view {
-            crate::meter::VIEW_COMPACT => MeterView::Compact,
-            crate::meter::VIEW_FULL => MeterView::Full,
+        let game = c.meter_games.iter().find(|g| same(&g.exe));
+        let meter = match game.map_or(0, |g| g.show) {
+            1 => MeterView::Compact,
+            2 => MeterView::Full,
             _ => MeterView::Off,
         };
-        let fps_limit = match c.meter_games.iter().find(|g| same(&g.exe)) {
+        // A mesma conta do Medidor ao abrir o jogo.
+        let hdr_on_launch = match game.map(|g| g.hdr) {
+            Some(1) => true,
+            Some(2) => false,
+            listed => match c.meter_hdr {
+                1 => listed.is_some(),
+                2 => true,
+                _ => false,
+            },
+        };
+        let volume = snd.filter(|a| a.pinned && a.volume >= 0).map(|a| a.volume as u32);
+        let fps_limit = match game {
             Some(g) if g.limit_mode == 1 => FpsLimit::Auto,
             Some(g) if g.limit_mode == 2 => FpsLimit::Manual(g.limit_fps),
             _ => FpsLimit::Off,
@@ -617,11 +638,12 @@ impl App {
                 hdr: crate::sys::hdr::hdr_output().map(|h| h.2),
                 auto_hdr,
                 auto_hdr_windows: autohdr::global_on(),
+                hdr_on_launch,
                 audio_out: devices(false),
                 audio_in: devices(true),
                 audio_out_id,
                 audio_in_id,
-                volume: sessions.first().map(|s| (s.volume * 100.0).round() as u32),
+                volume,
                 muted: sessions.first().is_some_and(|s| s.muted),
                 share_mode: if share_window() { ShareMode::Game } else { ShareMode::Screen },
                 replay,
@@ -767,6 +789,40 @@ impl App {
                     self.cfg.opt_skip.push(exe);
                 }
                 self.cfg.save();
+            }
+            OptionValue::Meter(view) => {
+                self.add_meter_game(&exe, path);
+                if let Some(g) = self.cfg.meter_games.iter_mut().find(|g| g.exe.eq_ignore_ascii_case(&exe)) {
+                    g.show = match view {
+                        MeterView::Compact => 1,
+                        MeterView::Full => 2,
+                        _ => 0,
+                    };
+                }
+                self.cfg.save();
+            }
+            OptionValue::HdrOnLaunch(on) => {
+                self.add_meter_game(&exe, path);
+                // Desligado volta à regra geral, a não ser que ela ligue: aí o jogo fica em "não liga".
+                let rule_on = self.cfg.meter_hdr != 0;
+                if let Some(g) = self.cfg.meter_games.iter_mut().find(|g| g.exe.eq_ignore_ascii_case(&exe)) {
+                    g.hdr = match (on, rule_on) {
+                        (true, _) => 1,
+                        (false, true) => 2,
+                        (false, false) => 0,
+                    };
+                }
+                self.cfg.save();
+            }
+            OptionValue::Volume(Some(v)) if v > 100 => return fail(code::INVALID, "Valor fora das opções"),
+            OptionValue::Volume(v) => {
+                crate::pages::volume::set_pinned(self, &exe, path, v.is_some(), v.map(|v| v as f32 / 100.0));
+                // Com o jogo aberto, vale já.
+                if let (Some(v), true) = (v, pid != 0) {
+                    for s in audio::for_process(pid) {
+                        s.set_volume(v as f32 / 100.0);
+                    }
+                }
             }
             OptionValue::Unknown(_) => return fail(code::NOT_SUPPORTED, "indisponível"),
         }
@@ -953,10 +1009,11 @@ mod tests {
             for c in [
                 cap::PAGE_METER, cap::PAGE_SHARE, cap::SAVE_REPLAY, cap::GAME_EVENTS, cap::CAPTURE_DIRS,
                 cap::METER_VIEW, cap::POWER_PLAN, cap::FULLSCREEN, cap::SOUND_VOLUME, cap::HDR,
-                cap::WINDOW_SHOT, cap::RECORD_WINDOW, cap::PAGE_ENERGY, cap::PAGE_FULLSCREEN,
+                cap::WINDOW_SHOT, cap::RECORD_WINDOW, cap::RECORD_SCREEN, cap::PAGE_ENERGY, cap::PAGE_FULLSCREEN,
                 cap::PAGE_SOUND, cap::PAGE_HDR, cap::PAGE_CAPTURE, cap::PAGE_CONTROLLERS, cap::CONTROLLERS,
                 cap::CONTROLLERS_MAPPING, cap::CONTROLLERS_KEYBOARD, cap::OPTIONS, cap::METER_FPS_LIMIT,
                 cap::HDR_AUTO, cap::SOUND_DEVICES, cap::REPLAY_OPTIONS, cap::FULLSCREENIZER, cap::OPTIMIZE,
+                cap::METER_ON_LAUNCH, cap::HDR_ON_LAUNCH, cap::SOUND_GAME_VOLUME,
             ] {
                 assert!(has(c), "{c}");
             }
@@ -986,6 +1043,7 @@ mod tests {
             Request::NvidiaSet { exe: String::new(), id: 1, value: None },
             Request::WindowShot { pid: 1 },
             Request::RecordWindow { pid: 1 },
+            Request::RecordScreen,
             Request::Controllers,
             Request::PadProfiles,
             Request::SetPadProfile { name: String::new() },
