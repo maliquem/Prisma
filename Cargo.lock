@@ -2341,6 +2341,7 @@ dependencies = [
  "nanoaudio-core",
  "nanoaudio-sbc",
  "opus-head-sys",
+ "prisma-eq",
  "prisma-link",
  "tokio",
  "url",
@@ -2351,6 +2352,10 @@ dependencies = [
  "windows-numerics",
  "winresource",
 ]
+
+[[package]]
+name = "prisma-eq"
+version = "0.1.0"
 
 [[package]]
 name = "prisma-link"

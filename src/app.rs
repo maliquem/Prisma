@@ -61,6 +61,17 @@ const WM_PICK_NV: u32 = WM_APP + 91;
 const WM_PICK_PAD: u32 = WM_APP + 94;
 const WM_PAD_IN: u32 = WM_APP + 95;
 const WM_PAD_OUT: u32 = WM_APP + 96;
+/// Avisa a janela que a cópia de administrador do equalizador terminou (de outra thread).
+pub fn post_eq_done(hub: isize, ok: bool) {
+    unsafe {
+        let _ = PostMessageW(Some(HWND(hub as *mut _)), WM_EQ_DONE, WPARAM(ok as usize), LPARAM(0));
+    }
+}
+
+/// Equalizador: importar e exportar perfil, e a cópia de administrador do motor terminou (WPARAM 1: deu certo).
+const WM_EQ_IN: u32 = WM_APP + 101;
+const WM_EQ_OUT: u32 = WM_APP + 102;
+const WM_EQ_DONE: u32 = WM_APP + 103;
 /// Escolher o .exe de um lugar do radial; WPARAM é o lugar.
 const WM_PICK_RADIAL: u32 = WM_APP + 97;
 /// Página Cópias: escolher arquivos (0), pastas (1) ou o destino (2) da lista aberta.
@@ -262,6 +273,7 @@ pub struct App {
     keyboard: Keyboard,
     radial: Radial,
     pub pads: crate::pages::controllers::State,
+    pub eq: crate::pages::equalizer::State,
     /// Quem estava na sala do compartilhamento na última olhada (chave, nome).
     room_seen: Option<Vec<(String, String)>>,
     /// Até onde os avisos do compartilhamento já foram mostrados (ms desde 1970; 0 antes da primeira olhada).
@@ -489,6 +501,7 @@ pub fn start(background: bool) {
             keyboard: Keyboard::new(),
             radial: Radial::new(),
             pads: Default::default(),
+            eq: Default::default(),
             room_seen: None,
             notices_since: 0,
             prompt: Prompt::new(),
@@ -2382,6 +2395,12 @@ impl App {
         }
     }
 
+    pub fn eq_file(&self, export: bool) {
+        unsafe {
+            let _ = PostMessageW(Some(self.hub), if export { WM_EQ_OUT } else { WM_EQ_IN }, WPARAM(0), LPARAM(0));
+        }
+    }
+
     pub fn import_plan(&self) {
         unsafe {
             let _ = PostMessageW(Some(self.hub), WM_POW_IN, WPARAM(0), LPARAM(0));
@@ -4068,6 +4087,38 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                     with(|a| a.toast.info(if done { "Perfil exportado" } else { "Não consegui exportar o perfil" }));
                 }
             }
+            LRESULT(0)
+        }
+        WM_EQ_OUT => {
+            if let Some((name, p)) = APP.with(|a| a.borrow().as_ref().and_then(crate::pages::equalizer::current)) {
+                if let Some(path) = capture::save_file(h, "Perfis de equalizador", w!("*.txt"), w!("txt"), &name) {
+                    let done = std::fs::write(&path, p.to_text()).is_ok();
+                    with(|a| a.toast.info(if done { "Perfil exportado" } else { "Não consegui exportar o perfil" }));
+                }
+            }
+            LRESULT(0)
+        }
+        WM_EQ_IN => {
+            if let Some(path) = capture::choose_file(h, "Perfis de equalizador", w!("*.txt")) {
+                // Arquivo de fora: tamanho limitado; o que não deu para ler fica de fora e é contado.
+                let path = std::path::PathBuf::from(path);
+                let r = crate::sys::eq::import_file(&path);
+                let file = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+                with(|a| {
+                    match r {
+                        Ok((p, skipped)) => crate::pages::equalizer::imported(a, &file, p, skipped.len()),
+                        Err(_) => a.toast.info("Não consegui ler esse arquivo"),
+                    }
+                    a.invalidate();
+                });
+            }
+            LRESULT(0)
+        }
+        WM_EQ_DONE => {
+            with(|a| {
+                crate::pages::equalizer::job_done(a, w.0 == 1);
+                a.invalidate();
+            });
             LRESULT(0)
         }
         WM_PAD_IN => {

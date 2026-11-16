@@ -207,12 +207,37 @@ pub fn set_device(app: &mut App, exe: &str, path: &str, input: bool, id: String)
     app.route_app(exe);
 }
 
+/// Abas da página: Programas e Equalizador.
+fn tabs(ui: &mut Ui, x: f32, y: f32, sel: &mut usize) {
+    const NAMES: [&str; 2] = ["Programas", "Equalizador"];
+    ui.tab_step(sel, NAMES.len());
+    let mut cx = x;
+    for (i, name) in NAMES.iter().enumerate() {
+        let name = crate::i18n::tr(name);
+        let w = crate::ui::gfx::measure(&name, 14.0, Weight::Semibold, None).0 + 28.0;
+        let r = rect(cx, y, w, 34.0);
+        let on = *sel == i;
+        if on {
+            ui.c.round(r, 8.0, CARD2);
+        }
+        if ui.hit(&format!("snd-tab{i}"), r) {
+            *sel = i;
+        }
+        ui.c.text_raw(r, &name, 14.0, if on { TEXT } else { MUTED }, Align::Center, if on { Weight::Semibold } else { Weight::Regular });
+        cx += w + 4.0;
+    }
+}
+
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
-    header(ui, a, "Som", "Volume e aparelhos de saída e de entrada de cada programa.");
-    defaults_button(ui, app, a.right() - 124.0, crate::config::Defaults::Volume, "Volta o modificador, o passo e o aviso na tela ao padrão.");
+    header(ui, a, "Som", "Volume, aparelhos e equalizador de cada saída e de cada programa.");
     let x = a.x + 28.0;
     let w = a.w - 56.0;
-    let top = 88.0;
+    tabs(ui, x, 84.0, &mut app.eq.tab);
+    if app.eq.tab == 1 {
+        return super::equalizer::draw(ui, app, rect(x, 132.0, w, a.h - 132.0 - 20.0));
+    }
+    defaults_button(ui, app, a.right() - 124.0, crate::config::Defaults::Volume, "Volta o modificador, o passo e o aviso na tela ao padrão.");
+    let top = 132.0;
     let cw = (w - 24.0) / 3.0;
     let r0 = rect(x, top, cw, 132.0);
     ui.card_on(r0);

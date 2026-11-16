@@ -1,5 +1,6 @@
 pub mod audio;
 pub mod eq;
+pub mod eqapo;
 pub mod audit;
 pub mod autohdr;
 pub mod autostart;

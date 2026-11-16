@@ -78,6 +78,10 @@ fn main() {
     if let Some(code) = sys::hidhide::run_arg() {
         std::process::exit(code);
     }
+    // Cópia de administrador que instala ou remove o motor do equalizador e sai.
+    if let Some(code) = sys::eqapo::run_arg() {
+        std::process::exit(code);
+    }
     // Compartilhar tela (host, quem assiste, serviço): roda ao lado de outras cópias, sem o nome único.
     if stream::run_args() {
         return;

@@ -6,6 +6,7 @@ use windows::core::*;
 use windows::Win32::Devices::FunctionDiscovery::PKEY_Device_FriendlyName;
 use windows::Win32::Foundation::S_OK;
 use windows::Win32::Media::Audio::*;
+use windows::Media::Audio::SpatialAudioDeviceConfiguration;
 use windows::Win32::System::Com::*;
 
 use super::procs;
@@ -218,6 +219,8 @@ pub struct Output {
     pub name: String,
     pub channels: u16,
     pub rate: u32,
+    /// Caixas do formato (`SPEAKER_*`); 0 quando o Windows não diz.
+    pub mask: u32,
     pub spatial_support: bool,
     /// Nome do formato de som espacial ativo. Vazio: desligado.
     pub spatial: String,
@@ -237,10 +240,22 @@ fn spatial_name(guid: &str) -> String {
 }
 
 pub fn default_output() -> Option<Output> {
-    use windows::Media::Audio::SpatialAudioDeviceConfiguration;
     unsafe {
         let en: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
-        let dev = en.GetDefaultAudioEndpoint(eRender, eConsole).ok()?;
+        output_info(&en.GetDefaultAudioEndpoint(eRender, eConsole).ok()?)
+    }
+}
+
+/// Uma saída pelo id: nome, formato e som espacial.
+pub fn output_of(id: &str) -> Option<Output> {
+    unsafe {
+        let en: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
+        output_info(&en.GetDevice(&HSTRING::from(id)).ok()?)
+    }
+}
+
+fn output_info(dev: &IMMDevice) -> Option<Output> {
+    unsafe {
         let raw = dev.GetId().ok()?;
         let id = raw.to_string().unwrap_or_default();
         CoTaskMemFree(Some(raw.0 as *const _));
@@ -254,6 +269,10 @@ pub fn default_output() -> Option<Output> {
             if let Ok(f) = client.GetMixFormat() {
                 out.channels = (*f).nChannels;
                 out.rate = (*f).nSamplesPerSec;
+                // WAVE_FORMAT_EXTENSIBLE traz quais caixas são (5.1 de trás ou de lado).
+                if (*f).wFormatTag == 0xFFFE {
+                    out.mask = std::ptr::addr_of!((*(f as *const WAVEFORMATEXTENSIBLE)).dwChannelMask).read_unaligned();
+                }
                 CoTaskMemFree(Some(f as *const _));
             }
         }
