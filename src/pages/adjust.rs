@@ -3,7 +3,7 @@ use crate::config::Defaults;
 
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     header(ui, a, "Configurações", "Início com o Windows, permissões e atalhos gerais.");
-    defaults_button(ui, app, a.right() - 124.0, Defaults::Settings, "Volta os atalhos de Otimizar, Fechar à força e Reiniciar o Explorer, o idioma e a busca de atualização ao padrão.");
+    defaults_button(ui, app, a.right() - 124.0, Defaults::Settings, "Volta os atalhos de Otimizar, Fechar à força, Reiniciar o Explorer e Mostrar o Prisma, o idioma e a busca de atualização ao padrão.");
     let x = a.x + 28.0;
     let w = a.w - 56.0;
     let top = 88.0;
@@ -112,9 +112,9 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         app.register_hotkeys();
     }
 
-    let third = (w - 24.0) / 3.0;
-    let field = (third - 32.0).min(240.0);
-    let r1 = rect(x, top + 338.0, third, 92.0);
+    let col = (w - 36.0) / 4.0;
+    let field = (col - 32.0).min(240.0);
+    let r1 = rect(x, top + 338.0, col, 92.0);
     ui.card(r1);
     ui.label(rect(r1.x + 16.0, r1.y + 10.0, r1.w - 32.0, 18.0), "Atalho de Otimizar", TEXT2);
     if ui.hotkey("hk-opt", rect(r1.x + 16.0, r1.y + 34.0, field, 44.0), &mut app.cfg.hk_optimize) {
@@ -123,7 +123,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     }
 
     // O atalho fecha a barra de tarefas: pede dois toques, e o botão pergunta antes.
-    let re = rect(r1.right() + 12.0, r1.y, third, 92.0);
+    let re = rect(r1.right() + 12.0, r1.y, col, 92.0);
     ui.card(re);
     ui.label(rect(re.x + 16.0, re.y + 10.0, re.w - 72.0, 18.0), "Reiniciar o Explorer", TEXT2);
     let go = rect(re.right() - 52.0, re.y + 6.0, 40.0, 24.0);
@@ -141,7 +141,16 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         app.register_hotkeys();
     }
 
-    let rl = rect(re.right() + 12.0, r1.y, third, 92.0);
+    // Traz a janela para a frente, também minimizada ou só na bandeja.
+    let rs = rect(re.right() + 12.0, r1.y, col, 92.0);
+    ui.card(rs);
+    ui.label(rect(rs.x + 16.0, rs.y + 10.0, rs.w - 32.0, 18.0), "Mostrar o Prisma", TEXT2);
+    if ui.hotkey("hk-show", rect(rs.x + 16.0, rs.y + 34.0, field, 44.0), &mut app.cfg.hk_show) {
+        app.cfg.save();
+        app.register_hotkeys();
+    }
+
+    let rl = rect(rs.right() + 12.0, r1.y, col, 92.0);
     ui.card(rl);
     ui.label(rect(rl.x + 16.0, rl.y + 10.0, rl.w - 32.0, 18.0), "Idioma", TEXT2);
 

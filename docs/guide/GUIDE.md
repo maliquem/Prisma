@@ -378,6 +378,8 @@ Click the bug button at the top of the window. Choose the feature, the severity,
 
 All of them can be changed in the program. If the new combination already belongs to another Prisma function, it says which one and asks whether to swap; Yes removes it from there. If another program already uses it, it says so and offers to pick another.
 
+**Shortcuts page:** your own shortcuts that open programs from anywhere in Windows. **Add** creates a row: record the combination (for example Ctrl + Alt + T), pick the program with **Choose program** (from the program list or an .exe file) and tick **As administrator** if it should open with administrator rights; Windows asks for confirmation when needed. The X removes the shortcut. If another program already uses the combination, the row shows **Already used by another program** and the shortcut does not work until you change it. Up to 32 shortcuts.
+
 - **Ctrl + Alt + F:** Fullscreenizer
 - **Ctrl + volume and mute keys:** volume of the program in focus
 - **Ctrl + Alt + W:** Widget
@@ -394,6 +396,7 @@ All of them can be changed in the program. If the new combination already belong
 - **Ctrl + Alt + P, A and J:** photo of an area, the screen and the window
 - **Ctrl + Alt + R and T:** record window and record screen
 - **Ctrl + Alt + B:** save replay
+- **Show Prisma** (in Settings, no default key): brings the Prisma window to the front, even when minimized or only in the tray
 
 Share screen shortcuts are changed in the page's Shortcuts tab: Ctrl + Alt + Shift + Q on the host disconnects everyone; in the viewer window, Ctrl + Alt + Shift + P opens the connection menu, Ctrl + Alt + Shift + F toggles fullscreen, Ctrl + Alt + Shift + I turns immersive mode on and off, Ctrl + Alt + Shift + M switches the meter, Ctrl + Alt + Shift + S turns sound on and off, Ctrl + Alt + End sends Ctrl + Alt + Del and Ctrl + Alt + Shift + D disconnects.
 

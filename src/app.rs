@@ -67,6 +67,8 @@ const WM_PICK_RADIAL: u32 = WM_APP + 97;
 pub const WM_PICK_COPY: u32 = WM_APP + 98;
 /// Ctrl+V numa pasta do Explorer (`PASTE_HOOK`); `lparam` é o controle em foco.
 const WM_PASTE_KEY: u32 = WM_APP + 99;
+/// Escolher o .exe de um atalho da página Atalhos; WPARAM é o atalho.
+const WM_PICK_RUN: u32 = WM_APP + 100;
 const WM_POW_OUT: u32 = WM_APP + 82;
 const WM_REPORT_PHOTO: u32 = WM_APP + 84;
 const WM_REPORT_DONE: u32 = WM_APP + 85;
@@ -206,12 +208,16 @@ const HK_METER_KEYS: i32 = 21;
 const HK_EXPLORER: i32 = 22;
 const HK_FIND: i32 = 23;
 const HK_MACRO: i32 = 24;
+const HK_SHOW: i32 = 25;
 const HK_VOL_UP: i32 = 10;
 const HK_VOL_DOWN: i32 = 11;
 const HK_MUTE: i32 = 12;
 /// Atalhos de aparelho padrão: um id para cada, a partir daqui.
 const HK_SND: i32 = 100;
 pub const SND_KEYS_MAX: usize = 12;
+/// Atalhos da página Atalhos: um id para cada, a partir daqui.
+const HK_RUN: i32 = 200;
+pub const RUN_KEYS_MAX: usize = 32;
 
 const VK_VOL_UP: u32 = 0xAF;
 const VK_VOL_DOWN: u32 = 0xAE;
@@ -1118,11 +1124,14 @@ impl App {
     pub fn register_hotkeys(&mut self) {
         self.unhook_force_key();
         unsafe {
-            for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER, HK_FIND, HK_MACRO, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE] {
+            for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER, HK_FIND, HK_MACRO, HK_SHOW, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE] {
                 let _ = UnregisterHotKey(Some(self.hub), id);
             }
             for i in 0..SND_KEYS_MAX as i32 {
                 let _ = UnregisterHotKey(Some(self.hub), HK_SND + i);
+            }
+            for i in 0..RUN_KEYS_MAX as i32 {
+                let _ = UnregisterHotKey(Some(self.hub), HK_RUN + i);
             }
         }
         self.hk_errors.clear();
@@ -1201,6 +1210,7 @@ impl App {
             (HK_FORCE, c.hk_force, "Fechar à força", true),
             (HK_EXPLORER, c.hk_explorer, "Reiniciar o Explorer", true),
             (HK_MACRO, c.hk_macro, "Gravar macro e parar", true),
+            (HK_SHOW, c.hk_show, "Mostrar o Prisma", true),
             (HK_VOL_UP, Hotkey::new(c.vol_mods, VK_VOL_UP), "Aumentar volume", false),
             (HK_VOL_DOWN, Hotkey::new(c.vol_mods, VK_VOL_DOWN), "Diminuir volume", false),
             (HK_MUTE, Hotkey::new(c.vol_mods, VK_MUTE), "Mudo", true),
@@ -1211,6 +1221,9 @@ impl App {
         }
         for (i, k) in c.snd_keys.iter().take(SND_KEYS_MAX).enumerate() {
             list.push((HK_SND + i as i32, k.key, "Aparelho padrão", true));
+        }
+        for (i, k) in c.run_keys.iter().take(RUN_KEYS_MAX).enumerate() {
+            list.push((HK_RUN + i as i32, k.key, "Abrir programa", true));
         }
         list
     }
@@ -1240,6 +1253,8 @@ impl App {
             HK_EXPLORER => &mut c.hk_explorer,
             HK_FIND => &mut c.hk_find,
             HK_MACRO => &mut c.hk_macro,
+            HK_SHOW => &mut c.hk_show,
+            id if id >= HK_RUN => &mut c.run_keys.get_mut((id - HK_RUN) as usize)?.key,
             id if id >= HK_SND => &mut c.snd_keys.get_mut((id - HK_SND) as usize)?.key,
             _ => return None,
         })
@@ -1269,8 +1284,12 @@ impl App {
         if on {
             self.unhook_force_key();
             unsafe {
-                for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER, HK_FIND, HK_MACRO] {
+                for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER, HK_FIND, HK_MACRO, HK_SHOW] {
                     let _ = UnregisterHotKey(Some(self.hub), id);
+                }
+                // Os da página Atalhos também: a combinação gravada não pode abrir o programa.
+                for i in 0..RUN_KEYS_MAX as i32 {
+                    let _ = UnregisterHotKey(Some(self.hub), HK_RUN + i);
                 }
             }
         } else {
@@ -1313,10 +1332,12 @@ impl App {
             HK_EXPLORER => self.explorer_key(),
             HK_FIND => self.toggle_find(),
             HK_MACRO => self.macro_toggle(None),
+            HK_SHOW => self.show_main(),
             HK_VOL_UP => self.volume(audio::Change::Step(self.cfg.vol_step as i32)),
             HK_VOL_DOWN => self.volume(audio::Change::Step(-(self.cfg.vol_step as i32))),
             HK_MUTE => self.volume(audio::Change::ToggleMute),
             id if (HK_SND..HK_SND + SND_KEYS_MAX as i32).contains(&id) => self.sound_default((id - HK_SND) as usize),
+            id if (HK_RUN..HK_RUN + RUN_KEYS_MAX as i32).contains(&id) => self.run_key((id - HK_RUN) as usize),
             _ => {}
         }
     }
@@ -2013,6 +2034,18 @@ impl App {
                 }
             }
             None => self.toast.info(&format!("{name} não tem som tocando")),
+        }
+    }
+
+    /// Atalho da página Atalhos: abre o programa; como administrador, o Windows pede a permissão (UAC).
+    fn run_key(&mut self, i: usize) {
+        let Some(k) = self.cfg.run_keys.get(i).cloned() else { return };
+        if k.path.is_empty() {
+            return;
+        }
+        let ok = if k.admin { crate::sys::quick::run_admin(&k.path, "", "") } else { crate::sys::quick::open_as_user(&k.path) };
+        if !ok {
+            self.toast.info("O programa do atalho não abriu");
         }
     }
 
@@ -2916,9 +2949,10 @@ impl App {
             Target::NvGame => WM_PICK_NV,
             Target::PadProgram | Target::PadGame => WM_PICK_PAD,
             Target::RadialProgram(_) => WM_PICK_RADIAL,
+            Target::RunKey(_) => WM_PICK_RUN,
         };
         let slot = match target {
-            Target::RadialProgram(i) => i as usize,
+            Target::RadialProgram(i) | Target::RunKey(i) => i as usize,
             Target::PadGame => 1,
             _ => 0,
         };
@@ -4046,6 +4080,15 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
             if !paths.is_empty() {
                 with(|a| {
                     crate::pages::copies::picked(a, w.0, paths);
+                    a.invalidate();
+                });
+            }
+            LRESULT(0)
+        }
+        WM_PICK_RUN => {
+            if let Some(path) = capture::choose_exe(h) {
+                with(|a| {
+                    crate::pages::shortcuts::set_program(a, w.0, &path);
                     a.invalidate();
                 });
             }

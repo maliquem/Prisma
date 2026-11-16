@@ -23,6 +23,7 @@ pub mod search;
 mod services;
 #[cfg(feature = "stream")]
 pub mod share;
+pub mod shortcuts;
 /// Cópia compilada sem o compartilhamento (`--no-default-features`).
 #[cfg(not(feature = "stream"))]
 pub mod share {
@@ -73,6 +74,7 @@ pub enum Page {
     Capture,
     Share,
     Controllers,
+    Shortcuts,
     Widget,
     Adjust,
     Report,
@@ -238,10 +240,11 @@ pub fn nav_page(i: usize) -> Option<(Page, Icon)> {
     action_nav().nth(i).map(|n| (n.0, n.2))
 }
 
-/// A barra lateral na ordem das ações "Página ...": Cópias entrou depois, então fica no fim e os
-/// números das ações já gravadas não mudam.
+/// A barra lateral na ordem das ações "Página ...": Cópias e Atalhos entraram depois, então ficam no
+/// fim e os números das ações já gravadas não mudam.
 fn action_nav() -> impl Iterator<Item = &'static (Page, &'static str, Icon)> {
-    NAV.iter().filter(|n| n.0 != Page::Copies).chain(NAV.iter().filter(|n| n.0 == Page::Copies))
+    const LATE: [Page; 2] = [Page::Copies, Page::Shortcuts];
+    NAV.iter().filter(|n| !LATE.contains(&n.0)).chain(LATE.iter().filter_map(|p| NAV.iter().find(|n| n.0 == *p)))
 }
 
 /// Ícone de uma ação do Prisma (`sys::remap::ACTIONS`), ou de abrir um programa (`sys::radial::PROGRAM`).
@@ -302,6 +305,7 @@ const NAV: &[(Page, &str, Icon)] = &[
     (Page::Capture, "Captura", ICON_CAP),
     (Page::Share, "Compartilhar tela", ICON_SHARE),
     (Page::Controllers, "Controles", ICON_PAD),
+    (Page::Shortcuts, "Atalhos", ICON_KEYS),
     (Page::Widget, "Widget", ICON_WID),
     (Page::Adjust, "Configurações", ICON_ADJ),
 ];
@@ -423,6 +427,7 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
         Page::Capture => capture::draw(&mut ui, app, area),
         Page::Share => share::draw(&mut ui, app, area),
         Page::Controllers => controllers::draw(&mut ui, app, area),
+        Page::Shortcuts => shortcuts::draw(&mut ui, app, area),
         Page::Widget => widget::draw(&mut ui, app, area),
         Page::Adjust => adjust::draw(&mut ui, app, area),
         Page::Report => report::draw(&mut ui, app, area),

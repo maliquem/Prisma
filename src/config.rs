@@ -159,6 +159,25 @@ pub struct SndKey {
     pub input: String,
 }
 
+/// Atalho da página Atalhos: abre um programa, como administrador se `admin`.
+#[derive(Clone, Default, Debug, PartialEq)]
+pub struct RunKey {
+    pub key: Hotkey,
+    pub admin: bool,
+    pub path: String,
+}
+
+impl RunKey {
+    /// Linha `run_key=` do config.ini: `mods,vk|admin|caminho`.
+    pub fn line(&self) -> String {
+        format!("{},{}|{}|{}", self.key.mods, self.key.vk, self.admin as u8, self.path)
+    }
+    pub fn parse(v: &str) -> Option<Self> {
+        let p: Vec<&str> = v.splitn(3, '|').collect();
+        (p.len() == 3).then(|| Self { key: Hotkey::parse(p[0]), admin: p[1] == "1", path: p[2].into() })
+    }
+}
+
 /// Tela cujas opções voltam ao padrão.
 #[derive(Clone, Copy, PartialEq)]
 pub enum Defaults {
@@ -197,6 +216,8 @@ pub struct Config {
     pub hk_optimize: Hotkey,
     pub hk_force: Hotkey,
     pub hk_explorer: Hotkey,
+    /// Traz a janela do Prisma para a frente (Configurações).
+    pub hk_show: Hotkey,
     pub hk_find: Hotkey,
     /// Começa e para a gravação de macro (sem tecla de fábrica).
     pub hk_macro: Hotkey,
@@ -284,6 +305,8 @@ pub struct Config {
     pub snd_keep: u8,
     pub snd_apps: Vec<SndApp>,
     pub snd_keys: Vec<SndKey>,
+    /// Atalhos que abrem programas (página Atalhos).
+    pub run_keys: Vec<RunKey>,
     /// Nomes que o usuário deu aos aparelhos pareados: (id do aparelho, nome).
     pub share_names: Vec<(String, String)>,
     pub black: Vec<String>,
@@ -391,6 +414,7 @@ impl Default for Config {
             hk_optimize: Hotkey::new(MOD_CTRL | MOD_ALT, b'O' as u32),
             hk_force: Hotkey::new(MOD_ALT, 0x73),
             hk_explorer: Hotkey::new(0, 0),
+            hk_show: Hotkey::new(0, 0),
             hk_find: Hotkey::new(MOD_CTRL | MOD_ALT, 0x20),
             hk_macro: Hotkey::new(0, 0),
             search_on: false,
@@ -457,6 +481,7 @@ impl Default for Config {
             snd_keep: 0,
             snd_apps: Vec::new(),
             snd_keys: Vec::new(),
+            run_keys: Vec::new(),
             share_names: Vec::new(),
             black: Vec::new(),
             white: Vec::new(),
@@ -646,6 +671,7 @@ impl Config {
                 "hk_optimize" => c.hk_optimize = Hotkey::parse(v),
                 "hk_force" => c.hk_force = Hotkey::parse(v),
                 "hk_explorer" => c.hk_explorer = Hotkey::parse(v),
+                "hk_show" => c.hk_show = Hotkey::parse(v),
                 "hk_find" => c.hk_find = Hotkey::parse(v),
                 "hk_macro" => c.hk_macro = Hotkey::parse(v),
                 "search_on" => c.search_on = v == "1",
@@ -711,6 +737,7 @@ impl Config {
                         c.snd_keys.push(SndKey { key: Hotkey::parse(p[0]), output: p[1].into(), input: p[2].into() });
                     }
                 }
+                "run_key" => c.run_keys.extend(RunKey::parse(v)),
                 "snd_keep" => c.snd_keep = v.parse().unwrap_or(0),
                 "share_name" => {
                     if let Some((id, name)) = v.split_once('|') {
@@ -861,6 +888,7 @@ impl Config {
         hk(&mut s, "hk_optimize", self.hk_optimize);
         hk(&mut s, "hk_force", self.hk_force);
         hk(&mut s, "hk_explorer", self.hk_explorer);
+        hk(&mut s, "hk_show", self.hk_show);
         hk(&mut s, "hk_find", self.hk_find);
         hk(&mut s, "hk_macro", self.hk_macro);
         let _ = writeln!(s, "search_on={}", self.search_on as u8);
@@ -982,6 +1010,9 @@ impl Config {
         }
         for k in &self.snd_keys {
             let _ = writeln!(s, "snd_key={},{}|{}|{}", k.key.mods, k.key.vk, k.output, k.input);
+        }
+        for k in &self.run_keys {
+            let _ = writeln!(s, "run_key={}", k.line());
         }
         let _ = writeln!(s, "snd_keep={}", self.snd_keep);
         let _ = writeln!(s, "meter_hdr={}", self.meter_hdr);
@@ -1138,6 +1169,7 @@ impl Config {
                 self.hk_optimize = d.hk_optimize;
                 self.hk_force = d.hk_force;
                 self.hk_explorer = d.hk_explorer;
+                self.hk_show = d.hk_show;
                 self.update_auto = d.update_auto;
                 self.lang = d.lang;
             }
@@ -1203,6 +1235,15 @@ mod tests {
         assert!(t.ends_with("\nlang=2\n"));
         let dir = std::env::temp_dir().join(format!("prisma-cfg-{}", std::process::id()));
         assert!(read_text(&dir.join("nao-existe.ini")).unwrap().is_none());
+    }
+
+    #[test]
+    fn run_key_round_trip() {
+        let k = RunKey { key: Hotkey::new(MOD_CTRL | MOD_ALT, 0x54), admin: true, path: r"C:\Windows\System32\cmd.exe".into() };
+        assert_eq!(k.line(), format!(r"{},84|1|C:\Windows\System32\cmd.exe", MOD_CTRL | MOD_ALT));
+        assert_eq!(RunKey::parse(&k.line()), Some(k));
+        assert_eq!(RunKey::parse("3,84|0|").map(|k| (k.key.label(), k.admin)), Some(("Ctrl + Alt + T".into(), false)));
+        assert_eq!(RunKey::parse("3,84"), None);
     }
 
     #[test]

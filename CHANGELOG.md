@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Settings: new **Show Prisma** shortcut (no default key) that brings the Prisma window to the front, even when minimized or only in the tray. / Configurações: atalho novo **Mostrar o Prisma** (sem tecla de fábrica), que traz a janela do Prisma para a frente, mesmo minimizada ou só na bandeja.
+- Shortcuts: new page. Add keyboard shortcuts that open a program, picked from the program list or as an .exe file, for example Ctrl + Alt + T for the terminal. Each one has an **As administrator** box (Windows asks for confirmation). Shortcuts can be added and removed freely; a combination already used by another program shows a warning on its row. / Atalhos: página nova. Crie atalhos de teclado que abrem um programa, escolhido da lista de programas ou como arquivo .exe, por exemplo Ctrl + Alt + T para o terminal. Cada um tem a caixa **Como administrador** (o Windows pede a confirmação). Os atalhos podem ser adicionados e removidos à vontade; combinação já usada por outro programa mostra um aviso na linha.
 - Search: Prisma uses less memory. After 10 minutes without a search, the file index leaves memory and stays only on disk; the next search brings it back in one to four seconds. Starting Prisma no longer rewrites the whole index on disk, and saving it no longer holds up a search. / Pesquisar: o Prisma usa menos memória. Depois de 10 minutos sem pesquisa, o índice de arquivos sai da memória e fica só no disco; a pesquisa seguinte o traz de volta em um a quatro segundos. Abrir o Prisma não regrava mais o índice inteiro no disco, e gravá-lo não segura mais a pesquisa.
 
 ## 1.2.0

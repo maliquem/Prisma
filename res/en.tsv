@@ -802,7 +802,7 @@ Volta as opções de ponto de restauração e de desinstalar sem janela ao padr�
 Volta as opções Ver log e Restauração ao padrão. Os ajustes aplicados continuam como estão: para reverter, use Desfazer.	Resets the Show log and Restore point options to default. Applied tweaks stay as they are: use Undo to revert them.
 Esvazia as listas de nunca fechar e sempre fechar, e as sugestões recusadas. Essa ação não fecha nenhum programa.	Empties the never-close and always-close lists and the declined suggestions. This does not close any program.
 Volta o modificador, o passo e o aviso na tela ao padrão.	Resets the modifier, step and on-screen notice to default.
-Volta os atalhos de Otimizar, Fechar à força e Reiniciar o Explorer, o idioma e a busca de atualização ao padrão.	Resets the Optimize, Force close and Restart Explorer shortcuts, language and update check to default.
+Volta os atalhos de Otimizar, Fechar à força, Reiniciar o Explorer e Mostrar o Prisma, o idioma e a busca de atualização ao padrão.	Resets the Optimize, Force close, Restart Explorer and Show Prisma shortcuts, language and update check to default.
 Fechar à força	Force close
 Encerra na hora o programa em foco, mesmo travado. O que não foi salvo é perdido.	Ends the focused program at once, even if frozen. Anything unsaved is lost.
 {} fechado à força	{} force-closed
@@ -2608,3 +2608,11 @@ Enviado	Sent
 {} h {} min	{} h {} min
 Ao lado do relógio	Next to clock
 No canto esquerdo	Far left
+Combinações de teclas que abrem programas de qualquer lugar do Windows.	Key combinations that open programs from anywhere in Windows.
+Atalhos de programa	Program shortcuts
+Por exemplo, Ctrl + Alt + T para abrir o terminal. Use Adicionar.	For example, Ctrl + Alt + T to open the terminal. Use Add.
+Já usada por outro programa	Already used by another program
+Como administrador	As administrator
+O programa do atalho não abriu	The shortcut's program did not open
+Página Atalhos	Shortcuts page
+Mostrar o Prisma	Show Prisma
