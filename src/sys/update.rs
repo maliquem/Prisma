@@ -312,9 +312,16 @@ pub fn json_text(json: &str, key: &str) -> Option<String> {
     None
 }
 
-fn parts(v: &str) -> Option<[u32; 3]> {
-    let mut it = v.trim_start_matches('v').split('.');
-    Some([it.next()?.parse().ok()?, it.next()?.parse().ok()?, it.next()?.parse().ok()?])
+/// "1.0.0-beta" vem antes de "1.0.0": a final ganha da prévia de mesmo número.
+/// shortcut: sufixos comparam como texto ("beta.10" < "beta.2"); trocar se houver mais de 9 prévias.
+fn parts(v: &str) -> Option<([u32; 3], bool, &str)> {
+    let (num, pre) = v.trim_start_matches('v').split_once('-').map_or((v.trim_start_matches('v'), None), |(n, p)| (n, Some(p)));
+    let mut it = num.split('.');
+    let n = [it.next()?.parse().ok()?, it.next()?.parse().ok()?, it.next()?.parse().ok()?];
+    if it.next().is_some() || pre == Some("") {
+        return None;
+    }
+    Some((n, pre.is_none(), pre.unwrap_or("")))
 }
 
 pub fn is_newer(found: &str, have: &str) -> bool {
@@ -549,5 +556,11 @@ mod tests {
         assert!(!is_newer("0.15.9", "0.16.0"));
         assert!(!is_newer("lixo", "0.16.0"));
         assert!(!is_newer("0.17", "0.16.0"));
+        assert!(is_newer("v1.0.0-beta", "0.16.0"));
+        assert!(is_newer("1.0.0", "1.0.0-beta"));
+        assert!(!is_newer("1.0.0-beta", "1.0.0"));
+        assert!(!is_newer("1.0.0-beta", "1.0.0-beta"));
+        assert!(is_newer("1.0.0-beta.2", "1.0.0-beta"));
+        assert!(is_newer("1.0.1", "1.0.0-beta"));
     }
 }
