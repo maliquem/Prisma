@@ -12,7 +12,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use super::pads::{self, Buttons, Input};
 use crate::stream::pads::{Bridge, VirtualPad};
@@ -348,38 +348,49 @@ pub fn merge(all: &[Input]) -> Input {
     m
 }
 
-/// Os controles virtuais ligados agora: (grupo, controles físicos dele, virtual).
+/// Quanto o virtual espera o controle físico voltar antes de sair: o físico some por um instante
+/// ao reconectar e quando o HidHide o reinicia, e o jogo não deve ver o Xbox cair e voltar.
+const GRACE: Duration = Duration::from_secs(3);
+
+/// Os controles virtuais ligados agora: (grupo, controles físicos dele, virtual, última vez visto).
 pub struct Runner {
     bridge: Bridge,
-    live: Vec<(String, Vec<String>, Box<dyn VirtualPad>)>,
+    live: Vec<(String, Vec<String>, Box<dyn VirtualPad>, Instant)>,
+    merged: bool,
 }
 
 impl Runner {
     pub fn new(bridge: Bridge) -> Runner {
-        Runner { bridge, live: vec![] }
+        Runner { bridge, live: vec![], merged: false }
     }
 
     /// Um passo: liga e solta virtuais conforme os controles, manda o estado e devolve a vibração
     /// pedida pelo jogo para cada controle físico (grave, agudo).
-    pub fn step(&mut self, pads: &[(String, Input)], merge_all: bool) -> Result<Vec<(String, (u8, u8))>, String> {
+    pub fn step(&mut self, pads: &[(String, Input)], merge_all: bool, now: Instant) -> Result<Vec<(String, (u8, u8))>, String> {
         let groups: Vec<(String, Vec<&(String, Input)>)> = if merge_all {
             if pads.is_empty() { vec![] } else { vec![("todos".into(), pads.iter().collect())] }
         } else {
             pads.iter().map(|p| (p.0.clone(), vec![p])).collect()
         };
-        self.live.retain(|l| groups.iter().any(|g| g.0 == l.0));
+        // Trocar entre juntos e separados solta os de antes na hora.
+        if merge_all != self.merged {
+            self.live.clear();
+            self.merged = merge_all;
+        }
+        self.live.retain(|l| groups.iter().any(|g| g.0 == l.0) || now.duration_since(l.3) < GRACE);
         let mut out = vec![];
         for (id, members) in &groups {
             let keys: Vec<String> = members.iter().map(|m| m.0.clone()).collect();
             let i = match self.live.iter().position(|l| &l.0 == id) {
                 Some(i) => i,
                 None => {
-                    self.live.push((id.clone(), keys.clone(), self.bridge.plug()?));
+                    self.live.push((id.clone(), keys.clone(), self.bridge.plug()?, now));
                     self.live.len() - 1
                 }
             };
             let l = &mut self.live[i];
             l.1 = keys;
+            l.3 = now;
             let inputs: Vec<Input> = members.iter().map(|m| m.1).collect();
             if !l.2.update(&to_xbox(&merge(&inputs))) {
                 let id = id.clone();
@@ -460,6 +471,11 @@ fn hide_physical(keys: &[String], on: bool) {
     }
 }
 
+/// Controles da lista que ainda não foram escondidos.
+fn new_keys(hidden: &[String], list: &[(String, Input)]) -> Vec<String> {
+    list.iter().map(|p| p.0.clone()).filter(|k| !hidden.contains(k)).collect()
+}
+
 /// Vibração do jogo nos controles do XInput (os HID recebem pelo `PadOut`).
 fn xinput_rumble(sent: &mut Vec<(String, (u8, u8))>, now: &[(String, (u8, u8))]) {
     use windows::Win32::UI::Input::XboxController::{XInputSetState, XINPUT_VIBRATION};
@@ -520,13 +536,15 @@ fn run() {
             ACTIVE.store(true, Ordering::Relaxed);
         }
         let list: Vec<(String, Input)> = pads::list().into_iter().map(|p| (p.key, p.input)).collect();
-        let keys: Vec<String> = list.iter().map(|p| p.0.clone()).collect();
-        if keys != hidden {
-            hide_physical(&hidden, false);
-            hide_physical(&keys, true);
-            hidden = keys;
+        // Só acrescenta: um controle que some por um instante (reconexão, o reinício do HidHide)
+        // fica escondido até a ponte parar. Mostrar e esconder de novo a cada sumiço deixava o jogo
+        // pegar o físico e reiniciava o controle em laço.
+        let fresh = new_keys(&hidden, &list);
+        if !fresh.is_empty() {
+            hide_physical(&fresh, true);
+            hidden.extend(fresh);
         }
-        match runner.as_mut().unwrap().step(&list, MERGE.load(Ordering::Relaxed)) {
+        match runner.as_mut().unwrap().step(&list, MERGE.load(Ordering::Relaxed), Instant::now()) {
             Ok(r) => {
                 xinput_rumble(&mut sent, &r);
                 *RUMBLE.lock().unwrap() = r;
@@ -673,17 +691,48 @@ mod tests {
         let mut r = Runner::new(Bridge::fake(log.clone()));
         let a = ("ds".to_string(), Input { buttons: pads::A, ..Default::default() });
         let b = ("xinput:0".to_string(), Input { buttons: pads::B, ..Default::default() });
-        let out = r.step(&[a.clone(), b.clone()], false).unwrap();
+        let t = Instant::now();
+        let out = r.step(&[a.clone(), b.clone()], false, t).unwrap();
         assert_eq!(r.len(), 2);
         assert_eq!(out.iter().map(|o| o.0.as_str()).collect::<Vec<_>>(), ["ds", "xinput:0"]);
         // Juntos: os dois de antes saem e um só recebe os dois botões.
         log.lock().unwrap().clear();
-        let out = r.step(&[a.clone(), b], true).unwrap();
+        let out = r.step(&[a.clone(), b], true, t).unwrap();
         assert_eq!(r.len(), 1);
         assert_eq!(out.len(), 2);
         assert_eq!(log.lock().unwrap().last().unwrap().1.buttons, 0x1000 | 0x2000);
-        // Sem controles, sem virtual.
-        r.step(&[], true).unwrap();
+        // Sem controles, o virtual espera um pouco e sai.
+        r.step(&[], true, t + Duration::from_secs(1)).unwrap();
+        assert_eq!(r.len(), 1);
+        r.step(&[], true, t + GRACE + Duration::from_secs(1)).unwrap();
         assert_eq!(r.len(), 0);
+    }
+
+    #[test]
+    fn pad_blinking_keeps_its_virtual() {
+        let log: crate::stream::pads::FakeLog = Default::default();
+        let mut r = Runner::new(Bridge::fake(log.clone()));
+        let a = ("ds".to_string(), Input::default());
+        let t = Instant::now();
+        r.step(&[a.clone()], false, t).unwrap();
+        // O físico some por um instante (o HidHide reiniciou o controle) e volta.
+        r.step(&[], false, t + Duration::from_millis(500)).unwrap();
+        r.step(&[a.clone()], false, t + Duration::from_secs(1)).unwrap();
+        // Ligado uma vez só: o jogo não viu o Xbox cair.
+        assert_eq!(log.lock().unwrap().iter().filter(|(_, s)| s.buttons == 0xFFFF).count(), 1);
+        assert_eq!(r.len(), 1);
+    }
+
+    #[test]
+    fn hidden_list_only_grows_while_bridged() {
+        let i = Input::default();
+        let mut hidden = vec!["ds".to_string()];
+        // O DualSense sumiu por um instante: nada a mostrar nem a esconder de novo.
+        assert!(new_keys(&hidden, &[]).is_empty());
+        assert!(new_keys(&hidden, &[("ds".into(), i)]).is_empty());
+        let fresh = new_keys(&hidden, &[("xinput:1".into(), i), ("ds".into(), i)]);
+        assert_eq!(fresh, ["xinput:1"]);
+        hidden.extend(fresh);
+        assert_eq!(hidden, ["ds", "xinput:1"]);
     }
 }

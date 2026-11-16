@@ -329,16 +329,54 @@ fn run(op: &str) -> bool {
     *LEDGER.lock().unwrap_or_else(|e| e.into_inner()) = None;
     let ok = match Device::open() {
         Ok(mut d) => apply(&mut d, op),
-        Err(true) => crate::startup::run_elevated_wait(&format!("--hidhide={op}")) == Some(0),
+        Err(true) => crate::startup::run_elevated_wait(&elevated_arg(op)) == Some(0),
         Err(false) => false,
     };
     *LEDGER.lock().unwrap_or_else(|e| e.into_inner()) = None;
     ok
 }
 
+/// O argumento da cópia de administrador, entre aspas: o caminho da instância tem `&` e pode ter espaço.
+fn elevated_arg(op: &str) -> String {
+    format!("\"--hidhide={op}\"")
+}
+
+/// Reinicia o aparelho. O HidHide só barra quem abre o controle depois: quem já estava com ele
+/// aberto (a Steam na bandeja) continuava vendo. Reiniciado, todos fecham e, ao abrir de novo, o
+/// HidHide decide; ao mostrar, o jogo nota o controle voltando. Pede administrador, como o driver.
+fn restart(instance: &str) {
+    use windows::core::HSTRING;
+    use windows::Win32::Devices::DeviceAndDriverInstallation::*;
+    unsafe {
+        let Ok(set) = SetupDiCreateDeviceInfoList(None, None) else { return };
+        let mut info = SP_DEVINFO_DATA { cbSize: std::mem::size_of::<SP_DEVINFO_DATA>() as u32, ..Default::default() };
+        if SetupDiOpenDeviceInfoW(set, &HSTRING::from(instance), None, 0, Some(&mut info as *mut _)).is_ok() {
+            let p = SP_PROPCHANGE_PARAMS {
+                ClassInstallHeader: SP_CLASSINSTALL_HEADER { cbSize: std::mem::size_of::<SP_CLASSINSTALL_HEADER>() as u32, InstallFunction: DIF_PROPERTYCHANGE },
+                StateChange: DICS_PROPCHANGE,
+                Scope: DICS_FLAG_CONFIGSPECIFIC,
+                HwProfile: 0,
+            };
+            if SetupDiSetClassInstallParamsW(set, Some(&info as *const _), Some(&p.ClassInstallHeader as *const _), std::mem::size_of::<SP_PROPCHANGE_PARAMS>() as u32).is_ok() {
+                let _ = SetupDiCallClassInstaller(DIF_PROPERTYCHANGE, set, Some(&info as *const _));
+            }
+        }
+        let _ = SetupDiDestroyDeviceInfoList(set);
+    }
+}
+
+/// Aparelhos que a operação mudou: o da operação, ou todos os anotados no `undo`.
+fn touched(op: &str, before: &[String]) -> Vec<String> {
+    match op.split_once(':') {
+        Some((_, dev)) => vec![dev.to_string()],
+        None => before.to_vec(),
+    }
+}
+
 /// `hide:<instância>`, `show:<instância>` ou `undo`.
 fn apply(d: &mut dyn Driver, op: &str) -> bool {
     let mut lg = ledger();
+    let before = lg.devs.clone();
     let r = match op.split_once(':') {
         Some(("hide", dev)) => match own_image() {
             Some(app) => hide(d, &mut lg, dev, &app, &mut save),
@@ -349,6 +387,9 @@ fn apply(d: &mut dyn Driver, op: &str) -> bool {
         _ => Err(()),
     };
     save(&lg);
+    if r.is_ok() {
+        touched(op, &before).iter().for_each(|dev| restart(dev));
+    }
     r.is_ok()
 }
 
@@ -644,5 +685,18 @@ mod tests {
         let json = r#"{"assets":[{"browser_download_url":"https://evil.example/HidHide_x64.exe"},{"browser_download_url":"https://github.com/nefarius/HidHide/releases/download/v1.5.230.0/HidHide_1.5.230_x64.exe"}]}"#;
         assert_eq!(installer_url(json).as_deref(), Some("https://github.com/nefarius/HidHide/releases/download/v1.5.230.0/HidHide_1.5.230_x64.exe"));
         assert_eq!(installer_url(r#"{"browser_download_url":"https://evil.example/x64.exe"}"#), None);
+    }
+
+    #[test]
+    fn elevated_arg_keeps_instance_whole() {
+        let op = r"hide:HID\{00001124-0000-1000-8000-00805F9B34FB}_VID&0002054C_PID&0CE6\9&2 A&0&0000";
+        assert_eq!(elevated_arg(op), format!("\"--hidhide={op}\""));
+    }
+
+    #[test]
+    fn restart_what_changed() {
+        let before = s(&[r"HID\A\1", r"HID\B\2"]);
+        assert_eq!(touched(r"hide:HID\VID_054C&PID_0CE6\1", &before), s(&[r"HID\VID_054C&PID_0CE6\1"]));
+        assert_eq!(touched("undo", &before), before);
     }
 }
