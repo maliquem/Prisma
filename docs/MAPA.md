@@ -274,7 +274,7 @@ A barra lateral é `NAV` (`src/pages/mod.rs:282-295`), na ordem abaixo. Cada pá
 | Função | Como é chamada | Onde no código | Observações |
 |---|---|---|---|
 | Pesquisa de arquivos, programas, web e comandos | Atalho `HK_FIND` (`app.rs:205`); ação 23; campo na página | `open` `pages/search.rs:301`; `toggle_find` `app.rs:2520`; `set_search` `app.rs:2480` | Config `search_on`, `search_apps`, `search_web`, `search_cmds`, `search_term`, `search_drives`, `search_engines`. |
-| Índice de arquivos | Automático | `sys/index.rs:580` `set`; `:603` `turn_off`; `:609` `refresh`; `:615` `flush`; `:1165` `key`; `:1327` `items` | 4 testes em `sys/index.rs`. |
+| Índice de arquivos | Automático | `sys/index.rs:605` `set`; `:629` `turn_off`; `:635` `refresh`; `:642` `flush`; `:1222` `key`; `:1385` `items` | 5 testes em `sys/index.rs`. |
 | Linhas do resultado | Página | `pages/search.rs:99` `row`; `:95` `rows` | |
 | Ações sobre um resultado | Menu do resultado | `act` `pages/search.rs:309`; `act_extra` `:330`; `menu` `:820`; `open_menu` `:832` | |
 | Abrir o arquivo ou programa | Enter ou clique | `send` `pages/search.rs:154`; `sys/quick.rs:141` `launch_app` | |
@@ -560,7 +560,7 @@ A barra lateral é `NAV` (`src/pages/mod.rs:282-295`), na ordem abaixo. Cada pá
 
 ## 6. Números e testes de apoio
 
-- Testes `#[test]` por área (contagem feita com grep): `sys/remap.rs` 21; `sys/macros.rs` 6; `link.rs` 19 (com `PadBridge` em `every_new_request_gets_an_answer`); `sys/pads.rs` 14;  `sys/osk.rs` 6; `sys/radial.rs` 6; `sys/power.rs` 5; `sys/index.rs` 4; `sys/cmds.rs` 4; `config.rs` 2; `sys/update.rs` 2; `sys/xbridge.rs` 8; `startup.rs` 1; `sys/quick.rs` 2; `sys/stores.rs` 2; `app.rs` 1; `i18n.rs` 2; `sys/nvset.rs` 1; `pages/nvidia.rs` 1; `pages/mod.rs` 1; `ui/glyph.rs` 1; `sys/nav.rs` 2; `ui/mod.rs` 1; `overlays.rs` 4 (1 ignorado); `stream/` 36 no total.
+- Testes `#[test]` por área (contagem feita com grep): `sys/remap.rs` 21; `sys/macros.rs` 6; `link.rs` 19 (com `PadBridge` em `every_new_request_gets_an_answer`); `sys/pads.rs` 14;  `sys/osk.rs` 6; `sys/radial.rs` 6; `sys/power.rs` 5; `sys/index.rs` 5; `sys/cmds.rs` 4; `config.rs` 2; `sys/update.rs` 2; `sys/xbridge.rs` 8; `startup.rs` 1; `sys/quick.rs` 2; `sys/stores.rs` 2; `app.rs` 1; `i18n.rs` 2; `sys/nvset.rs` 1; `pages/nvidia.rs` 1; `pages/mod.rs` 1; `ui/glyph.rs` 1; `sys/nav.rs` 2; `ui/mod.rs` 1; `overlays.rs` 4 (1 ignorado); `stream/` 36 no total.
 - `src/selftest.rs` (só debug): `run` (linha 5), `misc` (23), `fake_uninstall` (55), `tweaks` (110), `audit` (162), `toolrun` (189), `tweak_log` (223).
 
 ---

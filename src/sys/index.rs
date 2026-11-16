@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, LazyLock, Mutex, RwLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -41,6 +41,8 @@ const R_CLOSE: u32 = 0x8000_0000;
 const RESCAN: Duration = Duration::from_secs(15 * 60);
 /// Gravar o índice inteiro custa escrita no SSD: ao sair já grava, e o diário cobre o resto.
 const SAVE_EVERY: Duration = Duration::from_secs(6 * 3600);
+/// Sem pesquisa por este tempo, o índice sai da memória e fica só no disco.
+const IDLE: Duration = Duration::from_secs(10 * 60);
 const POLL: Duration = Duration::from_secs(2);
 /// Resultados guardados por pesquisa. O total encontrado continua contado.
 pub const CAP: usize = 200_000;
@@ -95,6 +97,10 @@ impl Vol {
         self.garbage += e.name_len as usize;
         e.name_off = self.names.len() as u32;
         e.name_len = s.len().min(u16::MAX as usize) as u16;
+        // Folga fixa: crescer dobrando deixaria centenas de MB reservados à toa.
+        if self.names.capacity() - self.names.len() < e.name_len as usize {
+            self.names.reserve_exact(1 << 20);
+        }
         self.names.extend_from_slice(&s.as_bytes()[..e.name_len as usize]);
     }
 
@@ -378,6 +384,9 @@ fn apply(v: &mut Vol, data: &[u8], refresh: &mut HashMap<u32, u64>) -> bool {
             continue;
         }
         if idx as usize >= v.entries.len() {
+            if idx as usize >= v.entries.capacity() {
+                v.entries.reserve_exact(idx as usize + 1 - v.entries.len() + 4096);
+            }
             v.entries.resize(idx as usize + 1, Entry::default());
         }
         let was = v.entries[idx as usize].flags & USED != 0;
@@ -450,13 +459,12 @@ fn store_dir() -> PathBuf {
     base.join("indice")
 }
 
-fn file_for(letter: char) -> PathBuf {
-    store_dir().join(format!("{letter}.idx"))
+fn file_for(dir: &Path, letter: char) -> PathBuf {
+    dir.join(format!("{letter}.idx"))
 }
 
-fn save(v: &Vol) -> bool {
-    let dir = store_dir();
-    let _ = std::fs::create_dir_all(&dir);
+fn save(dir: &Path, v: &Vol) -> bool {
+    let _ = std::fs::create_dir_all(dir);
     let tmp = dir.join(format!("{}.tmp", v.letter));
     let ok = (|| -> std::io::Result<()> {
         let mut f = std::io::BufWriter::with_capacity(1 << 20, std::fs::File::create(&tmp)?);
@@ -479,27 +487,29 @@ fn save(v: &Vol) -> bool {
         Ok(())
     })()
     .is_ok();
-    ok && std::fs::rename(&tmp, file_for(v.letter)).is_ok()
+    ok && std::fs::rename(&tmp, file_for(dir, v.letter)).is_ok()
 }
 
-fn load(letter: char) -> Option<Vol> {
-    let b = std::fs::read(file_for(letter)).ok()?;
-    if b.len() < HEADER || &b[0..4] != MAGIC || b[4] != letter as u8 {
+fn load(dir: &Path, letter: char) -> Option<Vol> {
+    use std::io::Read;
+    let mut f = std::fs::File::open(file_for(dir, letter)).ok()?;
+    let mut b = [0u8; HEADER];
+    f.read_exact(&mut b).ok()?;
+    if &b[0..4] != MAGIC || b[4] != letter as u8 {
         return None;
     }
     let n = u32_at(&b, 44) as usize;
     let nl = u32_at(&b, 48) as usize;
     let es = std::mem::size_of::<Entry>();
-    if b.len() != HEADER + n * es + nl {
-        return None;
-    }
-    let mut entries = vec![Entry::default(); n];
-    unsafe { std::ptr::copy_nonoverlapping(b[HEADER..].as_ptr(), entries.as_mut_ptr() as *mut u8, n * es) };
-    let names = b[HEADER + n * es..].to_vec();
     let root = u32_at(&b, 8);
-    if root as usize >= n {
+    if f.metadata().ok()?.len() != (HEADER + n * es + nl) as u64 || root as usize >= n {
         return None;
     }
+    // Direto do arquivo para as listas, sem uma cópia inteira no meio.
+    let mut entries = vec![Entry::default(); n];
+    f.read_exact(unsafe { std::slice::from_raw_parts_mut(entries.as_mut_ptr() as *mut u8, n * es) }).ok()?;
+    let mut names = vec![0u8; nl];
+    f.read_exact(&mut names).ok()?;
     Some(Vol {
         letter,
         ntfs: b[5] != 0,
@@ -549,6 +559,10 @@ struct Index {
     /// Ao desligar, apaga o índice salvo em vez de gravar.
     wipe: AtomicBool,
     thread: Mutex<Option<std::thread::Thread>>,
+    /// Hora (now_secs) da última pesquisa.
+    used: AtomicU64,
+    /// Discos como estavam ao sair da memória; vazio quando o índice está carregado.
+    asleep: Mutex<Vec<Drive>>,
 }
 
 static IX: LazyLock<Index> = LazyLock::new(|| Index {
@@ -560,6 +574,8 @@ static IX: LazyLock<Index> = LazyLock::new(|| Index {
     refresh: AtomicBool::new(false),
     wipe: AtomicBool::new(false),
     thread: Mutex::new(None),
+    used: AtomicU64::new(0),
+    asleep: Mutex::new(Vec::new()),
 });
 
 fn active() -> bool {
@@ -576,6 +592,15 @@ fn wake() {
     }
 }
 
+/// Alguém quer o índice: se saiu da memória, volta.
+fn touch() {
+    IX.used.store(now_secs(), Ordering::Relaxed);
+    if !std::mem::take(&mut *IX.asleep.lock().unwrap()).is_empty() {
+        bump();
+        wake();
+    }
+}
+
 /// Liga ou desliga e diz quais discos entram. Desligar libera a memória.
 pub fn set(on: bool, drives: Vec<char>) {
     {
@@ -585,6 +610,7 @@ pub fn set(on: bool, drives: Vec<char>) {
         }
         *w = (on, drives);
     }
+    touch();
     if on {
         IX.wipe.store(false, Ordering::Relaxed);
         let mut t = IX.thread.lock().unwrap();
@@ -608,6 +634,7 @@ pub fn turn_off() {
 /// Lê todos os discos de novo.
 pub fn refresh() {
     IX.refresh.store(true, Ordering::Relaxed);
+    touch();
     wake();
 }
 
@@ -615,7 +642,7 @@ pub fn refresh() {
 pub fn flush() {
     for v in IX.vols.read().unwrap().iter() {
         if v.dirty {
-            save(v);
+            save(&store_dir(), v);
         }
     }
 }
@@ -632,6 +659,10 @@ pub fn status() -> Vec<Drive> {
     let (on, wanted) = IX.wanted.lock().unwrap().clone();
     if !on {
         return Vec::new();
+    }
+    let asleep = IX.asleep.lock().unwrap().clone();
+    if !asleep.is_empty() {
+        return asleep;
     }
     let vols = IX.vols.read().unwrap();
     let building = *IX.building.lock().unwrap();
@@ -684,7 +715,7 @@ fn build(letter: char) -> Option<Vol> {
 
 /// Índice salvo, conferido e posto em dia pelo diário. Nada disso serve: None.
 fn restore(letter: char) -> Option<Vol> {
-    let mut v = load(letter)?;
+    let mut v = load(&store_dir(), letter)?;
     let (serial, _) = volume_info(letter)?;
     if v.serial != serial {
         return None;
@@ -771,15 +802,16 @@ fn poll() {
     }
 }
 
+/// Só a thread do índice escreve em `vols`: gravar com a trava de leitura deixa a pesquisa rodar
+/// e nada muda entre gravar e marcar como gravado.
 fn save_dirty() {
-    let mut vols = IX.vols.write().unwrap();
-    for v in vols.iter_mut() {
-        if v.dirty {
-            v.tidy();
-            if save(v) {
-                v.dirty = false;
-            }
-        }
+    for v in IX.vols.write().unwrap().iter_mut().filter(|v| v.dirty) {
+        v.tidy();
+    }
+    let dir = store_dir();
+    let saved: Vec<char> = IX.vols.read().unwrap().iter().filter(|v| v.dirty && save(&dir, v)).map(|v| v.letter).collect();
+    for v in IX.vols.write().unwrap().iter_mut().filter(|v| saved.contains(&v.letter)) {
+        v.dirty = false;
     }
 }
 
@@ -791,10 +823,13 @@ fn run() {
     let mut last_save = Instant::now();
     // Leitor de cartão sem cartão também tem letra: não insiste nele a cada volta.
     let mut failed: HashMap<char, Instant> = HashMap::new();
+    // Desde quando o índice está fora da memória por falta de pesquisa.
+    let mut slept: Option<Instant> = None;
     loop {
         std::thread::park_timeout(Duration::from_millis(500));
         let (on, wanted) = IX.wanted.lock().unwrap().clone();
         if !on {
+            slept = None;
             if IX.wipe.swap(false, Ordering::Relaxed) {
                 IX.vols.write().unwrap().clear();
                 if let Ok(rd) = std::fs::read_dir(store_dir()) {
@@ -812,6 +847,16 @@ fn run() {
             }
             continue;
         }
+        let idle = now_secs().saturating_sub(IX.used.load(Ordering::Relaxed)) >= IDLE.as_secs();
+        if let Some(t) = slept {
+            // Sem pesquisa, só volta para pôr o diário em dia antes que ele esqueça o que mudou.
+            if idle && t.elapsed() < SAVE_EVERY {
+                continue;
+            }
+            slept = None;
+            IX.asleep.lock().unwrap().clear();
+            bump();
+        }
         // Disco tirado da lista: sai da memória e do disco. Disco que sumiu: só da memória.
         let gone: Vec<(char, bool)> =
             IX.vols.read().unwrap().iter().filter(|v| !wanted.contains(&v.letter) || !present(v.letter)).map(|v| (v.letter, wanted.contains(&v.letter))).collect();
@@ -820,9 +865,9 @@ fn run() {
             if let Some(i) = vols.iter().position(|v| v.letter == l) {
                 let v = vols.remove(i);
                 if keep && v.dirty {
-                    save(&v);
+                    save(&store_dir(), &v);
                 } else if !keep {
-                    let _ = std::fs::remove_file(file_for(l));
+                    let _ = std::fs::remove_file(file_for(&store_dir(), l));
                 }
             }
             drop(vols);
@@ -838,17 +883,29 @@ fn run() {
         let have: Vec<char> = IX.vols.read().unwrap().iter().map(|v| v.letter).collect();
         let retry = |l: &char| failed.get(l).is_none_or(|t| t.elapsed() > Duration::from_secs(60));
         if let Some(&l) = wanted.iter().find(|l| !have.contains(l) && present(**l) && retry(l)) {
-            let v = restore(l).or_else(|| build(l));
-            if v.is_none() {
-                failed.insert(l, Instant::now());
-            }
-            if let Some(v) = v {
-                let fresh = v.dirty;
-                insert(v);
-                if fresh {
-                    save_dirty();
+            // Só o que foi lido do zero é gravado já; o restaurado espera a próxima gravação.
+            let v = restore(l).map(|v| (v, false)).or_else(|| build(l).map(|v| (v, true)));
+            match v {
+                Some((v, fresh)) => {
+                    insert(v);
+                    if fresh {
+                        save_dirty();
+                    }
+                }
+                None => {
+                    failed.insert(l, Instant::now());
                 }
             }
+            continue;
+        }
+        if idle {
+            save_dirty();
+            let snap = status();
+            IX.vols.write().unwrap().clear();
+            *IX.asleep.lock().unwrap() = snap;
+            slept = Some(Instant::now());
+            last_save = Instant::now();
+            bump();
             continue;
         }
         if last_poll.elapsed() >= POLL {
@@ -1172,6 +1229,7 @@ fn search(q: &str, sort: Sort, desc: bool, gen: &AtomicU64, my: u64) -> Option<R
     if query.empty() {
         return Some(Results { query: q.to_string(), hits: Vec::new(), total: 0, ms: 0 });
     }
+    touch();
     let vols = IX.vols.read().unwrap();
     const CHUNK: usize = 1 << 15;
     let chunks: Vec<(usize, usize)> = vols.iter().enumerate().flat_map(|(vi, v)| (0..v.entries.len()).step_by(CHUNK).map(move |s| (vi, s))).collect();
@@ -1325,6 +1383,7 @@ impl Item {
 
 /// Os resultados pedidos, na mesma ordem. O que sumiu do disco desde a pesquisa fica None.
 pub fn items(keys: &[u64]) -> Vec<Option<Item>> {
+    touch();
     let vols = IX.vols.read().unwrap();
     keys.iter()
         .map(|&k| {
@@ -1375,6 +1434,38 @@ mod tests {
         assert!(has_ascii_ci(b"MeuArquivo.TXT", b"arquivo.t"));
         assert!(!has_ascii_ci(b"abc", b"abcd"));
     }
+
+    #[test]
+    fn saves_and_loads() {
+        let dir = std::env::temp_dir().join(format!("prisma-idx-{}", std::process::id()));
+        let mut v = Vol {
+            letter: 'Q',
+            ntfs: true,
+            entries: vec![Entry::default(); 3],
+            names: Vec::new(),
+            root: 0,
+            serial: 0xABCD,
+            journal: 7,
+            next_usn: -5,
+            built: 99,
+            garbage: 0,
+            dirty: true,
+            files: 2,
+            live: true,
+        };
+        v.entries[1] = Entry { parent: 0, flags: USED, mtime: 12, size: 1 << 40, ..Default::default() };
+        v.entries[2] = Entry { parent: 1, flags: USED, mtime: 34, size: 5, ..Default::default() };
+        v.set_name(1, "pasta");
+        v.set_name(2, "ação.txt");
+        assert!(save(&dir, &v));
+        let w = load(&dir, 'Q').expect("lê o que gravou");
+        assert!(load(&dir, 'R').is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!((w.ntfs, w.root, w.serial, w.journal, w.next_usn, w.built, w.files), (true, 0, 0xABCD, 7, -5, 99, 2));
+        assert_eq!(w.path(2), r"Q:\pasta\ação.txt");
+        assert_eq!((w.entries[1].size, w.entries[2].mtime, w.entries[2].parent), (1 << 40, 34, 1));
+        assert!(!w.dirty && !w.live);
+    }
 }
 
 /// Teste de ponta a ponta num disco: monta o índice, cria, muda, renomeia e apaga um arquivo em
@@ -1383,7 +1474,7 @@ mod tests {
 pub fn self_test(letter: char, dir: &str) -> String {
     use std::fmt::Write as _;
     let mut out = String::new();
-    let had = file_for(letter).exists();
+    let had = file_for(&store_dir(), letter).exists();
     let _ = writeln!(out, "administrador: {} · índice salvo antes: {had}", crate::startup::is_elevated());
     let t = Instant::now();
     set(true, vec![letter]);
@@ -1423,7 +1514,7 @@ pub fn self_test(letter: char, dir: &str) -> String {
     let _ = writeln!(out, "apagado: {} achado(s)", find(&format!("renomeado_{name}")).total);
     let t = Instant::now();
     flush();
-    let size = std::fs::metadata(file_for(letter)).map_or(0, |m| m.len());
+    let size = std::fs::metadata(file_for(&store_dir(), letter)).map_or(0, |m| m.len());
     let _ = writeln!(out, "gravado em {} ms · arquivo {} MB", t.elapsed().as_millis(), size >> 20);
     out
 }
