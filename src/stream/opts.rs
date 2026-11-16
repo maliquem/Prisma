@@ -228,7 +228,7 @@ impl Opts {
         format!(
             "hdr_desligar={}\npessoas={}\ncontroles={}\nconvite={}\nnome={}\nresolucao={}\nquadros={}\nbanda={}\ncodec={}\nprioridade={}\n\
 dez_bits={}\npermitir_444={}\nmonitor={}\nritmo_constante={}\nsom_programa={}\nsem_chamadas={}\num_por_vez={}\nhost_primeiro={}\n\
-sem_cadeia={}\nporta={}\nupnp={}\natalho_emergencia={}\ngpu={}\nsom_saida={}\nsom_entrada={}\nconvite_minutos={}\n",
+sem_cadeia={}\nporta={}\njanela={}:{}\nupnp={}\natalho_emergencia={}\ngpu={}\nsom_saida={}\nsom_entrada={}\nconvite_minutos={}\n",
             b(self.hdr_off),
             self.guests,
             self.pads,
