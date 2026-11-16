@@ -2,7 +2,7 @@
 
 [English](README.md) · [Português (Brasil)](README.pt-BR.md) · [Español](README.es.md) · [Русский](README.ru.md) · **简体中文**
 
-一款轻量的 Windows 11 实用工具，完全用 Rust 编写，不依赖任何界面框架。它常驻托盘，只加载正在使用的部分，整个程序只有一个 2 MB 的文件。它可以代替任务管理器，并把电脑玩家通常要一个个收集的小工具集中在一起。
+一款轻量的 Windows 11 实用工具，完全用 Rust 编写，不依赖任何界面框架。它常驻托盘，只加载正在使用的部分，整个程序只有一个 13 MB 的文件。它可以代替任务管理器，并把高级用户和电脑玩家通常要一个个收集的小工具集中在一起。
 
 **[下载最新版本](https://github.com/maliquem/Prisma/releases/latest)** · **[指南：每项功能的说明（英文）](docs/guide/GUIDE.md)**
 

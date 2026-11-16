@@ -2,7 +2,7 @@
 
 **English** · [Português (Brasil)](README.pt-BR.md) · [Español](README.es.md) · [Русский](README.ru.md) · [简体中文](README.zh-CN.md)
 
-A lightweight utility for Windows 11, written entirely in Rust with no UI framework. It sits in the tray, loads only what is in use and fits in a single 2 MB file. It replaces Task Manager and brings together the small tools a PC gamer usually collects one by one.
+A lightweight utility for Windows 11, written entirely in Rust with no UI framework. It sits in the tray, loads only what is in use and fits in a single 13 MB file. It replaces Task Manager and brings together the small tools that power users and PC gamers usually collect one by one.
 
 **[Download the latest version](https://github.com/maliquem/Prisma/releases/latest)** · **[Guide: every feature explained](docs/guide/GUIDE.md)**
 

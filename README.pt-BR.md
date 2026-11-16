@@ -2,7 +2,7 @@
 
 [English](README.md) · **Português (Brasil)** · [Español](README.es.md) · [Русский](README.ru.md) · [简体中文](README.zh-CN.md)
 
-Utilitário leve para Windows 11, todo em Rust, sem framework de interface. Fica na bandeja, só carrega o que está em uso e cabe em um único arquivo de 2 MB. Substitui o Gerenciador de Tarefas e reúne as pequenas ferramentas que quem joga no PC costuma juntar uma a uma.
+Utilitário leve para Windows 11, todo em Rust, sem framework de interface. Fica na bandeja, só carrega o que está em uso e cabe em um único arquivo de 13 MB. Substitui o Gerenciador de Tarefas e reúne as pequenas ferramentas que power users e quem joga no PC costumam juntar uma a uma.
 
 **[Baixar a versão mais recente](https://github.com/maliquem/Prisma/releases/latest)** · **[Guia: todas as funções explicadas](docs/guide/GUIA.md)**
 
