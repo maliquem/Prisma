@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prisma Equalizador</title>
+<style>
+:root{--bg:#17191d;--side:#1d2025;--card:#24272e;--card2:#2c3038;--border:#3b404b;--text:#e8eaee;--text2:#c3c7cf;--muted:#a4a9b4;--accent:#7cc4ff;--warn:#ffb26b;--ok:#7ee0a1}
+*{box-sizing:border-box}
+body{margin:0;background:#0e0f12;color:var(--text);font:14px/1.35 "Segoe UI Variable","Segoe UI",system-ui,sans-serif}
+.note{max-width:1180px;margin:16px auto 8px;padding:0 16px;color:var(--muted);font-size:13px}
+.win{max-width:1180px;margin:0 auto 24px;display:flex;background:var(--bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;min-height:860px}
+.side{width:196px;background:var(--side);padding:14px 8px;flex:none}
+.side .logo{font-weight:600;padding:4px 12px 14px;color:var(--accent)}
+.side a{display:block;padding:8px 12px;border-radius:8px;color:var(--muted);text-decoration:none;font-size:13px}
+.side a.on{background:var(--card2);color:var(--text);font-weight:600}
+main{flex:1;padding:18px 28px 24px;min-width:0}
+h1{margin:0;font-size:22px;font-weight:600}
+.sub{color:var(--muted);font-size:13px;margin:2px 0 14px}
+.tabs{display:flex;gap:4px;margin-bottom:14px}
+.tab{padding:7px 14px;border-radius:8px;color:var(--muted);cursor:pointer;user-select:none}
+.tab.on{background:var(--card2);color:var(--text);font-weight:600}
+.card{background:var(--card);border-radius:10px;padding:12px 16px;margin-bottom:12px}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.grid3{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:12px;margin-bottom:12px}
+.grid3 .card{margin:0}
+.lab{color:var(--text2);font-size:12px;margin-bottom:6px}
+.hint{color:var(--muted);font-size:12px}
+.title{font-weight:600;font-size:15px}
+select,input[type=number]{background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:7px 8px;font:inherit;font-size:13px}
+input[type=number]{width:72px}
+button{background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:7px 12px;font:inherit;font-size:13px;cursor:pointer}
+button.pri{background:var(--accent);color:#0c1a26;border-color:var(--accent);font-weight:600}
+button.on{border-color:var(--accent);color:var(--accent)}
+.pill{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;background:var(--card2);color:var(--muted)}
+.pill.ok{color:var(--ok)} .pill.warn{color:var(--warn)}
+.seg{display:inline-flex;background:var(--card2);border-radius:8px;padding:2px}
+.seg span{padding:5px 12px;border-radius:6px;cursor:pointer;color:var(--muted);font-size:13px}
+.seg span.on{background:var(--border);color:var(--text)}
+svg{display:block;width:100%}
+.curve{background:#1b1e23;border-radius:8px;touch-action:none}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{padding:5px 6px;text-align:left}
+th{color:var(--muted);font-weight:400;font-size:12px}
+tr.sel td{background:var(--card2)}
+.dot{width:12px;height:12px;border-radius:50%;display:inline-block}
+.geq{display:flex;gap:4px;align-items:flex-end;height:190px;padding-top:6px}
+.geq div{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0}
+.geq input{writing-mode:vertical-lr;direction:rtl;height:150px;width:18px;accent-color:var(--accent)}
+.geq small{color:var(--muted);font-size:10px}
+.spk{position:relative;height:250px;background:#1b1e23;border-radius:8px}
+.spk .s{position:absolute;transform:translate(-50%,-50%);width:58px;padding:6px 0;text-align:center;border-radius:8px;background:var(--card2);border:1px solid var(--border);cursor:pointer;font-size:12px}
+.spk .s.on{border-color:var(--accent);color:var(--accent)}
+.spk .s b{display:block;font-size:13px}
+.spk .head{position:absolute;left:50%;top:56%;transform:translate(-50%,-50%);width:46px;height:46px;border-radius:50%;border:1px dashed var(--border)}
+.split{display:grid;grid-template-columns:1fr 340px;gap:12px}
+.split .card{margin:0}
+.apps td:first-child{width:36px}
+.ico{width:24px;height:24px;border-radius:6px;background:var(--border);display:inline-block}
+.consent{border:1px solid var(--warn)}
+@media (max-width:900px){.grid3,.split{grid-template-columns:1fr}.side{display:none}main{padding:16px}}
+</style>
+</head>
+<body>
+<p class="note">Mock-up: página <b>Som</b> do Prisma com a aba nova <b>Equalizador</b>. Interativo: arraste os pontos da curva, escolha o canal no desenho 7.1, troque Paramétrico/Gráfico. Nada aqui grava no Windows.</p>
+<div class="win">
+  <nav class="side">
+    <div class="logo">◆ Prisma</div>
+    <a>Medidor</a><a>Otimizar</a><a>Controles</a><a>Captura</a><a class="on">Som</a><a>HDR</a><a>Driver NVIDIA</a><a>Energia</a><a>Ajustes</a>
+  </nav>
+  <main>
+    <h1>Som</h1>
+    <div class="sub">Volume, aparelhos e equalizador de cada saída e de cada programa.</div>
+    <div class="tabs"><span class="tab" data-t="0">Programas</span><span class="tab on" data-t="1">Equalizador</span></div>
+
+    <section id="t0" hidden>
+      <div class="card hint">A aba Programas continua como hoje: modificador, passo, manter o som acordado, atalhos de aparelho padrão e a lista de programas. Cada programa ganha só a coluna <b>Equalizador</b> (perfil ou "do aparelho").</div>
+    </section>
+
+    <section id="t1">
+      <!-- Linha de cima: aparelho, perfil, motor -->
+      <div class="grid3">
+        <div class="card">
+          <div class="lab">Aparelho de saída</div>
+          <div class="row">
+            <select id="dev" style="flex:1">
+              <option value="71">Alto-falantes (Realtek USB) · 7.1</option>
+              <option value="20">Fone (Arctis Nova) · estéreo</option>
+              <option value="51">LG TV (NVIDIA HDMI) · 5.1</option>
+            </select>
+          </div>
+          <div class="hint" style="margin-top:8px"><span class="pill ok">EQ ativo neste aparelho</span> &nbsp;48 kHz · 8 canais (L R C LFE RL RR SL SR)</div>
+        </div>
+        <div class="card">
+          <div class="lab">Perfil do aparelho</div>
+          <div class="row">
+            <select id="prof" style="flex:1"><option>Filmes noite</option><option>Música</option><option>Plano (desligado)</option><option>+ Novo perfil…</option></select>
+          </div>
+          <div class="row" style="margin-top:8px"><button>Renomear</button><button>Duplicar</button><button>Importar AutoEQ</button></div>
+        </div>
+        <div class="card">
+          <div class="lab">Motor de equalização do Prisma</div>
+          <div class="hint">Ativo em 2 de 3 aparelhos. O som de cada programa passa pelo equalizador antes da mistura.</div>
+          <div class="row" style="margin-top:8px"><button>Aparelhos…</button><button>Remover</button><button title="Tira de todos os aparelhos agora">Emergência</button></div>
+        </div>
+      </div>
+
+      <!-- Curva + bandas -->
+      <div class="card">
+        <div class="row" style="justify-content:space-between;margin-bottom:8px">
+          <div class="row"><span class="title">Equalizador</span><span class="seg" id="mode"><span class="on" data-m="p">Paramétrico</span><span data-m="g">Gráfico</span></span>
+            <span class="hint" id="chname">Canal: Todos</span></div>
+          <div class="row"><span class="hint">Pré-amplificação</span><input type="number" id="pre" value="-4" step="0.5"> <span class="hint">dB</span>
+            <span class="pill warn" id="clip" hidden>Pode distorcer: baixe a pré-amplificação</span>
+            <button id="bypass">Comparar sem EQ</button></div>
+        </div>
+        <svg id="curve" class="curve" viewBox="0 0 1000 260" preserveAspectRatio="none"></svg>
+        <div id="pbox" style="margin-top:10px">
+          <table><thead><tr><th></th><th>Liga</th><th>Tipo</th><th>Frequência (Hz)</th><th>Ganho (dB)</th><th>Q</th><th></th></tr></thead><tbody id="bands"></tbody></table>
+          <div class="row" style="margin-top:6px"><button id="add">Adicionar banda</button><span class="hint">Até 10 bandas por canal. Clique duplo na curva também cria uma.</span></div>
+        </div>
+        <div id="gbox" hidden>
+          <div class="row" style="margin:6px 0"><span class="hint">Bandas</span><span class="seg" id="gn"><span class="on" data-n="10">10</span><span data-n="15">15</span><span data-n="31">31</span></span><button id="flat">Zerar</button></div>
+          <div class="geq" id="geq"></div>
+        </div>
+      </div>
+
+      <!-- Canais e programas -->
+      <div class="split">
+        <div class="card">
+          <div class="row" style="justify-content:space-between"><span class="title">Canais</span>
+            <span class="hint">Clique num alto-falante para equalizar só ele. <button id="all" class="on">Todos juntos</button></span></div>
+          <div class="row" style="align-items:flex-start;margin-top:8px">
+            <div class="spk" id="spk" style="flex:1.2;min-width:260px"><div class="head"></div></div>
+            <div style="flex:1;min-width:220px">
+              <table><thead><tr><th>Canal</th><th>Ganho</th><th>Atraso</th><th></th></tr></thead><tbody id="chans"></tbody></table>
+              <div class="hint" style="margin-top:6px">Atraso em ms (1 ms ≈ 34 cm). <button>Abrir configuração de alto-falantes do Windows</button></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="row" style="justify-content:space-between"><span class="title">Perfis por programa</span><button>Adicionar</button></div>
+          <table class="apps" style="margin-top:6px"><tbody>
+            <tr><td><span class="ico"></span></td><td>Cyberpunk 2077<div class="hint">quando em foco</div></td><td><select><option>Jogos FPS</option></select></td></tr>
+            <tr><td><span class="ico"></span></td><td>Spotify<div class="hint">quando tocando</div></td><td><select><option>Música</option></select></td></tr>
+            <tr><td><span class="ico"></span></td><td>Discord<div class="hint">sempre (só no som dele)</div></td><td><select><option>Voz</option></select></td></tr>
+          </tbody></table>
+          <div class="hint" style="margin-top:6px"><b>Sempre</b>: o perfil vale só no som daquele programa, junto com os outros. <b>Em foco</b> e <b>tocando</b>: o perfil do aparelho troca enquanto o programa está na frente ou tocando, e volta quando ele fecha.</div>
+          <div class="hint" style="margin-top:8px">Agora: <b style="color:var(--accent)">Filmes noite</b> (perfil do aparelho)</div>
+        </div>
+      </div>
+
+      <!-- Consentimento (estado sem o motor) -->
+      <div class="card consent" style="margin-top:12px">
+        <div class="title">Antes de ligar (como aparece sem o motor instalado)</div>
+        <div class="hint" style="margin:6px 0 10px">O equalizador entra no motor de áudio do Windows, nos aparelhos que você escolher. Pede administrador uma vez e guarda a configuração original de cada aparelho, para devolver igual ao remover. Nada é baixado. Programas em modo exclusivo passam sem EQ, e as Melhorias de áudio do Windows precisam estar ligadas.</div>
+        <div class="row"><button class="pri">Ligar o equalizador…</button><button>Saber mais</button></div>
+      </div>
+    </section>
+  </main>
+</div>
+<script>
+const FS=48000;
+const TYPES={PK:'Pico',LSC:'Grave (prateleira)',HSC:'Agudo (prateleira)',LP:'Passa-baixa',HP:'Passa-alta',NO:'Corte'};
+const CH={71:[['L','Frente esq.',22,22],['C','Centro',50,14],['R','Frente dir.',78,22],['LFE','Sub',88,46],['SL','Lado esq.',10,56],['SR','Lado dir.',90,70],['RL','Trás esq.',28,88],['RR','Trás dir.',72,88]],
+ 51:[['L','Frente esq.',22,22],['C','Centro',50,14],['R','Frente dir.',78,22],['LFE','Sub',88,46],['RL','Trás esq.',24,86],['RR','Trás dir.',76,86]],
+ 20:[['L','Esquerdo',30,50],['R','Direito',70,50]]};
+const COL=['#7cc4ff','#ffb26b','#7ee0a1','#e58cff','#ff7c9c','#ffe27c','#8cf0ff','#b9a0ff','#ff9f6b','#9fd36b'];
+let eq={all:[{on:1,t:'LSC',f:80,g:3,q:0.7},{on:1,t:'PK',f:250,g:-2,q:1.2},{on:1,t:'PK',f:3200,g:2.5,q:1.4},{on:1,t:'HSC',f:9000,g:-1.5,q:0.7}]};
+let chs={}, cur='all', sel=0, bypass=false, mode='p', gn=10, geq={};
+function biq(b){const A=Math.pow(10,b.g/40),w=2*Math.PI*b.f/FS,c=Math.cos(w),s=Math.sin(w),al=s/(2*b.q);let b0,b1,b2,a0,a1,a2;
+ if(b.t==='PK'){b0=1+al*A;b1=-2*c;b2=1-al*A;a0=1+al/A;a1=-2*c;a2=1-al/A}
+ else if(b.t==='LSC'||b.t==='HSC'){const sq=2*Math.sqrt(A)*al,sg=b.t==='LSC'?1:-1;
+  b0=A*((A+1)-sg*(A-1)*c+sq);b1=sg*2*A*((A-1)-sg*(A+1)*c);b2=A*((A+1)-sg*(A-1)*c-sq);a0=(A+1)+sg*(A-1)*c+sq;a1=-sg*2*((A-1)+sg*(A+1)*c);a2=(A+1)+sg*(A-1)*c-sq}
+ else if(b.t==='LP'){b0=(1-c)/2;b1=1-c;b2=b0;a0=1+al;a1=-2*c;a2=1-al}
+ else if(b.t==='HP'){b0=(1+c)/2;b1=-(1+c);b2=b0;a0=1+al;a1=-2*c;a2=1-al}
+ else {b0=1;b1=-2*c;b2=1;a0=1+al;a1=-2*c;a2=1-al}
+ return [b0/a0,b1/a0,b2/a0,a1/a0,a2/a0]}
+function mag(k,f){const w=2*Math.PI*f/FS,c1=Math.cos(w),s1=Math.sin(w),c2=Math.cos(2*w),s2=Math.sin(2*w);
+ const nr=k[0]+k[1]*c1+k[2]*c2,ni=-(k[1]*s1+k[2]*s2),dr=1+k[3]*c1+k[4]*c2,di=-(k[3]*s1+k[4]*s2);
+ return 10*Math.log10((nr*nr+ni*ni)/(dr*dr+di*di))}
+const X=f=>Math.log10(f/20)/Math.log10(1000)*1000, F=x=>20*Math.pow(1000,x/1000), Y=db=>130-db*8, D=y=>(130-y)/8;
+function gfreqs(){return gn===10?[31,62,125,250,500,1000,2000,4000,8000,16000]:gn===15?[25,40,63,100,160,250,400,630,1000,1600,2500,4000,6300,10000,16000]:
+ [20,25,31.5,40,50,63,80,100,125,160,200,250,315,400,500,630,800,1000,1250,1600,2000,2500,3150,4000,5000,6300,8000,10000,12500,16000,20000]}
+function list(){return eq[cur]||(eq[cur]=[])}
+function resp(f){if(bypass)return 0;let d=+document.getElementById('pre').value;
+ if(mode==='g'){const fr=gfreqs(),v=geq[cur]||[];let i=0;while(i<fr.length-1&&fr[i+1]<f)i++;
+  if(f<=fr[0])return d+(v[0]||0);if(i>=fr.length-1)return d+(v[fr.length-1]||0);
+  const t=(Math.log(f)-Math.log(fr[i]))/(Math.log(fr[i+1])-Math.log(fr[i]));return d+(v[i]||0)*(1-t)+(v[i+1]||0)*t}
+ for(const b of list())if(b.on)d+=mag(biq(b),f);return d}
+function draw(){const s=document.getElementById('curve');let h='';
+ for(const db of [-12,-6,0,6,12])h+=`<line x1="0" x2="1000" y1="${Y(db)}" y2="${Y(db)}" stroke="${db?'#2c3038':'#3b404b'}"/><text x="6" y="${Y(db)-3}" fill="#a4a9b4" font-size="11">${db>0?'+':''}${db} dB</text>`;
+ for(const f of [50,100,200,500,1000,2000,5000,10000])h+=`<line y1="0" y2="260" x1="${X(f)}" x2="${X(f)}" stroke="#2c3038"/><text x="${X(f)+3}" y="254" fill="#a4a9b4" font-size="11">${f>=1000?f/1000+'k':f}</text>`;
+ let p='',mx=-99;for(let x=0;x<=1000;x+=4){const v=resp(F(x));mx=Math.max(mx,v);p+=(x?'L':'M')+x+','+Y(v).toFixed(1)}
+ h+=`<path d="${p} L1000,260 L0,260Z" fill="#7cc4ff" opacity=".08"/><path d="${p}" fill="none" stroke="${bypass?'#a4a9b4':'#7cc4ff'}" stroke-width="2.5"/>`;
+ if(mode==='p'&&!bypass)list().forEach((b,i)=>{const cx=X(b.f),cy=Y(b.t==='LP'||b.t==='HP'?0:b.g);
+  h+=`<circle cx="${cx}" cy="${cy}" r="${i===sel?10:8}" fill="${COL[i%10]}" stroke="#17191d" stroke-width="2" data-i="${i}" style="cursor:grab"/><text x="${cx}" y="${cy+4}" text-anchor="middle" font-size="10" fill="#0c1a26" pointer-events="none">${i+1}</text>`});
+ s.innerHTML=h;document.getElementById('clip').hidden=!(mx>0.05&&!bypass);}
+function table(){const tb=document.getElementById('bands');tb.innerHTML=list().map((b,i)=>`<tr class="${i===sel?'sel':''}" data-i="${i}">
+ <td><span class="dot" style="background:${COL[i%10]}"></span></td><td><input type="checkbox" ${b.on?'checked':''} data-k="on"></td>
+ <td><select data-k="t">${Object.entries(TYPES).map(([k,v])=>`<option value="${k}" ${k===b.t?'selected':''}>${v}</option>`).join('')}</select></td>
+ <td><input type="number" value="${Math.round(b.f)}" data-k="f" min="20" max="20000"></td><td><input type="number" value="${b.g.toFixed(1)}" step="0.5" data-k="g"></td>
+ <td><input type="number" value="${b.q.toFixed(2)}" step="0.1" min="0.1" data-k="q"></td><td><button data-k="x">✕</button></td></tr>`).join('');}
+document.getElementById('bands').addEventListener('input',e=>{const tr=e.target.closest('tr'),i=+tr.dataset.i,k=e.target.dataset.k,b=list()[i];
+ if(k==='on')b.on=e.target.checked?1:0;else if(k==='t')b.t=e.target.value;else b[k]=Math.max(k==='q'?0.1:k==='f'?20:-24,+e.target.value||0);sel=i;draw()});
+document.getElementById('bands').addEventListener('click',e=>{if(e.target.dataset.k==='x'){list().splice(+e.target.closest('tr').dataset.i,1);sel=0;table();draw()}});
+document.getElementById('add').onclick=()=>{if(list().length<10){list().push({on:1,t:'PK',f:1000,g:0,q:1});sel=list().length-1;table();draw()}};
+const sv=document.getElementById('curve');let drag=-1;
+function pt(e){const r=sv.getBoundingClientRect();return[(e.clientX-r.left)/r.width*1000,(e.clientY-r.top)/r.height*260]}
+sv.addEventListener('pointerdown',e=>{const i=e.target.dataset&&e.target.dataset.i;if(i!==undefined){drag=+i;sel=drag;sv.setPointerCapture(e.pointerId);table();draw()}});
+sv.addEventListener('pointermove',e=>{if(drag<0)return;const[x,y]=pt(e),b=list()[drag];b.f=Math.min(20000,Math.max(20,F(x)));if(b.t!=='LP'&&b.t!=='HP')b.g=Math.round(Math.max(-15,Math.min(15,D(y)))*2)/2;draw();table()});
+sv.addEventListener('pointerup',()=>drag=-1);
+sv.addEventListener('wheel',e=>{if(mode!=='p')return;e.preventDefault();const b=list()[sel];if(b){b.q=Math.max(0.1,Math.min(10,b.q*(e.deltaY<0?1.1:0.9)));table();draw()}},{passive:false});
+sv.addEventListener('dblclick',e=>{if(mode!=='p'||list().length>=10)return;const[x,y]=pt(e);list().push({on:1,t:'PK',f:F(x),g:Math.round(D(y)*2)/2,q:1});sel=list().length-1;table();draw()});
+function geqUI(){const fr=gfreqs(),v=geq[cur]||(geq[cur]=fr.map(()=>0));if(v.length!==fr.length)geq[cur]=fr.map(()=>0);
+ document.getElementById('geq').innerHTML=fr.map((f,i)=>`<div><small>${(geq[cur][i]>0?'+':'')+geq[cur][i]}</small><input type="range" min="-12" max="12" step="0.5" value="${geq[cur][i]}" data-i="${i}"><small>${f>=1000?f/1000+'k':f}</small></div>`).join('')}
+document.getElementById('geq').addEventListener('input',e=>{geq[cur][+e.target.dataset.i]=+e.target.value;e.target.previousElementSibling.textContent=(+e.target.value>0?'+':'')+e.target.value;draw()});
+document.getElementById('flat').onclick=()=>{geq[cur]=gfreqs().map(()=>0);geqUI();draw()};
+function seg(id,fn){document.getElementById(id).addEventListener('click',e=>{if(!e.target.dataset||e.target.tagName!=='SPAN')return;[...e.currentTarget.children].forEach(c=>c.classList.toggle('on',c===e.target));fn(e.target.dataset)})}
+seg('mode',d=>{mode=d.m;document.getElementById('pbox').hidden=mode!=='p';document.getElementById('gbox').hidden=mode!=='g';if(mode==='g')geqUI();draw()});
+seg('gn',d=>{gn=+d.n;geqUI();draw()});
+document.getElementById('pre').oninput=draw;
+document.getElementById('bypass').onclick=e=>{bypass=!bypass;e.target.classList.toggle('on',bypass);draw()};
+function setCh(c){cur=c;sel=0;document.getElementById('all').classList.toggle('on',c==='all');
+ document.querySelectorAll('.spk .s').forEach(s=>s.classList.toggle('on',s.dataset.c===c));
+ document.getElementById('chname').textContent='Canal: '+(c==='all'?'Todos':c+' (só este; soma com Todos)');table();if(mode==='g')geqUI();draw()}
+function speakers(){const lay=CH[document.getElementById('dev').value],spk=document.getElementById('spk');
+ spk.innerHTML='<div class="head"></div>'+lay.map(([c,n,x,y])=>`<div class="s" data-c="${c}" style="left:${x}%;top:${y}%"><b>${c}</b>${n}</div>`).join('');
+ lay.forEach(([c])=>chs[c]=chs[c]||{g:c==='LFE'?2:0,d:c[0]==='R'&&c!=='R'?8:0});
+ document.getElementById('chans').innerHTML=lay.map(([c])=>`<tr><td>${c}</td><td><input type="number" value="${chs[c].g}" step="0.5" style="width:60px"> dB</td><td><input type="number" value="${chs[c].d}" step="0.5" style="width:60px"> ms</td><td><button title="Toca um ruído só neste alto-falante">▶ Testar</button></td></tr>`).join('');
+ setCh('all')}
+document.getElementById('spk').addEventListener('click',e=>{const s=e.target.closest('.s');if(s)setCh(s.dataset.c)});
+document.getElementById('all').onclick=()=>setCh('all');
+document.getElementById('dev').onchange=speakers;
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===t));document.getElementById('t0').hidden=t.dataset.t!=='0';document.getElementById('t1').hidden=t.dataset.t!=='1'});
+speakers();table();draw();
+</script>
+</body>
+</html>

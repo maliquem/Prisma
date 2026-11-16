@@ -1,0 +1,7 @@
+[package]
+name = "prisma-eq"
+version = "0.1.0"
+edition = "2024"
+description = "Equalizador do Prisma: filtros, perfis e a corrente de processamento, sem Windows"
+
+[dependencies]
