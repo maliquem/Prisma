@@ -741,9 +741,70 @@ pub(super) struct Injector {
     id: u64,
     one_at_a_time: bool,
     host_first: bool,
+    /// Só esta janela (e o processo dela) recebe: a imagem é ela, e não o monitor.
+    win: Option<(HWND, u32)>,
+    /// Onde o mouse de quem assiste está, em pixels da área de trabalho.
+    at: POINT,
+}
+
+/// Da imagem (0 a 65535) para a área transmitida em pixels, e daí para a escala de 0 a 65535 da
+/// área de todos os monitores, que o `SendInput` usa.
+fn to_desktop(x: u16, y: u16, area: RECT, virt: RECT) -> (POINT, i32, i32) {
+    let mw = (area.right - area.left).max(1) as i64;
+    let mh = (area.bottom - area.top).max(1) as i64;
+    let px = area.left as i64 + x as i64 * (mw - 1) / 65535;
+    let py = area.top as i64 + y as i64 * (mh - 1) / 65535;
+    let vw = (virt.right - virt.left).max(2) as i64;
+    let vh = (virt.bottom - virt.top).max(2) as i64;
+    let dx = ((px - virt.left as i64) * 65535 / (vw - 1)) as i32;
+    let dy = ((py - virt.top as i64) * 65535 / (vh - 1)) as i32;
+    (POINT { x: px as i32, y: py as i32 }, dx, dy)
+}
+
+/// A área visível da janela, a mesma que o WGC captura (sem a borda invisível do Windows).
+fn window_rect(h: HWND) -> RECT {
+    use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_EXTENDED_FRAME_BOUNDS};
+    let mut r = RECT::default();
+    unsafe {
+        if DwmGetWindowAttribute(h, DWMWA_EXTENDED_FRAME_BOUNDS, &mut r as *mut RECT as *mut _, std::mem::size_of::<RECT>() as u32).is_err() {
+            let _ = GetWindowRect(h, &mut r);
+        }
+    }
+    r
+}
+
+/// Traz a janela para frente (e de volta do minimizado). Falso se o Windows não deixou: aí a
+/// entrada não vai, para não cair noutro programa.
+fn bring_front(h: HWND, pid: u32) -> bool {
+    let pid_of = crate::sys::procs::window_pid;
+    unsafe {
+        if IsIconic(h).as_bool() {
+            let _ = ShowWindow(h, SW_RESTORE);
+        }
+        if pid_of(GetForegroundWindow()) == pid {
+            return true;
+        }
+        if !SetForegroundWindow(h).as_bool() {
+            // O Windows só passa o primeiro plano para quem recebeu a última entrada: um Alt
+            // apertado e solto por aqui conta como essa entrada.
+            let alt = |up: bool| INPUT {
+                r#type: INPUT_KEYBOARD,
+                Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: VK_MENU, wScan: 0, dwFlags: if up { KEYEVENTF_KEYUP } else { KEYBD_EVENT_FLAGS(0) }, time: 0, dwExtraInfo: 0 } },
+            };
+            SendInput(&[alt(false), alt(true)], std::mem::size_of::<INPUT>() as i32);
+            let _ = SetForegroundWindow(h);
+        }
+        pid_of(GetForegroundWindow()) == pid
+    }
 }
 
 impl Injector {
+    /// Só a janela `win` recebe o mouse e o teclado, com as posições na área dela.
+    pub(super) fn with_window(mut self, win: Option<HWND>) -> Self {
+        self.win = win.map(|h| (h, crate::sys::procs::window_pid(h)));
+        self
+    }
+
     pub(super) fn new(mon: HMONITOR, perms: u8) -> Self {
         let mut mi = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
         unsafe {
@@ -754,7 +815,7 @@ impl Injector {
             RECT { left: x, top: y, right: x + GetSystemMetrics(SM_CXVIRTUALSCREEN), bottom: y + GetSystemMetrics(SM_CYVIRTUALSCREEN) }
         };
         let id = INJECTORS.fetch_add(1, Ordering::Relaxed);
-        let mut me = Self { mon: mi.rcMonitor, virt, perms, next: None, keys: HashSet::new(), buttons: [false; 5], id, one_at_a_time: false, host_first: false };
+        let mut me = Self { mon: mi.rcMonitor, virt, perms, next: None, keys: HashSet::new(), buttons: [false; 5], id, one_at_a_time: false, host_first: false, win: None, at: POINT::default() };
         me.rules(&Opts::load());
         me
     }
@@ -817,23 +878,24 @@ impl Injector {
         }
         Some(match e {
             Input::Move { x, y } => {
-                // Da imagem para o monitor, e do monitor para a escala de 0 a 65535 da área toda.
-                let mw = (self.mon.right - self.mon.left) as i64;
-                let mh = (self.mon.bottom - self.mon.top) as i64;
-                let px = self.mon.left as i64 + x as i64 * (mw - 1) / 65535;
-                let py = self.mon.top as i64 + y as i64 * (mh - 1) / 65535;
-                let vw = (self.virt.right - self.virt.left).max(2) as i64;
-                let vh = (self.virt.bottom - self.virt.top).max(2) as i64;
-                let dx = ((px - self.virt.left as i64) * 65535 / (vw - 1)) as i32;
-                let dy = ((py - self.virt.top as i64) * 65535 / (vh - 1)) as i32;
+                // A janela anda e muda de tamanho: a área dela é lida a cada movimento.
+                let area = self.win.map_or(self.mon, |(h, _)| window_rect(h));
+                let (at, dx, dy) = to_desktop(x, y, area, self.virt);
+                self.at = at;
                 Self::mouse(MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK, dx, dy, 0)
             }
             Input::Button { button, down } => {
-                if let Some(s) = self.buttons.get_mut(button as usize) {
-                    *s = down;
+                let (inside, windowed) = (!down || self.inside(), self.win.is_some());
+                let s = self.buttons.get_mut(button as usize)?;
+                // Só a janela: clique em cima de outro programa não vai, e o soltar só vai se o
+                // apertar foi.
+                if !inside || (!down && !*s && windowed) {
+                    return None;
                 }
+                *s = down;
                 Self::button(button, down)?
             }
+            Input::Wheel { .. } if !self.inside() => return None,
             Input::Wheel { delta, horizontal } => Self::mouse(if horizontal { MOUSEEVENTF_HWHEEL } else { MOUSEEVENTF_WHEEL }, 0, 0, delta as i32),
             Input::Key { scan, extended, down } => {
                 if down {
@@ -845,6 +907,13 @@ impl Injector {
             }
             Input::Away => return None,
         })
+    }
+
+    /// O mouse está em cima da janela compartilhada (ou de um menu dela)? Sem janela, sempre.
+    fn inside(&self) -> bool {
+        let Some((_, pid)) = self.win else { return true };
+        let under = unsafe { GetAncestor(WindowFromPoint(self.at), GA_ROOT) };
+        crate::sys::procs::window_pid(under) == pid
     }
 
     /// Pode mexer agora? O host mexeu há pouco, ou outro visitante está com a vez.
@@ -869,6 +938,15 @@ impl Injector {
         if fresh && !self.may_act() {
             // Pula a vez, sem deixar nada apertado no host.
             self.release();
+            let n = (events.len() / INPUT_SIZE) as u32;
+            if n > 0 {
+                self.next = Some(first.wrapping_add(n));
+            }
+            return;
+        }
+        // Só uma janela: ela vem para frente antes; se o Windows não deixar, nada vai, para o
+        // teclado não cair noutro programa.
+        if fresh && self.win.is_some_and(|(h, pid)| !bring_front(h, pid)) {
             let n = (events.len() / INPUT_SIZE) as u32;
             if n > 0 {
                 self.next = Some(first.wrapping_add(n));
@@ -1181,10 +1259,73 @@ pub(super) fn pick_monitor(n: u32) -> HMONITOR {
     monitors().get(n as usize - 1).copied().unwrap_or(primary)
 }
 
+/// A janela das opções, se ainda existe e é do mesmo processo (o número de uma janela fechada
+/// pode voltar noutra).
+pub fn chosen_window(w: (u64, u32)) -> Option<HWND> {
+    let h = HWND(w.0 as usize as *mut _);
+    (w.0 != 0 && unsafe { IsWindow(Some(h)).as_bool() } && crate::sys::procs::window_pid(h) == w.1).then_some(h)
+}
+
+/// Uma janela que dá para compartilhar: hwnd, processo e título.
+pub struct Shareable {
+    pub hwnd: u64,
+    pub pid: u32,
+    pub title: String,
+}
+
+/// Fica na lista? As do próprio Prisma (página, host, avisos) saem.
+fn shareable(exe: Option<&str>, own_exe: &str) -> bool {
+    let name = |p: &str| p.rsplit(['\\', '/']).next().unwrap_or(p).to_ascii_lowercase();
+    exe.is_none_or(|e| name(e) != name(own_exe))
+}
+
+/// As janelas abertas que dá para compartilhar, de cima para baixo: visíveis, com título, sem as
+/// de ferramenta, as escondidas e as do Prisma (o filtro de `top_windows`, mais este).
+pub fn share_windows() -> Vec<Shareable> {
+    let own = std::env::current_exe().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
+    crate::sys::procs::top_windows()
+        .into_iter()
+        .filter_map(|h| {
+            let pid = crate::sys::procs::window_pid(h);
+            let title = crate::sys::procs::window_title(h).trim().to_string();
+            (pid != std::process::id() && !title.is_empty() && shareable(crate::sys::procs::image_path(pid).as_deref(), &own)).then(|| Shareable { hwnd: h.0 as usize as u64, pid, title })
+        })
+        .collect()
+}
+
+/// A janela compartilhada fechou: todo mundo sai e um aviso aparece aqui. Nunca troca sozinho
+/// para a tela inteira; a página tira a escolha velha quando abre.
+fn window_closed(room: &Room) -> End {
+    eprintln!("a janela compartilhada fechou: o compartilhamento parou");
+    super::notice("A janela compartilhada fechou: o compartilhamento parou", "");
+    let mut out = Vec::new();
+    write(&mut out, &Msg::Bye);
+    for g in &room.guests {
+        g.link.send(&out);
+        g.link.send(&out);
+    }
+    End::Gone
+}
+
 unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner>>) -> Result<End> {
     *LEAD.lock().unwrap() = room.guests[0].id.clone();
     let mut opts = room_opts();
-    let mon = pick_monitor(opts.monitor);
+    // Só uma janela, se foi escolhida. Fechada antes de começar: o compartilhamento para (nunca
+    // cai sozinho para a tela inteira).
+    let win = chosen_window(opts.window);
+    if opts.window.0 != 0 && win.is_none() {
+        return Ok(window_closed(room));
+    }
+    let mon = match win {
+        Some(h) => {
+            // Minimizada, a janela não tem imagem nem tamanho.
+            if IsIconic(h).as_bool() {
+                let _ = ShowWindow(h, SW_RESTORE);
+            }
+            MonitorFromWindow(h, MONITOR_DEFAULTTONEAREST)
+        }
+        None => pick_monitor(opts.monitor),
+    };
     let color = monitor_color(mon);
     // A placa que codifica: a das opções, ou a do monitor transmitido. Num notebook com duas, a
     // Desktop Duplication só lê a tela pela placa ligada a ela; a imagem passa para a outra.
@@ -1205,10 +1346,14 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
         _ => None,
     };
     let d: &D3d = own.as_ref().unwrap_or(d);
-    let mut cap = if use_dda() {
-        None
-    } else {
-        Some(monitor_item(mon)?)
+    // A janela vai sempre pelo WGC, mesmo no serviço (a Desktop Duplication só pega a tela toda).
+    let mut cap = match win {
+        Some(h) => {
+            eprintln!("captura: só a janela «{}»", crate::sys::procs::window_title(h));
+            Some(crate::capture::window_item(h)?)
+        }
+        None if use_dda() => None,
+        None => Some(monitor_item(mon)?),
     };
     let (src_w, src_h) = match &cap {
         Some(item) => {
@@ -1382,6 +1527,9 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     };
     let mut fed_at = Instant::now() - Duration::from_secs(1);
     let mut was_secure = false;
+    // Tamanho novo da janela compartilhada e desde quando.
+    let mut resize: Option<((u32, u32), Instant)> = None;
+    let mut first_size: Option<(u32, u32)> = None;
 
     // Som para quem tem a permissão. Mesmo PC: tira o som da janela que assiste.
     let hearing = |guests: &[Guest]| -> Vec<Arc<dyn Link>> { guests.iter().filter(|g| g.perms & SOUND != 0).map(|g| g.link.clone()).collect() };
@@ -1393,7 +1541,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
         std::thread::Builder::new().name("compartilhar-som".into()).spawn(move || audio(l, exclude, stop)).ok()
     };
     for g in &mut room.guests {
-        g.input = (g.perms & (KEYBOARD | MOUSE) != 0).then(|| Injector::new(mon, g.perms));
+        g.input = (g.perms & (KEYBOARD | MOUSE) != 0).then(|| Injector::new(mon, g.perms).with_window(win));
         g.heard = Instant::now();
     }
 
@@ -1459,7 +1607,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                         if let Some(inj) = &mut g.input {
                             inj.release();
                         }
-                        g.input = (p & (KEYBOARD | MOUSE) != 0).then(|| Injector::new(mon, p));
+                        g.input = (p & (KEYBOARD | MOUSE) != 0).then(|| Injector::new(mon, p).with_window(win));
                         g.link.send(&infos[p as usize]);
                         *audio_links.lock().unwrap() = hearing(&room.guests);
                         room_count = usize::MAX;
@@ -1483,6 +1631,10 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                     }
                 }
                 opts = fresh;
+            }
+            if win.is_some_and(|h| !IsWindow(Some(h)).as_bool()) {
+                result = window_closed(room);
+                break 'run;
             }
             if wave_asked {
                 let fit = room.guests.iter().all(|g| g.hello.codecs & WAVE != 0 && g.link.near());
@@ -1520,7 +1672,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                 let ok = fits(&j.hello, codec, vf) && (codec != VideoCodec::Wave || j.link.near()) && !echo;
                 let mut g = Guest::new(j);
                 if ok {
-                    g.input = (g.perms & (KEYBOARD | MOUSE) != 0).then(|| Injector::new(mon, g.perms));
+                    g.input = (g.perms & (KEYBOARD | MOUSE) != 0).then(|| Injector::new(mon, g.perms).with_window(win));
                     g.link.send(&infos[g.perms as usize]);
                     enc.force_key();
                     room.guests.push(g);
@@ -1715,6 +1867,19 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                 }
             }
             if let Some((f, pts)) = newest {
+                // Janela com outro tamanho: o vídeo recomeça quando ela para de mudar (abaixo).
+                if win.is_some() {
+                    let cs = f.ContentSize()?;
+                    let now_size = (even(cs.Width.max(0) as u32), even(cs.Height.max(0) as u32));
+                    // Comparado ao primeiro quadro, e não ao tamanho do item, para nunca recomeçar em
+                    // laço se os dois diferirem.
+                    let base = *first_size.get_or_insert(now_size);
+                    if now_size == base || now_size.0 < 16 || now_size.1 < 16 {
+                        resize = None;
+                    } else if resize.is_none_or(|(s, _)| s != now_size) {
+                        resize = Some((now_size, Instant::now()));
+                    }
+                }
                 let access: IDirect3DDxgiInterfaceAccess = f.Surface()?.cast()?;
                 let tex: ID3D11Texture2D = access.GetInterface()?;
                 if let Some(t) = &tone {
@@ -1725,6 +1890,9 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                 }
                 let _ = f.Close();
                 pending = Some(pts);
+            }
+            if resize.is_some_and(|(_, t)| t.elapsed() > Duration::from_millis(500)) {
+                changed = true;
             }
             enc.pump(space, &mut pkts, &mut ready)?;
             if enc.ready() {
@@ -1930,5 +2098,32 @@ mod tests {
         assert!(fits(&h(WAVE, 0), VideoCodec::Wave, VideoFmt { hdr10: false, yuv444: true }));
         assert!(!fits(&h(WAVE, ASKS_444), VideoCodec::Wave, VideoFmt { hdr10: true, yuv444: true }));
         assert!(fits(&h(WAVE, SEES_HDR), VideoCodec::Wave, VideoFmt { hdr10: true, yuv444: true }));
+    }
+
+    #[test]
+    fn window_point_to_desktop() {
+        let r = |l, t, r, b| RECT { left: l, top: t, right: r, bottom: b };
+        // Janela de 800x600 em (100, 50), com um monitor à esquerda do principal.
+        let (win, virt) = (r(100, 50, 900, 650), r(-1920, 0, 1920, 1080));
+        let (p, dx, dy) = to_desktop(0, 0, win, virt);
+        assert_eq!((p.x, p.y), (100, 50));
+        assert_eq!((dx, dy), ((2020i64 * 65535 / 3839) as i32, (50i64 * 65535 / 1079) as i32));
+        let (p, ..) = to_desktop(65535, 65535, win, virt);
+        assert_eq!((p.x, p.y), (899, 649));
+        let (p, ..) = to_desktop(32768, 32768, win, virt);
+        assert_eq!((p.x, p.y), (499, 349));
+        // Janela sem tamanho (fechando): fica no canto dela, sem dividir por zero.
+        let (p, ..) = to_desktop(65535, 65535, r(10, 10, 10, 10), virt);
+        assert_eq!((p.x, p.y), (10, 10));
+    }
+
+    #[test]
+    fn prisma_windows_stay_out() {
+        let own = r"C:\Program Files\Prisma\prisma.exe";
+        assert!(!shareable(Some(r"C:\Program Files\Prisma\Prisma.EXE"), own));
+        assert!(!shareable(Some(r"D:\outra\prisma.exe"), own));
+        assert!(shareable(Some(r"C:\Windows\notepad.exe"), own));
+        // Sem acesso ao caminho (programa elevado): fica na lista.
+        assert!(shareable(None, own));
     }
 }

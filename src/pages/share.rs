@@ -107,6 +107,8 @@ struct State {
     name_field: Option<String>,
     port_field: Option<String>,
     sound_apps: (Vec<String>, Option<Instant>),
+    /// Janelas que dá para compartilhar, lidas a cada 2 s.
+    share_wins: (Vec<stream::host::Shareable>, Option<Instant>),
     /// Fotos de teste: um convite de exemplo.
     test_invite: Option<Shown>,
     /// Fotos de teste: pessoas conectadas de exemplo.
@@ -626,6 +628,10 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
     };
     ui.c.text_raw(rect(ix, y, iw, 20.0), &state, 13.0, if !room.is_empty() || failing { WARN } else if service || hosting { ACCENT } else { MUTED }, Align::Left, Weight::Regular);
     y += 26.0;
+    // A tela inteira (o monitor da aba Host) ou só uma janela; a lista abre no fim.
+    ui.label(rect(ix, y, iw, 18.0), "O que as pessoas veem", TEXT2);
+    let src_y = y + 20.0;
+    y += 70.0;
     // Validade do convite ao lado das permissões.
     let min_w = 150.0;
     ui.label(rect(ix, y, iw - min_w - GAP, 18.0), "Quem parear agora pode", TEXT2);
@@ -1018,6 +1024,31 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
     let mut m = stream::INVITE_MINUTES.iter().position(|x| *x == opts.invite_min).unwrap_or(1);
     if ui.select("sh-inv-min", rect(ix + iw - min_w, sel_y, min_w, 40.0), &mins, &mut m) {
         new_opts.invite_min = stream::INVITE_MINUTES[m];
+    }
+
+    // Tela inteira ou uma janela aberta. Uma escolha de janela que já fechou volta para a tela inteira.
+    if st.share_wins.1.is_none_or(|t| t.elapsed().as_secs() >= 2) {
+        st.share_wins = (stream::host::share_windows(), Some(Instant::now()));
+    }
+    let chosen = stream::host::chosen_window(opts.window);
+    if opts.window.0 != 0 && chosen.is_none() {
+        new_opts.window = (0, 0);
+    }
+    let short = |t: &str| if t.chars().count() > 60 { format!("{}…", t.chars().take(59).collect::<String>()) } else { t.to_string() };
+    let only = crate::i18n::tr("Só a janela:").into_owned();
+    let mut vals = vec![(0u64, 0u32)];
+    let mut names = vec![crate::i18n::tr("Tela inteira").into_owned()];
+    for w in &st.share_wins.0 {
+        vals.push((w.hwnd, w.pid));
+        names.push(format!("{only} {}", short(&w.title)));
+    }
+    if let Some(h) = chosen.filter(|_| !vals.contains(&opts.window)) {
+        vals.push(opts.window);
+        names.push(format!("{only} {}", short(&crate::sys::procs::window_title(h))));
+    }
+    let mut s = vals.iter().position(|v| *v == new_opts.window).unwrap_or(0);
+    if ui.select("sh-src", rect(ix, src_y, iw, 40.0), &names, &mut s) {
+        new_opts.window = vals[s];
     }
 }
 
