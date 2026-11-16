@@ -2583,3 +2583,22 @@ Não consegui baixar o instalador	Не удалось скачать устан�
 O driver não foi instalado	Драйвер не установлен
 Não achei o desinstalador do driver	Деинсталлятор драйвера не найден
 O driver não foi removido	Драйвер не удалён
+Prender na barra de tarefas (estilo Pílula)	Закрепить на панели задач (стиль «Таблетка»)
+Clique no widget da barra abre o painel detalhado	Щелчок по виджету на панели открывает подробную панель
+Processos	Процессы
+Threads	Потоки
+Handles	Дескрипторы
+Ligado há	Время работы
+Mín / méd / máx (1 min)	Мин / сред / макс (1 мин)
+Em uso	Используется
+Disponível	Доступно
+Memória comprometida	Выделено
+Ventoinha	Вентилятор
+Memória dedicada	Выделенная память
+Clock	Частота
+Recebido	Получено
+Enviado	Отправлено
+{} d {} h {} min	{} д {} ч {} мин
+{} h {} min	{} ч {} мин
+Ao lado do relógio	Рядом с часами
+No canto esquerdo	Слева

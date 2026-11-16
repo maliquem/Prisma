@@ -95,6 +95,8 @@ pub static DETAIL: AtomicBool = AtomicBool::new(false);
 /// A detecção de jogo precisa da GPU de cada programa mesmo com a janela fechada, mas só
 /// enquanto há um candidato em foco: ler todos os contadores da GPU custa.
 pub static GPU_WANTED: AtomicBool = AtomicBool::new(false);
+/// Painel detalhado do widget aberto: carrega a NVML sem o resto do modo detalhado.
+pub static PANEL: AtomicBool = AtomicBool::new(false);
 /// O medidor sobre o jogo também precisa das leituras completas.
 pub static METER: AtomicBool = AtomicBool::new(false);
 /// O widget mostra a temperatura da GPU: lida pelo Windows, sem a biblioteca da NVIDIA.
@@ -419,13 +421,14 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
             let _ = GlobalMemoryStatusEx(&mut mem);
         }
         // A biblioteca da NVIDIA pesa cerca de 20 MB: só fica carregada com a janela aberta.
-        if detail && nvml.is_none() {
+        let want_nvml = detail || PANEL.load(Ordering::Relaxed);
+        if want_nvml && nvml.is_none() {
             nvml = Nvml::load();
             if let Some(n) = &nvml {
                 gpu_name = n.name.clone();
                 gpu_driver = n.driver.clone();
             }
-        } else if !detail {
+        } else if !want_nvml {
             nvml = None;
         }
         // O driver só fica aberto enquanto alguém mostra a temperatura; sem ele, tenta de novo a cada 30 s.

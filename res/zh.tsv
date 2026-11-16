@@ -2583,3 +2583,22 @@ Não consegui baixar o instalador	无法下载安装程序
 O driver não foi instalado	驱动未安装
 Não achei o desinstalador do driver	找不到驱动的卸载程序
 O driver não foi removido	驱动未移除
+Prender na barra de tarefas (estilo Pílula)	固定到任务栏（胶囊样式）
+Clique no widget da barra abre o painel detalhado	点击任务栏小组件打开详细面板
+Processos	进程
+Threads	线程
+Handles	句柄
+Ligado há	运行时间
+Mín / méd / máx (1 min)	最小 / 平均 / 最大（1 分钟）
+Em uso	已用
+Disponível	可用
+Memória comprometida	已提交
+Ventoinha	风扇
+Memória dedicada	专用内存
+Clock	频率
+Recebido	已接收
+Enviado	已发送
+{} d {} h {} min	{} 天 {} 小时 {} 分
+{} h {} min	{} 小时 {} 分
+Ao lado do relógio	时钟旁边
+No canto esquerdo	最左侧

@@ -2589,3 +2589,22 @@ Não consegui baixar o instalador	Could not download the installer
 O driver não foi instalado	The driver was not installed
 Não achei o desinstalador do driver	Could not find the driver's uninstaller
 O driver não foi removido	The driver was not removed
+Prender na barra de tarefas (estilo Pílula)	Pin to taskbar (Pill style)
+Clique no widget da barra abre o painel detalhado	Clicking the taskbar widget opens the detailed panel
+Processos	Processes
+Threads	Threads
+Handles	Handles
+Ligado há	Uptime
+Mín / méd / máx (1 min)	Min / avg / max (1 min)
+Em uso	In use
+Disponível	Available
+Memória comprometida	Committed
+Ventoinha	Fan
+Memória dedicada	Dedicated memory
+Clock	Clock
+Recebido	Received
+Enviado	Sent
+{} d {} h {} min	{} d {} h {} min
+{} h {} min	{} h {} min
+Ao lado do relógio	Next to clock
+No canto esquerdo	Far left

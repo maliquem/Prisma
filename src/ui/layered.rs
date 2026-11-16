@@ -21,6 +21,8 @@ pub struct Layered {
     canvas: Option<Canvas>,
     dc_rt: Option<ID2D1DCRenderTarget>,
     pub scale: f32,
+    /// Opacidade da janela inteira (animação de entrada).
+    pub alpha: u8,
     #[cfg(debug_assertions)]
     bits: *mut u8,
 }
@@ -37,6 +39,7 @@ impl Layered {
             canvas: None,
             dc_rt: None,
             scale: 1.0,
+            alpha: 255,
             #[cfg(debug_assertions)]
             bits: std::ptr::null_mut(),
         }
@@ -136,7 +139,7 @@ impl Layered {
             let blend = BLENDFUNCTION {
                 BlendOp: AC_SRC_OVER as u8,
                 BlendFlags: 0,
-                SourceConstantAlpha: 255,
+                SourceConstantAlpha: self.alpha,
                 AlphaFormat: AC_SRC_ALPHA as u8,
             };
             let _ = UpdateLayeredWindow(
