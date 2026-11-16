@@ -2179,8 +2179,17 @@ Apagar macro	Удалить макрос
 Gravando: use o teclado e o mouse em outro programa e volte aqui para parar. O movimento do mouse não entra.	Запись: работайте клавиатурой и мышью в другой программе и вернитесь сюда, чтобы остановить. Движение мыши не записывается.
 {} passos. Gravar troca os passos pelos novos.	Шагов: {}. Запись заменяет шаги новыми.
 Adicionar passo	Добавить шаг
-Gravando macro: volte ao Prisma e clique em Parar	Запись макроса: вернитесь в Prisma и нажмите «Стоп»
-Macro gravada	Макрос записан
+Gravar macro e parar	Запись макроса и стоп
+Gravando macro	Запись макроса
+Gravação parada e salva como {}	Запись остановлена и сохранена как {}
+Nenhuma macro estava sendo gravada	Макрос не записывался
+Gravação parada: nada foi gravado	Запись остановлена: ничего не записано
+Não deu para salvar a macro	Не удалось сохранить макрос
+Este perfil já tem macros demais	В этом профиле уже слишком много макросов
+aperte um botão ou uma tecla	нажмите кнопку или клавишу
+Macro nova	Новый макрос
+Gravar cria uma macro nova.	Запись создаёт новый макрос.
+Atalho de teclado para gravar e parar, em qualquer programa:	Сочетание клавиш для записи и остановки, в любой программе:
 Jogo com anti-cheat: as macros ficam paradas nele.	Игра с античитом: макросы в ней не работают.
 Botões do controle	Кнопки геймпада
 Teclado e mouse	Клавиатура и мышь

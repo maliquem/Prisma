@@ -290,7 +290,7 @@ const PAD_KINDS: [(usize, u8, &str); 4] = [
 
 /// Nome de uma ação do Prisma nas listas, com a página de onde vem antes: "(Medidor) Medidor compacto".
 pub fn action_choice(n: u8) -> String {
-    let name = if n >= remap::SOUND { tr("Combinação de som {}").replace("{}", &(n - remap::SOUND + 1).to_string()) } else { remap::ACTIONS.get(n as usize).map_or_else(String::new, |a| tr(a)) };
+    let name = if n >= remap::SOUND { tr("Combinação de som {}").replace("{}", &(n - remap::SOUND + 1).to_string()) } else { tr(remap::action_name(n)) };
     match remap::action_section(n) {
         Some(sec) => format!("({}) {name}", tr(sec)),
         None => name,
@@ -410,12 +410,24 @@ fn describe(o: Out, p: &Profile) -> String {
         Out::Layer(n) => tr("Camada {} enquanto segura").replace("{}", &layer_name(p, n)),
         Out::Toggle(n) => tr("Liga e desliga a camada {}").replace("{}", &layer_name(p, n)),
         Out::Action(n) if n >= remap::SOUND => tr("Combinação de som {}").replace("{}", &(n - remap::SOUND + 1).to_string()),
-        Out::Action(n) => remap::ACTIONS.get(n as usize).map_or_else(String::new, |a| tr(a)),
+        Out::Action(n) => tr(remap::action_name(n)),
         Out::Profile(n) => tr("Trocar para o perfil {}").replace("{}", p.strings.get(n as usize).map_or("", |s| s)),
         Out::Run(n) => tr("Abrir {}").replace("{}", &p.strings.get(n as usize).map_or_else(String::new, |s| if remap::link_ok(s) { s.clone() } else { crate::sys::procs::exe_name(s) })),
         Out::Macro(n) => tr("Macro {}").replace("{}", p.macros.get(n as usize).map_or("", |m| &m.name)),
         Out::Text(n) => tr("Digitar {}").replace("{}", &p.texts.get(n as usize).map_or_else(String::new, short)),
-        Out::Pad(b) => remap::button_name(1 << b).to_string(),
+        Out::Pad(_) => out_label(o, None),
+    }
+}
+
+/// Tecla, clique, roda ou botão do controle `pad` (família e vid; sem ele, os nomes do Xbox): o
+/// passo de macro e o aviso da gravação.
+pub fn out_label(o: Out, pad: Option<(Family, u16)>) -> String {
+    match o {
+        Out::Pad(b) => button_label(pad.map_or(Family::Xbox, |x| x.0), 1 << b),
+        Out::Key(vk, m) => key_label(vk, m),
+        Out::Mouse(n) => tr(MOUSE[(n as usize).clamp(1, 5) - 1]),
+        Out::Wheel(n) => tr(WHEEL[if n > 0 { 0 } else { 1 }]),
+        _ => String::new(),
     }
 }
 
@@ -444,11 +456,12 @@ fn key_out(hk: &Hotkey) -> Option<Out> {
     })
 }
 
-fn step_text(s: Step, p: &Profile) -> String {
+fn step_text(s: Step, p: &Profile, pad: Option<(Family, u16)>) -> String {
+    let d = |o: Out| if let Out::Pad(_) = o { out_label(o, pad) } else { describe(o, p) };
     match s {
-        Step::Down(o @ Out::Wheel(_)) => describe(o, p),
-        Step::Down(o) => tr("Aperta {}").replace("{}", &describe(o, p)),
-        Step::Up(o) => tr("Solta {}").replace("{}", &describe(o, p)),
+        Step::Down(o @ Out::Wheel(_)) => d(o),
+        Step::Down(o) => tr("Aperta {}").replace("{}", &d(o)),
+        Step::Up(o) => tr("Solta {}").replace("{}", &d(o)),
         Step::Wait(_) => tr("Espera"),
     }
 }
@@ -660,6 +673,8 @@ pub fn top(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
     }
     let Some(ed) = app.pads.edit.as_mut() else { return };
     ed.prof = ed.prof.min(list.len() - 1);
+    // Gravação começada em qualquer lugar (atalho, radial, combinação ou aqui).
+    ed.rec = macros::recording();
     let title_w = crate::ui::gfx::measure(&tr("Perfis"), 15.0, Weight::Semibold, None).0 + 16.0;
     // Larguras em partes: a lista dos perfis e o jeito de abrir o programa têm os textos mais longos.
     const PARTS: [f32; 5] = [1.3, 0.9, 0.8, 1.2, 1.3];
@@ -877,6 +892,8 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
     let list = remap::profiles();
     let Some(ed) = app.pads.edit.as_mut() else { return };
     ed.prof = ed.prof.min(list.len() - 1);
+    // Gravação começada em qualquer lugar (atalho, radial, combinação ou aqui).
+    ed.rec = macros::recording();
     // Com uma janela aberta, a página atrás dela para de receber cliques.
     if ed.batt || ed.pick.is_some() {
         ui.block();
@@ -916,7 +933,9 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
     remap::preview_trig(Some(p.trig));
     let mut changed = false;
     let mut pick = None;
-    let mut rec_note = None;
+    // Gravar ou Parar no editor (com a macro de destino) e o atalho de gravar mudado.
+    let mut rec_note: Option<Option<(String, usize)>> = None;
+    let mut hk_macro = false;
     if tab == 0 {
 
     // Assistente do Acessível: três perguntas e Aplicar.
@@ -1190,7 +1209,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
     let sounds = app.cfg.snd_keys.len().min(crate::app::SND_KEYS_MAX);
     let others_p: Vec<String> = list.iter().map(|o| o.name.clone()).filter(|n| *n != p.name).collect();
     // Ações do Prisma fora da seção Controles, mais as combinações de som.
-    let prisma_ids: Vec<u8> = (0..remap::ACTIONS.len() as u8).filter(|a| !remap::PAD_ACTIONS.contains(a)).chain((0..sounds as u8).map(|n| remap::SOUND + n)).collect();
+    let prisma_ids: Vec<u8> = (0..remap::ACTIONS.len() as u8).filter(|a| !remap::PAD_ACTIONS.contains(a)).chain([remap::MACRO_REC]).chain((0..sounds as u8).map(|n| remap::SOUND + n)).collect();
     let values: Vec<String> = match ed.kind {
         1 => SPECIAL.iter().map(|s| tr(s.1)).collect(),
         2 => MOUSE.iter().map(|s| tr(s)).collect(),
@@ -1469,26 +1488,26 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
     }
 
     if tab == 1 {
-    // Macros do perfil: escolher, criar, apagar, o modo, gravar e os passos.
-    if ed.rec && !macros::recording() {
-        ed.rec = false;
-    }
+    // Macros do perfil: escolher, criar, apagar, o modo, gravar e os passos. A gravação pode ter
+    // começado fora daqui (atalho, radial, combinação): os passos aparecem ao vivo do mesmo jeito.
+    let live = macros::live();
+    ed.rec = live.is_some();
     ui.title(rect(x, y + 4.0, w, 22.0), "Macros");
     y += 32.0;
     let names: Vec<String> = p.macros.iter().map(|m| m.name.clone()).collect();
-    if names.is_empty() {
+    if let Some(l) = &live {
+        let target = match &l.into {
+            Some((pn, i)) if *pn == p.name => names.get(*i).cloned().unwrap_or_default(),
+            _ => tr("Macro nova"),
+        };
+        ui.c.text_fit(rect(x, y, third, 34.0), &target, 13.0, TEXT, Align::Left, Weight::Regular);
+    } else if names.is_empty() {
         ui.c.text_fit(rect(x, y, third, 34.0), &tr("Nenhuma macro."), 13.0, MUTED, Align::Left, Weight::Regular);
-    } else if !ed.rec {
-        ui.select("pp-mac", rect(x, y, third, 34.0), &names, &mut ed.mac);
     } else {
-        ui.c.text_fit(rect(x, y, third, 34.0), &names[ed.mac], 13.0, TEXT, Align::Left, Weight::Regular);
+        ui.select("pp-mac", rect(x, y, third, 34.0), &names, &mut ed.mac);
     }
     if ui.button_ex("pp-mac-add", rect(x + third + 8.0, y, third, 34.0), "Nova macro", false, !ed.rec && p.macros.len() < remap::MAX_MACROS) {
-        let mut n = p.macros.len() + 1;
-        while p.macros.iter().any(|m| m.name == format!("{} {n}", tr("Macro"))) {
-            n += 1;
-        }
-        p.macros.push(Macro { name: format!("{} {n}", tr("Macro")), mode: Mode::Once, steps: vec![] });
+        p.macros.push(Macro { name: macros::next_name(&p, &tr("Macro")), mode: Mode::Once, steps: vec![], pad: None });
         ed.mac = p.macros.len() - 1;
         changed = true;
     }
@@ -1498,50 +1517,70 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
         changed = true;
     }
     y += 44.0;
-    if ed.mac < p.macros.len() {
+    let has = ed.mac < p.macros.len();
+    if let Some(l) = &live {
+        let t = format!("{:02}:{:02}", l.secs / 60, l.secs % 60);
+        ui.c.text_fit(rect(x, y, 2.0 * third + 8.0, 34.0), &t, 13.0, WARN, Align::Left, Weight::Semibold);
+    } else if has {
         let modes: Vec<String> = MODE_NAMES.iter().map(|s| tr(s)).collect();
         let mut mi = remap::MODES.iter().position(|x| x.0 == p.macros[ed.mac].mode).unwrap_or(0);
         if ui.select("pp-mac-mode", rect(x, y, 2.0 * third + 8.0, 34.0), &modes, &mut mi) {
             p.macros[ed.mac].mode = remap::MODES[mi].0;
             changed = true;
         }
-        if ui.button_ex("pp-mac-rec", rect(x + 2.0 * (third + 8.0), y, third, 34.0), if ed.rec { "Parar" } else { "Gravar" }, ed.rec, true) {
-            if ed.rec {
-                p.macros[ed.mac].steps = macros::record_stop();
-                ed.rec = false;
-                rec_note = Some(false);
-                changed = true;
-            } else {
-                macros::record_start();
-                ed.rec = true;
-                rec_note = Some(true);
-            }
-        }
-        y += 44.0;
-        let n = p.macros[ed.mac].steps.len();
+    } else {
+        ui.c.text_fit(rect(x, y, 2.0 * third + 8.0, 34.0), &tr("Gravar cria uma macro nova."), 12.0, MUTED, Align::Left, Weight::Regular);
+    }
+    // Sem macro escolhida, grava numa nova; Parar guarda onde a gravação começou.
+    if ui.button_ex("pp-mac-rec", rect(x + 2.0 * (third + 8.0), y, third, 34.0), if ed.rec { "Parar" } else { "Gravar" }, ed.rec, true) {
+        rec_note = Some(if has && !ed.rec { Some((p.name.clone(), ed.mac)) } else { None });
+    }
+    y += 44.0;
+    // Atalho de teclado que começa e para (o mesmo que a ação no radial e nos botões).
+    ui.c.text_wrap(rect(x, y, 2.0 * third + 8.0, 40.0), &tr("Atalho de teclado para gravar e parar, em qualquer programa:"), 12.0, MUTED, Weight::Regular);
+    hk_macro = ui.hotkey("hk-macro", rect(x + 2.0 * (third + 8.0), y, third, 40.0), &mut app.cfg.hk_macro);
+    y += 48.0;
+    let (steps, pad) = match &live {
+        Some(l) => (l.steps.clone(), l.pad),
+        None if has => (p.macros[ed.mac].steps.clone(), p.macros[ed.mac].pad),
+        None => (vec![], None),
+    };
+    let n = steps.len();
+    if has || ed.rec {
         let status = if ed.rec { tr("Gravando: aperte os botões do controle (aqui mesmo ou em outro programa) ou use o teclado e o mouse em outro programa; clique em Parar no fim. Sticks, gyro e o movimento do mouse não entram.") } else { tr("{} passos. Gravar troca os passos pelos novos.").replace("{}", &n.to_string()) };
         ui.c.text_fit(rect(x, y, w, 20.0), &status, 12.0, if ed.rec { WARN } else { MUTED }, Align::Left, Weight::Regular);
         y += 28.0;
-        let mut drop = None;
-        for i in 0..n {
-            let s = p.macros[ed.mac].steps[i];
-            ui.c.text_fit(rect(x, y, 2.0 * third + 8.0 - 150.0, 34.0), &step_text(s, &p), 13.0, TEXT, Align::Left, Weight::Regular);
-            if let Step::Wait(ms) = s {
-                let mut v = ms;
-                if ui.stepper(&format!("pp-ms{i}"), rect(x + 2.0 * third + 8.0 - 140.0, y, 140.0, 34.0), &mut v, (10, remap::MAX_WAIT), 10, "ms") {
-                    p.macros[ed.mac].steps[i] = Step::Wait(v);
-                    changed = true;
-                }
-            }
-            if ui.button_ex(&format!("pp-mrm{i}"), rect(x + 2.0 * (third + 8.0), y, third, 32.0), "Remover", false, !ed.rec) {
-                drop = Some(i);
-            }
+    }
+    // Botões no desenho do controle em que a macro foi gravada.
+    let pstyle = pad.map_or(gstyle, |(f, vid)| crate::ui::glyph::Style::of(f, vid));
+    let mut drop = None;
+    for (i, &s) in steps.iter().enumerate() {
+        let mut tx = x;
+        if let Step::Down(Out::Pad(b)) | Step::Up(Out::Pad(b)) = s {
+            tx += crate::ui::glyph::draw(ui.c, x, y + 17.0, 18.0, pstyle, 1 << b, TEXT2) + 8.0;
+        }
+        ui.c.text_fit(rect(tx, y, 2.0 * third + 8.0 - 150.0 - (tx - x), 34.0), &step_text(s, &p, pad), 13.0, TEXT, Align::Left, Weight::Regular);
+        if ed.rec {
             y += 40.0;
+            continue;
         }
-        if let Some(i) = drop {
-            p.macros[ed.mac].steps.remove(i);
-            changed = true;
+        if let Step::Wait(ms) = s {
+            let mut v = ms;
+            if ui.stepper(&format!("pp-ms{i}"), rect(x + 2.0 * third + 8.0 - 140.0, y, 140.0, 34.0), &mut v, (10, remap::MAX_WAIT), 10, "ms") {
+                p.macros[ed.mac].steps[i] = Step::Wait(v);
+                changed = true;
+            }
         }
+        if ui.button_ex(&format!("pp-mrm{i}"), rect(x + 2.0 * (third + 8.0), y, third, 32.0), "Remover", false, true) {
+            drop = Some(i);
+        }
+        y += 40.0;
+    }
+    if let Some(i) = drop {
+        p.macros[ed.mac].steps.remove(i);
+        changed = true;
+    }
+    if has && !ed.rec {
         // Passo novo no fim: tecla ou clique (aperta e solta) ou espera.
         let kinds: Vec<String> = STEP_KINDS.iter().map(|s| tr(s)).collect();
         ui.select("pp-skind", rect(x, y, third, 34.0), &kinds, &mut ed.skind);
@@ -1565,7 +1604,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
             }
         };
         let room = n + 2 <= remap::MAX_STEPS;
-        if ui.button_ex("pp-sadd", rect(x + 2.0 * (third + 8.0), y, third, 34.0), "Adicionar passo", true, !ed.rec && room && add.is_some()) {
+        if ui.button_ex("pp-sadd", rect(x + 2.0 * (third + 8.0), y, third, 34.0), "Adicionar passo", true, room && add.is_some()) {
             p.macros[ed.mac].steps.extend(add.unwrap_or_default());
             changed = true;
         }
@@ -1620,14 +1659,10 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
         ui.s.needs_redraw = true;
     }
 
-    // Depois do último uso de `ed`: o aviso e o botão precisam da App inteira.
-    match rec_note {
-        Some(true) => app.toast.keep("Gravando macro: volte ao Prisma e clique em Parar"),
-        Some(false) => {
-            app.toast.hide();
-            app.toast.info("Macro gravada");
-        }
-        None => {}
+    // Depois do último uso de `ed`: o atalho precisa da App inteira.
+    if hk_macro {
+        app.cfg.save();
+        app.register_hotkeys();
     }
     if let Some(r) = pick {
         super::picker::add_button(ui, app, r, super::picker::Target::PadProgram);
@@ -1637,6 +1672,10 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
     changed |= light_sheets(ui, app, &mut p);
     if changed && !remap::save(&p) {
         app.toast.info("Não deu para salvar o perfil.");
+    }
+    // Depois de salvar o perfil: Parar guarda os passos nele, e o `p` daqui não pode apagá-los.
+    if let Some(into) = rec_note {
+        app.macro_toggle(into);
     }
 }
 

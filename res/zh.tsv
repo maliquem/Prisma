@@ -2179,8 +2179,17 @@ Apagar macro	删除宏
 Gravando: use o teclado e o mouse em outro programa e volte aqui para parar. O movimento do mouse não entra.	正在录制：在其他程序中使用键盘和鼠标，然后回到这里停止。鼠标移动不会被录制。
 {} passos. Gravar troca os passos pelos novos.	{} 个步骤。录制会用新步骤替换。
 Adicionar passo	添加步骤
-Gravando macro: volte ao Prisma e clique em Parar	正在录制宏：回到 Prisma 并点击停止
-Macro gravada	宏已录制
+Gravar macro e parar	录制宏并停止
+Gravando macro	正在录制宏
+Gravação parada e salva como {}	录制已停止，已保存为 {}
+Nenhuma macro estava sendo gravada	没有正在录制的宏
+Gravação parada: nada foi gravado	录制已停止：没有录到任何内容
+Não deu para salvar a macro	无法保存宏
+Este perfil já tem macros demais	此配置文件的宏已太多
+aperte um botão ou uma tecla	请按一个按钮或按键
+Macro nova	新建宏
+Gravar cria uma macro nova.	录制会新建一个宏。
+Atalho de teclado para gravar e parar, em qualquer programa:	录制和停止的键盘快捷键，在任何程序中均可用：
 Jogo com anti-cheat: as macros ficam paradas nele.	游戏有反作弊：宏在其中暂停。
 Botões do controle	手柄按键
 Teclado e mouse	键盘和鼠标

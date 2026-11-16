@@ -2179,8 +2179,17 @@ Apagar macro	Borrar macro
 Gravando: use o teclado e o mouse em outro programa e volte aqui para parar. O movimento do mouse não entra.	Grabando: usa el teclado y el ratón en otro programa y vuelve aquí para parar. El movimiento del ratón no se graba.
 {} passos. Gravar troca os passos pelos novos.	{} pasos. Grabar cambia los pasos por los nuevos.
 Adicionar passo	Añadir paso
-Gravando macro: volte ao Prisma e clique em Parar	Grabando macro: vuelve a Prisma y haz clic en Parar
-Macro gravada	Macro grabada
+Gravar macro e parar	Grabar macro y detener
+Gravando macro	Grabando macro
+Gravação parada e salva como {}	Grabación detenida y guardada como {}
+Nenhuma macro estava sendo gravada	No se estaba grabando ninguna macro
+Gravação parada: nada foi gravado	Grabación detenida: no se grabó nada
+Não deu para salvar a macro	No se pudo guardar la macro
+Este perfil já tem macros demais	Este perfil ya tiene demasiadas macros
+aperte um botão ou uma tecla	pulsa un botón o una tecla
+Macro nova	Macro nueva
+Gravar cria uma macro nova.	Grabar crea una macro nueva.
+Atalho de teclado para gravar e parar, em qualquer programa:	Atajo de teclado para grabar y detener, en cualquier programa:
 Jogo com anti-cheat: as macros ficam paradas nele.	Juego con anti-cheat: las macros quedan en pausa en él.
 Botões do controle	Botones del mando
 Teclado e mouse	Teclado y ratón

@@ -1213,7 +1213,7 @@ fn radial(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
     }
     ui.tip(check, "Um círculo em cada stick, com 8 lugares cada. O stick que apontar por último escolhe.");
     // Nada, e todas as ações menos o próprio radial.
-    let ids: Vec<u8> = std::iter::once(EMPTY).chain((0..remap::ACTIONS.len() as u8).filter(|&a| a != remap::RADIAL)).collect();
+    let ids: Vec<u8> = std::iter::once(EMPTY).chain((0..remap::ACTIONS.len() as u8).filter(|&a| a != remap::RADIAL)).chain([remap::MACRO_REC]).collect();
     let names: Vec<String> = ids.iter().map(|&a| if a == EMPTY { crate::i18n::tr("Nada").into_owned() } else { super::pad_profiles::action_choice(a) }).collect();
     // Nos lugares (não nas 4 opções), também a troca de perfil.
     // Logo depois de "Nada", para não sumir no fim da lista das ações.

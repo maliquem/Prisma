@@ -49,6 +49,8 @@ const TIMER_SHARE: usize = 78;
 const TIMER_ROOM: usize = 79;
 /// A aba Controles redesenha o controle ao vivo enquanto está aberta.
 const TIMER_PADS: usize = 80;
+/// O aviso da gravação de macro se atualiza enquanto ela grava.
+const TIMER_MACRO: usize = 81;
 const WM_UPDATED: u32 = WM_APP + 77;
 const WM_PICK_FS: u32 = WM_APP + 78;
 const WM_PICK_SND: u32 = WM_APP + 79;
@@ -203,6 +205,7 @@ const HK_LOG: i32 = 20;
 const HK_METER_KEYS: i32 = 21;
 const HK_EXPLORER: i32 = 22;
 const HK_FIND: i32 = 23;
+const HK_MACRO: i32 = 24;
 const HK_VOL_UP: i32 = 10;
 const HK_VOL_DOWN: i32 = 11;
 const HK_MUTE: i32 = 12;
@@ -410,6 +413,7 @@ pub struct App {
     engine: Option<Handle>,
     rec_start: Option<Instant>,
     hud: Hud,
+    macro_hud: crate::overlays::MacroHud,
 }
 
 thread_local! {
@@ -612,6 +616,7 @@ pub fn start(background: bool) {
             engine: None,
             rec_start: None,
             hud: Hud::new(),
+            macro_hud: crate::overlays::MacroHud::new(),
             cfg,
         };
         app.first_run();
@@ -1113,7 +1118,7 @@ impl App {
     pub fn register_hotkeys(&mut self) {
         self.unhook_force_key();
         unsafe {
-            for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER, HK_FIND, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE] {
+            for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER, HK_FIND, HK_MACRO, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE] {
                 let _ = UnregisterHotKey(Some(self.hub), id);
             }
             for i in 0..SND_KEYS_MAX as i32 {
@@ -1195,6 +1200,7 @@ impl App {
             (HK_REPLAY, c.hk_replay, "Replay", true),
             (HK_FORCE, c.hk_force, "Fechar à força", true),
             (HK_EXPLORER, c.hk_explorer, "Reiniciar o Explorer", true),
+            (HK_MACRO, c.hk_macro, "Gravar macro e parar", true),
             (HK_VOL_UP, Hotkey::new(c.vol_mods, VK_VOL_UP), "Aumentar volume", false),
             (HK_VOL_DOWN, Hotkey::new(c.vol_mods, VK_VOL_DOWN), "Diminuir volume", false),
             (HK_MUTE, Hotkey::new(c.vol_mods, VK_MUTE), "Mudo", true),
@@ -1233,6 +1239,7 @@ impl App {
             HK_FORCE => &mut c.hk_force,
             HK_EXPLORER => &mut c.hk_explorer,
             HK_FIND => &mut c.hk_find,
+            HK_MACRO => &mut c.hk_macro,
             id if id >= HK_SND => &mut c.snd_keys.get_mut((id - HK_SND) as usize)?.key,
             _ => return None,
         })
@@ -1262,7 +1269,7 @@ impl App {
         if on {
             self.unhook_force_key();
             unsafe {
-                for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER, HK_FIND] {
+                for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER, HK_FIND, HK_MACRO] {
                     let _ = UnregisterHotKey(Some(self.hub), id);
                 }
             }
@@ -1305,6 +1312,7 @@ impl App {
             HK_FORCE => self.force_close(),
             HK_EXPLORER => self.explorer_key(),
             HK_FIND => self.toggle_find(),
+            HK_MACRO => self.macro_toggle(None),
             HK_VOL_UP => self.volume(audio::Change::Step(self.cfg.vol_step as i32)),
             HK_VOL_DOWN => self.volume(audio::Change::Step(-(self.cfg.vol_step as i32))),
             HK_MUTE => self.volume(audio::Change::ToggleMute),
@@ -1535,6 +1543,49 @@ impl App {
         let info = e.info.lock().unwrap().clone();
         let bytes = e.status.bytes.load(Ordering::Relaxed);
         self.hud.update(t.elapsed().as_secs(), &info, bytes);
+    }
+
+    /// Começa ou para a gravação de macro: pelo atalho, o radial e a combinação no controle (macro
+    /// nova no perfil em uso) ou pelo botão do editor (`into`: perfil e número da macro dele).
+    /// Parando, guarda no perfil e avisa no alto da tela.
+    pub fn macro_toggle(&mut self, into: Option<(String, usize)>) {
+        use crate::sys::macros;
+        if macros::recording() {
+            let text = match macros::record_stop() {
+                Ok(name) => crate::i18n::tr("Gravação parada e salva como {}").replace("{}", &name),
+                Err(e) => crate::i18n::tr(e).into_owned(),
+            };
+            self.macro_hud.done(&text);
+        } else {
+            macros::record_start(into);
+            unsafe {
+                SetTimer(Some(self.hub), TIMER_MACRO, 200, None);
+            }
+            self.macro_tick();
+        }
+        self.invalidate();
+    }
+
+    /// Aviso da gravação de macro com o Prisma fora da frente; na frente, o editor mostra os passos.
+    fn macro_tick(&mut self) {
+        let Some(l) = crate::sys::macros::live() else {
+            // Parou: o aviso de salva fica até o tempo dele.
+            unsafe {
+                let _ = KillTimer(Some(self.hub), TIMER_MACRO);
+            }
+            return;
+        };
+        if crate::sys::nav::front() {
+            self.macro_hud.hide();
+            return;
+        }
+        let last = l.pressed.map_or_else(|| crate::i18n::tr("aperte um botão ou uma tecla").into_owned(), |o| crate::pages::pad_profiles::out_label(o, l.pad));
+        let style = l.pad.map_or_else(crate::ui::glyph::Style::current, |(f, vid)| crate::ui::glyph::Style::of(f, vid));
+        let icon = match l.pressed {
+            Some(crate::sys::remap::Out::Pad(b)) => Some((style, 1 << b)),
+            _ => None,
+        };
+        self.macro_hud.recording(l.secs, &last, icon);
     }
 
     pub fn hud_stop(&mut self) {
@@ -3363,6 +3414,7 @@ impl App {
                 let n = name.map(|p| p.name).unwrap_or_default();
                 return Some(if crate::sys::pads::disconnect(pad) { format!("{n} desconectado") } else { format!("{n} não está no Bluetooth ou não desconectou") });
             }
+            crate::sys::remap::MACRO_REC => self.macro_toggle(None),
             crate::sys::remap::RADIAL => {
                 crate::sys::radial::open_action();
                 self.radial.update(&self.cfg);
@@ -3852,6 +3904,8 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                     } else {
                         let _ = KillTimer(Some(a.hub), TIMER_SHARE);
                     }
+                } else if w.0 == TIMER_MACRO {
+                    a.macro_tick();
                 } else {
                     a.hud_update();
                 }

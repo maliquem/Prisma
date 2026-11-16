@@ -265,6 +265,7 @@ pub fn action_icon(id: u8) -> Icon {
         28 => ICON_ADJ,
         29..=31 => ICON_POW,
         32 => ICON_SHARE,
+        crate::sys::remap::MACRO_REC => ICON_REC,
         n if n >= crate::sys::remap::PAGES && n < crate::sys::radial::PROFILES => nav_page((n - crate::sys::remap::PAGES) as usize).map_or(ICON_PAD, |p| p.1),
         crate::sys::radial::PROGRAM => ICON_APP,
         crate::sys::radial::PROFILES => ICON_PAD,

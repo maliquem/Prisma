@@ -1,8 +1,9 @@
 //! Macros dos perfis: cada uma roda numa thread própria, com os passos e as esperas dela, e para no
 //! fim (uma vez), ao soltar o botão (enquanto segura), no próximo aperto (até apertar de novo) ou
 //! quando o mapeamento solta tudo (parada de emergência, troca de perfil, teclado do Prisma).
-//! O gravador pega teclado, cliques e roda do mouse enquanto o editor grava, com o aviso na tela, e
-//! os botões e gatilhos de todo controle, lidos direto do leitor (`pad_input`), em qualquer modo.
+//! O gravador pega teclado, cliques e roda do mouse e os botões e gatilhos de todo controle, lidos
+//! direto do leitor (`pad_input`), em qualquer modo. Começa pelo editor (grava na macro escolhida)
+//! ou pela ação liga/desliga (atalho, radial, combinação: grava numa macro nova do perfil em uso).
 //! Na reprodução, o botão gravado é apertado no controle que rodou a macro, antes do perfil e da
 //! ponte Xbox: o motor e o Xbox virtual o veem como se fosse do controle.
 
@@ -11,8 +12,8 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use super::pads::{Buttons, Input};
-use super::remap::{self, Act, Macro, Mode, Out, Step};
+use super::pads::{Buttons, Family, Input};
+use super::remap::{self, Act, Macro, Mode, Out, Profile, Step};
 
 /// Botões do controle que a macro grava e aperta: os físicos com nome e os dois gatilhos.
 /// shortcut: sticks e gyro não gravam (só botões e gatilhos); gravar eixos pede passo com valor.
@@ -142,6 +143,13 @@ struct Rec {
     down: Vec<Out>,
     /// Botões de cada controle no último relatório; o primeiro só marca o ponto de partida.
     pads: HashMap<String, Buttons>,
+    /// Primeiro controle que apertou algo: a macro mostra os botões dele.
+    pad: Option<String>,
+    /// Último aperto, para o aviso na tela.
+    pressed: Option<Out>,
+    /// Destino: a macro `n` do perfil (o editor); sem ele, uma macro nova.
+    into: Option<(String, usize)>,
+    start: Option<Instant>,
 }
 
 impl Rec {
@@ -172,6 +180,9 @@ impl Rec {
         }
         self.last = Some(now);
         self.steps.push(s);
+        if let Step::Down(o) = s {
+            self.pressed = Some(o);
+        }
     }
 
     /// Relatório do controle `key`: o que mudou nos botões vira aperto ou soltura.
@@ -180,7 +191,11 @@ impl Rec {
         for i in 0..64u8 {
             let bit: Buttons = 1 << i;
             if (old ^ b) & bit != 0 {
+                let n = self.steps.len();
                 self.event(now, if b & bit != 0 { Step::Down(Out::Pad(i)) } else { Step::Up(Out::Pad(i)) });
+                if self.steps.len() > n && self.pad.is_none() {
+                    self.pad = Some(key.to_string());
+                }
             }
         }
     }
@@ -263,32 +278,93 @@ pub fn recording() -> bool {
     REC.lock().unwrap().is_some()
 }
 
-/// Começa a gravar. Nada do que acontece com o Prisma em foco entra, nem o que o Prisma manda.
-pub fn record_start() {
+/// A gravação em curso, para o editor e o aviso na tela.
+pub struct Live {
+    pub steps: Vec<Step>,
+    pub secs: u64,
+    pub pressed: Option<Out>,
+    pub pad: Option<(Family, u16)>,
+    pub into: Option<(String, usize)>,
+}
+
+pub fn live() -> Option<Live> {
+    let (l, key) = {
+        let g = REC.lock().unwrap();
+        let r = g.as_ref()?;
+        let secs = r.start.map_or(0, |t| t.elapsed().as_secs());
+        (Live { steps: r.steps.clone(), secs, pressed: r.pressed, pad: None, into: r.into.clone() }, r.pad.clone())
+    };
+    // Fora da trava do gravador: a lista de controles tem a dela.
+    Some(Live { pad: key.and_then(|k| pad_of(&k)), ..l })
+}
+
+fn pad_of(key: &str) -> Option<(Family, u16)> {
+    super::pads::list().into_iter().find(|p| p.key == key).map(|p| (p.family, p.vid))
+}
+
+/// Começa a gravar na macro `into` (perfil, número) ou, sem ela, numa macro nova. Nada do que
+/// acontece com o Prisma em foco entra, menos o controle, nem o que o Prisma manda.
+pub fn record_start(into: Option<(String, usize)>) {
     let mut g = REC.lock().unwrap();
     if g.is_some() {
         return;
     }
-    *g = Some(Rec::default());
+    *g = Some(Rec { into, start: Some(Instant::now()), ..Default::default() });
     crate::config::log("macro: gravação começou");
     std::thread::spawn(hooks);
 }
 
-/// Para de gravar e devolve os passos.
-pub fn record_stop() -> Vec<Step> {
+/// Para de gravar e guarda no perfil: devolve o nome da macro, ou o motivo de não ter guardado.
+pub fn record_stop() -> Result<String, &'static str> {
     use windows::Win32::Foundation::{LPARAM, WPARAM};
     use windows::Win32::UI::WindowsAndMessaging::{PostThreadMessageW, WM_QUIT};
     let rec = REC.lock().unwrap().take();
-    let pads = rec.as_ref().map_or(0, |r| r.pads.len());
-    let steps = rec.map(Rec::finish).unwrap_or_default();
-    crate::config::log(&format!("macro: gravação parou com {} passos ({pads} controles ouvidos)", steps.len()));
     let t = REC_THREAD.swap(0, Ordering::SeqCst);
     if t != 0 {
         unsafe {
             let _ = PostThreadMessageW(t, WM_QUIT, WPARAM(0), LPARAM(0));
         }
     }
-    steps
+    let Some(rec) = rec else { return Err("Nenhuma macro estava sendo gravada") };
+    let (pads, key, into) = (rec.pads.len(), rec.pad.clone(), rec.into.clone());
+    let steps = rec.finish();
+    // Fora dos testes: o registro é o do PC.
+    if !cfg!(test) {
+        crate::config::log(&format!("macro: gravação parou com {} passos ({pads} controles ouvidos)", steps.len()));
+    }
+    if steps.is_empty() && into.is_none() {
+        return Err("Gravação parada: nada foi gravado");
+    }
+    let prof = match &into {
+        Some((p, _)) => Some(p.clone()),
+        None => remap::profile_for(key.as_deref()),
+    };
+    let mut p = prof.and_then(|n| remap::profiles().into_iter().find(|p| p.name == n)).ok_or("Não deu para salvar a macro")?;
+    let name = store(&mut p, into.map(|x| x.1), steps, key.and_then(|k| pad_of(&k)), &crate::i18n::tr("Macro")).ok_or("Este perfil já tem macros demais")?;
+    if !remap::save(&p) {
+        return Err("Não deu para salvar a macro");
+    }
+    Ok(name)
+}
+
+/// Guarda os passos na macro `into` ou numa nova com o próximo nome livre. `None`: sem lugar.
+fn store(p: &mut Profile, into: Option<usize>, steps: Vec<Step>, pad: Option<(Family, u16)>, word: &str) -> Option<String> {
+    if let Some(m) = into.and_then(|i| p.macros.get_mut(i)) {
+        m.steps = steps;
+        m.pad = pad.or(m.pad);
+        return Some(m.name.clone());
+    }
+    if p.macros.len() >= remap::MAX_MACROS {
+        return None;
+    }
+    let name = next_name(p, word);
+    p.macros.push(Macro { name: name.clone(), mode: Mode::Once, steps, pad });
+    Some(name)
+}
+
+/// "Macro N" com o menor N que nenhuma macro do perfil usa.
+pub fn next_name(p: &Profile, word: &str) -> String {
+    (1..).map(|n| format!("{word} {n}")).find(|n| !p.macros.iter().any(|m| m.name == *n)).unwrap_or_default()
 }
 
 fn record(s: Step) {
@@ -412,6 +488,41 @@ mod tests {
     }
 
     #[test]
+    fn new_recordings_take_the_next_free_name_and_the_editor_keeps_its_own() {
+        let mut p = remap::Profile::base();
+        let m = |n: &str| Macro { name: n.into(), mode: Mode::Once, steps: vec![], pad: None };
+        p.macros = vec![m("Macro 1"), m("Macro 2")];
+        let a = vec![Step::Down(Out::Pad(0)), Step::Up(Out::Pad(0))];
+        let ds = Some((Family::DualSense, 0x054c));
+        assert_eq!(store(&mut p, None, a.clone(), ds, "Macro").as_deref(), Some("Macro 3"));
+        assert_eq!((p.macros[2].steps.clone(), p.macros[2].pad), (a.clone(), ds));
+        // Buraco na numeração: o primeiro livre.
+        p.macros.remove(0);
+        assert_eq!(next_name(&p, "Macro"), "Macro 1");
+        // Pelo editor: troca os passos da macro escolhida, sem nome novo.
+        assert_eq!(store(&mut p, Some(0), vec![], None, "Macro").as_deref(), Some("Macro 2"));
+        assert_eq!((p.macros.len(), p.macros[0].steps.len()), (2, 0));
+        p.macros = (0..remap::MAX_MACROS).map(|i| m(&i.to_string())).collect();
+        assert_eq!(store(&mut p, None, a, None, "Macro"), None);
+    }
+
+    #[test]
+    fn live_recording_shows_steps_as_they_come_and_the_toggle_turns_it_off() {
+        use crate::sys::pads::A;
+        // Liga, aperta: o passo aparece já, antes de parar; desliga: some.
+        assert!(!recording());
+        *REC.lock().unwrap() = Some(Rec { start: Some(Instant::now()), ..Default::default() });
+        assert!(recording());
+        let t = Instant::now();
+        pad_input("xinput:9", &mut Input::default(), t);
+        pad_input("xinput:9", &mut Input { buttons: A, ..Default::default() }, t + Duration::from_millis(30));
+        let l = live().unwrap();
+        assert_eq!((l.steps, l.pressed), (vec![Step::Down(Out::Pad(0))], Some(Out::Pad(0))));
+        let _ = record_stop();
+        assert!(!recording() && live().is_none());
+    }
+
+    #[test]
     fn held_pad_buttons_reach_the_report_and_survive_the_profile_text() {
         use crate::sys::pads::{A, B};
         let mut inp = Input { buttons: B, ..Default::default() };
@@ -419,7 +530,7 @@ mod tests {
         assert_eq!(inp.buttons, A | B);
         assert_eq!(inp.rt, 1.0);
         let mut p = remap::Profile::base();
-        p.macros.push(Macro { name: "M".into(), mode: Mode::Once, steps: vec![Step::Down(Out::Pad(0)), Step::Up(Out::Pad(17))] });
+        p.macros.push(Macro { name: "M".into(), mode: Mode::Once, steps: vec![Step::Down(Out::Pad(0)), Step::Up(Out::Pad(17))], pad: Some((Family::DualSense, 0x054c)) });
         assert_eq!(remap::Profile::parse(&p.to_text()).unwrap().macros[0].steps, p.macros[0].steps);
     }
 

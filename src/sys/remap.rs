@@ -127,6 +127,8 @@ pub struct Macro {
     pub name: String,
     pub mode: Mode,
     pub steps: Vec<Step>,
+    /// Controle em que foi gravada (família e vid): os passos mostram os botões dele.
+    pub pad: Option<(pads::Family, u16)>,
 }
 pub const MAX_MACROS: usize = 32;
 pub const MAX_STEPS: usize = 2000;
@@ -221,6 +223,31 @@ pub const KEYBOARD: u8 = 26;
 pub const RADIAL: u8 = 27;
 /// Primeira ação "Página ...": abre a página `n - PAGES` da barra lateral.
 pub const PAGES: u8 = 33;
+/// Começa e para a gravação de macro (`sys::macros`). Fora de `ACTIONS`, que termina nas páginas;
+/// o número fica entre elas e `SOUND`.
+pub const MACRO_REC: u8 = 90;
+
+/// Nome da ação `n` do Prisma (sem as combinações de som); vazio se não existe.
+pub fn action_name(n: u8) -> &'static str {
+    if n == MACRO_REC {
+        return "Gravar macro e parar";
+    }
+    ACTIONS.get(n as usize).copied().unwrap_or("")
+}
+const FAMILIES: [pads::Family; 6] = [pads::Family::DualSense, pads::Family::Ds4, pads::Family::Xbox, pads::Family::EightBitDo, pads::Family::Switch, pads::Family::Generic];
+
+/// Família no arquivo do perfil (linha `mpad`).
+fn family_text(f: pads::Family) -> &'static str {
+    match f {
+        pads::Family::DualSense => "dualsense",
+        pads::Family::Ds4 => "ds4",
+        pads::Family::Xbox => "xbox",
+        pads::Family::EightBitDo => "8bitdo",
+        pads::Family::Switch => "switch",
+        pads::Family::Generic => "generic",
+    }
+}
+
 /// Nome do controle para o qual um perfil foi feito (`Profile.made_for`).
 pub fn made_for_name(f: pads::Family) -> &'static str {
     match f {
@@ -247,7 +274,7 @@ pub fn action_section(n: u8) -> Option<&'static str> {
         21 => "Configurações",
         22 => "Monitor",
         23 => "Pesquisar",
-        24..=27 => "Controles",
+        24..=27 | MACRO_REC => "Controles",
         29..=31 => "Energia",
         32 => "Compartilhar tela",
         n if n >= SOUND => "Som",
@@ -739,6 +766,9 @@ impl Profile {
         for (i, m) in self.macros.iter().enumerate() {
             let mode = MODES.iter().find(|x| x.0 == m.mode).map_or("once", |x| x.1);
             let _ = writeln!(s, "macro {mode} {}", m.name);
+            if let Some((f, vid)) = m.pad {
+                let _ = writeln!(s, "mpad {i} {} {vid}", family_text(f));
+            }
             for st in &m.steps {
                 match st {
                     Step::Down(o) => _ = writeln!(s, "mstep {i} down {}", out_text(*o, &self.strings)),
@@ -989,7 +1019,14 @@ impl Profile {
                     if p.macros.len() >= MAX_MACROS || name.is_empty() {
                         return None;
                     }
-                    p.macros.push(Macro { name, mode, steps: vec![] });
+                    p.macros.push(Macro { name, mode, steps: vec![], pad: None });
+                }
+                "mpad" => {
+                    let mut it = rest.split(' ');
+                    let m = it.next()?.parse::<usize>().ok().filter(|&m| m < p.macros.len())?;
+                    let name = it.next()?;
+                    let f = *FAMILIES.iter().find(|f| family_text(**f) == name)?;
+                    p.macros[m].pad = Some((f, it.next()?.parse().ok()?));
                 }
                 "mstep" => {
                     let mut it = rest.splitn(3, ' ');
@@ -1171,7 +1208,7 @@ fn parse_out(s: &str, strings: &mut Vec<String>) -> Option<Out> {
         "toggle" => Out::Toggle(n.parse::<u8>().ok()?),
         "macro" => Out::Macro(n.parse::<u8>().ok().filter(|&m| (m as usize) < MAX_MACROS)?),
         "text" => Out::Text(n.parse::<u8>().ok().filter(|&m| (m as usize) < MAX_TEXTS)?),
-        "action" => Out::Action(n.parse::<u8>().ok().filter(|&a| (a as usize) < ACTIONS.len() || (SOUND..SOUND + crate::app::SND_KEYS_MAX as u8).contains(&a))?),
+        "action" => Out::Action(n.parse::<u8>().ok().filter(|&a| (a as usize) < ACTIONS.len() || a == MACRO_REC || (SOUND..SOUND + crate::app::SND_KEYS_MAX as u8).contains(&a))?),
         _ => return None,
     };
     it.next().is_none().then_some(out)
@@ -2116,6 +2153,13 @@ pub fn light(key: &str) -> Option<(Light, bool)> {
         let p = &r.profiles[prof_of(r, key)];
         p.light.map(|l| (l, p.light_bt))
     })
+}
+
+/// Perfil em uso no controle `key` (o próprio dele ou o do programa); sem controle, o do programa.
+/// Vale também com o mapeamento parado.
+pub fn profile_for(key: Option<&str>) -> Option<String> {
+    let g = RUN.lock().unwrap();
+    g.as_ref().map(|r| r.profiles[key.map_or(r.cur, |k| prof_of(r, k))].name.clone())
 }
 
 pub fn active() -> Option<String> {
@@ -3374,15 +3418,15 @@ buzz 9
         p.layers[1].binds.push(Bind { button: pads::A, with: pads::LB | pads::RB, when: When::Double, out: Out::Key(0x43, CTRL | SHIFT) });
         let base = intern(&mut p.strings, "Base").unwrap();
         let prog = intern(&mut p.strings, "C:/Program Files/App Dir/app.exe").unwrap();
-        for out in [Out::Action(0), Out::Action(ACTIONS.len() as u8 - 1), Out::Action(SOUND + 2), Out::Profile(base), Out::Run(prog)] {
+        for out in [Out::Action(0), Out::Action(ACTIONS.len() as u8 - 1), Out::Action(SOUND + 2), Out::Action(MACRO_REC), Out::Profile(base), Out::Run(prog)] {
             one(&mut p.layers[1], pads::B, When::Tap, out);
         }
         p.turbo.push(Turbo { button: pads::X, speed: 3, delay: 250, on: true });
         p.turbo.push(Turbo::new(pads::LB));
         p.turbo_key = pads::LB | LT;
         let k = Out::Key(0x41, 0);
-        p.macros.push(Macro { name: "Combo 1".into(), mode: Mode::Held, steps: vec![Step::Down(k), Step::Wait(120), Step::Up(k), Step::Down(Out::Wheel(-2)), Step::Down(Out::Mouse(4)), Step::Up(Out::Mouse(4))] });
-        p.macros.push(Macro { name: "Vazia".into(), mode: Mode::Toggle, steps: vec![] });
+        p.macros.push(Macro { name: "Combo 1".into(), mode: Mode::Held, steps: vec![Step::Down(k), Step::Wait(120), Step::Up(k), Step::Down(Out::Wheel(-2)), Step::Down(Out::Mouse(4)), Step::Up(Out::Mouse(4))], pad: None });
+        p.macros.push(Macro { name: "Vazia".into(), mode: Mode::Toggle, steps: vec![], pad: Some((pads::Family::Switch, 0x057e)) });
         one(&mut p.layers[0], pads::Y, When::Press, Out::Macro(1));
         let text = p.to_text();
         assert_eq!(Profile::parse(&text), Some(p), "{text}");

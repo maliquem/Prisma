@@ -2185,8 +2185,17 @@ Apagar macro	Delete macro
 Gravando: use o teclado e o mouse em outro programa e volte aqui para parar. O movimento do mouse não entra.	Recording: use the keyboard and mouse in another program and come back here to stop. Mouse movement isn't recorded.
 {} passos. Gravar troca os passos pelos novos.	{} steps. Recording replaces the steps with new ones.
 Adicionar passo	Add step
-Gravando macro: volte ao Prisma e clique em Parar	Recording macro: come back to Prisma and click Stop
-Macro gravada	Macro recorded
+Gravar macro e parar	Record macro and stop
+Gravando macro	Recording macro
+Gravação parada e salva como {}	Recording stopped and saved as {}
+Nenhuma macro estava sendo gravada	No macro was being recorded
+Gravação parada: nada foi gravado	Recording stopped: nothing was recorded
+Não deu para salvar a macro	Could not save the macro
+Este perfil já tem macros demais	This profile already has too many macros
+aperte um botão ou uma tecla	press a button or a key
+Macro nova	New macro
+Gravar cria uma macro nova.	Record creates a new macro.
+Atalho de teclado para gravar e parar, em qualquer programa:	Keyboard shortcut to record and stop, in any program:
 Jogo com anti-cheat: as macros ficam paradas nele.	Game with anti-cheat: macros stay paused in it.
 Botões do controle	Controller buttons
 Teclado e mouse	Keyboard and mouse

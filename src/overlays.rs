@@ -703,6 +703,80 @@ impl Hud {
     }
 }
 
+/// Aviso de gravação de macro no alto da tela, no meio: o tempo e o último botão ou tecla; ao
+/// parar, que a macro foi salva. Não pega o mouse nem o foco, e fica fora das capturas.
+pub struct MacroHud {
+    surface: Layered,
+}
+
+impl MacroHud {
+    pub fn new() -> Self {
+        register(w!("PrismaMacroHud"), toast_proc);
+        let hwnd = create_overlay(w!("PrismaMacroHud"), true);
+        crate::capture::hide_from_capture(hwnd);
+        Self { surface: Layered::new(hwnd) }
+    }
+
+    /// `ms` > 0: some sozinho depois desse tempo.
+    fn show(&mut self, w: f32, ms: u32, draw: impl FnOnce(&Canvas, Rect)) {
+        let mon = focus_monitor();
+        let hwnd = self.surface.hwnd;
+        let scale = unsafe { windows::Win32::UI::HiDpi::GetDpiForWindow(hwnd) } as f32 / 96.0;
+        let x = (mon.left + mon.right) / 2 - (w * scale / 2.0) as i32;
+        let y = mon.top + (24.0 * scale) as i32;
+        self.surface.paint(x, y, w, 48.0, draw);
+        unsafe {
+            let _ = KillTimer(Some(hwnd), 1);
+            let _ = SetWindowPos(hwnd, Some(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+            if ms > 0 {
+                SetTimer(Some(hwnd), 1, ms, None);
+            }
+        }
+    }
+
+    /// Gravando: o tempo, e o último aperto (`icon`: o botão no desenho do controle usado).
+    pub fn recording(&mut self, secs: u64, last: &str, icon: Option<(crate::ui::glyph::Style, crate::sys::pads::Buttons)>) {
+        const TITLE: &str = "Gravando macro";
+        let time = format!("{:02}:{:02}", secs / 60, secs % 60);
+        let last = last.to_string();
+        let tw = measure(TITLE, 13.0, Weight::Regular, None).0;
+        let iw = icon.map_or(0.0, |(_, b)| crate::ui::glyph::width(b, 20.0) + 6.0);
+        // Nome longo (outro idioma, tecla com modificadores): a caixa cresce até 640 e a letra encolhe.
+        let lw = measure_raw(&last, 14.0, Weight::Semibold);
+        let w = (84.0 + tw + 16.0 + iw + lw + 20.0).clamp(220.0, 640.0);
+        self.show(w, 0, move |c, r| {
+            c.round(r, r.h / 2.0, rgb(0x0d0f14).alpha(0.86));
+            c.circle(20.0, r.h / 2.0, 5.0, REC);
+            c.text_raw(rect(32.0, 0.0, 48.0, r.h), &time, 14.0, WHITE, Align::Left, Weight::Semibold);
+            c.text(rect(84.0, 0.0, tw + 4.0, r.h), TITLE, 13.0, rgb(0xc5cad6), Align::Left, Weight::Regular);
+            let mut x = 84.0 + tw + 16.0;
+            if let Some((s, b)) = icon {
+                x += crate::ui::glyph::draw(c, x, r.h / 2.0, 20.0, s, b, WHITE) + 6.0;
+            }
+            c.text_fit(rect(x, 0.0, r.w - x - 16.0, r.h), &last, 14.0, WHITE, Align::Left, Weight::Semibold);
+        });
+    }
+
+    /// Fim da gravação: o texto fica 3 s.
+    pub fn done(&mut self, text: &str) {
+        crate::report::note(text);
+        let text = crate::i18n::tr(text).into_owned();
+        let w = (measure_raw(&text, 14.0, Weight::Regular) + 40.0).clamp(160.0, 640.0);
+        self.show(w, 3000, move |c, r| {
+            c.round(r, r.h / 2.0, rgb(0x0d0f14).alpha(0.86));
+            c.text_fit(rect(20.0, 0.0, r.w - 40.0, r.h), &text, 14.0, WHITE, Align::Center, Weight::Regular);
+        });
+    }
+
+    pub fn hide(&mut self) {
+        unsafe {
+            let _ = KillTimer(Some(self.surface.hwnd), 1);
+            let _ = ShowWindow(self.surface.hwnd, SW_HIDE);
+        }
+    }
+}
+
 /// Teclado do Prisma para controle (`sys::osk`): só desenha, quem digita é o controle.
 /// A seta anda 45% do caminho até o stick a cada quadro; devolve se mexeu o bastante para redesenhar.
 fn ease(arrow: &mut (f32, f32), (tx, ty): (f32, f32)) -> bool {
@@ -1025,7 +1099,7 @@ impl Radial {
                 } else if a == crate::sys::radial::PROFILES {
                     crate::i18n::tr("Trocar perfil").into_owned()
                 } else {
-                    crate::sys::remap::ACTIONS.get(a as usize).map_or(String::new(), |n| crate::i18n::tr(n).into_owned())
+                    crate::i18n::tr(crate::sys::remap::action_name(a)).into_owned()
                 };
             }
             self.icons = cfg.pad_radial;

@@ -196,6 +196,8 @@ pub struct Config {
     pub hk_force: Hotkey,
     pub hk_explorer: Hotkey,
     pub hk_find: Hotkey,
+    /// Começa e para a gravação de macro (sem tecla de fábrica).
+    pub hk_macro: Hotkey,
     /// Pesquisa de arquivos ligada: o índice fica na memória.
     pub search_on: bool,
     /// Letras dos discos da pesquisa. Vazio: todos, menos os com problema de saúde.
@@ -380,6 +382,7 @@ impl Default for Config {
             hk_force: Hotkey::new(MOD_ALT, 0x73),
             hk_explorer: Hotkey::new(0, 0),
             hk_find: Hotkey::new(MOD_CTRL | MOD_ALT, 0x20),
+            hk_macro: Hotkey::new(0, 0),
             search_on: false,
             search_drives: String::new(),
             search_apps: true,
@@ -539,7 +542,7 @@ pub fn radial_default() -> [u8; crate::sys::radial::ALL] {
 /// `GROUP` só vale nos 16 lugares.
 fn parse_radial(v: &str) -> Option<[u8; crate::sys::radial::ALL]> {
     use crate::sys::{radial::{ALL, EMPTY, GROUP, PROFILES, PROGRAM, SLOTS}, remap};
-    let list: Vec<u8> = v.split(',').enumerate().map(|(i, x)| x.trim().parse::<u8>().ok().filter(|&a| a == EMPTY || a == PROGRAM || ((a == GROUP || a == PROFILES) && i < SLOTS) || ((a as usize) < remap::ACTIONS.len() && a != remap::RADIAL))).collect::<Option<_>>()?;
+    let list: Vec<u8> = v.split(',').enumerate().map(|(i, x)| x.trim().parse::<u8>().ok().filter(|&a| a == EMPTY || a == PROGRAM || ((a == GROUP || a == PROFILES) && i < SLOTS) || a == remap::MACRO_REC || ((a as usize) < remap::ACTIONS.len() && a != remap::RADIAL))).collect::<Option<_>>()?;
     let mut out = radial_default();
     match list.len() {
         8 | SLOTS | ALL => out[..list.len()].copy_from_slice(&list),
@@ -630,6 +633,7 @@ impl Config {
                 "hk_force" => c.hk_force = Hotkey::parse(v),
                 "hk_explorer" => c.hk_explorer = Hotkey::parse(v),
                 "hk_find" => c.hk_find = Hotkey::parse(v),
+                "hk_macro" => c.hk_macro = Hotkey::parse(v),
                 "search_on" => c.search_on = v == "1",
                 "search_drives" => c.search_drives = v.chars().filter(|c| c.is_ascii_uppercase() || *c == '-').collect(),
                 "search_apps" => c.search_apps = v == "1",
@@ -840,6 +844,7 @@ impl Config {
         hk(&mut s, "hk_force", self.hk_force);
         hk(&mut s, "hk_explorer", self.hk_explorer);
         hk(&mut s, "hk_find", self.hk_find);
+        hk(&mut s, "hk_macro", self.hk_macro);
         let _ = writeln!(s, "search_on={}", self.search_on as u8);
         let _ = writeln!(s, "search_drives={}", self.search_drives);
         let _ = writeln!(s, "search_apps={}", self.search_apps as u8);
