@@ -11,7 +11,7 @@ mod energy;
 mod fullscreen;
 pub mod guide;
 mod hdr;
-mod meter;
+pub mod meter;
 mod monitor;
 pub mod news;
 pub mod nvidia;
@@ -43,7 +43,7 @@ mod storage;
 mod tools;
 mod tweaks;
 mod uninstall;
-mod volume;
+pub mod volume;
 pub mod welcome;
 mod widget;
 

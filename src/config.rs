@@ -281,6 +281,8 @@ pub struct Config {
     pub black: Vec<String>,
     pub white: Vec<String>,
     pub ignored: Vec<String>,
+    /// Jogos (pelo .exe) que o Otimizar pula ao abrir; escolha feita pelo Prisma Launcher.
+    pub opt_skip: Vec<String>,
     pub profiles: Vec<Profile>,
     pub cap_dir: String,
     pub cap_target: u8,
@@ -448,6 +450,7 @@ impl Default for Config {
             black: Vec::new(),
             white: Vec::new(),
             ignored: Vec::new(),
+            opt_skip: Vec::new(),
             profiles: Vec::new(),
             cap_dir: default_capture_dir(),
             cap_target: 0,
@@ -670,6 +673,7 @@ impl Config {
                 "black" => c.black.push(v.into()),
                 "white" => c.white.push(v.into()),
                 "ignored" => c.ignored.push(v.into()),
+                "opt_skip" => c.opt_skip.push(v.into()),
                 "load_gpu_pct" => c.load_gpu_pct = v.parse().unwrap_or(40),
                 "load_gpu_secs" => c.load_gpu_secs = v.parse().unwrap_or(5),
                 "load_cpu_pct" => c.load_cpu_pct = v.parse().unwrap_or(35),
@@ -885,6 +889,9 @@ impl Config {
         }
         for v in &self.ignored {
             let _ = writeln!(s, "ignored={v}");
+        }
+        for v in &self.opt_skip {
+            let _ = writeln!(s, "opt_skip={v}");
         }
         for p in &self.profiles {
             let _ = writeln!(

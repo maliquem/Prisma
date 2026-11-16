@@ -8,7 +8,7 @@ use std::sync::mpsc::{sync_channel, SyncSender};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use prisma_link::{cap, fail as code, Controller, MeterView, NvidiaKind, NvidiaSetting, NvidiaValue, Page as LinkPage, PowerPlan, Reply, Request, ServerInfo, VolumeChange};
+use prisma_link::{cap, fail as code, AudioDevice, Controller, FpsLimit, MeterView, NvidiaKind, NvidiaSetting, NvidiaValue, OptionValue, Page as LinkPage, PowerPlan, ReplayOptions, ReplayResolution, Reply, Request, ServerInfo, ShareMode, VolumeChange};
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_APP};
 
@@ -17,7 +17,7 @@ use crate::pages::Page;
 use crate::sys::remap;
 use crate::sys::drs::{self, Profile};
 use crate::sys::nvset::{self, Kind, Setting};
-use crate::sys::{audio, power, procs};
+use crate::sys::{audio, autohdr, power, procs};
 
 /// Avisa a janela de controle que há pedidos do launcher na fila.
 pub const WM_LINK: u32 = WM_APP + 92;
@@ -104,6 +104,14 @@ fn controller_of(p: &crate::sys::pads::Pad) -> Controller {
     }
 }
 
+/// O Compartilhar tela está em "Só a janela" com uma janela que ainda existe.
+fn share_window() -> bool {
+    #[cfg(feature = "stream")]
+    return crate::stream::host::chosen_window(crate::stream::Opts::load().window).is_some();
+    #[cfg(not(feature = "stream"))]
+    false
+}
+
 fn fail(code: &'static str, reason: &str) -> Outcome {
     Outcome::Failed(code, crate::i18n::tr(reason).into_owned())
 }
@@ -165,8 +173,16 @@ fn caps_with(nvidia: bool) -> Vec<String> {
         cap::HDR,
         cap::WINDOW_SHOT,
         cap::RECORD_WINDOW,
+        cap::OPTIONS,
+        cap::METER_FPS_LIMIT,
+        cap::HDR_AUTO,
+        cap::SOUND_DEVICES,
+        cap::REPLAY_OPTIONS,
+        cap::FULLSCREENIZER,
+        cap::OPTIMIZE,
     ];
     if cfg!(feature = "stream") {
+        caps.push(cap::SHARE_MODE);
         caps.push(cap::SHARE_INVITE);
         caps.push(cap::SHARE_INVITE_MINUTES);
         caps.push(cap::SHARE_ASK);
@@ -500,8 +516,179 @@ impl App {
             }
             #[cfg(not(feature = "stream"))]
             Request::ShareAsk { .. } => Outcome::Failed(code::NOT_SUPPORTED, "indisponível".into()),
+            Request::Options { exe, pid } => Outcome::Reply(self.link_options(&procs::exe_name(&exe), pid)),
+            Request::SetOption { exe, pid, option } => self.link_set_option(&exe, pid, option),
             Request::Hello { .. } | Request::Unknown => Outcome::Done,
         }
+    }
+
+    /// O estado da barra do launcher para o jogo `exe` (só o nome do .exe).
+    fn link_options(&self, exe: &str, pid: u32) -> Reply {
+        let same = |e: &str| !exe.is_empty() && e.eq_ignore_ascii_case(exe);
+        let devices = |capture| {
+            let def = audio::default_id(capture).unwrap_or_default();
+            audio::devices(capture).into_iter().map(|d| AudioDevice { default: d.id == def, id: d.id, name: d.name }).collect()
+        };
+        let snd = self.cfg.snd_apps.iter().find(|a| same(&a.exe));
+        let sessions: Vec<_> = if pid != 0 { audio::for_process(pid) } else { audio::sessions().into_iter().filter(|s| same(&s.exe)).collect() };
+        let c = &self.cfg;
+        Reply::Options {
+            meter: match self.meter.view {
+                crate::meter::VIEW_COMPACT => MeterView::Compact,
+                crate::meter::VIEW_FULL => MeterView::Full,
+                _ => MeterView::Off,
+            },
+            fps_limit: match c.meter_games.iter().find(|g| same(&g.exe)) {
+                Some(g) if g.limit_mode == 1 => FpsLimit::Auto,
+                Some(g) if g.limit_mode == 2 => FpsLimit::Manual(g.limit_fps),
+                _ => FpsLimit::Off,
+            },
+            hdr: crate::sys::hdr::hdr_output().map(|h| h.2),
+            auto_hdr: match c.hdr_games.iter().find(|h| same(&h.exe)).map_or(0, |h| h.mode) {
+                1 => Some(true),
+                2 => Some(false),
+                _ => None,
+            },
+            auto_hdr_windows: autohdr::global_on(),
+            audio_out: devices(false),
+            audio_in: devices(true),
+            audio_out_id: snd.map(|a| a.output.clone()).unwrap_or_default(),
+            audio_in_id: snd.map(|a| a.input.clone()).unwrap_or_default(),
+            volume: sessions.first().map(|s| (s.volume * 100.0).round() as u32),
+            muted: sessions.first().is_some_and(|s| s.muted),
+            share_mode: if share_window() { ShareMode::Game } else { ShareMode::Screen },
+            replay: ReplayOptions {
+                on: c.replay_on,
+                secs: c.replay_secs,
+                resolution: match c.cap_mode {
+                    1 => ReplayResolution::P2160,
+                    2 => ReplayResolution::P1440,
+                    3 => ReplayResolution::P1080,
+                    _ => ReplayResolution::Native,
+                },
+                hdr: c.cap_hdr,
+            },
+            fullscreenizer: c.fs_auto(exe),
+            optimize: !c.opt_skip.iter().any(|e| same(e)),
+        }
+    }
+
+    /// Muda uma opção da barra, como a tela do Prisma que cuida dela.
+    fn link_set_option(&mut self, exe_path: &str, pid: u32, option: OptionValue) -> Outcome {
+        let exe = procs::exe_name(exe_path);
+        // O caminho completo só serve à lista das telas; um nome sozinho fica sem caminho.
+        let path = if exe_path.contains('\\') { exe_path } else { "" };
+        let per_game = !matches!(option, OptionValue::ShareMode(_) | OptionValue::Replay(_) | OptionValue::Unknown(_));
+        if per_game && exe.is_empty() {
+            return fail(code::INVALID, "Falta o .exe do jogo");
+        }
+        match option {
+            OptionValue::FpsLimit(limit) => {
+                if matches!(limit, FpsLimit::Manual(f) if !(20..=1023).contains(&f)) {
+                    return fail(code::INVALID, "Valor fora das opções");
+                }
+                self.add_meter_game(&exe, path);
+                let first = crate::meter::first_limit(self.refresh_hz());
+                let Some(g) = self.cfg.meter_games.iter_mut().find(|g| g.exe.eq_ignore_ascii_case(&exe)) else { return fail(code::FAILED, "Valor fora das opções") };
+                match limit {
+                    FpsLimit::Off => g.limit_mode = 0,
+                    FpsLimit::Auto => {
+                        g.limit_mode = 1;
+                        g.limit_fps = first;
+                        g.measured = false;
+                    }
+                    FpsLimit::Manual(f) => {
+                        g.limit_mode = 2;
+                        g.limit_fps = f;
+                    }
+                }
+                let g = g.clone();
+                self.cfg.save();
+                // Com injeção, o limite vale sem o driver NVIDIA.
+                if !crate::meter::write_limit(&g) && !crate::meter::uses_injection(&g) {
+                    return fail(code::FAILED, "Não consegui gravar no driver NVIDIA.");
+                }
+            }
+            OptionValue::AutoHdr(on) => {
+                let mode = match on {
+                    Some(true) => 1,
+                    Some(false) => 2,
+                    None => 0,
+                };
+                if !crate::pages::meter::set_auto_hdr(self, &exe, path, mode) {
+                    return fail(code::FAILED, "Não consegui gravar a escolha.");
+                }
+                self.cfg.save();
+            }
+            OptionValue::AudioOut(id) | OptionValue::AudioIn(id) if !id.is_empty() && !audio::devices(false).iter().chain(&audio::devices(true)).any(|d| d.id == id) => {
+                return fail(code::INVALID, "Valor fora das opções");
+            }
+            OptionValue::AudioOut(id) => crate::pages::volume::set_device(self, &exe, path, false, id),
+            OptionValue::AudioIn(id) => crate::pages::volume::set_device(self, &exe, path, true, id),
+            OptionValue::ShareMode(mode) => return self.link_share_mode(mode, pid),
+            OptionValue::Replay(r) => {
+                if ![15, 30, 60, 120].contains(&r.secs) {
+                    return fail(code::INVALID, "Valor fora das opções");
+                }
+                let c = &mut self.cfg;
+                let toggled = c.replay_on != r.on;
+                c.replay_on = r.on;
+                c.replay_secs = r.secs;
+                c.cap_hdr = r.hdr;
+                c.cap_mode = match r.resolution {
+                    ReplayResolution::Native => 0,
+                    ReplayResolution::P2160 => 1,
+                    ReplayResolution::P1440 => 2,
+                    ReplayResolution::P1080 => 3,
+                };
+                c.save();
+                if toggled {
+                    self.replay_changed();
+                }
+            }
+            OptionValue::Fullscreenizer(on) => {
+                self.cfg.fs_note(&exe, path);
+                if let Some(a) = self.cfg.fs_apps.iter_mut().find(|a| a.exe.eq_ignore_ascii_case(&exe)) {
+                    a.auto = on;
+                }
+                self.cfg.save();
+            }
+            OptionValue::Optimize(on) => {
+                self.cfg.opt_skip.retain(|e| !e.eq_ignore_ascii_case(&exe));
+                if !on {
+                    self.cfg.opt_skip.push(exe);
+                }
+                self.cfg.save();
+            }
+            OptionValue::Unknown(_) => return fail(code::NOT_SUPPORTED, "indisponível"),
+        }
+        self.invalidate();
+        Outcome::Done
+    }
+
+    /// Tela inteira ou só a janela do jogo, como a escolha da página Compartilhar tela.
+    #[cfg(feature = "stream")]
+    fn link_share_mode(&mut self, mode: ShareMode, pid: u32) -> Outcome {
+        let mut opts = crate::stream::Opts::load();
+        opts.window = match mode {
+            ShareMode::Screen => (0, 0),
+            ShareMode::Game => {
+                // Sem `pid` não há jogo: a janela em primeiro plano seria a do launcher.
+                let Some((h, _)) = self.link_window(pid).filter(|_| pid != 0) else { return fail(code::NO_WINDOW, "Janela do jogo não encontrada") };
+                (h.0 as usize as u64, procs::window_pid(h))
+            }
+        };
+        if opts.save().is_err() {
+            return fail(code::FAILED, "Não deu para salvar. Com o serviço, abra o Prisma como administrador.");
+        }
+        crate::pages::share::reload_opts();
+        self.invalidate();
+        Outcome::Done
+    }
+
+    #[cfg(not(feature = "stream"))]
+    fn link_share_mode(&mut self, _: ShareMode, _: u32) -> Outcome {
+        fail(code::NOT_SUPPORTED, "indisponível")
     }
 
     /// A janela do jogo que o launcher abriu; `pid` 0 é a janela em primeiro plano, como os atalhos.
@@ -660,13 +847,15 @@ mod tests {
                 cap::METER_VIEW, cap::POWER_PLAN, cap::FULLSCREEN, cap::SOUND_VOLUME, cap::HDR,
                 cap::WINDOW_SHOT, cap::RECORD_WINDOW, cap::PAGE_ENERGY, cap::PAGE_FULLSCREEN,
                 cap::PAGE_SOUND, cap::PAGE_HDR, cap::PAGE_CAPTURE, cap::PAGE_CONTROLLERS, cap::CONTROLLERS,
-                cap::CONTROLLERS_MAPPING, cap::CONTROLLERS_KEYBOARD,
+                cap::CONTROLLERS_MAPPING, cap::CONTROLLERS_KEYBOARD, cap::OPTIONS, cap::METER_FPS_LIMIT,
+                cap::HDR_AUTO, cap::SOUND_DEVICES, cap::REPLAY_OPTIONS, cap::FULLSCREENIZER, cap::OPTIMIZE,
             ] {
                 assert!(has(c), "{c}");
             }
             assert_eq!(has(cap::SHARE_INVITE), cfg!(feature = "stream"));
             assert_eq!(has(cap::SHARE_INVITE_MINUTES), cfg!(feature = "stream"));
             assert_eq!(has(cap::SHARE_ASK), cfg!(feature = "stream"));
+            assert_eq!(has(cap::SHARE_MODE), cfg!(feature = "stream"));
             assert_eq!(has(cap::CONTROLLERS_BRIDGE), cfg!(feature = "stream"));
             assert_eq!(has(cap::NVIDIA), nvidia);
             assert_eq!(has(cap::PAGE_NVIDIA), nvidia);
@@ -696,6 +885,8 @@ mod tests {
             Request::PadBridge { on: None },
             Request::Keyboard { on: None },
             Request::ShareAsk { name: String::new(), perms: 0, code: None },
+            Request::Options { exe: String::new(), pid: 0 },
+            Request::SetOption { exe: String::new(), pid: 0, option: OptionValue::Optimize(true) },
         ];
         for r in &answer {
             assert_eq!(wait_of(r), Wait::Answer, "{r:?}");

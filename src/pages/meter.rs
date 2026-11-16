@@ -425,11 +425,7 @@ fn games(ui: &mut Ui, app: &mut App, r: Rect) {
         changed = true;
     }
     if let Some((exe, path, mode)) = auto_hdr {
-        if crate::sys::autohdr::apply(&exe, mode) {
-            match app.cfg.hdr_games.iter_mut().find(|h| h.exe.eq_ignore_ascii_case(&exe)) {
-                Some(h) => h.mode = mode,
-                None => app.cfg.hdr_games.push(crate::config::HdrGame { exe, path, mode }),
-            }
+        if set_auto_hdr(app, &exe, &path, mode) {
             changed = true;
         } else {
             app.toast.info("Não consegui gravar a escolha.");
@@ -459,6 +455,18 @@ fn games(ui: &mut Ui, app: &mut App, r: Rect) {
     if changed {
         app.cfg.save();
     }
+}
+
+/// Auto HDR do jogo (0 o Windows decide, 1 força, 2 desliga), a mesma escolha da aba HDR. Não grava o config.
+pub fn set_auto_hdr(app: &mut App, exe: &str, path: &str, mode: u8) -> bool {
+    if !crate::sys::autohdr::apply(exe, mode) {
+        return false;
+    }
+    match app.cfg.hdr_games.iter_mut().find(|h| h.exe.eq_ignore_ascii_case(exe)) {
+        Some(h) => h.mode = mode,
+        None => app.cfg.hdr_games.push(crate::config::HdrGame { exe: exe.to_string(), path: path.to_string(), mode }),
+    }
+    true
 }
 
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
