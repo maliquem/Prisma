@@ -57,16 +57,13 @@ fn build(p: &Params, path: Option<&Path>) -> Option<Chain> {
             return None;
         }
     };
-    match Profile::parse(&text) {
-        Ok(profile) => {
-            log(&format!("instância {} perfil {} ({} filtros, canais {:?})", p.id, path.display(), profile.filters.len(), channel_names(p.mask, p.ch as usize)));
-            Some(Chain::new(&profile, p.mask, p.ch as usize, p.rate as f64)).filter(|c| !c.is_flat())
-        }
-        Err(e) => {
-            log(&format!("instância {} perfil {} com erro, passa o som sem mexer: {e}", p.id, path.display()));
-            None
-        }
+    // Aceita também o config.txt do Equalizer APO e os arquivos do AutoEQ; o que não serve vira aviso.
+    let (profile, warnings) = Profile::import(&text);
+    for w in &warnings {
+        log(&format!("instância {} perfil {} com aviso, ficou de fora: {w}", p.id, path.display()));
     }
+    log(&format!("instância {} perfil {} ({} filtros, canais {:?})", p.id, path.display(), profile.filters.len(), channel_names(p.mask, p.ch as usize)));
+    Some(Chain::new(&profile, p.mask, p.ch as usize, p.rate as f64)).filter(|c| !c.is_flat())
 }
 
 /// Entre a thread e o tempo real. `fresh`: corrente nova para usar; senão, `chain` é a velha que

@@ -194,7 +194,7 @@ fn passa_o_som_e_anota_no_log() -> Result<()> {
     drop((via_agg, agg_rt, agg, inner, factory));
 
     let text = std::fs::read_to_string(&log).expect("log não foi escrito");
-    for wanted in ["criada", "Initialize", "versão 2", "aceito", "recusado", "LockForProcess: entrada [float 2 canais 32 bits 48000 Hz", "chamadas=9 quadros=4320 silenciosos=1 copias=6", "sem perfil", "com erro", "perfil.txt (0 filtros", "sozinha", "agregada", "instância 2 destruída"] {
+    for wanted in ["criada", "Initialize", "versão 2", "aceito", "recusado", "LockForProcess: entrada [float 2 canais 32 bits 48000 Hz", "chamadas=9 quadros=4320 silenciosos=1 copias=6", "sem perfil", "com aviso", "perfil.txt (0 filtros", "sozinha", "agregada", "instância 2 destruída"] {
         assert!(text.contains(wanted), "falta \"{wanted}\" no log:\n{text}");
     }
     let _ = std::fs::remove_dir_all(&dir);

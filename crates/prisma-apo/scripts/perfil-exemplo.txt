@@ -1,6 +1,8 @@
 # Exemplo para ouvir a diferença: graves fortes e agudos cortados.
 # Copie para C:\ProgramData\Prisma\eq\perfil.txt (vale para todos os aparelhos)
-# ou perfil-<guid do aparelho>.txt (só aquele). Vale quando o som recomeça.
+# ou perfil-<guid do aparelho>.txt (só aquele). Salvar já troca, com o som tocando.
+# protecao=sim corta abaixo de 20 Hz e acima de 20 kHz; apague a linha para desligar.
 preamp=-8
+protecao=sim
 Filter 1: ON LSC Fc 120 Hz Gain 8 dB Q 0.7
 Filter 2: ON HSC Fc 4000 Hz Gain -10 dB Q 0.7

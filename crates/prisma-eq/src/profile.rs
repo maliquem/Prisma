@@ -2,6 +2,7 @@
 //!
 //! ```text
 //! preamp=-4                 (ou "Preamp: -4 dB", como vem do AutoEQ)
+//! protecao=sim              (corta o que fica abaixo e acima do audível; opcional)
 //! grafico=0 0 1 2 3 2 0 0 -1 -2   (10, 15 ou 31 ganhos; opcional)
 //! Filter 1: ON LSC Fc 80 Hz Gain 3 dB Q 0.7
 //! [C] ganho=2 atraso=0      (daqui para baixo, só nesses canais)
@@ -32,12 +33,26 @@ pub struct Group {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Profile {
     pub preamp_db: f64,
+    /// Corte do subsônico e do ultrassônico (`PROTECT_*`), antes dos outros filtros.
+    pub protect: bool,
     /// Ganhos do modo gráfico (10, 15 ou 31), somados aos filtros.
     pub graphic: Vec<f64>,
     /// Filtros de todos os canais.
     pub filters: Vec<Filter>,
     pub groups: Vec<Group>,
 }
+
+/// Proteção: passa-altas em 20 Hz e passa-baixas em 20 kHz, Butterworth de 4ª ordem (24 dB/oitava,
+/// dois biquads com Q 0,541 e 1,307 cada). Custa ~0,2 dB em 30 Hz e ~0,7 dB em 16 kHz.
+pub const PROTECT_HP_HZ: f64 = 20.0;
+pub const PROTECT_LP_HZ: f64 = 20_000.0;
+const BW4_Q: [f64; 2] = [0.541_196_1, 1.306_563];
+pub(crate) const PROTECT: [(Kind, f64, f64); 4] = [
+    (Kind::HighPass, PROTECT_HP_HZ, BW4_Q[0]),
+    (Kind::HighPass, PROTECT_HP_HZ, BW4_Q[1]),
+    (Kind::LowPass, PROTECT_LP_HZ, BW4_Q[0]),
+    (Kind::LowPass, PROTECT_LP_HZ, BW4_Q[1]),
+];
 
 /// Frequências ISO do modo gráfico e o Q da largura de cada banda (1, 2/3 ou 1/3 de oitava).
 pub fn graphic_freqs(bands: usize) -> Option<(&'static [f64], f64)> {
@@ -68,7 +83,7 @@ fn kind_of(t: &str) -> Option<Kind> {
     })
 }
 
-fn kind_name(k: Kind) -> &'static str {
+pub(crate) fn kind_name(k: Kind) -> &'static str {
     match k {
         Kind::Peak => "PK",
         Kind::LowShelf => "LSC",
@@ -78,13 +93,13 @@ fn kind_name(k: Kind) -> &'static str {
     }
 }
 
-fn num(s: &str) -> Result<f64, String> {
+pub(crate) fn num(s: &str) -> Result<f64, String> {
     // Aceita vírgula decimal (perfil escrito à mão no Windows em português).
     s.replace(',', ".").parse::<f64>().ok().filter(|v| v.is_finite()).ok_or_else(|| format!("número inválido: {s}"))
 }
 
 /// `ON PK Fc 250 Hz Gain -2 dB Q 1.2` (o que vem depois de "Filter N:").
-fn parse_filter(rest: &str) -> Result<Filter, String> {
+pub(crate) fn parse_filter(rest: &str) -> Result<Filter, String> {
     let t: Vec<&str> = rest.split_whitespace().collect();
     let on = match t.first() {
         Some(&"ON") => true,
@@ -98,7 +113,13 @@ fn parse_filter(rest: &str) -> Result<Filter, String> {
         return Err("Fc precisa ser maior que zero".into());
     }
     let gain_db = after("Gain").map(|g| num(g)).transpose()?.unwrap_or(0.0);
-    let q = after("Q").map(|q| num(q)).transpose()?.unwrap_or(std::f64::consts::FRAC_1_SQRT_2);
+    // "BW Oct 1" (largura em oitavas, do Equalizer APO) vira Q.
+    let bw = t.iter().position(|w| w.eq_ignore_ascii_case("BW")).and_then(|i| t.get(i + 2)).map(|n| num(n)).transpose()?;
+    let q = match (after("Q"), bw) {
+        (Some(q), _) => num(q)?,
+        (None, Some(n)) if n > 0.0 => 2f64.powf(n).sqrt() / (2f64.powf(n) - 1.0),
+        _ => std::f64::consts::FRAC_1_SQRT_2,
+    };
     if q <= 0.0 {
         return Err("Q precisa ser maior que zero".into());
     }
@@ -151,6 +172,12 @@ impl Profile {
                     return Err(fail(format!("o gráfico tem {} ganhos; precisa de 10, 15 ou 31", gains.len())));
                 }
                 p.graphic = gains;
+            } else if let Some(v) = line.strip_prefix("protecao=") {
+                p.protect = match v.trim() {
+                    "sim" => true,
+                    "nao" | "não" => false,
+                    _ => return Err(fail(format!("protecao=sim ou protecao=nao, não {v}"))),
+                };
             } else if line.starts_with("modo=") {
                 // Só para a página lembrar a aba; o som é o mesmo.
             } else if let Some(g) = p.groups.last_mut() {
@@ -165,6 +192,9 @@ impl Profile {
     /// Volta para texto; `parse(to_text())` dá o mesmo perfil.
     pub fn to_text(&self) -> String {
         let mut s = format!("preamp={}\n", self.preamp_db);
+        if self.protect {
+            s += "protecao=sim\n";
+        }
         if !self.graphic.is_empty() {
             let g: Vec<String> = self.graphic.iter().map(|v| v.to_string()).collect();
             s += &format!("grafico={}\n", g.join(" "));
@@ -186,6 +216,9 @@ impl Profile {
     /// Todos os filtros que valem num canal (gráfico + comuns + os dos grupos daquele canal).
     pub fn filters_for(&self, channel: &str) -> Vec<Filter> {
         let mut out = Vec::new();
+        if self.protect {
+            out.extend(PROTECT.iter().map(|&(kind, freq, q)| Filter { on: true, kind, freq, gain_db: 0.0, q }));
+        }
         if let Some((freqs, q)) = graphic_freqs(self.graphic.len()) {
             for (&freq, &gain_db) in freqs.iter().zip(&self.graphic) {
                 if gain_db != 0.0 {
@@ -251,7 +284,23 @@ Filter 1: ON PK Fc 2500 Hz Gain 2 dB Q 1
     fn ida_e_volta_pelo_texto() {
         let mut p = Profile::parse(EXEMPLO).unwrap();
         p.graphic = vec![1.0; 10];
+        p.protect = true;
         assert_eq!(Profile::parse(&p.to_text()).unwrap(), p);
+    }
+
+    #[test]
+    fn protecao_corta_so_fora_do_audivel() {
+        let p = Profile::parse("protecao=sim").unwrap();
+        assert!(p.protect);
+        let db = |f: f64| p.response_db("L", f, 48_000.0);
+        assert!((db(PROTECT_HP_HZ) + 3.0).abs() < 0.2, "20 Hz: {}", db(PROTECT_HP_HZ));
+        assert!(db(10.0) < -20.0, "10 Hz: {}", db(10.0));
+        assert!(db(30.0) > -0.5, "30 Hz: {}", db(30.0));
+        assert!(db(1000.0).abs() < 0.01);
+        assert!(db(16_000.0) > -1.5, "16 kHz: {}", db(16_000.0));
+        assert!(db(23_500.0) < -6.0, "23,5 kHz: {}", db(23_500.0));
+        assert!(!Profile::parse("protecao=nao").unwrap().protect);
+        assert!(Profile::parse("protecao=talvez").is_err());
     }
 
     #[test]

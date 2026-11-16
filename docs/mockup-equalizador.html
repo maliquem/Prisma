@@ -1,13 +1,8 @@
-<!doctype html>
-<html lang="pt-BR">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Prisma Equalizador</title>
 <style>
-:root{--bg:#17191d;--side:#1d2025;--card:#24272e;--card2:#2c3038;--border:#3b404b;--text:#e8eaee;--text2:#c3c7cf;--muted:#a4a9b4;--accent:#7cc4ff;--warn:#ffb26b;--ok:#7ee0a1}
+:root{--bg:#17191d;--side:#1d2025;--card:#24272e;--card2:#2c3038;--border:#3b404b;--text:#e8eaee;--text2:#c3c7cf;--muted:#a4a9b4;--accent:#7cc4ff;--warn:#ffb26b;--ok:#7ee0a1;--ground:#0e0f12;--plot:#1b1e23;color-scheme:dark}
 *{box-sizing:border-box}
-body{margin:0;background:#0e0f12;color:var(--text);font:14px/1.35 "Segoe UI Variable","Segoe UI",system-ui,sans-serif}
+body{margin:0;background:var(--ground);color:var(--text);font:14px/1.35 "Segoe UI Variable","Segoe UI",system-ui,sans-serif}
 .note{max-width:1180px;margin:16px auto 8px;padding:0 16px;color:var(--muted);font-size:13px}
 .win{max-width:1180px;margin:0 auto 24px;display:flex;background:var(--bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;min-height:860px}
 .side{width:196px;background:var(--side);padding:14px 8px;flex:none}
@@ -58,11 +53,21 @@ tr.sel td{background:var(--card2)}
 .apps td:first-child{width:36px}
 .ico{width:24px;height:24px;border-radius:6px;background:var(--border);display:inline-block}
 .consent{border:1px solid var(--warn)}
-@media (max-width:900px){.grid3,.split{grid-template-columns:1fr}.side{display:none}main{padding:16px}}
+.tw{overflow-x:auto}
+.chk{display:inline-flex;gap:6px;align-items:center;cursor:pointer;color:var(--text2);font-size:13px}
+.chk input{accent-color:var(--accent);width:16px;height:16px}
+.modal{position:fixed;inset:0;background:rgba(5,6,8,.72);display:flex;align-items:flex-start;justify-content:center;padding:6vh 16px;z-index:5;overflow:auto}
+.dlg{background:var(--bg);border:1px solid var(--border);border-radius:12px;width:100%;max-width:640px;padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+.dlg .pane{display:flex;flex-direction:column;gap:10px}
+textarea{width:100%;background:var(--plot);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font:12px/1.45 Consolas,"Cascadia Mono",monospace;resize:vertical}
+.res{font-size:12px;color:var(--text2);background:var(--card);border-radius:8px;padding:8px 10px}
+.res ul{margin:4px 0 0;padding-left:18px;color:var(--warn)}
+.res b{color:var(--ok);font-weight:600}
+button:disabled{opacity:.45;cursor:default}
+button:focus-visible,.seg span:focus-visible,.tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (max-width:900px){.grid3,.split{grid-template-columns:1fr}.side{display:none}main{padding:16px}.win{margin:0 16px 24px}}
 </style>
-</head>
-<body>
-<p class="note">Mock-up: página <b>Som</b> do Prisma com a aba nova <b>Equalizador</b>. Interativo: arraste os pontos da curva, escolha o canal no desenho 7.1, troque Paramétrico/Gráfico. Nada aqui grava no Windows.</p>
+<p class="note">Mock-up: página <b>Som</b> do Prisma com a aba nova <b>Equalizador</b>. Interativo: arraste os pontos da curva, escolha o canal no desenho 7.1, troque Paramétrico/Gráfico, ligue a proteção e use <b>Importar…</b> e <b>Exportar…</b> com textos do Equalizer APO ou do AutoEQ. Nada aqui grava no Windows.</p>
 <div class="win">
   <nav class="side">
     <div class="logo">◆ Prisma</div>
@@ -96,7 +101,7 @@ tr.sel td{background:var(--card2)}
           <div class="row">
             <select id="prof" style="flex:1"><option>Filmes noite</option><option>Música</option><option>Plano (desligado)</option><option>+ Novo perfil…</option></select>
           </div>
-          <div class="row" style="margin-top:8px"><button>Renomear</button><button>Duplicar</button><button>Importar AutoEQ</button></div>
+          <div class="row" style="margin-top:8px"><button>Renomear</button><button>Duplicar</button><button id="bimp">Importar…</button><button id="bexp">Exportar…</button></div>
         </div>
         <div class="card">
           <div class="lab">Motor de equalização do Prisma</div>
@@ -109,14 +114,15 @@ tr.sel td{background:var(--card2)}
       <div class="card">
         <div class="row" style="justify-content:space-between;margin-bottom:8px">
           <div class="row"><span class="title">Equalizador</span><span class="seg" id="mode"><span class="on" data-m="p">Paramétrico</span><span data-m="g">Gráfico</span></span>
-            <span class="hint" id="chname">Canal: Todos</span></div>
+            <span class="hint" id="chname">Canal: Todos</span>
+            <label class="chk" title="24 dB por oitava. Custa ~0,2 dB em 30 Hz e ~0,7 dB em 16 kHz."><input type="checkbox" id="prot" checked> Proteção: corta abaixo de 20 Hz e acima de 20 kHz</label></div>
           <div class="row"><span class="hint">Pré-amplificação</span><input type="number" id="pre" value="-4" step="0.5"> <span class="hint">dB</span>
             <span class="pill warn" id="clip" hidden>Pode distorcer: baixe a pré-amplificação</span>
             <button id="bypass">Comparar sem EQ</button></div>
         </div>
         <svg id="curve" class="curve" viewBox="0 0 1000 260" preserveAspectRatio="none"></svg>
         <div id="pbox" style="margin-top:10px">
-          <table><thead><tr><th></th><th>Liga</th><th>Tipo</th><th>Frequência (Hz)</th><th>Ganho (dB)</th><th>Q</th><th></th></tr></thead><tbody id="bands"></tbody></table>
+          <div class="tw"><table><thead><tr><th></th><th>Liga</th><th>Tipo</th><th>Frequência (Hz)</th><th>Ganho (dB)</th><th>Q</th><th></th></tr></thead><tbody id="bands"></tbody></table></div>
           <div class="row" style="margin-top:6px"><button id="add">Adicionar banda</button><span class="hint">Até 10 bandas por canal. Clique duplo na curva também cria uma.</span></div>
         </div>
         <div id="gbox" hidden>
@@ -150,6 +156,25 @@ tr.sel td{background:var(--card2)}
         </div>
       </div>
 
+      <!-- Importar e exportar -->
+      <div class="modal" id="io" hidden><div class="dlg" role="dialog" aria-labelledby="iot">
+        <div class="row" style="justify-content:space-between"><span class="title" id="iot">Perfis de outros programas</span><button id="ioclose">Fechar</button></div>
+        <span class="seg" id="iotab"><span class="on" data-v="imp" tabindex="0">Importar</span><span data-v="exp" tabindex="0">Exportar</span></span>
+        <div id="imp" class="pane">
+          <div class="hint">Lê o <b>config.txt</b> do Equalizer APO e do Peace, o <b>ParametricEQ.txt</b> e o <b>GraphicEQ.txt</b> do AutoEQ (o mesmo do Wavelet), o <b>Filter Settings</b> do REW e perfis do Prisma. Escolha o arquivo ou cole o texto.</div>
+          <div class="row"><input type="file" id="iofile" accept=".txt,.cfg"><button id="iosample">Exemplo do Equalizer APO</button><button id="iosample2">Exemplo do AutoEQ</button></div>
+          <textarea id="iotext" rows="9" placeholder="Preamp: -6 dB&#10;Filter 1: ON PK Fc 1000 Hz Gain 3 dB Q 1.41"></textarea>
+          <div class="res" id="iores">Cole um perfil para ver o que entra.</div>
+          <div class="row"><button class="pri" id="iouse" disabled>Usar no perfil “Filmes noite”</button><button id="ionew" disabled>Criar perfil novo</button></div>
+        </div>
+        <div id="exp" class="pane" hidden>
+          <span class="seg" id="expfmt"><span class="on" data-f="apo" tabindex="0">Equalizer APO / Peace</span><span data-f="prisma" tabindex="0">Prisma</span></span>
+          <textarea id="exptext" rows="11" readonly></textarea>
+          <div class="hint" id="exphint"></div>
+          <div class="row"><button class="pri" title="No Prisma abre a janela Salvar do Windows">Salvar arquivo…</button><button id="expcopy">Copiar</button></div>
+        </div>
+      </div></div>
+
       <!-- Consentimento (estado sem o motor) -->
       <div class="card consent" style="margin-top:12px">
         <div class="title">Antes de ligar (como aparece sem o motor instalado)</div>
@@ -161,7 +186,7 @@ tr.sel td{background:var(--card2)}
 </div>
 <script>
 const FS=48000;
-const TYPES={PK:'Pico',LSC:'Grave (prateleira)',HSC:'Agudo (prateleira)',LP:'Passa-baixa',HP:'Passa-alta',NO:'Corte'};
+const TYPES={PK:'Pico',LSC:'Grave (prateleira)',HSC:'Agudo (prateleira)',LP:'Passa-baixa',HP:'Passa-alta'};
 const CH={71:[['L','Frente esq.',22,22],['C','Centro',50,14],['R','Frente dir.',78,22],['LFE','Sub',88,46],['SL','Lado esq.',10,56],['SR','Lado dir.',90,70],['RL','Trás esq.',28,88],['RR','Trás dir.',72,88]],
  51:[['L','Frente esq.',22,22],['C','Centro',50,14],['R','Frente dir.',78,22],['LFE','Sub',88,46],['RL','Trás esq.',24,86],['RR','Trás dir.',76,86]],
  20:[['L','Esquerdo',30,50],['R','Direito',70,50]]};
@@ -188,10 +213,12 @@ function resp(f){if(bypass)return 0;let d=+document.getElementById('pre').value;
   if(f<=fr[0])return d+(v[0]||0);if(i>=fr.length-1)return d+(v[fr.length-1]||0);
   const t=(Math.log(f)-Math.log(fr[i]))/(Math.log(fr[i+1])-Math.log(fr[i]));return d+(v[i]||0)*(1-t)+(v[i+1]||0)*t}
  for(const b of list())if(b.on)d+=mag(biq(b),f);return d}
+const PROT=[{t:'HP',f:20,q:0.5412},{t:'HP',f:20,q:1.3066},{t:'LP',f:20000,q:0.5412},{t:'LP',f:20000,q:1.3066}];
+function respAll(f){let d=resp(f);if(!bypass&&document.getElementById('prot').checked)for(const b of PROT)d+=mag(biq({...b,g:0}),f);return d}
 function draw(){const s=document.getElementById('curve');let h='';
  for(const db of [-12,-6,0,6,12])h+=`<line x1="0" x2="1000" y1="${Y(db)}" y2="${Y(db)}" stroke="${db?'#2c3038':'#3b404b'}"/><text x="6" y="${Y(db)-3}" fill="#a4a9b4" font-size="11">${db>0?'+':''}${db} dB</text>`;
  for(const f of [50,100,200,500,1000,2000,5000,10000])h+=`<line y1="0" y2="260" x1="${X(f)}" x2="${X(f)}" stroke="#2c3038"/><text x="${X(f)+3}" y="254" fill="#a4a9b4" font-size="11">${f>=1000?f/1000+'k':f}</text>`;
- let p='',mx=-99;for(let x=0;x<=1000;x+=4){const v=resp(F(x));mx=Math.max(mx,v);p+=(x?'L':'M')+x+','+Y(v).toFixed(1)}
+ let p='',mx=-99;for(let x=0;x<=1000;x+=4){const v=respAll(F(x));mx=Math.max(mx,v);p+=(x?'L':'M')+x+','+Y(v).toFixed(1)}
  h+=`<path d="${p} L1000,260 L0,260Z" fill="#7cc4ff" opacity=".08"/><path d="${p}" fill="none" stroke="${bypass?'#a4a9b4':'#7cc4ff'}" stroke-width="2.5"/>`;
  if(mode==='p'&&!bypass)list().forEach((b,i)=>{const cx=X(b.f),cy=Y(b.t==='LP'||b.t==='HP'?0:b.g);
   h+=`<circle cx="${cx}" cy="${cy}" r="${i===sel?10:8}" fill="${COL[i%10]}" stroke="#17191d" stroke-width="2" data-i="${i}" style="cursor:grab"/><text x="${cx}" y="${cy+4}" text-anchor="middle" font-size="10" fill="#0c1a26" pointer-events="none">${i+1}</text>`});
@@ -220,6 +247,7 @@ function seg(id,fn){document.getElementById(id).addEventListener('click',e=>{if(
 seg('mode',d=>{mode=d.m;document.getElementById('pbox').hidden=mode!=='p';document.getElementById('gbox').hidden=mode!=='g';if(mode==='g')geqUI();draw()});
 seg('gn',d=>{gn=+d.n;geqUI();draw()});
 document.getElementById('pre').oninput=draw;
+document.getElementById('prot').onchange=draw;
 document.getElementById('bypass').onclick=e=>{bypass=!bypass;e.target.classList.toggle('on',bypass);draw()};
 function setCh(c){cur=c;sel=0;document.getElementById('all').classList.toggle('on',c==='all');
  document.querySelectorAll('.spk .s').forEach(s=>s.classList.toggle('on',s.dataset.c===c));
@@ -233,7 +261,101 @@ document.getElementById('spk').addEventListener('click',e=>{const s=e.target.clo
 document.getElementById('all').onclick=()=>setCh('all');
 document.getElementById('dev').onchange=speakers;
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===t));document.getElementById('t0').hidden=t.dataset.t!=='0';document.getElementById('t1').hidden=t.dataset.t!=='1'});
+// Importar: o mesmo que Profile::import do prisma-eq, resumido para o mock-up.
+const KIND={PK:'PK',PEQ:'PK',LSC:'LSC',LS:'LSC',HSC:'HSC',HS:'HSC',LP:'LP',LPQ:'LP',HP:'HP',HPQ:'HP'};
+const NAME={SUB:'LFE',RC:'BC'},NUM=['L','R','C','LFE','RL','RR','SL','SR'];
+let parsed=null;
+function chName(c){c=c.toUpperCase();return /^[1-8]$/.test(c)?NUM[c-1]:(NAME[c]||c)}
+function parseText(t){const out={pre:0,bands:{all:[]},ch:{},prot:false,graphic:0,warn:[],fmt:'Prisma'};let sel=[];
+ const num=v=>parseFloat(String(v).replace(',','.'));
+ const chan=c=>out.ch[c]=out.ch[c]||{g:0,d:0};
+ t.split(/\r?\n/).forEach((raw,n)=>{const l=raw.trim(),w=m=>out.warn.push(`linha ${n+1}: ${m}: ${l}`);if(!l||l[0]==='#')return;
+  let m;
+  if((m=l.match(/^preamp=(.+)/))){out.pre+=num(m[1]);return}
+  if(l==='protecao=sim'){out.prot=true;return}
+  if(/^(modo|grafico)=/.test(l)){if(l.startsWith('grafico='))out.graphic=l.split(/\s+/).length;return}
+  if((m=l.match(/^\[([^\]]+)\](.*)/))){sel=m[1].trim().split(/\s+/);const g=m[2].match(/ganho=(\S+)/),d=m[2].match(/atraso=(\S+)/);
+   sel.forEach(c=>{chan(c);if(g)out.ch[c].g+=num(g[1]);if(d)out.ch[c].d+=num(d[1])});return}
+  const i=l.indexOf(':');if(i<0){w('não entendi');return}
+  const cmd=l.slice(0,i).trim().split(/\s+/)[0],arg=l.slice(i+1).trim();
+  if(cmd==='Channel'){out.fmt='Equalizer APO';sel=arg.split(/\s+/).map(chName);if(sel.includes('ALL'))sel=[];return}
+  if(cmd==='Preamp'){const v=num(arg);if(sel.length)sel.forEach(c=>{chan(c).g+=v});else out.pre+=v;return}
+  if(cmd==='Delay'){if(!sel.length){w('atraso em todos os canais não muda nada');return}out.fmt='Equalizer APO';sel.forEach(c=>{chan(c).d+=num(arg)});return}
+  if(cmd==='GraphicEQ'){if(out.fmt==='Prisma')out.fmt='AutoEQ (GraphicEQ)';out.graphic=arg.split(';').length;return}
+  if(cmd==='Filter'){const tk=arg.split(/\s+/),k=KIND[tk[1]],at=x=>{const j=tk.findIndex(v=>v.toLowerCase()===x.toLowerCase());return j<0?undefined:tk[j+1]};
+   if(!k){w(`filtro ${tk[1]} o Prisma não faz, ficou de fora`);return}
+   let q=at('Q')!==undefined?num(at('Q')):0.7071;const bw=tk.indexOf('BW');if(bw>=0){const o=num(tk[bw+2]);q=Math.sqrt(2**o)/(2**o-1)}
+   const b={on:tk[0]==='ON'?1:0,t:k,f:num(at('Fc')),g:num(at('Gain')||0),q};(sel.length?sel:['all']).forEach(c=>(out.bands[c]=out.bands[c]||[]).push({...b}));return}
+  w('o Prisma não faz isso, ficou de fora')});
+ // A proteção que o Prisma exporta volta como proteção.
+ const a=out.bands.all,pi=a.findIndex((b,i)=>b.t==='HP'&&b.f===20&&a[i+3]&&a[i+3].t==='LP'&&a[i+3].f===20000);
+ if(pi>=0){a.splice(pi,4);out.prot=true}
+ if(out.fmt==='Prisma'&&/Preamp:/.test(t))out.fmt='AutoEQ / Equalizer APO';
+ return out}
+function setUse(on){document.getElementById('iouse').disabled=!on;document.getElementById('ionew').disabled=!on}
+function showParse(){const t=document.getElementById('iotext').value,r=document.getElementById('iores');
+ if(!t.trim()){parsed=null;r.textContent='Cole um perfil para ver o que entra.';setUse(false);return}
+ parsed=parseText(t);const nf=Object.values(parsed.bands).reduce((s,v)=>s+v.length,0);
+ const chs2=[...new Set(Object.keys(parsed.ch).concat(Object.keys(parsed.bands).filter(c=>c!=='all')))];
+ r.innerHTML=`<b>Lido como ${parsed.fmt}</b>: pré-amplificação ${parsed.pre} dB, ${nf} filtro${nf===1?'':'s'}`+
+  (parsed.graphic?`, gráfico de ${parsed.graphic} pontos (vira 31 bandas)`:'')+(chs2.length?`, ajustes nos canais ${chs2.join(' ')}`:'')+(parsed.prot?', proteção ligada':'')+'.'+
+  (parsed.warn.length?`<div style="margin-top:6px">Ficaram de fora (${parsed.warn.length}):</div><ul>${parsed.warn.map(x=>`<li>${x.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</li>`).join('')}</ul>`:'<div style="margin-top:4px">Nada ficou de fora.</div>');
+ setUse(true)}
+function applyParsed(){if(!parsed)return;eq={all:parsed.bands.all.slice(0,10)};for(const[c,v]of Object.entries(parsed.bands))if(c!=='all')eq[c]=v.slice(0,10);
+ document.getElementById('pre').value=parsed.pre;document.getElementById('prot').checked=parsed.prot;
+ for(const c in chs)chs[c]={g:0,d:0};for(const[c,v]of Object.entries(parsed.ch))chs[c]=v;
+ if(mode!=='p')document.querySelector('#mode span[data-m="p"]').click();closeIO();speakers();table();draw()}
+const SAMPLE_APO=`Device: Speakers Realtek USB
+Preamp: -5 dB
+Filter 1: ON LSC Fc 90 Hz Gain 4 dB Q 0.7
+Filter 2: ON PK Fc 1000 Hz Gain -2 dB BW Oct 1
+Filter 3: ON BP Fc 500 Hz Q 2
+Channel: C
+Preamp: 2 dB
+Filter: ON PK Fc 2500 Hz Gain 3 dB Q 1.2
+Channel: SUB
+Filter: ON LP Fc 120 Hz
+Channel: RL RR
+Delay: 6 ms
+Channel: all
+Copy: SL=0.5*L`;
+const SAMPLE_AUTOEQ=`Preamp: -6.4 dB
+Filter 1: ON LSC Fc 105 Hz Gain 6.2 dB Q 0.70
+Filter 2: ON PK Fc 2380 Hz Gain -3.1 dB Q 1.67
+Filter 3: ON PK Fc 5170 Hz Gain 4.4 dB Q 3.62
+Filter 4: ON HSC Fc 10000 Hz Gain -2.5 dB Q 0.70`;
+// Exportar: o mesmo que Profile::to_apo e to_text.
+let fmt='apo';
+const EXN={LP:'LPQ',HP:'HPQ'},APON={LFE:'SUB',BC:'RC'};
+function exportText(){const pre=+document.getElementById('pre').value,prot=document.getElementById('prot').checked,n=v=>+(+v).toFixed(4);
+ const geqs=mode==='g'?(geq.all||[]):[];
+ if(fmt==='prisma'){let s=`preamp=${pre}\n`+(prot?'protecao=sim\n':'')+(geqs.length?`grafico=${geqs.join(' ')}\n`:'');
+  const fl=v=>v.map((b,i)=>`Filter ${i+1}: ${b.on?'ON':'OFF'} ${EXN[b.t]||b.t} Fc ${n(b.f)} Hz Gain ${n(b.g)} dB Q ${n(b.q)}\n`).join('');
+  s+=fl(eq.all||[]);for(const c of Object.keys(chs)){const v=eq[c]||[],x=chs[c];if(v.length||x.g||x.d)s+=`[${c}] ganho=${x.g} atraso=${x.d}\n`+fl(v)}return s}
+ const fl=b=>`Filter: ${b.on?'ON':'OFF'} ${EXN[b.t]||b.t} Fc ${n(b.f)} Hz${b.t==='LP'||b.t==='HP'?'':` Gain ${n(b.g)} dB`} Q ${n(b.q)}\n`;
+ let s=`# Exportado do Prisma\nPreamp: ${pre} dB\n`;if(prot)s+=PROT.map(b=>fl({...b,on:1})).join('');
+ const gf=gfreqs(),gq=gn===10?1.41:gn===15?2.15:4.32;geqs.forEach((g,i)=>{if(g)s+=fl({on:1,t:'PK',f:gf[i],g,q:gq})});
+ (eq.all||[]).forEach(b=>s+=fl(b));let any=false;
+ for(const c of Object.keys(chs)){const v=eq[c]||[],x=chs[c];if(!v.length&&!x.g&&!x.d)continue;any=true;s+=`Channel: ${APON[c]||c}\n`;if(x.g)s+=`Preamp: ${x.g} dB\n`;if(x.d)s+=`Delay: ${x.d} ms\n`;v.forEach(b=>s+=fl(b))}
+ if(any)s+='Channel: all\n';return s}
+function showExport(){document.getElementById('exptext').value=exportText();
+ document.getElementById('exphint').textContent=fmt==='apo'?'Proteção e gráfico viram filtros comuns, para o som sair igual no outro programa. No Equalizer APO, salve na pasta config e chame com Include: no config.txt (ou abra no Peace). Importar de volta no Prisma reconhece a proteção.':'Formato do Prisma: guarda tudo como está (gráfico, proteção, canais) e serve de cópia de segurança.'}
+function closeIO(){document.getElementById('io').hidden=true}
+function openIO(tab){document.getElementById('io').hidden=false;document.querySelector(`#iotab span[data-v="${tab}"]`).click()}
+document.getElementById('bimp').onclick=()=>openIO('imp');
+document.getElementById('bexp').onclick=()=>openIO('exp');
+document.getElementById('ioclose').onclick=closeIO;
+document.getElementById('io').addEventListener('click',e=>{if(e.target.id==='io')closeIO()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeIO()});
+seg('iotab',d=>{document.getElementById('imp').hidden=d.v!=='imp';document.getElementById('exp').hidden=d.v!=='exp';if(d.v==='exp')showExport()});
+seg('expfmt',d=>{fmt=d.f;showExport()});
+document.getElementById('iotext').oninput=showParse;
+document.getElementById('iosample').onclick=()=>{document.getElementById('iotext').value=SAMPLE_APO;showParse()};
+document.getElementById('iosample2').onclick=()=>{document.getElementById('iotext').value=SAMPLE_AUTOEQ;showParse()};
+document.getElementById('iofile').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{document.getElementById('iotext').value=r.result;showParse()};r.readAsText(f)};
+document.getElementById('iouse').onclick=applyParsed;
+document.getElementById('ionew').onclick=()=>{const o=document.createElement('option');o.textContent='Importado';const sel=document.getElementById('prof');sel.insertBefore(o,sel.lastElementChild);sel.value='Importado';applyParsed()};
+document.getElementById('expcopy').onclick=e=>{const t=document.getElementById('exptext'),b=e.currentTarget;const done=()=>{b.textContent='Copiado';setTimeout(()=>b.textContent='Copiar',1500)};
+ try{navigator.clipboard.writeText(t.value).then(done,()=>{t.select()})}catch(_){t.select()}};
 speakers();table();draw();
 </script>
-</body>
-</html>

@@ -172,7 +172,13 @@ espacial ativo; a tela avisa e oferece desligar o Atmos primeiro. O teste segue 
 - **Por canal:** filtros "todos" + filtros do canal, ganho, atraso (linha de atraso alocada no
   `LockForProcess` até 50 ms na taxa do fluxo).
 - **Proteção:** pré-amplificação automática opcional (o pico da curva não passa de 0 dB) e limitador
-  suave no fim, desligável.
+  suave no fim, desligável. Feito: `protecao=sim` no perfil liga um passa-altas em 20 Hz e um
+  passa-baixas em 20 kHz, Butterworth de 4ª ordem (24 dB/oitava), antes dos outros filtros. Abaixo de
+  20 Hz não se ouve, mas o subsônico gasta curso do alto-falante e gera intermodulação nos graves; acima
+  de 20 kHz, o ultrassônico vindo do processamento gera intermodulação e cansa o tweeter. Custo
+  calculado: ~0,2 dB em 30 Hz e ~0,7 dB em 16 kHz. Uma ordem 2 custaria ~0,8 dB em 30 Hz, e um corte em
+  18 kHz já tiraria brilho (~1,4 dB em 16 kHz). As fontes são fracas (fóruns, linearaudio.net/node/542,
+  airwindows.com/ultrasonic) e não há norma AES.
 - **Números:** coeficientes e estado do filtro em f64 (TDF-II), restos minúsculos zerados a cada bloco.
 
 `estado.bin` (escrito só pelo Prisma, em `estado.tmp` e trocado atomicamente): versão, e uma lista
@@ -187,6 +193,7 @@ diferente da que o APO conhece: ele passa o som sem mexer.
   ```
   modo=parametrico
   preamp=-4
+  protecao=sim
   Filter 1: ON LSC Fc 80 Hz Gain 3 dB Q 0.7
   Filter 2: ON PK Fc 250 Hz Gain -2 dB Q 1.2
   [C] ganho=2 atraso=0
@@ -194,6 +201,22 @@ diferente da que o APO conhece: ele passa o som sem mexer.
   [RL RR] atraso=8
   ```
   Modo gráfico: `grafico=10|15|31` e os ganhos de cada ponto.
+- **Importar e exportar** (`prisma-eq/src/apo.rs`, feito e testado):
+  - `Profile::import` aceita o perfil do Prisma ou o de outro programa. Lê o `config.txt` do Equalizer
+    APO e do Peace (`Preamp`, `Filter` com `Q` ou `BW Oct`, `Channel` com nomes ou números, `Delay`
+    em ms ou amostras, `GraphicEQ`), o `ParametricEQ.txt` e o `GraphicEQ.txt` do AutoEQ (o mesmo do
+    Wavelet) e o "Filter Settings" do REW. Nunca falha: o que o Prisma não faz (Copy, Include,
+    Device, Convolution, filtros BP/NO/AP/IIR) fica de fora, e um aviso diz a linha.
+  - Os nomes mudam assim: SUB vira LFE e RC vira BC. LS/HS sem Q usam a inclinação 0,9 do Equalizer
+    APO. `GraphicEQ` com muitos pontos é lido nas 31 bandas ISO; se os pontos já forem as bandas de
+    10, 15 ou 31, entram direto.
+  - `Profile::to_apo` escreve para o Equalizer APO e o Peace. A proteção e o gráfico viram filtros
+    comuns, para o som sair igual. Ao importar de volta, a proteção é reconhecida; o gráfico volta
+    como filtros paramétricos.
+  - O APO de teste já lê o `perfil.txt` por `import`: um `config.txt` do Equalizer APO salvo com esse
+    nome vale direto, e o que ficou de fora aparece no `apo.log`.
+  - Na página: **Importar…** e **Exportar…** no cartão do perfil. A importação mostra o que entrou e o
+    que ficou de fora antes de aplicar. O mock-up está em `docs/mockup-equalizador.html`.
 - Na config (`src/config.rs`, linhas como `snd_app`):
   - `eq_dev=<id do aparelho>|<perfil>`
   - `eq_app=<exe>|<perfil>|<quando>`, `quando` = `sempre` (só se o teste 2 der certo), `foco`,
