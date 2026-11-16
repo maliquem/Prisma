@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.3.0
 
 - Settings: new **Show Prisma** shortcut (no default key) that brings the Prisma window to the front, even when minimized or only in the tray. / Configurações: atalho novo **Mostrar o Prisma** (sem tecla de fábrica), que traz a janela do Prisma para a frente, mesmo minimizada ou só na bandeja.
 - Shortcuts: new page. Add keyboard shortcuts that open a program, picked from the program list or as an .exe file, for example Ctrl + Alt + T for the terminal. Each one has an **As administrator** box (Windows asks for confirmation). Shortcuts can be added and removed freely; a combination already used by another program shows a warning on its row. / Atalhos: página nova. Crie atalhos de teclado que abrem um programa, escolhido da lista de programas ou como arquivo .exe, por exemplo Ctrl + Alt + T para o terminal. Cada um tem a caixa **Como administrador** (o Windows pede a confirmação). Os atalhos podem ser adicionados e removidos à vontade; combinação já usada por outro programa mostra um aviso na linha.
