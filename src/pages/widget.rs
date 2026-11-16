@@ -23,7 +23,28 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         app.register_hotkeys();
     }
 
-    let by = top + 104.0;
+    // Barra de tarefas: só o estilo Pílula cabe nela; o painel abre ao clicar no widget preso.
+    let r2 = rect(x, top + 104.0, cw, 60.0);
+    ui.card(r2);
+    if ui.check("wg-dock", rect(r2.x + 16.0, r2.y + 8.0, r2.w - 248.0, 44.0), "Prender na barra de tarefas (estilo Pílula)", &mut app.cfg.widget_dock) {
+        app.cfg.save();
+        app.widget.update(&app.cfg, &app.snap);
+    }
+    // Onde fica na barra: com os ícones centralizados, o canto esquerdo costuma estar livre.
+    let mut side = app.cfg.widget_dock_left as usize;
+    let sides = ["Ao lado do relógio".to_string(), "No canto esquerdo".to_string()];
+    if ui.select("wg-side", rect(r2.right() - 216.0, r2.y + 10.0, 200.0, 40.0), &sides, &mut side) {
+        app.cfg.widget_dock_left = side == 1;
+        app.cfg.save();
+        app.widget.update(&app.cfg, &app.snap);
+    }
+    let r3 = rect(x + cw + 12.0, top + 104.0, cw, 60.0);
+    ui.card(r3);
+    if ui.check("wg-panel", r3.inset_xy(16.0, 8.0), "Clique no widget da barra abre o painel detalhado", &mut app.cfg.widget_panel) {
+        app.cfg.save();
+    }
+
+    let by = top + 176.0;
     let ch = 176.0;
     // Estilos em 2 x 2 à esquerda; a lista de itens à direita.
     let lw = 300.0;

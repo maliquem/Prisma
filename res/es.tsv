@@ -2583,3 +2583,22 @@ Não consegui baixar o instalador	No se pudo descargar el instalador
 O driver não foi instalado	El driver no se instaló
 Não achei o desinstalador do driver	No se encontró el desinstalador del driver
 O driver não foi removido	El driver no se eliminó
+Prender na barra de tarefas (estilo Pílula)	Anclar a la barra de tareas (estilo Píldora)
+Clique no widget da barra abre o painel detalhado	Clic en el widget de la barra abre el panel detallado
+Processos	Procesos
+Threads	Hilos
+Handles	Identificadores
+Ligado há	Tiempo activo
+Mín / méd / máx (1 min)	Mín / prom / máx (1 min)
+Em uso	En uso
+Disponível	Disponible
+Memória comprometida	Confirmada
+Ventoinha	Ventilador
+Memória dedicada	Memoria dedicada
+Clock	Reloj
+Recebido	Recibido
+Enviado	Enviado
+{} d {} h {} min	{} d {} h {} min
+{} h {} min	{} h {} min
+Ao lado do relógio	Junto al reloj
+No canto esquerdo	A la izquierda

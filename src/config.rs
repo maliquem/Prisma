@@ -228,6 +228,12 @@ pub struct Config {
     pub widget_items: u16,
     pub widget_x: i32,
     pub widget_y: i32,
+    /// Estilo Pílula preso dentro da barra de tarefas.
+    pub widget_dock: bool,
+    /// Na barra: no canto esquerdo em vez de ao lado do relógio.
+    pub widget_dock_left: bool,
+    /// Clique no widget preso abre o painel detalhado.
+    pub widget_panel: bool,
     pub power_auto: bool,
     pub plan_game: String,
     pub plan_rest: String,
@@ -405,6 +411,9 @@ impl Default for Config {
             widget_items: crate::overlays::ALL_ITEMS,
             widget_x: 24,
             widget_y: 24,
+            widget_dock: false,
+            widget_dock_left: false,
+            widget_panel: false,
             power_auto: true,
             plan_game: "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c".into(),
             plan_rest: "381b4222-f694-41f0-9685-ff5bb260df2e".into(),
@@ -656,6 +665,9 @@ impl Config {
                 "widget_items" => c.widget_items = crate::overlays::parse_items(v),
                 "widget_x" => c.widget_x = v.parse().unwrap_or(24),
                 "widget_y" => c.widget_y = v.parse().unwrap_or(24),
+                "widget_dock" => c.widget_dock = b,
+                "widget_dock_left" => c.widget_dock_left = b,
+                "widget_panel" => c.widget_panel = b,
                 "power_auto" => c.power_auto = b,
                 "plan_game" => c.plan_game = v.into(),
                 "plan_rest" => c.plan_rest = v.into(),
@@ -868,6 +880,9 @@ impl Config {
         let _ = writeln!(s, "widget_items={}", self.widget_items);
         let _ = writeln!(s, "widget_x={}", self.widget_x);
         let _ = writeln!(s, "widget_y={}", self.widget_y);
+        let _ = writeln!(s, "widget_dock={}", b(self.widget_dock));
+        let _ = writeln!(s, "widget_dock_left={}", b(self.widget_dock_left));
+        let _ = writeln!(s, "widget_panel={}", b(self.widget_panel));
         let _ = writeln!(s, "power_auto={}", b(self.power_auto));
         let _ = writeln!(s, "plan_game={}", self.plan_game);
         let _ = writeln!(s, "plan_rest={}", self.plan_rest);
@@ -1101,6 +1116,9 @@ impl Config {
                 self.widget_items = d.widget_items;
                 self.widget_x = d.widget_x;
                 self.widget_y = d.widget_y;
+                self.widget_dock = d.widget_dock;
+                self.widget_dock_left = d.widget_dock_left;
+                self.widget_panel = d.widget_panel;
             }
             Defaults::Optimize => {
                 self.black = d.black;

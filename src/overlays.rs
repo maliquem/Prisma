@@ -3,6 +3,7 @@
 use windows::core::*;
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Gdi::*;
+use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::Input::KeyboardAndMouse::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
@@ -118,11 +119,28 @@ pub struct Widget {
     /// G-SYNC lido numa thread: 0 sem leitura, 1 desligado, 2 ligado.
     vrr: std::sync::Arc<std::sync::atomic::AtomicU8>,
     vrr_at: Option<std::time::Instant>,
+    /// Filho da barra de tarefas (estilo Pílula com "Prender na barra").
+    docked: bool,
+    panel: Option<Panel>,
 }
+
+/// O widget preso não se arrasta: o clique abre o painel.
+static DOCKED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static PRESSED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 unsafe extern "system" fn widget_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT {
     match m {
+        WM_NCHITTEST if DOCKED.load(std::sync::atomic::Ordering::Relaxed) => LRESULT(HTCLIENT as isize),
         WM_NCHITTEST => LRESULT(HTCAPTION as isize),
+        // Clique inteiro no widget: um botão solto que começou fora (arrasto na barra) não abre nada.
+        WM_LBUTTONDOWN => {
+            PRESSED.store(true, std::sync::atomic::Ordering::Relaxed);
+            LRESULT(0)
+        }
+        WM_LBUTTONUP if PRESSED.swap(false, std::sync::atomic::Ordering::Relaxed) => {
+            crate::app::with(click);
+            LRESULT(0)
+        }
         WM_MOUSEACTIVATE => LRESULT(MA_NOACTIVATE as isize),
         WM_EXITSIZEMOVE => {
             let mut r = RECT::default();
@@ -158,12 +176,74 @@ impl Widget {
         register(w!("PrismaWidget"), widget_proc);
         let hwnd = create_overlay(w!("PrismaWidget"), false);
         crate::capture::hide_from_capture(hwnd);
-        Self { surface: Layered::new(hwnd), visible: false, status: Status::default(), status_at: None, status_items: 0, vrr: Default::default(), vrr_at: None }
+        Self {
+            surface: Layered::new(hwnd),
+            visible: false,
+            status: Status::default(),
+            status_at: None,
+            status_items: 0,
+            vrr: Default::default(),
+            vrr_at: None,
+            docked: false,
+            panel: None,
+        }
+    }
+
+    /// O Explorer reiniciou e levou a janela junto: cria outra.
+    fn recreate(&mut self) {
+        let hwnd = create_overlay(w!("PrismaWidget"), false);
+        crate::capture::hide_from_capture(hwnd);
+        self.surface = Layered::new(hwnd);
+        self.docked = false;
+        DOCKED.store(false, std::sync::atomic::Ordering::Relaxed);
+        if self.visible {
+            unsafe {
+                let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+            }
+        }
+    }
+
+    /// Põe o widget dentro da barra (`Some`) ou de volta solto na tela (`None`).
+    fn set_parent(&mut self, bar: Option<HWND>) {
+        let h = self.surface.hwnd;
+        let float = |vis: u32| unsafe {
+            SetWindowLongPtrW(h, GWL_STYLE, (WS_POPUP.0 | vis) as isize);
+            SetWindowLongPtrW(h, GWL_EXSTYLE, (WS_EX_LAYERED.0 | WS_EX_TOOLWINDOW.0 | WS_EX_NOACTIVATE.0 | WS_EX_TOPMOST.0) as isize);
+            let _ = SetParent(h, None);
+        };
+        unsafe {
+            let vis = GetWindowLongPtrW(h, GWL_STYLE) as u32 & WS_VISIBLE.0;
+            if let Some(b) = bar {
+                SetWindowLongPtrW(h, GWL_STYLE, (WS_CHILD.0 | WS_CLIPSIBLINGS.0 | vis) as isize);
+                SetWindowLongPtrW(h, GWL_EXSTYLE, (WS_EX_LAYERED.0 | WS_EX_TOOLWINDOW.0 | WS_EX_NOACTIVATE.0) as isize);
+                let _ = SetParent(h, Some(b));
+                if ok_docked(h, bar) {
+                    // SetParent junta as filas de entrada das duas threads; separadas, um travamento do Prisma não trava a barra.
+                    let _ = windows::Win32::System::Threading::AttachThreadInput(
+                        windows::Win32::System::Threading::GetCurrentThreadId(),
+                        GetWindowThreadProcessId(b, None),
+                        false,
+                    );
+                } else {
+                    // Recusado (versão nova do Windows, por exemplo): continua solto.
+                    float(vis);
+                }
+            } else {
+                float(vis);
+            }
+            self.docked = ok_docked(h, bar);
+            let z = if self.docked { HWND_TOP } else { HWND_TOPMOST };
+            let _ = SetWindowPos(h, Some(z), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+        }
+        DOCKED.store(self.docked, std::sync::atomic::Ordering::Relaxed);
     }
 
     pub fn set_visible(&mut self, on: bool) {
         self.visible = on;
         self.status_at = None;
+        if !on {
+            self.close_panel();
+        }
         unsafe {
             let _ = ShowWindow(self.surface.hwnd, if on { SW_SHOWNOACTIVATE } else { SW_HIDE });
         }
@@ -202,26 +282,399 @@ impl Widget {
     pub fn update(&mut self, cfg: &Config, s: &Snapshot) {
         use std::sync::atomic::Ordering::Relaxed;
         let mask = cfg.widget_items;
-        crate::sys::cputemp::WIDGET.store(self.visible && has(mask, CPU_TEMP), Relaxed);
-        crate::sys::monitor::GPU_TEMP.store(self.visible && has(mask, GPU_TEMP), Relaxed);
+        let panel = self.panel.as_ref().is_some_and(|p| p.open);
+        crate::sys::cputemp::WIDGET.store(self.visible && (panel || has(mask, CPU_TEMP)), Relaxed);
+        crate::sys::monitor::GPU_TEMP.store(self.visible && (panel || has(mask, GPU_TEMP)), Relaxed);
         if !self.visible {
             return;
         }
         self.refresh(mask);
-        let m = items(s, &self.status, mask);
+        let mut m = items(s, &self.status, mask);
         let style = cfg.widget_style;
+        if unsafe { !IsWindow(Some(self.surface.hwnd)).as_bool() } {
+            self.recreate();
+        }
+        let bar = if cfg.widget_dock && style == 0 { taskbar() } else { None };
+        // Preso: tira itens do fim até caber no espaço livre, para não cobrir os ícones.
+        if let Some(room) = bar.as_ref().and_then(|tb| tb.room(cfg.widget_dock_left)) {
+            let k = unsafe { GetDpiForWindow(self.surface.hwnd) } as f32 / 96.0;
+            while m.len() > 1 && size(style, &m).0 * k > room as f32 {
+                m.pop();
+            }
+        }
         let (w, h) = size(style, &m);
-        self.surface.paint(cfg.widget_x, cfg.widget_y, w, h, |c, r| draw(c, style, r, &m));
+        match &bar {
+            // Explorer reiniciado traz outra barra: prende de novo.
+            Some(tb) if !ok_docked(self.surface.hwnd, Some(tb.bar)) => self.set_parent(Some(tb.bar)),
+            None if self.docked => self.set_parent(None),
+            _ => {}
+        }
+        match bar.filter(|_| self.docked) {
+            Some(tb) => {
+                let k = unsafe { GetDpiForWindow(self.surface.hwnd) } as f32 / 96.0;
+                let (pw, ph) = ((w * k).ceil() as i32, (h * k).ceil() as i32);
+                let x = if cfg.widget_dock_left { tb.rect.left + tb.gap } else { tb.tray_left - tb.gap - pw };
+                let mut p = POINT { x, y: tb.rect.top + (tb.rect.bottom - tb.rect.top - ph) / 2 };
+                unsafe {
+                    let _ = ScreenToClient(tb.bar, &mut p);
+                }
+                self.surface.paint(p.x, p.y, w, h, |c, r| draw(c, style, r, &m));
+                unsafe {
+                    // Acima da parte XAML da barra; assíncrono para uma barra travada não segurar o Prisma.
+                    let _ = SetWindowPos(self.surface.hwnd, Some(HWND_TOP), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
+                }
+            }
+            None => {
+                self.surface.paint(cfg.widget_x, cfg.widget_y, w, h, |c, r| draw(c, style, r, &m));
+                unsafe {
+                    let _ = SetWindowPos(
+                        self.surface.hwnd,
+                        Some(HWND_TOPMOST),
+                        0,
+                        0,
+                        0,
+                        0,
+                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+                    );
+                }
+            }
+        }
+        if !self.docked {
+            self.close_panel();
+        }
+        if let Some(p) = self.panel.as_mut().filter(|p| p.open) {
+            crate::sys::nets::sample(&mut p.nets);
+            self.paint_panel(s);
+        }
+    }
+}
+
+fn ok_docked(h: HWND, bar: Option<HWND>) -> bool {
+    bar.is_some_and(|b| unsafe { GetAncestor(h, GA_PARENT) } == b)
+}
+
+/// Barra de tarefas principal, deitada, e onde começa a área de notificação, em pixels de tela.
+struct Taskbar {
+    bar: HWND,
+    rect: RECT,
+    tray_left: i32,
+    /// Começo do botão Iniciar, quando a barra o expõe como janela.
+    start_left: Option<i32>,
+    /// Folga entre o widget e o que está ao lado, em pixels.
+    gap: i32,
+}
+
+impl Taskbar {
+    /// Largura livre, em pixels, no lado escolhido. `None` quando não dá para medir.
+    /// shortcut: supõe os ícones centralizados e simétricos em volta do meio; não mede com UI Automation.
+    fn room(&self, left: bool) -> Option<i32> {
+        let start = self.start_left?;
+        if start - self.rect.left < 4 * self.gap {
+            // Ícones à esquerda: o lado do relógio fica livre e o canto esquerdo não tem espaço.
+            return if left { Some(0) } else { None };
+        }
+        let icons_right = self.rect.left + self.rect.right - start;
+        Some(if left { start - self.rect.left - 2 * self.gap } else { self.tray_left - icons_right - 2 * self.gap })
+    }
+}
+
+fn taskbar() -> Option<Taskbar> {
+    unsafe {
+        let bar = FindWindowW(w!("Shell_TrayWnd"), None).ok()?;
+        let mut rect = RECT::default();
+        GetWindowRect(bar, &mut rect).ok()?;
+        if rect.right - rect.left <= rect.bottom - rect.top {
+            return None;
+        }
+        let mut rt = RECT::default();
+        let tray = FindWindowExW(Some(bar), None, w!("TrayNotifyWnd"), None).ok();
+        let dpi = GetDpiForWindow(bar) as i32;
+        let tray_left = match tray {
+            Some(t) if GetWindowRect(t, &mut rt).is_ok() && rt.left > rect.left && rt.right > rt.left => rt.left,
+            _ => rect.right - 160 * dpi / 96,
+        };
+        let mut rs = RECT::default();
+        let start_left = FindWindowExW(Some(bar), None, w!("Start"), None)
+            .ok()
+            .filter(|s| GetWindowRect(*s, &mut rs).is_ok() && rs.right > rs.left)
+            .map(|_| rs.left);
+        Some(Taskbar { bar, rect, tray_left, start_left, gap: 12 * dpi / 96 })
+    }
+}
+
+/// Clique no widget preso: painel detalhado, se ligado; senão, abre o Prisma no Monitor.
+fn click(a: &mut crate::app::App) {
+    if !a.widget.docked {
+        return;
+    }
+    if a.cfg.widget_panel {
+        let (w, s) = (&mut a.widget, &a.snap);
+        w.toggle_panel(s);
+    } else {
+        a.page = crate::pages::Page::Monitor;
+        a.show_main();
+    }
+}
+
+// ---------- Painel detalhado ----------
+
+struct Panel {
+    surface: Layered,
+    open: bool,
+    shown_at: std::time::Instant,
+    closed_at: Option<std::time::Instant>,
+    nets: Vec<crate::sys::nets::Net>,
+}
+
+const WM_PANEL_CLOSE: u32 = WM_APP + 1;
+const ANIM_MS: f32 = 180.0;
+const PANEL_W: f32 = 340.0;
+
+unsafe extern "system" fn panel_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT {
+    match m {
+        WM_TIMER => {
+            crate::app::with(|a| {
+                let (wd, s) = (&mut a.widget, &a.snap);
+                wd.paint_panel(s);
+            });
+            LRESULT(0)
+        }
+        // Fecha depois, fora desta mensagem: a ativação pode chegar com o estado em uso.
+        WM_ACTIVATE if w.0 & 0xffff == WA_INACTIVE as usize => {
+            let _ = PostMessageW(Some(h), WM_PANEL_CLOSE, WPARAM(0), LPARAM(0));
+            LRESULT(0)
+        }
+        WM_KEYDOWN if w.0 == VK_ESCAPE.0 as usize => {
+            let _ = PostMessageW(Some(h), WM_PANEL_CLOSE, WPARAM(0), LPARAM(0));
+            LRESULT(0)
+        }
+        WM_PANEL_CLOSE => {
+            crate::app::with(|a| a.widget.close_panel());
+            LRESULT(0)
+        }
+        _ => DefWindowProcW(h, m, w, l),
+    }
+}
+
+impl Widget {
+    fn toggle_panel(&mut self, s: &Snapshot) {
+        if self.panel.is_none() {
+            register(w!("PrismaPanel"), panel_proc);
+            let h = create_overlay(w!("PrismaPanel"), false);
+            unsafe {
+                // Este recebe o foco: perder o foco fecha o painel.
+                SetWindowLongPtrW(h, GWL_EXSTYLE, (WS_EX_LAYERED.0 | WS_EX_TOPMOST.0 | WS_EX_TOOLWINDOW.0) as isize);
+            }
+            crate::capture::hide_from_capture(h);
+            self.panel = Some(Panel { surface: Layered::new(h), open: false, shown_at: std::time::Instant::now(), closed_at: None, nets: Vec::new() });
+        }
+        let Some(p) = self.panel.as_mut() else { return };
+        // O clique no widget já fechou o painel (perdeu o foco): não reabre no mesmo clique.
+        if p.open || p.closed_at.is_some_and(|t| t.elapsed().as_millis() < 300) {
+            self.close_panel();
+            return;
+        }
+        p.open = true;
+        p.shown_at = std::time::Instant::now();
+        p.nets = crate::sys::nets::list();
+        crate::sys::nets::sample(&mut p.nets);
+        crate::sys::monitor::PANEL.store(true, std::sync::atomic::Ordering::Relaxed);
+        let h = p.surface.hwnd;
+        self.paint_panel(s);
         unsafe {
-            let _ = SetWindowPos(
-                self.surface.hwnd,
-                Some(HWND_TOPMOST),
-                0,
-                0,
-                0,
-                0,
-                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
-            );
+            let _ = ShowWindow(h, SW_SHOW);
+            let _ = SetForegroundWindow(h);
+            SetTimer(Some(h), 1, 15, None);
+        }
+    }
+
+    fn close_panel(&mut self) {
+        let Some(p) = self.panel.as_mut().filter(|p| p.open) else { return };
+        p.open = false;
+        p.closed_at = Some(std::time::Instant::now());
+        crate::sys::monitor::PANEL.store(false, std::sync::atomic::Ordering::Relaxed);
+        unsafe {
+            let _ = KillTimer(Some(p.surface.hwnd), 1);
+            let _ = ShowWindow(p.surface.hwnd, SW_HIDE);
+        }
+    }
+
+    /// Desenha o painel acima do widget; nos primeiros quadros ele sobe e aparece.
+    fn paint_panel(&mut self, s: &Snapshot) {
+        let wh = self.surface.hwnd;
+        let Some(p) = self.panel.as_mut().filter(|p| p.open) else { return };
+        let t = (p.shown_at.elapsed().as_secs_f32() * 1000.0 / ANIM_MS).min(1.0);
+        if t >= 1.0 {
+            unsafe {
+                let _ = KillTimer(Some(p.surface.hwnd), 1);
+            }
+        }
+        let e = 1.0 - (1.0 - t).powi(3);
+        let d = detail(s, &p.nets);
+        let h = panel_h(&d);
+        let mut wr = RECT::default();
+        let mut mi = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
+        let k = unsafe {
+            let _ = GetWindowRect(wh, &mut wr);
+            let _ = GetMonitorInfoW(MonitorFromWindow(wh, MONITOR_DEFAULTTOPRIMARY), &mut mi);
+            GetDpiForWindow(wh) as f32 / 96.0
+        };
+        let (pw, ph) = ((PANEL_W * k).ceil() as i32, (h * k).ceil() as i32);
+        let bar_top = taskbar().map_or(wr.top, |tb| tb.rect.top);
+        let m = mi.rcMonitor;
+        let gap = (8.0 * k) as i32;
+        let x = (wr.right - pw).min(m.right - pw - gap).max(m.left + gap);
+        let y = bar_top - ph - (12.0 * k) as i32 + ((1.0 - e) * 24.0 * k) as i32;
+        p.surface.alpha = (e * 255.0) as u8;
+        p.surface.paint(x, y, PANEL_W, h, |c, r| draw_panel(c, r, &d));
+    }
+}
+
+/// Um bloco do painel: título, valor em destaque, barra opcional e linhas de uma ou duas células.
+struct Section {
+    title: String,
+    value: String,
+    gauge: Option<f32>,
+    lines: Vec<Vec<(String, String)>>,
+}
+
+fn cell(k: &str, v: String) -> (String, String) {
+    (k.to_string(), v)
+}
+
+/// Mínimo, média e máximo do histórico do monitor (último minuto).
+fn mma(h: &std::collections::VecDeque<f32>) -> String {
+    if h.is_empty() {
+        return "—".into();
+    }
+    let (lo, hi) = h.iter().fold((f32::MAX, 0.0f32), |(a, b), v| (a.min(*v), b.max(*v)));
+    format!("{lo:.0}% / {:.0}% / {hi:.0}%", h.iter().sum::<f32>() / h.len() as f32)
+}
+
+fn uptime(secs: u64) -> String {
+    let (d, h, m) = (secs / 86400, secs / 3600 % 24, secs / 60 % 60);
+    if d > 0 {
+        format!("{d} d {h} h {m} min")
+    } else {
+        format!("{h} h {m} min")
+    }
+}
+
+fn detail(s: &Snapshot, nets: &[crate::sys::nets::Net]) -> Vec<Section> {
+    use crate::pages::{fmt_mem, fmt_rate};
+    use windows::Win32::Storage::FileSystem::{GetDiskFreeSpaceExW, GetDriveTypeW, GetLogicalDrives};
+    let mut pi = windows::Win32::System::ProcessStatus::PERFORMANCE_INFORMATION::default();
+    let pi_ok = unsafe { windows::Win32::System::ProcessStatus::GetPerformanceInfo(&mut pi, std::mem::size_of_val(&pi) as u32) }.is_ok();
+    let page = pi.PageSize as u64;
+    let up = unsafe { windows::Win32::System::SystemInformation::GetTickCount64() } / 1000;
+    let dash = || "—".to_string();
+    let mut out = Vec::new();
+
+    let mut cpu = vec![vec![
+        cell("Velocidade", format!("{:.2} GHz", s.ghz).replace('.', crate::i18n::comma())),
+        cell("Temperatura", s.cpu_temp.map_or_else(dash, |t| format!("{t:.0} °C"))),
+    ]];
+    if pi_ok {
+        cpu.push(vec![cell("Processos", pi.ProcessCount.to_string()), cell("Threads", pi.ThreadCount.to_string())]);
+        cpu.push(vec![cell("Handles", pi.HandleCount.to_string()), cell("Ligado há", uptime(up))]);
+    }
+    cpu.push(vec![cell("Mín / méd / máx (1 min)", mma(&s.hist_cpu))]);
+    out.push(Section { title: "CPU".into(), value: format!("{:.0}%", s.cpu), gauge: Some(s.cpu), lines: cpu });
+
+    let mut ram = vec![vec![cell("Em uso", format!("{} de {}", fmt_mem(s.ram_used), fmt_mem(s.ram_total)))]];
+    ram.push(vec![cell("Disponível", fmt_mem(s.ram_total.saturating_sub(s.ram_used)))]);
+    if pi_ok {
+        ram.push(vec![cell("Memória comprometida", format!("{} de {}", fmt_mem(pi.CommitTotal as u64 * page), fmt_mem(pi.CommitLimit as u64 * page)))]);
+    }
+    ram.push(vec![cell("Mín / méd / máx (1 min)", mma(&s.hist_ram))]);
+    out.push(Section { title: "RAM".into(), value: format!("{:.0}%", s.ram_pct()), gauge: Some(s.ram_pct()), lines: ram });
+
+    let g = &s.gpu;
+    let mut gpu = Vec::new();
+    if !s.gpu_name.is_empty() {
+        gpu.push(vec![cell(&s.gpu_name, String::new())]);
+    }
+    gpu.push(vec![
+        cell("Temperatura", if g.temp > 0 { format!("{} °C", g.temp) } else { dash() }),
+        cell("Ventoinha", if g.fan > 0 { format!("{}%", g.fan) } else { dash() }),
+    ]);
+    if g.total > 0 {
+        gpu.push(vec![cell("Memória dedicada", format!("{} de {}", fmt_mem(g.used), fmt_mem(g.total)))]);
+    }
+    if g.mhz > 0 {
+        gpu.push(vec![cell("Clock", format!("{} MHz", g.mhz)), cell("Memória", format!("{} MHz", g.mem_mhz))]);
+    }
+    if g.watts > 0.0 {
+        gpu.push(vec![cell("Energia", format!("{:.0} W", g.watts)), cell("Limite", format!("{:.0} W", g.power_limit))]);
+    }
+    gpu.push(vec![cell("Mín / méd / máx (1 min)", mma(&s.hist_gpu))]);
+    out.push(Section { title: "GPU".into(), value: format!("{:.0}%", g.util), gauge: Some(g.util), lines: gpu });
+
+    let mut disks = Vec::new();
+    let mask = unsafe { GetLogicalDrives() };
+    for i in 0..26u8 {
+        let letter = (b'A' + i) as char;
+        let root = HSTRING::from(format!("{letter}:\\"));
+        // Só discos fixos: leitor de cartão vazio e unidade de rede podem demorar.
+        if mask & (1 << i) == 0 || unsafe { GetDriveTypeW(&root) } != 3 {
+            continue;
+        }
+        let (mut free, mut total) = (0u64, 0u64);
+        if unsafe { GetDiskFreeSpaceExW(&root, None, Some(&mut total), Some(&mut free)) }.is_ok() && total > 0 {
+            disks.push(vec![cell(&format!("{letter}:"), format!("{} livres de {}", fmt_mem(free), fmt_mem(total)))]);
+        }
+    }
+    if !disks.is_empty() {
+        out.push(Section { title: "Discos".into(), value: String::new(), gauge: None, lines: disks });
+    }
+
+    if let Some(n) = nets.iter().find(|n| n.up && !n.ip.is_empty()) {
+        let lines = vec![vec![cell(&n.desc, String::new())], vec![cell("Recebido", fmt_mem(n.total_down)), cell("Enviado", fmt_mem(n.total_up))]];
+        out.push(Section { title: "Rede".into(), value: format!("↓ {}  ↑ {}", fmt_rate(n.down_rate), fmt_rate(n.up_rate)), gauge: None, lines });
+    }
+    out
+}
+
+const LINE_H: f32 = 20.0;
+const PAD: f32 = 14.0;
+const SEP: f32 = 17.0;
+
+fn section_h(sec: &Section) -> f32 {
+    26.0 + if sec.gauge.is_some() { 10.0 } else { 0.0 } + sec.lines.len() as f32 * LINE_H
+}
+
+fn panel_h(d: &[Section]) -> f32 {
+    PAD * 2.0 + d.iter().map(section_h).sum::<f32>() + d.len().saturating_sub(1) as f32 * SEP
+}
+
+fn draw_panel(c: &Canvas, r: Rect, d: &[Section]) {
+    c.round(r, 12.0, Color { r: 0.11, g: 0.12, b: 0.15, a: 0.97 });
+    c.round_line(r, 12.0, WHITE.alpha(0.1), 1.0);
+    let w = r.w - PAD * 2.0;
+    let mut y = PAD;
+    for (i, sec) in d.iter().enumerate() {
+        if i > 0 {
+            c.fill(rect(PAD, y + SEP / 2.0, w, 1.0), WHITE.alpha(0.08));
+            y += SEP;
+        }
+        let vc = sec.gauge.map_or(ACCENT, |v| if v >= HOT { WARN } else { ACCENT });
+        c.text(rect(PAD, y, w, 24.0), &sec.title, 14.0, WHITE, Align::Left, Weight::Semibold);
+        c.text(rect(PAD, y, w, 24.0), &sec.value, 14.0, vc, Align::Right, Weight::Semibold);
+        y += 26.0;
+        if let Some(v) = sec.gauge {
+            c.round(rect(PAD, y, w, 4.0), 2.0, WHITE.alpha(0.12));
+            c.round(rect(PAD, y, w * v.clamp(0.0, 100.0) / 100.0, 4.0), 2.0, vc);
+            y += 10.0;
+        }
+        for line in &sec.lines {
+            let gap = 16.0;
+            let cw = (w - gap * (line.len() - 1) as f32) / line.len() as f32;
+            for (j, (k, v)) in line.iter().enumerate() {
+                let x = PAD + j as f32 * (cw + gap);
+                c.text(rect(x, y, cw, LINE_H), k, 12.0, rgb(LABEL), Align::Left, Weight::Regular);
+                c.text(rect(x, y, cw, LINE_H), v, 12.0, WHITE, Align::Right, Weight::Semibold);
+            }
+            y += LINE_H;
         }
     }
 }
@@ -375,6 +828,18 @@ pub fn preview(c: &Canvas, style: u8, area: Rect, s: &Snapshot, st: &Status, mas
 #[cfg(test)]
 mod widget_tests {
     use super::*;
+
+    #[test]
+    fn taskbar_room_beside_icons() {
+        // 4K a 200%: Iniciar em 1258, relógio em 3206 (medido na barra real).
+        let tb = |start| Taskbar { bar: HWND::default(), rect: RECT { left: 0, top: 2064, right: 3840, bottom: 2160 }, tray_left: 3206, start_left: start, gap: 24 };
+        assert_eq!(tb(Some(1258)).room(true), Some(1258 - 48));
+        assert_eq!(tb(Some(1258)).room(false), Some(3206 - (3840 - 1258) - 48));
+        // Ícones à esquerda: canto esquerdo sem espaço, lado do relógio sem limite.
+        assert_eq!(tb(Some(0)).room(true), Some(0));
+        assert_eq!(tb(Some(0)).room(false), None);
+        assert_eq!(tb(None).room(true), None);
+    }
 
     #[test]
     fn widget_items_choice_and_file() {
