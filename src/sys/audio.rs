@@ -163,6 +163,18 @@ pub fn devices(capture: bool) -> Vec<Device> {
     out
 }
 
+/// Id do aparelho padrão do Windows, de saída ou de entrada.
+pub fn default_id(capture: bool) -> Option<String> {
+    let flow = if capture { eCapture } else { eRender };
+    unsafe {
+        let en: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
+        let raw = en.GetDefaultAudioEndpoint(flow, eConsole).ok()?.GetId().ok()?;
+        let id = raw.to_string().ok();
+        CoTaskMemFree(Some(raw.0 as *const _));
+        id
+    }
+}
+
 // O Windows não publica esta interface: é a mesma que a tela Volume e preferências de
 // dispositivo usa. Só importam os métodos depois dos 19 reservados, na ordem abaixo.
 const POLICY_IIDS: [GUID; 2] = [

@@ -154,6 +154,13 @@ fn test_setup() -> State {
 
 static STATE: Mutex<Option<State>> = Mutex::new(None);
 
+/// As opções mudaram fora da página (pelo Prisma Launcher): a página lê de novo do arquivo.
+pub fn reload_opts() {
+    if let Some(st) = STATE.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
+        st.opts = None;
+    }
+}
+
 /// Um trabalho preso à janela: o Windows fecha os processos do trabalho quando o Prisma fecha.
 fn job(st: &mut State) -> windows::Win32::Foundation::HANDLE {
     use windows::Win32::System::JobObjects::*;

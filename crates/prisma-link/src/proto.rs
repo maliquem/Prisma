@@ -112,8 +112,150 @@ pub enum Request {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         code: Option<String>,
     },
+    /// Estado das opções da barra do launcher para o jogo (`options`). `exe` é o caminho ou o nome
+    /// do .exe (o que é por jogo); `pid`, quando o jogo está aberto, dá o volume dele.
+    Options {
+        #[serde(default)]
+        exe: String,
+        #[serde(default)]
+        pid: u32,
+    },
+    /// Muda uma opção do jogo; responde `Done` ou `Failed`. Cada opção tem a sua capacidade (veja
+    /// `OptionValue`).
+    SetOption {
+        #[serde(default)]
+        exe: String,
+        #[serde(default)]
+        pid: u32,
+        option: OptionValue,
+    },
+    /// Arma um convite do Compartilhar tela só da janela do jogo `exe` (o nome do .exe): quando o
+    /// jogo abrir, o Prisma cria o convite. Responde `Done` já; o código aparece em
+    /// `Reply::Options::invite` (`share.invite_game`).
+    ShareInviteForGame {
+        exe: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        minutes: Option<u32>,
+        /// Reservado: amigo que vai receber o link (chat). Hoje é ignorado.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        to: Option<String>,
+    },
+    /// Desarma o convite do jogo `exe`; vazio desarma qualquer um. Responde `Done`. Um convite já
+    /// criado continua valendo (a página Compartilhar tela o revoga).
+    ShareInviteCancel {
+        #[serde(default)]
+        exe: String,
+    },
     #[serde(other)]
     Unknown,
+}
+
+/// Limite de FPS do jogo, como a tela Medidor.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FpsLimit {
+    Off,
+    /// O Prisma mede o jogo e escolhe.
+    Auto,
+    /// FPS de 20 a 1023.
+    Manual(u32),
+}
+
+/// O que o Compartilhar tela transmite, ou o que o replay grava.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ShareMode {
+    #[default]
+    Screen,
+    /// Só a janela do jogo (a do `pid`).
+    Game,
+}
+
+/// Resolução do replay e das gravações, como a tela Captura.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ReplayResolution {
+    #[serde(rename = "native")]
+    Native,
+    #[serde(rename = "1080p")]
+    P1080,
+    #[serde(rename = "1440p")]
+    P1440,
+    #[serde(rename = "2160p")]
+    P2160,
+}
+
+/// Replay da tela Captura: guarda os últimos `secs` segundos (15, 30, 60 ou 120) em modo jogo.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReplayOptions {
+    pub on: bool,
+    pub secs: u32,
+    /// A tela inteira ou só a janela do jogo em primeiro plano.
+    #[serde(default)]
+    pub target: ShareMode,
+    pub resolution: ReplayResolution,
+    /// HDR10; falso é SDR.
+    pub hdr: bool,
+}
+
+/// Em que pé está o convite armado com `ShareInviteForGame`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InviteState {
+    /// Esperando o jogo abrir.
+    Armed,
+    /// Jogo aberto, criando o convite.
+    Creating,
+    /// `code` e `link` prontos.
+    Ready,
+    /// Não deu; o motivo vem em `reason`.
+    Failed,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GameInvite {
+    pub exe: String,
+    pub state: InviteState,
+    #[serde(default)]
+    pub code: String,
+    #[serde(default)]
+    pub link: String,
+    #[serde(default)]
+    pub reason: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AudioDevice {
+    pub id: String,
+    pub name: String,
+    /// O padrão do Windows agora.
+    pub default: bool,
+}
+
+/// Uma opção de `SetOption`, com a capacidade que a anuncia.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OptionValue {
+    /// `meter.fps_limit`.
+    FpsLimit(FpsLimit),
+    /// Auto HDR do Windows para o jogo; `None` deixa o Windows decidir (`hdr.auto`). Vale na próxima
+    /// abertura.
+    AutoHdr(Option<bool>),
+    /// Aparelho de saída do jogo; vazio é o padrão do Windows (`sound.devices`).
+    AudioOut(String),
+    /// Aparelho de entrada do jogo; vazio é o padrão do Windows (`sound.devices`).
+    AudioIn(String),
+    /// `share.mode`. `Game` precisa do `pid` com a janela aberta.
+    ShareMode(ShareMode),
+    /// `replay.options`.
+    Replay(ReplayOptions),
+    /// Sem bordas sozinho sempre que o jogo abrir (`fullscreenizer`).
+    Fullscreenizer(bool),
+    /// Otimizar ao abrir o jogo; falso pula este jogo (`optimize`). A regra geral da tela Energia
+    /// ("Não perguntar") vale por cima.
+    Optimize(bool),
+    /// Opção que este lado não conhece, com o que veio nela.
+    #[serde(untagged)]
+    Unknown(serde_json::Value),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -278,6 +420,35 @@ pub enum Reply {
         allow: bool,
         #[serde(default)]
         trust: bool,
+    },
+    /// Resposta ao `Options`.
+    Options {
+        meter: MeterView,
+        fps_limit: FpsLimit,
+        /// HDR do Windows na tela principal; `None` sem tela com HDR.
+        hdr: Option<bool>,
+        /// Escolha do jogo; `None` deixa o Windows decidir.
+        auto_hdr: Option<bool>,
+        /// A chave geral do Auto HDR nas Configurações do Windows.
+        auto_hdr_windows: bool,
+        audio_out: Vec<AudioDevice>,
+        audio_in: Vec<AudioDevice>,
+        /// Aparelhos do jogo; vazio é o padrão do Windows.
+        audio_out_id: String,
+        audio_in_id: String,
+        /// Volume do jogo de 0 a 100; `None` sem som aberto.
+        volume: Option<u32>,
+        muted: bool,
+        share_mode: ShareMode,
+        replay: ReplayOptions,
+        fullscreenizer: bool,
+        optimize: bool,
+        /// Sobe a cada mudança no Prisma, venha de onde vier: igual ao da última leitura, nada mudou.
+        #[serde(default)]
+        rev: u64,
+        /// O convite armado com `ShareInviteForGame`, se houver.
+        #[serde(default)]
+        invite: Option<GameInvite>,
     },
     #[serde(other)]
     Unknown,
@@ -467,6 +638,115 @@ mod tests {
             serde_json::to_string(&Reply::Failed { code: "busy".into(), reason: "r".into() }).unwrap(),
             r#"{"type":"failed","code":"busy","reason":"r"}"#
         );
+    }
+
+    #[test]
+    fn options_requests_round_trip() {
+        let replay = ReplayOptions { on: true, secs: 30, target: ShareMode::Game, resolution: ReplayResolution::P1440, hdr: false };
+        let cases: Vec<(Request, &str)> = vec![
+            (Request::Options { exe: r"C:\G\g.exe".into(), pid: 7 }, r#"{"type":"options","exe":"C:\\G\\g.exe","pid":7}"#),
+            (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::FpsLimit(FpsLimit::Off) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"fps_limit":"off"}}"#),
+            (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::FpsLimit(FpsLimit::Auto) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"fps_limit":"auto"}}"#),
+            (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::FpsLimit(FpsLimit::Manual(120)) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"fps_limit":{"manual":120}}}"#),
+            (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::AutoHdr(None) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"auto_hdr":null}}"#),
+            (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::AutoHdr(Some(true)) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"auto_hdr":true}}"#),
+            (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::AudioOut("{0.0.0}.{a}".into()) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"audio_out":"{0.0.0}.{a}"}}"#),
+            (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::AudioIn(String::new()) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"audio_in":""}}"#),
+            (Request::SetOption { exe: "g.exe".into(), pid: 7, option: OptionValue::ShareMode(ShareMode::Game) }, r#"{"type":"set_option","exe":"g.exe","pid":7,"option":{"share_mode":"game"}}"#),
+            (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::Replay(replay) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"replay":{"on":true,"secs":30,"target":"game","resolution":"1440p","hdr":false}}}"#),
+            (Request::ShareInviteForGame { exe: "g.exe".into(), minutes: None, to: None }, r#"{"type":"share_invite_for_game","exe":"g.exe"}"#),
+            (Request::ShareInviteForGame { exe: "g.exe".into(), minutes: Some(30), to: Some("ana".into()) }, r#"{"type":"share_invite_for_game","exe":"g.exe","minutes":30,"to":"ana"}"#),
+            (Request::ShareInviteCancel { exe: "g.exe".into() }, r#"{"type":"share_invite_cancel","exe":"g.exe"}"#),
+            (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::Fullscreenizer(true) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"fullscreenizer":true}}"#),
+            (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::Optimize(false) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"optimize":false}}"#),
+        ];
+        for (req, json) in cases {
+            assert_eq!(serde_json::to_string(&req).unwrap(), json);
+            assert_eq!(serde_json::from_str::<Request>(json).unwrap(), req);
+        }
+        // `exe` e `pid` podem faltar; uma opção que este lado não conhece vira Unknown.
+        assert_eq!(serde_json::from_str::<Request>(r#"{"type":"options"}"#).unwrap(), Request::Options { exe: String::new(), pid: 0 });
+        assert_eq!(
+            serde_json::from_str::<Request>(r#"{"type":"set_option","option":{"future":1}}"#).unwrap(),
+            Request::SetOption { exe: String::new(), pid: 0, option: OptionValue::Unknown(serde_json::json!({"future": 1})) }
+        );
+        // Sem `target`, o replay antigo grava a tela inteira.
+        assert_eq!(
+            serde_json::from_str::<ReplayOptions>(r#"{"on":true,"secs":30,"resolution":"native","hdr":false}"#).unwrap().target,
+            ShareMode::Screen
+        );
+        for (res, name) in [(ReplayResolution::Native, "native"), (ReplayResolution::P1080, "1080p"), (ReplayResolution::P2160, "2160p")] {
+            assert_eq!(serde_json::to_string(&res).unwrap(), format!("\"{name}\""));
+        }
+    }
+
+    #[test]
+    fn options_reply_round_trips() {
+        let dev = |id: &str, default| AudioDevice { id: id.into(), name: format!("Alto-falante {id}"), default };
+        let replies = vec![
+            Reply::Options {
+                meter: MeterView::Compact,
+                fps_limit: FpsLimit::Manual(90),
+                hdr: Some(true),
+                auto_hdr: None,
+                auto_hdr_windows: true,
+                audio_out: vec![dev("a", true), dev("b", false)],
+                audio_in: vec![],
+                audio_out_id: "b".into(),
+                audio_in_id: String::new(),
+                volume: Some(40),
+                muted: false,
+                share_mode: ShareMode::Screen,
+                replay: ReplayOptions { on: false, secs: 120, target: ShareMode::Screen, resolution: ReplayResolution::Native, hdr: true },
+                fullscreenizer: true,
+                optimize: false,
+                rev: 0,
+                invite: None,
+            },
+            Reply::Options {
+                meter: MeterView::Off,
+                fps_limit: FpsLimit::Auto,
+                hdr: None,
+                auto_hdr: Some(false),
+                auto_hdr_windows: false,
+                audio_out: vec![],
+                audio_in: vec![dev("m", true)],
+                audio_out_id: String::new(),
+                audio_in_id: "m".into(),
+                volume: None,
+                muted: true,
+                share_mode: ShareMode::Game,
+                replay: ReplayOptions { on: true, secs: 15, target: ShareMode::Game, resolution: ReplayResolution::P1080, hdr: false },
+                fullscreenizer: false,
+                optimize: true,
+                rev: 42,
+                invite: Some(GameInvite { exe: "g.exe".into(), state: InviteState::Ready, code: "ABCD".into(), link: "https://x/ABCD".into(), reason: String::new() }),
+            },
+        ];
+        for r in replies {
+            let json = serde_json::to_string(&r).unwrap();
+            assert_eq!(serde_json::from_str::<Reply>(&json).unwrap(), r, "{json}");
+        }
+    }
+
+    #[test]
+    fn old_peer_reads_options_as_unknown() {
+        // O Prisma 1.0 não conhece `options` nem `set_option`.
+        #[derive(Debug, PartialEq, Deserialize)]
+        #[serde(tag = "type", rename_all = "snake_case")]
+        enum OldRequest {
+            SaveReplay,
+            #[serde(other)]
+            Unknown,
+        }
+        for json in [
+            r#"{"type":"options","exe":"g.exe"}"#,
+            r#"{"type":"set_option","option":{"optimize":true}}"#,
+            r#"{"type":"share_invite_for_game","exe":"g.exe"}"#,
+            r#"{"type":"share_invite_cancel"}"#,
+        ] {
+            assert_eq!(serde_json::from_str::<OldRequest>(json).unwrap(), OldRequest::Unknown);
+        }
     }
 
     #[test]

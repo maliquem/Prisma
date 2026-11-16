@@ -176,14 +176,7 @@ fn draw_list(ui: &mut Ui, app: &mut App, t: Rect, outputs: &[audio::Device], inp
         app.cfg.save();
     }
     if let Some((exe, path, input, id)) = changed {
-        let e = app.cfg.snd_entry(&exe, &path);
-        if input {
-            e.input = id;
-        } else {
-            e.output = id;
-        }
-        app.cfg.save();
-        app.route_app(&exe);
+        set_device(app, &exe, &path, input, id);
     }
     if let Some(exe) = remove {
         // Tira da lista e devolve o programa ao padrão do Windows.
@@ -194,6 +187,18 @@ fn draw_list(ui: &mut Ui, app: &mut App, t: Rect, outputs: &[audio::Device], inp
         app.cfg.snd_apps.retain(|a| !a.exe.eq_ignore_ascii_case(&exe));
         app.cfg.save();
     }
+}
+
+/// Aparelho de saída ou de entrada do programa (vazio: o padrão do Windows), aplicado já no que está aberto.
+pub fn set_device(app: &mut App, exe: &str, path: &str, input: bool, id: String) {
+    let e = app.cfg.snd_entry(exe, path);
+    if input {
+        e.input = id;
+    } else {
+        e.output = id;
+    }
+    app.cfg.save();
+    app.route_app(exe);
 }
 
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {

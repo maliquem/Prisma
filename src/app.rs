@@ -3140,7 +3140,10 @@ impl App {
                     self.apply_plan(&plan);
                 }
                 if let Some(g) = game {
-                    if self.cfg.on_game != 2 && self.asked.insert(g.clone()) {
+                    #[cfg(feature = "stream")]
+                    self.link_game_entered(&g);
+                    let skip = self.cfg.opt_skip.iter().any(|e| e.eq_ignore_ascii_case(&g));
+                    if self.cfg.on_game != 2 && !skip && self.asked.insert(g.clone()) {
                         if self.cfg.on_game == 1 {
                             self.close_selected();
                         } else {

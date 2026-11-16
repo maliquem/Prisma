@@ -12,8 +12,8 @@ mod server;
 
 pub use frame::{read_frame, write_frame};
 pub use proto::{
-    Capabilities, Controller, MeterView, NvidiaKind, NvidiaSetting, NvidiaValue, Page, PowerPlan, Reply, Request,
-    VolumeChange,
+    AudioDevice, Capabilities, Controller, FpsLimit, GameInvite, InviteState, MeterView, NvidiaKind, NvidiaSetting, NvidiaValue, OptionValue, Page,
+    PowerPlan, ReplayOptions, ReplayResolution, Reply, Request, ShareMode, VolumeChange,
 };
 
 #[cfg(windows)]
@@ -63,6 +63,24 @@ pub mod cap {
     /// Perguntar se alguém entra no compartilhamento de tela (`Request::ShareAsk`), no pipe
     /// `share_pipe_name`.
     pub const SHARE_ASK: &str = "share.ask";
+    /// Ler o estado das opções da barra do launcher (`Request::Options`).
+    pub const OPTIONS: &str = "options";
+    /// `OptionValue::FpsLimit`.
+    pub const METER_FPS_LIMIT: &str = "meter.fps_limit";
+    /// `OptionValue::AutoHdr`.
+    pub const HDR_AUTO: &str = "hdr.auto";
+    /// `OptionValue::AudioOut` e `AudioIn`.
+    pub const SOUND_DEVICES: &str = "sound.devices";
+    /// `OptionValue::ShareMode`.
+    pub const SHARE_MODE: &str = "share.mode";
+    /// `OptionValue::Replay`.
+    pub const REPLAY_OPTIONS: &str = "replay.options";
+    /// `OptionValue::Fullscreenizer`.
+    pub const FULLSCREENIZER: &str = "fullscreenizer";
+    /// `OptionValue::Optimize`.
+    pub const OPTIMIZE: &str = "optimize";
+    /// `ShareInviteForGame` e `ShareInviteCancel`, com o estado em `Reply::Options::invite`.
+    pub const SHARE_INVITE_GAME: &str = "share.invite_game";
 }
 
 /// Códigos estáveis de `Reply::Failed`.
