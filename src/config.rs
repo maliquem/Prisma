@@ -304,6 +304,8 @@ pub struct Config {
     pub hk_limit_down: Hotkey,
     pub snd_keep: u8,
     pub snd_apps: Vec<SndApp>,
+    /// Perfil de equalizador de cada jogo: (exe, perfil). Sem linha é o padrão do aparelho.
+    pub eq_apps: Vec<(String, String)>,
     pub snd_keys: Vec<SndKey>,
     /// Atalhos que abrem programas (página Atalhos).
     pub run_keys: Vec<RunKey>,
@@ -480,6 +482,7 @@ impl Default for Config {
             hk_limit_down: Hotkey::new(MOD_CTRL | MOD_ALT, 0x28),
             snd_keep: 0,
             snd_apps: Vec::new(),
+            eq_apps: Vec::new(),
             snd_keys: Vec::new(),
             run_keys: Vec::new(),
             share_names: Vec::new(),
@@ -729,6 +732,13 @@ impl Config {
                         if p.len() == 4 {
                             c.snd_apps.push(SndApp { exe: p[0].into(), output: p[1].into(), input: p[2].into(), path: p[3].into(), pinned: false, volume: -1 });
                         }
+                    }
+                }
+                "eq_app" => {
+                    // exe|perfil; um terceiro campo (quando) fica para depois.
+                    let p: Vec<&str> = v.split('|').collect();
+                    if p.len() >= 2 && !p[0].is_empty() && !p[1].is_empty() {
+                        c.eq_apps.push((p[0].into(), p[1].into()));
                     }
                 }
                 "snd_key" => {
@@ -1007,6 +1017,9 @@ impl Config {
         }
         for a in &self.snd_apps {
             let _ = writeln!(s, "snd_app={}|{}|{}|{}|{}|{}", a.exe, a.output, a.input, b(a.pinned), a.volume, a.path);
+        }
+        for (exe, profile) in &self.eq_apps {
+            let _ = writeln!(s, "eq_app={exe}|{profile}");
         }
         for k in &self.snd_keys {
             let _ = writeln!(s, "snd_key={},{}|{}|{}", k.key.mods, k.key.vk, k.output, k.input);

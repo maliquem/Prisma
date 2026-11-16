@@ -3,6 +3,7 @@
 //! ```text
 //! preamp=-4                 (ou "Preamp: -4 dB", como vem do AutoEQ)
 //! protecao=sim              (corta o que fica abaixo e acima do audível; opcional)
+//! limitador=nao             (o limitador vem ligado: segura os picos quando o ganho passa de 0 dB)
 //! grafico=0 0 1 2 3 2 0 0 -1 -2   (10, 15 ou 31 ganhos; opcional)
 //! Filter 1: ON LSC Fc 80 Hz Gain 3 dB Q 0.7
 //! [C] ganho=2 atraso=0      (daqui para baixo, só nesses canais)
@@ -30,16 +31,25 @@ pub struct Group {
     pub filters: Vec<Filter>,
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Profile {
+    /// Ganho geral; acima de 0 dB o limitador segura os picos.
     pub preamp_db: f64,
     /// Corte do subsônico e do ultrassônico (`PROTECT_*`), antes dos outros filtros.
     pub protect: bool,
+    /// Limitador no fim (`chain::LIMIT_DB`). Ligado por padrão.
+    pub limiter: bool,
     /// Ganhos do modo gráfico (10, 15 ou 31), somados aos filtros.
     pub graphic: Vec<f64>,
     /// Filtros de todos os canais.
     pub filters: Vec<Filter>,
     pub groups: Vec<Group>,
+}
+
+impl Default for Profile {
+    fn default() -> Self {
+        Profile { preamp_db: 0.0, protect: false, limiter: true, graphic: Vec::new(), filters: Vec::new(), groups: Vec::new() }
+    }
 }
 
 /// Proteção: passa-altas em 20 Hz e passa-baixas em 20 kHz, Butterworth de 4ª ordem (24 dB/oitava,
@@ -178,6 +188,12 @@ impl Profile {
                     "nao" | "não" => false,
                     _ => return Err(fail(format!("protecao=sim ou protecao=nao, não {v}"))),
                 };
+            } else if let Some(v) = line.strip_prefix("limitador=") {
+                p.limiter = match v.trim() {
+                    "sim" => true,
+                    "nao" | "não" => false,
+                    _ => return Err(fail(format!("limitador=sim ou limitador=nao, não {v}"))),
+                };
             } else if line.starts_with("modo=") {
                 // Só para a página lembrar a aba; o som é o mesmo.
             } else if let Some(g) = p.groups.last_mut() {
@@ -194,6 +210,9 @@ impl Profile {
         let mut s = format!("preamp={}\n", self.preamp_db);
         if self.protect {
             s += "protecao=sim\n";
+        }
+        if !self.limiter {
+            s += "limitador=nao\n";
         }
         if !self.graphic.is_empty() {
             let g: Vec<String> = self.graphic.iter().map(|v| v.to_string()).collect();
@@ -285,6 +304,8 @@ Filter 1: ON PK Fc 2500 Hz Gain 2 dB Q 1
         let mut p = Profile::parse(EXEMPLO).unwrap();
         p.graphic = vec![1.0; 10];
         p.protect = true;
+        assert_eq!(Profile::parse(&p.to_text()).unwrap(), p);
+        p.limiter = false;
         assert_eq!(Profile::parse(&p.to_text()).unwrap(), p);
     }
 

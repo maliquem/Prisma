@@ -1,6 +1,7 @@
 # Exemplo para ouvir a diferença: graves fortes e agudos cortados.
 # Copie para C:\ProgramData\Prisma\eq\perfil.txt (vale para todos os aparelhos)
 # ou perfil-<guid do aparelho>.txt (só aquele). Salvar já troca, com o som tocando.
+# preamp é o ganho geral: pode passar de 0 (ex.: preamp=6) que o limitador segura os picos.
 # protecao=sim corta abaixo de 20 Hz e acima de 20 kHz; apague a linha para desligar.
 preamp=-8
 protecao=sim

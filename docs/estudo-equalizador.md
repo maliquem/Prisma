@@ -171,8 +171,14 @@ espacial ativo; a tela avisa e oferece desligar o Atmos primeiro. O teste segue 
 - **Transição:** perfil novo entra em 20 ms, misturando a saída velha e a nova.
 - **Por canal:** filtros "todos" + filtros do canal, ganho, atraso (linha de atraso alocada no
   `LockForProcess` até 50 ms na taxa do fluxo).
-- **Proteção:** pré-amplificação automática opcional (o pico da curva não passa de 0 dB) e limitador
-  suave no fim, desligável. Feito: `protecao=sim` no perfil liga um passa-altas em 20 Hz e um
+- **Ganho e limitador (feito):** `preamp=` é o ganho geral e pode passar de 0 dB. Um limitador de pico
+  no fim (`chain.rs`, `Limiter`) segura o que passaria do máximo: baixa na hora o ganho do quadro, com o
+  mesmo ganho em todos os canais, e solta em ~120 ms. Não usa antecipação, então não soma atraso. Abaixo
+  do máximo ele não mexe, e sem ganho o volume cheio do Windows passa igual. Vem ligado; `limitador=nao`
+  desliga. Motivo: pela soundbar em 2.0, o som do Windows sai bem mais baixo que o dos apps com Dolby.
+  O Equalizer APO não tem limitador, então a exportação avisa num comentário quando o ganho passa de 0.
+  Falta a pré-amplificação automática (o pico da curva não passa de 0 dB).
+- **Proteção:** feito: `protecao=sim` no perfil liga um passa-altas em 20 Hz e um
   passa-baixas em 20 kHz, Butterworth de 4ª ordem (24 dB/oitava), antes dos outros filtros. Abaixo de
   20 Hz não se ouve, mas o subsônico gasta curso do alto-falante e gera intermodulação nos graves; acima
   de 20 kHz, o ultrassônico vindo do processamento gera intermodulação e cansa o tweeter. Custo
@@ -221,6 +227,15 @@ diferente da que o APO conhece: ele passa o som sem mexer.
   - `eq_dev=<id do aparelho>|<perfil>`
   - `eq_app=<exe>|<perfil>|<quando>`, `quando` = `sempre` (só se o teste 2 der certo), `foco`,
     `tocando`.
+- **Perfil por jogo, pelo Launcher (feito).** Na barra do jogo o Launcher mostra **Padrão** e os
+  perfis do aparelho de saída do jogo (o escolhido para ele, senão o padrão do Windows naquele
+  momento) e grava a escolha com `SetOption` / `OptionValue::EqProfile` (capacidade `sound.eq`; a
+  lista vem em `Options.eq_profiles`). O Prisma guarda `eq_app=<exe>|<perfil>` (sem o `quando`, que
+  fica para a aba Programas) e, com o jogo aberto, copia
+  `C:\ProgramData\Prisma\eq\perfis\<guid>\<perfil>.txt` para `jogo-<guid>.txt`; o APO prefere esse
+  arquivo ao `perfil-<guid>.txt` e troca ao vivo, com a mistura de 20 ms. O jogo fechou, o arquivo
+  sai e o aparelho volta ao perfil dele. É o plano B: enquanto o jogo está aberto, o perfil vale para
+  todo o som daquele aparelho. Código: `src/sys/eq.rs`, `eq_tick` e `eq_device` em `src/app.rs`.
 - **Qual vale** (função pura `eq::active`, testada):
   1. Teste 2 deu certo: o perfil do programa vai no bloco daquele programa e vale **só no som
      dele**, ao mesmo tempo que os outros programas usam o do aparelho.
@@ -318,7 +333,7 @@ Ver `docs/mockup-equalizador.html`.
 2. APO mínimo e os testes da seção 2.2 no PC de teste. **Feito**, menos assinatura e HVCI.
 3. `prisma-apo` completo, testado dentro do processo. **Em parte:** já aplica o perfil
    (`perfil-<guid>.txt` ou `perfil.txt` em `C:\ProgramData\Prisma\eq`), lido no `LockForProcess`.
-   Falta: limitador, perfil por programa e o `estado.bin` (hoje o APO lê o texto do perfil direto).
+   Falta: perfil por programa e o `estado.bin` (hoje o APO lê o texto do perfil direto).
    Ouvido nos fones HyperX em 16/11/2026: o perfil de exemplo (graves +8, agudos -10) muda o som.
    Lição: o perfil só vale quando o fluxo recomeça (fechar e abrir o programa), daí a troca ao vivo.
    Troca ao vivo feita (`prisma-apo/src/live.rs`): uma thread por fluxo olha o arquivo do perfil a

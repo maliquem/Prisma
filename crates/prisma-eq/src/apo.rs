@@ -175,6 +175,9 @@ impl Profile {
     /// o som sair igual ao do Prisma.
     pub fn to_apo(&self) -> String {
         let mut s = String::from("# Exportado do Prisma\n");
+        if self.limiter && self.preamp_db > 0.0 {
+            s += "# O Equalizer APO não tem o limitador do Prisma: com ganho acima de 0 dB os picos podem distorcer.\n";
+        }
         s += &format!("Preamp: {} dB\n", self.preamp_db);
         let filter = |s: &mut String, f: &Filter| {
             let on = if f.on { "ON" } else { "OFF" };

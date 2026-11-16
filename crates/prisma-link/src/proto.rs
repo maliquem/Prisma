@@ -263,6 +263,9 @@ pub enum OptionValue {
     /// Volume do jogo, de 0 a 100, posto quando ele abre (a lista do Som, programa fixo); `None`
     /// tira o volume guardado (`sound.game_volume`).
     Volume(Option<u32>),
+    /// Perfil de equalizador que roda enquanto o jogo está aberto, um de `eq_profiles`; vazio é o
+    /// padrão do aparelho (`sound.eq`).
+    EqProfile(String),
     /// Opção que este lado não conhece, com o que veio nela.
     #[serde(untagged)]
     Unknown(serde_json::Value),
@@ -464,6 +467,13 @@ pub enum Reply {
         /// O convite armado com `ShareInviteForGame`, se houver.
         #[serde(default)]
         invite: Option<GameInvite>,
+        /// Perfis de equalizador do aparelho de saída do jogo (o padrão do Windows agora, se o jogo
+        /// usa o padrão). Vazio: nenhum criado no Prisma.
+        #[serde(default)]
+        eq_profiles: Vec<String>,
+        /// Perfil escolhido para o jogo; vazio é o padrão do aparelho.
+        #[serde(default)]
+        eq_profile: String,
     },
     #[serde(other)]
     Unknown,
@@ -668,6 +678,7 @@ mod tests {
             (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::AutoHdr(Some(true)) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"auto_hdr":true}}"#),
             (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::AudioOut("{0.0.0}.{a}".into()) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"audio_out":"{0.0.0}.{a}"}}"#),
             (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::AudioIn(String::new()) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"audio_in":""}}"#),
+            (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::EqProfile("FPS".into()) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"eq_profile":"FPS"}}"#),
             (Request::SetOption { exe: "g.exe".into(), pid: 7, option: OptionValue::ShareMode(ShareMode::Game) }, r#"{"type":"set_option","exe":"g.exe","pid":7,"option":{"share_mode":"game"}}"#),
             (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::Replay(replay) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"replay":{"on":true,"secs":30,"target":"game","resolution":"1440p","hdr":false}}}"#),
             (Request::ShareInviteForGame { exe: "g.exe".into(), minutes: None, to: None }, r#"{"type":"share_invite_for_game","exe":"g.exe"}"#),
@@ -723,6 +734,8 @@ mod tests {
                 optimize: false,
                 rev: 0,
                 invite: None,
+                eq_profiles: vec!["Jogos".into(), "FPS".into()],
+                eq_profile: "FPS".into(),
             },
             Reply::Options {
                 meter: MeterView::Off,
@@ -743,6 +756,8 @@ mod tests {
                 optimize: true,
                 rev: 42,
                 invite: Some(GameInvite { exe: "g.exe".into(), state: InviteState::Ready, code: "ABCD".into(), link: "https://x/ABCD".into(), reason: String::new() }),
+                eq_profiles: vec![],
+                eq_profile: String::new(),
             },
         ];
         for r in replies {

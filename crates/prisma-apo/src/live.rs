@@ -29,9 +29,10 @@ pub struct Params {
     pub rate: f32,
 }
 
-/// Perfil do aparelho, senão o geral.
+/// Perfil do jogo aberto (o Prisma põe e tira), senão o do aparelho, senão o geral.
 fn profile_path(p: &Params) -> Option<PathBuf> {
-    let candidates = [(!p.device.is_empty()).then(|| p.dir.join(format!("perfil-{}.txt", p.device))), Some(p.dir.join("perfil.txt"))];
+    let dev = |name: &str| (!p.device.is_empty()).then(|| p.dir.join(format!("{name}-{}.txt", p.device)));
+    let candidates = [dev("jogo"), dev("perfil"), Some(p.dir.join("perfil.txt"))];
     candidates.into_iter().flatten().find(|f| f.exists())
 }
 

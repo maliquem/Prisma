@@ -89,6 +89,8 @@ pub mod cap {
     pub const HDR_ON_LAUNCH: &str = "hdr.on_launch";
     /// `OptionValue::Volume`: volume guardado do jogo.
     pub const SOUND_GAME_VOLUME: &str = "sound.game_volume";
+    /// `OptionValue::EqProfile` e a lista `eq_profiles` no `Options`: perfil de equalizador do jogo.
+    pub const SOUND_EQ: &str = "sound.eq";
 }
 
 /// Códigos estáveis de `Reply::Failed`.

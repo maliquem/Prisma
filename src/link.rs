@@ -212,6 +212,7 @@ fn caps_with(nvidia: bool) -> Vec<String> {
         cap::METER_ON_LAUNCH,
         cap::HDR_ON_LAUNCH,
         cap::SOUND_GAME_VOLUME,
+        cap::SOUND_EQ,
     ];
     if cfg!(feature = "stream") {
         caps.push(cap::SHARE_MODE);
@@ -624,6 +625,8 @@ impl App {
         };
         let fullscreenizer = c.fs_auto(exe);
         let optimize = !c.opt_skip.iter().any(|e| same(e));
+        let eq_profile = c.eq_apps.iter().find(|(e, _)| same(e)).map(|(_, p)| p.clone()).unwrap_or_default();
+        let eq_out = audio_out_id.clone();
         let exe = exe.to_string();
         Outcome::Later(Box::new(move || {
             let same = |e: &str| !exe.is_empty() && e.eq_ignore_ascii_case(&exe);
@@ -651,6 +654,8 @@ impl App {
                 optimize,
                 rev: 0,
                 invite: GAME_INVITE.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|(i, _)| i.clone()),
+                eq_profiles: crate::sys::eq::profiles(&crate::sys::eq::guid_of(&if eq_out.is_empty() { audio::default_id(false).unwrap_or_default() } else { eq_out })),
+                eq_profile,
             };
             let r = rev_of(&reply);
             if let Reply::Options { rev, .. } = &mut reply {
@@ -823,6 +828,18 @@ impl App {
                         s.set_volume(v as f32 / 100.0);
                     }
                 }
+            }
+            OptionValue::EqProfile(name) => {
+                let guid = crate::sys::eq::guid_of(&self.eq_device(&exe));
+                if !name.is_empty() && !crate::sys::eq::profiles(&guid).contains(&name) {
+                    return fail(code::INVALID, "Valor fora das opções");
+                }
+                self.cfg.eq_apps.retain(|(e, _)| !e.eq_ignore_ascii_case(&exe));
+                if !name.is_empty() {
+                    self.cfg.eq_apps.push((exe.clone(), name));
+                }
+                self.cfg.save();
+                // Com o jogo aberto, o próximo `eq_tick` troca o som.
             }
             OptionValue::Unknown(_) => return fail(code::NOT_SUPPORTED, "indisponível"),
         }
@@ -1013,7 +1030,7 @@ mod tests {
                 cap::PAGE_SOUND, cap::PAGE_HDR, cap::PAGE_CAPTURE, cap::PAGE_CONTROLLERS, cap::CONTROLLERS,
                 cap::CONTROLLERS_MAPPING, cap::CONTROLLERS_KEYBOARD, cap::OPTIONS, cap::METER_FPS_LIMIT,
                 cap::HDR_AUTO, cap::SOUND_DEVICES, cap::REPLAY_OPTIONS, cap::FULLSCREENIZER, cap::OPTIMIZE,
-                cap::METER_ON_LAUNCH, cap::HDR_ON_LAUNCH, cap::SOUND_GAME_VOLUME,
+                cap::METER_ON_LAUNCH, cap::HDR_ON_LAUNCH, cap::SOUND_GAME_VOLUME, cap::SOUND_EQ,
             ] {
                 assert!(has(c), "{c}");
             }

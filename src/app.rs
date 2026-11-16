@@ -354,6 +354,8 @@ pub struct App {
     pub find_drives: Vec<char>,
     pub pick_list: crate::sys::catalog::Shared,
     snd_seen: std::collections::HashSet<u32>,
+    /// Perfil de EQ de jogo posto por último: (guid, perfil); `None` antes do primeiro tick.
+    eq_last: Option<Option<(String, String)>>,
     /// Processos de programas fixos e quantas vezes o volume guardado já foi tentado neles.
     snd_vol_tries: std::collections::HashMap<u32, u8>,
     upd_last: Option<Instant>,
@@ -562,6 +564,7 @@ pub fn start(background: bool) {
             find_drives: Vec::new(),
             pick_list: Default::default(),
             snd_seen: std::collections::HashSet::new(),
+            eq_last: None,
             snd_vol_tries: std::collections::HashMap::new(),
             upd_last: None,
             started: Instant::now(),
@@ -2113,6 +2116,32 @@ impl App {
         }
     }
 
+    /// Aparelho de saída do jogo: o escolhido no Som, senão o padrão do Windows agora.
+    pub fn eq_device(&self, exe: &str) -> String {
+        let chosen = self.cfg.snd_apps.iter().find(|a| a.exe.eq_ignore_ascii_case(exe)).map(|a| a.output.clone()).unwrap_or_default();
+        if chosen.is_empty() { audio::default_id(false).unwrap_or_default() } else { chosen }
+    }
+
+    /// Jogo aberto com perfil de EQ escolhido: o perfil vai para o aparelho dele; fechou, sai.
+    // shortcut: o aparelho é lido quando o jogo abre ou o perfil muda; trocar o padrão do Windows com
+    // o jogo aberto não move o perfil.
+    fn eq_tick(&mut self) {
+        let game = self.snap.groups.iter().find_map(|g| self.cfg.eq_apps.iter().find(|(e, _)| e.eq_ignore_ascii_case(&g.exe)));
+        let want = match (game, &self.eq_last) {
+            (None, _) => None,
+            // Mesmo perfil já posto: não pergunta o aparelho de novo.
+            (Some((_, p)), Some(Some((g, last)))) if p == last => Some((g.clone(), p.clone())),
+            (Some((exe, p)), _) => Some((crate::sys::eq::guid_of(&self.eq_device(exe)), p.clone())),
+        };
+        if self.eq_last.as_ref() == Some(&want) {
+            return;
+        }
+        if let Err(e) = crate::sys::eq::apply(want.as_ref().filter(|(g, _)| !g.is_empty()).map(|(g, p)| (g.as_str(), p.as_str()))) {
+            self.log(&format!("equalizador: {e}"));
+        }
+        self.eq_last = Some(want);
+    }
+
     /// Programa fixo que abre volta com o volume guardado. O Windows só mostra a sessão de
     /// som depois que o processo toca algo: cada processo novo é tentado algumas vezes.
     fn sound_volumes(&mut self) {
@@ -3225,6 +3254,7 @@ impl App {
         self.full.sweep();
         self.update_tick();
         self.sound_tick();
+        self.eq_tick();
         if let Some(t) = self.tm_check {
             self.replaces_tm = crate::startup::replaces_taskmgr();
             if t.elapsed().as_secs() > 6 {
