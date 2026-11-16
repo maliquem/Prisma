@@ -2273,7 +2273,7 @@ Clique em Testar: o controle para de navegar pelo Prisma.	点击“测试”：�
 O controle está em Nativo: o jogo o recebe como ele é, e nada deste perfil vale, menos a barra de luz. Para as ligações, o gyro e o touchpad valerem, mude para Teclado e mouse.	手柄处于“原生”模式：游戏会原样接收手柄输入，此配置文件中的内容均不生效，灯条除外。若要让按键绑定、陀螺仪和触控板生效，请切换到“键盘和鼠标”。
 Passa ao jogo	由游戏读取
 Passa ao jogo: o Prisma não usa nem esconde, e o jogo lê direto do controle (suporte nativo ao DualSense).	由游戏读取：Prisma 不使用也不隐藏它，游戏直接从手柄读取（原生支持 DualSense）。
-Gravando: vá a outro programa e use o teclado e o mouse; volte aqui para parar. Nada do que você faz dentro do Prisma entra, o movimento do mouse não entra, e os botões do controle ainda não são gravados.	正在录制：请切换到其他程序，使用键盘和鼠标；回到这里即可停止。在 Prisma 内的操作不会被录制，鼠标移动不会被录制，手柄按钮暂时也不会被录制。
+Gravando: vá a outro programa e use o teclado, o mouse ou o controle; volte aqui para parar. Nada do que você faz dentro do Prisma entra, o movimento do mouse não entra, e os botões do controle entram como as teclas e cliques que o perfil dá a eles.	正在录制：切换到其他程序并使用键盘、鼠标或手柄；回到这里停止。在 Prisma 内的操作不会录制，鼠标移动不会录制，手柄按键会按配置文件为其设置的按键和点击录制。
 Cor	颜色
 Menu radial	轮盘
 Ligar: teclado e mouse	开启：键盘和鼠标

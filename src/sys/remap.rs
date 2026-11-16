@@ -2217,6 +2217,7 @@ pub fn feed(key: &str, inp: &Input, arrived: Instant) {
         acts
     };
     if !acts.is_empty() {
+        super::macros::record_acts(arrived, &acts);
         send(&acts);
         let us = arrived.elapsed().as_micros().min(u32::MAX as u128) as u32;
         if let Some(r) = RUN.lock().unwrap().as_mut() {

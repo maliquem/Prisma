@@ -1,7 +1,8 @@
 //! Macros dos perfis: cada uma roda numa thread própria, com os passos e as esperas dela, e para no
 //! fim (uma vez), ao soltar o botão (enquanto segura), no próximo aperto (até apertar de novo) ou
 //! quando o mapeamento solta tudo (parada de emergência, troca de perfil, teclado do Prisma).
-//! O gravador pega teclado, cliques e roda do mouse enquanto o editor grava, com o aviso na tela.
+//! O gravador pega teclado, cliques e roda do mouse enquanto o editor grava, com o aviso na tela, e
+//! os botões do controle como as teclas, cliques e roda que o perfil faz deles (`record_acts`).
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -154,6 +155,19 @@ impl Rec {
         self.steps.push(s);
     }
 
+    /// O que o motor do controle mandou: teclas, cliques e roda viram passos; o resto não entra.
+    fn acts(&mut self, now: Instant, acts: &[Act]) {
+        for a in acts {
+            let s = match *a {
+                Act::Down(o @ (Out::Key(..) | Out::Mouse(_))) => Step::Down(o),
+                Act::Up(o @ (Out::Key(..) | Out::Mouse(_))) => Step::Up(o),
+                Act::Wheel(n) if n / 120 != 0 => Step::Down(Out::Wheel((n / 120).clamp(-127, 127) as i8)),
+                _ => continue,
+            };
+            self.event(now, s);
+        }
+    }
+
     /// Os passos gravados. O que ainda está apertado (o clique em Parar) sai, com a espera antes dele.
     fn finish(mut self) -> Vec<Step> {
         for o in self.down {
@@ -205,6 +219,16 @@ pub fn record_stop() -> Vec<Step> {
 fn record(s: Step) {
     if let Some(r) = REC.lock().unwrap().as_mut() {
         r.event(Instant::now(), s);
+    }
+}
+
+/// O controle apertou algo pelo perfil (`remap::feed`). Essas teclas saem injetadas, e o gancho
+/// as ignora; sem isto o controle não gravava nada.
+pub fn record_acts(now: Instant, acts: &[Act]) {
+    if let Some(r) = REC.lock().unwrap().as_mut() {
+        if !super::nav::front() {
+            r.acts(now, acts);
+        }
     }
 }
 
@@ -301,6 +325,18 @@ mod tests {
         // Clique em Parar: o aperto sem a soltura sai, com a espera antes dele.
         r.event(at(900), Step::Down(click));
         assert_eq!(r.finish(), vec![Step::Down(a), Step::Wait(100), Step::Up(a), Step::Wait(90), Step::Down(Out::Wheel(-1))]);
+    }
+
+    #[test]
+    fn recorder_takes_controller_keys_clicks_and_wheel() {
+        let t = Instant::now();
+        let at = |ms| t + Duration::from_millis(ms);
+        let (a, click) = (Out::Key(0x41, 0), Out::Mouse(1));
+        let mut r = Rec::default();
+        r.acts(at(0), &[Act::Down(a), Act::Move(5, 5), Act::Cmd(Out::Action(0))]);
+        r.acts(at(50), &[Act::Up(a), Act::Down(click)]);
+        r.acts(at(80), &[Act::Up(click), Act::Wheel(-240)]);
+        assert_eq!(r.finish(), vec![Step::Down(a), Step::Wait(50), Step::Up(a), Step::Down(click), Step::Wait(30), Step::Up(click), Step::Down(Out::Wheel(-2))]);
     }
 
     #[test]
