@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.0
+
+- Prisma Launcher: the bridge can list the equalizer profiles of the game's sound device and keep one per game; while the game is open, that profile plays on the device. The Launcher screen for it and the equalizer itself come in a later version. / Prisma Launcher: a ponte pode listar os perfis de equalizador do aparelho de som do jogo e guardar um por jogo; com o jogo aberto, esse perfil toca no aparelho. A tela do Launcher para isso e o próprio equalizador chegam numa versão seguinte.
+
 ## 1.3.0
 
 - Settings: new **Show Prisma** shortcut (no default key) that brings the Prisma window to the front, even when minimized or only in the tray. / Configurações: atalho novo **Mostrar o Prisma** (sem tecla de fábrica), que traz a janela do Prisma para a frente, mesmo minimizada ou só na bandeja.
