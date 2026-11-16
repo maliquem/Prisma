@@ -179,12 +179,24 @@ fn shell_wait(file: &str, args: &str, admin: bool) -> Result<(), String> {
         let mut code = 1;
         let _ = GetExitCodeProcess(info.hProcess, &mut code);
         let _ = CloseHandle(info.hProcess);
-        if code == 0 {
-            Ok(())
-        } else {
-            Err(format!("saiu com o código {code}"))
+        match crate::startup::install_ok(code) {
+            Some(reboot) => {
+                // O driver usbip-win2 costuma sair com 3010: instalou, e o Windows pede reinício.
+                if reboot {
+                    REBOOT_ASKED.store(true, Ordering::Relaxed);
+                }
+                Ok(())
+            }
+            None => Err(format!("saiu com o código {code}")),
         }
     }
+}
+
+/// O instalador disse que o Windows pede reinício para terminar.
+static REBOOT_ASKED: AtomicBool = AtomicBool::new(false);
+
+pub fn reboot_asked() -> bool {
+    REBOOT_ASKED.load(Ordering::Relaxed)
 }
 
 impl Host for Win {
@@ -247,14 +259,48 @@ fn set_stage(s: Stage) {
     *STAGE.lock().unwrap() = Some(s);
 }
 
-/// Estado agora (olha o sistema na primeira vez).
+static CHECKED: Mutex<Option<std::time::Instant>> = Mutex::new(None);
+
+/// Estado agora (olha o sistema na primeira vez). Esperando reinício ou com falha, olha de novo a
+/// cada 3 s: o servidor do VIIPER pode subir depois da instalação, sem reiniciar o Prisma.
 pub fn stage() -> Stage {
-    if let Some(s) = STAGE.lock().unwrap().clone() {
-        return s;
+    let cur = STAGE.lock().unwrap().clone();
+    let s = match cur {
+        Some(s @ (Stage::Reboot | Stage::Failed(_))) => s,
+        Some(s) => return s,
+        None => {
+            let s = detect(&Win);
+            set_stage(s.clone());
+            return s;
+        }
+    };
+    {
+        let mut c = CHECKED.lock().unwrap();
+        if c.is_some_and(|t| t.elapsed() < Duration::from_secs(3)) {
+            return s;
+        }
+        *c = Some(std::time::Instant::now());
     }
-    let s = detect(&Win);
-    set_stage(s.clone());
+    // Numa linha à parte: a conexão ao servidor pode levar até 300 ms e a tela não espera.
+    let old = s.clone();
+    std::thread::spawn(move || {
+        let d = recheck_from(&old, detect(&Win));
+        let mut g = STAGE.lock().unwrap();
+        // Só troca se ninguém mudou o estado enquanto olhava (uma instalação nova, por exemplo).
+        if g.as_ref() == Some(&old) {
+            *g = Some(d);
+        }
+    });
     s
+}
+
+/// O que fica depois de olhar de novo: uma falha só sai se a ponte estiver lá (o motivo continua
+/// à vista enquanto nada estiver instalado).
+pub fn recheck_from(old: &Stage, now: Stage) -> Stage {
+    match (old, now) {
+        (Stage::Failed(_), Stage::Absent) => old.clone(),
+        (_, now) => now,
+    }
 }
 
 /// Olha o sistema de novo (depois de reiniciar o PC, por exemplo).
@@ -622,6 +668,16 @@ mod tests {
         let h = Fake { fail_download: true, ..Default::default() };
         assert!(matches!(install(&h, &mut |_| {}).0, Stage::Failed(_)));
         assert_eq!(*h.calls.borrow(), vec!["download"]);
+    }
+
+    #[test]
+    fn recheck_after_install() {
+        let failed = Stage::Failed("saiu com o código 3010".into());
+        // Instalou apesar do erro: a falha some sem reiniciar o Prisma.
+        assert_eq!(recheck_from(&failed, Stage::Ready), Stage::Ready);
+        assert_eq!(recheck_from(&Stage::Reboot, Stage::Ready), Stage::Ready);
+        // Nada instalado: o motivo da falha continua à vista.
+        assert_eq!(recheck_from(&failed, Stage::Absent), failed);
     }
 
     #[test]

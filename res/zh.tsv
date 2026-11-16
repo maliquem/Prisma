@@ -2507,6 +2507,7 @@ Ponte do controle Xbox	Xbox 手柄桥接
 Ponte instalada. Reinicie o PC para o driver começar.	桥接已安装。请重启电脑以启用驱动。
 Ponte não instalada. Sem ela, nada muda no PC.	桥接未安装。没有它，电脑不会有任何变化。
 Ponte pronta. Escolha Virar controle Xbox no cartão do controle.	桥接已就绪。请在手柄卡片上选择“变成 Xbox 手柄”。
+Ponte instalada e funcionando. O Windows pede para reiniciar o PC para terminar a instalação do driver.	桥接已安装并正常工作。Windows 需要重启电脑以完成驱动安装。
 Removendo a ponte.	正在移除桥接。
 Remover a ponte	移除桥接
 Remover a ponte?	移除桥接？
@@ -2525,6 +2526,7 @@ Instalar o HidHide	安装 HidHide
 Instalar o HidHide?	安装 HidHide？
 O Prisma baixa o instalador oficial do GitHub da Nefarius, confere a assinatura e abre o instalador. O Windows pede permissão de administrador e pode pedir para reiniciar. Na desinstalação do Prisma, o HidHide sai junto.	Prisma 会从 Nefarius 的 GitHub 下载官方安装程序，校验签名后打开安装程序。Windows 会请求管理员权限，并可能要求重启。卸载 Prisma 时，HidHide 也会一并卸载。
 HidHide instalado	HidHide 已安装
+HidHide instalado. O Windows pede para reiniciar o PC para terminar.	HidHide 已安装。Windows 需要重启电脑以完成安装。
 Não consegui falar com o GitHub do HidHide	无法连接 HidHide 的 GitHub
 Não achei o instalador na versão mais nova do HidHide	在 HidHide 最新版本中找不到安装程序
 Não consegui baixar o HidHide	无法下载 HidHide

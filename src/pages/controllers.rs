@@ -1081,7 +1081,13 @@ fn bridge_note(s: &xbridge::Stage) -> &'static str {
 /// Ponte do controle Xbox (Fase 8): estado, juntar os controles, instalar e remover.
 fn bridge(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
     let stage = xbridge::stage();
-    let line = if stage == xbridge::Stage::Ready && !app.cfg.pad_xbox { "Ponte pronta. Escolha Virar controle Xbox no cartão do controle." } else { bridge_note(&stage) };
+    let line = if stage == xbridge::Stage::Ready && !app.cfg.pad_xbox {
+        "Ponte pronta. Escolha Virar controle Xbox no cartão do controle."
+    } else if stage == xbridge::Stage::Ready && xbridge::reboot_asked() && !remap::anti_cheat_front() && !remap::stopped() {
+        "Ponte instalada e funcionando. O Windows pede para reiniciar o PC para terminar a instalação do driver."
+    } else {
+        bridge_note(&stage)
+    };
     let mut note = crate::i18n::tr(line).into_owned();
     if let xbridge::Stage::Failed(e) = &stage {
         note = format!("{note} ({})", crate::i18n::tr(e));

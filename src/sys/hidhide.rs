@@ -439,8 +439,8 @@ const SIGNER: &str = "Nefarius Software Solutions";
 
 /// Baixa o instalador da última versão no GitHub do HidHide, confere a assinatura e abre o
 /// instalador oficial, com a tela dele (o projeto não documenta modo silencioso). Anota que foi o
-/// Prisma que instalou. Roda fora da janela (leva tempo).
-pub fn install() -> Result<(), &'static str> {
+/// Prisma que instalou. Roda fora da janela (leva tempo). `Ok(true)`: o Windows pede reinício.
+pub fn install() -> Result<bool, &'static str> {
     let json = crate::sys::update::download(RELEASES).map_err(|_| "Não consegui falar com o GitHub do HidHide")?;
     let json = String::from_utf8_lossy(&json);
     let url = installer_url(&json).ok_or("Não achei o instalador na versão mais nova do HidHide")?;
@@ -455,16 +455,15 @@ pub fn install() -> Result<(), &'static str> {
             return Err("O instalador baixado não tem a assinatura da Nefarius");
         }
     }
-    // 3010: instalou e pede para reiniciar.
-    let ok = matches!(crate::startup::run_file_elevated_wait(&file, "", true), Some(0 | 3010));
+    let ok = crate::startup::run_file_elevated_wait(&file, "", true).and_then(crate::startup::install_ok);
     let _ = std::fs::remove_file(&file);
-    if !ok {
+    let Some(reboot) = ok else {
         return Err("O HidHide não foi instalado");
-    }
+    };
     let mut lg = ledger();
     lg.installed = true;
     save(&lg);
-    Ok(())
+    Ok(reboot)
 }
 
 /// O `.exe` x64 entre os arquivos da versão (resposta da API do GitHub).
