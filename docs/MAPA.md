@@ -430,13 +430,14 @@ A barra lateral é `NAV` (`src/pages/mod.rs:282-295`), na ordem abaixo. Cada pá
 | Criar convite (código ou link) | Botão; Launcher `ShareInvite` | `create_invite` `pages/share.rs:221`; `invite_in` `:231`; `invite_of` `:200`; `link.rs:339` | Validade em minutos (`share_invite.minutes`). |
 | Quem transmite (host) | Aba Host | `pages/share.rs:1065` `host_tab`; `stream/host.rs` (70 funções, não listadas) | Config `share_names`, `cap_target`. |
 | Quem assiste (cliente) | Aba Cliente | `pages/share.rs:1318` `client_tab`; `stream/view.rs`; `stream/mod.rs:633` `sane_video` (recusa vídeo com 0 FPS ou tamanho impossível) | |
+| Compartilhar só uma janela | Lista **O que as pessoas veem** na aba Compartilhar | `pages/share.rs:632` (rótulo) e `:1050` (lista `sh-src`, lida a cada 2 s em `share_wins`); `stream/host.rs:1284` `share_windows` (usa `sys/procs.rs` `top_windows` e tira as do Prisma com `shareable` `:1277`); `:1264` `chosen_window` (hwnd e processo ainda batem); captura em `session` pelo `capture::window_item`, tamanho novo em `resize` `:1531`, janela fechada em `window_closed` `:1298`; entrada em `Injector::with_window` `:803`, `to_desktop` `:752`, `window_rect` `:765`, `bring_front` `:778`, `inside` `:913` | Opção `janela=hwnd:pid` (`Opts::window`, `stream/opts.rs:206`), fora de `PER_CLIENT`; muda o vídeo (`video_differs`). Janela fechada: para para todos, nunca cai para a tela inteira. Controles virtuais, som e copiar e colar continuam do PC todo. Testes: `window_point_to_desktop` `host.rs:2104`, `prisma_windows_stay_out` `:2121`. |
 | Rede | Aba Rede | `pages/share.rs:1410` `net_tab`; `stream/net.rs` | |
 | Teclas e controle remoto | Aba Teclas | `pages/share.rs:1467` `keys_tab`; `:1458` `hotkey_row`; `stream/kvm.rs` | |
 | Controles locais repassados | Aba Controles | `pages/share.rs:1514` `local_pads`; `:1540` `pads_tab`; `stream/pads.rs` | |
 | Parar transmissão | Botão | `pages/share.rs:241` `stop`; `:249` `stop_kvm`; `:271` `stop_ear` | |
 | Trabalho em segundo plano | Automático | `pages/share.rs:276` `service_job`; `stream/service.rs`; `stream/mod.rs:163` `service_dir`; `stream/mod.rs:665` `run_args` | `main.rs` chama `run_args` antes do nome único. |
 | Abrir convite recebido (`prisma://`) | Clique no link | `stream/weblink.rs` `take_arg`; `main.rs` (variável `link`); `stream/weblink.rs:26` `link_alone`, chamado no começo de `main` | Link com outros argumentos junto: nada abre. |
-| Testes | `--test-stream=` | `app.rs:604`; testes em `src/stream/*.rs` | 34 testes no total em `stream/`. |
+| Testes | `--test-stream=` | `app.rs:604`; testes em `src/stream/*.rs` | 36 testes no total em `stream/`. |
 
 ### 4.19 Controles (`src/pages/controllers.rs`, `draw` linha 179)
 
@@ -555,7 +556,7 @@ A barra lateral é `NAV` (`src/pages/mod.rs:282-295`), na ordem abaixo. Cada pá
 
 ## 6. Números e testes de apoio
 
-- Testes `#[test]` por área (contagem feita com grep): `sys/remap.rs` 21; `sys/macros.rs` 2; `link.rs` 19 (com `PadBridge` em `every_new_request_gets_an_answer`); `sys/pads.rs` 14;  `sys/osk.rs` 6; `sys/radial.rs` 6; `sys/power.rs` 5; `sys/index.rs` 4; `sys/cmds.rs` 4; `config.rs` 2; `sys/update.rs` 2; `sys/xbridge.rs` 5; `sys/quick.rs` 2; `sys/stores.rs` 2; `app.rs` 1; `i18n.rs` 2; `sys/nvset.rs` 1; `pages/nvidia.rs` 1; `pages/mod.rs` 1; `ui/glyph.rs` 1; `sys/nav.rs` 2; `ui/mod.rs` 1; `overlays.rs` 2 (1 ignorado); `stream/` 34 no total.
+- Testes `#[test]` por área (contagem feita com grep): `sys/remap.rs` 21; `sys/macros.rs` 2; `link.rs` 19 (com `PadBridge` em `every_new_request_gets_an_answer`); `sys/pads.rs` 14;  `sys/osk.rs` 6; `sys/radial.rs` 6; `sys/power.rs` 5; `sys/index.rs` 4; `sys/cmds.rs` 4; `config.rs` 2; `sys/update.rs` 2; `sys/xbridge.rs` 5; `sys/quick.rs` 2; `sys/stores.rs` 2; `app.rs` 1; `i18n.rs` 2; `sys/nvset.rs` 1; `pages/nvidia.rs` 1; `pages/mod.rs` 1; `ui/glyph.rs` 1; `sys/nav.rs` 2; `ui/mod.rs` 1; `overlays.rs` 2 (1 ignorado); `stream/` 36 no total.
 - `src/selftest.rs` (só debug): `run` (linha 5), `misc` (23), `fake_uninstall` (55), `tweaks` (110), `audit` (162), `toolrun` (189), `tweak_log` (223).
 
 ---

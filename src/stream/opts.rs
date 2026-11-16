@@ -87,6 +87,8 @@ pub struct Opts {
     pub allow444: bool,
     /// 0 é o monitor principal; 1, 2... a ordem do Windows.
     pub monitor: u32,
+    /// Janela compartilhada no lugar da tela (hwnd e processo dela); 0 é a tela inteira.
+    pub window: (u64, u32),
     /// Repete o último quadro para manter o ritmo, mesmo com a tela parada.
     pub constant: bool,
     /// Programa cujo som vai sozinho (nome do exe); vazio manda o som do PC.
@@ -155,6 +157,7 @@ impl Default for Opts {
             ten_bit: true,
             allow444: true,
             monitor: 0,
+            window: (0, 0),
             constant: false,
             sound_app: String::new(),
             no_calls: true,
@@ -200,6 +203,7 @@ impl Opts {
                 "dez_bits" => o.ten_bit = flag(v),
                 "permitir_444" => o.allow444 = flag(v),
                 "monitor" => o.monitor = v.parse().unwrap_or(0),
+                "janela" => o.window = v.split_once(':').and_then(|(h, p)| Some((h.parse().ok()?, p.parse().ok()?))).unwrap_or((0, 0)),
                 "ritmo_constante" => o.constant = flag(v),
                 "som_programa" => o.sound_app = clean(v, 80),
                 "sem_chamadas" => o.no_calls = flag(v),
@@ -245,6 +249,8 @@ sem_cadeia={}\nporta={}\nupnp={}\natalho_emergencia={}\ngpu={}\nsom_saida={}\nso
             b(self.host_first),
             b(self.no_chain),
             self.port,
+            self.window.0,
+            self.window.1,
             b(self.upnp),
             keys_text(self.key_panic),
             self.gpu,
@@ -317,8 +323,8 @@ sem_cadeia={}\nporta={}\nupnp={}\natalho_emergencia={}\ngpu={}\nsom_saida={}\nso
     /// Mudou algo que o vídeo já aberto usa: a transmissão recomeça para valer. O resto (ritmo,
     /// som, mouse e teclado, pessoas) muda sem recomeçar.
     pub fn video_differs(&self, o: &Opts) -> bool {
-        (self.res, self.fps, self.mbps, &self.codec, self.priority, self.ten_bit, self.allow444, self.monitor, &self.gpu)
-            != (o.res, o.fps, o.mbps, &o.codec, o.priority, o.ten_bit, o.allow444, o.monitor, &o.gpu)
+        (self.res, self.fps, self.mbps, &self.codec, self.priority, self.ten_bit, self.allow444, self.monitor, &self.gpu, self.window)
+            != (o.res, o.fps, o.mbps, &o.codec, o.priority, o.ten_bit, o.allow444, o.monitor, &o.gpu, o.window)
     }
 
     #[cfg_attr(not(feature = "stream"), allow(dead_code))]
@@ -501,6 +507,7 @@ mod tests {
             ten_bit: false,
             allow444: false,
             monitor: 2,
+            window: (0x2a0b4, 1234),
             constant: true,
             sound_app: "game.exe".into(),
             no_calls: false,
@@ -519,6 +526,9 @@ mod tests {
         // Com o PyroWave, o limite passa do teto do NVENC até o MAX_MBPS.
         assert_eq!(Opts::parse("codec=pyrowave\nbanda=500").mbps, 500);
         assert_eq!(Opts::parse("banda=9000").mbps, MAX_MBPS);
+        // Janela quebrada volta para a tela inteira.
+        assert_eq!(Opts::parse("janela=12").window, (0, 0));
+        assert_eq!(Opts::parse("janela=x:5").window, (0, 0));
         // Arquivo da 0.11.0: o resto fica no padrão.
         assert_eq!(Opts::parse("hdr_desligar=1\npessoas=2\ncontroles=auto\nconvite=total\n"), Opts { hdr_off: true, guests: 2, invite: TOTAL, ..Opts::default() });
         let c = ClientOpts { fullscreen: false, vsync: true, immersive: 1, meter: 2, warn: false, mute: true, ask444: true, pad_background: true, pad_keys: true, fps: 60, gpu: "AMD Radeon(TM) Graphics".into(), key_menu: (MOD_ALT, 0x70), key_sound: (MOD_CTRL, b'M' as u32), ..ClientOpts::default() };
@@ -549,7 +559,7 @@ mod tests {
         let o = Opts::default();
         // Ritmo, som, mouse e teclado mudam sem recomeçar.
         assert!(!o.video_differs(&Opts { constant: true, no_calls: false, sound_app: "game.exe".into(), one_at_a_time: false, host_first: false, guests: 2, ..Opts::default() }));
-        for v in [Opts { fps: 30, ..Opts::default() }, Opts { mbps: 80, ..Opts::default() }, Opts { priority: 2, ..Opts::default() }, Opts { gpu: "Outra".into(), ..Opts::default() }, Opts { monitor: 1, ..Opts::default() }] {
+        for v in [Opts { fps: 30, ..Opts::default() }, Opts { mbps: 80, ..Opts::default() }, Opts { priority: 2, ..Opts::default() }, Opts { gpu: "Outra".into(), ..Opts::default() }, Opts { monitor: 1, ..Opts::default() }, Opts { window: (7, 8), ..Opts::default() }] {
             assert!(o.video_differs(&v), "{v:?}");
         }
     }
