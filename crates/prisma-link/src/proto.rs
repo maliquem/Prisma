@@ -129,6 +129,23 @@ pub enum Request {
         pid: u32,
         option: OptionValue,
     },
+    /// Arma um convite do Compartilhar tela só da janela do jogo `exe` (o nome do .exe): quando o
+    /// jogo abrir, o Prisma cria o convite. Responde `Done` já; o código aparece em
+    /// `Reply::Options::invite` (`share.invite_game`).
+    ShareInviteForGame {
+        exe: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        minutes: Option<u32>,
+        /// Reservado: amigo que vai receber o link (chat). Hoje é ignorado.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        to: Option<String>,
+    },
+    /// Desarma o convite do jogo `exe`; vazio desarma qualquer um. Responde `Done`. Um convite já
+    /// criado continua valendo (a página Compartilhar tela o revoga).
+    ShareInviteCancel {
+        #[serde(default)]
+        exe: String,
+    },
     #[serde(other)]
     Unknown,
 }
@@ -144,10 +161,11 @@ pub enum FpsLimit {
     Manual(u32),
 }
 
-/// O que o Compartilhar tela transmite.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// O que o Compartilhar tela transmite, ou o que o replay grava.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ShareMode {
+    #[default]
     Screen,
     /// Só a janela do jogo (a do `pid`).
     Game,
@@ -171,9 +189,38 @@ pub enum ReplayResolution {
 pub struct ReplayOptions {
     pub on: bool,
     pub secs: u32,
+    /// A tela inteira ou só a janela do jogo em primeiro plano.
+    #[serde(default)]
+    pub target: ShareMode,
     pub resolution: ReplayResolution,
     /// HDR10; falso é SDR.
     pub hdr: bool,
+}
+
+/// Em que pé está o convite armado com `ShareInviteForGame`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InviteState {
+    /// Esperando o jogo abrir.
+    Armed,
+    /// Jogo aberto, criando o convite.
+    Creating,
+    /// `code` e `link` prontos.
+    Ready,
+    /// Não deu; o motivo vem em `reason`.
+    Failed,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GameInvite {
+    pub exe: String,
+    pub state: InviteState,
+    #[serde(default)]
+    pub code: String,
+    #[serde(default)]
+    pub link: String,
+    #[serde(default)]
+    pub reason: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -396,6 +443,12 @@ pub enum Reply {
         replay: ReplayOptions,
         fullscreenizer: bool,
         optimize: bool,
+        /// Sobe a cada mudança no Prisma, venha de onde vier: igual ao da última leitura, nada mudou.
+        #[serde(default)]
+        rev: u64,
+        /// O convite armado com `ShareInviteForGame`, se houver.
+        #[serde(default)]
+        invite: Option<GameInvite>,
     },
     #[serde(other)]
     Unknown,
@@ -589,7 +642,7 @@ mod tests {
 
     #[test]
     fn options_requests_round_trip() {
-        let replay = ReplayOptions { on: true, secs: 30, resolution: ReplayResolution::P1440, hdr: false };
+        let replay = ReplayOptions { on: true, secs: 30, target: ShareMode::Game, resolution: ReplayResolution::P1440, hdr: false };
         let cases: Vec<(Request, &str)> = vec![
             (Request::Options { exe: r"C:\G\g.exe".into(), pid: 7 }, r#"{"type":"options","exe":"C:\\G\\g.exe","pid":7}"#),
             (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::FpsLimit(FpsLimit::Off) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"fps_limit":"off"}}"#),
@@ -600,7 +653,10 @@ mod tests {
             (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::AudioOut("{0.0.0}.{a}".into()) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"audio_out":"{0.0.0}.{a}"}}"#),
             (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::AudioIn(String::new()) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"audio_in":""}}"#),
             (Request::SetOption { exe: "g.exe".into(), pid: 7, option: OptionValue::ShareMode(ShareMode::Game) }, r#"{"type":"set_option","exe":"g.exe","pid":7,"option":{"share_mode":"game"}}"#),
-            (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::Replay(replay) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"replay":{"on":true,"secs":30,"resolution":"1440p","hdr":false}}}"#),
+            (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::Replay(replay) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"replay":{"on":true,"secs":30,"target":"game","resolution":"1440p","hdr":false}}}"#),
+            (Request::ShareInviteForGame { exe: "g.exe".into(), minutes: None, to: None }, r#"{"type":"share_invite_for_game","exe":"g.exe"}"#),
+            (Request::ShareInviteForGame { exe: "g.exe".into(), minutes: Some(30), to: Some("ana".into()) }, r#"{"type":"share_invite_for_game","exe":"g.exe","minutes":30,"to":"ana"}"#),
+            (Request::ShareInviteCancel { exe: "g.exe".into() }, r#"{"type":"share_invite_cancel","exe":"g.exe"}"#),
             (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::Fullscreenizer(true) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"fullscreenizer":true}}"#),
             (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::Optimize(false) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"optimize":false}}"#),
         ];
@@ -613,6 +669,11 @@ mod tests {
         assert_eq!(
             serde_json::from_str::<Request>(r#"{"type":"set_option","option":{"future":1}}"#).unwrap(),
             Request::SetOption { exe: String::new(), pid: 0, option: OptionValue::Unknown(serde_json::json!({"future": 1})) }
+        );
+        // Sem `target`, o replay antigo grava a tela inteira.
+        assert_eq!(
+            serde_json::from_str::<ReplayOptions>(r#"{"on":true,"secs":30,"resolution":"native","hdr":false}"#).unwrap().target,
+            ShareMode::Screen
         );
         for (res, name) in [(ReplayResolution::Native, "native"), (ReplayResolution::P1080, "1080p"), (ReplayResolution::P2160, "2160p")] {
             assert_eq!(serde_json::to_string(&res).unwrap(), format!("\"{name}\""));
@@ -636,9 +697,11 @@ mod tests {
                 volume: Some(40),
                 muted: false,
                 share_mode: ShareMode::Screen,
-                replay: ReplayOptions { on: false, secs: 120, resolution: ReplayResolution::Native, hdr: true },
+                replay: ReplayOptions { on: false, secs: 120, target: ShareMode::Screen, resolution: ReplayResolution::Native, hdr: true },
                 fullscreenizer: true,
                 optimize: false,
+                rev: 0,
+                invite: None,
             },
             Reply::Options {
                 meter: MeterView::Off,
@@ -653,9 +716,11 @@ mod tests {
                 volume: None,
                 muted: true,
                 share_mode: ShareMode::Game,
-                replay: ReplayOptions { on: true, secs: 15, resolution: ReplayResolution::P1080, hdr: false },
+                replay: ReplayOptions { on: true, secs: 15, target: ShareMode::Game, resolution: ReplayResolution::P1080, hdr: false },
                 fullscreenizer: false,
                 optimize: true,
+                rev: 42,
+                invite: Some(GameInvite { exe: "g.exe".into(), state: InviteState::Ready, code: "ABCD".into(), link: "https://x/ABCD".into(), reason: String::new() }),
             },
         ];
         for r in replies {
@@ -674,7 +739,12 @@ mod tests {
             #[serde(other)]
             Unknown,
         }
-        for json in [r#"{"type":"options","exe":"g.exe"}"#, r#"{"type":"set_option","option":{"optimize":true}}"#] {
+        for json in [
+            r#"{"type":"options","exe":"g.exe"}"#,
+            r#"{"type":"set_option","option":{"optimize":true}}"#,
+            r#"{"type":"share_invite_for_game","exe":"g.exe"}"#,
+            r#"{"type":"share_invite_cancel"}"#,
+        ] {
             assert_eq!(serde_json::from_str::<OldRequest>(json).unwrap(), OldRequest::Unknown);
         }
     }

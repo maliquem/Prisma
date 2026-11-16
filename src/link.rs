@@ -8,7 +8,7 @@ use std::sync::mpsc::{sync_channel, SyncSender};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use prisma_link::{cap, fail as code, AudioDevice, Controller, FpsLimit, MeterView, NvidiaKind, NvidiaSetting, NvidiaValue, OptionValue, Page as LinkPage, PowerPlan, ReplayOptions, ReplayResolution, Reply, Request, ServerInfo, ShareMode, VolumeChange};
+use prisma_link::{cap, fail as code, AudioDevice, Controller, FpsLimit, GameInvite, InviteState, MeterView, NvidiaKind, NvidiaSetting, NvidiaValue, OptionValue, Page as LinkPage, PowerPlan, ReplayOptions, ReplayResolution, Reply, Request, ServerInfo, ShareMode, VolumeChange};
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_APP};
 
@@ -104,6 +104,34 @@ fn controller_of(p: &crate::sys::pads::Pad) -> Controller {
     }
 }
 
+/// O convite armado pelo launcher e os minutos pedidos.
+static GAME_INVITE: Mutex<Option<(GameInvite, Option<u32>)>> = Mutex::new(None);
+
+/// Guarda o resultado do convite do jogo `exe`, se ninguém o cancelou ou armou outro enquanto isso.
+fn invite_done(exe: &str, reply: Reply) {
+    let mut g = GAME_INVITE.lock().unwrap_or_else(|e| e.into_inner());
+    let Some((i, _)) = g.as_mut().filter(|(i, _)| i.state == InviteState::Creating && i.exe.eq_ignore_ascii_case(exe)) else { return };
+    match reply {
+        Reply::ShareInviteCode { code, link } => {
+            i.state = InviteState::Ready;
+            (i.code, i.link) = (code, link);
+        }
+        Reply::ShareInviteFailed { reason } => {
+            i.state = InviteState::Failed;
+            i.reason = reason;
+        }
+        _ => {}
+    }
+}
+
+/// Muda quando qualquer campo do `Options` muda: o launcher só redesenha com outro número.
+fn rev_of(reply: &Reply) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    format!("{reply:?}").hash(&mut h);
+    h.finish()
+}
+
 /// O Compartilhar tela está em "Só a janela" com uma janela que ainda existe.
 fn share_window() -> bool {
     #[cfg(feature = "stream")]
@@ -183,6 +211,7 @@ fn caps_with(nvidia: bool) -> Vec<String> {
     ];
     if cfg!(feature = "stream") {
         caps.push(cap::SHARE_MODE);
+        caps.push(cap::SHARE_INVITE_GAME);
         caps.push(cap::SHARE_INVITE);
         caps.push(cap::SHARE_INVITE_MINUTES);
         caps.push(cap::SHARE_ASK);
@@ -212,6 +241,10 @@ pub fn start(hub: HWND) {
 fn serve_on(name: String, hub: HWND) {
     let hub = hub.0 as isize;
     std::thread::spawn(move || {
+        // O `Options` lê os aparelhos e as sessões de som nesta thread.
+        unsafe {
+            let _ = windows::Win32::System::Com::CoInitializeEx(None, windows::Win32::System::Com::COINIT_MULTITHREADED);
+        }
         let info = ServerInfo {
             app_version: env!("CARGO_PKG_VERSION").to_string(),
             caps: caps(),
@@ -516,60 +549,134 @@ impl App {
             }
             #[cfg(not(feature = "stream"))]
             Request::ShareAsk { .. } => Outcome::Failed(code::NOT_SUPPORTED, "indisponível".into()),
-            Request::Options { exe, pid } => Outcome::Reply(self.link_options(&procs::exe_name(&exe), pid)),
+            Request::Options { exe, pid } => self.link_options(&procs::exe_name(&exe), pid),
+            #[cfg(feature = "stream")]
+            Request::ShareInviteForGame { exe, minutes, .. } => self.link_arm_invite(procs::exe_name(&exe), minutes),
+            #[cfg(not(feature = "stream"))]
+            Request::ShareInviteForGame { .. } => fail(code::NOT_SUPPORTED, "indisponível"),
+            Request::ShareInviteCancel { exe } => {
+                let exe = procs::exe_name(&exe);
+                let mut g = GAME_INVITE.lock().unwrap_or_else(|e| e.into_inner());
+                if g.as_ref().is_some_and(|(i, _)| exe.is_empty() || i.exe.eq_ignore_ascii_case(&exe)) {
+                    *g = None;
+                }
+                Outcome::Done
+            }
             Request::SetOption { exe, pid, option } => self.link_set_option(&exe, pid, option),
             Request::Hello { .. } | Request::Unknown => Outcome::Done,
         }
     }
 
-    /// O estado da barra do launcher para o jogo `exe` (só o nome do .exe).
-    fn link_options(&self, exe: &str, pid: u32) -> Reply {
+    /// O estado da barra do launcher para o jogo `exe` (só o nome do .exe). O que vem do config sai
+    /// aqui; som, HDR e Compartilhar são lidos na thread do pipe, sem segurar a janela.
+    fn link_options(&self, exe: &str, pid: u32) -> Outcome {
         let same = |e: &str| !exe.is_empty() && e.eq_ignore_ascii_case(exe);
-        let devices = |capture| {
-            let def = audio::default_id(capture).unwrap_or_default();
-            audio::devices(capture).into_iter().map(|d| AudioDevice { default: d.id == def, id: d.id, name: d.name }).collect()
-        };
-        let snd = self.cfg.snd_apps.iter().find(|a| same(&a.exe));
-        let sessions: Vec<_> = if pid != 0 { audio::for_process(pid) } else { audio::sessions().into_iter().filter(|s| same(&s.exe)).collect() };
         let c = &self.cfg;
-        Reply::Options {
-            meter: match self.meter.view {
-                crate::meter::VIEW_COMPACT => MeterView::Compact,
-                crate::meter::VIEW_FULL => MeterView::Full,
-                _ => MeterView::Off,
+        let snd = c.snd_apps.iter().find(|a| same(&a.exe));
+        let (audio_out_id, audio_in_id) = snd.map_or_else(Default::default, |a| (a.output.clone(), a.input.clone()));
+        let meter = match self.meter.view {
+            crate::meter::VIEW_COMPACT => MeterView::Compact,
+            crate::meter::VIEW_FULL => MeterView::Full,
+            _ => MeterView::Off,
+        };
+        let fps_limit = match c.meter_games.iter().find(|g| same(&g.exe)) {
+            Some(g) if g.limit_mode == 1 => FpsLimit::Auto,
+            Some(g) if g.limit_mode == 2 => FpsLimit::Manual(g.limit_fps),
+            _ => FpsLimit::Off,
+        };
+        let auto_hdr = match c.hdr_games.iter().find(|h| same(&h.exe)).map_or(0, |h| h.mode) {
+            1 => Some(true),
+            2 => Some(false),
+            _ => None,
+        };
+        let replay = ReplayOptions {
+            on: c.replay_on,
+            secs: c.replay_secs,
+            target: if c.cap_target == 1 { ShareMode::Game } else { ShareMode::Screen },
+            resolution: match c.cap_mode {
+                1 => ReplayResolution::P2160,
+                2 => ReplayResolution::P1440,
+                3 => ReplayResolution::P1080,
+                _ => ReplayResolution::Native,
             },
-            fps_limit: match c.meter_games.iter().find(|g| same(&g.exe)) {
-                Some(g) if g.limit_mode == 1 => FpsLimit::Auto,
-                Some(g) if g.limit_mode == 2 => FpsLimit::Manual(g.limit_fps),
-                _ => FpsLimit::Off,
+            hdr: c.cap_hdr,
+        };
+        let fullscreenizer = c.fs_auto(exe);
+        let optimize = !c.opt_skip.iter().any(|e| same(e));
+        let exe = exe.to_string();
+        Outcome::Later(Box::new(move || {
+            let same = |e: &str| !exe.is_empty() && e.eq_ignore_ascii_case(&exe);
+            let devices = |capture| {
+                let def = audio::default_id(capture).unwrap_or_default();
+                audio::devices(capture).into_iter().map(|d| AudioDevice { default: d.id == def, id: d.id, name: d.name }).collect()
+            };
+            let sessions: Vec<_> = if pid != 0 { audio::for_process(pid) } else { audio::sessions().into_iter().filter(|s| same(&s.exe)).collect() };
+            let mut reply = Reply::Options {
+                meter,
+                fps_limit,
+                hdr: crate::sys::hdr::hdr_output().map(|h| h.2),
+                auto_hdr,
+                auto_hdr_windows: autohdr::global_on(),
+                audio_out: devices(false),
+                audio_in: devices(true),
+                audio_out_id,
+                audio_in_id,
+                volume: sessions.first().map(|s| (s.volume * 100.0).round() as u32),
+                muted: sessions.first().is_some_and(|s| s.muted),
+                share_mode: if share_window() { ShareMode::Game } else { ShareMode::Screen },
+                replay,
+                fullscreenizer,
+                optimize,
+                rev: 0,
+                invite: GAME_INVITE.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|(i, _)| i.clone()),
+            };
+            let r = rev_of(&reply);
+            if let Reply::Options { rev, .. } = &mut reply {
+                *rev = r;
+            }
+            reply
+        }))
+    }
+
+    /// Arma o convite só do jogo `exe`; se o jogo já está em primeiro plano, cria agora.
+    #[cfg(feature = "stream")]
+    fn link_arm_invite(&mut self, exe: String, minutes: Option<u32>) -> Outcome {
+        if exe.is_empty() {
+            return fail(code::INVALID, "Falta o .exe do jogo");
+        }
+        let armed = GameInvite { exe: exe.clone(), state: InviteState::Armed, code: String::new(), link: String::new(), reason: String::new() };
+        *GAME_INVITE.lock().unwrap_or_else(|e| e.into_inner()) = Some((armed, minutes));
+        if self.fg_info().is_some_and(|(_, _, e)| e.eq_ignore_ascii_case(&exe)) {
+            self.link_game_entered(&exe);
+        }
+        Outcome::Done
+    }
+
+    /// O jogo `game` entrou: com convite armado para ele, escolhe a janela no Compartilhar tela e
+    /// cria o convite. O código chega pelo registro, numa thread, e aparece no `Options`.
+    #[cfg(feature = "stream")]
+    pub fn link_game_entered(&mut self, game: &str) {
+        let minutes = {
+            let mut g = GAME_INVITE.lock().unwrap_or_else(|e| e.into_inner());
+            let Some((i, m)) = g.as_mut().filter(|(i, _)| i.state == InviteState::Armed && i.exe.eq_ignore_ascii_case(game)) else { return };
+            i.state = InviteState::Creating;
+            *m
+        };
+        let window = self.fg_info().filter(|(_, _, e)| e.eq_ignore_ascii_case(game)).map(|(h, _, _)| procs::window_pid(h));
+        let res = match window {
+            None => Err("Janela do jogo não encontrada".to_string()),
+            Some(pid) => match self.link_share_mode(ShareMode::Game, pid) {
+                Outcome::Failed(_, reason) => Err(reason),
+                _ => crate::pages::share::create_invite(self, minutes).ok_or_else(|| "não deu para criar o convite".to_string()),
             },
-            hdr: crate::sys::hdr::hdr_output().map(|h| h.2),
-            auto_hdr: match c.hdr_games.iter().find(|h| same(&h.exe)).map_or(0, |h| h.mode) {
-                1 => Some(true),
-                2 => Some(false),
-                _ => None,
-            },
-            auto_hdr_windows: autohdr::global_on(),
-            audio_out: devices(false),
-            audio_in: devices(true),
-            audio_out_id: snd.map(|a| a.output.clone()).unwrap_or_default(),
-            audio_in_id: snd.map(|a| a.input.clone()).unwrap_or_default(),
-            volume: sessions.first().map(|s| (s.volume * 100.0).round() as u32),
-            muted: sessions.first().is_some_and(|s| s.muted),
-            share_mode: if share_window() { ShareMode::Game } else { ShareMode::Screen },
-            replay: ReplayOptions {
-                on: c.replay_on,
-                secs: c.replay_secs,
-                resolution: match c.cap_mode {
-                    1 => ReplayResolution::P2160,
-                    2 => ReplayResolution::P1440,
-                    3 => ReplayResolution::P1080,
-                    _ => ReplayResolution::Native,
-                },
-                hdr: c.cap_hdr,
-            },
-            fullscreenizer: c.fs_auto(exe),
-            optimize: !c.opt_skip.iter().any(|e| same(e)),
+        };
+        let game = game.to_string();
+        match res {
+            Err(reason) => invite_done(&game, Reply::ShareInviteFailed { reason }),
+            Ok((log, pid)) => {
+                self.toast.info("Convite do Compartilhar tela criado pelo Prisma Launcher");
+                std::thread::spawn(move || invite_done(&game, wait_invite(&log, INVITE_WAIT, || crate::sys::procs::is_alive(pid))));
+            }
         }
     }
 
@@ -635,6 +742,7 @@ impl App {
                 c.replay_on = r.on;
                 c.replay_secs = r.secs;
                 c.cap_hdr = r.hdr;
+                c.cap_target = if r.target == ShareMode::Game { 1 } else { 0 };
                 c.cap_mode = match r.resolution {
                     ReplayResolution::Native => 0,
                     ReplayResolution::P2160 => 1,
@@ -856,6 +964,7 @@ mod tests {
             assert_eq!(has(cap::SHARE_INVITE_MINUTES), cfg!(feature = "stream"));
             assert_eq!(has(cap::SHARE_ASK), cfg!(feature = "stream"));
             assert_eq!(has(cap::SHARE_MODE), cfg!(feature = "stream"));
+            assert_eq!(has(cap::SHARE_INVITE_GAME), cfg!(feature = "stream"));
             assert_eq!(has(cap::CONTROLLERS_BRIDGE), cfg!(feature = "stream"));
             assert_eq!(has(cap::NVIDIA), nvidia);
             assert_eq!(has(cap::PAGE_NVIDIA), nvidia);
@@ -887,6 +996,8 @@ mod tests {
             Request::ShareAsk { name: String::new(), perms: 0, code: None },
             Request::Options { exe: String::new(), pid: 0 },
             Request::SetOption { exe: String::new(), pid: 0, option: OptionValue::Optimize(true) },
+            Request::ShareInviteForGame { exe: String::new(), minutes: None, to: None },
+            Request::ShareInviteCancel { exe: String::new() },
         ];
         for r in &answer {
             assert_eq!(wait_of(r), Wait::Answer, "{r:?}");

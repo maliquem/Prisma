@@ -12,7 +12,7 @@ mod server;
 
 pub use frame::{read_frame, write_frame};
 pub use proto::{
-    AudioDevice, Capabilities, Controller, FpsLimit, MeterView, NvidiaKind, NvidiaSetting, NvidiaValue, OptionValue, Page,
+    AudioDevice, Capabilities, Controller, FpsLimit, GameInvite, InviteState, MeterView, NvidiaKind, NvidiaSetting, NvidiaValue, OptionValue, Page,
     PowerPlan, ReplayOptions, ReplayResolution, Reply, Request, ShareMode, VolumeChange,
 };
 
@@ -79,6 +79,8 @@ pub mod cap {
     pub const FULLSCREENIZER: &str = "fullscreenizer";
     /// `OptionValue::Optimize`.
     pub const OPTIMIZE: &str = "optimize";
+    /// `ShareInviteForGame` e `ShareInviteCancel`, com o estado em `Reply::Options::invite`.
+    pub const SHARE_INVITE_GAME: &str = "share.invite_game";
 }
 
 /// Códigos estáveis de `Reply::Failed`.
