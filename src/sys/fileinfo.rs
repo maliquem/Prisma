@@ -91,6 +91,15 @@ unsafe fn signer(state: HANDLE) -> Option<String> {
     (n > 1).then(|| String::from_utf16_lossy(&buf[..n as usize - 1]))
 }
 
+/// Grava um instalador baixado e o devolve aberto só para leitura, sem deixar outro programa
+/// escrever, trocar ou apagar o arquivo. Confira a assinatura e rode com ele aberto: assim o que
+/// roda é o que foi conferido.
+pub fn write_locked(path: &std::path::Path, data: &[u8]) -> std::io::Result<std::fs::File> {
+    use std::os::windows::fs::OpenOptionsExt;
+    std::fs::write(path, data)?;
+    std::fs::OpenOptions::new().read(true).share_mode(FILE_SHARE_READ.0).open(path)
+}
+
 pub fn check(path: &str) -> Signature {
     unsafe {
         let wide = HSTRING::from(path);

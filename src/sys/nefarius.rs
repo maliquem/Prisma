@@ -74,16 +74,18 @@ impl Kit {
         let (_, url) = self.latest()?;
         let data = crate::sys::update::download(&url).map_err(|_| "Não consegui baixar o instalador")?;
         let file = std::env::temp_dir().join(format!("{}_setup.exe", self.name));
-        std::fs::write(&file, data).map_err(|_| "Não consegui gravar o instalador")?;
+        let lock = crate::sys::fileinfo::write_locked(&file, &data).map_err(|_| "Não consegui gravar o instalador")?;
         let path = file.display().to_string();
         match crate::sys::fileinfo::check(&path) {
             crate::sys::fileinfo::Signature::Valid(n) if n.contains(SIGNER) => {}
             _ => {
+                drop(lock);
                 let _ = std::fs::remove_file(&file);
                 return Err("O instalador baixado não tem a assinatura da Nefarius");
             }
         }
         let ok = crate::startup::run_file_elevated_wait(&file, "", true).and_then(crate::startup::install_ok);
+        drop(lock);
         let _ = std::fs::remove_file(&file);
         ok.ok_or("O driver não foi instalado")
     }

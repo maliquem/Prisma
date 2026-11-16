@@ -60,7 +60,9 @@ fn log(line: &str) {
         if let Some(dir) = path.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
-        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&path)
+        // Cada som aberto anota: acima de 1 MB recomeça, senão cresce para sempre.
+        let full = std::fs::metadata(&path).is_ok_and(|m| m.len() > 1 << 20);
+        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).write(true).append(!full).truncate(full).open(&path)
             && f.write_all(text.as_bytes()).is_ok()
         {
             return;

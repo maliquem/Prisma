@@ -3,7 +3,7 @@
 //! administrador (`--eq=...`) aberta pelo botão, com o pedido do Windows (UAC). O Prisma não fica
 //! elevado.
 //!
-//! Instalar num aparelho, guardando o que muda em `ProgramData\Prisma\eq\backup\<guid>.txt`:
+//! Instalar num aparelho, guardando o que muda em `Program Files\Prisma\eq\backup\<guid>.txt`:
 //! põe o APO no fim da lista de efeitos do aparelho (`{d04e05a6-...},13`) ou, sem lista, no lugar
 //! antigo (`,5`); liga as melhorias de áudio se estavam desligadas. Os modos (`{d3993a3f-...}`)
 //! nunca são tocados. Remover desfaz valor por valor (o administrador não pode apagar a chave).
@@ -37,13 +37,18 @@ fn fx_key(guid: &str) -> String {
     format!(r"{RENDER}\{{{guid}}}\FxProperties")
 }
 
+/// Pela pasta conhecida do Windows: com `%ProgramFiles%` trocado, a DLL iria para uma pasta que
+/// qualquer programa altera, e o motor de áudio carregaria o que estivesse lá.
 fn dll_path() -> PathBuf {
-    let base = std::env::var_os("ProgramFiles").map_or_else(|| PathBuf::from(r"C:\Program Files"), PathBuf::from);
+    let base = super::known_folder(&windows::Win32::UI::Shell::FOLDERID_ProgramFiles);
+    let base = if base.as_os_str().is_empty() { PathBuf::from(r"C:\Program Files") } else { base };
     base.join(r"Prisma\eq\prisma_apo.dll")
 }
 
+/// Ao lado da DLL, onde só o administrador escreve: o que está aqui volta ao registro do sistema
+/// na remoção. Antes ficava no ProgramData, que os usuários alteram.
 fn backup_dir() -> PathBuf {
-    super::eq::dir().join("backup")
+    dll_path().with_file_name("backup")
 }
 
 /// GUID de aparelho vindo da linha de comando: só hexadecimal e traço.
@@ -135,7 +140,9 @@ fn install(ids: &[String]) -> Result<(), String> {
         return Err("aparelho inválido".into());
     }
     let data = super::eq::dir();
-    std::fs::create_dir_all(backup_dir()).map_err(|e| format!("pasta {}: {e}", data.display()))?;
+    for d in [&data, &backup_dir()] {
+        std::fs::create_dir_all(d).map_err(|e| format!("pasta {}: {e}", d.display()))?;
+    }
     // O motor de áudio roda como LOCAL SERVICE: lê os perfis e escreve o log. Os usuários gravam os perfis.
     let _ = Command::new(super::system_tool("icacls"))
         .arg(&data)
@@ -305,6 +312,7 @@ fn remove(ids: Option<&[String]>) -> Result<(), String> {
     if all {
         // Com o motor parado e de volta sem o APO, a DLL está solta.
         let _ = std::fs::remove_file(dll_path());
+        let _ = std::fs::remove_dir(backup_dir());
         if let Some(d) = dll_path().parent() {
             let _ = std::fs::remove_dir(d);
         }

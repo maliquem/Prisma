@@ -258,13 +258,14 @@ pub mod setup {
         let _ = std::thread::Builder::new().name("pawnio".into()).spawn(|| {
             let Ok(data) = crate::sys::update::download(URL) else { return fail("o download falhou") };
             let path = std::env::temp_dir().join("PawnIO_setup.exe");
-            if std::fs::write(&path, &data).is_err() {
+            let Ok(lock) = crate::sys::fileinfo::write_locked(&path, &data) else {
                 return fail("não deu para salvar o instalador");
-            }
+            };
             let text = path.to_string_lossy().to_string();
             match crate::sys::fileinfo::check(&text) {
                 crate::sys::fileinfo::Signature::Valid(who) if who == SIGNER => {}
                 _ => {
+                    drop(lock);
                     let _ = std::fs::remove_file(&path);
                     return fail("a assinatura do instalador não confere");
                 }
@@ -272,6 +273,7 @@ pub mod setup {
             STATE.store(RUNNING, Ordering::Relaxed);
             crate::config::log("PawnIO: instalador aberto");
             let code = run_and_wait(&text);
+            drop(lock);
             let _ = std::fs::remove_file(&path);
             if installed() {
                 crate::config::log("PawnIO: instalado");

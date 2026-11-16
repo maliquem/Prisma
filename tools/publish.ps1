@@ -24,6 +24,8 @@ if (-not $info.isDraft) { throw "$tag não está em rascunho." }
 
 # 3. Compila e assina aqui.
 $env:RUSTUP_HOME = 'K:\rust\rustup'; $env:CARGO_HOME = 'K:\rust\cargo'; $env:PATH = "K:\rust\cargo\bin;$env:PATH"
+cargo test --locked
+if ($LASTEXITCODE) { throw 'Os testes falharam.' }
 cargo build --release --locked
 if ($LASTEXITCODE) { throw 'A compilação falhou.' }
 $out = Join-Path ([IO.Path]::GetTempPath()) "prisma-$tag"
