@@ -83,6 +83,10 @@ pub struct View {
     pub right: Option<usize>,
     /// Com os dois sticks: as letras no stick direito e os números no esquerdo.
     pub letters_right: bool,
+    /// Letras digitadas desde que abriu e a última (círculo da direita, grupo, posição), para a
+    /// janela pulsar a letra.
+    pub hits: u32,
+    pub hit: (bool, usize, usize),
 }
 
 impl View {
@@ -154,13 +158,15 @@ impl Osk {
         }
         // Cada botão apertado agora e a tecla que ele digita.
         let mut typed: Vec<(pads::Buttons, Key)> = vec![];
-        if let Some(p) = self.view.petal {
-            typed.extend(FACE.iter().enumerate().filter(|(_, b)| down & **b != 0).map(|(i, b)| (*b, Key::Char(self.view.wheel_char(false, p, i)))));
-        }
         // Stick direito apontado: o direcional digita no círculo dele e deixa de ser as setas.
         let dpad_types = self.view.right.is_some();
-        if let Some(p) = self.view.right {
-            typed.extend(DPAD.iter().enumerate().filter(|(_, b)| down & **b != 0).map(|(i, b)| (*b, Key::Char(self.view.wheel_char(true, p, i)))));
+        for (right, p, btns) in [(false, self.view.petal, &FACE), (true, self.view.right, &DPAD)] {
+            let Some(p) = p else { continue };
+            for (i, b) in btns.iter().enumerate().filter(|(_, b)| down & **b != 0) {
+                typed.push((*b, Key::Char(self.view.wheel_char(right, p, i))));
+                self.view.hits = self.view.hits.wrapping_add(1);
+                self.view.hit = (right, p, i);
+            }
         }
         if down & pads::RB != 0 {
             typed.push((pads::RB, Key::Char(' ')));

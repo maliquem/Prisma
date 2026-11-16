@@ -1254,29 +1254,100 @@ fn ease(arrow: &mut (f32, f32), (tx, ty): (f32, f32)) -> bool {
     true
 }
 
-/// Círculo do meio e a seta para onde o stick aponta, mais comprida quanto mais inclinado.
-fn stick_arrow(c: &Canvas, cx: f32, cy: f32, (ax, ay): (f32, f32)) {
-    let len = (ax * ax + ay * ay).sqrt();
-    let m = len.min(1.0);
-    c.circle(cx, cy, 30.0, WHITE.alpha(0.08));
-    c.circle_line(cx, cy, 30.0, ACCENT.alpha(0.15 + 0.6 * m), 2.0);
+/// Centro do círculo: disco, e um arco no aro que aponta para onde o stick vai, mais forte quanto
+/// mais inclinado.
+fn stick_hub(c: &Canvas, cx: f32, cy: f32, r: f32, (ax, ay): (f32, f32)) {
+    let m = (ax * ax + ay * ay).sqrt().min(1.0);
+    c.circle(cx, cy, r, WHITE.alpha(0.06));
+    c.circle_line(cx, cy, r, WHITE.alpha(0.08), 1.0);
     if m > 0.08 {
-        let (ux, uy) = (ax / len, -ay / len);
-        let (r0, r1) = (32.0, 34.0 + 34.0 * m);
-        let (tx, ty) = (cx + ux * r1, cy + uy * r1);
-        c.line(cx + ux * r0, cy + uy * r0, tx, ty, ACCENT, 4.0);
-        for side in [1.0, -1.0] {
-            c.line(tx, ty, tx - ux * 10.0 - uy * 7.0 * side, ty - uy * 10.0 + ux * 7.0 * side, ACCENT, 4.0);
+        let a = ax.atan2(ay).to_degrees();
+        c.arc_span(cx, cy, r - 3.0, a - 24.0, a + 24.0, ACCENT.alpha(0.25 + 0.75 * m), 3.0);
+    }
+}
+
+/// Valor animado de `from` a `to` em `ms`, pelo relógio: o timer de 16 ms oscila, contar quadros
+/// deixaria o passo irregular. Curva cúbica: suave na chegada, ou na saída para fechar (`ease_in`).
+#[derive(Clone, Copy)]
+struct Tw {
+    from: f32,
+    to: f32,
+    t0: std::time::Instant,
+    ms: f32,
+    ease_in: bool,
+}
+
+impl Tw {
+    fn new(v: f32) -> Self {
+        Self { from: v, to: v, t0: std::time::Instant::now(), ms: 0.0, ease_in: false }
+    }
+    fn k(&self) -> f32 {
+        let e = std::time::Instant::now().saturating_duration_since(self.t0).as_secs_f32() * 1000.0;
+        if self.ms <= 0.0 { 1.0 } else { (e / self.ms).min(1.0) }
+    }
+    fn v(&self) -> f32 {
+        let k = self.k();
+        let e = if self.ease_in { k * k * k } else { 1.0 - (1.0 - k).powi(3) };
+        self.from + (self.to - self.from) * e
+    }
+    /// Vai até `to` em `ms`, depois de `wait` ms, a partir de onde está agora.
+    fn go(&mut self, to: f32, ms: f32, wait: f32, ease_in: bool) {
+        if to != self.to {
+            *self = Self { from: self.v(), to, t0: std::time::Instant::now() + std::time::Duration::from_secs_f32(wait / 1000.0), ms, ease_in };
         }
     }
+    fn set(&mut self, to: f32, ms: f32) {
+        self.go(to, ms, 0.0, false)
+    }
+    fn busy(&self) -> bool {
+        self.k() < 1.0
+    }
+}
+
+/// Ângulo de chegada pelo caminho mais curto, para o destaque girar pelo lado certo.
+fn short_to(from: f32, to: f32) -> f32 {
+    from + ((to - from) % 360.0 + 540.0) % 360.0 - 180.0
+}
+
+/// Destaque que gira até `ang` (em graus); aparece de onde já está se estava apagado.
+fn turn_to(ang: &mut Tw, on: &mut Tw, to: f32) {
+    if on.v() < 0.05 {
+        *ang = Tw::new(to);
+    } else {
+        let a = ang.v();
+        ang.set(short_to(a, to), 140.0);
+    }
+    on.set(1.0, 140.0);
+}
+
+/// Cascata ao abrir: cada item entra 8 ms depois do anterior, em 160 ms.
+fn cascade(since_ms: f32, i: usize) -> f32 {
+    let k = ((since_ms - i as f32 * 8.0) / 160.0).clamp(0.0, 1.0);
+    1.0 - (1.0 - k).powi(3)
+}
+
+/// Margem da janela para a sombra em volta do painel.
+const SHADOW: f32 = 18.0;
+
+/// Painel das janelas do controle: sombra em anéis (sem desfoque, que o Direct2D em software
+/// não faz a 60 quadros), fundo escuro translúcido e borda fina.
+fn pad_panel(c: &Canvas, r: Rect) {
+    // 3 anéis de 6 px: cada contorno custa no Direct2D em software, mais que a largura dele.
+    for i in 0..3 {
+        let g = 3.0 + i as f32 * 6.0;
+        c.round_line(r.inset(-g), 22.0 + g, rgb(0).alpha(0.16 - 0.05 * i as f32), 6.0);
+    }
+    c.round(r, 22.0, rgb(0x0d0f14).alpha(0.88));
+    c.round_line(r, 22.0, WHITE.alpha(0.09), 1.0);
 }
 
 pub struct Keyboard {
     surface: Layered,
-    /// Setas desenhadas agora (esquerdo, direito): correm atrás dos analógicos a cada quadro, para
+    /// Sticks desenhados agora (esquerdo, direito): correm atrás dos analógicos a cada quadro, para
     /// andar suave.
     arrow: [(f32, f32); 2],
-    /// Canto na tela, as duas linhas de ajuda e os dois sticks, fixos enquanto o teclado fica aberto.
+    /// Canto do painel na tela, as duas linhas de ajuda e os dois sticks, fixos enquanto o teclado
+    /// fica aberto.
     at: (i32, i32),
     lines: [Vec<(Vec<crate::sys::pads::Buttons>, String)>; 2],
     style: crate::ui::glyph::Style,
@@ -1286,6 +1357,19 @@ pub struct Keyboard {
     /// da escolhida.
     rows: (i32, i32),
     y: f32,
+    /// Abre (0 a 1) e fecha (1 a 0, com `closing`); o relógio segue até acabar de sumir.
+    show: Tw,
+    closing: bool,
+    opened: std::time::Instant,
+    /// Estado desenhado (fica o último enquanto fecha) e o de antes da troca de modo, para as
+    /// letras trocarem em fade (`swap`).
+    last: crate::sys::osk::View,
+    prev: crate::sys::osk::View,
+    swap: Tw,
+    /// Destaque de cada círculo (esquerdo, direito): ângulo e quanto aparece.
+    hl: [(Tw, Tw); 2],
+    /// Letra digitada: pulso de 0 a 1.
+    pulse: Tw,
 }
 
 /// Cursor de texto do programa em foco, na tela, lido por `watch_caret`.
@@ -1362,31 +1446,76 @@ unsafe extern "system" fn keyboard_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -
     DefWindowProcW(h, m, w, l)
 }
 
+/// Texto que troca: o velho sobe 3 px e some, o novo sobe de 3 px abaixo e aparece (`k` de 0 a 1).
+fn swap_text(c: &Canvas, r: Rect, old: &str, new: &str, k: f32, size: f32, col: Color, w: Weight) {
+    if k >= 1.0 || old == new {
+        c.text_raw(r, new, size, col, Align::Center, w);
+        return;
+    }
+    c.text_raw(rect(r.x, r.y - 3.0 * k, r.w, r.h), old, size, col.alpha(col.a * (1.0 - k)), Align::Center, w);
+    c.text_raw(rect(r.x, r.y + 3.0 * (1.0 - k), r.w, r.h), new, size, col.alpha(col.a * k), Align::Center, w);
+}
+
+fn kb_mode(v: &crate::sys::osk::View) -> &'static str {
+    match (v.sym, v.shift) {
+        (true, true) => "áç",
+        (true, false) => "123",
+        (false, true) => "ABC",
+        (false, false) => "abc",
+    }
+}
+
+/// Escala da janela pelo DPI do monitor dela.
+fn dpi_scale(hwnd: HWND) -> f32 {
+    unsafe { GetDpiForWindow(hwnd) as f32 / 96.0 }
+}
+
 impl Keyboard {
     pub fn new() -> Self {
         register(w!("PrismaKeyboard"), keyboard_proc);
         let hwnd = create_overlay(w!("PrismaKeyboard"), true);
-        Self { surface: Layered::new(hwnd), arrow: [(0.0, 0.0); 2], at: (0, 0), lines: Default::default(), style: crate::ui::glyph::Style::Xbox, two: false, ticking: false, rows: (0, 0), y: 0.0 }
+        Self {
+            surface: Layered::new(hwnd),
+            arrow: [(0.0, 0.0); 2],
+            at: (0, 0),
+            lines: Default::default(),
+            style: crate::ui::glyph::Style::Xbox,
+            two: false,
+            ticking: false,
+            rows: (0, 0),
+            y: 0.0,
+            show: Tw::new(0.0),
+            closing: false,
+            opened: std::time::Instant::now(),
+            last: Default::default(),
+            prev: Default::default(),
+            swap: Tw::new(1.0),
+            hl: [(Tw::new(0.0), Tw::new(0.0)); 2],
+            pulse: Tw::new(1.0),
+        }
     }
 
-    /// Mostra o estado de agora do teclado, ou esconde se ele fechou. Devolve `Some` quando ele
-    /// acabou de abrir (`true`) ou de fechar (`false`).
+    /// Mostra o estado de agora do teclado, ou começa a esconder se ele fechou. Devolve `Some`
+    /// quando ele acabou de abrir (`true`) ou de fechar (`false`).
     pub fn update(&mut self) -> Option<bool> {
         use crate::sys::pads;
-        let open = crate::sys::osk::view().open;
+        let v = crate::sys::osk::view();
         let hwnd = self.surface.hwnd;
-        if !open {
-            unsafe {
-                let _ = KillTimer(Some(hwnd), 1);
-                let _ = ShowWindow(hwnd, SW_HIDE);
+        if !v.open {
+            if !self.ticking || self.closing {
+                return None;
             }
-            return std::mem::take(&mut self.ticking).then_some(false);
+            // Some em 140 ms; o `tick` esconde a janela no fim.
+            self.closing = true;
+            self.show.go(0.0, 140.0, 0.0, true);
+            return Some(false);
         }
-        let opened = !self.ticking;
+        // Reabrir enquanto some conta como abrir de novo.
+        let opened = !self.ticking || self.closing;
         if opened {
             let mon = focus_monitor();
-            let scale = unsafe { windows::Win32::UI::HiDpi::GetDpiForWindow(hwnd) } as f32 / 96.0;
-            self.two = crate::sys::osk::view().two;
+            let scale = dpi_scale(hwnd);
+            self.two = v.two;
             self.at = ((mon.left + mon.right) / 2 - (self.width() * scale / 2.0) as i32, mon.bottom - ((KB_H + 48.0) * scale) as i32);
             self.rows = (self.at.1, mon.top + (48.0 * scale) as i32);
             self.y = self.at.1 as f32;
@@ -1411,11 +1540,42 @@ impl Keyboard {
                 },
             ];
             self.arrow = crate::sys::osk::stick();
+            self.closing = false;
+            self.show = Tw::new(0.0);
+            self.show.set(1.0, 180.0);
+            self.opened = std::time::Instant::now();
+            self.prev = v;
+            self.swap = Tw::new(1.0);
+            self.pulse = Tw::new(1.0);
+            self.hl = [(Tw::new(0.0), Tw::new(0.0)); 2];
             unsafe {
                 SetTimer(Some(hwnd), 1, KB_FRAME, None);
             }
             self.ticking = true;
+        } else {
+            let l = self.last;
+            if (v.shift, v.sym, v.letters_right) != (l.shift, l.sym, l.letters_right) {
+                self.prev = l;
+                self.swap = Tw::new(0.0);
+                self.swap.set(1.0, 140.0);
+            }
+            if v.hits != l.hits {
+                self.pulse = Tw::new(0.0);
+                self.pulse.set(1.0, 200.0);
+            }
         }
+        let before = if opened { [None, None] } else { [self.last.petal, self.last.right] };
+        for (side, p) in [v.petal, v.right].into_iter().enumerate() {
+            if p == before[side] {
+                continue;
+            }
+            let (ang, on) = &mut self.hl[side];
+            match p {
+                Some(p) => turn_to(ang, on, p as f32 * 45.0),
+                None => on.set(0.0, 120.0),
+            }
+        }
+        self.last = v;
         self.paint();
         unsafe {
             let _ = SetWindowPos(hwnd, Some(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
@@ -1424,13 +1584,23 @@ impl Keyboard {
         opened.then_some(true)
     }
 
-    /// Um quadro: cada seta anda 45% do caminho até o analógico, o teclado anda 35% do caminho até
-    /// a altura escolhida (embaixo, ou no alto com o cursor de texto atrás dele), e só redesenha se
-    /// algo mexeu.
+    /// Um quadro: cada stick anda 45% do caminho até o analógico, o teclado anda 35% do caminho até
+    /// a altura escolhida (embaixo, ou no alto com o cursor de texto atrás dele), as animações
+    /// seguem o relógio, e só redesenha se algo mexeu. No fim do fechar, esconde e para o relógio.
     pub fn tick(&mut self) {
+        let hwnd = self.surface.hwnd;
+        if self.closing && !self.show.busy() {
+            unsafe {
+                let _ = KillTimer(Some(hwnd), 1);
+                let _ = ShowWindow(hwnd, SW_HIDE);
+            }
+            self.ticking = false;
+            self.closing = false;
+            return;
+        }
         let [l, r] = crate::sys::osk::stick();
         let (a, b) = (ease(&mut self.arrow[0], l), ease(&mut self.arrow[1], r));
-        let scale = unsafe { windows::Win32::UI::HiDpi::GetDpiForWindow(self.surface.hwnd) } as f32 / 96.0;
+        let scale = dpi_scale(hwnd);
         let (w, h) = ((self.width() * scale) as i32, (KB_H * scale) as i32);
         let up = CARET.lock().unwrap().is_some_and(|c| dodge_up(c, self.at.0, self.rows.0, w, h));
         let goal = if up { self.rows.1 } else { self.rows.0 } as f32;
@@ -1442,9 +1612,14 @@ impl Keyboard {
             }
             self.at.1 = self.y.round() as i32;
         }
-        if a || b || moved {
+        if a || b || moved || self.animating() {
             self.paint();
         }
+    }
+
+    fn animating(&self) -> bool {
+        // 8 pétalas em cascata: a última entra aos 56 ms e leva 160.
+        self.opened.elapsed().as_millis() < 240 || self.show.busy() || self.swap.busy() || self.pulse.busy() || self.hl.iter().any(|(a, o)| a.busy() || o.busy())
     }
 
     /// Com os dois sticks, os dois círculos lado a lado.
@@ -1453,18 +1628,24 @@ impl Keyboard {
     }
 
     fn paint(&mut self) {
-        let v = crate::sys::osk::view();
+        let (v, pv) = (self.last, self.prev);
         let (arrow, two, style) = (self.arrow, self.two, self.style);
         let lines = &self.lines;
-        let mode = match (v.sym, v.shift) {
-            (true, true) => "áç",
-            (true, false) => "123",
-            (false, true) => "ABC",
-            (false, false) => "abc",
-        };
-        self.surface.paint(self.at.0, self.at.1, self.width(), KB_H, |c, r| {
-            c.round(r, 18.0, rgb(0x0d0f14).alpha(0.92));
-            let (cy, ring, pr) = (176.0, 116.0, 42.0);
+        let s = self.show.v();
+        // Abre subindo 12 px; fecha descendo 8.
+        let dy = if self.closing { 8.0 } else { 12.0 } * (1.0 - s);
+        let since = self.opened.elapsed().as_secs_f32() * 1000.0;
+        let (mk, pk) = (self.swap.v(), self.pulse.v());
+        let hl = self.hl.map(|(a, o)| (a.v(), o.v()));
+        let w = self.width();
+        self.surface.alpha = (s.clamp(0.0, 1.0) * 255.0).round() as u8;
+        let m = (SHADOW * dpi_scale(self.surface.hwnd)).round() as i32;
+        self.surface.paint(self.at.0 - m, self.at.1 - m, w + 2.0 * SHADOW, KB_H + 2.0 * SHADOW, |c, _| {
+            let (bx, by) = (SHADOW, SHADOW + dy);
+            c.translate(bx, by);
+            let r = rect(0.0, 0.0, w, KB_H);
+            pad_panel(c, r);
+            let (cy, ring, pr, hub) = (176.0, 116.0, 42.0, 62.0);
             // Esquerdo (A, B, X, Y digitam) à esquerda; com os dois sticks, o direito (o direcional
             // digita) à direita, com um traço entre os dois.
             let wheels: &[(f32, bool)] = if two { &[(KB_W / 2.0, false), (KB_W * 1.5, true)] } else { &[(KB_W / 2.0, false)] };
@@ -1472,43 +1653,89 @@ impl Keyboard {
                 c.line(KB_W, 40.0, KB_W, 312.0, WHITE.alpha(0.10), 1.0);
             }
             for &(cx, right) in wheels {
-            stick_arrow(c, cx, cy, arrow[right as usize]);
-            let numbers = two && right != v.letters_right;
-            // No centro, os botões que digitam neste círculo; o modo logo abaixo.
-            if right {
-                crate::ui::glyph::dpad(c, cx, cy, 26.0, None, TEXT2);
-            } else {
-                crate::ui::glyph::face(c, cx, cy, 40.0, style, TEXT2);
-            }
-            c.text_raw(rect(cx - 30.0, cy + 34.0, 60.0, 20.0), if numbers { "123" } else { mode }, 13.0, MUTED, Align::Center, Weight::Semibold);
-            let chosen = if right { v.right } else { v.petal };
-            for p in 0..8 {
-                let a = (p as f32 * 45.0).to_radians();
-                let (px, py) = (cx + ring * a.sin(), cy - ring * a.cos());
-                let on = chosen == Some(p);
-                c.circle(px, py, pr, if on { ACCENT.alpha(0.35) } else { WHITE.alpha(0.07) });
-                // Mesma posição dos botões (X à esquerda, Y em cima, B à direita, A embaixo) e
-                // das setas do direcional.
-                for (i, (dx, dy)) in [(-22.0, 0.0), (0.0, -22.0), (22.0, 0.0), (0.0, 22.0)].into_iter().enumerate() {
-                    let (size, color, weight) = if on { (17.0, WHITE, Weight::Semibold) } else { (15.0, TEXT2, Weight::Regular) };
-                    c.text_raw(rect(px + dx - 12.0, py + dy - 11.0, 24.0, 22.0), &v.wheel_char(right, p, i).to_string(), size, color, Align::Center, weight);
+                let side = right as usize;
+                let numbers = |v: &crate::sys::osk::View| two && right != v.letters_right;
+                let chosen = if right { v.right } else { v.petal };
+                let (ha, hon) = hl[side];
+                let hit = pk < 1.0 && v.hit.0 == right;
+                stick_hub(c, cx, cy, hub, arrow[side]);
+                if hit {
+                    c.circle(cx, cy, hub, ACCENT.alpha(0.15 * (1.0 - pk)));
                 }
-            }
+                // No centro, os botões que digitam neste círculo; o modo logo abaixo.
+                if right {
+                    crate::ui::glyph::dpad(c, cx, cy, 26.0, None, TEXT2);
+                } else {
+                    crate::ui::glyph::face(c, cx, cy, 40.0, style, TEXT2);
+                }
+                let mode = |v: &crate::sys::osk::View| if numbers(v) { "123" } else { kb_mode(v) };
+                swap_text(c, rect(cx - 30.0, cy + 34.0, 60.0, 20.0), mode(&pv), mode(&v), mk, 13.0, MUTED, Weight::Semibold);
+                let pos = |a: f32| (cx + ring * a.to_radians().sin(), cy - ring * a.to_radians().cos());
+                // Cada pétala entra crescendo de 0,9 em cascata; a escolhida cresce mais 5%.
+                let grow = |p: usize| {
+                    let k = cascade(since, p);
+                    // 5%: com mais, a escolhida encosta nas vizinhas.
+                    let sc = (0.9 + 0.1 * k) * if chosen == Some(p) { 1.0 + 0.05 * hon } else { 1.0 };
+                    let (px, py) = pos(p as f32 * 45.0);
+                    c.scale_at(sc, bx + px * (1.0 - sc), by + py * (1.0 - sc));
+                    (k, px, py)
+                };
+                for p in 0..8 {
+                    let (k, px, py) = grow(p);
+                    c.circle(px, py, pr, WHITE.alpha(0.07 * k));
+                }
+                c.translate(bx, by);
+                // O destaque gira pelo anel até a pétala escolhida.
+                if hon > 0.01 {
+                    let (hx, hy) = pos(ha);
+                    let hr = pr * (1.0 + 0.05 * hon);
+                    c.circle(hx, hy, hr, ACCENT.alpha(0.24 * hon));
+                    c.circle_line(hx, hy, hr, ACCENT.alpha(hon), 1.5);
+                }
+                // As outras pétalas apagam um pouco enquanto uma está escolhida.
+                let dim = if chosen.is_some() { 1.0 - 0.3 * hon } else { 1.0 };
+                for p in 0..8 {
+                    let (k, px, py) = grow(p);
+                    let on = chosen == Some(p);
+                    // Mesma posição dos botões (X à esquerda, Y em cima, B à direita, A embaixo) e
+                    // das setas do direcional.
+                    for (i, (dx, dy)) in [(-22.0, 0.0), (0.0, -22.0), (22.0, 0.0), (0.0, 22.0)].into_iter().enumerate() {
+                        let (x, y) = (px + dx, py + dy);
+                        let (mut size, col, weight) = if on { (17.0, WHITE.alpha(k), Weight::Semibold) } else { (15.0, TEXT2.alpha(k * dim), Weight::Regular) };
+                        // A letra digitada pulsa: maior e na cor de destaque, voltando em 200 ms.
+                        let pulse = pk < 1.0 && v.hit == (right, p, i);
+                        if pulse {
+                            size *= 1.4 - 0.4 * pk;
+                        }
+                        let tr = rect(x - 18.0, y - 15.0, 36.0, 30.0);
+                        let now = v.wheel_char(right, p, i).to_string();
+                        swap_text(c, tr, &pv.wheel_char(right, p, i).to_string(), &now, mk, size, col, weight);
+                        if pulse {
+                            c.text_raw(tr, &now, size, ACCENT.alpha(1.0 - pk), Align::Center, weight);
+                            c.circle_line(x, y, 8.0 + 14.0 * pk, ACCENT.alpha(0.6 * (1.0 - pk)), 1.5);
+                        }
+                    }
+                }
+                c.translate(bx, by);
             }
             crate::ui::glyph::hints(c, rect(16.0, 336.0, r.w - 32.0, 22.0), style, &lines[0], 12.0, MUTED);
             crate::ui::glyph::hints(c, rect(16.0, 362.0, r.w - 32.0, 22.0), style, &lines[1], 12.0, MUTED);
+            c.translate(0.0, 0.0);
         });
     }
 }
 
-/// Radial do Prisma (`sys::radial`): oito ações em volta, no meio da tela.
+/// Radial do Prisma (`sys::radial`): oito ações em gomos de um anel, no meio da tela.
 pub struct Radial {
     surface: Layered,
-    /// Setas do stick direito e do esquerdo.
+    /// Sticks direito e esquerdo desenhados agora.
     arrow: [(f32, f32); 2],
+    /// Canto do painel na tela.
     at: (i32, i32),
     names: [String; crate::sys::radial::ALL],
     icons: [u8; crate::sys::radial::ALL],
+    /// Nome do lugar cabe em duas linhas no gomo; senão, uma com reticências.
+    wraps: [bool; crate::sys::radial::SLOTS],
     two: bool,
     /// Algum lugar tem 4 opções: a janela cresce para a faixa delas, embaixo do círculo.
     groups: bool,
@@ -1516,13 +1743,38 @@ pub struct Radial {
     hint: Vec<(Vec<crate::sys::pads::Buttons>, String)>,
     style: crate::ui::glyph::Style,
     ticking: bool,
+    /// Abre (0 a 1) e fecha (1 a 0, com `closing`); o relógio segue até acabar de sumir.
+    show: Tw,
+    closing: bool,
+    opened: std::time::Instant,
+    /// Estado desenhado; enquanto fecha, fica o último.
+    last: crate::sys::radial::View,
+    /// Quanto cada lugar está escolhido: o gomo cresce e acende.
+    pop: [Tw; crate::sys::radial::SLOTS],
+    /// Destaque de cada círculo: ângulo e quanto aparece.
+    hl: [(Tw, Tw); 2],
+    /// Nome no centro: troca (0 a 1) a partir do lugar de antes.
+    label: Tw,
+    label_prev: Option<usize>,
+    /// Faixa das 4 opções: aparece (0 a 1), de que lugar é, posição e brilho do destaque.
+    strip: Tw,
+    strip_slot: Option<usize>,
+    strip_x: Tw,
+    strip_on: Tw,
+    /// Lugar disparado: pisca antes de a janela sumir.
+    flash: Tw,
+    flash_slot: Option<usize>,
 }
 
 /// Largura de um círculo; com dois, a janela tem os dois lado a lado.
 const RD_W: f32 = 600.0;
-const RD_H: f32 = 460.0;
+const RD_H: f32 = 480.0;
 /// Faixa das 4 opções do direcional, entre o círculo e a dica.
-const RD_SUB: f32 = 96.0;
+const RD_SUB: f32 = 100.0;
+/// Anel dos gomos (raio de dentro e de fora) e disco do centro.
+const RD_R0: f32 = 96.0;
+const RD_R1: f32 = 198.0;
+const RD_HUB: f32 = 78.0;
 
 unsafe extern "system" fn radial_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT {
     if m == WM_TIMER {
@@ -1536,32 +1788,82 @@ impl Radial {
     pub fn new() -> Self {
         register(w!("PrismaRadial"), radial_proc);
         let hwnd = create_overlay(w!("PrismaRadial"), true);
-        Self { surface: Layered::new(hwnd), arrow: [(0.0, 0.0); 2], at: (0, 0), names: std::array::from_fn(|_| String::new()), icons: [0; crate::sys::radial::ALL], two: false, groups: false, left: false, hint: Vec::new(), style: crate::ui::glyph::Style::Xbox, ticking: false }
+        Self {
+            surface: Layered::new(hwnd),
+            arrow: [(0.0, 0.0); 2],
+            at: (0, 0),
+            names: std::array::from_fn(|_| String::new()),
+            icons: [0; crate::sys::radial::ALL],
+            wraps: [false; crate::sys::radial::SLOTS],
+            two: false,
+            groups: false,
+            left: false,
+            hint: Vec::new(),
+            style: crate::ui::glyph::Style::Xbox,
+            ticking: false,
+            show: Tw::new(0.0),
+            closing: false,
+            opened: std::time::Instant::now(),
+            last: Default::default(),
+            pop: [Tw::new(0.0); crate::sys::radial::SLOTS],
+            hl: [(Tw::new(0.0), Tw::new(0.0)); 2],
+            label: Tw::new(1.0),
+            label_prev: None,
+            strip: Tw::new(0.0),
+            strip_slot: None,
+            strip_x: Tw::new(0.0),
+            strip_on: Tw::new(0.0),
+            flash: Tw::new(0.0),
+            flash_slot: None,
+        }
     }
 
-    /// Mostra o estado de agora, ou esconde se fechou. As ações e os programas vêm da configuração.
+    /// Mostra o estado de agora, ou começa a esconder se fechou. As ações e os programas vêm da
+    /// configuração.
     pub fn update(&mut self, cfg: &crate::config::Config) {
+        use crate::sys::radial::{GROUP, PROFILES, SLOTS};
         let hwnd = self.surface.hwnd;
         let v = crate::sys::radial::view();
         if !v.open {
-            unsafe {
-                let _ = KillTimer(Some(hwnd), 1);
-                let _ = ShowWindow(hwnd, SW_HIDE);
+            if !self.ticking || self.closing {
+                return;
             }
-            self.ticking = false;
+            let fired = crate::sys::radial::fired();
+            // Captura: some na hora, como antes, para o radial não sair na foto.
+            if fired.is_some_and(|a| a <= 5) {
+                unsafe {
+                    let _ = KillTimer(Some(hwnd), 1);
+                    let _ = ShowWindow(hwnd, SW_HIDE);
+                }
+                self.ticking = false;
+                return;
+            }
+            // Fechou por Confirmar: o gomo pisca 220 ms e a janela some a partir dos 120.
+            self.closing = true;
+            self.flash_slot = self.last.sel.filter(|_| fired.is_some());
+            let wait = if self.flash_slot.is_some() {
+                self.flash = Tw::new(1.0);
+                self.flash.set(0.0, 220.0);
+                120.0
+            } else {
+                0.0
+            };
+            self.show.go(0.0, 140.0, wait, true);
             return;
         }
-        if !self.ticking {
+        // Reabrir enquanto some conta como abrir de novo.
+        let opened = !self.ticking || self.closing;
+        if opened {
             let mon = focus_monitor();
-            let scale = unsafe { windows::Win32::UI::HiDpi::GetDpiForWindow(hwnd) } as f32 / 96.0;
+            let scale = dpi_scale(hwnd);
             self.two = v.two;
             self.left = v.left;
-            self.groups = cfg.pad_radial[..crate::sys::radial::SLOTS].iter().any(|&a| a == crate::sys::radial::GROUP || a == crate::sys::radial::PROFILES);
+            self.groups = cfg.pad_radial[..SLOTS].iter().any(|&a| a == GROUP || a == PROFILES);
             self.at = ((mon.left + mon.right) / 2 - (self.width() * scale / 2.0) as i32, (mon.top + mon.bottom) / 2 - (self.height() * scale / 2.0) as i32);
             for (i, &a) in cfg.pad_radial.iter().enumerate() {
                 self.names[i] = if a == crate::sys::radial::PROGRAM {
                     cfg.pad_radial_prog[i].0.clone()
-                } else if a == crate::sys::radial::PROFILES {
+                } else if a == PROFILES {
                     crate::i18n::tr("Trocar perfil").into_owned()
                 } else {
                     crate::i18n::tr(crate::sys::remap::action_name(a)).into_owned()
@@ -1570,13 +1872,15 @@ impl Radial {
             self.icons = cfg.pad_radial;
             // Lugar de perfis: as opções são os perfis lidos ao abrir.
             let choices = crate::sys::radial::choices();
-            for i in (0..crate::sys::radial::SLOTS).filter(|&i| cfg.pad_radial[i] == crate::sys::radial::PROFILES) {
+            for i in (0..SLOTS).filter(|&i| cfg.pad_radial[i] == PROFILES) {
                 for d in 0..4 {
                     let k = crate::sys::radial::sub(i, d);
                     self.names[k] = choices.get(d).cloned().unwrap_or_default();
-                    self.icons[k] = if d < choices.len() { crate::sys::radial::PROFILES } else { crate::sys::radial::EMPTY };
+                    self.icons[k] = if d < choices.len() { PROFILES } else { crate::sys::radial::EMPTY };
                 }
             }
+            // Medido uma vez, em negrito (a largura maior): medir a cada quadro custa.
+            self.wraps = std::array::from_fn(|i| measure(&self.names[i], 11.0, Weight::Semibold, Some(86.0)).1 <= 30.0);
             self.style = crate::ui::glyph::Style::current();
             let b = |i: u8| crate::sys::radial::PICK_BUTTONS[i.min(5) as usize];
             let t = |s: &str| crate::i18n::tr(s).into_owned();
@@ -1585,11 +1889,71 @@ impl Radial {
                 self.hint.insert(1, (vec![crate::ui::glyph::DPAD_ANY], t("escolhe entre as 4 opções")));
             }
             self.arrow = crate::sys::radial::stick();
+            self.closing = false;
+            self.show = Tw::new(0.0);
+            self.show.set(1.0, 180.0);
+            self.opened = std::time::Instant::now();
+            self.pop = [Tw::new(0.0); SLOTS];
+            self.hl = [(Tw::new(0.0), Tw::new(0.0)); 2];
+            self.label = Tw::new(1.0);
+            self.label_prev = None;
+            self.strip = Tw::new(0.0);
+            self.strip_slot = None;
+            self.strip_on = Tw::new(0.0);
+            self.flash = Tw::new(0.0);
+            self.flash_slot = None;
             unsafe {
                 SetTimer(Some(hwnd), 1, KB_FRAME, None);
             }
             self.ticking = true;
         }
+        let before = if opened { Default::default() } else { self.last };
+        if v.sel != before.sel {
+            if let Some(i) = before.sel.filter(|&i| i < SLOTS) {
+                self.pop[i].set(0.0, 120.0);
+            }
+            if let Some(i) = v.sel.filter(|&i| i < SLOTS) {
+                self.pop[i].set(1.0, 160.0);
+            }
+            let two = self.two;
+            let ring_of = |i: usize| (two && i < 8) as usize;
+            for ring in 0..2 {
+                let (now, was) = (v.sel.filter(|&i| ring_of(i) == ring), before.sel.filter(|&i| ring_of(i) == ring));
+                if now == was {
+                    continue;
+                }
+                let (ang, on) = &mut self.hl[ring];
+                match now {
+                    Some(i) => turn_to(ang, on, (i % 8) as f32 * 45.0),
+                    None => on.set(0.0, 120.0),
+                }
+            }
+            self.label_prev = before.sel;
+            self.label = Tw::new(0.0);
+            self.label.set(1.0, 120.0);
+            // A faixa sobe 10 px e aparece com um lugar de 4 opções; ao sair dele, some.
+            match v.sel.filter(|&i| self.groups && (self.icons[i] == GROUP || self.icons[i] == PROFILES)) {
+                Some(i) => {
+                    self.strip_slot = Some(i);
+                    self.strip.set(1.0, 160.0);
+                }
+                None => self.strip.set(0.0, 120.0),
+            }
+        }
+        if v.sub != before.sub {
+            match v.sub {
+                Some(d) => {
+                    if self.strip_on.v() < 0.05 {
+                        self.strip_x = Tw::new(d as f32);
+                    } else {
+                        self.strip_x.set(d as f32, 140.0);
+                    }
+                    self.strip_on.set(1.0, 140.0);
+                }
+                None => self.strip_on.set(0.0, 120.0),
+            }
+        }
+        self.last = v;
         self.paint();
         unsafe {
             let _ = SetWindowPos(hwnd, Some(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
@@ -1597,12 +1961,30 @@ impl Radial {
         }
     }
 
+    /// Um quadro: sticks e animações; no fim do fechar, esconde e para o relógio.
     pub fn tick(&mut self) {
+        if self.closing && !self.show.busy() {
+            unsafe {
+                let _ = KillTimer(Some(self.surface.hwnd), 1);
+                let _ = ShowWindow(self.surface.hwnd, SW_HIDE);
+            }
+            self.ticking = false;
+            self.closing = false;
+            return;
+        }
         let [r, l] = crate::sys::radial::stick();
         let (a, b) = (ease(&mut self.arrow[0], r), ease(&mut self.arrow[1], l));
-        if a || b {
+        if a || b || self.animating() {
             self.paint();
         }
+    }
+
+    fn animating(&self) -> bool {
+        // 8 gomos em cascata: o último entra aos 56 ms e leva 160.
+        self.opened.elapsed().as_millis() < 240
+            || [self.show, self.flash, self.label, self.strip, self.strip_x, self.strip_on].iter().any(Tw::busy)
+            || self.pop.iter().any(Tw::busy)
+            || self.hl.iter().any(|(a, o)| a.busy() || o.busy())
     }
 
     fn width(&self) -> f32 {
@@ -1614,70 +1996,136 @@ impl Radial {
     }
 
     fn paint(&mut self) {
-        use crate::sys::radial::{sub, EMPTY, GROUP, PROFILES};
-        let v = crate::sys::radial::view();
+        use crate::sys::radial::{sub, EMPTY, GROUP, SLOTS};
+        let v = self.last;
         let sel = v.sel;
-        let (names, icons, hint, arrow, two, left, groups, style) = (&self.names, &self.icons, &self.hint, self.arrow, self.two, self.left, self.groups, self.style);
-        self.surface.paint(self.at.0, self.at.1, self.width(), self.height(), |c, r| {
-            c.round(r, 18.0, rgb(0x0d0f14).alpha(0.92));
-            let cy = 210.0;
+        let s = self.show.v();
+        // Abre de 95% do tamanho; fecha até 97%, ambos pelo meio.
+        let k = if self.closing { 0.97 + 0.03 * s } else { 0.95 + 0.05 * s };
+        let since = self.opened.elapsed().as_secs_f32() * 1000.0;
+        let pops: [f32; SLOTS] = std::array::from_fn(|i| self.pop[i].v());
+        let hl = self.hl.map(|(a, o)| (a.v(), o.v()));
+        let (lk, lprev) = (self.label.v(), self.label_prev);
+        let (sv, sslot, sx, son) = (self.strip.v(), self.strip_slot, self.strip_x.v(), self.strip_on.v());
+        let (fl, fslot) = (self.flash.v(), self.flash_slot);
+        let (names, icons, wraps, hint, arrow, two, left, style) = (&self.names, &self.icons, &self.wraps, &self.hint, self.arrow, self.two, self.left, self.style);
+        let (w, h) = (self.width(), self.height());
+        self.surface.alpha = (s.clamp(0.0, 1.0) * 255.0).round() as u8;
+        let m = (SHADOW * dpi_scale(self.surface.hwnd)).round() as i32;
+        self.surface.paint(self.at.0 - m, self.at.1 - m, w + 2.0 * SHADOW, h + 2.0 * SHADOW, |c, _| {
+            c.scale_at(k, SHADOW + w / 2.0 * (1.0 - k), SHADOW + h / 2.0 * (1.0 - k));
+            let r = rect(0.0, 0.0, w, h);
+            pad_panel(c, r);
+            let cy = 226.0;
             // Com dois círculos, o do stick esquerdo (lugares 8 a 15) fica à esquerda.
-            let rings: &[(f32, usize)] = if two { &[(RD_W / 2.0, 8), (r.w - RD_W / 2.0, 0)] } else { &[(RD_W / 2.0, 0)] };
+            let rings: &[(f32, usize)] = if two { &[(RD_W / 2.0, 8), (w - RD_W / 2.0, 0)] } else { &[(RD_W / 2.0, 0)] };
+            let ring_of = |i: usize| (two && i < 8) as usize;
             // Traço entre os dois círculos, para não parecerem um só.
             if two {
-                c.line(r.w / 2.0, 40.0, r.w / 2.0, 380.0, WHITE.alpha(0.10), 1.0);
+                c.line(w / 2.0, 40.0, w / 2.0, 420.0, WHITE.alpha(0.10), 1.0);
             }
-            for &(cx, first) in rings {
-            let stick = if left { 1 } else { first / 8 };
-            stick_arrow(c, cx, cy, arrow[stick]);
-            // No centro, o stick que aponta neste círculo.
-            crate::ui::glyph::draw(c, cx - 11.0, cy, 22.0, style, if stick == 1 { crate::sys::pads::LS } else { crate::sys::pads::RS }, TEXT2);
-            for (i, name) in names.iter().enumerate().skip(first).take(8) {
-                let a = ((i % 8) as f32 * 45.0).to_radians();
-                let (px, py) = (cx + 210.0 * a.sin(), cy - 160.0 * a.cos());
-                let b = rect(px - 70.0, py - 40.0, 140.0, 80.0);
-                let on = sel == Some(i);
-                if icons[i] == GROUP {
-                    // As 4 opções em cruz, na posição do direcional, sem nome: os nomes ficam na faixa.
-                    c.round(b, 12.0, if on { ACCENT.alpha(0.35) } else { WHITE.alpha(0.07) });
-                    for (d, (dx, dy)) in [(0.0, -1.0), (1.0, 0.0), (0.0, 1.0), (-1.0, 0.0)].into_iter().enumerate() {
-                        let k = icons[sub(i, d)];
-                        if k != EMPTY {
-                            c.icon(px - 9.0 + dx * 26.0, py - 9.0 + dy * 22.0, 18.0, crate::pages::action_icon(k), if on { WHITE } else { ACCENT });
-                        }
-                    }
-                    continue;
-                }
-                if name.is_empty() {
-                    c.round_line(b, 12.0, WHITE.alpha(0.12), 1.0);
-                    continue;
-                }
-                c.round(b, 12.0, if on { ACCENT.alpha(0.35) } else { WHITE.alpha(0.07) });
-                // Ícone em cima, nome embaixo (até três linhas).
-                c.icon(px - 10.0, b.y + 7.0, 20.0, crate::pages::action_icon(icons[i]), if on { WHITE } else { ACCENT });
-                c.text_wrap_center(rect(b.x + 6.0, b.y + 31.0, b.w - 12.0, 46.0), name, 11.0, if on { WHITE } else { TEXT2 }, if on { Weight::Semibold } else { Weight::Regular });
-            }
-            }
-            // Faixa das 4 opções do lugar escolhido, embaixo do círculo dele: seta do direcional, ícone e nome.
-            if let Some(i) = sel.filter(|&i| groups && (icons[i] == GROUP || icons[i] == PROFILES)) {
-                let cx = if two && i < 8 { r.w - RD_W / 2.0 } else { RD_W / 2.0 };
-                let (w, gap) = (134.0, 8.0);
-                let x0 = cx - (4.0 * w + 3.0 * gap) / 2.0;
-                for d in 0..4 {
-                    let k = sub(i, d);
-                    let b = rect(x0 + d as f32 * (w + gap), RD_H - 40.0, w, 80.0);
-                    if icons[k] == EMPTY {
-                        c.round_line(b, 12.0, WHITE.alpha(0.12), 1.0);
+            for (ring, &(cx, first)) in rings.iter().enumerate() {
+                let stick = if left { 1 } else { first / 8 };
+                for i in first..first + 8 {
+                    let a = (i % 8) as f32 * 45.0;
+                    let (a0, a1) = (a - 22.5 + 0.6, a + 22.5 - 0.6);
+                    // Ao abrir, cada gomo cresce para fora em cascata; o escolhido sai 7 px.
+                    let ck = cascade(since, i % 8);
+                    let pop = pops[i];
+                    let r1 = RD_R0 + (0.7 + 0.3 * ck) * (RD_R1 - RD_R0) + 7.0 * pop;
+                    let r0 = RD_R0 + 2.0 * pop;
+                    if icons[i] != GROUP && names[i].is_empty() {
+                        c.sector(cx, cy, r0, r1, a0, a1, &[], Some((WHITE.alpha(0.12 * ck), 1.0)));
                         continue;
                     }
-                    let on = v.sub == Some(d);
-                    c.round(b, 12.0, if on { ACCENT.alpha(0.35) } else { WHITE.alpha(0.07) });
-                    crate::ui::glyph::dpad(c, b.x + 17.0, b.y + 17.0, 18.0, Some(d), if on { WHITE } else { MUTED });
-                    c.icon(b.x + b.w / 2.0 - 10.0, b.y + 7.0, 20.0, crate::pages::action_icon(icons[k]), if on { WHITE } else { ACCENT });
-                    c.text_wrap_center(rect(b.x + 6.0, b.y + 31.0, b.w - 12.0, 46.0), &names[k], 11.0, if on { WHITE } else { TEXT2 }, if on { Weight::Semibold } else { Weight::Regular });
+                    let flash = if fslot == Some(i) { fl } else { 0.0 };
+                    let fills = [WHITE.alpha(0.055 * ck), ACCENT.alpha(0.24 * pop), ACCENT.alpha(0.6 * flash)];
+                    let n = if flash > 0.0 { 3 } else if pop > 0.0 { 2 } else { 1 };
+                    c.sector(cx, cy, r0, r1, a0, a1, &fills[..n], Some((WHITE.alpha(0.07 * ck), 1.0)));
+                    let rm = (r0 + r1) / 2.0;
+                    let (px, py) = (cx + rm * a.to_radians().sin(), cy - rm * a.to_radians().cos());
+                    let lit = pop > 0.5;
+                    let ic = if lit { WHITE } else { ACCENT }.alpha(ck);
+                    if icons[i] == GROUP {
+                        // As 4 opções em cruz, na posição do direcional, sem nome: os nomes ficam na faixa.
+                        for (d, (dx, dy)) in [(0.0, -1.0), (1.0, 0.0), (0.0, 1.0), (-1.0, 0.0)].into_iter().enumerate() {
+                            let kk = icons[sub(i, d)];
+                            if kk != EMPTY {
+                                c.icon(px - 8.0 + dx * 20.0, py - 8.0 + dy * 18.0, 16.0, crate::pages::action_icon(kk), ic);
+                            }
+                        }
+                        continue;
+                    }
+                    // Ícone em cima, nome embaixo: duas linhas se couber, senão uma com reticências.
+                    c.icon(px - 10.5, py - 22.0, 21.0, crate::pages::action_icon(icons[i]), ic);
+                    let (tc, wt) = if lit { (WHITE.alpha(ck), Weight::Semibold) } else { (TEXT2.alpha(ck), Weight::Regular) };
+                    if wraps[i] {
+                        c.text_wrap_center(rect(px - 43.0, py + 2.0, 86.0, 30.0), &names[i], 11.0, tc, wt);
+                    } else {
+                        c.text_raw(rect(px - 43.0, py + 2.0, 86.0, 16.0), &names[i], 11.0, tc, Align::Center, wt);
+                    }
+                }
+                // Destaque: arco por fora do gomo, que gira até o escolhido; três traços fazem o brilho.
+                let (ha, hon) = hl[ring];
+                if hon > 0.01 {
+                    let rr = RD_R1 + 7.0 * hon + 3.0;
+                    for (lw, al) in [(16.0, 0.06), (8.0, 0.12), (3.0, 1.0)] {
+                        c.arc_span(cx, cy, rr, ha - 22.5 + 0.6, ha + 22.5 - 0.6, ACCENT.alpha(al * hon), lw);
+                    }
+                }
+                // No centro, o nome inteiro do escolhido (troca em fade, 4 px) e o stick deste círculo.
+                stick_hub(c, cx, cy, RD_HUB, arrow[stick]);
+                // Lugar de 4 opções não tem nome: mostra o da opção do direcional.
+                let mine = |j: Option<usize>| {
+                    let j = j.filter(|&i| ring_of(i) == ring)?;
+                    let j = match v.sub {
+                        Some(d) if icons[j] == GROUP || icons[j] == crate::sys::radial::PROFILES => sub(j, d),
+                        _ => j,
+                    };
+                    (!names[j].is_empty()).then_some(j)
+                };
+                let label = |j: usize, al: f32, dy: f32| c.text_wrap_center(rect(cx - 60.0, cy - 34.0 + dy, 120.0, 36.0), &names[j], 13.0, TEXT.alpha(al), Weight::Semibold);
+                if let Some(j) = mine(sel) {
+                    label(j, lk, 4.0 * (1.0 - lk));
+                }
+                if let Some(j) = mine(lprev).filter(|_| lk < 1.0) {
+                    label(j, 1.0 - lk, -4.0 * lk);
+                }
+                crate::ui::glyph::draw(c, cx - 11.0, cy + 22.0, 22.0, style, if stick == 1 { crate::sys::pads::LS } else { crate::sys::pads::RS }, TEXT2);
+            }
+            // Faixa das 4 opções do lugar escolhido, embaixo do círculo dele: seta do direcional,
+            // ícone e nome; o destaque corre entre elas.
+            if let Some(i) = sslot.filter(|_| sv > 0.01) {
+                let cx = if two && i < 8 { w - RD_W / 2.0 } else { RD_W / 2.0 };
+                let (bw, gap) = (134.0, 8.0);
+                let x0 = cx - (4.0 * bw + 3.0 * gap) / 2.0;
+                let y = RD_H - 32.0 + 10.0 * (1.0 - sv);
+                let bx = |d: f32| rect(x0 + d * (bw + gap), y, bw, 80.0);
+                for d in 0..4 {
+                    if icons[sub(i, d)] == EMPTY {
+                        c.round_line(bx(d as f32), 12.0, WHITE.alpha(0.12 * sv), 1.0);
+                    } else {
+                        c.round(bx(d as f32), 12.0, WHITE.alpha(0.07 * sv));
+                    }
+                }
+                if son > 0.01 {
+                    c.round(bx(sx), 12.0, ACCENT.alpha(0.24 * son * sv));
+                    c.round_line(bx(sx), 12.0, ACCENT.alpha(son * sv), 1.5);
+                }
+                for d in 0..4 {
+                    let kk = sub(i, d);
+                    if icons[kk] == EMPTY {
+                        continue;
+                    }
+                    let b = bx(d as f32);
+                    let on = sel == Some(i) && v.sub == Some(d);
+                    crate::ui::glyph::dpad(c, b.x + 17.0, b.y + 17.0, 18.0, Some(d), if on { WHITE } else { MUTED }.alpha(sv));
+                    c.icon(b.x + b.w / 2.0 - 10.0, b.y + 7.0, 20.0, crate::pages::action_icon(icons[kk]), if on { WHITE } else { ACCENT }.alpha(sv));
+                    c.text_wrap_center(rect(b.x + 6.0, b.y + 31.0, b.w - 12.0, 46.0), &names[kk], 11.0, if on { WHITE } else { TEXT2 }.alpha(sv), if on { Weight::Semibold } else { Weight::Regular });
                 }
             }
             crate::ui::glyph::hints(c, rect(16.0, r.h - 36.0, r.w - 32.0, 22.0), style, hint, 12.0, MUTED);
+            c.translate(0.0, 0.0);
         });
     }
 }
@@ -1694,6 +2142,108 @@ mod tests {
         assert!(dodge_up(r(690, 590), 700, 600, 520, 392));
         assert!(!dodge_up(r(900, 300), 700, 600, 520, 392));
         assert!(!dodge_up(r(100, 700), 700, 600, 520, 392));
+    }
+
+    /// Custo de um quadro do radial e do teclado, os dois círculos e tudo aceso:
+    /// `cargo test --release frame_cost -- --ignored --nocapture`. O relógio é de 16 ms.
+    #[test]
+    #[ignore]
+    fn frame_cost() {
+        use crate::sys::radial::{sub, SLOTS};
+        let ago = std::time::Instant::now() - std::time::Duration::from_secs(1);
+        let time = |name: &str, f: &mut dyn FnMut()| {
+            f();
+            let t = std::time::Instant::now();
+            for _ in 0..120 {
+                f();
+            }
+            println!("{name}: {:.2} ms por quadro", t.elapsed().as_secs_f32() * 1000.0 / 120.0);
+        };
+        let mut r = Radial::new();
+        for i in 0..SLOTS {
+            r.names[i] = format!("Ação de teste número {i}");
+            r.icons[i] = 1;
+            for d in 0..4 {
+                r.names[sub(i, d)] = format!("Opção {d}");
+                r.icons[sub(i, d)] = 1;
+            }
+        }
+        r.wraps = [true; SLOTS];
+        (r.two, r.groups, r.opened) = (true, true, ago);
+        r.last = crate::sys::radial::View { open: true, sel: Some(3), sub: Some(1), two: true, ..Default::default() };
+        r.pop[3] = Tw::new(1.0);
+        r.hl[1] = (Tw::new(135.0), Tw::new(1.0));
+        (r.strip, r.strip_slot, r.strip_x, r.strip_on) = (Tw::new(1.0), Some(3), Tw::new(1.0), Tw::new(1.0));
+        r.arrow = [(0.5, 0.5); 2];
+        time("radial", &mut || r.paint());
+        let mut k = Keyboard::new();
+        (k.two, k.opened) = (true, ago);
+        k.last = crate::sys::osk::View { open: true, two: true, petal: Some(2), right: Some(5), ..Default::default() };
+        k.hl = [(Tw::new(90.0), Tw::new(1.0)), (Tw::new(225.0), Tw::new(1.0))];
+        k.arrow = [(0.5, 0.5); 2];
+        time("teclado", &mut || k.paint());
+        // Letra pulsando e letras trocando de modo, o quadro mais cheio.
+        k.prev.shift = true;
+        (k.swap, k.pulse) = (Tw::new(0.5), Tw::new(0.5));
+        k.swap.set(1.0, 1e9);
+        k.pulse.set(1.0, 1e9);
+        time("teclado animando", &mut || k.paint());
+    }
+
+    /// Fotos do radial e do teclado, já abertos (build de debug):
+    /// `PRISMA_LAYER_DUMP=<pasta> cargo test layer_shots -- --ignored`.
+    #[test]
+    #[ignore]
+    fn layer_shots() {
+        use crate::sys::radial::{sub, EMPTY, GROUP, PROGRAM, SLOTS};
+        let dir = std::env::var("PRISMA_LAYER_DUMP").expect("PRISMA_LAYER_DUMP");
+        let ago = std::time::Instant::now() - std::time::Duration::from_secs(1);
+        let keep = |name: &str| {
+            let newest = std::fs::read_dir(&dir).unwrap().flatten().filter(|e| e.file_name().to_string_lossy().starts_with("camada_")).max_by_key(|e| e.metadata().unwrap().modified().unwrap()).unwrap();
+            std::fs::rename(newest.path(), format!("{dir}\\{name}.png")).unwrap();
+        };
+        for (two, file) in [(false, "radial_um"), (true, "radial_dois")] {
+            let mut r = Radial::new();
+            for i in 0..SLOTS {
+                let a = [0u8, 6, 15, GROUP, PROGRAM, 20, EMPTY, 29][i % 8];
+                r.icons[i] = a;
+                r.names[i] = match a {
+                    PROGRAM => "Visual Studio Code".into(),
+                    EMPTY => String::new(),
+                    _ => crate::i18n::tr(crate::sys::remap::action_name(a)).into_owned(),
+                };
+                for d in 0..4 {
+                    let s = [1u8, 7, 16, 21][d];
+                    r.icons[sub(i, d)] = s;
+                    r.names[sub(i, d)] = crate::i18n::tr(crate::sys::remap::action_name(s)).into_owned();
+                }
+                r.wraps[i] = measure(&r.names[i], 11.0, Weight::Semibold, Some(86.0)).1 <= 30.0;
+            }
+            r.hint = vec![(vec![crate::sys::pads::A], "dispara".into()), (vec![crate::ui::glyph::DPAD_ANY], "escolhe entre as 4 opções".into()), (vec![crate::sys::pads::B], "fecha".into())];
+            (r.two, r.groups, r.opened, r.show) = (two, true, ago, Tw::new(1.0));
+            r.last = crate::sys::radial::View { open: true, sel: Some(3), sub: Some(1), two, ..Default::default() };
+            r.pop[3] = Tw::new(1.0);
+            r.hl[(two) as usize] = (Tw::new(135.0), Tw::new(1.0));
+            (r.strip, r.strip_slot, r.strip_x, r.strip_on) = (Tw::new(1.0), Some(3), Tw::new(1.0), Tw::new(1.0));
+            r.arrow = [(0.6, -0.6); 2];
+            r.paint();
+            keep(file);
+        }
+        for (two, file) in [(false, "teclado_um"), (true, "teclado_dois")] {
+            let mut k = Keyboard::new();
+            (k.two, k.opened, k.show) = (two, ago, Tw::new(1.0));
+            let t = |s: &str| s.to_string();
+            k.lines = [
+                vec![(vec![crate::sys::pads::LB], t("apaga")), (vec![crate::sys::pads::RB], t("espaço")), (vec![crate::sys::pads::START], t("Enter")), (vec![crate::ui::glyph::DPAD_ANY], t("setas"))],
+                vec![(vec![crate::sys::remap::RT], t("maiúsculas")), (vec![crate::sys::remap::LT], t("números")), (vec![crate::sys::pads::BACK], t("fecha"))],
+            ];
+            k.last = crate::sys::osk::View { open: true, two, petal: Some(2), right: two.then_some(5), ..Default::default() };
+            k.prev = k.last;
+            k.hl = [(Tw::new(90.0), Tw::new(1.0)), (Tw::new(225.0), Tw::new(1.0))];
+            k.arrow = [(0.7, 0.0), (-0.5, -0.5)];
+            k.paint();
+            keep(file);
+        }
     }
 
     /// Lê o cursor de texto da janela em foco agora: `cargo test caret_now -- --ignored --nocapture`.

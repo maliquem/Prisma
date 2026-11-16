@@ -150,6 +150,14 @@ pub fn view() -> View {
     }
 }
 
+/// Ação disparada mais 1; 0 se o radial fechou sem disparar.
+static FIRED: std::sync::atomic::AtomicU16 = std::sync::atomic::AtomicU16::new(0);
+
+/// A ação com que fechou por Confirmar (a janela pisca o lugar antes de sumir).
+pub fn fired() -> Option<u8> {
+    FIRED.load(std::sync::atomic::Ordering::Relaxed).checked_sub(1).map(|a| a as u8)
+}
+
 /// Sticks direito e esquerdo agora (Y para cima positivo), para as setas.
 pub fn stick() -> [(f32, f32); 2] {
     match &*STATE.lock().unwrap() {
@@ -184,6 +192,7 @@ fn open(watch: pads::Buttons) {
             prev: pads::Buttons::MAX,
         });
         drop(s);
+        FIRED.store(0, std::sync::atomic::Ordering::Relaxed);
         // Aberto, a soltura do botão vai para o radial e não para o gatilho: ele recomeça do zero.
         TRIG.lock().unwrap().take();
         super::remap::release_held();
@@ -252,6 +261,7 @@ fn step(r: &mut Radial, inp: &Input) -> (Option<u8>, bool, bool) {
     if down & r.ok != 0 && target.is_some() {
         r.fired = target;
         let pick = if sel.is_some_and(|i| r.slots[i] == PROFILES) { PROFILES } else { target.map_or(EMPTY, |i| r.slots[i]) };
+        FIRED.store(pick as u16 + 1, std::sync::atomic::Ordering::Relaxed);
         return (Some(pick), true, true);
     }
     if down & (r.back | r.watch) != 0 {

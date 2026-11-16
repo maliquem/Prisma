@@ -484,6 +484,43 @@ impl Canvas {
         }
     }
 
+    /// Arco de `a0` a `a1` graus (0 em cima, sentido horário), menor que meia volta.
+    pub fn arc_span(&self, cx: f32, cy: f32, r: f32, a0: f32, a1: f32, c: Color, w: f32) {
+        let p = |a: f32| windows_numerics::Vector2 { X: cx + r * a.to_radians().sin(), Y: cy - r * a.to_radians().cos() };
+        unsafe {
+            let Ok(path) = self.factory.CreatePathGeometry() else { return };
+            let Ok(sink) = path.Open() else { return };
+            sink.BeginFigure(p(a0), D2D1_FIGURE_BEGIN_HOLLOW);
+            sink.AddArc(&D2D1_ARC_SEGMENT { point: p(a1), size: D2D_SIZE_F { width: r, height: r }, rotationAngle: 0.0, sweepDirection: D2D1_SWEEP_DIRECTION_CLOCKWISE, arcSize: D2D1_ARC_SIZE_SMALL });
+            sink.EndFigure(D2D1_FIGURE_END_OPEN);
+            let _ = sink.Close();
+            self.rt.DrawGeometry(&path, self.b(c), w, None);
+        }
+    }
+
+    /// Gomo de anel entre os raios `r0` e `r1`, de `a0` a `a1` graus (0 em cima, sentido
+    /// horário): pinta cada cor de `fills` por cima da anterior e depois o contorno.
+    pub fn sector(&self, cx: f32, cy: f32, r0: f32, r1: f32, a0: f32, a1: f32, fills: &[Color], line: Option<(Color, f32)>) {
+        let p = |r: f32, a: f32| windows_numerics::Vector2 { X: cx + r * a.to_radians().sin(), Y: cy - r * a.to_radians().cos() };
+        let arc = |r: f32, a: f32, dir| D2D1_ARC_SEGMENT { point: p(r, a), size: D2D_SIZE_F { width: r, height: r }, rotationAngle: 0.0, sweepDirection: dir, arcSize: D2D1_ARC_SIZE_SMALL };
+        unsafe {
+            let Ok(path) = self.factory.CreatePathGeometry() else { return };
+            let Ok(sink) = path.Open() else { return };
+            sink.BeginFigure(p(r1, a0), D2D1_FIGURE_BEGIN_FILLED);
+            sink.AddArc(&arc(r1, a1, D2D1_SWEEP_DIRECTION_CLOCKWISE));
+            sink.AddLine(p(r0, a1));
+            sink.AddArc(&arc(r0, a0, D2D1_SWEEP_DIRECTION_COUNTER_CLOCKWISE));
+            sink.EndFigure(D2D1_FIGURE_END_CLOSED);
+            let _ = sink.Close();
+            for &f in fills {
+                self.rt.FillGeometry(&path, self.b(f), None);
+            }
+            if let Some((c, w)) = line {
+                self.rt.DrawGeometry(&path, self.b(c), w, None);
+            }
+        }
+    }
+
     /// Linha de um gráfico. Valores de 0 a 100, do mais antigo ao mais novo.
     pub fn sparkline(&self, r: Rect, vals: &[f32], c: Color, w: f32) {
         if vals.len() < 2 {
