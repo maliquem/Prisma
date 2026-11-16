@@ -1100,7 +1100,13 @@ impl Meter {
                 }
             }
         }
-        // O medidor só aparece pelo atalho. Medir para o limitador automático não depende dele.
+        // Sem escolha do jogo, o medidor só aparece pelo atalho.
+        match listed.as_ref().map_or(0, |g| g.show) {
+            1 => self.show(VIEW_COMPACT),
+            2 => self.show(VIEW_FULL),
+            _ => {}
+        }
+        // Medir para o limitador automático não depende do medidor.
         if listed.as_ref().is_some_and(|g| g.limit_mode == 1 && !g.measured) {
             // Medir para o limitador não depende de o medidor estar visível.
             monitor::METER.store(true, std::sync::atomic::Ordering::Relaxed);

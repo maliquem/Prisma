@@ -33,6 +33,8 @@ pub struct MeterGame {
     pub power: String,
     /// Dia (desde 1970) em que o jogo abriu pela última vez; 0 é desconhecido.
     pub last: u32,
+    /// Medidor que abre sozinho com o jogo: 0 nenhum, 1 compacto, 2 completo.
+    pub show: u8,
 }
 
 /// Hoje, em dias desde 1970.
@@ -741,7 +743,7 @@ impl Config {
                     if p.len() >= 9 {
                         let n = |s: &str| s.parse().unwrap_or(0);
                         let flag = |i: usize| p.get(i).is_some_and(|v| *v == "1");
-                        c.meter_games.push(MeterGame { exe: p[0].into(), view: n(p[1]), limit_mode: n(p[2]), limit_fps: p[3].parse().unwrap_or(0), limit_real: p[4] == "1", measured: p[5] == "1", hdr: n(p[6]), preset: n(p[7]), path: p[8].into(), inject: p.get(9).map_or(true, |v| *v == "1"), inject_off: flag(10), power: p.get(11).map_or(String::new(), |v| v.to_string()), last: p.get(12).and_then(|v| v.parse().ok()).filter(|d| *d > 0).unwrap_or_else(today) });
+                        c.meter_games.push(MeterGame { exe: p[0].into(), view: n(p[1]), limit_mode: n(p[2]), limit_fps: p[3].parse().unwrap_or(0), limit_real: p[4] == "1", measured: p[5] == "1", hdr: n(p[6]), preset: n(p[7]), path: p[8].into(), inject: p.get(9).map_or(true, |v| *v == "1"), inject_off: flag(10), power: p.get(11).map_or(String::new(), |v| v.to_string()), last: p.get(12).and_then(|v| v.parse().ok()).filter(|d| *d > 0).unwrap_or_else(today), show: p.get(13).map_or(0, |v| n(v)) });
                     }
                 }
                 "hdr_game" => {
@@ -998,7 +1000,7 @@ impl Config {
         hk(&mut s, "hk_limit_up", self.hk_limit_up);
         hk(&mut s, "hk_limit_down", self.hk_limit_down);
         for g in &self.meter_games {
-            let _ = writeln!(s, "meter_game={}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}", g.exe, g.view, g.limit_mode, g.limit_fps, b(g.limit_real), b(g.measured), g.hdr, g.preset, g.path, b(g.inject), b(g.inject_off), g.power, g.last);
+            let _ = writeln!(s, "meter_game={}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}", g.exe, g.view, g.limit_mode, g.limit_fps, b(g.limit_real), b(g.measured), g.hdr, g.preset, g.path, b(g.inject), b(g.inject_off), g.power, g.last, g.show);
         }
         for g in &self.hdr_games {
             let _ = writeln!(s, "hdr_game={}|{}|{}", g.exe, g.mode, g.path);

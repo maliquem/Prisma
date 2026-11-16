@@ -44,6 +44,8 @@ pub mod cap {
     pub const NVIDIA: &str = "nvidia";
     pub const WINDOW_SHOT: &str = "capture.window_shot";
     pub const RECORD_WINDOW: &str = "capture.record_window";
+    /// `Request::RecordScreen`.
+    pub const RECORD_SCREEN: &str = "capture.record_screen";
     pub const PAGE_ENERGY: &str = "page.energy";
     pub const PAGE_FULLSCREEN: &str = "page.fullscreen";
     pub const PAGE_SOUND: &str = "page.sound";
@@ -81,6 +83,12 @@ pub mod cap {
     pub const OPTIMIZE: &str = "optimize";
     /// `ShareInviteForGame` e `ShareInviteCancel`, com o estado em `Reply::Options::invite`.
     pub const SHARE_INVITE_GAME: &str = "share.invite_game";
+    /// `OptionValue::Meter`: o medidor abre com o jogo.
+    pub const METER_ON_LAUNCH: &str = "meter.on_launch";
+    /// `OptionValue::HdrOnLaunch`.
+    pub const HDR_ON_LAUNCH: &str = "hdr.on_launch";
+    /// `OptionValue::Volume`: volume guardado do jogo.
+    pub const SOUND_GAME_VOLUME: &str = "sound.game_volume";
 }
 
 /// Códigos estáveis de `Reply::Failed`.

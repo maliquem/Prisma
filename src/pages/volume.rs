@@ -161,19 +161,7 @@ fn draw_list(ui: &mut Ui, app: &mut App, t: Rect, outputs: &[audio::Device], inp
     }
     ui.end_scroll();
     if let Some((exe, path, on, vol)) = pin {
-        let e = app.cfg.snd_entry(&exe, &path);
-        e.pinned = on;
-        if on {
-            if let Some(v) = vol {
-                e.volume = (v * 100.0).round() as i32;
-            }
-        } else {
-            e.volume = -1;
-            if e.output.is_empty() && e.input.is_empty() {
-                app.cfg.snd_apps.retain(|a| !a.exe.eq_ignore_ascii_case(&exe));
-            }
-        }
-        app.cfg.save();
+        set_pinned(app, &exe, &path, on, vol);
     }
     if let Some((exe, path, input, id)) = changed {
         set_device(app, &exe, &path, input, id);
@@ -187,6 +175,24 @@ fn draw_list(ui: &mut Ui, app: &mut App, t: Rect, outputs: &[audio::Device], inp
         app.cfg.snd_apps.retain(|a| !a.exe.eq_ignore_ascii_case(&exe));
         app.cfg.save();
     }
+}
+
+/// Fixa o programa na lista com o volume `vol` (0 a 1), que volta quando ele abre; soltar esquece o
+/// volume e tira da lista quem não tem aparelho escolhido.
+pub fn set_pinned(app: &mut App, exe: &str, path: &str, on: bool, vol: Option<f32>) {
+    let e = app.cfg.snd_entry(exe, path);
+    e.pinned = on;
+    if on {
+        if let Some(v) = vol {
+            e.volume = (v * 100.0).round() as i32;
+        }
+    } else {
+        e.volume = -1;
+        if e.output.is_empty() && e.input.is_empty() {
+            app.cfg.snd_apps.retain(|a| !a.exe.eq_ignore_ascii_case(exe));
+        }
+    }
+    app.cfg.save();
 }
 
 /// Aparelho de saída ou de entrada do programa (vazio: o padrão do Windows), aplicado já no que está aberto.

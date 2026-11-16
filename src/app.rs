@@ -2509,6 +2509,10 @@ impl App {
         self.show_saved_log();
         if was != self.meter.view {
             self.meter_timer();
+            // Aberto sozinho com o jogo, como pelo atalho.
+            if was == crate::meter::VIEW_OFF {
+                self.load_hdr();
+            }
         }
     }
 

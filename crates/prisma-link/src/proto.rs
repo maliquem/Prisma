@@ -71,6 +71,9 @@ pub enum Request {
     RecordWindow {
         pid: u32,
     },
+    /// Liga ou para a gravação da tela inteira, a do monitor em foco (`capture.record_screen`).
+    /// Responde `Toggled`.
+    RecordScreen,
     /// Controles ligados agora (`controllers`).
     Controllers,
     /// Perfis do controle como teclado e mouse e qual está em uso (`controllers.mapping`).
@@ -253,6 +256,13 @@ pub enum OptionValue {
     /// Otimizar ao abrir o jogo; falso pula este jogo (`optimize`). A regra geral da tela Energia
     /// ("Não perguntar") vale por cima.
     Optimize(bool),
+    /// Medidor que abre sozinho quando o jogo abre; `Off` não abre (`meter.on_launch`).
+    Meter(MeterView),
+    /// Liga o HDR do Windows quando o jogo abre e devolve como estava quando fecha (`hdr.on_launch`).
+    HdrOnLaunch(bool),
+    /// Volume do jogo, de 0 a 100, posto quando ele abre (a lista do Som, programa fixo); `None`
+    /// tira o volume guardado (`sound.game_volume`).
+    Volume(Option<u32>),
     /// Opção que este lado não conhece, com o que veio nela.
     #[serde(untagged)]
     Unknown(serde_json::Value),
@@ -423,6 +433,7 @@ pub enum Reply {
     },
     /// Resposta ao `Options`.
     Options {
+        /// Medidor que abre com o jogo (`OptionValue::Meter`).
         meter: MeterView,
         fps_limit: FpsLimit,
         /// HDR do Windows na tela principal; `None` sem tela com HDR.
@@ -431,13 +442,17 @@ pub enum Reply {
         auto_hdr: Option<bool>,
         /// A chave geral do Auto HDR nas Configurações do Windows.
         auto_hdr_windows: bool,
+        /// O HDR do Windows liga quando o jogo abre (a escolha do jogo ou a regra geral do Medidor).
+        #[serde(default)]
+        hdr_on_launch: bool,
         audio_out: Vec<AudioDevice>,
         audio_in: Vec<AudioDevice>,
         /// Aparelhos do jogo; vazio é o padrão do Windows.
         audio_out_id: String,
         audio_in_id: String,
-        /// Volume do jogo de 0 a 100; `None` sem som aberto.
+        /// Volume guardado do jogo, de 0 a 100, posto quando ele abre; `None` fora da lista do Som.
         volume: Option<u32>,
+        /// O jogo aberto (`pid`) está mudo agora.
         muted: bool,
         share_mode: ShareMode,
         replay: ReplayOptions,
@@ -585,6 +600,7 @@ mod tests {
             (Request::NvidiaSet { exe: "g.exe".into(), id: 5, value: None }, r#"{"type":"nvidia_set","exe":"g.exe","id":5,"value":null}"#),
             (Request::WindowShot { pid: 7 }, r#"{"type":"window_shot","pid":7}"#),
             (Request::RecordWindow { pid: 7 }, r#"{"type":"record_window","pid":7}"#),
+            (Request::RecordScreen, r#"{"type":"record_screen"}"#),
             (Request::ShareAsk { name: "PC".into(), perms: 3, code: None }, r#"{"type":"share_ask","name":"PC","perms":3}"#),
             (Request::ShareAsk { name: "PC".into(), perms: 3, code: Some("12 34".into()) }, r#"{"type":"share_ask","name":"PC","perms":3,"code":"12 34"}"#),
         ];
@@ -659,6 +675,10 @@ mod tests {
             (Request::ShareInviteCancel { exe: "g.exe".into() }, r#"{"type":"share_invite_cancel","exe":"g.exe"}"#),
             (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::Fullscreenizer(true) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"fullscreenizer":true}}"#),
             (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::Optimize(false) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"optimize":false}}"#),
+            (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::Meter(MeterView::Full) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"meter":"full"}}"#),
+            (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::HdrOnLaunch(true) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"hdr_on_launch":true}}"#),
+            (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::Volume(Some(35)) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"volume":35}}"#),
+            (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::Volume(None) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"volume":null}}"#),
         ];
         for (req, json) in cases {
             assert_eq!(serde_json::to_string(&req).unwrap(), json);
@@ -690,6 +710,7 @@ mod tests {
                 hdr: Some(true),
                 auto_hdr: None,
                 auto_hdr_windows: true,
+                hdr_on_launch: true,
                 audio_out: vec![dev("a", true), dev("b", false)],
                 audio_in: vec![],
                 audio_out_id: "b".into(),
@@ -709,6 +730,7 @@ mod tests {
                 hdr: None,
                 auto_hdr: Some(false),
                 auto_hdr_windows: false,
+                hdr_on_launch: false,
                 audio_out: vec![],
                 audio_in: vec![dev("m", true)],
                 audio_out_id: String::new(),
