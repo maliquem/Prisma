@@ -216,6 +216,18 @@ fn draw_update(ui: &mut Ui, app: &mut App, r: Rect) {
         app.page = Page::News;
         ui.s.needs_redraw = true;
     }
+    let nw = measure("Novidades", 13.0, Weight::Semibold, None).0;
+    let gh = rect(news.x + nw + 16.0, news.y, 60.0, 22.0);
+    ui.c.text(gh, "GitHub", 13.0, if ui.is_hover(gh) { TEXT } else { ACCENT }, Align::Left, Weight::Semibold);
+    if ui.hit("github", gh) {
+        crate::report::open_url("https://github.com/maliquem/Prisma");
+    }
+    let tw = measure("Atualizações", 15.0, Weight::Semibold, None).0;
+    let me = rect(r.x + 28.0 + tw, r.y + 10.0, 140.0, 22.0);
+    ui.c.text(me, "Made by Maliquem", 12.0, if ui.is_hover(me) { TEXT } else { MUTED }, Align::Left, Weight::Regular);
+    if ui.hit("maliquem", me) {
+        crate::report::open_url("https://github.com/maliquem");
+    }
     let (text, color) = match &s.phase {
         Phase::Idle => ("Busca só o GitHub do Prisma, sem enviar dados seus.".to_string(), TEXT2),
         Phase::Checking => ("Procurando…".to_string(), TEXT2),

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.1
+
+- Settings: the Updates card has a **GitHub** link to Prisma's page and **Made by Maliquem**, which opens the author's page. / Configurações: o cartão Atualizações tem o link **GitHub**, para a página do Prisma, e **Made by Maliquem**, que abre a página da autora.
+
 ## 1.5.0
 
 - Sound page: new **Equalizer** tab, with a per-device equalizer (parametric or graphic, profiles, channel gain and delay for 5.1/7.1, and the engine installed from the page itself). / Página Som: aba nova **Equalizador**, com equalizador por aparelho (paramétrico ou gráfico, perfis, ganho e atraso por canal em 5.1/7.1, e o motor instalado pela própria página).

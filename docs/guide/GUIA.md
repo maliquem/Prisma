@@ -381,6 +381,7 @@ Com a busca automática ligada, o Prisma procura uma versão nova uma vez por di
 - **Não:** ele pergunta de novo na próxima vez que a janela abrir.
 - **Não mostrar de novo:** desliga a busca automática. Para religar, marque a opção em Configurações, onde também há **Procurar agora**.
 - **Novidades:** depois de atualizar, o Prisma abre com o que mudou em cada versão desde a que você usava, mesmo pulando várias. Para ver de novo, clique em **Novidades** ao lado da versão, em Configurações.
+- **GitHub e Made by Maliquem:** ao lado de **Novidades**, **GitHub** abre a página do Prisma, e **Made by Maliquem**, ao lado do título Atualizações, abre a página da autora.
 
 ## Reportar bug
 

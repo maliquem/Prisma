@@ -381,6 +381,7 @@ With automatic search on, Prisma looks for a new version once a day on GitHub, w
 - **No:** it asks again the next time the window opens.
 - **Don't show again:** turns automatic search off. To turn it back on, check the option in Settings, which also has **Check now**.
 - **What's new:** after an update, Prisma opens with what changed in each version since the one you had, even if you skipped several. To see it again, click **What's new** next to the version in Settings.
+- **GitHub and Made by Maliquem:** next to **What's new**, **GitHub** opens Prisma's page, and **Made by Maliquem**, next to the Updates title, opens the author's page.
 
 ## Report a bug
 
