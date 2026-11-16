@@ -306,6 +306,8 @@ pub struct Config {
     pub snd_apps: Vec<SndApp>,
     /// Perfil de equalizador de cada jogo: (exe, perfil). Sem linha é o padrão do aparelho.
     pub eq_apps: Vec<(String, String)>,
+    /// Perfil de equalizador de cada aparelho de saída fora dos jogos: (GUID, perfil). Sem linha é o plano.
+    pub eq_devs: Vec<(String, String)>,
     pub snd_keys: Vec<SndKey>,
     /// Atalhos que abrem programas (página Atalhos).
     pub run_keys: Vec<RunKey>,
@@ -483,6 +485,7 @@ impl Default for Config {
             snd_keep: 0,
             snd_apps: Vec::new(),
             eq_apps: Vec::new(),
+            eq_devs: Vec::new(),
             snd_keys: Vec::new(),
             run_keys: Vec::new(),
             share_names: Vec::new(),
@@ -739,6 +742,12 @@ impl Config {
                     let p: Vec<&str> = v.split('|').collect();
                     if p.len() >= 2 && !p[0].is_empty() && !p[1].is_empty() {
                         c.eq_apps.push((p[0].into(), p[1].into()));
+                    }
+                }
+                "eq_dev" => {
+                    let p: Vec<&str> = v.split('|').collect();
+                    if p.len() >= 2 && !p[0].is_empty() && !p[1].is_empty() {
+                        c.eq_devs.push((p[0].into(), p[1].into()));
                     }
                 }
                 "snd_key" => {
@@ -1020,6 +1029,9 @@ impl Config {
         }
         for (exe, profile) in &self.eq_apps {
             let _ = writeln!(s, "eq_app={exe}|{profile}");
+        }
+        for (guid, profile) in &self.eq_devs {
+            let _ = writeln!(s, "eq_dev={guid}|{profile}");
         }
         for k in &self.snd_keys {
             let _ = writeln!(s, "snd_key={},{}|{}|{}", k.key.mods, k.key.vk, k.output, k.input);

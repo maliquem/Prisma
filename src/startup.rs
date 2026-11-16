@@ -401,6 +401,7 @@ pub fn uninstall() {
     }
     crate::sys::autohdr::clear_all();
     crate::sys::hidhide::uninstall();
+    crate::sys::eqapo::uninstall();
     crate::sys::shellmenu::set(false);
     crate::sys::copy::set_menu(false);
     let cfg = crate::config::Config::load();

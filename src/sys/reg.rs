@@ -117,6 +117,15 @@ pub fn delete_key(h: Hive, key: &str) -> bool {
     }
 }
 
+/// Apaga a chave com tudo o que tem dentro.
+pub fn delete_tree(h: Hive, key: &str) -> bool {
+    unsafe {
+        let k = wide(key);
+        let r = RegDeleteTreeW(h.key(), PCWSTR(k.as_ptr()));
+        r == ERROR_SUCCESS || r == ERROR_FILE_NOT_FOUND
+    }
+}
+
 pub fn exists(h: Hive, key: &str) -> bool {
     unsafe {
         let k = wide(key);

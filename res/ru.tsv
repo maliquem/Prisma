@@ -2610,3 +2610,69 @@ Como administrador	От имени администратора
 O programa do atalho não abriu	Программа сочетания клавиш не открылась
 Página Atalhos	Страница «Сочетания клавиш»
 Mostrar o Prisma	Показать Prisma
+Grave (prateleira)	НЧ (полочный)
+Agudo (prateleira)	ВЧ (полочный)
+Passa-baixa	ФНЧ
+Passa-alta	ФВЧ
+{} linhas do arquivo ficaram de fora	Строк пропущено из файла: {}
+Pronto: o som do Windows reiniciou com o equalizador	Готово: звук Windows перезапущен с эквалайзером
+O equalizador não mudou (permissão recusada ou erro; veja eq\instalar.log)	Эквалайзер не изменился (доступ отклонён или ошибка; см. eq\instalar.log)
+Não consegui gravar o perfil do equalizador	Не удалось сохранить профиль эквалайзера
+Nenhum aparelho de saída ligado.	Нет подключённых устройств вывода.
+Aparelho de saída	Устройство вывода
+mono	моно
+estéreo	стерео
+{} canais	Каналов: {}
+EQ ativo neste aparelho	Эквалайзер включён на этом устройстве
+EQ desligado neste aparelho	Эквалайзер выключен на этом устройстве
+Perfil do aparelho	Профиль устройства
+Plano (desligado)	Плоский (выключен)
++ Novo perfil…	+ Новый профиль…
+Duplicar	Дублировать
+Importar…	Импорт…
+Exportar…	Экспорт…
+Apagar o perfil {}?	Удалить профиль {}?
+O aparelho volta ao plano. O arquivo do perfil sai do disco.	Устройство вернётся к плоской характеристике. Файл профиля будет удалён с диска.
+Motor do equalizador	Движок эквалайзера
+Esperando o Windows…	Ожидание Windows…
+Com {} ligado, o Windows não passa o som deste aparelho pelo equalizador. Desligue o som espacial dele para usar.	Пока включён {}, Windows не пропускает звук этого устройства через эквалайзер. Выключите на нём пространственный звук, чтобы использовать эквалайзер.
+Ligado neste aparelho. O som de todos os programas passa pelo perfil do aparelho.	Включён на этом устройстве. Звук всех программ проходит через профиль устройства.
+Instalado, mas desligado neste aparelho.	Установлен, но выключен на этом устройстве.
+Não instalado. Os perfis podem ser montados agora; o som só muda com o motor ligado.	Не установлен. Профили можно создавать уже сейчас; звук изменится только при включённом движке.
+Desligar aqui	Выключить здесь
+Desligar o equalizador neste aparelho?	Выключить эквалайзер на этом устройстве?
+O Windows vai pedir administrador. A configuração original do aparelho volta e o som do Windows reinicia (alguns segundos de silêncio).	Windows запросит права администратора. Исходная конфигурация устройства вернётся, а звук Windows перезапустится (несколько секунд тишины).
+Ligar aqui	Включить здесь
+Ligar o equalizador…	Включить эквалайзер…
+Ligar o equalizador neste aparelho?	Включить эквалайзер на этом устройстве?
+O Windows vai pedir administrador. O Prisma copia o motor para Arquivos de Programas, coloca no aparelho e reinicia o som do Windows (alguns segundos de silêncio). A configuração original do aparelho fica guardada para voltar igual ao remover. Nada é baixado.\n\nO motor ainda não é assinado: para o Windows carregar, a proteção do motor de áudio fica desligada (o Equalizer APO faz o mesmo). Conteúdo protegido, como alguns filmes em streaming, pode tocar em qualidade menor ou não tocar.	Windows запросит права администратора. Prisma копирует движок в Program Files, подключает его к устройству и перезапускает звук Windows (несколько секунд тишины). Исходная конфигурация устройства сохраняется, чтобы при удалении всё вернулось как было. Ничего не скачивается.\n\nДвижок пока не подписан: чтобы Windows его загрузила, защита аудиодвижка отключается (Equalizer APO делает то же самое). Защищённый контент, например некоторые фильмы в стриминге, может воспроизводиться в более низком качестве или не воспроизводиться.
+Remover de todos	Удалить везде
+Remover o equalizador de todos os aparelhos?	Удалить эквалайзер со всех устройств?
+O Windows vai pedir administrador. Cada aparelho volta à configuração original, o motor sai do Windows e o som reinicia. Os perfis ficam guardados.	Windows запросит права администратора. Каждое устройство вернётся к исходной конфигурации, движок будет удалён из Windows, а звук перезапустится. Профили сохранятся.
+Equalizador	Эквалайзер
+Paramétrico	Параметрический
+Gráfico	Графический
+Comparar sem EQ	Сравнить без эквалайзера
+Canal: todos	Канал: все
+Canal: {}	Канал: {}
+Plano: escolha ou crie um perfil para editar a curva.	Плоский: выберите или создайте профиль, чтобы изменить кривую.
+Pré-amplificação (dB)	Предусиление (дБ)
+Proteção: corta abaixo de 20 Hz e acima de 20 kHz	Защита: срез ниже 20 Гц и выше 20 кГц
+Acima de 0 dB: o limitador segura os picos no volume cheio.	Выше 0 дБ: ограничитель сдерживает пики на полной громкости.
+Pode distorcer: baixe a pré-amplificação ou ligue o limitador.	Возможны искажения: уменьшите предусиление или включите ограничитель.
+Bandas	Полосы
+Zerar	Сбросить
+Liga	Вкл.
+Tipo	Тип
+Frequência (Hz)	Частота (Гц)
+Ganho (dB)	Усиление (дБ)
+Adicionar banda	Добавить полосу
+Até 10 bandas. Clique duplo na curva também cria uma; a roda do mouse num ponto muda o Q.	До 10 полос. Двойной щелчок по кривой тоже создаёт полосу; колесо мыши на точке меняет Q.
+Canais	Каналы
+Ganho em dB e atraso em ms (1 ms ≈ 34 cm), para alinhar as caixas da sala.	Усиление в дБ и задержка в мс (1 мс ≈ 34 см), чтобы выровнять колонки в комнате.
+Ganho	Усиление
+Atraso	Задержка
+Abrir configuração de alto-falantes do Windows	Открыть настройку динамиков Windows
+Perfis de equalizador	Профили эквалайзера
+Não consegui ler esse arquivo	Не удалось прочитать этот файл
+Volume, aparelhos e equalizador de cada saída e de cada programa.	Громкость, устройства и эквалайзер для каждого выхода и каждой программы.

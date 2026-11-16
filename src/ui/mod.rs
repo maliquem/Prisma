@@ -783,6 +783,24 @@ impl<'a> Ui<'a> {
         changed
     }
 
+    /// Arrastar que começou dentro de `r`: true enquanto o botão segue apertado (o mouse pode sair).
+    pub fn drag(&mut self, key: &str, r: Rect) -> bool {
+        let id = hash_id(key);
+        if self.hover(r) && self.s.pressed {
+            self.s.active = id;
+        }
+        let on = self.s.active == id;
+        if on && (self.s.released || !self.s.down) {
+            self.s.active = 0;
+        }
+        on
+    }
+
+    /// O campo de texto `key` está com o foco.
+    pub fn focused(&self, key: &str) -> bool {
+        self.s.focus == hash_id(key)
+    }
+
     /// Campo que captura a próxima combinação de teclas. Esc cancela e Backspace limpa.
     pub fn hotkey(&mut self, key: &str, r: Rect, hk: &mut Hotkey) -> bool {
         let id = hash_id(key);

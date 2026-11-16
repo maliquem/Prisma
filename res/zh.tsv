@@ -2610,3 +2610,69 @@ Como administrador	以管理员身份
 O programa do atalho não abriu	快捷键对应的程序未能打开
 Página Atalhos	“快捷键”页面
 Mostrar o Prisma	显示 Prisma
+Grave (prateleira)	低架
+Agudo (prateleira)	高架
+Passa-baixa	低通
+Passa-alta	高通
+{} linhas do arquivo ficaram de fora	文件中有 {} 行被跳过
+Pronto: o som do Windows reiniciou com o equalizador	完成：Windows 声音已随均衡器重启
+O equalizador não mudou (permissão recusada ou erro; veja eq\instalar.log)	均衡器没有变化（权限被拒绝或出错；请查看 eq\instalar.log）
+Não consegui gravar o perfil do equalizador	无法保存均衡器配置文件
+Nenhum aparelho de saída ligado.	没有已连接的输出设备。
+Aparelho de saída	输出设备
+mono	单声道
+estéreo	立体声
+{} canais	{} 个声道
+EQ ativo neste aparelho	此设备已启用均衡器
+EQ desligado neste aparelho	此设备已关闭均衡器
+Perfil do aparelho	设备配置文件
+Plano (desligado)	平坦（关闭）
++ Novo perfil…	+ 新建配置文件…
+Duplicar	复制
+Importar…	导入…
+Exportar…	导出…
+Apagar o perfil {}?	删除配置文件 {}？
+O aparelho volta ao plano. O arquivo do perfil sai do disco.	设备将恢复为平坦。配置文件会从磁盘中删除。
+Motor do equalizador	均衡器引擎
+Esperando o Windows…	正在等待 Windows…
+Com {} ligado, o Windows não passa o som deste aparelho pelo equalizador. Desligue o som espacial dele para usar.	{} 开启时，Windows 不会让此设备的声音经过均衡器。请关闭其空间音效后再使用。
+Ligado neste aparelho. O som de todos os programas passa pelo perfil do aparelho.	已在此设备上启用。所有程序的声音都会经过设备配置文件。
+Instalado, mas desligado neste aparelho.	已安装，但在此设备上已关闭。
+Não instalado. Os perfis podem ser montados agora; o som só muda com o motor ligado.	未安装。现在可以先创建配置文件；只有开启引擎后声音才会改变。
+Desligar aqui	在此关闭
+Desligar o equalizador neste aparelho?	要在此设备上关闭均衡器吗？
+O Windows vai pedir administrador. A configuração original do aparelho volta e o som do Windows reinicia (alguns segundos de silêncio).	Windows 会请求管理员权限。设备的原始配置将恢复，Windows 声音会重启（会有几秒钟静音）。
+Ligar aqui	在此开启
+Ligar o equalizador…	开启均衡器…
+Ligar o equalizador neste aparelho?	要在此设备上开启均衡器吗？
+O Windows vai pedir administrador. O Prisma copia o motor para Arquivos de Programas, coloca no aparelho e reinicia o som do Windows (alguns segundos de silêncio). A configuração original do aparelho fica guardada para voltar igual ao remover. Nada é baixado.\n\nO motor ainda não é assinado: para o Windows carregar, a proteção do motor de áudio fica desligada (o Equalizer APO faz o mesmo). Conteúdo protegido, como alguns filmes em streaming, pode tocar em qualidade menor ou não tocar.	Windows 会请求管理员权限。Prisma 会把引擎复制到 Program Files，安装到设备上，并重启 Windows 声音（会有几秒钟静音）。设备的原始配置会被保存，移除时可原样恢复。不会下载任何内容。\n\n引擎尚未签名：为了让 Windows 加载它，音频引擎保护会被关闭（Equalizer APO 也是如此）。受保护的内容，例如某些流媒体电影，可能以较低画质播放或无法播放。
+Remover de todos	从所有设备移除
+Remover o equalizador de todos os aparelhos?	要从所有设备移除均衡器吗？
+O Windows vai pedir administrador. Cada aparelho volta à configuração original, o motor sai do Windows e o som reinicia. Os perfis ficam guardados.	Windows 会请求管理员权限。每个设备都会恢复到原始配置，引擎会从 Windows 中移除，声音会重启。配置文件会保留。
+Equalizador	均衡器
+Paramétrico	参量
+Gráfico	图形
+Comparar sem EQ	不用均衡器对比
+Canal: todos	声道：全部
+Canal: {}	声道：{}
+Plano: escolha ou crie um perfil para editar a curva.	平坦：请选择或新建配置文件以编辑曲线。
+Pré-amplificação (dB)	前置放大（dB）
+Proteção: corta abaixo de 20 Hz e acima de 20 kHz	保护：截去 20 Hz 以下和 20 kHz 以上
+Acima de 0 dB: o limitador segura os picos no volume cheio.	超过 0 dB：限幅器会在最大音量时压住峰值。
+Pode distorcer: baixe a pré-amplificação ou ligue o limitador.	可能失真：请降低前置放大或开启限幅器。
+Bandas	频段
+Zerar	清零
+Liga	启用
+Tipo	类型
+Frequência (Hz)	频率（Hz）
+Ganho (dB)	增益（dB）
+Adicionar banda	添加频段
+Até 10 bandas. Clique duplo na curva também cria uma; a roda do mouse num ponto muda o Q.	最多 10 个频段。双击曲线也可新建一个；在点上滚动鼠标滚轮可调整 Q。
+Canais	声道
+Ganho em dB e atraso em ms (1 ms ≈ 34 cm), para alinhar as caixas da sala.	增益（dB）和延迟（ms）（1 ms ≈ 34 cm），用于校准房间里的音箱。
+Ganho	增益
+Atraso	延迟
+Abrir configuração de alto-falantes do Windows	打开 Windows 扬声器设置
+Perfis de equalizador	均衡器配置文件
+Não consegui ler esse arquivo	无法读取此文件
+Volume, aparelhos e equalizador de cada saída e de cada programa.	每个输出和每个程序的音量、设备与均衡器。

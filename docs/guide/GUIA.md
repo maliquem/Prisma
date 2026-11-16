@@ -196,6 +196,21 @@ Controla o volume de cada programa. As teclas de volume do teclado, com um modif
 - **Manter o som acordado:** toca um fluxo sem som audível, para HDMI e Dolby não cortarem o começo do próximo som. Para sozinho depois de 10 minutos sem uso.
 - **Limite:** a troca de aparelho usa um recurso interno do Windows, e alguns programas só trocam ao reabrir.
 
+A página Som tem duas abas no topo: **Programas** (o que está acima nesta seção) e **Equalizador**. O equalizador muda o som de cada aparelho de saída. Ele é separado do volume por programa.
+
+- **Aparelho de saída:** escolhe o aparelho. Mostra se é mono, estéreo ou quantos canais, a taxa em kHz, e se o equalizador está ativo nele.
+- **Perfil do aparelho:** lista os perfis guardados do aparelho, mais **Plano (desligado)** e **+ Novo perfil…**. O botão **Mais ▾** tem Renomear, Duplicar, Importar…, Exportar… e Apagar. Apagar pede confirmação, o aparelho volta ao plano e o arquivo sai do disco. Os perfis ficam em `C:\ProgramData\Prisma\eq\perfis\`, uma pasta por aparelho. O perfil em uso fica copiado em `C:\ProgramData\Prisma\eq\perfil-<guid>.txt`. Importar aceita arquivos .txt do Prisma e do Equalizer APO, até 256 KB; linhas que não deu para ler ficam de fora, e o Prisma avisa quantas. Mudanças são gravadas sozinhas, um quarto de segundo depois de parar de mexer.
+- **Motor do equalizador:** o motor do Prisma (o APO) é o que processa o som no Windows. Mostra uma de quatro situações: não instalado, instalado mas desligado neste aparelho, ligado neste aparelho ou esperando o Windows. Os botões são **Ligar o equalizador…** (ou **Ligar aqui**, se já estiver instalado), **Desligar aqui** e **Remover de todos**. Cada um pergunta antes. O Windows pede administrador (UAC). O Prisma copia o motor para `C:\Program Files\Prisma\eq\`, põe no aparelho e reinicia o som do Windows, então há alguns segundos sem som. A configuração original do aparelho fica guardada e volta igual ao remover. Nada é baixado. Erros da instalação vão para `C:\ProgramData\Prisma\eq\instalar.log`.
+  - **Aviso:** o motor ainda não é assinado. Para o Windows carregar, a proteção do motor de áudio fica desligada, como o Equalizer APO faz. Conteúdo protegido, como alguns filmes em streaming, pode tocar em qualidade menor ou não tocar.
+  - Com som espacial (Windows Sonic, Dolby Atmos etc.) ligado no aparelho, o botão fica bloqueado com aviso: o Windows não passa esse som pelo equalizador.
+  - Sem o motor, os perfis podem ser montados, mas o som só muda com o motor ligado. Desinstalar o Prisma também tira o motor de todos os aparelhos.
+- **Equalizador:** a curva. Os modos são **Paramétrico** e **Gráfico** (10, 15 ou 31 bandas, com **Zerar**). Escolha se a curva mostra todos os canais ou um só. **Comparar sem EQ** desliga o efeito enquanto estiver ligado, para comparar. Na curva, de 20 Hz a 20 kHz e ±15 dB, arraste um ponto para mudar frequência e ganho, use a roda do mouse num ponto para mudar o Q, e dê clique duplo na curva para criar uma banda.
+  - **Tabela de bandas:** até 10 bandas, com Liga, Tipo (Pico, Grave (prateleira), Agudo (prateleira), Passa-baixa, Passa-alta), Frequência (Hz), Ganho (dB), Q, ✕ para apagar e **Adicionar banda**.
+  - **Pré-amplificação (dB)** com campo e controle deslizante, **Limitador** (segura os picos no volume cheio) e **Proteção** (corta abaixo de 20 Hz e acima de 20 kHz). O aviso "Pode distorcer" aparece quando a curva passa de 0 dB sem limitador.
+- **Canais** (só em aparelhos com mais de 2 canais, como 5.1 e 7.1): ganho em dB e atraso em ms de cada canal (1 ms ≈ 34 cm), para alinhar as caixas da sala. O botão abre a configuração de alto-falantes do Windows.
+- **Perfil por jogo:** não mudou; continua como na 1.4.0.
+- **Ainda não tem:** botão de emergência, perfil por programa e filtros por canal (só ganho e atraso por canal).
+
 ## HDR
 
 Painel de leitura com o modo da tela, o perfil de calibração ativo, o brilho que cada fonte declara, o que o Windows informa aos jogos, o Dolby Vision declarado e os formatos de som aceitos. Avisa quando algo não confere.

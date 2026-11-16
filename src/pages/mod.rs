@@ -8,6 +8,7 @@ pub mod controllers;
 pub mod pad_profiles;
 mod pad_hide;
 mod energy;
+pub mod equalizer;
 mod fullscreen;
 pub mod guide;
 mod hdr;

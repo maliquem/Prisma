@@ -196,6 +196,21 @@ Controls the volume of each program. The keyboard volume keys, with a modifier (
 - **Keep the sound awake:** plays a stream with no audible sound, so HDMI and Dolby don't cut the start of the next sound. It stops on its own after 10 minutes without use.
 - **Limit:** switching devices uses an internal Windows feature, and some programs only switch on reopening.
 
+The Sound page has two tabs at the top: **Programs** (what is above in this section) and **Equalizer**. The equalizer changes the sound of each output device. It is separate from the volume per program.
+
+- **Output device:** picks the device. Shows whether it is mono, stereo or how many channels, the rate in kHz, and whether the equalizer is on for it.
+- **Device profile:** lists the device's saved profiles, plus **Flat (off)** and **+ New profile…**. The **More ▾** button has Rename, Duplicate, Import…, Export… and Delete. Delete asks first, the device goes back to the plan, and the file is removed from disk. Profiles are stored in `C:\ProgramData\Prisma\eq\perfis\`, one folder per device. The profile in use is also copied to `C:\ProgramData\Prisma\eq\perfil-<guid>.txt`. Import accepts .txt files from Prisma and Equalizer APO, up to 256 KB; lines that cannot be read are left out, and Prisma says how many. Changes save by themselves, a quarter second after you stop editing.
+- **Equalizer engine:** Prisma's engine (APO) is what processes sound in Windows. It shows one of four states: not installed, installed but off on this device, on for this device, or waiting for Windows. The buttons are **Turn on the equalizer…** (or **Turn on here** if already installed), **Turn off here** and **Remove from all**. Each one asks first. Windows asks for administrator rights (UAC). Prisma copies the engine to `C:\Program Files\Prisma\eq\`, puts it on the device and restarts Windows sound, so there are a few seconds of silence. The device's original setup is saved and comes back the same when the engine is removed. Nothing is downloaded. Install errors go to `C:\ProgramData\Prisma\eq\instalar.log`.
+  - **Warning:** the engine is not signed yet. For Windows to load it, the audio engine protection is turned off, as Equalizer APO does too. Protected content, such as some streaming movies, may play at lower quality or not play at all.
+  - With spatial sound (Windows Sonic, Dolby Atmos, etc.) on for the device, the button is locked with a warning: Windows does not send that sound through the equalizer.
+  - Without the engine, profiles can be built, but the sound only changes with the engine on. Uninstalling Prisma also removes the engine from all devices.
+- **Equalizer:** the curve. The modes are **Parametric** and **Graphic** (10, 15 or 31 bands, with **Reset**). Pick whether the curve shows all channels or one. **Compare without EQ** turns the effect off while it is on, for comparison. On the curve, from 20 Hz to 20 kHz and ±15 dB, drag a point to change frequency and gain, use the mouse wheel on a point to change Q, and double-click the curve to create a band.
+  - **Band table:** up to 10 bands, with On, Type (Peak, Bass (shelf), Treble (shelf), Low-pass, High-pass), Frequency (Hz), Gain (dB), Q, ✕ to delete and **Add band**.
+  - **Preamp (dB)** with a field and slider, **Limiter** (holds the peaks at full volume) and **Protection** (cuts below 20 Hz and above 20 kHz). The "May distort" warning appears when the curve goes above 0 dB without the limiter.
+- **Channels** (only on devices with more than 2 channels, such as 5.1 and 7.1): gain in dB and delay in ms for each channel (1 ms ≈ 34 cm), to line up the speakers in the room. A button opens the Windows speaker setup.
+- **Profile per game:** unchanged; works as in 1.4.0.
+- **Not yet:** an emergency button, a profile per program, and filters per channel (only per-channel gain and delay).
+
 ## HDR
 
 A reading panel with the display mode, the active calibration profile, the brightness each source declares, what Windows tells games, the declared Dolby Vision and the accepted sound formats. It warns when something doesn't match.

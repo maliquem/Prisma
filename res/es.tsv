@@ -2610,3 +2610,69 @@ Como administrador	Como administrador
 O programa do atalho não abriu	El programa del atajo no se abrió
 Página Atalhos	Página Atajos
 Mostrar o Prisma	Mostrar Prisma
+Grave (prateleira)	Graves (shelf)
+Agudo (prateleira)	Agudos (shelf)
+Passa-baixa	Paso bajo
+Passa-alta	Paso alto
+{} linhas do arquivo ficaram de fora	{} líneas del archivo se omitieron
+Pronto: o som do Windows reiniciou com o equalizador	Listo: el sonido de Windows se reinició con el ecualizador
+O equalizador não mudou (permissão recusada ou erro; veja eq\instalar.log)	El ecualizador no cambió (permiso denegado o error; mira eq\instalar.log)
+Não consegui gravar o perfil do equalizador	No se pudo guardar el perfil del ecualizador
+Nenhum aparelho de saída ligado.	Ningún dispositivo de salida conectado.
+Aparelho de saída	Dispositivo de salida
+mono	mono
+estéreo	estéreo
+{} canais	{} canales
+EQ ativo neste aparelho	EQ activo en este dispositivo
+EQ desligado neste aparelho	EQ desactivado en este dispositivo
+Perfil do aparelho	Perfil del dispositivo
+Plano (desligado)	Plano (desactivado)
++ Novo perfil…	+ Nuevo perfil…
+Duplicar	Duplicar
+Importar…	Importar…
+Exportar…	Exportar…
+Apagar o perfil {}?	¿Borrar el perfil {}?
+O aparelho volta ao plano. O arquivo do perfil sai do disco.	El dispositivo vuelve a plano. El archivo del perfil se elimina del disco.
+Motor do equalizador	Motor del ecualizador
+Esperando o Windows…	Esperando a Windows…
+Com {} ligado, o Windows não passa o som deste aparelho pelo equalizador. Desligue o som espacial dele para usar.	Con {} activado, Windows no pasa el sonido de este dispositivo por el ecualizador. Desactiva su sonido espacial para usarlo.
+Ligado neste aparelho. O som de todos os programas passa pelo perfil do aparelho.	Activado en este dispositivo. El sonido de todos los programas pasa por el perfil del dispositivo.
+Instalado, mas desligado neste aparelho.	Instalado, pero desactivado en este dispositivo.
+Não instalado. Os perfis podem ser montados agora; o som só muda com o motor ligado.	No instalado. Ya se pueden crear perfiles; el sonido solo cambia con el motor activado.
+Desligar aqui	Desactivar aquí
+Desligar o equalizador neste aparelho?	¿Desactivar el ecualizador en este dispositivo?
+O Windows vai pedir administrador. A configuração original do aparelho volta e o som do Windows reinicia (alguns segundos de silêncio).	Windows pedirá administrador. La configuración original del dispositivo vuelve y el sonido de Windows se reinicia (unos segundos de silencio).
+Ligar aqui	Activar aquí
+Ligar o equalizador…	Activar el ecualizador…
+Ligar o equalizador neste aparelho?	¿Activar el ecualizador en este dispositivo?
+O Windows vai pedir administrador. O Prisma copia o motor para Arquivos de Programas, coloca no aparelho e reinicia o som do Windows (alguns segundos de silêncio). A configuração original do aparelho fica guardada para voltar igual ao remover. Nada é baixado.\n\nO motor ainda não é assinado: para o Windows carregar, a proteção do motor de áudio fica desligada (o Equalizer APO faz o mesmo). Conteúdo protegido, como alguns filmes em streaming, pode tocar em qualidade menor ou não tocar.	Windows pedirá administrador. Prisma copia el motor a Archivos de programa, lo coloca en el dispositivo y reinicia el sonido de Windows (unos segundos de silencio). La configuración original del dispositivo se guarda para volver igual al quitarlo. No se descarga nada.\n\nEl motor aún no está firmado: para que Windows lo cargue, la protección del motor de audio se desactiva (Equalizer APO hace lo mismo). El contenido protegido, como algunas películas en streaming, puede reproducirse con menor calidad o no reproducirse.
+Remover de todos	Quitar de todos
+Remover o equalizador de todos os aparelhos?	¿Quitar el ecualizador de todos los dispositivos?
+O Windows vai pedir administrador. Cada aparelho volta à configuração original, o motor sai do Windows e o som reinicia. Os perfis ficam guardados.	Windows pedirá administrador. Cada dispositivo vuelve a su configuración original, el motor sale de Windows y el sonido se reinicia. Los perfiles se conservan.
+Equalizador	Ecualizador
+Paramétrico	Paramétrico
+Gráfico	Gráfico
+Comparar sem EQ	Comparar sin EQ
+Canal: todos	Canal: todos
+Canal: {}	Canal: {}
+Plano: escolha ou crie um perfil para editar a curva.	Plano: elige o crea un perfil para editar la curva.
+Pré-amplificação (dB)	Preamplificación (dB)
+Proteção: corta abaixo de 20 Hz e acima de 20 kHz	Protección: corta por debajo de 20 Hz y por encima de 20 kHz
+Acima de 0 dB: o limitador segura os picos no volume cheio.	Por encima de 0 dB: el limitador contiene los picos a volumen máximo.
+Pode distorcer: baixe a pré-amplificação ou ligue o limitador.	Puede distorsionar: baja la preamplificación o activa el limitador.
+Bandas	Bandas
+Zerar	Restablecer
+Liga	Activa
+Tipo	Tipo
+Frequência (Hz)	Frecuencia (Hz)
+Ganho (dB)	Ganancia (dB)
+Adicionar banda	Añadir banda
+Até 10 bandas. Clique duplo na curva também cria uma; a roda do mouse num ponto muda o Q.	Hasta 10 bandas. Doble clic en la curva también crea una; la rueda del ratón sobre un punto cambia la Q.
+Canais	Canales
+Ganho em dB e atraso em ms (1 ms ≈ 34 cm), para alinhar as caixas da sala.	Ganancia en dB y retardo en ms (1 ms ≈ 34 cm), para alinear los altavoces de la sala.
+Ganho	Ganancia
+Atraso	Retardo
+Abrir configuração de alto-falantes do Windows	Abrir la configuración de altavoces de Windows
+Perfis de equalizador	Perfiles de ecualizador
+Não consegui ler esse arquivo	No se pudo leer este archivo
+Volume, aparelhos e equalizador de cada saída e de cada programa.	Volumen, dispositivos y ecualizador de cada salida y de cada programa.

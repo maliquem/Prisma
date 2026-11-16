@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Sound page: new **Equalizer** tab, with a per-device equalizer (parametric or graphic, profiles, channel gain and delay for 5.1/7.1, and the engine installed from the page itself). / Página Som: aba nova **Equalizador**, com equalizador por aparelho (paramétrico ou gráfico, perfis, ganho e atraso por canal em 5.1/7.1, e o motor instalado pela própria página).
+
 ## 1.4.0
 
 - Prisma Launcher: the bridge can list the equalizer profiles of the game's sound device and keep one per game; while the game is open, that profile plays on the device. The Launcher screen for it and the equalizer itself come in a later version. / Prisma Launcher: a ponte pode listar os perfis de equalizador do aparelho de som do jogo e guardar um por jogo; com o jogo aberto, esse perfil toca no aparelho. A tela do Launcher para isso e o próprio equalizador chegam numa versão seguinte.

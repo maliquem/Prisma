@@ -2616,3 +2616,69 @@ Como administrador	As administrator
 O programa do atalho não abriu	The shortcut's program did not open
 Página Atalhos	Shortcuts page
 Mostrar o Prisma	Show Prisma
+Grave (prateleira)	Bass (shelf)
+Agudo (prateleira)	Treble (shelf)
+Passa-baixa	Low-pass
+Passa-alta	High-pass
+{} linhas do arquivo ficaram de fora	{} lines from the file were skipped
+Pronto: o som do Windows reiniciou com o equalizador	Done: Windows sound restarted with the equalizer
+O equalizador não mudou (permissão recusada ou erro; veja eq\instalar.log)	The equalizer did not change (permission denied or error; see eq\instalar.log)
+Não consegui gravar o perfil do equalizador	Could not save the equalizer profile
+Nenhum aparelho de saída ligado.	No output device connected.
+Aparelho de saída	Output device
+mono	mono
+estéreo	stereo
+{} canais	{} channels
+EQ ativo neste aparelho	EQ on for this device
+EQ desligado neste aparelho	EQ off for this device
+Perfil do aparelho	Device profile
+Plano (desligado)	Flat (off)
++ Novo perfil…	+ New profile…
+Duplicar	Duplicate
+Importar…	Import…
+Exportar…	Export…
+Apagar o perfil {}?	Delete profile {}?
+O aparelho volta ao plano. O arquivo do perfil sai do disco.	The device goes back to flat. The profile file is removed from the disk.
+Motor do equalizador	Equalizer engine
+Esperando o Windows…	Waiting for Windows…
+Com {} ligado, o Windows não passa o som deste aparelho pelo equalizador. Desligue o som espacial dele para usar.	With {} on, Windows does not send this device's sound through the equalizer. Turn off its spatial sound to use it.
+Ligado neste aparelho. O som de todos os programas passa pelo perfil do aparelho.	On for this device. The sound of all programs goes through the device profile.
+Instalado, mas desligado neste aparelho.	Installed, but off for this device.
+Não instalado. Os perfis podem ser montados agora; o som só muda com o motor ligado.	Not installed. Profiles can be built now; the sound only changes with the engine on.
+Desligar aqui	Turn off here
+Desligar o equalizador neste aparelho?	Turn off the equalizer on this device?
+O Windows vai pedir administrador. A configuração original do aparelho volta e o som do Windows reinicia (alguns segundos de silêncio).	Windows will ask for administrator. The device's original configuration comes back and Windows sound restarts (a few seconds of silence).
+Ligar aqui	Turn on here
+Ligar o equalizador…	Turn on the equalizer…
+Ligar o equalizador neste aparelho?	Turn on the equalizer on this device?
+O Windows vai pedir administrador. O Prisma copia o motor para Arquivos de Programas, coloca no aparelho e reinicia o som do Windows (alguns segundos de silêncio). A configuração original do aparelho fica guardada para voltar igual ao remover. Nada é baixado.\n\nO motor ainda não é assinado: para o Windows carregar, a proteção do motor de áudio fica desligada (o Equalizer APO faz o mesmo). Conteúdo protegido, como alguns filmes em streaming, pode tocar em qualidade menor ou não tocar.	Windows will ask for administrator. Prisma copies the engine to Program Files, attaches it to the device and restarts Windows sound (a few seconds of silence). The device's original configuration is kept so it returns identical on removal. Nothing is downloaded.\n\nThe engine is not signed yet: for Windows to load it, the audio engine protection is turned off (Equalizer APO does the same). Protected content, such as some streaming movies, may play at lower quality or not play.
+Remover de todos	Remove from all
+Remover o equalizador de todos os aparelhos?	Remove the equalizer from all devices?
+O Windows vai pedir administrador. Cada aparelho volta à configuração original, o motor sai do Windows e o som reinicia. Os perfis ficam guardados.	Windows will ask for administrator. Each device returns to its original configuration, the engine leaves Windows and the sound restarts. The profiles are kept.
+Equalizador	Equalizer
+Paramétrico	Parametric
+Gráfico	Graphic
+Comparar sem EQ	Compare without EQ
+Canal: todos	Channel: all
+Canal: {}	Channel: {}
+Plano: escolha ou crie um perfil para editar a curva.	Flat: choose or create a profile to edit the curve.
+Pré-amplificação (dB)	Preamp (dB)
+Proteção: corta abaixo de 20 Hz e acima de 20 kHz	Protection: cuts below 20 Hz and above 20 kHz
+Acima de 0 dB: o limitador segura os picos no volume cheio.	Above 0 dB: the limiter holds the peaks at full volume.
+Pode distorcer: baixe a pré-amplificação ou ligue o limitador.	May distort: lower the preamp or turn on the limiter.
+Bandas	Bands
+Zerar	Reset
+Liga	On
+Tipo	Type
+Frequência (Hz)	Frequency (Hz)
+Ganho (dB)	Gain (dB)
+Adicionar banda	Add band
+Até 10 bandas. Clique duplo na curva também cria uma; a roda do mouse num ponto muda o Q.	Up to 10 bands. Double-clicking the curve also creates one; the mouse wheel on a point changes the Q.
+Canais	Channels
+Ganho em dB e atraso em ms (1 ms ≈ 34 cm), para alinhar as caixas da sala.	Gain in dB and delay in ms (1 ms ≈ 34 cm), to align the speakers in the room.
+Ganho	Gain
+Atraso	Delay
+Abrir configuração de alto-falantes do Windows	Open Windows speaker setup
+Perfis de equalizador	Equalizer profiles
+Não consegui ler esse arquivo	Could not read this file
+Volume, aparelhos e equalizador de cada saída e de cada programa.	Volume, devices and equalizer for each output and each program.
