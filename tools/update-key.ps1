@@ -74,7 +74,7 @@ elseif ($Restore) {
     "Chave de volta em $KeyFile"
 }
 elseif ($Sign) {
-    if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw 'Informe -Version no formato 1.2.3.' }
+    if ($Version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$') { throw 'Informe -Version no formato 1.2.3 ou 1.2.3-beta.' }
     $e = Load-Key
     $hash = (Get-FileHash $Sign -Algorithm SHA256).Hash.ToLower()
     # Mesmo texto que src/sys/update.rs confere: a assinatura vale para este arquivo e esta versão.
