@@ -273,6 +273,16 @@ pub fn start(hub: HWND) {
     let _ = std::thread::Builder::new().name("controles".into()).spawn(|| unsafe { watch() });
 }
 
+/// Relatório refeito pela macro (`sys::macros`): fica como o estado do controle (a ponte Xbox lê
+/// daqui) e passa pelo perfil, como um relatório que chegou agora.
+pub fn refeed(key: &str, inp: &Input) {
+    // Controle que já saiu: nada a refazer.
+    let found = PADS.lock().unwrap().iter_mut().find(|p| p.key == key).map(|p| p.input = *inp).is_some();
+    if found {
+        super::remap::feed(key, inp, Instant::now());
+    }
+}
+
 pub fn list() -> Vec<Pad> {
     #[allow(unused_mut)]
     let mut v = PADS.lock().unwrap().clone();
@@ -1677,6 +1687,10 @@ unsafe fn read_loop(d: Dev) {
                 CAL_ASK.store(false, Ordering::Relaxed);
             }
         }
+        // Em todo modo, antes do perfil e da ponte: a macro grava daqui e aperta aqui.
+        if let Some((inp, _)) = parsed.as_mut() {
+            super::macros::pad_input(&d.path, inp, now);
+        }
         if !shown {
             show(true);
             shown = true;
@@ -1831,10 +1845,12 @@ unsafe fn poll_xinput() {
                 _ => (format!("Controle Xbox {}", i + 1), Link::Usb, counted),
             };
             let now = Instant::now();
-            super::remap::feed(&key, &xinput_input(&st.Gamepad), now);
+            let mut inp = xinput_input(&st.Gamepad);
+            super::macros::pad_input(&key, &mut inp, now);
+            super::remap::feed(&key, &inp, now);
             let mut pads = PADS.lock().unwrap();
             let events = if let Some(p) = pads.iter_mut().find(|p| p.key == key) {
-                p.input = xinput_input(&st.Gamepad);
+                p.input = inp;
                 p.battery = battery;
                 p.rate = rate;
                 check_warnings(p)
@@ -1847,7 +1863,7 @@ unsafe fn poll_xinput() {
                     vid: 0x045e,
                     pid: 0,
                     battery,
-                    input: xinput_input(&st.Gamepad),
+                    input: inp,
                     rate,
                     generic_buttons: 0,
                     generic_axes: vec![],

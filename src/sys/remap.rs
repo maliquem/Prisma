@@ -99,6 +99,9 @@ pub enum Out {
     Macro(u8),
     /// Texto rápido do perfil (índice em `Profile::texts`), digitado como texto.
     Text(u8),
+    /// Botão do controle (número do bit em `Buttons`), só em passo de macro: `sys::macros` aperta
+    /// no controle que rodou a macro, pelo mesmo caminho dos botões de verdade.
+    Pad(u8),
 }
 
 /// Como a macro roda: uma vez, repetindo enquanto o botão fica apertado, ou repetindo até o
@@ -996,11 +999,14 @@ impl Profile {
                     let step = match kind {
                         "wait" => Step::Wait(arg.parse::<u32>().ok().filter(|v| *v <= MAX_WAIT)?),
                         "down" | "up" => {
-                            // Só tecla, mouse e roda (a roda só aperta).
-                            let o = parse_out(arg, &mut p.strings)?;
+                            // Só tecla, mouse, roda (só aperta) e botão do controle.
+                            let o = match arg.strip_prefix("pad ") {
+                                Some(b) => Out::Pad(button_bit(b).filter(|x| x & super::macros::PAD_BITS != 0)?.trailing_zeros() as u8),
+                                None => parse_out(arg, &mut p.strings)?,
+                            };
                             match (o, kind) {
-                                (Out::Key(..) | Out::Mouse(_) | Out::Wheel(_), "down") => Step::Down(o),
-                                (Out::Key(..) | Out::Mouse(_), _) => Step::Up(o),
+                                (Out::Key(..) | Out::Mouse(_) | Out::Wheel(_) | Out::Pad(_), "down") => Step::Down(o),
+                                (Out::Key(..) | Out::Mouse(_) | Out::Pad(_), _) => Step::Up(o),
                                 _ => return None,
                             }
                         }
@@ -1121,6 +1127,7 @@ fn out_text(o: Out, strings: &[String]) -> String {
         Out::Run(n) => format!("run {}", text(n)),
         Out::Macro(n) => format!("macro {n}"),
         Out::Text(n) => format!("text {n}"),
+        Out::Pad(b) => format!("pad {}", button_name(1 << b)),
     }
 }
 
@@ -2217,7 +2224,6 @@ pub fn feed(key: &str, inp: &Input, arrived: Instant) {
         acts
     };
     if !acts.is_empty() {
-        super::macros::record_acts(arrived, &acts);
         send(&acts);
         let us = arrived.elapsed().as_micros().min(u32::MAX as u128) as u32;
         if let Some(r) = RUN.lock().unwrap().as_mut() {

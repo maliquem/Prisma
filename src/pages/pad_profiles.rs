@@ -415,6 +415,7 @@ fn describe(o: Out, p: &Profile) -> String {
         Out::Run(n) => tr("Abrir {}").replace("{}", &p.strings.get(n as usize).map_or_else(String::new, |s| if remap::link_ok(s) { s.clone() } else { crate::sys::procs::exe_name(s) })),
         Out::Macro(n) => tr("Macro {}").replace("{}", p.macros.get(n as usize).map_or("", |m| &m.name)),
         Out::Text(n) => tr("Digitar {}").replace("{}", &p.texts.get(n as usize).map_or_else(String::new, short)),
+        Out::Pad(b) => remap::button_name(1 << b).to_string(),
     }
 }
 
@@ -1518,7 +1519,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
         }
         y += 44.0;
         let n = p.macros[ed.mac].steps.len();
-        let status = if ed.rec { tr("Gravando: vá a outro programa e use o teclado, o mouse ou o controle; volte aqui para parar. Nada do que você faz dentro do Prisma entra, o movimento do mouse não entra, e os botões do controle entram como as teclas e cliques que o perfil dá a eles.") } else { tr("{} passos. Gravar troca os passos pelos novos.").replace("{}", &n.to_string()) };
+        let status = if ed.rec { tr("Gravando: aperte os botões do controle (aqui mesmo ou em outro programa) ou use o teclado e o mouse em outro programa; clique em Parar no fim. Sticks, gyro e o movimento do mouse não entram.") } else { tr("{} passos. Gravar troca os passos pelos novos.").replace("{}", &n.to_string()) };
         ui.c.text_fit(rect(x, y, w, 20.0), &status, 12.0, if ed.rec { WARN } else { MUTED }, Align::Left, Weight::Regular);
         y += 28.0;
         let mut drop = None;

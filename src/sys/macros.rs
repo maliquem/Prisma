@@ -2,14 +2,21 @@
 //! fim (uma vez), ao soltar o botão (enquanto segura), no próximo aperto (até apertar de novo) ou
 //! quando o mapeamento solta tudo (parada de emergência, troca de perfil, teclado do Prisma).
 //! O gravador pega teclado, cliques e roda do mouse enquanto o editor grava, com o aviso na tela, e
-//! os botões do controle como as teclas, cliques e roda que o perfil faz deles (`record_acts`).
+//! os botões e gatilhos de todo controle, lidos direto do leitor (`pad_input`), em qualquer modo.
+//! Na reprodução, o botão gravado é apertado no controle que rodou a macro, antes do perfil e da
+//! ponte Xbox: o motor e o Xbox virtual o veem como se fosse do controle.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use super::pads::{Buttons, Input};
 use super::remap::{self, Act, Macro, Mode, Out, Step};
+
+/// Botões do controle que a macro grava e aperta: os físicos com nome e os dois gatilhos.
+/// shortcut: sticks e gyro não gravam (só botões e gatilhos); gravar eixos pede passo com valor.
+pub const PAD_BITS: Buttons = (super::pads::PHYSICAL & ((1 << 62) - 1)) | remap::LT | remap::RT;
 
 /// Macros rodando: (controle, número) → modo e o sinal de parar.
 static RUNNING: Mutex<Option<HashMap<(String, u8), (Mode, Arc<AtomicBool>)>>> = Mutex::new(None);
@@ -30,8 +37,18 @@ pub fn press(pad: &str, n: u8, m: &Macro) {
     let stop = Arc::new(AtomicBool::new(false));
     map.insert(key.clone(), (m.mode, stop.clone()));
     let (steps, mode) = (m.steps.clone(), m.mode);
+    let pad = pad.to_string();
     std::thread::spawn(move || {
-        run(&steps, mode, &stop, |a| remap::send(a));
+        run(&steps, mode, &stop, |a| {
+            // Botão do controle: pelo caminho do controle; o resto, ao Windows.
+            let (b, rest): (Vec<Act>, Vec<Act>) = a.iter().copied().partition(|x| matches!(x, Act::Down(Out::Pad(_)) | Act::Up(Out::Pad(_))));
+            remap::send(&rest);
+            for x in b {
+                if let Act::Down(Out::Pad(n)) | Act::Up(Out::Pad(n)) = x {
+                    press_pad(&pad, 1 << n, matches!(x, Act::Down(_)));
+                }
+            }
+        });
         let mut g = RUNNING.lock().unwrap();
         if let Some(map) = g.as_mut() {
             if map.get(&key).is_some_and(|(_, s)| Arc::ptr_eq(s, &stop)) {
@@ -123,6 +140,8 @@ struct Rec {
     steps: Vec<Step>,
     last: Option<Instant>,
     down: Vec<Out>,
+    /// Botões de cada controle no último relatório; o primeiro só marca o ponto de partida.
+    pads: HashMap<String, Buttons>,
 }
 
 impl Rec {
@@ -155,16 +174,14 @@ impl Rec {
         self.steps.push(s);
     }
 
-    /// O que o motor do controle mandou: teclas, cliques e roda viram passos; o resto não entra.
-    fn acts(&mut self, now: Instant, acts: &[Act]) {
-        for a in acts {
-            let s = match *a {
-                Act::Down(o @ (Out::Key(..) | Out::Mouse(_))) => Step::Down(o),
-                Act::Up(o @ (Out::Key(..) | Out::Mouse(_))) => Step::Up(o),
-                Act::Wheel(n) if n / 120 != 0 => Step::Down(Out::Wheel((n / 120).clamp(-127, 127) as i8)),
-                _ => continue,
-            };
-            self.event(now, s);
+    /// Relatório do controle `key`: o que mudou nos botões vira aperto ou soltura.
+    fn pad(&mut self, key: &str, b: Buttons, now: Instant) {
+        let Some(old) = self.pads.insert(key.to_string(), b) else { return };
+        for i in 0..64u8 {
+            let bit: Buttons = 1 << i;
+            if (old ^ b) & bit != 0 {
+                self.event(now, if b & bit != 0 { Step::Down(Out::Pad(i)) } else { Step::Up(Out::Pad(i)) });
+            }
         }
     }
 
@@ -188,6 +205,60 @@ impl Rec {
 static REC: Mutex<Option<Rec>> = Mutex::new(None);
 static REC_THREAD: AtomicU32 = AtomicU32::new(0);
 
+/// Os botões que a macro grava, num relatório: os físicos e os gatilhos passando da metade.
+fn pad_bits(inp: &Input) -> Buttons {
+    let lt = if inp.lt >= 0.5 { remap::LT } else { 0 };
+    let rt = if inp.rt >= 0.5 { remap::RT } else { 0 };
+    (inp.buttons & PAD_BITS & !(remap::LT | remap::RT)) | lt | rt
+}
+
+/// Botões que as macros seguram agora, por controle, e o último relatório de verdade de cada um.
+static HELD: Mutex<Option<HashMap<String, (Buttons, Input)>>> = Mutex::new(None);
+
+/// Cada relatório de controle passa aqui antes de tudo (`sys::pads`, HID e XInput, em todo modo):
+/// grava o que mudou e soma o que as macros seguram.
+pub fn pad_input(key: &str, inp: &mut Input, now: Instant) {
+    if let Some(r) = REC.lock().unwrap().as_mut() {
+        r.pad(key, pad_bits(inp), now);
+    }
+    let held = {
+        let mut g = HELD.lock().unwrap();
+        let e = g.get_or_insert_with(HashMap::new).entry(key.to_string()).or_insert((0, *inp));
+        e.1 = *inp;
+        e.0
+    };
+    hold(inp, held);
+}
+
+/// Soma os botões seguros ao relatório; gatilho seguro vai ao fim.
+fn hold(inp: &mut Input, held: Buttons) {
+    inp.buttons |= held & !(remap::LT | remap::RT);
+    if held & remap::LT != 0 {
+        inp.lt = 1.0;
+    }
+    if held & remap::RT != 0 {
+        inp.rt = 1.0;
+    }
+}
+
+/// A macro aperta ou solta `bit` no controle `key`. Vale já: o último relatório volta pelo caminho
+/// do controle, para o controle que só manda relatório quando algo muda.
+fn press_pad(key: &str, bit: Buttons, down: bool) {
+    let last = {
+        let mut g = HELD.lock().unwrap();
+        let Some(e) = g.get_or_insert_with(HashMap::new).get_mut(key) else { return };
+        if down {
+            e.0 |= bit;
+        } else {
+            e.0 &= !bit;
+        }
+        let mut inp = e.1;
+        hold(&mut inp, e.0);
+        inp
+    };
+    super::pads::refeed(key, &last);
+}
+
 pub fn recording() -> bool {
     REC.lock().unwrap().is_some()
 }
@@ -199,6 +270,7 @@ pub fn record_start() {
         return;
     }
     *g = Some(Rec::default());
+    crate::config::log("macro: gravação começou");
     std::thread::spawn(hooks);
 }
 
@@ -206,7 +278,10 @@ pub fn record_start() {
 pub fn record_stop() -> Vec<Step> {
     use windows::Win32::Foundation::{LPARAM, WPARAM};
     use windows::Win32::UI::WindowsAndMessaging::{PostThreadMessageW, WM_QUIT};
-    let steps = REC.lock().unwrap().take().map(Rec::finish).unwrap_or_default();
+    let rec = REC.lock().unwrap().take();
+    let pads = rec.as_ref().map_or(0, |r| r.pads.len());
+    let steps = rec.map(Rec::finish).unwrap_or_default();
+    crate::config::log(&format!("macro: gravação parou com {} passos ({pads} controles ouvidos)", steps.len()));
     let t = REC_THREAD.swap(0, Ordering::SeqCst);
     if t != 0 {
         unsafe {
@@ -219,16 +294,6 @@ pub fn record_stop() -> Vec<Step> {
 fn record(s: Step) {
     if let Some(r) = REC.lock().unwrap().as_mut() {
         r.event(Instant::now(), s);
-    }
-}
-
-/// O controle apertou algo pelo perfil (`remap::feed`). Essas teclas saem injetadas, e o gancho
-/// as ignora; sem isto o controle não gravava nada.
-pub fn record_acts(now: Instant, acts: &[Act]) {
-    if let Some(r) = REC.lock().unwrap().as_mut() {
-        if !super::nav::front() {
-            r.acts(now, acts);
-        }
     }
 }
 
@@ -328,15 +393,34 @@ mod tests {
     }
 
     #[test]
-    fn recorder_takes_controller_keys_clicks_and_wheel() {
+    fn recorder_takes_controller_buttons_and_triggers_from_the_reader() {
+        use crate::sys::pads::{A, START};
+        // O leitor é o mesmo em Nativo, Teclado e mouse e Xbox: o gravador não depende do modo
+        // nem do perfil. Botão virtual (direção do stick) não entra; o gatilho entra pela metade.
         let t = Instant::now();
         let at = |ms| t + Duration::from_millis(ms);
-        let (a, click) = (Out::Key(0x41, 0), Out::Mouse(1));
+        let b = |buttons, lt| pad_bits(&Input { buttons, lt, ..Default::default() });
         let mut r = Rec::default();
-        r.acts(at(0), &[Act::Down(a), Act::Move(5, 5), Act::Cmd(Out::Action(0))]);
-        r.acts(at(50), &[Act::Up(a), Act::Down(click)]);
-        r.acts(at(80), &[Act::Up(click), Act::Wheel(-240)]);
-        assert_eq!(r.finish(), vec![Step::Down(a), Step::Wait(50), Step::Up(a), Step::Down(click), Step::Wait(30), Step::Up(click), Step::Down(Out::Wheel(-2))]);
+        r.pad("hid#ds", b(START, 0.0), at(0));
+        r.pad("hid#ds", b(START | A | remap::LSU, 0.0), at(10));
+        r.pad("xinput:0", b(0, 0.0), at(20));
+        r.pad("xinput:0", b(0, 0.9), at(60));
+        r.pad("hid#ds", b(START, 0.0), at(110));
+        r.pad("xinput:0", b(0, 0.1), at(150));
+        let lt = remap::LT.trailing_zeros() as u8;
+        assert_eq!(r.finish(), vec![Step::Down(Out::Pad(0)), Step::Wait(50), Step::Down(Out::Pad(lt)), Step::Wait(50), Step::Up(Out::Pad(0)), Step::Wait(40), Step::Up(Out::Pad(lt))]);
+    }
+
+    #[test]
+    fn held_pad_buttons_reach_the_report_and_survive_the_profile_text() {
+        use crate::sys::pads::{A, B};
+        let mut inp = Input { buttons: B, ..Default::default() };
+        hold(&mut inp, A | remap::RT);
+        assert_eq!(inp.buttons, A | B);
+        assert_eq!(inp.rt, 1.0);
+        let mut p = remap::Profile::base();
+        p.macros.push(Macro { name: "M".into(), mode: Mode::Once, steps: vec![Step::Down(Out::Pad(0)), Step::Up(Out::Pad(17))] });
+        assert_eq!(remap::Profile::parse(&p.to_text()).unwrap().macros[0].steps, p.macros[0].steps);
     }
 
     #[test]

@@ -2279,7 +2279,7 @@ Clique em Testar: o controle para de navegar pelo Prisma.	Click Test: the contro
 O controle está em Nativo: o jogo o recebe como ele é, e nada deste perfil vale, menos a barra de luz. Para as ligações, o gyro e o touchpad valerem, mude para Teclado e mouse.	The controller is set to Native: the game receives it as is, and nothing in this profile applies, except the light bar. For the bindings, gyro and touchpad to apply, switch to Keyboard and mouse.
 Passa ao jogo	Game reads it
 Passa ao jogo: o Prisma não usa nem esconde, e o jogo lê direto do controle (suporte nativo ao DualSense).	Game reads it: Prisma neither uses nor hides it, and the game reads it straight from the controller (native DualSense support).
-Gravando: vá a outro programa e use o teclado, o mouse ou o controle; volte aqui para parar. Nada do que você faz dentro do Prisma entra, o movimento do mouse não entra, e os botões do controle entram como as teclas e cliques que o perfil dá a eles.	Recording: switch to another program and use the keyboard, mouse or controller; come back here to stop. Nothing you do inside Prisma is recorded, mouse movement is not recorded, and controller buttons are recorded as the keys and clicks the profile gives them.
+Gravando: aperte os botões do controle (aqui mesmo ou em outro programa) ou use o teclado e o mouse em outro programa; clique em Parar no fim. Sticks, gyro e o movimento do mouse não entram.	Recording: press controller buttons (here or in another program) or use the keyboard and mouse in another program; click Stop when done. Sticks, gyro and mouse movement are not recorded.
 Cor	Color
 Menu radial	Radial menu
 Ligar: teclado e mouse	Turn on: keyboard and mouse
