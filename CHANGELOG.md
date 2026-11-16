@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.2
+
+- Equalizer: the engine is always installed in the real Program Files folder, and the copy of the old sound settings now stays next to it, where only an administrator can change it. Engines installed by earlier versions keep working; removing one of them no longer restores the old Windows audio protection setting. / Equalizador: o motor é sempre instalado na pasta Program Files verdadeira, e a cópia dos ajustes de som antigos agora fica ao lado dele, onde só um administrador altera. Motores instalados por versões anteriores continuam funcionando; remover um deles não volta mais a proteção de áudio do Windows ao ajuste antigo.
+- Driver installers (ViGEmBus, HidHide and PawnIO): the downloaded installer stays locked from the signature check until it closes, so no other program can swap it in between. / Instaladores de drivers (ViGEmBus, HidHide e PawnIO): o instalador baixado fica travado da conferência da assinatura até fechar, e nenhum outro programa consegue trocá-lo no meio.
+- Equalizer: the engine log (apo.log) starts over above 1 MB instead of growing forever. / Equalizador: o log do motor (apo.log) recomeça acima de 1 MB em vez de crescer para sempre.
+
 ## 1.5.1
 
 - Settings: the Updates card has a **GitHub** link to Prisma's page and **Made by Maliquem**, which opens the author's page. / Configurações: o cartão Atualizações tem o link **GitHub**, para a página do Prisma, e **Made by Maliquem**, que abre a página da autora.
