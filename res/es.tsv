@@ -2476,7 +2476,9 @@ Tentar de novo	Reintentar
 Cópia do Prisma	Copia de Prisma
 Ctrl+V nas pastas do Explorer cola pelo Prisma	Ctrl+V en las carpetas del Explorador pega con Prisma
 Substituir a cópia do Windows?	¿Reemplazar la copia de Windows?
-Com o Prisma aberto, o Ctrl+V nas pastas do Explorer cola pela janela de cópia do Prisma. Arrastar com o mouse e o Colar do menu continuam com o Windows. Dá para desligar aqui a qualquer hora.	Con Prisma abierto, Ctrl+V en las carpetas del Explorador pega con la ventana de copia de Prisma. Arrastrar con el ratón y Pegar del menú siguen con Windows. Se puede desactivar aquí en cualquier momento.
+Com o Prisma aberto, o Ctrl+V nas pastas do Explorer cola pela janela de cópia do Prisma. Arrastar com o mouse e o Colar do menu continuam com o Windows. Dá para desligar em Configurações ou em Cópias a qualquer hora.	Con Prisma abierto, Ctrl+V en las carpetas del Explorador pega con la ventana de copia de Prisma. Arrastrar con el ratón y Pegar del menú siguen con Windows. Se puede desactivar en Configuración o en Copias en cualquier momento.
+Substituir a cópia do Windows	Reemplazar la copia de Windows
+Com o Prisma aberto, o Ctrl+V nas pastas do Explorer cola pela janela de cópia do Prisma. Arrastar com o mouse continua com o Windows.	Con Prisma abierto, Ctrl+V en las carpetas del Explorador pega con la ventana de copia de Prisma. Arrastrar con el ratón sigue con Windows.
 Arrastar com o mouse continua com o Windows.	Arrastrar con el ratón sigue con Windows.
 Página Cópias	Página Copias
 Cópias	Copias

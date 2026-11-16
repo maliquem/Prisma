@@ -1350,6 +1350,13 @@ impl App {
         }
     }
 
+    /// Substituir a cópia do Windows: só a configuração e o gancho do Prisma aberto, nada no Windows.
+    pub fn set_paste_key(&mut self, on: bool) {
+        self.cfg.paste_key = on;
+        self.cfg.save();
+        self.sync_hook();
+    }
+
     fn force_close(&mut self) {
         let h = unsafe { GetForegroundWindow() };
         // No teste, só a janela descartável pode ser fechada.

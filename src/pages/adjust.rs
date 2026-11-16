@@ -99,22 +99,8 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     }
     // Substituir a cópia do Windows: só o Ctrl+V, pelo gancho de teclado do Prisma aberto.
     ui.c.line(rp.x + 16.0, rp.y + 74.0, rp.right() - 16.0, rp.y + 74.0, LINE, 1.0);
-    let mut key_on = app.cfg.paste_key;
-    if ui.check("paste-key", rect(rp.x + 16.0, rp.y + 78.0, 400.0, 32.0), "Ctrl+V nas pastas do Explorer cola pelo Prisma", &mut key_on) {
-        if key_on {
-            ui.ask("paste-key-on", "Substituir a cópia do Windows?", "Com o Prisma aberto, o Ctrl+V nas pastas do Explorer cola pela janela de cópia do Prisma. Arrastar com o mouse e o Colar do menu continuam com o Windows. Dá para desligar aqui a qualquer hora.");
-        } else {
-            app.cfg.paste_key = false;
-            app.cfg.save();
-            app.sync_hook();
-        }
-    }
+    paste_key_check(ui, app, rect(rp.x + 16.0, rp.y + 78.0, 400.0, 32.0));
     ui.c.text_fit(rect(rp.x + 426.0, rp.y + 78.0, rp.w - 442.0, 32.0), "Arrastar com o mouse continua com o Windows.", 13.0, MUTED, Align::Left, Weight::Regular);
-    if ui.answered("paste-key-on") {
-        app.cfg.paste_key = true;
-        app.cfg.save();
-        app.sync_hook();
-    }
 
     let top = top + 128.0;
     let rf = rect(x, top + 250.0, w, 76.0);
@@ -179,6 +165,22 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         app.cfg.save();
         crate::i18n::set_lang(app.cfg.lang);
         app.sync_explorer_menu();
+    }
+}
+
+/// Caixa "substituir a cópia do Windows" (Ctrl+V do Explorer), a mesma em Configurações e em Cópias.
+/// Ligar pergunta antes; desligar é na hora. Só grava `paste_key` e liga ou solta o gancho.
+pub fn paste_key_check(ui: &mut Ui, app: &mut App, r: Rect) {
+    let mut key_on = app.cfg.paste_key;
+    if ui.check("paste-key", r, "Ctrl+V nas pastas do Explorer cola pelo Prisma", &mut key_on) {
+        if key_on {
+            ui.ask("paste-key-on", "Substituir a cópia do Windows?", "Com o Prisma aberto, o Ctrl+V nas pastas do Explorer cola pela janela de cópia do Prisma. Arrastar com o mouse e o Colar do menu continuam com o Windows. Dá para desligar em Configurações ou em Cópias a qualquer hora.");
+        } else {
+            app.set_paste_key(false);
+        }
+    }
+    if ui.answered("paste-key-on") {
+        app.set_paste_key(true);
     }
 }
 

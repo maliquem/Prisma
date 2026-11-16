@@ -2476,7 +2476,9 @@ Tentar de novo	Повторить
 Cópia do Prisma	Копирование Prisma
 Ctrl+V nas pastas do Explorer cola pelo Prisma	Ctrl+V в папках Проводника вставляет через Prisma
 Substituir a cópia do Windows?	Заменить копирование Windows?
-Com o Prisma aberto, o Ctrl+V nas pastas do Explorer cola pela janela de cópia do Prisma. Arrastar com o mouse e o Colar do menu continuam com o Windows. Dá para desligar aqui a qualquer hora.	Пока Prisma открыт, Ctrl+V в папках Проводника вставляет через окно копирования Prisma. Перетаскивание мышью и «Вставить» в меню остаются за Windows. Это можно отключить здесь в любой момент.
+Com o Prisma aberto, o Ctrl+V nas pastas do Explorer cola pela janela de cópia do Prisma. Arrastar com o mouse e o Colar do menu continuam com o Windows. Dá para desligar em Configurações ou em Cópias a qualquer hora.	Пока Prisma открыт, Ctrl+V в папках Проводника вставляет через окно копирования Prisma. Перетаскивание мышью и «Вставить» в меню остаются за Windows. Это можно отключить в «Настройках» или в «Копировании» в любой момент.
+Substituir a cópia do Windows	Заменить копирование Windows
+Com o Prisma aberto, o Ctrl+V nas pastas do Explorer cola pela janela de cópia do Prisma. Arrastar com o mouse continua com o Windows.	Пока Prisma открыт, Ctrl+V в папках Проводника вставляет через окно копирования Prisma. Перетаскивание мышью остаётся за Windows.
 Arrastar com o mouse continua com o Windows.	Перетаскивание мышью остаётся за Windows.
 Página Cópias	Страница «Копирование»
 Cópias	Копирование

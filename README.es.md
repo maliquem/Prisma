@@ -14,7 +14,7 @@ Una utilidad ligera para Windows 11, escrita entera en Rust sin framework de int
 
 Prisma es un solo archivo, `Prisma.exe`. La primera vez Windows puede avisar de un editor desconocido, porque el archivo no tiene firma de código.
 
-Al abrirlo por primera vez, la pantalla de bienvenida pregunta si quieres instalar, dar permiso de administrador y sustituir el Administrador de tareas. Las tres vienen marcadas, y Windows pide permiso una sola vez. La pantalla también abre la guía, que explica cada función y lo que puede y no puede hacer. Aparece una sola vez, salvo que desmarques **No volver a mostrar**.
+Al abrirlo por primera vez, la pantalla de bienvenida pregunta si quieres instalar, dar permiso de administrador, sustituir el Administrador de tareas y reemplazar la copia de Windows (Ctrl+V en las carpetas del Explorador con la ventana de copia de Prisma). Las tres primeras vienen marcadas; la de la copia, no, y Windows pide permiso una sola vez. La pantalla también abre la guía, que explica cada función y lo que puede y no puede hacer. Aparece una sola vez, salvo que desmarques **No volver a mostrar**.
 
 - **Portátil:** se ejecuta desde cualquier carpeta. La configuración queda en `PrismaData`, junto al programa, y nada se registra en Windows. Con administrador, Windows pregunta cada vez que se abre.
 - **Instalada:** Prisma pasa a Archivos de programa, recibe un acceso en el menú Inicio y aparece en la lista de programas de Windows. Con administrador, abre sin preguntar. También puedes instalar más tarde, en **Configuración**.
