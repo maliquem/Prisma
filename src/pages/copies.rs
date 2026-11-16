@@ -187,12 +187,13 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     }
     let x = a.x + 28.0;
     tabs(ui, x, 88.0, &mut app.cp.tab);
-    let body = rect(x, 136.0, a.w - 56.0, a.h - 136.0 - 20.0);
+    let body = rect(x, 136.0, a.w - 56.0, a.h - 136.0 - 20.0 - 44.0);
     if app.cp.tab == 0 {
         history(ui, app, body);
     } else {
         lists(ui, app, body);
     }
+    super::adjust::paste_key_check(ui, app, rect(x, body.bottom() + 8.0, body.w, 32.0));
 }
 
 fn tabs(ui: &mut Ui, x: f32, y: f32, sel: &mut usize) {

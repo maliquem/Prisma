@@ -1,4 +1,4 @@
-//! Boas-vindas: três escolhas marcadas por padrão, aplicadas de uma vez só.
+//! Boas-vindas: três escolhas marcadas por padrão e a da cópia desmarcada, aplicadas de uma vez só.
 
 use super::*;
 use crate::startup::Plan;
@@ -11,13 +11,15 @@ pub struct Choices {
     pub install: bool,
     pub admin: bool,
     pub taskmgr: bool,
+    /// Substituir a cópia do Windows (Ctrl+V do Explorer); começa desmarcada.
+    pub paste: bool,
     /// Não mostrar novamente.
     pub hide: bool,
 }
 
 impl Choices {
     pub fn new() -> Self {
-        Self { install: true, admin: true, taskmgr: true, hide: true }
+        Self { install: true, admin: true, taskmgr: true, paste: false, hide: true }
     }
 }
 
@@ -43,10 +45,19 @@ fn row(ui: &mut Ui, key: &str, r: Rect, title: &str, body: &str, val: &mut bool,
     ui.c.text_wrap(rect(r.x + 44.0, r.y + 38.0, r.w - 60.0, 40.0), body, 13.0, MUTED, Weight::Regular);
 }
 
+/// Daqui só liga: desmarcar nunca desliga o que já estava ligado (isso é em Configurações ou Cópias).
+fn paste_after(chosen: bool, now: bool) -> bool {
+    now || chosen
+}
+
 fn finish(ui: &mut Ui, app: &mut App, c: Choices) {
     app.welcome = None;
     app.cfg.welcome = !c.hide;
     app.cfg.save();
+    let paste = paste_after(c.paste, app.cfg.paste_key);
+    if paste != app.cfg.paste_key {
+        app.set_paste_key(paste);
+    }
     let install = c.install && !app.installed;
     // A troca só aponta para a cópia instalada: veja `startup::replace_taskmgr_with`.
     let taskmgr = c.taskmgr && !app.replaces_tm && (install || app.installed);
@@ -62,7 +73,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, full: Rect) {
     let Some(mut c) = app.welcome else { return };
     let w = W.min(full.w - 48.0);
     let x = (full.w - w) / 2.0;
-    let total = 480.0;
+    let total = 574.0;
     let mut y = ((full.h - total) / 2.0).max(16.0);
 
     ui.c.icon(x, y + 4.0, 30.0, &[&[(12., 3.), (3., 20.), (21., 20.), (12., 3.)], &[(12., 3.), (12., 20.)]], ACCENT);
@@ -95,7 +106,8 @@ pub fn draw(ui: &mut Ui, app: &mut App, full: Rect) {
     row(ui, "w-install", rect(x, y, w, ROW), "Instalar no PC", "Vai para Arquivos de Programas, ganha atalho no menu Iniciar e abre com o Windows. Sem isso, roda daqui mesmo, como portátil.", &mut c.install, app.installed, false);
     row(ui, "w-admin", rect(x, y + step, w, ROW), "Dar permissão de administrador", admin_note, &mut c.admin, app.cfg.always_admin, false);
     row(ui, "w-tm", rect(x, y + step * 2.0, w, ROW), "Substituir o Gerenciador de Tarefas", tm_note, &mut c.taskmgr, app.replaces_tm, tm_locked);
-    y += step * 3.0 + 4.0;
+    row(ui, "w-paste", rect(x, y + step * 3.0, w, ROW), "Substituir a cópia do Windows", "Com o Prisma aberto, o Ctrl+V nas pastas do Explorer cola pela janela de cópia do Prisma. Arrastar com o mouse continua com o Windows.", &mut c.paste, app.cfg.paste_key, false);
+    y += step * 4.0 + 4.0;
 
     ui.check("w-hide", rect(x, y, 220.0, 44.0), "Não mostrar novamente", &mut c.hide);
     let go = rect(x + w - 150.0, y, 150.0, 44.0);
@@ -107,5 +119,18 @@ pub fn draw(ui: &mut Ui, app: &mut App, full: Rect) {
     }
     if ui.button("w-go", go, "Continuar", true) {
         finish(ui, app, c);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn paste_starts_off_and_welcome_never_turns_it_off() {
+        assert!(!Choices::new().paste);
+        assert!(!paste_after(false, false));
+        assert!(paste_after(true, false));
+        assert!(paste_after(false, true));
     }
 }

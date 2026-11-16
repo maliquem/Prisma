@@ -2482,7 +2482,9 @@ Tentar de novo	Try again
 Cópia do Prisma	Prisma copy
 Ctrl+V nas pastas do Explorer cola pelo Prisma	Ctrl+V in Explorer folders pastes through Prisma
 Substituir a cópia do Windows?	Replace the Windows copy?
-Com o Prisma aberto, o Ctrl+V nas pastas do Explorer cola pela janela de cópia do Prisma. Arrastar com o mouse e o Colar do menu continuam com o Windows. Dá para desligar aqui a qualquer hora.	With Prisma open, Ctrl+V in Explorer folders pastes through Prisma's copy window. Dragging with the mouse and the menu's Paste stay with Windows. You can turn this off here at any time.
+Com o Prisma aberto, o Ctrl+V nas pastas do Explorer cola pela janela de cópia do Prisma. Arrastar com o mouse e o Colar do menu continuam com o Windows. Dá para desligar em Configurações ou em Cópias a qualquer hora.	With Prisma open, Ctrl+V in Explorer folders pastes through Prisma's copy window. Dragging with the mouse and the menu's Paste stay with Windows. You can turn this off in Settings or in Copies at any time.
+Substituir a cópia do Windows	Replace the Windows copy
+Com o Prisma aberto, o Ctrl+V nas pastas do Explorer cola pela janela de cópia do Prisma. Arrastar com o mouse continua com o Windows.	With Prisma open, Ctrl+V in Explorer folders pastes through Prisma's copy window. Dragging with the mouse stays with Windows.
 Arrastar com o mouse continua com o Windows.	Dragging with the mouse stays with Windows.
 Página Cópias	Copies page
 Cópias	Copies
