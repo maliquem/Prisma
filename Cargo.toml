@@ -1,6 +1,6 @@
 [package]
 name = "prisma"
-version = "1.0.0-beta"
+version = "1.0.0"
 edition = "2021"
 license-file = "LICENSE"
 description = "Utilitário leve para Windows: fullscreen, volume por programa, monitor, energia e captura"
