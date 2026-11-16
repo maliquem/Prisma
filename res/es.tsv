@@ -2375,7 +2375,7 @@ O que aparece	Qué mostrar
 Mostra uso, temperatura, plano de energia, HDR e VRR por cima de tudo. Arraste para mudar de lugar.	Muestra uso, temperatura, plan de energía, HDR y VRR por encima de todo. Arrástralo para moverlo.
 Volta o atalho, o estilo, os itens e a posição do widget ao padrão, e esconde o widget.	Restablece el atajo, el estilo, los elementos y la posición del widget a lo predeterminado, y oculta el widget.
 Trocar o atalho?	¿Cambiar el atajo?
-{} já é o atalho de {}. Sim tira de lá e coloca aqui.	{} ya es el atajo de {}. Sí lo quita de allí y lo pone aquí.
+{} já é o atalho de {}, na página {}. Sim tira de lá e coloca aqui.	{} ya es el atajo de {}, en la página {}. Sí lo quita de allí y lo pone aquí.
 Escolher outro atalho?	¿Elegir otro atajo?
 {} já é usado por outro programa, e o Windows não diz qual. Com essa combinação, o atalho não funciona no Prisma.	{} ya lo usa otro programa, y Windows no dice cuál. Con esa combinación, el atajo no funciona en Prisma.
 Pesquisar aqui com o Prisma	Buscar aquí con Prisma
