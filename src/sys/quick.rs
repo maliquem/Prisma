@@ -300,7 +300,7 @@ pub fn run_command(ps: bool, cmd: &str, admin: bool, elevated: bool) -> bool {
 }
 
 /// Pede o administrador ao Windows. Se a pessoa recusar, nada abre.
-fn run_admin(file: &str, args: &str, dir: &str) -> bool {
+pub fn run_admin(file: &str, args: &str, dir: &str) -> bool {
     use windows::core::w;
     use windows::Win32::UI::Shell::*;
     let (f, a, d) = (HSTRING::from(file), HSTRING::from(args), HSTRING::from(dir));

@@ -378,6 +378,8 @@ Clique no botão do inseto, no alto da janela. Escolha a função, a gravidade, 
 
 Todos podem ser trocados no programa. Se a combinação nova já é de outra função do Prisma, ele diz qual e pergunta se quer trocar; Sim tira o atalho de lá. Se outro programa já a usa, ele avisa e oferece escolher outra.
 
+**Página Atalhos:** atalhos seus que abrem programas de qualquer lugar do Windows. **Adicionar** cria uma linha: grave a combinação (por exemplo Ctrl + Alt + T), escolha o programa em **Escolher programa** (da lista de programas ou um arquivo .exe) e marque **Como administrador** se ele deve abrir com permissão de administrador; o Windows pede a confirmação quando precisa. O X tira o atalho. Se outro programa já usa a combinação, a linha mostra **Já usada por outro programa** e o atalho não funciona até você trocar. Cabem até 32 atalhos.
+
 - **Ctrl + Alt + F:** Fullscreenizer
 - **Ctrl + teclas de volume e mudo:** volume do programa em foco
 - **Ctrl + Alt + W:** Widget
@@ -394,6 +396,7 @@ Todos podem ser trocados no programa. Se a combinação nova já é de outra fun
 - **Ctrl + Alt + P, A e J:** foto da área, da tela e da janela
 - **Ctrl + Alt + R e T:** gravar janela e gravar tela
 - **Ctrl + Alt + B:** salvar replay
+- **Mostrar o Prisma** (em Configurações, sem tecla de fábrica): traz a janela do Prisma para a frente, mesmo minimizada ou só na bandeja
 
 Os atalhos de Compartilhar tela mudam na aba Atalhos da página: Ctrl + Alt + Shift + Q no host desconecta todo mundo; na janela de quem assiste, Ctrl + Alt + Shift + P abre o menu da conexão, Ctrl + Alt + Shift + F alterna tela cheia, Ctrl + Alt + Shift + I liga e desliga o modo imersivo, Ctrl + Alt + Shift + M troca o medidor, Ctrl + Alt + Shift + S liga e desliga o som, Ctrl + Alt + End manda Ctrl + Alt + Del e Ctrl + Alt + Shift + D desconecta.
 

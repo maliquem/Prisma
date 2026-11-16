@@ -796,7 +796,7 @@ Volta as opções de ponto de restauração e de desinstalar sem janela ao padr�
 Volta as opções Ver log e Restauração ao padrão. Os ajustes aplicados continuam como estão: para reverter, use Desfazer.	Сбрасывает параметры «Показать журнал» и «Точка восстановления» по умолчанию. Применённые настройки остаются: отмените их кнопкой «Отменить».
 Esvazia as listas de nunca fechar e sempre fechar, e as sugestões recusadas. Essa ação não fecha nenhum programa.	Очищает списки «никогда не закрывать» и «всегда закрывать» и отклонённые предложения. Программы не закрываются.
 Volta o modificador, o passo e o aviso na tela ao padrão.	Сбрасывает модификатор, шаг и уведомление на экране по умолчанию.
-Volta os atalhos de Otimizar, Fechar à força e Reiniciar o Explorer, o idioma e a busca de atualização ao padrão.	Сбрасывает клавиши «Оптимизировать», «Закрыть принудительно» и «Перезапустить Проводник», язык и проверку обновлений по умолчанию.
+Volta os atalhos de Otimizar, Fechar à força, Reiniciar o Explorer e Mostrar o Prisma, o idioma e a busca de atualização ao padrão.	Сбрасывает клавиши «Оптимизировать», «Закрыть принудительно», «Перезапустить Проводник» и «Показать Prisma», язык и проверку обновлений по умолчанию.
 Fechar à força	Закрыть принудительно
 Encerra na hora o programa em foco, mesmo travado. O que não foi salvo é perdido.	Сразу завершает активную программу, даже зависшую. Несохранённое пропадёт.
 {} fechado à força	{}: закрыто принудительно
@@ -2602,3 +2602,11 @@ Enviado	Отправлено
 {} h {} min	{} ч {} мин
 Ao lado do relógio	Рядом с часами
 No canto esquerdo	Слева
+Combinações de teclas que abrem programas de qualquer lugar do Windows.	Сочетания клавиш, которые открывают программы из любого места Windows.
+Atalhos de programa	Сочетания клавиш для программ
+Por exemplo, Ctrl + Alt + T para abrir o terminal. Use Adicionar.	Например, Ctrl + Alt + T, чтобы открыть терминал. Нажмите «Добавить».
+Já usada por outro programa	Уже используется другой программой
+Como administrador	От имени администратора
+O programa do atalho não abriu	Программа сочетания клавиш не открылась
+Página Atalhos	Страница «Сочетания клавиш»
+Mostrar o Prisma	Показать Prisma
