@@ -2513,6 +2513,7 @@ Ponte do controle Xbox	Xbox controller bridge
 Ponte instalada. Reinicie o PC para o driver começar.	Bridge installed. Restart the PC for the driver to start.
 Ponte não instalada. Sem ela, nada muda no PC.	Bridge not installed. Without it, nothing changes on the PC.
 Ponte pronta. Escolha Virar controle Xbox no cartão do controle.	Bridge ready. Choose Become an Xbox controller on the controller's card.
+Ponte instalada e funcionando. O Windows pede para reiniciar o PC para terminar a instalação do driver.	Bridge installed and working. Windows asks to restart the PC to finish installing the driver.
 Removendo a ponte.	Removing the bridge.
 Remover a ponte	Remove the bridge
 Remover a ponte?	Remove the bridge?
@@ -2531,6 +2532,7 @@ Instalar o HidHide	Install HidHide
 Instalar o HidHide?	Install HidHide?
 O Prisma baixa o instalador oficial do GitHub da Nefarius, confere a assinatura e abre o instalador. O Windows pede permissão de administrador e pode pedir para reiniciar. Na desinstalação do Prisma, o HidHide sai junto.	Prisma downloads the official installer from Nefarius's GitHub, checks the signature and opens the installer. Windows asks for administrator permission and may ask to restart. When Prisma is uninstalled, HidHide is removed too.
 HidHide instalado	HidHide installed
+HidHide instalado. O Windows pede para reiniciar o PC para terminar.	HidHide installed. Windows asks to restart the PC to finish.
 Não consegui falar com o GitHub do HidHide	Could not reach the HidHide GitHub
 Não achei o instalador na versão mais nova do HidHide	Could not find the installer in the latest HidHide release
 Não consegui baixar o HidHide	Could not download HidHide

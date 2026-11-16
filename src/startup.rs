@@ -151,6 +151,25 @@ pub fn run_elevated_wait(args: &str) -> Option<u32> {
     run_file_elevated_wait(&std::env::current_exe().unwrap_or_default(), args, false)
 }
 
+/// Código de saída de um instalador: `Some(reinício pedido)` quando deu certo. 3010 e 1641 são
+/// sucesso com o Windows pedindo (ou já começando) o reinício para terminar.
+pub fn install_ok(code: u32) -> Option<bool> {
+    match code {
+        0 => Some(false),
+        3010 | 1641 => Some(true),
+        _ => None,
+    }
+}
+
+#[test]
+fn install_exit_codes() {
+    assert_eq!(install_ok(0), Some(false));
+    assert_eq!(install_ok(3010), Some(true));
+    assert_eq!(install_ok(1641), Some(true));
+    assert_eq!(install_ok(1), None);
+    assert_eq!(install_ok(1603), None);
+}
+
 /// O mesmo para outro programa (o instalador do HidHide, com a janela dele à vista). Espera até 10 minutos.
 pub fn run_file_elevated_wait(file: &std::path::Path, args: &str, show: bool) -> Option<u32> {
     use windows::core::*;

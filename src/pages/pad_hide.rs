@@ -23,7 +23,8 @@ pub fn card(ui: &mut Ui, app: &mut App, list: &[Pad], at: Rect) -> f32 {
         }
         if ui.answered("pad-hh-install") {
             hidhide::background(|| Some(match hidhide::install() {
-                Ok(()) => "HidHide instalado",
+                Ok(false) => "HidHide instalado",
+                Ok(true) => "HidHide instalado. O Windows pede para reiniciar o PC para terminar.",
                 Err(e) => e,
             }));
         }

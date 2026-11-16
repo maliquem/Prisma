@@ -2507,6 +2507,7 @@ Ponte do controle Xbox	Мост геймпада Xbox
 Ponte instalada. Reinicie o PC para o driver começar.	Мост установлен. Перезагрузите ПК, чтобы драйвер заработал.
 Ponte não instalada. Sem ela, nada muda no PC.	Мост не установлен. Без него на ПК ничего не меняется.
 Ponte pronta. Escolha Virar controle Xbox no cartão do controle.	Мост готов. Выберите «Стать геймпадом Xbox» в карточке геймпада.
+Ponte instalada e funcionando. O Windows pede para reiniciar o PC para terminar a instalação do driver.	Мост установлен и работает. Windows просит перезагрузить ПК, чтобы завершить установку драйвера.
 Removendo a ponte.	Удаление моста.
 Remover a ponte	Удалить мост
 Remover a ponte?	Удалить мост?
@@ -2525,6 +2526,7 @@ Instalar o HidHide	Установить HidHide
 Instalar o HidHide?	Установить HidHide?
 O Prisma baixa o instalador oficial do GitHub da Nefarius, confere a assinatura e abre o instalador. O Windows pede permissão de administrador e pode pedir para reiniciar. Na desinstalação do Prisma, o HidHide sai junto.	Prisma скачивает официальный установщик с GitHub Nefarius, проверяет подпись и открывает установщик. Windows запросит права администратора и может попросить перезагрузку. При удалении Prisma HidHide удаляется вместе с ним.
 HidHide instalado	HidHide установлен
+HidHide instalado. O Windows pede para reiniciar o PC para terminar.	HidHide установлен. Windows просит перезагрузить ПК, чтобы завершить установку.
 Não consegui falar com o GitHub do HidHide	Не удалось связаться с GitHub HidHide
 Não achei o instalador na versão mais nova do HidHide	В последней версии HidHide установщик не найден
 Não consegui baixar o HidHide	Не удалось скачать HidHide

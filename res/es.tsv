@@ -2507,6 +2507,7 @@ Ponte do controle Xbox	Puente del mando Xbox
 Ponte instalada. Reinicie o PC para o driver começar.	Puente instalado. Reinicia el PC para que el controlador arranque.
 Ponte não instalada. Sem ela, nada muda no PC.	Puente no instalado. Sin él, nada cambia en el PC.
 Ponte pronta. Escolha Virar controle Xbox no cartão do controle.	Puente listo. Elige Convertir en mando Xbox en la tarjeta del mando.
+Ponte instalada e funcionando. O Windows pede para reiniciar o PC para terminar a instalação do driver.	Puente instalado y funcionando. Windows pide reiniciar el PC para terminar de instalar el controlador.
 Removendo a ponte.	Quitando el puente.
 Remover a ponte	Quitar el puente
 Remover a ponte?	¿Quitar el puente?
@@ -2525,6 +2526,7 @@ Instalar o HidHide	Instalar HidHide
 Instalar o HidHide?	¿Instalar HidHide?
 O Prisma baixa o instalador oficial do GitHub da Nefarius, confere a assinatura e abre o instalador. O Windows pede permissão de administrador e pode pedir para reiniciar. Na desinstalação do Prisma, o HidHide sai junto.	Prisma descarga el instalador oficial del GitHub de Nefarius, comprueba la firma y abre el instalador. Windows pide permiso de administrador y puede pedir reiniciar. Al desinstalar Prisma, HidHide se elimina también.
 HidHide instalado	HidHide instalado
+HidHide instalado. O Windows pede para reiniciar o PC para terminar.	HidHide instalado. Windows pide reiniciar el PC para terminar.
 Não consegui falar com o GitHub do HidHide	No se pudo conectar con el GitHub de HidHide
 Não achei o instalador na versão mais nova do HidHide	No se encontró el instalador en la última versión de HidHide
 Não consegui baixar o HidHide	No se pudo descargar HidHide
