@@ -185,6 +185,8 @@ As flags de teste ficam em `src/app.rs` (`start`, linha 366, e as checagens de `
 | Relógio e atualização das telas | Automático | `on_tick` `src/app.rs:3038` (`WM_TICK` `app.rs:38`) | |
 | Notícias | Automático | `check_news` `src/app.rs:1090` | |
 | Registrar atalhos | Ao abrir e ao salvar | `register_hotkeys` `src/app.rs:1113` | Erros de atalho ficam em `hk_errors`. |
+| Troca de combinação entre atalhos do Prisma | Gravar no campo de tecla uma combinação já usada | `hk_changed` `src/app.rs:185` (atalho novo ou mudado, inclusive linha nova da página Atalhos); `hk_conflict` `:190`; `hk_place_page` `:197` e `App::hk_place` `app.rs:1289` (página e item); pergunta em `hotkey_prompt` `src/pages/mod.rs:443` (`ui.ask("hk-swap")`, Sim → `hk_swap`) | Teste `hotkey_conflict_between_functions`. Teclas de volume (`vol_mods`) ficam fora da troca. |
+| Apagar combinação com o clique do meio | Clique do meio num campo de tecla, em qualquer página | `WM_MBUTTONUP` (`app.rs:4588`) → `UiState::middle_released` (`src/ui/mod.rs:132`, zera em `end_frame`); `Ui::hotkey` `src/ui/mod.rs:790` | |
 | Pedido de outra cópia para abrir a janela | Abrir o .exe de novo | `WM_SHOW` `src/app.rs:40` | Nome único `Local\PrismaApp` (`main.rs`). |
 | Busca de programas e arquivos (barra) | Atalho HK_FIND; ação 23 | `toggle_find` `src/app.rs:2520`, `show_find` `app.rs:2529`, `close_find` `app.rs:2576` | |
 | Teclado e navegação | Teclado | `on_key` `src/app.rs:3671`; `nav_key` `app.rs:4107`; `typed_char` `app.rs:4118` | |

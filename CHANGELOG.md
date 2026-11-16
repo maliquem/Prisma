@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Shortcuts: a combination already used by another Prisma shortcut now opens the swap question, also for new rows on the Shortcuts page, and the question says the item and the page where it is. A middle click on any key field clears the combination. / Atalhos: uma combinação que já é de outro atalho do Prisma agora abre a pergunta de troca, também nas linhas novas da página Atalhos, e a pergunta diz o item e a página onde ele está. O clique do meio do mouse em qualquer campo de tecla apaga a combinação.
+
 ## 1.4.0
 
 - Prisma Launcher: the bridge can list the equalizer profiles of the game's sound device and keep one per game; while the game is open, that profile plays on the device. The Launcher screen for it and the equalizer itself come in a later version. / Prisma Launcher: a ponte pode listar os perfis de equalizador do aparelho de som do jogo e guardar um por jogo; com o jogo aberto, esse perfil toca no aparelho. A tela do Launcher para isso e o próprio equalizador chegam numa versão seguinte.

@@ -2375,7 +2375,7 @@ O que aparece	显示内容
 Mostra uso, temperatura, plano de energia, HDR e VRR por cima de tudo. Arraste para mudar de lugar.	在所有内容上方显示使用率、温度、电源计划、HDR 和 VRR。拖动可移动。
 Volta o atalho, o estilo, os itens e a posição do widget ao padrão, e esconde o widget.	将小组件的快捷键、样式、项目和位置恢复默认，并隐藏小组件。
 Trocar o atalho?	更换快捷键？
-{} já é o atalho de {}. Sim tira de lá e coloca aqui.	{} 已是“{}”的快捷键。选“是”会从那里移除，并设到这里。
+{} já é o atalho de {}, na página {}. Sim tira de lá e coloca aqui.	{} 已是“{}”的快捷键（{} 页面）。选“是”会从那里移除，并设到这里。
 Escolher outro atalho?	选择其他快捷键？
 {} já é usado por outro programa, e o Windows não diz qual. Com essa combinação, o atalho não funciona no Prisma.	{} 已被其他程序占用，Windows 不会说明是哪个。使用这个组合，快捷键在 Prisma 中无法使用。
 Pesquisar aqui com o Prisma	用 Prisma 在此处搜索

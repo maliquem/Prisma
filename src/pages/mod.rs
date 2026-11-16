@@ -445,7 +445,8 @@ fn hotkey_prompt(ui: &mut Ui, app: &mut App) {
     if let Some(a) = app.hk_ask.take() {
         match a {
             HkAsk::Swap { hk, other, .. } => {
-                ui.ask("hk-swap", "Trocar o atalho?", &format!("{} já é o atalho de {}. Sim tira de lá e coloca aqui.", hk.label(), app.hk_name(other)));
+                let (item, page) = app.hk_place(other);
+                ui.ask("hk-swap", "Trocar o atalho?", &format!("{} já é o atalho de {item}, na página {page}. Sim tira de lá e coloca aqui.", hk.label()));
             }
             HkAsk::Taken(hk) => {
                 ui.ask("hk-taken", "Escolher outro atalho?", &format!("{} já é usado por outro programa, e o Windows não diz qual. Com essa combinação, o atalho não funciona no Prisma.", hk.label()));

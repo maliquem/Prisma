@@ -128,6 +128,8 @@ pub struct UiState {
     pub pressed: bool,
     pub released: bool,
     pub right_released: bool,
+    /// Botão do meio (roda) solto neste quadro.
+    pub middle_released: bool,
     pub wheel: f32,
     active: u64,
     popup: Option<Popup>,
@@ -265,6 +267,7 @@ impl UiState {
         self.pressed = false;
         self.released = false;
         self.right_released = false;
+        self.middle_released = false;
         self.wheel = 0.0;
         self.key_event = None;
         self.key_cancel = false;
@@ -790,6 +793,15 @@ impl<'a> Ui<'a> {
         if self.clickable(id, r) {
             self.s.capturing = id;
             self.s.needs_redraw = true;
+        }
+        // Botão do meio (roda) no campo apaga a combinação.
+        if self.s.middle_released && self.hover(r) {
+            *hk = Hotkey::default();
+            changed = true;
+            self.s.last_hotkey = id;
+            if self.s.capturing == id {
+                self.s.capturing = 0;
+            }
         }
         let active = self.s.capturing == id;
         if active {

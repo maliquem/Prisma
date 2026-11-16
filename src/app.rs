@@ -180,11 +180,32 @@ fn hk_keys(list: &[(i32, Hotkey, &str, bool)]) -> Vec<(i32, Hotkey)> {
     list.iter().filter(|e| !matches!(e.0, HK_VOL_UP | HK_VOL_DOWN | HK_MUTE)).map(|e| (e.0, e.1)).collect()
 }
 
+/// O atalho `id` mudou desde o último registro. Um que não estava (linha nova da página Atalhos)
+/// também conta; na primeira leitura, nenhum.
+fn hk_changed(old: &[(i32, Hotkey)], id: i32, hk: Hotkey) -> bool {
+    !old.is_empty() && !old.iter().any(|&(o, ohk)| o == id && ohk == hk)
+}
+
 /// Atalho que mudou desde `old` e repete o de outra função: (o que mudou, o dono).
 fn hk_conflict(old: &[(i32, Hotkey)], now: &[(i32, Hotkey)]) -> Option<(i32, i32)> {
     now.iter()
-        .filter(|(id, hk)| hk.vk != 0 && old.iter().any(|(o, ohk)| o == id && ohk != hk))
+        .filter(|&&(id, hk)| hk.vk != 0 && hk_changed(old, id, hk))
         .find_map(|(id, hk)| now.iter().find(|(o, ohk)| o != id && ohk == hk).map(|(o, _)| (*id, *o)))
+}
+
+/// Página onde se muda o atalho `id` (nome da barra lateral).
+fn hk_place_page(id: i32) -> &'static str {
+    match id {
+        HK_FULL => "Fullscreenizer",
+        HK_WIDGET => "Widget",
+        HK_OPT | HK_FORCE | HK_EXPLORER | HK_SHOW => "Configurações",
+        HK_SHOT | HK_SHOT_FULL | HK_SHOT_WIN | HK_REC | HK_REC_FULL | HK_REPLAY => "Captura",
+        HK_METER_C | HK_METER_F | HK_METER_O | HK_LIMIT_T | HK_LIMIT_UP | HK_LIMIT_DOWN | HK_LOG | HK_METER_KEYS => "Medidor",
+        HK_FIND => "Pesquisar",
+        HK_MACRO => "Controles",
+        id if id >= HK_RUN => "Atalhos",
+        _ => "Som",
+    }
 }
 
 const HK_FULL: i32 = 1;
@@ -1173,7 +1194,7 @@ impl App {
                     force_hook = Some(hk);
                 } else {
                     errors.push(format!("{name}: {} já está em uso", hk.label()));
-                    if self.hk_last.iter().any(|e| e.0 == id && e.1 != hk) {
+                    if hk_changed(&self.hk_last, id, hk) {
                         taken = Some(hk);
                     }
                 }
@@ -1261,6 +1282,14 @@ impl App {
             id if id >= HK_SND => &mut c.snd_keys.get_mut((id - HK_SND) as usize)?.key,
             _ => return None,
         })
+    }
+
+    /// Onde fica o atalho `id`, para a pergunta de troca: (item, página). Na página Atalhos, o item é
+    /// o programa.
+    pub fn hk_place(&self, id: i32) -> (String, &'static str) {
+        let run = (HK_RUN..HK_RUN + RUN_KEYS_MAX as i32).contains(&id);
+        let prog = self.cfg.run_keys.get((id - HK_RUN).max(0) as usize).filter(|k| run && !k.path.is_empty());
+        (prog.map_or_else(|| self.hk_name(id).to_string(), |k| crate::sys::procs::exe_name(&k.path)), hk_place_page(id))
     }
 
     pub fn hk_name(&self, id: i32) -> &'static str {
@@ -4556,6 +4585,14 @@ unsafe extern "system" fn main_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
                 a.invalidate();
                 Some(0)
             }
+            WM_MBUTTONUP => {
+                mouse_xy(a, l);
+                if let Some(mw) = &mut a.main {
+                    mw.ui.middle_released = true;
+                }
+                a.invalidate();
+                Some(0)
+            }
             WM_MOUSEWHEEL => {
                 let d = ((w.0 >> 16) & 0xffff) as i16 as f32 / 120.0;
                 pad_off(a);
@@ -4649,6 +4686,11 @@ mod window_tests {
         // Combinação nova e livre, ou campo apagado: sem pergunta.
         assert_eq!(hk_conflict(&old, &[(HK_FULL, f), (HK_FIND, Hotkey::new(3, 0x47)), (HK_WIDGET, Hotkey::default())]), None);
         assert_eq!(hk_conflict(&old, &[(HK_FULL, Hotkey::default()), (HK_FIND, Hotkey::new(3, 0x20)), (HK_WIDGET, Hotkey::default())]), None);
+        // Linha nova da página Atalhos (fora do registro anterior) com a combinação do Fullscreenizer.
+        let run = [(HK_FULL, f), (HK_FIND, Hotkey::new(3, 0x20)), (HK_WIDGET, Hotkey::default()), (HK_RUN, f)];
+        assert_eq!(hk_conflict(&old, &run), Some((HK_RUN, HK_FULL)));
+        assert_eq!(hk_place_page(HK_RUN), "Atalhos");
+        assert_eq!(hk_place_page(HK_SHOW), "Configurações");
         // Volume não tem campo próprio: fica fora.
         let list = [(HK_VOL_UP, f, "", false), (HK_FULL, f, "", true)];
         assert_eq!(hk_keys(&list), vec![(HK_FULL, f)]);
