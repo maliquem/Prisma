@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.5.0
 
 - Sound page: new **Equalizer** tab, with a per-device equalizer (parametric or graphic, profiles, channel gain and delay for 5.1/7.1, and the engine installed from the page itself). / Página Som: aba nova **Equalizador**, com equalizador por aparelho (paramétrico ou gráfico, perfis, ganho e atraso por canal em 5.1/7.1, e o motor instalado pela própria página).
 - Shortcuts: a combination already used by another Prisma shortcut now opens the swap question, also for new rows on the Shortcuts page, and the question says the item and the page where it is. A middle click on any key field clears the combination. / Atalhos: uma combinação que já é de outro atalho do Prisma agora abre a pergunta de troca, também nas linhas novas da página Atalhos, e a pergunta diz o item e a página onde ele está. O clique do meio do mouse em qualquer campo de tecla apaga a combinação.
