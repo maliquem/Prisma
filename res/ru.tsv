@@ -1489,7 +1489,7 @@ bateria acabando	батарея почти разряжена
 Controles virtuais no host	Виртуальные геймпады на хосте
 Mandar o controle com a janela em segundo plano	Передавать геймпад, когда окно в фоне
 Usar o teclado como controle	Использовать клавиатуру как геймпад
-No host, cada controle de quem assiste vira um controle de Xbox virtual, pelo ViGEmBus ou pelo VIIPER (o Prisma não instala nenhum dos dois). Eles saem sozinhos quando o jogo da frente tem anti-cheat. Teclado como controle: WASD é o analógico esquerdo, as setas são o direcional, J é A, K é B, U é X, I é Y, Q e E são LB e RB, Z e C os gatilhos, Enter é Start e Backspace é Back.	На хосте каждый геймпад зрителя становится виртуальным геймпадом Xbox через ViGEmBus или VIIPER (Prisma их не устанавливает). Они убираются сами, когда у игры на переднем плане есть античит. Клавиатура как геймпад: WASD — левый стик, стрелки — крестовина, J — A, K — B, U — X, I — Y, Q и E — LB и RB, Z и C — курки, Enter — Start, Backspace — Back.
+No host, cada controle de quem assiste vira um controle de Xbox virtual, pelo ViGEmBus ou pelo VIIPER (o ViGEmBus se instala no cartão Drivers da aba Controles; o VIIPER, não). Eles saem sozinhos quando o jogo da frente tem anti-cheat. Teclado como controle: WASD é o analógico esquerdo, as setas são o direcional, J é A, K é B, U é X, I é Y, Q e E são LB e RB, Z e C os gatilhos, Enter é Start e Backspace é Back.	На хосте каждый геймпад зрителя становится виртуальным геймпадом Xbox через ViGEmBus или VIIPER (ViGEmBus устанавливается в карточке «Драйверы» на вкладке «Геймпады»; VIIPER — нет). Они убираются сами, когда у игры на переднем плане есть античит. Клавиатура как геймпад: WASD — левый стик, стрелки — крестовина, J — A, K — B, U — X, I — Y, Q и E — LB и RB, Z и C — курки, Enter — Start, Backspace — Back.
 Ligados agora	Подключены сейчас
 Neste PC	На этом ПК
 Nenhum controle ligado.	Геймпады не подключены.
@@ -2545,3 +2545,32 @@ O que as pessoas veem	Что видят другие
 Tela inteira	Весь экран
 Só a janela:	Только окно:
 A janela compartilhada fechou: o compartilhamento parou	Общее окно закрылось: показ остановлен
+O HidHide é um driver gratuito da Nefarius que esconde o controle físico do jogo, para ele ver só o controle da ponte. Ele se instala no cartão Drivers, logo abaixo.	HidHide — бесплатный драйвер от Nefarius, который скрывает физический геймпад от игры, чтобы она видела только геймпад моста. Устанавливается в карточке «Драйверы» ниже.
+Esconde o controle físico do jogo.	Скрывает физический геймпад от игры.
+Cria o controle de Xbox virtual da ponte.	Создаёт виртуальный геймпад Xbox моста.
+O HidHide está instalado, mas o filtro dele não está ativo no Windows, então esconder o controle não tem efeito. Reinstalar a versão mais nova costuma resolver; o Windows pode pedir para reiniciar.	HidHide установлен, но его фильтр не активен в Windows, поэтому скрытие геймпада не работает. Обычно помогает переустановка последней версии; Windows может попросить перезагрузку.
+procurando…	поиск…
+não deu para ver	не удалось определить
+Instalado: {}	Установлено: {}
+No GitHub: {}	На GitHub: {}
+Drivers	Драйверы
+Atualizar	Обновить
+Instalar o {}?	Установить {}?
+Atualizar o {}?	Обновить {}?
+Desinstalar o {}?	Удалить {}?
+O Prisma baixa o instalador oficial do GitHub da Nefarius, confere a assinatura e abre o instalador. O Windows pede permissão de administrador e pode pedir para reiniciar. Se foi o Prisma que instalou o HidHide, ele sai junto na desinstalação do Prisma.	Prisma скачивает официальный установщик с GitHub Nefarius, проверяет подпись и открывает установщик. Windows запросит права администратора и может попросить перезагрузку. Если HidHide установил Prisma, он удаляется вместе с Prisma.
+O Prisma baixa o instalador oficial do GitHub da Nefarius, confere a assinatura e abre o instalador. O Windows pede permissão de administrador e pode pedir para reiniciar.	Prisma скачивает официальный установщик с GitHub Nefarius, проверяет подпись и открывает установщик. Windows запросит права администратора и может попросить перезагрузку.
+O Prisma abre o desinstalador oficial do driver. O Windows pede permissão de administrador e pode pedir para reiniciar. Sem o HidHide, o jogo volta a ver os controles físicos; sem o ViGEmBus, a ponte e os controles de quem assiste param de funcionar.	Prisma открывает официальный деинсталлятор драйвера. Windows запросит права администратора и может попросить перезагрузку. Без HidHide игра снова видит физические геймпады; без ViGEmBus мост и геймпады зрителей перестают работать.
+Reparar o HidHide	Исправить HidHide
+Reparar o HidHide?	Исправить HidHide?
+O Prisma baixa a versão mais nova do instalador oficial e abre o instalador, que tira a versão atual e instala de novo. O Windows pede permissão de administrador e pode pedir para reiniciar; depois do reinício, abra o instalador de novo se ele pedir.	Prisma скачивает последнюю версию официального установщика и открывает его: он удаляет текущую версию и ставит заново. Windows запросит права администратора и может попросить перезагрузку; после перезагрузки откройте установщик снова, если он попросит.
+Driver instalado	Драйвер установлен
+Driver instalado. O Windows pede para reiniciar o PC para terminar.	Драйвер установлен. Windows просит перезагрузить ПК, чтобы завершить.
+Driver removido	Драйвер удалён
+Driver removido. O Windows pede para reiniciar o PC para terminar.	Драйвер удалён. Windows просит перезагрузить ПК, чтобы завершить.
+Não consegui falar com o GitHub da Nefarius	Не удалось связаться с GitHub Nefarius
+Não achei o instalador na versão mais nova	В последней версии установщик не найден
+Não consegui baixar o instalador	Не удалось скачать установщик
+O driver não foi instalado	Драйвер не установлен
+Não achei o desinstalador do driver	Деинсталлятор драйвера не найден
+O driver não foi removido	Драйвер не удалён

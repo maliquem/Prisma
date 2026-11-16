@@ -53,6 +53,7 @@ pub mod update;
 pub mod uninstall;
 pub mod xbridge;
 pub mod hidhide;
+pub mod nefarius;
 
 use std::path::PathBuf;
 

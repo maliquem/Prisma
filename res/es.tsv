@@ -1489,7 +1489,7 @@ bateria acabando	batería casi vacía
 Controles virtuais no host	Mandos virtuales en el anfitrión
 Mandar o controle com a janela em segundo plano	Enviar el mando con la ventana en segundo plano
 Usar o teclado como controle	Usar el teclado como mando
-No host, cada controle de quem assiste vira um controle de Xbox virtual, pelo ViGEmBus ou pelo VIIPER (o Prisma não instala nenhum dos dois). Eles saem sozinhos quando o jogo da frente tem anti-cheat. Teclado como controle: WASD é o analógico esquerdo, as setas são o direcional, J é A, K é B, U é X, I é Y, Q e E são LB e RB, Z e C os gatilhos, Enter é Start e Backspace é Back.	En el anfitrión, cada mando de quien mira se convierte en un mando virtual de Xbox, mediante ViGEmBus o VIIPER (Prisma no instala ninguno). Se quitan solos cuando el juego en primer plano tiene antitrampas. Teclado como mando: WASD es el stick izquierdo, las flechas son la cruceta, J es A, K es B, U es X, I es Y, Q y E son LB y RB, Z y C los gatillos, Enter es Start y Retroceso es Back.
+No host, cada controle de quem assiste vira um controle de Xbox virtual, pelo ViGEmBus ou pelo VIIPER (o ViGEmBus se instala no cartão Drivers da aba Controles; o VIIPER, não). Eles saem sozinhos quando o jogo da frente tem anti-cheat. Teclado como controle: WASD é o analógico esquerdo, as setas são o direcional, J é A, K é B, U é X, I é Y, Q e E são LB e RB, Z e C os gatilhos, Enter é Start e Backspace é Back.	En el anfitrión, cada mando de quien mira se convierte en un mando virtual de Xbox, mediante ViGEmBus o VIIPER (ViGEmBus se instala desde la tarjeta Drivers de la pestaña Mandos; VIIPER, no). Se quitan solos cuando el juego en primer plano tiene antitrampas. Teclado como mando: WASD es el stick izquierdo, las flechas son la cruceta, J es A, K es B, U es X, I es Y, Q y E son LB y RB, Z y C los gatillos, Enter es Start y Retroceso es Back.
 Ligados agora	Conectados ahora
 Neste PC	En este PC
 Nenhum controle ligado.	No hay mandos conectados.
@@ -2545,3 +2545,32 @@ O que as pessoas veem	Lo que ven las personas
 Tela inteira	Pantalla completa
 Só a janela:	Solo la ventana:
 A janela compartilhada fechou: o compartilhamento parou	La ventana compartida se cerró: se dejó de compartir
+O HidHide é um driver gratuito da Nefarius que esconde o controle físico do jogo, para ele ver só o controle da ponte. Ele se instala no cartão Drivers, logo abaixo.	HidHide es un driver gratuito de Nefarius que oculta el mando físico del juego, para que solo vea el mando del puente. Se instala en la tarjeta Drivers, justo debajo.
+Esconde o controle físico do jogo.	Oculta el mando físico del juego.
+Cria o controle de Xbox virtual da ponte.	Crea el mando de Xbox virtual del puente.
+O HidHide está instalado, mas o filtro dele não está ativo no Windows, então esconder o controle não tem efeito. Reinstalar a versão mais nova costuma resolver; o Windows pode pedir para reiniciar.	HidHide está instalado, pero su filtro no está activo en Windows, así que ocultar el mando no surte efecto. Reinstalar la versión más reciente suele resolverlo; Windows puede pedir reiniciar.
+procurando…	buscando…
+não deu para ver	no se pudo ver
+Instalado: {}	Instalado: {}
+No GitHub: {}	En GitHub: {}
+Drivers	Drivers
+Atualizar	Actualizar
+Instalar o {}?	¿Instalar {}?
+Atualizar o {}?	¿Actualizar {}?
+Desinstalar o {}?	¿Desinstalar {}?
+O Prisma baixa o instalador oficial do GitHub da Nefarius, confere a assinatura e abre o instalador. O Windows pede permissão de administrador e pode pedir para reiniciar. Se foi o Prisma que instalou o HidHide, ele sai junto na desinstalação do Prisma.	Prisma descarga el instalador oficial del GitHub de Nefarius, comprueba la firma y abre el instalador. Windows pide permiso de administrador y puede pedir reiniciar. Si fue Prisma quien instaló HidHide, se elimina junto con Prisma al desinstalarlo.
+O Prisma baixa o instalador oficial do GitHub da Nefarius, confere a assinatura e abre o instalador. O Windows pede permissão de administrador e pode pedir para reiniciar.	Prisma descarga el instalador oficial del GitHub de Nefarius, comprueba la firma y abre el instalador. Windows pide permiso de administrador y puede pedir reiniciar.
+O Prisma abre o desinstalador oficial do driver. O Windows pede permissão de administrador e pode pedir para reiniciar. Sem o HidHide, o jogo volta a ver os controles físicos; sem o ViGEmBus, a ponte e os controles de quem assiste param de funcionar.	Prisma abre el desinstalador oficial del driver. Windows pide permiso de administrador y puede pedir reiniciar. Sin HidHide, el juego vuelve a ver los mandos físicos; sin ViGEmBus, el puente y los mandos de quienes miran dejan de funcionar.
+Reparar o HidHide	Reparar HidHide
+Reparar o HidHide?	¿Reparar HidHide?
+O Prisma baixa a versão mais nova do instalador oficial e abre o instalador, que tira a versão atual e instala de novo. O Windows pede permissão de administrador e pode pedir para reiniciar; depois do reinício, abra o instalador de novo se ele pedir.	Prisma descarga la última versión del instalador oficial y abre el instalador, que quita la versión actual e instala de nuevo. Windows pide permiso de administrador y puede pedir reiniciar; tras el reinicio, abre el instalador otra vez si lo pide.
+Driver instalado	Driver instalado
+Driver instalado. O Windows pede para reiniciar o PC para terminar.	Driver instalado. Windows pide reiniciar el PC para terminar.
+Driver removido	Driver eliminado
+Driver removido. O Windows pede para reiniciar o PC para terminar.	Driver eliminado. Windows pide reiniciar el PC para terminar.
+Não consegui falar com o GitHub da Nefarius	No se pudo conectar con el GitHub de Nefarius
+Não achei o instalador na versão mais nova	No se encontró el instalador en la última versión
+Não consegui baixar o instalador	No se pudo descargar el instalador
+O driver não foi instalado	El driver no se instaló
+Não achei o desinstalador do driver	No se encontró el desinstalador del driver
+O driver não foi removido	El driver no se eliminó
