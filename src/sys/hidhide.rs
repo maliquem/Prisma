@@ -244,7 +244,7 @@ fn ledger_path() -> std::path::PathBuf {
 }
 
 /// A aba desenha a cada quadro: o arquivo e o driver são lidos no máximo uma vez por segundo.
-fn cached<T: Clone>(slot: &Mutex<Option<(std::time::Instant, T)>>, f: impl FnOnce() -> T) -> T {
+pub(crate) fn cached<T: Clone>(slot: &Mutex<Option<(std::time::Instant, T)>>, f: impl FnOnce() -> T) -> T {
     let mut c = slot.lock().unwrap_or_else(|e| e.into_inner());
     match &*c {
         Some((t, v)) if t.elapsed() < std::time::Duration::from_secs(1) => v.clone(),
@@ -472,47 +472,29 @@ pub fn take_message() -> Option<&'static str> {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Instalar e remover o driver, da fonte oficial e só com consentimento.
+// Instalar e remover o driver: o caminho comum aos dois drivers fica em `nefarius`.
 
-const RELEASES: &str = "https://api.github.com/repos/nefarius/HidHide/releases/latest";
-/// Quem assina o instalador oficial.
-const SIGNER: &str = "Nefarius Software Solutions";
-
-/// Baixa o instalador da última versão no GitHub do HidHide, confere a assinatura e abre o
-/// instalador oficial, com a tela dele (o projeto não documenta modo silencioso). Anota que foi o
-/// Prisma que instalou. Roda fora da janela (leva tempo). `Ok(true)`: o Windows pede reinício.
+/// Instala ou atualiza pelo instalador oficial. Se faltava, anota que foi o Prisma que instalou
+/// (sai junto na desinstalação do Prisma). `Ok(true)`: o Windows pede reinício.
 pub fn install() -> Result<bool, &'static str> {
-    let json = crate::sys::update::download(RELEASES).map_err(|_| "Não consegui falar com o GitHub do HidHide")?;
-    let json = String::from_utf8_lossy(&json);
-    let url = installer_url(&json).ok_or("Não achei o instalador na versão mais nova do HidHide")?;
-    let data = crate::sys::update::download(&url).map_err(|_| "Não consegui baixar o HidHide")?;
-    let file = std::env::temp_dir().join("HidHide_setup.exe");
-    std::fs::write(&file, data).map_err(|_| "Não consegui gravar o instalador")?;
-    let path = file.display().to_string();
-    match crate::sys::fileinfo::check(&path) {
-        crate::sys::fileinfo::Signature::Valid(n) if n.contains(SIGNER) => {}
-        _ => {
-            let _ = std::fs::remove_file(&file);
-            return Err("O instalador baixado não tem a assinatura da Nefarius");
-        }
+    let was = installed();
+    let reboot = crate::sys::nefarius::HIDHIDE.install()?;
+    if !was {
+        let mut lg = ledger();
+        lg.installed = true;
+        save(&lg);
     }
-    let ok = crate::startup::run_file_elevated_wait(&file, "", true).and_then(crate::startup::install_ok);
-    let _ = std::fs::remove_file(&file);
-    let Some(reboot) = ok else {
-        return Err("O HidHide não foi instalado");
-    };
-    let mut lg = ledger();
-    lg.installed = true;
-    save(&lg);
     Ok(reboot)
 }
 
-/// O `.exe` x64 entre os arquivos da versão (resposta da API do GitHub).
-pub fn installer_url(json: &str) -> Option<String> {
-    json.split("\"browser_download_url\"").skip(1).filter_map(|s| s.split('"').nth(1)).find(|u| {
-        let l = u.to_ascii_lowercase();
-        l.starts_with("https://github.com/nefarius/hidhide/releases/download/") && l.ends_with(".exe") && l.contains("x64")
-    }).map(str::to_string)
+/// A pessoa pediu para remover: tira o que o Prisma acrescentou às listas e abre o desinstalador.
+pub fn remove() -> Result<bool, &'static str> {
+    let _ = limpar();
+    let r = crate::sys::nefarius::HIDHIDE.uninstall()?;
+    let mut lg = ledger();
+    lg.installed = false;
+    save(&lg);
+    Ok(r)
 }
 
 /// Desinstalação do Prisma: tira o que ele acrescentou e remove o driver só se foi ele que instalou.
@@ -522,30 +504,13 @@ pub fn uninstall() {
         let _ = undo(&mut d, &mut lg, &mut |_: &Ledger| {});
     }
     if ledger().installed {
-        if let Some(cmd) = uninstall_command() {
+        if let Some((exe, args)) = crate::sys::nefarius::HIDHIDE.uninstall_command(true) {
             use std::os::windows::process::CommandExt;
             // `start /wait`: o msiexec é programa de janela e o cmd não esperaria por ele.
-            let _ = std::process::Command::new(crate::sys::system_tool("cmd")).raw_arg(format!("/c start \"\" /wait {cmd}")).output();
+            let _ = std::process::Command::new(crate::sys::system_tool("cmd")).raw_arg(format!("/c start \"\" /wait \"{exe}\" {args}")).output();
         }
     }
     let _ = std::fs::remove_file(ledger_path());
-}
-
-/// Comando silencioso de remoção que o instalador do HidHide registrou no Windows.
-fn uninstall_command() -> Option<String> {
-    use crate::sys::reg::{self, Hive};
-    const KEY: &str = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall";
-    let text = |k: &str, v: &str| reg::read(Hive::Machine, k, v).map(|(_, b)| {
-        let w: Vec<u16> = b.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
-        String::from_utf16_lossy(&w).trim_end_matches('\0').to_string()
-    });
-    reg::subkeys(Hive::Machine, KEY).into_iter().find_map(|s| {
-        let k = format!(r"{KEY}\{s}");
-        let ours = text(&k, "DisplayName")?.starts_with("HidHide") && text(&k, "Publisher").is_some_and(|p| p.contains("Nefarius"));
-        ours.then_some(())?;
-        // MSI: o código do produto é o nome da chave.
-        Some(text(&k, "QuietUninstallString").unwrap_or_else(|| format!("msiexec /x {s} /quiet /norestart")))
-    })
 }
 
 #[cfg(test)]
@@ -677,13 +642,6 @@ mod tests {
         assert_eq!(parse_multi_sz(&w), v);
         assert_eq!(multi_sz(&[]), vec![0, 0]);
         assert!(parse_multi_sz(&[0, 0]).is_empty());
-    }
-
-    #[test]
-    fn installer_only_from_official_releases() {
-        let json = r#"{"assets":[{"browser_download_url":"https://evil.example/HidHide_x64.exe"},{"browser_download_url":"https://github.com/nefarius/HidHide/releases/download/v1.5.230.0/HidHide_1.5.230_x64.exe"}]}"#;
-        assert_eq!(installer_url(json).as_deref(), Some("https://github.com/nefarius/HidHide/releases/download/v1.5.230.0/HidHide_1.5.230_x64.exe"));
-        assert_eq!(installer_url(r#"{"browser_download_url":"https://evil.example/x64.exe"}"#), None);
     }
 
     #[test]

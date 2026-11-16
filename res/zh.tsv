@@ -1489,7 +1489,7 @@ bateria acabando	电量几乎耗尽
 Controles virtuais no host	主机上的虚拟手柄
 Mandar o controle com a janela em segundo plano	窗口在后台时也发送手柄
 Usar o teclado como controle	把键盘当作手柄
-No host, cada controle de quem assiste vira um controle de Xbox virtual, pelo ViGEmBus ou pelo VIIPER (o Prisma não instala nenhum dos dois). Eles saem sozinhos quando o jogo da frente tem anti-cheat. Teclado como controle: WASD é o analógico esquerdo, as setas são o direcional, J é A, K é B, U é X, I é Y, Q e E são LB e RB, Z e C os gatilhos, Enter é Start e Backspace é Back.	在主机上，观看方的每个手柄都会通过 ViGEmBus 或 VIIPER 变成一个虚拟 Xbox 手柄（Prisma 不安装两者中的任何一个）。前台游戏有反作弊时会自动移除。键盘当手柄：WASD 是左摇杆，方向键是十字键，J 是 A，K 是 B，U 是 X，I 是 Y，Q 和 E 是 LB 和 RB，Z 和 C 是扳机，Enter 是 Start，Backspace 是 Back。
+No host, cada controle de quem assiste vira um controle de Xbox virtual, pelo ViGEmBus ou pelo VIIPER (o ViGEmBus se instala no cartão Drivers da aba Controles; o VIIPER, não). Eles saem sozinhos quando o jogo da frente tem anti-cheat. Teclado como controle: WASD é o analógico esquerdo, as setas são o direcional, J é A, K é B, U é X, I é Y, Q e E são LB e RB, Z e C os gatilhos, Enter é Start e Backspace é Back.	在主机上，观看方的每个手柄都会通过 ViGEmBus 或 VIIPER 变成一个虚拟 Xbox 手柄（ViGEmBus 可在“手柄”标签页的“驱动”卡片中安装；VIIPER 则不能）。前台游戏有反作弊时会自动移除。键盘当手柄：WASD 是左摇杆，方向键是十字键，J 是 A，K 是 B，U 是 X，I 是 Y，Q 和 E 是 LB 和 RB，Z 和 C 是扳机，Enter 是 Start，Backspace 是 Back。
 Ligados agora	当前已连接
 Neste PC	此电脑上
 Nenhum controle ligado.	没有连接手柄。
@@ -2545,3 +2545,32 @@ O que as pessoas veem	其他人看到的内容
 Tela inteira	整个屏幕
 Só a janela:	仅此窗口：
 A janela compartilhada fechou: o compartilhamento parou	共享的窗口已关闭：共享已停止
+O HidHide é um driver gratuito da Nefarius que esconde o controle físico do jogo, para ele ver só o controle da ponte. Ele se instala no cartão Drivers, logo abaixo.	HidHide 是 Nefarius 的免费驱动，可对游戏隐藏实体手柄，让游戏只看到桥接手柄。它在下方的“驱动”卡片中安装。
+Esconde o controle físico do jogo.	对游戏隐藏实体手柄。
+Cria o controle de Xbox virtual da ponte.	创建桥接的虚拟 Xbox 手柄。
+O HidHide está instalado, mas o filtro dele não está ativo no Windows, então esconder o controle não tem efeito. Reinstalar a versão mais nova costuma resolver; o Windows pode pedir para reiniciar.	HidHide 已安装，但其过滤器在 Windows 中未启用，因此隐藏手柄不会生效。重新安装最新版本通常可以解决；Windows 可能会要求重启。
+procurando…	查找中…
+não deu para ver	无法获取
+Instalado: {}	已安装：{}
+No GitHub: {}	GitHub 上：{}
+Drivers	驱动
+Atualizar	更新
+Instalar o {}?	安装 {}？
+Atualizar o {}?	更新 {}？
+Desinstalar o {}?	卸载 {}？
+O Prisma baixa o instalador oficial do GitHub da Nefarius, confere a assinatura e abre o instalador. O Windows pede permissão de administrador e pode pedir para reiniciar. Se foi o Prisma que instalou o HidHide, ele sai junto na desinstalação do Prisma.	Prisma 会从 Nefarius 的 GitHub 下载官方安装程序，校验签名后打开安装程序。Windows 会请求管理员权限，并可能要求重启。如果 HidHide 是 Prisma 安装的，卸载 Prisma 时会一并卸载。
+O Prisma baixa o instalador oficial do GitHub da Nefarius, confere a assinatura e abre o instalador. O Windows pede permissão de administrador e pode pedir para reiniciar.	Prisma 会从 Nefarius 的 GitHub 下载官方安装程序，校验签名后打开安装程序。Windows 会请求管理员权限，并可能要求重启。
+O Prisma abre o desinstalador oficial do driver. O Windows pede permissão de administrador e pode pedir para reiniciar. Sem o HidHide, o jogo volta a ver os controles físicos; sem o ViGEmBus, a ponte e os controles de quem assiste param de funcionar.	Prisma 会打开驱动的官方卸载程序。Windows 会请求管理员权限，并可能要求重启。没有 HidHide，游戏会重新看到实体手柄；没有 ViGEmBus，桥接和观看方的手柄将停止工作。
+Reparar o HidHide	修复 HidHide
+Reparar o HidHide?	修复 HidHide？
+O Prisma baixa a versão mais nova do instalador oficial e abre o instalador, que tira a versão atual e instala de novo. O Windows pede permissão de administrador e pode pedir para reiniciar; depois do reinício, abra o instalador de novo se ele pedir.	Prisma 会下载最新版官方安装程序并打开，它会卸载当前版本后重新安装。Windows 会请求管理员权限，并可能要求重启；重启后如果安装程序提示，请再次打开它。
+Driver instalado	驱动已安装
+Driver instalado. O Windows pede para reiniciar o PC para terminar.	驱动已安装。Windows 需要重启电脑以完成操作。
+Driver removido	驱动已移除
+Driver removido. O Windows pede para reiniciar o PC para terminar.	驱动已移除。Windows 需要重启电脑以完成操作。
+Não consegui falar com o GitHub da Nefarius	无法连接 Nefarius 的 GitHub
+Não achei o instalador na versão mais nova	在最新版本中找不到安装程序
+Não consegui baixar o instalador	无法下载安装程序
+O driver não foi instalado	驱动未安装
+Não achei o desinstalador do driver	找不到驱动的卸载程序
+O driver não foi removido	驱动未移除
