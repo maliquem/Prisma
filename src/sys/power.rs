@@ -256,6 +256,8 @@ const NOT_GAMES: &[&str] = &[
     "discord.exe", "obs64.exe", "spotify.exe", "powerpnt.exe", "resolve.exe", "blender.exe", "photoshop.exe", "afterfx.exe", "adobe premiere pro.exe",
     "steam.exe", "steamwebhelper.exe", "epicgameslauncher.exe", "galaxyclient.exe", "eadesktop.exe", "upc.exe", "battle.net.exe", "xboxpcapp.exe", "gamebar.exe", "playnite.fullscreenapp.exe", "playnite.desktopapp.exe",
     "losslessscaling.exe", "wallpaper64.exe", "wallpaper32.exe", "nvidia overlay.exe", "explorer.exe", "prisma.exe",
+    // O Prisma Launcher abre o jogo e fica aberto; o vigia de travamento do Unity nasce com o jogo.
+    "prisma-launcher.exe", "unitycrashhandler64.exe", "unitycrashhandler32.exe",
 ];
 
 /// Programa que nunca é jogo, mesmo em tela cheia.
@@ -390,6 +392,12 @@ impl Detector {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn launcher_and_crash_handler_are_not_games() {
+        assert!(not_game("Prisma-Launcher.exe") && not_game("UnityCrashHandler64.exe"));
+        assert!(!not_game("Castlevania Belmont's Curse.exe"));
+    }
 
     #[test]
     fn hint_matches_pid() {

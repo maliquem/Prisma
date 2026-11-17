@@ -2561,7 +2561,7 @@ impl App {
         }
         if let Some(path) = procs::image_path(self.fg_pid) {
             let exe = procs::exe_name(&path);
-            if self.cfg.meter_games.iter().any(|g| g.exe.eq_ignore_ascii_case(&exe)) {
+            if !not_meter_game(&exe) && self.cfg.meter_games.iter().any(|g| g.exe.eq_ignore_ascii_case(&exe)) {
                 return Some((exe, self.fg_pid, path));
             }
         }
@@ -2580,8 +2580,7 @@ impl App {
         }
         let path = procs::image_path(pid)?;
         let exe = procs::exe_name(&path);
-        const SHELL: [&str; 7] = ["explorer.exe", "searchhost.exe", "startmenuexperiencehost.exe", "shellexperiencehost.exe", "textinputhost.exe", "lockapp.exe", "prisma.exe"];
-        (!SHELL.iter().any(|s| exe.eq_ignore_ascii_case(s))).then_some((exe, pid, path))
+        (!not_meter_game(&exe)).then_some((exe, pid, path))
     }
 
     /// Sem jogo na sessão, o atalho usa o programa em foco.
@@ -4786,6 +4785,13 @@ fn work_area_at_cursor() -> RECT {
         let _ = GetCursorPos(&mut pt);
         work_area_of(MonitorFromPoint(pt, MONITOR_DEFAULTTOPRIMARY))
     }
+}
+
+/// Programa em foco que nunca é o jogo do Medidor: o Windows, o próprio Prisma, o Prisma Launcher
+/// (fica aberto com o jogo e prendia a sessão nele, com 0 FPS) e o vigia de travamento do Unity.
+fn not_meter_game(exe: &str) -> bool {
+    const SHELL: [&str; 10] = ["explorer.exe", "searchhost.exe", "startmenuexperiencehost.exe", "shellexperiencehost.exe", "textinputhost.exe", "lockapp.exe", "prisma.exe", "prisma-launcher.exe", "unitycrashhandler64.exe", "unitycrashhandler32.exe"];
+    SHELL.iter().any(|s| exe.eq_ignore_ascii_case(s))
 }
 
 /// Frequência do monitor arredondada: 119 vira 120 e 59 vira 60.

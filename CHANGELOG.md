@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Meter: opening the Meter from Prisma Launcher (or with the launcher in focus) no longer locks it onto the launcher, which showed 0 FPS for the whole game. The Unity crash handler never becomes the Meter game either. / Medidor: abrir o Medidor pelo Prisma Launcher (ou com o launcher em foco) não o prende mais no launcher, o que mostrava 0 FPS o jogo inteiro. O vigia de travamento do Unity também nunca vira o jogo do Medidor.
+
 ## 1.6.1
 
 - Controllers, Desktop profile: holding Y brings Prisma to the front again when it is in the background. A Desktop profile saved before 1.6.0 gets the hold on Y by itself, if its Y is still the default Enter. / Controles, perfil Desktop: segurar o Y volta a trazer o Prisma para a frente quando ele está em segundo plano. Um perfil Desktop salvo antes do 1.6.0 ganha sozinho o segurar no Y, se o Y dele ainda for o Enter de fábrica.

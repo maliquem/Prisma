@@ -250,7 +250,7 @@ A barra lateral é `NAV` (`src/pages/mod.rs:321-321`), na ordem abaixo. Cada pá
 | Toque na tela do Medidor (arrastar, clicar) | Mouse | `meter_input` `app.rs:2486`; `meter::input` `meter.rs:679`; `meter::act` `meter.rs:778` | |
 | Atualização a cada tick | Automático | `meter_tick` `app.rs:2567`; `meter::tick` `meter.rs:950`; `meter_timer` `app.rs:2514` | |
 | Pintura | Automático | `meter_paint` `app.rs:2600`; `meter::paint` `meter.rs:1169` | |
-| Jogos do Medidor | Página | `pages/meter.rs:256` `games`; `add_meter_game` `app.rs:2611` | Config `meter_games`. |
+| Jogos do Medidor | Página | `pages/meter.rs:256` `games`; `add_meter_game` `app.rs:2611`; escolha do jogo: `meter_game` `app.rs:2555`, `focused_game` `app.rs:2575`, nunca jogo: `not_meter_game` `app.rs:4792` | Config `meter_games`. O Prisma Launcher e o UnityCrashHandler nunca viram o jogo (prendiam a sessão com 0 FPS). |
 | Opções gerais | Página | `pages/meter.rs:57` `general`; `:116` `items`; `:206` `log` | |
 | Driver de medição (PawnIO) | Página | `pages/meter.rs:148` `pawnio_installed`; `:158` `pawnio_row` | |
 | Limite seguro e anti-trapaça | Automático | `meter.rs:324` `safe_cap`; `:404` `anti_cheat`; `:428` `driver_limit`; `:437` `uses_injection`; `:442` `write_limit`; `:446` `write_preset` | |
