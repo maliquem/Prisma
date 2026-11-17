@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.1
+
+- Controllers, Desktop profile: holding Y brings Prisma to the front again when it is in the background. A Desktop profile saved before 1.6.0 gets the hold on Y by itself, if its Y is still the default Enter. / Controles, perfil Desktop: segurar o Y volta a trazer o Prisma para a frente quando ele está em segundo plano. Um perfil Desktop salvo antes do 1.6.0 ganha sozinho o segurar no Y, se o Y dele ainda for o Enter de fábrica.
+- Controllers: **Opens with** moved up to the Profiles row and has **Other programs…**, which opens Explorer to pick any .exe. / Controles: **Abre sozinho com** subiu para a linha Perfis e tem **Outros programas…**, que abre o Explorer para escolher qualquer .exe.
+- Controllers, Settings tab: the cards are spread over three columns. / Controles, aba Ajustes: os cartões ficam distribuídos em três colunas.
 ## 1.6.0
 
 - Controllers: the radial menu and the Prisma keyboard have a new look, with short animations when opening, choosing and closing. / Controles: o menu radial e o teclado do Prisma têm um visual novo, com animações curtas ao abrir, escolher e fechar.
