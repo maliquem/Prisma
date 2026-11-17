@@ -3750,7 +3750,8 @@ impl App {
         if let Some(m) = &self.main {
             unsafe {
                 let _ = ShowWindow(m.hwnd, SW_RESTORE);
-                let _ = SetForegroundWindow(m.hwnd);
+                // Chamado pelo controle com o Prisma em segundo plano, o Windows recusaria só o SetForegroundWindow.
+                crate::paste::to_front(m.hwnd);
             }
             return;
         }

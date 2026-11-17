@@ -1969,7 +1969,8 @@ fn load_profiles() -> Vec<Profile> {
     let mut list = vec![Profile::desktop(), Profile::base()];
     if let Ok(dir) = std::fs::read_dir(profiles_dir()) {
         for e in dir.flatten() {
-            let Some(p) = std::fs::read_to_string(e.path()).ok().and_then(|t| Profile::parse(&t)) else { continue };
+            let Some(mut p) = std::fs::read_to_string(e.path()).ok().and_then(|t| Profile::parse(&t)) else { continue };
+            desktop_y_hold(&mut p);
             match list.iter_mut().find(|x| x.name == p.name) {
                 Some(x) => *x = p,
                 None => list.push(p),
@@ -1977,6 +1978,20 @@ fn load_profiles() -> Vec<Profile> {
         }
     }
     list
+}
+
+/// Desktop salvo antes do 1.6.0 tem Y só como Enter: ganha o segurar que traz o Prisma para a frente.
+/// Um Y que a pessoa mudou fica como está.
+fn desktop_y_hold(p: &mut Profile) {
+    let Some(l) = p.layers.first_mut().filter(|_| p.name == DESKTOP) else { return };
+    let ys: Vec<_> = l.binds.iter().filter(|b| b.button == pads::Y && b.with == 0).collect();
+    if let [b] = ys[..] {
+        if b.when == When::Press && b.out == Out::Key(0x0D, 0) {
+            let defaults = Profile::desktop();
+            l.binds.retain(|b| !(b.button == pads::Y && b.with == 0));
+            l.binds.extend(defaults.layers[0].binds.iter().filter(|b| b.button == pads::Y).cloned());
+        }
+    }
 }
 
 /// Perfis como estão agora: Desktop, Base e os da pasta.
@@ -3289,6 +3304,17 @@ buzz 9
         e.step(&p, &btn(pads::Y), at(1000, t0));
         assert!(e.step(&p, &btn(pads::Y), at(1500, t0)).contains(&Act::Cmd(Out::Action(28))));
         assert_eq!(ACTIONS[28], "Abrir o Prisma");
+        // Desktop salvo com o Y antigo (só Enter) ganha o segurar; um Y mudado fica.
+        let mut old = Profile::desktop();
+        old.layers[0].binds.retain(|b| b.button != pads::Y);
+        old.layers[0].binds.push(Bind { button: pads::Y, with: 0, when: When::Press, out: Out::Key(0x0D, 0) });
+        let mut q = Profile::parse(&old.to_text()).unwrap();
+        desktop_y_hold(&mut q);
+        assert!(q.layers[0].binds.iter().any(|b| b.button == pads::Y && b.when == When::Hold && b.out == Out::Action(28)));
+        old.layers[0].binds.last_mut().unwrap().out = Out::Key(0x20, 0);
+        let mut q = Profile::parse(&old.to_text()).unwrap();
+        desktop_y_hold(&mut q);
+        assert!(!q.layers[0].binds.iter().any(|b| b.button == pads::Y && b.when == When::Hold));
     }
 
     #[test]
