@@ -558,7 +558,9 @@ impl Meter {
         // Sem sessão aberta não há o que religar: a nova tentativa vem logo abaixo.
         self.silent = if silent && self.tracker.is_some() { self.silent + 1 } else { 0 };
         if dead || self.silent >= SILENT_SECS {
-            crate::config::log(&format!("medidor: religou o rastreamento, sessão {}", if dead { "encerrada" } else { "sem eventos" }));
+            let dxgi = self.tracker.as_ref().map_or(0, |t| t.dxgi);
+            let why = if dxgi != 0 { format!(", o DXGI recusou (erro {dxgi})") } else { String::new() };
+            crate::config::log(&format!("medidor: religou o rastreamento, sessão {}{why}", if dead { "encerrada" } else { "sem eventos" }));
             self.tracker = None;
             self.stats = Stats::default();
             self.silent = 0;

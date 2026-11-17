@@ -195,6 +195,8 @@ pub struct Tracker {
     thread: Option<std::thread::JoinHandle<()>>,
     frequency: f32,
     pcl: bool,
+    /// Erro do Windows ao ligar as apresentações do DXGI (0 = ligou). Sem elas, jogo em tela cheia direta fica sem quadros.
+    pub dxgi: u32,
 }
 
 /// Só os eventos que interessam chegam ao Prisma: o resto nem sai de onde nasceu.
@@ -237,7 +239,7 @@ impl Tracker {
                 return Err(format!("a placa de vídeo não aceitou a sessão (erro {})", enabled.0));
             }
             // Sem estes, a placa ainda conta os quadros enquanto o Windows compõe a tela.
-            let _ = enable_filtered(handle, &DXGI, INFO, KEYWORD_ANALYTIC, &[DXGI_PRESENT, DXGI_PRESENT_MPO]);
+            let dxgi = enable_filtered(handle, &DXGI, INFO, KEYWORD_ANALYTIC, &[DXGI_PRESENT, DXGI_PRESENT_MPO]).0;
             let _ = enable_filtered(handle, &D3D9, INFO, KEYWORD_ANALYTIC, &[D3D9_PRESENT]);
             let mut f = 0i64;
             let _ = QueryPerformanceFrequency(&mut f);
@@ -260,7 +262,7 @@ impl Tracker {
                     let _ = ProcessTrace(&[PROCESSTRACE_HANDLE { Value: c }], None, None);
                 })
                 .ok();
-            Ok(Self { handle, consumer, thread, frequency: f as f32, pcl: false })
+            Ok(Self { handle, consumer, thread, frequency: f as f32, pcl: false, dxgi })
         }
     }
 
