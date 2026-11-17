@@ -196,7 +196,22 @@ pub fn layer_changes(app: &App, f: Family) -> Option<(String, Vec<String>)> {
     Some((layer_name(p, ed.layer as u8), lines))
 }
 
-/// "Abre sozinho com", na linha das abas: o jogo cujo foco troca para o perfil aberto no editor.
+/// Lugar `i` da linha Perfis (`r` é a linha toda); o 3, depois do Mais, é o "Abre sozinho com".
+pub fn slot(r: Rect, i: usize) -> Rect {
+    let title_w = crate::ui::gfx::measure(&tr("Perfis"), 15.0, Weight::Semibold, None).0 + 16.0;
+    // Larguras em partes: a lista dos perfis, o "Abre sozinho com" e o jeito de abrir o programa têm os textos mais longos.
+    const PARTS: [f32; 6] = [1.3, 0.9, 0.8, 2.0, 1.2, 1.3];
+    let unit = (r.w - title_w - 40.0) / PARTS.iter().sum::<f32>();
+    let left: f32 = PARTS[..i].iter().sum();
+    rect((r.x + title_w + left * unit + i as f32 * 8.0).floor(), r.y, (PARTS[i] * unit).floor(), 34.0)
+}
+
+/// Escrevendo o nome de um perfil: a linha Perfis está ocupada pelo campo.
+pub fn naming(app: &App) -> bool {
+    app.pads.edit.as_ref().is_some_and(|e| e.naming.is_some())
+}
+
+/// "Abre sozinho com", na linha Perfis: o jogo cujo foco troca para o perfil aberto no editor.
 /// Desktop e Base não têm jogo: dizem quando valem.
 pub fn opens_with(ui: &mut Ui, app: &mut App, r: Rect) {
     let list = remap::profiles();
@@ -230,12 +245,18 @@ pub fn opens_with(ui: &mut Ui, app: &mut App, r: Rect) {
     let mut opts = vec![tr("Nenhum programa")];
     opts.extend(exes.iter().cloned());
     opts.push(tr("Escolher programa"));
+    opts.push(tr("Outros programas…"));
     let mut sel = usize::from(cur.is_some());
     if !ui.select("pp-opens", sr, &opts, &mut sel) {
         return;
     }
-    if sel == opts.len() - 1 {
+    if sel == opts.len() - 2 {
         app.open_picker(super::picker::Target::PadGame);
+        return;
+    }
+    // Qualquer .exe pelo Explorer; a resposta chega em `set_game`.
+    if sel == opts.len() - 1 {
+        app.pick_exe_for(super::picker::Target::PadGame);
         return;
     }
     let mut p = p.clone();
@@ -698,13 +719,7 @@ pub fn top(ui: &mut Ui, app: &mut App, r: Rect, family: Family, pad: Option<&str
     // Gravação começada em qualquer lugar (atalho, radial, combinação ou aqui).
     ed.rec = macros::recording();
     let title_w = crate::ui::gfx::measure(&tr("Perfis"), 15.0, Weight::Semibold, None).0 + 16.0;
-    // Larguras em partes: a lista dos perfis e o jeito de abrir o programa têm os textos mais longos.
-    const PARTS: [f32; 5] = [1.3, 0.9, 0.8, 1.2, 1.3];
-    let unit = (r.w - title_w - 32.0) / PARTS.iter().sum::<f32>();
-    let at = |i: usize| {
-        let left: f32 = PARTS[..i].iter().sum();
-        rect((r.x + title_w + left * unit + i as f32 * 8.0).floor(), r.y, (PARTS[i] * unit).floor(), 34.0)
-    };
+    let at = |i: usize| slot(r, i);
     ui.title(rect(r.x, r.y + 6.0, title_w, 22.0), "Perfis");
     let names: Vec<String> = list.iter().map(|p| p.name.clone()).collect();
     let mut p = list[ed.prof].clone();
@@ -725,9 +740,11 @@ pub fn top(ui: &mut Ui, app: &mut App, r: Rect, family: Family, pad: Option<&str
         }
         let name: String = text.trim().chars().filter(|c| !c.is_control()).take(60).collect();
         let taken = list.iter().any(|x| x.name.eq_ignore_ascii_case(&name) && !(rename && x.name == p.name));
-        let mut done = ui.button("pp-name-no", at(3), "Cancelar", false);
+        // Cancelar com a largura do Criar, no começo do lugar largo; o aviso vem logo depois.
+        let (c, w) = (at(3), at(2).w);
+        let mut done = ui.button("pp-name-no", rect(c.x, c.y, w, 34.0), "Cancelar", false);
         if taken {
-            ui.c.text_fit(at(4), &tr("Esse nome já existe"), 12.0, WARN, Align::Left, Weight::Regular);
+            ui.c.text_fit(rect(c.x + w + 8.0, c.y, at(4).right() - c.x - w - 8.0, 34.0), &tr("Esse nome já existe"), 12.0, WARN, Align::Left, Weight::Regular);
         }
         if ui.button_ex("pp-name-ok", at(2), if rename { "Renomear" } else { "Criar" }, true, !name.is_empty() && !taken) {
             // De fábrica: o Base, sem programa ligado.
@@ -877,12 +894,12 @@ pub fn top(ui: &mut Ui, app: &mut App, r: Rect, family: Family, pad: Option<&str
     // O programa do perfil aberto tem outros perfis: qual é o padrão dele e com qual ele abre.
     if p.games.iter().any(|g| list.iter().any(|o| o.name != p.name && o.games.contains(g))) {
         let mut main = p.main;
-        if ui.check("pp-main", at(3), "Padrão do programa", &mut main) {
+        if ui.check("pp-main", at(4), "Padrão do programa", &mut main) {
             set_main(app, &p.name, main);
         }
-        ui.tip(at(3), "O programa tem mais de um perfil: o padrão é o que abre com ele.");
+        ui.tip(at(4), "O programa tem mais de um perfil: o padrão é o que abre com ele.");
         let mut v = app.cfg.pad_reopen_last as usize;
-        if ui.select("pp-reopen", at(4), &[tr("Abre com o padrão"), tr("Abre com o último usado")], &mut v) {
+        if ui.select("pp-reopen", at(5), &[tr("Abre com o padrão"), tr("Abre com o último usado")], &mut v) {
             app.cfg.pad_reopen_last = v == 1;
             app.cfg.save();
             app.apply_pads();

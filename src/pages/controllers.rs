@@ -275,11 +275,14 @@ fn draw_page(ui: &mut Ui, app: &mut App, a: Rect) {
     let fw = a.w - 56.0;
     let family = list.get(app.pads.sel).map_or(Family::Xbox, |p| p.family);
     let key = list.get(app.pads.sel).map(|p| p.key.clone());
-    super::pad_profiles::top(ui, app, rect(x, 88.0, fw, 34.0), family, key.as_deref());
+    let row = rect(x, 88.0, fw, 34.0);
+    super::pad_profiles::top(ui, app, row, family, key.as_deref());
+    if !super::pad_profiles::naming(app) {
+        super::pad_profiles::opens_with(ui, app, super::pad_profiles::slot(row, 3));
+    }
     let y = pad_card(ui, app, &list, rect(x, 134.0, fw, 0.0));
     // Gravando uma macro, a aba não troca: o botão Parar fica na aba Macros.
-    let end = tabs(ui, x, y, &mut app.pads.tab, !crate::sys::macros::recording());
-    super::pad_profiles::opens_with(ui, app, rect(end + 16.0, y, x + fw - end - 16.0, 34.0));
+    tabs(ui, x, y, &mut app.pads.tab, !crate::sys::macros::recording());
     let top = y + 46.0;
     let h = a.h - top - 12.0;
     // Fora do editor, nenhuma luz de mostra: as abas que o desenham põem a dele de volta, e a
@@ -446,8 +449,7 @@ fn pad_card(ui: &mut Ui, app: &mut App, list: &[Pad], at: Rect) -> f32 {
 }
 
 /// Abas da página; `on` falso deixa trocar de aba desligado (gravando macro).
-/// Devolve onde as abas terminam.
-fn tabs(ui: &mut Ui, x: f32, y: f32, sel: &mut usize, on: bool) -> f32 {
+fn tabs(ui: &mut Ui, x: f32, y: f32, sel: &mut usize, on: bool) {
     const TABS: [&str; 4] = ["Mapeamento", "Macros", "Menu radial", "Ajustes"];
     if on {
         ui.tab_step(sel, TABS.len());
@@ -468,19 +470,38 @@ fn tabs(ui: &mut Ui, x: f32, y: f32, sel: &mut usize, on: bool) -> f32 {
         ui.c.text_raw(r, &name, 14.0, color, Align::Center, if cur { Weight::Semibold } else { Weight::Regular });
         cx += w + 4.0;
     }
-    cx
 }
 
-/// Aba Ajustes: avisos, estado do mapeamento, radial, teclado, conflitos à esquerda; diagnóstico e
-/// a medida dos sticks à direita.
+/// Aba Ajustes: até três colunas (avisos; diagnóstico, medir sticks e teclado; mods, ponte e drivers).
 fn settings(ui: &mut Ui, app: &mut App, list: &[Pad], a: Rect) {
     let (x, top) = (a.x, a.y);
-    // Duas colunas que rolam juntas: o lado direito leva os cartões largos, para a esquerda não
-    // ficar com barra de rolagem enquanto sobra espaço do outro lado.
-    let lw = 340.0_f32.min(a.w - 24.0);
-    let rw = (a.w - lw - 12.0).clamp(0.0, 680.0);
+    // Colunas que rolam juntas, com alturas parecidas: avisos | medir e teclado | mods, ponte e
+    // drivers. Janela mais estreita junta em duas (a terceira vai para baixo da primeira) ou uma.
+    let cols = if a.w >= 1000.0 { 3 } else if a.w >= 652.0 { 2 } else { 1 };
+    let cw = ((a.w - 12.0 * (cols - 1) as f32) / cols as f32).floor();
+    let col = |i: usize| x + i as f32 * (cw + 12.0);
     ui.begin_scroll("pads-set", a, app.pads.left_h);
-    let mut y = top;
+    let a_end = alerts(ui, app, list, rect(x, top, cw, 0.0));
+    let (bx, by) = if cols > 1 { (col(1), top) } else { (x, a_end) };
+    let b_end = tools(ui, app, list, rect(bx, by, cw, 0.0));
+    let (cx, cy) = match cols {
+        3 => (col(2), top),
+        2 => (x, a_end),
+        _ => (x, b_end),
+    };
+    let c_end = extras(ui, app, list, rect(cx, cy, cw, 0.0));
+    let y = a_end.max(b_end).max(c_end);
+    if (y - top - app.pads.left_h).abs() > 0.5 {
+        app.pads.left_h = y - top;
+        ui.s.needs_redraw = true;
+    }
+    ui.end_scroll();
+}
+
+/// Controles pareados sem HID, Avisos, o cartão do Mapeamento e os conflitos.
+fn alerts(ui: &mut Ui, app: &mut App, list: &[Pad], at: Rect) -> f32 {
+    let (x, lw) = (at.x, at.w);
+    let mut y = at.y;
     for name in pads::without_hid() {
         let r = rect(x, y, lw, 122.0);
         ui.card(r);
@@ -520,75 +541,66 @@ fn settings(ui: &mut Ui, app: &mut App, list: &[Pad], a: Rect) {
     }
     y += r.h + 12.0;
     y = mapping(ui, rect(x, y, lw, 0.0));
-    y = dsx(ui, app, rect(x, y, lw, 0.0));
-    y = bridge(ui, app, rect(x, y, lw, 0.0));
-    y = super::pad_hide::card(ui, app, list, rect(x, y, lw, 0.0));
-    y = super::pad_hide::drivers(ui, app, rect(x, y, lw, 0.0));
     for t in &app.pads.conflicts {
         let r = rect(x, y, lw, 64.0);
         ui.card(r);
         ui.c.text_wrap(rect(r.x + 16.0, r.y + 10.0, r.w - 32.0, r.h - 16.0), t, 12.0, TEXT2, Weight::Regular);
         y += r.h + 8.0;
     }
+    y
+}
 
-    // Coluna direita: diagnóstico, medir os sticks do controle escolhido e o teclado do Prisma.
-    let rx = x + lw + 12.0;
-    let mut ry = top;
-    if rw < 300.0 {
-        // Janela estreita: tudo numa coluna só.
-        ry = keyboard(ui, app, rect(x, y, lw, 0.0));
-        y = ry;
-    }
-    if ui.button("pads-copy", rect(rx, ry, 200.0, 36.0), "Copiar diagnóstico", false) {
+/// Mods do DSX, a ponte do Xbox, esconder o controle e os drivers.
+fn extras(ui: &mut Ui, app: &mut App, list: &[Pad], at: Rect) -> f32 {
+    let (x, lw) = (at.x, at.w);
+    let y = dsx(ui, app, at);
+    let y = bridge(ui, app, rect(x, y, lw, 0.0));
+    let y = super::pad_hide::card(ui, app, list, rect(x, y, lw, 0.0));
+    super::pad_hide::drivers(ui, app, rect(x, y, lw, 0.0))
+}
+
+/// Copiar diagnóstico, medir os sticks do controle escolhido e o teclado do Prisma.
+fn tools(ui: &mut Ui, app: &mut App, list: &[Pad], at: Rect) -> f32 {
+    let (rx, rw) = (at.x, at.w);
+    if ui.button("pads-copy", rect(rx, at.y, 200.0_f32.min(rw), 36.0), "Copiar diagnóstico", false) {
         let ok = crate::capture::copy_text(app.hub, &diagnostic(list, &app.pads.conflicts));
         app.toast.info(if ok { "Diagnóstico copiado" } else { "Não consegui copiar" });
     }
-    let done = |ui: &mut Ui, app: &mut App, y: f32| {
-        if (y - top - app.pads.left_h).abs() > 0.5 {
-            app.pads.left_h = y - top;
-            ui.s.needs_redraw = true;
+    let mut y = at.y + 48.0;
+    if let Some(p) = list.get(app.pads.sel) {
+        // O cartão só fica alto enquanto está medindo ou mostrando o resultado.
+        let mh = if app.pads.wiz.is_some() || app.pads.result.is_some() { 220.0 } else { 150.0 };
+        let m = rect(rx, y, rw, mh);
+        ui.card(m);
+        ui.title(rect(m.x + 16.0, m.y + 12.0, m.w - 220.0, 22.0), "Medir sticks e gatilhos");
+        let running = app.pads.wiz.is_some();
+        if ui.button_ex("pad-measure", rect(m.right() - 196.0, m.y + 8.0, 180.0, 34.0), if running { "Medindo…" } else { "Começar" }, true, !running) {
+            app.pads.result = None;
+            app.pads.wiz = Some(Wizard { key: p.key.clone(), started: Instant::now(), rest: Default::default(), turn: Default::default(), trig_rest: Default::default(), trig: Default::default() });
         }
-        ui.end_scroll();
-    };
-    let Some(p) = list.get(app.pads.sel) else {
-        done(ui, app, y);
-        return;
-    };
-    // O cartão só fica alto enquanto está medindo ou mostrando o resultado.
-    let mh = if app.pads.wiz.is_some() || app.pads.result.is_some() { 220.0 } else { 150.0 };
-    let m = rect(rx, ry + 48.0, rw, mh);
-    ui.card(m);
-    ui.title(rect(m.x + 16.0, m.y + 12.0, m.w - 220.0, 22.0), "Medir sticks e gatilhos");
-    let running = app.pads.wiz.is_some();
-    if ui.button_ex("pad-measure", rect(m.right() - 196.0, m.y + 8.0, 180.0, 34.0), if running { "Medindo…" } else { "Começar" }, true, !running) {
-        app.pads.result = None;
-        app.pads.wiz = Some(Wizard { key: p.key.clone(), started: Instant::now(), rest: Default::default(), turn: Default::default(), trig_rest: Default::default(), trig: Default::default() });
-    }
-    let body = rect(m.x + 16.0, m.y + 48.0, m.w - 32.0, m.h - 60.0);
-    if let Some(w) = &app.pads.wiz {
-        let t = w.started.elapsed().as_secs_f32();
-        let (step, text) = if t < STEPS[0] {
-            (0, "Solte os sticks e os gatilhos e não toque no controle.")
-        } else if t < STEPS[0] + STEPS[1] {
-            (1, "Gire os dois sticks devagar, encostando na borda, algumas voltas.")
+        let body = rect(m.x + 16.0, m.y + 48.0, m.w - 32.0, m.h - 60.0);
+        if let Some(w) = &app.pads.wiz {
+            let t = w.started.elapsed().as_secs_f32();
+            let (step, text) = if t < STEPS[0] {
+                (0, "Solte os sticks e os gatilhos e não toque no controle.")
+            } else if t < STEPS[0] + STEPS[1] {
+                (1, "Gire os dois sticks devagar, encostando na borda, algumas voltas.")
+            } else {
+                (2, "Aperte os dois gatilhos até o fim algumas vezes.")
+            };
+            ui.c.text_wrap(rect(body.x, body.y, body.w, 40.0), text, 14.0, TEXT, Weight::Regular);
+            let done = (t / STEPS.iter().sum::<f32>()).min(1.0);
+            ui.c.round(rect(body.x, body.y + 50.0, body.w, 6.0), 3.0, BORDER);
+            ui.c.round(rect(body.x, body.y + 50.0, body.w * done, 6.0), 3.0, ACCENT);
+            ui.label(rect(body.x, body.y + 62.0, body.w, 20.0), &format!("{} {} / 3", crate::i18n::tr("Etapa"), step + 1), MUTED);
+        } else if let Some((_, r)) = app.pads.result.as_ref().filter(|(k, _)| *k == p.key) {
+            draw_results(ui, r, body);
         } else {
-            (2, "Aperte os dois gatilhos até o fim algumas vezes.")
-        };
-        ui.c.text_wrap(rect(body.x, body.y, body.w, 40.0), text, 14.0, TEXT, Weight::Regular);
-        let done = (t / STEPS.iter().sum::<f32>()).min(1.0);
-        ui.c.round(rect(body.x, body.y + 50.0, body.w, 6.0), 3.0, BORDER);
-        ui.c.round(rect(body.x, body.y + 50.0, body.w * done, 6.0), 3.0, ACCENT);
-        ui.label(rect(body.x, body.y + 62.0, body.w, 20.0), &format!("{} {} / 3", crate::i18n::tr("Etapa"), step + 1), MUTED);
-    } else if let Some((_, r)) = app.pads.result.as_ref().filter(|(k, _)| *k == p.key) {
-        draw_results(ui, r, body);
-    } else {
-        ui.c.text_wrap(rect(body.x, body.y, body.w, 60.0), "Mede o desvio dos sticks parados, a tremida, o alcance, o quanto o contorno foge de um círculo e o curso dos gatilhos. Leva 13 segundos.", 13.0, MUTED, Weight::Regular);
+            ui.c.text_wrap(rect(body.x, body.y, body.w, 60.0), "Mede o desvio dos sticks parados, a tremida, o alcance, o quanto o contorno foge de um círculo e o curso dos gatilhos. Leva 13 segundos.", 13.0, MUTED, Weight::Regular);
+        }
+        y = m.bottom() + 12.0;
     }
-    if rw >= 300.0 {
-        let ry = keyboard(ui, app, rect(rx, m.bottom() + 12.0, rw, 0.0));
-        y = y.max(ry);
-    }
-    done(ui, app, y);
+    keyboard(ui, app, rect(rx, y, rw, 0.0))
 }
 
 /// Área de um botão no desenho: bit, x, y, largura e altura em % da imagem, e o raio da borda em
