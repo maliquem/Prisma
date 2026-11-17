@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.6.2
 
 - Meter: opening the Meter from Prisma Launcher (or with the launcher in focus) no longer locks it onto the launcher, which showed 0 FPS for the whole game. The Unity crash handler never becomes the Meter game either. / Medidor: abrir o Medidor pelo Prisma Launcher (ou com o launcher em foco) não o prende mais no launcher, o que mostrava 0 FPS o jogo inteiro. O vigia de travamento do Unity também nunca vira o jogo do Medidor.
 
