@@ -294,7 +294,7 @@ pub fn run_command(ps: bool, cmd: &str, admin: bool, elevated: bool) -> bool {
         return run_admin(&file, &args, &dir);
     }
     if !admin && elevated {
-        return run_as_user(&file, &args, &dir);
+        return run_as_user(&file, &args, &dir, CREATE_NEW_CONSOLE);
     }
     std::process::Command::new(&exe).raw_arg(&args).current_dir(&dir).creation_flags(CREATE_NEW_CONSOLE.0).spawn().is_ok()
 }
@@ -324,7 +324,7 @@ pub fn open_as_user(path: &str) -> bool {
     if crate::startup::is_elevated() {
         let explorer = crate::sys::system_tool("explorer").display().to_string();
         let dir = crate::sys::windows_dir().display().to_string();
-        return run_as_user(&explorer, &format!("\"{path}\""), &dir);
+        return run_as_user(&explorer, &format!("\"{path}\""), &dir, CREATE_NEW_CONSOLE);
     }
     use windows::Win32::UI::Shell::ShellExecuteW;
     let r = unsafe { ShellExecuteW(None, windows::core::w!("open"), &HSTRING::from(path), None, None, SW_SHOWNORMAL) };
@@ -332,7 +332,7 @@ pub fn open_as_user(path: &str) -> bool {
 }
 
 /// Com o Prisma como administrador: abre com a permissão do Explorer, a da pessoa.
-fn run_as_user(file: &str, args: &str, dir: &str) -> bool {
+pub(crate) fn run_as_user(file: &str, args: &str, dir: &str, window: PROCESS_CREATION_FLAGS) -> bool {
     let Some(token) = crate::sys::procs::shell_pid().and_then(crate::sys::procs::shell_token) else { return false };
     let mut line: Vec<u16> = format!("\"{file}\" {args}").encode_utf16().chain([0]).collect();
     let app = HSTRING::from(file);
@@ -340,7 +340,7 @@ fn run_as_user(file: &str, args: &str, dir: &str) -> bool {
     let si = STARTUPINFOW { cb: std::mem::size_of::<STARTUPINFOW>() as u32, ..Default::default() };
     let mut pi = PROCESS_INFORMATION::default();
     unsafe {
-        let ok = CreateProcessWithTokenW(token, LOGON_WITH_PROFILE, &app, Some(PWSTR(line.as_mut_ptr())), CREATE_NEW_CONSOLE | CREATE_UNICODE_ENVIRONMENT, None, &cwd, &si, &mut pi).is_ok();
+        let ok = CreateProcessWithTokenW(token, LOGON_WITH_PROFILE, &app, Some(PWSTR(line.as_mut_ptr())), window | CREATE_UNICODE_ENVIRONMENT, None, &cwd, &si, &mut pi).is_ok();
         let _ = CloseHandle(token);
         if ok {
             let _ = CloseHandle(pi.hThread);

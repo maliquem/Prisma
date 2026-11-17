@@ -225,6 +225,10 @@ mod viiper {
         let text = std::env::var("PRISMA_VIIPER").unwrap_or_else(|_| ADDR.to_string());
         let addr: SocketAddr = text.parse().map_err(|_| format!("endereço do VIIPER inválido: {text}"))?;
         // Sem servidor, a conexão recusa na hora; só espera de verdade num endereço de outra máquina.
+        // O Prisma só abre o VIIPER quando precisa: no endereço padrão, sobe o servidor antes.
+        if std::env::var_os("PRISMA_VIIPER").is_none() {
+            crate::sys::xbridge::ensure_server();
+        }
         std::net::TcpStream::connect_timeout(&addr, Duration::from_secs(2)).map_err(|_| format!("o VIIPER não está rodando em {addr}"))?;
         let c = ViiperClient::new(addr);
         let bus = match c.bus_list().map_err(|e| format!("o VIIPER não respondeu: {e}"))?.buses.first() {

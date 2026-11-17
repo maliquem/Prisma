@@ -2083,6 +2083,7 @@ Essa combinação já é usada por {}.	此组合已被 {} 使用。
 Sem atalho: o turbo só muda aqui.	无快捷键：连发只能在这里更改。
 Segure o atalho e aperte o botão para ligar ou desligar o turbo dele.	按住快捷键再按按键即可开关它的连发。
 a parada de emergência	紧急停止
+a troca entre Desktop e Base	Desktop 与 Base 之间的切换
 o atalho do turbo	连发快捷键
 uma ligação da camada {}	层 {} 中的一个绑定
 Turbo ligado no {}	{} 连发已开启
@@ -2359,7 +2360,7 @@ barra de luz	灯条
 botão de mute	静音键
 gatilhos adaptativos	自适应扳机
 Fullscreenizer	Fullscreenizer
-O jogo vê o controle como ele é, e o perfil vale junto. Fora dos jogos, o Base.	游戏看到的是真实手柄，配置在其上生效。游戏之外使用 Base。
+O jogo vê o controle como ele é, e o perfil vale junto. Fora dos jogos, o Desktop.	游戏看到的是真实手柄，配置在其上生效。游戏之外使用 Desktop。
 botões de trás	背键
 botões extras	额外按键
 Deslizante	滑块

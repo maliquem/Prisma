@@ -246,14 +246,17 @@ pub fn stick() -> [(f32, f32); 2] {
     }
 }
 
-/// Abre o teclado. O que o mapeamento segurava é solto antes.
-pub fn open() {
+/// Abre o teclado. O que o mapeamento segurava é solto antes. Só o controle `pad` mexe nele;
+/// sem um, o primeiro que mandar relatório.
+pub fn open(pad: Option<&str>) {
     super::pads::trace(|| "abre o teclado do Prisma".into());
     let mut close_on = super::remap::keyboard_buttons();
     close_on.push(super::radial::button());
     let mut s = STATE.lock().unwrap();
     if !matches!(*s, State::Open(_)) {
-        *s = State::Open(Osk::new(close_on));
+        let mut o = Osk::new(close_on);
+        o.pad = pad.filter(|p| !p.is_empty()).map(str::to_string);
+        *s = State::Open(o);
         drop(s);
         super::remap::release_held();
     }
@@ -262,7 +265,7 @@ pub fn open() {
 /// Só para as fotos do manual: teclado aberto com o grupo `petal` escolhido (com os dois sticks,
 /// o direito aponta para o grupo oposto).
 pub fn show_for_test(petal: usize) {
-    open();
+    open(None);
     if let State::Open(o) = &mut *STATE.lock().unwrap() {
         let at = |p: usize| {
             let a = (p as f32 * 45.0).to_radians();
@@ -358,7 +361,7 @@ mod tests {
     fn open_keyboard_owns_the_controller_until_released_after_closing() {
         let t = Instant::now();
         assert!(!feed("p", &inp(0, 0.0, 0.0), t), "fechado: o controle vai para o perfil");
-        open();
+        open(None);
         // A segurado desde antes: nada é digitado e o perfil (Desktop ou outro) não recebe nada.
         assert!(feed("p", &inp(pads::A, 0.0, 0.0), t));
         close();
@@ -366,7 +369,7 @@ mod tests {
         assert!(feed("p", &inp(0, 0.0, 0.0), t));
         assert!(!feed("p", &inp(0, 0.0, 0.0), t), "solto: volta ao perfil que estava carregado");
         // O dono saiu: o teclado fecha; outro controle saindo não fecha.
-        open();
+        open(None);
         assert!(feed("p", &inp(0, 0.0, 0.0), t));
         forget("q");
         assert!(feed("p", &inp(0, 0.0, 0.0), t));

@@ -2089,6 +2089,7 @@ Essa combinação já é usada por {}.	This combination is already used by {}.
 Sem atalho: o turbo só muda aqui.	No shortcut: turbo only changes here.
 Segure o atalho e aperte o botão para ligar ou desligar o turbo dele.	Hold the shortcut and press the button to turn its turbo on or off.
 a parada de emergência	the emergency stop
+a troca entre Desktop e Base	switching between Desktop and Base
 o atalho do turbo	the turbo shortcut
 uma ligação da camada {}	a binding in layer {}
 Turbo ligado no {}	Turbo on for {}
@@ -2365,7 +2366,7 @@ barra de luz	light bar
 botão de mute	mute button
 gatilhos adaptativos	adaptive triggers
 Fullscreenizer	Fullscreenizer
-O jogo vê o controle como ele é, e o perfil vale junto. Fora dos jogos, o Base.	The game sees the real controller, and the profile applies on top. Outside games, Base.
+O jogo vê o controle como ele é, e o perfil vale junto. Fora dos jogos, o Desktop.	The game sees the real controller, and the profile applies on top. Outside games, Desktop.
 botões de trás	back buttons
 botões extras	extra buttons
 Deslizante	Slider

@@ -167,7 +167,8 @@ pub fn stick() -> [(f32, f32); 2] {
 }
 
 /// Abre. O que o perfil segurava é solto antes. Não chamar com o mapeamento travado (`remap::RUN`).
-fn open(watch: pads::Buttons) {
+/// Só o controle `pad` mexe no radial aberto; vazio, o primeiro que mandar relatório.
+fn open(watch: pads::Buttons, pad: &str) {
     let (slots, two, left, keep, ok, back) = { let c = CFG.lock().unwrap(); (c.slots, c.two, c.left && !c.two, c.keep, c.ok, c.back) };
     let names = if slots[..SLOTS].contains(&PROFILES) { super::remap::program_profiles() } else { vec![] };
     let profiles = names.len();
@@ -178,7 +179,7 @@ fn open(watch: pads::Buttons) {
             slots,
             two,
             left,
-            pad: None,
+            pad: Some(pad.to_string()).filter(|p| !p.is_empty()),
             sel: None,
             sub: None,
             profiles,
@@ -204,14 +205,14 @@ pub fn button() -> pads::Buttons {
     CFG.lock().unwrap().button
 }
 
-/// Aberto pela ação "Radial do Prisma" ligada a um botão do perfil (segurar).
-pub fn open_action() {
-    open(0);
+/// Aberto pela ação "Radial do Prisma" ligada a um botão do perfil (segurar) no controle `pad`.
+pub fn open_action(pad: &str) {
+    open(0, pad);
 }
 
 /// Só para as fotos do manual: aberto, apontando para `sel`.
 pub fn show_for_test(sel: usize, sub: Option<usize>) {
-    open(pads::BACK);
+    open(pads::BACK, "");
     if let State::Open(r) = &mut *STATE.lock().unwrap() {
         r.sel = Some(sel);
         r.sub = sub;
@@ -449,8 +450,8 @@ pub fn trigger(key: &str, buttons: pads::Buttons, now: Instant, game: bool, comb
 }
 
 /// Abre o radial pedido por `trigger`.
-pub fn open_from(button: pads::Buttons) {
-    self::open(button);
+pub fn open_from(button: pads::Buttons, pad: &str) {
+    self::open(button, pad);
     pads::emit(pads::Event::Radial);
 }
 

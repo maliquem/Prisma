@@ -10,6 +10,8 @@ use crate::sys::remap::{self, Batt, Bind, Light, Motion, Layer, Macro, Mode, Out
 #[derive(Default)]
 pub struct Editor {
     prof: usize,
+    /// Perfil em uso no controle escolhido, da última vez que o editor foi atrás dele.
+    follow: Option<String>,
     layer: usize,
     button: pads::Buttons,
     when: usize,
@@ -160,7 +162,16 @@ pub fn chosen(app: &App) -> pads::Buttons {
 pub fn choose(app: &mut App, bit: pads::Buttons) {
     if let Some(e) = app.pads.edit.as_mut() {
         e.src = 0;
-        e.button = bit;
+        e.set_button(bit);
+    }
+}
+
+impl Editor {
+    /// Outro botão: a ligação nova começa do padrão, sem o que foi escolhido para o anterior.
+    fn set_button(&mut self, bit: pads::Buttons) {
+        if self.button != bit {
+            *self = Editor { button: bit, when: 0, with: 0, kind: 0, val: 0, hk: Hotkey::default(), run: String::new(), url: String::new(), ..std::mem::take(self) };
+        }
     }
 }
 
@@ -636,7 +647,7 @@ fn apply(p: &mut Profile, t: Profile) {
 
 /// Linha do perfil no topo da página: escolher, novo para um jogo, apagar, modelo, importar e exportar.
 /// `family`: o controle escolhido na página; perfil novo fica marcado como feito para ele.
-pub fn top(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
+pub fn top(ui: &mut Ui, app: &mut App, r: Rect, family: Family, pad: Option<&str>) {
     let list = remap::profiles();
     let Some(ed) = app.pads.edit.as_mut() else { return };
     // Importado: um programa por vez; fechar a pergunta sem Sim recusa aquele programa.
@@ -672,6 +683,17 @@ pub fn top(ui: &mut Ui, app: &mut App, r: Rect, family: Family) {
         }
     }
     let Some(ed) = app.pads.edit.as_mut() else { return };
+    // O editor abre no perfil em uso no controle escolhido (o próprio dele ou o do programa) e vai
+    // atrás quando ele muda; escolhido outro à mão, fica nele até lá.
+    let used = remap::profile_for(pad);
+    if used != ed.follow {
+        if let Some(i) = used.as_ref().and_then(|n| list.iter().position(|x| x.name == *n)) {
+            if i != ed.prof {
+                (ed.prof, ed.layer) = (i, 0);
+            }
+        }
+        ed.follow = used;
+    }
     ed.prof = ed.prof.min(list.len() - 1);
     // Gravação começada em qualquer lugar (atalho, radial, combinação ou aqui).
     ed.rec = macros::recording();
@@ -1129,7 +1151,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
         }
         ui.tip(c, label);
         if ui.hit(&format!("pp-b{bit}"), c) {
-            ed.button = *bit;
+            ed.set_button(*bit);
             ui.s.needs_redraw = true;
         }
         bx += cw + 6.0;
@@ -1214,7 +1236,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
         1 => SPECIAL.iter().map(|s| tr(s.1)).collect(),
         2 => MOUSE.iter().map(|s| tr(s)).collect(),
         3 => WHEEL.iter().map(|s| tr(s)).collect(),
-        4 | 5 => layers.clone(),
+        4 | 5 => p.layers.iter().map(|l| l.name.clone()).collect(),
         6 => prisma_ids.iter().map(|&a| action_choice(a)).collect(),
         7 => others_p.clone(),
         10 => p.macros.iter().map(|m| m.name.clone()).collect(),

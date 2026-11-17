@@ -23,7 +23,7 @@ const ASSET: &str = "viiper-windows-amd64.exe";
 
 // ---------- Instalação ----------
 
-/// Onde a ponte está. `Reboot`: instalada, mas o servidor não respondeu (o driver pede reinício).
+/// Onde a ponte está. `Reboot`: instalada, mas o servidor não subiu (o driver pede reinício).
 #[derive(Clone, PartialEq, Debug)]
 pub enum Stage {
     Absent,
@@ -54,14 +54,18 @@ pub trait Host {
     fn uninstall_usbip(&self) -> Result<(), String>;
     /// Apaga as pastas do VIIPER e o que foi baixado.
     fn clean(&self);
+    /// Sobe o servidor do VIIPER, como o início automático dele faria.
+    fn start_server(&self) -> bool;
 }
 
+/// Instalado é pronto: o servidor do VIIPER só sobe quando o modo Xbox precisa dele (`revive`).
 pub fn detect(h: &dyn Host) -> Stage {
-    match (h.viiper_installed(), h.server_up(0)) {
-        (true, true) => Stage::Ready,
-        (true, false) => Stage::Reboot,
-        _ => Stage::Absent,
-    }
+    if h.viiper_installed() { Stage::Ready } else { Stage::Absent }
+}
+
+/// O servidor no ar: sobe ele se não estiver (o Prisma é quem abre o VIIPER).
+pub fn revive(h: &dyn Host) -> bool {
+    h.server_up(0) || (!reboot_asked() && h.start_server() && h.server_up(5))
 }
 
 /// Instala. Devolve o estado final e se o usbip-win2 chegou com esta instalação (só então a
@@ -249,6 +253,22 @@ impl Host for Win {
         let _ = std::fs::remove_dir_all(PathBuf::from(std::env::var_os("APPDATA").unwrap_or_default()).join("VIIPER"));
         let _ = std::fs::remove_dir_all(std::env::temp_dir().join("prisma-viiper"));
     }
+    fn start_server(&self) -> bool {
+        use std::os::windows::process::CommandExt;
+        use windows::Win32::System::Threading::CREATE_NO_WINDOW;
+        let dir = viiper_dir();
+        let file = dir.join("viiper.exe").display().to_string();
+        let log = PathBuf::from(std::env::var_os("APPDATA").unwrap_or_default()).join("VIIPER").join("viiper.log");
+        let args = format!("server --log.file \"{}\"", log.display());
+        let ok = if crate::startup::is_elevated() {
+            // A versão instalada roda como administrador; o servidor fica com a permissão da pessoa.
+            super::quick::run_as_user(&file, &args, &dir.display().to_string(), CREATE_NO_WINDOW)
+        } else {
+            std::process::Command::new(&file).raw_arg(&args).current_dir(&dir).creation_flags(CREATE_NO_WINDOW.0).spawn().is_ok()
+        };
+        crate::config::log(&format!("ponte: servidor do VIIPER fora do ar, {}", if ok { "iniciado pelo Prisma" } else { "não iniciou" }));
+        ok
+    }
 }
 
 static STAGE: Mutex<Option<Stage>> = Mutex::new(None);
@@ -264,6 +284,9 @@ static CHECKED: Mutex<Option<std::time::Instant>> = Mutex::new(None);
 /// Estado agora (olha o sistema na primeira vez). Esperando reinício ou com falha, olha de novo a
 /// cada 3 s: o servidor do VIIPER pode subir depois da instalação, sem reiniciar o Prisma.
 pub fn stage() -> Stage {
+    if START_FAILED.load(Ordering::Relaxed) {
+        return Stage::Reboot;
+    }
     let cur = STAGE.lock().unwrap().clone();
     let s = match cur {
         Some(s @ (Stage::Reboot | Stage::Failed(_))) => s,
@@ -305,6 +328,7 @@ pub fn recheck_from(old: &Stage, now: Stage) -> Stage {
 
 /// Olha o sistema de novo (depois de reiniciar o PC, por exemplo).
 pub fn recheck() {
+    START_FAILED.store(false, Ordering::Relaxed);
     if !stage().busy() {
         set_stage(detect(&Win));
     }
@@ -423,7 +447,13 @@ impl Runner {
             self.live.clear();
             self.merged = merge_all;
         }
-        self.live.retain(|l| groups.iter().any(|g| g.0 == l.0) || now.duration_since(l.3) < GRACE);
+        self.live.retain(|l| {
+            let keep = groups.iter().any(|g| g.0 == l.0) || now.duration_since(l.3) < GRACE;
+            if !keep {
+                note(&format!("ponte: Xbox virtual solto, {} sumiu por mais de 3 s", l.0));
+            }
+            keep
+        });
         let mut out = vec![];
         for (id, members) in &groups {
             let keys: Vec<String> = members.iter().map(|m| m.0.clone()).collect();
@@ -431,6 +461,7 @@ impl Runner {
                 Some(i) => i,
                 None => {
                     self.live.push((id.clone(), keys.clone(), self.bridge.plug()?, now));
+                    note(&format!("ponte: Xbox virtual ligado para {id}"));
                     self.live.len() - 1
                 }
             };
@@ -455,6 +486,28 @@ impl Runner {
     }
 }
 
+/// Tira o que um atalho do Prisma está usando (`remap::swallowed`): o jogo não vê a Guia nem os
+/// gatilhos da troca Desktop/Base, nem o botão do radial aberto.
+fn mask(mut i: Input, s: pads::Buttons) -> Input {
+    use super::remap::{LT, LTF, RT, RTF};
+    if s & LT != 0 {
+        i.lt = 0.0;
+    }
+    if s & RT != 0 {
+        i.rt = 0.0;
+    }
+    let s = s | if s & LT != 0 { LTF } else { 0 } | if s & RT != 0 { RTF } else { 0 };
+    i.buttons &= !s;
+    i
+}
+
+/// Linha no acoes.log; os testes não escrevem.
+fn note(line: &str) {
+    if !cfg!(test) {
+        crate::config::log(line);
+    }
+}
+
 static ON: AtomicBool = AtomicBool::new(false);
 static MERGE: AtomicBool = AtomicBool::new(false);
 /// Virtuais ligados agora (a ponte age).
@@ -463,13 +516,29 @@ static ACTIVE: AtomicBool = AtomicBool::new(false);
 static OWN: AtomicU8 = AtomicU8::new(0);
 static RUMBLE: Mutex<Vec<(String, (u8, u8))>> = Mutex::new(Vec::new());
 static STARTED: AtomicBool = AtomicBool::new(false);
+/// O servidor do VIIPER não subiu: fica no reinício até mudar o modo ou olhar de novo.
+static START_FAILED: AtomicBool = AtomicBool::new(false);
 
-/// Liga ou desliga a ponte e a junção dos controles (`apply_pads`).
+/// Liga ou desliga a ponte e a junção dos controles (`apply_pads`). A linha da ponte roda sempre:
+/// fora do modo Xbox ela fecha o VIIPER.
 pub fn configure(on: bool, merge_all: bool) {
     ON.store(on, Ordering::Relaxed);
     MERGE.store(merge_all, Ordering::Relaxed);
-    if on && !STARTED.swap(true, Ordering::Relaxed) {
+    START_FAILED.store(false, Ordering::Relaxed);
+    if !STARTED.swap(true, Ordering::Relaxed) {
         let _ = std::thread::Builder::new().name("ponte".into()).spawn(run);
+    }
+}
+
+/// Fecha o servidor do VIIPER (o da pasta dele): sem o modo Xbox, ou sem o Prisma, ele não serve
+/// para nada. Também tira o início automático que o instalador do VIIPER cria no login.
+pub fn stop_server() {
+    let _ = super::reg::delete(super::reg::Hive::User, r"Software\Microsoft\Windows\CurrentVersion\Run", "VIIPER");
+    let exe = viiper_dir().join("viiper.exe").display().to_string().to_lowercase();
+    let pids: Vec<u32> = super::procs::parent_map().into_keys().filter(|&p| super::procs::image_path(p).is_some_and(|i| i.to_lowercase() == exe)).collect();
+    if !pids.is_empty() {
+        crate::optimizer::force(&pids);
+        note("ponte: servidor do VIIPER fechado");
     }
 }
 
@@ -502,11 +571,8 @@ fn hide_physical(keys: &[String], on: bool) {
         let _ = std::thread::Builder::new().name("esconder".into()).spawn(move || {
             for (keys, on) in rx {
                 for k in &keys {
-                    if on {
-                        super::hidhide::esconder(k);
-                    } else {
-                        super::hidhide::mostrar(k);
-                    }
+                    let ok = if on { super::hidhide::esconder(k) } else { super::hidhide::mostrar(k) };
+                    crate::config::log(&format!("ponte: {} {k}: {}", if on { "esconder" } else { "mostrar" }, if ok { "ok" } else { "falhou" }));
                 }
             }
         });
@@ -549,6 +615,10 @@ fn run() {
     let mut runner: Option<Runner> = None;
     let mut sent = vec![];
     let mut hidden: Vec<String> = vec![];
+    let mut freed = Instant::now();
+    // Servidor do VIIPER: None sem saber (fecha o que sobrou do login), depois se o Prisma o deixou aberto.
+    let mut server: Option<bool> = None;
+    let mut no_pads: Option<Instant> = None;
     // Desliga tudo o que a ponte ligou: vagas, vibração e controles escondidos.
     let stop = |sent: &mut Vec<(String, (u8, u8))>, hidden: &mut Vec<String>| {
         ACTIVE.store(false, Ordering::Relaxed);
@@ -559,18 +629,35 @@ fn run() {
         hidden.clear();
     };
     loop {
-        let want = ON.load(Ordering::Relaxed) && stage() == Stage::Ready && !super::remap::stopped() && !super::remap::anti_cheat_front();
+        let on = ON.load(Ordering::Relaxed);
+        // Sem controle ligado por 30 s, o VIIPER fecha; volta quando um controle aparece.
+        let pads_now = !pads::list().is_empty();
+        no_pads = if pads_now { None } else { no_pads.or(Some(Instant::now())) };
+        let idle = no_pads.is_some_and(|t| t.elapsed() >= Duration::from_secs(30));
+        let want = on && pads_now && stage() == Stage::Ready && !super::remap::stopped() && !super::remap::anti_cheat_front();
         if !want {
             if runner.take().is_some() || !hidden.is_empty() {
                 stop(&mut sent, &mut hidden);
+            }
+            // O co-op também usa o VIIPER: transmitindo, ele fica aberto.
+            if (!on || idle) && server != Some(false) && !crate::pages::share::hosting() {
+                stop_server();
+                server = Some(false);
             }
             std::thread::sleep(Duration::from_millis(250));
             continue;
         }
         if runner.is_none() {
-            // shortcut: toda vaga do XInput que estava livre ao ligar fica com os virtuais (o índice
+            if !revive(&Win) {
+                note("ponte: o servidor do VIIPER não subiu");
+                START_FAILED.store(true, Ordering::Relaxed);
+                continue;
+            }
+            server = Some(true);
+            // shortcut: toda vaga do XInput livre com a ponte ligada fica com os virtuais (o índice
             // que o driver dá pode chegar tarde); um Xbox físico ligado depois só entra ao religar a ponte.
             OWN.store(!crate::stream::pads::xinput_mask() & 0xF, Ordering::Relaxed);
+            freed = Instant::now();
             match Bridge::viiper() {
                 Ok(b) => runner = Some(Runner::new(b)),
                 Err(_) => {
@@ -581,7 +668,13 @@ fn run() {
             }
             ACTIVE.store(true, Ordering::Relaxed);
         }
-        let list: Vec<(String, Input)> = pads::list().into_iter().map(|p| (p.key, p.input)).collect();
+        // O virtual de antes pode segurar uma vaga por uns segundos depois de solto, e o novo pega ela:
+        // a vaga que se solta também é dos virtuais, senão o Prisma leria o próprio Xbox virtual.
+        if freed.elapsed() >= Duration::from_millis(250) {
+            OWN.fetch_or(!crate::stream::pads::xinput_mask() & 0xF, Ordering::Relaxed);
+            freed = Instant::now();
+        }
+        let list: Vec<(String, Input)> = pads::list().into_iter().map(|p| (mask(p.input, super::remap::swallowed(&p.key)), p.key)).map(|(i, k)| (k, i)).collect();
         // Só acrescenta: um controle que some por um instante (reconexão, o reinício do HidHide)
         // fica escondido até a ponte parar. Mostrar e esconder de novo a cada sumiço deixava o jogo
         // pegar o físico e reiniciava o controle em laço.
@@ -597,6 +690,7 @@ fn run() {
             }
             Err(_) => {
                 // O controle virtual caiu: o jogo não pode ficar sem o físico escondido.
+                crate::config::log("ponte: o Xbox virtual caiu, religando em 2 s");
                 runner = None;
                 stop(&mut sent, &mut hidden);
                 std::thread::sleep(Duration::from_secs(2));
@@ -609,6 +703,16 @@ fn run() {
 
 #[cfg(not(feature = "stream"))]
 fn run() {}
+
+/// O VIIPER no ar para o co-op, que não depende do modo Xbox.
+pub fn ensure_server() -> bool {
+    revive(&Win)
+}
+
+/// Saída do Prisma: o VIIPER fecha junto.
+pub fn shutdown() {
+    stop_server();
+}
 
 #[cfg(test)]
 mod tests {
@@ -667,6 +771,11 @@ mod tests {
         fn clean(&self) {
             self.calls.borrow_mut().push("clean");
         }
+        fn start_server(&self) -> bool {
+            self.calls.borrow_mut().push("start_server");
+            self.server.set(self.starts);
+            true
+        }
     }
 
     #[test]
@@ -681,11 +790,37 @@ mod tests {
         let h = Fake { starts: false, ..Default::default() };
         h.usbip.set(true);
         assert_eq!(install(&h, &mut |_| {}), (Stage::Reboot, false));
-        assert_eq!(detect(&h), Stage::Reboot);
+        // Depois, instalado é pronto: o Prisma tenta abrir o servidor quando o modo Xbox liga.
+        assert_eq!(detect(&h), Stage::Ready);
         // Sem rede: nada é instalado.
         let h = Fake { fail_download: true, ..Default::default() };
         assert!(matches!(install(&h, &mut |_| {}).0, Stage::Failed(_)));
         assert_eq!(*h.calls.borrow(), vec!["download"]);
+    }
+
+    #[test]
+    fn server_is_started_by_prisma_on_demand() {
+        let h = Fake { starts: true, ..Default::default() };
+        h.viiper.set(true);
+        // Instalado com o servidor fechado é pronto: o Prisma abre o VIIPER quando precisa.
+        assert_eq!(detect(&h), Stage::Ready);
+        assert!(revive(&h));
+        assert_eq!(*h.calls.borrow(), vec!["start_server"]);
+        // Já no ar: não abre outro.
+        assert!(revive(&h));
+        assert_eq!(h.calls.borrow().len(), 1);
+        let h = Fake::default();
+        h.viiper.set(true);
+        assert!(!revive(&h), "não subiu: a ponte não liga");
+    }
+
+    #[test]
+    fn shortcut_buttons_do_not_reach_the_game() {
+        use super::super::remap::{LT, LTF, RT};
+        let i = Input { buttons: pads::GUIDE | LT | LTF | RT | pads::A, lt: 1.0, rt: 0.8, ..Default::default() };
+        let o = mask(i, pads::GUIDE | LT | RT);
+        assert_eq!((o.buttons, o.lt, o.rt), (pads::A, 0.0, 0.0));
+        assert_eq!(mask(i, 0).buttons, i.buttons);
     }
 
     #[test]

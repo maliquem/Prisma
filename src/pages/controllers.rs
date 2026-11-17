@@ -274,7 +274,8 @@ fn draw_page(ui: &mut Ui, app: &mut App, a: Rect) {
     let x = a.x + 28.0;
     let fw = a.w - 56.0;
     let family = list.get(app.pads.sel).map_or(Family::Xbox, |p| p.family);
-    super::pad_profiles::top(ui, app, rect(x, 88.0, fw, 34.0), family);
+    let key = list.get(app.pads.sel).map(|p| p.key.clone());
+    super::pad_profiles::top(ui, app, rect(x, 88.0, fw, 34.0), family, key.as_deref());
     let y = pad_card(ui, app, &list, rect(x, 134.0, fw, 0.0));
     // Gravando uma macro, a aba não troca: o botão Parar fica na aba Macros.
     let end = tabs(ui, x, y, &mut app.pads.tab, !crate::sys::macros::recording());
@@ -412,7 +413,7 @@ fn pad_card(ui: &mut Ui, app: &mut App, list: &[Pad], at: Rect) -> f32 {
     } else if map {
         "Fora dos jogos, mouse e teclado. Nos jogos, o perfil do jogo ou o Base, que não muda nada."
     } else {
-        "O jogo vê o controle como ele é, e o perfil vale junto. Fora dos jogos, o Base."
+        "O jogo vê o controle como ele é, e o perfil vale junto. Fora dos jogos, o Desktop."
     };
     ui.c.text_fit(rect(r.x + 16.0, ry + 40.0, r.w - 32.0, 20.0), &tr(note), 12.0, MUTED, Align::Left, Weight::Regular);
     // O perfil deste controle e o botão de desconectar.

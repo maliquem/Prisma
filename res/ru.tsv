@@ -2083,6 +2083,7 @@ Essa combinação já é usada por {}.	Эта комбинация уже зан
 Sem atalho: o turbo só muda aqui.	Без сочетания: турбо меняется только здесь.
 Segure o atalho e aperte o botão para ligar ou desligar o turbo dele.	Удерживайте сочетание и нажмите кнопку, чтобы включить или выключить её турбо.
 a parada de emergência	экстренная остановка
+a troca entre Desktop e Base	переключение между Desktop и Base
 o atalho do turbo	сочетание турбо
 uma ligação da camada {}	назначение в слое {}
 Turbo ligado no {}	Турбо включено для {}
@@ -2359,7 +2360,7 @@ barra de luz	световая панель
 botão de mute	кнопка отключения звука
 gatilhos adaptativos	адаптивные триггеры
 Fullscreenizer	Fullscreenizer
-O jogo vê o controle como ele é, e o perfil vale junto. Fora dos jogos, o Base.	Игра видит настоящий геймпад, профиль действует поверх. Вне игр — Base.
+O jogo vê o controle como ele é, e o perfil vale junto. Fora dos jogos, o Desktop.	Игра видит настоящий геймпад, профиль действует поверх. Вне игр — Desktop.
 botões de trás	задние кнопки
 botões extras	доп. кнопки
 Deslizante	Ползунок

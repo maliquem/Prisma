@@ -3459,9 +3459,10 @@ impl App {
     }
 
     /// Abre ou fecha o teclado do Prisma para controle.
-    pub fn set_keyboard(&mut self, on: bool) {
+    /// `pad`: o controle que abriu, o único que mexe no teclado.
+    pub fn set_keyboard(&mut self, on: bool, pad: Option<&str>) {
         if on {
-            crate::sys::osk::open();
+            crate::sys::osk::open(pad);
         } else {
             crate::sys::osk::close();
         }
@@ -3505,7 +3506,7 @@ impl App {
             self.refresh_page();
         }
         if keyboard {
-            self.set_keyboard(true);
+            self.set_keyboard(true, None);
         }
         self.invalidate();
     }
@@ -3535,12 +3536,12 @@ impl App {
             }
             crate::sys::remap::MACRO_REC => self.macro_toggle(None),
             crate::sys::remap::RADIAL => {
-                crate::sys::radial::open_action();
+                crate::sys::radial::open_action(pad);
                 self.radial.update(&self.cfg);
             }
             crate::sys::remap::KEYBOARD => {
                 let open = crate::sys::osk::view().open;
-                self.set_keyboard(!open);
+                self.set_keyboard(!open, Some(pad));
             }
             25 => return name.map(|p| format!("{}: {}", p.name, crate::pages::controllers::battery_label(&p))),
             28 => self.show_main(),

@@ -568,7 +568,6 @@ impl Profile {
             (pads::A, Out::Mouse(1)),
             (pads::B, Out::Mouse(2)),
             (pads::X, key(0x1B, 0)),
-            (pads::Y, key(0x0D, 0)),
             (pads::LB, key(0xA6, 0)),
             (pads::RB, key(0xA7, 0)),
             (pads::START, key(0x5B, 0)),
@@ -584,6 +583,10 @@ impl Profile {
         ] {
             l.binds.push(Bind { button, with: 0, when: When::Press, out });
         }
+        // Y: tocar é Enter; segurar traz o Prisma para a frente (ação 28, "Abrir o Prisma"), o
+        // contrário do Y dentro dele, que o esconde.
+        l.binds.push(Bind { button: pads::Y, with: 0, when: When::Tap, out: key(0x0D, 0) });
+        l.binds.push(Bind { button: pads::Y, with: 0, when: When::Hold, out: Out::Action(28) });
         // Select: Win + Tab. Segurado, o botão do radial (cartão Radial do Prisma) fica com ele antes.
         l.binds.push(Bind { button: pads::BACK, with: 0, when: When::Press, out: key(0x09, WIN) });
         p
@@ -1126,6 +1129,9 @@ pub fn combo_conflict(p: &Profile, combo: Buttons, for_turbo: bool) -> Option<St
     }
     if combo & STOP_COMBO == STOP_COMBO || STOP_COMBO & combo == combo {
         return Some(tr("a parada de emergência"));
+    }
+    if combo & pads::GUIDE != 0 && combo & (LT | RT | LTF | RTF) != 0 {
+        return Some(tr("a troca entre Desktop e Base"));
     }
     if !for_turbo && p.turbo_key != 0 && combo & p.turbo_key == p.turbo_key {
         return Some(tr("o atalho do turbo"));
@@ -1839,6 +1845,7 @@ fn prof_of(r: &Run, key: &str) -> usize {
 pub fn set_fixed(list: &[(String, String)]) {
     if let Some(r) = RUN.lock().unwrap().as_mut() {
         r.fixed = list.iter().cloned().collect();
+        pads::trace(|| format!("perfis por controle {:?}", r.fixed));
     }
 }
 
@@ -2019,8 +2026,8 @@ fn reload() {
     *FOCUS.lock().unwrap() = (None, 0, false);
 }
 
-/// O motor do perfil roda nos dois modos. `kbm` é o modo Teclado e mouse: fora dos jogos vale o
-/// Desktop; em Nativo, o Base. `games` são os .exe do Medidor.
+/// O motor do perfil roda nos dois modos; fora dos jogos vale o Desktop em qualquer um. `kbm` é o
+/// modo Teclado e mouse. `games` são os .exe do Medidor.
 pub fn configure(kbm: bool, games: Vec<String>) {
     {
         let mut g = RUN.lock().unwrap();
@@ -2029,10 +2036,6 @@ pub fn configure(kbm: bool, games: Vec<String>) {
         let first = !ON.swap(true, Ordering::Relaxed);
         if first || KBM.swap(kbm, Ordering::Relaxed) != kbm {
             KBM.store(kbm, Ordering::Relaxed);
-            // Em Nativo o Desktop não vale: até o programa em foco escolher de novo, fica o Base.
-            if !kbm && r.profiles[r.cur].name == DESKTOP {
-                r.cur = r.profiles.iter().position(|p| p.name == BASE).unwrap_or(r.cur);
-            }
             r.exe.clear();
             *FOCUS.lock().unwrap() = (None, 0, false);
         }
@@ -2178,13 +2181,13 @@ pub fn latency() -> Option<(u32, u32)> {
     Some((v[v.len() / 2], v[v.len() * 99 / 100]))
 }
 
-/// No Nativo, o perfil só age se a pessoa o fez: o Desktop é do Teclado e mouse e o Base de
-/// fábrica não liga nada (o Base mudado por ela vale).
+/// No Nativo age todo perfil menos o Base de fábrica, que não liga nada (o Base mudado por ela
+/// vale). O Desktop vale fora dos jogos em qualquer modo: é para navegar no Windows.
 fn native_runs(p: &Profile) -> bool {
-    p.name != DESKTOP && !(p.name == BASE && *p == Profile::base())
+    !(p.name == BASE && *p == Profile::base())
 }
 
-/// O motor age agora no controle em uso: Teclado e mouse, ou Nativo com um perfil da pessoa.
+/// O motor age agora no controle em uso: Teclado e mouse, ou Nativo fora do Base de fábrica.
 pub fn live() -> bool {
     ON.load(Ordering::Relaxed) && (KBM.load(Ordering::Relaxed) || RUN.lock().unwrap().as_ref().is_some_and(|r| native_runs(&r.profiles[r.cur])))
 }
@@ -2217,13 +2220,28 @@ pub fn feed(key: &str, inp: &Input, arrived: Instant) {
     if !ON.load(Ordering::Relaxed) {
         return;
     }
+    // Guia segurado com um gatilho: é a troca entre Desktop e Base, e o perfil não vê os gatilhos
+    // (o Desktop baixaria e subiria o volume).
+    let gtrig = chord(key, inp);
+    let quiet = Input { lt: 0.0, rt: 0.0, ..*inp };
+    let swap = mode_swap(key, inp.buttons & pads::GUIDE != 0 && inp.lt > 0.5 && inp.rt > 0.5);
+    let inp = if gtrig { &quiet } else { inp };
     let mut events = vec![];
     let mut radial = None;
     let acts = 'feed: {
         let mut g = RUN.lock().unwrap();
         let Some(r) = g.as_mut() else { return };
-        // Nativo: só um perfil feito pela pessoa age; com o Base ou o Desktop, nada (nem o botão
-        // do radial nem o Win + G), como antes do motor valer no Nativo.
+        // Para quando a detecção de jogo errar: vale em qualquer modo, menos com a parada ligada.
+        if swap && !STOPPED.load(Ordering::Relaxed) {
+            let to = if r.profiles[prof_of(r, key)].name == DESKTOP { BASE } else { DESKTOP };
+            if let Some(to) = r.profiles.iter().position(|p| p.name == to) {
+                let mut acts = vec![];
+                pad_switch(r, key, to, &mut acts, &mut events);
+                break 'feed acts;
+            }
+        }
+        // Nativo com o Base de fábrica: nada (nem o botão do radial nem o Win + G), como antes do
+        // motor valer no Nativo.
         if !KBM.load(Ordering::Relaxed) && !native_runs(&r.profiles[prof_of(r, key)]) {
             break 'feed vec![];
         }
@@ -2249,10 +2267,21 @@ pub fn feed(key: &str, inp: &Input, arrived: Instant) {
         if !STOPPED.load(Ordering::Relaxed) {
             // Botão que abre o radial: o perfil não o vê; o toque (ou o segurar) volta como aperto.
             let mine = prof_of(r, key);
+            #[cfg(debug_assertions)]
+            {
+                static USED: Mutex<Vec<(String, usize)>> = Mutex::new(Vec::new());
+                let mut u = USED.lock().unwrap();
+                if !u.iter().any(|(k, m)| k == key && *m == mine) {
+                    u.retain(|(k, _)| k != key);
+                    u.push((key.to_string(), mine));
+                    pads::trace(|| format!("{key} usa o perfil {}", r.profiles[mine].name));
+                }
+            }
             let rb = super::radial::button();
             // Botões que o perfil liga junto com o do radial: com eles, o radial dá passagem.
             let combo = r.profiles[mine].layers.iter().flat_map(|l| &l.binds).fold(0, |m, b| if b.with & rb != 0 { m | b.button } else if b.button == rb && b.with != 0 { m | b.with } else { m }) & !rb;
-            let trig = super::radial::trigger(key, inp.buttons, arrived, r.profiles[mine].name == BASE, combo);
+            // A troca Desktop/Base conta como combinação do guia: o radial nele dá passagem.
+            let trig = super::radial::trigger(key, inp.buttons | if gtrig { LT } else { 0 }, arrived, r.profiles[mine].name == BASE, combo | LT);
             radial = trig.open;
             if trig.win_g {
                 acts.extend([Act::Down(Out::Key(0x47, WIN)), Act::Up(Out::Key(0x47, WIN))]);
@@ -2281,7 +2310,7 @@ pub fn feed(key: &str, inp: &Input, arrived: Instant) {
     events.into_iter().for_each(pads::emit);
     if let Some(o) = radial {
         pads::trace(|| format!("abre o radial pelo botão {o:#x}"));
-        super::radial::open_from(o);
+        super::radial::open_from(o, key);
     }
     focus_tick(arrived);
 }
@@ -2571,6 +2600,50 @@ pub fn forget(key: &str) {
     send(&acts);
 }
 
+/// Guia + LT + RT do controle `key` apertados agora (`on`): verdadeiro só no começo do aperto.
+static CHORD: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// Guia com um gatilho no controle `key`: vale do aperto até soltar Guia e gatilhos.
+fn chord(key: &str, inp: &Input) -> bool {
+    let guide = inp.buttons & pads::GUIDE != 0;
+    let mut c = CHORD.lock().unwrap();
+    let at = c.iter().position(|k| k == key);
+    match at {
+        None if guide && (inp.lt > 0.4 || inp.rt > 0.4) => c.push(key.to_string()),
+        Some(i) if !guide && inp.lt < 0.3 && inp.rt < 0.3 => {
+            c.swap_remove(i);
+        }
+        _ => {}
+    }
+    c.iter().any(|k| k == key)
+}
+
+/// Bits que um atalho do Prisma consome no controle `key` (`Pad::key`), para a ponte não repassá-los ao
+/// Xbox virtual: Guia e gatilhos durante a troca Desktop/Base, e o botão do radial com ele aberto.
+pub fn swallowed(key: &str) -> pads::Buttons {
+    let mut b = if CHORD.lock().unwrap().iter().any(|k| k == key) { pads::GUIDE | LT | RT } else { 0 };
+    if super::radial::view().open {
+        b |= super::radial::button();
+    }
+    b
+}
+
+fn mode_swap(key: &str, on: bool) -> bool {
+    static HELD: Mutex<Vec<String>> = Mutex::new(Vec::new());
+    let mut h = HELD.lock().unwrap();
+    match (on, h.iter().position(|k| k == key)) {
+        (true, None) => {
+            h.push(key.to_string());
+            true
+        }
+        (false, Some(i)) => {
+            h.swap_remove(i);
+            false
+        }
+        _ => false,
+    }
+}
+
 /// Programa novo em foco. Troca de perfil depois da folga, e só com nada apertado. Jogo é o que está
 /// no Medidor ou o que ocupa a tela inteira (menos a área de trabalho do Windows).
 fn on_focus(pid: u32, full: bool) {
@@ -2595,14 +2668,16 @@ fn on_focus(pid: u32, full: bool) {
             set_keys(r);
         }
         let named = |n: &str| r.profiles.iter().position(|p| p.name == n).unwrap_or(0);
-        let game = r.games.contains(&exe) || (full && exe != "explorer.exe");
+        // Como o modo jogo da energia: navegador, player, acesso remoto e lançador nunca são jogo.
+        let game = r.games.contains(&exe) || (!super::power::not_game(&exe) && (full || super::power::in_library(&path)));
         // O mesmo programa (só voltou o foco, ou o perfil foi gravado): fica o perfil de agora.
         let keep = (r.exe == exe).then_some(r.cur);
         // O último usado vale sempre que o jogo só voltou ao foco (Alt+Tab); ao abrir de novo, só
         // com a opção ligada.
         let same_run = r.pids.insert(exe.clone(), pid) == Some(pid);
         let last = if same_run || REOPEN_LAST.load(Ordering::Relaxed) { r.last.get(&exe).map(String::as_str) } else { None };
-        let to = pick_for(&r.profiles, &exe, keep, last).unwrap_or_else(|| if game || !KBM.load(Ordering::Relaxed) { named(BASE) } else { named(DESKTOP) });
+        let to = pick_for(&r.profiles, &exe, keep, last).unwrap_or_else(|| if game { named(BASE) } else { named(DESKTOP) });
+        pads::trace(|| format!("foco {exe} tela cheia {full} jogo {game} perfil {} fixos {:?}", r.profiles[to].name, r.fixed));
         r.exe = exe.clone();
         r.want = (to != r.cur).then(|| (to, Instant::now() + SWITCH_DELAY));
         let turbo = r.profiles[to].turbo.iter().any(|t| t.on);
@@ -2887,9 +2962,28 @@ buzz 9
     }
 
     #[test]
-    fn native_runs_only_profiles_the_person_made() {
-        // O Desktop tem PS + Start para desconectar e o stick como mouse: no Nativo, nunca.
-        assert!(!native_runs(&Profile::desktop()));
+    fn mode_swap_fires_once_per_press() {
+        let k = "teste-troca";
+        assert!(mode_swap(k, true));
+        assert!(!mode_swap(k, true));
+        assert!(!mode_swap(k, false));
+        assert!(mode_swap(k, true));
+        assert!(!mode_swap(k, false));
+        let held = |b, lt| Input { buttons: b, lt, ..Input::default() };
+        assert!(!chord(k, &held(pads::GUIDE, 0.0)));
+        assert!(chord(k, &held(pads::GUIDE, 0.9)));
+        assert!(chord(k, &held(0, 0.9)), "gatilho ainda apertado segue consumido");
+        assert_eq!(swallowed(k), pads::GUIDE | LT | RT);
+        assert!(!chord(k, &held(0, 0.0)));
+        assert_eq!(swallowed(k) & pads::GUIDE, 0);
+        let p = Profile::desktop();
+        assert!(combo_conflict(&p, pads::GUIDE | LT, false).is_some());
+    }
+
+    #[test]
+    fn native_runs_all_but_factory_base() {
+        // O Desktop vale fora dos jogos também no Nativo; o Base de fábrica, não.
+        assert!(native_runs(&Profile::desktop()));
         assert!(!native_runs(&Profile::base()));
         let mut edited = Profile::base();
         edited.layers[0].binds.push(Bind { button: pads::A, with: pads::GUIDE, when: When::Press, out: Out::Action(0) });
@@ -3183,6 +3277,18 @@ buzz 9
         assert!(e.step(&p, &btn(pads::A), t0).is_empty());
         assert!(e.step(&p, &btn(0), at(10, t0)).is_empty());
         assert_eq!(e.step(&p, &btn(pads::A), at(20, t0)), vec![Act::Down(K1)]);
+    }
+
+    #[test]
+    fn desktop_y_tap_enters_and_hold_shows_prisma() {
+        let t0 = Instant::now();
+        let p = Profile::desktop();
+        let mut e = engine(&p, t0);
+        e.step(&p, &btn(pads::Y), at(10, t0));
+        assert_eq!(e.step(&p, &btn(0), at(100, t0)), vec![Act::Down(Out::Key(0x0D, 0)), Act::Up(Out::Key(0x0D, 0))]);
+        e.step(&p, &btn(pads::Y), at(1000, t0));
+        assert!(e.step(&p, &btn(pads::Y), at(1500, t0)).contains(&Act::Cmd(Out::Action(28))));
+        assert_eq!(ACTIONS[28], "Abrir o Prisma");
     }
 
     #[test]

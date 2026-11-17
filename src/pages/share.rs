@@ -1664,6 +1664,11 @@ pub fn open_room() {
     guard.get_or_insert_with(test_setup).tab = TABS.len();
 }
 
+/// O co-op está transmitindo: os controles dele podem estar no VIIPER.
+pub fn hosting() -> bool {
+    STATE.lock().unwrap().as_ref().is_some_and(|s| s.host.is_some())
+}
+
 /// Fecha o que a página abriu (o trabalho também fecha tudo quando o Prisma sai).
 pub fn shutdown() {
     if let Some(st) = STATE.lock().unwrap().as_mut() {

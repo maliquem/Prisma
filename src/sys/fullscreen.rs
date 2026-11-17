@@ -115,6 +115,12 @@ impl Fullscreenizer {
 pub fn covers_monitor(hwnd: HWND) -> bool {
     unsafe {
         let Some(mon) = monitor_rect(hwnd) else { return false };
+        // Janela maximizada com barra de título (navegador, pastas) não é tela cheia, mesmo cobrindo
+        // o monitor sem barra de tarefas (escondida ou em outro monitor).
+        let caption = WS_CAPTION.0;
+        if IsZoomed(hwnd).as_bool() && GetWindowLongW(hwnd, GWL_STYLE) as u32 & caption == caption {
+            return false;
+        }
         let mut r = RECT::default();
         if GetWindowRect(hwnd, &mut r).is_err() {
             return false;

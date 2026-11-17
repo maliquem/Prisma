@@ -469,7 +469,7 @@ impl App {
             }
             Request::Keyboard { on } => {
                 let on = on.unwrap_or(!crate::sys::osk::view().open);
-                self.set_keyboard(on);
+                self.set_keyboard(on, None);
                 Outcome::Reply(Reply::Toggled { on })
             }
             Request::PowerPlans => Outcome::Reply(Reply::PowerPlans {

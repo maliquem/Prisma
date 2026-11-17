@@ -399,11 +399,19 @@ pub fn trace(line: impl FnOnce() -> String) {
     #[cfg(debug_assertions)]
     {
         use std::io::Write;
-        static PATH: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
-        if let Some(p) = PATH.get_or_init(|| std::env::var("PRISMA_PAD_TRACE").ok()) {
+        // Arquivo aberto uma vez só: abrir a cada relatório atrasava a leitura dos controles.
+        static FILE: std::sync::OnceLock<Option<std::sync::Mutex<std::io::BufWriter<std::fs::File>>>> = std::sync::OnceLock::new();
+        let f = FILE.get_or_init(|| {
+            let p = std::env::var("PRISMA_PAD_TRACE").ok()?;
+            let f = std::fs::OpenOptions::new().create(true).append(true).open(p).ok()?;
+            Some(std::sync::Mutex::new(std::io::BufWriter::new(f)))
+        });
+        if let Some(f) = f {
             let t = unsafe { windows::Win32::System::SystemInformation::GetLocalTime() };
-            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(p) {
-                let _ = writeln!(f, "{:02}:{:02}:{:02}.{:03} {}", t.wHour, t.wMinute, t.wSecond, t.wMilliseconds, line());
+            let mut f = f.lock().unwrap();
+            let _ = writeln!(f, "{:02}:{:02}:{:02}.{:03} {}", t.wHour, t.wMinute, t.wSecond, t.wMilliseconds, line());
+            if t.wMilliseconds < 50 {
+                let _ = f.flush();
             }
         }
     }

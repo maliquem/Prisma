@@ -258,7 +258,12 @@ const NOT_GAMES: &[&str] = &[
     "losslessscaling.exe", "wallpaper64.exe", "wallpaper32.exe", "nvidia overlay.exe", "explorer.exe", "prisma.exe",
 ];
 
-fn in_library(path: &str) -> bool {
+/// Programa que nunca é jogo, mesmo em tela cheia.
+pub fn not_game(exe: &str) -> bool {
+    NOT_GAMES.iter().any(|n| exe.eq_ignore_ascii_case(n))
+}
+
+pub fn in_library(path: &str) -> bool {
     let low = path.to_ascii_lowercase();
     LIBRARIES.iter().any(|l| low.contains(l))
 }
@@ -335,7 +340,7 @@ impl Detector {
             let pid = procs::window_pid(fg);
             if let Some(path) = procs::image_path(pid) {
                 let exe = procs::exe_name(&path);
-                let known = NOT_GAMES.iter().any(|n| exe.eq_ignore_ascii_case(n));
+                let known = not_game(&exe);
                 let cover = cfg.rule_fullscreen && fullscreen::covers_monitor(fg);
                 let lib = cfg.rule_library && in_library(&path);
                 let candidate = !known && (cover || lib);

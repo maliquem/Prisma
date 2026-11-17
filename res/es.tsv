@@ -2083,6 +2083,7 @@ Essa combinação já é usada por {}.	Esa combinación ya la usa {}.
 Sem atalho: o turbo só muda aqui.	Sin atajo: el turbo solo cambia aquí.
 Segure o atalho e aperte o botão para ligar ou desligar o turbo dele.	Mantén el atajo y pulsa el botón para activar o desactivar su turbo.
 a parada de emergência	la parada de emergencia
+a troca entre Desktop e Base	el cambio entre Desktop y Base
 o atalho do turbo	el atajo del turbo
 uma ligação da camada {}	una asignación de la capa {}
 Turbo ligado no {}	Turbo activado en {}
@@ -2359,7 +2360,7 @@ barra de luz	barra de luz
 botão de mute	botón de silencio
 gatilhos adaptativos	gatillos adaptativos
 Fullscreenizer	Fullscreenizer
-O jogo vê o controle como ele é, e o perfil vale junto. Fora dos jogos, o Base.	El juego ve el mando tal cual es, y el perfil se aplica encima. Fuera de los juegos, el Base.
+O jogo vê o controle como ele é, e o perfil vale junto. Fora dos jogos, o Desktop.	El juego ve el mando tal cual es, y el perfil se aplica encima. Fuera de los juegos, el Desktop.
 botões de trás	botones traseros
 botões extras	botones extra
 Deslizante	Deslizador

@@ -171,6 +171,8 @@ fn main() {
         app::shutdown();
         // O controle escondido volta a aparecer: sem o Prisma, a ponte não existe.
         sys::hidhide::limpar();
+        // O VIIPER só serve à ponte: fecha junto.
+        sys::xbridge::shutdown();
         // Sair sem destruir o que ainda está carregado: o Direct3D não sobrevive à ordem
         // de saída do Windows e derrubava o processo aqui, depois de tudo salvo.
         let _ = TerminateProcess(GetCurrentProcess(), 0);
