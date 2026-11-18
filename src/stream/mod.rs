@@ -194,7 +194,7 @@ pub enum Kind {
     Sas = 14,
     Clip = 15,
     /// Número alto de propósito: os de 16 em diante ficam para as outras frentes do compartilhamento.
-    Rate = 24,
+    Rate = 26,
 }
 
 // ---------- Permissões de quem assiste ----------
@@ -637,7 +637,7 @@ pub fn read(b: &[u8]) -> Option<Msg<'_>> {
         13 => Msg::PadInfo { pad: *b.get(4)?, player: *b.get(5)?, slot: *b.get(6)?, why: *b.get(7)? },
         14 => Msg::Sas,
         15 => Msg::Clip { id: u16_at(b, 4)?, part: *b.get(6)?, parts: *b.get(7)?, data: b.get(8..)? },
-        24 => Msg::Rate(rate::Report { delay_ms: u16_at(b, 4)?, loss_pm: u16_at(b, 6)?, kbps: u32_at(b, 8)? }),
+        26 => Msg::Rate(rate::Report { delay_ms: u16_at(b, 4)?, loss_pm: u16_at(b, 6)?, kbps: u32_at(b, 8)? }),
         _ => return None,
     })
 }
