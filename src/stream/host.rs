@@ -1254,17 +1254,21 @@ impl Coder {
 /// Intervalos guardados para o registro do ritmo: os primeiros 10 minutos a 60 por segundo.
 const GAPS_KEPT: usize = 36_000;
 
-/// Hora de dar um quadro ao codificador. Um quadro novo vale depois de 0,9 intervalo, contado do
-/// começo da vez anterior: a captura oscila em volta do vsync, e contar do fim (depois do NVENC, que
-/// leva alguns ms) deixava o quadro seguinte esperando e o vídeo saía a ~53 de 60 por segundo. No
-/// ritmo constante (`repeat`), sem quadro novo, o mesmo vai de novo depois de um intervalo inteiro.
-fn time_to_feed(since: Duration, interval: i64, fresh: bool, repeat: bool) -> bool {
-    let gap = Duration::from_nanos(interval as u64 * 100);
-    if fresh {
-        since >= gap * 9 / 10
-    } else {
-        repeat && since >= gap
-    }
+/// Hora de dar um quadro ao codificador, numa grade de horários (`due`) que anda um intervalo por
+/// quadro. Um quadro novo vale até 0,1 intervalo antes da hora: a captura oscila em volta do vsync.
+/// Contar do quadro anterior, e não da grade, deixava a tela de 119 Hz sair a ~64 de 60 por segundo
+/// (o primeiro quadro depois de 0,9 intervalo); contar do fim do NVENC deixava a de 60 Hz sair a ~53.
+/// No ritmo constante (`repeat`), sem quadro novo, o mesmo vai de novo na hora exata.
+fn time_to_feed(now: i64, due: i64, interval: i64, fresh: bool, repeat: bool) -> bool {
+    if fresh { now >= due - interval / 10 } else { repeat && now >= due }
+}
+
+/// A hora do quadro seguinte: um intervalo depois desta, mais 1/10 do atraso, para a grade seguir
+/// devagar a fase da captura (sem isso, a 119,88 Hz ela escorrega e pula um quadro por segundo). Se o
+/// vídeo ficou parado ou atrasou mais de um intervalo, 0,9 intervalo depois de agora (sem rajada).
+fn next_due(now: i64, due: i64, interval: i64) -> i64 {
+    let late = now - due;
+    if late > interval { now + interval * 9 / 10 } else { due + interval + late.max(0) / 10 }
 }
 
 /// De onde vem a imagem: WGC (com o cursor do Windows) ou Desktop Duplication (no serviço, para
@@ -1580,6 +1584,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
         }
     };
     let mut fed_at = Instant::now() - Duration::from_secs(1);
+    let mut due = 0i64;
     let mut was_secure = false;
     // Tamanho novo da janela compartilhada e desde quando.
     let mut resize: Option<((u32, u32), Instant)> = None;
@@ -1946,10 +1951,12 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                     }
                     enc.pump(space, &mut pkts, &mut ready)?;
                     // A Desktop Duplication entrega cada mudança (o mouse também): o ritmo fica aqui.
-                    if enc.ready() && time_to_feed(fed_at.elapsed(), interval, pending.is_some(), opts.constant && fed_once) {
+                    let t = now();
+                    if enc.ready() && time_to_feed(t, due, interval, pending.is_some(), opts.constant && fed_once) {
+                        due = next_due(t, due, interval);
                         if fed_gaps.len() < GAPS_KEPT {
-                    fed_gaps.push(fed_at.elapsed().as_nanos() as i64 / 100);
-                }
+                            fed_gaps.push(fed_at.elapsed().as_nanos() as i64 / 100);
+                        }
                         fed_at = Instant::now();
                         // Ritmo constante com a tela parada: o último quadro de novo.
                         let pts = match pending.take() {
@@ -2012,7 +2019,9 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                 changed = true;
             }
             enc.pump(space, &mut pkts, &mut ready)?;
-            if enc.ready() && time_to_feed(fed_at.elapsed(), interval, pending.is_some(), opts.constant && fed_once) {
+            let t = now();
+            if enc.ready() && time_to_feed(t, due, interval, pending.is_some(), opts.constant && fed_once) {
+                due = next_due(t, due, interval);
                 if fed_gaps.len() < GAPS_KEPT {
                     fed_gaps.push(fed_at.elapsed().as_nanos() as i64 / 100);
                 }
@@ -2104,14 +2113,31 @@ mod tests {
     #[test]
     fn feeds_on_the_capture_rhythm_and_repeats_only_when_constant() {
         let i = 10_000_000 / 60;
-        let ms = Duration::from_millis;
-        // O quadro do vsync seguinte chega um pouco antes de 16,7 ms depois do começo da vez anterior.
-        assert!(time_to_feed(ms(16), i, true, false));
-        assert!(!time_to_feed(ms(14), i, true, true));
-        // Tela parada: só o ritmo constante repete, e só depois de um intervalo inteiro.
-        assert!(!time_to_feed(ms(40), i, false, false));
-        assert!(!time_to_feed(ms(16), i, false, true));
-        assert!(time_to_feed(ms(17), i, false, true));
+        let ms = |v: i64| v * 10_000;
+        // O quadro do vsync seguinte chega um pouco antes da hora: vale.
+        assert!(time_to_feed(ms(16), i, i, true, false));
+        assert!(!time_to_feed(ms(14), i, i, true, true));
+        // Tela parada: só o ritmo constante repete, e só na hora.
+        assert!(!time_to_feed(ms(40), i, i, false, false));
+        assert!(!time_to_feed(ms(16), i, i, false, true));
+        assert!(time_to_feed(ms(17), i, i, false, true));
+        // Vídeo a 60: a 119 Hz sai um quadro sim, outro não (595 em 10 s, não ~640); a 144 Hz, perto de 600.
+        let fed_at = |hz: i64| {
+            let (mut due, mut fed) = (0, 0);
+            for k in 0..hz * 10 {
+                let t = k * 10_000_000 / hz;
+                if time_to_feed(t, due, i, true, false) {
+                    due = next_due(t, due, i);
+                    fed += 1;
+                }
+            }
+            fed
+        };
+        assert_eq!(fed_at(60), 600);
+        assert_eq!(fed_at(119), 595);
+        assert!((585..=600).contains(&fed_at(144)), "{}", fed_at(144));
+        // Depois de a tela ficar parada, o quadro novo vai na hora e o seguinte não vem em rajada.
+        assert_eq!(next_due(ms(5000), i, i), ms(5000) + i * 9 / 10);
     }
 
     struct FakeLink {
