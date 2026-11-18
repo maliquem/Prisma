@@ -62,6 +62,10 @@ impl Meter {
         self.excess.0 += d - base;
         self.excess.1 += 1;
         self.bytes += len as u64;
+        // O host recomeçou o vídeo (o número do quadro volta a zero): o que ficou é de antes.
+        if self.frames.keys().next_back().is_some_and(|&n| n.abs_diff(frame) > 1000) {
+            self.frames.clear();
+        }
         let e = self.frames.entry(frame).or_insert((0, count));
         e.0 = e.0.saturating_add(1);
     }
@@ -256,5 +260,22 @@ mod tests {
         }
         let r = m.report(now).unwrap();
         assert_eq!(r.delay_ms, 40);
+    }
+
+    #[test]
+    fn video_recomecado_nao_vira_perda() {
+        let mut m = Meter::default();
+        let now = 1_000_000_000i64;
+        for f in 5000..5010u32 {
+            m.video(f, 2, now, 1000, now);
+            m.video(f, 2, now, 1000, now);
+        }
+        m.report(now + 50 * MS).unwrap();
+        // O host recomeçou: quadros 0, 1, 2... completos não contam como perdidos.
+        for f in 0..10u32 {
+            m.video(f, 2, now, 1000, now);
+            m.video(f, 2, now, 1000, now);
+        }
+        assert_eq!(m.report(now + 100 * MS).unwrap().loss_pm, 0);
     }
 }

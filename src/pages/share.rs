@@ -168,7 +168,9 @@ fn job(st: &mut State) -> windows::Win32::Foundation::HANDLE {
         unsafe {
             if let Ok(j) = CreateJobObjectW(None, None) {
                 let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
-                info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+                // BREAKAWAY_OK: a cópia vigia da tela virtual (`vdd::watch`) sai do trabalho e
+                // sobrevive ao Prisma, para devolver as telas daqui.
+                info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK;
                 let _ = SetInformationJobObject(j, JobObjectExtendedLimitInformation, &info as *const _ as *const _, std::mem::size_of_val(&info) as u32);
                 st.job = j.0 as isize;
             }
@@ -1536,6 +1538,11 @@ fn virtual_card(ui: &mut Ui, x: f32, bottom: f32, w: f32) -> f32 {
     if let Failed(e) = &stage {
         note = format!("{note} ({})", crate::i18n::tr(e));
     }
+    // Remover só tira o que o Prisma pôs; o que veio de outro instalador fica com ele.
+    let ours = vdd::ours();
+    if !ours && stage != Absent && !stage.busy() {
+        note = format!("{note} {}", crate::i18n::tr("Instalada fora do Prisma; para remover, use o instalador dela."));
+    }
     let nh = crate::ui::gfx::measure(&note, 12.0, Weight::Regular, Some(w - 32.0)).1.ceil();
     let r = rect(x, bottom - (100.0 + nh), w, 100.0 + nh);
     ui.card(r);
@@ -1553,8 +1560,8 @@ fn virtual_card(ui: &mut Ui, x: f32, bottom: f32, w: f32) -> f32 {
         if ui.button("vdd-check", b1, "Verificar de novo", false) && !busy {
             vdd::recheck();
         }
-        if ui.button("vdd-remove", b2, "Remover…", false) && !busy {
-            ui.ask("vdd-remove", "Remover a tela virtual?", "Sai o driver, o certificado dele em Editores Confiáveis e a pasta C:\\VirtualDisplayDriver. O Windows pede permissão de administrador.");
+        if ours && ui.button("vdd-remove", b2, "Remover…", false) && !busy {
+            ui.ask("vdd-remove", "Remover a tela virtual?", "Sai só o que o Prisma pôs: o driver, o certificado dele em Editores Confiáveis e a pasta C:\\VirtualDisplayDriver. O que já estava no PC antes fica. O Windows pede permissão de administrador.");
         }
     }
     if ui.answered("vdd-install") {

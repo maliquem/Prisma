@@ -8,8 +8,10 @@
 //!   assiste (o modo vai no `C:\VirtualDisplayDriver\vdd_settings.xml` e o driver recarrega pelo
 //!   pipe `\\.\pipe\MTTVirtualDisplayPipe`). No modo privacidade, só ela fica ligada.
 //! - Tudo pelo `SetDisplayConfig` sem gravar no banco do Windows: ao sair (ou no próximo início do
-//!   Prisma, se ele cair), o Windows volta ao arranjo salvo, com a tela virtual desligada.
-//! - Remove tudo pelo próprio Prisma (`start_remove`). Notas do que não deu para confirmar sem o
+//!   Prisma, se ele cair), o Windows volta ao arranjo salvo, com a tela virtual desligada. Uma
+//!   cópia vigia (`--vdd-watch`) faz a volta se o host morrer sem soltar a sessão.
+//! - Remove pelo próprio Prisma (`start_remove`) só o que a instalação dele pôs (`Owned`); driver
+//!   e certificado que já estavam no PC ficam. Notas do que não deu para confirmar sem o
 //!   driver: `docs/GUIA.md`, seção da tela virtual.
 
 use std::io::{Read, Write};
@@ -19,8 +21,9 @@ use std::time::Duration;
 
 use windows::core::PCWSTR;
 use windows::Win32::Devices::Display::*;
-use windows::Win32::Foundation::LUID;
+use windows::Win32::Foundation::{CloseHandle, LUID, WAIT_TIMEOUT};
 use windows::Win32::Graphics::Gdi::*;
+use windows::Win32::System::Threading::{OpenProcess, WaitForSingleObject, INFINITE, PROCESS_SYNCHRONIZE};
 
 pub use super::xbridge::Stage;
 
@@ -249,8 +252,14 @@ impl Virtual {
                 std::thread::sleep(Duration::from_millis(1500));
             }
         }
-        if std::fs::create_dir_all(mark().parent().unwrap()).and_then(|_| std::fs::write(mark(), "1")).is_err() {
+        if std::fs::create_dir_all(mark().parent().unwrap()).and_then(|_| std::fs::write(mark(), std::process::id().to_string())).is_err() {
             crate::config::log("tela virtual: sem a marca de volta no disco; não liga");
+            return None;
+        }
+        // Com panic=abort ou o processo morto, o Drop não roda: a cópia vigia devolve as telas.
+        if !watch() && alone {
+            let _ = std::fs::remove_file(mark());
+            crate::config::log("tela virtual: sem a cópia vigia, o modo privacidade não liga");
             return None;
         }
         let me = Virtual(());
@@ -292,17 +301,67 @@ impl Drop for Virtual {
     }
 }
 
-/// O Windows volta ao arranjo salvo (as telas daqui, sem a virtual). No início do Prisma, só se
-/// uma sessão caiu com a tela virtual ligada.
+/// O Windows volta ao arranjo salvo (as telas daqui, sem a virtual). Fora do próprio host, só
+/// quando o host que ligou a tela já saiu (a marca guarda o número dele).
 pub fn restore() {
-    if !mark().exists() {
+    let Ok(text) = std::fs::read_to_string(mark()) else { return };
+    // shortcut: um número de processo reaproveitado depois de reiniciar o PC adia a volta até ele
+    // sair; sem perigo, porque o arranjo salvo do Windows nunca teve a tela virtual.
+    if text.trim().parse::<u32>().is_ok_and(|pid| pid != std::process::id() && alive(pid)) {
         return;
     }
-    let r = unsafe { SetDisplayConfig(None, None, SDC_APPLY | SDC_USE_DATABASE_CURRENT) };
-    if r == 0 {
-        let _ = std::fs::remove_file(mark());
+    for _ in 0..3 {
+        if unsafe { SetDisplayConfig(None, None, SDC_APPLY | SDC_USE_DATABASE_CURRENT) } == 0 {
+            let _ = std::fs::remove_file(mark());
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(500));
     }
     detach_saved();
+}
+
+fn alive(pid: u32) -> bool {
+    unsafe {
+        OpenProcess(PROCESS_SYNCHRONIZE, false, pid).is_ok_and(|h| {
+            let on = WaitForSingleObject(h, 0) == WAIT_TIMEOUT;
+            let _ = CloseHandle(h);
+            on
+        })
+    }
+}
+
+/// Liga, uma vez por host, a cópia vigia (`--vdd-watch=<pid>`). `false` se não deu.
+fn watch() -> bool {
+    use std::os::windows::process::CommandExt;
+    use std::process::{Command, Stdio};
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    // O host vive no trabalho da janela, que fecha tudo junto com o Prisma: a vigia sai dele.
+    const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x0100_0000;
+    static WATCH: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *WATCH.get_or_init(|| {
+        let Ok(exe) = std::env::current_exe() else { return false };
+        let run = |flags: u32| Command::new(&exe).arg(format!("--vdd-watch={}", std::process::id())).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).creation_flags(flags).spawn();
+        // Um trabalho de fora que não deixa sair (outro lançador): a vigia fica nele, melhor que nada.
+        let ok = run(CREATE_NO_WINDOW | CREATE_BREAKAWAY_FROM_JOB).or_else(|_| run(CREATE_NO_WINDOW)).is_ok();
+        if !ok {
+            crate::config::log("tela virtual: a cópia vigia não abriu");
+        }
+        ok
+    })
+}
+
+/// A cópia vigia: espera o host sair (normal, travado, morto pelo Gerenciador de Tarefas) e
+/// devolve as telas daqui. `false` quando o Prisma não foi aberto para isso.
+pub fn run_arg() -> bool {
+    let Some(pid) = std::env::args().find_map(|a| a.strip_prefix("--vdd-watch=").and_then(|p| p.parse::<u32>().ok())) else { return false };
+    unsafe {
+        if let Ok(h) = OpenProcess(PROCESS_SYNCHRONIZE, false, pid) {
+            let _ = WaitForSingleObject(h, INFINITE);
+            let _ = CloseHandle(h);
+        }
+    }
+    restore();
+    true
 }
 
 /// Tira a tela virtual do arranjo salvo do Windows. Logo depois de instalar o Windows liga a tela
@@ -321,48 +380,118 @@ fn detach_saved() {
 
 // ---------- Instalação ----------
 
+/// O que a instalação do Prisma pôs no PC; o que já estava lá antes fica fora (como o
+/// `xbridge_usbip` da ponte Xbox). O script de administrador escreve, a remoção só tira isto.
+#[derive(Default, Debug, PartialEq)]
+pub struct Owned {
+    /// Impressões dos certificados que entraram em Editores Confiáveis.
+    pub certs: Vec<String>,
+    /// Pacotes `oemN.inf` do driver que apareceram com a instalação.
+    pub drivers: Vec<String>,
+    /// Aparelhos `Root\MttVDD` que apareceram com a instalação.
+    pub devices: Vec<String>,
+    /// A pasta `C:\VirtualDisplayDriver` não existia antes.
+    pub folder: bool,
+}
+
+fn own_file() -> PathBuf {
+    crate::config::data_dir().join("compartilhar").join("vdd_prisma.txt")
+}
+
+pub fn parse_owned(text: &str) -> Owned {
+    let mut o = Owned::default();
+    for line in text.lines() {
+        let mut it = line.split_whitespace();
+        let key = it.next();
+        let list: Vec<String> = it.map(str::to_string).collect();
+        match key {
+            Some("certs") => o.certs = list,
+            Some("drivers") => o.drivers = list,
+            Some("devices") => o.devices = list,
+            Some("folder") => o.folder = list.first().is_some_and(|v| v == "1"),
+            _ => {}
+        }
+    }
+    o
+}
+
+fn owned() -> Option<Owned> {
+    std::fs::read_to_string(own_file()).ok().map(|t| parse_owned(&t))
+}
+
+/// O Prisma instalou o driver neste PC; só então o cartão oferece Remover.
+pub fn ours() -> bool {
+    own_file().exists()
+}
+
+fn ps_list(v: &[String]) -> String {
+    format!("@({})", v.iter().map(|s| super::quick::ps_quote(s)).collect::<Vec<_>>().join(","))
+}
+
 /// O script que roda como administrador: confere as somas de novo, abre os zips numa pasta do
-/// sistema, põe os certificados do driver em Editores Confiáveis e instala.
-pub fn install_script(vdd_zip: &Path, nefcon_zip: &Path) -> String {
+/// sistema, põe em Editores Confiáveis os certificados do driver que ainda não estavam lá e instala.
+/// Anota em `own` só o que é novo; `prev` (de uma instalação anterior do Prisma) conta como dele.
+pub fn install_script(vdd_zip: &Path, nefcon_zip: &Path, own: &Path, prev: &Owned) -> String {
     let q = |p: &Path| super::quick::ps_quote(&p.to_string_lossy());
     format!(
         "$ErrorActionPreference='Stop'\n\
 function Sum($p){{(Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash.ToLower()}}\n\
 if((Sum {v}) -ne '{vs}' -or (Sum {n}) -ne '{ns}'){{exit 5}}\n\
+function Drv{{@(Get-WindowsDriver -Online | Where-Object {{ $_.OriginalFileName -like '*\\mttvdd.inf' }} | ForEach-Object {{ $_.Driver }})}}\n\
+function Dev{{@(Get-PnpDevice -ErrorAction SilentlyContinue | Where-Object {{ $_.HardwareID -contains 'Root\\MttVDD' }} | ForEach-Object {{ $_.InstanceId }})}}\n\
+$pd={pd}; $pv={pv}; $new={pc}\n\
+$drv0=@(Drv | Where-Object {{ $pd -notcontains $_ }}); $dev0=@(Dev | Where-Object {{ $pv -notcontains $_ }})\n\
+$folder=[int]({pf} -or -not (Test-Path -LiteralPath 'C:\\VirtualDisplayDriver'))\n\
+function Save($drv,$dev){{Set-Content -LiteralPath {o} -Encoding ASCII -Value @(('certs '+($new -join ' ')),('drivers '+($drv -join ' ')),('devices '+($dev -join ' ')),('folder '+$folder))}}\n\
 $d=Join-Path $env:SystemRoot ('Temp\\prisma-vdd-'+[guid]::NewGuid().ToString('N'))\n\
 Expand-Archive -LiteralPath {n} -DestinationPath $d\n\
 Expand-Archive -LiteralPath {v} -DestinationPath $d\n\
 $cs=New-Object System.Security.Cryptography.X509Certificates.X509Certificate2Collection\n\
 $cs.Import([IO.File]::ReadAllBytes((Join-Path $d 'VirtualDisplayDriver\\mttvdd.cat')))\n\
 $st=New-Object System.Security.Cryptography.X509Certificates.X509Store('TrustedPublisher','LocalMachine')\n\
-$st.Open('ReadWrite'); foreach($c in $cs){{$st.Add($c)}}; $st.Close()\n\
+$st.Open('ReadWrite')\n\
+foreach($c in $cs){{if($st.Certificates.Find('FindByThumbprint',$c.Thumbprint,$false).Count -eq 0){{$st.Add($c); $new+=$c.Thumbprint}}}}\n\
+$st.Close()\n\
+Save @() @()\n\
 & (Join-Path $d 'x64\\nefconw.exe') install (Join-Path $d 'VirtualDisplayDriver\\MttVDD.inf') 'Root\\MttVDD'\n\
 $r=$LASTEXITCODE\n\
+$ErrorActionPreference='Continue'\n\
+Save @(Drv | Where-Object {{ $drv0 -notcontains $_ }}) @(Dev | Where-Object {{ $dev0 -notcontains $_ }})\n\
 Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue\n\
 exit $r\n",
         v = q(vdd_zip),
         n = q(nefcon_zip),
+        o = q(own),
+        pd = ps_list(&prev.drivers),
+        pv = ps_list(&prev.devices),
+        pc = ps_list(&prev.certs),
+        pf = if prev.folder { "$true" } else { "$false" },
         vs = ASSET_SUM,
         ns = NEFCON_SUM,
     )
 }
 
-/// O script da remoção: o aparelho, os certificados que vieram no `.cat`, o driver e a pasta.
-pub const REMOVE_SCRIPT: &str = "$ErrorActionPreference='Continue'\n\
-foreach($x in Get-PnpDevice | Where-Object { $_.HardwareID -contains 'Root\\MttVDD' }){ pnputil /remove-device $x.InstanceId | Out-Null }\n\
-foreach($x in Get-WindowsDriver -Online | Where-Object { $_.OriginalFileName -like '*\\mttvdd.inf' }){\n\
-  $cat=Join-Path (Split-Path $x.OriginalFileName) 'mttvdd.cat'\n\
-  if(Test-Path -LiteralPath $cat){\n\
-    $cs=New-Object System.Security.Cryptography.X509Certificates.X509Certificate2Collection\n\
-    $cs.Import([IO.File]::ReadAllBytes($cat))\n\
-    $st=New-Object System.Security.Cryptography.X509Certificates.X509Store('TrustedPublisher','LocalMachine')\n\
-    $st.Open('ReadWrite'); foreach($c in $cs){$st.Remove($c)}; $st.Close()\n\
-  }\n\
-  pnputil /delete-driver $x.Driver /uninstall /force | Out-Null\n\
-}\n\
-Remove-Item -LiteralPath 'C:\\VirtualDisplayDriver' -Recurse -Force -ErrorAction SilentlyContinue\n\
-if(Get-PnpDevice | Where-Object { $_.HardwareID -contains 'Root\\MttVDD' }){exit 1}\n\
-exit 0\n";
+/// O script da remoção: só o que a instalação do Prisma anotou. Um pacote só sai se ainda for o
+/// do VDD (o número `oemN` volta a ser usado pelo Windows depois que um pacote sai).
+pub fn remove_script(o: &Owned) -> String {
+    let folder = if o.folder { "Remove-Item -LiteralPath 'C:\\VirtualDisplayDriver' -Recurse -Force -ErrorAction SilentlyContinue\n" } else { "" };
+    format!(
+        "$ErrorActionPreference='Continue'\n\
+$drv={d}; $dev={v}; $tp={c}\n\
+foreach($x in Get-PnpDevice | Where-Object {{ $dev -contains $_.InstanceId -and $_.HardwareID -contains 'Root\\MttVDD' }}){{ pnputil /remove-device $x.InstanceId | Out-Null }}\n\
+foreach($x in Get-WindowsDriver -Online | Where-Object {{ $drv -contains $_.Driver -and $_.OriginalFileName -like '*\\mttvdd.inf' }}){{ pnputil /delete-driver $x.Driver /uninstall /force | Out-Null }}\n\
+$st=New-Object System.Security.Cryptography.X509Certificates.X509Store('TrustedPublisher','LocalMachine')\n\
+$st.Open('ReadWrite')\n\
+foreach($t in $tp){{foreach($k in $st.Certificates.Find('FindByThumbprint',$t,$false)){{$st.Remove($k)}}}}\n\
+$st.Close()\n\
+{folder}\
+if(Get-PnpDevice | Where-Object {{ $dev -contains $_.InstanceId }}){{exit 1}}\n\
+exit 0\n",
+        d = ps_list(&o.drivers),
+        v = ps_list(&o.devices),
+        c = ps_list(&o.certs),
+    )
+}
 
 fn elevated(script: &str) -> Result<(), String> {
     super::xbridge::shell_wait(&super::system_tool("powershell").to_string_lossy(), &format!("-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand {}", super::quick::utf16_b64(script)), true)
@@ -398,7 +527,9 @@ fn install() -> Stage {
     let lock = |p: &Path| std::fs::OpenOptions::new().read(true).share_mode(FILE_SHARE_READ.0).open(p);
     let r = match (lock(&v), lock(&n)) {
         (Ok(a), Ok(b)) => {
-            let r = elevated(&install_script(&v, &n));
+            let own = own_file();
+            let _ = std::fs::create_dir_all(own.parent().unwrap());
+            let r = elevated(&install_script(&v, &n, &own, &owned().unwrap_or_default()));
             drop((a, b));
             r
         }
@@ -447,17 +578,22 @@ pub fn start_install() {
     std::thread::spawn(|| set_stage(install()));
 }
 
-/// Remove o driver, os certificados dele e a pasta de configuração.
+/// Remove o que a instalação do Prisma pôs: o aparelho, o driver, os certificados novos e a pasta.
+/// Instalado por outro caminho: não mexe (o cartão nem mostra o botão).
 pub fn start_remove() {
+    let Some(own) = owned() else { return };
     if stage().busy() {
         return;
     }
     set_stage(Stage::Removing);
-    std::thread::spawn(|| {
+    std::thread::spawn(move || {
         restore();
-        let r = elevated(REMOVE_SCRIPT);
+        let r = elevated(&remove_script(&own));
         set_stage(match r {
-            Ok(()) if !present() => Stage::Absent,
+            Ok(()) if !present() => {
+                let _ = std::fs::remove_file(own_file());
+                Stage::Absent
+            }
             Ok(()) => Stage::Reboot,
             Err(e) => Stage::Failed(e),
         });
@@ -488,10 +624,30 @@ mod tests {
 
     #[test]
     fn script_confere_as_somas_e_aspas() {
-        let s = install_script(Path::new(r"C:\Users\O'Neil\AppData\Local\Temp\prisma-vdd\a.zip"), Path::new(r"C:\t\n.zip"));
+        let s = install_script(Path::new(r"C:\Users\O'Neil\AppData\Local\Temp\prisma-vdd\a.zip"), Path::new(r"C:\t\n.zip"), Path::new(r"C:\d\own.txt"), &Owned::default());
         assert!(s.contains("'C:\\Users\\O''Neil\\AppData\\Local\\Temp\\prisma-vdd\\a.zip'"));
         assert!(s.contains(ASSET_SUM) && s.contains(NEFCON_SUM));
         assert!(s.contains("install (Join-Path $d 'VirtualDisplayDriver\\MttVDD.inf') 'Root\\MttVDD'"));
-        assert!(REMOVE_SCRIPT.contains("pnputil /delete-driver"));
+        assert!(s.contains("Set-Content -LiteralPath 'C:\\d\\own.txt'") && s.contains("$pd=@(); $pv=@(); $new=@()"));
+        // Certificado que já estava em Editores Confiáveis não entra na lista do Prisma.
+        assert!(s.contains("if($st.Certificates.Find('FindByThumbprint',$c.Thumbprint,$false).Count -eq 0){$st.Add($c); $new+=$c.Thumbprint}"));
+    }
+
+    #[test]
+    fn remocao_so_leva_o_que_o_prisma_pos() {
+        let o = parse_owned("certs AB12 CD34\r\ndrivers oem7.inf\r\ndevices ROOT\\DISPLAY\\0001\r\nfolder 0\r\n");
+        assert_eq!(o, Owned { certs: vec!["AB12".into(), "CD34".into()], drivers: vec!["oem7.inf".into()], devices: vec![r"ROOT\DISPLAY\0001".into()], folder: false });
+        let s = remove_script(&o);
+        assert!(s.contains(r"$drv=@('oem7.inf'); $dev=@('ROOT\DISPLAY\0001'); $tp=@('AB12','CD34')"));
+        // A pasta já existia antes: fica.
+        assert!(!s.contains("Remove-Item"));
+        // Nada anotado: nenhum aparelho, pacote ou certificado sai.
+        let none = remove_script(&parse_owned("certs\r\ndrivers\r\ndevices\r\nfolder 1\r\n"));
+        assert!(none.contains("$drv=@(); $dev=@(); $tp=@()") && none.contains("Remove-Item"));
+        // Uma aspa num nome não fecha a lista do script.
+        assert!(remove_script(&parse_owned("drivers x');calc;('")).contains("$drv=@('x'');calc;(''')"));
+        // Reinstalar depois de remover por fora: o que era do Prisma continua dele.
+        let again = install_script(Path::new("a"), Path::new("b"), Path::new("c"), &o);
+        assert!(again.contains("$pd=@('oem7.inf');") && again.contains("$new=@('AB12','CD34')") && again.contains("$folder=[int]($false -or"));
     }
 }

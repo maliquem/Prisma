@@ -82,6 +82,10 @@ fn main() {
     if let Some(code) = sys::eqapo::run_arg() {
         std::process::exit(code);
     }
+    // Cópia vigia da tela virtual: espera o host sair, de qualquer jeito, e devolve as telas daqui.
+    if sys::vdd::run_arg() {
+        return;
+    }
     // Compartilhar tela (host, quem assiste, serviço): roda ao lado de outras cópias, sem o nome único.
     if stream::run_args() {
         return;

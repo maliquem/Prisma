@@ -2706,6 +2706,7 @@ Remover…	移除…
 Instalar a tela virtual?	安装虚拟屏幕？
 Remover a tela virtual?	移除虚拟屏幕？
 O Prisma vai baixar o Virtual Display Driver (VirtualDrivers, programa livre de terceiros, assinado) e o NefCon, que instala o driver, das páginas oficiais deles no GitHub, e conferir os dois. O Windows pede permissão de administrador; o certificado do driver entra em Editores Confiáveis. A tela virtual só liga quando alguém conecta com ela escolhida em Monitor, e desliga ao sair. Para desfazer: este cartão, Remover.	Prisma 将从 GitHub 上的官方页面下载 Virtual Display Driver（VirtualDrivers 出品，免费第三方程序，已签名）和用于安装驱动的 NefCon，并校验两者。Windows 会请求管理员权限；驱动证书会加入“受信任的发布者”。只有当有人连接并在“监视器”中选择了虚拟屏幕时它才会开启，退出时关闭。要撤销：使用此卡片中的“移除”。
-Sai o driver, o certificado dele em Editores Confiáveis e a pasta C:\VirtualDisplayDriver. O Windows pede permissão de administrador.	将移除驱动、其在“受信任的发布者”中的证书以及文件夹 C:\VirtualDisplayDriver。Windows 会请求管理员权限。
+Sai só o que o Prisma pôs: o driver, o certificado dele em Editores Confiáveis e a pasta C:\VirtualDisplayDriver. O que já estava no PC antes fica. O Windows pede permissão de administrador.	仅移除 Prisma 安装的内容：驱动、其在“受信任的发布者”中的证书以及文件夹 C:\VirtualDisplayDriver。电脑上原有的内容会保留。Windows 会请求管理员权限。
+Instalada fora do Prisma; para remover, use o instalador dela.	此虚拟屏幕不是通过 Prisma 安装的；如需移除，请使用它自带的安装程序。
 o download falhou	下载失败
 não deu para abrir o que foi baixado	无法打开已下载的文件

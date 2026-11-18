@@ -296,7 +296,10 @@ impl Amf {
             if r != INPUT_FULL {
                 break;
             }
-            self.take()?;
+            if let Err(e) = self.take() {
+                release(surf);
+                return Err(e);
+            }
             r = submit(self.comp, surf);
         }
         release(surf);
@@ -328,7 +331,8 @@ impl Amf {
             let size = slot::<unsafe extern "system" fn(*mut c_void) -> usize>(buf, BUF_GET_SIZE)(buf);
             let ptr = slot::<unsafe extern "system" fn(*mut c_void) -> *mut c_void>(buf, BUF_GET_NATIVE)(buf);
             let pts = slot::<unsafe extern "system" fn(*mut c_void) -> i64>(data, DATA_GET_PTS)(data);
-            let key = get(buf, self.n.out_type).is_some_and(|v| (v.v[0] as i64) <= 1);
+            // Só IDR (H.264/HEVC) ou KEY (AV1), os dois 0: um I sem IDR não abre o vídeo para quem chega.
+            let key = get(buf, self.n.out_type).is_some_and(|v| v.v[0] as i64 == 0);
             if !ptr.is_null() && size > 0 {
                 self.ready.push(Pkt { data: std::slice::from_raw_parts(ptr as *const u8, size).to_vec(), pts, key });
             }

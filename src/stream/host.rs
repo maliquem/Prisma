@@ -1767,11 +1767,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                             }
                             Msg::Rate(r) if top_bits > 0 => {
                                 let t = born.elapsed().as_millis() as i64;
-                                let changed = rates.entry(g.key().to_string()).or_insert_with(|| super::rate::Rate::new(top_bits)).feedback(r, t).is_some();
-                                let want = rates.values().map(|r| r.current()).min().unwrap_or(top_bits);
-                                if changed && want != applied && enc.set_bitrate(want) {
-                                    applied = want;
-                                }
+                                rates.entry(g.key().to_string()).or_insert_with(|| super::rate::Rate::new(top_bits)).feedback(r, t);
                             }
                             Msg::Input { first, events } => {
                                 // Na tela segura, só quem tem a permissão de sistema.
@@ -1819,6 +1815,13 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
             if g.heard.elapsed() > SILENCE {
                 g.gone = true;
             }
+        }
+        // O mais lento manda; quando ele sai, os outros puxam de volta para cima. Recusado pelo
+        // codificador: não tenta de novo a cada volta.
+        let want = rates.values().map(|r| r.current()).min().unwrap_or(top_bits);
+        if want != applied {
+            let _ = enc.set_bitrate(want);
+            applied = want;
         }
         for m in pad_msgs.drain(..) {
             pad_msg(room, m, &mut out);
