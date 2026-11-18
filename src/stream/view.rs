@@ -978,6 +978,8 @@ struct Stats {
     e2e: Vec<i64>,
     decode: Vec<i64>,
     rtt: Vec<i64>,
+    /// Maior fila do segundo: quadros esperando para decodificar.
+    queue: u32,
 }
 
 fn pct(v: &mut [i64], q: f64) -> f64 {
@@ -1121,7 +1123,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         .and_then(|f5| f5.CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &mut allow as *mut _ as *mut _, std::mem::size_of::<BOOL>() as u32))
         .is_ok()
         && allow.as_bool();
-    let swap_flags = if tearing { DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING.0 as u32 } else { 0 };
+    let swap_flags = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT.0 as u32 | if tearing { DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING.0 as u32 } else { 0 };
     let desc = DXGI_SWAP_CHAIN_DESC1 {
         Width: 0,
         Height: 0,
@@ -1137,6 +1139,19 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     };
     let swap = factory.CreateSwapChainForHwnd(&d.dev, hwnd, &desc, None, None)?;
     let _ = factory.MakeWindowAssociation(hwnd, DXGI_MWA_NO_ALT_ENTER);
+    // Fila de um quadro: espera a tela liberar o buffer antes de desenhar, em vez de empilhar quadros prontos.
+    let ready = swap
+        .cast::<IDXGISwapChain2>()
+        .and_then(|s| s.SetMaximumFrameLatency(1).map(|_| Owned::new(s.GetFrameLatencyWaitableObject())))
+        .ok();
+    // Uma espera por Present: o objeto é um semáforo que cada quadro mostrado devolve. Espera que
+    // não virou Present (erro ao desenhar) fica devendo, e a próxima não espera, senão travaria 100 ms.
+    let owed = std::cell::Cell::new(false);
+    let wait_ready = || {
+        if let Some(h) = ready.as_ref().filter(|_| !owed.replace(true)) {
+            let _ = WaitForSingleObjectEx(**h, 100, false);
+        }
+    };
     // VSync ligado espera a atualização da tela: sem rasgos, um pouco mais de atraso.
     let present_mode = |vsync: bool| (vsync as u32, if tearing && !vsync { DXGI_PRESENT_ALLOW_TEARING } else { DXGI_PRESENT(0) });
     let (mut sync, mut present_flags) = present_mode(co.vsync);
@@ -1416,6 +1431,8 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         }
 
         let events: Vec<Event> = sh.queue.lock().unwrap().drain(..).collect();
+        // Quadros que chegaram juntos: além do primeiro, esperavam na fila (para o HUD).
+        let arrived = events.iter().filter(|e| matches!(e, Event::Frame(_) | Event::Wave { .. })).count() as u32;
         let mut last: Option<Decoded> = None;
         for e in events {
             match e {
@@ -1545,6 +1562,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                 }
             }
         }
+        second.queue = second.queue.max(arrived.saturating_sub(1) + dec.as_ref().map_or(0, |d| d.waiting()));
         // Mouse e teclado novos vão na hora; os recentes se repetem por um tempo, contra perda.
         if std::mem::take(&mut KEYS.lock().unwrap().sas) {
             eprintln!("Ctrl+Alt+Del pedido ao host");
@@ -1576,9 +1594,11 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
 
         #[cfg(feature = "stream")]
         if let (Some(pts), Some((n, draw))) = (nv_pts.take(), &nv) {
+            wait_ready();
             let bb: ID3D11Texture2D = swap.GetBuffer(0)?;
             let (ow, oh) = buffer_size(&bb);
             if draw.draw(&d.dev, &d.ctx, n, &bb, ow, oh).is_ok() && swap.Present(sync, present_flags).is_ok() {
+                owed.set(false);
                 let shown = now();
                 second.shown += 1;
                 second.e2e.push(shown + sh.offset.load(Ordering::Relaxed) - pts);
@@ -1589,9 +1609,11 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
             match wd.decode(&parts) {
                 Ok(true) => {
                     second.decode.push(now() - t);
+                    wait_ready();
                     let bb: ID3D11Texture2D = swap.GetBuffer(0)?;
                     let (ow, oh) = buffer_size(&bb);
                     if wd.draw(&d.dev, &d.ctx, &bb, video_rect(wd.w, wd.h, ow, oh)).is_ok() && swap.Present(sync, present_flags).is_ok() {
+                        owed.set(false);
                         let shown = now();
                         second.shown += 1;
                         second.e2e.push(shown + sh.offset.load(Ordering::Relaxed) - pts);
@@ -1603,6 +1625,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         }
         if let (Some(f), Some((_, w, h, fps))) = (last, info) {
             if let Some((tex, slice)) = f.texture() {
+                wait_ready();
                 let bb: ID3D11Texture2D = swap.GetBuffer(0)?;
                 let (ow, oh) = buffer_size(&bb);
                 if scaler.as_ref().is_none_or(|s| s.size != (w, h, ow, oh) || s.hdr != hdr_out) {
@@ -1610,6 +1633,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                 }
                 if let Some(s) = &scaler {
                     if s.blt(&tex, slice, &bb).is_ok() && swap.Present(sync, present_flags).is_ok() {
+                        owed.set(false);
                         let shown = now();
                         second.shown += 1;
                         second.e2e.push(shown + sh.offset.load(Ordering::Relaxed) - f.pts);
@@ -1634,6 +1658,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                     rtt_ms: rtt as f64 / 10_000.0,
                     e2e_ms: pct(&mut second.e2e.clone(), 0.5),
                     decode_ms: pct(&mut second.decode.clone(), 0.5),
+                    queue: second.queue,
                     fps: fps_now,
                     mbps,
                     lost: lost_total.saturating_sub(lost_mark),

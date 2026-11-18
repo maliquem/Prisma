@@ -103,6 +103,10 @@ impl Decoder {
             attrs.SetUINT32(&MF_TRANSFORM_ASYNC_UNLOCK, 1)?;
         }
         let _ = attrs.SetUINT32(&MF_LOW_LATENCY, 1);
+        // O mesmo pedido pela ICodecAPI: alguns decodificadores só soltam o quadro sem reter fila por ela.
+        if let Ok(api) = mft.cast::<ICodecAPI>() {
+            let _ = api.SetValue(&CODECAPI_AVLowLatencyMode, &windows::Win32::System::Variant::VARIANT::from(true));
+        }
         let mut gpu = false;
         if attrs.GetUINT32(&MF_SA_D3D11_AWARE).unwrap_or(0) != 0 {
             let mut token = 0;
@@ -203,6 +207,11 @@ impl Decoder {
     }
 
     /// Entrega um pacote (ou só trata o que estiver pendente) e diz quais quadros saíram.
+    /// Pacotes ainda esperando entrada no decodificador assíncrono.
+    pub fn waiting(&self) -> u32 {
+        self.queue.len() as u32
+    }
+
     pub unsafe fn decode(&mut self, p: Option<&Pkt>, out: &mut Vec<Decoded>) -> Result<()> {
         if self.events.is_none() {
             if let Some(p) = p {
