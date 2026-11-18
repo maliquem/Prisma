@@ -275,15 +275,19 @@ fn draw_page(ui: &mut Ui, app: &mut App, a: Rect) {
     let fw = a.w - 56.0;
     let family = list.get(app.pads.sel).map_or(Family::Xbox, |p| p.family);
     let key = list.get(app.pads.sel).map(|p| p.key.clone());
-    let row = rect(x, 88.0, fw, 34.0);
-    super::pad_profiles::top(ui, app, row, family, key.as_deref());
-    if !super::pad_profiles::naming(app) {
-        super::pad_profiles::opens_with(ui, app, super::pad_profiles::slot(row, 3));
-    }
-    let y = pad_card(ui, app, &list, rect(x, 134.0, fw, 0.0));
+    let y = pad_card(ui, app, &list, rect(x, 88.0, fw, 0.0));
     // Gravando uma macro, a aba não troca: o botão Parar fica na aba Macros.
     tabs(ui, x, y, &mut app.pads.tab, !crate::sys::macros::recording());
-    let top = y + 46.0;
+    let mut top = y + 46.0;
+    // A linha Perfis escolhe o que Mapeamento e Macros editam: fica dentro dessas duas abas.
+    if app.pads.tab < 2 {
+        let row = rect(x, top, fw, 34.0);
+        super::pad_profiles::top(ui, app, row, family, key.as_deref());
+        if !super::pad_profiles::naming(app) {
+            super::pad_profiles::opens_with(ui, app, super::pad_profiles::slot(row, 3));
+        }
+        top += 46.0;
+    }
     let h = a.h - top - 12.0;
     // Fora do editor, nenhuma luz de mostra: as abas que o desenham põem a dele de volta, e a
     // mostra só muda no fim do quadro (`preview_commit`).
@@ -543,7 +547,7 @@ fn extras(ui: &mut Ui, app: &mut App, list: &[Pad], at: Rect) -> f32 {
 /// Copiar diagnóstico, medir os sticks do controle escolhido e o teclado do Prisma.
 fn tools(ui: &mut Ui, app: &mut App, list: &[Pad], at: Rect) -> f32 {
     let (rx, rw) = (at.x, at.w);
-    if ui.button("pads-copy", rect(rx, at.y, 200.0_f32.min(rw), 36.0), "Copiar diagnóstico", false) {
+    if ui.button("pads-copy", rect(rx, at.y, rw, 36.0), "Copiar diagnóstico", false) {
         let ok = crate::capture::copy_text(app.hub, &diagnostic(list, &app.pads.conflicts));
         app.toast.info(if ok { "Diagnóstico copiado" } else { "Não consegui copiar" });
     }
@@ -1137,13 +1141,13 @@ fn radial(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
     // Cada lugar de 4 opções ganha 4 linhas, uma por direção do direcional.
     let n = if two { 16 } else { 8 };
     let groups = app.cfg.pad_radial[..n].iter().filter(|&&a| a == GROUP).count();
-    let r = rect(at.x, at.y, at.w, if two { 536.0 } else { 528.0 } + (n + 4 * groups) as f32 * 42.0);
+    let r = rect(at.x, at.y, at.w, if two { 512.0 } else { 504.0 } + (n + 4 * groups) as f32 * 42.0);
     ui.card(r);
     ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Radial do Prisma");
-    ui.c.text_wrap(rect(r.x + 16.0, r.y + 40.0, r.w - 32.0, 58.0), "O stick direito aponta. O radial fica aberto até Confirmar disparar ou Voltar fechar.", 12.0, TEXT2, Weight::Regular);
+    ui.c.text_wrap(rect(r.x + 16.0, r.y + 40.0, r.w - 32.0, 36.0), "O stick direito aponta. O radial fica aberto até Confirmar disparar ou Voltar fechar.", 12.0, TEXT2, Weight::Regular);
     let tr = |s: &str| crate::i18n::tr(s).into_owned();
     let mut changed = false;
-    let row = |i: usize| (rect(r.x + 16.0, r.y + 104.0 + i as f32 * 42.0, 108.0, 34.0), rect(r.x + 128.0, r.y + 104.0 + i as f32 * 42.0, r.w - 144.0, 34.0));
+    let row = |i: usize| (rect(r.x + 16.0, r.y + 80.0 + i as f32 * 42.0, 108.0, 34.0), rect(r.x + 128.0, r.y + 80.0 + i as f32 * 42.0, r.w - 144.0, 34.0));
     let (l, c) = row(0);
     ui.c.text_fit(l, &tr("Botão"), 12.0, TEXT2, Align::Left, Weight::Regular);
     let mut b = app.cfg.pad_radial_btn.min(2) as usize;
@@ -1180,13 +1184,13 @@ fn radial(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
             changed = true;
         }
     }
-    ui.tip(rect(r.x + 16.0, r.y + 230.0, r.w - 32.0, 76.0), "O radial fica aberto até Confirmar disparar o lugar escolhido ou Voltar fechar sem escolher.");
-    let check = rect(r.x + 10.0, r.y + 314.0, r.w - 20.0, 36.0);
+    ui.tip(rect(r.x + 16.0, r.y + 206.0, r.w - 32.0, 76.0), "O radial fica aberto até Confirmar disparar o lugar escolhido ou Voltar fechar sem escolher.");
+    let check = rect(r.x + 10.0, r.y + 290.0, r.w - 20.0, 36.0);
     if ui.check("pad-radial-keep", check, "A escolha fica com o stick no centro", &mut app.cfg.pad_radial_keep) {
         changed = true;
     }
     ui.tip(check, "Soltar o stick não desfaz a escolha: o último lugar apontado continua marcado até apontar outro.");
-    let check = rect(r.x + 10.0, r.y + 354.0, r.w - 20.0, 36.0);
+    let check = rect(r.x + 10.0, r.y + 330.0, r.w - 20.0, 36.0);
     let mut guide = app.cfg.pad_guide;
     if ui.check("pad-guide", check, "O Prisma cuida do botão Guia", &mut guide) {
         if guide {
@@ -1199,8 +1203,8 @@ fn radial(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
         changed = true;
     }
     ui.tip(check, "A Xbox Game Bar deixa de abrir pelo botão Guia do controle, e o Prisma faz a função normal dele (Win + G). Desligar devolve a opção da Game Bar como estava.");
-    ui.c.text_wrap(rect(r.x + 16.0, r.y + 392.0, r.w - 32.0, 46.0), "Com o Steam aberto, desligue nele a opção do botão Guia.", 12.0, MUTED, Weight::Regular);
-    let check = rect(r.x + 10.0, r.y + 438.0, r.w - 20.0, 36.0);
+    ui.c.text_wrap(rect(r.x + 16.0, r.y + 368.0, r.w - 32.0, 46.0), "Com o Steam aberto, desligue nele a opção do botão Guia.", 12.0, MUTED, Weight::Regular);
+    let check = rect(r.x + 10.0, r.y + 414.0, r.w - 20.0, 36.0);
     if ui.check("pad-radial-two", check, "Dois círculos (16 lugares)", &mut app.cfg.pad_radial_two) {
         app.cfg.pad_radial_keep |= app.cfg.pad_radial_two && app.cfg.pad_radial[8..16].iter().any(|&a| a == GROUP || a == PROFILES);
         changed = true;
@@ -1226,7 +1230,7 @@ fn radial(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
             changed = true;
         }
     }
-    let mut y = r.y + if two { 480.0 } else { 502.0 };
+    let mut y = r.y + if two { 456.0 } else { 478.0 };
     for i in 0..n {
         if two && i % 8 == 0 {
             ui.c.text_fit(rect(r.x + 16.0, y, r.w - 32.0, 20.0), &tr(if i == 0 { "Stick direito" } else { "Stick esquerdo" }), 12.0, MUTED, Align::Left, Weight::Semibold);
