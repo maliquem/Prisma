@@ -314,23 +314,7 @@ fn tabs(ui: &mut Ui, x: f32, y: f32, sel: &mut usize, present: usize) {
     if *sel >= names.len() {
         *sel = 0;
     }
-    ui.tab_step(sel, names.len());
-    let mut cx = x;
-    for (i, name) in names.iter().enumerate() {
-        let w = crate::ui::gfx::measure(name, 14.0, Weight::Semibold, None).0 + 28.0;
-        let r = rect(cx, y, w, 34.0);
-        let on = *sel == i;
-        let room_tab = i == TABS.len();
-        if on {
-            ui.c.round(r, 8.0, CARD2);
-        }
-        if ui.hit(&format!("sh-tab{i}"), r) {
-            *sel = i;
-        }
-        let color = if room_tab { WARN } else if on { TEXT } else { MUTED };
-        ui.c.text_raw(r, name, 14.0, color, Align::Center, if on { Weight::Semibold } else { Weight::Regular });
-        cx += w + 4.0;
-    }
+    ui.tabs("sh-tab", x, y, &names, sel, true, Some(TABS.len()));
 }
 
 /// O caminho que o host grava, curto e traduzido: o tipo e a latência.

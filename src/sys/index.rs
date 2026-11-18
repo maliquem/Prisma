@@ -19,6 +19,7 @@ use windows::Win32::System::Threading::*;
 use windows::Win32::UI::WindowsAndMessaging::PostMessageW;
 
 use super::mft;
+use super::{from_wide, u16_at, u32_at, u64_at};
 
 const USED: u8 = 1;
 const DIR: u8 = 2;
@@ -314,8 +315,7 @@ fn volume_info(letter: char) -> Option<(u32, bool)> {
     let mut serial = 0u32;
     let mut fs = [0u16; 32];
     unsafe { GetVolumeInformationW(&HSTRING::from(format!("{letter}:\\")), None, Some(&mut serial), None, None, Some(&mut fs)).ok()? };
-    let n = fs.iter().position(|&c| c == 0).unwrap_or(fs.len());
-    Some((serial, String::from_utf16_lossy(&fs[..n]).eq_ignore_ascii_case("NTFS")))
+    Some((serial, from_wide(&fs).eq_ignore_ascii_case("NTFS")))
 }
 
 /// Identificador do diário e o próximo número dele.
@@ -347,16 +347,6 @@ fn read_journal(h: &Handle, journal: u64, mut from: i64, out: &mut Vec<u8>) -> s
         from = next;
     }
     Ok(from)
-}
-
-fn u16_at(b: &[u8], o: usize) -> u16 {
-    u16::from_le_bytes([b[o], b[o + 1]])
-}
-fn u32_at(b: &[u8], o: usize) -> u32 {
-    u32::from_le_bytes(b[o..o + 4].try_into().unwrap())
-}
-fn u64_at(b: &[u8], o: usize) -> u64 {
-    u64::from_le_bytes(b[o..o + 8].try_into().unwrap())
 }
 
 /// Aplica os registros do diário. Devolve os arquivos que precisam ter o tamanho lido de novo.

@@ -608,6 +608,32 @@ impl<'a> Ui<'a> {
         changed
     }
 
+    #[allow(clippy::too_many_arguments)]
+    /// Abas sob o título de uma página: a escolhida em CARD2, as outras em MUTED, e o botão de aba
+    /// do controle troca entre elas. `names` já vêm traduzidos; `key` + o número é o id de cada aba.
+    /// `on` falso deixa as abas paradas; a aba `warn` vem em WARN.
+    pub fn tabs<S: AsRef<str>>(&mut self, key: &str, x: f32, y: f32, names: &[S], sel: &mut usize, on: bool, warn: Option<usize>) {
+        if on {
+            self.tab_step(sel, names.len());
+        }
+        let mut cx = x;
+        for (i, name) in names.iter().enumerate() {
+            let name = name.as_ref();
+            let w = measure(name, 14.0, Weight::Semibold, None).0 + 28.0;
+            let r = rect(cx, y, w, 34.0);
+            let cur = *sel == i;
+            if cur {
+                self.c.round(r, 8.0, CARD2);
+            }
+            if on && self.hit(&format!("{key}{i}"), r) {
+                *sel = i;
+            }
+            let color = if warn == Some(i) { WARN } else if cur { TEXT } else { MUTED };
+            self.c.text_raw(r, name, 14.0, color, Align::Center, if cur { Weight::Semibold } else { Weight::Regular });
+            cx += w + 4.0;
+        }
+    }
+
     pub fn check(&mut self, key: &str, r: Rect, label: &str, val: &mut bool) -> bool {
         let id = hash_id(key);
         let n = self.s.targets.len();

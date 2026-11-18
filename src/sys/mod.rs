@@ -101,3 +101,62 @@ pub fn known_folder(id: &windows::core::GUID) -> PathBuf {
     };
     PathBuf::from(path.unwrap_or_default())
 }
+
+/// Texto do Windows: UTF-16 terminado em zero.
+pub fn wide(s: &str) -> Vec<u16> {
+    s.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
+/// Texto de um buffer UTF-16 do Windows, até o primeiro zero.
+pub fn from_wide(b: &[u16]) -> String {
+    let n = b.iter().position(|&c| c == 0).unwrap_or(b.len());
+    String::from_utf16_lossy(&b[..n])
+}
+
+/// Números little-endian dentro de um bloco de bytes do Windows.
+pub fn u16_at(b: &[u8], o: usize) -> u16 {
+    u16::from_le_bytes([b[o], b[o + 1]])
+}
+pub fn u32_at(b: &[u8], o: usize) -> u32 {
+    u32::from_le_bytes(b[o..o + 4].try_into().unwrap())
+}
+pub fn u64_at(b: &[u8], o: usize) -> u64 {
+    u64::from_le_bytes(b[o..o + 8].try_into().unwrap())
+}
+
+/// Um SHA-256 do Windows (BCrypt) em andamento; solto ao sair.
+pub(crate) struct Sha(windows::Win32::Security::Cryptography::BCRYPT_HASH_HANDLE);
+
+impl Sha {
+    pub(crate) fn new() -> std::io::Result<Self> {
+        use windows::Win32::Security::Cryptography::*;
+        let mut h = BCRYPT_HASH_HANDLE::default();
+        unsafe { BCryptCreateHash(BCRYPT_SHA256_ALG_HANDLE, &mut h, None, None, 0) }.ok().map_err(|_| std::io::Error::other("BCrypt"))?;
+        Ok(Sha(h))
+    }
+
+    pub(crate) fn add(&self, data: &[u8]) -> std::io::Result<()> {
+        unsafe { windows::Win32::Security::Cryptography::BCryptHashData(self.0, data, 0) }.ok().map_err(|_| std::io::Error::other("BCrypt"))
+    }
+
+    pub(crate) fn finish(&self) -> std::io::Result<[u8; 32]> {
+        let mut out = [0u8; 32];
+        unsafe { windows::Win32::Security::Cryptography::BCryptFinishHash(self.0, &mut out, 0) }.ok().map_err(|_| std::io::Error::other("BCrypt"))?;
+        Ok(out)
+    }
+
+    /// O SHA-256 de `data` de uma vez.
+    pub(crate) fn digest(data: &[u8]) -> Option<[u8; 32]> {
+        let s = Sha::new().ok()?;
+        s.add(data).ok()?;
+        s.finish().ok()
+    }
+}
+
+impl Drop for Sha {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = windows::Win32::Security::Cryptography::BCryptDestroyHash(self.0);
+        }
+    }
+}

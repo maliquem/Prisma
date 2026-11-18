@@ -14,6 +14,8 @@ use windows::Win32::System::Registry::*;
 use windows::Win32::System::Threading::*;
 use windows::Win32::UI::Shell::*;
 
+use super::{from_wide, wide};
+
 const UNINSTALL: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall";
 const UNINSTALL32: &str = "Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall";
 
@@ -32,10 +34,6 @@ pub struct Program {
     pub quiet: String,
     pub inno: bool,
     pub on: bool,
-}
-
-fn wide(s: &str) -> Vec<u16> {
-    s.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
 fn open_key(root: HKEY, sub: &str) -> Option<HKEY> {
@@ -80,8 +78,7 @@ fn text(k: HKEY, name: &str) -> String {
         if r.is_err() {
             return String::new();
         }
-        let end = buf.iter().position(|c| *c == 0).unwrap_or(0);
-        String::from_utf16_lossy(&buf[..end])
+        from_wide(&buf)
     }
 }
 
@@ -362,10 +359,26 @@ fn clean_publisher(p: &str) -> String {
 const NEVER: &[&str] = &[
     "windows", "microsoft", "commonfiles", "system32", "programfiles", "programdata", "users", "nvidia",
     "nvidiacorporation", "intel", "amd", "google", "packages", "temp", "cache", "steam", "installer", "common",
+    "games", "jogos", "downloads", "programas",
 ];
 
 fn too_generic(n: &str) -> bool {
     n.len() < 4 || NEVER.contains(&n)
+}
+
+/// Quanto uma pasta `f` (nome já em `norm`) parece ser do programa `nn`: 0 não tem relação, 1
+/// parece e 2 é o nome do programa. Só 2 vem marcado: a pasta onde ele foi instalado pode ser uma
+/// pasta comum (um jogo direto em `D:\Games`), e com outro nome ela aparece desmarcada.
+fn name_grade(f: &str, nn: &str, names: &[String], taken: impl Fn(&str) -> bool) -> u8 {
+    if f == nn {
+        2
+    } else if too_generic(f) || f.len() < 5 || taken(f) {
+        0
+    } else if names.iter().any(|n| f == n || (n.len() >= 5 && (f.starts_with(n.as_str()) || n.starts_with(f)))) {
+        1
+    } else {
+        0
+    }
 }
 
 fn folder_size(p: &Path) -> u64 {
@@ -476,18 +489,7 @@ pub fn scan(p: &Program, others: &[Program]) -> Vec<Leftover> {
     names.push(stem.clone());
     names.retain(|n| !too_generic(n) && !taken(n));
     names.dedup();
-    // 0 não tem relação, 1 parece e 2 é o nome exato.
-    let grade = |f: &str| -> u8 {
-        if f == nn || (!leaf.is_empty() && f == leaf && !too_generic(&leaf)) {
-            2
-        } else if too_generic(f) || f.len() < 5 || taken(f) {
-            0
-        } else if names.iter().any(|n| f == n || (n.len() >= 5 && (f.starts_with(n.as_str()) || n.starts_with(f)))) {
-            1
-        } else {
-            0
-        }
-    };
+    let grade = |f: &str| name_grade(f, &nn, &names, &taken);
     let mut add = |path: PathBuf, on: bool| {
         let s = path.display().to_string();
         if out.iter().any(|l| l.label.eq_ignore_ascii_case(&s)) || shared(&s) {
@@ -775,4 +777,21 @@ pub fn scan_preview(name: &str) -> String {
         s += &format!("{} {} {}\n", if l.on { "[x]" } else { "[ ]" }, l.size >> 20, l.label);
     }
     s
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_the_program_name_comes_marked() {
+        let names: Vec<String> = ["footool", "meusjogos"].map(String::from).to_vec();
+        // A pasta onde foi instalado, com outro nome, aparece desmarcada.
+        assert_eq!(name_grade("meusjogos", "footool", &names, |_| false), 1);
+        assert_eq!(name_grade("footool", "footool", &names, |_| false), 2);
+        assert_eq!(name_grade("outracoisa", "footool", &names, |_| false), 0);
+        for n in ["games", "jogos", "downloads", "programas"] {
+            assert!(too_generic(n));
+        }
+    }
 }

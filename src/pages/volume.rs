@@ -209,23 +209,7 @@ pub fn set_device(app: &mut App, exe: &str, path: &str, input: bool, id: String)
 
 /// Abas da página: Programas e Equalizador.
 fn tabs(ui: &mut Ui, x: f32, y: f32, sel: &mut usize) {
-    const NAMES: [&str; 2] = ["Programas", "Equalizador"];
-    ui.tab_step(sel, NAMES.len());
-    let mut cx = x;
-    for (i, name) in NAMES.iter().enumerate() {
-        let name = crate::i18n::tr(name);
-        let w = crate::ui::gfx::measure(&name, 14.0, Weight::Semibold, None).0 + 28.0;
-        let r = rect(cx, y, w, 34.0);
-        let on = *sel == i;
-        if on {
-            ui.c.round(r, 8.0, CARD2);
-        }
-        if ui.hit(&format!("snd-tab{i}"), r) {
-            *sel = i;
-        }
-        ui.c.text_raw(r, &name, 14.0, if on { TEXT } else { MUTED }, Align::Center, if on { Weight::Semibold } else { Weight::Regular });
-        cx += w + 4.0;
-    }
+    ui.tabs("snd-tab", x, y, &["Programas", "Equalizador"].map(crate::i18n::tr), sel, true, None);
 }
 
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {

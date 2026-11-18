@@ -65,22 +65,8 @@ fn shown<'a>(who: &'a Profile, group: &'static [Setting]) -> impl Iterator<Item 
 }
 
 fn tabs(ui: &mut Ui, x: f32, y: f32, sel: &mut usize) {
-    ui.tab_step(sel, nvset::GROUPS.len());
-    let mut cx = x;
-    for (i, (name, _)) in nvset::GROUPS.iter().enumerate() {
-        let name = crate::i18n::tr(name);
-        let w = crate::ui::gfx::measure(&name, 14.0, Weight::Semibold, None).0 + 28.0;
-        let r = rect(cx, y, w, 34.0);
-        let on = *sel == i;
-        if on {
-            ui.c.round(r, 8.0, CARD2);
-        }
-        if ui.hit(&format!("nv-tab{i}"), r) {
-            *sel = i;
-        }
-        ui.c.text_raw(r, &name, 14.0, if on { TEXT } else { MUTED }, Align::Center, if on { Weight::Semibold } else { Weight::Regular });
-        cx += w + 4.0;
-    }
+    let names: Vec<_> = nvset::GROUPS.iter().map(|(name, _)| crate::i18n::tr(name)).collect();
+    ui.tabs("nv-tab", x, y, &names, sel, true, None);
 }
 
 /// "Padrão (valor)": o que vale sem nada gravado aqui, quando o driver diz.

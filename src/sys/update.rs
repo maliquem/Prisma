@@ -328,20 +328,14 @@ pub fn is_newer(found: &str, have: &str) -> bool {
     matches!((parts(found), parts(have)), (Some(a), Some(b)) if a > b)
 }
 
-fn sha256_raw(data: &[u8]) -> Option<[u8; 32]> {
-    let mut out = [0u8; 32];
-    unsafe { BCryptHash(BCRYPT_SHA256_ALG_HANDLE, None, data, &mut out) }.ok().ok()?;
-    Some(out)
-}
-
 pub fn sha256(data: &[u8]) -> Option<String> {
-    Some(sha256_raw(data)?.iter().map(|b| format!("{b:02x}")).collect())
+    Some(super::Sha::digest(data)?.iter().map(|b| format!("{b:02x}")).collect())
 }
 
 /// Confere a assinatura de `tools/update-key.ps1`. O texto assinado junta versão e hash: uma versão
 /// antiga assinada não passa por nova, e um arquivo trocado não passa por nenhuma.
 pub fn signed(version: &str, hash: &str, sig: &[u8]) -> bool {
-    let Some(digest) = sha256_raw(format!("Prisma {version}\n{hash}").as_bytes()) else { return false };
+    let Some(digest) = super::Sha::digest(format!("Prisma {version}\n{hash}").as_bytes()) else { return false };
     let mut blob = Vec::with_capacity(72);
     blob.extend_from_slice(&BCRYPT_ECDSA_PUBLIC_P256_MAGIC.to_le_bytes());
     blob.extend_from_slice(&32u32.to_le_bytes());

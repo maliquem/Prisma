@@ -133,8 +133,13 @@ impl Job {
     }
 }
 
-pub fn load_jobs(path: &Path) -> Vec<Job> {
-    std::fs::read_to_string(path).map(|t| t.lines().filter_map(Job::parse).collect()).unwrap_or_default()
+/// As listas salvas. Sem o arquivo, nenhuma; outro erro volta, para ninguém gravar por cima.
+pub fn load_jobs(path: &Path) -> std::io::Result<Vec<Job>> {
+    match std::fs::read_to_string(path) {
+        Ok(t) => Ok(t.lines().filter_map(Job::parse).collect()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(e) => Err(e),
+    }
 }
 
 pub fn save_jobs(path: &Path, jobs: &[Job]) -> std::io::Result<()> {
@@ -417,5 +422,16 @@ mod tests {
         let p = spec_file(&j).unwrap();
         assert_eq!(read_spec(&p), Some(j));
         assert!(!p.exists());
+    }
+
+    #[test]
+    fn missing_jobs_file_is_empty_but_unreadable_is_an_error() {
+        let dir = std::env::temp_dir().join(format!("prisma_listas_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(load_jobs(&dir.join("listas.txt")).unwrap().is_empty());
+        // Uma pasta no lugar do arquivo: o Windows recusa a leitura.
+        std::fs::create_dir_all(&dir).unwrap();
+        assert!(load_jobs(&dir).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

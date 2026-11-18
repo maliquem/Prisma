@@ -13,6 +13,8 @@ use windows::Win32::Foundation::*;
 use windows::Win32::Storage::FileSystem::*;
 use windows::Win32::System::IO::DeviceIoControl;
 
+use super::{u16_at, u32_at, u64_at};
+
 const NTFS_VOLUME_DATA: u32 = 0x90064;
 const VOLUME_EXTENTS: u32 = 0x560000;
 const CHUNK: usize = 8 << 20;
@@ -300,22 +302,12 @@ impl Aligned {
     }
 }
 
-fn u16_at(b: &[u8], o: usize) -> usize {
-    u16::from_le_bytes([b[o], b[o + 1]]) as usize
-}
-fn u32_at(b: &[u8], o: usize) -> u32 {
-    u32::from_le_bytes(b[o..o + 4].try_into().unwrap())
-}
-fn u64_at(b: &[u8], o: usize) -> u64 {
-    u64::from_le_bytes(b[o..o + 8].try_into().unwrap())
-}
-
 fn fixup(r: &mut [u8]) -> bool {
     if r.len() < 48 || &r[..4] != b"FILE" {
         return false;
     }
-    let off = u16_at(r, 4);
-    let count = u16_at(r, 6);
+    let off = u16_at(r, 4) as usize;
+    let count = u16_at(r, 6) as usize;
     if count == 0 || off + count * 2 > r.len() {
         return false;
     }
@@ -333,7 +325,7 @@ fn fixup(r: &mut [u8]) -> bool {
 /// Atributos do registro: (tipo, início, comprimento).
 fn attrs(r: &[u8]) -> Vec<(u32, usize, usize)> {
     let mut out = Vec::with_capacity(8);
-    let mut o = u16_at(r, 20);
+    let mut o = u16_at(r, 20) as usize;
     while o + 16 <= r.len() {
         let t = u32_at(r, o);
         if t == 0xFFFF_FFFF {
@@ -350,7 +342,7 @@ fn attrs(r: &[u8]) -> Vec<(u32, usize, usize)> {
 }
 
 fn decode_runs(a: &[u8], out: &mut Vec<(i64, u64)>) {
-    let mut o = u16_at(a, 32);
+    let mut o = u16_at(a, 32) as usize;
     let mut lcn = 0i64;
     while o < a.len() && a[o] != 0 {
         let (l, f) = ((a[o] & 15) as usize, (a[o] >> 4) as usize);
@@ -414,13 +406,13 @@ impl Parser {
             let a = &r[o..o + len];
             match t {
                 0x10 if a[8] == 0 && !self.times.is_empty() => {
-                    let v = u16_at(a, 20);
+                    let v = u16_at(a, 20) as usize;
                     if v + 16 <= a.len() {
                         self.times[id] = unix_secs(u64_at(a, v + 8));
                     }
                 }
                 0x30 if a[8] == 0 => {
-                    let v = u16_at(a, 20);
+                    let v = u16_at(a, 20) as usize;
                     let vl = u32_at(a, 16) as usize;
                     if vl < 66 || v + vl > a.len() {
                         continue;
@@ -547,13 +539,13 @@ pub(crate) fn read_table(drive: char, p: &Progress, with_times: bool) -> Option<
         if let Some((o, len)) = list_attr {
             let a = &first[o..o + len];
             if a[8] == 0 {
-                let v = u16_at(a, 20);
+                let v = u16_at(a, 20) as usize;
                 let vl = u32_at(a, 16) as usize;
                 let l = &a[v..(v + vl).min(a.len())];
                 let mut i = 0;
                 while i + 26 <= l.len() {
                     let tp = u32_at(l, i);
-                    let rl = u16_at(l, i + 4);
+                    let rl = u16_at(l, i + 4) as usize;
                     let vcn = u64_at(l, i + 8);
                     let number = u64_at(l, i + 16) & 0xFFFF_FFFF_FFFF;
                     if rl == 0 {

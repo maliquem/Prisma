@@ -450,26 +450,7 @@ fn pad_card(ui: &mut Ui, app: &mut App, list: &[Pad], at: Rect) -> f32 {
 
 /// Abas da página; `on` falso deixa trocar de aba desligado (gravando macro).
 fn tabs(ui: &mut Ui, x: f32, y: f32, sel: &mut usize, on: bool) {
-    const TABS: [&str; 4] = ["Mapeamento", "Macros", "Menu radial", "Ajustes"];
-    if on {
-        ui.tab_step(sel, TABS.len());
-    }
-    let mut cx = x;
-    for (i, name) in TABS.iter().enumerate() {
-        let name = crate::i18n::tr(name);
-        let w = measure(&name, 14.0, Weight::Semibold, None).0 + 28.0;
-        let r = rect(cx, y, w, 34.0);
-        let cur = *sel == i;
-        if cur {
-            ui.c.round(r, 8.0, CARD2);
-        }
-        if on && ui.hit(&format!("pad-tab{i}"), r) {
-            *sel = i;
-        }
-        let color = if cur { TEXT } else { MUTED };
-        ui.c.text_raw(r, &name, 14.0, color, Align::Center, if cur { Weight::Semibold } else { Weight::Regular });
-        cx += w + 4.0;
-    }
+    ui.tabs("pad-tab", x, y, &["Mapeamento", "Macros", "Menu radial", "Ajustes"].map(crate::i18n::tr), sel, on, None);
 }
 
 /// Aba Ajustes: até três colunas (avisos; diagnóstico, medir sticks e teclado; mods, ponte e drivers).

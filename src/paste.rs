@@ -432,7 +432,7 @@ fn record(o: &Win) -> Record {
     Record { name: o.name.clone(), dest: o.dest_path.display().to_string(), items: o.items.iter().map(|p| p.display().to_string()).collect(), ..Default::default() }
 }
 
-/// Copia de novo só o que deu erro, substituindo o que já tiver chegado pela metade.
+/// Copia de novo só o que deu erro, com a mesma escolha para o que já existe (`copy::retry_policy`).
 fn retry(o: &mut Win) {
     let errors = o.st.errors.lock().unwrap().clone();
     let pairs = copy::retry_pairs(&o.items, &o.dest_path, &errors);
@@ -440,7 +440,7 @@ fn retry(o: &mut Win) {
         return;
     }
     let st = Arc::new(State::default());
-    st.policy.store(copy::REPLACE, Relaxed);
+    st.policy.store(copy::retry_policy(o.st.policy.load(Relaxed)), Relaxed);
     st.verify.store(o.st.verify.load(Relaxed), Relaxed);
     o.st = st.clone();
     o.samples.clear();

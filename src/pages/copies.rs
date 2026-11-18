@@ -113,10 +113,14 @@ fn load_history(d: &mut Data) {
     }
 }
 
+/// Sem conseguir ler o arquivo, `loaded` fica falso: tenta de novo no próximo segundo e nada grava
+/// por cima das listas que estão lá.
 fn load_jobs(d: &mut Data) {
     if !d.loaded {
-        d.jobs = copylist::load_jobs(&copylist::jobs_path());
-        d.loaded = true;
+        if let Ok(jobs) = copylist::load_jobs(&copylist::jobs_path()) {
+            d.jobs = jobs;
+            d.loaded = true;
+        }
     }
 }
 
@@ -197,22 +201,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
 }
 
 fn tabs(ui: &mut Ui, x: f32, y: f32, sel: &mut usize) {
-    ui.tab_step(sel, 2);
-    let mut cx = x;
-    for (i, name) in ["Histórico", "Listas de cópia"].iter().enumerate() {
-        let name = crate::i18n::tr(name);
-        let w = measure(&name, 14.0, Weight::Semibold, None).0 + 28.0;
-        let r = rect(cx, y, w, 34.0);
-        let on = *sel == i;
-        if on {
-            ui.c.round(r, 8.0, CARD2);
-        }
-        if ui.hit(&format!("cp-tab{i}"), r) {
-            *sel = i;
-        }
-        ui.c.text_raw(r, &name, 14.0, if on { TEXT } else { MUTED }, Align::Center, if on { Weight::Semibold } else { Weight::Regular });
-        cx += w + 4.0;
-    }
+    ui.tabs("cp-tab", x, y, &["Histórico", "Listas de cópia"].map(tr), sel, true, None);
 }
 
 fn result_chip(r: &Record) -> (String, Color) {
@@ -499,6 +488,7 @@ fn editor(ui: &mut Ui, app: &mut App, r: Rect) {
     }
     if ui.button("cp-save", rect(r.right() - 20.0 - 150.0, by, 150.0, 40.0), "Salvar", true) {
         match e.job(now) {
+            Ok(_) if !app.cp.loaded => app.toast.info("Não deu para salvar a lista"),
             Ok(mut j) => {
                 // Salvar conta como a última vez: um horário que já passou hoje não roda na hora.
                 j.last = now;

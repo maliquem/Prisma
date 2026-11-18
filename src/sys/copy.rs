@@ -7,6 +7,8 @@ use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, AtomicUsize,
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+use super::Sha;
+
 /// O que fazer com um arquivo que já existe no destino. `ASK` espera a escolha na janela.
 pub const ASK: u8 = 0;
 pub const SKIP: u8 = 1;
@@ -96,6 +98,24 @@ fn same_path(a: &Path, b: &Path) -> bool {
     a.as_os_str().to_string_lossy().to_lowercase() == b.as_os_str().to_string_lossy().to_lowercase()
 }
 
+/// O mesmo arquivo ou pasta, também por outro caminho (unidade mapeada, `subst`, junção): mover
+/// por cima de si mesmo apagaria o arquivo. O texto igual resolve sem abrir nada.
+fn same_file(a: &Path, b: &Path) -> bool {
+    same_path(a, b) || file_id(a).is_some_and(|x| file_id(b) == Some(x))
+}
+
+/// Número de série do volume e número do arquivo nele.
+fn file_id(p: &Path) -> Option<(u32, u32, u32)> {
+    use std::os::windows::fs::OpenOptionsExt;
+    use std::os::windows::io::AsRawHandle;
+    use windows::Win32::Storage::FileSystem::{GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION};
+    // Só ler atributos, sem travar ninguém; FILE_FLAG_BACKUP_SEMANTICS abre pasta também.
+    let f = std::fs::OpenOptions::new().access_mode(0x80).share_mode(7).custom_flags(0x0200_0000).open(p).ok()?;
+    let mut bi = BY_HANDLE_FILE_INFORMATION::default();
+    unsafe { GetFileInformationByHandle(windows::Win32::Foundation::HANDLE(f.as_raw_handle()), &mut bi) }.ok()?;
+    Some((bi.dwVolumeSerialNumber, bi.nFileIndexHigh, bi.nFileIndexLow))
+}
+
 /// "nome (2).ext", "nome (3).ext"... o primeiro que não existe, como o Windows.
 pub fn unique(p: &Path) -> PathBuf {
     let stem = p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
@@ -144,6 +164,8 @@ pub fn free_space(dir: &Path) -> Option<u64> {
 pub fn run_to(pairs: &[(PathBuf, PathBuf)], mv: bool, st: &State, free: impl Fn(&Path) -> Option<u64>) {
     st.phase.store(PREPARING, Relaxed);
     let mut plan = Vec::new();
+    // Onde começa no plano o que vai para cada destino, para somar o espaço de cada disco.
+    let mut groups: Vec<(usize, &Path)> = Vec::new();
     for (item, dest) in pairs {
         if st.cancel.load(Relaxed) {
             st.phase.store(CANCELED, Relaxed);
@@ -151,12 +173,12 @@ pub fn run_to(pairs: &[(PathBuf, PathBuf)], mv: bool, st: &State, free: impl Fn(
         }
         let dest = dest.as_path();
         let Some(name) = item.file_name() else { continue };
-        if same_path(item, dest) || dest.to_string_lossy().to_lowercase().starts_with(&format!("{}\\", item.to_string_lossy().to_lowercase())) {
+        if same_file(item, dest) || dest.to_string_lossy().to_lowercase().starts_with(&format!("{}\\", item.to_string_lossy().to_lowercase())) {
             st.error(item, "Uma pasta não pode ir para dentro dela mesma");
             continue;
         }
         let mut dst = dest.join(name);
-        if same_path(item, &dst) {
+        if same_file(item, &dst) {
             if mv {
                 continue;
             }
@@ -171,6 +193,7 @@ pub fn run_to(pairs: &[(PathBuf, PathBuf)], mv: bool, st: &State, free: impl Fn(
             st.ok_files.fetch_add(1, Relaxed);
             continue;
         }
+        groups.push((plan.len(), dest));
         walk(item, &dst, new, &mut plan, st);
     }
     if st.cancel.load(Relaxed) {
@@ -180,19 +203,18 @@ pub fn run_to(pairs: &[(PathBuf, PathBuf)], mv: bool, st: &State, free: impl Fn(
     let files = plan.iter().filter(|e| !e.dir).count() as u32;
     st.files.fetch_add(files, Relaxed);
     st.total.store(plan.iter().map(|e| e.size).sum(), Relaxed);
-    // Só substituir devolve o espaço do antigo; perguntar pode virar "manter os dois", que ocupa tudo.
-    let replace = st.policy.load(Relaxed) == REPLACE;
-    let need: u64 = plan.iter().filter(|e| !e.dir).map(|e| if replace && !e.new { e.size.saturating_sub(e.dst.metadata().map_or(0, |m| m.len())) } else { e.size }).sum();
-    let Some(dest) = pairs.first().map(|p| p.1.as_path()) else {
+    if pairs.is_empty() {
         st.phase.store(DONE, Relaxed);
         return;
-    };
-    if let Some(f) = free(dest) {
-        if need > f {
-            st.need.store(need, Relaxed);
-            st.free.store(f, Relaxed);
-            st.phase.store(NO_SPACE, Relaxed);
-            return;
+    }
+    for (dest, need) in needs(&plan, &groups, mv, st.policy.load(Relaxed) == REPLACE) {
+        if let Some(f) = free(dest) {
+            if need > f {
+                st.need.store(need, Relaxed);
+                st.free.store(f, Relaxed);
+                st.phase.store(NO_SPACE, Relaxed);
+                return;
+            }
         }
     }
     st.phase.store(COPYING, Relaxed);
@@ -279,6 +301,37 @@ pub fn run_to(pairs: &[(PathBuf, PathBuf)], mv: bool, st: &State, free: impl Fn(
     st.phase.store(if st.cancel.load(Relaxed) { CANCELED } else { DONE }, Relaxed);
 }
 
+/// Bytes que cada disco de destino precisa ter livres. Mover no mesmo disco só troca o nome e não
+/// ocupa nada; só substituir devolve o espaço do antigo (perguntar pode virar "manter os dois", que
+/// ocupa tudo).
+// shortcut: caminho de rede conta por pasta de destino, não por compartilhamento; basta enquanto
+// os itens colados vão para uma pasta só.
+fn needs<'a>(plan: &[Entry], groups: &[(usize, &'a Path)], mv: bool, replace: bool) -> Vec<(&'a Path, u64)> {
+    let vol = |p: &Path| drive(p).unwrap_or_else(|| p.to_string_lossy().to_lowercase());
+    let mut out: Vec<(&Path, u64)> = Vec::new();
+    for (i, &(start, dest)) in groups.iter().enumerate() {
+        let end = groups.get(i + 1).map_or(plan.len(), |g| g.0);
+        let need: u64 = plan[start..end]
+            .iter()
+            .filter(|e| !e.dir)
+            .map(|e| {
+                if mv && drive(&e.src).is_some() && drive(&e.src) == drive(&e.dst) {
+                    0
+                } else if replace && !e.new {
+                    e.size.saturating_sub(e.dst.metadata().map_or(0, |m| m.len()))
+                } else {
+                    e.size
+                }
+            })
+            .sum();
+        match out.iter_mut().find(|o| vol(o.0) == vol(dest)) {
+            Some(o) => o.1 += need,
+            None => out.push((dest, need)),
+        }
+    }
+    out
+}
+
 /// Para tentar de novo só o que falhou: cada arquivo da lista de erros com a pasta onde ele ia.
 /// Erros fora dos itens (uma pasta dentro dela mesma) ficam de fora.
 pub fn retry_pairs(items: &[PathBuf], dest: &Path, errors: &[(String, String)]) -> Vec<(PathBuf, PathBuf)> {
@@ -294,6 +347,17 @@ pub fn retry_pairs(items: &[PathBuf], dest: &Path, errors: &[(String, String)]) 
         }
     }
     out
+}
+
+/// A escolha para o que já existe ao tentar de novo: a mesma de antes, para "Manter os dois" não
+/// virar substituir. Pular viraria não tentar nada: o que deu erro e tem destino é cópia nossa que
+/// não bateu, e essa é substituída.
+pub fn retry_policy(prev: u8) -> u8 {
+    if prev == SKIP {
+        REPLACE
+    } else {
+        prev
+    }
 }
 
 /// Espera enquanto pausado. False: cancelado.
@@ -530,36 +594,6 @@ fn copy_verified(src: &Path, dst: &Path, size: u64, replace: bool, st: &State, b
         let _ = unsafe { SetFileAttributesW(&windows::core::HSTRING::from(dst.as_os_str()), FILE_FLAGS_AND_ATTRIBUTES(attr)) };
     }
     Ok(h)
-}
-
-/// Um SHA-256 do Windows (BCrypt) em andamento; solto ao sair.
-struct Sha(windows::Win32::Security::Cryptography::BCRYPT_HASH_HANDLE);
-
-impl Sha {
-    fn new() -> std::io::Result<Self> {
-        use windows::Win32::Security::Cryptography::*;
-        let mut h = BCRYPT_HASH_HANDLE::default();
-        unsafe { BCryptCreateHash(BCRYPT_SHA256_ALG_HANDLE, &mut h, None, None, 0) }.ok().map_err(|_| std::io::Error::other("BCrypt"))?;
-        Ok(Sha(h))
-    }
-
-    fn add(&self, data: &[u8]) -> std::io::Result<()> {
-        unsafe { windows::Win32::Security::Cryptography::BCryptHashData(self.0, data, 0) }.ok().map_err(|_| std::io::Error::other("BCrypt"))
-    }
-
-    fn finish(&self) -> std::io::Result<[u8; 32]> {
-        let mut out = [0u8; 32];
-        unsafe { windows::Win32::Security::Cryptography::BCryptFinishHash(self.0, &mut out, 0) }.ok().map_err(|_| std::io::Error::other("BCrypt"))?;
-        Ok(out)
-    }
-}
-
-impl Drop for Sha {
-    fn drop(&mut self) {
-        unsafe {
-            let _ = windows::Win32::Security::Cryptography::BCryptDestroyHash(self.0);
-        }
-    }
 }
 
 const CHUNK: usize = 4 << 20;
@@ -1028,6 +1062,40 @@ mod tests {
         assert!(errs.len() == 1 && errs[0].1 == "Link de pasta, não copiado", "{errs:?}");
         assert!(d.join(r"dst\src\sub\b.bin").exists() && !d.join(r"dst\src\sub\volta").exists());
         let _ = std::fs::remove_dir(d.join(r"src\sub\volta"));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn retry_keeps_the_choice() {
+        assert_eq!(retry_policy(KEEP_BOTH), KEEP_BOTH);
+        assert_eq!(retry_policy(REPLACE), REPLACE);
+        assert_eq!(retry_policy(ASK), ASK);
+        assert_eq!(retry_policy(SKIP), REPLACE);
+    }
+
+    #[test]
+    fn moving_on_the_same_disk_needs_no_space() {
+        let e = |src: &str, dst: &str, size| Entry { src: src.into(), dst: dst.into(), dir: false, size, new: true };
+        let plan = [e(r"C:\a\x", r"C:\b\x", 100), e(r"D:\y", r"C:\b\y", 50), e(r"C:\z", r"E:\c\z", 7)];
+        let groups = [(0, Path::new(r"C:\b")), (2, Path::new(r"E:\c"))];
+        assert_eq!(needs(&plan, &groups, true, false), vec![(Path::new(r"C:\b"), 50), (Path::new(r"E:\c"), 7)]);
+        assert_eq!(needs(&plan, &groups, false, false), vec![(Path::new(r"C:\b"), 150), (Path::new(r"E:\c"), 7)]);
+        // Duas pastas no mesmo disco somam juntas.
+        let groups = [(0, Path::new(r"C:\b")), (2, Path::new(r"c:\outra"))];
+        assert_eq!(needs(&plan, &groups, false, false), vec![(Path::new(r"C:\b"), 157)]);
+    }
+
+    #[test]
+    fn moving_onto_itself_by_another_path_keeps_the_file() {
+        let d = scratch("mesmo");
+        let ok = std::process::Command::new("cmd").args(["/c", "mklink", "/J"]).arg(d.join("atalho")).arg(d.join("src")).output().unwrap().status.success();
+        assert!(ok);
+        assert!(same_file(&d.join(r"atalho\a.txt"), &d.join(r"src\a.txt")));
+        assert!(!same_file(&d.join(r"src\a.txt"), &d.join(r"src\sub\b.bin")));
+        let st = state(REPLACE, false);
+        run(&[d.join(r"atalho\a.txt")], &d.join("src"), true, &st, |_| None);
+        assert_eq!(std::fs::read(d.join(r"src\a.txt")).unwrap(), b"alfa");
+        let _ = std::fs::remove_dir(d.join("atalho"));
         let _ = std::fs::remove_dir_all(&d);
     }
 
