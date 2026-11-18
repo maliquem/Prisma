@@ -166,6 +166,8 @@ pub struct UiState {
     pub pad: bool,
     /// LT/RT: aba anterior (-1) ou seguinte (1), para a página que tiver abas.
     pub pad_tab: Option<i8>,
+    /// Navegação pelo teclado (Tab, setas): o mesmo anel do controle, sem a faixa de dicas.
+    pub keys: bool,
     /// Controles clicáveis do desenho em curso e do último.
     targets: Vec<Target>,
     last: Vec<Target>,
@@ -225,6 +227,24 @@ impl UiState {
         }
         let ts = &self.last;
         pick(ts, from, dir, |t| t.shown()).map(|i| ts[i].center())
+    }
+
+    /// Teclado: Tab leva ao próximo controle à vista na ordem do desenho (Shift+Tab, ao anterior),
+    /// dando a volta. Devolve onde pôr o cursor.
+    pub fn tab_move(&mut self, back: bool) -> Option<(f32, f32)> {
+        let (mx, my) = (self.mx, self.my);
+        let shown: Vec<&Target> = self.last.iter().filter(|t| t.shown()).collect();
+        let n = shown.len();
+        if n == 0 {
+            return None;
+        }
+        let k = match shown.iter().rposition(|t| t.r.contains(mx, my)) {
+            Some(c) if back => (c + n - 1) % n,
+            Some(c) => (c + 1) % n,
+            None if back => n - 1,
+            None => 0,
+        };
+        Some(shown[k].center())
     }
 
     /// Rola a lista `area` em `d` e devolve quanto andou de fato.
@@ -1084,18 +1104,25 @@ impl<'a> Ui<'a> {
         self.draw_ask();
         if self.s.pad {
             self.pad_bar();
+        } else if self.s.keys {
+            self.ring();
         }
         self.blocked = false;
         self.s.end_frame();
     }
 
-    /// Controle em uso: anel no controle sob o cursor e, embaixo, o que cada botão faz.
-    fn pad_bar(&mut self) {
-        use crate::sys::{pads, remap};
+    /// Anel azul no controle sob o cursor, que é onde está o foco do controle ou do teclado.
+    fn ring(&mut self) {
         let (mx, my) = (self.s.mx, self.s.my);
         if let Some(t) = self.s.targets.iter().rev().find(|t| t.shown() && t.r.contains(mx, my)) {
             self.c.round_line(t.r.inset(-3.0), 10.0, ACCENT, 2.0);
         }
+    }
+
+    /// Controle em uso: anel no controle sob o cursor e, embaixo, o que cada botão faz.
+    fn pad_bar(&mut self) {
+        use crate::sys::{pads, remap};
+        self.ring();
         let t = |s: &str| crate::i18n::tr(s).into_owned();
         let mut items = vec![(vec![glyph::DPAD_ANY], t("Mover")), (vec![pads::A], t("Escolher"))];
         if self.s.popup.is_some() || self.s.ask.is_some() {
@@ -1212,5 +1239,21 @@ mod tests {
         // Fora de qualquer controle: vai ao mais perto.
         (s.mx, s.my) = (700.0, 500.0);
         assert_eq!(s.pad_move(None), Some((550.0, 135.0)));
+    }
+
+    #[test]
+    fn tab_goes_round_in_draw_order() {
+        let view = rect(0.0, 0.0, 800.0, 600.0);
+        let mut s = UiState::default();
+        // O do meio está fora da vista: Tab pula ele.
+        s.last = vec![t(10.0, 10.0, 0, view), t(10.0, 700.0, 0, view), t(10.0, 100.0, 0, view)];
+        (s.mx, s.my) = (400.0, 400.0);
+        assert_eq!(s.tab_move(false), Some((60.0, 25.0)));
+        assert_eq!(s.tab_move(true), Some((60.0, 115.0)));
+        (s.mx, s.my) = (60.0, 25.0);
+        assert_eq!(s.tab_move(false), Some((60.0, 115.0)));
+        assert_eq!(s.tab_move(true), Some((60.0, 115.0)));
+        (s.mx, s.my) = (60.0, 115.0);
+        assert_eq!(s.tab_move(false), Some((60.0, 25.0)));
     }
 }

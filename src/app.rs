@@ -3493,12 +3493,8 @@ impl App {
             },
             Cmd::Wake => {}
         }
-        if let Some((x, y)) = to {
-            let mut p = POINT { x: (x * m.scale) as i32, y: (y * m.scale) as i32 };
-            unsafe {
-                let _ = ClientToScreen(m.hwnd, &mut p);
-            }
-            nav::point_to(p.x, p.y);
+        if let Some(xy) = to {
+            cursor_to(m, xy);
         }
         if let Some(p) = page.filter(|&p| p != self.page) {
             self.page = p;
@@ -3506,6 +3502,41 @@ impl App {
         }
         if keyboard {
             self.set_keyboard(true, None);
+        }
+        self.invalidate();
+    }
+
+    /// Teclado na janela, sem campo de texto em foco, pelo mesmo caminho do controle (o cursor vai até
+    /// o controle): Tab e Shift+Tab, as setas, Enter e Espaço clicam, Esc fecha a lista aberta,
+    /// Ctrl+Tab troca de aba e Ctrl+PgUp/PgDn de página. O primeiro Enter só mostra onde está o foco.
+    fn key_nav(&mut self, vk: u32) {
+        let held = |k: VIRTUAL_KEY| unsafe { GetKeyState(k.0 as i32) } < 0;
+        let (ctrl, shift) = (held(VK_CONTROL), held(VK_SHIFT));
+        if held(VK_MENU) || held(VK_LWIN) || held(VK_RWIN) {
+            return;
+        }
+        let Some(m) = &mut self.main else { return };
+        let woke = !m.ui.keys && !m.ui.pad;
+        let (mut to, mut page) = (None, None);
+        match vk {
+            0x09 if ctrl => m.ui.pad_tab = Some(if shift { -1 } else { 1 }),
+            0x21 | 0x22 if ctrl => page = Some(crate::pages::nav_step(self.page, if vk == 0x21 { -1 } else { 1 })),
+            0x09 => to = m.ui.tab_move(shift),
+            0x25..=0x28 if !ctrl => to = m.ui.pad_move(Some((vk - 0x25) as u8)),
+            0x0D | 0x20 if woke => to = m.ui.pad_move(None),
+            0x0D | 0x20 => crate::sys::nav::click(),
+            0x1B => {
+                m.ui.cancel();
+            }
+            _ => return,
+        }
+        m.ui.keys = true;
+        if let Some(xy) = to {
+            cursor_to(m, xy);
+        }
+        if let Some(p) = page.filter(|&p| p != self.page) {
+            self.page = p;
+            self.refresh_page();
         }
         self.invalidate();
     }
@@ -3855,7 +3886,9 @@ impl App {
             return;
         }
         if m.ui.capturing == 0 {
-            if m.ui.focus != 0 && nav_key(&mut m.ui, vk) {
+            if m.ui.focus == 0 {
+                self.key_nav(vk);
+            } else if nav_key(&mut m.ui, vk) {
                 self.invalidate();
             }
             return;
@@ -4307,14 +4340,24 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
     }
 }
 
-/// Mouse ou teclado de verdade (sem a marca do Prisma): some o anel e a faixa do controle.
-fn pad_off(a: &mut App) {
+/// Mouse ou teclado de verdade (sem a marca do Prisma): some o anel e a faixa do controle. O anel do
+/// teclado só some com o mouse (`mouse`), porque a própria tecla o acende.
+fn pad_off(a: &mut App, mouse: bool) {
     if unsafe { GetMessageExtraInfo() }.0 as usize == crate::sys::remap::MARK {
         return;
     }
-    if a.main.as_mut().is_some_and(|mw| std::mem::take(&mut mw.ui.pad)) {
+    if a.main.as_mut().is_some_and(|mw| std::mem::take(&mut mw.ui.pad) | (mouse && std::mem::take(&mut mw.ui.keys))) {
         a.invalidate();
     }
+}
+
+/// Leva o cursor ao ponto `xy` da janela (em px sem escala), com a marca do Prisma.
+fn cursor_to(m: &MainWin, (x, y): (f32, f32)) {
+    let mut p = POINT { x: (x * m.scale) as i32, y: (y * m.scale) as i32 };
+    unsafe {
+        let _ = ClientToScreen(m.hwnd, &mut p);
+    }
+    crate::sys::nav::point_to(p.x, p.y);
 }
 
 fn mouse_xy(a: &mut App, l: LPARAM) {
@@ -4602,13 +4645,13 @@ unsafe extern "system" fn main_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
                 mouse_xy(a, l);
                 // Mexer no mouse de verdade esconde as dicas do controle; o Windows repete a posição às vezes.
                 if before != a.main.as_ref().map(|mw| (mw.ui.mx, mw.ui.my)) {
-                    pad_off(a);
+                    pad_off(a, true);
                 }
                 a.invalidate();
                 Some(0)
             }
             WM_LBUTTONDOWN => {
-                pad_off(a);
+                pad_off(a, true);
                 mouse_xy(a, l);
                 if let Some(mw) = &mut a.main {
                     mw.ui.down = true;
@@ -4629,7 +4672,7 @@ unsafe extern "system" fn main_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
                 Some(0)
             }
             WM_RBUTTONUP => {
-                pad_off(a);
+                pad_off(a, true);
                 mouse_xy(a, l);
                 if let Some(mw) = &mut a.main {
                     mw.ui.right_released = true;
@@ -4647,7 +4690,7 @@ unsafe extern "system" fn main_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
             }
             WM_MOUSEWHEEL => {
                 let d = ((w.0 >> 16) & 0xffff) as i16 as f32 / 120.0;
-                pad_off(a);
+                pad_off(a, true);
                 if let Some(mw) = &mut a.main {
                     mw.ui.wheel += d;
                 }
@@ -4655,7 +4698,7 @@ unsafe extern "system" fn main_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
                 Some(0)
             }
             WM_KEYDOWN | WM_SYSKEYDOWN => {
-                pad_off(a);
+                pad_off(a, false);
                 a.on_key(w.0 as u32);
                 None
             }
