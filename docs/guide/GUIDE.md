@@ -17,9 +17,11 @@ The screen also has the language selector. Prisma starts in the Windows language
 
 All of this can be changed later in **Settings**. Prisma stays in the Windows tray: closing the window does not end the program. To exit, use the menu on the tray icon.
 
+The sidebar splits the pages into five groups: **System**, **Maintenance**, **Games and display**, **Input and sound** and **Prisma**. The open page is marked with a blue line on the left and a blue icon. In a short window the group names go away and only a gap is left between groups.
+
 ## Guide and Report a bug
 
-Both sit next to the Prisma name, at the top of the window, always in view. Hover over a button to see what it does. In the guide, clicking a topic on the left jumps straight to it.
+Both sit next to the Prisma name, at the top of the window, always in view, together with the Ko-fi button to support Prisma. Hover over a button to see what it does. In the guide, clicking a topic on the left jumps straight to it.
 
 ![Guide and Report a bug buttons](help-en.png)
 
@@ -156,7 +158,7 @@ Brings together Windows repair (DISM then SFC), crash history, Windows Update, d
 
 ## Copies
 
-The Copies page is in the sidebar, after Tools, with two tabs: **History** and **Copy lists**. At the bottom of the page is the **Ctrl+V in Explorer folders pastes through Prisma** box, the same one as in Settings. The **New copy** button at the top opens a new list already holding the files copied in Explorer.
+The Copies page is in the sidebar, in the Maintenance group, after Tools, with two tabs: **History** and **Copy lists**. At the bottom of the page is the **Ctrl+V in Explorer folders pastes through Prisma** box, the same one as in Settings. The **New copy** button at the top opens a new list already holding the files copied in Explorer.
 
 - **History:** the last 500 copies made by the Prisma copy window, with date, whether it was copied or moved, what, where to, size, number of files and result: Verified, Done, errors, Canceled or No space. **Search history** filters the list. Each row has **Open destination** and **Copy again**, and **Clear history** erases everything. It keeps only paths, sizes and results, in Prisma's data folder (in the portable version, next to Prisma.exe), in the file copias_historico.txt.
 - **Copy lists:** one list gathers files and folders from several places into one destination. Fields: **Name**; **What to copy**, with **Add files**, **Add folder** and **Remove from list**; **Where to**, with **Choose**; **When**: **Only when I start it**, **Once** (with day, month, hour and minute), **Every day** or **Days of the week**; **If the file already exists at the destination**: **Skip**, **Replace** or **Keep both**; **Verify with hash (SHA-256)**; and **Move instead of copying**. The buttons are **Copy now**, **Save** and **Delete list**. Lists are kept in the file copias.txt.

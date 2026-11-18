@@ -94,7 +94,7 @@ Convenção: `arquivo:linha nome`. "Atalho" é a combinação global (chaves `hk
 | 28 | Abrir o Prisma | `show_main` em `pad_action` (`app.rs:3515`) | sem atalho |
 | 29 a 31 | Plano de energia automático, de jogo e de repouso | `link_power` (`link.rs:499`), o mesmo do Launcher `SetPowerPlan`, em `pad_action` (`app.rs:3515`); aviso com o nome da ação ou "O Windows não trocou o plano" | sem atalho |
 | 32 | Criar convite do Compartilhar tela | `create_invite` e abre a página Compartilhar tela (`app.rs:3561`), só com a feature `stream` | sem atalho |
-| 33 a 55 | Página X (uma por item da barra lateral; a 54 é Cópias e a 55 é Atalhos, que `action_nav` `pages/mod.rs:246` põe no fim para não mudar os números já gravados) | `nav_page(n - PAGES)` (`pages/mod.rs:240`) dá a página e o ícone; `go` + `show_main` (`app.rs:3719`). `PAGES` = 33 (`remap.rs:226`). Ícone de cada ação: `action_icon` (`pages/mod.rs:252`) | sem atalho |
+| 33 a 55 | Página X (uma por item da barra lateral; a 54 é Cópias e a 55 é Atalhos, que `ACTION_PAGES` `pages/mod.rs:246` (lido por `action_nav` `:273`) põe no fim para não mudar os números já gravados) | `nav_page(n - PAGES)` (`pages/mod.rs:240`) dá a página e o ícone; `go` + `show_main` (`app.rs:3719`). `PAGES` = 33 (`remap.rs:226`). Ícone de cada ação: `action_icon` (`pages/mod.rs:252`) | sem atalho |
 | 100+ | Combinação de som n | `sound_default(n)` (`app.rs:2069`); `SOUND` = 100 (`remap.rs:289`) | `HK_SND` (100+) |
 
 ### 2.4 Prisma Launcher (`prisma-link`)
@@ -181,7 +181,7 @@ As flags de teste ficam em `src/app.rs` (`start`, linha 366, e as checagens de `
 | Menu da bandeja | Clique direito no ícone | `tray_menu` `src/app.rs:3858`; `WM_TRAY` `app.rs:39` | Itens: Abrir (`TRAY_OPEN` `app.rs:237`), Widget (`TRAY_WIDGET` `238`), Otimizar agora (`TRAY_OPT` `239`), Tirar foto da área (`TRAY_SHOT` `240`), Sair (`TRAY_EXIT` `241`). |
 | Clique esquerdo no ícone | Clique esquerdo | `WM_LBUTTONUP` em `app.rs:4258` | |
 | Tela de boas-vindas | Primeira abertura | `first_run` `src/app.rs:1101`; `pages/welcome.rs:72` `draw` | |
-| Trocar de página | Clique na barra lateral | `go` `src/app.rs:1658`; lista `NAV` `src/pages/mod.rs:288` | Chama `refresh_page` (`app.rs:3580`) para carregar a página. Onde o clique chama `go` não foi lido. |
+| Trocar de página | Clique na barra lateral | `go` `src/app.rs:1658`; lista `NAV` `src/pages/mod.rs:315`, em grupos `GROUPS` `:342` (`group_of` `:345`) | Chama `refresh_page` (`app.rs:3580`) para carregar a página. Onde o clique chama `go` não foi lido. |
 | Atualizar a página aberta | Automático | `refresh_page` `src/app.rs:3580` | |
 | Relógio e atualização das telas | Automático | `on_tick` `src/app.rs:3182` (`WM_TICK` `app.rs:3182`) | |
 | Notícias | Automático | `check_news` `src/app.rs:1117` | |
@@ -191,7 +191,7 @@ As flags de teste ficam em `src/app.rs` (`start`, linha 366, e as checagens de `
 | Pedido de outra cópia para abrir a janela | Abrir o .exe de novo | `WM_SHOW` `src/app.rs:3906` | Nome único `Local\PrismaApp` (`main.rs`). |
 | Busca de programas e arquivos (barra) | Atalho HK_FIND; ação 23 | `toggle_find` `src/app.rs:2663`, `show_find` `app.rs:2672`, `close_find` `app.rs:2719` | |
 | Teclado e navegação | Teclado | `on_key` `src/app.rs:3821`; `nav_key` `app.rs:4300`; `typed_char` `app.rs:4311` | |
-| Navegar com o controle | Prisma em foco: direcional, A, B, LB/RB, LT/RT, X, Y e os dois sticks (esquerdo mouse, direito rolagem, como no Desktop) | Controle: `sys/nav.rs:179` `feed`, `:170` `forget` (chamado por `remap::forget`), `:43` `Pad` (`step`), `:142` `dir_of`, `:203` `rest`, `:215` `point_to`, `:228` `click`, `:147` `set_window` (em `show_main` `app.rs:3719` e `WM_DESTROY` `app.rs:3443`). Janela: `pad_nav` `app.rs:3473` (evento `Event::Nav`, `app.rs:4281`); `pad_off` `app.rs:4281`; `nav_step` `pages/mod.rs:282`. Interface: `Target` `src/ui/mod.rs:72`, `pick` `:98`, `pad_move` `:192`, `scroll_by` `:229`, `pad_field` `:246`, `cancel` `:251`, `target` `:318` (chamado em `clickable`, nas linhas da lista aberta e nos botões da pergunta), `tab_step` `:988` (abas em `pages/nvidia.rs:68`, `pages/share.rs:317` e `pages/controllers.rs:402`), `pad_bar` `:1047` | O foco é o próprio cursor: o direcional leva o cursor ao centro do próximo alvo e A manda um clique de verdade. Entradas do Prisma levam a marca `remap::MARK` (`remap.rs:66`); mouse e teclado sem ela apagam o anel e a faixa (`pad_off`). Com a faixa, a página encolhe `PAD_BAR` (`ui/mod.rs:80`). XInput a 8 ms com a janela aberta (`window_open`, `nav.rs:158`). Testes: `nav.rs` 2, `ui/mod.rs` 1. Pausa: `nav::pause` (`sys/nav.rs:154`), chamado a cada desenho em `paint` (`app.rs:3781`) com campo de tecla esperando, macro gravando, medição ou teste dos botões rodando (`pages/controllers.rs:11` `measuring`, que inclui `State.testing` `:35`); pausado, `feed` só deixa passar a parada de emergência. |
+| Navegar com o controle | Prisma em foco: direcional, A, B, LB/RB, LT/RT, X, Y e os dois sticks (esquerdo mouse, direito rolagem, como no Desktop) | Controle: `sys/nav.rs:179` `feed`, `:170` `forget` (chamado por `remap::forget`), `:43` `Pad` (`step`), `:142` `dir_of`, `:203` `rest`, `:215` `point_to`, `:228` `click`, `:147` `set_window` (em `show_main` `app.rs:3719` e `WM_DESTROY` `app.rs:3443`). Janela: `pad_nav` `app.rs:3473` (evento `Event::Nav`, `app.rs:4281`); `pad_off` `app.rs:4281`; `nav_step` `pages/mod.rs:308`. Interface: `Target` `src/ui/mod.rs:72`, `pick` `:98`, `pad_move` `:192`, `scroll_by` `:229`, `pad_field` `:246`, `cancel` `:251`, `target` `:318` (chamado em `clickable`, nas linhas da lista aberta e nos botões da pergunta), `tab_step` `:988` (abas em `pages/nvidia.rs:68`, `pages/share.rs:317` e `pages/controllers.rs:402`), `pad_bar` `:1047` | O foco é o próprio cursor: o direcional leva o cursor ao centro do próximo alvo e A manda um clique de verdade. Entradas do Prisma levam a marca `remap::MARK` (`remap.rs:66`); mouse e teclado sem ela apagam o anel e a faixa (`pad_off`). Com a faixa, a página encolhe `PAD_BAR` (`ui/mod.rs:80`). XInput a 8 ms com a janela aberta (`window_open`, `nav.rs:158`). Testes: `nav.rs` 2, `ui/mod.rs` 1. Pausa: `nav::pause` (`sys/nav.rs:154`), chamado a cada desenho em `paint` (`app.rs:3781`) com campo de tecla esperando, macro gravando, medição ou teste dos botões rodando (`pages/controllers.rs:11` `measuring`, que inclui `State.testing` `:35`); pausado, `feed` só deixa passar a parada de emergência. |
 | Rolagem e clique do mouse | Mouse | `mouse_xy` `src/app.rs:4290`; `find_mouse` `app.rs:4332`; `picker_mouse` `app.rs:4421` | |
 | Pintura da janela | Automático | `paint` `src/app.rs:3781`; `invalidate` `app.rs:3773` | |
 | Seletor de programa (.exe) | Botões que pedem um programa | `open_picker` `src/app.rs:2206`; `show_picker` `app.rs:2215`; `paint_picker` `app.rs:2272`; `pick_exe_for` `app.rs:2990`; `close_picker` `app.rs:2984`; página `pages/picker.rs:67` `draw` | |
@@ -225,7 +225,7 @@ As flags de teste ficam em `src/app.rs` (`start`, linha 366, e as checagens de `
 
 ## 4. Funções por página (barra lateral)
 
-A barra lateral é `NAV` (`src/pages/mod.rs:321-321`), na ordem abaixo. Cada página tem um `draw` no próprio arquivo. O carregamento ao abrir fica em `refresh_page` (`src/app.rs:3580`).
+A barra lateral é `NAV` (`src/pages/mod.rs:315`), em cinco grupos (`GROUPS` `:342`: Sistema, Manutenção, Jogos e tela, Entrada e som, Prisma; nomes dos grupos só quando a janela tem altura, senão um vão). As seções abaixo seguem a ordem das ações "Página ..." (`ACTION_PAGES` `:246`), que não muda com a barra. O botão do Ko-fi fica ao lado de Guia e Reportar bug (`draw` `:367`). Cada página tem um `draw` no próprio arquivo. O carregamento ao abrir fica em `refresh_page` (`src/app.rs:3580`).
 
 ### 4.1 Monitor (`src/pages/monitor.rs`, `draw` linha 53)
 
@@ -407,7 +407,7 @@ A barra lateral é `NAV` (`src/pages/mod.rs:321-321`), na ordem abaixo. Cada pá
 
 | Função | Como é chamada | Onde no código | Observações |
 |---|---|---|---|
-| Página só aparece com placa NVIDIA | Automático | `nvidia::available` `pages/nvidia.rs:28`; filtro `pages/mod.rs:355` | |
+| Página só aparece com placa NVIDIA | Automático | `nvidia::available` `pages/nvidia.rs:28`; filtro `pages/mod.rs:408` | |
 | Ajustes por programa | Página | `sys/drs.rs:148` `driver_version`; `:255` `snapshot`; `:355` `write`; `:391` `restore`; `:396` `apply`; `:401` `read`; `:409` `forget`; `pages/nvidia.rs:164` `draw_with` | |
 | Lista de programas | Página | `pages/nvidia.rs:33` `games`; `:43` `add_game`; `:55` `stale` | Config `nv_games`. |
 | Valores do driver | Página | `sys/nvset.rs:150` `ids`; `:155` `value_name`; `pages/nvidia.rs:100` `row` | |
@@ -601,7 +601,7 @@ A barra lateral é `NAV` (`src/pages/mod.rs:321-321`), na ordem abaixo. Cada pá
 - Atalhos padrão: só confirmei `hk_fullscreen`, `hk_widget`, `hk_optimize` (Ctrl+Alt+F, W e O) e `hk_force` (Alt+F4) em `config.rs:416-419`. Os demais padrões não foram conferidos.
 - Linhas da tabela `HK` em `pad_action` (`src/app.rs:3518`) e as de `on_link` (`src/link.rs:322` a `456`) vieram de grep e leitura parcial. Confira com grep antes de citar.
 - Não confirmei o nome da função que contém `src/stream/hud.rs:575` (a variável `PRISMA_LAYER_DUMP` é definida dentro de um bloco com `proc` na linha 549).
-- Não li o ponto do clique da barra lateral que chama `go`. Sei que `NAV` fica em `pages/mod.rs:288` e que `go` é `app.rs:1658`.
+- Não li o ponto do clique da barra lateral que chama `go`. Sei que `NAV` fica em `pages/mod.rs:315` e que `go` é `app.rs:1658`.
 - As páginas de HDR e Medidor, e as demais, tiveram só as funções `draw` e auxiliares listadas pelo grep. Os botões de cada aba não foram lidos linha a linha.
 - Os números de `docs/guide/GUIA.md` não foram usados como fonte de comportamento; as funções saíram do código.
 - Equalizador: `pages/equalizer.rs` e `sys/eqapo.rs` só têm as funções públicas e os cartões listados em 4.14; o resto não foi mapeado linha a linha.

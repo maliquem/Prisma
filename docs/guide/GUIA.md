@@ -17,9 +17,11 @@ A tela também tem o seletor de idioma. O Prisma começa no idioma do Windows: p
 
 Tudo isso pode ser mudado depois em **Configurações**. O Prisma fica na bandeja do Windows: fechar a janela não encerra o programa. Para sair, use o menu do ícone na bandeja.
 
+A barra lateral separa as páginas em cinco grupos: **Sistema**, **Manutenção**, **Jogos e tela**, **Entrada e som** e **Prisma**. A página aberta fica marcada com um traço azul à esquerda e o ícone azul. Em janela baixa, os nomes dos grupos somem e fica só um vão entre eles.
+
 ## Guia e Reportar bug
 
-Os dois ficam ao lado do nome Prisma, no alto da janela, sempre à vista. Passe o mouse em cima para ver o que cada botão faz. No guia, clicar num tópico à esquerda pula direto para ele.
+Os dois ficam ao lado do nome Prisma, no alto da janela, sempre à vista, junto com o botão do Ko-fi, para apoiar o Prisma. Passe o mouse em cima para ver o que cada botão faz. No guia, clicar num tópico à esquerda pula direto para ele.
 
 ![Botões do guia e de reportar bug](help-pt.png)
 
@@ -156,7 +158,7 @@ Reúne reparo do Windows (DISM e depois SFC), histórico de falhas, Windows Upda
 
 ## Cópias
 
-A página Cópias fica na barra lateral, depois de Ferramentas, com duas abas: **Histórico** e **Listas de cópia**. No pé da página fica a caixa **Ctrl+V nas pastas do Explorer cola pelo Prisma**, a mesma de Configurações. O botão **Nova cópia**, no alto, abre uma lista nova já com os arquivos que estão copiados no Explorer.
+A página Cópias fica na barra lateral, no grupo Manutenção, depois de Ferramentas, com duas abas: **Histórico** e **Listas de cópia**. No pé da página fica a caixa **Ctrl+V nas pastas do Explorer cola pelo Prisma**, a mesma de Configurações. O botão **Nova cópia**, no alto, abre uma lista nova já com os arquivos que estão copiados no Explorer.
 
 - **Histórico:** as últimas 500 cópias feitas pela janela do Prisma, com data, se foi copiado ou movido, o que, para onde, tamanho, número de arquivos e resultado: Conferido, Pronto, erros, Cancelado ou Sem espaço. **Procurar no histórico** filtra a lista. Cada linha tem **Abrir o destino** e **Copiar de novo**, e **Limpar histórico** apaga tudo. Guarda só caminhos, tamanhos e resultados, na pasta de dados do Prisma (no modo portátil, ao lado do prisma.exe), no arquivo copias_historico.txt.
 - **Listas de cópia:** uma lista junta arquivos e pastas de vários lugares num destino só. Campos: **Nome**; **O que copiar**, com **Adicionar arquivos**, **Adicionar pasta** e **Tirar da lista**; **Para onde**, com **Escolher**; **Quando**: **Só quando eu mandar**, **Uma vez** (com dia, mês, hora e minuto), **Todo dia** ou **Dias da semana**; **Se o arquivo já existir no destino**: **Pular**, **Substituir** ou **Manter os dois**; **Conferir com hash (SHA-256)**; e **Mover em vez de copiar**. Os botões são **Copiar agora**, **Salvar** e **Apagar lista**. As listas ficam no arquivo copias.txt.

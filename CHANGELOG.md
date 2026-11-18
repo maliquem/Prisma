@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Tabs and sort choices (Monitor, Windows tweaks, Disks and networks, Services, Startup, Uninstall, Disk space and Report a bug) look like tabs: the chosen one is a gray pill with a blue line under it. Solid blue is now only for the page's main action. / Abas e escolhas de ordem (Monitor, Ajustes do Windows, Discos e redes, Serviços, Inicialização, Desinstalar, Espaço em disco e Reportar bug) têm cara de aba: a escolhida fica num fundo cinza com um traço azul embaixo. O azul cheio fica só para a ação principal da página.
+- Sidebar: the pages are split into five groups (System, Maintenance, Games and display, Input and sound, Prisma), and the open page has a blue line on the left and a blue icon. In a short window only a gap separates the groups. The Ko-fi button moved next to Guide and Report a bug. Controller actions that open a page keep their numbers, so saved bindings still open the same page. / Barra lateral: as páginas ficam em cinco grupos (Sistema, Manutenção, Jogos e tela, Entrada e som, Prisma), e a página aberta tem um traço azul à esquerda e o ícone azul. Em janela baixa, só um vão separa os grupos. O botão do Ko-fi foi para o lado de Guia e Reportar bug. As ações do controle que abrem uma página mantêm os números, então os atalhos gravados abrem a mesma página.
 
 ## 1.6.2
 

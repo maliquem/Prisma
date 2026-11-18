@@ -241,11 +241,37 @@ pub fn nav_page(i: usize) -> Option<(Page, Icon)> {
     action_nav().nth(i).map(|n| (n.0, n.2))
 }
 
-/// A barra lateral na ordem das ações "Página ...": Cópias e Atalhos entraram depois, então ficam no
-/// fim e os números das ações já gravadas não mudam.
+/// Ordem das ações "Página ..." (33 a 55): a da barra lateral antes dos grupos, com Cópias e Atalhos
+/// no fim. Nunca muda, mesmo que a barra mude: os números já gravados dependem dela.
+const ACTION_PAGES: [Page; 23] = [
+    Page::Monitor,
+    Page::Meter,
+    Page::Storage,
+    Page::Analyze,
+    Page::Search,
+    Page::Startup,
+    Page::Services,
+    Page::Uninstall,
+    Page::Tweaks,
+    Page::Tools,
+    Page::Optimize,
+    Page::Energy,
+    Page::Fullscreen,
+    Page::Volume,
+    Page::Hdr,
+    Page::Nvidia,
+    Page::Capture,
+    Page::Share,
+    Page::Controllers,
+    Page::Widget,
+    Page::Adjust,
+    Page::Copies,
+    Page::Shortcuts,
+];
+
+/// Os itens da barra lateral na ordem das ações "Página ...".
 fn action_nav() -> impl Iterator<Item = &'static (Page, &'static str, Icon)> {
-    const LATE: [Page; 2] = [Page::Copies, Page::Shortcuts];
-    NAV.iter().filter(|n| !LATE.contains(&n.0)).chain(LATE.iter().filter_map(|p| NAV.iter().find(|n| n.0 == *p)))
+    ACTION_PAGES.iter().filter_map(|p| NAV.iter().find(|n| n.0 == *p))
 }
 
 /// Ícone de uma ação do Prisma (`sys::remap::ACTIONS`), ou de abrir um programa (`sys::radial::PROGRAM`).
@@ -285,36 +311,55 @@ pub fn nav_step(page: Page, d: i8) -> Page {
     nav[(i + d as isize).rem_euclid(nav.len() as isize) as usize]
 }
 
+/// Barra lateral, em grupos (`GROUPS`). Mudar a ordem não mexe nas ações "Página ..." (`ACTION_PAGES`).
 const NAV: &[(Page, &str, Icon)] = &[
     (Page::Monitor, "Monitor", ICON_MON),
-    (Page::Meter, "Medidor", ICON_METER),
     (Page::Storage, "Discos e redes", ICON_DISK),
     (Page::Analyze, "Espaço em disco", ICON_MAP),
-    (Page::Search, "Pesquisar", ICON_FIND),
     (Page::Startup, "Inicialização", ICON_BOOT),
     (Page::Services, "Serviços", ICON_SVC),
     (Page::Uninstall, "Desinstalar", ICON_DEL),
+    (Page::Search, "Pesquisar", ICON_FIND),
     (Page::Tweaks, "Ajustes do Windows", ICON_TW),
     (Page::Tools, "Ferramentas", ICON_TOOL),
     (Page::Copies, "Cópias", ICON_COPY),
     (Page::Optimize, "Otimizar", ICON_OPT),
     (Page::Energy, "Energia", ICON_POW),
+    (Page::Meter, "Medidor", ICON_METER),
     (Page::Fullscreen, "Fullscreenizer", ICON_WIN),
-    (Page::Volume, "Som", ICON_VOL),
     (Page::Hdr, "HDR", ICON_HDR),
     (Page::Nvidia, "Driver NVIDIA", ICON_GPU),
     (Page::Capture, "Captura", ICON_CAP),
     (Page::Share, "Compartilhar tela", ICON_SHARE),
+    (Page::Volume, "Som", ICON_VOL),
     (Page::Controllers, "Controles", ICON_PAD),
     (Page::Shortcuts, "Atalhos", ICON_KEYS),
     (Page::Widget, "Widget", ICON_WID),
     (Page::Adjust, "Configurações", ICON_ADJ),
 ];
 
+/// Grupos da barra lateral: nome e quantos itens seguidos de `NAV` entram nele.
+const GROUPS: [(&str, usize); 5] = [("Sistema", 6), ("Manutenção", 6), ("Jogos e tela", 6), ("Entrada e som", 3), ("Prisma", 2)];
+
+/// Grupo do item `i` de `NAV`.
+fn group_of(i: usize) -> usize {
+    let mut end = 0;
+    GROUPS
+        .iter()
+        .position(|g| {
+            end += g.1;
+            i < end
+        })
+        .unwrap_or(GROUPS.len() - 1)
+}
+
 /// Ajuda fora da lista de funções: ao lado do nome, sempre à vista.
 const HELP: &[(Page, &str, Icon)] = &[(Page::Guide, "Guia e tutorial", ICON_HELP), (Page::Report, "Reportar bug", ICON_BUG)];
 
 const SIDE_W: f32 = 216.0;
+/// Altura do nome de um grupo na barra lateral; sem espaço para ele, fica só um vão de `GROUP_GAP`.
+const GROUP_CAP: f32 = 18.0;
+const GROUP_GAP: f32 = 8.0;
 const KOFI_URL: &str = "https://ko-fi.com/maliquem";
 const KOFI_ICON: &[u8] = include_bytes!("../../res/kofi.bgra");
 
@@ -333,11 +378,20 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
     let c = ui.c;
     c.icon(24.0, 20.0, 22.0, &[&[(12., 3.), (3., 20.), (21., 20.), (12., 3.)], &[(12., 3.), (12., 20.)]], ACCENT);
     c.text(rect(56.0, 18.0, 70.0, 26.0), "Prisma", 16.0, TEXT, Align::Left, Weight::Semibold);
+    // Ko-fi, Guia e Reportar bug, lado a lado à direita do nome.
+    let slot = |i: usize| rect(SIDE_W - 12.0 - 28.0 - (2 - i) as f32 * 32.0, 17.0, 28.0, 28.0);
+    let coffee = slot(0);
+    ui.c.round(coffee, 8.0, if ui.is_hover(coffee) { CARD2 } else { CARD });
+    ui.image("kofi", 64, KOFI_ICON, rect(coffee.x + 5.0, coffee.y + 5.0, 18.0, 18.0));
+    ui.tip(coffee, "Apoiar o Prisma no Ko-fi");
+    if ui.hit("kofi", coffee) {
+        crate::report::open_url(KOFI_URL);
+    }
     for (i, (page, tip, icon)) in HELP.iter().enumerate() {
-        let r = rect(SIDE_W - 84.0 + i as f32 * 36.0, 16.0, 30.0, 30.0);
+        let r = slot(i + 1);
         let current = app.page == *page;
         ui.c.round(r, 8.0, if current { ACCENT } else if ui.is_hover(r) { CARD2 } else { CARD });
-        ui.c.icon(r.x + 6.0, r.y + 6.0, 18.0, icon, if current { ON_ACCENT } else { ACCENT });
+        ui.c.icon(r.x + 5.0, r.y + 5.0, 18.0, icon, if current { ON_ACCENT } else { ACCENT });
         ui.tip(r, tip);
         if ui.hit(&format!("nav-help-{tip}"), r) && !current {
             if *page == Page::Report {
@@ -349,21 +403,38 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
         }
     }
 
-    let mut y = 58.0;
-    // Em janela baixa as linhas apertam para não entrar no cartão de energia.
+    let mut y = 52.0;
     // Driver NVIDIA só aparece com placa NVIDIA.
-    let nav: Vec<_> = NAV.iter().filter(|n| n.0 != Page::Nvidia || nvidia::available()).collect();
-    let step = ((full.h - 140.0 - y) / nav.len() as f32).min(33.0).floor();
-    for (page, label, icon) in nav {
+    let nav: Vec<_> = NAV.iter().enumerate().filter(|(_, n)| n.0 != Page::Nvidia || nvidia::available()).collect();
+    // Em janela baixa as linhas apertam para não entrar no cartão de energia, e os nomes dos grupos
+    // viram só um vão entre eles.
+    let free = full.h - 100.0 - y;
+    let groups = GROUPS.len() as f32;
+    let captions = (free - groups * GROUP_CAP) / nav.len() as f32 >= 22.0;
+    let sep = if captions { GROUP_CAP } else { GROUP_GAP };
+    let step = ((free - groups * sep) / nav.len() as f32).min(33.0).floor();
+    let mut group = usize::MAX;
+    for (i, (page, label, icon)) in nav {
+        if group_of(i) != group {
+            group = group_of(i);
+            if captions {
+                ui.c.text(rect(24.0, y, SIDE_W - 48.0, sep), GROUPS[group].0, 12.0, MUTED, Align::Left, Weight::Semibold);
+            }
+            y += sep;
+        }
         let r = rect(12.0, y, SIDE_W - 24.0, step - 1.0);
         let current = app.page == *page;
         let hover = ui.is_hover(r);
         if current || hover {
             ui.c.round(r, 8.0, if current { CARD2 } else { CARD });
         }
+        // A página aberta: traço azul à esquerda e ícone azul, além do fundo.
+        if current {
+            ui.c.round(rect(r.x, r.y + 6.0, 3.0, r.h - 12.0), 1.5, ACCENT);
+        }
         let color = if current { WHITE } else { TEXT2 };
-        ui.c.icon(r.x + 12.0, r.y + (r.h - 18.0) / 2.0, 18.0, icon, color);
-        ui.c.text(rect(r.x + 42.0, r.y, r.w - 48.0, r.h), label, 14.0, color, Align::Left, Weight::Regular);
+        ui.c.icon(r.x + 12.0, r.y + (r.h - 18.0) / 2.0, 18.0, icon, if current { ACCENT } else { color });
+        ui.c.text(rect(r.x + 42.0, r.y, r.w - 48.0, r.h), label, 14.0, color, Align::Left, if current { Weight::Semibold } else { Weight::Regular });
         if ui.hit(&format!("nav-{label}"), r) && !current {
             crate::report::note(&format!("page: {label}"));
             app.page = *page;
@@ -371,14 +442,6 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
             ui.s.needs_redraw = true;
         }
         y += step;
-    }
-
-    let coffee = rect(12.0, full.h - 128.0, SIDE_W - 24.0, 34.0);
-    ui.c.round(coffee, 8.0, if ui.is_hover(coffee) { CARD2 } else { CARD });
-    ui.image("kofi", 64, KOFI_ICON, rect(coffee.x + 10.0, coffee.y + 6.0, 22.0, 22.0));
-    ui.c.text(rect(coffee.x + 42.0, coffee.y, coffee.w - 48.0, coffee.h), "Buy me a coffee", 14.0, TEXT, Align::Left, Weight::Regular);
-    if ui.hit("kofi", coffee) {
-        crate::report::open_url(KOFI_URL);
     }
 
     let chip = rect(12.0, full.h - 88.0, SIDE_W - 24.0, 76.0);
@@ -599,5 +662,22 @@ mod tests {
         for (a, n) in pages.iter().zip(super::action_nav()) {
             assert_eq!(*a, format!("Página {}", n.1));
         }
+    }
+
+    /// Cada item da barra lateral tem uma ação "Página ..." só, os números das primeiras e das últimas
+    /// continuam os gravados, e os grupos cobrem a barra inteira.
+    #[test]
+    fn every_page_has_one_action_and_one_group() {
+        use super::*;
+        assert_eq!(ACTION_PAGES.len(), NAV.len());
+        for n in NAV {
+            assert_eq!(ACTION_PAGES.iter().filter(|&&p| p == n.0).count(), 1, "{}", n.1);
+        }
+        assert_eq!(GROUPS.iter().map(|g| g.1).sum::<usize>(), NAV.len());
+        assert!(nav_page(0).is_some_and(|n| n.0 == Page::Monitor));
+        assert!(nav_page(1).is_some_and(|n| n.0 == Page::Meter));
+        assert!(nav_page(21).is_some_and(|n| n.0 == Page::Copies));
+        assert!(nav_page(22).is_some_and(|n| n.0 == Page::Shortcuts));
+        assert!(nav_page(23).is_none());
     }
 }
