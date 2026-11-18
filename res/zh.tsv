@@ -2610,6 +2610,7 @@ Atalhos de programa	程序快捷键
 Por exemplo, Ctrl + Alt + T para abrir o terminal. Use Adicionar.	例如，按 Ctrl + Alt + T 打开终端。请使用“添加”。
 Já usada por outro programa	已被其他程序使用
 Como administrador	以管理员身份
+Pedir confirmação do Windows ao abrir atalhos como administrador	以管理员身份打开快捷方式时请求 Windows 确认
 O programa do atalho não abriu	快捷键对应的程序未能打开
 Página Atalhos	“快捷键”页面
 Mostrar o Prisma	显示 Prisma

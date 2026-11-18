@@ -2092,13 +2092,18 @@ impl App {
         }
     }
 
-    /// Atalho da página Atalhos: abre o programa; como administrador, o Windows pede a permissão (UAC).
+    /// Atalho da página Atalhos: abre o programa; como administrador, com o Prisma já elevado o Windows
+    /// só pergunta se `run_key_uac`.
     fn run_key(&mut self, i: usize) {
         let Some(k) = self.cfg.run_keys.get(i).cloned() else { return };
         if k.path.is_empty() {
             return;
         }
-        let ok = if k.admin { crate::sys::quick::run_admin(&k.path, "", "") } else { crate::sys::quick::open_as_user(&k.path) };
+        let ok = match (k.admin, self.cfg.run_key_uac) {
+            (true, true) => crate::sys::quick::run_admin_asking(&k.path),
+            (true, false) => crate::sys::quick::run_admin(&k.path, "", ""),
+            (false, _) => crate::sys::quick::open_as_user(&k.path),
+        };
         if !ok {
             self.toast.info("O programa do atalho não abriu");
         }
@@ -2386,7 +2391,12 @@ impl App {
     pub fn prepare_report(&mut self) {
         let area = crate::i18n::tr(crate::pages::report::areas()[self.report.area]).into_owned();
         let pc = crate::report::machine(&self.snap, self.paint_window.1);
-        let log = crate::report::recent_log();
+        // Desktop e Base são do Prisma; o resto foi nomeado pela pessoa.
+        let mut names: Vec<String> = crate::sys::remap::profiles().into_iter().skip(2).map(|p| p.name).collect();
+        let c = &self.cfg;
+        names.extend(c.share_names.iter().chain(&c.eq_apps).chain(&c.eq_devs).map(|(_, n)| n.clone()));
+        names.extend(c.snd_keys.iter().flat_map(|k| [k.output.clone(), k.input.clone()]));
+        let log = crate::report::recent_log(&names);
         self.report.prepare(&area, &pc, &log);
     }
 

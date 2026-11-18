@@ -148,7 +148,7 @@ unsafe fn my_sid() -> Option<String> {
 }
 
 /// Junção ou atalho: o instalador, elevado, daria permissão e gravaria na pasta para onde ele aponta.
-fn is_link(p: &std::path::Path) -> bool {
+pub(crate) fn is_link(p: &std::path::Path) -> bool {
     use std::os::windows::fs::MetadataExt;
     std::fs::symlink_metadata(p).is_ok_and(|m| m.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT.0 != 0)
 }

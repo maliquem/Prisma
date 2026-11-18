@@ -317,6 +317,18 @@ pub fn run_admin(file: &str, args: &str, dir: &str) -> bool {
     unsafe { ShellExecuteExW(&mut info).is_ok() }
 }
 
+/// Como `run_admin`, mas com o Prisma já como administrador a pergunta do Windows aparece: um
+/// PowerShell escondido, aberto com a permissão da pessoa, pede o administrador.
+pub fn run_admin_asking(file: &str) -> bool {
+    if !crate::startup::is_elevated() {
+        return run_admin(file, "", "");
+    }
+    let script = format!("Start-Process -Verb RunAs -FilePath {}", ps_quote(file));
+    let args = format!("-NoLogo -NoProfile -WindowStyle Hidden -EncodedCommand {}", utf16_b64(&script));
+    let dir = crate::sys::windows_dir().display().to_string();
+    run_as_user(&powershell().display().to_string(), &args, &dir, CREATE_NO_WINDOW)
+}
+
 /// Abre um programa, arquivo ou link de um perfil ou do radial. Com o Prisma como administrador, abre
 /// pelo Explorer, com a permissão da pessoa: o caminho vem de arquivos que qualquer programa da conta
 /// altera, e não pode virar um programa aberto como administrador.

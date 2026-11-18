@@ -153,9 +153,15 @@ fn viiper_dir() -> PathBuf {
     PathBuf::from(std::env::var_os("LOCALAPPDATA").unwrap_or_default()).join("VIIPER")
 }
 
+/// Só do HKLM: uma entrada do HKCU qualquer programa da conta escreve, e o desinstalador roda como
+/// administrador.
 fn usbip_program() -> Option<super::uninstall::Program> {
-    super::uninstall::list().into_iter().find(|p| p.name.to_ascii_lowercase().starts_with("usbip"))
+    let hklm = windows::Win32::System::Registry::HKEY_LOCAL_MACHINE.0 as isize;
+    super::uninstall::list().into_iter().find(|p| p.hive == hklm && p.name.to_ascii_lowercase().starts_with("usbip"))
 }
+
+/// Soma do VIIPER baixado, conferida de novo na hora de rodar.
+static VIIPER_SUM: Mutex<Option<String>> = Mutex::new(None);
 
 /// Roda e espera, pelo Shell: um programa que pede administrador mostra a confirmação do Windows.
 fn shell_wait(file: &str, args: &str, admin: bool) -> Result<(), String> {
@@ -235,10 +241,25 @@ impl Host for Win {
         let _ = std::fs::create_dir_all(&dir);
         let p = dir.join(ASSET);
         std::fs::write(&p, data).map_err(|e| e.to_string())?;
+        *VIIPER_SUM.lock().unwrap() = Some(want);
         Ok(p)
     }
     fn install(&self, exe: &Path) -> Result<(), String> {
-        shell_wait(&exe.to_string_lossy(), "install --quiet --no-update", false)
+        use std::io::Read;
+        use std::os::windows::fs::OpenOptionsExt;
+        use windows::Win32::Storage::FileSystem::FILE_SHARE_READ;
+        // A pasta temporária é da conta: o arquivo fica preso sem escrita nem troca desde a conferência
+        // até o fim da instalação, que pode rodar como administrador.
+        let mut f = std::fs::OpenOptions::new().read(true).share_mode(FILE_SHARE_READ.0).open(exe).map_err(|e| e.to_string())?;
+        let mut data = Vec::new();
+        f.read_to_end(&mut data).map_err(|e| e.to_string())?;
+        let want = VIIPER_SUM.lock().unwrap().take();
+        if want.is_none() || super::update::sha256(&data) != want {
+            return Err("o arquivo do VIIPER mudou depois do download".into());
+        }
+        let r = shell_wait(&exe.to_string_lossy(), "install --quiet --no-update", false);
+        drop(f);
+        r
     }
     fn uninstall_viiper(&self) -> Result<(), String> {
         shell_wait(&viiper_dir().join("viiper.exe").to_string_lossy(), "uninstall --quiet", false)

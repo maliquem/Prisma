@@ -2616,6 +2616,7 @@ Atalhos de programa	Program shortcuts
 Por exemplo, Ctrl + Alt + T para abrir o terminal. Use Adicionar.	For example, Ctrl + Alt + T to open the terminal. Use Add.
 Já usada por outro programa	Already used by another program
 Como administrador	As administrator
+Pedir confirmação do Windows ao abrir atalhos como administrador	Ask Windows for confirmation when opening shortcuts as administrator
 O programa do atalho não abriu	The shortcut's program did not open
 Página Atalhos	Shortcuts page
 Mostrar o Prisma	Show Prisma

@@ -140,6 +140,10 @@ fn install(ids: &[String]) -> Result<(), String> {
         return Err("aparelho inválido".into());
     }
     let data = super::eq::dir();
+    // ProgramData\Prisma aceita pastas de qualquer usuário: uma junção ali levaria o icacls a outra pasta.
+    if let Some(p) = data.ancestors().take(2).find(|p| crate::stream::service::is_link(p)) {
+        return Err(format!("{} é um atalho para outra pasta; apague-o e tente de novo", p.display()));
+    }
     for d in [&data, &backup_dir()] {
         std::fs::create_dir_all(d).map_err(|e| format!("pasta {}: {e}", d.display()))?;
     }

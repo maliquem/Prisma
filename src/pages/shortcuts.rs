@@ -18,13 +18,18 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         app.cfg.run_keys.push(RunKey::default());
         app.cfg.save();
     }
+    let mut uac = app.cfg.run_key_uac;
+    if ui.check("run-uac", rect(k.x + 16.0, k.y + 44.0, k.w - 32.0, 24.0), "Pedir confirmação do Windows ao abrir atalhos como administrador", &mut uac) {
+        app.cfg.run_key_uac = uac;
+        app.cfg.save();
+    }
     if n == 0 {
-        ui.c.text_wrap(rect(k.x + 16.0, k.y + 46.0, k.w - 32.0, 40.0), "Por exemplo, Ctrl + Alt + T para abrir o terminal. Use Adicionar.", 12.0, MUTED, Weight::Regular);
+        ui.c.text_wrap(rect(k.x + 16.0, k.y + 78.0, k.w - 32.0, 40.0), "Por exemplo, Ctrl + Alt + T para abrir o terminal. Use Adicionar.", 12.0, MUTED, Weight::Regular);
     }
     let fw = 200.0f32.min(k.w * 0.24);
     let bw = 150.0;
     let cw = 190.0;
-    let list = rect(k.x, k.y + 46.0, k.w, k.h - 54.0);
+    let list = rect(k.x, k.y + 78.0, k.w, k.h - 86.0);
     ui.begin_scroll("run-list", list, n as f32 * 44.0);
     let mut keys_changed = false;
     let mut drop = None;

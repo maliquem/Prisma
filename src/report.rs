@@ -190,29 +190,53 @@ pub fn encode(s: &str) -> String {
     out
 }
 
-fn replace_any_case(text: &str, word: &str, by: &str) -> String {
-    let (low, word) = (text.to_lowercase(), word.to_lowercase());
-    // Só compara enquanto minúsculas têm o mesmo tamanho: letras raras mudam de bytes.
-    if low.len() != text.len() {
+/// Troca `word` em qualquer caixa, letra a letra (letras raras mudam de bytes em minúscula).
+/// `whole`: só onde não há letra nem número dos dois lados.
+fn replace_any_case(text: &str, word: &str, by: &str, whole: bool) -> String {
+    let w: Vec<char> = word.chars().collect();
+    if w.is_empty() {
         return text.to_string();
     }
-    let (mut out, mut at) = (String::new(), 0);
-    while let Some(i) = low[at..].find(&word) {
-        out.push_str(&text[at..at + i]);
-        out.push_str(by);
-        at += i + word.len();
+    let t: Vec<char> = text.chars().collect();
+    let free = |k: usize| !whole || !t.get(k).is_some_and(|c| c.is_alphanumeric());
+    let (mut out, mut k) = (String::new(), 0);
+    while k < t.len() {
+        let hit = k + w.len() <= t.len() && t[k..k + w.len()].iter().zip(&w).all(|(a, b)| a.to_lowercase().eq(b.to_lowercase())) && (k == 0 || free(k - 1)) && free(k + w.len());
+        if hit {
+            out.push_str(by);
+            k += w.len();
+        } else {
+            out.push(t[k]);
+            k += 1;
+        }
     }
-    out + &text[at..]
+    out
 }
 
 /// Tira nome de usuário, nome do PC e caminhos de arquivo. Do caminho em diante, a linha sai.
 pub fn scrub(line: &str) -> String {
+    scrub_names(line, &[])
+}
+
+/// Como `scrub`, e troca também `names` (perfis e aparelhos que a pessoa nomeou) e o nome entre «»,
+/// que vem de outro aparelho.
+pub fn scrub_names(line: &str, names: &[String]) -> String {
+    let env = [("USERNAME", "<user>"), ("COMPUTERNAME", "<pc>")].map(|(v, tag)| (std::env::var(v).unwrap_or_default(), tag));
     let mut s = line.to_string();
-    for (var, tag) in [("USERNAME", "<user>"), ("COMPUTERNAME", "<pc>")] {
-        if let Some(v) = std::env::var(var).ok().filter(|v| v.chars().count() >= 3) {
-            s = replace_any_case(&s, &v, tag);
+    for (name, tag) in env.iter().map(|(n, t)| (n.as_str(), *t)).chain(names.iter().map(|n| (n.as_str(), "<name>"))) {
+        let name = name.trim();
+        // Nome curto só como palavra inteira: "Al" não come pedaço de "Alt".
+        s = replace_any_case(&s, name, tag, name.chars().count() < 3);
+    }
+    let mut parts = s.split('«');
+    let mut q = parts.next().unwrap_or_default().to_string();
+    for p in parts {
+        match p.split_once('»') {
+            Some((_, rest)) => q += &format!("«<name>»{rest}"),
+            None => q += &format!("«{p}"),
         }
     }
+    let mut s = q;
     let b = s.as_bytes();
     let path = (0..b.len()).find(|&i| {
         let drive = i + 2 < b.len() && b[i].is_ascii_alphabetic() && b[i + 1] == b':' && matches!(b[i + 2], b'\\' | b'/') && (i == 0 || !b[i - 1].is_ascii_alphanumeric());
@@ -270,7 +294,8 @@ pub fn machine(snap: &Snapshot, scale: f32) -> String {
 /// Só linhas do registro de ações que dizem algo do Prisma, nunca nomes de arquivos ou programas.
 const SAFE_LINES: [&str; 10] = ["erro interno", "o Prisma tinha caído", "plano ", "aplicou ajustes", "desfez ajustes", "desligou a hibernação", "ligou a hibernação", "resetou", "refez", "medidor:"];
 
-pub fn recent_log() -> Vec<String> {
+/// `names`: perfis e aparelhos que a pessoa nomeou, trocados por <name>.
+pub fn recent_log(names: &[String]) -> Vec<String> {
     let mut out = Vec::new();
     if let Some(c) = crate::crash::last() {
         out.push(format!("Last crash: {c}"));
@@ -279,12 +304,12 @@ pub fn recent_log() -> Vec<String> {
     let mut kept: Vec<String> = file
         .lines()
         .filter(|l| l.split_once(' ').and_then(|r| r.1.split_once(' ')).is_some_and(|r| SAFE_LINES.iter().any(|s| r.1.starts_with(s))))
-        .map(scrub)
+        .map(|l| scrub_names(l, names))
         .collect();
     let from = kept.len().saturating_sub(10);
     out.extend(kept.drain(from..));
     if let Ok(n) = NOTES.lock() {
-        out.extend(n.iter().map(|l| scrub(l)));
+        out.extend(n.iter().map(|l| scrub_names(l, names)));
     }
     out
 }
@@ -394,7 +419,7 @@ pub fn self_test(path: &str, snap: &Snapshot) {
     out.push_str(&format!("api sem licença: {:?}\n", update::post("https://api.github.com/repos/maliquem/Prisma/issues", "Accept: application/json\r\nContent-Type: application/json\r\n", "{\"title\":\"x\"}").map(|r| (r.0, r.1.chars().take(60).collect::<String>()))));
     out.push_str(&format!("código com id falso: {:?}\n", update::post("https://github.com/login/device/code", FORM, "client_id=Iv1.0000000000000000").map(|r| (r.0, r.1))));
     out.push_str(&format!("json: {}\n", json("a\"b\\c\nd")));
-    out.push_str(&format!("{}\n---\n{:?}\n---\n", machine(snap, 2.0), recent_log()));
+    out.push_str(&format!("{}\n---\n{:?}\n---\n", machine(snap, 2.0), recent_log(&[])));
     note("toast de teste");
     for (name, text) in [("curto", "O medidor sumiu"), ("longo", &"ação ".repeat(600)[..])] {
         for extras in [true, false] {
@@ -405,4 +430,18 @@ pub fn self_test(path: &str, snap: &Snapshot) {
         }
     }
     let _ = std::fs::write(path, out);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn names_and_short_words() {
+        let names = vec!["Al".to_string(), "Perfil da Ana".to_string()];
+        assert_eq!(scrub_names("Ctrl + Alt: al conectou", &names), "Ctrl + Alt: <name> conectou");
+        assert_eq!(scrub_names("perfil da ana importado", &names), "<name> importado");
+        assert_eq!(scrub_names("«PC-SALA» está pedindo", &names), "«<name>» está pedindo");
+        assert_eq!(replace_any_case("İx MARIA", "maria", "<user>", false), "İx <user>");
+    }
 }

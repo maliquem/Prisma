@@ -92,8 +92,8 @@ pub fn ca() -> iroh::tls::CaTlsConfig {
 
 fn client(url: &str) -> std::result::Result<PkarrRelayClient, String> {
     let tls = ca().client_config(iroh::tls::default_provider()).map_err(|e| e.to_string())?;
-    let url = url.parse().map_err(|e: url::ParseError| e.to_string())?;
-    Ok(PkarrRelayClient::new(url, tls, iroh::dns::DnsResolver::new()))
+    let url: iroh::RelayUrl = url.parse().map_err(|e: iroh::RelayUrlParseError| e.to_string())?;
+    Ok(PkarrRelayClient::new(url.into(), tls, iroh::dns::DnsResolver::new()))
 }
 
 /// O endereço do host como linhas do registro: `rele=URL` e `ip=IP:porta` (até 8, para caber).

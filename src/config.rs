@@ -311,6 +311,8 @@ pub struct Config {
     pub snd_keys: Vec<SndKey>,
     /// Atalhos que abrem programas (página Atalhos).
     pub run_keys: Vec<RunKey>,
+    /// Com o Prisma como administrador, atalhos "Como administrador" passam pela pergunta do Windows.
+    pub run_key_uac: bool,
     /// Nomes que o usuário deu aos aparelhos pareados: (id do aparelho, nome).
     pub share_names: Vec<(String, String)>,
     pub black: Vec<String>,
@@ -488,6 +490,7 @@ impl Default for Config {
             eq_devs: Vec::new(),
             snd_keys: Vec::new(),
             run_keys: Vec::new(),
+            run_key_uac: false,
             share_names: Vec::new(),
             black: Vec::new(),
             white: Vec::new(),
@@ -757,6 +760,7 @@ impl Config {
                     }
                 }
                 "run_key" => c.run_keys.extend(RunKey::parse(v)),
+                "run_key_uac" => c.run_key_uac = b,
                 "snd_keep" => c.snd_keep = v.parse().unwrap_or(0),
                 "share_name" => {
                     if let Some((id, name)) = v.split_once('|') {
@@ -1039,6 +1043,7 @@ impl Config {
         for k in &self.run_keys {
             let _ = writeln!(s, "run_key={}", k.line());
         }
+        let _ = writeln!(s, "run_key_uac={}", b(self.run_key_uac));
         let _ = writeln!(s, "snd_keep={}", self.snd_keep);
         let _ = writeln!(s, "meter_hdr={}", self.meter_hdr);
         let _ = writeln!(s, "meter_items={}\nmeter_power=1", self.meter_items);
