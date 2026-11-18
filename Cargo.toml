@@ -14,6 +14,8 @@ windows-core = "0.62"
 opus-head-sys = { version = "0.3.3", default-features = false }
 nanoaudio-sbc = "0.1.1"
 nanoaudio-core = "0.1.1"
+# FEC do vídeo do Compartilhar tela: Reed-Solomon (Leopard-RS em Rust puro, com SIMD; MIT).
+reed-solomon-simd = "3.1.0"
 # Ponte com o Prisma Launcher (pipe nomeado local).
 prisma-link = { path = "crates/prisma-link" }
 # Perfis do equalizador (o mesmo formato que o APO lê) e a curva desenhada na aba.

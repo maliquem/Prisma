@@ -127,7 +127,15 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
     // O texto copiado aqui só vai quando a janela de assistir está na frente (ou esteve até 2 s
     // antes, para o Ctrl+C dentro dela valer): o host não lê o que se copia com ela atrás.
     let mut clip_out: Option<String> = None;
+    // Imagem ou arquivos copiados aqui: a mesma regra da janela na frente.
+    let mut rich_out: Option<Arc<Vec<u8>>> = None;
+    let mut rich = super::clip::Rich::default();
     let mut last_front = Instant::now() - CLIP_FRONT;
+    // FEC: os pedaços de vídeo que a paridade refez entram aqui e passam pelo mesmo caminho dos que
+    // chegaram pela rede, antes do próximo pacote (e antes de um Nack).
+    let mut fec = FecRx::default();
+    let mut opus = OpusDecoder::default();
+    let mut fixed: VecDeque<Vec<u8>> = VecDeque::new();
 
     let push = |e: Event| {
         sh.queue.lock().unwrap().push_back(e);
@@ -156,6 +164,9 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
             while let Ok(t) = c.changed.try_recv() {
                 clip_out = Some(t);
             }
+            while let Ok(b) = c.rich.try_recv() {
+                rich_out = Some(b);
+            }
             if unsafe { GetForegroundWindow() }.0 as isize == VIEW_HWND.load(Ordering::Relaxed) {
                 last_front = Instant::now();
             }
@@ -166,24 +177,39 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
                     link.send(p);
                 }
             }
+            if let Some(b) = rich_out.take_if(|_| last_front.elapsed() <= CLIP_FRONT) {
+                clip_id = clip_id.wrapping_add(1);
+                rich.offer(clip_id, b, &*link);
+            }
+            rich.tick(&*link, Instant::now());
         }
         if waiting_key && !wave && sh.got_info.load(Ordering::Relaxed) && last_req.elapsed() > Duration::from_millis(150) {
             write(&mut out, &Msg::KeyReq);
             link.send(&out);
             last_req = Instant::now();
         }
-        let n = match link.recv(&mut buf, Duration::from_millis(20)) {
-            Poll::Got(n) => n,
-            Poll::Closed => {
-                sh.closed.store(true, Ordering::Relaxed);
-                unsafe {
-                    let _ = SetEvent(HANDLE(sh.wake as *mut _));
+        if let Some(permille) = fec.tick(Instant::now()) {
+            write(&mut out, &Msg::Loss { permille });
+            link.send(&out);
+        }
+        let n = if let Some(p) = fixed.pop_front() {
+            buf[..p.len()].copy_from_slice(&p);
+            p.len()
+        } else {
+            let n = match link.recv(&mut buf, Duration::from_millis(20)) {
+                Poll::Got(n) => n,
+                Poll::Closed => {
+                    sh.closed.store(true, Ordering::Relaxed);
+                    unsafe {
+                        let _ = SetEvent(HANDLE(sh.wake as *mut _));
+                    }
+                    break;
                 }
-                break;
-            }
-            _ => continue,
+                _ => continue,
+            };
+            sh.bytes.fetch_add(n as u64, Ordering::Relaxed);
+            n
         };
-        sh.bytes.fetch_add(n as u64, Ordering::Relaxed);
         match read(&buf[..n]) {
             // O host desconectou esta pessoa (pela página dele, ou banida).
             Some(Msg::Bye) => {
@@ -208,6 +234,13 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
             Some(Msg::Clip { id, part, parts, data }) => {
                 if let (Some(c), Some(t)) = (&clip, clip_in.add(id, part, parts, data)) {
                     let _ = c.set.send(t);
+                }
+            }
+            Some(m @ (Msg::ClipOffer { .. } | Msg::ClipWant { .. } | Msg::ClipData { .. })) => {
+                if let Some(c) = &clip {
+                    if let Some(b) = rich.on(&m, &*link) {
+                        let _ = c.set_rich.send(b);
+                    }
                 }
             }
             Some(Msg::Rumble { pad, low, high }) => {
@@ -243,6 +276,20 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
                     sh.spk.audio.lock().unwrap().extend(data.chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])));
                 }
             }
+            Some(Msg::Opus { seq, data, .. }) => {
+                sh.audio_blocks.fetch_add(1, Ordering::Relaxed);
+                if let Some(n) = audio_next {
+                    let gap = seq.wrapping_sub(n);
+                    if gap > 0 && gap < 1000 {
+                        sh.audio_lost.fetch_add(gap, Ordering::Relaxed);
+                    }
+                }
+                audio_next = Some(seq.wrapping_add(1));
+                let pcm = opus.decode(seq, data);
+                if !sh.mute {
+                    sh.spk.audio.lock().unwrap().extend(pcm);
+                }
+            }
             Some(Msg::Pong { t, host }) => {
                 let back = now();
                 let rtt = back - t;
@@ -255,9 +302,15 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
                     sh.offset.store(o, Ordering::Relaxed);
                 }
             }
+            Some(Msg::Fec { frame, pts, key, count, idx, rec, data }) => {
+                fixed.extend(fec.parity(frame, count, idx, rec, key, pts, data));
+            }
             Some(Msg::Video { key, more, idx, count, frame, pts, data }) => {
                 if count == 0 || idx >= count {
                     continue;
+                }
+                if !wave {
+                    fixed.extend(fec.data(frame, count, idx, key, pts, data));
                 }
                 if let Some(e) = expect.filter(|&e| newer(e, frame)) {
                     // Quadro-chave muito atrás do esperado: o host recomeçou o vídeo (outros quadros
@@ -634,6 +687,48 @@ fn release_all(k: &mut Keys) {
     }
 }
 
+/// Super-resolução do fabricante no VideoProcessor: a RTX VSR da NVIDIA e a da Intel, pelas extensões
+/// e GUIDs que o Chromium usa (`swap_chain_presenter.cc`). A AMD não tem. Devolve o que aconteceu.
+unsafe fn super_res(d: &D3d, vc: &ID3D11VideoContext1, vp: &ID3D11VideoProcessor) -> String {
+    let vendor = d.dev.cast::<IDXGIDevice>().and_then(|x| x.GetAdapter()).and_then(|a| a.GetDesc()).map_or(0, |x| x.VendorId);
+    let (name, hr) = match vendor {
+        0x10de => {
+            const NV: GUID = GUID::from_values(0xd43ce1b3, 0x1f4b, 0x48ac, [0xba, 0xee, 0xc3, 0xc2, 0x53, 0x75, 0xe6, 0xf7]);
+            // Versão 1, método 2 (super-resolução), ligado.
+            let s: [u32; 3] = [1, 2, 1];
+            ("RTX VSR da NVIDIA", vc.VideoProcessorSetStreamExtension(vp, 0, &NV, 12, s.as_ptr().cast()))
+        }
+        0x8086 => {
+            const INTEL: GUID = GUID::from_values(0xedd1d4b9, 0x8659, 0x4cbc, [0xa4, 0xd6, 0x98, 0x31, 0xa2, 0x16, 0x3a, 0xc3]);
+            #[repr(C)]
+            struct Ext {
+                function: u32,
+                param: *const core::ffi::c_void,
+            }
+            let size = std::mem::size_of::<Ext>() as u32;
+            let (version, mode, scale) = (3u32, 1u32, 2u32);
+            let ext = |function: u32, value: &u32| Ext { function, param: (value as *const u32).cast() };
+            // Versão, modo pré-processamento e, no quadro de entrada, a escala por super-resolução.
+            let (a, b, c) = (ext(0x01, &version), ext(0x20, &mode), ext(0x37, &scale));
+            let hr = [
+                vc.VideoProcessorSetOutputExtension(vp, &INTEL, size, (&a as *const Ext).cast()),
+                vc.VideoProcessorSetOutputExtension(vp, &INTEL, size, (&b as *const Ext).cast()),
+                vc.VideoProcessorSetStreamExtension(vp, 0, &INTEL, size, (&c as *const Ext).cast()),
+            ]
+            .into_iter()
+            .find(|h| *h < 0)
+            .unwrap_or(0);
+            ("super-resolução da Intel", hr)
+        }
+        _ => return format!("a placa (fabricante {vendor:#06x}) não tem"),
+    };
+    if hr >= 0 {
+        format!("{name} ligada")
+    } else {
+        format!("{name} recusada ({:#010x}; driver antigo ou opção desligada no painel da placa)", hr as u32)
+    }
+}
+
 /// Converte o quadro decodificado (NV12, ou P010 no HDR10) para a tela e encaixa com faixas pretas.
 struct Scaler {
     vd: ID3D11VideoDevice,
@@ -645,7 +740,8 @@ struct Scaler {
 }
 
 impl Scaler {
-    unsafe fn new(d: &D3d, iw: u32, ih: u32, ow: u32, oh: u32, fps: u32, hdr: bool) -> Result<Self> {
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn new(d: &D3d, iw: u32, ih: u32, ow: u32, oh: u32, fps: u32, hdr: bool, sr: bool) -> Result<Self> {
         let vd: ID3D11VideoDevice = d.dev.cast()?;
         let vc: ID3D11VideoContext1 = d.ctx.cast()?;
         let desc = D3D11_VIDEO_PROCESSOR_CONTENT_DESC {
@@ -680,6 +776,10 @@ impl Scaler {
         let (x, y) = ((ow as i32 - dw) / 2, (oh as i32 - dh) / 2);
         vc.VideoProcessorSetStreamDestRect(&vp, 0, true, Some(&RECT { left: x, top: y, right: x + dw, bottom: y + dh }));
         vc.VideoProcessorSetOutputTargetRect(&vp, true, Some(&RECT { left: 0, top: 0, right: ow as i32, bottom: oh as i32 }));
+        // Só vale aumentando: no mesmo tamanho ou diminuindo não há o que refazer.
+        if sr && (dw as u32 > iw || dh as u32 > ih) {
+            eprintln!("super-resolução ({iw}x{ih} para {dw}x{dh}): {}", super_res(d, &vc, &vp));
+        }
         Ok(Self { vd, vc, en, vp, size: (iw, ih, ow, oh), hdr })
     }
 
@@ -717,6 +817,22 @@ unsafe fn resize_swap(d: &D3d, swap: &IDXGISwapChain1, fmt: DXGI_FORMAT, flags: 
     d.ctx.ClearState();
     d.ctx.Flush();
     swap.ResizeBuffers(0, 0, 0, fmt, DXGI_SWAP_CHAIN_FLAG(flags as i32))
+}
+
+/// Quanto o quadro ainda espera para não passar dos `hz` da tela (faixa VRR): sem espera quando já
+/// passou um intervalo da tela desde o anterior.
+fn vrr_gap(since_last: Duration, hz: u32) -> Duration {
+    Duration::from_nanos(1_000_000_000 / hz.max(1) as u64).saturating_sub(since_last)
+}
+
+/// Apresenta o quadro; com `vrr_hz`, espera o [`vrr_gap`] antes.
+unsafe fn present(swap: &IDXGISwapChain1, sync: u32, flags: DXGI_PRESENT, vrr_hz: u32, last: &mut Instant) -> bool {
+    if vrr_hz > 0 {
+        std::thread::sleep(vrr_gap(last.elapsed(), vrr_hz));
+    }
+    let ok = swap.Present(sync, flags).is_ok();
+    *last = Instant::now();
+    ok
 }
 
 /// Tamanho real do buffer de trás: desenhar nele inteiro não deixa sobra de quadro velho.
@@ -1152,9 +1268,15 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
             let _ = WaitForSingleObjectEx(**h, 100, false);
         }
     };
-    // VSync ligado espera a atualização da tela: sem rasgos, um pouco mais de atraso.
-    let present_mode = |vsync: bool| (vsync as u32, if tearing && !vsync { DXGI_PRESENT_ALLOW_TEARING } else { DXGI_PRESENT(0) });
-    let (mut sync, mut present_flags) = present_mode(co.vsync);
+    // VSync ligado espera a atualização da tela: sem rasgos, um pouco mais de atraso. Tela VRR não
+    // espera: o quadro sai na hora, só que nunca antes de um intervalo da tela depois do anterior.
+    let present_mode = |co: &ClientOpts| {
+        let vsync = co.vsync && !(co.vrr && tearing);
+        (vsync as u32, if tearing && !vsync { DXGI_PRESENT_ALLOW_TEARING } else { DXGI_PRESENT(0) })
+    };
+    let (mut sync, mut present_flags) = present_mode(&co);
+    let mut shown_at = Instant::now();
+    let vrr_hz = if co.vrr && tearing { hz } else { 0 };
 
     let mut codecs = 0u8;
     for c in [Codec::H264, Codec::Hevc, Codec::Av1] {
@@ -1166,7 +1288,8 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     codecs |= WAVE;
     // Tela em HDR: o host manda HDR10 se a dele também estiver. 4:4:4 só pedindo, porque gasta mais
     // rede (e, no HEVC, abre o CUDA aqui). O PyroWave faz 4:4:4 em qualquer placa.
-    let mut flags = 0u8;
+    // O FEC refaz pedaços perdidos aqui; host de versão anterior ignora o bit.
+    let mut flags = FEC_OK | OPUS_OK;
     #[cfg(feature = "stream")]
     let can444 = crate::capture::nvdec::can_444();
     #[cfg(not(feature = "stream"))]
@@ -1382,7 +1505,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                 hud::Pick::Vsync => {
                     co.vsync = !co.vsync;
                     let _ = co.save();
-                    (sync, present_flags) = present_mode(co.vsync);
+                    (sync, present_flags) = present_mode(&co);
                     note = Some(format!("VSync: {}", on_off(co.vsync)));
                 }
                 hud::Pick::Ask444 => {
@@ -1597,7 +1720,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
             wait_ready();
             let bb: ID3D11Texture2D = swap.GetBuffer(0)?;
             let (ow, oh) = buffer_size(&bb);
-            if draw.draw(&d.dev, &d.ctx, n, &bb, ow, oh).is_ok() && swap.Present(sync, present_flags).is_ok() {
+            if draw.draw(&d.dev, &d.ctx, n, &bb, ow, oh).is_ok() && present(&swap, sync, present_flags, vrr_hz, &mut shown_at) {
                 owed.set(false);
                 let shown = now();
                 second.shown += 1;
@@ -1612,7 +1735,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                     wait_ready();
                     let bb: ID3D11Texture2D = swap.GetBuffer(0)?;
                     let (ow, oh) = buffer_size(&bb);
-                    if wd.draw(&d.dev, &d.ctx, &bb, video_rect(wd.w, wd.h, ow, oh)).is_ok() && swap.Present(sync, present_flags).is_ok() {
+                    if wd.draw(&d.dev, &d.ctx, &bb, video_rect(wd.w, wd.h, ow, oh)).is_ok() && present(&swap, sync, present_flags, vrr_hz, &mut shown_at) {
                         owed.set(false);
                         let shown = now();
                         second.shown += 1;
@@ -1629,10 +1752,10 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                 let bb: ID3D11Texture2D = swap.GetBuffer(0)?;
                 let (ow, oh) = buffer_size(&bb);
                 if scaler.as_ref().is_none_or(|s| s.size != (w, h, ow, oh) || s.hdr != hdr_out) {
-                    scaler = Scaler::new(&d, w, h, ow, oh, fps, hdr_out).ok();
+                    scaler = Scaler::new(&d, w, h, ow, oh, fps, hdr_out, co.upscale).ok();
                 }
                 if let Some(s) = &scaler {
-                    if s.blt(&tex, slice, &bb).is_ok() && swap.Present(sync, present_flags).is_ok() {
+                    if s.blt(&tex, slice, &bb).is_ok() && present(&swap, sync, present_flags, vrr_hz, &mut shown_at) {
                         owed.set(false);
                         let shown = now();
                         second.shown += 1;
@@ -1735,7 +1858,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         }
         s += &format!("caminho: {}
 ", link.route());
-        s += &format!("tela daqui: {screen_w}x{screen_h} a {hz} Hz, tearing {}\n", if tearing { "permitido" } else { "não" });
+        s += &format!("tela daqui: {screen_w}x{screen_h} a {hz} Hz, tearing {}, VRR {}\n", if tearing { "permitido" } else { "não" }, if vrr_hz > 0 { "ligado" } else { "desligado" });
         s += &format!(
             "quadros mostrados: {:.1}/s, perdidos: {} ({} consertados sem quadro-chave)\n",
             total.shown as f64 / secs,
@@ -1777,4 +1900,18 @@ fn immersive_name(m: u8) -> String {
 /// Nome do medidor para a nota da tela.
 fn meter_name(m: u8) -> String {
     crate::i18n::tr(["desligado", "simples", "detalhado"][m.min(2) as usize]).into_owned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn vrr_keeps_frames_inside_the_screen_rate() {
+        let hz = 120;
+        assert_eq!(vrr_gap(Duration::ZERO, hz), Duration::from_nanos(8_333_333));
+        assert_eq!(vrr_gap(Duration::from_millis(3), hz), Duration::from_nanos(5_333_333));
+        assert_eq!(vrr_gap(Duration::from_millis(20), hz), Duration::ZERO);
+        assert!(vrr_gap(Duration::ZERO, 0) > Duration::ZERO);
+    }
 }

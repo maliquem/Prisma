@@ -101,16 +101,26 @@ struct Guest {
     heard: Instant,
     gone: bool,
     clip_in: super::clip::Pieces,
+    /// Imagem ou arquivos com esta pessoa.
+    rich: super::clip::Rich,
+    /// Perda de pacotes de vídeo que ela mediu no último segundo, em milésimos (`Msg::Loss`; zero
+    /// enquanto não chega nenhuma, e sempre com versões que não medem).
+    loss: u16,
 }
 
 impl Guest {
     fn new(j: Joiner) -> Self {
-        Guest { link: j.link, hello: j.hello, perms: j.perms, name: j.name, id: j.id, input: None, pads: Default::default(), refused: [PAD_OK; PADS], heard: Instant::now(), gone: false, clip_in: Default::default() }
+        Guest { link: j.link, hello: j.hello, perms: j.perms, name: j.name, id: j.id, input: None, pads: Default::default(), refused: [PAD_OK; PADS], heard: Instant::now(), gone: false, clip_in: Default::default(), rich: Default::default(), loss: 0 }
     }
 
     fn send(&self, m: &Msg, out: &mut Vec<u8>) {
         write(out, m);
         self.link.send(out);
+    }
+
+    /// Recebe a paridade do FEC: pediu, e não está no mesmo PC (sem rede para perder pacote).
+    fn wants_fec(&self) -> bool {
+        self.hello.flags & FEC_OK != 0 && !self.link.same_pc()
     }
 
     /// Como a página Compartilhar tela acha esta pessoa: o id do aparelho, ou o endereço pelo UDP.
@@ -549,7 +559,8 @@ fn sound_from(opts: &Opts, viewer_here: Option<u32>, keep: Option<u32>) -> (Soun
 /// Som do PC em blocos de 5 ms, para quem tem a permissão de som. A origem segue as opções e os
 /// programas abertos durante a transmissão: outra linha decide a cada segundo, e esta só troca a
 /// captura quando a decisão muda (procurar processos e sessões de som atrasaria os blocos).
-pub(super) fn audio(links: Arc<Mutex<Vec<Arc<dyn Link>>>>, viewer_here: Option<u32>, stop: Arc<AtomicBool>) {
+/// Quem tem `true` ao lado recebe o som em Opus.
+pub(super) fn audio(links: Arc<Mutex<Vec<(Arc<dyn Link>, bool)>>>, viewer_here: Option<u32>, stop: Arc<AtomicBool>) {
     // A origem do som, e a entrada que vai junto (vazio: nenhuma).
     type Choice = (SoundFrom, String, String);
     let choice: Arc<Mutex<Option<Choice>>> = Arc::new(Mutex::new(None));
@@ -586,6 +597,8 @@ pub(super) fn audio(links: Arc<Mutex<Vec<Arc<dyn Link>>>>, viewer_here: Option<u
         let (mut a, mut m) = (Vec::<f32>::new(), Vec::<f32>::new());
         let mut pcm: Vec<f32> = Vec::new();
         let mut block = Vec::with_capacity(AUDIO_BLOCK * 4);
+        let mut samples = Vec::with_capacity(AUDIO_BLOCK * 2);
+        let mut enc = super::opus::Encoder::default();
         let mut out = Vec::with_capacity(MTU);
         let mut seq = 0u32;
         while !stop.load(Ordering::Relaxed) {
@@ -641,14 +654,22 @@ pub(super) fn audio(links: Arc<Mutex<Vec<Arc<dyn Link>>>>, viewer_here: Option<u
                 None => pcm.append(&mut a),
             }
             while pcm.len() >= AUDIO_BLOCK * 2 {
-                block.clear();
-                for v in pcm.drain(..AUDIO_BLOCK * 2) {
-                    block.extend_from_slice(&((v.clamp(-1.0, 1.0) * 32767.0) as i16).to_le_bytes());
+                samples.clear();
+                samples.extend(pcm.drain(..AUDIO_BLOCK * 2).map(|v| (v.clamp(-1.0, 1.0) * 32767.0) as i16));
+                let ls = links.lock().unwrap();
+                // Sem Opus (o codificador não abriu), todo mundo recebe PCM.
+                let coded = if ls.iter().any(|l| l.1) { enc.encode(&samples) } else { None };
+                if let Some(c) = &coded {
+                    write(&mut out, &Msg::Opus { seq, pts: now(), data: c });
+                    ls.iter().filter(|l| l.1).for_each(|l| l.0.send(&out));
                 }
-                write(&mut out, &Msg::Audio { seq, pts: now(), data: &block });
-                for l in links.lock().unwrap().iter() {
-                    l.send(&out);
+                if ls.iter().any(|l| !l.1 || coded.is_none()) {
+                    block.clear();
+                    samples.iter().for_each(|v| block.extend_from_slice(&v.to_le_bytes()));
+                    write(&mut out, &Msg::Audio { seq, pts: now(), data: &block });
+                    ls.iter().filter(|l| !l.1 || coded.is_none()).for_each(|l| l.0.send(&out));
                 }
+                drop(ls);
                 seq = seq.wrapping_add(1);
             }
         }
@@ -1532,7 +1553,10 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     let mut first_size: Option<(u32, u32)> = None;
 
     // Som para quem tem a permissão. Mesmo PC: tira o som da janela que assiste.
-    let hearing = |guests: &[Guest]| -> Vec<Arc<dyn Link>> { guests.iter().filter(|g| g.perms & SOUND != 0).map(|g| g.link.clone()).collect() };
+    // Fora da rede local, quem decodifica Opus recebe o som em Opus.
+    let hearing = |guests: &[Guest]| -> Vec<(Arc<dyn Link>, bool)> {
+        guests.iter().filter(|g| g.perms & SOUND != 0).map(|g| (g.link.clone(), g.hello.flags & OPUS_OK != 0 && !g.link.near())).collect()
+    };
     let audio_links = Arc::new(Mutex::new(hearing(&room.guests)));
     let exclude = room.guests.iter().find(|g| g.link.same_pc() && g.hello.pid != 0).map(|g| g.hello.pid);
     let stop_audio = Arc::new(AtomicBool::new(false));
@@ -1564,6 +1588,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     let mut pending: Option<i64> = None;
     let mut pkts: Vec<Pkt> = Vec::new();
     let mut ready: Vec<Ready> = Vec::new();
+    let pacer = super::pace::Pacer::new();
     // PyroWave pedido: se o caminho de alguém sair da rede local ou da VPN (ou voltar), o vídeo
     // recomeça com o codec que cabe.
     let wave_asked = codec_opt == "pyrowave" && !room.wave_failed;
@@ -1698,6 +1723,16 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                     }
                 }
             }
+            while let Ok(b) = c.rich.try_recv() {
+                room.clip_id = room.clip_id.wrapping_add(1);
+                for g in room.guests.iter_mut().filter(|g| g.perms & COPY != 0) {
+                    g.rich.offer(room.clip_id, b.clone(), &*g.link);
+                }
+            }
+            let now = Instant::now();
+            for g in room.guests.iter_mut().filter(|g| g.perms & COPY != 0) {
+                g.rich.tick(&*g.link, now);
+            }
         }
         // O que cada pessoa mandou.
         for (gi, g) in room.guests.iter_mut().enumerate() {
@@ -1729,6 +1764,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                         match m {
                             Msg::Ping { t } => g.send(&Msg::Pong { t, host: now() }, &mut out),
                             Msg::KeyReq => enc.force_key(),
+                            Msg::Loss { permille } => g.loss = permille.min(1000),
                             Msg::Nack { frame } => {
                                 // Para de usar o quadro perdido e os enviados depois dele, que dependiam dele.
                                 let mut ok = false;
@@ -1753,6 +1789,13 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                             Msg::Clip { id, part, parts, data } if g.perms & COPY != 0 => {
                                 if let (Some(c), Some(t)) = (&room.clip, g.clip_in.add(id, part, parts, data)) {
                                     let _ = c.set.send(t);
+                                }
+                            }
+                            m @ (Msg::ClipOffer { .. } | Msg::ClipWant { .. } | Msg::ClipData { .. }) if g.perms & COPY != 0 => {
+                                if let Some(c) = &room.clip {
+                                    if let Some(b) = g.rich.on(&m, &*g.link) {
+                                        let _ = c.set_rich.send(b);
+                                    }
                                 }
                             }
                             Msg::Sas => {
@@ -1816,7 +1859,9 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
         let mut changed = false;
         // O mesmo vídeo para todo mundo, em pedaços que cabem no caminho mais estreito.
         let room_mtu = room.guests.iter().map(|g| g.link.mtu()).min().unwrap_or(MTU);
-        let space = room_mtu - VIDEO_HEAD;
+        // O PyroWave fica sem FEC: só sai na rede local, e os pedaços críticos já vão duas vezes.
+        let fec_on = codec != VideoCodec::Wave && room.guests.iter().any(Guest::wants_fec);
+        let space = room_mtu - VIDEO_HEAD - if fec_on { super::fec::EXTRA } else { 0 };
         let step = (|| -> Result<()> {
             let pool = match &mut cap {
                 Cap::Wgc { pool: Some((pool, ..)), .. } => pool,
@@ -1929,15 +1974,24 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
             if count == 0 || count > u16::MAX as usize {
                 continue;
             }
+            let mut packets = Vec::with_capacity(count);
             for (idx, chunk) in c.parts.iter().enumerate() {
                 write(&mut out, &Msg::Video { key: p.key, more: c.more[idx], idx: idx as u16, count: count as u16, frame: frame_id, pts: p.pts, data: chunk });
                 // Os pedaços críticos do PyroWave vão duas vezes: sem eles, o quadro inteiro se perde.
                 for _ in 0..if idx < c.critical { 2 } else { 1 } {
-                    for g in &room.guests {
-                        g.link.send(&out);
-                    }
+                    packets.push(out.clone());
                 }
             }
+            let parity_from = packets.len();
+            if fec_on {
+                // A paridade segue a pior perda medida entre quem recebe o FEC.
+                let loss = room.guests.iter().filter(|g| g.wants_fec()).map(|g| g.loss).max().unwrap_or(0);
+                packets.extend(super::fec::packets(&c.parts, frame_id, p.pts, p.key, super::fec::percent(loss)));
+            }
+            // Com os dois lados no mesmo PC não há roteador para encher: sai tudo de uma vez.
+            let links: Vec<(Arc<dyn Link>, bool)> = room.guests.iter().map(|g| (g.link.clone(), g.wants_fec())).collect();
+            let gap = if room.guests.iter().all(|g| g.link.same_pc()) { Duration::ZERO } else { Duration::from_nanos(interval as u64 * 100) };
+            pacer.frame(links, packets, parity_from, gap);
             sent.push_back((frame_id, p.pts));
             if sent.len() > 32 {
                 sent.pop_front();
