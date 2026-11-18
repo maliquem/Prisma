@@ -1,6 +1,7 @@
 //! Interface imediata desenhada só quando algo muda: cada redesenho descreve a tela
 //! e os controles respondem ao mouse nesse mesmo passe.
 
+pub mod a11y;
 pub mod edit;
 pub mod gfx;
 pub mod glyph;
@@ -171,6 +172,9 @@ pub struct UiState {
     /// Controles clicáveis do desenho em curso e do último.
     targets: Vec<Target>,
     last: Vec<Target>,
+    /// Nome e papel de cada alvo, na mesma ordem, para o Narrador (vazios até um leitor pedir).
+    names: Vec<a11y::Node>,
+    last_names: Vec<a11y::Node>,
 }
 
 impl UiState {
@@ -294,6 +298,23 @@ impl UiState {
         self.nav.clear();
         self.pad_tab = None;
         self.last = std::mem::take(&mut self.targets);
+        self.last_names = std::mem::take(&mut self.names);
+    }
+
+    /// Narrador: passa os controles à vista do último desenho e qual tem o foco (o do anel).
+    pub fn publish(&self, hwnd: windows::Win32::Foundation::HWND, scale: f32) {
+        if !a11y::on() {
+            return;
+        }
+        let mut focus = None;
+        let mut items = Vec::new();
+        for (t, n) in self.last.iter().zip(&self.last_names).filter(|(t, _)| t.shown()) {
+            if (self.pad || self.keys) && t.r.contains(self.mx, self.my) {
+                focus = Some(items.len());
+            }
+            items.push((t.r, n.clone()));
+        }
+        a11y::publish(hwnd, scale, items, focus);
     }
 }
 
@@ -307,6 +328,8 @@ pub struct Ui<'a> {
     area: u64,
     bar: Option<Bar>,
     tip: Option<(Rect, String)>,
+    /// Narrador: dica que chegou antes do alvo dela, com o lugar dele.
+    tip_name: Option<(Rect, String)>,
 }
 
 impl<'a> Ui<'a> {
@@ -322,7 +345,7 @@ impl<'a> Ui<'a> {
         if std::env::var_os("PRISMA_TEST_PAD").is_some() {
             s.pad = true;
         }
-        Self { c, s, dy: 0.0, blocked, clip: None, area: 0, bar: None, tip: None }
+        Self { c, s, dy: 0.0, blocked, clip: None, area: 0, bar: None, tip: None, tip_name: None }
     }
 
     fn hover(&self, r: Rect) -> bool {
@@ -341,6 +364,33 @@ impl<'a> Ui<'a> {
     fn target(&mut self, r: Rect, clip: Option<Rect>, area: u64) {
         let view = rect(0.0, 0.0, self.s.view_w, self.s.view_h);
         self.s.targets.push(Target { r, clip: clip.unwrap_or(view), area, field: false });
+        let mut node = a11y::Node::default();
+        // Ícone com dica desenhada antes do clique: a dica é o nome.
+        if let Some((tr, name)) = self.tip_name.take() {
+            if tr == r {
+                node.name = name;
+            }
+        }
+        self.s.names.push(node);
+    }
+
+    /// Narrador: nome e papel do alvo `n` (o índice de antes de registrá-lo). Nada se o alvo não
+    /// entrou (controle bloqueado) ou se nenhum leitor de tela pediu.
+    fn named(&mut self, n: usize, name: &str, role: a11y::Role, on: Option<bool>) {
+        if !a11y::on() {
+            return;
+        }
+        if let Some(x) = self.s.names.get_mut(n) {
+            *x = a11y::Node { name: crate::i18n::tr(name).into_owned(), role, on };
+        }
+    }
+
+    /// `hit` com nome, papel e estado (`on`: escolhido ou marcado) para o Narrador.
+    pub fn hit_as(&mut self, key: &str, r: Rect, name: &str, role: a11y::Role, on: Option<bool>) -> bool {
+        let n = self.s.targets.len();
+        let clicked = self.hit(key, r);
+        self.named(n, name, role, on);
+        clicked
     }
 
     /// Devolve true no clique que começou e terminou sobre este controle.
@@ -450,6 +500,15 @@ impl<'a> Ui<'a> {
 
     /// Dica que aparece com o mouse em cima, por cima de tudo.
     pub fn tip(&mut self, r: Rect, text: &str) {
+        if a11y::on() {
+            // A dica dá nome ao ícone clicável do mesmo lugar, venha antes ou depois do clique.
+            let at = rect(r.x, r.y - self.dy, r.w, r.h);
+            let name = crate::i18n::tr(text).into_owned();
+            match (self.s.targets.last(), self.s.names.last_mut()) {
+                (Some(t), Some(n)) if t.r == at && n.name.is_empty() => n.name = name,
+                _ => self.tip_name = Some((at, name)),
+            }
+        }
         if self.hover(r) {
             // A dica é desenhada fora da lista: guarda onde a linha está na tela, já com a rolagem.
             self.tip = Some((rect(r.x, r.y - self.dy, r.w, r.h), text.to_string()));
@@ -488,7 +547,9 @@ impl<'a> Ui<'a> {
     pub fn button_ex(&mut self, key: &str, r: Rect, label: &str, primary: bool, on: bool) -> bool {
         let id = hash_id(key);
         let hover = on && self.hover(r);
+        let n = self.s.targets.len();
         let clicked = on && self.clickable(id, r);
+        self.named(n, label, a11y::Role::Button, None);
         if primary {
             let bg = if !on {
                 LINE
@@ -525,7 +586,10 @@ impl<'a> Ui<'a> {
             let r = rect(cx, y, w, h);
             let id = hash_id(&format!("{key}#{i}"));
             let hover = self.hover(r);
-            if self.clickable(id, r) && *sel != i {
+            let n = self.s.targets.len();
+            let hit = self.clickable(id, r);
+            self.named(n, name, a11y::Role::Tab, Some(*sel == i));
+            if hit && *sel != i {
                 *sel = i;
                 changed = true;
                 self.s.needs_redraw = true;
@@ -546,10 +610,12 @@ impl<'a> Ui<'a> {
 
     pub fn check(&mut self, key: &str, r: Rect, label: &str, val: &mut bool) -> bool {
         let id = hash_id(key);
+        let n = self.s.targets.len();
         let clicked = self.clickable(id, r);
         if clicked {
             *val = !*val;
         }
+        self.named(n, label, a11y::Role::Check, Some(*val));
         let bx = rect(r.x, r.y + (r.h - 18.0) / 2.0, 18.0, 18.0);
         if *val {
             self.c.round(bx, 4.0, ACCENT);
@@ -583,7 +649,10 @@ impl<'a> Ui<'a> {
             }
         }
         let hover = self.hover(r);
-        if self.clickable(id, r) {
+        let n = self.s.targets.len();
+        let open = self.clickable(id, r);
+        self.named(n, options.get(*sel).map_or("", |o| o.as_str()), a11y::Role::Combo, None);
+        if open {
             let h = popup_h(options.len(), self.s.view_h);
             // Larga só o bastante para a opção mais longa: uma caixa larga não abre uma lista enorme.
             let widest = options.iter().map(|o| measure(o, 14.0, Weight::Regular, None).0).fold(0.0, f32::max);
@@ -959,6 +1028,7 @@ impl<'a> Ui<'a> {
         if let Some(t) = self.s.targets.get_mut(n) {
             t.field = true;
         }
+        self.named(n, if text.is_empty() { hint } else { text.as_str() }, a11y::Role::Edit, None);
         if clicked {
             self.s.focus = id;
         } else if self.s.released && !self.hover(r) && self.s.focus == id {
@@ -1041,7 +1111,7 @@ impl<'a> Ui<'a> {
                 }
                 let off = p.off.get(i).copied().unwrap_or(false);
                 if !off {
-                    rows.push(r);
+                    rows.push((r, o.to_string()));
                 }
                 let hover = !off && r.contains(self.s.mx, self.s.my) && inner.contains(self.s.mx, self.s.my);
                 if hover {
@@ -1075,8 +1145,10 @@ impl<'a> Ui<'a> {
                 close = true;
             }
             self.s.popup_new = false;
-            for r in rows {
+            for (r, o) in rows {
+                let n = self.s.targets.len();
                 self.target(r, Some(inner), POPUP);
+                self.named(n, &o, a11y::Role::Item, None);
             }
         }
         if close {
@@ -1208,8 +1280,16 @@ impl<'a> Ui<'a> {
         }
         self.s.ask_new = false;
         let notice = self.s.ask.as_ref().is_some_and(|a| a.notice);
-        for r in [check_row, (!notice).then_some(no), Some(yes)].into_iter().flatten() {
+        let mark = self.s.ask.as_ref().and_then(|a| a.check.clone());
+        let named = [
+            check_row.map(|r| (r, mark.as_ref().map_or(String::new(), |c| c.0.clone()), a11y::Role::Check, mark.as_ref().map(|c| c.1))),
+            (!notice).then_some((no, "Não".to_string(), a11y::Role::Button, None)),
+            Some((yes, if notice { "OK" } else { "Sim" }.to_string(), a11y::Role::Button, None)),
+        ];
+        for (r, name, role, on) in named.into_iter().flatten() {
+            let n = self.s.targets.len();
             self.target(r, None, 0);
+            self.named(n, &name, role, on);
         }
     }
 }

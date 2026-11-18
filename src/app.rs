@@ -3869,6 +3869,7 @@ impl App {
         self.pause_hotkeys(m.ui.capturing != 0);
         // Onde o controle é lido (campo de tecla, gravação, medição), ele não navega pelo Prisma.
         crate::sys::nav::pause(m.ui.capturing != 0 || crate::sys::macros::recording() || crate::pages::controllers::measuring(&self.pads));
+        m.ui.publish(m.hwnd, m.scale);
         let again = std::mem::take(&mut m.ui.needs_redraw);
         let hwnd = m.hwnd;
         self.main = Some(m);
@@ -4591,6 +4592,12 @@ unsafe extern "system" fn main_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
     // Vem também durante o desenho, quando o estado está ocupado.
     if m == WM_CTLCOLOREDIT {
         return crate::ui::edit::paint_colors(HDC(w.0 as *mut _));
+    }
+    // Narrador: pode chegar no meio do desenho, então não passa pelo estado do app.
+    if m == WM_GETOBJECT {
+        if let Some(r) = crate::ui::a11y::answer(h, w, l) {
+            return r;
+        }
     }
     let r = with(|a| {
         match m {

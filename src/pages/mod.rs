@@ -435,7 +435,7 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
         let color = if current { WHITE } else { TEXT2 };
         ui.c.icon(r.x + 12.0, r.y + (r.h - 18.0) / 2.0, 18.0, icon, if current { ACCENT } else { color });
         ui.c.text(rect(r.x + 42.0, r.y, r.w - 48.0, r.h), label, 14.0, color, Align::Left, if current { Weight::Semibold } else { Weight::Regular });
-        if ui.hit(&format!("nav-{label}"), r) && !current {
+        if ui.hit_as(&format!("nav-{label}"), r, label, crate::ui::a11y::Role::Tab, Some(current)) && !current {
             crate::report::note(&format!("page: {label}"));
             app.page = *page;
             app.refresh_page();
