@@ -498,6 +498,8 @@ pub fn control(arg: &str) {
 /// Uma conexão aberta com um PC do arranjo.
 struct Peer {
     link: Arc<dyn Link>,
+    /// Imagem ou arquivos com este PC.
+    rich: super::clip::Rich,
     name: String,
     /// Avisa a linha da conexão que pode fechar.
     done: Arc<AtomicBool>,
@@ -650,7 +652,7 @@ fn run(me: u8, targets: Vec<(String, u8)>, lock_key: Keys) {
                     if perms & KEYBOARD == 0 {
                         eprintln!("«{name}» não deu a permissão de teclado: lá só vai o mouse");
                     }
-                    peers[i] = Some(Peer { lat: super::LatLog::new("").of(&name), link, name, done, history: VecDeque::new(), first: 0, last_input: now_, last_send: now_, last_ping: now_ - Duration::from_secs(1), heard: now_, perms });
+                    peers[i] = Some(Peer { lat: super::LatLog::new("").of(&name), rich: Default::default(), link, name, done, history: VecDeque::new(), first: 0, last_input: now_, last_send: now_, last_ping: now_ - Duration::from_secs(1), heard: now_, perms });
                 }
                 Event::Gone(i) => {
                     lines -= 1;
@@ -675,6 +677,16 @@ fn run(me: u8, targets: Vec<(String, u8)>, lock_key: Keys) {
                         p.link.send(k);
                     }
                 }
+            }
+            while let Ok(b) = c.rich.try_recv() {
+                clip_id = clip_id.wrapping_add(1);
+                for p in peers.iter_mut().flatten().filter(|p| p.perms & COPY != 0) {
+                    p.rich.offer(clip_id, b.clone(), &*p.link);
+                }
+            }
+            let now_ = Instant::now();
+            for p in peers.iter_mut().flatten().filter(|p| p.perms & COPY != 0) {
+                p.rich.tick(&*p.link, now_);
             }
         }
         // Os eventos novos vão na hora; os recentes vão de novo por um instante, contra perda.
@@ -711,6 +723,13 @@ fn run(me: u8, targets: Vec<(String, u8)>, lock_key: Keys) {
                         Some(Msg::Clip { id, part, parts, data }) => {
                             if let (Some(c), Some(t)) = (&clip, clip_in.add(id, part, parts, data)) {
                                 let _ = c.set.send(t);
+                            }
+                        }
+                        Some(m @ (Msg::ClipOffer { .. } | Msg::ClipWant { .. } | Msg::ClipData { .. })) => {
+                            if let Some(c) = &clip {
+                                if let Some(b) = p.rich.on(&m, &*p.link) {
+                                    let _ = c.set_rich.send(b);
+                                }
                             }
                         }
                         _ => {}
@@ -778,6 +797,7 @@ pub(super) fn serve(link: Arc<dyn Link>, perms: u8, name: String) {
     let mut clip = (perms & COPY != 0).then(super::clip::start);
     let mut clip_in = super::clip::Pieces::default();
     let mut clip_id = 0u16;
+    let mut rich = super::clip::Rich::default();
     let mut buf = vec![0u8; 2048];
     let mut heard = Instant::now();
     loop {
@@ -789,6 +809,11 @@ pub(super) fn serve(link: Arc<dyn Link>, perms: u8, name: String) {
                     link.send(p);
                 }
             }
+            while let Ok(b) = c.rich.try_recv() {
+                clip_id = clip_id.wrapping_add(1);
+                rich.offer(clip_id, b, &*link);
+            }
+            rich.tick(&*link, Instant::now());
         }
         match link.recv(&mut buf, Duration::from_millis(20)) {
             Poll::Got(n) => {
@@ -819,6 +844,13 @@ pub(super) fn serve(link: Arc<dyn Link>, perms: u8, name: String) {
                     Some(Msg::Clip { id, part, parts, data }) => {
                         if let (Some(c), Some(t)) = (&clip, clip_in.add(id, part, parts, data)) {
                             let _ = c.set.send(t);
+                        }
+                    }
+                    Some(m @ (Msg::ClipOffer { .. } | Msg::ClipWant { .. } | Msg::ClipData { .. })) => {
+                        if let Some(c) = &clip {
+                            if let Some(b) = rich.on(&m, &*link) {
+                                let _ = c.set_rich.send(b);
+                            }
                         }
                     }
                     Some(Msg::Bye) => break,

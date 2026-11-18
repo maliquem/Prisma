@@ -127,6 +127,9 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
     // O texto copiado aqui só vai quando a janela de assistir está na frente (ou esteve até 2 s
     // antes, para o Ctrl+C dentro dela valer): o host não lê o que se copia com ela atrás.
     let mut clip_out: Option<String> = None;
+    // Imagem ou arquivos copiados aqui: a mesma regra da janela na frente.
+    let mut rich_out: Option<Arc<Vec<u8>>> = None;
+    let mut rich = super::clip::Rich::default();
     let mut last_front = Instant::now() - CLIP_FRONT;
     // FEC: os pedaços de vídeo que a paridade refez entram aqui e passam pelo mesmo caminho dos que
     // chegaram pela rede, antes do próximo pacote (e antes de um Nack).
@@ -161,6 +164,9 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
             while let Ok(t) = c.changed.try_recv() {
                 clip_out = Some(t);
             }
+            while let Ok(b) = c.rich.try_recv() {
+                rich_out = Some(b);
+            }
             if unsafe { GetForegroundWindow() }.0 as isize == VIEW_HWND.load(Ordering::Relaxed) {
                 last_front = Instant::now();
             }
@@ -171,6 +177,11 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
                     link.send(p);
                 }
             }
+            if let Some(b) = rich_out.take_if(|_| last_front.elapsed() <= CLIP_FRONT) {
+                clip_id = clip_id.wrapping_add(1);
+                rich.offer(clip_id, b, &*link);
+            }
+            rich.tick(&*link, Instant::now());
         }
         if waiting_key && !wave && sh.got_info.load(Ordering::Relaxed) && last_req.elapsed() > Duration::from_millis(150) {
             write(&mut out, &Msg::KeyReq);
@@ -223,6 +234,13 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
             Some(Msg::Clip { id, part, parts, data }) => {
                 if let (Some(c), Some(t)) = (&clip, clip_in.add(id, part, parts, data)) {
                     let _ = c.set.send(t);
+                }
+            }
+            Some(m @ (Msg::ClipOffer { .. } | Msg::ClipWant { .. } | Msg::ClipData { .. })) => {
+                if let Some(c) = &clip {
+                    if let Some(b) = rich.on(&m, &*link) {
+                        let _ = c.set_rich.send(b);
+                    }
                 }
             }
             Some(Msg::Rumble { pad, low, high }) => {

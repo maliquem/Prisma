@@ -101,6 +101,8 @@ struct Guest {
     heard: Instant,
     gone: bool,
     clip_in: super::clip::Pieces,
+    /// Imagem ou arquivos com esta pessoa.
+    rich: super::clip::Rich,
     /// Perda de pacotes de vídeo que ela mediu no último segundo, em milésimos (`Msg::Loss`; zero
     /// enquanto não chega nenhuma, e sempre com versões que não medem).
     loss: u16,
@@ -108,7 +110,7 @@ struct Guest {
 
 impl Guest {
     fn new(j: Joiner) -> Self {
-        Guest { link: j.link, hello: j.hello, perms: j.perms, name: j.name, id: j.id, input: None, pads: Default::default(), refused: [PAD_OK; PADS], heard: Instant::now(), gone: false, clip_in: Default::default(), loss: 0 }
+        Guest { link: j.link, hello: j.hello, perms: j.perms, name: j.name, id: j.id, input: None, pads: Default::default(), refused: [PAD_OK; PADS], heard: Instant::now(), gone: false, clip_in: Default::default(), rich: Default::default(), loss: 0 }
     }
 
     fn send(&self, m: &Msg, out: &mut Vec<u8>) {
@@ -1721,6 +1723,16 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                     }
                 }
             }
+            while let Ok(b) = c.rich.try_recv() {
+                room.clip_id = room.clip_id.wrapping_add(1);
+                for g in room.guests.iter_mut().filter(|g| g.perms & COPY != 0) {
+                    g.rich.offer(room.clip_id, b.clone(), &*g.link);
+                }
+            }
+            let now = Instant::now();
+            for g in room.guests.iter_mut().filter(|g| g.perms & COPY != 0) {
+                g.rich.tick(&*g.link, now);
+            }
         }
         // O que cada pessoa mandou.
         for (gi, g) in room.guests.iter_mut().enumerate() {
@@ -1777,6 +1789,13 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                             Msg::Clip { id, part, parts, data } if g.perms & COPY != 0 => {
                                 if let (Some(c), Some(t)) = (&room.clip, g.clip_in.add(id, part, parts, data)) {
                                     let _ = c.set.send(t);
+                                }
+                            }
+                            m @ (Msg::ClipOffer { .. } | Msg::ClipWant { .. } | Msg::ClipData { .. }) if g.perms & COPY != 0 => {
+                                if let Some(c) = &room.clip {
+                                    if let Some(b) = g.rich.on(&m, &*g.link) {
+                                        let _ = c.set_rich.send(b);
+                                    }
                                 }
                             }
                             Msg::Sas => {
