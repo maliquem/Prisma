@@ -348,6 +348,9 @@ pub struct ClientOpts {
     pub fullscreen: bool,
     /// Espera a atualização da tela para mostrar (sem rasgos, um pouco mais de atraso).
     pub vsync: bool,
+    /// Tela com G-SYNC ou FreeSync: cada quadro aparece assim que chega, sem esperar a atualização,
+    /// mas nunca mais rápido que os Hz da tela (dentro da faixa VRR, sem rasgo). Vale mais que o VSync.
+    pub vrr: bool,
     /// Bit 1 prende o mouse na janela em tela cheia; bit 2 manda Alt+Tab e a tecla Windows ao host.
     pub immersive: u8,
     /// 0 desligado, 1 simples, 2 detalhado.
@@ -388,6 +391,7 @@ impl Default for ClientOpts {
         ClientOpts {
             fullscreen: true,
             vsync: false,
+            vrr: false,
             immersive: 3,
             meter: 0,
             warn: true,
@@ -423,6 +427,7 @@ impl ClientOpts {
             match k {
                 "tela_cheia" => o.fullscreen = flag(v),
                 "vsync" => o.vsync = flag(v),
+                "vrr" => o.vrr = flag(v),
                 "imersivo" => o.immersive = v.parse::<u8>().ok().filter(|m| IMMERSIVE.contains(m)).unwrap_or(3),
                 "medidor" => o.meter = v.parse::<u8>().unwrap_or(0).min(2),
                 "aviso" => o.warn = flag(v),
@@ -452,7 +457,7 @@ impl ClientOpts {
         let b = |x: bool| x as u8;
         format!(
             "tela_cheia={}\nvsync={}\nimersivo={}\nmedidor={}\naviso={}\nmudo={}\npedir_444={}\ncontrole_fundo={}\nteclado_controle={}\n\
-quadros={}\natalho_menu={}\natalho_tela_cheia={}\natalho_ctrl_alt_del={}\natalho_desconectar={}\natalho_imersivo={}\natalho_medidor={}\natalho_som={}\ngpu={}\ntelas={}\natalho_travar_mouse={}\n",
+quadros={}\natalho_menu={}\natalho_tela_cheia={}\natalho_ctrl_alt_del={}\natalho_desconectar={}\natalho_imersivo={}\natalho_medidor={}\natalho_som={}\ngpu={}\ntelas={}\natalho_travar_mouse={}\nvrr={}\n",
             b(self.fullscreen),
             b(self.vsync),
             self.immersive,
@@ -473,6 +478,7 @@ quadros={}\natalho_menu={}\natalho_tela_cheia={}\natalho_ctrl_alt_del={}\natalho
             self.gpu,
             self.screens.join(","),
             keys_text(self.key_lock),
+            b(self.vrr),
         )
     }
 
@@ -535,7 +541,7 @@ mod tests {
         assert_eq!(Opts::parse("janela=x:5").window, (0, 0));
         // Arquivo da 0.11.0: o resto fica no padrão.
         assert_eq!(Opts::parse("hdr_desligar=1\npessoas=2\ncontroles=auto\nconvite=total\n"), Opts { hdr_off: true, guests: 2, invite: TOTAL, ..Opts::default() });
-        let c = ClientOpts { fullscreen: false, vsync: true, immersive: 1, meter: 2, warn: false, mute: true, ask444: true, pad_background: true, pad_keys: true, fps: 60, gpu: "AMD Radeon(TM) Graphics".into(), key_menu: (MOD_ALT, 0x70), key_sound: (MOD_CTRL, b'M' as u32), ..ClientOpts::default() };
+        let c = ClientOpts { fullscreen: false, vsync: true, vrr: true, immersive: 1, meter: 2, warn: false, mute: true, ask444: true, pad_background: true, pad_keys: true, fps: 60, gpu: "AMD Radeon(TM) Graphics".into(), key_menu: (MOD_ALT, 0x70), key_sound: (MOD_CTRL, b'M' as u32), ..ClientOpts::default() };
         assert_eq!(ClientOpts::parse(&c.text()), c);
         let c = ClientOpts { screens: ["eu".into(), "".into(), "31ded57656ab".into()], key_lock: (MOD_CTRL, b'L' as u32), ..ClientOpts::default() };
         assert_eq!(ClientOpts::parse(&c.text()), c);

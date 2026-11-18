@@ -754,6 +754,22 @@ unsafe fn resize_swap(d: &D3d, swap: &IDXGISwapChain1, fmt: DXGI_FORMAT, flags: 
     swap.ResizeBuffers(0, 0, 0, fmt, DXGI_SWAP_CHAIN_FLAG(flags as i32))
 }
 
+/// Quanto o quadro ainda espera para não passar dos `hz` da tela (faixa VRR): sem espera quando já
+/// passou um intervalo da tela desde o anterior.
+fn vrr_gap(since_last: Duration, hz: u32) -> Duration {
+    Duration::from_nanos(1_000_000_000 / hz.max(1) as u64).saturating_sub(since_last)
+}
+
+/// Apresenta o quadro; com `vrr_hz`, espera o [`vrr_gap`] antes.
+unsafe fn present(swap: &IDXGISwapChain1, sync: u32, flags: DXGI_PRESENT, vrr_hz: u32, last: &mut Instant) -> bool {
+    if vrr_hz > 0 {
+        std::thread::sleep(vrr_gap(last.elapsed(), vrr_hz));
+    }
+    let ok = swap.Present(sync, flags).is_ok();
+    *last = Instant::now();
+    ok
+}
+
 /// Tamanho real do buffer de trás: desenhar nele inteiro não deixa sobra de quadro velho.
 unsafe fn buffer_size(bb: &ID3D11Texture2D) -> (u32, u32) {
     let mut desc = D3D11_TEXTURE2D_DESC::default();
@@ -1172,9 +1188,15 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     };
     let swap = factory.CreateSwapChainForHwnd(&d.dev, hwnd, &desc, None, None)?;
     let _ = factory.MakeWindowAssociation(hwnd, DXGI_MWA_NO_ALT_ENTER);
-    // VSync ligado espera a atualização da tela: sem rasgos, um pouco mais de atraso.
-    let present_mode = |vsync: bool| (vsync as u32, if tearing && !vsync { DXGI_PRESENT_ALLOW_TEARING } else { DXGI_PRESENT(0) });
-    let (mut sync, mut present_flags) = present_mode(co.vsync);
+    // VSync ligado espera a atualização da tela: sem rasgos, um pouco mais de atraso. Tela VRR não
+    // espera: o quadro sai na hora, só que nunca antes de um intervalo da tela depois do anterior.
+    let present_mode = |co: &ClientOpts| {
+        let vsync = co.vsync && !(co.vrr && tearing);
+        (vsync as u32, if tearing && !vsync { DXGI_PRESENT_ALLOW_TEARING } else { DXGI_PRESENT(0) })
+    };
+    let (mut sync, mut present_flags) = present_mode(&co);
+    let mut shown_at = Instant::now();
+    let vrr_hz = if co.vrr && tearing { hz } else { 0 };
 
     let mut codecs = 0u8;
     for c in [Codec::H264, Codec::Hevc, Codec::Av1] {
@@ -1403,7 +1425,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                 hud::Pick::Vsync => {
                     co.vsync = !co.vsync;
                     let _ = co.save();
-                    (sync, present_flags) = present_mode(co.vsync);
+                    (sync, present_flags) = present_mode(&co);
                     note = Some(format!("VSync: {}", on_off(co.vsync)));
                 }
                 hud::Pick::Ask444 => {
@@ -1614,7 +1636,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         if let (Some(pts), Some((n, draw))) = (nv_pts.take(), &nv) {
             let bb: ID3D11Texture2D = swap.GetBuffer(0)?;
             let (ow, oh) = buffer_size(&bb);
-            if draw.draw(&d.dev, &d.ctx, n, &bb, ow, oh).is_ok() && swap.Present(sync, present_flags).is_ok() {
+            if draw.draw(&d.dev, &d.ctx, n, &bb, ow, oh).is_ok() && present(&swap, sync, present_flags, vrr_hz, &mut shown_at) {
                 let shown = now();
                 second.shown += 1;
                 second.e2e.push(shown + sh.offset.load(Ordering::Relaxed) - pts);
@@ -1627,7 +1649,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                     second.decode.push(now() - t);
                     let bb: ID3D11Texture2D = swap.GetBuffer(0)?;
                     let (ow, oh) = buffer_size(&bb);
-                    if wd.draw(&d.dev, &d.ctx, &bb, video_rect(wd.w, wd.h, ow, oh)).is_ok() && swap.Present(sync, present_flags).is_ok() {
+                    if wd.draw(&d.dev, &d.ctx, &bb, video_rect(wd.w, wd.h, ow, oh)).is_ok() && present(&swap, sync, present_flags, vrr_hz, &mut shown_at) {
                         let shown = now();
                         second.shown += 1;
                         second.e2e.push(shown + sh.offset.load(Ordering::Relaxed) - pts);
@@ -1645,7 +1667,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                     scaler = Scaler::new(&d, w, h, ow, oh, fps, hdr_out).ok();
                 }
                 if let Some(s) = &scaler {
-                    if s.blt(&tex, slice, &bb).is_ok() && swap.Present(sync, present_flags).is_ok() {
+                    if s.blt(&tex, slice, &bb).is_ok() && present(&swap, sync, present_flags, vrr_hz, &mut shown_at) {
                         let shown = now();
                         second.shown += 1;
                         second.e2e.push(shown + sh.offset.load(Ordering::Relaxed) - f.pts);
@@ -1746,7 +1768,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         }
         s += &format!("caminho: {}
 ", link.route());
-        s += &format!("tela daqui: {screen_w}x{screen_h} a {hz} Hz, tearing {}\n", if tearing { "permitido" } else { "não" });
+        s += &format!("tela daqui: {screen_w}x{screen_h} a {hz} Hz, tearing {}, VRR {}\n", if tearing { "permitido" } else { "não" }, if vrr_hz > 0 { "ligado" } else { "desligado" });
         s += &format!(
             "quadros mostrados: {:.1}/s, perdidos: {} ({} consertados sem quadro-chave)\n",
             total.shown as f64 / secs,
@@ -1788,4 +1810,18 @@ fn immersive_name(m: u8) -> String {
 /// Nome do medidor para a nota da tela.
 fn meter_name(m: u8) -> String {
     crate::i18n::tr(["desligado", "simples", "detalhado"][m.min(2) as usize]).into_owned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn vrr_keeps_frames_inside_the_screen_rate() {
+        let hz = 120;
+        assert_eq!(vrr_gap(Duration::ZERO, hz), Duration::from_nanos(8_333_333));
+        assert_eq!(vrr_gap(Duration::from_millis(3), hz), Duration::from_nanos(5_333_333));
+        assert_eq!(vrr_gap(Duration::from_millis(20), hz), Duration::ZERO);
+        assert!(vrr_gap(Duration::ZERO, 0) > Duration::ZERO);
+    }
 }
