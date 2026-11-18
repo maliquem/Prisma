@@ -1017,12 +1017,13 @@ impl Prompt {
     pub fn new() -> Self {
         register(w!("PrismaPrompt"), prompt_proc);
         let hwnd = create_overlay(w!("PrismaPrompt"), false);
-        crate::capture::hide_from_capture(hwnd);
         Self { surface: Layered::new(hwnd), ui: UiState::default(), title: String::new(), body: Vec::new(), buttons: Vec::new(), gap: (24.0, 24.0), open: false }
     }
 
     /// `limit`: some sozinha depois desses ms (`prompt_hide`); `None` fica até a resposta.
-    pub fn ask(&mut self, title: String, body: Vec<String>, buttons: &[(&'static str, bool)], gap: (f32, f32), limit: Option<u32>) {
+    /// `captured`: aparece em capturas (Parsec, compartilhamento), para quem usa este PC de longe poder
+    /// responder; sem ele, fica fora de fotos e vídeos.
+    pub fn ask(&mut self, title: String, body: Vec<String>, buttons: &[(&'static str, bool)], gap: (f32, f32), limit: Option<u32>, captured: bool) {
         self.title = title;
         self.body = body;
         self.buttons = buttons.to_vec();
@@ -1031,6 +1032,7 @@ impl Prompt {
         self.ui = UiState::default();
         self.redraw();
         unsafe {
+            let _ = SetWindowDisplayAffinity(self.surface.hwnd, if captured { WDA_NONE } else { WDA_EXCLUDEFROMCAPTURE });
             let _ = KillTimer(Some(self.surface.hwnd), 1);
             let _ = ShowWindow(self.surface.hwnd, SW_SHOWNOACTIVATE);
             if let Some(ms) = limit {

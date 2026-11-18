@@ -3132,7 +3132,7 @@ impl App {
         let plural = if n == 1 { "programa" } else { "programas" };
         let gap = self.meter.corner_gap(&self.cfg);
         let buttons = [("Fechar", true), ("Ver lista", false), ("Agora não", false)];
-        self.prompt.ask(title, vec![format!("Fechar {n} {plural} e liberar {gb} GB?")], &buttons, gap, Some(PROMPT_MS));
+        self.prompt.ask(title, vec![format!("Fechar {n} {plural} e liberar {gb} GB?")], &buttons, gap, Some(PROMPT_MS), false);
     }
 
     /// Alguém pede para entrar no compartilhamento de tela (pedido `ShareAsk` do serviço ou do
@@ -3154,7 +3154,7 @@ impl App {
         let gap = self.meter.corner_gap(&self.cfg);
         // Uma pergunta nova toma o lugar da anterior: a anterior perde o canal e vale como recusa.
         self.share_ask = Some((tx, code.is_some()));
-        self.prompt.ask(title, body, buttons, gap, None);
+        self.prompt.ask(title, body, buttons, gap, None, true);
         rx
     }
 

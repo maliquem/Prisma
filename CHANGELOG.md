@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Share screen: the question that asks whether to let someone pair or connect now shows up in screen captures, so you can answer it while using this PC remotely (Parsec, for example). Before, it was hidden from captures like the other Prisma pop-ups, and the remote screen never showed it. The question to close programs is still left out of photos and videos. / Compartilhar tela: a pergunta que pede para deixar alguém parear ou se conectar agora aparece em capturas de tela, e dá para responder usando este PC de longe (pelo Parsec, por exemplo). Antes ela ficava fora das capturas, como os outros avisos do Prisma, e a tela remota nunca a mostrava. A pergunta de fechar programas continua fora de fotos e vídeos.
+
 ## 1.7.1
 
 - Share screen, pairing: the long invite now also carries this PC's IP addresses (local network and VPN, like ZeroTier), so pairing works without the n0 relays when both PCs are on the same network or VPN. When the pairing PC cannot reach any n0 relay, its log says so and shows the error. A long invite from this version still pairs on 1.7.0, but only through the n0 lookup. / Compartilhar tela, pareamento: o convite longo agora leva também os IPs deste PC (rede local e VPN, como o ZeroTier), e o pareamento funciona sem os relés da n0 quando os dois PCs estão na mesma rede ou VPN. Quando o PC que pareia não alcança nenhum relé da n0, o log dele diz isso e mostra o erro. Um convite longo desta versão ainda pareia na 1.7.0, mas só pela busca da n0.
