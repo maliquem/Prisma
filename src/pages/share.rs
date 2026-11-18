@@ -1382,6 +1382,8 @@ fn client_tab(ui: &mut Ui, app: &App, c: &mut ClientOpts, x: f32, top: f32, w: f
     ui.check("sh-vsync", rect(ix, y, iw, 30.0), "VSync: sem rasgos na imagem, com um pouco mais de atraso", &mut c.vsync);
     y += 34.0;
     ui.check("sh-vrr", rect(ix, y, iw, 30.0), "Tela G-SYNC ou FreeSync: cada quadro na hora, sem rasgar", &mut c.vrr);
+    y += 34.0;
+    ui.check("sh-upscale", rect(ix, y, iw, 30.0), "Super-resolução da placa (NVIDIA RTX ou Intel)", &mut c.upscale);
     y += 40.0;
     let ctl = 240.0f32.min(iw * 0.55);
     let imm_r = row(ui, ix, y, iw, "Modo imersivo", ctl);

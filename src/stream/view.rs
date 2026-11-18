@@ -669,6 +669,48 @@ fn release_all(k: &mut Keys) {
     }
 }
 
+/// Super-resolução do fabricante no VideoProcessor: a RTX VSR da NVIDIA e a da Intel, pelas extensões
+/// e GUIDs que o Chromium usa (`swap_chain_presenter.cc`). A AMD não tem. Devolve o que aconteceu.
+unsafe fn super_res(d: &D3d, vc: &ID3D11VideoContext1, vp: &ID3D11VideoProcessor) -> String {
+    let vendor = d.dev.cast::<IDXGIDevice>().and_then(|x| x.GetAdapter()).and_then(|a| a.GetDesc()).map_or(0, |x| x.VendorId);
+    let (name, hr) = match vendor {
+        0x10de => {
+            const NV: GUID = GUID::from_values(0xd43ce1b3, 0x1f4b, 0x48ac, [0xba, 0xee, 0xc3, 0xc2, 0x53, 0x75, 0xe6, 0xf7]);
+            // Versão 1, método 2 (super-resolução), ligado.
+            let s: [u32; 3] = [1, 2, 1];
+            ("RTX VSR da NVIDIA", vc.VideoProcessorSetStreamExtension(vp, 0, &NV, 12, s.as_ptr().cast()))
+        }
+        0x8086 => {
+            const INTEL: GUID = GUID::from_values(0xedd1d4b9, 0x8659, 0x4cbc, [0xa4, 0xd6, 0x98, 0x31, 0xa2, 0x16, 0x3a, 0xc3]);
+            #[repr(C)]
+            struct Ext {
+                function: u32,
+                param: *const core::ffi::c_void,
+            }
+            let size = std::mem::size_of::<Ext>() as u32;
+            let (version, mode, scale) = (3u32, 1u32, 2u32);
+            let ext = |function: u32, value: &u32| Ext { function, param: (value as *const u32).cast() };
+            // Versão, modo pré-processamento e, no quadro de entrada, a escala por super-resolução.
+            let (a, b, c) = (ext(0x01, &version), ext(0x20, &mode), ext(0x37, &scale));
+            let hr = [
+                vc.VideoProcessorSetOutputExtension(vp, &INTEL, size, (&a as *const Ext).cast()),
+                vc.VideoProcessorSetOutputExtension(vp, &INTEL, size, (&b as *const Ext).cast()),
+                vc.VideoProcessorSetStreamExtension(vp, 0, &INTEL, size, (&c as *const Ext).cast()),
+            ]
+            .into_iter()
+            .find(|h| *h < 0)
+            .unwrap_or(0);
+            ("super-resolução da Intel", hr)
+        }
+        _ => return format!("a placa (fabricante {vendor:#06x}) não tem"),
+    };
+    if hr >= 0 {
+        format!("{name} ligada")
+    } else {
+        format!("{name} recusada ({:#010x}; driver antigo ou opção desligada no painel da placa)", hr as u32)
+    }
+}
+
 /// Converte o quadro decodificado (NV12, ou P010 no HDR10) para a tela e encaixa com faixas pretas.
 struct Scaler {
     vd: ID3D11VideoDevice,
@@ -680,7 +722,8 @@ struct Scaler {
 }
 
 impl Scaler {
-    unsafe fn new(d: &D3d, iw: u32, ih: u32, ow: u32, oh: u32, fps: u32, hdr: bool) -> Result<Self> {
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn new(d: &D3d, iw: u32, ih: u32, ow: u32, oh: u32, fps: u32, hdr: bool, sr: bool) -> Result<Self> {
         let vd: ID3D11VideoDevice = d.dev.cast()?;
         let vc: ID3D11VideoContext1 = d.ctx.cast()?;
         let desc = D3D11_VIDEO_PROCESSOR_CONTENT_DESC {
@@ -715,6 +758,10 @@ impl Scaler {
         let (x, y) = ((ow as i32 - dw) / 2, (oh as i32 - dh) / 2);
         vc.VideoProcessorSetStreamDestRect(&vp, 0, true, Some(&RECT { left: x, top: y, right: x + dw, bottom: y + dh }));
         vc.VideoProcessorSetOutputTargetRect(&vp, true, Some(&RECT { left: 0, top: 0, right: ow as i32, bottom: oh as i32 }));
+        // Só vale aumentando: no mesmo tamanho ou diminuindo não há o que refazer.
+        if sr && (dw as u32 > iw || dh as u32 > ih) {
+            eprintln!("super-resolução ({iw}x{ih} para {dw}x{dh}): {}", super_res(d, &vc, &vp));
+        }
         Ok(Self { vd, vc, en, vp, size: (iw, ih, ow, oh), hdr })
     }
 
@@ -1664,7 +1711,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                 let bb: ID3D11Texture2D = swap.GetBuffer(0)?;
                 let (ow, oh) = buffer_size(&bb);
                 if scaler.as_ref().is_none_or(|s| s.size != (w, h, ow, oh) || s.hdr != hdr_out) {
-                    scaler = Scaler::new(&d, w, h, ow, oh, fps, hdr_out).ok();
+                    scaler = Scaler::new(&d, w, h, ow, oh, fps, hdr_out, co.upscale).ok();
                 }
                 if let Some(s) = &scaler {
                     if s.blt(&tex, slice, &bb).is_ok() && present(&swap, sync, present_flags, vrr_hz, &mut shown_at) {
