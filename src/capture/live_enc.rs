@@ -106,6 +106,15 @@ impl LiveEncoder {
         }
     }
 
+    /// Troca a taxa sem reabrir (controle de taxa da transmissão). Falso se o codificador recusou.
+    pub fn set_bitrate(&mut self, bitrate: u32) -> bool {
+        match self {
+            LiveEncoder::Mf(e) => e.set_bitrate(bitrate),
+            #[cfg(feature = "stream")]
+            LiveEncoder::Nv(n) => unsafe { n.set_bitrate(bitrate) },
+        }
+    }
+
     /// Sabe se recuperar de um quadro perdido sem mandar quadro-chave.
     pub fn recovers(&self) -> bool {
         match self {

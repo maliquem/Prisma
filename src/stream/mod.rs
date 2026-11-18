@@ -27,6 +27,7 @@ pub(crate) mod pads;
 mod screen;
 #[cfg(feature = "stream")]
 pub mod service;
+pub mod rate;
 pub mod view;
 pub mod wave;
 #[cfg(feature = "stream")]
@@ -192,6 +193,8 @@ pub enum Kind {
     PadInfo = 13,
     Sas = 14,
     Clip = 15,
+    /// Número alto de propósito: os de 16 em diante ficam para as outras frentes do compartilhamento.
+    Rate = 24,
 }
 
 // ---------- Permissões de quem assiste ----------
@@ -412,6 +415,8 @@ pub enum Msg<'a> {
     Sas,
     /// Um pedaço de texto copiado: `part` de `parts`, do texto `id`.
     Clip { id: u16, part: u8, parts: u8, data: &'a [u8] },
+    /// Retorno de quem assiste para o controle de taxa (veja `rate.rs`). Host antigo ignora.
+    Rate(rate::Report),
 }
 
 /// O codec do vídeo na rede: um dos de sempre (NVENC e Media Foundation) ou o PyroWave, que só
@@ -556,6 +561,12 @@ pub fn write(out: &mut Vec<u8>, m: &Msg) {
             out.extend_from_slice(&[part, parts]);
             out.extend_from_slice(data);
         }
+        Msg::Rate(r) => {
+            head(out, Kind::Rate);
+            out.extend_from_slice(&r.delay_ms.to_le_bytes());
+            out.extend_from_slice(&r.loss_pm.to_le_bytes());
+            out.extend_from_slice(&r.kbps.to_le_bytes());
+        }
     }
 }
 
@@ -626,6 +637,7 @@ pub fn read(b: &[u8]) -> Option<Msg<'_>> {
         13 => Msg::PadInfo { pad: *b.get(4)?, player: *b.get(5)?, slot: *b.get(6)?, why: *b.get(7)? },
         14 => Msg::Sas,
         15 => Msg::Clip { id: u16_at(b, 4)?, part: *b.get(6)?, parts: *b.get(7)?, data: b.get(8..)? },
+        24 => Msg::Rate(rate::Report { delay_ms: u16_at(b, 4)?, loss_pm: u16_at(b, 6)?, kbps: u32_at(b, 8)? }),
         _ => return None,
     })
 }
@@ -782,6 +794,7 @@ mod tests {
         round(Msg::PadInfo { pad: 1, player: 3, slot: 2, why: PAD_OK });
         round(Msg::Sas);
         round(Msg::Clip { id: 300, part: 1, parts: 3, data: b"texto" });
+        round(Msg::Rate(rate::Report { delay_ms: 31, loss_pm: 1000, kbps: 150_000 }));
         round(Msg::Nack { frame: 77 });
         round(Msg::Hello { w: 3840, h: 2160, hz: 119, codecs: 7, pid: 4321, flags: SEES_HDR | DECODES_444 });
         round(Msg::Audio { seq: 9, pts: 10, data: &[0, 1, 2, 3] });

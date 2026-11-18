@@ -2,7 +2,7 @@
 //! Várias pessoas podem assistir juntas (co-op): cada uma com as permissões do aparelho dela,
 //! o mouse e o teclado aplicados aqui e os controles dela virando controles virtuais.
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
@@ -1188,6 +1188,14 @@ impl Coder {
         }
     }
 
+    /// Troca a taxa (só o NVENC e o Media Foundation; o PyroWave segue a dele).
+    fn set_bitrate(&mut self, bits: u32) -> bool {
+        match self {
+            Coder::Nv { enc, .. } => enc.set_bitrate(bits),
+            Coder::Wave(_) => false,
+        }
+    }
+
     fn recovers(&self) -> bool {
         match self {
             Coder::Nv { enc, .. } => enc.recovers(),
@@ -1429,6 +1437,8 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
         }
     }
     let mut made = None;
+    // Teto da taxa do codificador aberto; o controle de taxa (`rate.rs`) só desce dele.
+    let mut top_bits = 0u32;
     for (c, vf) in tries {
         if wave.is_some() {
             break;
@@ -1458,6 +1468,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                 };
                 eprintln!("vídeo: {}x{} a {} quadros/s, {}{}, {:.1} Mbit/s ({})", out_w, out_h, fps, codec_name(VideoCodec::Std(c)), extra, bits as f64 / 1e6, e.name());
                 made = Some((e, c, vf));
+                top_bits = bits;
                 break;
             }
             Err(e) if vf != VideoFmt::default() => eprintln!("vídeo: {}{} recusado ({}); tentando o próximo", codec_name(VideoCodec::Std(c)), if vf.hdr10 { " HDR10" } else { " 4:4:4" }, e.message()),
@@ -1555,6 +1566,10 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     }).collect();
     // Quadros enviados há pouco, com a hora de cada um, para invalidar os que se perderam.
     let mut sent: VecDeque<(u32, i64)> = VecDeque::new();
+    // Controle de taxa: um por pessoa (pela chave dela); o codificador segue a pior.
+    let mut rates: HashMap<String, super::rate::Rate> = HashMap::new();
+    let mut applied = top_bits;
+    let born = Instant::now();
     for g in &room.guests {
         g.link.send(&infos[g.perms as usize]);
     }
@@ -1744,6 +1759,14 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                                     enc.force_key();
                                 }
                             }
+                            Msg::Rate(r) if top_bits > 0 => {
+                                let t = born.elapsed().as_millis() as i64;
+                                let changed = rates.entry(g.key().to_string()).or_insert_with(|| super::rate::Rate::new(top_bits)).feedback(r, t).is_some();
+                                let want = rates.values().map(|r| r.current()).min().unwrap_or(top_bits);
+                                if changed && want != applied && enc.set_bitrate(want) {
+                                    applied = want;
+                                }
+                            }
                             Msg::Input { first, events } => {
                                 // Na tela segura, só quem tem a permissão de sistema.
                                 if let Some(inj) = g.input.as_mut().filter(|_| !secure || g.perms & SYSTEM != 0) {
@@ -1807,6 +1830,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                 eprintln!("«{}» saiu", g.name);
             }
             room.guests.retain(|g| !g.gone);
+            rates.retain(|k, _| room.guests.iter().any(|g| g.key() == k));
             *audio_links.lock().unwrap() = hearing(&room.guests);
             if room.guests.is_empty() {
                 break;

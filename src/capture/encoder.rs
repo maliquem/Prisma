@@ -185,6 +185,15 @@ impl Encoder {
         }
     }
 
+    /// Troca a taxa durante a transmissão. Falso se o codificador recusou (alguns só aceitam no início).
+    pub fn set_bitrate(&self, bitrate: u32) -> bool {
+        let Some(a) = &self.api else { return false };
+        unsafe {
+            let _ = a.SetValue(&CODECAPI_AVEncCommonBufferSize, &VARIANT::from(bitrate / self.fps.max(1) * 3 / 2));
+            a.SetValue(&CODECAPI_AVEncCommonMeanBitRate, &VARIANT::from(bitrate)).is_ok()
+        }
+    }
+
     /// Trata os eventos pendentes e entrega o que saiu do codificador.
     pub fn pump(&mut self, out: &mut Vec<Pkt>) -> Result<()> {
         unsafe {

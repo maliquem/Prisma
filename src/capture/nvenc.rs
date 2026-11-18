@@ -52,6 +52,10 @@ pub struct Nvenc {
     pub intra_refresh: bool,
     /// Sabe deixar de usar um quadro perdido como referência.
     pub can_invalidate: bool,
+    /// Parâmetros do início, guardados para trocar a taxa sem reabrir (`set_bitrate`).
+    ip: NV_ENC_INITIALIZE_PARAMS,
+    cfg: Box<NV_ENC_CONFIG>,
+    fps: u32,
 }
 
 fn fail(what: &str, st: NVENCSTATUS) -> Error {
@@ -104,6 +108,9 @@ impl Nvenc {
             name: String::new(),
             intra_refresh: false,
             can_invalidate: false,
+            ip: std::mem::zeroed(),
+            cfg: Box::new(std::mem::zeroed()),
+            fps,
         };
         // Daqui em diante, um erro fecha a sessão pelo Drop.
         me.init(codec, fps, bitrate)?;
@@ -165,11 +172,14 @@ impl Nvenc {
         ip.tuningInfo = tuning;
         // Alguma placa recusa a renovação gradual com estes ajustes: aí tenta sem ela.
         for ir in [self.intra_refresh, false] {
-            let mut cfg = self.config(&pc.presetCfg, codec, fps, bitrate, ir);
-            ip.encodeConfig = &mut cfg;
+            let mut cfg = Box::new(self.config(&pc.presetCfg, codec, fps, bitrate, ir));
+            ip.encodeConfig = &mut *cfg;
             let st = (self.api.nvEncInitializeEncoder)(self.enc, &mut ip);
             if st == NVENCSTATUS::SUCCESS {
                 self.intra_refresh = ir;
+                // O Box não muda de endereço ao entrar na struct: o ponteiro em `ip` segue válido.
+                self.cfg = cfg;
+                self.ip = ip;
                 break;
             }
             if !ir {
@@ -361,6 +371,22 @@ impl Nvenc {
     /// O próximo quadro sai como quadro-chave.
     pub fn force_key(&self) {
         self.force.set(true);
+    }
+
+    /// Troca a taxa sem quadro-chave nem reabrir a sessão. Falso se o NVENC recusou.
+    pub unsafe fn set_bitrate(&mut self, bitrate: u32) -> bool {
+        let rc = &mut self.cfg.rcParams;
+        rc.averageBitRate = bitrate;
+        rc.maxBitRate = bitrate;
+        rc.vbvBufferSize = bitrate / self.fps.max(1);
+        rc.vbvInitialDelay = rc.vbvBufferSize;
+        self.ip.encodeConfig = &mut *self.cfg;
+        let mut p: NV_ENC_RECONFIGURE_PARAMS = std::mem::zeroed();
+        p.version = self.ver.reconfigure_params_ver();
+        p.reInitEncodeParams = self.ip;
+        // resetEncoder e forceIDR ficam em 0: só a taxa muda, a imagem segue sem quadro-chave.
+        p.bit_fields = 0;
+        (self.api.nvEncReconfigureEncoder)(self.enc, &mut p) == NVENCSTATUS::SUCCESS
     }
 
     /// Deixa de usar como referência o quadro com esta hora. Falso se o NVENC não aceitou.

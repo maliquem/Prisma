@@ -128,6 +128,8 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
     // antes, para o Ctrl+C dentro dela valer): o host não lê o que se copia com ela atrás.
     let mut clip_out: Option<String> = None;
     let mut last_front = Instant::now() - CLIP_FRONT;
+    // Fila e perda do vídeo, mandadas ao host para ele ajustar a taxa (host antigo ignora).
+    let mut meter = super::rate::Meter::default();
 
     let push = |e: Event| {
         sh.queue.lock().unwrap().push_back(e);
@@ -145,6 +147,10 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
             write(&mut out, &Msg::Ping { t: now() });
             link.send(&out);
             last_ping = Instant::now();
+        }
+        if let Some(r) = meter.report(now()) {
+            write(&mut out, &Msg::Rate(r));
+            link.send(&out);
         }
         if sh.want_key.swap(false, Ordering::Relaxed) {
             waiting_key = true;
@@ -259,6 +265,7 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
                 if count == 0 || idx >= count {
                     continue;
                 }
+                meter.video(frame, count, pts, data.len(), now());
                 if let Some(e) = expect.filter(|&e| newer(e, frame)) {
                     // Quadro-chave muito atrás do esperado: o host recomeçou o vídeo (outros quadros
                     // por segundo, outra opção) e a contagem voltou. Sem isto, tudo seria descartado
