@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.7.1
 
 - Share screen, pairing: the long invite now also carries this PC's IP addresses (local network and VPN, like ZeroTier), so pairing works without the n0 relays when both PCs are on the same network or VPN. When the pairing PC cannot reach any n0 relay, its log says so and shows the error. A long invite from this version still pairs on 1.7.0, but only through the n0 lookup. / Compartilhar tela, pareamento: o convite longo agora leva também os IPs deste PC (rede local e VPN, como o ZeroTier), e o pareamento funciona sem os relés da n0 quando os dois PCs estão na mesma rede ou VPN. Quando o PC que pareia não alcança nenhum relé da n0, o log dele diz isso e mostra o erro. Um convite longo desta versão ainda pareia na 1.7.0, mas só pela busca da n0.
 - Share screen: on a network that opens HTTPS to inspect it (school, company, some antivirus), Prisma could not reach the n0 relays or find the short code, because it only trusted its own built-in certificate list. It now trusts the certificates installed in Windows, like the browser does. / Compartilhar tela: numa rede que abre o HTTPS para inspecionar (escola, empresa, alguns antivírus), o Prisma não alcançava os relés da n0 nem achava o código curto, porque só confiava na lista de certificados embutida nele. Agora ele confia nos certificados instalados no Windows, como o navegador.

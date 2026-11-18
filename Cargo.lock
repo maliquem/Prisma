@@ -2331,7 +2331,7 @@ dependencies = [
 
 [[package]]
 name = "prisma"
-version = "1.7.0"
+version = "1.7.1"
 dependencies = [
  "blake3",
  "data-encoding",
