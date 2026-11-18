@@ -39,12 +39,10 @@ fn fmt_hours(h: u64) -> String {
 
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     header(ui, a, "Discos e redes", "Tudo que está ligado no PC, em tempo real.");
-    let bw = 104.0;
-    for (i, name) in ["Discos", "Redes"].iter().enumerate() {
-        let b = rect(a.right() - 28.0 - (2 - i) as f32 * (bw + 8.0) + 8.0, 28.0, bw, 40.0);
-        if ui.button(name, b, name, app.store_tab == i as u8) {
-            app.store_tab = i as u8;
-        }
+    const TABS: [&str; 2] = ["Discos", "Redes"];
+    let mut tab = app.store_tab as usize;
+    if ui.segment("st-tab", a.right() - 28.0 - Ui::segment_width(&TABS), 30.0, 36.0, &TABS, &mut tab) {
+        app.store_tab = tab as u8;
     }
     if app.store_tab == 0 {
         draw_disks(ui, app, a);

@@ -36,13 +36,13 @@ fn draw_list(ui: &mut Ui, app: &mut App, a: Rect) {
     let mut q = std::mem::take(&mut app.un_search);
     ui.search("un-q", rect(l.x + 12.0, l.y + 10.0, 320.0, 36.0), &mut q, "Buscar por nome ou empresa");
     app.un_search = q;
-    ui.c.text(rect(l.right() - 360.0, l.y + 10.0, 92.0, 36.0), "Ordenar por", 13.0, MUTED, Align::Right, Weight::Regular);
+    ui.c.text(rect(l.right() - 12.0 - Ui::segment_width(&SORT) - 108.0, l.y + 10.0, 100.0, 36.0), "Ordenar por", 13.0, MUTED, Align::Right, Weight::Regular);
     // Na mesma ordem das colunas da lista.
-    for (i, (name, by)) in [("Nome", 0u8), ("Data", 2), ("Tamanho", 1)].iter().enumerate() {
-        let b = rect(l.right() - 262.0 + i as f32 * 84.0, l.y + 10.0, 78.0, 36.0);
-        if ui.button(&format!("us{i}"), b, name, app.un_sort == *by) {
-            app.sort_programs(*by);
-        }
+    const SORT: [&str; 3] = ["Nome", "Data", "Tamanho"];
+    const BY: [u8; 3] = [0, 2, 1];
+    let mut sort = BY.iter().position(|&b| b == app.un_sort).unwrap_or(0);
+    if ui.segment("us", l.right() - 12.0 - Ui::segment_width(&SORT), l.y + 10.0, 36.0, &SORT, &mut sort) {
+        app.sort_programs(BY[sort]);
     }
     let needle = app.un_search.to_lowercase();
     let rows: Vec<usize> = app

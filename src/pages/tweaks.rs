@@ -17,12 +17,10 @@ fn color(l: Level) -> Color {
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     header(ui, a, "Ajustes do Windows", "Só o que tem efeito comprovado. Tudo pode ser desfeito.");
     defaults_button(ui, app, a.right() - 484.0, crate::config::Defaults::Tweaks, "Volta as opções Ver log e Restauração ao padrão. Os ajustes aplicados continuam como estão: para reverter, use Desfazer.");
-    let bw = 112.0;
-    for (i, name) in ["Auditoria", "Perfis", "Fora da lista"].iter().enumerate() {
-        let b = rect(a.right() - 28.0 - (3 - i) as f32 * (bw + 8.0) + 8.0, 28.0, bw, 40.0);
-        if ui.button(name, b, name, app.tw_tab == i as u8) {
-            app.tw_tab = i as u8;
-        }
+    const TABS: [&str; 3] = ["Auditoria", "Perfis", "Fora da lista"];
+    let mut tab = app.tw_tab as usize;
+    if ui.segment("tw-tab", a.right() - 28.0 - Ui::segment_width(&TABS), 30.0, 36.0, &TABS, &mut tab) {
+        app.tw_tab = tab as u8;
     }
     let area = rect(a.x + 28.0, 88.0, a.w - 56.0, a.h - 108.0);
     match app.tw_tab {

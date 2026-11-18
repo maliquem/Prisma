@@ -169,13 +169,10 @@ fn draw_result(ui: &mut Ui, app: &mut App, s: &Scan, area: Rect) {
     ui.card(l);
     let mut next = None;
     let path = s.path(cur);
-    for (i, name) in ["Pastas", "Maiores arquivos"].iter().enumerate() {
-        let w = if i == 0 { 84.0 } else { 150.0 };
-        let x = if i == 0 { l.x + 12.0 } else { l.x + 102.0 };
-        if ui.button(name, rect(x, l.y + 10.0, w, 36.0), name, app.scan_tab == i as u8) {
-            app.scan_tab = i as u8;
-            ui.reset_scroll("tree");
-        }
+    let mut tab = app.scan_tab as usize;
+    if ui.segment("scan-tab", l.x + 12.0, l.y + 10.0, 36.0, &["Pastas", "Maiores arquivos"], &mut tab) {
+        app.scan_tab = tab as u8;
+        ui.reset_scroll("tree");
     }
     let foot = 104.0;
     let list = rect(l.x + 8.0, l.y + 94.0, l.w - 16.0, l.h - 102.0 - foot);

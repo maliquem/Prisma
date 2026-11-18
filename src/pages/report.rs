@@ -66,13 +66,7 @@ fn form(ui: &mut Ui, app: &mut App, a: Rect) {
     }
     let lx = x + 242.0;
     ui.label(rect(lx, 84.0, col - 242.0, 18.0), "Gravidade", TEXT2);
-    let bw = ((col - 242.0 - 12.0) / 3.0).max(70.0);
-    for (i, name) in LEVELS.iter().enumerate() {
-        if ui.button(&format!("bug-l{i}"), rect(lx + i as f32 * (bw + 6.0), 106.0, bw, 38.0), name, app.report.level == i) {
-            app.report.level = i;
-            ui.s.needs_redraw = true;
-        }
-    }
+    ui.segment("bug-l", lx, 106.0, 38.0, &LEVELS, &mut app.report.level);
     ui.c.text(rect(lx, 148.0, col - 242.0, 18.0), MEANING[app.report.level], 12.0, MUTED, Align::Left, Weight::Regular);
 
     ui.label(rect(x, 172.0, col, 18.0), "O que aconteceu? Conte o que fez, o que esperava e o que viu.", TEXT2);

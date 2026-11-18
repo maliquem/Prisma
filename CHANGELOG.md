@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Tabs and sort choices (Monitor, Windows tweaks, Disks and networks, Services, Startup, Uninstall, Disk space and Report a bug) look like tabs: the chosen one is a gray pill with a blue line under it. Solid blue is now only for the page's main action. / Abas e escolhas de ordem (Monitor, Ajustes do Windows, Discos e redes, Serviços, Inicialização, Desinstalar, Espaço em disco e Reportar bug) têm cara de aba: a escolhida fica num fundo cinza com um traço azul embaixo. O azul cheio fica só para a ação principal da página.
+
 ## 1.6.2
 
 - Meter: opening the Meter from Prisma Launcher (or with the launcher in focus) no longer locks it onto the launcher, which showed 0 FPS for the whole game. The Unity crash handler never becomes the Meter game either. / Medidor: abrir o Medidor pelo Prisma Launcher (ou com o launcher em foco) não o prende mais no launcher, o que mostrava 0 FPS o jogo inteiro. O vigia de travamento do Unity também nunca vira o jogo do Medidor.

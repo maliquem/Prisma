@@ -490,6 +490,40 @@ impl<'a> Ui<'a> {
         clicked
     }
 
+    /// Largura de `segment` com estes nomes, para alinhar à direita.
+    pub fn segment_width(names: &[&str]) -> f32 {
+        names.iter().map(|n| measure(n, 14.0, Weight::Semibold, None).0 + 28.0 + 4.0).sum::<f32>() - 4.0
+    }
+
+    /// Abas (ou escolha de uma entre poucas): a escolhida em CARD2 com traço ACCENT embaixo, as
+    /// outras só texto. Fica fora do azul cheio, que é da ação da página. Devolve true ao trocar.
+    pub fn segment(&mut self, key: &str, x: f32, y: f32, h: f32, names: &[&str], sel: &mut usize) -> bool {
+        let mut cx = x;
+        let mut changed = false;
+        for (i, name) in names.iter().enumerate() {
+            let w = measure(name, 14.0, Weight::Semibold, None).0 + 28.0;
+            let r = rect(cx, y, w, h);
+            let id = hash_id(&format!("{key}#{i}"));
+            let hover = self.hover(r);
+            if self.clickable(id, r) && *sel != i {
+                *sel = i;
+                changed = true;
+                self.s.needs_redraw = true;
+            }
+            let on = *sel == i;
+            if on {
+                self.c.round(r, 8.0, CARD2);
+                self.c.round(rect(r.x + 12.0, r.bottom() - 3.0, r.w - 24.0, 2.0), 1.0, ACCENT);
+            } else if hover {
+                self.c.round(r, 8.0, LINE);
+            }
+            let color = if on || hover { TEXT } else { TEXT2 };
+            self.c.text(r, name, 14.0, color, Align::Center, if on { Weight::Semibold } else { Weight::Regular });
+            cx += w + 4.0;
+        }
+        changed
+    }
+
     pub fn check(&mut self, key: &str, r: Rect, label: &str, val: &mut bool) -> bool {
         let id = hash_id(key);
         let clicked = self.clickable(id, r);

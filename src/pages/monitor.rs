@@ -100,11 +100,10 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let tw = w - core_w - 12.0;
     let t = rect(x, by, tw, bh);
     ui.card(t);
-    for (i, name) in ["Programas", "Detalhes"].iter().enumerate() {
-        if ui.button(&format!("mt{i}"), rect(t.x + 12.0 + i as f32 * 104.0, t.y + 8.0, 98.0, 32.0), name, app.mon_tab == i as u8) {
-            app.mon_tab = i as u8;
-            app.mon_filter = None;
-        }
+    let mut tab = app.mon_tab as usize;
+    if ui.segment("mt", t.x + 12.0, t.y + 8.0, 32.0, &["Programas", "Detalhes"], &mut tab) {
+        app.mon_tab = tab as u8;
+        app.mon_filter = None;
     }
     let details = app.mon_tab == 1;
     let find = rect(t.x + 226.0, t.y + 8.0, (t.w - 406.0).min(280.0), 32.0);

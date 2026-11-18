@@ -10,14 +10,10 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     if ui.button("boot-add", rect(a.right() - 168.0, 24.0, 140.0, 44.0), "Adicionar", true) {
         app.pick_exe();
     }
-    let sort = ["Nome", "Ativados", "Desativados"];
-    let widths = [76.0, 96.0, 118.0];
-    let mut bx = a.right() - 184.0 - widths.iter().map(|w| w + 6.0).sum::<f32>();
-    for (i, name) in sort.iter().enumerate() {
-        if ui.button(&format!("bs{i}"), rect(bx, 28.0, widths[i], 36.0), name, app.boot_sort == i as u8) {
-            app.sort_boot(i as u8);
-        }
-        bx += widths[i] + 6.0;
+    const SORT: [&str; 3] = ["Nome", "Ativados", "Desativados"];
+    let mut sort = app.boot_sort as usize;
+    if ui.segment("bs", a.right() - 184.0 - Ui::segment_width(&SORT), 28.0, 36.0, &SORT, &mut sort) {
+        app.sort_boot(sort as u8);
     }
 
     let x = a.x + 28.0;

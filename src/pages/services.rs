@@ -38,13 +38,12 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let rw = 300.0;
     let l = rect(x, top, a.w - 56.0 - rw - 12.0, h);
     ui.card(l);
-    let bw = 92.0;
-    for (i, name) in ["Todos", "Rodando", "Parados"].iter().enumerate() {
-        if ui.button(name, rect(l.x + 12.0 + i as f32 * (bw + 6.0), l.y + 10.0, bw, 36.0), name, app.svc_filter == i as u8) {
-            app.svc_filter = i as u8;
-        }
+    const TABS: [&str; 3] = ["Todos", "Rodando", "Parados"];
+    let mut tab = app.svc_filter as usize;
+    if ui.segment("svc-tab", l.x + 12.0, l.y + 10.0, 36.0, &TABS, &mut tab) {
+        app.svc_filter = tab as u8;
     }
-    let sx = l.x + 12.0 + 3.0 * (bw + 6.0) + 6.0;
+    let sx = l.x + 12.0 + Ui::segment_width(&TABS) + 12.0;
     let mut q = std::mem::take(&mut app.svc_search);
     ui.search("svc-q", rect(sx, l.y + 10.0, l.right() - sx - 12.0, 36.0), &mut q, "Buscar");
     app.svc_search = q;
