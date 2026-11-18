@@ -1628,8 +1628,8 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     }
 
     let interval = 10_000_000i64 / fps as i64;
-    // Já saiu um quadro: o ritmo constante só repete depois do primeiro.
-    let mut fed_once = false;
+    // Quadros dados ao codificador; o ritmo constante só repete depois do primeiro.
+    let mut fed = 0u32;
     let mut pending: Option<i64> = None;
     let mut pkts: Vec<Pkt> = Vec::new();
     let mut ready: Vec<Ready> = Vec::new();
@@ -1952,7 +1952,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                     enc.pump(space, &mut pkts, &mut ready)?;
                     // A Desktop Duplication entrega cada mudança (o mouse também): o ritmo fica aqui.
                     let t = now();
-                    if enc.ready() && time_to_feed(t, due, interval, pending.is_some(), opts.constant && fed_once) {
+                    if enc.ready() && time_to_feed(t, due, interval, pending.is_some(), opts.constant && fed > 0) {
                         due = next_due(t, due, interval);
                         if fed_gaps.len() < GAPS_KEPT {
                             fed_gaps.push(fed_at.elapsed().as_nanos() as i64 / 100);
@@ -1973,7 +1973,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                             None => now(),
                         };
                         enc.feed(&d.ctx, pts, space, &mut ready)?;
-                        fed_once = true;
+                        fed += 1;
                     }
                     return Ok(());
                 }
@@ -2020,7 +2020,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
             }
             enc.pump(space, &mut pkts, &mut ready)?;
             let t = now();
-            if enc.ready() && time_to_feed(t, due, interval, pending.is_some(), opts.constant && fed_once) {
+            if enc.ready() && time_to_feed(t, due, interval, pending.is_some(), opts.constant && fed > 0) {
                 due = next_due(t, due, interval);
                 if fed_gaps.len() < GAPS_KEPT {
                     fed_gaps.push(fed_at.elapsed().as_nanos() as i64 / 100);
@@ -2029,7 +2029,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                 // Ritmo constante com a tela parada: o último quadro de novo.
                 let pts = pending.take().unwrap_or_else(now);
                 enc.feed(&d.ctx, pts, space, &mut ready)?;
-                fed_once = true;
+                fed += 1;
             }
             Ok(())
         })();
@@ -2081,7 +2081,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     }
     room.frame_id = frame_id;
     if fed_gaps.len() > 1 {
-        eprint!("ritmo: {captured} capturados, {} quadros ao codificador; {}", fed_gaps.len(), super::view::gap_line(&mut fed_gaps[1..], fps).replace("mostrados", "dados ao codificador"));
+        eprint!("ritmo: {captured} capturados, {fed} quadros ao codificador; {}", super::view::gap_line(&mut fed_gaps[1..], fps).replace("mostrados", "dados ao codificador"));
     }
     for g in &mut room.guests {
         if let Some(inj) = &mut g.input {

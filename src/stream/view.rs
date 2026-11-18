@@ -1839,7 +1839,8 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                 None => format!("Prisma · conectando ({})", link.route()),
             };
             let _ = SetWindowTextW(hwnd, &HSTRING::from(title));
-            if start.elapsed() > warm {
+            // Só o relatório (`out_file`) usa o total; sem ele as listas cresceriam a sessão toda.
+            if out_file.is_some() && start.elapsed() > warm {
                 total.shown += second.shown;
                 total.e2e.append(&mut second.e2e);
                 total.decode.append(&mut second.decode);
