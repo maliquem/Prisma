@@ -167,7 +167,7 @@ As flags de teste ficam em `src/app.rs` (`start`, linha 366, e as checagens de `
 | `PRISMA_AUTO_SECS` | `src/meter.rs:1052` | Tempo da medição automática. |
 | `PRISMA_SETUP_OUT` e `PRISMA_URL_OUT` | `app.rs:1911` (SETUP_OUT) e `report.rs:294` (URL_OUT) | Arquivo de saída da instalação e do link do relatório. |
 | `PRISMA_CODEC`, `PRISMA_HDR10` | `app.rs:697` e `712` | Codec e HDR10 na gravação de teste (`--test-rec=`). |
-| `PRISMA_FORCE_HDR`, `PRISMA_POOL`, `PRISMA_MININT`, `PRISMA_DROP`, `PRISMA_DROP_LATE`, `PRISMA_FMT`, `PRISMA_NO_WAKE`, `PRISMA_ENC`, `PRISMA_NVDEC_CPU` | `capture/engine.rs:343`, `capture/live.rs:282`, `292`, `359`, `360`, `666`, `682`, `capture/live_enc.rs:30`, `capture/nvdec.rs:386` | Ajustes de captura para testes de desempenho. |
+| `PRISMA_FORCE_HDR`, `PRISMA_POOL`, `PRISMA_MININT`, `PRISMA_DROP`, `PRISMA_DROP_LATE`, `PRISMA_FMT`, `PRISMA_NO_WAKE`, `PRISMA_ENC`, `PRISMA_NVDEC_CPU`, `PRISMA_AQ` | `capture/engine.rs:343`, `capture/live.rs:282`, `292`, `359`, `360`, `666`, `682`, `capture/live_enc.rs:30`, `capture/nvdec.rs:386`, `capture/nvenc.rs:205` | Ajustes de captura para testes de desempenho. |
 
 ---
 

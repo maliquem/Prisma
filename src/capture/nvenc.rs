@@ -200,6 +200,12 @@ impl Nvenc {
         rc.set_enableLookahead(0);
         rc.lookaheadDepth = 0;
         rc.set_zeroReorderDelay(1);
+        // AQ espacial, desligado como no Sunshine: `PRISMA_AQ=1..15` liga com essa força, para a bancada
+        // medir texto parado em 10 e 40 Mbit. Pode deixar o texto mais nítido e escurecer sombras.
+        if let Some(s) = std::env::var("PRISMA_AQ").ok().and_then(|v| v.parse::<u32>().ok()).filter(|s| (1..=15).contains(s)) {
+            rc.set_enableAQ(1);
+            rc.set_aqStrength(s);
+        }
 
         // Uma volta de renovação a cada 2 segundos, espalhada por um quarto de segundo.
         let period = fps * 2;
