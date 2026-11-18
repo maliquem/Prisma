@@ -1144,9 +1144,11 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         .cast::<IDXGISwapChain2>()
         .and_then(|s| s.SetMaximumFrameLatency(1).map(|_| Owned::new(s.GetFrameLatencyWaitableObject())))
         .ok();
-    // Uma espera por Present: o objeto é um semáforo que cada quadro mostrado devolve.
+    // Uma espera por Present: o objeto é um semáforo que cada quadro mostrado devolve. Espera que
+    // não virou Present (erro ao desenhar) fica devendo, e a próxima não espera, senão travaria 100 ms.
+    let owed = std::cell::Cell::new(false);
     let wait_ready = || {
-        if let Some(h) = &ready {
+        if let Some(h) = ready.as_ref().filter(|_| !owed.replace(true)) {
             let _ = WaitForSingleObjectEx(**h, 100, false);
         }
     };
@@ -1596,6 +1598,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
             let bb: ID3D11Texture2D = swap.GetBuffer(0)?;
             let (ow, oh) = buffer_size(&bb);
             if draw.draw(&d.dev, &d.ctx, n, &bb, ow, oh).is_ok() && swap.Present(sync, present_flags).is_ok() {
+                owed.set(false);
                 let shown = now();
                 second.shown += 1;
                 second.e2e.push(shown + sh.offset.load(Ordering::Relaxed) - pts);
@@ -1610,6 +1613,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                     let bb: ID3D11Texture2D = swap.GetBuffer(0)?;
                     let (ow, oh) = buffer_size(&bb);
                     if wd.draw(&d.dev, &d.ctx, &bb, video_rect(wd.w, wd.h, ow, oh)).is_ok() && swap.Present(sync, present_flags).is_ok() {
+                        owed.set(false);
                         let shown = now();
                         second.shown += 1;
                         second.e2e.push(shown + sh.offset.load(Ordering::Relaxed) - pts);
@@ -1629,6 +1633,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                 }
                 if let Some(s) = &scaler {
                     if s.blt(&tex, slice, &bb).is_ok() && swap.Present(sync, present_flags).is_ok() {
+                        owed.set(false);
                         let shown = now();
                         second.shown += 1;
                         second.e2e.push(shown + sh.offset.load(Ordering::Relaxed) - f.pts);
