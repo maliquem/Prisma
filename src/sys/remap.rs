@@ -2009,6 +2009,11 @@ fn file_name(name: &str) -> String {
     format!("{}.txt", s.trim())
 }
 
+/// Os dois nomes caem no mesmo arquivo (o NTFS não diferencia maiúsculas).
+pub fn same_file(a: &str, b: &str) -> bool {
+    file_name(a).to_lowercase() == file_name(b).to_lowercase()
+}
+
 /// Grava o perfil e passa a usar a versão nova.
 pub fn save(p: &Profile) -> bool {
     let dir = profiles_dir();
@@ -2806,6 +2811,14 @@ pub(super) fn send(acts: &[Act]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn nomes_que_caem_no_mesmo_arquivo() {
+        assert!(same_file("Jogo", "jogo"));
+        assert!(same_file("A:B", "A?B"));
+        assert!(same_file("Jogo", "Jogo"));
+        assert!(!same_file("Jogo", "Jogo 2"));
+    }
 
     #[test]
     fn gyro_moves_mouse_only_where_the_layer_turns_it_on() {

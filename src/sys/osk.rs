@@ -264,6 +264,7 @@ pub fn open(pad: Option<&str>) {
 
 /// Só para as fotos do manual: teclado aberto com o grupo `petal` escolhido (com os dois sticks,
 /// o direito aponta para o grupo oposto).
+#[cfg(debug_assertions)]
 pub fn show_for_test(petal: usize) {
     open(None);
     if let State::Open(o) = &mut *STATE.lock().unwrap() {

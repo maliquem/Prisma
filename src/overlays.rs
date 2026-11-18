@@ -944,21 +944,6 @@ impl Toast {
         self.info_at(text, 56.0);
     }
 
-    /// Aviso que fica na tela até `hide` (gravação de macro).
-    pub fn keep(&mut self, text: &str) {
-        self.info(text);
-        unsafe {
-            let _ = KillTimer(Some(self.surface.hwnd), 1);
-        }
-    }
-
-    pub fn hide(&mut self) {
-        unsafe {
-            let _ = KillTimer(Some(self.surface.hwnd), 1);
-            let _ = ShowWindow(self.surface.hwnd, SW_HIDE);
-        }
-    }
-
     /// Aviso a `bottom` DIPs do pé da tela, para não cobrir outra janela flutuante.
     pub fn info_at(&mut self, text: &str, bottom: f32) {
         self.info_for(text, bottom, 1500);

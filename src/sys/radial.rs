@@ -211,6 +211,7 @@ pub fn open_action(pad: &str) {
 }
 
 /// Só para as fotos do manual: aberto, apontando para `sel`.
+#[cfg(debug_assertions)]
 pub fn show_for_test(sel: usize, sub: Option<usize>) {
     open(pads::BACK, "");
     if let State::Open(r) = &mut *STATE.lock().unwrap() {

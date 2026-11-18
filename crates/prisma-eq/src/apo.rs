@@ -2,7 +2,7 @@
 //! mesmo), o `ParametricEQ.txt` e o `GraphicEQ.txt` do AutoEQ (também lido pelo Wavelet) e o
 //! "Filter Settings" do REW. Importar nunca falha: o que o Prisma não faz vira aviso.
 
-use crate::profile::{PROTECT, kind_name, num, parse_filter};
+use crate::profile::{PROTECT, num, parse_filter};
 use crate::{Filter, Group, Kind, Profile, graphic_freqs};
 
 /// Nome do canal no Equalizer APO <-> no Prisma (os outros são iguais).
@@ -16,10 +16,6 @@ fn from_apo_name(c: &str) -> String {
         return BY_NUMBER[n - 1].into();
     }
     RENAMES.iter().find(|r| r.0 == c).map_or(c, |r| r.1.into())
-}
-
-fn to_apo_name(c: &str) -> &str {
-    RENAMES.iter().find(|r| r.1 == c).map_or(c, |r| r.0)
 }
 
 /// Q de uma prateleira dada pela inclinação S (fórmula do RBJ cookbook).
@@ -170,78 +166,11 @@ impl Profile {
         }
         (p, warn)
     }
-
-    /// Texto para o `config.txt` do Equalizer APO (e Peace). Proteção e gráfico viram filtros, para
-    /// o som sair igual ao do Prisma.
-    pub fn to_apo(&self) -> String {
-        let mut s = String::from("# Exportado do Prisma\n");
-        if self.limiter && self.preamp_db > 0.0 {
-            s += "# O Equalizer APO não tem o limitador do Prisma: com ganho acima de 0 dB os picos podem distorcer.\n";
-        }
-        s += &format!("Preamp: {} dB\n", self.preamp_db);
-        let filter = |s: &mut String, f: &Filter| {
-            let on = if f.on { "ON" } else { "OFF" };
-            let gain = if matches!(f.kind, Kind::LowPass | Kind::HighPass) { String::new() } else { format!(" Gain {} dB", f.gain_db) };
-            *s += &format!("Filter: {on} {} Fc {} Hz{gain} Q {}\n", kind_name(f.kind), f.freq, f.q);
-        };
-        // Só os filtros fixos (proteção e gráfico): os do perfil vêm depois, com os desligados.
-        let fixed = Profile { protect: self.protect, graphic: self.graphic.clone(), ..Profile::default() };
-        for f in fixed.filters_for("") {
-            filter(&mut s, &f);
-        }
-        for f in &self.filters {
-            filter(&mut s, f);
-        }
-        for g in &self.groups {
-            let names: Vec<&str> = g.channels.iter().map(|c| to_apo_name(c)).collect();
-            s += &format!("Channel: {}\n", names.join(" "));
-            if g.gain_db != 0.0 {
-                s += &format!("Preamp: {} dB\n", g.gain_db);
-            }
-            if g.delay_ms != 0.0 {
-                s += &format!("Delay: {} ms\n", g.delay_ms);
-            }
-            for f in &g.filters {
-                filter(&mut s, f);
-            }
-        }
-        if !self.groups.is_empty() {
-            s += "Channel: all\n";
-        }
-        s
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    const RATE: f64 = 48_000.0;
-
-    fn same_sound(a: &Profile, b: &Profile, ch: &str) {
-        for f in [15.0, 30.0, 100.0, 440.0, 1000.0, 3000.0, 9000.0, 16000.0, 21000.0] {
-            let (x, y) = (a.response_db(ch, f, RATE), b.response_db(ch, f, RATE));
-            assert!((x - y).abs() < 1e-6, "{ch} {f} Hz: {x} != {y}");
-        }
-        assert_eq!(a.gain_delay_for(ch), b.gain_delay_for(ch));
-    }
-
-    #[test]
-    fn exportar_e_importar_da_o_mesmo_som() {
-        let p = Profile::parse(
-            "preamp=-4\nprotecao=sim\ngrafico=0 0 1 2 3 2 0 0 -1 -2\nFilter 1: ON LSC Fc 80 Hz Gain 3 dB Q 0.7\nFilter 2: OFF PK Fc 9000 Hz Gain 9 dB Q 2\n[C LFE] ganho=2 atraso=3\nFilter 1: ON PK Fc 2500 Hz Gain 2 dB Q 1\n[RL RR] atraso=8\n",
-        )
-        .unwrap();
-        let text = p.to_apo();
-        assert!(text.contains("Channel: C SUB\n") && text.contains("Delay: 8 ms\n") && text.ends_with("Channel: all\n"), "{text}");
-        let (back, warn) = Profile::from_apo(&text);
-        assert!(warn.is_empty(), "{warn:?}");
-        assert!(back.protect);
-        assert_eq!(back.filters.iter().filter(|f| !f.on).count(), 1);
-        for ch in ["L", "C", "LFE", "RR"] {
-            same_sound(&p, &back, ch);
-        }
-    }
 
     #[test]
     fn le_config_do_equalizer_apo() {

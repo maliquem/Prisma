@@ -70,7 +70,9 @@ pub fn current(app: &App) -> Option<Profile> {
 pub fn imported(app: &mut App, mut p: Profile) {
     let Some(ed) = app.pads.edit.as_mut() else { return };
     let list = remap::profiles();
-    while list.iter().any(|x| x.name == p.name) {
+    // `|` separa os perfis em `pad_fixed` no config.
+    p.name.retain(|c| c != '|');
+    while list.iter().any(|x| remap::same_file(&x.name, &p.name)) {
         p.name = tr("{} (importado)").replace("{}", &p.name);
     }
     let mut runs: Vec<u8> = vec![];
@@ -85,6 +87,7 @@ pub fn imported(app: &mut App, mut p: Profile) {
 }
 
 /// Fotos de teste: o formulário em Ação do Prisma (a mais longa), Abrir programa ou o assistente.
+#[cfg(debug_assertions)]
 pub fn test_target(app: &mut App, what: &str) {
     if let Some(ed) = app.pads.edit.as_mut() {
         match what {
@@ -738,8 +741,10 @@ pub fn top(ui: &mut Ui, app: &mut App, r: Rect, family: Family, pad: Option<&str
                 mode = from as u8 + 1;
             }
         }
-        let name: String = text.trim().chars().filter(|c| !c.is_control()).take(60).collect();
-        let taken = list.iter().any(|x| x.name.eq_ignore_ascii_case(&name) && !(rename && x.name == p.name));
+        // Sem `|`: ele separa os perfis em `pad_fixed` no config.
+        let name: String = text.trim().chars().filter(|c| !c.is_control() && *c != '|').take(60).collect();
+        // Nomes diferentes podem cair no mesmo arquivo; o próprio perfil, ao renomear, não conta.
+        let taken = list.iter().any(|x| remap::same_file(&x.name, &name) && !(rename && x.name == p.name));
         // Cancelar com a largura do Criar, no começo do lugar largo; o aviso vem logo depois.
         let (c, w) = (at(3), at(2).w);
         let mut done = ui.button("pp-name-no", rect(c.x, c.y, w, 34.0), "Cancelar", false);
@@ -766,7 +771,10 @@ pub fn top(ui: &mut Ui, app: &mut App, r: Rect, family: Family, pad: Option<&str
                         ok &= remap::save(&o);
                     }
                 }
-                remap::remove(&old);
+                // Mesmo arquivo (só maiúsculas ou símbolos mudaram): o save já gravou por cima.
+                if !remap::same_file(&old, &name) {
+                    remap::remove(&old);
+                }
                 // Controles com este perfil próprio continuam com ele.
                 for e in app.cfg.pad_fixed.iter_mut().filter(|e| e.1 == old) {
                     e.1 = name.clone();
