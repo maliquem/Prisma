@@ -469,14 +469,23 @@ fn published(n: usize) {
     }
 }
 
-/// Id, segredo e, depois deles, o relé do host em texto: quem pareia conecta sem depender de achar
-/// o host pelo DNS da n0. As versões até a 1.6.2 só aceitam o convite sem o relé.
+/// Id, segredo e, depois deles, o relé e os IPs do host em texto (`rele=` e `ip=`, até 200 letras):
+/// quem pareia conecta sem depender de achar o host pelo DNS da n0, e pela rede local ou pela VPN
+/// mesmo sem relé. As versões até a 1.6.2 só aceitam o convite sem nada depois do segredo.
 fn invite_text(host: &EndpointAddr, secret: &[u8; 16]) -> String {
     let mut b = host.id.as_bytes().to_vec();
     b.extend_from_slice(secret);
-    if let Some(u) = host.relay_urls().next() {
-        b.extend_from_slice(u.to_string().as_bytes());
+    let mut tail = String::new();
+    for l in code::addr_lines(host) {
+        if tail.len() + l.len() + 1 > 200 {
+            break;
+        }
+        if !tail.is_empty() {
+            tail.push('\n');
+        }
+        tail.push_str(&l);
     }
+    b.extend_from_slice(tail.as_bytes());
     format!("{INVITE_PREFIX}{}", data_encoding::BASE32_NOPAD.encode(&b))
 }
 
@@ -488,9 +497,12 @@ fn parse_invite(s: &str) -> Option<(EndpointAddr, [u8; 16])> {
         return None;
     }
     let id = EndpointId::from_bytes(b[..32].try_into().ok()?).ok()?;
-    // Um relé que não lê fica de fora: o id basta para tentar pelo DNS.
-    let relay = std::str::from_utf8(&b[48..]).ok().and_then(|u| u.parse().ok()).map(TransportAddr::Relay);
-    Some((EndpointAddr::from_parts(id, relay), b[32..48].try_into().ok()?))
+    // O que não lê fica de fora: o id basta para tentar pelo DNS.
+    let text = std::str::from_utf8(&b[48..]).unwrap_or("");
+    let mut addrs = code::parse_addrs(text.lines());
+    // O convite da 1.7.0 tem só o relé, sem `rele=`.
+    addrs.extend(text.parse().ok().map(TransportAddr::Relay));
+    Some((EndpointAddr::from_parts(id, addrs), b[32..48].try_into().ok()?))
 }
 
 /// Seis dígitos que os dois lados mostram: se forem iguais, ninguém se meteu no meio.
@@ -957,9 +969,14 @@ fn host_with(invite_perms: Option<u8>, service: bool) {
 /// não foi achado" e de "achado, mas calado" no log de quem pareia ou assiste.
 async fn why_silent(ep: &Endpoint, other: EndpointId) -> String {
     use iroh::Watcher;
-    let mine = match ep.home_relay_status().get().into_iter().find(|r| r.is_connected()) {
+    let st = ep.home_relay_status().get();
+    let mine = match st.iter().find(|r| r.is_connected()) {
         Some(r) => format!("este PC no relé {}", r.url()),
-        None => "este PC sem relé".into(),
+        None => match st.iter().find_map(|r| r.last_error().map(|e| format!("{}: {e}", r.url()))) {
+            Some(e) => format!("este PC sem relé ({e})"),
+            // Sem relé escolhido: nenhum relé da n0 respondeu ao teste de rede (firewall, antivírus, proxy).
+            None => "este PC sem relé: nenhum relé da n0 respondeu".into(),
+        },
     };
     let theirs = match ep.remote_info(other).await {
         Some(i) => code::addr_lines(&EndpointAddr::from_parts(other, i.into_addrs().map(|a| a.into_addr()))),
@@ -1172,12 +1189,23 @@ mod tests {
         let (a2, s2) = parse_invite(&format!("  {}  ", t.to_lowercase())).unwrap();
         assert_eq!(a2, EndpointAddr::from(id));
         assert_eq!(s2, secret);
-        // Com o relé, ele volta inteiro (e os IPs não entram, para o convite não crescer).
+        // Com o relé e os IPs, eles voltam inteiros.
         let relay: iroh::RelayUrl = "https://use1-1.relay.n0.iroh.link./".parse().unwrap();
-        let full = EndpointAddr::from_parts(id, [TransportAddr::Relay(relay.clone()), TransportAddr::Ip("192.168.0.5:47600".parse().unwrap())]);
+        let ip = |s: &str| TransportAddr::Ip(s.parse().unwrap());
+        let full = EndpointAddr::from_parts(id, [TransportAddr::Relay(relay.clone()), ip("192.168.1.176:51458"), ip("172.24.66.19:51458"), ip("[2804:880:1680:b300:718f:682d:67c4:ee7a]:51460")]);
         let (a3, s3) = parse_invite(&invite_text(&full, &secret)).unwrap();
-        assert_eq!(a3, EndpointAddr::from_parts(id, [TransportAddr::Relay(relay)]));
+        assert_eq!(a3, full);
         assert_eq!(s3, secret);
+        // Endereços demais: fica o que cabe em 200 letras, o relé primeiro.
+        let many = EndpointAddr::from_parts(id, std::iter::once(TransportAddr::Relay(relay.clone())).chain((1..30).map(|i| ip(&format!("10.0.0.{i}:51458")))));
+        let (a5, _) = parse_invite(&invite_text(&many, &secret)).unwrap();
+        assert!(a5.relay_urls().next().is_some() && a5.addrs.len() > 3 && a5.addrs.len() < 12);
+        // O convite da 1.7.0, com o relé sem `rele=`.
+        let mut b = id.as_bytes().to_vec();
+        b.extend_from_slice(&secret);
+        b.extend_from_slice(relay.to_string().as_bytes());
+        let (a6, _) = parse_invite(&format!("{INVITE_PREFIX}{}", data_encoding::BASE32_NOPAD.encode(&b))).unwrap();
+        assert_eq!(a6, EndpointAddr::from_parts(id, [TransportAddr::Relay(relay)]));
         // Um final que não é relé fica de fora, sem perder o convite.
         let mut b = id.as_bytes().to_vec();
         b.extend_from_slice(&secret);
