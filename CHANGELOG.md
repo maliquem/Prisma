@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.8.0
 
 - Share screen and remote access: with the viewer window in front (or Parsec, Remote Desktop, Moonlight, RustDesk, AnyDesk or TeamViewer), Prisma on this PC lets go of its shortcuts, so they reach the PC on the other side. Before, this PC's Prisma took them, and the capture shortcut did nothing there. / Compartilhar tela e acesso remoto: com a janela de quem assiste na frente (ou a do Parsec, da Área de Trabalho Remota, do Moonlight, do RustDesk, do AnyDesk ou do TeamViewer), o Prisma deste PC solta os atalhos dele, e eles chegam ao PC do outro lado. Antes o Prisma deste PC ficava com eles, e o atalho de captura não fazia nada lá.
 - Widget docked on the taskbar: it shows up in screen captures and remote access (Parsec, Share screen) instead of a black rectangle. The floating widget is still left out of photos and videos. / Widget preso na barra de tarefas: aparece nas capturas de tela e no acesso remoto (Parsec, Compartilhar tela) em vez de um retângulo preto. O widget solto continua fora de fotos e vídeos.
