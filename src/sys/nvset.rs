@@ -147,7 +147,7 @@ pub const GROUPS: &[(&str, &[Setting])] = &[
 ];
 
 /// Todos os ids, na ordem dos grupos.
-#[cfg(debug_assertions)]
+#[cfg(any(test, debug_assertions))]
 pub fn ids() -> Vec<u32> {
     GROUPS.iter().flat_map(|g| g.1.iter().map(|s| s.id)).collect()
 }
