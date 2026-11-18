@@ -206,12 +206,12 @@ impl Decoder {
         }
     }
 
-    /// Entrega um pacote (ou só trata o que estiver pendente) e diz quais quadros saíram.
     /// Pacotes ainda esperando entrada no decodificador assíncrono.
     pub fn waiting(&self) -> u32 {
         self.queue.len() as u32
     }
 
+    /// Entrega um pacote (ou só trata o que estiver pendente) e diz quais quadros saíram.
     pub unsafe fn decode(&mut self, p: Option<&Pkt>, out: &mut Vec<Decoded>) -> Result<()> {
         if self.events.is_none() {
             if let Some(p) = p {
@@ -228,7 +228,15 @@ impl Decoder {
                     }
                 }
             }
+            let n = out.len();
             while self.pull(out)? {}
+            // O AV1 da Microsoft às vezes segura o quadro até o próximo pacote (16 ms depois, e aí
+            // saem dois e um se perde); pedir o drain solta na hora (~0,2 ms) e ele segue aceitando
+            // entrada. HEVC e H.264 medidos não passam por aqui.
+            if p.is_some() && out.len() == n {
+                self.mft.ProcessMessage(MFT_MESSAGE_COMMAND_DRAIN, 0)?;
+                while self.pull(out)? {}
+            }
             return Ok(());
         }
         if let Some(p) = p {
