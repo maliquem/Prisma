@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Share screen, pairing: the long invite now also carries this PC's IP addresses (local network and VPN, like ZeroTier), so pairing works without the n0 relays when both PCs are on the same network or VPN. When the pairing PC cannot reach any n0 relay, its log says so and shows the error. A long invite from this version still pairs on 1.7.0, but only through the n0 lookup. / Compartilhar tela, pareamento: o convite longo agora leva também os IPs deste PC (rede local e VPN, como o ZeroTier), e o pareamento funciona sem os relés da n0 quando os dois PCs estão na mesma rede ou VPN. Quando o PC que pareia não alcança nenhum relé da n0, o log dele diz isso e mostra o erro. Um convite longo desta versão ainda pareia na 1.7.0, mas só pela busca da n0.
+- Share screen: on a PC where a network adapter (a VPN, for example) lists a DNS server that does not answer, Prisma could not reach the n0 relays or find the short code, even with the internet working. Prisma now asks public DNS servers alongside the system ones from the start. / Compartilhar tela: num PC em que um adaptador de rede (uma VPN, por exemplo) lista um servidor DNS que não responde, o Prisma não alcançava os relés da n0 nem achava o código curto, mesmo com a internet funcionando. Agora o Prisma pergunta aos servidores DNS públicos junto com os do sistema desde o início.
 
 ## 1.7.0
 
