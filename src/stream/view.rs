@@ -1103,6 +1103,8 @@ struct Stats {
     rtt: Vec<i64>,
     /// Maior fila do segundo: quadros esperando para decodificar.
     queue: u32,
+    /// Intervalo entre um quadro mostrado e o anterior (100 ns).
+    gaps: Vec<i64>,
 }
 
 fn pct(v: &mut [i64], q: f64) -> f64 {
@@ -1392,6 +1394,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     let warm = Duration::from_secs(2);
     let mut total = Stats::default();
     let mut second = Stats::default();
+    let mut last_shown = now();
     let mut tick = Instant::now();
     let mut bytes_mark = 0u64;
     let mut lost_mark = 0u32;
@@ -1737,6 +1740,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
             if draw.draw(&d.dev, &d.ctx, n, &bb, ow, oh).is_ok() && present(&swap, sync, present_flags, vrr_hz, &mut shown_at) {
                 owed.set(false);
                 let shown = now();
+                second.gaps.push(shown - std::mem::replace(&mut last_shown, shown));
                 second.shown += 1;
                 second.e2e.push(shown + sh.offset.load(Ordering::Relaxed) - pts);
             }
@@ -1752,6 +1756,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                     if wd.draw(&d.dev, &d.ctx, &bb, video_rect(wd.w, wd.h, ow, oh)).is_ok() && present(&swap, sync, present_flags, vrr_hz, &mut shown_at) {
                         owed.set(false);
                         let shown = now();
+                        second.gaps.push(shown - std::mem::replace(&mut last_shown, shown));
                         second.shown += 1;
                         second.e2e.push(shown + sh.offset.load(Ordering::Relaxed) - pts);
                     }
@@ -1772,6 +1777,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                     if s.blt(&tex, slice, &bb).is_ok() && present(&swap, sync, present_flags, vrr_hz, &mut shown_at) {
                         owed.set(false);
                         let shown = now();
+                        second.gaps.push(shown - std::mem::replace(&mut last_shown, shown));
                         second.shown += 1;
                         second.e2e.push(shown + sh.offset.load(Ordering::Relaxed) - f.pts);
                     }
@@ -1833,11 +1839,13 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                 None => format!("Prisma · conectando ({})", link.route()),
             };
             let _ = SetWindowTextW(hwnd, &HSTRING::from(title));
-            if start.elapsed() > warm {
+            // Só o relatório (`out_file`) usa o total; sem ele as listas cresceriam a sessão toda.
+            if out_file.is_some() && start.elapsed() > warm {
                 total.shown += second.shown;
                 total.e2e.append(&mut second.e2e);
                 total.decode.append(&mut second.decode);
                 total.rtt.append(&mut second.rtt);
+                total.gaps.append(&mut second.gaps);
             }
             second = Stats::default();
             tick = Instant::now();
@@ -1891,6 +1899,9 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
             pct(&mut total.e2e, 0.95),
             pct(&mut total.e2e, 1.0)
         );
+        if let Some((.., fps)) = info {
+            s += &gap_line(&mut total.gaps, fps);
+        }
         let blocks = sh.audio_blocks.load(Ordering::Relaxed);
         if sh.mute {
             s += &format!("som: {blocks} blocos de 5 ms recebidos, {} perdidos, sem tocar\n", sh.audio_lost.load(Ordering::Relaxed));
@@ -1907,6 +1918,22 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         let _ = std::fs::write(path, s);
     }
     Ok(())
+}
+
+/// O ritmo dos quadros mostrados: mediana, p95 e desvio do intervalo, e quantos passaram de 1,5
+/// intervalo do vídeo (um quadro que a tela repetiu).
+pub(super) fn gap_line(gaps: &mut [i64], fps: u32) -> String {
+    let n = gaps.len().max(1) as f64;
+    let mean = gaps.iter().sum::<i64>() as f64 / n;
+    let sd = (gaps.iter().map(|g| (*g as f64 - mean).powi(2)).sum::<f64>() / n).sqrt();
+    let slow = gaps.iter().filter(|g| **g * 2 > 3 * 10_000_000 / fps.max(1) as i64).count();
+    format!(
+        "intervalo entre quadros mostrados: mediana {:.2} ms, p95 {:.2} ms, desvio {:.2} ms, {slow} acima de 1,5 quadro
+",
+        pct(gaps, 0.5),
+        pct(gaps, 0.95),
+        sd / 10_000.0
+    )
 }
 
 /// Nome do modo imersivo para a nota da tela.

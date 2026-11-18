@@ -1251,6 +1251,26 @@ impl Coder {
     }
 }
 
+/// Intervalos guardados para o registro do ritmo: os primeiros 10 minutos a 60 por segundo.
+const GAPS_KEPT: usize = 36_000;
+
+/// Hora de dar um quadro ao codificador, numa grade de horários (`due`) que anda um intervalo por
+/// quadro. Um quadro novo vale até 0,1 intervalo antes da hora: a captura oscila em volta do vsync.
+/// Contar do quadro anterior, e não da grade, deixava a tela de 119 Hz sair a ~64 de 60 por segundo
+/// (o primeiro quadro depois de 0,9 intervalo); contar do fim do NVENC deixava a de 60 Hz sair a ~53.
+/// No ritmo constante (`repeat`), sem quadro novo, o mesmo vai de novo na hora exata.
+fn time_to_feed(now: i64, due: i64, interval: i64, fresh: bool, repeat: bool) -> bool {
+    if fresh { now >= due - interval / 10 } else { repeat && now >= due }
+}
+
+/// A hora do quadro seguinte: um intervalo depois desta, mais 1/10 do atraso, para a grade seguir
+/// devagar a fase da captura (sem isso, a 119,88 Hz ela escorrega e pula um quadro por segundo). Se o
+/// vídeo ficou parado ou atrasou mais de um intervalo, 0,9 intervalo depois de agora (sem rajada).
+fn next_due(now: i64, due: i64, interval: i64) -> i64 {
+    let late = now - due;
+    if late > interval { now + interval * 9 / 10 } else { due + interval + late.max(0) / 10 }
+}
+
 /// De onde vem a imagem: WGC (com o cursor do Windows) ou Desktop Duplication (no serviço, para
 /// alcançar a tela segura; `PRISMA_CAPTURE=dda` também liga, para teste).
 enum Cap {
@@ -1564,6 +1584,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
         }
     };
     let mut fed_at = Instant::now() - Duration::from_secs(1);
+    let mut due = 0i64;
     let mut was_secure = false;
     // Tamanho novo da janela compartilhada e desde quando.
     let mut resize: Option<((u32, u32), Instant)> = None;
@@ -1607,7 +1628,8 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     }
 
     let interval = 10_000_000i64 / fps as i64;
-    let mut last_fed = i64::MIN / 2;
+    // Quadros dados ao codificador; o ritmo constante só repete depois do primeiro.
+    let mut fed = 0u32;
     let mut pending: Option<i64> = None;
     let mut pkts: Vec<Pkt> = Vec::new();
     let mut ready: Vec<Ready> = Vec::new();
@@ -1619,6 +1641,9 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     let mut frame_id = room.frame_id;
     let mut result = End::Gone;
     let mut failed = None;
+    // Intervalos entre quadros dados ao codificador, para o registro no fim.
+    let mut fed_gaps: Vec<i64> = Vec::new();
+    let mut captured = 0u32;
     let mut pad_msgs: Vec<PadMsg> = Vec::new();
     let mut info_tick = Instant::now();
 
@@ -1917,31 +1942,38 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                 Cap::Wgc { .. } => return Ok(()),
                 Cap::Dda(x) => {
                     match x.poll(&mid)? {
-                        super::screen::Got::Frame(pts) => pending = Some(pts),
+                        super::screen::Got::Frame(pts) => {
+                            captured += 1;
+                            pending = Some(pts)
+                        }
                         super::screen::Got::Changed => changed = true,
                         super::screen::Got::Nothing => {}
                     }
                     enc.pump(space, &mut pkts, &mut ready)?;
                     // A Desktop Duplication entrega cada mudança (o mouse também): o ritmo fica aqui.
-                    if enc.ready() && fed_at.elapsed() >= Duration::from_nanos(interval as u64 * 90) {
-                        if let Some(pts) = pending.take() {
-                            match &cross {
-                                Some((cd, cm, cc)) => {
-                                    x.compose(cm)?;
-                                    cc.copy(cd, cm, d, &mid)?;
-                                }
-                                None => x.compose(&mid)?,
-                            }
-                            enc.feed(&d.ctx, pts, space, &mut ready)?;
-                            last_fed = pts;
-                            fed_at = Instant::now();
-                        } else if opts.constant && last_fed > i64::MIN / 2 && fed_at.elapsed() >= Duration::from_nanos(interval as u64 * 100) {
-                            // Ritmo constante: a tela parada repete o último quadro, no ritmo de sempre.
-                            let pts = now();
-                            enc.feed(&d.ctx, pts, space, &mut ready)?;
-                            last_fed = pts;
-                            fed_at = Instant::now();
+                    let t = now();
+                    if enc.ready() && time_to_feed(t, due, interval, pending.is_some(), opts.constant && fed > 0) {
+                        due = next_due(t, due, interval);
+                        if fed_gaps.len() < GAPS_KEPT {
+                            fed_gaps.push(fed_at.elapsed().as_nanos() as i64 / 100);
                         }
+                        fed_at = Instant::now();
+                        // Ritmo constante com a tela parada: o último quadro de novo.
+                        let pts = match pending.take() {
+                            Some(pts) => {
+                                match &cross {
+                                    Some((cd, cm, cc)) => {
+                                        x.compose(cm)?;
+                                        cc.copy(cd, cm, d, &mid)?;
+                                    }
+                                    None => x.compose(&mid)?,
+                                }
+                                pts
+                            }
+                            None => now(),
+                        };
+                        enc.feed(&d.ctx, pts, space, &mut ready)?;
+                        fed += 1;
                     }
                     return Ok(());
                 }
@@ -1953,10 +1985,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
             let mut newest = None;
             while let Ok(f) = pool.TryGetNextFrame() {
                 let pts = f.SystemRelativeTime()?.Duration;
-                if pts - last_fed < interval * 9 / 10 {
-                    let _ = f.Close();
-                    continue;
-                }
+                captured += 1;
                 if let Some((old, _)) = newest.replace((f, pts)) {
                     let _ = old.Close();
                 }
@@ -1990,15 +2019,17 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                 changed = true;
             }
             enc.pump(space, &mut pkts, &mut ready)?;
-            if enc.ready() {
-                // Ritmo constante: a tela parada repete o último quadro, no ritmo de sempre.
-                if pending.is_none() && opts.constant && last_fed > i64::MIN / 2 && now() - last_fed >= interval {
-                    pending = Some(now());
+            let t = now();
+            if enc.ready() && time_to_feed(t, due, interval, pending.is_some(), opts.constant && fed > 0) {
+                due = next_due(t, due, interval);
+                if fed_gaps.len() < GAPS_KEPT {
+                    fed_gaps.push(fed_at.elapsed().as_nanos() as i64 / 100);
                 }
-                if let Some(pts) = pending.take() {
-                    enc.feed(&d.ctx, pts, space, &mut ready)?;
-                    last_fed = pts;
-                }
+                fed_at = Instant::now();
+                // Ritmo constante com a tela parada: o último quadro de novo.
+                let pts = pending.take().unwrap_or_else(now);
+                enc.feed(&d.ctx, pts, space, &mut ready)?;
+                fed += 1;
             }
             Ok(())
         })();
@@ -2049,6 +2080,9 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
         }
     }
     room.frame_id = frame_id;
+    if fed_gaps.len() > 1 {
+        eprint!("ritmo: {captured} capturados, {fed} quadros ao codificador; {}", super::view::gap_line(&mut fed_gaps[1..], fps).replace("mostrados", "dados ao codificador"));
+    }
     for g in &mut room.guests {
         if let Some(inj) = &mut g.input {
             inj.release();
@@ -2075,6 +2109,36 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn feeds_on_the_capture_rhythm_and_repeats_only_when_constant() {
+        let i = 10_000_000 / 60;
+        let ms = |v: i64| v * 10_000;
+        // O quadro do vsync seguinte chega um pouco antes da hora: vale.
+        assert!(time_to_feed(ms(16), i, i, true, false));
+        assert!(!time_to_feed(ms(14), i, i, true, true));
+        // Tela parada: só o ritmo constante repete, e só na hora.
+        assert!(!time_to_feed(ms(40), i, i, false, false));
+        assert!(!time_to_feed(ms(16), i, i, false, true));
+        assert!(time_to_feed(ms(17), i, i, false, true));
+        // Vídeo a 60: a 119 Hz sai um quadro sim, outro não (595 em 10 s, não ~640); a 144 Hz, perto de 600.
+        let fed_at = |hz: i64| {
+            let (mut due, mut fed) = (0, 0);
+            for k in 0..hz * 10 {
+                let t = k * 10_000_000 / hz;
+                if time_to_feed(t, due, i, true, false) {
+                    due = next_due(t, due, i);
+                    fed += 1;
+                }
+            }
+            fed
+        };
+        assert_eq!(fed_at(60), 600);
+        assert_eq!(fed_at(119), 595);
+        assert!((585..=600).contains(&fed_at(144)), "{}", fed_at(144));
+        // Depois de a tela ficar parada, o quadro novo vai na hora e o seguinte não vem em rajada.
+        assert_eq!(next_due(ms(5000), i, i), ms(5000) + i * 9 / 10);
+    }
 
     struct FakeLink {
         sent: Mutex<Vec<Vec<u8>>>,
