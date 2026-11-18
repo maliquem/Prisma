@@ -1564,6 +1564,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     let mut pending: Option<i64> = None;
     let mut pkts: Vec<Pkt> = Vec::new();
     let mut ready: Vec<Ready> = Vec::new();
+    let pacer = super::pace::Pacer::new();
     // PyroWave pedido: se o caminho de alguém sair da rede local ou da VPN (ou voltar), o vídeo
     // recomeça com o codec que cabe.
     let wave_asked = codec_opt == "pyrowave" && !room.wave_failed;
@@ -1928,15 +1929,18 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
             if count == 0 || count > u16::MAX as usize {
                 continue;
             }
+            let mut packets = Vec::with_capacity(count);
             for (idx, chunk) in c.parts.iter().enumerate() {
                 write(&mut out, &Msg::Video { key: p.key, more: c.more[idx], idx: idx as u16, count: count as u16, frame: frame_id, pts: p.pts, data: chunk });
                 // Os pedaços críticos do PyroWave vão duas vezes: sem eles, o quadro inteiro se perde.
                 for _ in 0..if idx < c.critical { 2 } else { 1 } {
-                    for g in &room.guests {
-                        g.link.send(&out);
-                    }
+                    packets.push(out.clone());
                 }
             }
+            // Com os dois lados no mesmo PC não há roteador para encher: sai tudo de uma vez.
+            let links: Vec<Arc<dyn Link>> = room.guests.iter().map(|g| g.link.clone()).collect();
+            let gap = if room.guests.iter().all(|g| g.link.same_pc()) { Duration::ZERO } else { Duration::from_nanos(interval as u64 * 100) };
+            pacer.frame(links, packets, gap);
             sent.push_back((frame_id, p.pts));
             if sent.len() > 32 {
                 sent.pop_front();
