@@ -13,10 +13,12 @@ const BURST: usize = 16;
 /// Parte do intervalo do quadro usada para espalhar o resto.
 const SPREAD_PCT: u32 = 65;
 
-/// Um quadro já cortado em pacotes, para estas pessoas.
+/// Um quadro já cortado em pacotes, para estas pessoas. Os pacotes a partir de `parity_from` são
+/// a paridade do FEC, só para quem tem `true` ao lado.
 struct Batch {
-    links: Vec<Arc<dyn Link>>,
+    links: Vec<(Arc<dyn Link>, bool)>,
     packets: Vec<Vec<u8>>,
+    parity_from: usize,
     span: Duration,
 }
 
@@ -47,9 +49,11 @@ impl Pacer {
                         next = rx.try_recv().ok();
                     }
                     let upto = if next.is_some() { b.packets.len() } else { due(b.packets.len(), t0.elapsed(), b.span) };
-                    for p in &b.packets[sent..upto] {
-                        for l in &b.links {
-                            l.send(p);
+                    for (i, p) in b.packets.iter().enumerate().take(upto).skip(sent) {
+                        for (l, fec) in &b.links {
+                            if i < b.parity_from || *fec {
+                                l.send(p);
+                            }
                         }
                     }
                     sent = upto.max(sent);
@@ -64,9 +68,9 @@ impl Pacer {
 
     /// Manda um quadro inteiro; `interval` é o intervalo entre quadros. Com os dois lados no mesmo
     /// PC (sem roteador no meio), passe `interval` zero para sair tudo de uma vez.
-    pub fn frame(&self, links: Vec<Arc<dyn Link>>, packets: Vec<Vec<u8>>, interval: Duration) {
+    pub fn frame(&self, links: Vec<(Arc<dyn Link>, bool)>, packets: Vec<Vec<u8>>, parity_from: usize, interval: Duration) {
         let span = interval * SPREAD_PCT / 100;
-        let _ = self.tx.send(Batch { links, packets, span });
+        let _ = self.tx.send(Batch { links, packets, parity_from, span });
     }
 }
 
@@ -99,13 +103,16 @@ mod tests {
     #[test]
     fn every_packet_arrives_in_order_and_spread() {
         let c = Arc::new(Count(Mutex::new(Vec::new())));
+        let old = Arc::new(Count(Mutex::new(Vec::new())));
         let p = Pacer::new();
         let pk: Vec<Vec<u8>> = (0..100u8).map(|i| vec![i]).collect();
         let t0 = Instant::now();
-        p.frame(vec![c.clone()], pk, Duration::from_millis(20));
+        p.frame(vec![(c.clone(), true), (old.clone(), false)], pk, 90, Duration::from_millis(20));
         std::thread::sleep(Duration::from_millis(60));
         let got = c.0.lock().unwrap();
         assert_eq!(got.iter().map(|g| g.0).collect::<Vec<_>>(), (0..100u8).collect::<Vec<_>>());
+        // Quem não pediu o FEC fica sem a paridade.
+        assert_eq!(old.0.lock().unwrap().len(), 90);
         // O último sai perto de 65% de 20 ms, e não na hora.
         let last = got[99].1 - t0;
         assert!(last >= Duration::from_millis(10), "{last:?}");

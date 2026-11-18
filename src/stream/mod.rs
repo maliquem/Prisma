@@ -21,6 +21,8 @@ mod link;
 #[cfg(feature = "stream")]
 pub(crate) mod net;
 mod pace;
+mod fec;
+pub use fec::Rx as FecRx;
 #[cfg(feature = "stream")]
 pub use net::{device_rows, forget_device, me, presence_keep, presence_of, revoke_invite, set_device, wake_device, wake_note, DeviceRow, Presence, CODE_FAIL, CODE_LINE, CODE_OK, EXPIRES_LINE, INVITE_MINUTES};
 pub use net::unix_now;
@@ -193,6 +195,9 @@ pub enum Kind {
     PadInfo = 13,
     Sas = 14,
     Clip = 15,
+    // Números a partir de 20: versões anteriores ignoram tipo que não conhecem.
+    Fec = 20,
+    Loss = 21,
 }
 
 // ---------- Permissões de quem assiste ----------
@@ -372,6 +377,9 @@ pub const SOUND_ONLY: u8 = 8;
 /// `Hello.flags`: quem assiste pede 4:4:4. Vale para o PyroWave, que decodifica 4:4:4 em qualquer
 /// placa; o HEVC 4:4:4 ainda pede também [`DECODES_444`].
 pub const ASKS_444: u8 = 16;
+/// `Hello.flags`: quem assiste refaz pedaços perdidos com a paridade ([`Msg::Fec`]) e mede a perda
+/// ([`Msg::Loss`]). Só ele recebe a paridade.
+pub const FEC_OK: u8 = 32;
 
 /// O que um pacote diz.
 #[derive(Debug, PartialEq)]
@@ -413,6 +421,12 @@ pub enum Msg<'a> {
     Sas,
     /// Um pedaço de texto copiado: `part` de `parts`, do texto `id`.
     Clip { id: u16, part: u8, parts: u8, data: &'a [u8] },
+    /// Paridade Reed-Solomon do quadro `frame` (que tem `count` pedaços): a `idx` de `rec` (veja
+    /// `fec.rs`). O cabeçalho tem o tamanho do vídeo.
+    Fec { frame: u32, pts: i64, key: bool, count: u16, idx: u16, rec: u16, data: &'a [u8] },
+    /// Quem assiste conta ao host a perda de pacotes de vídeo do último segundo, em milésimos,
+    /// medida antes do FEC refazer.
+    Loss { permille: u16 },
 }
 
 /// O codec do vídeo na rede: um dos de sempre (NVENC e Media Foundation) ou o PyroWave, que só
@@ -557,6 +571,20 @@ pub fn write(out: &mut Vec<u8>, m: &Msg) {
             out.extend_from_slice(&[part, parts]);
             out.extend_from_slice(data);
         }
+        Msg::Fec { frame, pts, key, count, idx, rec, data } => {
+            head(out, Kind::Fec);
+            out.extend_from_slice(&frame.to_le_bytes());
+            out.extend_from_slice(&pts.to_le_bytes());
+            out.extend_from_slice(&[key as u8, 0]);
+            out.extend_from_slice(&count.to_le_bytes());
+            out.extend_from_slice(&idx.to_le_bytes());
+            out.extend_from_slice(&rec.to_le_bytes());
+            out.extend_from_slice(data);
+        }
+        Msg::Loss { permille } => {
+            head(out, Kind::Loss);
+            out.extend_from_slice(&permille.to_le_bytes());
+        }
     }
 }
 
@@ -627,6 +655,8 @@ pub fn read(b: &[u8]) -> Option<Msg<'_>> {
         13 => Msg::PadInfo { pad: *b.get(4)?, player: *b.get(5)?, slot: *b.get(6)?, why: *b.get(7)? },
         14 => Msg::Sas,
         15 => Msg::Clip { id: u16_at(b, 4)?, part: *b.get(6)?, parts: *b.get(7)?, data: b.get(8..)? },
+        20 => Msg::Fec { frame: u32_at(b, 4)?, pts: i64_at(b, 8)?, key: *b.get(16)? != 0, count: u16_at(b, 18)?, idx: u16_at(b, 20)?, rec: u16_at(b, 22)?, data: b.get(VIDEO_HEAD..)? },
+        21 => Msg::Loss { permille: u16_at(b, 4)? },
         _ => return None,
     })
 }
@@ -790,6 +820,12 @@ mod tests {
         round(Msg::Ping { t: 123 });
         round(Msg::Pong { t: 1, host: 2 });
         round(Msg::Bye);
+        round(Msg::Fec { frame: 4, pts: -9, key: true, count: 30, idx: 2, rec: 6, data: &[5, 6] });
+        round(Msg::Loss { permille: 123 });
+        // O cabeçalho da paridade tem o tamanho do vídeo: o pedaço refeito cabe onde cabia o original.
+        let mut b = Vec::new();
+        write(&mut b, &Msg::Fec { frame: 0, pts: 0, key: false, count: 1, idx: 0, rec: 1, data: &[] });
+        assert_eq!(b.len(), VIDEO_HEAD);
     }
 
     #[test]

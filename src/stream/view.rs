@@ -128,6 +128,10 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
     // antes, para o Ctrl+C dentro dela valer): o host não lê o que se copia com ela atrás.
     let mut clip_out: Option<String> = None;
     let mut last_front = Instant::now() - CLIP_FRONT;
+    // FEC: os pedaços de vídeo que a paridade refez entram aqui e passam pelo mesmo caminho dos que
+    // chegaram pela rede, antes do próximo pacote (e antes de um Nack).
+    let mut fec = FecRx::default();
+    let mut fixed: VecDeque<Vec<u8>> = VecDeque::new();
 
     let push = |e: Event| {
         sh.queue.lock().unwrap().push_back(e);
@@ -172,18 +176,28 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
             link.send(&out);
             last_req = Instant::now();
         }
-        let n = match link.recv(&mut buf, Duration::from_millis(20)) {
-            Poll::Got(n) => n,
-            Poll::Closed => {
-                sh.closed.store(true, Ordering::Relaxed);
-                unsafe {
-                    let _ = SetEvent(HANDLE(sh.wake as *mut _));
+        if let Some(permille) = fec.tick(Instant::now()) {
+            write(&mut out, &Msg::Loss { permille });
+            link.send(&out);
+        }
+        let n = if let Some(p) = fixed.pop_front() {
+            buf[..p.len()].copy_from_slice(&p);
+            p.len()
+        } else {
+            let n = match link.recv(&mut buf, Duration::from_millis(20)) {
+                Poll::Got(n) => n,
+                Poll::Closed => {
+                    sh.closed.store(true, Ordering::Relaxed);
+                    unsafe {
+                        let _ = SetEvent(HANDLE(sh.wake as *mut _));
+                    }
+                    break;
                 }
-                break;
-            }
-            _ => continue,
+                _ => continue,
+            };
+            sh.bytes.fetch_add(n as u64, Ordering::Relaxed);
+            n
         };
-        sh.bytes.fetch_add(n as u64, Ordering::Relaxed);
         match read(&buf[..n]) {
             // O host desconectou esta pessoa (pela página dele, ou banida).
             Some(Msg::Bye) => {
@@ -255,9 +269,15 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
                     sh.offset.store(o, Ordering::Relaxed);
                 }
             }
+            Some(Msg::Fec { frame, pts, key, count, idx, rec, data }) => {
+                fixed.extend(fec.parity(frame, count, idx, rec, key, pts, data));
+            }
             Some(Msg::Video { key, more, idx, count, frame, pts, data }) => {
                 if count == 0 || idx >= count {
                     continue;
+                }
+                if !wave {
+                    fixed.extend(fec.data(frame, count, idx, key, pts, data));
                 }
                 if let Some(e) = expect.filter(|&e| newer(e, frame)) {
                     // Quadro-chave muito atrás do esperado: o host recomeçou o vídeo (outros quadros
@@ -1151,7 +1171,8 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     codecs |= WAVE;
     // Tela em HDR: o host manda HDR10 se a dele também estiver. 4:4:4 só pedindo, porque gasta mais
     // rede (e, no HEVC, abre o CUDA aqui). O PyroWave faz 4:4:4 em qualquer placa.
-    let mut flags = 0u8;
+    // O FEC refaz pedaços perdidos aqui; host de versão anterior ignora o bit.
+    let mut flags = FEC_OK;
     #[cfg(feature = "stream")]
     let can444 = crate::capture::nvdec::can_444();
     #[cfg(not(feature = "stream"))]

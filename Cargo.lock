@@ -2344,6 +2344,7 @@ dependencies = [
  "opus-head-sys",
  "prisma-eq",
  "prisma-link",
+ "reed-solomon-simd",
  "tokio",
  "vigem-client",
  "viiper-client",
@@ -2462,6 +2463,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "caa0f4137e1c0a72f4c651489402276c8e8e1cf081f3b0ba156d2cbeef09e86a"
 dependencies = [
  "rand_core 0.10.1",
+]
+
+[[package]]
+name = "readme-rustdocifier"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08ad765b21a08b1a8e5cdce052719188a23772bcbefb3c439f0baaf62c56ceac"
+
+[[package]]
+name = "reed-solomon-simd"
+version = "3.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cffef0520d30fbd4151fb20e262947ae47fb0ab276a744a19b6398438105a072"
+dependencies = [
+ "cpufeatures 0.2.17",
+ "fixedbitset",
+ "once_cell",
+ "readme-rustdocifier",
 ]
 
 [[package]]

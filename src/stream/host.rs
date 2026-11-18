@@ -101,16 +101,24 @@ struct Guest {
     heard: Instant,
     gone: bool,
     clip_in: super::clip::Pieces,
+    /// Perda de pacotes de vídeo que ela mediu no último segundo, em milésimos (`Msg::Loss`; zero
+    /// enquanto não chega nenhuma, e sempre com versões que não medem).
+    loss: u16,
 }
 
 impl Guest {
     fn new(j: Joiner) -> Self {
-        Guest { link: j.link, hello: j.hello, perms: j.perms, name: j.name, id: j.id, input: None, pads: Default::default(), refused: [PAD_OK; PADS], heard: Instant::now(), gone: false, clip_in: Default::default() }
+        Guest { link: j.link, hello: j.hello, perms: j.perms, name: j.name, id: j.id, input: None, pads: Default::default(), refused: [PAD_OK; PADS], heard: Instant::now(), gone: false, clip_in: Default::default(), loss: 0 }
     }
 
     fn send(&self, m: &Msg, out: &mut Vec<u8>) {
         write(out, m);
         self.link.send(out);
+    }
+
+    /// Recebe a paridade do FEC: pediu, e não está no mesmo PC (sem rede para perder pacote).
+    fn wants_fec(&self) -> bool {
+        self.hello.flags & FEC_OK != 0 && !self.link.same_pc()
     }
 
     /// Como a página Compartilhar tela acha esta pessoa: o id do aparelho, ou o endereço pelo UDP.
@@ -1730,6 +1738,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                         match m {
                             Msg::Ping { t } => g.send(&Msg::Pong { t, host: now() }, &mut out),
                             Msg::KeyReq => enc.force_key(),
+                            Msg::Loss { permille } => g.loss = permille.min(1000),
                             Msg::Nack { frame } => {
                                 // Para de usar o quadro perdido e os enviados depois dele, que dependiam dele.
                                 let mut ok = false;
@@ -1817,7 +1826,9 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
         let mut changed = false;
         // O mesmo vídeo para todo mundo, em pedaços que cabem no caminho mais estreito.
         let room_mtu = room.guests.iter().map(|g| g.link.mtu()).min().unwrap_or(MTU);
-        let space = room_mtu - VIDEO_HEAD;
+        // O PyroWave fica sem FEC: só sai na rede local, e os pedaços críticos já vão duas vezes.
+        let fec_on = codec != VideoCodec::Wave && room.guests.iter().any(Guest::wants_fec);
+        let space = room_mtu - VIDEO_HEAD - if fec_on { super::fec::EXTRA } else { 0 };
         let step = (|| -> Result<()> {
             let pool = match &mut cap {
                 Cap::Wgc { pool: Some((pool, ..)), .. } => pool,
@@ -1937,10 +1948,16 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                     packets.push(out.clone());
                 }
             }
+            let parity_from = packets.len();
+            if fec_on {
+                // A paridade segue a pior perda medida entre quem recebe o FEC.
+                let loss = room.guests.iter().filter(|g| g.wants_fec()).map(|g| g.loss).max().unwrap_or(0);
+                packets.extend(super::fec::packets(&c.parts, frame_id, p.pts, p.key, super::fec::percent(loss)));
+            }
             // Com os dois lados no mesmo PC não há roteador para encher: sai tudo de uma vez.
-            let links: Vec<Arc<dyn Link>> = room.guests.iter().map(|g| g.link.clone()).collect();
+            let links: Vec<(Arc<dyn Link>, bool)> = room.guests.iter().map(|g| (g.link.clone(), g.wants_fec())).collect();
             let gap = if room.guests.iter().all(|g| g.link.same_pc()) { Duration::ZERO } else { Duration::from_nanos(interval as u64 * 100) };
-            pacer.frame(links, packets, gap);
+            pacer.frame(links, packets, parity_from, gap);
             sent.push_back((frame_id, p.pts));
             if sent.len() > 32 {
                 sent.pop_front();
