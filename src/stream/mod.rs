@@ -18,6 +18,7 @@ mod ear;
 #[cfg(feature = "stream")]
 mod kvm;
 mod link;
+mod mic;
 #[cfg(feature = "stream")]
 pub(crate) mod net;
 mod pace;
@@ -32,6 +33,7 @@ pub(crate) mod pads;
 mod screen;
 #[cfg(feature = "stream")]
 pub mod service;
+pub mod rate;
 pub mod view;
 pub mod wave;
 #[cfg(feature = "stream")]
@@ -204,6 +206,10 @@ pub enum Kind {
     ClipOffer = 23,
     ClipWant = 24,
     ClipData = 25,
+    /// Número alto de propósito: os de 16 em diante ficam para as outras frentes do compartilhamento.
+    Rate = 26,
+    /// Microfone de quem assiste para o host (veja `mic.rs`). Host antigo ignora.
+    Mic = 27,
 }
 
 // ---------- Permissões de quem assiste ----------
@@ -218,6 +224,8 @@ pub const MOUSE: u8 = 8;
 pub const SYSTEM: u8 = 16;
 /// Área de transferência, só texto, nos dois sentidos.
 pub const COPY: u8 = 32;
+/// O microfone de quem assiste toca no CABLE Input do host (VB-CABLE).
+pub const MIC: u8 = 64;
 pub const TOTAL: u8 = 0xFF;
 
 /// Predefinições: nome no arquivo e na linha de comando, nome na tela, permissões.
@@ -227,13 +235,14 @@ pub const PRESETS: [(&str, &str, u8); 4] = [
     ("teclado-mouse", "Ver, controle, teclado e mouse", SOUND | PAD | KEYBOARD | MOUSE),
     ("ver", "Só ver", SOUND),
 ];
-pub const PERM_NAMES: [(&str, &str, u8); 6] = [
+pub const PERM_NAMES: [(&str, &str, u8); 7] = [
     ("som", "som", SOUND),
     ("controle", "controle de jogo", PAD),
     ("teclado", "teclado", KEYBOARD),
     ("mouse", "mouse", MOUSE),
     ("sistema", "tela segura do Windows", SYSTEM),
     ("copiar", "área de transferência", COPY),
+    ("microfone", "microfone de quem assiste", MIC),
 ];
 
 /// Lê uma predefinição ou uma lista como `som,controle`. `video` é só o vídeo, sem nada mais.
@@ -318,6 +327,8 @@ pub fn pad_why(why: u8) -> &'static str {
 /// Som: 48 kHz, dois canais, 16 bits, em blocos de 5 ms.
 pub const AUDIO_RATE: u32 = 48_000;
 pub const AUDIO_BLOCK: usize = 240;
+/// Microfone de quem assiste: 48 kHz, um canal, 16 bits, em blocos de 10 ms.
+pub const MIC_BLOCK: usize = 480;
 
 /// Um evento de mouse ou teclado de quem assiste.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -445,6 +456,10 @@ pub enum Msg<'a> {
     ClipWant { id: u16, start: u32, count: u16 },
     /// O pedaço `idx` do conteúdo `id`.
     ClipData { id: u16, idx: u32, data: &'a [u8] },
+    /// Retorno de quem assiste para o controle de taxa (veja `rate.rs`). Host antigo ignora.
+    Rate(rate::Report),
+    /// Microfone de quem assiste, um bloco de `MIC_BLOCK` amostras. Host antigo ignora.
+    Mic(&'a [u8]),
 }
 
 /// O codec do vídeo na rede: um dos de sempre (NVENC e Media Foundation) ou o PyroWave, que só
@@ -626,6 +641,16 @@ pub fn write(out: &mut Vec<u8>, m: &Msg) {
             out.extend_from_slice(&idx.to_le_bytes());
             out.extend_from_slice(data);
         }
+        Msg::Rate(r) => {
+            head(out, Kind::Rate);
+            out.extend_from_slice(&r.delay_ms.to_le_bytes());
+            out.extend_from_slice(&r.loss_pm.to_le_bytes());
+            out.extend_from_slice(&r.kbps.to_le_bytes());
+        }
+        Msg::Mic(data) => {
+            head(out, Kind::Mic);
+            out.extend_from_slice(data);
+        }
     }
 }
 
@@ -702,6 +727,8 @@ pub fn read(b: &[u8]) -> Option<Msg<'_>> {
         23 => Msg::ClipOffer { id: u16_at(b, 4)?, size: u32_at(b, 6)? },
         24 => Msg::ClipWant { id: u16_at(b, 4)?, start: u32_at(b, 6)?, count: u16_at(b, 10)? },
         25 => Msg::ClipData { id: u16_at(b, 4)?, idx: u32_at(b, 6)?, data: b.get(10..)? },
+        26 => Msg::Rate(rate::Report { delay_ms: u16_at(b, 4)?, loss_pm: u16_at(b, 6)?, kbps: u32_at(b, 8)? }),
+        27 => Msg::Mic(b.get(4..)?),
         _ => return None,
     })
 }
@@ -858,6 +885,8 @@ mod tests {
         round(Msg::PadInfo { pad: 1, player: 3, slot: 2, why: PAD_OK });
         round(Msg::Sas);
         round(Msg::Clip { id: 300, part: 1, parts: 3, data: b"texto" });
+        round(Msg::Rate(rate::Report { delay_ms: 31, loss_pm: 1000, kbps: 150_000 }));
+        round(Msg::Mic(&[1, 2, 3, 4]));
         round(Msg::Nack { frame: 77 });
         round(Msg::Hello { w: 3840, h: 2160, hz: 119, codecs: 7, pid: 4321, flags: SEES_HDR | DECODES_444 });
         round(Msg::Audio { seq: 9, pts: 10, data: &[0, 1, 2, 3] });

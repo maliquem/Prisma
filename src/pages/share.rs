@@ -9,11 +9,12 @@ use std::time::Instant;
 
 use super::*;
 use crate::config::Hotkey;
-use crate::stream::{self, code, weblink, ClientOpts, Opts, COPY, KEYBOARD, MOUSE, PAD, PRESETS, SOUND, SYSTEM};
+use crate::stream::{self, code, weblink, ClientOpts, Opts, COPY, KEYBOARD, MIC, MOUSE, PAD, PRESETS, SOUND, SYSTEM};
+use crate::sys::xbridge::Stage;
 
 const GAP: f32 = 12.0;
 /// Nomes curtos das permissões, para caberem nas caixas.
-const PERMS: [(&str, u8); 6] = [("Som", SOUND), ("Controle", PAD), ("Teclado", KEYBOARD), ("Mouse", MOUSE), ("Copiar e colar", COPY), ("Tela segura", SYSTEM)];
+const PERMS: [(&str, u8); 7] = [("Som", SOUND), ("Controle", PAD), ("Teclado", KEYBOARD), ("Mouse", MOUSE), ("Copiar e colar", COPY), ("Tela segura", SYSTEM), ("Microfone", MIC)];
 const NOTICE: &str = "Pela internet, a conexão usa o iroh (n0, licença MIT ou Apache-2.0). Sem caminho direto nem VPN, os pacotes passam pelos relés públicos da n0, sempre criptografados de ponta a ponta.";
 const TABS: [&str; 6] = ["Compartilhar", "Host", "Cliente", "Rede", "Atalhos", "Controles"];
 
@@ -168,7 +169,9 @@ fn job(st: &mut State) -> windows::Win32::Foundation::HANDLE {
         unsafe {
             if let Ok(j) = CreateJobObjectW(None, None) {
                 let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
-                info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+                // BREAKAWAY_OK: a cópia vigia da tela virtual (`vdd::watch`) sai do trabalho e
+                // sobrevive ao Prisma, para devolver as telas daqui.
+                info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK;
                 let _ = SetInformationJobObject(j, JobObjectExtendedLimitInformation, &info as *const _ as *const _, std::mem::size_of_val(&info) as u32);
                 st.job = j.0 as isize;
             }
@@ -799,7 +802,7 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
     let drop = if stack { 44.0 } else { 0.0 };
     // Nem os botões sozinhos cabem numa linha: Mouse e teclado e Só o som descem para outra.
     let kvm_down = rw - 24.0 < all_buttons;
-    let row_v = 132.0 + drop;
+    let row_v = 158.0 + drop;
     let row_h = 64.0 + drop + if kvm_down { 44.0 } else { 0.0 };
     // A latência de um PC com modo ligado ganha uma linha no cartão dele.
     let lat_line = |d: &stream::DeviceRow| -> Option<String> {
@@ -912,7 +915,7 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
                 }
             }
             let mut ask = d.ask;
-            let changed_ask = ui.check(&format!("sh-ask{i}"), rect(px, row.y + 100.0 + drop, pw, 24.0), "Perguntar a cada conexão", &mut ask);
+            let changed_ask = ui.check(&format!("sh-ask{i}"), rect(px, row.y + 126.0 + drop, pw, 24.0), "Perguntar a cada conexão", &mut ask);
             if perms != d.perms || changed_ask {
                 changes.push((d.id.clone(), perms, ask));
             }
@@ -1247,6 +1250,11 @@ fn host_tab(ui: &mut Ui, app: &mut App, st: &mut State, all: &mut Opts, x: f32, 
         mon_vals.push(i as u32 + 1);
         mon_names.push(format!("{} {} ({}x{})", crate::i18n::tr("Monitor"), i + 1, rc.right - rc.left, rc.bottom - rc.top));
     }
+    // A tela virtual entra na lista quando o driver está instalado (cartão na aba Rede).
+    if crate::sys::vdd::stage() == crate::sys::vdd::Stage::Ready || o.monitor >= crate::sys::vdd::VIRTUAL {
+        mon_vals.extend([crate::sys::vdd::VIRTUAL, crate::sys::vdd::PRIVATE]);
+        mon_names.extend(["Tela virtual", "Tela virtual, telas daqui apagadas"].map(|t| crate::i18n::tr(t).into_owned()));
+    }
     if !mon_vals.contains(&o.monitor) {
         mon_vals.push(o.monitor);
         mon_names.push(format!("{} {}", crate::i18n::tr("Monitor"), o.monitor));
@@ -1391,6 +1399,9 @@ fn client_tab(ui: &mut Ui, app: &App, c: &mut ClientOpts, x: f32, top: f32, w: f
     ui.check("sh-ask444", rect(ix, y, iw, 30.0), "Pedir 4:4:4 (texto mais nítido; HEVC só em NVIDIA ou Intel)", &mut c.ask444);
     y += 34.0;
     ui.check("sh-mute", rect(ix, y, iw, 30.0), "Começar sem o som do outro PC", &mut c.mute);
+    y += 34.0;
+    ui.check("sh-mic", rect(ix, y, iw, 30.0), "Mandar meu microfone ao outro PC (se ele permitir)", &mut c.mic);
+    ui.tip(rect(ix, y, iw, 30.0), "Lá, os programas ouvem a sua voz no microfone CABLE Output. O outro PC precisa do VB-CABLE e da permissão Microfone para este aparelho.");
     y += 38.0;
     ui.label(rect(ix, y, iw, 18.0), "Telas lado a lado: esquerda, meio e direita", TEXT2);
     y += 22.0;
@@ -1467,7 +1478,8 @@ fn client_tab(ui: &mut Ui, app: &App, c: &mut ClientOpts, x: f32, top: f32, w: f
 #[allow(clippy::too_many_arguments)]
 fn net_tab(ui: &mut Ui, app: &mut App, st: &mut State, o: &mut Opts, x: f32, top: f32, w: f32, h: f32) {
     let lw = ((w - GAP) / 2.0).floor();
-    let l = rect(x, top, lw, h);
+    let vh = virtual_card(ui, x, top + h, lw);
+    let l = rect(x, top, lw, h - vh - GAP);
     ui.card(l);
     let ix = l.x + 16.0;
     let iw = l.w - 32.0;
@@ -1499,7 +1511,8 @@ fn net_tab(ui: &mut Ui, app: &mut App, st: &mut State, o: &mut Opts, x: f32, top
     );
     let _ = app;
 
-    let r = rect(l.right() + GAP, top, w - lw - GAP, h);
+    let ch = cable_card(ui, l.right() + GAP, top + h, w - lw - GAP);
+    let r = rect(l.right() + GAP, top, w - lw - GAP, h - ch - GAP);
     ui.card(r);
     let rx = r.x + 16.0;
     let rw = r.w - 32.0;
@@ -1511,6 +1524,136 @@ fn net_tab(ui: &mut Ui, app: &mut App, st: &mut State, o: &mut Opts, x: f32, top
         let t = format!("{} {route}", crate::i18n::tr("Última conexão:"));
         ui.c.text_raw(rect(rx, r.bottom() - 40.0, rw, 24.0), &t, 13.0, ACCENT, Align::Left, Weight::Regular);
     }
+}
+
+/// Aviso antes de baixar e instalar o driver da tela virtual: o que entra no PC e como desfazer.
+const VDD_CONSENT: &str = "O Prisma vai baixar o Virtual Display Driver (VirtualDrivers, programa livre de terceiros, assinado) e o NefCon, que instala o driver, das páginas oficiais deles no GitHub, e conferir os dois. O Windows pede permissão de administrador; o certificado do driver entra em Editores Confiáveis. A tela virtual só liga quando alguém conecta com ela escolhida em Monitor, e desliga ao sair. Para desfazer: este cartão, Remover.";
+
+/// O que o cartão de um driver de terceiros pediu.
+enum DriverAct {
+    Install,
+    Check,
+    Remove,
+}
+
+/// Cartão de um driver de terceiros que o Prisma só instala com consentimento: a linha do estado,
+/// Instalar, Verificar de novo e Remover (só se foi o Prisma que instalou). Fica no pé da coluna, a
+/// partir de `bottom`. Devolve a altura e o que foi pedido.
+#[allow(clippy::too_many_arguments)]
+fn driver_card(ui: &mut Ui, id: &str, title: &str, x: f32, bottom: f32, w: f32, stage: &Stage, line: &str, ours: bool, outside: &str, install: (&str, &str), remove: (&str, &str)) -> (f32, Option<DriverAct>) {
+    let mut note = crate::i18n::tr(line).into_owned();
+    if let Stage::Failed(e) = stage {
+        note = format!("{note} ({})", crate::i18n::tr(e));
+    }
+    // Remover só tira o que o Prisma pôs; o que veio de outro instalador fica com ele.
+    if !ours && *stage != Stage::Absent && !stage.busy() {
+        note = format!("{note} {}", crate::i18n::tr(outside));
+    }
+    let nh = crate::ui::gfx::measure(&note, 12.0, Weight::Regular, Some(w - 32.0)).1.ceil();
+    let r = rect(x, bottom - (100.0 + nh), w, 100.0 + nh);
+    ui.card(r);
+    ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), title);
+    ui.c.text_wrap(rect(r.x + 16.0, r.y + 40.0, r.w - 32.0, nh), &note, 12.0, TEXT2, Weight::Regular);
+    let bw = ((r.w - 40.0) / 2.0).floor();
+    let b1 = rect(r.x + 16.0, r.y + 50.0 + nh, bw, 34.0);
+    let b2 = rect(r.x + 24.0 + bw, r.y + 50.0 + nh, bw, 34.0);
+    let busy = stage.busy();
+    let (ik, rk) = (format!("{id}-install"), format!("{id}-remove"));
+    let mut act = None;
+    if *stage == Stage::Absent {
+        if ui.button(&ik, b1, "Instalar…", true) && !busy {
+            ui.ask(&ik, install.0, install.1);
+        }
+    } else {
+        if ui.button(&format!("{id}-check"), b1, "Verificar de novo", false) && !busy {
+            act = Some(DriverAct::Check);
+        }
+        if ours && ui.button(&rk, b2, "Remover…", false) && !busy {
+            ui.ask(&rk, remove.0, remove.1);
+        }
+    }
+    if ui.answered(&ik) {
+        act = Some(DriverAct::Install);
+    }
+    if ui.answered(&rk) {
+        act = Some(DriverAct::Remove);
+    }
+    (r.h, act)
+}
+
+/// Tela virtual (VDD) no pé da coluna esquerda da aba Rede. Devolve a altura que ocupou.
+fn virtual_card(ui: &mut Ui, x: f32, bottom: f32, w: f32) -> f32 {
+    use crate::sys::vdd;
+    let stage = vdd::stage();
+    let line = match &stage {
+        Stage::Absent => "Não instalada. Com ela, quem assiste ganha uma tela só sua, no tamanho e nos Hz dele, e dá para apagar as telas daqui.",
+        Stage::Downloading => "Baixando o driver da página oficial.",
+        Stage::Installing => "Instalando. Aceite a permissão de administrador do Windows.",
+        Stage::Reboot => "Reinicie o PC para terminar.",
+        Stage::Removing => "Removendo a tela virtual.",
+        Stage::Failed(_) => "A instalação não deu certo.",
+        Stage::Ready => "Pronta. Escolha Tela virtual em Monitor, na aba Host ou na configuração de um aparelho.",
+    };
+    let (h, act) = driver_card(
+        ui,
+        "vdd",
+        "Tela virtual",
+        x,
+        bottom,
+        w,
+        &stage,
+        line,
+        vdd::ours(),
+        "Instalada fora do Prisma; para remover, use o instalador dela.",
+        ("Instalar a tela virtual?", VDD_CONSENT),
+        ("Remover a tela virtual?", "Sai só o que o Prisma pôs: o driver, o certificado dele em Editores Confiáveis e a pasta C:\\VirtualDisplayDriver. O que já estava no PC antes fica. O Windows pede permissão de administrador."),
+    );
+    match act {
+        Some(DriverAct::Install) => vdd::start_install(),
+        Some(DriverAct::Check) => vdd::recheck(),
+        Some(DriverAct::Remove) => vdd::start_remove(),
+        None => {}
+    }
+    h
+}
+
+/// Aviso antes de baixar e abrir o instalador do VB-CABLE: de quem é, a licença e como desfazer.
+const CABLE_CONSENT: &str = "O VB-CABLE é da VB-Audio, donationware de terceiros: o uso pessoal é livre, com doação opcional, e o uso profissional ou em empresa pede licenças pagas na loja da VB-Audio. O Prisma vai baixar o pacote da página oficial (vb-audio.com), conferir a soma e abrir o instalador da VB-Audio, que pede permissão de administrador. Nele, clique em Install Driver; o PC pode pedir para reiniciar. Para desfazer: este cartão, Remover.";
+
+/// VB-CABLE no pé da coluna direita da aba Rede: o microfone de quem assiste toca nele.
+fn cable_card(ui: &mut Ui, x: f32, bottom: f32, w: f32) -> f32 {
+    use crate::sys::vbcable;
+    let stage = vbcable::stage();
+    let line = match &stage {
+        Stage::Absent => "Não instalado. Com ele, quem assiste e tem a permissão Microfone fala nos programas daqui, que ouvem o microfone CABLE Output.",
+        Stage::Downloading => "Baixando o VB-CABLE da página oficial.",
+        Stage::Installing => "No instalador da VB-Audio, clique em Install Driver.",
+        Stage::Reboot => "Se o instalador terminou, reinicie o PC para o cabo aparecer.",
+        Stage::Removing => "No instalador da VB-Audio, clique em Remove Driver.",
+        Stage::Failed(_) => "Não deu certo.",
+        Stage::Ready => "Pronto. Nos programas daqui, escolha CABLE Output como microfone, e dê a permissão Microfone ao aparelho de quem assiste.",
+    };
+    let (h, act) = driver_card(
+        ui,
+        "vbc",
+        "Microfone de quem assiste (VB-CABLE)",
+        x,
+        bottom,
+        w,
+        &stage,
+        line,
+        vbcable::ours(),
+        "Instalado fora do Prisma; para remover, use o instalador dele.",
+        ("Instalar o VB-CABLE?", CABLE_CONSENT),
+        ("Remover o VB-CABLE?", "Abre o instalador da VB-Audio: clique em Remove Driver. O Windows pede permissão de administrador, e o PC pode pedir para reiniciar."),
+    );
+    match act {
+        Some(DriverAct::Install) => vbcable::start_install(),
+        Some(DriverAct::Check) => vbcable::recheck(),
+        Some(DriverAct::Remove) => vbcable::start_remove(),
+        None => {}
+    }
+    h
 }
 
 fn hotkey_row(ui: &mut Ui, key: &str, x: f32, y: f32, w: f32, label: &str, k: &mut stream::Keys) {

@@ -2696,3 +2696,37 @@ Pedido para ligar «{}» mandado na rede deste PC.	Solicitud de encendido de “
 Pedido para ligar mandado por «{}», na rede de casa.	Solicitud de encendido enviada por “{}”, en la red doméstica.
 «{}» não ligou o PC: ele também precisa assistir a esse PC.	“{}” no encendió el PC: él también necesita ver ese PC.
 Para ligar de outra rede, deixe outro PC com o Prisma ligado na mesma rede de casa.	Para encenderlo desde otra red, deja otro PC con Prisma encendido en la misma red doméstica.
+Tela virtual	Pantalla virtual
+Tela virtual, telas daqui apagadas	Pantalla virtual, pantallas de aquí apagadas
+Não instalada. Com ela, quem assiste ganha uma tela só sua, no tamanho e nos Hz dele, e dá para apagar as telas daqui.	No instalada. Con ella, quien ve obtiene una pantalla solo suya, con su tamaño y sus Hz, y se pueden apagar las pantallas de aquí.
+Baixando o driver da página oficial.	Descargando el driver de la página oficial.
+Reinicie o PC para terminar.	Reinicia el PC para terminar.
+Removendo a tela virtual.	Quitando la pantalla virtual.
+A instalação não deu certo.	La instalación no salió bien.
+Pronta. Escolha Tela virtual em Monitor, na aba Host ou na configuração de um aparelho.	Lista. Elige Pantalla virtual en Monitor, en la pestaña Anfitrión o en los ajustes de un dispositivo.
+Instalar…	Instalar…
+Remover…	Quitar…
+Instalar a tela virtual?	¿Instalar la pantalla virtual?
+Remover a tela virtual?	¿Quitar la pantalla virtual?
+O Prisma vai baixar o Virtual Display Driver (VirtualDrivers, programa livre de terceiros, assinado) e o NefCon, que instala o driver, das páginas oficiais deles no GitHub, e conferir os dois. O Windows pede permissão de administrador; o certificado do driver entra em Editores Confiáveis. A tela virtual só liga quando alguém conecta com ela escolhida em Monitor, e desliga ao sair. Para desfazer: este cartão, Remover.	Prisma descargará el Virtual Display Driver (VirtualDrivers, programa libre de terceros, firmado) y NefCon, que instala el driver, desde sus páginas oficiales en GitHub, y comprobará ambos. Windows pide permiso de administrador; el certificado del driver entra en Editores de confianza. La pantalla virtual solo se enciende cuando alguien se conecta con ella elegida en Monitor, y se apaga al salir. Para deshacerlo: esta tarjeta, Quitar.
+Sai só o que o Prisma pôs: o driver, o certificado dele em Editores Confiáveis e a pasta C:\VirtualDisplayDriver. O que já estava no PC antes fica. O Windows pede permissão de administrador.	Se quita solo lo que puso Prisma: el driver, su certificado en Editores de confianza y la carpeta C:\VirtualDisplayDriver. Lo que ya estaba en el PC antes se queda. Windows pide permiso de administrador.
+Instalada fora do Prisma; para remover, use o instalador dela.	Instalada fuera de Prisma; para quitarla, usa su instalador.
+o download falhou	la descarga falló
+não deu para abrir o que foi baixado	no se pudo abrir lo descargado
+Mandar meu microfone ao outro PC (se ele permitir)	Enviar mi micrófono al otro PC (si lo permite)
+Lá, os programas ouvem a sua voz no microfone CABLE Output. O outro PC precisa do VB-CABLE e da permissão Microfone para este aparelho.	Allí, los programas oyen tu voz en el micrófono CABLE Output. El otro PC necesita VB-CABLE y el permiso Micrófono para este dispositivo.
+Microfone de quem assiste (VB-CABLE)	Micrófono de quien mira (VB-CABLE)
+Não instalado. Com ele, quem assiste e tem a permissão Microfone fala nos programas daqui, que ouvem o microfone CABLE Output.	No instalado. Con él, quien mira y tiene el permiso Micrófono habla en los programas de aquí, que oyen el micrófono CABLE Output.
+Baixando o VB-CABLE da página oficial.	Descargando VB-CABLE de la página oficial.
+No instalador da VB-Audio, clique em Install Driver.	En el instalador de VB-Audio, haz clic en Install Driver.
+Se o instalador terminou, reinicie o PC para o cabo aparecer.	Si el instalador terminó, reinicia el PC para que aparezca el cable.
+No instalador da VB-Audio, clique em Remove Driver.	En el instalador de VB-Audio, haz clic en Remove Driver.
+Não deu certo.	No funcionó.
+Pronto. Nos programas daqui, escolha CABLE Output como microfone, e dê a permissão Microfone ao aparelho de quem assiste.	Listo. En los programas de aquí, elige CABLE Output como micrófono y da el permiso Micrófono al dispositivo de quien mira.
+Instalado fora do Prisma; para remover, use o instalador dele.	Instalado fuera de Prisma; para quitarlo, usa su instalador.
+Instalar o VB-CABLE?	¿Instalar VB-CABLE?
+Remover o VB-CABLE?	¿Quitar VB-CABLE?
+Abre o instalador da VB-Audio: clique em Remove Driver. O Windows pede permissão de administrador, e o PC pode pedir para reiniciar.	Abre el instalador de VB-Audio: haz clic en Remove Driver. Windows pide permiso de administrador, y el PC puede pedir reiniciar.
+O VB-CABLE é da VB-Audio, donationware de terceiros: o uso pessoal é livre, com doação opcional, e o uso profissional ou em empresa pede licenças pagas na loja da VB-Audio. O Prisma vai baixar o pacote da página oficial (vb-audio.com), conferir a soma e abrir o instalador da VB-Audio, que pede permissão de administrador. Nele, clique em Install Driver; o PC pode pedir para reiniciar. Para desfazer: este cartão, Remover.	VB-CABLE es de VB-Audio, donationware de terceros: el uso personal es libre, con donación opcional, y el uso profesional o en empresa requiere licencias de pago en la tienda de VB-Audio. Prisma descargará el paquete de la página oficial (vb-audio.com), comprobará la suma y abrirá el instalador de VB-Audio, que pide permiso de administrador. En él, haz clic en Install Driver; el PC puede pedir reiniciar. Para deshacerlo: esta tarjeta, Quitar.
+o arquivo baixado não confere com o pacote oficial	el archivo descargado no coincide con el paquete oficial
+o pacote guardado sumiu	el paquete guardado desapareció

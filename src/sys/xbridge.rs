@@ -164,7 +164,7 @@ fn usbip_program() -> Option<super::uninstall::Program> {
 static VIIPER_SUM: Mutex<Option<String>> = Mutex::new(None);
 
 /// Roda e espera, pelo Shell: um programa que pede administrador mostra a confirmação do Windows.
-fn shell_wait(file: &str, args: &str, admin: bool) -> Result<(), String> {
+pub(crate) fn shell_wait(file: &str, args: &str, admin: bool) -> Result<(), String> {
     use windows::core::*;
     use windows::Win32::Foundation::*;
     use windows::Win32::System::Threading::*;
