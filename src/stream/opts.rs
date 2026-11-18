@@ -337,6 +337,10 @@ sem_cadeia={}\nporta={}\njanela={}:{}\nupnp={}\natalho_emergencia={}\ngpu={}\nso
     }
 }
 
+/// Modos imersivos, na ordem do menu: desligado, só o mouse, só o teclado, os dois, tudo (bit 4:
+/// todas as teclas vão ao host).
+pub const IMMERSIVE: [u8; 5] = [0, 1, 2, 3, 7];
+
 /// Opções de quem assiste, em `cliente.txt`.
 #[derive(Clone, PartialEq, Debug)]
 pub struct ClientOpts {
@@ -419,7 +423,7 @@ impl ClientOpts {
             match k {
                 "tela_cheia" => o.fullscreen = flag(v),
                 "vsync" => o.vsync = flag(v),
-                "imersivo" => o.immersive = v.parse::<u8>().unwrap_or(3).min(3),
+                "imersivo" => o.immersive = v.parse::<u8>().ok().filter(|m| IMMERSIVE.contains(m)).unwrap_or(3),
                 "medidor" => o.meter = v.parse::<u8>().unwrap_or(0).min(2),
                 "aviso" => o.warn = flag(v),
                 "mudo" => o.mute = flag(v),
@@ -537,6 +541,9 @@ mod tests {
         assert_eq!(ClientOpts::parse(&c.text()), c);
         // Lixo e repetidos saem, e este PC sempre tem lugar.
         assert_eq!(ClientOpts::parse("telas=abcdef12,abcdef12,x;y").screens, ["abcdef12".to_string(), "eu".into(), "".into()]);
+        // O Tudo (7) vale; um número fora dos modos volta para mouse e teclado.
+        assert_eq!(ClientOpts::parse("imersivo=7").immersive, 7);
+        assert_eq!(ClientOpts::parse("imersivo=5").immersive, 3);
         assert_eq!(ClientOpts::parse("atalho_menu=2,0\nmedidor=9\nquadros=75"), ClientOpts { meter: 2, ..ClientOpts::default() });
     }
 

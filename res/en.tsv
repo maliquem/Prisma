@@ -1464,7 +1464,7 @@ Só o teclado	Keyboard only
 Mouse e teclado	Mouse and keyboard
 Pedir 4:4:4 (texto mais nítido; HEVC só em NVIDIA ou Intel)	Ask for 4:4:4 (sharper text; HEVC needs NVIDIA or Intel)
 Começar sem o som do outro PC	Start without the other PC's sound
-No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. O atalho do menu sempre funciona aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga. Telas lado a lado valem para Mouse e teclado, na lista de PCs: o mouse passa pela borda de uma tela para a vizinha, sem vídeo. Um PC sem posição vai para a primeira livre ao lado deste.	In immersive mode, in fullscreen, the mouse stays inside the window, and the Windows key and Alt+Tab go to the other PC. The menu shortcut always works here. On a G-SYNC or FreeSync screen, leave VSync off: the picture does not tear. Screens side by side are for Mouse and keyboard, in the PC list: the mouse goes past the edge of one screen to the next one, with no video. A PC with no position goes to the first free one next to this PC.
+No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. No Tudo, vai qualquer tecla, mesmo as que um programa deste PC pegaria. Os atalhos desta janela sempre funcionam aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga. Telas lado a lado valem para Mouse e teclado, na lista de PCs: o mouse passa pela borda de uma tela para a vizinha, sem vídeo. Um PC sem posição vai para a primeira livre ao lado deste.	In immersive mode, in fullscreen, the mouse stays inside the window, and the Windows key and Alt+Tab go to the other PC. In Everything, any key goes through, even ones a program on this PC would catch. The shortcuts of this window always work here. On a G-SYNC or FreeSync screen, leave VSync off: the picture does not tear. Screens side by side are for Mouse and keyboard, in the PC list: the mouse goes past the edge of one screen to the next one, with no video. A PC with no position goes to the first free one next to this PC.
 Medidor e avisos	Meter and warnings
 Medidor de latência	Latency meter
 Simples	Simple
@@ -1893,6 +1893,7 @@ Acesso mudou	Access changed
 só o mouse	mouse only
 só o teclado	keyboard only
 mouse e teclado	mouse and keyboard
+tudo	everything
 mín	min
 máx	max
 som	sound

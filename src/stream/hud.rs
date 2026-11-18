@@ -44,6 +44,8 @@ pub fn priority_name(p: u8) -> Option<&'static str> {
 /// Quanto tempo o aviso fica na tela.
 const WARN_FOR: Duration = Duration::from_secs(6);
 /// Quanto tempo fica a nota de uma opção trocada.
+/// Aviso de latência subindo, que no medidor simples vira uma seta.
+const WORSE: &str = "Conexão piorando: a latência está subindo";
 pub const NOTICE_FOR: Duration = Duration::from_millis(2500);
 
 pub struct Hud {
@@ -83,7 +85,8 @@ impl Hud {
     }
 
 
-    /// Confere a conexão no segundo que passou. Devolve o aviso novo, se houver.
+    /// Confere a conexão no segundo que passou. Devolve o aviso novo, se houver. No medidor simples, o
+    /// aviso vira um símbolo depois dos ms: ↑ para `WORSE`, ⚠ para os outros.
     fn check(&mut self, s: &Sample) -> Option<&'static str> {
         let frames = s.shown + s.lost;
         if frames >= 10 && s.lost as f64 / frames as f64 > 0.02 {
@@ -105,7 +108,7 @@ impl Hud {
             }
             if self.rising >= 3 {
                 self.rising = 0;
-                return Some("Conexão piorando: a latência está subindo");
+                return Some(WORSE);
             }
         }
         None
@@ -128,7 +131,12 @@ impl Hud {
         if let Some(s) = s.filter(|_| meter > 0) {
             let ms = if s.e2e_ms > 0.0 { s.e2e_ms } else { s.rtt_ms };
             if meter == 1 {
-                lines.push((format!("{ms:.0} ms"), TEXT, 15.0, Weight::Semibold));
+                let mark = match self.warn {
+                    Some((WORSE, _)) => " ↑",
+                    Some(_) => " ⚠",
+                    None => "",
+                };
+                lines.push((format!("{ms:.0} ms{mark}"), if mark.is_empty() { TEXT } else { WARN }, 15.0, Weight::Semibold));
             } else {
                 let c = crate::i18n::comma();
                 let n = |v: f64, d: usize| format!("{v:.d$}").replace('.', c);
@@ -144,7 +152,7 @@ impl Hud {
                 lines.push((s.route.clone(), MUTED, 13.0, Weight::Regular));
             }
         }
-        if let Some((w, _)) = self.warn {
+        if let Some((w, _)) = self.warn.filter(|_| meter != 1 || s.is_none()) {
             lines.push((tr(w).into_owned(), WARN, 14.0, Weight::Semibold));
         }
         if self.notice.as_ref().is_some_and(|n| n.1.elapsed() > NOTICE_FOR) {
@@ -282,7 +290,7 @@ const SEG: f32 = 30.0;
 /// As opções de cada linha com escolhas: (texto, escolha, marcada).
 fn segments(st: &MenuState, row: usize) -> Vec<(String, Pick, bool)> {
     match row {
-        0 => ["Desligado", "Mouse", "Teclado", "Os dois"].iter().enumerate().map(|(i, t)| (tr(t).into_owned(), Pick::Immersive(i as u8), st.immersive == i as u8)).collect(),
+        0 => ["Desligado", "Mouse", "Teclado", "Os dois", "Tudo"].iter().zip(crate::stream::opts::IMMERSIVE).map(|(t, v)| (tr(t).into_owned(), Pick::Immersive(v), st.immersive == v)).collect(),
         1 => crate::stream::CLIENT_FPS
             .iter()
             .filter(|&&f| f == 0 || f <= st.max_hz.max(30))

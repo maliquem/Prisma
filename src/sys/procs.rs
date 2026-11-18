@@ -217,7 +217,7 @@ pub enum Forced {
     Nothing,
 }
 
-fn class_of(h: HWND) -> String {
+pub(crate) fn class_of(h: HWND) -> String {
     let mut b = [0u16; 64];
     let n = unsafe { GetClassNameW(h, &mut b) };
     String::from_utf16_lossy(&b[..n.max(0) as usize])

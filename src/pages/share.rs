@@ -1379,7 +1379,7 @@ fn client_tab(ui: &mut Ui, app: &App, c: &mut ClientOpts, x: f32, top: f32, w: f
     y += 52.0;
     ui.c.text_wrap(
         rect(ix, y, iw, (l.bottom() - y - 12.0).max(0.0)),
-        "No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. O atalho do menu sempre funciona aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga. Telas lado a lado valem para Mouse e teclado, na lista de PCs: o mouse passa pela borda de uma tela para a vizinha, sem vídeo. Um PC sem posição vai para a primeira livre ao lado deste.",
+        "No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. No Tudo, vai qualquer tecla, mesmo as que um programa deste PC pegaria. Os atalhos desta janela sempre funcionam aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga. Telas lado a lado valem para Mouse e teclado, na lista de PCs: o mouse passa pela borda de uma tela para a vizinha, sem vídeo. Um PC sem posição vai para a primeira livre ao lado deste.",
         12.0,
         MUTED,
         Weight::Regular,
@@ -1436,7 +1436,7 @@ fn client_tab(ui: &mut Ui, app: &App, c: &mut ClientOpts, x: f32, top: f32, w: f
             }
         }
     }
-    pick(ui, "sh-imm", imm_r, &[0u8, 1, 2, 3], opt(&["Desligado", "Só o mouse", "Só o teclado", "Mouse e teclado"]), &mut c.immersive);
+    pick(ui, "sh-imm", imm_r, &stream::IMMERSIVE, opt(&["Desligado", "Só o mouse", "Só o teclado", "Mouse e teclado", "Tudo"]), &mut c.immersive);
     pick(ui, "sh-meter", meter_r, &[0u8, 1, 2], opt(&["Desligado", "Simples", "Detalhado"]), &mut c.meter);
     let cfps = crate::stream::CLIENT_FPS;
     let cfps_names: Vec<String> = cfps.iter().map(|&f| if f == 0 { crate::i18n::tr("Automático").into_owned() } else { f.to_string() }).collect();

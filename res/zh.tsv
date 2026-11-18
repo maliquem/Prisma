@@ -1458,7 +1458,7 @@ Só o teclado	仅键盘
 Mouse e teclado	鼠标和键盘
 Pedir 4:4:4 (texto mais nítido; HEVC só em NVIDIA ou Intel)	请求 4:4:4（文字更清晰；HEVC 需要 NVIDIA 或 Intel）
 Começar sem o som do outro PC	开始时不播放另一台电脑的声音
-No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. O atalho do menu sempre funciona aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga. Telas lado a lado valem para Mouse e teclado, na lista de PCs: o mouse passa pela borda de uma tela para a vizinha, sem vídeo. Um PC sem posição vai para a primeira livre ao lado deste.	在沉浸模式下，全屏时鼠标会留在窗口内，Windows 键和 Alt+Tab 会发送到另一台电脑。菜单快捷键在这里始终有效。在支持 G-SYNC 或 FreeSync 的屏幕上，请关闭垂直同步：画面不会撕裂。并排屏幕用于电脑列表中的“鼠标和键盘”：鼠标越过一个屏幕的边缘进入相邻屏幕，没有视频。没有位置的电脑会放到这台电脑旁边第一个空位。
+No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. No Tudo, vai qualquer tecla, mesmo as que um programa deste PC pegaria. Os atalhos desta janela sempre funcionam aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga. Telas lado a lado valem para Mouse e teclado, na lista de PCs: o mouse passa pela borda de uma tela para a vizinha, sem vídeo. Um PC sem posição vai para a primeira livre ao lado deste.	在沉浸模式下，全屏时鼠标会留在窗口内，Windows 键和 Alt+Tab 会发送到另一台电脑。在“全部”模式下，任何按键都会发送，即使是这台电脑上的程序会拦截的按键。本窗口的快捷键在这里始终有效。在支持 G-SYNC 或 FreeSync 的屏幕上，请关闭垂直同步：画面不会撕裂。并排屏幕用于电脑列表中的“鼠标和键盘”：鼠标越过一个屏幕的边缘进入相邻屏幕，没有视频。没有位置的电脑会放到这台电脑旁边第一个空位。
 Medidor e avisos	监视和警告
 Medidor de latência	延迟监视
 Simples	简单
@@ -1887,6 +1887,7 @@ Acesso mudou	权限已更改
 só o mouse	仅鼠标
 só o teclado	仅键盘
 mouse e teclado	鼠标和键盘
+tudo	全部
 mín	最低
 máx	最高
 som	声音

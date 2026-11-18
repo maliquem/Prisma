@@ -483,7 +483,8 @@ struct Keys {
     key_sound: opts::Keys,
     /// Atalhos apertados que a volta da janela ainda vai fazer.
     acts: Vec<hud::Pick>,
-    /// Modo imersivo: bit 1 o mouse fica na janela, bit 2 o Alt+Tab e a tecla Windows vão ao host.
+    /// Modo imersivo: bit 1 o mouse fica na janela, bit 2 o Alt+Tab e a tecla Windows vão ao host,
+    /// bit 4 (Tudo) todas as teclas vão, menos os atalhos de quem assiste.
     immersive: u8,
 }
 
@@ -514,7 +515,8 @@ static VIEW_HWND: AtomicIsize = AtomicIsize::new(0);
 const CLIP_FRONT: Duration = Duration::from_secs(2);
 
 /// Modo imersivo: com a janela em primeiro plano, a tecla Windows, o Alt+Tab, o Alt+Esc e o
-/// Ctrl+Esc vão para o host em vez de agir aqui. O Ctrl+Alt+Del o Windows não deixa pegar.
+/// Ctrl+Esc vão para o host em vez de agir aqui. No Tudo, vai qualquer tecla, antes que um atalho
+/// de outro programa deste PC a pegue. O Ctrl+Alt+Del o Windows não deixa pegar.
 unsafe extern "system" fn immersive_hook(code: i32, w: WPARAM, l: LPARAM) -> LRESULT {
     if code >= 0 {
         let k = &*(l.0 as *const KBDLLHOOKSTRUCT);
@@ -523,11 +525,16 @@ unsafe extern "system" fn immersive_hook(code: i32, w: WPARAM, l: LPARAM) -> LRE
         let ctrl = GetAsyncKeyState(VK_CONTROL.0 as i32) < 0;
         let vk = VIRTUAL_KEY(k.vkCode as u16);
         let grab = matches!(vk, VK_LWIN | VK_RWIN) || (vk == VK_TAB && alt) || (vk == VK_ESCAPE && (alt || ctrl));
-        if mine && grab && k.flags.0 & LLKHF_INJECTED.0 == 0 {
+        if mine && k.flags.0 & LLKHF_INJECTED.0 == 0 {
             if let Ok(mut keys) = KEYS.try_lock() {
-                if keys.keyboard && keys.immersive & 2 != 0 {
+                let (scan, extended) = (k.scanCode as u16, k.flags.0 & LLKHF_EXTENDED.0 != 0);
+                // Ctrl, Alt e Shift seguem pela janela, que confere os atalhos dela com eles.
+                let modifier = matches!(vk, VK_CONTROL | VK_LCONTROL | VK_RCONTROL | VK_MENU | VK_LMENU | VK_RMENU | VK_SHIFT | VK_LSHIFT | VK_RSHIFT);
+                // A tecla que desceu para o host sobe para ele, mesmo se um modificador mudou no meio.
+                let all = keys.immersive & 4 != 0
+                    && (keys.held.contains(&(scan, extended)) || !modifier && !own_key(&keys, (opts::mods_now(ctrl, alt, GetAsyncKeyState(VK_SHIFT.0 as i32) < 0), vk.0 as u32), scan, extended));
+                if keys.keyboard && ((grab && keys.immersive & 2 != 0) || all) {
                     let down = !matches!(w.0 as u32, WM_KEYUP | WM_SYSKEYUP);
-                    let (scan, extended) = (k.scanCode as u16, k.flags.0 & LLKHF_EXTENDED.0 != 0);
                     if down {
                         if !keys.held.contains(&(scan, extended)) {
                             keys.held.push((scan, extended));
@@ -542,6 +549,12 @@ unsafe extern "system" fn immersive_hook(code: i32, w: WPARAM, l: LPARAM) -> LRE
         }
     }
     CallNextHookEx(None, code, w, l)
+}
+
+/// Tecla que fica com a janela de quem assiste: os atalhos dela e as do teclado como controle.
+fn own_key(k: &Keys, combo: opts::Keys, scan: u16, extended: bool) -> bool {
+    [k.key_menu, k.key_full, k.key_cad, k.key_disc, k.key_imm, k.key_meter, k.key_sound].iter().any(|c| c.1 != 0 && *c == combo)
+        || (k.pad_keys && KEY_PAD.iter().any(|m| (m.0, m.1) == (scan, extended)))
 }
 
 /// Área da janela onde está a imagem, com as faixas pretas de fora.
@@ -1733,7 +1746,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
 
 /// Nome do modo imersivo para a nota da tela.
 fn immersive_name(m: u8) -> String {
-    crate::i18n::tr(["desligado", "só o mouse", "só o teclado", "mouse e teclado"][m.min(3) as usize]).into_owned()
+    crate::i18n::tr(["desligado", "só o mouse", "só o teclado", "mouse e teclado", "tudo"][opts::IMMERSIVE.iter().position(|v| *v == m).unwrap_or(3)]).into_owned()
 }
 
 /// Nome do medidor para a nota da tela.

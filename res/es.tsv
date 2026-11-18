@@ -1458,7 +1458,7 @@ Só o teclado	Solo teclado
 Mouse e teclado	Ratón y teclado
 Pedir 4:4:4 (texto mais nítido; HEVC só em NVIDIA ou Intel)	Pedir 4:4:4 (texto más nítido; en HEVC necesita NVIDIA o Intel)
 Começar sem o som do outro PC	Empezar sin el sonido del otro PC
-No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. O atalho do menu sempre funciona aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga. Telas lado a lado valem para Mouse e teclado, na lista de PCs: o mouse passa pela borda de uma tela para a vizinha, sem vídeo. Um PC sem posição vai para a primeira livre ao lado deste.	En el modo inmersivo, en pantalla completa, el ratón se queda dentro de la ventana, y la tecla Windows y Alt+Tab van al otro PC. El atajo del menú siempre funciona aquí. En una pantalla con G-SYNC o FreeSync, deja el VSync desactivado: la imagen no se rasga. Las pantallas lado a lado sirven para Ratón y teclado, en la lista de PC: el ratón pasa por el borde de una pantalla a la de al lado, sin vídeo. Un PC sin posición va a la primera libre junto a este.
+No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. No Tudo, vai qualquer tecla, mesmo as que um programa deste PC pegaria. Os atalhos desta janela sempre funcionam aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga. Telas lado a lado valem para Mouse e teclado, na lista de PCs: o mouse passa pela borda de uma tela para a vizinha, sem vídeo. Um PC sem posição vai para a primeira livre ao lado deste.	En el modo inmersivo, en pantalla completa, el ratón se queda dentro de la ventana, y la tecla Windows y Alt+Tab van al otro PC. En Todo, pasa cualquier tecla, incluso las que captaría un programa de este PC. Los atajos de esta ventana siempre funcionan aquí. En una pantalla con G-SYNC o FreeSync, deja el VSync desactivado: la imagen no se rasga. Las pantallas lado a lado sirven para Ratón y teclado, en la lista de PC: el ratón pasa por el borde de una pantalla a la de al lado, sin vídeo. Un PC sin posición va a la primera libre junto a este.
 Medidor e avisos	Medidor y avisos
 Medidor de latência	Medidor de latencia
 Simples	Simple
@@ -1887,6 +1887,7 @@ Acesso mudou	El acceso cambió
 só o mouse	solo el ratón
 só o teclado	solo el teclado
 mouse e teclado	ratón y teclado
+tudo	todo
 mín	mín
 máx	máx
 som	sonido

@@ -187,6 +187,13 @@ pub enum HkAsk {
 
 /// Atalhos que podem trocar de dono. shortcut: os de volume saem porque vêm de `vol_mods`, sem campo
 /// próprio; repetir um deles cai no aviso de outro programa.
+/// Janela de acesso remoto (a de assistir do Prisma, Parsec, Área de Trabalho Remota...): com ela na frente, os
+/// atalhos são do PC do outro lado, e este Prisma solta os dele para as teclas passarem.
+fn remote_window(class: &str, exe: &str) -> bool {
+    class == "PrismaAssistir"
+        || ["parsecd.exe", "mstsc.exe", "msrdc.exe", "moonlight.exe", "rustdesk.exe", "anydesk.exe", "teamviewer.exe"].iter().any(|e| exe.eq_ignore_ascii_case(e))
+}
+
 fn hk_keys(list: &[(i32, Hotkey, &str, bool)]) -> Vec<(i32, Hotkey)> {
     list.iter().filter(|e| !matches!(e.0, HK_VOL_UP | HK_VOL_DOWN | HK_MUTE)).map(|e| (e.0, e.1)).collect()
 }
@@ -451,6 +458,8 @@ pub struct App {
     last_tick: Instant,
     last_save: Instant,
     capturing_keys: bool,
+    /// Uma janela de acesso remoto está na frente: atalhos soltos (`remote_window`).
+    remote_front: bool,
     engine: Option<Handle>,
     rec_start: Option<Instant>,
     hud: Hud,
@@ -656,6 +665,7 @@ pub fn start(background: bool) {
             last_tick: Instant::now(),
             last_save: Instant::now(),
             capturing_keys: false,
+            remote_front: false,
             engine: None,
             rec_start: None,
             hud: Hud::new(),
@@ -3234,6 +3244,11 @@ impl App {
                 self.fg_exe = exe.clone();
                 self.apply_profile(h, &exe);
             }
+            let remote = remote_window(&procs::class_of(h), &exe);
+            if remote != self.remote_front {
+                self.remote_front = remote;
+                self.pause_hotkeys(remote);
+            }
         }
         let fg_exe = self.fg_exe.clone();
         self.usage.note(&self.snap.groups, &fg_exe, secs);
@@ -4774,6 +4789,15 @@ fn centered(wa: RECT, want_w: i32, want_h: i32, margin: i32) -> (i32, i32, i32, 
 #[cfg(test)]
 mod window_tests {
     use super::*;
+
+    #[test]
+    fn remote_window_frees_hotkeys() {
+        assert!(remote_window("PrismaAssistir", "prisma.exe"));
+        assert!(remote_window("", "parsecd.exe"));
+        assert!(remote_window("", "MSTSC.EXE"));
+        assert!(!remote_window("PrismaMain", "prisma.exe"));
+        assert!(!remote_window("", "notepad.exe"));
+    }
 
     #[test]
     fn hotkey_conflict_between_functions() {

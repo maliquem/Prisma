@@ -210,10 +210,14 @@ impl Widget {
             SetWindowLongPtrW(h, GWL_STYLE, (WS_POPUP.0 | vis) as isize);
             SetWindowLongPtrW(h, GWL_EXSTYLE, (WS_EX_LAYERED.0 | WS_EX_TOOLWINDOW.0 | WS_EX_NOACTIVATE.0 | WS_EX_TOPMOST.0) as isize);
             let _ = SetParent(h, None);
+            crate::capture::hide_from_capture(h);
         };
         unsafe {
             let vis = GetWindowLongPtrW(h, GWL_STYLE) as u32 & WS_VISIBLE.0;
             if let Some(b) = bar {
+                // Preso, faz parte da barra, que aparece em capturas (Parsec, compartilhamento); fora delas saía
+                // um retângulo preto. A afinidade só vale em janela de cima: troca antes de prender.
+                let _ = SetWindowDisplayAffinity(h, WDA_NONE);
                 SetWindowLongPtrW(h, GWL_STYLE, (WS_CHILD.0 | WS_CLIPSIBLINGS.0 | vis) as isize);
                 SetWindowLongPtrW(h, GWL_EXSTYLE, (WS_EX_LAYERED.0 | WS_EX_TOOLWINDOW.0 | WS_EX_NOACTIVATE.0) as isize);
                 let _ = SetParent(h, Some(b));
