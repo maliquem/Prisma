@@ -356,6 +356,8 @@ pub struct ClientOpts {
     pub warn: bool,
     /// Não toca o som do host.
     pub mute: bool,
+    /// Manda o microfone daqui ao host, se ele der a permissão.
+    pub mic: bool,
     /// Pede 4:4:4 (texto nítido), se a placa daqui decodifica.
     pub ask444: bool,
     /// O controle continua valendo com a janela em segundo plano.
@@ -392,6 +394,7 @@ impl Default for ClientOpts {
             meter: 0,
             warn: true,
             mute: false,
+            mic: false,
             ask444: false,
             pad_background: false,
             pad_keys: false,
@@ -427,6 +430,7 @@ impl ClientOpts {
                 "medidor" => o.meter = v.parse::<u8>().unwrap_or(0).min(2),
                 "aviso" => o.warn = flag(v),
                 "mudo" => o.mute = flag(v),
+                "microfone" => o.mic = flag(v),
                 "pedir_444" => o.ask444 = flag(v),
                 "controle_fundo" => o.pad_background = flag(v),
                 "teclado_controle" => o.pad_keys = flag(v),
@@ -451,7 +455,7 @@ impl ClientOpts {
     pub fn text(&self) -> String {
         let b = |x: bool| x as u8;
         format!(
-            "tela_cheia={}\nvsync={}\nimersivo={}\nmedidor={}\naviso={}\nmudo={}\npedir_444={}\ncontrole_fundo={}\nteclado_controle={}\n\
+            "tela_cheia={}\nvsync={}\nimersivo={}\nmedidor={}\naviso={}\nmudo={}\nmicrofone={}\npedir_444={}\ncontrole_fundo={}\nteclado_controle={}\n\
 quadros={}\natalho_menu={}\natalho_tela_cheia={}\natalho_ctrl_alt_del={}\natalho_desconectar={}\natalho_imersivo={}\natalho_medidor={}\natalho_som={}\ngpu={}\ntelas={}\natalho_travar_mouse={}\n",
             b(self.fullscreen),
             b(self.vsync),
@@ -459,6 +463,7 @@ quadros={}\natalho_menu={}\natalho_tela_cheia={}\natalho_ctrl_alt_del={}\natalho
             self.meter,
             b(self.warn),
             b(self.mute),
+            b(self.mic),
             b(self.ask444),
             b(self.pad_background),
             b(self.pad_keys),
@@ -535,7 +540,7 @@ mod tests {
         assert_eq!(Opts::parse("janela=x:5").window, (0, 0));
         // Arquivo da 0.11.0: o resto fica no padrão.
         assert_eq!(Opts::parse("hdr_desligar=1\npessoas=2\ncontroles=auto\nconvite=total\n"), Opts { hdr_off: true, guests: 2, invite: TOTAL, ..Opts::default() });
-        let c = ClientOpts { fullscreen: false, vsync: true, immersive: 1, meter: 2, warn: false, mute: true, ask444: true, pad_background: true, pad_keys: true, fps: 60, gpu: "AMD Radeon(TM) Graphics".into(), key_menu: (MOD_ALT, 0x70), key_sound: (MOD_CTRL, b'M' as u32), ..ClientOpts::default() };
+        let c = ClientOpts { fullscreen: false, vsync: true, immersive: 1, meter: 2, warn: false, mute: true, mic: true, ask444: true, pad_background: true, pad_keys: true, fps: 60, gpu: "AMD Radeon(TM) Graphics".into(), key_menu: (MOD_ALT, 0x70), key_sound: (MOD_CTRL, b'M' as u32), ..ClientOpts::default() };
         assert_eq!(ClientOpts::parse(&c.text()), c);
         let c = ClientOpts { screens: ["eu".into(), "".into(), "31ded57656ab".into()], key_lock: (MOD_CTRL, b'L' as u32), ..ClientOpts::default() };
         assert_eq!(ClientOpts::parse(&c.text()), c);

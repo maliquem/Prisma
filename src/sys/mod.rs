@@ -53,6 +53,7 @@ pub mod tools;
 pub mod tweaks;
 pub mod update;
 pub mod uninstall;
+pub mod vbcable;
 pub mod vdd;
 pub mod xbridge;
 pub mod hidhide;

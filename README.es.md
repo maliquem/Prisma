@@ -139,7 +139,7 @@ Compartir pantalla usa bibliotecas de código abierto, sin modificar:
 
 La lista de opciones de la página Driver NVIDIA se estudió en [NVIDIA Profile Inspector](https://github.com/Orbmu2k/nvidiaProfileInspector) (MIT, Orbmu2k y colaboradores): solo ids y valores de las opciones, nada de código.
 
-ViGEmBus y VIIPER no vienen con Prisma. ViGEmBus se instala, cuando lo pides, desde la tarjeta Drivers de la pestaña Mandos; VIIPER, desde el puente del mando Xbox. El Virtual Display Driver y NefCon tampoco vienen con Prisma; se instalan, cuando lo pides, desde la tarjeta Pantalla virtual de la pestaña Red de Compartir pantalla.
+ViGEmBus y VIIPER no vienen con Prisma. ViGEmBus se instala, cuando lo pides, desde la tarjeta Drivers de la pestaña Mandos; VIIPER, desde el puente del mando Xbox. El Virtual Display Driver y NefCon tampoco vienen con Prisma; se instalan, cuando lo pides, desde la tarjeta Pantalla virtual de la pestaña Red de Compartir pantalla. VB-CABLE (VB-Audio, donationware: el uso profesional requiere licencias de pago) tampoco viene con Prisma; se instala, cuando lo pides, desde la tarjeta Micrófono de quien mira (VB-CABLE) de la misma pestaña.
 
 ## Licencia
 

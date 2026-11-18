@@ -2710,3 +2710,20 @@ Sai só o que o Prisma pôs: o driver, o certificado dele em Editores Confiávei
 Instalada fora do Prisma; para remover, use o instalador dela.	Установлен не через Prisma; чтобы удалить, используйте его собственный установщик.
 o download falhou	загрузка не удалась
 não deu para abrir o que foi baixado	не удалось открыть скачанное
+Mandar meu microfone ao outro PC (se ele permitir)	Передать мой микрофон на другой ПК (если он разрешит)
+Lá, os programas ouvem a sua voz no microfone CABLE Output. O outro PC precisa do VB-CABLE e da permissão Microfone para este aparelho.	Там программы слышат ваш голос через микрофон CABLE Output. На другом ПК нужны VB-CABLE и разрешение «Микрофон» для этого устройства.
+Microfone de quem assiste (VB-CABLE)	Микрофон зрителя (VB-CABLE)
+Não instalado. Com ele, quem assiste e tem a permissão Microfone fala nos programas daqui, que ouvem o microfone CABLE Output.	Не установлен. С ним зритель, у которого есть разрешение «Микрофон», говорит в программах здесь, которые слышат микрофон CABLE Output.
+Baixando o VB-CABLE da página oficial.	Скачивание VB-CABLE с официальной страницы.
+No instalador da VB-Audio, clique em Install Driver.	В установщике VB-Audio нажмите Install Driver.
+Se o instalador terminou, reinicie o PC para o cabo aparecer.	Если установщик завершил работу, перезагрузите ПК, чтобы появился кабель.
+No instalador da VB-Audio, clique em Remove Driver.	В установщике VB-Audio нажмите Remove Driver.
+Não deu certo.	Не получилось.
+Pronto. Nos programas daqui, escolha CABLE Output como microfone, e dê a permissão Microfone ao aparelho de quem assiste.	Готово. В программах здесь выберите CABLE Output как микрофон и дайте разрешение «Микрофон» устройству зрителя.
+Instalado fora do Prisma; para remover, use o instalador dele.	Установлен не через Prisma; чтобы удалить, используйте его собственный установщик.
+Instalar o VB-CABLE?	Установить VB-CABLE?
+Remover o VB-CABLE?	Удалить VB-CABLE?
+Abre o instalador da VB-Audio: clique em Remove Driver. O Windows pede permissão de administrador, e o PC pode pedir para reiniciar.	Откроется установщик VB-Audio: нажмите Remove Driver. Windows запросит права администратора, и ПК может предложить перезагрузиться.
+O VB-CABLE é da VB-Audio, donationware de terceiros: o uso pessoal é livre, com doação opcional, e o uso profissional ou em empresa pede licenças pagas na loja da VB-Audio. O Prisma vai baixar o pacote da página oficial (vb-audio.com), conferir a soma e abrir o instalador da VB-Audio, que pede permissão de administrador. Nele, clique em Install Driver; o PC pode pedir para reiniciar. Para desfazer: este cartão, Remover.	VB-CABLE — продукт VB-Audio, donationware стороннего разработчика: личное использование бесплатно, пожертвование по желанию, а для профессионального или корпоративного использования нужны платные лицензии в магазине VB-Audio. Prisma скачает пакет с официальной страницы (vb-audio.com), проверит контрольную сумму и откроет установщик VB-Audio, который запросит права администратора. В нём нажмите Install Driver; ПК может предложить перезагрузиться. Чтобы отменить: эта карточка, «Удалить».
+o arquivo baixado não confere com o pacote oficial	скачанный файл не совпадает с официальным пакетом
+o pacote guardado sumiu	сохранённый пакет пропал

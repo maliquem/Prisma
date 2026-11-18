@@ -1575,6 +1575,8 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     // Controle de taxa: um por pessoa (pela chave dela); o codificador segue a pior.
     let mut rates: HashMap<String, super::rate::Rate> = HashMap::new();
     let mut applied = top_bits;
+    // O CABLE Input do VB-CABLE, aberto no primeiro bloco de microfone (uma tentativa por sessão).
+    let mut cable: Option<Option<super::mic::Cable>> = None;
     let born = Instant::now();
     for g in &room.guests {
         g.link.send(&infos[g.perms as usize]);
@@ -1791,6 +1793,18 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                                 }
                             }
                             Msg::Pad { pad, seq, on, state } => pad_msgs.push(PadMsg { guest: gi, pad, seq, on, state }),
+                            Msg::Mic(data) if g.perms & MIC != 0 => {
+                                let c = cable.get_or_insert_with(|| {
+                                    let c = super::mic::Cable::open();
+                                    if c.is_none() {
+                                        eprintln!("microfone de «{}»: o VB-CABLE não está instalado neste PC", g.name);
+                                    }
+                                    c
+                                });
+                                if let Some(c) = c {
+                                    c.push(g.key(), data);
+                                }
+                            }
                             Msg::Bye => {
                                 g.gone = true;
                                 break;

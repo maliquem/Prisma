@@ -139,7 +139,7 @@ Share screen uses open-source libraries, unmodified:
 
 The list of settings on the NVIDIA driver page was studied from [NVIDIA Profile Inspector](https://github.com/Orbmu2k/nvidiaProfileInspector) (MIT, Orbmu2k and contributors): setting ids and values only, no code.
 
-ViGEmBus and VIIPER do not come with Prisma. ViGEmBus installs, when you ask, through the **Drivers** card on the Controllers tab; VIIPER, through the Xbox controller bridge. The Virtual Display Driver and NefCon do not come with Prisma either; they install, when you ask, through the **Virtual display** card on the Share screen Network tab.
+ViGEmBus and VIIPER do not come with Prisma. ViGEmBus installs, when you ask, through the **Drivers** card on the Controllers tab; VIIPER, through the Xbox controller bridge. The Virtual Display Driver and NefCon do not come with Prisma either; they install, when you ask, through the **Virtual display** card on the Share screen Network tab. VB-CABLE (VB-Audio, donationware: professional use needs paid licenses) does not come with Prisma either; it installs, when you ask, through the **Viewer's microphone (VB-CABLE)** card on the same tab.
 
 ## License
 

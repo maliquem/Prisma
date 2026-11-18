@@ -61,7 +61,7 @@ fn run(link: Arc<dyn Link>, name: &str) {
     let quit = Arc::new(AtomicBool::new(false));
     let player = {
         let (spk, quit) = (spk.clone(), quit.clone());
-        std::thread::Builder::new().name("so-o-som".into()).spawn(move || play_until(&spk, &quit)).ok()
+        std::thread::Builder::new().name("so-o-som".into()).spawn(move || play_until(&spk, &quit, "")).ok()
     };
     let mut last_ping = Instant::now() - Duration::from_secs(1);
     let mut heard = Instant::now();

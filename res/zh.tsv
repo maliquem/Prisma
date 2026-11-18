@@ -2710,3 +2710,20 @@ Sai só o que o Prisma pôs: o driver, o certificado dele em Editores Confiávei
 Instalada fora do Prisma; para remover, use o instalador dela.	此虚拟屏幕不是通过 Prisma 安装的；如需移除，请使用它自带的安装程序。
 o download falhou	下载失败
 não deu para abrir o que foi baixado	无法打开已下载的文件
+Mandar meu microfone ao outro PC (se ele permitir)	把我的麦克风发送到另一台电脑（如果对方允许）
+Lá, os programas ouvem a sua voz no microfone CABLE Output. O outro PC precisa do VB-CABLE e da permissão Microfone para este aparelho.	在那边，程序会通过麦克风 CABLE Output 听到你的声音。另一台电脑需要 VB-CABLE，并为这台设备授予“麦克风”权限。
+Microfone de quem assiste (VB-CABLE)	观看者的麦克风（VB-CABLE）
+Não instalado. Com ele, quem assiste e tem a permissão Microfone fala nos programas daqui, que ouvem o microfone CABLE Output.	未安装。安装后，拥有“麦克风”权限的观看者可以对这里的程序说话，这些程序会听到麦克风 CABLE Output。
+Baixando o VB-CABLE da página oficial.	正在从官方页面下载 VB-CABLE。
+No instalador da VB-Audio, clique em Install Driver.	在 VB-Audio 安装程序中，点击 Install Driver。
+Se o instalador terminou, reinicie o PC para o cabo aparecer.	如果安装程序已完成，请重启电脑，让虚拟线缆出现。
+No instalador da VB-Audio, clique em Remove Driver.	在 VB-Audio 安装程序中，点击 Remove Driver。
+Não deu certo.	没有成功。
+Pronto. Nos programas daqui, escolha CABLE Output como microfone, e dê a permissão Microfone ao aparelho de quem assiste.	完成。在这里的程序中，请选择 CABLE Output 作为麦克风，并为观看者的设备授予“麦克风”权限。
+Instalado fora do Prisma; para remover, use o instalador dele.	不是通过 Prisma 安装的；如需移除，请使用它自带的安装程序。
+Instalar o VB-CABLE?	安装 VB-CABLE？
+Remover o VB-CABLE?	移除 VB-CABLE？
+Abre o instalador da VB-Audio: clique em Remove Driver. O Windows pede permissão de administrador, e o PC pode pedir para reiniciar.	将打开 VB-Audio 安装程序：点击 Remove Driver。Windows 会请求管理员权限，电脑也可能要求重启。
+O VB-CABLE é da VB-Audio, donationware de terceiros: o uso pessoal é livre, com doação opcional, e o uso profissional ou em empresa pede licenças pagas na loja da VB-Audio. O Prisma vai baixar o pacote da página oficial (vb-audio.com), conferir a soma e abrir o instalador da VB-Audio, que pede permissão de administrador. Nele, clique em Install Driver; o PC pode pedir para reiniciar. Para desfazer: este cartão, Remover.	VB-CABLE 由 VB-Audio 提供，是第三方的 donationware：个人使用免费，可自愿捐赠；专业或企业使用需要在 VB-Audio 商店购买付费许可。Prisma 会从官方页面（vb-audio.com）下载安装包，校验其校验和，并打开 VB-Audio 安装程序，该程序会请求管理员权限。在其中点击 Install Driver；电脑可能要求重启。如需撤销：此卡片中的“移除”。
+o arquivo baixado não confere com o pacote oficial	下载的文件与官方安装包不一致
+o pacote guardado sumiu	已保存的安装包不见了

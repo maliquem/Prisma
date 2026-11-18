@@ -387,22 +387,22 @@ impl Speaker {
 }
 
 fn play(sh: Arc<Shared>) {
-    play_until(&sh.spk, &sh.quit);
+    play_until(&sh.spk, &sh.quit, "");
 }
 
-/// Toca o som recebido na saída padrão, com o menor período que o Windows deixa, até `quit`.
-pub(super) fn play_until(spk: &Speaker, quit: &AtomicBool) {
+/// Toca o som recebido na saída `id` (vazio: a padrão), com o menor período que o Windows deixa, até `quit`.
+pub(super) fn play_until(spk: &Speaker, quit: &AtomicBool, id: &str) {
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-        if let Err(e) = play_loop(spk, quit) {
+        if let Err(e) = play_loop(spk, quit, id) {
             eprintln!("som: {e:?}");
         }
     }
 }
 
-unsafe fn play_loop(sh: &Speaker, quit: &AtomicBool) -> Result<()> {
+unsafe fn play_loop(sh: &Speaker, quit: &AtomicBool, id: &str) -> Result<()> {
     let en: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
-    let dev = en.GetDefaultAudioEndpoint(eRender, eConsole)?;
+    let dev = if id.is_empty() { en.GetDefaultAudioEndpoint(eRender, eConsole)? } else { en.GetDevice(&HSTRING::from(id))? };
     let f = sound::format();
     let mut client: IAudioClient = dev.Activate(CLSCTX_ALL, None)?;
     let mut low = false;
@@ -1213,6 +1213,13 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         let (l2, sh2, h) = (link.clone(), sh.clone(), hwnd.0 as isize);
         std::thread::Builder::new().name("assistir-controles".into()).spawn(move || pads(l2, sh2, h)).ok()
     };
+    // O microfone daqui vai ao host só com a opção ligada e a permissão dele.
+    let mic_thread = if co.mic {
+        let (l2, sh2) = (link.clone(), sh.clone());
+        std::thread::Builder::new().name("assistir-microfone".into()).spawn(move || super::mic::send_until(l2, &sh2.perms, &sh2.quit)).ok()
+    } else {
+        None
+    };
 
     let mut dec: Option<Decoder> = None;
     let mut wave: Option<super::wave::WaveDecoder> = None;
@@ -1705,6 +1712,9 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     link.send(&bye);
     let _ = rx.join();
     if let Some(t) = pad_thread {
+        let _ = t.join();
+    }
+    if let Some(t) = mic_thread {
         let _ = t.join();
     }
     let _ = CloseHandle(wake);
