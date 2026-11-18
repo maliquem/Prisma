@@ -364,6 +364,13 @@ impl Nvenc {
     }
 
     /// Deixa de usar como referência o quadro com esta hora. Falso se o NVENC não aceitou.
+    ///
+    /// Bancada com perda (`reports/fase4-nvenc-perda.txt`): o H.264 "decodificou 706/706" porque o
+    /// MFT dele mostra, remendados, os quadros que dependiam do perdido, e a invalidação virou 14
+    /// quadros I (14,9 Mbit/s); o HEVC (664/706, 0 quadros-chave, 5,3 Mbit/s) descarta esses ~3
+    /// quadros por perda no decodificador e recupera por uma referência mais velha. Invalidação,
+    /// renovação gradual e croma são iguais nos dois aqui. Hipótese a medir: o H.264 do P1 guarda
+    /// uma só referência (`maxNumRefFrames`), então invalidar não deixa nenhuma e sai quadro I.
     pub unsafe fn invalidate(&self, pts: i64) -> bool {
         self.can_invalidate && (self.api.nvEncInvalidateRefFrames)(self.enc, pts as u64) == NVENCSTATUS::SUCCESS
     }
