@@ -2699,3 +2699,19 @@ Pedido para ligar «{}» mandado na rede deste PC.	Request to turn on “{}” s
 Pedido para ligar mandado por «{}», na rede de casa.	Request to turn on sent by “{}”, on the home network.
 «{}» não ligou o PC: ele também precisa assistir a esse PC.	“{}” did not turn on the PC: it also needs to watch that PC.
 Para ligar de outra rede, deixe outro PC com o Prisma ligado na mesma rede de casa.	To turn it on from another network, leave another PC with Prisma running on the same home network.
+Tela virtual	Virtual display
+Tela virtual, telas daqui apagadas	Virtual display, screens here turned off
+Não instalada. Com ela, quem assiste ganha uma tela só sua, no tamanho e nos Hz dele, e dá para apagar as telas daqui.	Not installed. With it, the viewer gets a screen of their own, at their size and refresh rate, and the screens here can be turned off.
+Baixando o driver da página oficial.	Downloading the driver from the official page.
+Reinicie o PC para terminar.	Restart the PC to finish.
+Removendo a tela virtual.	Removing the virtual display.
+A instalação não deu certo.	The installation did not work.
+Pronta. Escolha Tela virtual em Monitor, na aba Host ou na configuração de um aparelho.	Ready. Choose Virtual display under Monitor, in the Host tab or in a device's settings.
+Instalar…	Install…
+Remover…	Remove…
+Instalar a tela virtual?	Install the virtual display?
+Remover a tela virtual?	Remove the virtual display?
+O Prisma vai baixar o Virtual Display Driver (VirtualDrivers, programa livre de terceiros, assinado) e o NefCon, que instala o driver, das páginas oficiais deles no GitHub, e conferir os dois. O Windows pede permissão de administrador; o certificado do driver entra em Editores Confiáveis. A tela virtual só liga quando alguém conecta com ela escolhida em Monitor, e desliga ao sair. Para desfazer: este cartão, Remover.	Prisma will download the Virtual Display Driver (VirtualDrivers, free third-party software, signed) and NefCon, which installs the driver, from their official GitHub pages, and verify both. Windows asks for administrator permission; the driver's certificate goes into Trusted Publishers. The virtual display only turns on when someone connects with it chosen under Monitor, and turns off on exit. To undo: this card, Remove.
+Sai o driver, o certificado dele em Editores Confiáveis e a pasta C:\VirtualDisplayDriver. O Windows pede permissão de administrador.	Removes the driver, its certificate in Trusted Publishers and the C:\VirtualDisplayDriver folder. Windows asks for administrator permission.
+o download falhou	the download failed
+não deu para abrir o que foi baixado	could not open what was downloaded

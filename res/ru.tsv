@@ -2693,3 +2693,19 @@ Pedido para ligar «{}» mandado na rede deste PC.	Запрос на включ�
 Pedido para ligar mandado por «{}», na rede de casa.	Запрос на включение отправлен с «{}» в домашней сети.
 «{}» não ligou o PC: ele também precisa assistir a esse PC.	«{}» не включил ПК: он тоже должен смотреть этот ПК.
 Para ligar de outra rede, deixe outro PC com o Prisma ligado na mesma rede de casa.	Чтобы включить из другой сети, оставьте другой ПК с запущенным Prisma в той же домашней сети.
+Tela virtual	Виртуальный экран
+Tela virtual, telas daqui apagadas	Виртуальный экран, местные экраны выключены
+Não instalada. Com ela, quem assiste ganha uma tela só sua, no tamanho e nos Hz dele, e dá para apagar as telas daqui.	Не установлен. С ним зритель получает свой отдельный экран с нужным размером и частотой в Гц, а экраны здесь можно выключить.
+Baixando o driver da página oficial.	Загрузка драйвера с официальной страницы.
+Reinicie o PC para terminar.	Перезагрузите ПК, чтобы завершить.
+Removendo a tela virtual.	Удаление виртуального экрана.
+A instalação não deu certo.	Установка не удалась.
+Pronta. Escolha Tela virtual em Monitor, na aba Host ou na configuração de um aparelho.	Готово. Выберите «Виртуальный экран» в разделе «Монитор» на вкладке «Хост» или в настройках устройства.
+Instalar…	Установить…
+Remover…	Удалить…
+Instalar a tela virtual?	Установить виртуальный экран?
+Remover a tela virtual?	Удалить виртуальный экран?
+O Prisma vai baixar o Virtual Display Driver (VirtualDrivers, programa livre de terceiros, assinado) e o NefCon, que instala o driver, das páginas oficiais deles no GitHub, e conferir os dois. O Windows pede permissão de administrador; o certificado do driver entra em Editores Confiáveis. A tela virtual só liga quando alguém conecta com ela escolhida em Monitor, e desliga ao sair. Para desfazer: este cartão, Remover.	Prisma скачает Virtual Display Driver (VirtualDrivers, свободная сторонняя программа, с подписью) и NefCon, который устанавливает драйвер, с их официальных страниц на GitHub и проверит оба. Windows запросит права администратора; сертификат драйвера попадёт в «Доверенные издатели». Виртуальный экран включается, только когда кто-то подключается с ним, выбранным в разделе «Монитор», и выключается при выходе. Чтобы отменить: эта карточка, «Удалить».
+Sai o driver, o certificado dele em Editores Confiáveis e a pasta C:\VirtualDisplayDriver. O Windows pede permissão de administrador.	Будут удалены драйвер, его сертификат в «Доверенных издателях» и папка C:\VirtualDisplayDriver. Windows запросит права администратора.
+o download falhou	загрузка не удалась
+não deu para abrir o que foi baixado	не удалось открыть скачанное

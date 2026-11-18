@@ -370,6 +370,7 @@ pub fn emergency_key() {
 
 /// No início do Prisma: se uma sessão caiu com o HDR desligado, liga de volta.
 pub fn restore_hdr() {
+    crate::sys::vdd::restore();
     for path in [super::user_dir().join("hdr_desligado.txt"), super::service_dir().join("hdr_desligado.txt")] {
         let Ok(s) = std::fs::read_to_string(&path) else { continue };
         let v: Vec<i64> = s.split_whitespace().filter_map(|x| x.parse().ok()).collect();
@@ -388,6 +389,8 @@ pub fn restore_hdr() {
 pub(super) fn serve(d: &D3d, first: Joiner, joins: Option<&mpsc::Receiver<Joiner>>) -> Option<(Hello, SocketAddr)> {
     *LEAD.lock().unwrap() = first.id.clone();
     let _hdr = HdrOff::new(&first.hello);
+    let h = &first.hello;
+    let _virtual = crate::sys::vdd::Virtual::for_monitor(room_opts().monitor, h.w, h.h, h.hz, h.flags & SEES_HDR != 0);
     let mut room = Room { guests: vec![Guest::new(first)], bridge: None, bridge_err: None, anti_cheat: false, checked: Instant::now() - Duration::from_secs(10), clip: None, clip_id: 0, frame_id: 0, wave_failed: false };
     let g = &room.guests[0];
     eprintln!("chegou «{}»: tela {}x{} a {} Hz, {} ({})", g.name, g.hello.w, g.hello.h, g.hello.hz, perms_text(g.perms), g.link.route());
@@ -1263,6 +1266,9 @@ pub(super) fn pick_monitor(n: u32) -> HMONITOR {
     let primary = unsafe { MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY) };
     if n == 0 {
         return primary;
+    }
+    if n >= crate::sys::vdd::VIRTUAL {
+        return crate::sys::vdd::monitor().unwrap_or(primary);
     }
     monitors().get(n as usize - 1).copied().unwrap_or(primary)
 }

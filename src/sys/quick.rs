@@ -253,7 +253,7 @@ pub fn powershell() -> PathBuf {
     }
 }
 
-fn utf16_b64(s: &str) -> String {
+pub(crate) fn utf16_b64(s: &str) -> String {
     let bytes: Vec<u8> = s.encode_utf16().flat_map(|u| u.to_le_bytes()).collect();
     b64(&bytes)
 }
@@ -270,7 +270,7 @@ pub(crate) fn b64(data: &[u8]) -> String {
     out
 }
 
-fn ps_quote(s: &str) -> String {
+pub(crate) fn ps_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "''"))
 }
 

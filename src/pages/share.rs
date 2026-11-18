@@ -1247,6 +1247,11 @@ fn host_tab(ui: &mut Ui, app: &mut App, st: &mut State, all: &mut Opts, x: f32, 
         mon_vals.push(i as u32 + 1);
         mon_names.push(format!("{} {} ({}x{})", crate::i18n::tr("Monitor"), i + 1, rc.right - rc.left, rc.bottom - rc.top));
     }
+    // A tela virtual entra na lista quando o driver está instalado (cartão na aba Rede).
+    if crate::sys::vdd::stage() == crate::sys::vdd::Stage::Ready || o.monitor >= crate::sys::vdd::VIRTUAL {
+        mon_vals.extend([crate::sys::vdd::VIRTUAL, crate::sys::vdd::PRIVATE]);
+        mon_names.extend(["Tela virtual", "Tela virtual, telas daqui apagadas"].map(|t| crate::i18n::tr(t).into_owned()));
+    }
     if !mon_vals.contains(&o.monitor) {
         mon_vals.push(o.monitor);
         mon_names.push(format!("{} {}", crate::i18n::tr("Monitor"), o.monitor));
@@ -1463,7 +1468,8 @@ fn client_tab(ui: &mut Ui, app: &App, c: &mut ClientOpts, x: f32, top: f32, w: f
 #[allow(clippy::too_many_arguments)]
 fn net_tab(ui: &mut Ui, app: &mut App, st: &mut State, o: &mut Opts, x: f32, top: f32, w: f32, h: f32) {
     let lw = ((w - GAP) / 2.0).floor();
-    let l = rect(x, top, lw, h);
+    let vh = virtual_card(ui, x, top + h, lw);
+    let l = rect(x, top, lw, h - vh - GAP);
     ui.card(l);
     let ix = l.x + 16.0;
     let iw = l.w - 32.0;
@@ -1507,6 +1513,57 @@ fn net_tab(ui: &mut Ui, app: &mut App, st: &mut State, o: &mut Opts, x: f32, top
         let t = format!("{} {route}", crate::i18n::tr("Última conexão:"));
         ui.c.text_raw(rect(rx, r.bottom() - 40.0, rw, 24.0), &t, 13.0, ACCENT, Align::Left, Weight::Regular);
     }
+}
+
+/// Aviso antes de baixar e instalar o driver da tela virtual: o que entra no PC e como desfazer.
+const VDD_CONSENT: &str = "O Prisma vai baixar o Virtual Display Driver (VirtualDrivers, programa livre de terceiros, assinado) e o NefCon, que instala o driver, das páginas oficiais deles no GitHub, e conferir os dois. O Windows pede permissão de administrador; o certificado do driver entra em Editores Confiáveis. A tela virtual só liga quando alguém conecta com ela escolhida em Monitor, e desliga ao sair. Para desfazer: este cartão, Remover.";
+
+/// Tela virtual (VDD): estado, instalar e remover. Fica no pé da coluna, a partir de `bottom`.
+/// Devolve a altura que ocupou.
+fn virtual_card(ui: &mut Ui, x: f32, bottom: f32, w: f32) -> f32 {
+    use crate::sys::vdd::{self, Stage::*};
+    let stage = vdd::stage();
+    let line = match &stage {
+        Absent => "Não instalada. Com ela, quem assiste ganha uma tela só sua, no tamanho e nos Hz dele, e dá para apagar as telas daqui.",
+        Downloading => "Baixando o driver da página oficial.",
+        Installing => "Instalando. Aceite a permissão de administrador do Windows.",
+        Reboot => "Reinicie o PC para terminar.",
+        Removing => "Removendo a tela virtual.",
+        Failed(_) => "A instalação não deu certo.",
+        Ready => "Pronta. Escolha Tela virtual em Monitor, na aba Host ou na configuração de um aparelho.",
+    };
+    let mut note = crate::i18n::tr(line).into_owned();
+    if let Failed(e) = &stage {
+        note = format!("{note} ({})", crate::i18n::tr(e));
+    }
+    let nh = crate::ui::gfx::measure(&note, 12.0, Weight::Regular, Some(w - 32.0)).1.ceil();
+    let r = rect(x, bottom - (100.0 + nh), w, 100.0 + nh);
+    ui.card(r);
+    ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Tela virtual");
+    ui.c.text_wrap(rect(r.x + 16.0, r.y + 40.0, r.w - 32.0, nh), &note, 12.0, TEXT2, Weight::Regular);
+    let bw = ((r.w - 40.0) / 2.0).floor();
+    let b1 = rect(r.x + 16.0, r.y + 50.0 + nh, bw, 34.0);
+    let b2 = rect(r.x + 24.0 + bw, r.y + 50.0 + nh, bw, 34.0);
+    let busy = stage.busy();
+    if stage == Absent {
+        if ui.button("vdd-install", b1, "Instalar…", true) && !busy {
+            ui.ask("vdd-install", "Instalar a tela virtual?", VDD_CONSENT);
+        }
+    } else {
+        if ui.button("vdd-check", b1, "Verificar de novo", false) && !busy {
+            vdd::recheck();
+        }
+        if ui.button("vdd-remove", b2, "Remover…", false) && !busy {
+            ui.ask("vdd-remove", "Remover a tela virtual?", "Sai o driver, o certificado dele em Editores Confiáveis e a pasta C:\\VirtualDisplayDriver. O Windows pede permissão de administrador.");
+        }
+    }
+    if ui.answered("vdd-install") {
+        vdd::start_install();
+    }
+    if ui.answered("vdd-remove") {
+        vdd::start_remove();
+    }
+    r.h
 }
 
 fn hotkey_row(ui: &mut Ui, key: &str, x: f32, y: f32, w: f32, label: &str, k: &mut stream::Keys) {
