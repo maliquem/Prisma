@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.7.2
 
 - Share screen: the question that asks whether to let someone pair or connect now shows up in screen captures, so you can answer it while using this PC remotely (Parsec, for example). Before, it was hidden from captures like the other Prisma pop-ups, and the remote screen never showed it. The question to close programs is still left out of photos and videos. / Compartilhar tela: a pergunta que pede para deixar alguém parear ou se conectar agora aparece em capturas de tela, e dá para responder usando este PC de longe (pelo Parsec, por exemplo). Antes ela ficava fora das capturas, como os outros avisos do Prisma, e a tela remota nunca a mostrava. A pergunta de fechar programas continua fora de fotos e vídeos.
 
