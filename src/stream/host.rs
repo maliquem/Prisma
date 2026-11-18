@@ -1854,7 +1854,8 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
             };
             // Numa mudança grande (Alt+Tab, minimizar), chegam vários quadros de uma vez: só o
             // mais novo é copiado (ou convertido do HDR). Antes, cada um passava pela GPU e o
-            // anterior era jogado fora.
+            // anterior era jogado fora. `mid` com `pending` é a caixa de um quadro até o codificador:
+            // com ele ocupado (`!enc.ready()`), o quadro seguinte escreve por cima do que esperava.
             let mut newest = None;
             while let Ok(f) = pool.TryGetNextFrame() {
                 let pts = f.SystemRelativeTime()?.Duration;
