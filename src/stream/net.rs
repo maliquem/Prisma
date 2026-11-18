@@ -353,11 +353,11 @@ pub fn make_invite(perms: u8, minutes: u32) {
     eprintln!("Convite novo ({}; vale {minutes} minutos e uma vez).", perms_text(perms));
     eprintln!("{EXPIRES_LINE}{until}");
     eprintln!("{CODE_LINE}{shown}");
-    eprintln!("Convite longo, se o código não for achado:\n\n{}\n", invite_text(&sk.public(), &secret));
-    eprintln!("A pergunta de confirmação aparece na tela deste PC.");
     // O relé e os IPs vêm do host que está rodando (o ajudante do serviço ou a página).
     let lines = std::fs::read_to_string(addr_path()).unwrap_or_default();
     let addr = EndpointAddr::from_parts(sk.public(), code::parse_addrs(lines.lines()));
+    eprintln!("Convite longo, se o código não for achado:\n\n{}\n", invite_text(&addr, &secret));
+    eprintln!("A pergunta de confirmação aparece na tela deste PC.");
     let n = rt().block_on(code::publish(&root, &addr, until));
     published(n);
 }
@@ -469,21 +469,28 @@ fn published(n: usize) {
     }
 }
 
-fn invite_text(id: &EndpointId, secret: &[u8; 16]) -> String {
-    let mut b = id.as_bytes().to_vec();
+/// Id, segredo e, depois deles, o relé do host em texto: quem pareia conecta sem depender de achar
+/// o host pelo DNS da n0. As versões até a 1.6.2 só aceitam o convite sem o relé.
+fn invite_text(host: &EndpointAddr, secret: &[u8; 16]) -> String {
+    let mut b = host.id.as_bytes().to_vec();
     b.extend_from_slice(secret);
+    if let Some(u) = host.relay_urls().next() {
+        b.extend_from_slice(u.to_string().as_bytes());
+    }
     format!("{INVITE_PREFIX}{}", data_encoding::BASE32_NOPAD.encode(&b))
 }
 
-fn parse_invite(s: &str) -> Option<(EndpointId, [u8; 16])> {
+fn parse_invite(s: &str) -> Option<(EndpointAddr, [u8; 16])> {
     let s: String = s.trim().chars().filter(|c| !c.is_whitespace()).collect::<String>().to_ascii_uppercase();
     let s = s.strip_prefix(INVITE_PREFIX).unwrap_or(&s);
     let b = data_encoding::BASE32_NOPAD.decode(s.as_bytes()).ok()?;
-    if b.len() != 48 {
+    if b.len() < 48 || b.len() > 48 + 200 {
         return None;
     }
     let id = EndpointId::from_bytes(b[..32].try_into().ok()?).ok()?;
-    Some((id, b[32..].try_into().ok()?))
+    // Um relé que não lê fica de fora: o id basta para tentar pelo DNS.
+    let relay = std::str::from_utf8(&b[48..]).ok().and_then(|u| u.parse().ok()).map(TransportAddr::Relay);
+    Some((EndpointAddr::from_parts(id, relay), b[32..48].try_into().ok()?))
 }
 
 /// Seis dígitos que os dois lados mostram: se forem iguais, ninguém se meteu no meio.
@@ -886,7 +893,7 @@ fn host_with(invite_perms: Option<u8>, service: bool) {
             eprintln!("Prisma compartilhando pela internet. Quem parear agora: {}. Este PC: «{}», id {}", perms_text(perms), my_name(), ep.id().fmt_short());
             eprintln!("Convite para parear outro PC (vale 10 minutos e uma vez).");
             eprintln!("{CODE_LINE}{shown}");
-            eprintln!("Convite longo, se o código não for achado:\n\n{}\n", invite_text(&ep.id(), &secret));
+            eprintln!("Convite longo, se o código não for achado:\n\n{}\n", invite_text(&ep.addr(), &secret));
             let addr = ep.addr();
             let until = unix_now() + INVITE_TTL.as_secs();
             rt().spawn(async move { published(code::publish(&root, &addr, until).await) });
@@ -994,8 +1001,8 @@ pub fn pair(text: &str) {
             }
             Err(e) => return eprintln!("não achei o código ({e}): confira o código, ou peça o convite longo"),
         }
-    } else if let Some((id, secret)) = parse_invite(text) {
-        (id.into(), secret)
+    } else if let Some(x) = parse_invite(text) {
+        x
     } else {
         return eprintln!("convite inválido");
     };
@@ -1159,11 +1166,24 @@ mod tests {
     fn invite_round_trip() {
         let id = SecretKey::from_bytes(&[7; 32]).public();
         let secret = [9u8; 16];
-        let t = invite_text(&id, &secret);
+        // Sem relé: o mesmo texto das versões antigas.
+        let t = invite_text(&id.into(), &secret);
         assert!(t.starts_with(INVITE_PREFIX));
-        let (id2, s2) = parse_invite(&format!("  {}  ", t.to_lowercase())).unwrap();
-        assert_eq!(id2, id);
+        let (a2, s2) = parse_invite(&format!("  {}  ", t.to_lowercase())).unwrap();
+        assert_eq!(a2, EndpointAddr::from(id));
         assert_eq!(s2, secret);
+        // Com o relé, ele volta inteiro (e os IPs não entram, para o convite não crescer).
+        let relay: iroh::RelayUrl = "https://use1-1.relay.n0.iroh.link./".parse().unwrap();
+        let full = EndpointAddr::from_parts(id, [TransportAddr::Relay(relay.clone()), TransportAddr::Ip("192.168.0.5:47600".parse().unwrap())]);
+        let (a3, s3) = parse_invite(&invite_text(&full, &secret)).unwrap();
+        assert_eq!(a3, EndpointAddr::from_parts(id, [TransportAddr::Relay(relay)]));
+        assert_eq!(s3, secret);
+        // Um final que não é relé fica de fora, sem perder o convite.
+        let mut b = id.as_bytes().to_vec();
+        b.extend_from_slice(&secret);
+        b.extend_from_slice(b"lixo");
+        let (a4, _) = parse_invite(&format!("{INVITE_PREFIX}{}", data_encoding::BASE32_NOPAD.encode(&b))).unwrap();
+        assert_eq!(a4, EndpointAddr::from(id));
         assert!(parse_invite("PRISMA-ABC").is_none());
     }
 
