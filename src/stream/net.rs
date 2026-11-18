@@ -527,7 +527,7 @@ async fn endpoint(sk: SecretKey, alpns: Vec<Vec<u8>>, host: bool) -> std::result
         .keep_alive_interval(Duration::from_secs(1))
         .build();
     let make = |v6: bool| -> std::result::Result<iroh::endpoint::Builder, String> {
-        let mut b = Endpoint::builder(presets::N0).secret_key(sk.clone()).alpns(alpns.clone()).transport_config(cfg.clone());
+        let mut b = Endpoint::builder(presets::N0).secret_key(sk.clone()).alpns(alpns.clone()).transport_config(cfg.clone()).ca_tls_config(super::code::ca());
         if !o.upnp {
             b = b.portmapper_config(iroh::endpoint::PortmapperConfig::Disabled);
         }

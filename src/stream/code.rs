@@ -83,8 +83,15 @@ pub fn secret(root: &[u8; 32]) -> [u8; 16] {
     blake3::derive_key("Prisma 2026-12 convite curto, segredo", root)[..16].try_into().unwrap()
 }
 
+/// Os certificados em que o iroh confia: os do Windows, não a lista embutida. Uma rede que abre o HTTPS no meio do
+/// caminho (escola, empresa, antivírus) assina com a raiz dela, que só existe no Windows; com a lista embutida o PC
+/// ficava sem relé e sem achar o código curto.
+pub fn ca() -> iroh::tls::CaTlsConfig {
+    iroh::tls::CaTlsConfig::system()
+}
+
 fn client(url: &str) -> std::result::Result<PkarrRelayClient, String> {
-    let tls = iroh::tls::CaTlsConfig::embedded().client_config(iroh::tls::default_provider()).map_err(|e| e.to_string())?;
+    let tls = ca().client_config(iroh::tls::default_provider()).map_err(|e| e.to_string())?;
     let url = url.parse().map_err(|e: url::ParseError| e.to_string())?;
     Ok(PkarrRelayClient::new(url, tls, iroh::dns::DnsResolver::new()))
 }
