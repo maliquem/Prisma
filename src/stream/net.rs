@@ -946,13 +946,28 @@ fn host_with(invite_perms: Option<u8>, service: bool) {
 
 // ---------- Quem assiste ----------
 
+/// O que este PC sabia quando o outro não respondeu: separa "este PC sem relé" de "o outro PC
+/// não foi achado" e de "achado, mas calado" no log de quem pareia ou assiste.
+async fn why_silent(ep: &Endpoint, other: EndpointId) -> String {
+    use iroh::Watcher;
+    let mine = match ep.home_relay_status().get().into_iter().find(|r| r.is_connected()) {
+        Some(r) => format!("este PC no relé {}", r.url()),
+        None => "este PC sem relé".into(),
+    };
+    let theirs = match ep.remote_info(other).await {
+        Some(i) => code::addr_lines(&EndpointAddr::from_parts(other, i.into_addrs().map(|a| a.into_addr()))),
+        None => Vec::new(),
+    };
+    format!("{mine}; endereços do outro: {}", if theirs.is_empty() { "nenhum achado".into() } else { theirs.join(", ") })
+}
+
 /// Pede o pareamento e espera a resposta. Devolve o nome do outro PC se ele aceitou.
 async fn ask_pair(ep: &Endpoint, addr: EndpointAddr, secret: &[u8; 16]) -> std::result::Result<String, String> {
     let host_id = addr.id;
-    let conn = tokio::time::timeout(Duration::from_secs(30), ep.connect(addr, ALPN_PAIR))
-        .await
-        .map_err(|_| "o outro PC não respondeu em 30 s".to_string())?
-        .map_err(|e| e.to_string())?;
+    let conn = match tokio::time::timeout(Duration::from_secs(30), ep.connect(addr, ALPN_PAIR)).await {
+        Ok(c) => c.map_err(|e| e.to_string())?,
+        Err(_) => return Err(format!("o outro PC não respondeu em 30 s ({})", why_silent(ep, host_id).await)),
+    };
     let (mut send, mut recv) = conn.open_bi().await.map_err(|e| e.to_string())?;
     let mut msg = secret.to_vec();
     msg.extend_from_slice(my_name().as_bytes());
@@ -1034,7 +1049,7 @@ pub(super) fn with_host(target: &str, work: impl FnOnce(Arc<dyn Link>, &str)) {
             work(link, &dev.name);
         }
         Ok(Err(e)) => eprintln!("não conectou: {e}"),
-        Err(_) => eprintln!("«{}» não respondeu em 30 s (está com o Prisma compartilhando?)", dev.name),
+        Err(_) => eprintln!("«{}» não respondeu em 30 s (está com o Prisma compartilhando?; {})", dev.name, rt().block_on(why_silent(&ep, dev.id))),
     }
     rt().block_on(ep.close());
 }
