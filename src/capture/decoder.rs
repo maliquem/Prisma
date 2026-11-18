@@ -103,6 +103,10 @@ impl Decoder {
             attrs.SetUINT32(&MF_TRANSFORM_ASYNC_UNLOCK, 1)?;
         }
         let _ = attrs.SetUINT32(&MF_LOW_LATENCY, 1);
+        // O mesmo pedido pela ICodecAPI: alguns decodificadores só soltam o quadro sem reter fila por ela.
+        if let Ok(api) = mft.cast::<ICodecAPI>() {
+            let _ = api.SetValue(&CODECAPI_AVLowLatencyMode, &windows::Win32::System::Variant::VARIANT::from(true));
+        }
         let mut gpu = false;
         if attrs.GetUINT32(&MF_SA_D3D11_AWARE).unwrap_or(0) != 0 {
             let mut token = 0;
