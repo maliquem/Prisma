@@ -557,7 +557,8 @@ fn sound_from(opts: &Opts, viewer_here: Option<u32>, keep: Option<u32>) -> (Soun
 /// Som do PC em blocos de 5 ms, para quem tem a permissão de som. A origem segue as opções e os
 /// programas abertos durante a transmissão: outra linha decide a cada segundo, e esta só troca a
 /// captura quando a decisão muda (procurar processos e sessões de som atrasaria os blocos).
-pub(super) fn audio(links: Arc<Mutex<Vec<Arc<dyn Link>>>>, viewer_here: Option<u32>, stop: Arc<AtomicBool>) {
+/// Quem tem `true` ao lado recebe o som em Opus.
+pub(super) fn audio(links: Arc<Mutex<Vec<(Arc<dyn Link>, bool)>>>, viewer_here: Option<u32>, stop: Arc<AtomicBool>) {
     // A origem do som, e a entrada que vai junto (vazio: nenhuma).
     type Choice = (SoundFrom, String, String);
     let choice: Arc<Mutex<Option<Choice>>> = Arc::new(Mutex::new(None));
@@ -594,6 +595,8 @@ pub(super) fn audio(links: Arc<Mutex<Vec<Arc<dyn Link>>>>, viewer_here: Option<u
         let (mut a, mut m) = (Vec::<f32>::new(), Vec::<f32>::new());
         let mut pcm: Vec<f32> = Vec::new();
         let mut block = Vec::with_capacity(AUDIO_BLOCK * 4);
+        let mut samples = Vec::with_capacity(AUDIO_BLOCK * 2);
+        let mut enc = super::opus::Encoder::default();
         let mut out = Vec::with_capacity(MTU);
         let mut seq = 0u32;
         while !stop.load(Ordering::Relaxed) {
@@ -649,14 +652,22 @@ pub(super) fn audio(links: Arc<Mutex<Vec<Arc<dyn Link>>>>, viewer_here: Option<u
                 None => pcm.append(&mut a),
             }
             while pcm.len() >= AUDIO_BLOCK * 2 {
-                block.clear();
-                for v in pcm.drain(..AUDIO_BLOCK * 2) {
-                    block.extend_from_slice(&((v.clamp(-1.0, 1.0) * 32767.0) as i16).to_le_bytes());
+                samples.clear();
+                samples.extend(pcm.drain(..AUDIO_BLOCK * 2).map(|v| (v.clamp(-1.0, 1.0) * 32767.0) as i16));
+                let ls = links.lock().unwrap();
+                // Sem Opus (o codificador não abriu), todo mundo recebe PCM.
+                let coded = if ls.iter().any(|l| l.1) { enc.encode(&samples) } else { None };
+                if let Some(c) = &coded {
+                    write(&mut out, &Msg::Opus { seq, pts: now(), data: c });
+                    ls.iter().filter(|l| l.1).for_each(|l| l.0.send(&out));
                 }
-                write(&mut out, &Msg::Audio { seq, pts: now(), data: &block });
-                for l in links.lock().unwrap().iter() {
-                    l.send(&out);
+                if ls.iter().any(|l| !l.1 || coded.is_none()) {
+                    block.clear();
+                    samples.iter().for_each(|v| block.extend_from_slice(&v.to_le_bytes()));
+                    write(&mut out, &Msg::Audio { seq, pts: now(), data: &block });
+                    ls.iter().filter(|l| !l.1 || coded.is_none()).for_each(|l| l.0.send(&out));
                 }
+                drop(ls);
                 seq = seq.wrapping_add(1);
             }
         }
@@ -1540,7 +1551,10 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     let mut first_size: Option<(u32, u32)> = None;
 
     // Som para quem tem a permissão. Mesmo PC: tira o som da janela que assiste.
-    let hearing = |guests: &[Guest]| -> Vec<Arc<dyn Link>> { guests.iter().filter(|g| g.perms & SOUND != 0).map(|g| g.link.clone()).collect() };
+    // Fora da rede local, quem decodifica Opus recebe o som em Opus.
+    let hearing = |guests: &[Guest]| -> Vec<(Arc<dyn Link>, bool)> {
+        guests.iter().filter(|g| g.perms & SOUND != 0).map(|g| (g.link.clone(), g.hello.flags & OPUS_OK != 0 && !g.link.near())).collect()
+    };
     let audio_links = Arc::new(Mutex::new(hearing(&room.guests)));
     let exclude = room.guests.iter().find(|g| g.link.same_pc() && g.hello.pid != 0).map(|g| g.hello.pid);
     let stop_audio = Arc::new(AtomicBool::new(false));

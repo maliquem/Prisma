@@ -29,7 +29,7 @@ fn run(link: Arc<dyn Link>, name: &str) {
     };
     // Um host de versão anterior trata isto como quem assiste e se revela mandando vídeo.
     let mut hello = Vec::new();
-    write(&mut hello, &Msg::Hello { w: 1280, h: 720, hz: 60, codecs: codec_bit(Codec::H264), pid: std::process::id(), flags: SOUND_ONLY });
+    write(&mut hello, &Msg::Hello { w: 1280, h: 720, hz: 60, codecs: codec_bit(Codec::H264), pid: std::process::id(), flags: SOUND_ONLY | OPUS_OK });
     let mut buf = vec![0u8; 2048];
     let start = Instant::now();
     let mut last_hello = start - Duration::from_secs(2);
@@ -66,6 +66,7 @@ fn run(link: Arc<dyn Link>, name: &str) {
     let mut last_ping = Instant::now() - Duration::from_secs(1);
     let mut heard = Instant::now();
     let (mut next, mut lost, mut blocks) = (None::<u32>, 0u64, 0u64);
+    let mut opus = OpusDecoder::default();
     let mut lat = super::LatLog::new("som");
     loop {
         if last_ping.elapsed() > Duration::from_millis(500) {
@@ -93,6 +94,18 @@ fn run(link: Arc<dyn Link>, name: &str) {
                         }
                         next = Some(seq.wrapping_add(1));
                         spk.audio.lock().unwrap().extend(data.chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])));
+                    }
+                    Some(Msg::Opus { seq, data, .. }) => {
+                        blocks += 1;
+                        if let Some(n) = next {
+                            let gap = seq.wrapping_sub(n);
+                            if gap > 0 && gap < 1000 {
+                                lost += gap as u64;
+                            }
+                        }
+                        next = Some(seq.wrapping_add(1));
+                        let pcm = opus.decode(seq, data);
+                        spk.audio.lock().unwrap().extend(pcm);
                     }
                     Some(Msg::Info { perms, .. }) if perms & SOUND == 0 => {
                         eprintln!("«{name}» tirou a permissão de som deste PC");

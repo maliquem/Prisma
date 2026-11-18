@@ -131,6 +131,7 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
     // FEC: os pedaços de vídeo que a paridade refez entram aqui e passam pelo mesmo caminho dos que
     // chegaram pela rede, antes do próximo pacote (e antes de um Nack).
     let mut fec = FecRx::default();
+    let mut opus = OpusDecoder::default();
     let mut fixed: VecDeque<Vec<u8>> = VecDeque::new();
 
     let push = |e: Event| {
@@ -255,6 +256,20 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
                 audio_next = Some(seq.wrapping_add(1));
                 if !sh.mute {
                     sh.spk.audio.lock().unwrap().extend(data.chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])));
+                }
+            }
+            Some(Msg::Opus { seq, data, .. }) => {
+                sh.audio_blocks.fetch_add(1, Ordering::Relaxed);
+                if let Some(n) = audio_next {
+                    let gap = seq.wrapping_sub(n);
+                    if gap > 0 && gap < 1000 {
+                        sh.audio_lost.fetch_add(gap, Ordering::Relaxed);
+                    }
+                }
+                audio_next = Some(seq.wrapping_add(1));
+                let pcm = opus.decode(seq, data);
+                if !sh.mute {
+                    sh.spk.audio.lock().unwrap().extend(pcm);
                 }
             }
             Some(Msg::Pong { t, host }) => {
@@ -1172,7 +1187,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     // Tela em HDR: o host manda HDR10 se a dele também estiver. 4:4:4 só pedindo, porque gasta mais
     // rede (e, no HEVC, abre o CUDA aqui). O PyroWave faz 4:4:4 em qualquer placa.
     // O FEC refaz pedaços perdidos aqui; host de versão anterior ignora o bit.
-    let mut flags = FEC_OK;
+    let mut flags = FEC_OK | OPUS_OK;
     #[cfg(feature = "stream")]
     let can444 = crate::capture::nvdec::can_444();
     #[cfg(not(feature = "stream"))]
