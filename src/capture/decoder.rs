@@ -228,7 +228,14 @@ impl Decoder {
                     }
                 }
             }
+            let n = out.len();
             while self.pull(out)? {}
+            // O AV1 da Microsoft às vezes segura o quadro até o próximo pacote (16 ms depois, e aí
+            // saem dois e um se perde); pedir o drain solta na hora e ele segue aceitando entrada.
+            if p.is_some() && out.len() == n {
+                self.mft.ProcessMessage(MFT_MESSAGE_COMMAND_DRAIN, 0)?;
+                while self.pull(out)? {}
+            }
             return Ok(());
         }
         if let Some(p) = p {
