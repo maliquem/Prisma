@@ -141,7 +141,7 @@ fn run(link: Arc<dyn Link>, name: &str) {
 
 /// Um PC pareado ouve o som daqui, sem vídeo. A origem do som segue as opções do Host (um
 /// programa só, sem os programas de chamada), como no Compartilhar tela.
-pub(super) fn serve(link: Arc<dyn Link>, perms: u8, name: String, pid: u32) {
+pub(super) fn serve(link: Arc<dyn Link>, perms: u8, name: String, pid: u32, opus: bool) {
     let mut out = Vec::with_capacity(64);
     if perms & SOUND == 0 {
         eprintln!("«{name}» pediu o som, mas não tem a permissão de som aqui");
@@ -159,7 +159,7 @@ pub(super) fn serve(link: Arc<dyn Link>, perms: u8, name: String, pid: u32) {
     let here = (link.same_pc() && pid != 0).then_some(pid);
     let stop = Arc::new(AtomicBool::new(false));
     let sender = {
-        let (links, stop) = (Arc::new(Mutex::new(vec![link.clone()])), stop.clone());
+        let (links, stop) = (Arc::new(Mutex::new(vec![(link.clone(), opus && !link.near())])), stop.clone());
         std::thread::Builder::new().name("so-o-som-host".into()).spawn(move || super::host::audio(links, here, stop)).ok()
     };
     let mut buf = vec![0u8; 2048];

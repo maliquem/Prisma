@@ -97,6 +97,7 @@ fn newer(a: u32, b: u32) -> bool {
 impl Rx {
     /// Perda de pacotes de vídeo da última janela (1 s), em milésimos, antes do FEC refazer. Quadro
     /// que não mandou nenhum pedaço não entra na conta.
+    #[cfg(test)]
     pub fn loss_permille(&self) -> u16 {
         self.loss
     }

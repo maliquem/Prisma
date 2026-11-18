@@ -9,6 +9,8 @@ pub mod hdr;
 pub mod live;
 #[cfg(any(debug_assertions, feature = "stream"))]
 pub mod live_enc;
+#[cfg(any(debug_assertions, feature = "stream"))]
+pub mod amf;
 #[cfg(feature = "stream")]
 pub mod nvenc;
 #[cfg(feature = "stream")]

@@ -217,13 +217,16 @@ mod tests {
             }
             t += 40;
         }
-        let low = r.current();
+        let mut low = r.current();
         assert!(low < 30_000_000);
         // Logo depois de descer não sobe; depois sobe um passo por vez e nunca passa do teto.
         let mut changes = Vec::new();
         for _ in 0..1000 {
-            if let Some(b) = r.feedback(good(), t) {
-                changes.push((t, b));
+            match r.feedback(good(), t) {
+                // A média do atraso leva umas voltas para cair: até lá ainda pode descer.
+                Some(b) if b < low => (low, cut) = (b, t),
+                Some(b) => changes.push((t, b)),
+                None => {}
             }
             t += 40;
         }
