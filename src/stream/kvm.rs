@@ -725,7 +725,7 @@ fn run(me: u8, targets: Vec<(String, u8)>, lock_key: Keys) {
                                 let _ = c.set.send(t);
                             }
                         }
-                        Some(m @ (Msg::ClipOffer { .. } | Msg::ClipWant { .. } | Msg::ClipData { .. })) => {
+                        Some(m @ (Msg::ClipOffer { .. } | Msg::ClipWant { .. } | Msg::ClipData { .. })) if p.perms & COPY != 0 => {
                             if let Some(c) = &clip {
                                 if let Some(b) = p.rich.on(&m, &*p.link) {
                                     let _ = c.set_rich.send(b);
