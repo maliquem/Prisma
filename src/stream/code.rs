@@ -15,7 +15,7 @@
 use std::time::Duration;
 
 use iroh::address_lookup::pkarr::PkarrRelayClient;
-use iroh::{EndpointId, SecretKey};
+use iroh::{EndpointAddr, EndpointId, SecretKey, TransportAddr};
 use iroh_dns::pkarr::SignedPacket;
 
 /// Base32 de Crockford: sem I, L, O e U, que se confundem ao ditar ou copiar à mão.
@@ -89,9 +89,35 @@ fn client(url: &str) -> std::result::Result<PkarrRelayClient, String> {
     Ok(PkarrRelayClient::new(url, tls, iroh::dns::DnsResolver::new()))
 }
 
-/// Publica o id do host nos relés, ao mesmo tempo. Devolve em quantos deu certo.
-pub async fn publish(root: &[u8; 32], host: &EndpointId, until: u64) -> usize {
-    let values = [format!("id={}", data_encoding::HEXLOWER.encode(host.as_bytes())), format!("ate={until}")];
+/// O endereço do host como linhas do registro: `rele=URL` e `ip=IP:porta` (até 8, para caber).
+pub fn addr_lines(a: &EndpointAddr) -> Vec<String> {
+    a.addrs
+        .iter()
+        .filter_map(|t| match t {
+            TransportAddr::Relay(u) => Some(format!("rele={u}")),
+            TransportAddr::Ip(s) => Some(format!("ip={s}")),
+            _ => None,
+        })
+        .take(8)
+        .collect()
+}
+
+/// O contrário de `addr_lines`; o que não entende fica de fora.
+pub fn parse_addrs<'a>(values: impl IntoIterator<Item = &'a str>) -> Vec<TransportAddr> {
+    values
+        .into_iter()
+        .filter_map(|v| match v.strip_prefix("rele=") {
+            Some(u) => u.parse().ok().map(TransportAddr::Relay),
+            None => v.strip_prefix("ip=")?.parse().ok().map(TransportAddr::Ip),
+        })
+        .collect()
+}
+
+/// Publica o id do host nos relés, ao mesmo tempo. Devolve em quantos deu certo. O relé e os IPs
+/// do host vão junto: quem tem o código conecta sem depender de achar o host pelo DNS da n0.
+pub async fn publish(root: &[u8; 32], host: &EndpointAddr, until: u64) -> usize {
+    let mut values = vec![format!("id={}", data_encoding::HEXLOWER.encode(host.id.as_bytes())), format!("ate={until}")];
+    values.extend(addr_lines(host));
     let packet = match SignedPacket::from_txt_strings(&key(root), NAME, values, 600) {
         Ok(p) => p,
         Err(e) => {
@@ -124,8 +150,8 @@ pub async fn publish(root: &[u8; 32], host: &EndpointId, until: u64) -> usize {
     ok
 }
 
-/// Acha o id do host pelo código. Pergunta aos relés ao mesmo tempo e fica com a primeira resposta.
-pub async fn resolve(root: &[u8; 32]) -> std::result::Result<EndpointId, String> {
+/// Acha o host pelo código. Pergunta aos relés ao mesmo tempo e fica com a primeira resposta.
+pub async fn resolve(root: &[u8; 32]) -> std::result::Result<EndpointAddr, String> {
     let public = key(root).public();
     let (tx, mut rx) = tokio::sync::mpsc::channel(RELAYS.len());
     for url in RELAYS {
@@ -151,7 +177,7 @@ pub async fn resolve(root: &[u8; 32]) -> std::result::Result<EndpointId, String>
     Err(last)
 }
 
-fn read(values: &[String]) -> std::result::Result<EndpointId, String> {
+fn read(values: &[String]) -> std::result::Result<EndpointAddr, String> {
     let get = |k: &str| values.iter().find_map(|v| v.strip_prefix(k));
     if let Some(until) = get("ate=").and_then(|s| s.parse::<u64>().ok()) {
         if until < super::net::unix_now() {
@@ -160,7 +186,8 @@ fn read(values: &[String]) -> std::result::Result<EndpointId, String> {
     }
     let hex = get("id=").ok_or("registro sem id")?;
     let b: [u8; 32] = data_encoding::HEXLOWER_PERMISSIVE.decode(hex.as_bytes()).ok().and_then(|b| b.try_into().ok()).ok_or("id inválido")?;
-    EndpointId::from_bytes(&b).map_err(|e| e.to_string())
+    let id = EndpointId::from_bytes(&b).map_err(|e| e.to_string())?;
+    Ok(EndpointAddr::from_parts(id, parse_addrs(values.iter().map(String::as_str))))
 }
 
 #[cfg(test)]
@@ -219,23 +246,32 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let raw = stretch(&normalize(&new_code()).unwrap());
         let host = SecretKey::generate().public();
-        let n = rt.block_on(publish(&raw, &host, super::super::net::unix_now() + 120));
+        let n = rt.block_on(publish(&raw, &host.into(), super::super::net::unix_now() + 120));
         eprintln!("publicado em {n} de 3");
         for url in RELAYS {
             let r = rt.block_on(async { client(url).unwrap().resolve(key(&raw).public()).await.map(|p| read(&p.txt_records(NAME))) });
             eprintln!("{url}: {:?}", r.map_err(|e| e.to_string()));
         }
-        assert_eq!(rt.block_on(resolve(&raw)).unwrap(), host);
+        assert_eq!(rt.block_on(resolve(&raw)).unwrap().id, host);
     }
 
     #[test]
     fn record_round_trip() {
         let host = SecretKey::from_bytes(&[7; 32]).public();
-        let values = [format!("id={}", data_encoding::HEXLOWER.encode(host.as_bytes())), format!("ate={}", super::super::net::unix_now() + 600)];
+        let addr = EndpointAddr::from_parts(
+            host,
+            [TransportAddr::Relay("https://use1-1.relay.n0.iroh.link./".parse().unwrap()), TransportAddr::Ip("192.168.0.5:47600".parse().unwrap()), TransportAddr::Ip("[fd00::1]:47600".parse().unwrap())],
+        );
+        let mut values = vec![format!("id={}", data_encoding::HEXLOWER.encode(host.as_bytes())), format!("ate={}", super::super::net::unix_now() + 600)];
+        values.extend(addr_lines(&addr));
         let k = key(&[9; 32]);
         let p = SignedPacket::from_txt_strings(&k, NAME, values, 600).unwrap();
         let back = SignedPacket::from_relay_payload(&k.public(), &p.to_relay_payload()).unwrap();
-        assert_eq!(read(&back.txt_records(NAME)).unwrap(), host);
+        // O relé e os IPs voltam inteiros: é com eles que quem assiste conecta sem o DNS da n0.
+        assert_eq!(read(&back.txt_records(NAME)).unwrap(), addr);
+        // Registro das versões antigas, só com o id.
+        assert_eq!(read(&[format!("id={}", data_encoding::HEXLOWER.encode(host.as_bytes()))]).unwrap(), EndpointAddr::from(host));
+        assert_eq!(parse_addrs(["rele=nao e url", "ip=1.2.3", "outro=1"]), vec![]);
         assert_eq!(read(&["id=00".into()]).is_err(), true);
         assert_eq!(read(&[format!("id={}", data_encoding::HEXLOWER.encode(host.as_bytes())), "ate=5".into()]).unwrap_err(), "o convite venceu");
     }

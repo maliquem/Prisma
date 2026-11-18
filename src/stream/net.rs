@@ -355,8 +355,50 @@ pub fn make_invite(perms: u8, minutes: u32) {
     eprintln!("{CODE_LINE}{shown}");
     eprintln!("Convite longo, se o código não for achado:\n\n{}\n", invite_text(&sk.public(), &secret));
     eprintln!("A pergunta de confirmação aparece na tela deste PC.");
-    let n = rt().block_on(code::publish(&root, &sk.public(), until));
+    // O relé e os IPs vêm do host que está rodando (o ajudante do serviço ou a página).
+    let lines = std::fs::read_to_string(addr_path()).unwrap_or_default();
+    let addr = EndpointAddr::from_parts(sk.public(), code::parse_addrs(lines.lines()));
+    let n = rt().block_on(code::publish(&root, &addr, until));
     published(n);
+}
+
+/// Onde o host deixa o relé e os IPs dele, para o convite curto levar junto.
+fn addr_path() -> PathBuf {
+    dir().join("endereco.txt")
+}
+
+/// Hora local para as linhas do log do host.
+fn now_text() -> String {
+    let t = unsafe { windows::Win32::System::SystemInformation::GetLocalTime() };
+    format!("{:04}-{:02}-{:02} {:02}:{:02}:{:02}", t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond)
+}
+
+/// Cada vez que o relé do host liga ou cai, uma linha no log (no serviço, o `servico.log`) e o
+/// endereço novo no arquivo do convite: um pareamento que não chega fica visível.
+async fn watch_relay(ep: Endpoint) {
+    use iroh::Watcher;
+    let mut w = ep.home_relay_status();
+    let mut last = String::new();
+    loop {
+        let now = w.get();
+        let key: String = now.iter().map(|r| format!("{}{}", r.url(), r.is_connected())).collect();
+        if key != last {
+            last = key;
+            let text: Vec<String> = now
+                .iter()
+                .map(|r| match (r.is_connected(), r.last_error()) {
+                    (true, _) => format!("ligado a {}", r.url()),
+                    (false, Some(e)) => format!("sem ligação com {} ({e})", r.url()),
+                    (false, None) => format!("tentando {}", r.url()),
+                })
+                .collect();
+            eprintln!("{} relé: {}", now_text(), if text.is_empty() { "nenhum".into() } else { text.join("; ") });
+            let _ = crate::config::write_safe(&addr_path(), code::addr_lines(&ep.addr()).join("\n"));
+        }
+        if w.updated().await.is_err() {
+            return;
+        }
+    }
 }
 
 /// Leva a identidade e os aparelhos pareados para a pasta do serviço (na instalação).
@@ -740,8 +782,16 @@ async fn accept_loop(ep: Endpoint, invite: Arc<Mutex<Invite>>, tx: mpsc::Sender<
     while let Some(incoming) = ep.accept().await {
         let (invite, tx) = (invite.clone(), tx.clone());
         tokio::spawn(async move {
-            let Ok(accepting) = incoming.accept() else { return };
-            let Ok(conn) = accepting.await else { return };
+            // Quem não termina o aperto de mão também vai para o log: sem isso, um pareamento que
+            // chegou e caiu parecia nunca ter chegado.
+            let conn = match incoming.accept() {
+                Ok(a) => a.await,
+                Err(e) => return eprintln!("{} conexão recusada antes do aperto de mão: {e}", now_text()),
+            };
+            let conn = match conn {
+                Ok(c) => c,
+                Err(e) => return eprintln!("{} conexão caiu no aperto de mão: {e}", now_text()),
+            };
             let who = conn.remote_id();
             if conn.alpn() == ALPN_PAIR {
                 // O convite mais novo vem do arquivo que o --stream-invite grava.
@@ -825,6 +875,7 @@ fn host_with(invite_perms: Option<u8>, service: bool) {
     if !wait_online(&ep, Duration::from_secs(10)) {
         eprintln!("sem resposta do relé da n0 em 10 s: só a rede local e a VPN vão funcionar por enquanto");
     }
+    rt().spawn(watch_relay(ep.clone()));
     let shown = code::new_code();
     let root = code::stretch(&code::normalize(&shown).unwrap_or_default());
     let secret = if invite_perms.is_some() { code::secret(&root) } else { random::<16>() };
@@ -836,9 +887,9 @@ fn host_with(invite_perms: Option<u8>, service: bool) {
             eprintln!("Convite para parear outro PC (vale 10 minutos e uma vez).");
             eprintln!("{CODE_LINE}{shown}");
             eprintln!("Convite longo, se o código não for achado:\n\n{}\n", invite_text(&ep.id(), &secret));
-            let id = ep.id();
+            let addr = ep.addr();
             let until = unix_now() + INVITE_TTL.as_secs();
-            rt().spawn(async move { published(code::publish(&root, &id, until).await) });
+            rt().spawn(async move { published(code::publish(&root, &addr, until).await) });
         }
         None if service => eprintln!("serviço compartilhando pela internet. Este PC: «{}», id {}", my_name(), ep.id().fmt_short()),
         None => eprintln!("compartilhando pela internet. Este PC: «{}», id {}", my_name(), ep.id().fmt_short()),
@@ -918,15 +969,18 @@ async fn ask_pair(ep: &Endpoint, addr: EndpointAddr, secret: &[u8; 16]) -> std::
 
 pub fn pair(text: &str) {
     eprintln!("{NOTICE}");
-    let (host_id, secret) = if let Some(raw) = code::normalize(text) {
+    let (host, secret): (EndpointAddr, _) = if let Some(raw) = code::normalize(text) {
         eprintln!("procurando o código {}", code::show(&raw));
         let root = code::stretch(&raw);
         match rt().block_on(code::resolve(&root)) {
-            Ok(id) => (id, code::secret(&root)),
+            Ok(addr) => {
+                eprintln!("achei o PC {} ({})", addr.id.fmt_short(), code::addr_lines(&addr).join(", "));
+                (addr, code::secret(&root))
+            }
             Err(e) => return eprintln!("não achei o código ({e}): confira o código, ou peça o convite longo"),
         }
-    } else if let Some(x) = parse_invite(text) {
-        x
+    } else if let Some((id, secret)) = parse_invite(text) {
+        (id.into(), secret)
     } else {
         return eprintln!("convite inválido");
     };
@@ -936,7 +990,8 @@ pub fn pair(text: &str) {
     };
     let r: std::result::Result<String, String> = rt().block_on(async {
         let ep = endpoint(sk, Vec::new(), false).await?;
-        let r = ask_pair(&ep, host_id.into(), &secret).await;
+        let host_id = host.id;
+        let r = ask_pair(&ep, host, &secret).await;
         ep.close().await;
         let name = r?;
         remember(Device { role: Role::Host, id: host_id, name: name.clone(), perms: 0, ask: false }).map_err(|e| e.to_string())?;
