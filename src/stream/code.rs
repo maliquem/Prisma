@@ -83,19 +83,10 @@ pub fn secret(root: &[u8; 32]) -> [u8; 16] {
     blake3::derive_key("Prisma 2026-12 convite curto, segredo", root)[..16].try_into().unwrap()
 }
 
-/// O DNS do iroh com os resolvedores públicos correndo junto com os do Windows desde o início. O padrão só tenta
-/// os públicos depois que todos os do sistema estouram o tempo: um DNS morto num adaptador (VPN) deixava o PC sem
-/// relé e sem achar o código curto, mesmo com a internet funcionando.
-pub fn dns() -> std::result::Result<iroh::dns::DnsResolver, String> {
-    use iroh::dns::{DnsResolver, FallbackMode};
-    let tls = iroh::tls::CaTlsConfig::embedded().client_config(iroh::tls::default_provider()).map_err(|e| e.to_string())?;
-    Ok(DnsResolver::builder().with_system_defaults().with_fallback_mode(FallbackMode::Eager).tls_client_config(tls).build())
-}
-
 fn client(url: &str) -> std::result::Result<PkarrRelayClient, String> {
     let tls = iroh::tls::CaTlsConfig::embedded().client_config(iroh::tls::default_provider()).map_err(|e| e.to_string())?;
     let url = url.parse().map_err(|e: url::ParseError| e.to_string())?;
-    Ok(PkarrRelayClient::new(url, tls, dns()?))
+    Ok(PkarrRelayClient::new(url, tls, iroh::dns::DnsResolver::new()))
 }
 
 /// O endereço do host como linhas do registro: `rele=URL` e `ip=IP:porta` (até 8, para caber).
