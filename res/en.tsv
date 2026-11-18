@@ -1512,6 +1512,7 @@ ponta a ponta	end to end
 rede	network
 q/s	fps
 decodificação	decoding
+fila	queue
 perdidos	lost
 Mandar Ctrl+Alt+Del	Send Ctrl+Alt+Del
 Desconectar	Disconnect

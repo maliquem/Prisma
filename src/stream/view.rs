@@ -978,6 +978,8 @@ struct Stats {
     e2e: Vec<i64>,
     decode: Vec<i64>,
     rtt: Vec<i64>,
+    /// Maior fila do segundo: quadros esperando para decodificar.
+    queue: u32,
 }
 
 fn pct(v: &mut [i64], q: f64) -> f64 {
@@ -1427,6 +1429,8 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         }
 
         let events: Vec<Event> = sh.queue.lock().unwrap().drain(..).collect();
+        // Quadros que chegaram juntos: além do primeiro, esperavam na fila (para o HUD).
+        let arrived = events.iter().filter(|e| matches!(e, Event::Frame(_) | Event::Wave { .. })).count() as u32;
         let mut last: Option<Decoded> = None;
         for e in events {
             match e {
@@ -1556,6 +1560,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                 }
             }
         }
+        second.queue = second.queue.max(arrived.saturating_sub(1) + dec.as_ref().map_or(0, |d| d.waiting()));
         // Mouse e teclado novos vão na hora; os recentes se repetem por um tempo, contra perda.
         if std::mem::take(&mut KEYS.lock().unwrap().sas) {
             eprintln!("Ctrl+Alt+Del pedido ao host");
@@ -1648,6 +1653,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                     rtt_ms: rtt as f64 / 10_000.0,
                     e2e_ms: pct(&mut second.e2e.clone(), 0.5),
                     decode_ms: pct(&mut second.decode.clone(), 0.5),
+                    queue: second.queue,
                     fps: fps_now,
                     mbps,
                     lost: lost_total.saturating_sub(lost_mark),

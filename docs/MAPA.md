@@ -161,7 +161,7 @@ As flags de teste ficam em `src/app.rs` (`start`, linha 366, e as checagens de `
 | `--paste=<pasta>` e `--test-paste=<pasta>` | `src/paste.rs:122` `run_args`; foto em `test` `paste.rs:696` (5 momentos, o último na conferência, `copia_0..4.png`, aceita `--test-en` e `--test-lang=n`) | Colar com o Prisma; a foto usa `PRISMA_LAYER_DUMP`. |
 | `PRISMA_OVERFLOW=<arquivo>` | `src/ui/gfx.rs:212` `overflow_path` (lê a variável, `:214`); `note_overflow` `:250`; caixas em `BOXES` `:223`, `note_box` `:236`, registradas por `clear` `:394`, `round` `:408`, `round_line` `:415`, `push_clip` `:646`, `pop_clip` `:656`, `translate` `:662`, `scale_at` `:673`; `clear` chamado por `src/ui/layered.rs:124` | Só build de depuração. Grava o texto que não cabe no próprio espaço (em uma linha marca "reticências") e mede cada texto contra a menor caixa desenhada em volta; quando passa, grava "borda <lado> Npx". |
 | `PRISMA_TEST_PAD=1` | `src/ui/mod.rs:336`, dentro de `Ui::begin` | Foto com o anel e a faixa de dicas do controle. |
-| `PRISMA_LAYER_DUMP=<pasta>` | `src/ui/layered.rs:132`, dentro de `paint` (`layered.rs:111`); fotos do radial e do teclado no teste `layer_shots` (`src/overlays.rs:2188`, ignorado); definido em `src/stream/hud.rs:583` | Grava as camadas de desenho da janela. |
+| `PRISMA_LAYER_DUMP=<pasta>` | `src/ui/layered.rs:132`, dentro de `paint` (`layered.rs:111`); fotos do radial e do teclado no teste `layer_shots` (`src/overlays.rs:2188`, ignorado); definido em `src/stream/hud.rs:585` | Grava as camadas de desenho da janela. |
 | `PRISMA_METER_GAME`, `PRISMA_METER_PID`, `PRISMA_TEST_METER` | `app.rs:2609`, `2616`, `2622` | Jogo e processo do Medidor para teste. |
 | `PRISMA_TEST_REC` | `src/meter.rs:1338` | Gravação do Medidor no teste. |
 | `PRISMA_AUTO_SECS` | `src/meter.rs:1052` | Tempo da medição automática. |
@@ -603,7 +603,7 @@ A barra lateral é `NAV` (`src/pages/mod.rs:315`), em cinco grupos (`GROUPS` `:3
 - `crates/prisma-link/src/client.rs`, `server.rs`, `pipe.rs` e `frame.rs` não foram abertos: as funções deles não estão mapeadas. Só `lib.rs` e `proto.rs` (nomes e linhas de `Request`, `Reply`, `Page`, `MeterView`, `VolumeChange`, `NvidiaKind`, códigos e capacidades).
 - Atalhos padrão: só confirmei `hk_fullscreen`, `hk_widget`, `hk_optimize` (Ctrl+Alt+F, W e O) e `hk_force` (Alt+F4) em `config.rs:416-419`. Os demais padrões não foram conferidos.
 - Linhas da tabela `HK` em `pad_action` (`src/app.rs:3560`) e as de `on_link` (`src/link.rs:322` a `456`) vieram de grep e leitura parcial. Confira com grep antes de citar.
-- Não confirmei o nome da função que contém `src/stream/hud.rs:583` (a variável `PRISMA_LAYER_DUMP` é definida dentro de um bloco com `proc` na linha 557).
+- Não confirmei o nome da função que contém `src/stream/hud.rs:585` (a variável `PRISMA_LAYER_DUMP` é definida dentro de um bloco com `proc` na linha 559).
 - Não li o ponto do clique da barra lateral que chama `go`. Sei que `NAV` fica em `pages/mod.rs:315` e que `go` é `app.rs:1697`.
 - As páginas de HDR e Medidor, e as demais, tiveram só as funções `draw` e auxiliares listadas pelo grep. Os botões de cada aba não foram lidos linha a linha.
 - Os números de `docs/guide/GUIA.md` não foram usados como fonte de comportamento; as funções saíram do código.

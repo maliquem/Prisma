@@ -207,6 +207,11 @@ impl Decoder {
     }
 
     /// Entrega um pacote (ou só trata o que estiver pendente) e diz quais quadros saíram.
+    /// Pacotes ainda esperando entrada no decodificador assíncrono.
+    pub fn waiting(&self) -> u32 {
+        self.queue.len() as u32
+    }
+
     pub unsafe fn decode(&mut self, p: Option<&Pkt>, out: &mut Vec<Decoded>) -> Result<()> {
         if self.events.is_none() {
             if let Some(p) = p {

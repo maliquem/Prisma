@@ -23,6 +23,8 @@ pub struct Sample {
     pub rtt_ms: f64,
     pub e2e_ms: f64,
     pub decode_ms: f64,
+    /// Maior fila do segundo: quadros esperando para decodificar.
+    pub queue: u32,
     pub fps: f64,
     pub mbps: f64,
     /// Quadros perdidos neste segundo e no total.
@@ -148,7 +150,7 @@ impl Hud {
                     None => s.video.clone(),
                 };
                 lines.push((video, TEXT, 13.0, Weight::Regular));
-                lines.push((format!("{} {} ms · {} {}", tr("decodificação"), n(s.decode_ms, 2), tr("perdidos"), s.lost_total), MUTED, 13.0, Weight::Regular));
+                lines.push((format!("{} {} ms · {} {} · {} {}", tr("decodificação"), n(s.decode_ms, 2), tr("fila"), s.queue, tr("perdidos"), s.lost_total), MUTED, 13.0, Weight::Regular));
                 lines.push((s.route.clone(), MUTED, 13.0, Weight::Regular));
             }
         }
