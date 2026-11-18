@@ -1359,10 +1359,10 @@ fn host_tab(ui: &mut Ui, app: &mut App, st: &mut State, all: &mut Opts, x: f32, 
             let result = if own_before && !own {
                 Opts::drop_own(id)
             } else if own && (!own_before || edit != before) {
-                edit.save_for(id)
+                edit.save_for(id, all)
             } else if !own && edit != before {
                 // Mexeu numa opção sem configuração própria: ela nasce agora.
-                edit.save_for(id)
+                edit.save_for(id, all)
             } else {
                 Ok(())
             };

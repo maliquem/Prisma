@@ -1251,6 +1251,22 @@ impl Coder {
     }
 }
 
+/// Intervalos guardados para o registro do ritmo: os primeiros 10 minutos a 60 por segundo.
+const GAPS_KEPT: usize = 36_000;
+
+/// Hora de dar um quadro ao codificador. Um quadro novo vale depois de 0,9 intervalo, contado do
+/// começo da vez anterior: a captura oscila em volta do vsync, e contar do fim (depois do NVENC, que
+/// leva alguns ms) deixava o quadro seguinte esperando e o vídeo saía a ~53 de 60 por segundo. No
+/// ritmo constante (`repeat`), sem quadro novo, o mesmo vai de novo depois de um intervalo inteiro.
+fn time_to_feed(since: Duration, interval: i64, fresh: bool, repeat: bool) -> bool {
+    let gap = Duration::from_nanos(interval as u64 * 100);
+    if fresh {
+        since >= gap * 9 / 10
+    } else {
+        repeat && since >= gap
+    }
+}
+
 /// De onde vem a imagem: WGC (com o cursor do Windows) ou Desktop Duplication (no serviço, para
 /// alcançar a tela segura; `PRISMA_CAPTURE=dda` também liga, para teste).
 enum Cap {
@@ -1607,7 +1623,8 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     }
 
     let interval = 10_000_000i64 / fps as i64;
-    let mut last_fed = i64::MIN / 2;
+    // Já saiu um quadro: o ritmo constante só repete depois do primeiro.
+    let mut fed_once = false;
     let mut pending: Option<i64> = None;
     let mut pkts: Vec<Pkt> = Vec::new();
     let mut ready: Vec<Ready> = Vec::new();
@@ -1619,6 +1636,9 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     let mut frame_id = room.frame_id;
     let mut result = End::Gone;
     let mut failed = None;
+    // Intervalos entre quadros dados ao codificador, para o registro no fim.
+    let mut fed_gaps: Vec<i64> = Vec::new();
+    let mut captured = 0u32;
     let mut pad_msgs: Vec<PadMsg> = Vec::new();
     let mut info_tick = Instant::now();
 
@@ -1917,31 +1937,36 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                 Cap::Wgc { .. } => return Ok(()),
                 Cap::Dda(x) => {
                     match x.poll(&mid)? {
-                        super::screen::Got::Frame(pts) => pending = Some(pts),
+                        super::screen::Got::Frame(pts) => {
+                            captured += 1;
+                            pending = Some(pts)
+                        }
                         super::screen::Got::Changed => changed = true,
                         super::screen::Got::Nothing => {}
                     }
                     enc.pump(space, &mut pkts, &mut ready)?;
                     // A Desktop Duplication entrega cada mudança (o mouse também): o ritmo fica aqui.
-                    if enc.ready() && fed_at.elapsed() >= Duration::from_nanos(interval as u64 * 90) {
-                        if let Some(pts) = pending.take() {
-                            match &cross {
-                                Some((cd, cm, cc)) => {
-                                    x.compose(cm)?;
-                                    cc.copy(cd, cm, d, &mid)?;
+                    if enc.ready() && time_to_feed(fed_at.elapsed(), interval, pending.is_some(), opts.constant && fed_once) {
+                        if fed_gaps.len() < GAPS_KEPT {
+                    fed_gaps.push(fed_at.elapsed().as_nanos() as i64 / 100);
+                }
+                        fed_at = Instant::now();
+                        // Ritmo constante com a tela parada: o último quadro de novo.
+                        let pts = match pending.take() {
+                            Some(pts) => {
+                                match &cross {
+                                    Some((cd, cm, cc)) => {
+                                        x.compose(cm)?;
+                                        cc.copy(cd, cm, d, &mid)?;
+                                    }
+                                    None => x.compose(&mid)?,
                                 }
-                                None => x.compose(&mid)?,
+                                pts
                             }
-                            enc.feed(&d.ctx, pts, space, &mut ready)?;
-                            last_fed = pts;
-                            fed_at = Instant::now();
-                        } else if opts.constant && last_fed > i64::MIN / 2 && fed_at.elapsed() >= Duration::from_nanos(interval as u64 * 100) {
-                            // Ritmo constante: a tela parada repete o último quadro, no ritmo de sempre.
-                            let pts = now();
-                            enc.feed(&d.ctx, pts, space, &mut ready)?;
-                            last_fed = pts;
-                            fed_at = Instant::now();
-                        }
+                            None => now(),
+                        };
+                        enc.feed(&d.ctx, pts, space, &mut ready)?;
+                        fed_once = true;
                     }
                     return Ok(());
                 }
@@ -1953,10 +1978,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
             let mut newest = None;
             while let Ok(f) = pool.TryGetNextFrame() {
                 let pts = f.SystemRelativeTime()?.Duration;
-                if pts - last_fed < interval * 9 / 10 {
-                    let _ = f.Close();
-                    continue;
-                }
+                captured += 1;
                 if let Some((old, _)) = newest.replace((f, pts)) {
                     let _ = old.Close();
                 }
@@ -1990,15 +2012,15 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                 changed = true;
             }
             enc.pump(space, &mut pkts, &mut ready)?;
-            if enc.ready() {
-                // Ritmo constante: a tela parada repete o último quadro, no ritmo de sempre.
-                if pending.is_none() && opts.constant && last_fed > i64::MIN / 2 && now() - last_fed >= interval {
-                    pending = Some(now());
+            if enc.ready() && time_to_feed(fed_at.elapsed(), interval, pending.is_some(), opts.constant && fed_once) {
+                if fed_gaps.len() < GAPS_KEPT {
+                    fed_gaps.push(fed_at.elapsed().as_nanos() as i64 / 100);
                 }
-                if let Some(pts) = pending.take() {
-                    enc.feed(&d.ctx, pts, space, &mut ready)?;
-                    last_fed = pts;
-                }
+                fed_at = Instant::now();
+                // Ritmo constante com a tela parada: o último quadro de novo.
+                let pts = pending.take().unwrap_or_else(now);
+                enc.feed(&d.ctx, pts, space, &mut ready)?;
+                fed_once = true;
             }
             Ok(())
         })();
@@ -2049,6 +2071,9 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
         }
     }
     room.frame_id = frame_id;
+    if fed_gaps.len() > 1 {
+        eprint!("ritmo: {captured} capturados, {} quadros ao codificador; {}", fed_gaps.len(), super::view::gap_line(&mut fed_gaps[1..], fps).replace("mostrados", "dados ao codificador"));
+    }
     for g in &mut room.guests {
         if let Some(inj) = &mut g.input {
             inj.release();
@@ -2075,6 +2100,19 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn feeds_on_the_capture_rhythm_and_repeats_only_when_constant() {
+        let i = 10_000_000 / 60;
+        let ms = Duration::from_millis;
+        // O quadro do vsync seguinte chega um pouco antes de 16,7 ms depois do começo da vez anterior.
+        assert!(time_to_feed(ms(16), i, true, false));
+        assert!(!time_to_feed(ms(14), i, true, true));
+        // Tela parada: só o ritmo constante repete, e só depois de um intervalo inteiro.
+        assert!(!time_to_feed(ms(40), i, false, false));
+        assert!(!time_to_feed(ms(16), i, false, true));
+        assert!(time_to_feed(ms(17), i, false, true));
+    }
 
     struct FakeLink {
         sent: Mutex<Vec<Vec<u8>>>,

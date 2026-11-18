@@ -299,16 +299,26 @@ sem_cadeia={}\nporta={}\njanela={}:{}\nupnp={}\natalho_emergencia={}\ngpu={}\nso
         text
     }
 
-    /// Grava a configuração própria de um aparelho (só as opções de [`PER_CLIENT`]).
+    /// Grava a configuração própria de um aparelho: só as opções de [`PER_CLIENT`] que ficaram
+    /// diferentes das de todos (`all`). As iguais continuam seguindo as de todos; gravar todas
+    /// congelava o aparelho, e ligar o ritmo constante em «Todos os aparelhos» não chegava nele.
     #[cfg_attr(not(feature = "stream"), allow(dead_code))]
-    pub fn save_for(&self, id: &str) -> std::io::Result<()> {
+    pub fn save_for(&self, id: &str, all: &Opts) -> std::io::Result<()> {
         let p = Self::client_path(id);
         if let Some(d) = p.parent() {
             std::fs::create_dir_all(d)?;
         }
-        let text = self.text();
-        let own: Vec<&str> = text.lines().filter(|l| l.split_once('=').is_some_and(|(k, _)| PER_CLIENT.contains(&k))).collect();
-        crate::config::write_safe(&p, own.join("\n") + "\n")
+        crate::config::write_safe(&p, self.own_text(all))
+    }
+
+    /// As linhas de [`PER_CLIENT`] em que `self` difere de `all`.
+    fn own_text(&self, all: &Opts) -> String {
+        let base = all.text();
+        self.text()
+            .lines()
+            .filter(|l| l.split_once('=').is_some_and(|(k, _)| PER_CLIENT.contains(&k)) && !base.lines().any(|b| b == *l))
+            .map(|l| format!("{l}\n"))
+            .collect()
     }
 
     /// Tira a configuração própria: o aparelho volta a seguir a de todos.
@@ -575,6 +585,21 @@ mod tests {
         assert_eq!((got.guests, got.name.as_str()), (2, "Sala"));
         // Linhas de fora da lista são ignoradas.
         assert_eq!(Opts::parse(&Opts::merge(&all.text(), "pessoas=1\nnome=X\n")), all);
+    }
+
+    #[test]
+    fn own_settings_keep_only_what_differs() {
+        let all = Opts { constant: false, codec: "hevc".into(), ..Opts::default() };
+        let mine = Opts { codec: "av1".into(), ..all.clone() };
+        // Só o codec é do aparelho: o resto segue as de todos.
+        assert_eq!(mine.own_text(&all), "codec=av1\n");
+        // Ligar o ritmo constante em todos chega no aparelho, que mantém o codec dele.
+        let later = Opts { constant: true, ..all.clone() };
+        let got = Opts::parse(&Opts::merge(&later.text(), &mine.own_text(&all)));
+        assert!(got.constant);
+        assert_eq!(got.codec, "av1");
+        // Sem nada diferente, a configuração própria fica vazia.
+        assert_eq!(all.own_text(&all), "");
     }
 
     #[test]
