@@ -1458,6 +1458,7 @@ Com prioridade, quem assiste para por 1 segundo sempre que alguém mexe no mouse
 Janela de quem assiste	Viewer window
 Abrir em tela cheia sem borda	Open in borderless fullscreen
 VSync: sem rasgos na imagem, com um pouco mais de atraso	VSync: no tearing, with a little more delay
+Tela G-SYNC ou FreeSync: cada quadro na hora, sem rasgar	G-SYNC or FreeSync screen: each frame on time, no tearing
 Modo imersivo	Immersive mode
 Só o mouse	Mouse only
 Só o teclado	Keyboard only

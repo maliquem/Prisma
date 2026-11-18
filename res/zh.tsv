@@ -1452,6 +1452,7 @@ Com prioridade, quem assiste para por 1 segundo sempre que alguém mexe no mouse
 Janela de quem assiste	观看窗口
 Abrir em tela cheia sem borda	以无边框全屏打开
 VSync: sem rasgos na imagem, com um pouco mais de atraso	垂直同步：不撕裂，延迟稍高
+Tela G-SYNC ou FreeSync: cada quadro na hora, sem rasgar	G-SYNC 或 FreeSync 屏幕：每帧即时显示，不撕裂
 Modo imersivo	沉浸模式
 Só o mouse	仅鼠标
 Só o teclado	仅键盘
