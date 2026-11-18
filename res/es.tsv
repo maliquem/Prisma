@@ -2684,3 +2684,12 @@ Manutenção	Mantenimiento
 Jogos e tela	Juegos y pantalla
 Entrada e som	Entrada y sonido
 Apoiar o Prisma no Ko-fi	Apoyar a Prisma en Ko-fi
+Online	En línea
+Offline	Sin conexión
+Verificando	Comprobando
+Ligar este PC?	¿Encender este PC?
+O Prisma manda o pacote de Wake on LAN para «{}» pela rede. A placa-mãe e o adaptador de rede dele precisam estar com o Wake on LAN ligado (na BIOS e nas propriedades do adaptador).	Prisma envía el paquete de Wake on LAN a “{}” por la red. Su placa base y su adaptador de red deben tener Wake on LAN activado (en la BIOS y en las propiedades del adaptador).
+Pedido para ligar «{}» mandado na rede deste PC.	Solicitud de encendido de “{}” enviada en la red de este PC.
+Pedido para ligar mandado por «{}», na rede de casa.	Solicitud de encendido enviada por “{}”, en la red doméstica.
+«{}» não ligou o PC: ele também precisa assistir a esse PC.	“{}” no encendió el PC: él también necesita ver ese PC.
+Para ligar de outra rede, deixe outro PC com o Prisma ligado na mesma rede de casa.	Para encenderlo desde otra red, deja otro PC con Prisma encendido en la misma red doméstica.

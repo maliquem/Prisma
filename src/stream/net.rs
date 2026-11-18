@@ -13,7 +13,7 @@
 //! - `--stream-forget=nome`: esquece um aparelho.
 
 use std::io;
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr};
 use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -29,9 +29,15 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 use super::host::{self, Hello, Joiner};
 use super::*;
 use super::code;
+use super::wake::{self, Mac};
 
 const ALPN_STREAM: &[u8] = b"prisma/stream/1";
 const ALPN_PAIR: &[u8] = b"prisma/pair/1";
+/// Só "estou ligado" (e os MACs), ou ligar outro PC da rede: sem sessão, sem pergunta, sem captura.
+const ALPN_PRESENCE: &[u8] = b"prisma/presenca/1";
+/// Quanto a página espera cada PC responder, e de quanto em quanto tempo pergunta.
+const PRESENCE_WAIT: Duration = Duration::from_secs(5);
+const PRESENCE_ROUND: Duration = Duration::from_secs(30);
 const INVITE_TTL: Duration = Duration::from_secs(600);
 /// Tentativas por aparelho que tenta, e no total: quem erra de propósito não gasta o convite dos outros.
 const INVITE_TRIES: usize = 5;
@@ -149,6 +155,9 @@ struct Device {
     perms: u8,
     /// Pergunta antes de cada conexão.
     ask: bool,
+    /// Os MACs e os broadcasts que o PC mandou na última conexão (só nos PCs que este assiste).
+    macs: Vec<Mac>,
+    nets: Vec<Ipv4Addr>,
 }
 
 fn hex(id: &EndpointId) -> String {
@@ -219,7 +228,10 @@ fn read_list(path: &std::path::Path) -> Vec<Device> {
             let perms = parse_perms(f.next()?).unwrap_or(SOUND);
             let ask = f.next()? == "perguntar";
             let name = clean_name(f.next()?);
-            Some(Device { role, id, name, perms, ask })
+            // Colunas novas no fim: a 1.8.0 lê o arquivo e ignora o resto.
+            let macs = f.next().map(|v| v.split(',').filter_map(wake::mac_parse).collect()).unwrap_or_default();
+            let nets = f.next().map(|v| v.split(',').filter_map(|x| x.parse().ok()).collect()).unwrap_or_default();
+            Some(Device { role, id, name, perms, ask, macs, nets })
         })
         .collect()
 }
@@ -232,15 +244,17 @@ fn save(list: &[Device], role: Role) -> io::Result<()> {
 }
 
 fn write_list(path: &std::path::Path, list: &[Device]) -> io::Result<()> {
-    let mut s = String::from("# Aparelhos pareados do Prisma: papel, id, permissão, conexão, nome\n");
+    let mut s = String::from("# Aparelhos pareados do Prisma: papel, id, permissão, conexão, nome, MACs, redes\n");
     for d in list {
         s += &format!(
-            "{}\t{}\t{}\t{}\t{}\n",
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
             if d.role == Role::Viewer { "assiste" } else { "host" },
             hex(&d.id),
             perms_key(d.perms),
             if d.ask { "perguntar" } else { "confiar" },
-            d.name
+            d.name,
+            d.macs.iter().map(wake::mac_text).collect::<Vec<_>>().join(","),
+            d.nets.iter().map(|n| n.to_string()).collect::<Vec<_>>().join(",")
         );
     }
     if let Some(d) = path.parent() {
@@ -779,7 +793,7 @@ async fn pair_host(conn: Connection, me: EndpointId, invite: Arc<Mutex<Invite>>)
             invite.lock().unwrap().used = true;
             // O convite do serviço vale uma vez.
             let _ = std::fs::remove_file(invite_path());
-            match remember(Device { role: Role::Viewer, id: who, name: name.clone(), perms, ask }) {
+            match remember(Device { role: Role::Viewer, id: who, name: name.clone(), perms, ask, macs: Vec::new(), nets: Vec::new() }) {
                 Ok(()) => eprintln!("pareado com «{name}»"),
                 Err(e) => eprintln!("pareou, mas não deu para guardar: {e}"),
             }
@@ -794,6 +808,93 @@ async fn pair_host(conn: Connection, me: EndpointId, invite: Arc<Mutex<Invite>>)
         Some(())
     };
     let _ = run.await;
+}
+
+/// O que quem assiste assina: a página pergunta com uma chave de passagem (com a do aparelho, o
+/// relé tiraria do ar o host deste mesmo PC), e a chave do aparelho diz que ela é dele.
+fn presence_msg(who: &EndpointId) -> Vec<u8> {
+    [b"Prisma 2026-11 presenca".as_slice(), who.as_bytes()].concat()
+}
+
+/// O aparelho que assinou o pedido, se a assinatura vale para a chave de quem conectou.
+fn signed_by(msg: &[u8], remote: EndpointId) -> Option<EndpointId> {
+    let id = EndpointId::from_bytes(msg.get(..32)?.try_into().ok()?).ok()?;
+    let sig = iroh::Signature::from_bytes(msg.get(32..96)?.try_into().ok()?);
+    id.verify(&presence_msg(&remote), &sig).ok()?;
+    Some(id)
+}
+
+/// Os MACs e os broadcasts deste PC, uma linha cada.
+fn presence_info() -> Vec<u8> {
+    let (macs, nets) = wake::local();
+    let mut s = String::new();
+    for m in &macs {
+        s += &format!("mac\t{}\n", wake::mac_text(m));
+    }
+    for n in &nets {
+        s += &format!("rede\t{n}\n");
+    }
+    s.into_bytes()
+}
+
+fn parse_info(b: &[u8]) -> (Vec<Mac>, Vec<Ipv4Addr>) {
+    let (mut macs, mut nets) = (Vec::new(), Vec::new());
+    for l in String::from_utf8_lossy(b).lines() {
+        match l.split_once('\t') {
+            Some(("mac", v)) => macs.extend(wake::mac_parse(v)),
+            Some(("rede", v)) => nets.extend(v.parse::<Ipv4Addr>().ok()),
+            _ => {}
+        }
+    }
+    macs.truncate(8);
+    nets.truncate(8);
+    (macs, nets)
+}
+
+/// Outro aparelho pede para este PC ligar os MACs de `req` (6 bytes cada) na rede daqui. Só os
+/// que este PC conhece de um PC pareado com ele.
+fn relay_wake(list: &[Device], req: &[u8]) -> Vec<u8> {
+    static LAST: Mutex<Option<Instant>> = Mutex::new(None);
+    let known: Vec<Mac> = req.chunks_exact(6).take(8).filter_map(|m| m.try_into().ok()).filter(|m| list.iter().any(|d| d.role == Role::Host && d.macs.contains(m))).collect();
+    let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
+    let now = Instant::now();
+    if !wake::may_relay(!known.is_empty(), *last, now) {
+        return vec![0];
+    }
+    *last = Some(now);
+    let nets = wake::local().1;
+    let mut ok = false;
+    for m in &known {
+        eprintln!("{} pacote para ligar {} mandado a pedido de outro aparelho", now_text(), wake::mac_text(m));
+        ok |= wake::send(*m, &nets);
+    }
+    vec![ok as u8]
+}
+
+/// Ligado ou não, para a página de quem assiste: responde e fecha, sem sessão, sem pergunta e sem
+/// log (ela pergunta a cada 30 s). Quem não é pareado sai como na conexão.
+async fn presence_host(conn: Connection) {
+    let run = async {
+        let (mut send, mut recv) = conn.accept_bi().await.ok()?;
+        let msg = recv.read_to_end(128).await.ok()?;
+        let viewer = signed_by(&msg, conn.remote_id())?;
+        let list = load();
+        if !list.iter().any(|d| d.role == Role::Viewer && d.id == viewer) {
+            return None;
+        }
+        let reply = match &msg[96..] {
+            [] => presence_info(),
+            [1, m @ ..] if !m.is_empty() && m.len() % 6 == 0 => relay_wake(&list, m),
+            _ => return None,
+        };
+        send.write_all(&reply).await.ok()?;
+        send.finish().ok()?;
+        let _ = tokio::time::timeout(PRESENCE_WAIT, conn.closed()).await;
+        Some(())
+    };
+    if tokio::time::timeout(PRESENCE_WAIT * 2, run).await.ok().flatten().is_none() {
+        conn.close(1u32.into(), b"nao pareado");
+    }
 }
 
 async fn accept_loop(ep: Endpoint, invite: Arc<Mutex<Invite>>, tx: mpsc::Sender<(Connection, Device)>) {
@@ -822,6 +923,8 @@ async fn accept_loop(ep: Endpoint, invite: Arc<Mutex<Invite>>, tx: mpsc::Sender<
                     }
                 }
                 pair_host(conn, me, invite).await;
+            } else if conn.alpn() == ALPN_PRESENCE {
+                presence_host(conn).await;
             } else if conn.alpn() == ALPN_STREAM {
                 let Some(dev) = load().into_iter().find(|d| d.role == Role::Viewer && d.id == who) else {
                     eprintln!("conexão recusada: {} não está pareado", who.fmt_short());
@@ -887,7 +990,7 @@ fn host_with(invite_perms: Option<u8>, service: bool) {
         Ok(k) => k,
         Err(e) => return eprintln!("{e}"),
     };
-    let ep = match rt().block_on(endpoint(sk, vec![ALPN_STREAM.to_vec(), ALPN_PAIR.to_vec()], true)) {
+    let ep = match rt().block_on(endpoint(sk, vec![ALPN_STREAM.to_vec(), ALPN_PAIR.to_vec(), ALPN_PRESENCE.to_vec()], true)) {
         Ok(e) => e,
         Err(e) => return eprintln!("não deu para abrir a conexão: {e}"),
     };
@@ -1028,13 +1131,19 @@ pub fn pair(text: &str) {
         Err(e) => return eprintln!("{e}"),
     };
     let r: std::result::Result<String, String> = rt().block_on(async {
-        let ep = endpoint(sk, Vec::new(), false).await?;
+        let ep = endpoint(sk.clone(), Vec::new(), false).await?;
         let host_id = host.id;
-        let r = ask_pair(&ep, host, &secret).await;
+        let r = ask_pair(&ep, host, &secret).await.and_then(|name| {
+            remember(Device { role: Role::Host, id: host_id, name: name.clone(), perms: 0, ask: false, macs: Vec::new(), nets: Vec::new() }).map(|_| name).map_err(|e| e.to_string())
+        });
+        // Os MACs para o botão Ligar já vêm no pareamento.
+        if r.is_ok() {
+            if let Some(Some(info)) = ask_presence(&ep, &sk, host_id, &[]).await {
+                set_wol(host_id, &info);
+            }
+        }
         ep.close().await;
-        let name = r?;
-        remember(Device { role: Role::Host, id: host_id, name: name.clone(), perms: 0, ask: false }).map_err(|e| e.to_string())?;
-        Ok(name)
+        r
     });
     match r {
         Ok(name) => eprintln!("pareado com «{name}». Para assistir: --stream-connect={name}"),
@@ -1060,7 +1169,7 @@ pub(super) fn with_host(target: &str, work: impl FnOnce(Arc<dyn Link>, &str)) {
         Ok(k) => k,
         Err(e) => return eprintln!("{e}"),
     };
-    let ep = match rt().block_on(endpoint(sk, Vec::new(), false)) {
+    let ep = match rt().block_on(endpoint(sk.clone(), Vec::new(), false)) {
         Ok(e) => e,
         Err(e) => return eprintln!("não deu para abrir a conexão: {e}"),
     };
@@ -1068,6 +1177,13 @@ pub(super) fn with_host(target: &str, work: impl FnOnce(Arc<dyn Link>, &str)) {
     let conn = rt().block_on(async { tokio::time::timeout(Duration::from_secs(30), ep.connect(dev.id, ALPN_STREAM)).await });
     match conn {
         Ok(Ok(conn)) => {
+            // A cada conexão, os MACs e a rede de agora (um host antigo não responde, e tudo bem).
+            let (ep2, id) = (ep.clone(), dev.id);
+            rt().spawn(async move {
+                if let Some(Some(info)) = ask_presence(&ep2, &sk, id, &[]).await {
+                    set_wol(id, &info);
+                }
+            });
             let link = Net::new(conn);
             eprintln!("conectado: {}", link.route());
             work(link, &dev.name);
@@ -1076,6 +1192,211 @@ pub(super) fn with_host(target: &str, work: impl FnOnce(Arc<dyn Link>, &str)) {
         Err(_) => eprintln!("«{}» não respondeu em 30 s (está com o Prisma compartilhando?; {})", dev.name, rt().block_on(why_silent(&ep, dev.id))),
     }
     rt().block_on(ep.close());
+}
+
+// ---------- Ligado ou desligado (a página de quem assiste) ----------
+
+/// O host respondeu, mesmo recusando o protocolo (a 1.8.0 não conhece o de presença).
+fn answered(e: &iroh::endpoint::ConnectError) -> bool {
+    use iroh::endpoint::{ConnectError as E, ConnectingError, ConnectionError as C};
+    let c = match e {
+        E::Connection { source, .. } => source,
+        E::Connecting { source: ConnectingError::ConnectionError { source, .. }, .. } => source,
+        _ => return false,
+    };
+    matches!(c, C::ConnectionClosed(_) | C::ApplicationClosed(_) | C::TransportError(_))
+}
+
+/// Pergunta ao PC `id` se está ligado, ou pede a ele para ligar `wake` na rede dele. None: não
+/// respondeu. Some(None): está ligado, mas não respondeu ao pedido (versão antiga).
+async fn ask_presence(ep: &Endpoint, me: &SecretKey, id: EndpointId, wake: &[Mac]) -> Option<Option<Vec<u8>>> {
+    let run = async {
+        let conn = match ep.connect(id, ALPN_PRESENCE).await {
+            Ok(c) => c,
+            Err(e) => return answered(&e).then_some(None),
+        };
+        let talk = async {
+            let (mut send, mut recv) = conn.open_bi().await.ok()?;
+            let mut msg = me.public().as_bytes().to_vec();
+            msg.extend_from_slice(&me.sign(&presence_msg(&ep.id())).to_bytes());
+            if !wake.is_empty() {
+                msg.push(1);
+                msg.extend(wake.iter().take(8).flatten());
+            }
+            send.write_all(&msg).await.ok()?;
+            send.finish().ok()?;
+            recv.read_to_end(4096).await.ok()
+        };
+        let r = talk.await;
+        conn.close(0u32.into(), b"ok");
+        Some(r)
+    };
+    tokio::time::timeout(PRESENCE_WAIT, run).await.ok().flatten()
+}
+
+/// Guarda os MACs e as redes que o PC `id` mandou. Sem MAC (adaptador desligado agora), fica o
+/// que já estava.
+fn set_wol(id: EndpointId, info: &[u8]) {
+    let (macs, nets) = parse_info(info);
+    if macs.is_empty() {
+        return;
+    }
+    let _lock = devices_lock(Role::Host);
+    let mut list = load();
+    let mut changed = false;
+    for d in list.iter_mut().filter(|d| d.role == Role::Host && d.id == id && (d.macs != macs || d.nets != nets)) {
+        (d.macs, d.nets, changed) = (macs.clone(), nets.clone(), true);
+    }
+    if changed {
+        let _ = save(&list, Role::Host);
+    }
+}
+
+/// O que a página mostra ao lado de cada PC que este assiste.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Presence {
+    Checking,
+    Online,
+    Offline,
+}
+
+/// Texto da página em português, com `{}` trocado pelo nome.
+pub type Note = (&'static str, String);
+
+struct Watch {
+    /// A última vez que a página estava aberta e a janela visível.
+    lease: Option<Instant>,
+    running: bool,
+    /// A última vez que a conexão não abriu: espera uma rodada para tentar de novo.
+    failed: Option<Instant>,
+    seen: Vec<(EndpointId, Presence)>,
+    wake: Vec<String>,
+    note: Option<Note>,
+}
+
+static WATCH: Mutex<Watch> = Mutex::new(Watch { lease: None, running: false, failed: None, seen: Vec::new(), wake: Vec::new(), note: None });
+
+fn watch() -> std::sync::MutexGuard<'static, Watch> {
+    WATCH.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// A página está aberta e a janela visível: a verificação continua (ou começa). Sem chamada por
+/// 2 s, ela para e fecha a conexão e a linha dela.
+pub fn presence_keep() {
+    let mut w = watch();
+    w.lease = Some(Instant::now());
+    if w.running || w.failed.is_some_and(|t| t.elapsed() < PRESENCE_ROUND) {
+        return;
+    }
+    w.running = true;
+    drop(w);
+    if std::thread::Builder::new().name("compartilhar-presenca".into()).spawn(presence_worker).is_err() {
+        watch().running = false;
+    }
+}
+
+pub fn presence_of(id: &str) -> Presence {
+    watch().seen.iter().find(|(d, _)| hex(d) == id).map_or(Presence::Checking, |s| s.1)
+}
+
+/// Ligar o PC `id` (vai na próxima volta da verificação).
+pub fn wake_device(id: &str) {
+    watch().wake.push(id.to_string());
+}
+
+/// O resultado do último Ligar.
+pub fn wake_note() -> Option<Note> {
+    watch().note.take()
+}
+
+fn presence_worker() {
+    let ok = (|| {
+        let me = identity().ok()?;
+        // Runtime próprio: some junto com a linha quando a página fecha.
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().ok()?;
+        rt.block_on(async {
+            let ep = endpoint(SecretKey::generate(), Vec::new(), false).await.ok()?;
+            let _ = tokio::time::timeout(PRESENCE_WAIT, ep.online()).await;
+            let mut next = Instant::now();
+            loop {
+                let wake = {
+                    let mut w = watch();
+                    if w.lease.is_none_or(|t| t.elapsed() > Duration::from_secs(2)) {
+                        break;
+                    }
+                    std::mem::take(&mut w.wake)
+                };
+                for id in wake {
+                    let note = wake_now(&ep, &me, &id).await;
+                    watch().note = note;
+                }
+                if Instant::now() >= next {
+                    presence_round(&ep, &me).await;
+                    next = Instant::now() + PRESENCE_ROUND;
+                }
+                tokio::time::sleep(Duration::from_millis(500)).await;
+            }
+            ep.close().await;
+            Some(())
+        })
+    })()
+    .is_some();
+    let mut w = watch();
+    w.running = false;
+    w.wake.clear();
+    if ok {
+        w.seen.clear();
+    } else {
+        // Sem conexão neste PC: nenhum outro é alcançável.
+        w.failed = Some(Instant::now());
+        w.seen = load().into_iter().filter(|d| d.role == Role::Host).map(|d| (d.id, Presence::Offline)).collect();
+    }
+}
+
+/// Todos os PCs que este assiste ao mesmo tempo, cada um com até 5 s.
+async fn presence_round(ep: &Endpoint, me: &SecretKey) {
+    let mut set = tokio::task::JoinSet::new();
+    for d in load().into_iter().filter(|d| d.role == Role::Host) {
+        let (ep, me) = (ep.clone(), me.clone());
+        set.spawn(async move { (d.id, ask_presence(&ep, &me, d.id, &[]).await) });
+    }
+    while let Some(r) = set.join_next().await {
+        let Ok((id, r)) = r else { continue };
+        if let Some(Some(info)) = &r {
+            set_wol(id, info);
+        }
+        let p = if r.is_some() { Presence::Online } else { Presence::Offline };
+        let mut w = watch();
+        w.seen.retain(|s| s.0 != id);
+        w.seen.push((id, p));
+    }
+}
+
+/// Manda o pacote mágico daqui e, se este PC não está na rede do outro, pede a um PC ligado
+/// daquela rede para mandar lá.
+async fn wake_now(ep: &Endpoint, me: &SecretKey, id: &str) -> Option<Note> {
+    let list = load();
+    let t = list.iter().find(|d| d.role == Role::Host && hex(&d.id) == id && !d.macs.is_empty())?;
+    for m in &t.macs {
+        wake::send(*m, &t.nets);
+    }
+    if t.nets.iter().any(|n| wake::local().1.contains(n)) {
+        return Some(("Pedido para ligar «{}» mandado na rede deste PC.", t.name.clone()));
+    }
+    let online: Vec<EndpointId> = watch().seen.iter().filter(|s| s.1 == Presence::Online).map(|s| s.0).collect();
+    let mut refused = None;
+    for r in list.iter().filter(|d| d.role == Role::Host && d.id != t.id && online.contains(&d.id) && d.nets.iter().any(|n| t.nets.contains(n))) {
+        match ask_presence(ep, me, r.id, &t.macs).await {
+            Some(Some(b)) if b == [1] => {
+                return Some(("Pedido para ligar mandado por «{}», na rede de casa.", r.name.clone()))
+            }
+            _ => refused = Some(r.name.clone()),
+        }
+    }
+    Some(match refused {
+        Some(n) => ("«{}» não ligou o PC: ele também precisa assistir a esse PC.", n),
+        None => ("Para ligar de outra rede, deixe outro PC com o Prisma ligado na mesma rede de casa.", String::new()),
+    })
 }
 
 pub fn devices() {
@@ -1125,10 +1446,12 @@ pub struct DeviceRow {
     pub name: String,
     pub perms: u8,
     pub ask: bool,
+    /// Tem MAC guardado: dá para tentar ligar.
+    pub wake: bool,
 }
 
 pub fn device_rows() -> Vec<DeviceRow> {
-    load().into_iter().map(|d| DeviceRow { viewer: d.role == Role::Viewer, id: hex(&d.id), name: d.name, perms: d.perms, ask: d.ask }).collect()
+    load().into_iter().map(|d| DeviceRow { viewer: d.role == Role::Viewer, id: hex(&d.id), wake: !d.macs.is_empty(), name: d.name, perms: d.perms, ask: d.ask }).collect()
 }
 
 /// Muda permissões e confiança de um aparelho que assiste a este PC.
@@ -1217,7 +1540,7 @@ mod tests {
 
     #[test]
     fn lists_split_by_role() {
-        let dev = |role, n: u8| Device { role, id: SecretKey::from_bytes(&[n; 32]).public(), name: n.to_string(), perms: SOUND, ask: true };
+        let dev = |role, n: u8| Device { role, id: SecretKey::from_bytes(&[n; 32]).public(), name: n.to_string(), perms: SOUND, ask: true, macs: Vec::new(), nets: Vec::new() };
         // Arquivo do serviço de uma versão antiga: quem assiste (1) e um PC que este assiste (2).
         let shared = vec![dev(Role::Viewer, 1), dev(Role::Host, 2)];
         // Arquivo do usuário com uma cópia velha de quem assiste (3) e um PC que este assiste (4).
@@ -1351,5 +1674,20 @@ mod tests {
         assert_eq!(clean_name("a\tb\nc"), "abc");
         assert_eq!(clean_name("   "), "sem nome");
         assert_eq!(clean_name(&"x".repeat(80)).len(), 40);
+    }
+
+    /// O pedido de presença ou de ligar só vale assinado pelo aparelho para a chave que conectou.
+    #[test]
+    fn presence_request_is_signed() {
+        let me = SecretKey::from_bytes(&[7; 32]);
+        let pass = SecretKey::from_bytes(&[8; 32]).public();
+        let mut msg = me.public().as_bytes().to_vec();
+        msg.extend_from_slice(&me.sign(&presence_msg(&pass)).to_bytes());
+        assert_eq!(signed_by(&msg, pass), Some(me.public()));
+        assert_eq!(signed_by(&msg, SecretKey::from_bytes(&[9; 32]).public()), None);
+        assert_eq!(signed_by(&msg[..90], pass), None);
+        let (macs, nets) = parse_info(b"mac\t001a2b3c4d5e\nrede\t192.168.1.255\nlixo\n");
+        assert_eq!(macs, vec![[0x00, 0x1a, 0x2b, 0x3c, 0x4d, 0x5e]]);
+        assert_eq!(nets, vec![Ipv4Addr::new(192, 168, 1, 255)]);
     }
 }

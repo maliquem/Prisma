@@ -2684,3 +2684,12 @@ Manutenção	Обслуживание
 Jogos e tela	Игры и экран
 Entrada e som	Ввод и звук
 Apoiar o Prisma no Ko-fi	Поддержать Prisma на Ko-fi
+Online	В сети
+Offline	Не в сети
+Verificando	Проверка
+Ligar este PC?	Включить этот ПК?
+O Prisma manda o pacote de Wake on LAN para «{}» pela rede. A placa-mãe e o adaptador de rede dele precisam estar com o Wake on LAN ligado (na BIOS e nas propriedades do adaptador).	Prisma отправляет пакет Wake on LAN на «{}» по сети. На его материнской плате и сетевом адаптере должен быть включён Wake on LAN (в BIOS и в свойствах адаптера).
+Pedido para ligar «{}» mandado na rede deste PC.	Запрос на включение «{}» отправлен в сети этого ПК.
+Pedido para ligar mandado por «{}», na rede de casa.	Запрос на включение отправлен с «{}» в домашней сети.
+«{}» não ligou o PC: ele também precisa assistir a esse PC.	«{}» не включил ПК: он тоже должен смотреть этот ПК.
+Para ligar de outra rede, deixe outro PC com o Prisma ligado na mesma rede de casa.	Чтобы включить из другой сети, оставьте другой ПК с запущенным Prisma в той же домашней сети.

@@ -20,6 +20,12 @@ pub struct Net {
     pub total_down: u64,
     pub total_up: u64,
     pub hist: Vec<f32>,
+    /// MAC, quando o adaptador tem um de 6 bytes.
+    pub mac: Option<[u8; 6]>,
+    /// Bits da máscara do endereço IPv4.
+    pub prefix: u8,
+    /// Placa de verdade (não VPN, Hyper-V nem outra placa virtual).
+    pub hardware: bool,
     prev: Option<(u64, u64, Instant)>,
 }
 
@@ -56,6 +62,7 @@ pub fn list() -> Vec<Net> {
                 continue;
             }
             let mut ip = String::new();
+            let mut prefix = 0;
             let mut u = x.FirstUnicastAddress;
             while !u.is_null() {
                 let s = (*u).Address.lpSockaddr;
@@ -63,6 +70,7 @@ pub fn list() -> Vec<Net> {
                     let v4 = &*(s as *const SOCKADDR_IN);
                     let b = v4.sin_addr.S_un.S_un_b;
                     ip = format!("{}.{}.{}.{}", b.s_b1, b.s_b2, b.s_b3, b.s_b4);
+                    prefix = (*u).OnLinkPrefixLength;
                     break;
                 }
                 u = (*u).Next;
@@ -79,6 +87,13 @@ pub fn list() -> Vec<Net> {
                 total_down: 0,
                 total_up: 0,
                 hist: Vec::new(),
+                mac: (x.PhysicalAddressLength == 6).then(|| x.PhysicalAddress[..6].try_into().unwrap()),
+                prefix,
+                hardware: {
+                    let mut row = MIB_IF_ROW2 { InterfaceLuid: x.Luid, ..Default::default() };
+                    // HardwareInterface é o primeiro bit.
+                    GetIfEntry2(&mut row).is_ok() && row.InterfaceAndOperStatusFlags._bitfield & 1 != 0
+                },
                 prev: None,
             });
         }

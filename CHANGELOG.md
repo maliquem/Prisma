@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Share screen, viewer: each paired PC shows **Online**, **Offline** or **Checking**, checked every 30 seconds only while the page is open and the Prisma window is visible. The check opens no session, asks no approval and starts no capture on the host. With the PC Offline, **Turn on** sends a Wake on LAN packet over this network, or from another network asks another paired PC that is Online at home to send it. The motherboard and network adapter need Wake on LAN turned on. / Compartilhar tela, quem assiste: cada PC pareado mostra **Online**, **Offline** ou **Verificando**, conferido a cada 30 segundos só enquanto a página está aberta e a janela do Prisma está à vista. A conferência não abre sessão, não pede aprovação e não liga a captura no host. Com o PC Offline, **Ligar** manda o pacote de Wake on LAN por esta rede ou, de outra rede, pede a outro PC pareado que esteja Online em casa para mandar. A placa-mãe e o adaptador de rede precisam estar com o Wake on LAN ligado.
+
 ## 1.8.0
 
 - Share screen and remote access: with the viewer window in front (or Parsec, Remote Desktop, Moonlight, RustDesk, AnyDesk or TeamViewer), Prisma on this PC lets go of its shortcuts, so they reach the PC on the other side. Before, this PC's Prisma took them, and the capture shortcut did nothing there. / Compartilhar tela e acesso remoto: com a janela de quem assiste na frente (ou a do Parsec, da Área de Trabalho Remota, do Moonlight, do RustDesk, do AnyDesk ou do TeamViewer), o Prisma deste PC solta os atalhos dele, e eles chegam ao PC do outro lado. Antes o Prisma deste PC ficava com eles, e o atalho de captura não fazia nada lá.

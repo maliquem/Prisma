@@ -791,7 +791,7 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
     // e Só o som. A largura segue o texto, que em outros idiomas é mais comprido; sem espaço para
     // o nome ao lado, os botões descem para uma linha própria.
     let bw = |s: &str| (crate::ui::gfx::measure(s, 14.0, Weight::Semibold, None).0 + 28.0).max(84.0);
-    let (forget_w, watch_bw, kvm_bw, ear_bw) = (bw("Esquecer"), bw("Assistir"), bw("Mouse e teclado").max(bw("Parar mouse e teclado")), bw("Só o som").max(bw("Parar o som")));
+    let (forget_w, watch_bw, kvm_bw, ear_bw) = (bw("Esquecer"), bw("Assistir").max(bw("Ligar")), bw("Mouse e teclado").max(bw("Parar mouse e teclado")), bw("Só o som").max(bw("Parar o som")));
     let rn_max = bw("Renomear").max(bw("Salvar"));
     let extra_bw = kvm_bw + ear_bw + 8.0;
     let all_buttons = forget_w + rn_max + if st.dev_tab == 0 { watch_bw + extra_bw + 16.0 } else { 0.0 } + 16.0;
@@ -842,6 +842,7 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
     let mut watch: Option<String> = None;
     let mut kvm: Option<(String, bool)> = None;
     let mut ear: Option<(String, bool)> = None;
+    let mut wake: Option<(String, String)> = None;
     ui.begin_scroll("sh-list", list, content);
     let mut yy = list.y;
     for (i, d) in rows.iter().enumerate() {
@@ -874,6 +875,19 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
             if alias.is_some() {
                 ui.c.text_raw(rect(px, row.y + 29.0, name_w, 16.0), &d.name, 11.0, MUTED, Align::Left, Weight::Regular);
             }
+            // Ligado ou não, na linha de baixo (depois do nome original, se houver outro nome).
+            if !d.viewer {
+                let (label, color) = match stream::presence_of(&d.id) {
+                    stream::Presence::Online => ("Online", ACCENT),
+                    stream::Presence::Offline => ("Offline", MUTED),
+                    stream::Presence::Checking => ("Verificando", MUTED),
+                };
+                let sx = px + if alias.is_some() { crate::ui::gfx::measure(&d.name, 11.0, Weight::Regular, None).0 + 10.0 } else { 0.0 };
+                if sx + 40.0 < px + name_w {
+                    ui.c.round(rect(sx, row.y + 34.0, 7.0, 7.0), 3.5, color);
+                    ui.c.text_raw(rect(sx + 12.0, row.y + 29.0, px + name_w - sx - 12.0, 16.0), &crate::i18n::tr(label), 11.0, color, Align::Left, Weight::Regular);
+                }
+            }
         }
         if ui.button(&format!("sh-forget{i}"), rect(row.right() - 12.0 - forget_w, by, forget_w, 32.0), "Esquecer", false) {
             forget = Some((d.id.clone(), d.name.clone()));
@@ -903,7 +917,13 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
                 changes.push((d.id.clone(), perms, ask));
             }
         } else {
-            if ui.button(&format!("sh-watch{i}"), rect(rn_r.x - watch_bw - 8.0, by, watch_bw, 32.0), "Assistir", true) {
+            // Desligado e com o MAC guardado: no lugar de Assistir, Ligar.
+            let watch_r = rect(rn_r.x - watch_bw - 8.0, by, watch_bw, 32.0);
+            if d.wake && stream::presence_of(&d.id) == stream::Presence::Offline {
+                if ui.button(&format!("sh-wake{i}"), watch_r, "Ligar", true) {
+                    wake = Some((d.id.clone(), alias.clone().unwrap_or_else(|| d.name.clone())));
+                }
+            } else if ui.button(&format!("sh-watch{i}"), watch_r, "Assistir", true) {
                 watch = Some(d.name.clone());
             }
             let on = kvm_on.contains(&d.id);
@@ -965,6 +985,18 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
                 app.cfg.share_names.retain(|n| n.0 != d.id);
                 app.cfg.save();
             }
+        }
+    }
+    if let Some((id, name)) = wake {
+        ui.ask(
+            &format!("sh-wake-{id}"),
+            "Ligar este PC?",
+            &format!("O Prisma manda o pacote de Wake on LAN para «{name}» pela rede. A placa-mãe e o adaptador de rede dele precisam estar com o Wake on LAN ligado (na BIOS e nas propriedades do adaptador)."),
+        );
+    }
+    for d in &rows {
+        if ui.answered(&format!("sh-wake-{}", d.id)) {
+            stream::wake_device(&d.id);
         }
     }
     if let Some(name) = watch {
@@ -1633,6 +1665,16 @@ fn pads_tab(ui: &mut Ui, o: &mut Opts, c: &mut ClientOpts, x: f32, top: f32, w: 
 
 /// Pelo relógio da página, fora do desenho: a janela Compartilhar do Windows.
 pub fn tick(app: &mut App) {
+    // Ligado ou não dos PCs pareados: só com a página aberta e a janela à vista. Sem esta chamada,
+    // a verificação para sozinha em 2 s.
+    use windows::Win32::UI::WindowsAndMessaging::{IsIconic, IsWindowVisible};
+    if app.main.as_ref().is_some_and(|m| unsafe { IsWindowVisible(m.hwnd).as_bool() && !IsIconic(m.hwnd).as_bool() }) {
+        stream::presence_keep();
+    }
+    if let Some((text, name)) = stream::wake_note() {
+        // O aviso traduz o texto pronto pelo modelo com {}.
+        app.toast.info_for(&text.replace("{}", &name), 56.0, 5000);
+    }
     let req = STATE.lock().unwrap().as_mut().and_then(|s| s.share_req.take());
     let Some((title, text, link)) = req else { return };
     let Some(hwnd) = app.main.as_ref().map(|m| m.hwnd) else { return };
