@@ -398,6 +398,7 @@ pub fn apply(exe: &str, values: &[(u32, Option<u32>)]) -> bool {
 }
 
 /// Valor gravado no perfil deste jogo, sem contar o que vem do global ou do driver.
+#[cfg(debug_assertions)]
 pub fn read(exe: &str, id: u32) -> Option<u32> {
     with_session(|a, s| unsafe {
         let p = game_profile(a, s, exe, false)?;

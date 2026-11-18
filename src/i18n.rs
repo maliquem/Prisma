@@ -89,6 +89,7 @@ pub fn is_english() -> bool {
 }
 
 /// Testes e fotos: liga o inglês.
+#[cfg(debug_assertions)]
 pub fn set_english(on: bool) {
     set_lang(if on { EN } else { PT });
 }

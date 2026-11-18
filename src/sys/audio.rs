@@ -183,10 +183,12 @@ const POLICY_IIDS: [GUID; 2] = [
     GUID::from_u128(0x2a59116d_6c4f_45e0_a74f_707e3fef9258),
 ];
 const SET_ENDPOINT: usize = 25;
+#[cfg(debug_assertions)]
 const GET_ENDPOINT: usize = 26;
 
 type FactoryFn = unsafe extern "system" fn(*mut core::ffi::c_void, *const GUID, *mut *mut core::ffi::c_void) -> HRESULT;
 type SetFn = unsafe extern "system" fn(*mut core::ffi::c_void, u32, i32, i32, *mut core::ffi::c_void) -> HRESULT;
+#[cfg(debug_assertions)]
 type GetFn = unsafe extern "system" fn(*mut core::ffi::c_void, u32, i32, i32, *mut *mut core::ffi::c_void) -> HRESULT;
 
 fn policy() -> Option<*mut core::ffi::c_void> {
