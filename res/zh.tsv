@@ -2824,7 +2824,6 @@ O download falhou. Tente de novo.	下载失败。请重试。
 Instalada: {} presets.	已安装：{} 个 preset。
 Não baixada. Não vem com o Prisma por causa das licenças.	未下载。因许可原因，Prisma 不自带。
 Baixar	下载
-Trocar…	更改…
 Liga / desliga	开 / 关
 Menu no jogo	游戏内菜单
 Próximo perfil	下一个配置
@@ -2833,7 +2832,8 @@ Passes	Pass
 Testar com imagem	用图像测试
 Cena 2D (320×240)	2D 场景 (320×240)
 Barras de cor e grade	色条和网格
-Abrir imagem ou captura…	打开图像或截图…
+Importar preset…	导入 preset…
+Abrir imagem ou captura…打开图像或截图…
 Adicionar passe	添加 pass
 Carregar preset	加载 preset
 nada	无
@@ -2863,7 +2863,7 @@ Em tela cheia exclusiva o filtro some. Use janela sem borda ou ligue o Fullscree
 Ligar Fullscreenizer	开启 Fullscreenizer
 Monitor em HDR: a imagem é convertida para SDR antes do filtro (brilho acima do branco é cortado).	HDR 显示器：画面会先转换为 SDR 再经过滤镜（高于白色的亮度会被裁掉）。
 Salvar perfil	保存配置
-Salvar como preset…	另存为 preset…
+Salvar como preset	另存为 preset
 Perfil salvo para este jogo	已为此游戏保存配置
 Voltou ao último salvo	已恢复到上次保存
 Parâmetros	参数
@@ -2876,7 +2876,7 @@ padrão	默认
 Mínimo, máximo e passo vêm do próprio shader. A mudança aparece no jogo na hora; laranja é diferente do padrão. Botão direito volta o valor.	最小值、最大值和步长来自 shader 本身。更改会立即在游戏中显示；橙色表示与默认值不同。右键可恢复该值。
 Carregar preset (substitui os passes)	加载 preset（替换所有 pass）
 Buscar em {} presets (ex.: lottes, ntsc, vhs)	在 {} 个 preset 中搜索（例如：lottes、ntsc、vhs）
-A biblioteca está vazia. Baixe no cartão Biblioteca ou escolha outra pasta em Trocar.	库是空的。请在“库”卡片上下载，或用“更改”选择其他文件夹。
+A biblioteca está vazia. Baixe no cartão Biblioteca ou importe um preset.	库是空的。请在“库”卡片上下载，或导入 preset。
 Preset (.slangp) entra como um passe com todas as passadas dele; .slang entra como uma passada só.	Preset (.slangp) 会连同它的所有 pass 作为一个 pass 加入；.slang 则作为单个 pass 加入。
 Carregar	加载
 Adicionar ao fim	添加到末尾
@@ -2884,9 +2884,13 @@ Não deu para gravar o perfil	无法保存配置
 Este jogo não tem perfil de shader	此游戏没有 shader 配置
 Shader ligado	Shader 已开启
 Shader desligado	Shader 已关闭
-Preset exportado	Preset 已导出
+Preset importado	Preset 已导入
 Não deu para gravar o preset	无法保存 preset
 Não deu para juntar os passes num preset	无法将各 pass 合并为 preset
+Meus presets	我的 preset
+Faltam arquivos do preset importado (baixe a biblioteca ou copie para ela): {}	导入的 preset 缺少文件（请下载库，或将文件复制到库中）：{}
+Não deu para importar o preset	无法导入 preset
+Preset salvo em shaders\{}	Preset 已保存到 shaders\{}
 Página Shaders	Shaders 页面
 Shader liga / desliga	Shader 开 / 关
 Presets de shader	Shader preset

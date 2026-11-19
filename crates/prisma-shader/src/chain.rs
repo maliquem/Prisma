@@ -17,8 +17,9 @@ use crate::blocks::{self, Detect};
 use crate::profile::Profile;
 use crate::{say, texture, FullPass, Res, PS_COPY, PS_REDUCE};
 
-/// Junta os presets numa cadeia só, na ordem: as passadas uma atrás da outra (renumeradas), as texturas sem
-/// repetir nome (a primeira vence) e os valores de `parameters` (o último vence). O librashader resolve o
+/// Junta os presets numa cadeia só, na ordem: as passadas uma atrás da outra (renumeradas) e as texturas sem
+/// repetir nome (a primeira vence). Os valores de `parameters` saem: eles entraram no perfil ao carregar o
+/// preset (`profile::add_pass`), e o que não está no perfil vale o padrão do shader. O librashader resolve o
 /// `#reference` e deixa os caminhos absolutos ao ler cada preset, então não precisa de .slangp temporário.
 /// Preset depois do primeiro que lê uma passada pelo número (`PassOutput1`) enxergaria a passada errada da
 /// cadeia: a junção é recusada com o nome dele.
@@ -46,19 +47,17 @@ pub fn join(paths: &[PathBuf]) -> Res<ShaderPreset> {
                 o.textures.push(t);
             }
         }
-        for prm in next.parameters {
-            o.parameters.retain(|x| x.name != prm.name);
-            o.parameters.push(prm);
-        }
     }
     let mut o = out.ok_or("nenhum passe ligado")?;
     o.pass_count = o.passes.len() as i32;
+    o.parameters.clear();
     Ok(o)
 }
 
-/// A cadeia ligada do perfil como um .slangp comum (caminhos absolutos), com os valores do perfil por cima:
-/// o "Salvar como preset…" da página. Abre no RetroArch e de volta no Prisma como um passe só.
-pub fn slangp(p: &Profile) -> Res<String> {
+/// A cadeia ligada do perfil como um .slangp comum, com os valores do perfil: o "Salvar como preset…" da página.
+/// Caminhos dentro de `base` (a pasta onde o preset fica) saem relativos e com `/`, como o RetroArch grava; os de
+/// fora saem absolutos. Abre no RetroArch e de volta no Prisma como um passe só.
+pub fn slangp(p: &Profile, base: &Path) -> Res<String> {
     use librashader::presets::{ScaleFactor, ScaleType};
     use librashader::{FilterMode, WrapMode};
     use std::fmt::Write;
@@ -69,11 +68,22 @@ pub fn slangp(p: &Profile) -> Res<String> {
         WrapMode::Repeat => "repeat",
         WrapMode::MirroredRepeat => "mirrored_repeat",
     };
+    // O librashader devolve os caminhos canônicos (`\\?\C:\...`), que o RetroArch não lê e o strip_prefix não casa.
+    let plain = |f: &Path| {
+        let s = std::path::absolute(f).unwrap_or_else(|_| f.to_path_buf()).to_string_lossy().into_owned();
+        PathBuf::from(s.strip_prefix(r"\\?\UNC\").map(|x| format!(r"\\{x}")).or_else(|| s.strip_prefix(r"\\?\").map(str::to_string)).unwrap_or(s))
+    };
+    let base = &plain(base);
+    let at = |f: &Path| {
+        let f = plain(f);
+        f.strip_prefix(base).map_or_else(|_| f.display().to_string(), |r| r.to_string_lossy().replace('\\', "/"))
+    };
     let mut s = format!("# Prisma: {}\nshaders = {}\n", p.name, c.passes.len());
     for (i, pass) in c.passes.iter().enumerate() {
         let m = &pass.meta;
-        let _ = writeln!(s, "shader{i} = \"{}\"", pass.path.display());
-        if let Some(a) = &m.alias {
+        let _ = writeln!(s, "shader{i} = \"{}\"", at(&pass.path));
+        // `alias3 = ""` no original chega aqui com as aspas: escrito de novo, ganharia mais um par a cada volta.
+        if let Some(a) = m.alias.as_ref().map(|a| a.trim_matches('"')).filter(|a| !a.is_empty()) {
             let _ = writeln!(s, "alias{i} = \"{a}\"");
         }
         let _ = writeln!(s, "filter_linear{i} = {}", m.filter == FilterMode::Linear);
@@ -104,14 +114,10 @@ pub fn slangp(p: &Profile) -> Res<String> {
         let _ = writeln!(s, "textures = \"{}\"", names.join(";"));
         for t in &c.textures {
             let n = &t.meta.name;
-            let _ = writeln!(s, "{n} = \"{}\"\n{n}_linear = {}\n{n}_wrap_mode = {}\n{n}_mipmap = {}", t.path.display(), t.meta.filter_mode == FilterMode::Linear, wrap(t.meta.wrap_mode), t.meta.mipmap);
+            let _ = writeln!(s, "{n} = \"{}\"\n{n}_linear = {}\n{n}_wrap_mode = {}\n{n}_mipmap = {}", at(&t.path), t.meta.filter_mode == FilterMode::Linear, wrap(t.meta.wrap_mode), t.meta.mipmap);
         }
     }
-    let mut vals: Vec<(String, f32)> = c.parameters.iter().map(|x| (x.name.to_string(), x.value)).collect();
-    for (n, v) in &p.params {
-        vals.retain(|x| &x.0 != n);
-        vals.push((n.clone(), *v));
-    }
+    let vals = &p.params;
     if !vals.is_empty() {
         let _ = writeln!(s, "parameters = \"{}\"", vals.iter().map(|x| x.0.as_str()).collect::<Vec<_>>().join(";"));
         for (n, v) in vals {
@@ -355,7 +361,7 @@ mod tests {
     const SLANG: &str = "#version 450\n#pragma parameter A \"a\" 0.5 0.0 1.0 0.1\nlayout(push_constant) uniform Push { float A; } params;\nlayout(std140, set = 0, binding = 0) uniform UBO { mat4 MVP; } global;\n#pragma stage vertex\nlayout(location = 0) in vec4 Position;\nlayout(location = 1) in vec2 TexCoord;\nlayout(location = 0) out vec2 vTexCoord;\nvoid main() { gl_Position = global.MVP * Position; vTexCoord = TexCoord; }\n#pragma stage fragment\nlayout(location = 0) in vec2 vTexCoord;\nlayout(location = 0) out vec4 FragColor;\nlayout(set = 0, binding = 2) uniform sampler2D Source;\nvoid main() { FragColor = texture(Source, vTexCoord) * params.A; }\n";
 
     /// Dois presets em pastas diferentes, um deles por `#reference`: passadas renumeradas, caminhos absolutos
-    /// relativos ao preset de cada um, textura repetida uma vez só e o `parameters` do último vencendo.
+    /// relativos ao preset de cada um, textura repetida uma vez só e sem os `parameters` (eles vão para o perfil).
     #[test]
     fn junta_presets() {
         let dir = std::env::temp_dir().join(format!("prisma_junta_{}", std::process::id()));
@@ -377,7 +383,7 @@ mod tests {
         assert!(p.passes[2].path.exists());
         assert_eq!(p.passes[2].meta.alias.as_deref(), Some("Fim"));
         assert_eq!(p.textures.len(), 1);
-        assert_eq!(p.parameters.iter().map(|x| (x.name.to_string(), x.value)).collect::<Vec<_>>(), [("A".to_string(), 0.9)]);
+        assert!(p.parameters.is_empty());
 
         // Preset que lê PassOutput0 só entra como primeiro.
         std::fs::write(a.join("z.slang"), SLANG.replace("texture(Source", "texture(PassOutput0")).unwrap();
@@ -387,17 +393,24 @@ mod tests {
         assert!(join(&[a.join("z.slangp"), a.join("a.slangp")]).is_ok());
         assert!(uses_pass_number("PassFeedbackSize2.x") && !uses_pass_number("PassOutput;") && !uses_pass_number("OriginalHistory1"));
 
-        // A lista para a tela: um A só, no primeiro passe, com o padrão que vale na cadeia (o do último preset).
+        // O valor de cada preset entra no perfil ao carregar (o do último vence); a tela mostra um A só, no
+        // primeiro passe, com o padrão do shader.
         let mut prof = Profile::default();
-        prof.passes = vec![crate::profile::Pass { on: true, path: a.join("a.slangp") }, crate::profile::Pass { on: true, path: dir.join("b.slangp") }];
+        crate::profile::add_pass(&mut prof, a.join("a.slangp"));
+        assert_eq!(prof.params, [("A".to_string(), 0.2)]);
+        crate::profile::add_pass(&mut prof, dir.join("b.slangp"));
+        assert_eq!(prof.params, [("A".to_string(), 0.9)]);
         let ps = crate::profile::params(&prof);
         assert_eq!(ps.len(), 1);
-        assert_eq!((ps[0].name.as_str(), ps[0].default, ps[0].pass, ps[0].step), ("A", 0.9, 0, 0.1));
+        assert_eq!((ps[0].name.as_str(), ps[0].default, ps[0].pass, ps[0].step), ("A", 0.5, 0, 0.1));
 
-        // Salvar como preset: a cadeia vira um .slangp que o librashader lê de volta igual, com o valor do perfil.
+        // Salvar como preset: a cadeia vira um .slangp com caminhos relativos que o librashader lê de volta igual,
+        // com o valor do perfil.
         prof.set_param("A", Some(0.4));
         let out = dir.join("saida.slangp");
-        std::fs::write(&out, slangp(&prof).unwrap()).unwrap();
+        let text = slangp(&prof, &dir).unwrap();
+        assert!(text.contains("shader0 = \"a/x.slang\"") && text.contains("shader2 = \"b/sub/y.slang\"") && text.contains("LUT = \"a/lut.png\""), "{text}");
+        std::fs::write(&out, text).unwrap();
         let back = ShaderPreset::try_parse(&out, ShaderFeatures::NONE).unwrap();
         assert_eq!(back.passes.iter().map(|x| &x.path).collect::<Vec<_>>(), p.passes.iter().map(|x| &x.path).collect::<Vec<_>>());
         assert_eq!(back.passes[2].meta.alias.as_deref(), Some("Fim"));

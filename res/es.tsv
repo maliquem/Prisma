@@ -2824,7 +2824,6 @@ O download falhou. Tente de novo.	La descarga falló. Inténtalo de nuevo.
 Instalada: {} presets.	Instalada: {} presets.
 Não baixada. Não vem com o Prisma por causa das licenças.	No descargada. No viene con Prisma por las licencias.
 Baixar	Descargar
-Trocar…	Cambiar…
 Liga / desliga	Activar / desactivar
 Menu no jogo	Menú en el juego
 Próximo perfil	Siguiente perfil
@@ -2833,7 +2832,8 @@ Passes	Pases
 Testar com imagem	Probar con imagen
 Cena 2D (320×240)	Escena 2D (320×240)
 Barras de cor e grade	Barras de color y cuadrícula
-Abrir imagem ou captura…	Abrir imagen o captura…
+Importar preset…	Importar preset…
+Abrir imagem ou captura…Abrir imagen o captura…
 Adicionar passe	Añadir pase
 Carregar preset	Cargar preset
 nada	nada
@@ -2863,7 +2863,7 @@ Em tela cheia exclusiva o filtro some. Use janela sem borda ou ligue o Fullscree
 Ligar Fullscreenizer	Activar Fullscreenizer
 Monitor em HDR: a imagem é convertida para SDR antes do filtro (brilho acima do branco é cortado).	Monitor en HDR: la imagen se convierte a SDR antes del filtro (el brillo por encima del blanco se recorta).
 Salvar perfil	Guardar perfil
-Salvar como preset…	Guardar como preset…
+Salvar como preset	Guardar como preset
 Perfil salvo para este jogo	Perfil guardado para este juego
 Voltou ao último salvo	Vuelto al último guardado
 Parâmetros	Parámetros
@@ -2876,7 +2876,7 @@ padrão	predeterminado
 Mínimo, máximo e passo vêm do próprio shader. A mudança aparece no jogo na hora; laranja é diferente do padrão. Botão direito volta o valor.	El mínimo, el máximo y el paso vienen del propio shader. El cambio se ve en el juego al instante; naranja es distinto del predeterminado. Clic derecho restaura el valor.
 Carregar preset (substitui os passes)	Cargar preset (reemplaza los pases)
 Buscar em {} presets (ex.: lottes, ntsc, vhs)	Buscar en {} presets (p. ej.: lottes, ntsc, vhs)
-A biblioteca está vazia. Baixe no cartão Biblioteca ou escolha outra pasta em Trocar.	La biblioteca está vacía. Descárgala en la tarjeta Biblioteca o elige otra carpeta con Cambiar.
+A biblioteca está vazia. Baixe no cartão Biblioteca ou importe um preset.	La biblioteca está vacía. Descárgala en la tarjeta Biblioteca o importa un preset.
 Preset (.slangp) entra como um passe com todas as passadas dele; .slang entra como uma passada só.	Un preset (.slangp) entra como un pase con todas sus pasadas; un .slang entra como una sola pasada.
 Carregar	Cargar
 Adicionar ao fim	Añadir al final
@@ -2884,9 +2884,13 @@ Não deu para gravar o perfil	No se pudo guardar el perfil
 Este jogo não tem perfil de shader	Este juego no tiene perfil de shader
 Shader ligado	Shader activado
 Shader desligado	Shader desactivado
-Preset exportado	Preset exportado
+Preset importado	Preset importado
 Não deu para gravar o preset	No se pudo guardar el preset
 Não deu para juntar os passes num preset	No se pudieron unir los pases en un preset
+Meus presets	Mis presets
+Faltam arquivos do preset importado (baixe a biblioteca ou copie para ela): {}	Faltan archivos del preset importado (descarga la biblioteca o cópialos en ella): {}
+Não deu para importar o preset	No se pudo importar el preset
+Preset salvo em shaders\{}	Preset guardado en shaders\{}
 Página Shaders	Página Shaders
 Shader liga / desliga	Shader activado / desactivado
 Presets de shader	Presets de shader

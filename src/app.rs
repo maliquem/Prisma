@@ -4313,8 +4313,7 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
             let path = match w.0 {
                 shd::PICK_EXE => capture::choose_exe(h),
                 shd::PICK_IMAGE => capture::choose_file(h, "Imagens", w!("*.png;*.jpg;*.jpeg;*.bmp")),
-                shd::PICK_EXPORT => capture::save_file(h, "Presets de shader", w!("*.slangp"), w!("slangp"), "preset"),
-                _ => capture::choose_folder(h),
+                _ => capture::choose_file(h, "Presets de shader", w!("*.slangp")),
             };
             if let Some(path) = path {
                 with(|a| {

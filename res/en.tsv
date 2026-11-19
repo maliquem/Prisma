@@ -2830,7 +2830,6 @@ O download falhou. Tente de novo.	Download failed. Try again.
 Instalada: {} presets.	Installed: {} presets.
 Não baixada. Não vem com o Prisma por causa das licenças.	Not downloaded. It does not come with Prisma because of licenses.
 Baixar	Download
-Trocar…	Change…
 Liga / desliga	On / off
 Menu no jogo	In-game menu
 Próximo perfil	Next profile
@@ -2840,6 +2839,7 @@ Testar com imagem	Test with image
 Cena 2D (320×240)	2D scene (320×240)
 Barras de cor e grade	Color bars and grid
 Abrir imagem ou captura…	Open image or capture…
+Importar preset…	Import preset…
 Adicionar passe	Add pass
 Carregar preset	Load preset
 nada	nothing
@@ -2869,7 +2869,7 @@ Em tela cheia exclusiva o filtro some. Use janela sem borda ou ligue o Fullscree
 Ligar Fullscreenizer	Turn on Fullscreenizer
 Monitor em HDR: a imagem é convertida para SDR antes do filtro (brilho acima do branco é cortado).	HDR monitor: the image is converted to SDR before the filter (brightness above white is clipped).
 Salvar perfil	Save profile
-Salvar como preset…	Save as preset…
+Salvar como preset	Save as preset
 Perfil salvo para este jogo	Profile saved for this game
 Voltou ao último salvo	Back to the last saved
 Parâmetros	Parameters
@@ -2882,7 +2882,7 @@ padrão	default
 Mínimo, máximo e passo vêm do próprio shader. A mudança aparece no jogo na hora; laranja é diferente do padrão. Botão direito volta o valor.	Minimum, maximum and step come from the shader itself. The change shows in the game right away; orange means different from default. Right-click resets the value.
 Carregar preset (substitui os passes)	Load preset (replaces the passes)
 Buscar em {} presets (ex.: lottes, ntsc, vhs)	Search {} presets (e.g. lottes, ntsc, vhs)
-A biblioteca está vazia. Baixe no cartão Biblioteca ou escolha outra pasta em Trocar.	The library is empty. Download it on the Library card or pick another folder with Change.
+A biblioteca está vazia. Baixe no cartão Biblioteca ou importe um preset.	The library is empty. Download it on the Library card or import a preset.
 Preset (.slangp) entra como um passe com todas as passadas dele; .slang entra como uma passada só.	A preset (.slangp) is added as one pass with all its passes; a .slang is added as a single pass.
 Carregar	Load
 Adicionar ao fim	Add to end
@@ -2890,9 +2890,13 @@ Não deu para gravar o perfil	Could not save the profile
 Este jogo não tem perfil de shader	This game has no shader profile
 Shader ligado	Shader on
 Shader desligado	Shader off
-Preset exportado	Preset exported
+Preset importado	Preset imported
 Não deu para gravar o preset	Could not save the preset
 Não deu para juntar os passes num preset	Could not merge the passes into a preset
+Meus presets	My presets
+Faltam arquivos do preset importado (baixe a biblioteca ou copie para ela): {}	Files missing from the imported preset (download the library or copy them into it): {}
+Não deu para importar o preset	Could not import the preset
+Preset salvo em shaders\{}	Preset saved to shaders\{}
 Página Shaders	Shaders page
 Shader liga / desliga	Shader on / off
 Presets de shader	Shader presets

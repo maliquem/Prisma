@@ -125,18 +125,15 @@ pub struct Param {
 }
 
 /// Parâmetros de todos os passes do perfil (ligados ou não), na ordem em que aparecem nos shaders. O padrão é o
-/// da cadeia: o `parameters` do último preset ligado que mexe nele vence, como na junção. Nome repetido em dois
-/// passes fica só no primeiro (um valor só na cadeia). Passe que não abre fica de fora.
+/// do próprio shader (`#pragma parameter`): os valores de um preset entram no perfil ao carregá-lo (`add_pass`),
+/// como mudados. Nome repetido em dois passes fica só no primeiro (um valor só na cadeia). Passe que não abre fica
+/// de fora.
 pub fn params(profile: &Profile) -> Vec<Param> {
     use librashader::preprocess::ShaderSource;
     use librashader::presets::{ShaderFeatures, ShaderPreset};
     let mut out: Vec<Param> = Vec::new();
-    let mut chain_values = Vec::new();
     for (i, pass) in profile.passes.iter().enumerate() {
         let Ok(preset) = ShaderPreset::try_parse(&pass.path, ShaderFeatures::NONE) else { continue };
-        if pass.on {
-            chain_values.extend(preset.parameters.iter().map(|o| (o.name.to_string(), o.value)));
-        }
         for sp in &preset.passes {
             let Ok(src) = ShaderSource::load(&sp.path, ShaderFeatures::NONE) else { continue };
             // O librashader guarda os parâmetros num mapa sem ordem: a posição do #pragma no texto devolve a ordem.
@@ -148,17 +145,23 @@ pub fn params(profile: &Profile) -> Vec<Param> {
                 if out.iter().any(|o| o.name == p.id.as_str()) {
                     continue;
                 }
-                let default = preset.parameters.iter().find(|o| o.name == p.id).map_or(p.initial, |o| o.value);
-                out.push(Param { name: p.id.to_string(), desc: p.description, default, min: p.minimum, max: p.maximum, step: p.step, pass: i });
+                out.push(Param { name: p.id.to_string(), desc: p.description, default: p.initial, min: p.minimum, max: p.maximum, step: p.step, pass: i });
             }
         }
     }
-    for (name, v) in chain_values {
-        if let Some(x) = out.iter_mut().find(|x| x.name == name) {
-            x.default = v;
+    out
+}
+
+/// Põe o preset no fim dos passes, com os valores dele (`parameters`, `#reference`) no perfil, como mudados: o
+/// "Restaurar padrão" volta ao valor do shader. Valor já no perfil com o mesmo nome dá lugar ao do preset novo.
+pub fn add_pass(p: &mut Profile, path: PathBuf) {
+    use librashader::presets::{ShaderFeatures, ShaderPreset};
+    if let Ok(preset) = ShaderPreset::try_parse(&path, ShaderFeatures::NONE) {
+        for o in &preset.parameters {
+            p.set_param(&o.name, Some(o.value));
         }
     }
-    out
+    p.passes.push(Pass { on: true, path });
 }
 
 /// Tira o passe `i` e os valores de parâmetro que eram só dele (outro passe com o mesmo nome segura o valor).
