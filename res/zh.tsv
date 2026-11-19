@@ -2845,8 +2845,8 @@ Como aplicar	应用方式
 Por cima	叠加
 Bloqueado: este jogo tem anti-cheat	已阻止：此游戏有反作弊
 Janela por cima do jogo, capturando a imagem. DX9 a 12, Vulkan e OpenGL.	覆盖在游戏上的窗口，捕获画面。DX9 至 12、Vulkan 和 OpenGL。
-Não suportado neste jogo: a injeção cobre DX11 e DX9, em jogos de 64 bits	此游戏不支持：注入仅支持 DX11 和 DX9，且仅限 64 位游戏
-Dentro do jogo, na hora de mostrar o quadro: sem o quadro de atraso e sem janela por cima. DX11 e DX9, jogos de 64 bits.	在游戏内部、显示画面的时刻应用：没有一帧的延迟，也没有覆盖窗口。DX11 和 DX9，64 位游戏。
+Não suportado neste jogo: a injeção cobre DX9 a 12, OpenGL e Vulkan	此游戏不支持：注入支持 DX9 至 12、OpenGL 和 Vulkan
+Dentro do jogo, na hora de mostrar o quadro: sem o quadro de atraso e sem janela por cima. DX9 a 12, OpenGL e Vulkan; HDR fica sem efeito.	在游戏内部、显示画面的时刻应用：没有一帧的延迟，也没有覆盖窗口。支持 DX9 至 12、OpenGL 和 Vulkan；HDR 无效果。
 Resolução de entrada	输入分辨率
 Original	原始
 240 linhas	240 行

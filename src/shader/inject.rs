@@ -220,9 +220,9 @@ fn run_in(path: &Path, game: HWND, pid: u32, process: HANDLE) -> Res<bool> {
                     eprintln!("shader: injeção pronta");
                 }
             }
-            // Jogo Vulkan ou OpenGL que carrega o d3d11.dll para outra coisa: nenhum Present passa pela DLL.
+            // Nenhum Present passou pela DLL: o jogo apresenta por um caminho que ela não cobre.
             Some(t) if s.presents.load(Relaxed) == 0 && t.elapsed() >= API_WAIT => {
-                break to_overlay(&mut eng, &d.dev, "o jogo não apresenta por DX11 nem DX9");
+                break to_overlay(&mut eng, &d.dev, "nenhum quadro passou pela DLL");
             }
             _ => {}
         }

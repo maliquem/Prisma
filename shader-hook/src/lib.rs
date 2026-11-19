@@ -2,25 +2,29 @@
 //! antes do Present, sem janela por cima. Entra como o limitador (`hook/`): `SetWindowsHookEx` só na linha da
 //! janela do jogo, dispositivo falso para achar as tabelas de funções, e se prende até o jogo fechar.
 //! - DXGI com D3D11: `Present`, `Present1`, `ResizeBuffers`. Com D3D10, a cadeia roda num D3D11 nosso no mesmo
-//!   adaptador (`Bridge`). D3D12 só avisa a API (`api`) e passa.
+//!   adaptador (`Bridge`). Com D3D12, num D3D11 sobre a fila do jogo (11on12).
 //! - D3D9 e 9Ex: `Present`, `PresentEx`, `Reset`, `ResetEx`.
 //! - OpenGL: `wglSwapBuffers`, com a cadeia num contexto GL nosso no mesmo HDC (`Gl`).
+//! - Vulkan: `vkQueuePresentKHR`, `vkCreateSwapchainKHR` e as de destruir, desviadas no código do driver, com a
+//!   cadeia gravada num comando nosso na fila do jogo (`VkDev`).
 //! O motor (`prisma.exe --shader-profile`) conversa pela memória de `prisma_shader::link`: perfil, sinal de vida,
 //! `compare`. O perfil é relido a cada 250 ms, como no motor por cima.
 
 use std::cell::Cell;
 use std::collections::HashMap;
-use std::ffi::c_void;
+use std::ffi::{c_void, CStr};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::*};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
+use ash::vk;
 use glow::HasContext;
 
 use librashader::runtime::d3d9::FilterChain as Chain9;
 use librashader::runtime::gl::{FilterChain as ChainGl, GLImage as ChainGlImage};
+use librashader::runtime::vk::{FilterChain as ChainVk, VulkanImage as ChainVkImage};
 use librashader::runtime::{Size, Viewport};
 use prisma_shader::chain::{self, Engine, Tracker};
 use prisma_shader::link::*;
@@ -65,7 +69,8 @@ type D9ResetEx = unsafe extern "system" fn(*mut c_void, *mut c_void, *mut c_void
 
 static STARTED: AtomicBool = AtomicBool::new(false);
 static SHARED: AtomicUsize = AtomicUsize::new(0);
-/// (tabela, entrada, função original): o D3D9 comum e o 9Ex podem ter tabelas diferentes.
+/// (tabela, entrada, função original): o D3D9 comum e o 9Ex podem ter tabelas diferentes. Tabela 0: o código da
+/// função foi desviado e a original é o trampolim, valendo para qualquer tabela.
 static PATCHES: Mutex<Vec<(usize, usize, usize)>> = Mutex::new(Vec::new());
 static DX11: Mutex<Option<Dx11>> = Mutex::new(None);
 static D9: Mutex<Option<D9>> = Mutex::new(None);
@@ -126,7 +131,8 @@ fn guard(f: impl FnOnce()) {
 unsafe fn orig(this: *mut c_void, slot: usize) -> usize {
     let table = *(this as *const usize);
     let list = lock(&PATCHES);
-    list.iter().find(|p| p.0 == table && p.1 == slot).or_else(|| list.iter().find(|p| p.1 == slot)).map_or(0, |p| p.2)
+    let any = |t: usize| list.iter().find(|p| p.0 == t && p.1 == slot);
+    any(0).or_else(|| any(table)).or_else(|| list.iter().find(|p| p.1 == slot)).map_or(0, |p| p.2)
 }
 
 /// Troca uma entrada da tabela de funções. O original fica guardado antes de a nova valer.
@@ -145,16 +151,40 @@ unsafe fn patch(table: *mut usize, slot: usize, new: usize) -> bool {
     true
 }
 
+/// O DXGI é desviado no código da função (como o D3D9): com a tabela trocada, um gancho que a troque de novo por
+/// cima do nosso (o overlay da Steam no Halls of Torment) chama a gente e a gente a ele, até estourar a pilha.
+/// Se a tabela já não aponta para o dxgi.dll (alguém a trocou antes), fica a troca na tabela.
+unsafe fn hook_dxgi(table: *mut usize, slot: usize, new: usize) -> bool {
+    let at = *table.add(slot);
+    let mut m = HMODULE::default();
+    let flags = GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT | GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS;
+    let inside = GetModuleHandleExW(flags, PCWSTR(at as *const u16), &mut m).is_ok() && GetModuleHandleW(w!("dxgi.dll")).is_ok_and(|d| d == m);
+    if inside && detour_with(at, new, |t| lock(&PATCHES).push((0, slot, t))).is_ok() {
+        return true;
+    }
+    patch(table, slot, new)
+}
+
 /// (função original, trampolim que a chama): desvios no código, para quando a tabela não serve.
 static DETOURS: Mutex<Vec<(usize, usize)>> = Mutex::new(Vec::new());
 
 /// Desvia a função em `at` para `new`, uma vez por função. O desvio fica até o jogo fechar (a DLL está presa).
 unsafe fn detour(at: usize, new: usize) -> Res<()> {
+    detour_with(at, new, |_| ())
+}
+
+/// `before` recebe o trampolim antes de o desvio ligar: o gancho pode ser chamado já na instrução seguinte.
+unsafe fn detour_with(at: usize, new: usize, before: impl FnOnce(usize)) -> Res<()> {
     let mut list = lock(&DETOURS);
-    if at == 0 || list.iter().any(|d| d.0 == at) {
+    if let Some(d) = list.iter().find(|d| d.0 == at) {
+        before(d.1);
+        return Ok(());
+    }
+    if at == 0 {
         return Ok(());
     }
     let d = retour::RawDetour::new(at as *const (), new as *const ()).map_err(|e| e.to_string())?;
+    before(d.trampoline() as *const () as usize);
     d.enable().map_err(|e| e.to_string())?;
     list.push((at, d.trampoline() as *const () as usize));
     std::mem::forget(d);
@@ -185,7 +215,6 @@ unsafe extern "system" fn on_present1(this: *mut c_void, sync: u32, flags: u32, 
     f(this, sync, flags, params)
 }
 
-/// O ResizeBuffers falha se sobrar referência ao back buffer: as nossas saem antes.
 /// O ResizeBuffers falha com o back buffer ainda preso: o que é nosso dele sai antes.
 fn drop_bb(this: *mut c_void) {
     guard(|| {
@@ -213,7 +242,7 @@ unsafe extern "system" fn on_resize1(this: *mut c_void, n: u32, w: u32, h: u32, 
 
 unsafe fn dx11_present(this: *mut c_void, flags: u32) {
     let Some(s) = shared() else { return };
-    if flags & DXGI_PRESENT_TEST.0 != 0 {
+    if flags & DXGI_PRESENT_TEST.0 != 0 || VK_LIVE.load(Relaxed) {
         return;
     }
     s.presents.fetch_add(1, Relaxed);
@@ -623,13 +652,13 @@ unsafe fn install_dxgi() -> Res<()> {
     let done = made.map_err(|e| e.to_string()).and_then(|_| {
         let sc: IDXGISwapChain = sc.ok_or("sem swapchain")?;
         let t = vtable(&sc);
-        let mut ok = patch(t, SLOT_PRESENT, on_present as *const () as usize) && patch(t, SLOT_RESIZE, on_resize as *const () as usize);
+        let mut ok = hook_dxgi(t, SLOT_PRESENT, on_present as *const () as usize) && hook_dxgi(t, SLOT_RESIZE, on_resize as *const () as usize);
         if let Ok(sc1) = sc.cast::<IDXGISwapChain1>() {
-            ok &= patch(vtable(&sc1), SLOT_PRESENT1, on_present1 as *const () as usize);
+            ok &= hook_dxgi(vtable(&sc1), SLOT_PRESENT1, on_present1 as *const () as usize);
         }
         // Só a tabela de quem é IDXGISwapChain3 chega à entrada 39.
         if let Ok(sc3) = sc.cast::<IDXGISwapChain3>() {
-            ok &= patch(vtable(&sc3), SLOT_RESIZE1, on_resize1 as *const () as usize);
+            ok &= hook_dxgi(vtable(&sc3), SLOT_RESIZE1, on_resize1 as *const () as usize);
         }
         if ok { Ok(()) } else { Err("VirtualProtect".to_string()) }
     });
@@ -1298,6 +1327,556 @@ unsafe fn install_gl() -> Res<()> {
     detour(at, on_swap as *const () as usize)
 }
 
+// ---------- Vulkan ----------
+
+/// Drivers diferentes (placa e vídeo integrado) têm funções em endereços diferentes; cada um ganha a sua cópia
+/// do desvio (`N`), que sabe qual original chamar.
+const VK_N: usize = 4;
+const VK_PRESENT: usize = 0;
+const VK_CREATE_SC: usize = 1;
+const VK_DESTROY_SC: usize = 2;
+const VK_DESTROY_DEV: usize = 3;
+const VK_NAMES: [&CStr; 4] = [c"vkQueuePresentKHR", c"vkCreateSwapchainKHR", c"vkDestroySwapchainKHR", c"vkDestroyDevice"];
+/// Quadros em voo: cada um com o seu comando, cerca e semáforo.
+const VK_SLOTS: usize = 4;
+
+/// Trampolins por função e por driver.
+static VK_NEXT: [[AtomicUsize; VK_N]; 4] = [const { [const { AtomicUsize::new(0) }; VK_N] }; 4];
+/// A nossa instância (só para consultas da placa), e por driver os endereços das funções e uma placa dele.
+static VK_INST: Mutex<Option<(ash::Instance, Vec<([usize; 4], vk::PhysicalDevice)>)>> = Mutex::new(None);
+/// Por dispositivo do jogo, pela chave de despacho (a primeira palavra do objeto, a mesma nas filas dele).
+static VK_DEVS: Mutex<Vec<(usize, VkDev)>> = Mutex::new(Vec::new());
+/// Swapchain de antes da DLL já avisada com OUT_OF_DATE. Uma vez só: se a nova também não passar por nós, o
+/// jogo não fica refazendo para sempre.
+static VK_NUDGED: AtomicBool = AtomicBool::new(false);
+// O jogo apresenta em Vulkan: a swapchain DXGI que o driver da NVIDIA monta por baixo (Vulkan sobre DXGI) fica de fora.
+static VK_LIVE: AtomicBool = AtomicBool::new(false);
+
+fn vk_key<T: vk::Handle>(h: T) -> usize {
+    unsafe { *(h.as_raw() as usize as *const usize) }
+}
+
+unsafe fn vk_next(f: usize, n: usize) -> usize {
+    VK_NEXT[f][n].load(Relaxed)
+}
+
+/// As funções valem para qualquer dispositivo do mesmo driver: um dispositivo nosso de cada placa dá os
+/// endereços, e o desvio no código pega também o jogo que já tinha os ponteiros antes de a DLL entrar.
+unsafe fn install_vk() -> Res<()> {
+    let lib = GetModuleHandleW(w!("vulkan-1.dll")).map_err(|_| "sem vulkan-1.dll no jogo")?;
+    let gipa: vk::PFN_vkGetInstanceProcAddr = std::mem::transmute(GetProcAddress(lib, s!("vkGetInstanceProcAddr")).ok_or("sem vkGetInstanceProcAddr")?);
+    let entry = ash::Entry::from_static_fn(ash::StaticFn { get_instance_proc_addr: gipa });
+    let app = vk::ApplicationInfo::default().api_version(vk::API_VERSION_1_1);
+    let inst = entry.create_instance(&vk::InstanceCreateInfo::default().application_info(&app), None)?;
+    let mut sets: Vec<([usize; 4], vk::PhysicalDevice)> = Vec::new();
+    for pd in inst.enumerate_physical_devices()? {
+        let Some(fam) = vk_graphics_family(&inst, pd) else { continue };
+        let prio = [1.0];
+        let qi = [vk::DeviceQueueCreateInfo::default().queue_family_index(fam).queue_priorities(&prio)];
+        let ext = [ash::khr::swapchain::NAME.as_ptr()];
+        let Ok(dev) = inst.create_device(pd, &vk::DeviceCreateInfo::default().queue_create_infos(&qi).enabled_extension_names(&ext), None) else { continue };
+        let gdpa = inst.fp_v1_0().get_device_proc_addr;
+        let set = VK_NAMES.map(|n| gdpa(dev.handle(), n.as_ptr()).map_or(0, |f| f as usize));
+        dev.destroy_device(None);
+        if !sets.iter().any(|s| s.0 == set) {
+            sets.push((set, pd));
+        }
+    }
+    if sets.is_empty() {
+        inst.destroy_instance(None);
+        return Err("nenhuma placa Vulkan com swapchain".into());
+    }
+    let hooks: [[usize; VK_N]; 4] = [
+        [vk_present::<0> as *const () as usize, vk_present::<1> as *const () as usize, vk_present::<2> as *const () as usize, vk_present::<3> as *const () as usize],
+        [vk_create_sc::<0> as *const () as usize, vk_create_sc::<1> as *const () as usize, vk_create_sc::<2> as *const () as usize, vk_create_sc::<3> as *const () as usize],
+        [vk_destroy_sc::<0> as *const () as usize, vk_destroy_sc::<1> as *const () as usize, vk_destroy_sc::<2> as *const () as usize, vk_destroy_sc::<3> as *const () as usize],
+        [vk_destroy_dev::<0> as *const () as usize, vk_destroy_dev::<1> as *const () as usize, vk_destroy_dev::<2> as *const () as usize, vk_destroy_dev::<3> as *const () as usize],
+    ];
+    let n = sets.len().min(VK_N);
+    let list: Vec<[usize; 4]> = sets.iter().map(|s| s.0).collect();
+    *lock(&VK_INST) = Some((inst, sets));
+    // O Present por último: ele já pode mandar o jogo refazer a swapchain, e a criação precisa estar desviada.
+    for f in [VK_CREATE_SC, VK_DESTROY_SC, VK_DESTROY_DEV, VK_PRESENT] {
+        for (n, set) in list.iter().enumerate().take(VK_N) {
+            if set[f] == 0 {
+                return Err(format!("o driver não deu {:?}", VK_NAMES[f]).into());
+            }
+            detour_with(set[f], hooks[f][n], |t| VK_NEXT[f][n].store(t, SeqCst))?;
+        }
+    }
+    say!("shader: Vulkan, {n} driver(s) desviado(s)");
+    Ok(())
+}
+
+unsafe fn vk_graphics_family(inst: &ash::Instance, pd: vk::PhysicalDevice) -> Option<u32> {
+    inst.get_physical_device_queue_family_properties(pd).iter().position(|f| f.queue_flags.contains(vk::QueueFlags::GRAPHICS)).map(|i| i as u32)
+}
+
+unsafe extern "system" fn vk_create_sc<const N: usize>(d: vk::Device, ci: *const vk::SwapchainCreateInfoKHR, a: *const vk::AllocationCallbacks, out: *mut vk::SwapchainKHR) -> vk::Result {
+    let next: vk::PFN_vkCreateSwapchainKHR = std::mem::transmute(vk_next(VK_CREATE_SC, N));
+    // A cadeia lê a imagem do jogo por cópia e desenha nela: a swapchain precisa deixar as duas coisas.
+    let mut c = *ci;
+    c.image_usage |= vk::ImageUsageFlags::TRANSFER_SRC | vk::ImageUsageFlags::COLOR_ATTACHMENT;
+    let mut r = next(d, &c, a, out);
+    let ours = r == vk::Result::SUCCESS;
+    if !ours {
+        r = next(d, ci, a, out);
+    }
+    if r == vk::Result::SUCCESS {
+        let sc = *out;
+        guard(|| vk_swapchain(d, &*ci, sc, ours));
+    }
+    r
+}
+
+unsafe extern "system" fn vk_destroy_sc<const N: usize>(d: vk::Device, sc: vk::SwapchainKHR, a: *const vk::AllocationCallbacks) {
+    guard(|| {
+        if let Some((_, x)) = lock(&VK_DEVS).iter_mut().find(|x| x.0 == vk_key(d)) {
+            // As nossas cópias podem estar lendo as imagens dela.
+            x.wait();
+            x.scs.retain(|s| s.0 != sc);
+        }
+    });
+    let next: vk::PFN_vkDestroySwapchainKHR = std::mem::transmute(vk_next(VK_DESTROY_SC, N));
+    next(d, sc, a)
+}
+
+unsafe extern "system" fn vk_destroy_dev<const N: usize>(d: vk::Device, a: *const vk::AllocationCallbacks) {
+    guard(|| {
+        let mut g = lock(&VK_DEVS);
+        if let Some(i) = g.iter().position(|x| x.0 == vk_key(d)) {
+            drop(g.remove(i));
+        }
+    });
+    let next: vk::PFN_vkDestroyDevice = std::mem::transmute(vk_next(VK_DESTROY_DEV, N));
+    next(d, a)
+}
+
+unsafe extern "system" fn vk_present<const N: usize>(q: vk::Queue, info: *const vk::PresentInfoKHR) -> vk::Result {
+    let next: vk::PFN_vkQueuePresentKHR = std::mem::transmute(vk_next(VK_PRESENT, N));
+    VK_LIVE.store(true, Relaxed);
+    let (mut sem, mut nudge) = (None, false);
+    guard(|| (sem, nudge) = vk_frame(q, &*info));
+    let r = match sem {
+        Some(s) => {
+            let w = [s];
+            let mut i = *info;
+            i.wait_semaphore_count = 1;
+            i.p_wait_semaphores = w.as_ptr();
+            next(q, &i)
+        }
+        None => next(q, info),
+    };
+    // A swapchain é de antes da DLL (sem a cópia liberada): o jogo refaz ao ver OUT_OF_DATE, e aí ela passa por nós.
+    if nudge && r.as_raw() >= 0 {
+        // Há jogos (Godot) que olham o resultado de cada swapchain, não o da função.
+        if !(*info).p_results.is_null() {
+            std::slice::from_raw_parts_mut((*info).p_results, (*info).swapchain_count as usize).fill(vk::Result::ERROR_OUT_OF_DATE_KHR);
+        }
+        vk::Result::ERROR_OUT_OF_DATE_KHR
+    } else {
+        r
+    }
+}
+
+unsafe fn vk_swapchain(d: vk::Device, ci: &vk::SwapchainCreateInfoKHR, sc: vk::SwapchainKHR, ours: bool) {
+    let g = lock(&VK_INST);
+    let Some((inst, sets)) = g.as_ref() else { return };
+    let mut devs = lock(&VK_DEVS);
+    let key = vk_key(d);
+    if !devs.iter().any(|x| x.0 == key) {
+        let Some(s) = shared() else { return };
+        // A placa pelo driver que atende o dispositivo do jogo (o Present dele é o de uma das nossas).
+        let present = (inst.fp_v1_0().get_device_proc_addr)(d, VK_NAMES[VK_PRESENT].as_ptr()).map_or(0, |f| f as usize);
+        let pd = sets.iter().find(|s| s.0[VK_PRESENT] == present).unwrap_or(&sets[0]).1;
+        match VkDev::new(inst, pd, d, s) {
+            Ok(x) => devs.push((key, x)),
+            Err(e) => {
+                say!("shader: Vulkan não abriu: {e}");
+                return;
+            }
+        }
+    }
+    let x = &mut devs.iter_mut().find(|x| x.0 == key).unwrap().1;
+    let images = ash::khr::swapchain::Device::new(inst, &x.dev).get_swapchain_images(sc).unwrap_or_default();
+    // Só 8 bits por canal, como no DXGI: HDR (10 ou 16 bits) fica sem efeito.
+    let eight = matches!(ci.image_format, vk::Format::B8G8R8A8_UNORM | vk::Format::B8G8R8A8_SRGB | vk::Format::R8G8B8A8_UNORM | vk::Format::R8G8B8A8_SRGB | vk::Format::A8B8G8R8_UNORM_PACK32 | vk::Format::A8B8G8R8_SRGB_PACK32);
+    if !ours {
+        say!("shader: a swapchain recusou a cópia (TRANSFER_SRC), efeito desligado nela");
+    } else if !eight {
+        say!("shader: swapchain em {:?} (HDR), efeito desligado nela", ci.image_format);
+    }
+    x.scs.push((sc, Sc { format: ci.image_format, size: (ci.image_extent.width, ci.image_extent.height), images, ok: ours && eight }));
+}
+
+/// O semáforo que o Present passa a esperar (o fim da cadeia), e se o jogo deve refazer a swapchain.
+unsafe fn vk_frame(q: vk::Queue, info: &vk::PresentInfoKHR) -> (Option<vk::Semaphore>, bool) {
+    let Some(s) = shared() else { return (None, false) };
+    s.presents.fetch_add(1, Relaxed);
+    s.api.store(API_VK, Relaxed);
+    if !alive(s) {
+        return (None, false);
+    }
+    let scs = std::slice::from_raw_parts(info.p_swapchains, info.swapchain_count as usize);
+    let idx = std::slice::from_raw_parts(info.p_image_indices, info.swapchain_count as usize);
+    let mut devs = lock(&VK_DEVS);
+    let known = |sc: &vk::SwapchainKHR| devs.iter().any(|x| x.1.scs.iter().any(|s| s.0 == *sc));
+    if scs.iter().any(|sc| !known(sc)) && !VK_NUDGED.swap(true, Relaxed) {
+        say!("shader: Vulkan, swapchain de antes da injeção; o jogo vai refazê-la");
+        return (None, true);
+    }
+    // A fila tem a chave do dispositivo dela; com um dispositivo só, ele mesmo.
+    let key = vk_key(q);
+    let one = devs.len() == 1;
+    let Some((_, x)) = devs.iter_mut().find(|x| x.0 == key || one) else { return (None, false) };
+    if x.errors >= MAX_ERRORS {
+        return (None, false);
+    }
+    let target = scs.iter().zip(idx).find_map(|(sc, i)| x.scs.iter().find(|s| s.0 == *sc && s.1.ok).and_then(|s| Some((s.1.images.get(*i as usize).copied()?, s.1.format, s.1.size))));
+    let waits = std::slice::from_raw_parts(info.p_wait_semaphores, info.wait_semaphore_count as usize);
+    match x.frame(s, q, target, waits) {
+        Ok(sem) => {
+            x.errors = 0;
+            (sem, false)
+        }
+        Err(e) => {
+            x.errors += 1;
+            say!("shader: {e}");
+            if x.errors >= MAX_ERRORS {
+                say!("shader: {MAX_ERRORS} erros seguidos, efeito desligado neste dispositivo");
+            }
+            (None, false)
+        }
+    }
+}
+
+struct Sc {
+    format: vk::Format,
+    size: (u32, u32),
+    images: Vec<vk::Image>,
+    /// Criada com a cópia liberada.
+    ok: bool,
+}
+
+/// Imagem nossa na memória da placa.
+struct VkImg {
+    size: (u32, u32),
+    format: vk::Format,
+    image: vk::Image,
+    mem: vk::DeviceMemory,
+}
+
+/// As faixas do meio para o detector, numa memória que a CPU lê.
+struct VkStrips {
+    size: (u32, u32),
+    s: u32,
+    buf: vk::Buffer,
+    mem: vk::DeviceMemory,
+    ptr: *const u32,
+    /// Copiadas no comando deste quadro em voo; lidas quando a cerca dele abrir.
+    pending: Option<usize>,
+}
+
+struct VkDev {
+    inst: ash::Instance,
+    pd: vk::PhysicalDevice,
+    dev: ash::Device,
+    mem: vk::PhysicalDeviceMemoryProperties,
+    t: Tracker,
+    chain: Option<ChainVk>,
+    defaults: HashMap<String, f32>,
+    /// Perfil com que a cadeia não abriu (não tentar de novo a cada quadro).
+    failed: Option<(u32, Option<std::time::SystemTime>)>,
+    polled: Instant,
+    seq: u32,
+    pool: vk::CommandPool,
+    slots: Vec<(vk::CommandBuffer, vk::Fence, vk::Semaphore)>,
+    slot: usize,
+    scs: Vec<(vk::SwapchainKHR, Sc)>,
+    input: Option<VkImg>,
+    small: Option<VkImg>,
+    strips: Option<VkStrips>,
+    detect: blocks::Detect,
+    frame: usize,
+    errors: u32,
+}
+
+// Os objetos Vulkan só são usados debaixo do `Mutex`.
+unsafe impl Send for VkDev {}
+
+impl Drop for VkDev {
+    fn drop(&mut self) {
+        unsafe {
+            self.wait();
+            self.chain = None;
+            for i in [self.input.take(), self.small.take()].into_iter().flatten() {
+                self.dev.destroy_image(i.image, None);
+                self.dev.free_memory(i.mem, None);
+            }
+            if let Some(st) = self.strips.take() {
+                self.dev.destroy_buffer(st.buf, None);
+                self.dev.free_memory(st.mem, None);
+            }
+            for (_, f, s) in self.slots.drain(..) {
+                self.dev.destroy_fence(f, None);
+                self.dev.destroy_semaphore(s, None);
+            }
+            self.dev.destroy_command_pool(self.pool, None);
+        }
+    }
+}
+
+impl VkDev {
+    unsafe fn new(inst: &ash::Instance, pd: vk::PhysicalDevice, d: vk::Device, s: &Shared) -> Res<Self> {
+        let t = Tracker::open(&s.path())?;
+        let gdpa = inst.fp_v1_0().get_device_proc_addr;
+        let dev = ash::Device::load_with(|n| gdpa(d, n.as_ptr()).map_or(std::ptr::null(), |f| f as *const c_void), d);
+        // shortcut: a fila de desenho é a primeira família com gráficos da placa; um jogo que apresenta por uma família só de apresentação não ganha efeito.
+        let fam = vk_graphics_family(inst, pd).ok_or("a placa não tem fila de gráficos")?;
+        let pool = dev.create_command_pool(&vk::CommandPoolCreateInfo::default().queue_family_index(fam).flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER), None)?;
+        let cmds = dev.allocate_command_buffers(&vk::CommandBufferAllocateInfo::default().command_pool(pool).command_buffer_count(VK_SLOTS as u32))?;
+        let mut slots = Vec::new();
+        for c in cmds {
+            let f = dev.create_fence(&vk::FenceCreateInfo::default().flags(vk::FenceCreateFlags::SIGNALED), None)?;
+            let sm = dev.create_semaphore(&vk::SemaphoreCreateInfo::default(), None)?;
+            slots.push((c, f, sm));
+        }
+        let props = inst.get_physical_device_properties(pd);
+        let name = std::ffi::CStr::from_ptr(props.device_name.as_ptr()).to_string_lossy().to_string();
+        let x = Self { inst: inst.clone(), pd, mem: inst.get_physical_device_memory_properties(pd), dev, t, chain: None, defaults: HashMap::new(), failed: None, polled: Instant::now(), seq: s.seq.load(Acquire), pool, slots, slot: 0, scs: Vec::new(), input: None, small: None, strips: None, detect: Default::default(), frame: 0, errors: 0 };
+        say!("shader: Vulkan pronto em {name}, perfil {}", x.t.path.display());
+        Ok(x)
+    }
+
+    /// Espera os nossos comandos em voo.
+    unsafe fn wait(&self) {
+        let f: Vec<vk::Fence> = self.slots.iter().map(|s| s.1).collect();
+        let _ = self.dev.wait_for_fences(&f, true, 1_000_000_000);
+    }
+
+    /// A cadeia usa a fila do jogo para subir as tabelas (LUT): só na linha que apresenta, que a tem agora.
+    unsafe fn build(&mut self, q: vk::Queue, s: &Shared) {
+        self.wait();
+        self.chain = None;
+        self.defaults.clear();
+        let paths = self.t.on_paths();
+        if paths.is_empty() {
+            return;
+        }
+        let t = Instant::now();
+        let opts = librashader::runtime::vk::FilterChainOptions { frames_in_flight: VK_SLOTS as u32, ..Default::default() };
+        match chain::join(&paths).and_then(|p| ChainVk::load_from_preset(p, (self.pd, self.inst.clone(), self.dev.clone(), q), Some(&opts)).map_err(Into::into)) {
+            Ok(c) => {
+                self.defaults = chain::defaults(&c);
+                chain::apply(&c, &self.defaults, &self.t.profile);
+                self.chain = Some(c);
+                say!("shader: cadeia Vulkan de {} preset(s) carregada em {} ms", paths.len(), t.elapsed().as_millis());
+            }
+            Err(e) => {
+                self.failed = Some(fail_key(s));
+                say!("shader: {e}");
+            }
+        }
+    }
+
+    unsafe fn image(&self, w: u32, h: u32, format: vk::Format, usage: vk::ImageUsageFlags) -> Res<VkImg> {
+        let ci = vk::ImageCreateInfo::default()
+            .image_type(vk::ImageType::TYPE_2D)
+            .format(format)
+            .extent(vk::Extent3D { width: w, height: h, depth: 1 })
+            .mip_levels(1)
+            .array_layers(1)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .tiling(vk::ImageTiling::OPTIMAL)
+            .usage(usage);
+        let image = self.dev.create_image(&ci, None)?;
+        let req = self.dev.get_image_memory_requirements(image);
+        let mem = self.alloc(req, vk::MemoryPropertyFlags::DEVICE_LOCAL).inspect_err(|_| self.dev.destroy_image(image, None))?;
+        self.dev.bind_image_memory(image, mem, 0)?;
+        Ok(VkImg { size: (w, h), format, image, mem })
+    }
+
+    unsafe fn alloc(&self, req: vk::MemoryRequirements, want: vk::MemoryPropertyFlags) -> Res<vk::DeviceMemory> {
+        let types = &self.mem.memory_types[..self.mem.memory_type_count as usize];
+        let i = types.iter().enumerate().position(|(i, t)| req.memory_type_bits & (1 << i) != 0 && t.property_flags.contains(want)).ok_or("sem memória para a imagem")?;
+        Ok(self.dev.allocate_memory(&vk::MemoryAllocateInfo::default().allocation_size(req.size).memory_type_index(i as u32), None)?)
+    }
+
+    /// Refaz `slot` quando o tamanho ou o formato mudam (depois de esperar os comandos que podem usar a antiga).
+    unsafe fn fit(&mut self, small: bool, w: u32, h: u32, format: vk::Format) -> Res<()> {
+        let cur = if small { &self.small } else { &self.input };
+        if cur.as_ref().is_some_and(|i| i.size == (w, h) && i.format == format) {
+            return Ok(());
+        }
+        self.wait();
+        let new = self.image(w, h, format, vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED)?;
+        let slot = if small { &mut self.small } else { &mut self.input };
+        if let Some(old) = slot.replace(new) {
+            self.dev.destroy_image(old.image, None);
+            self.dev.free_memory(old.mem, None);
+        }
+        Ok(())
+    }
+
+    unsafe fn barrier(&self, cmd: vk::CommandBuffer, image: vk::Image, from: (vk::ImageLayout, vk::AccessFlags, vk::PipelineStageFlags), to: (vk::ImageLayout, vk::AccessFlags, vk::PipelineStageFlags)) {
+        let range = vk::ImageSubresourceRange::default().aspect_mask(vk::ImageAspectFlags::COLOR).level_count(1).layer_count(1);
+        let b = vk::ImageMemoryBarrier::default()
+            .image(image)
+            .old_layout(from.0)
+            .src_access_mask(from.1)
+            .new_layout(to.0)
+            .dst_access_mask(to.1)
+            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .subresource_range(range);
+        self.dev.cmd_pipeline_barrier(cmd, from.2, to.2, vk::DependencyFlags::empty(), &[], &[], &[b]);
+    }
+
+    /// Com a fila do jogo, na linha que apresenta. Devolve o semáforo do fim da cadeia, se desenhou.
+    unsafe fn frame(&mut self, s: &Shared, q: vk::Queue, target: Option<(vk::Image, vk::Format, (u32, u32))>, waits: &[vk::Semaphore]) -> Res<Option<vk::Semaphore>> {
+        if self.polled.elapsed().as_millis() >= 250 {
+            self.polled = Instant::now();
+            let seq = s.seq.load(Acquire);
+            if seq != self.seq {
+                self.seq = seq;
+                self.t.switch(&s.path());
+                say!("shader: perfil {}", self.t.path.display());
+            }
+            let c = self.t.poll();
+            if c.input {
+                self.detect = Default::default();
+            }
+            if c.chain {
+                self.wait();
+                self.chain = None;
+                self.failed = None;
+            } else if let Some(ch) = self.chain.as_ref().filter(|_| c.params) {
+                chain::apply(ch, &self.defaults, &self.t.profile);
+            }
+        }
+        let p = &self.t.profile;
+        if !p.on || !p.inject || s.flags.load(Relaxed) & FLAG_COMPARE != 0 {
+            return Ok(None);
+        }
+        let Some((sc_img, format, (w, h))) = target else { return Ok(None) };
+        if self.chain.is_none() && self.failed != Some(fail_key(s)) {
+            self.build(q, s);
+        }
+        if self.chain.is_none() || w == 0 || h == 0 {
+            return Ok(None);
+        }
+        let (cmd, fence, sem) = self.slots[self.slot];
+        self.dev.wait_for_fences(&[fence], true, 1_000_000_000)?;
+        self.dev.reset_command_buffer(cmd, vk::CommandBufferResetFlags::empty())?;
+        // As faixas copiadas há alguns quadros: a cerca daquele quadro já abriu.
+        if let Some(st) = self.strips.as_mut().filter(|st| st.pending.is_some_and(|p| self.dev.get_fence_status(self.slots[p].1) == Ok(true))) {
+            st.pending = None;
+            let (sw, sh, n) = (st.size.0 as usize, st.size.1 as usize, st.s as usize);
+            let all = std::slice::from_raw_parts(st.ptr, sw * n + n * sh);
+            let (a, b): (Vec<u32>, Vec<u32>) = (all[..sw * n].iter().map(|p| p & 0xFF_FFFF).collect(), all[sw * n..].iter().map(|p| p & 0xFF_FFFF).collect());
+            self.detect.vote(blocks::detect(&a, sw, &b, sh, n));
+        }
+        self.dev.begin_command_buffer(cmd, &vk::CommandBufferBeginInfo::default().flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT))?;
+        let r = self.record(cmd, sc_img, format, w, h);
+        self.dev.end_command_buffer(cmd)?;
+        // Com erro nada vai para a fila: o jogo apresenta como entregou e a cerca continua aberta.
+        if let Err(e) = r {
+            if let Some(st) = self.strips.as_mut().filter(|st| st.pending == Some(self.slot)) {
+                st.pending = None;
+            }
+            return Err(e);
+        }
+        self.dev.reset_fences(&[fence])?;
+        let stages = vec![vk::PipelineStageFlags::ALL_COMMANDS; waits.len()];
+        let (cmds, sig) = ([cmd], [sem]);
+        let submit = vk::SubmitInfo::default().wait_semaphores(waits).wait_dst_stage_mask(&stages).command_buffers(&cmds).signal_semaphores(&sig);
+        self.dev.queue_submit(q, &[submit], fence)?;
+        self.slot = (self.slot + 1) % VK_SLOTS;
+        self.frame += 1;
+        s.drawn.fetch_add(1, Relaxed);
+        Ok(Some(sem))
+    }
+
+    unsafe fn record(&mut self, cmd: vk::CommandBuffer, sc_img: vk::Image, format: vk::Format, w: u32, h: u32) -> Res<()> {
+        use vk::{AccessFlags as A, ImageLayout as L, PipelineStageFlags as P};
+        let color = vk::ImageSubresourceLayers::default().aspect_mask(vk::ImageAspectFlags::COLOR).layer_count(1);
+        self.barrier(cmd, sc_img, (L::PRESENT_SRC_KHR, A::MEMORY_WRITE, P::ALL_COMMANDS), (L::TRANSFER_SRC_OPTIMAL, A::TRANSFER_READ, P::TRANSFER));
+        // `auto`: o detector de blocos com as faixas do meio (a swapchain já é de 8 bits).
+        if self.t.profile.input == "auto" {
+            self.copy_strips(cmd, sc_img, w, h)?;
+        }
+        let k = blocks::reduce_for(&self.t.profile.input, h, self.detect.found);
+        let size = k.map_or((w, h), |k| blocks::reduced_size(w, h, k));
+        if k.is_some() && self.small.as_ref().is_none_or(|i| i.size != size) {
+            say!("shader: entrada {w}x{h} → {}x{}", size.0, size.1);
+        }
+        self.fit(k.is_some(), size.0, size.1, format)?;
+        let dst = if k.is_some() { self.small.as_ref() } else { self.input.as_ref() }.unwrap().image;
+        self.barrier(cmd, dst, (L::UNDEFINED, A::SHADER_READ, P::FRAGMENT_SHADER), (L::TRANSFER_DST_OPTIMAL, A::TRANSFER_WRITE, P::TRANSFER));
+        match k {
+            // Um ponto do centro de cada bloco, como o PS_REDUCE.
+            Some(k) => {
+                let (x0, y0) = (k[2].round() as i32, k[3].round() as i32);
+                let (x1, y1) = (((k[2] + size.0 as f32 * k[0]).round() as i32).min(w as i32), ((k[3] + size.1 as f32 * k[1]).round() as i32).min(h as i32));
+                let region = vk::ImageBlit::default()
+                    .src_subresource(color)
+                    .src_offsets([vk::Offset3D { x: x0, y: y0, z: 0 }, vk::Offset3D { x: x1, y: y1, z: 1 }])
+                    .dst_subresource(color)
+                    .dst_offsets([vk::Offset3D::default(), vk::Offset3D { x: size.0 as i32, y: size.1 as i32, z: 1 }]);
+                self.dev.cmd_blit_image(cmd, sc_img, L::TRANSFER_SRC_OPTIMAL, dst, L::TRANSFER_DST_OPTIMAL, &[region], vk::Filter::NEAREST);
+            }
+            None => {
+                let region = vk::ImageCopy::default().src_subresource(color).dst_subresource(color).extent(vk::Extent3D { width: w, height: h, depth: 1 });
+                self.dev.cmd_copy_image(cmd, sc_img, L::TRANSFER_SRC_OPTIMAL, dst, L::TRANSFER_DST_OPTIMAL, &[region]);
+            }
+        }
+        self.barrier(cmd, dst, (L::TRANSFER_DST_OPTIMAL, A::TRANSFER_WRITE, P::TRANSFER), (L::SHADER_READ_ONLY_OPTIMAL, A::SHADER_READ, P::FRAGMENT_SHADER));
+        self.barrier(cmd, sc_img, (L::TRANSFER_SRC_OPTIMAL, A::TRANSFER_READ, P::TRANSFER), (L::COLOR_ATTACHMENT_OPTIMAL, A::COLOR_ATTACHMENT_WRITE, P::COLOR_ATTACHMENT_OUTPUT));
+        let input = ChainVkImage { image: dst, size: Size::new(size.0, size.1), format };
+        let out = ChainVkImage { image: sc_img, size: Size::new(w, h), format };
+        let vp = Viewport { x: 0.0, y: 0.0, mvp: None, output: out, size: Size::new(w, h) };
+        let r = self.chain.as_mut().unwrap().frame(&input, &vp, cmd, self.frame, None);
+        // O jogo recebe a imagem como entregou, mesmo quando a cadeia falha no meio.
+        self.barrier(cmd, sc_img, (L::COLOR_ATTACHMENT_OPTIMAL, A::COLOR_ATTACHMENT_WRITE, P::COLOR_ATTACHMENT_OUTPUT), (L::PRESENT_SRC_KHR, A::empty(), P::BOTTOM_OF_PIPE));
+        Ok(r?)
+    }
+
+    /// Faixa horizontal e vertical do meio para a memória que a CPU lê, no quadro em voo atual.
+    unsafe fn copy_strips(&mut self, cmd: vk::CommandBuffer, sc_img: vk::Image, w: u32, h: u32) -> Res<()> {
+        if self.strips.as_ref().is_none_or(|st| st.size != (w, h)) {
+            self.wait();
+            self.detect = Default::default();
+            if let Some(st) = self.strips.take() {
+                self.dev.destroy_buffer(st.buf, None);
+                self.dev.free_memory(st.mem, None);
+            }
+            let n = 32.min(w).min(h);
+            let bytes = 4 * (w * n + n * h) as u64;
+            let buf = self.dev.create_buffer(&vk::BufferCreateInfo::default().size(bytes).usage(vk::BufferUsageFlags::TRANSFER_DST), None)?;
+            let req = self.dev.get_buffer_memory_requirements(buf);
+            let mem = self.alloc(req, vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT).inspect_err(|_| self.dev.destroy_buffer(buf, None))?;
+            self.dev.bind_buffer_memory(buf, mem, 0)?;
+            let ptr = self.dev.map_memory(mem, 0, bytes, vk::MemoryMapFlags::empty())? as *const u32;
+            self.strips = Some(VkStrips { size: (w, h), s: n, buf, mem, ptr, pending: None });
+        }
+        let st = self.strips.as_mut().unwrap();
+        if st.pending.is_some() || !self.detect.due() {
+            return Ok(());
+        }
+        let n = st.s;
+        let color = vk::ImageSubresourceLayers::default().aspect_mask(vk::ImageAspectFlags::COLOR).layer_count(1);
+        let regions = [
+            vk::BufferImageCopy::default().image_subresource(color).image_offset(vk::Offset3D { x: 0, y: ((h - n) / 2) as i32, z: 0 }).image_extent(vk::Extent3D { width: w, height: n, depth: 1 }),
+            vk::BufferImageCopy::default().buffer_offset(4 * (w * n) as u64).image_subresource(color).image_offset(vk::Offset3D { x: ((w - n) / 2) as i32, y: 0, z: 0 }).image_extent(vk::Extent3D { width: n, height: h, depth: 1 }),
+        ];
+        self.dev.cmd_copy_image_to_buffer(cmd, sc_img, vk::ImageLayout::TRANSFER_SRC_OPTIMAL, st.buf, &regions);
+        let b = vk::BufferMemoryBarrier::default().buffer(st.buf).size(vk::WHOLE_SIZE).src_access_mask(vk::AccessFlags::TRANSFER_WRITE).dst_access_mask(vk::AccessFlags::HOST_READ).src_queue_family_index(vk::QUEUE_FAMILY_IGNORED).dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED);
+        self.dev.cmd_pipeline_barrier(cmd, vk::PipelineStageFlags::TRANSFER, vk::PipelineStageFlags::HOST, vk::DependencyFlags::empty(), &[], &[b], &[]);
+        st.pending = Some(self.slot);
+        Ok(())
+    }
+}
+
 // ---------- entrada ----------
 
 /// Log da DLL ao lado dos logs do motor: `shaders\logs\<perfil>-injecao.log`.
@@ -1326,9 +1905,11 @@ unsafe extern "system" fn start(_: *mut c_void) -> u32 {
     s.state.store(STATE_LOADED, SeqCst);
     s.magic.store(MAGIC, SeqCst);
     SHARED.store(view.Value as usize, SeqCst);
+    // Vulkan primeiro: na NVIDIA o Present dele passa por uma swapchain DXGI do driver, que o gancho DXGI deve ignorar.
+    let vk = install_vk();
     let (dxgi, d12, d9, gl) = (install_dxgi(), install_d12(), install_d9(), install_gl());
-    say!("shader: injeção no pid {}: DXGI {:?}, D3D12 {:?}, D3D9 {:?}, OpenGL {:?}", GetCurrentProcessId(), dxgi, d12, d9, gl);
-    s.state.store(if dxgi.is_ok() || d9.is_ok() || gl.is_ok() { STATE_READY } else { STATE_FAILED }, SeqCst);
+    say!("shader: injeção no pid {}: DXGI {:?}, D3D12 {:?}, D3D9 {:?}, OpenGL {:?}, Vulkan {:?}", GetCurrentProcessId(), dxgi, d12, d9, gl, vk);
+    s.state.store(if dxgi.is_ok() || d9.is_ok() || gl.is_ok() || vk.is_ok() { STATE_READY } else { STATE_FAILED }, SeqCst);
     0
 }
 
@@ -1395,6 +1976,78 @@ mod tests {
             on12.ReleaseWrappedResources(&res);
             ctx.Flush();
             sc.Present(0, DXGI_PRESENT(0)).ok().unwrap();
+        }
+    }
+
+    /// O Vulkan passa pelos desvios sem tropeçar: a swapchain nasce com as nossas flags de uso, apresenta e
+    /// some pelos trampolins (o desvio ligado antes do trampolim gravado derrubava o jogo).
+    #[test]
+    fn vulkan_pelos_desvios() {
+        unsafe {
+            let entry = ash::Entry::load().unwrap();
+            install_vk().unwrap();
+            let ext = [ash::khr::surface::NAME.as_ptr(), ash::khr::win32_surface::NAME.as_ptr()];
+            let app = vk::ApplicationInfo::default().api_version(vk::API_VERSION_1_1);
+            let inst = entry.create_instance(&vk::InstanceCreateInfo::default().application_info(&app).enabled_extension_names(&ext), None).unwrap();
+            let hinst: HINSTANCE = GetModuleHandleW(None).unwrap().into();
+            let class = w!("PrismaTesteVK");
+            RegisterClassW(&WNDCLASSW { lpfnWndProc: Some(wndproc), hInstance: hinst, lpszClassName: class, ..Default::default() });
+            let hwnd = CreateWindowExW(WINDOW_EX_STYLE(0), class, class, WS_OVERLAPPEDWINDOW, 0, 0, 160, 120, None, None, Some(hinst), None).unwrap();
+            let si = vk::Win32SurfaceCreateInfoKHR::default().hinstance(hinst.0 as isize).hwnd(hwnd.0 as isize);
+            let surface = ash::khr::win32_surface::Instance::new(&entry, &inst).create_win32_surface(&si, None).unwrap();
+            let sfn = ash::khr::surface::Instance::new(&entry, &inst);
+            let (pd, fam) = inst.enumerate_physical_devices().unwrap().into_iter().find_map(|pd| {
+                let fam = vk_graphics_family(&inst, pd)?;
+                sfn.get_physical_device_surface_support(pd, fam, surface).unwrap_or(false).then_some((pd, fam))
+            }).unwrap();
+            let prio = [1.0];
+            let qi = [vk::DeviceQueueCreateInfo::default().queue_family_index(fam).queue_priorities(&prio)];
+            let dext = [ash::khr::swapchain::NAME.as_ptr()];
+            let dev = inst.create_device(pd, &vk::DeviceCreateInfo::default().queue_create_infos(&qi).enabled_extension_names(&dext), None).unwrap();
+            let q = dev.get_device_queue(fam, 0);
+            let caps = sfn.get_physical_device_surface_capabilities(pd, surface).unwrap();
+            let format = sfn.get_physical_device_surface_formats(pd, surface).unwrap()[0];
+            let ci = vk::SwapchainCreateInfoKHR::default()
+                .surface(surface)
+                .min_image_count(caps.min_image_count.max(2))
+                .image_format(format.format)
+                .image_color_space(format.color_space)
+                .image_extent(caps.current_extent)
+                .image_array_layers(1)
+                .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
+                .pre_transform(caps.current_transform)
+                .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
+                .present_mode(vk::PresentModeKHR::FIFO);
+            let scfn = ash::khr::swapchain::Device::new(&inst, &dev);
+            let sc = scfn.create_swapchain(&ci, None).unwrap();
+            let fence = dev.create_fence(&vk::FenceCreateInfo::default(), None).unwrap();
+            for _ in 0..3 {
+                let (i, _) = scfn.acquire_next_image(sc, u64::MAX, vk::Semaphore::null(), fence).unwrap();
+                dev.wait_for_fences(&[fence], true, u64::MAX).unwrap();
+                dev.reset_fences(&[fence]).unwrap();
+                // A imagem sai de UNDEFINED para PRESENT_SRC pela fila, como num jogo que desenhou nela.
+                let pool = dev.create_command_pool(&vk::CommandPoolCreateInfo::default().queue_family_index(fam), None).unwrap();
+                let cmd = dev.allocate_command_buffers(&vk::CommandBufferAllocateInfo::default().command_pool(pool).command_buffer_count(1)).unwrap()[0];
+                dev.begin_command_buffer(cmd, &vk::CommandBufferBeginInfo::default()).unwrap();
+                let range = vk::ImageSubresourceRange::default().aspect_mask(vk::ImageAspectFlags::COLOR).level_count(1).layer_count(1);
+                let img = scfn.get_swapchain_images(sc).unwrap()[i as usize];
+                let b = vk::ImageMemoryBarrier::default().image(img).subresource_range(range).old_layout(vk::ImageLayout::UNDEFINED).new_layout(vk::ImageLayout::PRESENT_SRC_KHR);
+                dev.cmd_pipeline_barrier(cmd, vk::PipelineStageFlags::TOP_OF_PIPE, vk::PipelineStageFlags::BOTTOM_OF_PIPE, vk::DependencyFlags::empty(), &[], &[], &[b]);
+                dev.end_command_buffer(cmd).unwrap();
+                dev.queue_submit(q, &[vk::SubmitInfo::default().command_buffers(&[cmd])], fence).unwrap();
+                dev.wait_for_fences(&[fence], true, u64::MAX).unwrap();
+                dev.reset_fences(&[fence]).unwrap();
+                dev.destroy_command_pool(pool, None);
+                let (scs, idx) = ([sc], [i]);
+                scfn.queue_present(q, &vk::PresentInfoKHR::default().swapchains(&scs).image_indices(&idx)).unwrap();
+            }
+            dev.device_wait_idle().unwrap();
+            dev.destroy_fence(fence, None);
+            scfn.destroy_swapchain(sc, None);
+            dev.destroy_device(None);
+            sfn.destroy_surface(surface, None);
+            inst.destroy_instance(None);
+            let _ = DestroyWindow(hwnd);
         }
     }
 

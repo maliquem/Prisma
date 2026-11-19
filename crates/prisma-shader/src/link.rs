@@ -21,6 +21,7 @@ pub const API_D3D9: u32 = 2;
 pub const API_DX12: u32 = 3;
 pub const API_DX10: u32 = 4;
 pub const API_GL: u32 = 5;
+pub const API_VK: u32 = 6;
 
 #[repr(C)]
 pub struct Shared {
@@ -74,13 +75,14 @@ pub fn api_name(api: u32) -> &'static str {
         API_DX12 => "dx12",
         API_DX10 => "dx10",
         API_GL => "opengl",
+        API_VK => "vulkan",
         _ => "",
     }
 }
 
 /// O modo Injeção cobre estas (`api=` do perfil).
 pub fn api_supported(api: &str) -> bool {
-    matches!(api, "dx11" | "dx10" | "dx12" | "d3d9" | "opengl")
+    matches!(api, "dx11" | "dx10" | "dx12" | "d3d9" | "opengl" | "vulkan")
 }
 
 #[cfg(test)]

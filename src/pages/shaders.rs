@@ -781,11 +781,11 @@ fn left_card(ui: &mut Ui, app: &mut App, s: &mut St, r: Rect) {
     if !can {
         let inj = rect(ix + lw + Ui::segment_width(names) + 8.0, y, 120.0, 32.0);
         ui.button_ex("shd-inj", inj, "Injeção", false, false);
-        ui.tip(inj, if s.anti_cheat { "Bloqueado: este jogo tem anti-cheat" } else { "Não suportado neste jogo: a injeção cobre DX11 e DX9, em jogos de 64 bits" });
+        ui.tip(inj, if s.anti_cheat { "Bloqueado: este jogo tem anti-cheat" } else { "Não suportado neste jogo: a injeção cobre DX9 a 12, OpenGL e Vulkan" });
     }
     y += 36.0;
     let how = if can && p.inject {
-        "Dentro do jogo, na hora de mostrar o quadro: sem o quadro de atraso e sem janela por cima. DX11 e DX9, jogos de 64 bits."
+        "Dentro do jogo, na hora de mostrar o quadro: sem o quadro de atraso e sem janela por cima. DX9 a 12, OpenGL e Vulkan; HDR fica sem efeito."
     } else {
         "Janela por cima do jogo, capturando a imagem. DX9 a 12, Vulkan e OpenGL."
     };
