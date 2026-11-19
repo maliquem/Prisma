@@ -11,7 +11,8 @@ use windows::Win32::System::LibraryLoader::*;
 pub const FRAME_LIMIT: u32 = 0x1083_5002;
 pub const DLSS_PRESET: u32 = 0x10E4_1DF3;
 pub const DLSS_OVERRIDE: u32 = 0x10E4_1E01;
-/// Gerenciamento de energia: 1 é "Preferir desempenho máximo".
+/// Gerenciamento de energia: 1 é "Preferir desempenho máximo". Só para devolver a marca da 1.9.3
+/// (o driver lê o perfil quando o processo abre, então gravar com o Prisma aberto não valia).
 pub const PREFERRED_PSTATE: u32 = 0x1057_EB71;
 
 const NAME_BYTES: usize = 4096;
@@ -408,11 +409,6 @@ pub fn read(exe: &str, id: u32) -> Option<u32> {
     })
 }
 
-/// O que alguém gravou neste programa (`Some(None)`: nada; o que a NVIDIA deixou no perfil não
-/// conta). None: sem driver NVIDIA.
-pub fn own(exe: &str, id: u32) -> Option<Option<u32>> {
-    with_session(|a, s| unsafe { Some(game_profile(a, s, exe, false).and_then(|p| get_value(a, s, p, id, true)).filter(|v| v.mine).map(|v| v.now)) })
-}
 
 /// Tira o que o Prisma gravou no jogo. O perfil criado por ele sai junto se ficou vazio.
 pub fn forget(exe: &str) {

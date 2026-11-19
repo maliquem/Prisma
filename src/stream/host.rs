@@ -270,20 +270,38 @@ impl Drop for HdrOff {
     }
 }
 
-/// Opção GPU em desempenho máximo: o perfil deste .exe no driver NVIDIA fica em "Preferir
-/// desempenho máximo" enquanto alguém assiste. O valor de antes fica numa marca até voltar, para
-/// voltar mesmo se o Prisma cair (veja [`restore_hdr`]).
-struct GpuMax(Option<(String, Option<u32>)>);
+/// Opção GPU em desempenho máximo: enquanto alguém assiste, a NVML trava o clock da placa NVIDIA
+/// com o mínimo no clock base e o máximo livre (como `nvidia-smi -lgc tdp,unlimited`). Vale na hora,
+/// sem reabrir nada; precisa do serviço ou do Prisma como administrador. A marca guarda o processo,
+/// para destravar mesmo se o Prisma cair (veja [`restore_hdr`]).
+// shortcut: só a placa 0 da NVML, e um travamento feito antes por fora é desfeito no fim; ler o de antes se alguém usar os dois.
+struct GpuMax(bool);
 
-fn gpu_mark() -> std::path::PathBuf {
-    super::dir().join("gpu_maximo.txt")
+fn gpu_lock_mark() -> std::path::PathBuf {
+    super::dir().join("gpu_travada.txt")
 }
 
-/// A marca: o .exe, o valor de antes (`-`: nada gravado) e o processo que mudou, um por linha.
-fn gpu_mark_text(exe: &str, old: Option<u32>, pid: u32) -> String {
-    format!("{exe}\n{}\n{pid}\n", old.map_or("-".into(), |v| v.to_string()))
+/// O que dizer quando a NVML recusa (códigos de `nvmlReturn_t`).
+fn gpu_lock_note(code: i32) -> &'static str {
+    match code {
+        3 => "esta placa ou este driver não deixa travar o clock",
+        4 => "sem permissão: precisa do serviço ou do Prisma como administrador",
+        _ => "erro da NVML",
+    }
 }
 
+/// Destrava o clock da placa 0.
+fn gpu_unlock() -> bool {
+    crate::sys::nvml::Nvml::load().is_some_and(|nv| nv.reset_locked_clocks() == 0)
+}
+
+/// A marca é de outro processo que ainda está compartilhando (o serviço, com o Prisma aberto ao lado)?
+fn held_by_other(pid: Option<u32>) -> bool {
+    pid.is_some_and(|p| p != std::process::id() && crate::sys::procs::is_alive(p))
+}
+
+/// Marca da 1.9.3, que punha o perfil do .exe em "Preferir desempenho máximo" no DRS: o .exe, o
+/// valor de antes (`-`: nada gravado) e o processo, um por linha. Só para devolver depois de uma queda.
 fn gpu_mark_parse(s: &str) -> Option<(String, Option<u32>, Option<u32>)> {
     let mut l = s.lines().map(str::trim);
     let exe = l.next().filter(|e| !e.is_empty())?;
@@ -292,11 +310,6 @@ fn gpu_mark_parse(s: &str) -> Option<(String, Option<u32>, Option<u32>)> {
         v => Some(v.parse().ok()?),
     };
     Some((exe.to_string(), old, l.next().and_then(|p| p.parse().ok())))
-}
-
-/// A marca é de outro processo que ainda está compartilhando (o serviço, com o Prisma aberto ao lado)?
-fn held_by_other(pid: Option<u32>) -> bool {
-    pid.is_some_and(|p| p != std::process::id() && crate::sys::procs::is_alive(p))
 }
 
 /// Devolve o perfil do .exe ao valor de antes. Sem valor de antes, tira também o perfil vazio que o Prisma criou.
@@ -311,37 +324,38 @@ fn gpu_back(exe: &str, old: Option<u32>) -> bool {
 impl GpuMax {
     fn new() -> Self {
         if !Opts::load().gpu_max {
-            return GpuMax(None);
+            return GpuMax(false);
         }
-        let Some(exe) = std::env::current_exe().ok().and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_lowercase())) else { return GpuMax(None) };
-        let Some(old) = crate::sys::drs::own(&exe, crate::sys::drs::PREFERRED_PSTATE) else {
-            eprintln!("GPU em desempenho máximo: sem driver NVIDIA, a opção não faz nada aqui");
-            return GpuMax(None);
+        let Some(nv) = crate::sys::nvml::Nvml::load() else {
+            eprintln!("GPU em desempenho máximo: sem NVML (placa NVIDIA), a opção não faz nada aqui");
+            return GpuMax(false);
         };
-        if old == Some(1) {
-            return GpuMax(None);
+        if std::fs::create_dir_all(super::dir()).and_then(|_| std::fs::write(gpu_lock_mark(), format!("{}\n", std::process::id()))).is_err() {
+            eprintln!("GPU em desempenho máximo: não deu para gravar a marca de volta; o clock fica livre");
+            return GpuMax(false);
         }
-        if std::fs::create_dir_all(super::dir()).and_then(|_| std::fs::write(gpu_mark(), gpu_mark_text(&exe, old, std::process::id()))).is_err() {
-            eprintln!("GPU em desempenho máximo: não deu para gravar a marca de volta; o driver fica como está");
-            return GpuMax(None);
-        }
-        if crate::sys::drs::apply(&exe, &[(crate::sys::drs::PREFERRED_PSTATE, Some(1))]) {
-            eprintln!("GPU em desempenho máximo enquanto alguém assiste ({exe})");
-            GpuMax(Some((exe, old)))
-        } else {
-            let _ = std::fs::remove_file(gpu_mark());
-            eprintln!("GPU em desempenho máximo: o driver não aceitou (sem o serviço, precisa do Prisma como administrador)");
-            GpuMax(None)
+        match nv.lock_base_clock() {
+            0 => {
+                eprintln!("GPU em desempenho máximo: clock da {} travado no mínimo do clock base enquanto alguém assiste", nv.name);
+                GpuMax(true)
+            }
+            code => {
+                let _ = std::fs::remove_file(gpu_lock_mark());
+                eprintln!("GPU em desempenho máximo: a NVML recusou travar o clock (código {code}: {})", gpu_lock_note(code));
+                GpuMax(false)
+            }
         }
     }
 }
 
 impl Drop for GpuMax {
     fn drop(&mut self) {
-        if let Some((exe, old)) = &self.0 {
-            if gpu_back(exe, *old) {
-                eprintln!("GPU de volta ao gerenciamento de energia de antes");
-                let _ = std::fs::remove_file(gpu_mark());
+        if self.0 {
+            if gpu_unlock() {
+                eprintln!("GPU em desempenho máximo: clock destravado");
+                let _ = std::fs::remove_file(gpu_lock_mark());
+            } else {
+                eprintln!("GPU em desempenho máximo: a NVML não destravou o clock; tenta de novo na próxima abertura");
             }
         }
     }
@@ -460,6 +474,14 @@ pub fn emergency_key() {
 pub fn restore_hdr() {
     crate::sys::vdd::restore();
     // A GPU em desempenho máximo também volta; sem conseguir (sem permissão), a marca fica para o serviço.
+    for path in [super::user_dir().join("gpu_travada.txt"), super::service_dir().join("gpu_travada.txt")] {
+        let Ok(s) = std::fs::read_to_string(&path) else { continue };
+        if !held_by_other(s.trim().parse().ok()) && gpu_unlock() {
+            crate::config::log("compartilhar: clock da GPU destravado depois de uma sessão interrompida");
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+    // A marca da 1.9.3 (perfil do DRS).
     for path in [super::user_dir().join("gpu_maximo.txt"), super::service_dir().join("gpu_maximo.txt")] {
         let Some((exe, old, pid)) = std::fs::read_to_string(&path).ok().and_then(|s| gpu_mark_parse(&s)) else { continue };
         if !held_by_other(pid) && gpu_back(&exe, old) {
@@ -2302,8 +2324,10 @@ mod tests {
 
     #[test]
     fn gpu_mark_round_trip() {
-        assert_eq!(gpu_mark_parse(&gpu_mark_text("prisma.exe", Some(5), 42)), Some(("prisma.exe".into(), Some(5), Some(42))));
-        assert_eq!(gpu_mark_parse(&gpu_mark_text("prisma.exe", None, 42)), Some(("prisma.exe".into(), None, Some(42))));
+        assert_eq!(gpu_mark_parse("prisma.exe\n5\n42\n"), Some(("prisma.exe".into(), Some(5), Some(42))));
+        assert_eq!(gpu_mark_parse("prisma.exe\n-\n42\n"), Some(("prisma.exe".into(), None, Some(42))));
+        // A recusa da NVML diz o porquê no registro.
+        assert!(gpu_lock_note(4).contains("serviço") && gpu_lock_note(3).contains("não deixa"));
         // Marca de antes do processo: volta sempre.
         assert_eq!(gpu_mark_parse("prisma.exe\n-\n"), Some(("prisma.exe".into(), None, None)));
         assert!(!held_by_other(None) && !held_by_other(Some(std::process::id())));

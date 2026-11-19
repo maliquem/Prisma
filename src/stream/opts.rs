@@ -99,7 +99,7 @@ pub struct Opts {
     pub host_first: bool,
     /// Recusa conexões enquanto este PC assiste a outro.
     pub no_chain: bool,
-    /// Placa NVIDIA em "Preferir desempenho máximo" enquanto alguém assiste (vale para todos).
+    /// Clock da placa NVIDIA travado no mínimo do clock base enquanto alguém assiste (vale para todos).
     pub gpu_max: bool,
     /// Porta UDP fixa; 0 deixa o Windows escolher.
     pub port: u16,
