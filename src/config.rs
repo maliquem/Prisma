@@ -157,6 +157,8 @@ pub struct SndKey {
     pub key: Hotkey,
     pub output: String,
     pub input: String,
+    /// Perfil de equalizador da saída ("" não muda).
+    pub eq: String,
 }
 
 /// Atalho da página Atalhos: abre um programa, como administrador se `admin`.
@@ -772,9 +774,10 @@ impl Config {
                     }
                 }
                 "snd_key" => {
-                    let p: Vec<&str> = v.splitn(3, '|').collect();
-                    if p.len() == 3 {
-                        c.snd_keys.push(SndKey { key: Hotkey::parse(p[0]), output: p[1].into(), input: p[2].into() });
+                    // O perfil de EQ veio depois: linhas antigas têm só três partes.
+                    let p: Vec<&str> = v.splitn(4, '|').collect();
+                    if p.len() >= 3 {
+                        c.snd_keys.push(SndKey { key: Hotkey::parse(p[0]), output: p[1].into(), input: p[2].into(), eq: p.get(3).unwrap_or(&"").to_string() });
                     }
                 }
                 "run_key" => c.run_keys.extend(RunKey::parse(v)),
@@ -1059,7 +1062,7 @@ impl Config {
             let _ = writeln!(s, "eq_dev={guid}|{profile}");
         }
         for k in &self.snd_keys {
-            let _ = writeln!(s, "snd_key={},{}|{}|{}", k.key.mods, k.key.vk, k.output, k.input);
+            let _ = writeln!(s, "snd_key={},{}|{}|{}|{}", k.key.mods, k.key.vk, k.output, k.input, k.eq);
         }
         for k in &self.run_keys {
             let _ = writeln!(s, "run_key={}", k.line());

@@ -226,7 +226,7 @@ Controls the volume of each program. The keyboard volume keys, with a modifier (
 
 - **You can:** choose the output and input device of each program, and add programs by hand.
 - **Pin:** the pin next to the name keeps the program on the list even when closed, saving its volume, output and input. When it opens, it comes back at the saved volume.
-- **Default device shortcuts:** each shortcut switches the Windows default output and input at once, for example Ctrl + Alt + Num 1 for the TV and the headset. **Add** creates a shortcut; pick the output and input (or Do not change) and click the field to record the keys. The X deletes it.
+- **Default device shortcuts:** each shortcut switches the Windows default output and input at once, for example Ctrl + Alt + Num 1 for the TV and the headset. **Add** creates a shortcut; pick the output, the input and the output's EQ profile (each can stay on Do not change) and click the field to record the keys. The X deletes it.
 - **Keep the sound awake:** plays a stream with no audible sound, so HDMI and Dolby don't cut the start of the next sound. It stops on its own after 10 minutes without use.
 - **Limit:** switching devices uses an internal Windows feature, and some programs only switch on reopening.
 

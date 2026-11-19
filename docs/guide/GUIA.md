@@ -226,7 +226,7 @@ Controla o volume de cada programa. As teclas de volume do teclado, com um modif
 
 - **Dá para:** escolher o aparelho de saída e o de entrada de cada programa, e adicionar programas à mão.
 - **Fixar:** o alfinete ao lado do nome deixa o programa na lista mesmo fechado, guardando o volume, a saída e a entrada. Quando ele abre, volta com o volume guardado.
-- **Atalhos de aparelho padrão:** cada atalho troca a saída e a entrada padrão do Windows de uma vez, por exemplo Ctrl + Alt + Num 1 para a TV e o fone. **Adicionar** cria um atalho; escolha a saída e a entrada (ou Não mudar) e clique no campo para gravar as teclas. O X apaga.
+- **Atalhos de aparelho padrão:** cada atalho troca a saída e a entrada padrão do Windows de uma vez, por exemplo Ctrl + Alt + Num 1 para a TV e o fone. **Adicionar** cria um atalho; escolha a saída, a entrada e o perfil de EQ da saída (cada um pode ficar em Não mudar) e clique no campo para gravar as teclas. O X apaga.
 - **Manter o som acordado:** toca um fluxo sem som audível, para HDMI e Dolby não cortarem o começo do próximo som. Para sozinho depois de 10 minutos sem uso.
 - **Limite:** a troca de aparelho usa um recurso interno do Windows, e alguns programas só trocam ao reabrir.
 

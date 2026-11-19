@@ -71,6 +71,16 @@ pub fn job_done(app: &mut App, ok: bool) {
     app.toast.info(if ok { "Pronto: o som do Windows reiniciou com o equalizador" } else { "O equalizador não mudou (permissão recusada ou erro; veja eq\\instalar.log)" });
 }
 
+/// Liga o perfil `name` no aparelho `g`, como escolher na página (para os atalhos de aparelho).
+pub fn set_profile(app: &mut App, g: &str, name: &str) -> Result<(), String> {
+    let p = eq::load(g, name).ok_or_else(|| format!("perfil não encontrado: {name}"))?;
+    app.cfg.eq_devs.retain(|(d, _)| d != g);
+    app.cfg.eq_devs.push((g.to_string(), name.to_string()));
+    app.cfg.save();
+    app.eq.loaded = None; // a página lê de novo
+    eq::set_device(g, Some(&p))
+}
+
 fn guid(st: &State) -> String {
     eq::guid_of(&st.dev)
 }
