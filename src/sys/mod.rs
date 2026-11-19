@@ -26,6 +26,7 @@ pub mod gpuuse;
 pub mod kmt;
 pub mod mft;
 pub mod monitor;
+pub mod perf;
 pub mod nets;
 pub mod nvml;
 pub mod nav;

@@ -2742,3 +2742,53 @@ Abre o instalador da VB-Audio: clique em Remove Driver. O Windows pede permissã
 O VB-CABLE é da VB-Audio, donationware de terceiros: o uso pessoal é livre, com doação opcional, e o uso profissional ou em empresa pede licenças pagas na loja da VB-Audio. O Prisma vai baixar o pacote da página oficial (vb-audio.com), conferir a soma e abrir o instalador da VB-Audio, que pede permissão de administrador. Nele, clique em Install Driver; o PC pode pedir para reiniciar. Para desfazer: este cartão, Remover.	VB-CABLE is by VB-Audio, third-party donationware: personal use is free, with optional donation, and professional or business use requires paid licenses from the VB-Audio store. Prisma will download the package from the official page (vb-audio.com), verify the checksum and open the VB-Audio installer, which asks for administrator permission. In it, click Install Driver; the PC may ask to restart. To undo: this card, Remove.
 o arquivo baixado não confere com o pacote oficial	the downloaded file does not match the official package
 o pacote guardado sumiu	the saved package is gone
+Página Desempenho	Performance page
+Medir com a janela fechada	Measure with the window closed
+Uso total	Total usage
+thread mais cheia:	busiest thread:
+base	base
+pelo PawnIO	via PawnIO
+threads	threads
+handles	handles
+Uso total · 60 s	Total usage · 60 s
+Por thread (uso e clock)	Per thread (usage and clock)
+Modificada	Modified
+Em espera (cache)	Standby (cache)
+Livre	Free
+de	of
+em uso	in use
+Composição	Composition
+Em uso · 60 s	In use · 60 s
+slots	slots
+Comprometida	Committed
+Cache	Cache
+Pool paginado	Paged pool
+Pool não paginado	Non-paged pool
+Pentes	Modules
+Dedicada	Dedicated
+Compartilhada	Shared
+Programas usando	Programs using
+sai da RAM	comes from RAM
+maior:	top:
+Outros	Others
+Dedicada por programa	Dedicated per program
+Dedicada · 60 s	Dedicated · 60 s
+Limite de energia	Power limit
+Lentidão do hardware	Hardware slowdown
+Ociosa	Idle
+só na NVIDIA	NVIDIA only
+maior engine:	top engine:
+Clock do núcleo	Core clock
+Clock da memória	Memory clock
+máx.	max
+controlador	controller
+ventoinha	fan
+Consumo	Power draw
+limite	limit
+Limite do clock	Clock limit
+Programas por engine	Programs per engine
+Toque numa linha para abrir	Tap a row to open
+RAM em uso	RAM in use
+VRAM dedicada	Dedicated VRAM
+VRAM compartilhada	Shared VRAM
+Abrir no Medidor	Open in Meter

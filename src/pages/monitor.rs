@@ -92,6 +92,13 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         let vals: Vec<f32> = hist.iter().copied().collect();
         let hot = vals.last().copied().unwrap_or(0.0) >= 80.0;
         ui.c.sparkline(rect(r.x + 16.0, r.y + 76.0, r.w - 32.0, 32.0), &vals, if hot { WARN } else { ACCENT }, 1.5);
+        // Abre o Desempenho na seção do cartão (a ordem lá é GPU, CPU, RAM, VRAM).
+        if ui.hit(&format!("perf-{name}"), r) {
+            app.perf_tab = [1, 0, 2, 3][i];
+            app.page = Page::Performance;
+            app.refresh_page();
+            ui.s.needs_redraw = true;
+        }
     }
 
     let by = top + 130.0;
