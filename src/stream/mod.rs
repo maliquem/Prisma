@@ -343,6 +343,13 @@ pub enum Input {
     /// Mouse e teclado: o mouse saiu desta tela para a de outro PC. Quem recebe esconde o cursor
     /// até o mouse voltar ou o mouse de lá se mexer. Versões antigas ignoram.
     Away,
+    /// Teclado: o Caps Lock e o Num Lock de quem assiste. O host acerta os dele por eles; as
+    /// teclas em si não vão, senão os dois lados trocariam e podiam ficar diferentes.
+    Locks { caps: bool, num: bool },
+    /// Teclado: um atalho de quem assiste usou Ctrl, Alt e Shift, que já desceram no host. Ele
+    /// toca uma tecla sem uso antes de soltá-los, senão o Alt+Shift e o Ctrl+Shift trocam o
+    /// teclado dele (ABNT2, US-Internacional...).
+    Mask,
 }
 
 pub const INPUT_SIZE: usize = 8;
@@ -357,6 +364,8 @@ impl Input {
             Input::Wheel { delta, horizontal } => (3, horizontal as u8, delta as u16, 0),
             Input::Key { scan, extended, down } => (4, down as u8 | (extended as u8) << 1, scan, 0),
             Input::Away => (5, 0, 0, 0),
+            Input::Locks { caps, num } => (6, caps as u8 | (num as u8) << 1, 0, 0),
+            Input::Mask => (7, 0, 0, 0),
         };
         out.push(k);
         out.push(f);
@@ -373,6 +382,8 @@ impl Input {
             3 => Input::Wheel { delta: a as i16, horizontal: f & 1 != 0 },
             4 => Input::Key { scan: a, extended: f & 2 != 0, down: f & 1 != 0 },
             5 => Input::Away,
+            6 => Input::Locks { caps: f & 1 != 0, num: f & 2 != 0 },
+            7 => Input::Mask,
             _ => return None,
         })
     }
@@ -917,6 +928,8 @@ mod tests {
             Input::Wheel { delta: -120, horizontal: true },
             Input::Key { scan: 0x1D, extended: true, down: false },
             Input::Away,
+            Input::Locks { caps: false, num: true },
+            Input::Mask,
         ];
         let mut b = Vec::new();
         write_input(&mut b, 41, &evs);

@@ -894,7 +894,7 @@ impl Injector {
     fn one(&mut self, e: Input) -> Option<INPUT> {
         let allowed = match e {
             Input::Away => return None,
-            Input::Key { .. } => self.perms & KEYBOARD != 0,
+            Input::Key { .. } | Input::Locks { .. } | Input::Mask => self.perms & KEYBOARD != 0,
             _ => self.perms & MOUSE != 0,
         };
         if !allowed {
@@ -929,8 +929,16 @@ impl Injector {
                 }
                 Self::key(scan, extended, down)
             }
-            Input::Away => return None,
+            Input::Away | Input::Locks { .. } | Input::Mask => return None,
         })
+    }
+
+    /// Toca uma tecla pelo código virtual (desce e sobe).
+    fn tap(vk: VIRTUAL_KEY) -> [INPUT; 2] {
+        // O Num Lock só troca com a marca de tecla estendida.
+        let ext = if vk == VK_NUMLOCK { KEYEVENTF_EXTENDEDKEY } else { KEYBD_EVENT_FLAGS(0) };
+        let k = |up: KEYBD_EVENT_FLAGS| INPUT { r#type: INPUT_KEYBOARD, Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: vk, wScan: 0, dwFlags: ext | up, time: 0, dwExtraInfo: 0 } } };
+        [k(KEYBD_EVENT_FLAGS(0)), k(KEYEVENTF_KEYUP)]
     }
 
     /// O mouse está em cima da janela compartilhada (ou de um menu dela)? Sem janela, sempre.
@@ -984,7 +992,11 @@ impl Injector {
                 continue;
             }
             if let Some(e) = Input::get(chunk) {
-                if let Some(inp) = self.one(e) {
+                if matches!(e, Input::Locks { .. } | Input::Mask) && self.perms & KEYBOARD != 0 {
+                    // O mesmo GetKeyState do Console.CapsLock do .NET: vale fora da janela da frente.
+                    let now = unsafe { (GetKeyState(VK_CAPITAL.0 as i32) & 1 != 0, GetKeyState(VK_NUMLOCK.0 as i32) & 1 != 0) };
+                    list.extend(keyboard_taps(e, now).into_iter().flat_map(Self::tap));
+                } else if let Some(inp) = self.one(e) {
                     list.push(inp);
                 }
             }
@@ -1010,6 +1022,17 @@ impl Injector {
                 SendInput(&list, std::mem::size_of::<INPUT>() as i32);
             }
         }
+    }
+}
+
+/// Teclas que o host toca por um pedido de teclado de quem assiste: as travas que estão diferentes
+/// das dele (`now`: Caps e Num Lock daqui) ou, no atalho, uma sem uso (0xE8, como no AutoHotkey),
+/// para o Windows não ver Alt+Shift nem Ctrl+Shift sozinhos ao soltar.
+fn keyboard_taps(e: Input, now: (bool, bool)) -> Vec<VIRTUAL_KEY> {
+    match e {
+        Input::Locks { caps, num } => [(caps != now.0, VK_CAPITAL), (num != now.1, VK_NUMLOCK)].into_iter().filter(|x| x.0).map(|x| x.1).collect(),
+        Input::Mask => vec![VIRTUAL_KEY(0xE8)],
+        _ => Vec::new(),
     }
 }
 
@@ -2188,6 +2211,16 @@ mod tests {
         fn same_pc(&self) -> bool {
             self.local
         }
+    }
+
+    #[test]
+    fn keyboard_taps_fix_locks_and_mask_shortcuts() {
+        // Só a trava diferente troca; iguais, nada.
+        assert_eq!(keyboard_taps(Input::Locks { caps: false, num: true }, (true, true)), vec![VK_CAPITAL]);
+        assert_eq!(keyboard_taps(Input::Locks { caps: true, num: false }, (false, true)), vec![VK_CAPITAL, VK_NUMLOCK]);
+        assert!(keyboard_taps(Input::Locks { caps: true, num: true }, (true, true)).is_empty());
+        assert_eq!(keyboard_taps(Input::Mask, (false, false)), vec![VIRTUAL_KEY(0xE8)]);
+        assert!(keyboard_taps(Input::Key { scan: 0x2A, extended: false, down: true }, (false, false)).is_empty());
     }
 
     #[test]

@@ -588,11 +588,14 @@ unsafe extern "system" fn immersive_hook(code: i32, w: WPARAM, l: LPARAM) -> LRE
         if mine && k.flags.0 & LLKHF_INJECTED.0 == 0 {
             if let Ok(mut keys) = KEYS.try_lock() {
                 let (scan, extended) = (k.scanCode as u16, k.flags.0 & LLKHF_EXTENDED.0 != 0);
-                // Ctrl, Alt e Shift seguem pela janela, que confere os atalhos dela com eles.
-                let modifier = matches!(vk, VK_CONTROL | VK_LCONTROL | VK_RCONTROL | VK_MENU | VK_LMENU | VK_RMENU | VK_SHIFT | VK_LSHIFT | VK_RSHIFT);
+                // Ctrl, Alt e Shift (descer e subir) seguem pela janela, que confere os atalhos dela
+                // com eles: engolir a subida aqui deixava este PC achando que continuavam apertados,
+                // e os atalhos daqui iam para o host. As travas também, para trocarem aqui.
+                let passes = matches!(vk, VK_CONTROL | VK_LCONTROL | VK_RCONTROL | VK_MENU | VK_LMENU | VK_RMENU | VK_SHIFT | VK_LSHIFT | VK_RSHIFT | VK_CAPITAL | VK_NUMLOCK);
                 // A tecla que desceu para o host sobe para ele, mesmo se um modificador mudou no meio.
                 let all = keys.immersive & 4 != 0
-                    && (keys.held.contains(&(scan, extended)) || !modifier && !own_key(&keys, (opts::mods_now(ctrl, alt, GetAsyncKeyState(VK_SHIFT.0 as i32) < 0), vk.0 as u32), scan, extended));
+                    && !passes
+                    && (keys.held.contains(&(scan, extended)) || !own_key(&keys, (opts::mods_now(ctrl, alt, GetAsyncKeyState(VK_SHIFT.0 as i32) < 0), vk.0 as u32), scan, extended));
                 if keys.keyboard && ((grab && keys.immersive & 2 != 0) || all) {
                     let down = !matches!(w.0 as u32, WM_KEYUP | WM_SYSKEYUP);
                     if down {
@@ -631,31 +634,43 @@ unsafe fn key_event(h: HWND, k: &mut Keys, m: u32, w: WPARAM, l: LPARAM) -> bool
     let alt = GetKeyState(VK_MENU.0 as i32) < 0;
     let shift = GetKeyState(VK_SHIFT.0 as i32) < 0;
     let combo = (opts::mods_now(ctrl, alt, shift), w.0 as u32);
+    // Só a primeira descida: segurar o atalho não repete (nem reabre o menu que ele fechou).
+    let fire = down && l.0 & (1 << 30) == 0;
     if combo == k.key_full {
-        if down {
+        if fire {
             toggle_full(h);
+            shortcut_used(k);
         }
         return true;
     }
     if combo == k.key_menu {
-        // Segurar o atalho não reabre o menu que ele acabou de fechar.
-        if down && l.0 & (1 << 30) == 0 {
+        if fire {
             k.menu = true;
+            shortcut_used(k);
         }
         return true;
     }
     // Os atalhos de quem assiste ficam aqui e não vão para o host.
     for (keys, act) in [(k.key_disc, hud::Pick::Disconnect), (k.key_imm, hud::Pick::ImmersiveToggle), (k.key_meter, hud::Pick::MeterCycle), (k.key_sound, hud::Pick::Sound)] {
         if keys.1 != 0 && combo == keys {
-            if down && l.0 & (1 << 30) == 0 {
+            if fire {
                 k.acts.push(act);
+                shortcut_used(k);
             }
             return true;
         }
     }
     if k.keyboard && combo == k.key_cad {
-        if down {
+        if fire {
             k.sas = true;
+            shortcut_used(k);
+        }
+        return true;
+    }
+    // Caps e Num Lock trocam aqui; o host acerta os dele pelo estado (a tecla não vai).
+    if k.keyboard && matches!(VIRTUAL_KEY(w.0 as u16), VK_CAPITAL | VK_NUMLOCK) {
+        if !down {
+            k.pending.push(locks_now());
         }
         return true;
     }
@@ -680,6 +695,21 @@ unsafe fn key_event(h: HWND, k: &mut Keys, m: u32, w: WPARAM, l: LPARAM) -> bool
     }
     k.pending.push(Input::Key { scan, extended, down });
     true
+}
+
+/// Um atalho daqui disparou com Ctrl, Alt e Shift já apertados no host: uma tecla sem uso antes de
+/// soltá-los, senão o Alt+Shift e o Ctrl+Shift trocam o teclado de lá (e o Shift ficava preso).
+fn shortcut_used(k: &mut Keys) {
+    if !k.held.is_empty() {
+        k.pending.push(Input::Mask);
+    }
+    release_all(k);
+}
+
+/// O Caps Lock e o Num Lock deste PC, para o host acertar os dele.
+fn locks_now() -> Input {
+    let on = |vk: VIRTUAL_KEY| unsafe { GetKeyState(vk.0 as i32) } & 1 != 0;
+    Input::Locks { caps: on(VK_CAPITAL), num: on(VK_NUMLOCK) }
 }
 
 /// Solta no host tudo que está apertado aqui, quando a janela perde o foco.
@@ -927,6 +957,11 @@ unsafe extern "system" fn wndproc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRES
         }
         WM_KILLFOCUS => {
             release_all(&mut KEYS.lock().unwrap());
+            DefWindowProcW(h, m, w, l)
+        }
+        // As travas podem ter mudado com a janela atrás.
+        WM_SETFOCUS => {
+            KEYS.lock().unwrap().pending.push(locks_now());
             DefWindowProcW(h, m, w, l)
         }
         // O cursor do host já vem na imagem: o daqui some em cima dela.
@@ -1597,7 +1632,12 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                     host_priority = priority;
                     {
                         let mut k = KEYS.lock().unwrap();
-                        k.keyboard = perms & KEYBOARD != 0;
+                        let kb = perms & KEYBOARD != 0;
+                        // Com o teclado liberado, o host acerta as travas pelas daqui.
+                        if kb && !k.keyboard {
+                            k.pending.push(locks_now());
+                        }
+                        k.keyboard = kb;
                         k.mouse = perms & MOUSE != 0;
                         k.pad_keys = perms & PAD != 0 && sh.pad_keys.load(Ordering::Relaxed);
                         k.video = (w, h);
