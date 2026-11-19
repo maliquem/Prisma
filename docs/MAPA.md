@@ -402,6 +402,7 @@ A barra lateral é `NAV` (`src/pages/mod.rs:324`), em cinco grupos (`GROUPS` `:3
 | Revisão de jogo | Página | `pages/hdr.rs:252` `review_card` | |
 | Ligar HDR ao abrir um jogo | Automático | `sys/autohdr.rs:13` `apply`; `:25` `clear_all`; `:32` `global_on` | Teste: `--test-autohdr=` (`app.rs:800`). |
 | Restaurar HDR se a sessão de compartilhamento caiu | Automático | `stream/host.rs` `restore_hdr` (chamada em `main.rs`) | |
+| GPU em desempenho máximo enquanto compartilha | Caixa na aba Host (só nas de todos) | `pages/share.rs:1242` (`sh-gpumax`); `stream/host.rs:276` `GpuMax` (criada em `serve`, desfeita no `Drop`), `:283` `gpu_mark_text`, `:289` `gpu_mark_parse`, `:300` `gpu_back`; volta depois de queda em `:456` `restore_hdr`; `sys/drs.rs:15` `PREFERRED_PSTATE`, `:413` `own` | Opção `gpu_maximo` (`Opts::gpu_max`, `stream/opts.rs:103`), fora de `PER_CLIENT`. Marca `gpu_maximo.txt` na pasta do compartilhamento com o .exe e o valor de antes. Só NVIDIA. Teste: `gpu_mark_round_trip` `host.rs:2255`. |
 | Formatos e cores | Automático | `sys/hdr.rs:189` `parse`; `:255` `to_xyz`; `:268` `saturation_matrix` | `sys/hdr.rs` não tem `#[test]`. |
 
 ### 4.16 Driver NVIDIA (`src/pages/nvidia.rs`, `draw` linha 156)

@@ -99,6 +99,8 @@ pub struct Opts {
     pub host_first: bool,
     /// Recusa conexões enquanto este PC assiste a outro.
     pub no_chain: bool,
+    /// Placa NVIDIA em "Preferir desempenho máximo" enquanto alguém assiste (vale para todos).
+    pub gpu_max: bool,
     /// Porta UDP fixa; 0 deixa o Windows escolher.
     pub port: u16,
     /// Pede ao roteador para abrir a porta (UPnP, NAT-PMP, PCP).
@@ -160,6 +162,7 @@ impl Default for Opts {
             one_at_a_time: true,
             host_first: true,
             no_chain: true,
+            gpu_max: false,
             port: 0,
             upnp: true,
             key_panic: (MOD_CTRL | MOD_ALT | MOD_SHIFT, b'Q' as u32),
@@ -205,6 +208,7 @@ impl Opts {
                 "um_por_vez" => o.one_at_a_time = flag(v),
                 "host_primeiro" => o.host_first = flag(v),
                 "sem_cadeia" => o.no_chain = flag(v),
+                "gpu_maximo" => o.gpu_max = flag(v),
                 "porta" => o.port = v.parse().unwrap_or(0),
                 "upnp" => o.upnp = flag(v),
                 "atalho_emergencia" => o.key_panic = keys_parse(v, o.key_panic),
@@ -223,7 +227,7 @@ impl Opts {
         format!(
             "hdr_desligar={}\npessoas={}\ncontroles={}\nconvite={}\nnome={}\nresolucao={}\nquadros={}\nbanda={}\ncodec={}\nprioridade={}\n\
 dez_bits={}\npermitir_444={}\nmonitor={}\nsom_programa={}\nsem_chamadas={}\num_por_vez={}\nhost_primeiro={}\n\
-sem_cadeia={}\nporta={}\njanela={}:{}\nupnp={}\natalho_emergencia={}\ngpu={}\nsom_saida={}\nsom_entrada={}\nconvite_minutos={}\n",
+sem_cadeia={}\nporta={}\njanela={}:{}\nupnp={}\natalho_emergencia={}\ngpu={}\nsom_saida={}\nsom_entrada={}\nconvite_minutos={}\ngpu_maximo={}\n",
             b(self.hdr_off),
             self.guests,
             self.pads,
@@ -251,6 +255,7 @@ sem_cadeia={}\nporta={}\njanela={}:{}\nupnp={}\natalho_emergencia={}\ngpu={}\nso
             self.sound_out,
             self.sound_in,
             self.invite_min,
+            b(self.gpu_max),
         )
     }
 
@@ -558,6 +563,7 @@ mod tests {
             one_at_a_time: false,
             host_first: false,
             no_chain: false,
+            gpu_max: true,
             port: 47610,
             upnp: false,
             key_panic: (MOD_CTRL, b'K' as u32),

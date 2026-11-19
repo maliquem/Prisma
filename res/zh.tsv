@@ -1448,6 +1448,8 @@ Tirar do som o programa de chamada	声音中排除通话应用
 Uma pessoa por vez no mouse e no teclado	鼠标和键盘一次一人
 O mouse e o teclado deste PC têm prioridade	此电脑的鼠标和键盘优先
 Recusar conexões enquanto este PC assiste a outro	此电脑正在观看其他电脑时拒绝连接
+GPU em desempenho máximo enquanto compartilha	共享时 GPU 以最高性能运行
+GPU em desempenho máximo enquanto compartilha (sem efeito: só placas NVIDIA)	共享时 GPU 以最高性能运行（无效：仅限 NVIDIA 显卡）
 Com prioridade, quem assiste para por 1 segundo sempre que alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. Programas de chamada: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack e Signal. O Windows só deixa tirar um: sai do som o que estiver tocando, e a escolha muda durante a conexão. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante. Num notebook com duas placas, a outra placa codifica com uma cópia a mais da imagem.	开启优先时，每当这里有人移动鼠标或打字，观看方会暂停 1 秒。一次一人：2 秒无输入后轮换。通话应用：Discord、Teams、Zoom、WhatsApp、Skype、Telegram、Slack 和 Signal。Windows 只允许排除一个：正在发声的那个会被排除在声音之外，并且在连接期间会随之改变。更改会立即生效；画面相关的更改会让视频短暂重新开始。在有两块显卡的笔记本上，另一块显卡编码时会多复制一次画面。
 Janela de quem assiste	观看窗口
 Abrir em tela cheia sem borda	以无边框全屏打开
@@ -1872,7 +1874,7 @@ Configuração própria para este aparelho	此设备使用单独设置
 Saída capturada	捕获的输出
 Entrada junto	混入输入
 Configuração própria: vale quando este aparelho conecta. Com mais de uma pessoa ao mesmo tempo, vale a de quem conectou primeiro. Nome, pessoas, rede, controles e atalhos são os de todos.	单独设置：此设备连接时生效。多人同时连接时，以最先连接者的设置为准。名称、人数、网络、手柄和快捷键对所有设备通用。
-Com prioridade, quem assiste para por 1 segundo quando alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. O Windows só deixa tirar um programa de chamada (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), e só da saída padrão: sai o que estiver tocando. Uma saída escolhida manda o que toca nela. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante.	开启优先时，每当这里有人移动鼠标或打字，观看方会暂停 1 秒。一次一人：2 秒无输入后轮换。Windows 只允许排除一个通话应用（Discord、Teams、Zoom、WhatsApp、Skype、Telegram、Slack、Signal），且仅限默认输出：正在发声的那个会被排除。选定的输出会发送其中播放的内容。更改会立即生效；画面相关的更改会让视频短暂重新开始。
+Com prioridade, quem assiste para por 1 segundo quando alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. O Windows só deixa tirar um programa de chamada (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), e só da saída padrão: sai o que estiver tocando. Uma saída escolhida manda o que toca nela. GPU em desempenho máximo: o driver NVIDIA deixa o Prisma em "Preferir desempenho máximo" enquanto alguém assiste e volta ao de antes no fim. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante.	开启优先时，每当这里有人移动鼠标或打字，观看方会暂停 1 秒。一次一人：2 秒无输入后轮换。Windows 只允许排除一个通话应用（Discord、Teams、Zoom、WhatsApp、Skype、Telegram、Slack、Signal），且仅限默认输出：正在发声的那个会被排除。选定的输出会发送其中播放的内容。GPU 最高性能：有人观看期间，NVIDIA 驱动会将 Prisma 设为“首选最高性能”，结束后恢复原设置。更改会立即生效；画面相关的更改会让视频短暂重新开始。
 A padrão do Windows	Windows 默认
 Desligada agora	当前已关闭
 Nenhuma	无

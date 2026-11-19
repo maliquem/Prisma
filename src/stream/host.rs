@@ -270,6 +270,80 @@ impl Drop for HdrOff {
     }
 }
 
+/// Opção GPU em desempenho máximo: o perfil deste .exe no driver NVIDIA fica em "Preferir
+/// desempenho máximo" enquanto alguém assiste. O valor de antes fica numa marca até voltar, para
+/// voltar mesmo se o Prisma cair (veja [`restore_hdr`]).
+struct GpuMax(Option<(String, Option<u32>)>);
+
+fn gpu_mark() -> std::path::PathBuf {
+    super::dir().join("gpu_maximo.txt")
+}
+
+/// A marca: o .exe na primeira linha e o valor de antes na segunda (`-`: nada gravado).
+fn gpu_mark_text(exe: &str, old: Option<u32>) -> String {
+    format!("{exe}
+{}
+", old.map_or("-".into(), |v| v.to_string()))
+}
+
+fn gpu_mark_parse(s: &str) -> Option<(String, Option<u32>)> {
+    let mut l = s.lines().map(str::trim);
+    let exe = l.next().filter(|e| !e.is_empty())?;
+    let old = match l.next()? {
+        "-" => None,
+        v => Some(v.parse().ok()?),
+    };
+    Some((exe.to_string(), old))
+}
+
+/// Devolve o perfil do .exe ao valor de antes. Sem valor de antes, tira também o perfil vazio que o Prisma criou.
+fn gpu_back(exe: &str, old: Option<u32>) -> bool {
+    let ok = crate::sys::drs::apply(exe, &[(crate::sys::drs::PREFERRED_PSTATE, old)]);
+    if ok && old.is_none() {
+        crate::sys::drs::forget(exe);
+    }
+    ok
+}
+
+impl GpuMax {
+    fn new() -> Self {
+        if !Opts::load().gpu_max {
+            return GpuMax(None);
+        }
+        let Some(exe) = std::env::current_exe().ok().and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_lowercase())) else { return GpuMax(None) };
+        let Some(old) = crate::sys::drs::own(&exe, crate::sys::drs::PREFERRED_PSTATE) else {
+            eprintln!("GPU em desempenho máximo: sem driver NVIDIA, a opção não faz nada aqui");
+            return GpuMax(None);
+        };
+        if old == Some(1) {
+            return GpuMax(None);
+        }
+        if std::fs::create_dir_all(super::dir()).and_then(|_| std::fs::write(gpu_mark(), gpu_mark_text(&exe, old))).is_err() {
+            eprintln!("GPU em desempenho máximo: não deu para gravar a marca de volta; o driver fica como está");
+            return GpuMax(None);
+        }
+        if crate::sys::drs::apply(&exe, &[(crate::sys::drs::PREFERRED_PSTATE, Some(1))]) {
+            eprintln!("GPU em desempenho máximo enquanto alguém assiste ({exe})");
+            GpuMax(Some((exe, old)))
+        } else {
+            let _ = std::fs::remove_file(gpu_mark());
+            eprintln!("GPU em desempenho máximo: o driver não aceitou (sem o serviço, precisa do Prisma como administrador)");
+            GpuMax(None)
+        }
+    }
+}
+
+impl Drop for GpuMax {
+    fn drop(&mut self) {
+        if let Some((exe, old)) = &self.0 {
+            if gpu_back(exe, *old) {
+                eprintln!("GPU de volta ao gerenciamento de energia de antes");
+                let _ = std::fs::remove_file(gpu_mark());
+            }
+        }
+    }
+}
+
 /// Quem está conectado agora, para a página Compartilhar tela (vazio: ninguém). Uma pessoa por
 /// linha: chave (id do aparelho), permissões, caminho e nome, separados por tabulação.
 pub fn room_path() -> std::path::PathBuf {
@@ -381,6 +455,14 @@ pub fn emergency_key() {
 /// No início do Prisma: se uma sessão caiu com o HDR desligado, liga de volta.
 pub fn restore_hdr() {
     crate::sys::vdd::restore();
+    // A GPU em desempenho máximo também volta; sem conseguir (sem permissão), a marca fica para o serviço.
+    for path in [super::user_dir().join("gpu_maximo.txt"), super::service_dir().join("gpu_maximo.txt")] {
+        let Some((exe, old)) = std::fs::read_to_string(&path).ok().and_then(|s| gpu_mark_parse(&s)) else { continue };
+        if gpu_back(&exe, old) {
+            crate::config::log("compartilhar: GPU de volta ao gerenciamento de energia de antes, depois de uma sessão interrompida");
+            let _ = std::fs::remove_file(&path);
+        }
+    }
     for path in [super::user_dir().join("hdr_desligado.txt"), super::service_dir().join("hdr_desligado.txt")] {
         let Ok(s) = std::fs::read_to_string(&path) else { continue };
         let v: Vec<i64> = s.split_whitespace().filter_map(|x| x.parse().ok()).collect();
@@ -399,6 +481,7 @@ pub fn restore_hdr() {
 pub(super) fn serve(d: &D3d, first: Joiner, joins: Option<&mpsc::Receiver<Joiner>>) -> Option<(Hello, SocketAddr)> {
     *LEAD.lock().unwrap() = first.id.clone();
     let _hdr = HdrOff::new(&first.hello);
+    let _gpu = GpuMax::new();
     let h = &first.hello;
     let _virtual = crate::sys::vdd::Virtual::for_monitor(room_opts().monitor, h.w, h.h, h.hz, h.flags & SEES_HDR != 0);
     let mut room = Room { guests: vec![Guest::new(first)], bridge: None, bridge_err: None, anti_cheat: false, checked: Instant::now() - Duration::from_secs(10), clip: None, clip_id: 0, frame_id: 0, wave_failed: false };
@@ -2167,6 +2250,20 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gpu_mark_round_trip() {
+        assert_eq!(gpu_mark_parse(&gpu_mark_text("prisma.exe", Some(5))), Some(("prisma.exe".into(), Some(5))));
+        assert_eq!(gpu_mark_parse(&gpu_mark_text("prisma.exe", None)), Some(("prisma.exe".into(), None)));
+        // Marca quebrada não mexe no driver.
+        assert_eq!(gpu_mark_parse("prisma.exe
+x
+"), None);
+        assert_eq!(gpu_mark_parse("
+-
+"), None);
+        assert_eq!(gpu_mark_parse("prisma.exe"), None);
+    }
 
     #[test]
     fn feeds_on_the_capture_rhythm_and_repeats_only_when_constant() {
