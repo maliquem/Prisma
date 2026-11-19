@@ -73,6 +73,12 @@ pub fn job_done(app: &mut App, ok: bool) {
 
 /// Liga o perfil `name` no aparelho `g`, como escolher na página (para os atalhos de aparelho).
 pub fn set_profile(app: &mut App, g: &str, name: &str) -> Result<(), String> {
+    // Edição da página ainda por gravar: grava antes de ler o perfil de novo.
+    let mut st = std::mem::take(&mut app.eq);
+    if st.save_at.is_some() {
+        flush(&mut st, app);
+    }
+    app.eq = st;
     let p = eq::load(g, name).ok_or_else(|| format!("perfil não encontrado: {name}"))?;
     app.cfg.eq_devs.retain(|(d, _)| d != g);
     app.cfg.eq_devs.push((g.to_string(), name.to_string()));
@@ -260,6 +266,9 @@ fn draw_in(ui: &mut Ui, app: &mut App, st: &mut State, a: Rect) {
                     for e in app.cfg.eq_apps.iter_mut().filter(|e| e.1 == st.name) {
                         e.1 = name.clone();
                     }
+                    for k in app.cfg.snd_keys.iter_mut().filter(|k| k.eq == st.name && eq::guid_of(&k.output) == g) {
+                        k.eq = name.clone();
+                    }
                 }),
                 1 => eq::save(&g, &name, &Profile::default()),
                 2 => eq::save(&g, &name, &st.prof),
@@ -314,6 +323,9 @@ fn draw_in(ui: &mut Ui, app: &mut App, st: &mut State, a: Rect) {
         if ui.answered("eq-del") {
             let _ = eq::remove(&g, &st.name);
             app.cfg.eq_apps.retain(|e| e.1 != st.name);
+            for k in app.cfg.snd_keys.iter_mut().filter(|k| k.eq == st.name && eq::guid_of(&k.output) == g) {
+                k.eq.clear();
+            }
             choose(st, app, "");
         }
     }

@@ -268,7 +268,8 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let outputs = audio::devices(false);
     let inputs = audio::devices(true);
     let n = app.cfg.snd_keys.len();
-    let kh = 56.0 + n.max(1) as f32 * 44.0;
+    // Duas linhas por atalho: aparelhos em cima, equalizador embaixo (nomes de aparelho são longos).
+    let kh = 56.0 + n.max(1) as f32 * 88.0;
     let k = rect(x, top + 144.0, w, kh);
     ui.card(k);
     ui.title(rect(k.x + 16.0, k.y + 12.0, k.w - 160.0, 22.0), "Atalhos de aparelho padrão");
@@ -280,14 +281,12 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         ui.c.text_wrap(rect(k.x + 16.0, k.y + 46.0, k.w - 32.0, 40.0), "Cada atalho troca a saída e a entrada padrão do Windows de uma vez e, se quiser, o perfil do equalizador da saída. Use Adicionar.", 12.0, MUTED, Weight::Regular);
     }
     let fw = 200.0f32.min(k.w * 0.24);
-    // Nomes de perfil são curtos: o equalizador ganha uma lista menor que as de aparelho.
-    let ew = 150.0f32.min(k.w * 0.16);
-    let dw = ((k.w - 32.0 - fw - 40.0 - 2.0 * 64.0 - 36.0 - ew - 36.0) / 2.0).max(80.0);
+    let dw = ((k.w - 32.0 - fw - 40.0 - 2.0 * 64.0 - 24.0) / 2.0).max(80.0);
     let mut keys_changed = false;
     let mut drop = None;
     let mut selects = Vec::new();
     for i in 0..n {
-        let ry = k.y + 46.0 + i as f32 * 44.0;
+        let ry = k.y + 46.0 + i as f32 * 88.0;
         let mut hk = app.cfg.snd_keys[i].key;
         if ui.hotkey(&format!("snd-k{i}"), rect(k.x + 16.0, ry, fw, 36.0), &mut hk) {
             app.cfg.snd_keys[i].key = hk;
@@ -297,9 +296,8 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         ui.c.text(rect(ox, ry, 60.0, 36.0), "Saída", 12.0, MUTED, Align::Left, Weight::Regular);
         let ix = ox + 64.0 + dw + 12.0;
         ui.c.text(rect(ix, ry, 60.0, 36.0), "Entrada", 12.0, MUTED, Align::Left, Weight::Regular);
-        let ex = ix + 64.0 + dw + 12.0;
-        ui.c.text(rect(ex, ry, 32.0, 36.0), "EQ", 12.0, MUTED, Align::Left, Weight::Regular);
-        selects.push((i, rect(ox + 64.0, ry, dw, 36.0), rect(ix + 64.0, ry, dw, 36.0), rect(ex + 36.0, ry, ew, 36.0)));
+        ui.c.text(rect(ox, ry + 44.0, 60.0, 36.0), "EQ", 12.0, MUTED, Align::Left, Weight::Regular);
+        selects.push((i, rect(ox + 64.0, ry, dw, 36.0), rect(ix + 64.0, ry, dw, 36.0), rect(ox + 64.0, ry + 44.0, dw, 36.0)));
         let b = rect(k.right() - 44.0, ry + 6.0, 24.0, 24.0);
         if ui.is_hover(b) {
             ui.c.round(b, 6.0, BORDER);
