@@ -54,6 +54,24 @@ fn vdf_value(strings: &[String], key: &str) -> Option<String> {
     strings.windows(2).find(|w| w[0].eq_ignore_ascii_case(key)).map(|w| w[1].clone())
 }
 
+/// O número do jogo na Steam, para um executável dentro de `steamapps\common\<pasta>`.
+pub fn steam_app_id(exe: &Path) -> Option<String> {
+    let common = exe.ancestors().find(|a| a.file_name().is_some_and(|n| n.eq_ignore_ascii_case("common")))?;
+    let dir = exe.strip_prefix(common).ok()?.components().next()?.as_os_str().to_string_lossy().to_string();
+    for e in std::fs::read_dir(common.parent()?).ok()?.flatten() {
+        let name = e.file_name().to_string_lossy().to_lowercase();
+        if !(name.starts_with("appmanifest_") && name.ends_with(".acf")) {
+            continue;
+        }
+        let Ok(t) = std::fs::read_to_string(e.path()) else { continue };
+        let s = vdf_strings(&t);
+        if vdf_value(&s, "installdir").is_some_and(|d| d.eq_ignore_ascii_case(&dir)) {
+            return vdf_value(&s, "appid");
+        }
+    }
+    None
+}
+
 fn steam_root() -> Option<PathBuf> {
     let p = super::reg::text(super::reg::Hive::User, "Software\\Valve\\Steam", "SteamPath")?;
     let p = PathBuf::from(p.replace('/', "\\"));

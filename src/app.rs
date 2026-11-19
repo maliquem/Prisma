@@ -684,6 +684,7 @@ pub fn start(background: bool) {
                         eprintln!("{}x{} hdr={} {:?}", f.w, f.h, f.half.is_some(), t.elapsed());
                         eprintln!("{:?}", capture::save_png(path, f.w, f.h, &f.bgra));
                         if let Some(h) = &f.half {
+                            eprintln!("nits maior, media, p99: {:?}", capture::half_nits(h));
                             eprintln!("{:?}", capture::save_jxr(&format!("{path}.jxr"), f.w, f.h, h));
                         }
                     }
@@ -833,6 +834,12 @@ pub fn start(background: bool) {
             if let Some(v) = a.strip_prefix("--test-inject=") {
                 let p: Vec<&str> = v.split('|').collect();
                 let _ = std::fs::write(p[0], crate::sys::inject::test(p[1].parse().unwrap(), p[2].parse().unwrap(), p[3].parse().unwrap()));
+                std::process::exit(0);
+            }
+            // Saída, jogo e arquivo de ajustes: --test-hdrgame=saida.txt|C:\jogo.exe|ajustes.txt
+            if let Some(v) = a.strip_prefix("--test-hdrgame=") {
+                let p: Vec<&str> = v.split('|').collect();
+                crate::sys::inject::test_hdr(p[0], p[1], p[2]);
                 std::process::exit(0);
             }
             if let Some(v) = a.strip_prefix("--test-drs=") {

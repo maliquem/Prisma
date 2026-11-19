@@ -247,6 +247,16 @@ fn half_table() -> Vec<f32> {
         .collect()
 }
 
+/// Teste: luminância (nits) do quadro HDR: maior, média e o percentil 99.
+#[cfg(debug_assertions)]
+pub fn half_nits(half: &[u16]) -> (f32, f32, f32) {
+    let t = half_table();
+    let mut y: Vec<f32> = half.chunks_exact(4).map(|p| 80.0 * (0.2126 * t[p[0] as usize] + 0.7152 * t[p[1] as usize] + 0.0722 * t[p[2] as usize])).collect();
+    let mean = y.iter().sum::<f32>() / y.len().max(1) as f32;
+    y.sort_by(f32::total_cmp);
+    (y.last().copied().unwrap_or(0.0), mean, y.get(y.len() * 99 / 100).copied().unwrap_or(0.0))
+}
+
 /// Curva de HDR para SDR: mantém igual o que é SDR e dobra só o que passa do branco.
 #[inline]
 pub fn rolloff(l: f32) -> f32 {

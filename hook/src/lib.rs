@@ -1,10 +1,13 @@
-//! Limitador de FPS dentro do jogo. Só espera antes de cada apresentação: não desenha nada e não
-//! toca na imagem. Sem o Prisma por perto, ou com o limite zerado, deixa tudo passar direto.
+//! Limitador de FPS e HDR dentro do jogo. O limitador só espera antes de cada apresentação. O HDR
+//! (`hdr.rs`) só entra quando o Prisma abre o jogo com ele pedido. Sem o Prisma por perto, ou com o
+//! limite zerado, deixa tudo passar direto.
+
+mod hdr;
 
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU32, AtomicU64, AtomicUsize, Ordering::*};
 
-type Ptr = *mut c_void;
+pub(crate) type Ptr = *mut c_void;
 type Present = unsafe extern "system" fn(Ptr, u32, u32) -> i32;
 type Present1 = unsafe extern "system" fn(Ptr, u32, u32, *const c_void) -> i32;
 
@@ -14,7 +17,7 @@ const STATE_READY: u32 = 2;
 const STATE_FAILED: u32 = 3;
 /// Sem sinal do Prisma por este tempo, o limite deixa de valer.
 const BEAT_MS: u64 = 5000;
-const PRESENT_TEST: u32 = 1;
+pub(crate) const PRESENT_TEST: u32 = 1;
 const SLOT_PRESENT: usize = 8;
 const SLOT_PRESENT1: usize = 22;
 const R8G8B8A8_UNORM: u32 = 28;
@@ -30,7 +33,7 @@ const TIMER_ALL: u32 = 0x1F0003;
 
 /// Mesmo formato de `src/sys/inject.rs`.
 #[repr(C)]
-struct Shared {
+pub(crate) struct Shared {
     magic: AtomicU32,
     state: AtomicU32,
     /// Milésimos de FPS. Zero desliga.
@@ -39,7 +42,24 @@ struct Shared {
     beat: AtomicU64,
     presents: AtomicU64,
     waits: AtomicU64,
+    /// O Prisma pede o proxy antes de o jogo rodar; só cadeias criadas com isto ligado viram HDR.
+    pub hdr_proxy: AtomicU32,
+    /// Curva HDR ligada. Desligada, o proxy mostra o SDR como o Windows mostraria.
+    pub hdr_on: AtomicU32,
+    /// Nits, em bits de f32. Gama, saturação e intensidade dos brilhos são números puros.
+    pub hdr_peak: AtomicU32,
+    pub hdr_paper: AtomicU32,
+    pub hdr_gamma: AtomicU32,
+    pub hdr_sat: AtomicU32,
+    pub hdr_boost: AtomicU32,
+    pub hdr_black: AtomicU32,
+    /// Escritos pelo jogo: cadeias com proxy, último erro (HRESULT) e quadros desenhados.
+    pub hdr_chains: AtomicU32,
+    pub hdr_error: AtomicU32,
+    pub hdr_frames: AtomicU64,
 }
+
+const _: () = assert!(std::mem::size_of::<Shared>() == 88);
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -93,7 +113,7 @@ extern "system" {
 }
 
 static STARTED: AtomicBool = AtomicBool::new(false);
-static SHARED: AtomicUsize = AtomicUsize::new(0);
+pub(crate) static SHARED: AtomicUsize = AtomicUsize::new(0);
 static FREQ: AtomicI64 = AtomicI64::new(0);
 static NEXT: AtomicI64 = AtomicI64::new(0);
 static TIMER: AtomicUsize = AtomicUsize::new(0);
@@ -155,19 +175,21 @@ unsafe fn pace(flags: u32) {
 }
 
 unsafe extern "system" fn on_present(this: Ptr, sync: u32, flags: u32) -> i32 {
+    hdr::present(this, flags);
     pace(flags);
     let old: Present = std::mem::transmute(OLD_PRESENT.load(Relaxed));
     old(this, sync, flags)
 }
 
 unsafe extern "system" fn on_present1(this: Ptr, sync: u32, flags: u32, params: *const c_void) -> i32 {
+    hdr::present(this, flags);
     pace(flags);
     let old: Present1 = std::mem::transmute(OLD_PRESENT1.load(Relaxed));
     old(this, sync, flags, params)
 }
 
 /// Troca uma entrada da tabela de funções. O original fica guardado antes de a nova valer.
-unsafe fn patch(table: *mut usize, slot: usize, new: usize, keep: &AtomicUsize) -> bool {
+pub(crate) unsafe fn patch(table: *mut usize, slot: usize, new: usize, keep: &AtomicUsize) -> bool {
     let at = table.add(slot);
     if *at == new {
         return true;
@@ -182,12 +204,25 @@ unsafe fn patch(table: *mut usize, slot: usize, new: usize, keep: &AtomicUsize) 
     true
 }
 
-unsafe fn release(obj: Ptr) {
+pub(crate) unsafe fn release(obj: Ptr) {
     if !obj.is_null() {
         let table = *(obj as *const *const usize);
         let f: unsafe extern "system" fn(Ptr) -> u32 = std::mem::transmute(*table.add(2));
         f(obj);
     }
+}
+
+/// Liga `Present` e `Present1` na tabela da cadeia.
+pub(crate) unsafe fn hook_present(chain: Ptr) -> bool {
+    let table = *(chain as *const *mut usize);
+    let mut done = patch(table, SLOT_PRESENT, on_present as usize, &OLD_PRESENT);
+    let mut newer = std::ptr::null_mut();
+    let ask: unsafe extern "system" fn(Ptr, *const Guid, *mut Ptr) -> i32 = std::mem::transmute(*table);
+    if ask(chain, &IID_SWAPCHAIN1, &mut newer) >= 0 {
+        done &= patch(*(newer as *const *mut usize), SLOT_PRESENT1, on_present1 as usize, &OLD_PRESENT1);
+        release(newer);
+    }
+    done
 }
 
 /// Uma cadeia de troca descartável mostra onde a tabela do Windows está, a mesma que o jogo usa.
@@ -216,13 +251,9 @@ unsafe fn install() -> bool {
         }
     }
     if done {
-        let table = *(chain as *const *mut usize);
-        done = patch(table, SLOT_PRESENT, on_present as usize, &OLD_PRESENT);
-        let mut newer = std::ptr::null_mut();
-        let ask: unsafe extern "system" fn(Ptr, *const Guid, *mut Ptr) -> i32 = std::mem::transmute(*table);
-        if ask(chain, &IID_SWAPCHAIN1, &mut newer) >= 0 {
-            done &= patch(*(newer as *const *mut usize), SLOT_PRESENT1, on_present1 as usize, &OLD_PRESENT1);
-            release(newer);
+        done = hook_present(chain);
+        if hdr::wanted() {
+            done &= hdr::hook_chain(chain) & hdr::install();
         }
     }
     release(chain);
@@ -257,14 +288,29 @@ unsafe extern "system" fn start(_: Ptr) -> u32 {
     0
 }
 
-/// O Windows chama isto na linha da janela do jogo. O trabalho vai para outra linha, para não segurar o jogo.
+/// Aberto pelo Prisma (`LoadLibraryW` com o jogo ainda parado): começa sozinho.
 #[no_mangle]
-pub unsafe extern "system" fn prisma_hook(code: i32, w: usize, l: isize) -> isize {
+pub unsafe extern "system" fn DllMain(_: Ptr, reason: u32, _: Ptr) -> i32 {
+    const PROCESS_ATTACH: u32 = 1;
+    if reason == PROCESS_ATTACH {
+        begin();
+    }
+    1
+}
+
+/// Uma vez só, em outra linha: o trabalho não pode rodar com a trava do carregador pega.
+unsafe fn begin() {
     if !STARTED.swap(true, SeqCst) {
         let t = CreateThread(std::ptr::null_mut(), 0, start, std::ptr::null_mut(), 0, std::ptr::null_mut());
         if !t.is_null() {
             CloseHandle(t);
         }
     }
+}
+
+/// O Windows chama isto na linha da janela do jogo. O trabalho vai para outra linha, para não segurar o jogo.
+#[no_mangle]
+pub unsafe extern "system" fn prisma_hook(code: i32, w: usize, l: isize) -> isize {
+    begin();
     CallNextHookEx(std::ptr::null_mut(), code, w, l)
 }
