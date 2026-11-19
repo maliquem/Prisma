@@ -1189,7 +1189,7 @@ fn host_tab(ui: &mut Ui, app: &mut App, st: &mut State, all: &mut Opts, x: f32, 
     y += 44.0;
     let mbps_r = row(ui, ix, y, iw, "Limite de banda", ctl);
     y += 46.0;
-    ui.check("sh-10", rect(ix, y, iw, 30.0), "HDR10 de 10 bits quando as duas telas estão em HDR", &mut o.ten_bit);
+    ui.check("sh-10", rect(ix, y, iw, 30.0), "10 bits: HDR10 com as duas telas em HDR, e degradês sem faixas para quem pede", &mut o.ten_bit);
     y += 32.0;
     ui.check("sh-444", rect(ix, y, iw, 30.0), "Aceitar 4:4:4 quando quem assiste pede", &mut o.allow444);
     y += 32.0;
@@ -1410,6 +1410,8 @@ fn client_tab(ui: &mut Ui, app: &App, c: &mut ClientOpts, x: f32, top: f32, w: f
     let imm_r = row(ui, ix, y, iw, "Modo imersivo", ctl);
     y += 46.0;
     ui.check("sh-ask444", rect(ix, y, iw, 30.0), "Pedir 4:4:4 (texto mais nítido; HEVC só em NVIDIA ou Intel)", &mut c.ask444);
+    y += 34.0;
+    ui.check("sh-ask10", rect(ix, y, iw, 30.0), "Pedir 10 bits (degradês sem faixas; host com NVIDIA)", &mut c.ask10);
     y += 34.0;
     ui.check("sh-mute", rect(ix, y, iw, 30.0), "Começar sem o som do outro PC", &mut c.mute);
     y += 34.0;

@@ -48,7 +48,7 @@ pub(super) struct Hello {
     hz: u32,
     codecs: u8,
     pub(super) pid: u32,
-    pub(super) flags: u8,
+    pub(super) flags: u16,
 }
 
 impl Hello {
@@ -1290,6 +1290,19 @@ fn pads_tick(room: &mut Room, out: &mut Vec<u8>, repeat_info: bool) {
     }
 }
 
+/// O formato no registro: ", HDR10", ", 4:4:4", ", 10 bits" ou nada.
+fn fmt_extra(vf: VideoFmt) -> &'static str {
+    if vf.hdr10 {
+        ", HDR10"
+    } else if vf.yuv444 {
+        ", 4:4:4"
+    } else if vf.deep {
+        ", 10 bits"
+    } else {
+        ""
+    }
+}
+
 /// O vídeo que já está saindo serve para quem chegou? (O PyroWave também pede o caminho perto,
 /// que quem chama confere pelo canal.)
 fn fits(hello: &Hello, codec: VideoCodec, vf: VideoFmt) -> bool {
@@ -1297,6 +1310,9 @@ fn fits(hello: &Hello, codec: VideoCodec, vf: VideoFmt) -> bool {
         VideoCodec::Wave => return hello.codecs & WAVE != 0 && (!vf.hdr10 || hello.flags & SEES_HDR != 0),
         VideoCodec::Std(c) => c,
     };
+    if vf.deep && hello.flags & ASKS_10 == 0 {
+        return false;
+    }
     if vf.yuv444 {
         return hello.flags & DECODES_444 != 0;
     }
@@ -1568,7 +1584,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     // O tamanho e os Hz seguem quem chegou primeiro; os codecs e formatos, o que todos aceitam.
     let lead = room.guests[0].hello;
     let codecs = room.guests.iter().fold(0xFF, |m, g| m & g.hello.codecs);
-    let flags = room.guests.iter().fold(0xFF, |m, g| m & g.hello.flags);
+    let flags = room.guests.iter().fold(0xFFFF, |m, g| m & g.hello.flags);
     // Automático: a altura da tela de quem assiste, sem passar da daqui nem do limite das opções.
     let want_h = if lead.h == 0 { src_h } else { lead.h };
     let want_h = if opts.res > 0 { want_h.min(opts.res) } else { want_h };
@@ -1587,18 +1603,24 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
         _ => None,
     };
     // Formato do vídeo, do melhor ao comum. HDR10 quando as telas estão em HDR; 4:4:4 quando quem
-    // assiste pede, porque gasta mais rede. Se o NVENC daqui não fizer, cai para o próximo.
+    // assiste pede, porque gasta mais rede; 10 bits com a tela SDR quando todos pedem. Se o NVENC
+    // daqui não fizer, cai para o próximo.
     let want444 = flags & DECODES_444 != 0 && opts.allow444;
     let ten_bit = std::env::var("PRISMA_HDR10").map(|v| v != "0").unwrap_or(opts.ten_bit);
     let want_hdr = color.hdr && flags & SEES_HDR != 0 && ten_bit;
-    let full = VideoFmt { hdr10: false, yuv444: true };
-    let ten = VideoFmt { hdr10: true, yuv444: false };
+    let want_deep = !want_hdr && flags & ASKS_10 != 0 && ten_bit;
+    let full = VideoFmt { yuv444: true, ..Default::default() };
+    let ten = VideoFmt { hdr10: true, ..Default::default() };
+    let deep = VideoFmt { deep: true, ..Default::default() };
     let mut tries: Vec<(Codec, VideoFmt)> = Vec::new();
     if want444 {
         tries.push((Codec::Hevc, full));
     }
     if want_hdr {
         tries.extend([(Codec::Av1, ten), (Codec::Hevc, ten)]);
+    }
+    if want_deep {
+        tries.extend([(Codec::Av1, deep), (Codec::Hevc, deep)]);
     }
     tries.extend([Codec::Av1, Codec::Hevc, Codec::H264].map(|c| (c, VideoFmt::default())));
     let mbps = std::env::var("PRISMA_MBPS").ok().and_then(|v| v.parse::<u32>().ok()).or((opts.mbps > 0).then_some(opts.mbps));
@@ -1614,7 +1636,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
         } else if !far.is_empty() {
             eprintln!("PyroWave só na rede local ou pela VPN, e {} não está: fica o automático", far.join(", "));
         } else {
-            let vf = VideoFmt { hdr10: want_hdr, yuv444: flags & ASKS_444 != 0 && opts.allow444 };
+            let vf = VideoFmt { hdr10: want_hdr, yuv444: flags & ASKS_444 != 0 && opts.allow444, deep: false };
             let bits = mbps.map(|m| m as u64 * 1_000_000).unwrap_or_else(|| super::wave::auto_bits(out_w, out_h, fps, vf));
             match super::wave::WaveEncoder::new(d, src_w, src_h, out_w, out_h, fps, bits, vf) {
                 Ok(w) => {
@@ -1653,17 +1675,13 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
         let bits = if vf.yuv444 { (bits as u64 * 3 / 2).min(150_000_000) as u32 } else { bits };
         match LiveEncoder::open(&d.dev, c, out_w, out_h, fps, bits, vf) {
             Ok(e) => {
-                let extra = match (vf.hdr10, vf.yuv444) {
-                    (true, _) => ", HDR10",
-                    (_, true) => ", 4:4:4",
-                    _ => "",
-                };
+                let extra = fmt_extra(vf);
                 eprintln!("vídeo: {}x{} a {} quadros/s, {}{}, {:.1} Mbit/s ({})", out_w, out_h, fps, codec_name(VideoCodec::Std(c)), extra, bits as f64 / 1e6, e.name());
                 made = Some((e, c, vf));
                 top_bits = bits;
                 break;
             }
-            Err(e) if vf != VideoFmt::default() => eprintln!("vídeo: {}{} recusado ({}); tentando o próximo", codec_name(VideoCodec::Std(c)), if vf.hdr10 { " HDR10" } else { " 4:4:4" }, e.message()),
+            Err(e) if vf != VideoFmt::default() => eprintln!("vídeo: {}{} recusado ({}); tentando o próximo", codec_name(VideoCodec::Std(c)), fmt_extra(vf).trim_start_matches(", "), e.message()),
             Err(_) => {}
         }
     }
@@ -1680,6 +1698,8 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                 ConvOut::Ayuv
             } else if vf.hdr10 {
                 ConvOut::P010
+            } else if vf.deep {
+                ConvOut::P010Sdr
             } else {
                 ConvOut::Nv12
             };
@@ -1754,7 +1774,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
 
     let mut out = Vec::with_capacity(MTU);
     let mut buf = vec![0u8; 2048];
-    let info = |perms: u8| Msg::Info { codec, w: out_w, h: out_h, fps, perms, recover: enc.recovers(), hdr10: vf.hdr10, yuv444: vf.yuv444, priority };
+    let info = |perms: u8| Msg::Info { codec, w: out_w, h: out_h, fps, perms, recover: enc.recovers(), hdr10: vf.hdr10, yuv444: vf.yuv444, priority, deep: vf.deep };
     let infos: Vec<Vec<u8>> = (0..=255u8).map(|p| {
         let mut b = Vec::new();
         write(&mut b, &info(p));
@@ -1964,6 +1984,8 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                                 super::notice("«{}» mudou os quadros por segundo", &g.name);
                             } else if (h.flags ^ g.hello.flags) & ASKS_444 != 0 {
                                 super::notice("«{}» mudou o pedido de 4:4:4", &g.name);
+                            } else if (h.flags ^ g.hello.flags) & ASKS_10 != 0 {
+                                super::notice("«{}» mudou o pedido de 10 bits", &g.name);
                             }
                             g.hello = h;
                             result = End::Again;
@@ -2459,16 +2481,21 @@ x
         let plain = VideoFmt::default();
         assert!(fits(&h(2, 0), VideoCodec::Std(Codec::Hevc), plain));
         assert!(!fits(&h(1, 0), VideoCodec::Std(Codec::Hevc), plain));
-        assert!(!fits(&h(7, 0), VideoCodec::Std(Codec::Av1), VideoFmt { hdr10: true, yuv444: false }));
-        assert!(fits(&h(7, SEES_HDR), VideoCodec::Std(Codec::Av1), VideoFmt { hdr10: true, yuv444: false }));
-        assert!(!fits(&h(7, SEES_HDR), VideoCodec::Std(Codec::Hevc), VideoFmt { hdr10: false, yuv444: true }));
-        assert!(fits(&h(0, DECODES_444), VideoCodec::Std(Codec::Hevc), VideoFmt { hdr10: false, yuv444: true }));
+        assert!(!fits(&h(7, 0), VideoCodec::Std(Codec::Av1), VideoFmt { hdr10: true, yuv444: false, deep: false }));
+        assert!(fits(&h(7, SEES_HDR), VideoCodec::Std(Codec::Av1), VideoFmt { hdr10: true, yuv444: false, deep: false }));
+        assert!(!fits(&h(7, SEES_HDR), VideoCodec::Std(Codec::Hevc), VideoFmt { hdr10: false, yuv444: true, deep: false }));
+        assert!(fits(&h(0, DECODES_444), VideoCodec::Std(Codec::Hevc), VideoFmt { hdr10: false, yuv444: true, deep: false }));
         assert!(fits(&h(WAVE, 0), VideoCodec::Wave, plain));
         assert!(!fits(&h(7, DECODES_444), VideoCodec::Wave, plain));
         // O PyroWave 4:4:4 serve a quem o tem, peça ou não; o HDR10 pede a tela em HDR.
-        assert!(fits(&h(WAVE, 0), VideoCodec::Wave, VideoFmt { hdr10: false, yuv444: true }));
-        assert!(!fits(&h(WAVE, ASKS_444), VideoCodec::Wave, VideoFmt { hdr10: true, yuv444: true }));
-        assert!(fits(&h(WAVE, SEES_HDR), VideoCodec::Wave, VideoFmt { hdr10: true, yuv444: true }));
+        assert!(fits(&h(WAVE, 0), VideoCodec::Wave, VideoFmt { hdr10: false, yuv444: true, deep: false }));
+        assert!(!fits(&h(WAVE, ASKS_444), VideoCodec::Wave, VideoFmt { hdr10: true, yuv444: true, deep: false }));
+        assert!(fits(&h(WAVE, SEES_HDR), VideoCodec::Wave, VideoFmt { hdr10: true, yuv444: true, deep: false }));
+        // Os 10 bits SDR só vão a quem pediu (quem não conhece o pedido decodifica em 8).
+        let deep = VideoFmt { deep: true, ..plain };
+        assert!(!fits(&h(7, 0), VideoCodec::Std(Codec::Hevc), deep));
+        assert!(fits(&h(7, ASKS_10), VideoCodec::Std(Codec::Av1), deep));
+        assert!(!fits(&h(1, ASKS_10), VideoCodec::Std(Codec::Av1), deep));
     }
 
     #[test]

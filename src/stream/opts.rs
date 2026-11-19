@@ -390,6 +390,8 @@ pub struct ClientOpts {
     pub mic: bool,
     /// Pede 4:4:4 (texto nítido), se a placa daqui decodifica.
     pub ask444: bool,
+    /// Pede 10 bits com a tela SDR (degradês sem faixas); o host decide se faz.
+    pub ask10: bool,
     /// O controle continua valendo com a janela em segundo plano.
     pub pad_background: bool,
     /// O teclado vira controle (WASD, setas, J, K, U, I...).
@@ -430,6 +432,7 @@ impl Default for ClientOpts {
             mute: false,
             mic: false,
             ask444: false,
+            ask10: false,
             pad_background: false,
             pad_keys: false,
             key_menu: (MOD_CTRL | MOD_ALT | MOD_SHIFT, b'P' as u32),
@@ -469,6 +472,7 @@ impl ClientOpts {
                 "mudo" => o.mute = flag(v),
                 "microfone" => o.mic = flag(v),
                 "pedir_444" => o.ask444 = flag(v),
+                "pedir_10_bits" => o.ask10 = flag(v),
                 "controle_fundo" => o.pad_background = flag(v),
                 "teclado_controle" => o.pad_keys = flag(v),
                 "atalho_menu" => o.key_menu = keys_parse(v, o.key_menu),
@@ -494,7 +498,7 @@ impl ClientOpts {
         let b = |x: bool| x as u8;
         format!(
             "tela_cheia={}\nvsync={}\nimersivo={}\nmedidor={}\naviso={}\nmudo={}\nmicrofone={}\npedir_444={}\ncontrole_fundo={}\nteclado_controle={}\n\
-quadros={}\natalho_menu={}\natalho_tela_cheia={}\natalho_ctrl_alt_del={}\natalho_desconectar={}\natalho_imersivo={}\natalho_medidor={}\natalho_som={}\ngpu={}\ntelas={}\natalho_travar_mouse={}\nvrr={}\nsuper_resolucao={}\nritmo_constante={}\n",
+quadros={}\natalho_menu={}\natalho_tela_cheia={}\natalho_ctrl_alt_del={}\natalho_desconectar={}\natalho_imersivo={}\natalho_medidor={}\natalho_som={}\ngpu={}\ntelas={}\natalho_travar_mouse={}\nvrr={}\nsuper_resolucao={}\nritmo_constante={}\npedir_10_bits={}\n",
             b(self.fullscreen),
             b(self.vsync),
             self.immersive,
@@ -519,6 +523,7 @@ quadros={}\natalho_menu={}\natalho_tela_cheia={}\natalho_ctrl_alt_del={}\natalho
             b(self.vrr),
             b(self.upscale),
             b(self.constant),
+            b(self.ask10),
         )
     }
 
@@ -581,7 +586,7 @@ mod tests {
         assert_eq!(Opts::parse("janela=x:5").window, (0, 0));
         // Arquivo da 0.11.0: o resto fica no padrão.
         assert_eq!(Opts::parse("hdr_desligar=1\npessoas=2\ncontroles=auto\nconvite=total\n"), Opts { hdr_off: true, guests: 2, invite: TOTAL, ..Opts::default() });
-        let c = ClientOpts { fullscreen: false, vsync: true, vrr: true, upscale: true, immersive: 1, meter: 2, warn: false, mute: true, mic: true, ask444: true, pad_background: true, pad_keys: true, fps: 60, constant: true, gpu: "AMD Radeon(TM) Graphics".into(), key_menu: (MOD_ALT, 0x70), key_sound: (MOD_CTRL, b'M' as u32), ..ClientOpts::default() };
+        let c = ClientOpts { fullscreen: false, vsync: true, vrr: true, upscale: true, immersive: 1, meter: 2, warn: false, mute: true, mic: true, ask444: true, ask10: true, pad_background: true, pad_keys: true, fps: 60, constant: true, gpu: "AMD Radeon(TM) Graphics".into(), key_menu: (MOD_ALT, 0x70), key_sound: (MOD_CTRL, b'M' as u32), ..ClientOpts::default() };
         assert_eq!(ClientOpts::parse(&c.text()), c);
         let c = ClientOpts { screens: ["eu".into(), "".into(), "31ded57656ab".into()], key_lock: (MOD_CTRL, b'L' as u32), ..ClientOpts::default() };
         assert_eq!(ClientOpts::parse(&c.text()), c);

@@ -1436,7 +1436,7 @@ Equilíbrio	平衡
 Qualidade	画质
 Codec	编解码器
 Limite de banda	带宽限制
-HDR10 de 10 bits quando as duas telas estão em HDR	两块屏幕都处于 HDR 时使用 10 位 HDR10
+10 bits: HDR10 com as duas telas em HDR, e degradês sem faixas para quem pede	10 位：两块屏幕都处于 HDR 时使用 HDR10，并为有需要的用户提供无色带渐变
 Aceitar 4:4:4 quando quem assiste pede	观看方请求时接受 4:4:4
 Os automáticos seguem quem assiste: a altura da tela, o menor entre os Hz dos dois lados e o melhor codec que os dois têm. O 4:4:4 e o HDR10 caem sozinhos se o outro lado não tiver.	自动值跟随观看方：其屏幕高度、两端中较低的刷新率，以及双方都有的最佳编解码器。另一端不支持时，4:4:4 和 HDR10 会自动关闭。
 PyroWave: uns 200 Mbit/s em 1080p60 e mais em 4K. Só na rede local ou pela VPN (ZeroTier, Tailscale), nunca pelo relé; fora delas, e com quem assiste numa versão sem ele, vale o automático.	PyroWave：1080p60 约需 200 Mbit/s，4K 更多。仅限局域网或 VPN（ZeroTier、Tailscale），绝不经过中继；在此之外，或观看方的版本没有它时，使用自动。
@@ -1461,6 +1461,7 @@ Só o mouse	仅鼠标
 Só o teclado	仅键盘
 Mouse e teclado	鼠标和键盘
 Pedir 4:4:4 (texto mais nítido; HEVC só em NVIDIA ou Intel)	请求 4:4:4（文字更清晰；HEVC 需要 NVIDIA 或 Intel）
+Pedir 10 bits (degradês sem faixas; host com NVIDIA)	请求 10 位（渐变无色带；主机需为 NVIDIA）
 Começar sem o som do outro PC	开始时不播放另一台电脑的声音
 No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. No Tudo, vai qualquer tecla, mesmo as que um programa deste PC pegaria. Os atalhos desta janela sempre funcionam aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga. Telas lado a lado valem para Mouse e teclado, na lista de PCs: o mouse passa pela borda de uma tela para a vizinha, sem vídeo. Um PC sem posição vai para a primeira livre ao lado deste.	在沉浸模式下，全屏时鼠标会留在窗口内，Windows 键和 Alt+Tab 会发送到另一台电脑。在“全部”模式下，任何按键都会发送，即使是这台电脑上的程序会拦截的按键。本窗口的快捷键在这里始终有效。在支持 G-SYNC 或 FreeSync 的屏幕上，请关闭垂直同步：画面不会撕裂。并排屏幕用于电脑列表中的“鼠标和键盘”：鼠标越过一个屏幕的边缘进入相邻屏幕，没有视频。没有位置的电脑会放到这台电脑旁边第一个空位。
 Medidor e avisos	监视和警告
@@ -1566,6 +1567,7 @@ aparelho desligado	设备已拔出
 Cada atalho troca a saída e a entrada padrão do Windows de uma vez. Use Adicionar.	每个快捷键会同时切换 Windows 默认输出和输入。请使用“添加”。
 Não deu para mudar na hora. Vale na próxima conexão.	无法立即更改。将在下次连接时生效。
 Pedir 4:4:4	请求 4:4:4
+Pedir 10 bits	请求 10 位
 Ritmo constante	恒定帧节奏
 Controle em segundo plano	后台时也发送手柄
 Teclado como controle	把键盘当作手柄
@@ -1884,6 +1886,7 @@ Acesso de «{}» mudou na hora	“{}”的权限已立即更改
 Opções do host aplicadas na conexão	主机选项已应用到连接
 «{}» mudou os quadros por segundo	“{}”更改了帧率
 «{}» mudou o pedido de 4:4:4	“{}”更改了 4:4:4 请求
+«{}» mudou o pedido de 10 bits	“{}”更改了 10 位请求
 «{}» mudou o ritmo dos quadros	“{}”更改了帧节奏
 Mouse travado nesta tela	鼠标已锁定在此屏幕
 Mouse destravado	鼠标已解锁

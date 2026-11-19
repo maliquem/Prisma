@@ -1436,7 +1436,7 @@ Equilíbrio	Баланс
 Qualidade	Качество
 Codec	Кодек
 Limite de banda	Ограничение полосы
-HDR10 de 10 bits quando as duas telas estão em HDR	10-битный HDR10, когда оба экрана в HDR
+10 bits: HDR10 com as duas telas em HDR, e degradês sem faixas para quem pede	10 бит: HDR10, когда оба экрана в HDR, и градиенты без полос по запросу
 Aceitar 4:4:4 quando quem assiste pede	Принимать 4:4:4 по запросу зрителя
 Os automáticos seguem quem assiste: a altura da tela, o menor entre os Hz dos dois lados e o melhor codec que os dois têm. O 4:4:4 e o HDR10 caem sozinhos se o outro lado não tiver.	Автоматические значения подстраиваются под зрителя: высота его экрана, меньшая частота из двух сторон и лучший общий кодек. 4:4:4 и HDR10 отключаются сами, если у другой стороны их нет.
 PyroWave: uns 200 Mbit/s em 1080p60 e mais em 4K. Só na rede local ou pela VPN (ZeroTier, Tailscale), nunca pelo relé; fora delas, e com quem assiste numa versão sem ele, vale o automático.	PyroWave: около 200 Мбит/с при 1080p60 и больше в 4K. Только в локальной сети или через VPN (ZeroTier, Tailscale), никогда через ретранслятор; вне их, или если у зрителя версия без него, действует автоматический выбор.
@@ -1461,6 +1461,7 @@ Só o mouse	Только мышь
 Só o teclado	Только клавиатура
 Mouse e teclado	Мышь и клавиатура
 Pedir 4:4:4 (texto mais nítido; HEVC só em NVIDIA ou Intel)	Запрашивать 4:4:4 (чётче текст; HEVC — NVIDIA или Intel)
+Pedir 10 bits (degradês sem faixas; host com NVIDIA)	Запрашивать 10 бит (градиенты без полос; хост с NVIDIA)
 Começar sem o som do outro PC	Начинать без звука другого ПК
 No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. No Tudo, vai qualquer tecla, mesmo as que um programa deste PC pegaria. Os atalhos desta janela sempre funcionam aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga. Telas lado a lado valem para Mouse e teclado, na lista de PCs: o mouse passa pela borda de uma tela para a vizinha, sem vídeo. Um PC sem posição vai para a primeira livre ao lado deste.	В режиме погружения, в полноэкранном режиме, мышь остаётся внутри окна, а клавиша Windows и Alt+Tab уходят на другой ПК. В режиме «Всё» уходит любая клавиша, даже те, которые перехватила бы программа на этом ПК. Сочетания клавиш этого окна здесь работают всегда. На экране с G-SYNC или FreeSync оставьте VSync выключенным: изображение не рвётся. Экраны рядом нужны для режима «Мышь и клавиатура» в списке ПК: мышь переходит через край одного экрана на соседний, без видео. ПК без места встаёт на первое свободное рядом с этим.
 Medidor e avisos	Счётчик и предупреждения
@@ -1566,6 +1567,7 @@ aparelho desligado	устройство отключено
 Cada atalho troca a saída e a entrada padrão do Windows de uma vez. Use Adicionar.	Каждое сочетание сразу переключает вывод и ввод Windows по умолчанию. Нажмите «Добавить».
 Não deu para mudar na hora. Vale na próxima conexão.	Не удалось изменить сразу. Применится при следующем подключении.
 Pedir 4:4:4	Запрашивать 4:4:4
+Pedir 10 bits	Запрашивать 10 бит
 Ritmo constante	Постоянный темп кадров
 Controle em segundo plano	Геймпад в фоне
 Teclado como controle	Клавиатура как геймпад
@@ -1884,6 +1886,7 @@ Acesso de «{}» mudou na hora	Доступ «{}» изменён сразу
 Opções do host aplicadas na conexão	Параметры хоста применены к подключению
 «{}» mudou os quadros por segundo	«{}» изменил частоту кадров
 «{}» mudou o pedido de 4:4:4	«{}» изменил запрос 4:4:4
+«{}» mudou o pedido de 10 bits	«{}» изменил запрос 10 бит
 «{}» mudou o ritmo dos quadros	«{}» изменил темп кадров
 Mouse travado nesta tela	Мышь закреплена на этом экране
 Mouse destravado	Мышь разблокирована

@@ -1442,7 +1442,7 @@ Equilíbrio	Balanced
 Qualidade	Quality
 Codec	Codec
 Limite de banda	Bandwidth limit
-HDR10 de 10 bits quando as duas telas estão em HDR	10-bit HDR10 when both screens are in HDR
+10 bits: HDR10 com as duas telas em HDR, e degradês sem faixas para quem pede	10-bit: HDR10 when both screens are in HDR, and banding-free gradients for those who ask
 Aceitar 4:4:4 quando quem assiste pede	Accept 4:4:4 when the viewer asks
 Os automáticos seguem quem assiste: a altura da tela, o menor entre os Hz dos dois lados e o melhor codec que os dois têm. O 4:4:4 e o HDR10 caem sozinhos se o outro lado não tiver.	The automatic values follow the viewer: the screen height, the lower refresh rate of the two sides and the best codec both have. 4:4:4 and HDR10 drop on their own if the other side lacks them.
 PyroWave: uns 200 Mbit/s em 1080p60 e mais em 4K. Só na rede local ou pela VPN (ZeroTier, Tailscale), nunca pelo relé; fora delas, e com quem assiste numa versão sem ele, vale o automático.	PyroWave: about 200 Mbit/s at 1080p60 and more at 4K. Only on the local network or over a VPN (ZeroTier, Tailscale), never through the relay; outside them, or with a viewer on a version without it, automatic applies.
@@ -1467,6 +1467,7 @@ Só o mouse	Mouse only
 Só o teclado	Keyboard only
 Mouse e teclado	Mouse and keyboard
 Pedir 4:4:4 (texto mais nítido; HEVC só em NVIDIA ou Intel)	Ask for 4:4:4 (sharper text; HEVC needs NVIDIA or Intel)
+Pedir 10 bits (degradês sem faixas; host com NVIDIA)	Ask for 10-bit (banding-free gradients; NVIDIA host)
 Começar sem o som do outro PC	Start without the other PC's sound
 No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. No Tudo, vai qualquer tecla, mesmo as que um programa deste PC pegaria. Os atalhos desta janela sempre funcionam aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga. Telas lado a lado valem para Mouse e teclado, na lista de PCs: o mouse passa pela borda de uma tela para a vizinha, sem vídeo. Um PC sem posição vai para a primeira livre ao lado deste.	In immersive mode, in fullscreen, the mouse stays inside the window, and the Windows key and Alt+Tab go to the other PC. In Everything, any key goes through, even ones a program on this PC would catch. The shortcuts of this window always work here. On a G-SYNC or FreeSync screen, leave VSync off: the picture does not tear. Screens side by side are for Mouse and keyboard, in the PC list: the mouse goes past the edge of one screen to the next one, with no video. A PC with no position goes to the first free one next to this PC.
 Medidor e avisos	Meter and warnings
@@ -1572,6 +1573,7 @@ aparelho desligado	device unplugged
 Cada atalho troca a saída e a entrada padrão do Windows de uma vez. Use Adicionar.	Each shortcut switches the Windows default output and input at once. Use Add.
 Não deu para mudar na hora. Vale na próxima conexão.	Could not change it right away. It applies on the next connection.
 Pedir 4:4:4	Ask for 4:4:4
+Pedir 10 bits	Ask for 10-bit
 Ritmo constante	Constant frame pacing
 Controle em segundo plano	Controller in the background
 Teclado como controle	Keyboard as controller
@@ -1890,6 +1892,7 @@ Acesso de «{}» mudou na hora	Access for “{}” changed right away
 Opções do host aplicadas na conexão	Host options applied to the connection
 «{}» mudou os quadros por segundo	“{}” changed the frame rate
 «{}» mudou o pedido de 4:4:4	“{}” changed the 4:4:4 request
+«{}» mudou o pedido de 10 bits	“{}” changed the 10-bit request
 «{}» mudou o ritmo dos quadros	“{}” changed the frame pacing
 Mouse travado nesta tela	Mouse locked to this screen
 Mouse destravado	Mouse unlocked
