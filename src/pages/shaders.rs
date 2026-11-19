@@ -100,7 +100,8 @@ static DL: Mutex<Dl> = Mutex::new(Dl { on: false, got: 0, total: 0, extracting: 
 /// jogo fechar).
 struct Run {
     profile: PathBuf,
-    child: Child,
+    /// Sem processo: anti-cheat, não inicia (e não lê a pasta do jogo de novo) até ele fechar.
+    child: Option<Child>,
     ended: bool,
 }
 static RUNS: Mutex<Vec<Run>> = Mutex::new(Vec::new());
@@ -324,11 +325,13 @@ pub fn tick(app: &mut App) {
         let prof = all.iter().find(|p| p.0 == r.profile);
         let up = prof.is_some_and(|p| open.contains(&exe_of(&p.1)));
         if !up {
-            stop(runs.remove(i).child);
+            if let Some(c) = runs.remove(i).child {
+                stop(c);
+            }
             continue;
         }
         if !r.ended {
-            if let Some(code) = r.child.try_wait().ok().flatten() {
+            if let Some(code) = r.child.as_mut().and_then(|c| c.try_wait().ok().flatten()) {
                 r.ended = true;
                 if !code.success() {
                     crate::config::log(&format!("shader: o motor de {} saiu com erro ({}); veja shaders/logs", r.profile.display(), code.code().unwrap_or(-1)));
@@ -338,10 +341,14 @@ pub fn tick(app: &mut App) {
         i += 1;
     }
     for (path, p) in &all {
-        if p.on && *path == sp::path_for(&p.exe) && open.contains(&exe_of(p)) && !runs.iter().any(|r| &r.profile == path) && !crate::meter::anti_cheat(&p.exe.to_string_lossy()) {
+        if starts(path, p, &open) && !runs.iter().any(|r| &r.profile == path) {
+            if crate::meter::anti_cheat(&p.exe.to_string_lossy()) {
+                runs.push(Run { profile: path.clone(), child: None, ended: true });
+                continue;
+            }
             let log = format!("{}.log", path.file_stem().unwrap_or_default().to_string_lossy());
             if let Some(child) = spawn(format!("--shader-profile={}", path.display()), &log) {
-                runs.push(Run { profile: path.clone(), child, ended: false });
+                runs.push(Run { profile: path.clone(), child: Some(child), ended: false });
             }
         }
     }
@@ -364,10 +371,15 @@ pub fn tick(app: &mut App) {
     app.invalidate();
 }
 
+/// Só o perfil principal (`<exe>.txt`) inicia o motor; os `<exe>*.txt` são do `next`, dentro dele.
+fn starts(path: &Path, p: &Profile, open: &std::collections::HashSet<String>) -> bool {
+    p.on && path == sp::path_for(&p.exe) && open.contains(&exe_of(p))
+}
+
 /// O motor lê `teclas.txt` só ao abrir: fecha os que rodam e o próximo `tick` abre de novo.
 fn restart() {
-    for r in RUNS.lock().unwrap_or_else(|e| e.into_inner()).drain(..) {
-        stop(r.child);
+    for c in RUNS.lock().unwrap_or_else(|e| e.into_inner()).drain(..).filter_map(|r| r.child) {
+        stop(c);
     }
 }
 
@@ -391,9 +403,12 @@ fn download(lib: PathBuf) {
     }
     std::thread::spawn(move || {
         let ok = fetch(&lib).is_some();
-        let mut d = DL.lock().unwrap_or_else(|e| e.into_inner());
-        d.on = false;
-        d.err = !ok;
+        // Solta o DL antes do ST: o desenho pega os dois na ordem contrária.
+        {
+            let mut d = DL.lock().unwrap_or_else(|e| e.into_inner());
+            d.on = false;
+            d.err = !ok;
+        }
         if let Some(s) = st().as_mut() {
             s.lib = None;
         }
@@ -1055,6 +1070,16 @@ mod tests {
         assert_eq!(scan(&d), vec!["crt\\crt-lottes.slangp".to_string(), "meus\\a.slang".to_string()]);
         assert_eq!(top_dir("crt\\crt-lottes.slangp"), "crt");
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn so_o_perfil_principal_inicia_o_motor() {
+        let open: std::collections::HashSet<String> = ["game.exe".to_string()].into();
+        let p = Profile { exe: PathBuf::from(r"C:\Jogos\Game.exe"), ..Profile::default() };
+        assert!(starts(&sp::path_for(&p.exe), &p, &open));
+        assert!(!starts(&sp::profiles_dir().join("game-crt.txt"), &p, &open));
+        assert!(!starts(&sp::path_for(&p.exe), &Profile { on: false, ..p.clone() }, &open));
+        assert!(!starts(&sp::path_for(&p.exe), &p, &Default::default()));
     }
 
     /// Download de verdade (uns 50 MB): `PRISMA_SHD_LIB=<pasta> cargo test baixa -- --ignored`.
