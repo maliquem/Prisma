@@ -86,9 +86,17 @@ pub struct Detect {
 }
 
 impl Detect {
-    pub fn step(&mut self, dev: &ID3D11Device, ctx: &ID3D11DeviceContext, src: &ID3D11Texture2D, w: u32, h: u32) -> Res<()> {
+    /// Hora de ler as faixas (conta os quadros de espera entre as leituras).
+    pub fn due(&mut self) -> bool {
         if self.wait > 0 {
             self.wait -= 1;
+            return false;
+        }
+        true
+    }
+
+    pub fn step(&mut self, dev: &ID3D11Device, ctx: &ID3D11DeviceContext, src: &ID3D11Texture2D, w: u32, h: u32) -> Res<()> {
+        if !self.due() {
             return Ok(());
         }
         let s = STRIP.min(w).min(h);
@@ -113,7 +121,7 @@ impl Detect {
     }
 
     /// Um resultado lido. Sem resposta (tela lisa) não conta nem zera a contagem.
-    fn vote(&mut self, v: Option<Blocks>) {
+    pub fn vote(&mut self, v: Option<Blocks>) {
         self.wait = 6;
         let Some(v) = v else { return };
         if self.votes.last() != Some(&v) {

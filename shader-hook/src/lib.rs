@@ -135,6 +135,28 @@ unsafe fn patch(table: *mut usize, slot: usize, new: usize) -> bool {
     true
 }
 
+/// (função original, trampolim que a chama): desvios no código, para quando a tabela não serve.
+static DETOURS: Mutex<Vec<(usize, usize)>> = Mutex::new(Vec::new());
+
+/// Desvia a função em `at` para `new`, uma vez por função. O desvio fica até o jogo fechar (a DLL está presa).
+unsafe fn detour(at: usize, new: usize) -> Res<()> {
+    let mut list = lock(&DETOURS);
+    if at == 0 || list.iter().any(|d| d.0 == at) {
+        return Ok(());
+    }
+    let d = retour::RawDetour::new(at as *const (), new as *const ()).map_err(|e| e.to_string())?;
+    d.enable().map_err(|e| e.to_string())?;
+    list.push((at, d.trampoline() as *const () as usize));
+    std::mem::forget(d);
+    Ok(())
+}
+
+/// A original de uma função desviada: a tabela de `this` ainda aponta para ela, o trampolim a chama sem o desvio.
+unsafe fn tramp(this: *mut c_void, slot: usize) -> usize {
+    let at = *(*(this as *const *const usize)).add(slot);
+    lock(&DETOURS).iter().find(|d| d.0 == at).map_or(at, |d| d.1)
+}
+
 unsafe fn vtable<T: Interface>(obj: &T) -> *mut usize {
     *(obj.as_raw() as *const *mut usize)
 }
@@ -400,26 +422,26 @@ unsafe fn install_dxgi() -> Res<()> {
 
 unsafe extern "system" fn on_d9_present(this: *mut c_void, a: *const c_void, b: *const c_void, w: HWND, r: *const c_void) -> HRESULT {
     guard(|| d9_present(this, w));
-    let f: D9Present = std::mem::transmute(orig(this, SLOT_D9_PRESENT));
+    let f: D9Present = std::mem::transmute(tramp(this, SLOT_D9_PRESENT));
     f(this, a, b, w, r)
 }
 
 unsafe extern "system" fn on_d9_present_ex(this: *mut c_void, a: *const c_void, b: *const c_void, w: HWND, r: *const c_void, flags: u32) -> HRESULT {
     guard(|| d9_present(this, w));
-    let f: D9PresentEx = std::mem::transmute(orig(this, SLOT_D9_PRESENT_EX));
+    let f: D9PresentEx = std::mem::transmute(tramp(this, SLOT_D9_PRESENT_EX));
     f(this, a, b, w, r, flags)
 }
 
 /// O Reset do D3D9 só funciona sem nada nosso em D3DPOOL_DEFAULT: a cadeia inteira sai e volta no próximo Present.
 unsafe extern "system" fn on_d9_reset(this: *mut c_void, pp: *mut c_void) -> HRESULT {
     guard(|| drop(lock(&D9).take()));
-    let f: D9Reset = std::mem::transmute(orig(this, SLOT_D9_RESET));
+    let f: D9Reset = std::mem::transmute(tramp(this, SLOT_D9_RESET));
     f(this, pp)
 }
 
 unsafe extern "system" fn on_d9_reset_ex(this: *mut c_void, pp: *mut c_void, mode: *mut c_void) -> HRESULT {
     guard(|| drop(lock(&D9).take()));
-    let f: D9ResetEx = std::mem::transmute(orig(this, SLOT_D9_RESET_EX));
+    let f: D9ResetEx = std::mem::transmute(tramp(this, SLOT_D9_RESET_EX));
     f(this, pp, mode)
 }
 
@@ -491,6 +513,8 @@ struct D9 {
     /// Cópia do back buffer (o librashader lê textura em D3DPOOL_DEFAULT).
     input: Option<((u32, u32, D3DFORMAT), IDirect3DTexture9, IDirect3DSurface9)>,
     small: Option<((u32, u32), IDirect3DTexture9, IDirect3DSurface9)>,
+    detect: blocks::Detect,
+    strips: Option<Strips>,
     sb: Option<IDirect3DStateBlock9>,
     frame: usize,
     warned: bool,
@@ -503,7 +527,7 @@ unsafe impl Send for D9 {}
 impl D9 {
     unsafe fn new(dev_ptr: usize, dev: &IDirect3DDevice9, s: &Shared) -> Res<Self> {
         let seq = s.seq.load(Acquire);
-        let mut x = Self { dev: dev_ptr, t: Tracker::open(&s.path())?, chain: None, defaults: HashMap::new(), polled: Instant::now(), seq, input: None, small: None, sb: None, frame: 0, warned: false, errors: 0 };
+        let mut x = Self { dev: dev_ptr, t: Tracker::open(&s.path())?, chain: None, defaults: HashMap::new(), polled: Instant::now(), seq, input: None, small: None, detect: Default::default(), strips: None, sb: None, frame: 0, warned: false, errors: 0 };
         x.build(dev);
         say!("shader: D3D9 pronto, perfil {}", x.t.path.display());
         Ok(x)
@@ -538,6 +562,9 @@ impl D9 {
                 say!("shader: perfil {}", self.t.path.display());
             }
             let c = self.t.poll();
+            if c.input {
+                self.detect = Default::default();
+            }
             if c.chain {
                 self.build(dev);
             } else if let Some(ch) = self.chain.as_ref().filter(|_| c.params) {
@@ -546,6 +573,10 @@ impl D9 {
         }
         let p = &self.t.profile;
         if !p.on || !p.inject || s.flags.load(Relaxed) & FLAG_COMPARE != 0 || self.chain.is_none() {
+            return Ok(());
+        }
+        // Tela cheia sem foco: o dispositivo está perdido até o Reset do jogo; desenhar só dá erro.
+        if dev.TestCooperativeLevel().is_err() {
             return Ok(());
         }
         let back = dev.GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO)?;
@@ -567,8 +598,12 @@ impl D9 {
         let (_, tex, surf) = self.input.as_ref().unwrap();
         dev.StretchRect(&back, std::ptr::null(), surf, std::ptr::null(), D3DTEXF_NONE)?;
         let mut input = tex;
-        // Redução fixa (240/480/720/d2..d4) por StretchRect de ponto; o `auto` (detector de blocos) é só do D3D11.
-        if let Some(k) = blocks::reduce_for(&p.input, d.Height, None) {
+        // `auto`: o mesmo detector de blocos do D3D11, com as faixas lidas pela CPU. 16 bits por pixel fica sem.
+        if self.t.profile.input == "auto" && matches!(d.Format, D3DFMT_X8R8G8B8 | D3DFMT_A8R8G8B8) {
+            d9_detect(&mut self.detect, &mut self.strips, dev, surf, d.Width, d.Height, d.Format)?;
+        }
+        // Redução por StretchRect de ponto.
+        if let Some(k) = blocks::reduce_for(&self.t.profile.input, d.Height, self.detect.found) {
             let size = blocks::reduced_size(d.Width, d.Height, k);
             if self.small.as_ref().is_none_or(|x| x.0 != size) {
                 let (t, sf) = target(dev, size.0, size.1, d.Format)?;
@@ -599,6 +634,61 @@ impl D9 {
     }
 }
 
+/// Faixas do meio para o detector de blocos: alvo na GPU e cópia legível na CPU, a horizontal e a vertical.
+struct Strips {
+    size: (u32, u32),
+    s: u32,
+    rt: [IDirect3DSurface9; 2],
+    sys: [IDirect3DSurface9; 2],
+    /// Copiadas num quadro, lidas no seguinte: a GPU já terminou e a leitura não espera.
+    pending: bool,
+}
+
+unsafe fn d9_detect(det: &mut blocks::Detect, st: &mut Option<Strips>, dev: &IDirect3DDevice9, src: &IDirect3DSurface9, w: u32, h: u32, fmt: D3DFORMAT) -> Res<()> {
+    if st.as_ref().is_none_or(|x| x.size != (w, h)) {
+        *det = Default::default();
+        let s = 32.min(w).min(h);
+        let mk = |a: u32, b: u32| -> Res<(IDirect3DSurface9, IDirect3DSurface9)> {
+            let (mut rt, mut sys) = (None, None);
+            dev.CreateRenderTarget(a, b, fmt, D3DMULTISAMPLE_NONE, 0, false, &mut rt, std::ptr::null_mut())?;
+            dev.CreateOffscreenPlainSurface(a, b, fmt, D3DPOOL_SYSTEMMEM, &mut sys, std::ptr::null_mut())?;
+            Ok((rt.ok_or("sem faixa")?, sys.ok_or("sem faixa")?))
+        };
+        let ((hr, hs), (vr, vs)) = (mk(w, s)?, mk(s, h)?);
+        *st = Some(Strips { size: (w, h), s, rt: [hr, vr], sys: [hs, vs], pending: false });
+    }
+    if !det.due() {
+        return Ok(());
+    }
+    let x = st.as_mut().unwrap();
+    let s = x.s;
+    if x.pending {
+        x.pending = false;
+        let (a, b) = (read9(dev, &x.rt[0], &x.sys[0], w, s)?, read9(dev, &x.rt[1], &x.sys[1], s, h)?);
+        det.vote(blocks::detect(&a, w as usize, &b, h as usize, s as usize));
+        return Ok(());
+    }
+    let (y0, x0) = ((h - s) / 2, (w - s) / 2);
+    dev.StretchRect(src, &RECT { left: 0, top: y0 as i32, right: w as i32, bottom: (y0 + s) as i32 }, &x.rt[0], std::ptr::null(), D3DTEXF_NONE)?;
+    dev.StretchRect(src, &RECT { left: x0 as i32, top: 0, right: (x0 + s) as i32, bottom: h as i32 }, &x.rt[1], std::ptr::null(), D3DTEXF_NONE)?;
+    x.pending = true;
+    Ok(())
+}
+
+/// A faixa em pixels BGRA, sem o byte de alfa (no X8R8G8B8 ele vem com qualquer coisa).
+unsafe fn read9(dev: &IDirect3DDevice9, rt: &IDirect3DSurface9, sys: &IDirect3DSurface9, w: u32, h: u32) -> Res<Vec<u32>> {
+    dev.GetRenderTargetData(rt, sys)?;
+    let mut l = D3DLOCKED_RECT::default();
+    sys.LockRect(&mut l, std::ptr::null(), D3DLOCK_READONLY as u32)?;
+    let mut out = Vec::with_capacity((w * h) as usize);
+    for y in 0..h as usize {
+        let row = std::slice::from_raw_parts((l.pBits as *const u8).add(y * l.Pitch as usize) as *const u32, w as usize);
+        out.extend(row.iter().map(|p| p & 0xFF_FFFF));
+    }
+    sys.UnlockRect()?;
+    Ok(out)
+}
+
 unsafe fn target(dev: &IDirect3DDevice9, w: u32, h: u32, fmt: D3DFORMAT) -> Res<(IDirect3DTexture9, IDirect3DSurface9)> {
     let mut t = None;
     dev.CreateTexture(w, h, 1, D3DUSAGE_RENDERTARGET as u32, fmt, D3DPOOL_DEFAULT, &mut t, std::ptr::null_mut())?;
@@ -611,24 +701,40 @@ unsafe fn install_d9() -> Res<()> {
     let window = dummy_window()?;
     let r = (|| -> Res<()> {
         let mut pp = D3DPRESENT_PARAMETERS { BackBufferWidth: 2, BackBufferHeight: 2, BackBufferCount: 1, SwapEffect: D3DSWAPEFFECT_DISCARD, hDeviceWindow: window, Windowed: TRUE, ..Default::default() };
-        let behavior = (D3DCREATE_SOFTWARE_VERTEXPROCESSING | D3DCREATE_DISABLE_DRIVER_MANAGEMENT) as u32;
-        let mut ok = true;
-        // Comum e 9Ex: as tabelas podem ser diferentes, as duas recebem o gancho.
+        let mut made = 0;
+        // Cada dispositivo D3D9 tem tabela própria (Windows 11): trocar a entrada do falso não chega ao do jogo.
+        // O desvio vai no código da função, que é o mesmo; comum e 9Ex, e cada jeito de processar vértices.
+        let soft = D3DCREATE_SOFTWARE_VERTEXPROCESSING | D3DCREATE_DISABLE_DRIVER_MANAGEMENT;
+        let kinds = [soft, D3DCREATE_HARDWARE_VERTEXPROCESSING, D3DCREATE_HARDWARE_VERTEXPROCESSING | D3DCREATE_PUREDEVICE, D3DCREATE_MIXED_VERTEXPROCESSING];
         if let Some(d3d) = Direct3DCreate9(D3D_SDK_VERSION) {
-            let mut dev = None;
-            d3d.CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, window, behavior, &mut pp, &mut dev)?;
-            let t = vtable(&dev.ok_or("sem dispositivo")?);
-            ok &= patch(t, SLOT_D9_RESET, on_d9_reset as *const () as usize) && patch(t, SLOT_D9_PRESENT, on_d9_present as *const () as usize);
+            for b in kinds {
+                let mut dev = None;
+                if d3d.CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, window, b as u32, &mut pp, &mut dev).is_err() {
+                    continue;
+                }
+                let Some(dev) = dev else { continue };
+                made += 1;
+                let t = vtable(&dev);
+                detour(*t.add(SLOT_D9_RESET), on_d9_reset as *const () as usize)?;
+                detour(*t.add(SLOT_D9_PRESENT), on_d9_present as *const () as usize)?;
+            }
         }
         let d3d = Direct3DCreate9Ex(D3D_SDK_VERSION)?;
-        let mut dev = None;
-        d3d.CreateDeviceEx(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, window, behavior, &mut pp, std::ptr::null_mut(), &mut dev)?;
-        let t = vtable(&dev.ok_or("sem dispositivo 9Ex")?);
-        ok &= patch(t, SLOT_D9_RESET, on_d9_reset as *const () as usize)
-            && patch(t, SLOT_D9_PRESENT, on_d9_present as *const () as usize)
-            && patch(t, SLOT_D9_PRESENT_EX, on_d9_present_ex as *const () as usize)
-            && patch(t, SLOT_D9_RESET_EX, on_d9_reset_ex as *const () as usize);
-        if ok { Ok(()) } else { Err("VirtualProtect".into()) }
+        for b in kinds {
+            let mut dev = None;
+            if d3d.CreateDeviceEx(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, window, b as u32, &mut pp, std::ptr::null_mut(), &mut dev).is_err() {
+                continue;
+            }
+            let Some(dev) = dev else { continue };
+            made += 1;
+            let t = vtable(&dev);
+            detour(*t.add(SLOT_D9_RESET), on_d9_reset as *const () as usize)?;
+            detour(*t.add(SLOT_D9_PRESENT), on_d9_present as *const () as usize)?;
+            detour(*t.add(SLOT_D9_PRESENT_EX), on_d9_present_ex as *const () as usize)?;
+            detour(*t.add(SLOT_D9_RESET_EX), on_d9_reset_ex as *const () as usize)?;
+        }
+        say!("shader: D3D9, {made} tipo(s) de dispositivo, {} função(ões) desviada(s)", lock(&DETOURS).len());
+        if made == 0 { Err("nenhum dispositivo D3D9".into()) } else { Ok(()) }
     })();
     let _ = DestroyWindow(window);
     r
