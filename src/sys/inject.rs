@@ -53,11 +53,11 @@ pub struct Limiter {
 }
 
 /// O arquivo tem nome pelo conteúdo: um jogo aberto com a versão anterior não impede a nova.
-fn dll_path(dll: &[u8], dir: &str, name: &str) -> Option<std::path::PathBuf> {
+fn dll_path(dll: &[u8], dir: &str, name: &str, ext: &str) -> Option<std::path::PathBuf> {
     let sum = dll.iter().fold(0xcbf2_9ce4_8422_2325u64, |h, b| (h ^ *b as u64).wrapping_mul(0x100_0000_01b3));
     let dir = crate::config::data_dir().join(dir);
     std::fs::create_dir_all(&dir).ok()?;
-    let path = dir.join(format!("{name}_{sum:016x}.dll"));
+    let path = dir.join(format!("{name}_{sum:016x}.{ext}"));
     if std::fs::read(&path).map_or(true, |d| d != dll) {
         std::fs::write(&path, dll).ok()?;
     }
@@ -67,7 +67,7 @@ fn dll_path(dll: &[u8], dir: &str, name: &str) -> Option<std::path::PathBuf> {
 /// Põe a DLL `dll` (gravada em `data_dir\<dir>`) na linha da janela do jogo pelo gancho exportado `name`. O
 /// gancho volta para quem chamou: solte depois que a DLL se prender (ela se prende sozinha ao carregar).
 pub fn load(pid: u32, dll: &[u8], dir: &str, name: &str) -> Option<HHOOK> {
-    let path = dll_path(dll, dir, name)?;
+    let path = dll_path(dll, dir, name, "dll")?;
     let tid = window_thread(pid)?;
     let export = std::ffi::CString::new(name).ok()?;
     unsafe {
@@ -80,6 +80,24 @@ pub fn load(pid: u32, dll: &[u8], dir: &str, name: &str) -> Option<HHOOK> {
         let _ = PostThreadMessageW(tid, WM_NULL, WPARAM(0), LPARAM(0));
         hook
     }
+}
+
+/// Jogo de 32 bits: quem põe o gancho é o ajudante de 32 bits `helper` (também gravado em `data_dir\<dir>`).
+/// Ele fica de pé até a entrada dele fechar: solte (`drop(child.stdin.take())`) depois que a DLL se prender.
+pub fn load_wow(pid: u32, dll: &[u8], helper: &[u8], dir: &str, name: &str) -> Option<std::process::Child> {
+    use std::io::BufRead;
+    use std::process::{Command, Stdio};
+    let path = dll_path(dll, dir, &format!("{name}32"), "dll")?;
+    let exe = dll_path(helper, dir, "prisma_hook32", "exe")?;
+    let tid = window_thread(pid)?;
+    let mut child = Command::new(exe).arg(&path).arg(name).arg(tid.to_string()).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().ok()?;
+    let mut line = String::new();
+    if child.stdout.take().is_some_and(|o| std::io::BufReader::new(o).read_line(&mut line).is_ok()) && line.trim() == "ok" {
+        return Some(child);
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+    None
 }
 
 fn window_thread(pid: u32) -> Option<u32> {

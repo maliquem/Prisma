@@ -1,6 +1,6 @@
 //! Modo Injeção do motor: põe a DLL de shaders (`shader-hook`) no jogo, passa o perfil e dá sinal de vida. O
 //! efeito roda dentro do jogo, no Present; aqui ficam o menu, os atalhos (`menu`, `next`, `compare`) e a volta
-//! para a janela por cima quando a injeção não serve no jogo (32 bits, DX12, Vulkan, OpenGL, DLL que não entrou).
+//! para a janela por cima quando a injeção não serve no jogo (API sem suporte, DLL que não entrou, jogo que caiu).
 
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -22,21 +22,36 @@ use super::{held, menu, Press};
 const DLL: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/shader-hook/debug/prisma_shader_hook.dll"));
 #[cfg(not(debug_assertions))]
 const DLL: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/shader-hook/release/prisma_shader_hook.dll"));
+/// Jogos de 32 bits: a mesma DLL em i686 e o ajudante que a prende no jogo.
+#[cfg(debug_assertions)]
+const DLL32: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/shader-hook/i686-pc-windows-msvc/debug/prisma_shader_hook.dll"));
+#[cfg(not(debug_assertions))]
+const DLL32: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/shader-hook/i686-pc-windows-msvc/release/prisma_shader_hook.dll"));
+#[cfg(debug_assertions)]
+const HELPER32: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/shader-hook/i686-pc-windows-msvc/debug/prisma_hook32.exe"));
+#[cfg(not(debug_assertions))]
+const HELPER32: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/shader-hook/i686-pc-windows-msvc/release/prisma_hook32.exe"));
 /// Tempo para a DLL carregar e se prender.
 const WAIT_SECS: u64 = 8;
 /// Tempo para o jogo carregar a API de vídeo depois de abrir a janela.
 const API_WAIT: Duration = Duration::from_secs(10);
 
+/// O gancho que pôs a DLL no jogo: o do motor (64 bits) ou o do ajudante de 32 bits.
+enum Hook {
+    Own(HHOOK),
+    Helper(std::process::Child),
+}
+
 /// A memória compartilhada com a DLL e o gancho que a pôs no jogo.
 struct Link {
     map: HANDLE,
     view: *const Shared,
-    hook: std::cell::Cell<Option<HHOOK>>,
+    hook: std::cell::RefCell<Option<Hook>>,
 }
 
 impl Link {
     /// Abre a memória do jogo (ou cria), passa o perfil e a janela, e carrega a DLL se ela ainda não está lá.
-    fn attach(pid: u32, game: HWND, path: &Path) -> Res<Self> {
+    fn attach(pid: u32, game: HWND, path: &Path, wow: bool) -> Res<Self> {
         unsafe {
             let map = CreateFileMappingW(INVALID_HANDLE_VALUE, None, PAGE_READWRITE, 0, std::mem::size_of::<Shared>() as u32, &HSTRING::from(map_name(pid)))?;
             let view = MapViewOfFile(map, FILE_MAP_ALL_ACCESS, 0, 0, 0);
@@ -54,7 +69,12 @@ impl Link {
             if s.magic.load(SeqCst) == MAGIC {
                 eprintln!("shader: a DLL já está no jogo, reconectando");
             } else {
-                me.hook.set(Some(crate::sys::inject::load(pid, DLL, "shaders", "prisma_shader_hook").ok_or("a DLL não entrou no jogo")?));
+                let hook = if wow {
+                    crate::sys::inject::load_wow(pid, DLL32, HELPER32, "shaders", "prisma_shader_hook").map(Hook::Helper)
+                } else {
+                    crate::sys::inject::load(pid, DLL, "shaders", "prisma_shader_hook").map(Hook::Own)
+                };
+                *me.hook.borrow_mut() = Some(hook.ok_or("a DLL não entrou no jogo")?);
             }
             Ok(me)
         }
@@ -66,10 +86,16 @@ impl Link {
 
     /// A DLL já se prendeu ao jogo: o gancho pode sair.
     fn unhook(&self) {
-        if let Some(h) = self.hook.take() {
-            unsafe {
+        match self.hook.take() {
+            Some(Hook::Own(h)) => unsafe {
                 let _ = UnhookWindowsHookEx(h);
+            },
+            // Fim da entrada: o ajudante solta o gancho e sai.
+            Some(Hook::Helper(mut c)) => {
+                drop(c.stdin.take());
+                let _ = c.wait();
             }
+            None => {}
         }
     }
 }
@@ -121,11 +147,7 @@ fn run_in(path: &Path, game: HWND, pid: u32, process: HANDLE) -> Res<bool> {
     // Sem cadeia aqui: o motor só acompanha o perfil para o menu; quem desenha é a DLL.
     let mut eng = Engine::open(path, &d.dev, true)?;
     let mut wow = BOOL(0);
-    if unsafe { IsWow64Process(process, &mut wow) }.is_ok() && wow.as_bool() {
-        // A DLL é de 64 bits. `api=x86` deixa a opção desligada na página, com o motivo.
-        eng.edit(&d.dev, |p| p.api = "x86".into());
-        return to_overlay(&mut eng, &d.dev, "jogo de 32 bits");
-    }
+    let wow = unsafe { IsWow64Process(process, &mut wow) }.is_ok() && wow.as_bool();
     let since = Instant::now();
     let mut api = crate::meter::video_api(pid);
     while api.is_empty() && since.elapsed() < API_WAIT {
@@ -139,7 +161,7 @@ fn run_in(path: &Path, game: HWND, pid: u32, process: HANDLE) -> Res<bool> {
     if !api.is_empty() && !api_supported(&api) {
         return to_overlay(&mut eng, &d.dev, &api);
     }
-    let link = match Link::attach(pid, game, &eng.path) {
+    let link = match Link::attach(pid, game, &eng.path, wow) {
         Ok(l) => l,
         Err(e) => return to_overlay(&mut eng, &d.dev, &e.to_string()),
     };
@@ -148,6 +170,8 @@ fn run_in(path: &Path, game: HWND, pid: u32, process: HANDLE) -> Res<bool> {
     let mut menu = menu::Menu::new();
     let (mut fg, mut menu_key, mut next_key) = (false, Press::default(), Press::default());
     let (since, mut polled, mut ready, mut sent) = (Instant::now(), Instant::now(), None, eng.path.clone());
+    // Último Present visto: queda na injeção acontece com o jogo desenhando; a do jogo saindo, depois de parar.
+    let (mut presents, mut drawing) = (0, Instant::now());
     let result = loop {
         unsafe {
             MsgWaitForMultipleObjects(None, false, if menu.open || fg { 16 } else { 100 }, QS_ALLINPUT);
@@ -159,6 +183,7 @@ fn run_in(path: &Path, game: HWND, pid: u32, process: HANDLE) -> Res<bool> {
         }
         if !unsafe { IsWindow(Some(game)) }.as_bool() {
             // A janela some um pouco antes do processo: espera o código de saída para saber se caiu.
+            let idle = drawing.elapsed();
             let mut code = None;
             for _ in 0..20 {
                 code = exit_code(process);
@@ -167,7 +192,11 @@ fn run_in(path: &Path, game: HWND, pid: u32, process: HANDLE) -> Res<bool> {
                 }
                 std::thread::sleep(Duration::from_millis(100));
             }
-            if code.is_some_and(crate::sys::inject::is_crash) {
+            // Sem Present há 250 ms o jogo já estava saindo: a queda é dele (o Castlevania Advance Collection cai
+            // assim sem o Prisma), e o perfil fica na Injeção.
+            if code.is_some_and(crate::sys::inject::is_crash) && idle >= Duration::from_millis(250) {
+                eprintln!("shader: o jogo caiu ao sair ({:#x}), {} ms depois do último quadro; o perfil continua na Injeção", code.unwrap(), idle.as_millis());
+            } else if code.is_some_and(crate::sys::inject::is_crash) {
                 eprintln!("shader: o jogo caiu com a injeção ({:#x}); o perfil volta para Por cima", code.unwrap());
                 eng.edit(&d.dev, |p| p.inject = false);
             }
@@ -175,6 +204,9 @@ fn run_in(path: &Path, game: HWND, pid: u32, process: HANDLE) -> Res<bool> {
             break Ok(true);
         }
         let s = link.s();
+        if s.presents.load(Relaxed) != presents {
+            (presents, drawing) = (s.presents.load(Relaxed), Instant::now());
+        }
         s.beat.store(unsafe { GetTickCount64() }, Relaxed);
         match ready {
             None => {

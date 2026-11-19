@@ -421,13 +421,13 @@ unsafe fn install_dxgi() -> Res<()> {
 // ---------- D3D9 ----------
 
 unsafe extern "system" fn on_d9_present(this: *mut c_void, a: *const c_void, b: *const c_void, w: HWND, r: *const c_void) -> HRESULT {
-    guard(|| d9_present(this, w));
+    guard(|| d9_present(this, w, a as *const RECT));
     let f: D9Present = std::mem::transmute(tramp(this, SLOT_D9_PRESENT));
     f(this, a, b, w, r)
 }
 
 unsafe extern "system" fn on_d9_present_ex(this: *mut c_void, a: *const c_void, b: *const c_void, w: HWND, r: *const c_void, flags: u32) -> HRESULT {
-    guard(|| d9_present(this, w));
+    guard(|| d9_present(this, w, a as *const RECT));
     let f: D9PresentEx = std::mem::transmute(tramp(this, SLOT_D9_PRESENT_EX));
     f(this, a, b, w, r, flags)
 }
@@ -445,7 +445,8 @@ unsafe extern "system" fn on_d9_reset_ex(this: *mut c_void, pp: *mut c_void, mod
     f(this, pp, mode)
 }
 
-unsafe fn d9_present(this: *mut c_void, over: HWND) {
+/// `src`: o pedaço do back buffer que o jogo apresenta (o Guilty Gear XX desenha num canto e mostra só ele).
+unsafe fn d9_present(this: *mut c_void, over: HWND, src: *const RECT) {
     let Some(s) = shared() else { return };
     s.presents.fetch_add(1, Relaxed);
     let Some(dev) = IDirect3DDevice9::from_raw_borrowed(&this) else { return };
@@ -491,7 +492,7 @@ unsafe fn d9_present(this: *mut c_void, over: HWND) {
     if x.errors >= MAX_ERRORS {
         return;
     }
-    match x.frame(dev, s) {
+    match x.frame(dev, s, src.as_ref()) {
         Ok(()) => x.errors = 0,
         Err(e) => {
             x.errors += 1;
@@ -548,11 +549,19 @@ impl D9 {
                 self.chain = Some(c);
                 say!("shader: cadeia D3D9 de {} preset(s) carregada em {} ms", paths.len(), t.elapsed().as_millis());
             }
-            Err(e) => say!("shader: {e}"),
+            Err(e) => {
+                // O jeito que o jogo criou o dispositivo explica a maioria das recusas do D3D9.
+                let (mut cp, mut caps) = (D3DDEVICE_CREATION_PARAMETERS::default(), D3DCAPS9::default());
+                unsafe {
+                    let _ = dev.GetCreationParameters(&mut cp);
+                    let _ = dev.GetDeviceCaps(&mut caps);
+                }
+                say!("shader: {e} (dispositivo {:#x}, VS {:#x}, PS {:#x})", cp.BehaviorFlags, caps.VertexShaderVersion, caps.PixelShaderVersion)
+            }
         }
     }
 
-    unsafe fn frame(&mut self, dev: &IDirect3DDevice9, s: &Shared) -> Res<()> {
+    unsafe fn frame(&mut self, dev: &IDirect3DDevice9, s: &Shared, src: Option<&RECT>) -> Res<()> {
         if self.polled.elapsed().as_millis() >= 250 {
             self.polled = Instant::now();
             let seq = s.seq.load(Acquire);
@@ -589,26 +598,32 @@ impl D9 {
             }
             return Ok(());
         }
-        let key = (d.Width, d.Height, d.Format);
+        let full = RECT { left: 0, top: 0, right: d.Width as i32, bottom: d.Height as i32 };
+        let r = src.map_or(full, |r| RECT { left: r.left.max(0), top: r.top.max(0), right: r.right.min(full.right), bottom: r.bottom.min(full.bottom) });
+        if r.right <= r.left || r.bottom <= r.top {
+            return Ok(());
+        }
+        let (w, h) = ((r.right - r.left) as u32, (r.bottom - r.top) as u32);
+        let key = (w, h, d.Format);
         if self.input.as_ref().is_none_or(|i| i.0 != key) {
-            let (t, sf) = target(dev, d.Width, d.Height, d.Format)?;
+            let (t, sf) = target(dev, w, h, d.Format)?;
             self.input = Some((key, t, sf));
-            say!("shader: back buffer {}x{} {:?}", d.Width, d.Height, d.Format);
+            say!("shader: back buffer {}x{} {:?}, imagem {w}x{h} em {},{}", d.Width, d.Height, d.Format, r.left, r.top);
         }
         let (_, tex, surf) = self.input.as_ref().unwrap();
-        dev.StretchRect(&back, std::ptr::null(), surf, std::ptr::null(), D3DTEXF_NONE)?;
+        dev.StretchRect(&back, &r, surf, std::ptr::null(), D3DTEXF_NONE)?;
         let mut input = tex;
         // `auto`: o mesmo detector de blocos do D3D11, com as faixas lidas pela CPU. 16 bits por pixel fica sem.
         if self.t.profile.input == "auto" && matches!(d.Format, D3DFMT_X8R8G8B8 | D3DFMT_A8R8G8B8) {
-            d9_detect(&mut self.detect, &mut self.strips, dev, surf, d.Width, d.Height, d.Format)?;
+            d9_detect(&mut self.detect, &mut self.strips, dev, surf, w, h, d.Format)?;
         }
         // Redução por StretchRect de ponto.
-        if let Some(k) = blocks::reduce_for(&self.t.profile.input, d.Height, self.detect.found) {
-            let size = blocks::reduced_size(d.Width, d.Height, k);
+        if let Some(k) = blocks::reduce_for(&self.t.profile.input, h, self.detect.found) {
+            let size = blocks::reduced_size(w, h, k);
             if self.small.as_ref().is_none_or(|x| x.0 != size) {
                 let (t, sf) = target(dev, size.0, size.1, d.Format)?;
                 self.small = Some((size, t, sf));
-                say!("shader: entrada {}x{} → {}x{}", d.Width, d.Height, size.0, size.1);
+                say!("shader: entrada {w}x{h} → {}x{}", size.0, size.1);
             }
             let (_, t, sf) = self.small.as_ref().unwrap();
             dev.StretchRect(surf, std::ptr::null(), sf, std::ptr::null(), D3DTEXF_POINT)?;
@@ -620,7 +635,7 @@ impl D9 {
             None => self.sb = Some(dev.CreateStateBlock(D3DSBT_ALL)?),
         }
         let (rt, ds) = (dev.GetRenderTarget(0).ok(), dev.GetDepthStencilSurface().ok());
-        let vp = Viewport { x: 0.0, y: 0.0, mvp: None, output: &back, size: Size::new(d.Width, d.Height) };
+        let vp = Viewport { x: r.left as f32, y: r.top as f32, mvp: None, output: &back, size: Size::new(w, h) };
         let r = self.chain.as_mut().unwrap().frame(input, &vp, self.frame, None);
         let _ = self.sb.as_ref().unwrap().Apply();
         if let Some(rt) = &rt {
@@ -698,6 +713,10 @@ unsafe fn target(dev: &IDirect3DDevice9, w: u32, h: u32, fmt: D3DFORMAT) -> Res<
 }
 
 unsafe fn install_d9() -> Res<()> {
+    // A cadeia D3D9 chama o D3DX9_43 (DirectX de junho de 2010), carregado só aqui (/DELAYLOAD): nem todo PC tem.
+    if LoadLibraryW(w!("D3DX9_43.dll")).is_err() {
+        return Err("o D3D9 precisa do D3DX9_43.dll (DirectX de junho de 2010), que não está neste PC".into());
+    }
     let window = dummy_window()?;
     let r = (|| -> Res<()> {
         let mut pp = D3DPRESENT_PARAMETERS { BackBufferWidth: 2, BackBufferHeight: 2, BackBufferCount: 1, SwapEffect: D3DSWAPEFFECT_DISCARD, hDeviceWindow: window, Windowed: TRUE, ..Default::default() };
