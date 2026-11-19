@@ -2808,3 +2808,88 @@ o que cada programa pode usar	доступно каждой программе
 Pico (sessão)	Пик (сеанс)
 Clock do núcleo · 60 s	Частота ядра · 60 с
 Temperatura · 60 s	Температура · 60 с
+Shaders	Shaders
+Filtros do RetroArch (.slang) por cima de qualquer jogo: CRT, scanlines, NTSC, nitidez. Um perfil por jogo.	Фильтры RetroArch (.slang) поверх любой игры: CRT, scanlines, NTSC, резкость. Один профиль на игру.
+Nenhum jogo ainda. Use Adicionar no cartão Jogo e escolha o .exe; depois baixe a biblioteca e adicione um passe.	Игр пока нет. Нажмите «Добавить» на карточке «Игры» и выберите .exe; затем скачайте библиотеку и добавьте проход.
+Nenhum jogo	Нет игры
+{} · 1 passe	{} · 1 проход
+{} · {} passes	{} · проходов: {}
+Anti-cheat: o shader não entra neste jogo	Античит: shader не применяется в этой игре
+Aplicando agora	Применяется сейчас
+Ligado: entra quando o jogo abrir	Вкл.: применится при запуске игры
+Biblioteca de shaders	Библиотека shader
+Extraindo… pode levar alguns minutos.	Распаковка… может занять несколько минут.
+Baixando de github.com/libretro/slang-shaders: {} MB	Загрузка с github.com/libretro/slang-shaders: {} МБ
+O download falhou. Tente de novo.	Не удалось скачать. Попробуйте ещё раз.
+Instalada: {} presets.	Установлено: {} preset.
+Não baixada. Não vem com o Prisma por causa das licenças.	Не скачана. Не входит в Prisma из-за лицензий.
+Baixar	Скачать
+Trocar…	Сменить…
+Liga / desliga	Вкл. / выкл.
+Menu no jogo	Меню в игре
+Próximo perfil	След. профиль
+Comparar (segurar)	Сравнить (удерж.)
+Passes	Проходы
+Testar com imagem	Тест на картинке
+Cena 2D (320×240)	Сцена 2D (320×240)
+Barras de cor e grade	Цветные полосы и сетка
+Abrir imagem ou captura…	Открыть изображение или снимок…
+Adicionar passe	Добавить проход
+Carregar preset	Загрузить preset
+nada	ничего
+Nenhum passe. Adicione um preset.	Нет проходов. Добавьте preset.
+{} · {} parâmetros	{} · {} параметров
+Ligar ou desligar só este passe	Включить или выключить только этот проход
+O nº 1 roda primeiro, sobre a imagem do jogo; o último fica por cima. Cada linha pode ser um preset inteiro (.slangp) ou um .slang avulso.	№ 1 идёт первым, по изображению игры; последний оказывается сверху. Каждая строка может быть целым preset (.slangp) или отдельным .slang.
+Como aplicar	Как применять
+Por cima	Поверх
+Injeção (em breve)	Внедрение (скоро)
+Bloqueado: este jogo tem anti-cheat	Заблокировано: в этой игре есть античит
+Em breve: aplicar dentro do jogo, sem o quadro de atraso	Скоро: применение внутри игры, без лишнего кадра задержки
+Janela por cima do jogo, capturando a imagem. DX9 a 12, Vulkan e OpenGL.	Окно поверх игры, захватывающее изображение. DX9–12, Vulkan и OpenGL.
+Resolução de entrada	Входное разрешение
+Original	Оригинальное
+240 linhas	240 строк
+480 linhas	480 строк
+720 linhas	720 строк
+÷2	÷2
+÷3	÷3
+÷4	÷4
+Automática acha o tamanho do pixel do jogo e entrega ao filtro a resolução original.	«Автоматически» определяет размер пикселя игры и передаёт фильтру исходное разрешение.
+Gravar e transmitir com o shader	Записывать и транслировать с shader
+Captura e Compartilhar tela usam a imagem já filtrada	Захват и Общий экран используют уже отфильтрованное изображение
+Anti-cheat detectado: o Prisma não aplica shader neste jogo, nem por cima.	Обнаружен античит: Prisma не применяет shader в этой игре, даже поверх.
+Em tela cheia exclusiva o filtro some. Use janela sem borda ou ligue o Fullscreenizer para este jogo.	В эксклюзивном полноэкранном режиме фильтр пропадает. Используйте окно без рамки или включите Fullscreenizer для этой игры.
+Ligar Fullscreenizer	Включить Fullscreenizer
+Monitor em HDR: a imagem é convertida para SDR antes do filtro (brilho acima do branco é cortado).	Монитор в HDR: изображение преобразуется в SDR перед фильтром (яркость выше белого обрезается).
+Salvar perfil	Сохранить профиль
+Salvar como preset…	Сохранить как preset…
+Perfil salvo para este jogo	Профиль сохранён для этой игры
+Voltou ao último salvo	Возврат к последнему сохранённому
+Parâmetros	Параметры
+Restaurar padrão	Сбросить по умолчанию
+Buscar parâmetro (ex.: mask, scan, gamma)	Поиск параметра (напр.: mask, scan, gamma)
+Só os alterados	Только изменённые
+Nenhum passe.	Нет проходов.
+Este passe não tem parâmetros.	В этом проходе нет параметров.
+padrão	по умолч.
+Mínimo, máximo e passo vêm do próprio shader. A mudança aparece no jogo na hora; laranja é diferente do padrão. Botão direito volta o valor.	Минимум, максимум и шаг берутся из самого shader. Изменение сразу видно в игре; оранжевый — отличается от значения по умолчанию. Правая кнопка возвращает значение.
+Carregar preset (substitui os passes)	Загрузить preset (заменяет проходы)
+Buscar em {} presets (ex.: lottes, ntsc, vhs)	Поиск среди {} preset (напр.: lottes, ntsc, vhs)
+A biblioteca está vazia. Baixe no cartão Biblioteca ou escolha outra pasta em Trocar.	Библиотека пуста. Скачайте её на карточке «Библиотека» или выберите другую папку кнопкой «Сменить».
+Preset (.slangp) entra como um passe com todas as passadas dele; .slang entra como uma passada só.	Preset (.slangp) добавляется как один проход со всеми своими проходами; .slang — как один проход.
+Carregar	Загрузить
+Adicionar ao fim	Добавить в конец
+Não deu para gravar o perfil	Не удалось сохранить профиль
+Este jogo não tem perfil de shader	У этой игры нет профиля shader
+Shader ligado	Shader включён
+Shader desligado	Shader выключен
+Preset exportado	Preset экспортирован
+Não deu para gravar o preset	Не удалось сохранить preset
+Não deu para juntar os passes num preset	Не удалось объединить проходы в preset
+Página Shaders	Страница «Shaders»
+Shader liga / desliga	Shader вкл. / выкл.
+Presets de shader	Preset для shader
+Perfil do jogo	Профиль игры
+Imagem do jogo	Изображение игры
+{} já está em uso por outro programa	{} уже занято другой программой

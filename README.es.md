@@ -50,6 +50,7 @@ Prisma consulta esta página una vez al día. Cuando hay versión nueva y abres 
 - **Energía:** detecta un juego o carga alta y cambia el plan de energía, volviendo al reposo tras 60 s sin carga. Con el cambio automático apagado, un plan fijo queda activo hasta que vuelva. Tú eliges el porcentaje y el tiempo que cuentan como carga para CPU y GPU. Selecciona un plan para editarlo con todas las opciones que Windows registra, incluidas las ocultas, o para importar y exportar archivos .pow. El clic derecho en un plan también ofrece Exportar y Editar. La primera edición guarda una copia del plan original. Los planes de Prisma llevan el nombre en el idioma elegido y cambian con él.
 - **Perfil por juego:** recuerda el volumen de cada programa.
 - **Fullscreenizer:** convierte la ventana en foco en pantalla completa sin bordes. Los programas en los que lo usas entran en una lista guardada, donde puedes añadirlos desde la lista de programas o por su .exe, quitarlos y marcar Automático para aplicarlo siempre que abran.
+- **Shaders:** filtros de RetroArch (CRT, líneas de barrido, NTSC, nitidez) sobre cualquier juego, un perfil por juego. Prisma no incluye los shaders: descarga la biblioteca desde la página o indica una carpeta que ya tengas. Cada juego tiene su propia cadena de pasos, controles deslizantes para cada parámetro y un menú dentro del juego.
 - **Atajos:** tus propios atajos de teclado que abren programas, desde la lista de programas o un .exe, opcionalmente como administrador (Windows pide confirmación), por ejemplo Ctrl + Alt + T para el terminal.
 - **Sonido:** volumen por programa, y las teclas de volumen del teclado, con un modificador, cambian solo el programa en foco. Elige el dispositivo de salida y entrada de cada programa, incluidos programas añadidos a mano desde la lista de programas o por su .exe. La lista tiene lo que muestra el menú Inicio, apps de la Microsoft Store, programas instalados, juegos de Steam y Epic y lo que esté abierto. Esto usa una función interna de Windows, y algunos programas solo cambian de dispositivo tras volver a abrirse. Los programas fijados siguen en la lista aunque estén cerrados y vuelven con su volumen guardado. Los atajos de dispositivo predeterminado cambian a la vez la salida y la entrada de Windows, cada uno con los dispositivos que elijas. Mantener el sonido despierto reproduce una señal sin sonido audible, para que HDMI y Dolby no corten el inicio del siguiente sonido, y se detiene solo tras 10 minutos sin uso. Cada dispositivo de salida también tiene ecualizador, paramétrico o gráfico, con perfiles guardados, ganancia y retardo por canal en 5.1 y 7.1, y el motor se instala desde la propia página.
 - **Widget:** CPU, GPU, RAM, VRAM, temperaturas, plan de energía, HDR y VRR por encima de todo, en cuatro estilos; tú eliges qué se muestra. El estilo Píldora puede quedar fijado en la barra de tareas de Windows 11, y un clic en él abre un panel detallado.
@@ -78,6 +79,10 @@ Todos se pueden cambiar en el programa. Si la combinación nueva ya es de otra f
 | Acción | Atajo |
 | --- | --- |
 | Fullscreenizer | Ctrl + Alt + F |
+| Shaders activados / desactivados | Ctrl + Alt + H |
+| Menú de Shaders en el juego | Ctrl + Alt + M |
+| Siguiente perfil de Shaders | Ctrl + Alt + D |
+| Comparar Shaders (mantener) | Ctrl + Alt + C |
 | Volumen del programa en foco | Ctrl + teclas de volumen y silencio |
 | Widget | Ctrl + Alt + W |
 | Optimizar | Ctrl + Alt + O |
@@ -100,6 +105,7 @@ En una foto: Enter o Ctrl + C copia, Ctrl + S guarda, Ctrl + Z deshace y Esc can
 ## Límites
 
 - Un juego en pantalla completa exclusiva debe estar en modo ventana antes de usar el Fullscreenizer.
+- Los Shaders no se aplican a juegos con antitrampas ni en pantalla completa exclusiva (usa una ventana sin bordes o el Fullscreenizer), un monitor HDR se convierte a SDR antes del filtro y el modo de inyección aún no está listo.
 - No uses la inyección en juegos en línea. La detección de antitrampas reconoce archivos y títulos conocidos, y no encontrar nada no prueba que un juego no tenga. Puedes elegir Driver como método para cualquier juego en la página Medidor.
 - Los juegos DirectX 9 y Vulkan usan el límite del driver, que se aplica al reabrir.
 - No hay lectura de temperatura ni consumo de la CPU, porque necesitan un driver de núcleo.

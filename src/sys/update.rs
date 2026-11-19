@@ -173,6 +173,28 @@ pub fn download(url: &str) -> Result<Vec<u8>, ()> {
     Ok(body)
 }
 
+/// Baixa direto para `path`, sem o limite de `MAX_SIZE` (a biblioteca de shaders passa dele).
+/// `progress` recebe o que já veio e o total (0 quando o servidor não diz).
+pub fn download_to(url: &str, path: &std::path::Path, mut progress: impl FnMut(usize, usize)) -> Result<(), ()> {
+    use std::io::Write;
+    let r = send(url, "", true)?;
+    if r.status != 200 {
+        return Err(());
+    }
+    let mut f = std::io::BufWriter::new(std::fs::File::create(path).map_err(|_| ())?);
+    let (mut got, mut ok) = (0, true);
+    read(&r, |c| {
+        ok &= f.write_all(c).is_ok();
+        got += c.len();
+        progress(got, r.total as usize);
+    })?;
+    if ok && f.flush().is_ok() {
+        Ok(())
+    } else {
+        Err(())
+    }
+}
+
 /// Endereço final do arquivo: cada conexão vai direto a ele e evita mais um passo pelo github.com.
 fn final_url(url: &str) -> Option<String> {
     let r = send(url, "", false).ok()?;

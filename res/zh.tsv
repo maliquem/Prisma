@@ -2808,3 +2808,88 @@ o que cada programa pode usar	每个程序可使用的量
 Pico (sessão)	峰值（本次）
 Clock do núcleo · 60 s	核心频率 · 60 秒
 Temperatura · 60 s	温度 · 60 秒
+Shaders	Shaders
+Filtros do RetroArch (.slang) por cima de qualquer jogo: CRT, scanlines, NTSC, nitidez. Um perfil por jogo.	适用于任何游戏的 RetroArch (.slang) 滤镜：CRT、扫描线、NTSC、锐化。每个游戏一个配置。
+Nenhum jogo ainda. Use Adicionar no cartão Jogo e escolha o .exe; depois baixe a biblioteca e adicione um passe.	还没有游戏。在“游戏”卡片上点击“添加”并选择 .exe；然后下载库并添加一个 pass。
+Nenhum jogo	无游戏
+{} · 1 passe	{} · 1 个 pass
+{} · {} passes	{} · {} 个 pass
+Anti-cheat: o shader não entra neste jogo	反作弊：shader 不会应用于此游戏
+Aplicando agora	正在应用
+Ligado: entra quando o jogo abrir	开：游戏打开时应用
+Biblioteca de shaders	Shader 库
+Extraindo… pode levar alguns minutos.	正在解压… 可能需要几分钟。
+Baixando de github.com/libretro/slang-shaders: {} MB	正在从 github.com/libretro/slang-shaders 下载：{} MB
+O download falhou. Tente de novo.	下载失败。请重试。
+Instalada: {} presets.	已安装：{} 个 preset。
+Não baixada. Não vem com o Prisma por causa das licenças.	未下载。因许可原因，Prisma 不自带。
+Baixar	下载
+Trocar…	更改…
+Liga / desliga	开 / 关
+Menu no jogo	游戏内菜单
+Próximo perfil	下一个配置
+Comparar (segurar)	对比（按住）
+Passes	Pass
+Testar com imagem	用图像测试
+Cena 2D (320×240)	2D 场景 (320×240)
+Barras de cor e grade	色条和网格
+Abrir imagem ou captura…	打开图像或截图…
+Adicionar passe	添加 pass
+Carregar preset	加载 preset
+nada	无
+Nenhum passe. Adicione um preset.	没有 pass。请添加一个 preset。
+{} · {} parâmetros	{} · {} 个参数
+Ligar ou desligar só este passe	仅开启或关闭此 pass
+O nº 1 roda primeiro, sobre a imagem do jogo; o último fica por cima. Cada linha pode ser um preset inteiro (.slangp) ou um .slang avulso.	第 1 个最先运行，作用于游戏画面；最后一个在最上层。每一行可以是完整的 preset (.slangp)，也可以是单独的 .slang。
+Como aplicar	应用方式
+Por cima	叠加
+Injeção (em breve)	注入（即将推出）
+Bloqueado: este jogo tem anti-cheat	已阻止：此游戏有反作弊
+Em breve: aplicar dentro do jogo, sem o quadro de atraso	即将推出：在游戏内部应用，没有一帧的延迟
+Janela por cima do jogo, capturando a imagem. DX9 a 12, Vulkan e OpenGL.	覆盖在游戏上的窗口，捕获画面。DX9 至 12、Vulkan 和 OpenGL。
+Resolução de entrada	输入分辨率
+Original	原始
+240 linhas	240 行
+480 linhas	480 行
+720 linhas	720 行
+÷2	÷2
+÷3	÷3
+÷4	÷4
+Automática acha o tamanho do pixel do jogo e entrega ao filtro a resolução original.	“自动”会找出游戏的像素大小，并把原始分辨率交给滤镜。
+Gravar e transmitir com o shader	带 shader 录制和串流
+Captura e Compartilhar tela usam a imagem já filtrada	捕获和屏幕共享使用已滤镜处理的画面
+Anti-cheat detectado: o Prisma não aplica shader neste jogo, nem por cima.	检测到反作弊：Prisma 不会对此游戏应用 shader，叠加模式也不会。
+Em tela cheia exclusiva o filtro some. Use janela sem borda ou ligue o Fullscreenizer para este jogo.	独占全屏时滤镜会消失。请使用无边框窗口，或为此游戏开启 Fullscreenizer。
+Ligar Fullscreenizer	开启 Fullscreenizer
+Monitor em HDR: a imagem é convertida para SDR antes do filtro (brilho acima do branco é cortado).	HDR 显示器：画面会先转换为 SDR 再经过滤镜（高于白色的亮度会被裁掉）。
+Salvar perfil	保存配置
+Salvar como preset…	另存为 preset…
+Perfil salvo para este jogo	已为此游戏保存配置
+Voltou ao último salvo	已恢复到上次保存
+Parâmetros	参数
+Restaurar padrão	恢复默认
+Buscar parâmetro (ex.: mask, scan, gamma)	搜索参数（例如：mask、scan、gamma）
+Só os alterados	仅已更改的
+Nenhum passe.	没有 pass。
+Este passe não tem parâmetros.	此 pass 没有参数。
+padrão	默认
+Mínimo, máximo e passo vêm do próprio shader. A mudança aparece no jogo na hora; laranja é diferente do padrão. Botão direito volta o valor.	最小值、最大值和步长来自 shader 本身。更改会立即在游戏中显示；橙色表示与默认值不同。右键可恢复该值。
+Carregar preset (substitui os passes)	加载 preset（替换所有 pass）
+Buscar em {} presets (ex.: lottes, ntsc, vhs)	在 {} 个 preset 中搜索（例如：lottes、ntsc、vhs）
+A biblioteca está vazia. Baixe no cartão Biblioteca ou escolha outra pasta em Trocar.	库是空的。请在“库”卡片上下载，或用“更改”选择其他文件夹。
+Preset (.slangp) entra como um passe com todas as passadas dele; .slang entra como uma passada só.	Preset (.slangp) 会连同它的所有 pass 作为一个 pass 加入；.slang 则作为单个 pass 加入。
+Carregar	加载
+Adicionar ao fim	添加到末尾
+Não deu para gravar o perfil	无法保存配置
+Este jogo não tem perfil de shader	此游戏没有 shader 配置
+Shader ligado	Shader 已开启
+Shader desligado	Shader 已关闭
+Preset exportado	Preset 已导出
+Não deu para gravar o preset	无法保存 preset
+Não deu para juntar os passes num preset	无法将各 pass 合并为 preset
+Página Shaders	Shaders 页面
+Shader liga / desliga	Shader 开 / 关
+Presets de shader	Shader preset
+Perfil do jogo	游戏配置
+Imagem do jogo	游戏画面
+{} já está em uso por outro programa	{} 已被其他程序占用

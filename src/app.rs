@@ -80,6 +80,8 @@ pub const WM_PICK_COPY: u32 = WM_APP + 98;
 const WM_PASTE_KEY: u32 = WM_APP + 99;
 /// Escolher o .exe de um atalho da página Atalhos; WPARAM é o atalho.
 const WM_PICK_RUN: u32 = WM_APP + 100;
+/// Janelas da página Shaders; o WPARAM diz qual (`pages::shaders::PICK_*`).
+pub const WM_PICK_SHADER: u32 = WM_APP + 104;
 const WM_POW_OUT: u32 = WM_APP + 82;
 const WM_REPORT_PHOTO: u32 = WM_APP + 84;
 const WM_REPORT_DONE: u32 = WM_APP + 85;
@@ -96,6 +98,10 @@ static FORCE_VK: AtomicU32 = AtomicU32::new(0);
 static FORCE_MODS: AtomicU32 = AtomicU32::new(0);
 static FORCE_HUB: AtomicIsize = AtomicIsize::new(0);
 static FORCE_HELD: AtomicBool = AtomicBool::new(false);
+/// Liga/desliga do shader também pelo gancho: há jogos que bloqueiam os atalhos do Windows com eles em foco.
+static SHADER_VK: AtomicU32 = AtomicU32::new(0);
+static SHADER_MODS: AtomicU32 = AtomicU32::new(0);
+static SHADER_HELD: AtomicBool = AtomicBool::new(false);
 /// Ctrl+Shift+Esc pelo gancho, quando o Windows não deixa trocar o Gerenciador no registro.
 static TM_HOOK: AtomicBool = AtomicBool::new(false);
 static TM_HELD: AtomicBool = AtomicBool::new(false);
@@ -155,6 +161,18 @@ unsafe extern "system" fn key_hook(code: i32, w: WPARAM, l: LPARAM) -> LRESULT {
                     }
                     return LRESULT(1);
                 }
+            }
+        }
+        if vk == SHADER_VK.load(Ordering::Relaxed) {
+            let press = w.0 as u32 == WM_KEYDOWN || w.0 as u32 == WM_SYSKEYDOWN;
+            if !press {
+                SHADER_HELD.store(false, Ordering::Relaxed);
+            } else if held_mods() == SHADER_MODS.load(Ordering::Relaxed) {
+                if !SHADER_HELD.swap(true, Ordering::Relaxed) {
+                    let hub = HWND(FORCE_HUB.load(Ordering::Relaxed) as *mut _);
+                    let _ = PostMessageW(Some(hub), WM_HOTKEY, WPARAM(HK_SHADER as usize), LPARAM(0));
+                }
+                return LRESULT(1);
             }
         }
         if vk == FORCE_VK.load(Ordering::Relaxed) {
@@ -221,6 +239,7 @@ fn hk_place_page(id: i32) -> &'static str {
         HK_METER_C | HK_METER_F | HK_METER_O | HK_LIMIT_T | HK_LIMIT_UP | HK_LIMIT_DOWN | HK_LOG | HK_METER_KEYS => "Medidor",
         HK_FIND => "Pesquisar",
         HK_MACRO => "Controles",
+        HK_SHADER => "Shaders",
         id if id >= HK_RUN => "Atalhos",
         _ => "Som",
     }
@@ -248,6 +267,7 @@ const HK_EXPLORER: i32 = 22;
 const HK_FIND: i32 = 23;
 const HK_MACRO: i32 = 24;
 const HK_SHOW: i32 = 25;
+const HK_SHADER: i32 = 26;
 const HK_VOL_UP: i32 = 10;
 const HK_VOL_DOWN: i32 = 11;
 const HK_MUTE: i32 = 12;
@@ -1022,6 +1042,7 @@ pub fn start(background: bool) {
                 "--page=meter" => Page::Meter,
                 "--page=capture" => Page::Capture,
                 "--page=share" => Page::Share,
+                "--page=shaders" => Page::Shaders,
                 "--page=controllers" => Page::Controllers,
                 "--page=widget" => Page::Widget,
                 "--page=adjust" => Page::Adjust,
@@ -1177,7 +1198,7 @@ impl App {
     pub fn register_hotkeys(&mut self) {
         self.unhook_force_key();
         unsafe {
-            for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER, HK_FIND, HK_MACRO, HK_SHOW, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE] {
+            for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER, HK_FIND, HK_MACRO, HK_SHOW, HK_SHADER, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE] {
                 let _ = UnregisterHotKey(Some(self.hub), id);
             }
             for i in 0..SND_KEYS_MAX as i32 {
@@ -1218,7 +1239,13 @@ impl App {
             if norepeat {
                 m |= MOD_NOREPEAT;
             }
-            if unsafe { RegisterHotKey(Some(self.hub), id, m, hk.vk) }.is_err() {
+            if unsafe { RegisterHotKey(Some(self.hub), id, m, hk.vk) }.is_ok() {
+                // Só a combinação que é nossa: a de outro programa continua dele.
+                if id == HK_SHADER {
+                    SHADER_VK.store(hk.vk, Ordering::Relaxed);
+                    SHADER_MODS.store(hk.mods, Ordering::Relaxed);
+                }
+            } else {
                 if id == HK_FORCE {
                     force_hook = Some(hk);
                 } else {
@@ -1237,6 +1264,7 @@ impl App {
         if let Some(hk) = force_hook {
             self.hook_force_key(hk);
         }
+        self.sync_hook();
     }
 
     /// Atalhos globais: número, combinação, nome da função e se ignora a repetição da tecla.
@@ -1269,6 +1297,10 @@ impl App {
             (HK_MUTE, Hotkey::new(c.vol_mods, VK_MUTE), "Mudo", true),
         ];
         // Pesquisa desligada: o atalho fica guardado, mas não conta.
+        // Shaders: só com algum perfil a combinação fica presa no Windows.
+        if crate::pages::shaders::in_use() {
+            list.push((HK_SHADER, c.hk_shader[0], "Shader liga / desliga", true));
+        }
         if c.search_on {
             list.push((HK_FIND, c.hk_find, "Pesquisar arquivos", true));
         }
@@ -1307,6 +1339,7 @@ impl App {
             HK_FIND => &mut c.hk_find,
             HK_MACRO => &mut c.hk_macro,
             HK_SHOW => &mut c.hk_show,
+            HK_SHADER => &mut c.hk_shader[0],
             id if id >= HK_RUN => &mut c.run_keys.get_mut((id - HK_RUN) as usize)?.key,
             id if id >= HK_SND => &mut c.snd_keys.get_mut((id - HK_SND) as usize)?.key,
             _ => return None,
@@ -1345,7 +1378,7 @@ impl App {
         if on {
             self.unhook_force_key();
             unsafe {
-                for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER, HK_FIND, HK_MACRO, HK_SHOW] {
+                for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER, HK_FIND, HK_MACRO, HK_SHOW, HK_SHADER] {
                     let _ = UnregisterHotKey(Some(self.hub), id);
                 }
                 // Os da página Atalhos também: a combinação gravada não pode abrir o programa.
@@ -1394,6 +1427,7 @@ impl App {
             HK_FIND => self.toggle_find(),
             HK_MACRO => self.macro_toggle(None),
             HK_SHOW => self.show_main(),
+            HK_SHADER => crate::pages::shaders::toggle_focused(self),
             HK_VOL_UP => self.volume(audio::Change::Step(self.cfg.vol_step as i32)),
             HK_VOL_DOWN => self.volume(audio::Change::Step(-(self.cfg.vol_step as i32))),
             HK_MUTE => self.volume(audio::Change::ToggleMute),
@@ -1412,11 +1446,12 @@ impl App {
 
     fn unhook_force_key(&mut self) {
         FORCE_VK.store(0, Ordering::Relaxed);
+        SHADER_VK.store(0, Ordering::Relaxed);
         self.sync_hook();
     }
 
-    /// Um gancho só para as duas teclas: Fechar à força quando outro programa tem a combinação,
-    /// e Ctrl+Shift+Esc quando o Windows recusou a troca do Gerenciador.
+    /// Um gancho só para as teclas: Fechar à força quando outro programa tem a combinação, Ctrl+Shift+Esc
+    /// quando o Windows recusou a troca do Gerenciador, Ctrl+V no Explorer e o liga/desliga do shader.
     pub fn sync_hook(&mut self) {
         FORCE_HUB.store(self.hub.0 as isize, Ordering::Relaxed);
         // A versão de teste só pega o Ctrl+Shift+Esc quando o teste pede: o PC continua em uso.
@@ -1427,7 +1462,7 @@ impl App {
         };
         TM_HOOK.store(tm, Ordering::Relaxed);
         PASTE_HOOK.store(self.cfg.paste_key, Ordering::Relaxed);
-        let want = tm || self.cfg.paste_key || FORCE_VK.load(Ordering::Relaxed) != 0;
+        let want = tm || self.cfg.paste_key || FORCE_VK.load(Ordering::Relaxed) != 0 || SHADER_VK.load(Ordering::Relaxed) != 0;
         if want && self.force_hook.is_none() {
             let inst = unsafe { GetModuleHandleW(None) }.unwrap_or_default();
             self.force_hook = unsafe { SetWindowsHookExW(WH_KEYBOARD_LL, Some(key_hook), Some(inst.into()), 0) }.ok();
@@ -2915,6 +2950,7 @@ impl App {
                     self.radial.update(&self.cfg);
                 }
                 Some("meter") => self.page = Page::Meter,
+                Some("shaders") => self.page = Page::Shaders,
                 Some("sound") => self.page = Page::Volume,
                 Some("guide") => self.page = Page::Guide,
                 Some("monitor") => self.page = Page::Monitor,
@@ -3060,6 +3096,7 @@ impl App {
             Target::PadProgram | Target::PadGame => WM_PICK_PAD,
             Target::RadialProgram(_) => WM_PICK_RADIAL,
             Target::RunKey(_) => WM_PICK_RUN,
+            Target::ShaderGame => WM_PICK_SHADER,
         };
         let slot = match target {
             Target::RadialProgram(i) | Target::RunKey(i) => i as usize,
@@ -3246,6 +3283,7 @@ impl App {
         #[cfg(debug_assertions)]
         self.test_shot_tick();
         crate::sys::cmds::term_tick();
+        crate::pages::shaders::tick(self);
         if self.cfg.search_on {
             self.sync_index();
             let hub = self.hub.0 as isize;
@@ -4270,6 +4308,22 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
             }
             LRESULT(0)
         }
+        WM_PICK_SHADER => {
+            use crate::pages::shaders as shd;
+            let path = match w.0 {
+                shd::PICK_EXE => capture::choose_exe(h),
+                shd::PICK_IMAGE => capture::choose_file(h, "Imagens", w!("*.png;*.jpg;*.jpeg;*.bmp")),
+                shd::PICK_EXPORT => capture::save_file(h, "Presets de shader", w!("*.slangp"), w!("slangp"), "preset"),
+                _ => capture::choose_folder(h),
+            };
+            if let Some(path) = path {
+                with(|a| {
+                    shd::picked(a, w.0, path);
+                    a.invalidate();
+                });
+            }
+            LRESULT(0)
+        }
         WM_PICK_RUN => {
             if let Some(path) = capture::choose_exe(h) {
                 with(|a| {
@@ -4841,6 +4895,9 @@ mod window_tests {
         // Linha nova da página Atalhos (fora do registro anterior) com a combinação do Fullscreenizer.
         let run = [(HK_FULL, f), (HK_FIND, Hotkey::new(3, 0x20)), (HK_WIDGET, Hotkey::default()), (HK_RUN, f)];
         assert_eq!(hk_conflict(&old, &run), Some((HK_RUN, HK_FULL)));
+        // O liga/desliga do shader aparece quando o primeiro perfil liga: pega a tecla de um programa da página Atalhos.
+        let spotify = Hotkey::new(3, 0x53);
+        assert_eq!(hk_conflict(&[(HK_RUN, spotify)], &[(HK_RUN, spotify), (HK_SHADER, spotify)]), Some((HK_SHADER, HK_RUN)));
         assert_eq!(hk_place_page(HK_RUN), "Atalhos");
         assert_eq!(hk_place_page(HK_SHOW), "Configurações");
         // Volume não tem campo próprio: fica fora.

@@ -78,7 +78,7 @@ impl Hotkey {
     pub const fn new(mods: u32, vk: u32) -> Self {
         Self { mods, vk }
     }
-    fn parse(s: &str) -> Self {
+    pub fn parse(s: &str) -> Self {
         let mut it = s.split(',');
         let mods = it.next().and_then(|v| v.parse().ok()).unwrap_or(0);
         let vk = it.next().and_then(|v| v.parse().ok()).unwrap_or(0);
@@ -221,6 +221,11 @@ pub struct Config {
     pub hk_find: Hotkey,
     /// Começa e para a gravação de macro (sem tecla de fábrica).
     pub hk_macro: Hotkey,
+    /// Shaders: liga/desliga, menu no jogo, próximo perfil e comparar (`shader_profile::KEYS`). Só o
+    /// primeiro é do app; os quatro vão para `teclas.txt`, que o motor lê.
+    pub hk_shader: [Hotkey; 4],
+    /// Pasta da biblioteca de shaders; vazio é `shaders\lib`.
+    pub shader_lib: String,
     /// Pesquisa de arquivos ligada: o índice fica na memória.
     pub search_on: bool,
     /// Letras dos discos da pesquisa. Vazio: todos, menos os com problema de saúde.
@@ -425,6 +430,9 @@ impl Default for Config {
             hk_show: Hotkey::new(0, 0),
             hk_find: Hotkey::new(MOD_CTRL | MOD_ALT, 0x20),
             hk_macro: Hotkey::new(0, 0),
+            // P e A já são das fotos: menu M e comparar C.
+            hk_shader: [Hotkey::new(MOD_CTRL | MOD_ALT, b'H' as u32), Hotkey::new(MOD_CTRL | MOD_ALT, b'M' as u32), Hotkey::new(MOD_CTRL | MOD_ALT, b'D' as u32), Hotkey::new(MOD_CTRL | MOD_ALT, b'C' as u32)],
+            shader_lib: String::new(),
             search_on: false,
             search_drives: String::new(),
             search_apps: true,
@@ -686,6 +694,12 @@ impl Config {
                 "hk_show" => c.hk_show = Hotkey::parse(v),
                 "hk_find" => c.hk_find = Hotkey::parse(v),
                 "hk_macro" => c.hk_macro = Hotkey::parse(v),
+                "hk_shader" => {
+                    for (slot, h) in c.hk_shader.iter_mut().zip(v.split(';')) {
+                        *slot = Hotkey::parse(h);
+                    }
+                }
+                "shader_lib" => c.shader_lib = v.into(),
                 "search_on" => c.search_on = v == "1",
                 "search_drives" => c.search_drives = v.chars().filter(|c| c.is_ascii_uppercase() || *c == '-').collect(),
                 "search_apps" => c.search_apps = v == "1",
@@ -918,6 +932,8 @@ impl Config {
         hk(&mut s, "hk_show", self.hk_show);
         hk(&mut s, "hk_find", self.hk_find);
         hk(&mut s, "hk_macro", self.hk_macro);
+        let _ = writeln!(s, "hk_shader={}", self.hk_shader.map(|h| format!("{},{}", h.mods, h.vk)).join(";"));
+        let _ = writeln!(s, "shader_lib={}", self.shader_lib);
         let _ = writeln!(s, "search_on={}", self.search_on as u8);
         let _ = writeln!(s, "search_drives={}", self.search_drives);
         let _ = writeln!(s, "search_apps={}", self.search_apps as u8);
@@ -1235,6 +1251,18 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn atalhos_padrao_nao_se_repetem() {
+        let c = Config::default();
+        let mut v = vec![c.hk_fullscreen, c.hk_widget, c.hk_optimize, c.hk_force, c.hk_find, c.hk_shot, c.hk_shot_full, c.hk_shot_win, c.hk_record, c.hk_record_full, c.hk_replay];
+        v.extend([c.hk_meter_compact, c.hk_meter_full, c.hk_meter_off, c.hk_log, c.hk_meter_keys, c.hk_limit_toggle, c.hk_limit_up, c.hk_limit_down]);
+        v.extend(c.hk_shader);
+        v.retain(|k| k.vk != 0);
+        for (i, a) in v.iter().enumerate() {
+            assert!(!v[i + 1..].contains(a), "{} repetido", a.label());
+        }
+    }
 
     #[test]
     fn radial_parses_eight_valid_actions() {
