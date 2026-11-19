@@ -27,7 +27,7 @@ mod opus;
 pub use opus::Decoder as OpusDecoder;
 pub use fec::Rx as FecRx;
 #[cfg(feature = "stream")]
-pub use net::{device_rows, forget_device, me, presence_keep, presence_of, revoke_invite, set_device, wake_device, wake_note, DeviceRow, Presence, CODE_FAIL, CODE_LINE, CODE_OK, EXPIRES_LINE, INVITE_MINUTES};
+pub use net::{device_rows, forget_device, me, net_path, presence_keep, presence_of, revoke_invite, set_device, wake_device, wake_note, DeviceRow, Presence, CODE_FAIL, CODE_LINE, CODE_OK, EXPIRES_LINE, INVITE_MINUTES};
 pub use net::unix_now;
 pub(crate) mod pads;
 mod screen;
@@ -111,6 +111,8 @@ pub fn take_notices(since: &mut u128) -> Vec<String> {
 
 /// O começo das linhas de latência que os modos escrevem no registro deles; a página mostra.
 pub const LAT_LINE: &str = "latência: ";
+/// A dica quando a conexão pela internet cai no relé da n0 (o caminho começa com "pelo relé").
+pub const RELAY_TIP: &str = "Pelo relé fica lento: abra a porta fixa no host ou use VPN.";
 
 /// Junta as medidas de latência e escreve uma linha no registro a cada 5 segundos: a média, a
 /// menor e a maior da rede (ida e volta) e, quando há, a do que a pessoa sente (`extra`, com nome).

@@ -415,6 +415,43 @@ async fn watch_relay(ep: Endpoint) {
     }
 }
 
+/// O que o host vê da internet, para a aba Rede (`rede.txt`) e o log: o IP público em IPv4 e em
+/// IPv6, a porta UDP em uso e se o roteador abriu a porta sozinho (UPnP, NAT-PMP ou PCP).
+pub fn net_path() -> PathBuf {
+    dir().join("rede.txt")
+}
+
+async fn watch_net(ep: Endpoint) {
+    use iroh::Watcher;
+    let mut w = ep.watch_addr();
+    let mut last = String::new();
+    loop {
+        // Os endereços públicos que o iroh achou (pelo relé ou pelo roteador) estão no endereço do host.
+        let mut text = String::new();
+        for t in &w.get().addrs {
+            let TransportAddr::Ip(a) = t else { continue };
+            if is_local(a.ip()) || is_cgnat(a.ip()) || vpn_of(a.ip()).is_some() {
+                continue;
+            }
+            let key = if a.is_ipv4() { "ip4=" } else { "ip6=" };
+            if !text.contains(key) {
+                text += &format!("{key}{}\n", a.ip());
+            }
+        }
+        let port = ep.bound_sockets().first().map_or(0, |a| a.port());
+        let opened = ep.metrics().net_report.portmap_external_address_updated.get() > 0;
+        text += &format!("porta={port}\nupnp={}\n", u8::from(opened));
+        if text != last {
+            eprintln!("{} rede: {}", now_text(), text.trim_end().replace('\n', ", "));
+            let _ = crate::config::write_safe(&net_path(), &text);
+            last = text;
+        }
+        if w.updated().await.is_err() {
+            return;
+        }
+    }
+}
+
 /// Leva a identidade e os aparelhos pareados para a pasta do serviço (na instalação).
 pub(super) fn copy_to_service(dst: &std::path::Path) -> std::result::Result<(), String> {
     let src = user_dir();
@@ -540,23 +577,31 @@ async fn endpoint(sk: SecretKey, alpns: Vec<Vec<u8>>, host: bool) -> std::result
         .datagram_receive_buffer_size(Some(8 << 20))
         .keep_alive_interval(Duration::from_secs(1))
         .build();
-    let make = |v6: bool| -> std::result::Result<iroh::endpoint::Builder, String> {
+    let make = |port: u16| -> std::result::Result<iroh::endpoint::Builder, String> {
         let mut b = Endpoint::builder(presets::N0).secret_key(sk.clone()).alpns(alpns.clone()).transport_config(cfg.clone()).ca_tls_config(super::code::ca());
         if !o.upnp {
             b = b.portmapper_config(iroh::endpoint::PortmapperConfig::Disabled);
         }
-        if host && o.port != 0 {
-            b = b.clear_ip_transports().bind_addr(std::net::SocketAddr::from(([0, 0, 0, 0], o.port))).map_err(|e| e.to_string())?;
-            if v6 {
-                b = b.bind_addr(std::net::SocketAddr::from((std::net::Ipv6Addr::UNSPECIFIED, o.port))).map_err(|e| e.to_string())?;
-            }
+        if port != 0 {
+            // O IPv6 na mesma porta pode faltar (PC sem IPv6): aí fica só o IPv4.
+            let v6 = iroh::endpoint::BindOpts::default().set_is_required(false);
+            b = b
+                .clear_ip_transports()
+                .bind_addr(std::net::SocketAddr::from(([0, 0, 0, 0], port)))
+                .map_err(|e| e.to_string())?
+                .bind_addr_with_opts(std::net::SocketAddr::from((std::net::Ipv6Addr::UNSPECIFIED, port)), v6)
+                .map_err(|e| e.to_string())?;
         }
         Ok(b)
     };
-    match make(true)?.bind().await {
+    let port = if host { o.port } else { 0 };
+    match make(port)?.bind().await {
         Ok(ep) => Ok(ep),
-        // Porta fixa num PC sem IPv6: fica só o IPv4.
-        Err(_) if host && o.port != 0 => make(false)?.bind().await.map_err(|e| e.to_string()),
+        // Porta ocupada (outro programa ou outro Prisma): segue na aleatória.
+        Err(e) if port != 0 => {
+            eprintln!("{} porta fixa {port} não abriu ({e}): usando uma porta aleatória", now_text());
+            make(0)?.bind().await.map_err(|e| e.to_string())
+        }
         Err(e) => Err(e.to_string()),
     }
 }
@@ -627,6 +672,7 @@ impl Link for Net {
                 TransportAddr::Ip(a) => match vpn_of(a.ip()) {
                     Some(v) => format!("pela VPN ({v}), {a}, {rtt:.0} ms"),
                     None if is_local(a.ip()) => format!("direto na rede local, {a}, {rtt:.0} ms"),
+                    None if a.is_ipv6() => format!("direto pela internet por IPv6, {a}, {rtt:.0} ms"),
                     None => format!("direto pela internet, {a}, {rtt:.0} ms"),
                 },
                 TransportAddr::Relay(u) => format!("pelo relé da n0 ({u}), {rtt:.0} ms"),
@@ -998,6 +1044,7 @@ fn host_with(invite_perms: Option<u8>, service: bool) {
         eprintln!("sem resposta do relé da n0 em 10 s: só a rede local e a VPN vão funcionar por enquanto");
     }
     rt().spawn(watch_relay(ep.clone()));
+    rt().spawn(watch_net(ep.clone()));
     let shown = code::new_code();
     let root = code::stretch(&code::normalize(&shown).unwrap_or_default());
     let secret = if invite_perms.is_some() { code::secret(&root) } else { random::<16>() };
