@@ -1522,7 +1522,9 @@ fn net_tab(ui: &mut Ui, app: &mut App, st: &mut State, o: &mut Opts, x: f32, top
     y += 24.0;
     ui.check("sh-upnp", rect(ix, y, iw, 30.0), "Pedir ao roteador para abrir a porta (UPnP, NAT-PMP, PCP)", &mut o.upnp);
     y += 40.0;
-    if let Some(seen) = net_seen(&std::fs::read_to_string(stream::net_path()).unwrap_or_default(), o.upnp) {
+    // O `rede.txt` fica no disco depois que o host para: só vale com o host no ar.
+    let live = stream::service::installed() || st.host.as_mut().is_some_and(Proc::alive);
+    if let Some(seen) = live.then(|| std::fs::read_to_string(stream::net_path()).unwrap_or_default()).and_then(|t| net_seen(&t, o.upnp)) {
         ui.c.text_wrap(rect(ix, y, iw, 36.0), &seen, 12.0, ACCENT, Weight::Regular);
         y += 40.0;
     }
@@ -1900,5 +1902,17 @@ pub fn shutdown() {
         if had_host {
             stream::host::restore_hdr();
         }
+    }
+}
+
+#[cfg(test)]
+mod net_seen_tests {
+    #[test]
+    fn reads_rede_txt() {
+        let opened = crate::i18n::tr("o roteador abriu a porta").into_owned();
+        let t = super::net_seen("ip4=200.1.2.3\nporta=50000\nupnp=1\n", true).unwrap();
+        assert!(t.contains("50000") && t.contains("200.1.2.3") && t.contains(&opened), "{t}");
+        assert_eq!(super::net_seen("porta=50000\nupnp=0\n", false).unwrap().split(" · ").count(), 1);
+        assert!(super::net_seen("", true).is_none());
     }
 }
