@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Share screen, viewer: in immersive mode **Everything**, the viewer's own shortcuts (menu, disconnect and the others) work again; Ctrl + Alt + Shift shortcuts were going to the host. Shortcuts changed in the Viewer tab during a connection now also apply in this mode. / Compartilhar tela, quem assiste: no modo imersivo **Tudo**, os atalhos de quem assiste (menu, desconectar e os outros) voltam a funcionar; os atalhos com Ctrl + Alt + Shift iam para o host. Atalhos trocados na aba Cliente com a conexão aberta também passam a valer nesse modo.
+- Share screen, viewer: in immersive mode **Everything**, the viewer's shortcuts (menu, disconnect and the others) now really stay with the viewer. The keyboard hook missed the Alt key when Ctrl was held too, so the default Ctrl + Alt + Shift shortcuts still went to the host. Shortcuts changed in the Viewer tab during a connection now apply within a second, in any immersive mode; before, they applied only on the next connection. / Compartilhar tela, quem assiste: no modo imersivo **Tudo**, os atalhos de quem assiste (menu, desconectar e os outros) agora ficam mesmo com quem assiste. O gancho do teclado não via o Alt quando o Ctrl também estava apertado, e os atalhos padrão com Ctrl + Alt + Shift ainda iam para o host. Atalhos trocados na aba Cliente com a conexão aberta passam a valer em até um segundo, em qualquer modo imersivo; antes, só na próxima conexão.
 
 ## 1.9.2
 
