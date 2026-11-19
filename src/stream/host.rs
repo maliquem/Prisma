@@ -1005,10 +1005,10 @@ impl Injector {
             Input::Wheel { .. } if !self.inside() => return None,
             Input::Wheel { delta, horizontal } => Self::mouse(if horizontal { MOUSEEVENTF_HWHEEL } else { MOUSEEVENTF_WHEEL }, 0, 0, delta as i32),
             Input::Key { scan, extended, down } => {
-                if down {
-                    self.keys.insert((scan, extended));
-                } else {
-                    self.keys.remove(&(scan, extended));
+                let changed = if down { self.keys.insert((scan, extended)) } else { self.keys.remove(&(scan, extended)) };
+                // Para achar o Shift preso: o registro guarda cada Ctrl, Alt e Shift que desce e sobe.
+                if let Some(name) = mod_name(scan, extended).filter(|_| changed) {
+                    eprintln!("teclado: {name} {}", if down { "desce" } else { "sobe" });
                 }
                 Self::key(scan, extended, down)
             }
@@ -1062,6 +1062,9 @@ impl Injector {
         // Só uma janela: ela vem para frente antes; se o Windows não deixar, nada vai, para o
         // teclado não cair noutro programa.
         if fresh && self.win.is_some_and(|(h, pid)| !bring_front(h, pid)) {
+            // As subidas deste pacote também não vão: o que estava apertado sobe agora, senão
+            // um Shift ficava preso até a pessoa sair.
+            self.release();
             let n = (events.len() / INPUT_SIZE) as u32;
             if n > 0 {
                 self.next = Some(first.wrapping_add(n));
@@ -1094,6 +1097,10 @@ impl Injector {
 
     /// Solta tudo que ficou apertado, para nenhuma tecla ficar presa quando quem assiste sai.
     pub(super) fn release(&mut self) {
+        let mods: Vec<&str> = self.keys.iter().filter_map(|&(s, e)| mod_name(s, e)).collect();
+        if !mods.is_empty() {
+            eprintln!("teclado: solta tudo ({})", mods.join(", "));
+        }
         let mut list: Vec<INPUT> = self.keys.drain().map(|(s, e)| Self::key(s, e, false)).collect();
         for (i, down) in self.buttons.iter_mut().enumerate() {
             if std::mem::take(down) {
@@ -1106,6 +1113,19 @@ impl Injector {
             }
         }
     }
+}
+
+/// O nome de um Ctrl, Alt ou Shift pelo scan code, para o registro.
+fn mod_name(scan: u16, extended: bool) -> Option<&'static str> {
+    Some(match (scan, extended) {
+        (0x2A, false) => "Shift esquerdo",
+        (0x36, _) => "Shift direito",
+        (0x1D, false) => "Ctrl esquerdo",
+        (0x1D, true) => "Ctrl direito",
+        (0x38, false) => "Alt esquerdo",
+        (0x38, true) => "Alt direito",
+        _ => return None,
+    })
 }
 
 /// Teclas que o host toca por um pedido de teclado de quem assiste: as travas que estão diferentes

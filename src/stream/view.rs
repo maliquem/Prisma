@@ -705,7 +705,34 @@ unsafe fn key_event(h: HWND, k: &mut Keys, m: u32, w: WPARAM, l: LPARAM) -> bool
         k.held.retain(|x| *x != (scan, extended));
     }
     k.pending.push(Input::Key { scan, extended, down });
+    // Com os dois Shifts apertados, o Windows não manda a subida do primeiro que sobe: ele ficava
+    // apertado no host. Ctrl, Alt e Shift que já subiram aqui sobem lá também.
+    for (s, e) in stale_mods(&k.held, (scan, extended), |vk| GetKeyState(vk.0 as i32) < 0) {
+        eprintln!("teclado: {s:#x} subiu sem aviso do Windows; sobe no host também");
+        k.held.retain(|x| *x != (s, e));
+        k.pending.push(Input::Key { scan: s, extended: e, down: false });
+    }
     true
+}
+
+/// Ctrl, Alt e Shift que estão em `held` mas já não estão apertados (`is_down`), fora a tecla deste evento.
+fn stale_mods(held: &[(u16, bool)], now: (u16, bool), is_down: impl Fn(VIRTUAL_KEY) -> bool) -> Vec<(u16, bool)> {
+    held.iter()
+        .copied()
+        .filter(|&k| k != now)
+        .filter(|&k| {
+            let vk = match k {
+                (0x2A, false) => VK_LSHIFT,
+                (0x36, _) => VK_RSHIFT,
+                (0x1D, false) => VK_LCONTROL,
+                (0x1D, true) => VK_RCONTROL,
+                (0x38, false) => VK_LMENU,
+                (0x38, true) => VK_RMENU,
+                _ => return false,
+            };
+            !is_down(vk)
+        })
+        .collect()
 }
 
 /// O que a aba Cliente mudou no arquivo desde a última leitura (`seen` → `new`) e o menu da
@@ -2061,6 +2088,16 @@ fn meter_name(m: u8) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shift_released_without_message_goes_up() {
+        // Os dois Shifts desceram; o esquerdo subiu sem WM_KEYUP e o direito sobe agora.
+        let held = [(0x2A, false), (0x36, false), (0x1E, false)];
+        let down = |vk: VIRTUAL_KEY| vk == VK_RSHIFT;
+        assert_eq!(stale_mods(&held, (0x36, false), down), vec![(0x2A, false)]);
+        // Tudo apertado de verdade: nada sobe, e a tecla A não é modificador.
+        assert!(stale_mods(&held, (0x1E, false), |_| true).is_empty());
+    }
 
     #[test]
     fn client_shortcuts_reach_the_hook() {
