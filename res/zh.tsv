@@ -2786,3 +2786,14 @@ RAM em uso	内存已用
 VRAM dedicada	专用显存
 VRAM compartilhada	共享显存
 Abrir no Medidor	在性能监视中打开
+Tempo real	实时
+Alta	高
+Acima do normal	高于正常
+Abaixo do normal	低于正常
+Baixa	低
+Thread mais cheia	最忙线程
+Orçamento da placa	显卡预算
+o que cada programa pode usar	每个程序可使用的量
+Pico (sessão)	峰值（本次）
+Clock do núcleo · 60 s	核心频率 · 60 秒
+Temperatura · 60 s	温度 · 60 秒

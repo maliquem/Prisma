@@ -156,6 +156,24 @@ impl Drop for Counters {
     }
 }
 
+/// A placa principal, para o orçamento de VRAM.
+// shortcut: usa a primeira placa do DXGI (a da tela principal); ler a mesma da NVML se alguém tiver duas.
+pub struct Adapter(windows::Win32::Graphics::Dxgi::IDXGIAdapter3);
+
+impl Adapter {
+    pub fn main() -> Option<Self> {
+        use windows::Win32::Graphics::Dxgi::*;
+        unsafe { CreateDXGIFactory1::<IDXGIFactory1>().ok()?.EnumAdapters1(0).ok()?.cast().ok().map(Self) }
+    }
+
+    /// Quanto da VRAM dedicada o Windows deixa um programa usar agora; muda com a pressão na placa.
+    pub fn budget(&self) -> u64 {
+        use windows::Win32::Graphics::Dxgi::*;
+        let mut i = DXGI_QUERY_VIDEO_MEMORY_INFO::default();
+        unsafe { self.0.QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &mut i) }.map_or(0, |_| i.Budget)
+    }
+}
+
 /// Pentes de memória pela tabela SMBIOS: tipo (DDR4, DDR5), velocidade em MT/s, slots ocupados e total.
 #[derive(Clone, Copy, Default, PartialEq, Debug)]
 pub struct Ram {

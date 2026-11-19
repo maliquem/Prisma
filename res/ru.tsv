@@ -2786,3 +2786,14 @@ RAM em uso	ОЗУ используется
 VRAM dedicada	Выделенная VRAM
 VRAM compartilhada	Общая VRAM
 Abrir no Medidor	Открыть в «Счётчике»
+Tempo real	Реального времени
+Alta	Высокий
+Acima do normal	Выше среднего
+Abaixo do normal	Ниже среднего
+Baixa	Низкий
+Thread mais cheia	Самый загруж. поток
+Orçamento da placa	Бюджет видеокарты
+o que cada programa pode usar	доступно каждой программе
+Pico (sessão)	Пик (сеанс)
+Clock do núcleo · 60 s	Частота ядра · 60 с
+Temperatura · 60 s	Температура · 60 с

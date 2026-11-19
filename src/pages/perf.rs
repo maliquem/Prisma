@@ -22,6 +22,19 @@ fn gb(b: u64) -> String {
     dec(b as f32 / (1u64 << 30) as f32, 1)
 }
 
+/// Nome da prioridade base de um processo (4 ociosa ... 24 tempo real).
+fn prio_name(p: u8) -> &'static str {
+    match p {
+        24.. => "Tempo real",
+        13.. => "Alta",
+        10.. => "Acima do normal",
+        8.. => "Normal",
+        6.. => "Abaixo do normal",
+        1.. => "Baixa",
+        0 => "—",
+    }
+}
+
 fn perf_info() -> windows::Win32::System::ProcessStatus::PERFORMANCE_INFORMATION {
     let mut pi = windows::Win32::System::ProcessStatus::PERFORMANCE_INFORMATION::default();
     let _ = unsafe { windows::Win32::System::ProcessStatus::GetPerformanceInfo(&mut pi, std::mem::size_of_val(&pi) as u32) };
@@ -157,9 +170,12 @@ fn detail(ui: &mut Ui, app: &mut App, r: Rect, s: &Snapshot) {
     let mut lines = vec![
         (tr("CPU").into_owned(), fmt_pct(g.cpu)),
         (tr("Threads").into_owned(), g.threads.to_string()),
+        (tr("Thread mais cheia").into_owned(), fmt_pct(g.hot.min(100.0))),
+        (tr("Prioridade").into_owned(), tr(prio_name(g.prio)).into_owned()),
         (tr("Processos").into_owned(), g.pids.len().to_string()),
         (tr("RAM em uso").into_owned(), fmt_mem(g.ram)),
         (tr("VRAM dedicada").into_owned(), fmt_mem(g.vram)),
+        (tr("Pico de VRAM").into_owned(), fmt_mem(g.vram_peak)),
         (tr("VRAM compartilhada").into_owned(), fmt_mem(g.shared)),
     ];
     for (i, n) in ENGINE_NAMES.iter().enumerate() {
@@ -246,8 +262,12 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
             y += 170.0 + GAP;
             let mut gs: Vec<&Group> = s.groups.iter().collect();
             gs.sort_by(|a, b| b.cpu.total_cmp(&a.cpu));
-            let rows: Vec<Row> = gs.into_iter().map(|g| Row { g, vals: vec![fmt_pct(g.cpu), g.threads.to_string(), g.pids.len().to_string()] }).collect();
-            table(ui, app, rect(x, y, rows_w, a.h - y - 20.0), "perf-cpu", "Programas", &[("CPU", 60.0), ("Threads", 70.0), ("Processos", 80.0)], &rows);
+            let rows: Vec<Row> = gs
+                .into_iter()
+                .map(|g| Row { g, vals: vec![fmt_pct(g.cpu), fmt_pct(g.hot.min(100.0)), g.threads.to_string(), tr(prio_name(g.prio)).into_owned(), g.pids.len().to_string()] })
+                .collect();
+            let cols = [("CPU", 60.0), ("Thread mais cheia", 120.0), ("Threads", 70.0), ("Prioridade", 120.0), ("Processos", 80.0)];
+            table(ui, app, rect(x, y, rows_w, a.h - y - 20.0), "perf-cpu", "Programas", &cols, &rows);
         }
         2 => {
             let pi = perf_info();
@@ -304,6 +324,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
                     ("Dedicada", gb(s.gpu.used), "GB", format!("{} {} GB · {:.0}%", tr("de"), gb(s.gpu.total), s.vram_pct())),
                     ("Compartilhada", gb(s.perf.shared), "GB", format!("{} {} GB · {}", tr("de"), gb(shared_max), tr("sai da RAM"))),
                     ("Programas usando", gs.len().to_string(), "", gs.first().map_or_else(String::new, |g| format!("{} {}", tr("maior:"), app_name(&g.exe)))),
+                    ("Orçamento da placa", if s.vram_budget > 0 { gb(s.vram_budget) } else { dash() }, if s.vram_budget > 0 { "GB" } else { "" }, tr("o que cada programa pode usar").into_owned()),
                 ],
             );
             y += 86.0 + GAP;
@@ -320,8 +341,9 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
             y += 84.0 + GAP;
             chart(ui, rect(x, y, w, 150.0), "Dedicada · 60 s", &format!("{:.0}%", s.vram_pct()), &s.hist_vram, ACCENT);
             y += 150.0 + GAP;
-            let rows: Vec<Row> = gs.into_iter().map(|g| Row { g, vals: vec![fmt_mem(g.vram), fmt_mem(g.shared)] }).collect();
-            table(ui, app, rect(x, y, rows_w, a.h - y - 20.0), "perf-vram", "Programas", &[("Dedicada", 90.0), ("Compartilhada", 110.0)], &rows);
+            let rows: Vec<Row> = gs.into_iter().map(|g| Row { g, vals: vec![fmt_mem(g.vram), fmt_mem(g.shared), fmt_mem(g.vram_peak)] }).collect();
+            let cols = [("Dedicada", 90.0), ("Compartilhada", 110.0), ("Pico (sessão)", 110.0)];
+            table(ui, app, rect(x, y, rows_w, a.h - y - 20.0), "perf-vram", "Programas", &cols, &rows);
         }
         _ => {
             let top = (0..ENGINES).max_by(|&i, &j| s.perf.eng[i].total_cmp(&s.perf.eng[j])).filter(|&i| s.perf.eng[i] > 0.0);
@@ -358,7 +380,12 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
                 ui.c.sparkline(rect(r.x + 14.0, r.y + 36.0, r.w - 28.0, 38.0), &v, if s.perf.eng[i] >= 80.0 { WARN } else { ACCENT }, 1.5);
             }
             y += 84.0 + GAP;
-            chart(ui, rect(x, y, w, 150.0), "Uso total · 60 s", &format!("{:.0}%", g.util), &s.hist_gpu, ACCENT);
+            let third = (w - GAP * 2.0) / 3.0;
+            chart(ui, rect(x, y, third, 150.0), "Uso total · 60 s", &format!("{:.0}%", g.util), &s.hist_gpu, ACCENT);
+            let clock = if nv { format!("{} MHz", g.mhz) } else { dash() };
+            chart(ui, rect(x + third + GAP, y, third, 150.0), "Clock do núcleo · 60 s", &clock, &s.hist_gclock, ACCENT);
+            let temp = if g.temp > 0 { format!("{} °C", g.temp) } else { dash() };
+            chart(ui, rect(x + (third + GAP) * 2.0, y, third, 150.0), "Temperatura · 60 s", &temp, &s.hist_gtemp, WARN);
             y += 150.0 + GAP;
             let mut gs: Vec<&Group> = s.groups.iter().filter(|g| g.eng.iter().any(|v| *v > 0.0) || g.vram > 0).collect();
             gs.sort_by(|a, b| b.eng.iter().sum::<f32>().total_cmp(&a.eng.iter().sum::<f32>()).then(b.vram.cmp(&a.vram)));
