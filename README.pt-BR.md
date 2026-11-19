@@ -50,6 +50,7 @@ O Prisma procura nesta página uma vez por dia. Quando há versão nova e você 
 - **Energia:** detecta jogo ou carga alta e troca o plano. Volta ao repouso depois de 60 s sem carga. Com a troca automática desligada, um plano fixo fica ligado até ela voltar. Você escolhe a porcentagem e o tempo que contam como carga na CPU e na GPU. Selecione um plano para editar com todas as opções que o Windows registra, inclusive as ocultas, ou importar e exportar em arquivos .pow. O botão direito no plano também oferece Exportar e Editar. A primeira edição guarda uma cópia do plano original. Os planos do Prisma levam o nome no idioma escolhido e mudam junto com ele.
 - **Perfil por jogo:** lembra o volume de cada programa.
 - **Fullscreenizer:** deixa a janela em foco em tela cheia sem bordas. Quem usa uma vez entra numa lista salva, onde dá para adicionar pela lista de programas ou pelo .exe, remover e marcar Automático para aplicar sempre que o programa abrir.
+- **Shaders:** filtros do RetroArch (CRT, scanlines, NTSC, nitidez) por cima de qualquer jogo, um perfil por jogo, com a biblioteca baixada pela própria página (o Prisma não traz os shaders), deslizantes para cada parâmetro e um menu dentro do jogo.
 - **Atalhos:** atalhos de teclado seus que abrem programas, da lista ou de um .exe, como administrador se quiser (o Windows pede a confirmação), por exemplo Ctrl + Alt + T para o terminal.
 - **Som:** volume por programa, e as teclas de volume do teclado, com um modificador, mudam só o programa em foco. Você escolhe o aparelho de saída e o de entrada de cada programa, inclusive os adicionados à mão pela lista de programas ou pelo .exe. A lista traz o que o menu Iniciar mostra, aplicativos da Microsoft Store, os programas instalados, os jogos da Steam e da Epic e o que está aberto. Isso usa um recurso interno do Windows, e alguns programas só trocam de aparelho ao reabrir. Programas fixos ficam na lista mesmo fechados e voltam com o volume guardado. Atalhos de aparelho padrão trocam a saída e a entrada do Windows de uma vez, cada um com os aparelhos que você escolher. Manter o som acordado toca um fluxo sem som audível, para HDMI e Dolby não cortarem o começo do próximo som, e para sozinho depois de 10 minutos sem uso. Cada aparelho de saída também tem equalizador, paramétrico ou gráfico, com perfis salvos, ganho e atraso por canal em 5.1 e 7.1, e o motor instalado pela própria página.
 - **Widget:** CPU, GPU, RAM, VRAM, temperaturas, plano de energia, HDR e VRR por cima de tudo, em quatro estilos; você escolhe o que aparece. O estilo Pílula pode ficar preso na barra de tarefas do Windows 11, e um clique nele abre um painel detalhado.
@@ -78,6 +79,10 @@ Todos podem ser trocados no programa. Se a combinação nova já é de outra fun
 | Ação | Atalho |
 | --- | --- |
 | Fullscreenizer | Ctrl + Alt + F |
+| Shaders liga / desliga | Ctrl + Alt + H |
+| Shaders menu no jogo | Ctrl + Alt + M |
+| Shaders próximo perfil | Ctrl + Alt + D |
+| Shaders comparar (segurar) | Ctrl + Alt + C |
 | Volume do programa em foco | Ctrl + teclas de volume e mudo |
 | Widget | Ctrl + Alt + W |
 | Otimizar | Ctrl + Alt + O |
@@ -102,6 +107,7 @@ Na foto: Enter ou Ctrl + C copia, Ctrl + S salva, Ctrl + Z desfaz e Esc cancela.
 - Não use injeção em jogos online. A detecção de anti-cheat reconhece arquivos e títulos conhecidos, e não achar nada não prova que o jogo não tem. Em qualquer jogo, dá para escolher Driver como método na aba Medidor.
 - Jogos em DirectX 9 e Vulkan usam o limite do driver, que vale ao reabrir.
 - Jogo em tela cheia exclusiva precisa estar em modo janela antes do Fullscreenizer.
+- Shaders: não entram em jogo com anti-cheat nem em tela cheia exclusiva (use janela sem borda ou o Fullscreenizer), monitor em HDR vira SDR antes do filtro, e o modo Injeção ainda não funciona.
 - Sem temperatura e consumo da CPU, porque exigem driver de kernel.
 - Os perfis não prometem FPS. O valor é privacidade e menos ruído.
 - Apps removidos voltam pela Loja, e a volta pode falhar.

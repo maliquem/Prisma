@@ -200,6 +200,26 @@ Makes the window in focus borderless fullscreen. Shortcut: Ctrl + Alt + F. Anyth
 
 - **You can't:** use it with a game in exclusive fullscreen. Put the game in windowed mode first.
 
+## Shaders
+
+RetroArch filters (.slang and .slangp), like CRT, scanlines, NTSC and sharpness, over any game. Each game has its own profile. Prisma does not ship the shaders: the page downloads the library.
+
+![Shaders page](shaders-en.png)
+
+- **Library:** **Download** fetches the libretro/slang-shaders library from GitHub, and then the button becomes **Update**. **Change…** points to a shader folder you already have, and **Open** shows the folder in Explorer.
+- **Game:** **Add** adds a game from **From the program list** or **Choose .exe file**. The profile starts on, and the **On** box turns it on and off.
+- **When it runs:** the filter starts by itself when the game opens and stops when it closes.
+- **Passes:** **Add pass** puts a pass at the end of the chain, picked from the library. **Load preset** replaces all passes with a preset. In the library window, pick a file and click **Add to end** or **Load**; a double click on the same file also adds it. Pass 1 runs first, on the game image, and the last one sits on top. ▲ and ▼ change the order, the box turns only that pass on or off, and ✕ removes it. A preset (.slangp) enters as one pass with all its passes; a .slang enters as one pass.
+- **Parameters:** each pass has its own sliders, with min, max and default. Search looks at the name and the description, and **Only changed** shows only what changed. Orange means different from the default. Right-click puts one value back, and **Restore default** puts back all values of the chosen pass. Changes show in the game at once.
+- **Input resolution:** the size of the image the filter gets from the game. **Automatic** finds the game's pixel size and gives the filter the original resolution. You can also pick Original, 240, 480 or 720 lines, or ÷2, ÷3 and ÷4.
+- **Mode:** only **Overlay** exists: a window over the game that captures its image, for DX9 to DX12, Vulkan and OpenGL.
+- **Recording:** **Record and stream with the shader** makes recording and streaming use the filtered image. When it is off, a screen recording shows the game without the filter.
+- **Saving:** changes save by themselves within moments. **Save profile** marks the point that **Discard** goes back to. **Save as preset…** joins the enabled chain into one normal .slangp file, to keep or use somewhere else.
+- **Test with image:** opens a preview window with the saved profile, over **2D scene (320×240)**, **Color bars and grid**, or your own image (**Open image or capture…**).
+- **Shortcuts:** four, changeable on the page. **On / off** (Ctrl + Alt + H) turns the focused game's profile on or off, and it only exists after the first profile. **In-game menu** (Ctrl + Alt + M) opens the menu. **Next profile** (Ctrl + Alt + D) switches to another profile of the same game, if there is one. **Compare (hold)** (Ctrl + Alt + C) hides the filter while the keys are held.
+- **In-game menu:** Ctrl + Alt + M opens and closes it. With the menu open, ↑ and ↓ pick a line, ← and → change the line picked (turn the filter on or off, switch profile, or turn a pass on or off), Enter opens the parameters of a pass, and Esc goes back or closes it. Inside the parameters, ← and → adjust and Enter goes back to the default. On a controller, Select + L1 opens and closes the menu, the D-pad picks, A confirms and B goes back. If the game loses focus, the menu closes.
+- **You can't:** use it with a game that has anti-cheat: the filter does not start, and the page shows a warning. In exclusive fullscreen the filter disappears: use borderless windowed mode, or the **Turn on Fullscreenizer** button in the warning. With an HDR monitor, the image becomes SDR before the filter and brightness above white is cut. **Injection (coming soon)** is disabled and does not work yet.
+
 ## Sound
 
 Controls the volume of each program. The keyboard volume keys, with a modifier (Ctrl by default), change only the program in focus. Prisma remembers the volume of each program.
@@ -420,6 +440,10 @@ All of them can be changed in the program. If the new combination already belong
 **Shortcuts page:** your own shortcuts that open programs from anywhere in Windows. **Add** creates a row: record the combination (for example Ctrl + Alt + T), pick the program with **Choose program** (from the program list or an .exe file) and tick **As administrator** if it should open with administrator rights. With Prisma already running as administrator, Windows asks nothing; tick **Ask Windows for confirmation when opening shortcuts as administrator**, above the list, to always get the prompt. The X removes the shortcut. If another program already uses the combination, the row shows **Already used by another program** and the shortcut does not work until you change it. If the combination already belongs to another Prisma shortcut, it says which one and on which page and asks whether to swap: **Yes** removes it there and puts it here, **No** leaves everything as it was. A middle click on a key field clears the combination, on this and any other page. Up to 32 shortcuts.
 
 - **Ctrl + Alt + F:** Fullscreenizer
+- **Ctrl + Alt + H:** Shaders, on / off
+- **Ctrl + Alt + M:** Shaders, in-game menu
+- **Ctrl + Alt + D:** Shaders, next profile
+- **Ctrl + Alt + C:** Shaders, compare (hold)
 - **Ctrl + volume and mute keys:** volume of the program in focus
 - **Ctrl + Alt + W:** Widget
 - **Ctrl + Alt + O:** Optimize

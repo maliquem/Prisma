@@ -200,6 +200,26 @@ Deixa a janela em foco em tela cheia sem bordas. Atalho: Ctrl + Alt + F. Quem us
 
 - **Não dá para:** usar com jogo em tela cheia exclusiva. Coloque o jogo em modo janela antes.
 
+## Shaders
+
+Filtros do RetroArch (.slang e .slangp), como CRT, scanlines, NTSC e nitidez, por cima de qualquer jogo. Cada jogo tem um perfil. O Prisma não traz os shaders: a própria página baixa a biblioteca.
+
+![Página Shaders](shaders-pt.png)
+
+- **Biblioteca:** **Baixar** pega a biblioteca libretro/slang-shaders no GitHub, e depois o botão vira **Atualizar**. **Trocar…** aponta para uma pasta de shaders que você já tem, e **Abrir** mostra a pasta no Explorador.
+- **Jogo:** **Adicionar** põe um jogo, da **Da lista de programas** ou de um **Escolher arquivo .exe**. O perfil nasce ligado, e a caixa **Ligado** liga e desliga o perfil.
+- **Quando roda:** o filtro começa sozinho quando o jogo abre e para quando ele fecha.
+- **Passes:** **Adicionar passe** põe um passe no fim da cadeia, escolhido na biblioteca. **Carregar preset** troca todos os passes por um preset. Na janela da biblioteca, escolha um arquivo e clique em **Adicionar ao fim** ou **Carregar**; dois cliques no mesmo arquivo também adicionam. O nº 1 roda primeiro, sobre a imagem do jogo, e o último fica por cima. ▲ e ▼ mudam a ordem, a caixa liga e desliga só aquele passe, e ✕ tira o passe. Um preset (.slangp) entra como um passe com todas as passadas dele; um .slang entra como uma passada só.
+- **Parâmetros:** cada passe mostra os próprios deslizantes, com mínimo, máximo e padrão. A busca procura pelo nome ou pela descrição, e **Só os alterados** mostra só o que mudou. Valor laranja é diferente do padrão. Botão direito volta um valor, e **Restaurar padrão** volta todos os do passe escolhido. A mudança aparece no jogo na hora.
+- **Resolução de entrada:** o tamanho da imagem que o filtro recebe do jogo. **Automática** acha o tamanho do pixel do jogo e entrega a resolução original. Também há Original, 240, 480 e 720 linhas, e ÷2, ÷3 e ÷4.
+- **Modo:** só **Por cima** existe: uma janela sobre o jogo que captura a imagem, em DX9 a 12, Vulkan e OpenGL.
+- **Gravação:** **Gravar e transmitir com o shader** faz a gravação e a transmissão pegarem a imagem já filtrada. Desligado, a gravação da tela mostra o jogo sem o filtro.
+- **Salvar:** as mudanças são gravadas sozinhas, em instantes. **Salvar perfil** marca o ponto para onde **Descartar** volta. **Salvar como preset…** junta a cadeia ligada num arquivo .slangp comum, para guardar ou usar em outro lugar.
+- **Testar com imagem:** abre uma janela de prévia com o perfil salvo, sobre **Cena 2D (320×240)**, **Barras de cor e grade** ou uma imagem sua (**Abrir imagem ou captura…**).
+- **Atalhos:** quatro, trocáveis na própria página. **Liga / desliga** (Ctrl + Alt + H) liga ou desliga o perfil do jogo em foco, e só existe depois do primeiro perfil. **Menu no jogo** (Ctrl + Alt + M) abre o menu. **Próximo perfil** (Ctrl + Alt + D) troca para outro perfil do mesmo jogo, se houver. **Comparar (segurar)** (Ctrl + Alt + C) tira o filtro enquanto a tecla estiver apertada.
+- **Menu no jogo:** Ctrl + Alt + M abre e fecha. Com o menu aberto, ↑ e ↓ escolhem uma linha, ← e → mudam a linha escolhida (ligar ou desligar o filtro, trocar de perfil, ou ligar e desligar um passe), Enter entra nos parâmetros de um passe, e Esc volta ou fecha. Dentro dos parâmetros, ← e → ajustam e Enter volta ao padrão. No controle, Select + L1 abre e fecha, o direcional escolhe, A confirma e B volta. Se o jogo perder o foco, o menu fecha.
+- **Não dá para:** usar com jogo que tem anti-cheat: o filtro não entra, e a página avisa. Em tela cheia exclusiva o filtro some: use janela sem borda ou o botão **Ligar Fullscreenizer** do aviso. Com monitor em HDR, a imagem vira SDR antes do filtro e o brilho acima do branco é cortado. **Injeção (em breve)** está desligado e ainda não funciona.
+
 ## Som
 
 Controla o volume de cada programa. As teclas de volume do teclado, com um modificador (Ctrl por padrão), mudam só o programa em foco. O Prisma lembra o volume de cada programa.
@@ -420,6 +440,10 @@ Todos podem ser trocados no programa. Se a combinação nova já é de outra fun
 **Página Atalhos:** atalhos seus que abrem programas de qualquer lugar do Windows. **Adicionar** cria uma linha: grave a combinação (por exemplo Ctrl + Alt + T), escolha o programa em **Escolher programa** (da lista de programas ou um arquivo .exe) e marque **Como administrador** se ele deve abrir com permissão de administrador. Com o Prisma já como administrador, o Windows não pergunta nada; marque **Pedir confirmação do Windows ao abrir atalhos como administrador**, no alto da lista, para a pergunta aparecer sempre. O X tira o atalho. Se outro programa já usa a combinação, a linha mostra **Já usada por outro programa** e o atalho não funciona até você trocar. Se a combinação já é de outro atalho do Prisma, ele diz qual e em que página e pergunta se quer trocar: **Sim** tira de lá e coloca aqui, **Não** deixa tudo como estava. O clique do meio do mouse num campo de tecla apaga a combinação, nesta e em qualquer página. Cabem até 32 atalhos.
 
 - **Ctrl + Alt + F:** Fullscreenizer
+- **Ctrl + Alt + H:** Shaders, liga / desliga
+- **Ctrl + Alt + M:** Shaders, menu no jogo
+- **Ctrl + Alt + D:** Shaders, próximo perfil
+- **Ctrl + Alt + C:** Shaders, comparar (segurar)
 - **Ctrl + teclas de volume e mudo:** volume do programa em foco
 - **Ctrl + Alt + W:** Widget
 - **Ctrl + Alt + O:** Otimizar
