@@ -4,7 +4,7 @@
 use windows::Win32::Graphics::Direct3D11::*;
 use windows::Win32::Graphics::Dxgi::Common::*;
 
-use super::Res;
+use crate::{say, Res};
 
 /// Tamanho dos blocos e onde o primeiro começa, em pixels, em cada eixo. Eixo sem blocos fica 1×0.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -129,8 +129,8 @@ impl Detect {
         if new != self.found {
             self.found = new;
             match new {
-                Some(b) => eprintln!("shader: blocos {}x{} (começo {},{})", b.bx, b.by, b.ox, b.oy),
-                None => eprintln!("shader: sem blocos de pixels, entrada na resolução original"),
+                Some(b) => say!("shader: blocos {}x{} (começo {},{})", b.bx, b.by, b.ox, b.oy),
+                None => say!("shader: sem blocos de pixels, entrada na resolução original"),
             }
         }
     }

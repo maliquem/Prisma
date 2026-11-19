@@ -10,7 +10,7 @@ use windows::Win32::UI::Input::KeyboardAndMouse::*;
 use windows::Win32::UI::Input::XboxController::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
-use super::chain::Engine;
+use prisma_shader::chain::Engine;
 use crate::shader_profile::Param;
 use crate::ui::gfx::{self, rect, Align, Weight};
 use crate::ui::layered::{create_overlay, Layered};

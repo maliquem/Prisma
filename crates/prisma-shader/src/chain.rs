@@ -1,5 +1,6 @@
 //! A cadeia de um perfil: junta os presets ligados, carrega no librashader, acompanha o arquivo do perfil e
-//! desenha (redução por blocos, cadeia) numa saída qualquer. Usada pela janela por cima e pela prévia.
+//! desenha (redução por blocos, cadeia) numa saída qualquer. Usada pela janela por cima, pela prévia e pela
+//! DLL de injeção.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -12,9 +13,9 @@ use librashader::runtime::{FilterChainParameters, Size, Viewport};
 use windows::Win32::Graphics::Direct3D11::*;
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
 
-use super::blocks::{self, Detect};
-use super::{texture, FullPass, Res, PS_COPY, PS_REDUCE};
-use crate::shader_profile::Profile;
+use crate::blocks::{self, Detect};
+use crate::profile::Profile;
+use crate::{say, texture, FullPass, Res, PS_COPY, PS_REDUCE};
 
 /// Junta os presets numa cadeia só, na ordem: as passadas uma atrás da outra (renumeradas), as texturas sem
 /// repetir nome (a primeira vence) e os valores de `parameters` (o último vence). O librashader resolve o
@@ -129,10 +130,79 @@ fn on_paths(p: &Profile) -> Vec<PathBuf> {
     p.passes.iter().filter(|x| x.on).map(|x| x.path.clone()).collect()
 }
 
-pub struct Engine {
+/// O arquivo do perfil acompanhado: relê quando a data muda. Fica fora do `Engine` porque a DLL de injeção
+/// também acompanha o perfil no D3D9, com a cadeia D3D9 do librashader.
+pub struct Tracker {
     pub path: PathBuf,
     stamp: Option<SystemTime>,
     pub profile: Profile,
+}
+
+/// O que mudou no perfil relido.
+#[derive(Default, Debug, PartialEq)]
+pub struct Changed {
+    /// Passes ligados: refazer a cadeia.
+    pub chain: bool,
+    /// Só valores: aplicar sem recarregar.
+    pub params: bool,
+    pub input: bool,
+}
+
+impl Tracker {
+    pub fn open(path: &Path) -> Res<Self> {
+        let profile = Profile::load(path).map_err(|err| format!("{}: {err}", path.display()))?;
+        Ok(Self { path: path.to_path_buf(), stamp: stamp(path), profile })
+    }
+
+    /// Relê o perfil se o arquivo mudou. Arquivo sumido ou ilegível fica com o perfil de antes.
+    pub fn poll(&mut self) -> Changed {
+        let now = stamp(&self.path);
+        if now == self.stamp {
+            return Changed::default();
+        }
+        self.stamp = now;
+        let Ok(new) = Profile::load(&self.path) else { return Changed::default() };
+        let old = std::mem::replace(&mut self.profile, new);
+        Changed { chain: on_paths(&old) != on_paths(&self.profile), params: old.params != self.profile.params, input: old.input != self.profile.input }
+    }
+
+    /// Passa a acompanhar outro perfil: o próximo `poll` lê o arquivo novo.
+    pub fn switch(&mut self, path: &Path) {
+        self.path = path.to_path_buf();
+        self.stamp = None;
+    }
+
+    /// Outro perfil salvo do mesmo jogo (`dir` +1 ou -1), se houver.
+    pub fn sibling(&self, dir: isize) -> Option<PathBuf> {
+        let folder = self.path.parent()?;
+        let list = crate::profile::siblings(folder, &self.profile.exe);
+        let name = |p: &Path| p.file_name().map(|n| n.to_string_lossy().to_lowercase());
+        let i = list.iter().position(|p| name(p) == name(&self.path)).map_or(0, |i| i as isize);
+        let p = list.get((i + dir).rem_euclid(list.len().max(1) as isize) as usize)?;
+        (name(p) != name(&self.path)).then(|| p.clone())
+    }
+
+    pub fn on_paths(&self) -> Vec<PathBuf> {
+        on_paths(&self.profile)
+    }
+}
+
+/// Valores padrão de todos os parâmetros de uma cadeia carregada (D3D11 ou D3D9).
+pub fn defaults(c: &impl FilterChainParameters) -> HashMap<String, f32> {
+    c.parameters().parameters().iter().map(|(k, v)| (k.to_string(), *v)).collect()
+}
+
+/// Os valores do perfil na cadeia; o que sumiu do perfil volta ao padrão.
+pub fn apply(c: &impl FilterChainParameters, defaults: &HashMap<String, f32>, p: &Profile) {
+    for (k, d) in defaults {
+        c.parameters().set_parameter_value(k, p.param(k).unwrap_or(*d));
+    }
+}
+
+pub struct Engine {
+    t: Tracker,
+    /// Sem cadeia: só acompanha o perfil (o menu do motor quando o efeito roda injetado no jogo).
+    idle: bool,
     chain: Option<FilterChain>,
     /// Valores padrão de todos os parâmetros da cadeia, para voltar ao padrão o que sumiu do perfil.
     defaults: HashMap<String, f32>,
@@ -144,12 +214,19 @@ pub struct Engine {
     frame: usize,
 }
 
+impl std::ops::Deref for Engine {
+    type Target = Tracker;
+    fn deref(&self) -> &Tracker {
+        &self.t
+    }
+}
+
 impl Engine {
-    pub fn open(path: &Path, dev: &ID3D11Device) -> Res<Self> {
+    /// `idle`: não carrega a cadeia, só acompanha o perfil.
+    pub fn open(path: &Path, dev: &ID3D11Device, idle: bool) -> Res<Self> {
         let mut e = Self {
-            path: path.to_path_buf(),
-            stamp: None,
-            profile: Profile::load(path).map_err(|err| format!("{}: {err}", path.display()))?,
+            t: Tracker::open(path)?,
+            idle,
             chain: None,
             defaults: HashMap::new(),
             detect: Detect::default(),
@@ -159,7 +236,6 @@ impl Engine {
             copy: FullPass::new(dev, PS_COPY)?,
             frame: 0,
         };
-        e.stamp = stamp(path);
         e.build(dev);
         Ok(e)
     }
@@ -170,74 +246,64 @@ impl Engine {
     }
 
     /// Relê o perfil se o arquivo mudou: só `param` mudou → valores na hora; `pass` mudou → refaz a cadeia;
-    /// `input` mudou → refaz a redução. Arquivo sumido ou ilegível fica com o perfil de antes.
+    /// `input` mudou → refaz a redução.
     pub fn poll(&mut self, dev: &ID3D11Device) {
-        let now = stamp(&self.path);
-        if now == self.stamp {
-            return;
-        }
-        self.stamp = now;
-        let Ok(new) = Profile::load(&self.path) else { return };
-        let old = std::mem::replace(&mut self.profile, new);
-        if on_paths(&old) != on_paths(&self.profile) {
+        let c = self.t.poll();
+        if c.chain {
             self.build(dev);
-        } else if old.params != self.profile.params {
+        } else if c.params {
             self.apply();
         }
-        if old.input != self.profile.input {
+        if c.input {
             self.detect = Detect::default();
         }
     }
 
     /// Muda o perfil e grava: o `poll` logo em seguida aplica, como se o app tivesse gravado.
     pub fn edit(&mut self, dev: &ID3D11Device, f: impl FnOnce(&mut Profile)) {
-        let mut p = self.profile.clone();
+        let mut p = self.t.profile.clone();
         f(&mut p);
-        if let Err(e) = p.save(&self.path) {
-            eprintln!("shader: não gravou {}: {e}", self.path.display());
+        if let Err(e) = p.save(&self.t.path) {
+            say!("shader: não gravou {}: {e}", self.t.path.display());
         }
         self.poll(dev);
     }
 
     /// Troca para outro perfil salvo do mesmo jogo (`dir` +1 ou -1).
     pub fn next(&mut self, dev: &ID3D11Device, dir: isize) {
-        let Some(folder) = self.path.parent() else { return };
-        let list = crate::shader_profile::siblings(folder, &self.profile.exe);
-        let name = |p: &Path| p.file_name().map(|n| n.to_string_lossy().to_lowercase());
-        let i = list.iter().position(|p| name(p) == name(&self.path)).map_or(0, |i| i as isize);
-        let Some(p) = list.get((i + dir).rem_euclid(list.len().max(1) as isize) as usize) else { return };
-        if name(p) == name(&self.path) {
-            return;
-        }
-        eprintln!("shader: perfil {}", p.display());
-        self.path = p.clone();
-        self.stamp = None;
+        let Some(p) = self.t.sibling(dir) else { return };
+        say!("shader: perfil {}", p.display());
+        self.switch(dev, &p);
+    }
+
+    /// Passa a acompanhar o perfil `path`.
+    pub fn switch(&mut self, dev: &ID3D11Device, path: &Path) {
+        self.t.switch(path);
         self.poll(dev);
     }
 
     fn build(&mut self, dev: &ID3D11Device) {
         self.chain = None;
         self.defaults.clear();
-        let paths = on_paths(&self.profile);
-        if paths.is_empty() {
+        let paths = self.t.on_paths();
+        if paths.is_empty() || self.idle {
             return;
         }
         let t = std::time::Instant::now();
         match join(&paths).and_then(|p| unsafe { FilterChain::load_from_preset(p, dev, None) }.map_err(Into::into)) {
             Ok(c) => {
-                self.defaults = c.parameters().parameters().iter().map(|(k, v)| (k.to_string(), *v)).collect();
+                self.defaults = defaults(&c);
                 self.chain = Some(c);
                 self.apply();
-                eprintln!("shader: cadeia de {} preset(s) carregada em {} ms", paths.len(), t.elapsed().as_millis());
+                say!("shader: cadeia de {} preset(s) carregada em {} ms", paths.len(), t.elapsed().as_millis());
             }
-            Err(e) => eprintln!("shader: {e}"),
+            Err(e) => say!("shader: {e}"),
         }
     }
 
     fn apply(&self) {
-        let Some(c) = &self.chain else { return };
-        for (k, d) in &self.defaults {
-            c.parameters().set_parameter_value(k, self.profile.param(k).unwrap_or(*d));
+        if let Some(c) = &self.chain {
+            apply(c, &self.defaults, &self.t.profile);
         }
     }
 
@@ -251,16 +317,16 @@ impl Engine {
         let Some(chain) = &mut self.chain else {
             return self.copy.draw(ctx, src.1, out, vp, [0.0; 4]);
         };
-        if self.profile.input == "auto" {
+        if self.t.profile.input == "auto" {
             self.detect.step(dev, ctx, src.0, w, h)?;
         }
         let mut input = src.1;
-        if let Some(k) = blocks::reduce_for(&self.profile.input, h, self.detect.found) {
+        if let Some(k) = blocks::reduce_for(&self.t.profile.input, h, self.detect.found) {
             let size = blocks::reduced_size(w, h, k);
             if self.small.as_ref().is_none_or(|s| s.0 != size) {
                 let (t, v) = texture(dev, size.0, size.1, DXGI_FORMAT_B8G8R8A8_UNORM, true)?;
-                self.small = Some((size, super::rtv(dev, &t)?, v));
-                eprintln!("shader: entrada {}x{} → {}x{}", w, h, size.0, size.1);
+                self.small = Some((size, crate::rtv(dev, &t)?, v));
+                say!("shader: entrada {}x{} → {}x{}", w, h, size.0, size.1);
             }
             let (_, rt, v) = self.small.as_ref().unwrap();
             self.reduce.draw(ctx, src.1, rt, [0.0, 0.0, size.0 as f32, size.1 as f32], k)?;
@@ -323,8 +389,8 @@ mod tests {
 
         // A lista para a tela: um A só, no primeiro passe, com o padrão que vale na cadeia (o do último preset).
         let mut prof = Profile::default();
-        prof.passes = vec![crate::shader_profile::Pass { on: true, path: a.join("a.slangp") }, crate::shader_profile::Pass { on: true, path: dir.join("b.slangp") }];
-        let ps = crate::shader_profile::params(&prof);
+        prof.passes = vec![crate::profile::Pass { on: true, path: a.join("a.slangp") }, crate::profile::Pass { on: true, path: dir.join("b.slangp") }];
+        let ps = crate::profile::params(&prof);
         assert_eq!(ps.len(), 1);
         assert_eq!((ps[0].name.as_str(), ps[0].default, ps[0].pass, ps[0].step), ("A", 0.9, 0, 0.1));
 
@@ -343,12 +409,12 @@ mod tests {
         // Tirar um passe leva junto o valor que era só dele; o que outro passe ainda usa fica.
         std::fs::write(a.join("c.slang"), SLANG.replace('A', "B")).unwrap();
         std::fs::write(a.join("c.slangp"), "shaders = 1\nshader0 = c.slang\n").unwrap();
-        prof.passes.push(crate::shader_profile::Pass { on: true, path: a.join("c.slangp") });
+        prof.passes.push(crate::profile::Pass { on: true, path: a.join("c.slangp") });
         prof.set_param("B", Some(0.3));
-        crate::shader_profile::remove_pass(&mut prof, 2);
+        crate::profile::remove_pass(&mut prof, 2);
         assert_eq!(prof.params, [("A".to_string(), 0.4)]);
         prof.set_param("B", Some(0.3));
-        crate::shader_profile::remove_pass(&mut prof, 1);
+        crate::profile::remove_pass(&mut prof, 1);
         assert_eq!(prof.params, [("A".to_string(), 0.4), ("B".to_string(), 0.3)]);
         let _ = std::fs::remove_dir_all(&dir);
     }

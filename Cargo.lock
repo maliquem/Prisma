@@ -3085,6 +3085,7 @@ dependencies = [
  "opus-head-sys",
  "prisma-eq",
  "prisma-link",
+ "prisma-shader",
  "reed-solomon-simd",
  "tokio",
  "vigem-client",
@@ -3105,6 +3106,14 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "windows",
+]
+
+[[package]]
+name = "prisma-shader"
+version = "0.1.0"
+dependencies = [
+ "librashader",
  "windows",
 ]
 

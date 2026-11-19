@@ -14,7 +14,7 @@ use windows::Win32::UI::HiDpi::*;
 use windows::Win32::UI::Input::KeyboardAndMouse::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
-use super::{chain::Engine, rtv, Res};
+use prisma_shader::{chain::Engine, rtv, Res};
 
 /// Cena 2D de 320×240 feita aqui: céu em faixas, sol, morros, chão de tijolos e um boneco.
 fn scene() -> (u32, u32, Vec<u8>) {
@@ -79,7 +79,7 @@ pub fn run(arg: &str) -> Res<()> {
     let d = crate::capture::d3d()?;
     let (img, srv) = super::texture(&d.dev, iw, ih, DXGI_FORMAT_B8G8R8A8_UNORM, false)?;
     unsafe { d.ctx.UpdateSubresource(&img, 0, None, px.as_ptr() as *const _, iw * 4, 0) };
-    let mut eng = Engine::open(path, &d.dev)?;
+    let mut eng = Engine::open(path, &d.dev, false)?;
 
     let hwnd = unsafe {
         crate::overlays::register(w!("PrismaShaderPreview"), wndproc);
