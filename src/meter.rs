@@ -353,6 +353,8 @@ pub fn video_api(pid: u32) -> String {
         "dx11"
     } else if has("d3d12.dll") {
         "dx12"
+    } else if has("d3d10.dll") || has("d3d10_1.dll") {
+        "dx10"
     } else if has("d3d9.dll") {
         "d3d9"
     } else if has("vulkan-1.dll") {

@@ -78,7 +78,7 @@ pub fn api_name(api: u32) -> &'static str {
 
 /// O modo Injeção cobre estas (`api=` do perfil).
 pub fn api_supported(api: &str) -> bool {
-    matches!(api, "dx11" | "d3d9")
+    matches!(api, "dx11" | "dx10" | "d3d9")
 }
 
 #[cfg(test)]

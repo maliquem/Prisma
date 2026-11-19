@@ -1,7 +1,8 @@
 //! Shaders do Prisma dentro do jogo (modo Injeção): a mesma cadeia do motor por cima, aplicada no back buffer
 //! antes do Present, sem janela por cima. Entra como o limitador (`hook/`): `SetWindowsHookEx` só na linha da
 //! janela do jogo, dispositivo falso para achar as tabelas de funções, e se prende até o jogo fechar.
-//! - DXGI com D3D11: `Present`, `Present1`, `ResizeBuffers`. D3D10 e D3D12 só avisam a API (`api`) e passam.
+//! - DXGI com D3D11: `Present`, `Present1`, `ResizeBuffers`. Com D3D10, a cadeia roda num D3D11 nosso no mesmo
+//!   adaptador (`Bridge`). D3D12 só avisa a API (`api`) e passa.
 //! - D3D9 e 9Ex: `Present`, `PresentEx`, `Reset`, `ResetEx`.
 //! O motor (`prisma.exe --shader-profile`) conversa pela memória de `prisma_shader::link`: perfil, sinal de vida,
 //! `compare`. O perfil é relido a cada 250 ms, como no motor por cima.
@@ -23,6 +24,7 @@ use prisma_shader::{blocks, rtv, say, texture, FullPass, Res, PS_COPY};
 use windows::core::*;
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Direct3D::*;
+use windows::Win32::Graphics::Direct3D10::*;
 use windows::Win32::Graphics::Direct3D11::*;
 use windows::Win32::Graphics::Direct3D9::*;
 use windows::Win32::Graphics::Dxgi::Common::*;
@@ -208,16 +210,19 @@ unsafe fn dx11_present(this: *mut c_void, flags: u32) {
     if !is_game(s, desc.OutputWindow) {
         return;
     }
-    let Ok(dev) = sc.GetDevice::<ID3D11Device>() else {
-        // DXGI sem D3D11 por trás: D3D12 (ou D3D10). O motor lê `api` e volta para a janela por cima.
-        if s.api.load(Relaxed) == 0 {
-            let api = if GetModuleHandleW(w!("d3d12.dll")).is_ok() { API_DX12 } else { API_DX10 };
-            s.api.store(api, Relaxed);
-            say!("shader: o jogo apresenta em {}, a injeção não cobre", api_name(api));
+    let d11 = sc.GetDevice::<ID3D11Device>().ok();
+    if d11.is_none() && sc.GetDevice::<ID3D10Device>().is_err() {
+        // DXGI sem D3D11 nem D3D10 por trás: D3D12. O motor lê `api` e volta para a janela por cima.
+        if s.api.load(Relaxed) != API_DX12 {
+            s.api.store(API_DX12, Relaxed);
+            say!("shader: o jogo apresenta em dx12, a injeção não cobre");
         }
         return;
-    };
-    s.api.store(API_DX11, Relaxed);
+    }
+    // Quem já caiu na ponte fica D3D10 (o D3D10 do Windows também atende como D3D11).
+    if s.api.load(Relaxed) != API_DX10 {
+        s.api.store(if d11.is_some() { API_DX11 } else { API_DX10 }, Relaxed);
+    }
     if !alive(s) {
         return;
     }
@@ -231,7 +236,21 @@ unsafe fn dx11_present(this: *mut c_void, flags: u32) {
         if *lock(&FAIL) == Some(key) {
             return;
         }
-        match Dx11::new(this as usize, dev, s) {
+        // O D3D10 atende como D3D11 mas recusa o estado de contexto nosso: aí a cadeia vai pela ponte (`Bridge`).
+        let made = match d11.map(|dev| Dx11::new(this as usize, dev, None, s)) {
+            Some(Ok(x)) => Ok(x),
+            first => match sc.GetDevice::<ID3D10Device>() {
+                Ok(d10) => {
+                    if let Some(Err(e)) = first {
+                        say!("shader: D3D11 do jogo recusou ({e}), indo como D3D10");
+                    }
+                    s.api.store(API_DX10, Relaxed);
+                    own_device(&d10).and_then(|dev| Dx11::new(this as usize, dev, Some(d10), s))
+                }
+                Err(_) => first.unwrap(),
+            },
+        };
+        match made {
             Ok(x) => *g = Some(x),
             Err(e) => {
                 *lock(&FAIL) = Some(key);
@@ -265,11 +284,77 @@ struct Bb {
     /// Em BGRA, quando o back buffer é RGBA: o detector de blocos e a redução leem BGRA.
     bgra: Option<(ID3D11Texture2D, ID3D11ShaderResourceView, ID3D11RenderTargetView)>,
     out: ID3D11RenderTargetView,
+    /// D3D10: entrada e saída compartilhadas com o dispositivo do jogo.
+    bridge: Option<Bridge>,
+}
+
+/// D3D10 ↔ D3D11 nosso. Compartilhamento simples (o D3D10.0 não abre textura com chave): cada lado espera a GPU
+/// terminar o seu (consulta de evento) antes de o outro ler.
+struct Bridge {
+    inp: (ID3D11Texture2D, ID3D10Texture2D),
+    out: (ID3D11Texture2D, ID3D10Texture2D),
+    q10: ID3D10Query,
+    q11: ID3D11Query,
+}
+
+impl Bridge {
+    unsafe fn new(dev: &ID3D11Device, d10: &ID3D10Device, w: u32, h: u32, fmt: DXGI_FORMAT) -> Res<(Self, ID3D11ShaderResourceView)> {
+        let (inp, out) = (shared_tex(dev, d10, w, h, fmt)?, shared_tex(dev, d10, w, h, fmt)?);
+        let mut v = None;
+        dev.CreateShaderResourceView(&inp.0, None, Some(&mut v))?;
+        let (mut q10, mut q11) = (None, None);
+        d10.CreateQuery(&D3D10_QUERY_DESC { Query: D3D10_QUERY_EVENT, MiscFlags: 0 }, Some(&mut q10))?;
+        dev.CreateQuery(&D3D11_QUERY_DESC { Query: D3D11_QUERY_EVENT, MiscFlags: 0 }, Some(&mut q11))?;
+        Ok((Self { inp, out, q10: q10.ok_or("sem consulta")?, q11: q11.ok_or("sem consulta")? }, v.ok_or("sem vista")?))
+    }
+}
+
+/// Textura compartilhada entre o D3D10 do jogo e o D3D11 nosso. Nasce no D3D10: ele não abre a que nasce no D3D11.
+unsafe fn shared_tex(dev: &ID3D11Device, d10: &ID3D10Device, w: u32, h: u32, fmt: DXGI_FORMAT) -> Res<(ID3D11Texture2D, ID3D10Texture2D)> {
+    let desc = D3D10_TEXTURE2D_DESC {
+        Width: w,
+        Height: h,
+        MipLevels: 1,
+        ArraySize: 1,
+        Format: fmt,
+        SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+        Usage: D3D10_USAGE_DEFAULT,
+        BindFlags: (D3D10_BIND_SHADER_RESOURCE.0 | D3D10_BIND_RENDER_TARGET.0) as u32,
+        CPUAccessFlags: 0,
+        MiscFlags: D3D10_RESOURCE_MISC_SHARED.0 as u32,
+    };
+    let t10 = d10.CreateTexture2D(&desc, None).map_err(|e| format!("textura {w}x{h} {fmt:?}: {e}"))?;
+    let mut t11: Option<ID3D11Texture2D> = None;
+    dev.OpenSharedResource(t10.cast::<IDXGIResource>()?.GetSharedHandle()?, &mut t11)?;
+    Ok((t11.ok_or("sem textura aberta")?, t10))
+}
+
+/// D3D10: a cadeia (feita para D3D11) roda num dispositivo nosso no mesmo adaptador do jogo.
+unsafe fn own_device(d10: &ID3D10Device) -> Res<ID3D11Device> {
+    let adapter = d10.cast::<IDXGIDevice>()?.GetAdapter()?;
+    let mut dev = None;
+    D3D11CreateDevice(&adapter, D3D_DRIVER_TYPE_UNKNOWN, HMODULE::default(), D3D11_CREATE_DEVICE_BGRA_SUPPORT, None, D3D11_SDK_VERSION, Some(&mut dev), None, None)?;
+    say!("shader: D3D10, a cadeia roda num D3D11 próprio no mesmo adaptador");
+    Ok(dev.ok_or("sem dispositivo D3D11")?)
+}
+
+/// Espera a GPU passar da consulta (100 ms no máximo: travar o jogo é pior que um quadro sem efeito).
+fn finished(mut ready: impl FnMut() -> bool) -> Res<()> {
+    let t = Instant::now();
+    while !ready() {
+        if t.elapsed().as_millis() >= 100 {
+            return Err("a GPU não terminou a cópia em 100 ms".into());
+        }
+        std::thread::yield_now();
+    }
+    Ok(())
 }
 
 struct Dx11 {
     sc: usize,
     dev: ID3D11Device,
+    /// O dispositivo do jogo, quando ele é D3D10 (o `dev` então é nosso).
+    d10: Option<ID3D10Device>,
     ctx: ID3D11DeviceContext1,
     /// Estado do contexto só nosso: o do jogo fica guardado do jeito que estava (`SwapDeviceContextState`).
     state: ID3DDeviceContextState,
@@ -283,7 +368,7 @@ struct Dx11 {
 }
 
 impl Dx11 {
-    unsafe fn new(sc: usize, dev: ID3D11Device, s: &Shared) -> Res<Self> {
+    unsafe fn new(sc: usize, dev: ID3D11Device, d10: Option<ID3D10Device>, s: &Shared) -> Res<Self> {
         let ctx: ID3D11DeviceContext1 = dev.GetImmediateContext()?.cast()?;
         let single = dev.GetCreationFlags() & D3D11_CREATE_DEVICE_SINGLETHREADED.0 as u32 != 0;
         let flags = if single { D3D11_1_CREATE_DEVICE_CONTEXT_STATE_SINGLETHREADED.0 as u32 } else { 0 };
@@ -301,7 +386,7 @@ impl Dx11 {
         }
         let (eng, copy) = made?;
         say!("shader: D3D11 pronto, perfil {}", eng.path.display());
-        Ok(Self { sc, dev, ctx, state, eng, copy, polled: Instant::now(), seq, bb: None, warned: false, errors: 0 })
+        Ok(Self { sc, dev, d10, ctx, state, eng, copy, polled: Instant::now(), seq, bb: None, warned: false, errors: 0 })
     }
 
     unsafe fn frame(&mut self, sc: &IDXGISwapChain, desc: &DXGI_SWAP_CHAIN_DESC, s: &Shared) -> Res<()> {
@@ -346,11 +431,16 @@ impl Dx11 {
                 return Ok(());
             }
         };
-        let back: ID3D11Texture2D = sc.GetBuffer(0)?;
         let key = (w, h, fmt, samples);
         if self.bb.as_ref().is_none_or(|b| b.key != key) {
             self.bb = None;
-            let raw = texture(&self.dev, w, h, base, false)?;
+            let (raw, out, bridge) = match &self.d10 {
+                Some(d10) => {
+                    let (br, v) = Bridge::new(&self.dev, d10, w, h, base)?;
+                    ((br.inp.0.clone(), v), rtv(&self.dev, &br.out.0)?, Some(br))
+                }
+                None => (texture(&self.dev, w, h, base, false)?, rtv(&self.dev, &sc.GetBuffer::<ID3D11Texture2D>(0)?)?, None),
+            };
             let bgra = if rgba {
                 let (t, v) = texture(&self.dev, w, h, DXGI_FORMAT_B8G8R8A8_UNORM, true)?;
                 let r = rtv(&self.dev, &t)?;
@@ -359,25 +449,56 @@ impl Dx11 {
                 None
             };
             // shortcut: back buffer _SRGB sai com a saída em sRGB de novo (fica mais claro); raro em flip model.
-            self.bb = Some(Bb { key, raw, bgra, out: rtv(&self.dev, &back)? });
+            self.bb = Some(Bb { key, raw, bgra, out, bridge });
             say!("shader: back buffer {w}x{h} {fmt:?}, {samples} amostra(s)");
         }
         let b = self.bb.as_ref().unwrap();
-        if samples > 1 {
-            self.ctx.ResolveSubresource(&b.raw.0, 0, &back, 0, base);
-        } else {
-            self.ctx.CopyResource(&b.raw.0, &back);
+        match (&b.bridge, &self.d10) {
+            (Some(br), Some(d10)) => {
+                // O jogo copia o quadro para `inp`, a cadeia desenha de `inp` em `out` e o jogo copia `out` de volta.
+                let back: ID3D10Texture2D = sc.GetBuffer(0)?;
+                if samples > 1 {
+                    d10.ResolveSubresource(&br.inp.1, 0, &back, 0, base);
+                } else {
+                    d10.CopyResource(&br.inp.1, &back);
+                }
+                br.q10.End();
+                d10.Flush();
+                let q: &ID3D10Asynchronous = &br.q10;
+                finished(|| (Interface::vtable(q).GetData)(q.as_raw(), std::ptr::null_mut(), 0, 0) == S_OK)?;
+                Self::chain_pass(&mut self.eng, &self.copy, &self.dev, &self.ctx, b, w, h)?;
+                self.ctx.End(&br.q11);
+                self.ctx.Flush();
+                let c: &ID3D11DeviceContext = &self.ctx;
+                finished(|| (Interface::vtable(c).GetData)(c.as_raw(), br.q11.as_raw(), std::ptr::null_mut(), 0, 0) == S_OK)?;
+                d10.CopyResource(&back, &br.out.1);
+                s.drawn.fetch_add(1, Relaxed);
+                return Ok(());
+            }
+            _ => {
+                let back: ID3D11Texture2D = sc.GetBuffer(0)?;
+                if samples > 1 {
+                    self.ctx.ResolveSubresource(&b.raw.0, 0, &back, 0, base);
+                } else {
+                    self.ctx.CopyResource(&b.raw.0, &back);
+                }
+            }
         }
+        Self::chain_pass(&mut self.eng, &self.copy, &self.dev, &self.ctx, b, w, h)?;
+        s.drawn.fetch_add(1, Relaxed);
+        Ok(())
+    }
+
+    /// Da cópia do back buffer (`raw`) até `out`, passando para BGRA quando precisa.
+    unsafe fn chain_pass(eng: &mut Engine, copy: &FullPass, dev: &ID3D11Device, ctx: &ID3D11DeviceContext1, b: &Bb, w: u32, h: u32) -> Res<()> {
         let input = match &b.bgra {
             Some((t, v, r)) => {
-                self.copy.draw(&self.ctx, &b.raw.1, r, [0.0, 0.0, w as f32, h as f32], [0.0; 4])?;
+                copy.draw(ctx, &b.raw.1, r, [0.0, 0.0, w as f32, h as f32], [0.0; 4])?;
                 (t, v)
             }
             None => (&b.raw.0, &b.raw.1),
         };
-        self.eng.render(&self.dev, &self.ctx, input, (w, h), &b.out, [0.0, 0.0, w as f32, h as f32])?;
-        s.drawn.fetch_add(1, Relaxed);
-        Ok(())
+        eng.render(dev, ctx, input, (w, h), &b.out, [0.0, 0.0, w as f32, h as f32])
     }
 }
 
@@ -806,4 +927,22 @@ pub unsafe extern "system" fn prisma_shader_hook(code: i32, w: WPARAM, l: LPARAM
         }
     }
     CallNextHookEx(None, code, w, l)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A ponte do D3D10: a textura nasce no D3D10 do jogo e abre no D3D11 nosso.
+    #[test]
+    fn ponte_d3d10() {
+        unsafe {
+            let mut d10 = None;
+            D3D10CreateDevice(None, D3D10_DRIVER_TYPE_HARDWARE, HMODULE::default(), 0, D3D10_SDK_VERSION, Some(&mut d10)).unwrap();
+            let d10 = d10.unwrap();
+            let dev = own_device(&d10).unwrap();
+            // O D3D10.0 não tem BGRA: o back buffer dele é RGBA.
+            Bridge::new(&dev, &d10, 720, 480, DXGI_FORMAT_R8G8B8A8_UNORM).unwrap();
+        }
+    }
 }
