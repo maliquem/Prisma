@@ -30,6 +30,8 @@ use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Direct3D::*;
 use windows::Win32::Graphics::Direct3D10::*;
 use windows::Win32::Graphics::Direct3D11::*;
+use windows::Win32::Graphics::Direct3D11on12::*;
+use windows::Win32::Graphics::Direct3D12::*;
 use windows::Win32::Graphics::Direct3D9::*;
 use windows::Win32::Graphics::Dxgi::Common::*;
 use windows::Win32::Graphics::Dxgi::*;
@@ -189,6 +191,10 @@ fn drop_bb(this: *mut c_void) {
     guard(|| {
         if let Some(x) = lock(&DX11).as_mut().filter(|x| x.sc == this as usize) {
             x.bb = None;
+            if x.on12.is_some() {
+                // O 11on12 só solta os back buffers do D3D12 no Flush.
+                unsafe { x.ctx.Flush() };
+            }
         }
     });
 }
@@ -217,16 +223,12 @@ unsafe fn dx11_present(this: *mut c_void, flags: u32) {
         return;
     }
     let d11 = sc.GetDevice::<ID3D11Device>().ok();
-    if d11.is_none() && sc.GetDevice::<ID3D10Device>().is_err() {
-        // DXGI sem D3D11 nem D3D10 por trás: D3D12. O motor lê `api` e volta para a janela por cima.
-        if s.api.load(Relaxed) != API_DX12 {
-            s.api.store(API_DX12, Relaxed);
-            say!("shader: o jogo apresenta em dx12, a injeção não cobre");
-        }
-        return;
-    }
-    // Quem já caiu na ponte fica D3D10 (o D3D10 do Windows também atende como D3D11).
-    if s.api.load(Relaxed) != API_DX10 {
+    // DXGI sem D3D11 nem D3D10 por trás: D3D12.
+    let d12 = if d11.is_none() && sc.GetDevice::<ID3D10Device>().is_err() { sc.GetDevice::<ID3D12Device>().ok() } else { None };
+    if d12.is_some() {
+        s.api.store(API_DX12, Relaxed);
+    } else if s.api.load(Relaxed) != API_DX10 {
+        // Quem já caiu na ponte fica D3D10 (o D3D10 do Windows também atende como D3D11).
         s.api.store(if d11.is_some() { API_DX11 } else { API_DX10 }, Relaxed);
     }
     if !alive(s) {
@@ -242,8 +244,18 @@ unsafe fn dx11_present(this: *mut c_void, flags: u32) {
         if *lock(&FAIL) == Some(key) {
             return;
         }
+        let queue = d12.as_ref().map(|d| lock(&QUEUE).clone().filter(|q| {
+            let mut qd: Option<ID3D12Device> = None;
+            q.GetDevice(&mut qd).is_ok() && qd.as_ref() == Some(d)
+        }));
+        if queue.as_ref().is_some_and(|q| q.is_none()) {
+            // O jogo ainda não mandou nada pela fila desde o desvio: fica para o próximo quadro.
+            return;
+        }
         // O D3D10 atende como D3D11 mas recusa o estado de contexto nosso: aí a cadeia vai pela ponte (`Bridge`).
-        let made = match d11.map(|dev| Dx11::new(this as usize, dev, None, s)) {
+        let made = match (d12, queue.flatten()) {
+            (Some(d12), Some(q)) => on12_device(&d12, &q).and_then(|(dev, on12)| Dx11::new(this as usize, dev, None, Some(on12), s)),
+            _ => match d11.map(|dev| Dx11::new(this as usize, dev, None, None, s)) {
             Some(Ok(x)) => Ok(x),
             first => match sc.GetDevice::<ID3D10Device>() {
                 Ok(d10) => {
@@ -251,9 +263,10 @@ unsafe fn dx11_present(this: *mut c_void, flags: u32) {
                         say!("shader: D3D11 do jogo recusou ({e}), indo como D3D10");
                     }
                     s.api.store(API_DX10, Relaxed);
-                    own_device(&d10).and_then(|dev| Dx11::new(this as usize, dev, Some(d10), s))
+                    own_device(&d10).and_then(|dev| Dx11::new(this as usize, dev, Some(d10), None, s))
                 }
                 Err(_) => first.unwrap(),
+            },
             },
         };
         match made {
@@ -289,7 +302,10 @@ struct Bb {
     raw: (ID3D11Texture2D, ID3D11ShaderResourceView),
     /// Em BGRA, quando o back buffer é RGBA: o detector de blocos e a redução leem BGRA.
     bgra: Option<(ID3D11Texture2D, ID3D11ShaderResourceView, ID3D11RenderTargetView)>,
-    out: ID3D11RenderTargetView,
+    /// Um por back buffer no D3D12 (o da vez sai do `GetCurrentBackBufferIndex`); um só nos outros.
+    out: Vec<ID3D11RenderTargetView>,
+    /// D3D12: os back buffers embrulhados pelo 11on12, na ordem de `out`.
+    wrapped: Vec<ID3D11Texture2D>,
     /// D3D10: entrada e saída compartilhadas com o dispositivo do jogo.
     bridge: Option<Bridge>,
 }
@@ -344,6 +360,16 @@ unsafe fn own_device(d10: &ID3D10Device) -> Res<ID3D11Device> {
     Ok(dev.ok_or("sem dispositivo D3D11")?)
 }
 
+/// D3D12: um D3D11 por cima do dispositivo e da fila do jogo (11on12). A cadeia, o detector e a redução são os do D3D11.
+unsafe fn on12_device(d12: &ID3D12Device, q: &ID3D12CommandQueue) -> Res<(ID3D11Device, ID3D11On12Device)> {
+    let mut dev = None;
+    D3D11On12CreateDevice(d12, D3D11_CREATE_DEVICE_BGRA_SUPPORT.0, None, Some(&[Some(q.cast::<IUnknown>()?)]), 0, Some(&mut dev), None, None)?;
+    let dev = dev.ok_or("sem dispositivo 11on12")?;
+    say!("shader: D3D12, a cadeia roda num D3D11 sobre a fila do jogo (11on12)");
+    let on12 = dev.cast()?;
+    Ok((dev, on12))
+}
+
 /// Espera a GPU passar da consulta (100 ms no máximo: travar o jogo é pior que um quadro sem efeito).
 fn finished(mut ready: impl FnMut() -> bool) -> Res<()> {
     let t = Instant::now();
@@ -361,6 +387,8 @@ struct Dx11 {
     dev: ID3D11Device,
     /// O dispositivo do jogo, quando ele é D3D10 (o `dev` então é nosso).
     d10: Option<ID3D10Device>,
+    /// D3D12: o `dev` é um 11on12 sobre a fila do jogo.
+    on12: Option<ID3D11On12Device>,
     ctx: ID3D11DeviceContext1,
     /// Estado do contexto só nosso: o do jogo fica guardado do jeito que estava (`SwapDeviceContextState`).
     state: ID3DDeviceContextState,
@@ -374,7 +402,7 @@ struct Dx11 {
 }
 
 impl Dx11 {
-    unsafe fn new(sc: usize, dev: ID3D11Device, d10: Option<ID3D10Device>, s: &Shared) -> Res<Self> {
+    unsafe fn new(sc: usize, dev: ID3D11Device, d10: Option<ID3D10Device>, on12: Option<ID3D11On12Device>, s: &Shared) -> Res<Self> {
         let ctx: ID3D11DeviceContext1 = dev.GetImmediateContext()?.cast()?;
         let single = dev.GetCreationFlags() & D3D11_CREATE_DEVICE_SINGLETHREADED.0 as u32 != 0;
         let flags = if single { D3D11_1_CREATE_DEVICE_CONTEXT_STATE_SINGLETHREADED.0 as u32 } else { 0 };
@@ -392,7 +420,7 @@ impl Dx11 {
         }
         let (eng, copy) = made?;
         say!("shader: D3D11 pronto, perfil {}", eng.path.display());
-        Ok(Self { sc, dev, d10, ctx, state, eng, copy, polled: Instant::now(), seq, bb: None, warned: false, errors: 0 })
+        Ok(Self { sc, dev, d10, on12, ctx, state, eng, copy, polled: Instant::now(), seq, bb: None, warned: false, errors: 0 })
     }
 
     unsafe fn frame(&mut self, sc: &IDXGISwapChain, desc: &DXGI_SWAP_CHAIN_DESC, s: &Shared) -> Res<()> {
@@ -440,12 +468,25 @@ impl Dx11 {
         let key = (w, h, fmt, samples);
         if self.bb.as_ref().is_none_or(|b| b.key != key) {
             self.bb = None;
-            let (raw, out, bridge) = match &self.d10 {
-                Some(d10) => {
+            let mut wrapped = Vec::new();
+            let (raw, out, bridge) = match (&self.d10, &self.on12) {
+                (Some(d10), _) => {
                     let (br, v) = Bridge::new(&self.dev, d10, w, h, base)?;
-                    ((br.inp.0.clone(), v), rtv(&self.dev, &br.out.0)?, Some(br))
+                    ((br.inp.0.clone(), v), vec![rtv(&self.dev, &br.out.0)?], Some(br))
                 }
-                None => (texture(&self.dev, w, h, base, false)?, rtv(&self.dev, &sc.GetBuffer::<ID3D11Texture2D>(0)?)?, None),
+                (None, Some(on12)) => {
+                    let flags = D3D11_RESOURCE_FLAGS { BindFlags: D3D11_BIND_RENDER_TARGET.0 as u32, ..Default::default() };
+                    let mut out = Vec::new();
+                    for i in 0..desc.BufferCount {
+                        let mut t: Option<ID3D11Texture2D> = None;
+                        on12.CreateWrappedResource(&sc.GetBuffer::<ID3D12Resource>(i)?, &flags, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_PRESENT, &mut t)?;
+                        let t = t.ok_or("sem back buffer embrulhado")?;
+                        out.push(rtv(&self.dev, &t)?);
+                        wrapped.push(t);
+                    }
+                    (texture(&self.dev, w, h, base, false)?, out, None)
+                }
+                (None, None) => (texture(&self.dev, w, h, base, false)?, vec![rtv(&self.dev, &sc.GetBuffer::<ID3D11Texture2D>(0)?)?], None),
             };
             let bgra = if rgba {
                 let (t, v) = texture(&self.dev, w, h, DXGI_FORMAT_B8G8R8A8_UNORM, true)?;
@@ -455,7 +496,7 @@ impl Dx11 {
                 None
             };
             // shortcut: back buffer _SRGB sai com a saída em sRGB de novo (fica mais claro); raro em flip model.
-            self.bb = Some(Bb { key, raw, bgra, out, bridge });
+            self.bb = Some(Bb { key, raw, bgra, out, wrapped, bridge });
             say!("shader: back buffer {w}x{h} {fmt:?}, {samples} amostra(s)");
         }
         let b = self.bb.as_ref().unwrap();
@@ -472,12 +513,27 @@ impl Dx11 {
                 d10.Flush();
                 let q: &ID3D10Asynchronous = &br.q10;
                 finished(|| (Interface::vtable(q).GetData)(q.as_raw(), std::ptr::null_mut(), 0, 0) == S_OK)?;
-                Self::chain_pass(&mut self.eng, &self.copy, &self.dev, &self.ctx, b, w, h)?;
+                Self::chain_pass(&mut self.eng, &self.copy, &self.dev, &self.ctx, b, &b.out[0], w, h)?;
                 self.ctx.End(&br.q11);
                 self.ctx.Flush();
                 let c: &ID3D11DeviceContext = &self.ctx;
                 finished(|| (Interface::vtable(c).GetData)(c.as_raw(), br.q11.as_raw(), std::ptr::null_mut(), 0, 0) == S_OK)?;
                 d10.CopyResource(&back, &br.out.1);
+                s.drawn.fetch_add(1, Relaxed);
+                return Ok(());
+            }
+            _ if !b.wrapped.is_empty() => {
+                // D3D12 (flip model, sem MSAA): o 11on12 põe tudo na fila do jogo antes do Present.
+                let on12 = self.on12.as_ref().unwrap();
+                let i = sc.cast::<IDXGISwapChain3>()?.GetCurrentBackBufferIndex() as usize;
+                let back = b.wrapped.get(i).ok_or("back buffer fora da conta")?;
+                let res = [Some(back.cast::<ID3D11Resource>()?)];
+                on12.AcquireWrappedResources(&res);
+                self.ctx.CopyResource(&b.raw.0, back);
+                let r = Self::chain_pass(&mut self.eng, &self.copy, &self.dev, &self.ctx, b, &b.out[i], w, h);
+                on12.ReleaseWrappedResources(&res);
+                self.ctx.Flush();
+                r?;
                 s.drawn.fetch_add(1, Relaxed);
                 return Ok(());
             }
@@ -490,13 +546,13 @@ impl Dx11 {
                 }
             }
         }
-        Self::chain_pass(&mut self.eng, &self.copy, &self.dev, &self.ctx, b, w, h)?;
+        Self::chain_pass(&mut self.eng, &self.copy, &self.dev, &self.ctx, b, &b.out[0], w, h)?;
         s.drawn.fetch_add(1, Relaxed);
         Ok(())
     }
 
     /// Da cópia do back buffer (`raw`) até `out`, passando para BGRA quando precisa.
-    unsafe fn chain_pass(eng: &mut Engine, copy: &FullPass, dev: &ID3D11Device, ctx: &ID3D11DeviceContext1, b: &Bb, w: u32, h: u32) -> Res<()> {
+    unsafe fn chain_pass(eng: &mut Engine, copy: &FullPass, dev: &ID3D11Device, ctx: &ID3D11DeviceContext1, b: &Bb, out: &ID3D11RenderTargetView, w: u32, h: u32) -> Res<()> {
         let input = match &b.bgra {
             Some((t, v, r)) => {
                 copy.draw(ctx, &b.raw.1, r, [0.0, 0.0, w as f32, h as f32], [0.0; 4])?;
@@ -504,8 +560,45 @@ impl Dx11 {
             }
             None => (&b.raw.0, &b.raw.1),
         };
-        eng.render(dev, ctx, input, (w, h), &b.out, [0.0, 0.0, w as f32, h as f32])
+        eng.render(dev, ctx, input, (w, h), out, [0.0, 0.0, w as f32, h as f32])
     }
+}
+
+const SLOT_D12_EXECUTE: usize = 10;
+type ExecuteCommandLists = unsafe extern "system" fn(*mut c_void, u32, *const *mut c_void);
+
+/// A última fila DIRECT do jogo: a swapchain do D3D12 não diz com que fila nasceu, e o 11on12 precisa dela.
+static QUEUE: Mutex<Option<ID3D12CommandQueue>> = Mutex::new(None);
+static QUEUE_RAW: AtomicUsize = AtomicUsize::new(0);
+/// Trampolim do `ExecuteCommandLists` (chamado muitas vezes por quadro: sem procurar na lista de desvios).
+static D12_EXECUTE: AtomicUsize = AtomicUsize::new(0);
+
+unsafe extern "system" fn on_execute(this: *mut c_void, n: u32, lists: *const *mut c_void) {
+    if QUEUE_RAW.load(Relaxed) != this as usize {
+        guard(|| {
+            if let Some(q) = ID3D12CommandQueue::from_raw_borrowed(&this).filter(|q| q.GetDesc().Type == D3D12_COMMAND_LIST_TYPE_DIRECT) {
+                *lock(&QUEUE) = Some(q.clone());
+                QUEUE_RAW.store(this as usize, Relaxed);
+            }
+        });
+    }
+    let f: ExecuteCommandLists = std::mem::transmute(D12_EXECUTE.load(Relaxed));
+    f(this, n, lists)
+}
+
+/// Só com a d3d12.dll já no jogo: carregar o D3D12 num jogo que não usa não serve para nada.
+unsafe fn install_d12() -> Res<()> {
+    if GetModuleHandleW(w!("d3d12.dll")).is_err() {
+        return Err("sem d3d12.dll".into());
+    }
+    let mut dev: Option<ID3D12Device> = None;
+    D3D12CreateDevice(None, D3D_FEATURE_LEVEL_11_0, &mut dev)?;
+    let q: ID3D12CommandQueue = dev.ok_or("sem dispositivo")?.CreateCommandQueue(&D3D12_COMMAND_QUEUE_DESC { Type: D3D12_COMMAND_LIST_TYPE_DIRECT, ..Default::default() })?;
+    let at = *vtable(&q).add(SLOT_D12_EXECUTE);
+    D12_EXECUTE.store(at, Relaxed);
+    detour(at, on_execute as *const () as usize)?;
+    D12_EXECUTE.store(tramp(q.as_raw(), SLOT_D12_EXECUTE), Relaxed);
+    Ok(())
 }
 
 unsafe fn install_dxgi() -> Res<()> {
@@ -1233,8 +1326,8 @@ unsafe extern "system" fn start(_: *mut c_void) -> u32 {
     s.state.store(STATE_LOADED, SeqCst);
     s.magic.store(MAGIC, SeqCst);
     SHARED.store(view.Value as usize, SeqCst);
-    let (dxgi, d9, gl) = (install_dxgi(), install_d9(), install_gl());
-    say!("shader: injeção no pid {}: DXGI {:?}, D3D9 {:?}, OpenGL {:?}", GetCurrentProcessId(), dxgi, d9, gl);
+    let (dxgi, d12, d9, gl) = (install_dxgi(), install_d12(), install_d9(), install_gl());
+    say!("shader: injeção no pid {}: DXGI {:?}, D3D12 {:?}, D3D9 {:?}, OpenGL {:?}", GetCurrentProcessId(), dxgi, d12, d9, gl);
     s.state.store(if dxgi.is_ok() || d9.is_ok() || gl.is_ok() { STATE_READY } else { STATE_FAILED }, SeqCst);
     0
 }
@@ -1264,6 +1357,44 @@ mod tests {
             let dev = own_device(&d10).unwrap();
             // O D3D10.0 não tem BGRA: o back buffer dele é RGBA.
             Bridge::new(&dev, &d10, 720, 480, DXGI_FORMAT_R8G8B8A8_UNORM).unwrap();
+        }
+    }
+
+    /// Swapchain de D3D12 numa janela escondida, como a de um jogo.
+    unsafe fn d3d12_swapchain() -> (ID3D12Device, ID3D12CommandQueue, IDXGISwapChain3) {
+        let mut dev: Option<ID3D12Device> = None;
+        D3D12CreateDevice(None, D3D_FEATURE_LEVEL_11_0, &mut dev).unwrap();
+        let dev = dev.unwrap();
+        let queue: ID3D12CommandQueue = dev.CreateCommandQueue(&D3D12_COMMAND_QUEUE_DESC { Type: D3D12_COMMAND_LIST_TYPE_DIRECT, ..Default::default() }).unwrap();
+        let factory: IDXGIFactory2 = CreateDXGIFactory2(DXGI_CREATE_FACTORY_FLAGS(0)).unwrap();
+        let desc = DXGI_SWAP_CHAIN_DESC1 { Width: 320, Height: 240, Format: DXGI_FORMAT_B8G8R8A8_UNORM, SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 }, BufferUsage: DXGI_USAGE_RENDER_TARGET_OUTPUT, BufferCount: 2, SwapEffect: DXGI_SWAP_EFFECT_FLIP_DISCARD, ..Default::default() };
+        let sc = factory.CreateSwapChainForHwnd(&queue, dummy_window().unwrap(), &desc, None, None).unwrap();
+        (dev, queue, sc.cast().unwrap())
+    }
+
+    /// A swapchain do D3D12 dá o dispositivo mas não a fila (vem do `ExecuteCommandLists`); com os dois, o 11on12
+    /// embrulha os back buffers e a cópia passa.
+    #[test]
+    fn d3d12_por_11on12() {
+        unsafe {
+            let (dev, queue, sc) = d3d12_swapchain();
+            assert!(sc.GetDevice::<ID3D11Device>().is_err() && sc.GetDevice::<ID3D10Device>().is_err());
+            assert!(sc.GetDevice::<ID3D12CommandQueue>().is_err());
+            assert_eq!(sc.GetDevice::<ID3D12Device>().unwrap(), dev);
+            let (d11, on12) = on12_device(&dev, &queue).unwrap();
+            let ctx = d11.GetImmediateContext().unwrap();
+            let flags = D3D11_RESOURCE_FLAGS { BindFlags: D3D11_BIND_RENDER_TARGET.0 as u32, ..Default::default() };
+            let mut back: Option<ID3D11Texture2D> = None;
+            on12.CreateWrappedResource(&sc.GetBuffer::<ID3D12Resource>(sc.GetCurrentBackBufferIndex()).unwrap(), &flags, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_PRESENT, &mut back).unwrap();
+            let back = back.unwrap();
+            let (raw, _) = texture(&d11, 320, 240, DXGI_FORMAT_B8G8R8A8_UNORM, false).unwrap();
+            let res = [Some(back.cast::<ID3D11Resource>().unwrap())];
+            on12.AcquireWrappedResources(&res);
+            ctx.CopyResource(&raw, &back);
+            ctx.ClearRenderTargetView(&rtv(&d11, &back).unwrap(), &[0.0, 0.5, 0.0, 1.0]);
+            on12.ReleaseWrappedResources(&res);
+            ctx.Flush();
+            sc.Present(0, DXGI_PRESENT(0)).ok().unwrap();
         }
     }
 
