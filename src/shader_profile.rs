@@ -199,8 +199,8 @@ pub struct Keys {
 
 impl Default for Keys {
     fn default() -> Self {
-        let ca = |c: char| Hotkey::new(crate::config::MOD_CTRL | crate::config::MOD_ALT, c as u32);
-        Self { toggle: ca('S'), menu: ca('P'), next: ca('D'), compare: ca('A') }
+        let [toggle, menu, next, compare] = crate::config::Config::default().hk_shader;
+        Self { toggle, menu, next, compare }
     }
 }
 
@@ -232,7 +232,7 @@ compare={}
 ", h(self.toggle), h(self.menu), h(self.next), h(self.compare))
     }
 
-    /// Sem arquivo, os padrões (Ctrl+Alt+S/P/D/A).
+    /// Sem arquivo, os padrões do config (Ctrl+Alt+S/M/D/C; P e A são as fotos do Prisma).
     pub fn load(path: &Path) -> Self {
         std::fs::read_to_string(path).map(|t| Self::parse(&t)).unwrap_or_default()
     }
