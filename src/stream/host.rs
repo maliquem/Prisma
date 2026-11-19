@@ -1691,6 +1691,8 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
 
     let mut room_names = String::from("\u{0}");
     let mut room_at = Instant::now() - Duration::from_secs(10);
+    // Uso da GPU daqui, lido só enquanto alguém com o medidor detalhado pede.
+    let gpu_use = crate::sys::gpuuse::Watch::default();
     let mut room_count = usize::MAX;
     let mut constant = asks_constant(&room.guests);
     eprintln!("ritmo: {}, pedido por quem assiste", pace_name(constant));
@@ -1866,7 +1868,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                         }
                         g.heard = Instant::now();
                         match m {
-                            Msg::Ping { t } => g.send(&Msg::Pong { t, host: now() }, &mut out),
+                            Msg::Ping { t, gpu } => g.send(&Msg::Pong { t, host: now(), gpu: if gpu { gpu_use.get() } else { None } }, &mut out),
                             Msg::KeyReq => enc.force_key(),
                             Msg::Loss { permille } => g.loss = permille.min(1000),
                             Msg::Nack { frame } => {

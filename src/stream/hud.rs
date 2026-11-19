@@ -36,6 +36,9 @@ pub struct Sample {
     pub route: String,
     /// Prioridade do host: 0 menor atraso, 1 equilíbrio, 2 qualidade; outro valor, sem informação.
     pub priority: u8,
+    /// Uso da GPU daqui e do host (só no medidor detalhado; o host antigo não manda).
+    pub gpu: Option<super::GpuUse>,
+    pub host_gpu: Option<super::GpuUse>,
 }
 
 /// A prioridade do host, como a página dele escreve.
@@ -151,6 +154,12 @@ impl Hud {
                 };
                 lines.push((video, TEXT, 13.0, Weight::Regular));
                 lines.push((format!("{} {} ms · {} {} · {} {}", tr("decodificação"), n(s.decode_ms, 2), tr("fila"), s.queue, tr("perdidos"), s.lost_total), MUTED, 13.0, Weight::Regular));
+                if let Some(g) = s.host_gpu {
+                    lines.push((format!("{} {}% · Prisma: 3D {}% · {} {}% · {} {}%", tr("GPU do host"), g.total, g.d3, tr("codificação"), g.encode, tr("cópia"), g.copy), MUTED, 13.0, Weight::Regular));
+                }
+                if let Some(g) = s.gpu {
+                    lines.push((format!("{} {}% · Prisma: 3D {}% · {} {}%", tr("GPU daqui"), g.total, g.d3, tr("decodificação"), g.decode), MUTED, 13.0, Weight::Regular));
+                }
                 lines.push((s.route.clone(), MUTED, 13.0, Weight::Regular));
             }
         }

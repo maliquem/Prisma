@@ -75,6 +75,9 @@ struct Shared {
     /// Relógio do host menos o daqui, em 100 ns.
     offset: AtomicI64,
     lost: AtomicU32,
+    /// Medidor detalhado aberto: o Ping pede o uso da GPU do host, que chega aqui.
+    detail: AtomicBool,
+    host_gpu: Mutex<Option<GpuUse>>,
     bytes: AtomicU64,
     spk: Speaker,
     mute: bool,
@@ -152,7 +155,7 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
             last_hello = Instant::now();
         }
         if last_ping.elapsed() > Duration::from_millis(500) {
-            write(&mut out, &Msg::Ping { t: now() });
+            write(&mut out, &Msg::Ping { t: now(), gpu: sh.detail.load(Ordering::Relaxed) });
             link.send(&out);
             last_ping = Instant::now();
         }
@@ -296,7 +299,8 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
                     sh.spk.audio.lock().unwrap().extend(pcm);
                 }
             }
-            Some(Msg::Pong { t, host }) => {
+            Some(Msg::Pong { t, host, gpu }) => {
+                *sh.host_gpu.lock().unwrap() = gpu;
                 let back = now();
                 let rtt = back - t;
                 samples.push_back((rtt, host - (t + back) / 2));
@@ -1398,6 +1402,8 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         rtt: AtomicI64::new(0),
         offset: AtomicI64::new(0),
         lost: AtomicU32::new(0),
+        detail: AtomicBool::new(false),
+        host_gpu: Mutex::new(None),
         bytes: AtomicU64::new(0),
         spk: Speaker::new(co.mute),
         mute: std::env::var("PRISMA_MUTE").is_ok_and(|v| v == "1"),
@@ -1465,6 +1471,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     let mut second = Stats::default();
     let mut last_shown = now();
     let mut tick = Instant::now();
+    let gpu_use = crate::sys::gpuuse::Watch::default();
     let mut bytes_mark = 0u64;
     let mut lost_mark = 0u32;
     let mut msg = MSG::default();
@@ -1894,8 +1901,12 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
             }
             let fps_now = second.shown as f64 / tick.elapsed().as_secs_f64();
             let lost_total = sh.lost.load(Ordering::Relaxed);
+            let detail = co.meter == 2;
+            sh.detail.store(detail, Ordering::Relaxed);
             if let Some(h) = &mut hud {
                 let sample = hud::Sample {
+                    gpu: if detail { gpu_use.get() } else { None },
+                    host_gpu: if detail { *sh.host_gpu.lock().unwrap() } else { None },
                     rtt_ms: rtt as f64 / 10_000.0,
                     e2e_ms: pct(&mut second.e2e.clone(), 0.5),
                     decode_ms: pct(&mut second.decode.clone(), 0.5),
