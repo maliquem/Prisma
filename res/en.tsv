@@ -2792,3 +2792,14 @@ RAM em uso	RAM in use
 VRAM dedicada	Dedicated VRAM
 VRAM compartilhada	Shared VRAM
 Abrir no Medidor	Open in Meter
+Tempo real	Realtime
+Alta	High
+Acima do normal	Above normal
+Abaixo do normal	Below normal
+Baixa	Low
+Thread mais cheia	Busiest thread
+Orçamento da placa	GPU budget
+o que cada programa pode usar	what each program can use
+Pico (sessão)	Peak (session)
+Clock do núcleo · 60 s	Core clock · 60 s
+Temperatura · 60 s	Temperature · 60 s

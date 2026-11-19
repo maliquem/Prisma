@@ -40,6 +40,11 @@ pub struct Group {
     pub eng: [f32; super::perf::ENGINES],
     pub shared: u64,
     pub threads: u32,
+    /// Também só com o Desempenho: a thread mais cheia (% de um núcleo), a prioridade base mais alta
+    /// dos processos e o maior uso de VRAM dedicada desde que a página começou a medir.
+    pub hot: f32,
+    pub prio: u8,
+    pub vram_peak: u64,
 }
 
 /// Uma linha da aba Detalhes: um processo, não o programa inteiro.
@@ -79,7 +84,12 @@ pub struct Snapshot {
     /// Leituras da página Desempenho; vazio quando ela não pede (`PERF`).
     pub perf: super::perf::Reading,
     pub hist_eng: [VecDeque<f32>; super::perf::ENGINES],
+    /// Clock do núcleo em % do máximo e temperatura da GPU em °C, dos últimos 60 s.
+    pub hist_gclock: VecDeque<f32>,
+    pub hist_gtemp: VecDeque<f32>,
     pub base_mhz: f32,
+    /// VRAM que o Windows deixa um programa usar na placa principal (DXGI); 0 sem leitura.
+    pub vram_budget: u64,
 }
 
 impl Snapshot {
@@ -132,10 +142,15 @@ struct Proc {
     ram: u64,
     io: u64,
     threads: u32,
+    /// Maior tempo de CPU de uma thread desde a leitura anterior, em 100 ns (só com `times`).
+    hot: i64,
+    prio: u8,
     exe: String,
 }
 
-fn read_processes(buf: &mut Vec<u8>, threads: Option<&mut HashMap<u32, u32>>) -> Vec<Proc> {
+/// `times`: tempo de cada thread na leitura anterior e o mapa que recebe o de agora, para achar a
+/// thread mais cheia de cada processo.
+fn read_processes(buf: &mut Vec<u8>, threads: Option<&mut HashMap<u32, u32>>, times: Option<(&HashMap<u32, i64>, &mut HashMap<u32, i64>)>) -> Vec<Proc> {
     unsafe {
         loop {
             let mut ret = 0u32;
@@ -152,6 +167,7 @@ fn read_processes(buf: &mut Vec<u8>, threads: Option<&mut HashMap<u32, u32>>) ->
         let mut out = Vec::with_capacity(512);
         let mut off = 0usize;
         let mut threads = threads;
+        let mut times = times;
         loop {
             let p = buf.as_ptr().add(off);
             let next = (p as *const u32).read_unaligned() as usize;
@@ -164,10 +180,19 @@ fn read_processes(buf: &mut Vec<u8>, threads: Option<&mut HashMap<u32, u32>>) ->
             let reads = (p.add(232) as *const u64).read_unaligned();
             let writes = (p.add(240) as *const u64).read_unaligned();
             let nthreads = (p.add(4) as *const u32).read_unaligned();
-            if let Some(map) = &mut threads {
-                for i in 0..nthreads as usize {
-                    let tid = (p.add(256 + i * 80 + 48) as *const usize).read_unaligned() as u32;
+            let prio = (p.add(72) as *const i32).read_unaligned().clamp(0, 31) as u8;
+            let mut hot = 0;
+            // Cada SYSTEM_THREAD_INFORMATION tem 80 bytes: tempo de kernel em 0, de usuário em 8, id em 48.
+            for i in 0..nthreads as usize {
+                let t = p.add(256 + i * 80);
+                let tid = (t.add(48) as *const usize).read_unaligned() as u32;
+                if let Some(map) = &mut threads {
                     map.insert(tid, pid);
+                }
+                if let Some((prev, now)) = &mut times {
+                    let time = (t as *const i64).read_unaligned() + (t.add(8) as *const i64).read_unaligned();
+                    hot = hot.max(time - prev.get(&tid).copied().unwrap_or(time));
+                    now.insert(tid, time);
                 }
             }
             if pid != 0 {
@@ -176,7 +201,7 @@ fn read_processes(buf: &mut Vec<u8>, threads: Option<&mut HashMap<u32, u32>>) ->
                 } else {
                     String::from_utf16_lossy(std::slice::from_raw_parts(name_ptr, name_len))
                 };
-                out.push(Proc { pid, time: user + kernel, ram: private, io: reads + writes, threads: nthreads, exe });
+                out.push(Proc { pid, time: user + kernel, ram: private, io: reads + writes, threads: nthreads, hot, prio, exe });
             }
             if next == 0 {
                 break;
@@ -418,6 +443,11 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
     let mut counters: Option<GpuCounters> = None;
     let mut perf_counters: Option<super::perf::Counters> = None;
     let mut h_eng: [VecDeque<f32>; super::perf::ENGINES] = Default::default();
+    let (mut h_gclock, mut h_gtemp) = (VecDeque::new(), VecDeque::new());
+    // Desempenho: tempo de cada thread na leitura anterior, pico de VRAM de cada programa e a placa principal.
+    let mut thread_times: HashMap<u32, i64> = HashMap::new();
+    let mut peaks: HashMap<String, u64> = HashMap::new();
+    let mut adapter: Option<super::perf::Adapter> = None;
     let mut cpu_temp: Option<super::cputemp::CpuTemp> = None;
     let mut cpu_temp_at: Option<Instant> = None;
     let mut last = Instant::now();
@@ -479,7 +509,15 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
             trace_tried = false;
         }
         let mut tids = HashMap::new();
-        let procs = read_processes(&mut pbuf, if trace.is_some() { Some(&mut tids) } else { None });
+        let mut now_times = HashMap::with_capacity(if perf_on { thread_times.len() } else { 0 });
+        let procs = read_processes(&mut pbuf, if trace.is_some() { Some(&mut tids) } else { None }, perf_on.then_some((&thread_times, &mut now_times)));
+        thread_times = now_times;
+        if !perf_on {
+            peaks.clear();
+            adapter = None;
+        } else if adapter.is_none() {
+            adapter = super::perf::Adapter::main();
+        }
         let io_now = if trace.is_some() {
             etw::set_threads(tids);
             etw::take()
@@ -547,6 +585,8 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
             g.net += row.net;
             g.disk += row.disk;
             g.threads += p.threads;
+            g.hot = g.hot.max(p.hot as f32 / 1e7 / elapsed * 100.0);
+            g.prio = g.prio.max(p.prio);
             if let Some(e) = pr.pid_eng.get(&p.pid) {
                 for (a, b) in g.eng.iter_mut().zip(e) {
                     *a += b;
@@ -560,6 +600,13 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
         prev_time = times;
         prev_io = io_map;
         let mut groups: Vec<Group> = groups.into_values().collect();
+        if perf_on {
+            for g in &mut groups {
+                let peak = peaks.entry(g.exe.to_ascii_lowercase()).or_default();
+                *peak = (*peak).max(g.vram);
+                g.vram_peak = *peak;
+            }
+        }
         groups.sort_by(|a, b| {
             let (x, y) = (a.cpu + a.gpu, b.cpu + b.gpu);
             y.partial_cmp(&x).unwrap().then(b.ram.cmp(&a.ram))
@@ -574,6 +621,8 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
         for (h, v) in h_eng.iter_mut().zip(pr.eng) {
             push(h, v);
         }
+        push(&mut h_gclock, if gpu.max_mhz > 0 { gpu.mhz as f32 / gpu.max_mhz as f32 * 100.0 } else { 0.0 });
+        push(&mut h_gtemp, gpu.temp as f32);
         {
             let mut s = out.lock().unwrap();
             s.cpu = cpu;
@@ -597,6 +646,9 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
             s.net_ok = trace.is_some();
             s.perf = pr;
             s.hist_eng = h_eng.clone();
+            s.hist_gclock = h_gclock.clone();
+            s.hist_gtemp = h_gtemp.clone();
+            s.vram_budget = adapter.as_ref().map_or(0, |a| a.budget());
             s.base_mhz = mhz;
         }
         unsafe {
