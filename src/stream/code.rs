@@ -97,16 +97,31 @@ fn client(url: &str) -> std::result::Result<PkarrRelayClient, String> {
 }
 
 /// O endereço do host como linhas do registro: `rele=URL` e `ip=IP:porta` (até 8, para caber).
+/// Ordem: o relé, o IP público, os IPv4 da rede local e da VPN, e o IPv6 global. O IPv6 de
+/// enlace (fe80::) fica fora: só vale na mesma rede e precisa da interface junto.
 pub fn addr_lines(a: &EndpointAddr) -> Vec<String> {
-    a.addrs
+    let mut v: Vec<(u8, String)> = a
+        .addrs
         .iter()
         .filter_map(|t| match t {
-            TransportAddr::Relay(u) => Some(format!("rele={u}")),
-            TransportAddr::Ip(s) => Some(format!("ip={s}")),
+            TransportAddr::Relay(u) => Some((0, format!("rele={u}"))),
+            TransportAddr::Ip(s) => addr_rank(s.ip()).map(|r| (r, format!("ip={s}"))),
             _ => None,
         })
-        .take(8)
-        .collect()
+        .collect();
+    v.sort_by_key(|(r, _)| *r);
+    v.into_iter().map(|(_, l)| l).take(8).collect()
+}
+
+fn addr_rank(ip: std::net::IpAddr) -> Option<u8> {
+    use super::link::{is_cgnat, is_local};
+    match ip {
+        std::net::IpAddr::V6(v) if (v.segments()[0] & 0xffc0) == 0xfe80 => None,
+        std::net::IpAddr::V4(_) if !is_local(ip) && !is_cgnat(ip) => Some(1),
+        std::net::IpAddr::V4(_) => Some(2),
+        std::net::IpAddr::V6(_) if !is_local(ip) => Some(3),
+        std::net::IpAddr::V6(_) => Some(4),
+    }
 }
 
 /// O contrário de `addr_lines`; o que não entende fica de fora.
@@ -200,6 +215,17 @@ fn read(values: &[String]) -> std::result::Result<EndpointAddr, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn addr_lines_order() {
+        let id = SecretKey::from_bytes(&[7; 32]).public();
+        let ips = ["[fe80::1]:5000", "[2804:14c::9]:5000", "192.168.0.5:5000", "200.10.20.30:5000", "10.147.17.4:5000"];
+        let mut addrs: Vec<TransportAddr> = ips.iter().map(|s| TransportAddr::Ip(s.parse().unwrap())).collect();
+        addrs.push(TransportAddr::Relay("https://use1-1.relay.n0.iroh.link./".parse().unwrap()));
+        let lines = addr_lines(&EndpointAddr::from_parts(id, addrs));
+        assert_eq!(lines, ["rele=https://use1-1.relay.n0.iroh.link./", "ip=200.10.20.30:5000", "ip=10.147.17.4:5000", "ip=192.168.0.5:5000", "ip=[2804:14c::9]:5000"]);
+        assert_eq!(parse_addrs(lines.iter().map(String::as_str)).len(), 5);
+    }
 
     #[test]
     fn codes_round_trip() {

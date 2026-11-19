@@ -328,6 +328,8 @@ fn route_text(route: &str) -> String {
         "Pela VPN"
     } else if route.starts_with("direto na rede local") {
         "Direto na rede local"
+    } else if route.starts_with("direto pela internet por IPv6") {
+        "Direto pela internet (IPv6)"
     } else if route.starts_with("direto pela internet") {
         "Direto pela internet"
     } else if route.starts_with("pelo relé") {
@@ -1503,7 +1505,7 @@ fn net_tab(ui: &mut Ui, app: &mut App, st: &mut State, o: &mut Opts, x: f32, top
     let iw = l.w - 32.0;
     ui.title(rect(ix, l.y + 12.0, iw, 22.0), "Portas");
     let mut y = l.y + 44.0;
-    let port_r = row(ui, ix, y, iw, "Porta UDP do host", 160.0);
+    let port_r = row(ui, ix, y, iw, "Porta fixa (UDP)", 160.0);
     let field = st.port_field.get_or_insert_with(|| if o.port == 0 { String::new() } else { o.port.to_string() });
     field.retain(|c| c.is_ascii_digit());
     field.truncate(5);
@@ -1520,9 +1522,13 @@ fn net_tab(ui: &mut Ui, app: &mut App, st: &mut State, o: &mut Opts, x: f32, top
     y += 24.0;
     ui.check("sh-upnp", rect(ix, y, iw, 30.0), "Pedir ao roteador para abrir a porta (UPnP, NAT-PMP, PCP)", &mut o.upnp);
     y += 40.0;
+    if let Some(seen) = net_seen(&std::fs::read_to_string(stream::net_path()).unwrap_or_default(), o.upnp) {
+        ui.c.text_wrap(rect(ix, y, iw, 36.0), &seen, 12.0, ACCENT, Weight::Regular);
+        y += 40.0;
+    }
     ui.c.text_wrap(
         rect(ix, y, iw, (l.bottom() - y - 12.0).max(0.0)),
-        "Automática serve para quase todo mundo: o Prisma fura o NAT sem porta fixa. A porta fixa é para quem redireciona a porta no roteador. Ela vale na próxima vez que o compartilhamento ligar. O pedido ao roteador some sozinho quando a conexão acaba.",
+        "Automática serve para quase todo mundo: o Prisma fura o NAT sem porta fixa. Se a conexão sem VPN passar pelo relé, escolha uma porta fixa e abra essa porta UDP no roteador para este PC (ou deixe o pedido ao roteador abrir). Com CGNAT (a operadora divide o IP com outras casas) abrir a porta não adianta: use VPN ou IPv6. A porta vale na próxima vez que o compartilhamento ligar; se estiver ocupada, o Prisma usa uma aleatória. O pedido ao roteador some sozinho quando a conexão acaba.",
         12.0,
         MUTED,
         Weight::Regular,
@@ -1541,7 +1547,28 @@ fn net_tab(ui: &mut Ui, app: &mut App, st: &mut State, o: &mut Opts, x: f32, top
     if let Some(route) = lines.iter().rev().find_map(|l| l.strip_prefix("conectado: ")) {
         let t = format!("{} {route}", crate::i18n::tr("Última conexão:"));
         ui.c.text_raw(rect(rx, r.bottom() - 40.0, rw, 24.0), &t, 13.0, ACCENT, Align::Left, Weight::Regular);
+        if route.starts_with("pelo relé") {
+            ui.c.text(rect(rx, r.bottom() - 64.0, rw, 24.0), stream::RELAY_TIP, 12.0, WARN, Align::Left, Weight::Regular);
+        }
     }
+}
+
+/// A linha "o host vê" da aba Rede, a partir do `rede.txt` que o host grava.
+fn net_seen(text: &str, upnp: bool) -> Option<String> {
+    use crate::i18n::tr;
+    let get = |k: &str| text.lines().find_map(|l| l.strip_prefix(k)).filter(|v| !v.is_empty());
+    let port = get("porta=")?;
+    let mut parts = vec![format!("{} {port}", tr("O host usa a porta"))];
+    if let Some(ip) = get("ip4=") {
+        parts.push(format!("{} {ip}", tr("IP público")));
+    }
+    if let Some(ip) = get("ip6=") {
+        parts.push(format!("IPv6 {ip}"));
+    }
+    if upnp {
+        parts.push(tr(if get("upnp=") == Some("1") { "o roteador abriu a porta" } else { "o roteador não abriu a porta sozinho" }).into_owned());
+    }
+    Some(parts.join(" · "))
 }
 
 /// Aviso antes de baixar e instalar o driver da tela virtual: o que entra no PC e como desfazer.

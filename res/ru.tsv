@@ -1471,11 +1471,11 @@ Detalhado	Подробный
 Avisar quando a conexão piorar	Предупреждать, когда связь ухудшается
 O simples mostra o atraso de ponta a ponta e uma bolinha verde, amarela ou vermelha. O detalhado mostra também a rede, o vídeo, os quadros por segundo, a banda, a decodificação, os quadros perdidos e o caminho. O aviso aparece quando a rede perde mais de 2% dos quadros, quando a latência varia mais de 10 ms ou sobe por 3 segundos seguidos. Os quadros por segundo pedidos não passam dos Hz desta tela; o automático usa os Hz dela. Tudo isso muda também pelo menu da conexão. A placa de vídeo vale na próxima conexão.	Простой показывает сквозную задержку и зелёную, жёлтую или красную точку. Подробный также показывает сеть, видео, кадры в секунду, полосу, декодирование, потерянные кадры и маршрут. Предупреждение появляется, когда сеть теряет больше 2% кадров, когда задержка скачет больше чем на 10 мс или растёт 3 секунды подряд. Запрошенные кадры в секунду не превышают частоту этого экрана; «Авто» использует его частоту. Всё это можно менять и из меню подключения. Видеокарта меняется со следующего подключения.
 Portas	Порты
-Porta UDP do host	UDP-порт хоста
+Porta fixa (UDP)	Фиксированный порт (UDP)
 Automática	Автоматически
 Use um número de 1024 a 65535.	Используйте число от 1024 до 65535.
 Pedir ao roteador para abrir a porta (UPnP, NAT-PMP, PCP)	Просить роутер открыть порт (UPnP, NAT-PMP, PCP)
-Automática serve para quase todo mundo: o Prisma fura o NAT sem porta fixa. A porta fixa é para quem redireciona a porta no roteador. Ela vale na próxima vez que o compartilhamento ligar. O pedido ao roteador some sozinho quando a conexão acaba.	«Автоматически» подходит почти всем: Prisma проходит NAT без фиксированного порта. Фиксированный порт — для тех, кто пробрасывает порт на роутере. Применяется при следующем запуске раздачи. Запрос к роутеру снимается сам по окончании подключения.
+Automática serve para quase todo mundo: o Prisma fura o NAT sem porta fixa. Se a conexão sem VPN passar pelo relé, escolha uma porta fixa e abra essa porta UDP no roteador para este PC (ou deixe o pedido ao roteador abrir). Com CGNAT (a operadora divide o IP com outras casas) abrir a porta não adianta: use VPN ou IPv6. A porta vale na próxima vez que o compartilhamento ligar; se estiver ocupada, o Prisma usa uma aleatória. O pedido ao roteador some sozinho quando a conexão acaba.	«Автоматически» подходит почти всем: Prisma проходит NAT без фиксированного порта. Если соединение без VPN идёт через ретранслятор, выберите фиксированный порт и откройте этот UDP-порт на роутере для этого ПК (или позвольте запросу к роутеру открыть его). При CGNAT (провайдер делит IP с другими домами) открытие порта не поможет: используйте VPN или IPv6. Порт применяется при следующем запуске раздачи; если он занят, Prisma берёт случайный. Запрос к роутеру снимается сам по окончании подключения.
 Como a conexão passa	Как идёт соединение
 Última conexão:	Последнее подключение:
 Atalhos da conexão	Сочетания для подключения
@@ -1534,6 +1534,12 @@ Pela VPN	Через VPN
 Direto na rede local	Напрямую в локальной сети
 Direto pela internet	Напрямую через интернет
 Pelo relé da n0	Через ретранслятор n0
+Direto pela internet (IPv6)	Напрямую через интернет (IPv6)
+Pelo relé fica lento: abra a porta fixa no host ou use VPN.	Через ретранслятор медленно: откройте фиксированный порт на хосте или используйте VPN.
+O host usa a porta	Хост использует порт
+IP público	публичный IP
+o roteador abriu a porta	роутер открыл порт
+o roteador não abriu a porta sozinho	роутер не открыл порт сам
 UDP direto	Прямой UDP
 Conectando	Подключение
 O acesso muda na hora e fica salvo para as próximas conexões. Desconectar derruba só esta conexão: o aparelho continua pareado. Banir derruba e esquece o aparelho, que só volta com um convite novo.	Доступ меняется сразу и сохраняется для следующих подключений. «Отключить» обрывает только это подключение: устройство остаётся сопряжённым. «Заблокировать» обрывает и забывает устройство, вернуться оно сможет только по новому приглашению.
