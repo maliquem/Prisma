@@ -697,25 +697,31 @@ unsafe fn key_event(h: HWND, k: &mut Keys, m: u32, w: WPARAM, l: LPARAM) -> bool
     true
 }
 
-/// O que mudou na aba Cliente e o menu da conexão também tem, como escolhas do menu.
-fn page_picks(co: &ClientOpts, new: &ClientOpts) -> Vec<hud::Pick> {
-    let mut p = Vec::new();
-    if new.immersive != co.immersive {
-        p.push(hud::Pick::Immersive(new.immersive));
+/// O que a aba Cliente mudou no arquivo desde a última leitura (`seen` → `new`) e o menu da
+/// conexão também tem, como escolhas do menu. Só o que mudou no arquivo: um valor do menu que não
+/// chegou a ser gravado (arquivo ocupado) não é desfeito pela releitura.
+fn page_picks(seen: &ClientOpts, new: &ClientOpts, co: &ClientOpts) -> Vec<hud::Pick> {
+    macro_rules! page {
+        ($f:ident) => {
+            new.$f != seen.$f && new.$f != co.$f
+        };
     }
-    if new.fps != co.fps {
-        p.push(hud::Pick::Fps(new.fps));
-    }
-    if new.meter != co.meter {
-        p.push(hud::Pick::Meter(new.meter));
-    }
-    // As outras o menu troca: entram só quando a página deixou diferente.
-    for (on, pick) in [(new.warn != co.warn, hud::Pick::Warn), (new.vsync != co.vsync, hud::Pick::Vsync), (new.ask444 != co.ask444, hud::Pick::Ask444), (new.constant != co.constant, hud::Pick::Constant), (new.pad_background != co.pad_background, hud::Pick::PadBackground), (new.pad_keys != co.pad_keys, hud::Pick::PadKeys)] {
-        if on {
-            p.push(pick);
-        }
-    }
-    p
+    [
+        (page!(immersive), hud::Pick::Immersive(new.immersive)),
+        (page!(fps), hud::Pick::Fps(new.fps)),
+        (page!(meter), hud::Pick::Meter(new.meter)),
+        // As outras o menu troca: entram só quando ficaram diferentes das da conexão.
+        (page!(warn), hud::Pick::Warn),
+        (page!(vsync), hud::Pick::Vsync),
+        (page!(ask444), hud::Pick::Ask444),
+        (page!(constant), hud::Pick::Constant),
+        (page!(pad_background), hud::Pick::PadBackground),
+        (page!(pad_keys), hud::Pick::PadKeys),
+    ]
+    .into_iter()
+    .filter(|x| x.0)
+    .map(|x| x.1)
+    .collect()
 }
 
 /// Um atalho daqui disparou com Ctrl, Alt e Shift já apertados no host: uma tecla sem uso antes de
@@ -1209,6 +1215,8 @@ pub(super) fn open(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64
 unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) -> Result<()> {
     let mut co = ClientOpts::load();
     let mut page_at = Instant::now();
+    // O que o arquivo tinha na última leitura.
+    let mut seen = co.clone();
     {
         let mut k = KEYS.lock().unwrap();
         k.key_menu = co.key_menu;
@@ -1496,10 +1504,11 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         if page_at.elapsed() >= Duration::from_secs(1) {
             page_at = Instant::now();
             let fresh = ClientOpts::load();
-            if fresh != co {
-                picks.extend(page_picks(&co, &fresh));
+            if fresh != seen {
+                picks.extend(page_picks(&seen, &fresh, &co));
                 // O resto (atalhos, placa...) vem da página; o menu grava por cima só o que muda.
-                co = ClientOpts { immersive: co.immersive, fps: co.fps, meter: co.meter, warn: co.warn, vsync: co.vsync, ask444: co.ask444, constant: co.constant, pad_background: co.pad_background, pad_keys: co.pad_keys, ..fresh };
+                co = ClientOpts { immersive: co.immersive, fps: co.fps, meter: co.meter, warn: co.warn, vsync: co.vsync, ask444: co.ask444, constant: co.constant, pad_background: co.pad_background, pad_keys: co.pad_keys, ..fresh.clone() };
+                seen = fresh;
             }
         }
         // O menu fechou: a escolha entra com as outras.
@@ -2043,11 +2052,16 @@ mod tests {
     #[test]
     fn page_changes_become_menu_picks() {
         let co = ClientOpts::default();
-        assert!(page_picks(&co, &co).is_empty());
+        assert!(page_picks(&co, &co, &co).is_empty());
         // A página pôs o imersivo Tudo e ligou o ritmo constante; a placa não é do menu.
         let new = ClientOpts { immersive: 7, constant: !co.constant, gpu: "Outra".into(), ..co.clone() };
-        let p = page_picks(&co, &new);
+        let p = page_picks(&co, &new, &co);
         assert!(matches!(p[..], [hud::Pick::Immersive(7), hud::Pick::Constant]), "{p:?}");
+        // O menu trocou o aviso e a gravação falhou: o arquivo igual não desfaz a troca.
+        let menu = ClientOpts { warn: !co.warn, ..co.clone() };
+        assert!(page_picks(&co, &co, &menu).is_empty());
+        // A gravação do menu chegou ao arquivo: já está na conexão, nada a escolher.
+        assert!(page_picks(&co, &menu, &menu).is_empty());
     }
 
     #[test]
