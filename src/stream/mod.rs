@@ -400,6 +400,9 @@ pub const FEC_OK: u8 = 32;
 /// `Hello.flags`: quem assiste decodifica o som em Opus ([`Msg::Opus`]). O host só manda Opus
 /// fora da rede local; na rede local o som continua PCM.
 pub const OPUS_OK: u8 = 64;
+/// `Hello.flags`: quem assiste pede o ritmo constante (com a tela parada, o host repete o último
+/// quadro). Sem o bit, o host manda só quando a tela muda. Mudar só ele não recomeça o vídeo.
+pub const CONSTANT: u8 = 128;
 
 /// O que um pacote diz.
 #[derive(Debug, PartialEq)]

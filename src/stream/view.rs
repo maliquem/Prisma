@@ -638,7 +638,8 @@ unsafe fn key_event(h: HWND, k: &mut Keys, m: u32, w: WPARAM, l: LPARAM) -> bool
         return true;
     }
     if combo == k.key_menu {
-        if down {
+        // Segurar o atalho não reabre o menu que ele acabou de fechar.
+        if down && l.0 & (1 << 30) == 0 {
             k.menu = true;
         }
         return true;
@@ -1310,6 +1311,9 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     let ask = |on: bool| if on { ASKS_444 | if can444 { DECODES_444 } else { 0 } } else { 0 };
     let ask444 = std::env::var("PRISMA_444").map(|v| v == "1").unwrap_or(co.ask444);
     flags |= ask(ask444);
+    if co.constant {
+        flags |= CONSTANT;
+    }
     if ask444 && !can444 && codecs & WAVE == 0 {
         eprintln!("4:4:4: esta placa não decodifica HEVC 4:4:4; fica o 4:2:0");
     }
@@ -1461,6 +1465,8 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                 keyboard: KEYS.lock().unwrap().keyboard,
                 vsync: co.vsync,
                 ask444: (can444 || codecs & WAVE != 0).then_some(flags & ASKS_444 != 0),
+                constant: co.constant,
+                key_menu: co.key_menu,
                 pad_background: sh.pad_background.load(Ordering::Relaxed),
                 pad_keys: (sh.perms.load(Ordering::Relaxed) & PAD != 0).then(|| sh.pad_keys.load(Ordering::Relaxed)),
                 video: info.map(|(c, w, h, fps)| format!("{w}x{h} {}{extra} · {fps} {} · {}", codec_name(c), crate::i18n::tr("q/s"), link.route())).unwrap_or_default(),
@@ -1531,6 +1537,17 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                     note = Some(format!("4:4:4: {}", on_off(co.ask444)));
                     flags = flags & !(ASKS_444 | DECODES_444) | ask(co.ask444);
                     // A descrição nova faz o host recomeçar o vídeo com ou sem o 4:4:4.
+                    let mut again = Vec::new();
+                    write(&mut again, &Msg::Hello { w: screen_w, h: screen_h, hz: ask_hz(co.fps), codecs, pid: std::process::id(), flags });
+                    link.send(&again);
+                    link.send(&again);
+                }
+                hud::Pick::Constant => {
+                    co.constant = !co.constant;
+                    let _ = co.save();
+                    note = Some(format!("{}: {}", tr("Ritmo dos quadros"), tr(if co.constant { "Constante" } else { "Só quando a tela muda" })));
+                    flags ^= CONSTANT;
+                    // Só o bit do ritmo mudou: o host troca o ritmo sem recomeçar o vídeo.
                     let mut again = Vec::new();
                     write(&mut again, &Msg::Hello { w: screen_w, h: screen_h, hz: ask_hz(co.fps), codecs, pid: std::process::id(), flags });
                     link.send(&again);
@@ -1807,7 +1824,8 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                     lost: lost_total.saturating_sub(lost_mark),
                     lost_total,
                     shown: second.shown,
-                    video: info.map(|(c, w, h, _)| format!("{w}x{h} {}", codec_name(c))).unwrap_or_default(),
+                    // O que está no ar (a descrição do host), não o que foi pedido.
+                    video: info.map(|(c, w, h, _)| format!("{w}x{h} {} · {} · {} bits", codec_name(c), if vfmt.1 { "4:4:4" } else { "4:2:0" }, if vfmt.0 { 10 } else { 8 })).unwrap_or_default(),
                     route: link.route(),
                     priority: host_priority,
                 };

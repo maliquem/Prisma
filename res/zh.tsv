@@ -1560,6 +1560,7 @@ aparelho desligado	设备已拔出
 Cada atalho troca a saída e a entrada padrão do Windows de uma vez. Use Adicionar.	每个快捷键会同时切换 Windows 默认输出和输入。请使用“添加”。
 Não deu para mudar na hora. Vale na próxima conexão.	无法立即更改。将在下次连接时生效。
 Pedir 4:4:4	请求 4:4:4
+Ritmo constante	恒定帧节奏
 Controle em segundo plano	后台时也发送手柄
 Teclado como controle	把键盘当作手柄
 VSync	垂直同步
@@ -1877,6 +1878,7 @@ Acesso de «{}» mudou na hora	“{}”的权限已立即更改
 Opções do host aplicadas na conexão	主机选项已应用到连接
 «{}» mudou os quadros por segundo	“{}”更改了帧率
 «{}» mudou o pedido de 4:4:4	“{}”更改了 4:4:4 请求
+«{}» mudou o ritmo dos quadros	“{}”更改了帧节奏
 Mouse travado nesta tela	鼠标已锁定在此屏幕
 Mouse destravado	鼠标已解锁
 Sim: parear e perguntar a cada conexão (recomendado).	是：配对，并在每次连接时询问（推荐）。

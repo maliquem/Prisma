@@ -1560,6 +1560,7 @@ aparelho desligado	устройство отключено
 Cada atalho troca a saída e a entrada padrão do Windows de uma vez. Use Adicionar.	Каждое сочетание сразу переключает вывод и ввод Windows по умолчанию. Нажмите «Добавить».
 Não deu para mudar na hora. Vale na próxima conexão.	Не удалось изменить сразу. Применится при следующем подключении.
 Pedir 4:4:4	Запрашивать 4:4:4
+Ritmo constante	Постоянный темп кадров
 Controle em segundo plano	Геймпад в фоне
 Teclado como controle	Клавиатура как геймпад
 VSync	VSync
@@ -1877,6 +1878,7 @@ Acesso de «{}» mudou na hora	Доступ «{}» изменён сразу
 Opções do host aplicadas na conexão	Параметры хоста применены к подключению
 «{}» mudou os quadros por segundo	«{}» изменил частоту кадров
 «{}» mudou o pedido de 4:4:4	«{}» изменил запрос 4:4:4
+«{}» mudou o ritmo dos quadros	«{}» изменил темп кадров
 Mouse travado nesta tela	Мышь закреплена на этом экране
 Mouse destravado	Мышь разблокирована
 Sim: parear e perguntar a cada conexão (recomendado).	Да: сопрячь и спрашивать при каждом подключении (рекомендуется).

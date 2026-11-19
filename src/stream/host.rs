@@ -1254,6 +1254,25 @@ impl Coder {
 /// Intervalos guardados para o registro do ritmo: os primeiros 10 minutos a 60 por segundo.
 const GAPS_KEPT: usize = 36_000;
 
+/// Ritmo constante: quem lidera a sala (o primeiro a conectar) pediu. Quem assiste numa versão
+/// sem o pedido fica no dinâmico.
+fn asks_constant(guests: &[Guest]) -> bool {
+    guests.first().is_some_and(|g| g.hello.flags & CONSTANT != 0)
+}
+
+fn pace_name(constant: bool) -> &'static str {
+    if constant {
+        "constante"
+    } else {
+        "dinâmico"
+    }
+}
+
+/// Mudou só o pedido de ritmo: o vídeo segue sem recomeçar.
+fn only_pace_changed(a: &Hello, b: &Hello) -> bool {
+    (a.flags ^ b.flags) == CONSTANT && (a.w, a.h, a.hz, a.codecs, a.pid) == (b.w, b.h, b.hz, b.codecs, b.pid)
+}
+
 /// Hora de dar um quadro ao codificador, numa grade de horários (`due`) que anda um intervalo por
 /// quadro. Um quadro novo vale até 0,1 intervalo antes da hora: a captura oscila em volta do vsync.
 /// Contar do quadro anterior, e não da grade, deixava a tela de 119 Hz sair a ~64 de 60 por segundo
@@ -1650,6 +1669,8 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     let mut room_names = String::from("\u{0}");
     let mut room_at = Instant::now() - Duration::from_secs(10);
     let mut room_count = usize::MAX;
+    let mut constant = asks_constant(&room.guests);
+    eprintln!("ritmo: {}, pedido por quem assiste", pace_name(constant));
     let _ = std::fs::remove_file(commands_path());
     'run: loop {
         // A lista da sala, para a página: na hora quando alguém entra ou sai, e a cada segundo
@@ -1688,8 +1709,13 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                     _ => {}
                 }
             }
+            // O ritmo segue o que pede quem lidera a sala, sem recomeçar o vídeo.
+            if constant != asks_constant(&room.guests) {
+                constant = !constant;
+                eprintln!("ritmo: {}, pedido por quem assiste", pace_name(constant));
+            }
             // As opções da página valem na hora: o que o vídeo usa recomeça a transmissão (um
-            // quadro-chave); ritmo, mouse e teclado mudam aqui; o som se ajusta sozinho.
+            // quadro-chave); mouse e teclado mudam aqui; o som se ajusta sozinho.
             let fresh = room_opts();
             if fresh != opts {
                 super::notice("Opções do host aplicadas na conexão", "");
@@ -1796,6 +1822,13 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                             if same {
                                 // Talvez a descrição do vídeo não tenha chegado: vai de novo.
                                 g.link.send(&infos[g.perms as usize]);
+                                continue;
+                            }
+                            if only_pace_changed(&h, &g.hello) {
+                                super::notice("«{}» mudou o ritmo dos quadros", &g.name);
+                                g.hello = h;
+                                // O ritmo novo vale já na próxima volta, sem esperar o segundo.
+                                room_at = Instant::now() - Duration::from_secs(10);
                                 continue;
                             }
                             // Pediu outros quadros por segundo ou o 4:4:4: avisa aqui o que mudou.
@@ -1952,7 +1985,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                     enc.pump(space, &mut pkts, &mut ready)?;
                     // A Desktop Duplication entrega cada mudança (o mouse também): o ritmo fica aqui.
                     let t = now();
-                    if enc.ready() && time_to_feed(t, due, interval, pending.is_some(), opts.constant && fed > 0) {
+                    if enc.ready() && time_to_feed(t, due, interval, pending.is_some(), constant && fed > 0) {
                         due = next_due(t, due, interval);
                         if fed_gaps.len() < GAPS_KEPT {
                             fed_gaps.push(fed_at.elapsed().as_nanos() as i64 / 100);
@@ -2020,7 +2053,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
             }
             enc.pump(space, &mut pkts, &mut ready)?;
             let t = now();
-            if enc.ready() && time_to_feed(t, due, interval, pending.is_some(), opts.constant && fed > 0) {
+            if enc.ready() && time_to_feed(t, due, interval, pending.is_some(), constant && fed > 0) {
                 due = next_due(t, due, interval);
                 if fed_gaps.len() < GAPS_KEPT {
                     fed_gaps.push(fed_at.elapsed().as_nanos() as i64 / 100);
@@ -2081,7 +2114,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     }
     room.frame_id = frame_id;
     if fed_gaps.len() > 1 {
-        eprint!("ritmo: {captured} capturados, {fed} quadros ao codificador; {}", super::view::gap_line(&mut fed_gaps[1..], fps).replace("mostrados", "dados ao codificador"));
+        eprint!("ritmo: {}, {captured} capturados, {fed} quadros ao codificador; {}", pace_name(constant), super::view::gap_line(&mut fed_gaps[1..], fps).replace("mostrados", "dados ao codificador"));
     }
     for g in &mut room.guests {
         if let Some(inj) = &mut g.input {
@@ -2155,6 +2188,24 @@ mod tests {
         fn same_pc(&self) -> bool {
             self.local
         }
+    }
+
+    #[test]
+    fn pace_follows_the_lead_guest_without_restarting() {
+        let (mut a, _) = guest(0, true);
+        let (b, _) = guest(0, true);
+        assert!(!asks_constant(&[]));
+        let old = a.hello;
+        a.hello.flags |= CONSTANT;
+        // Só o ritmo mudou: segue sem recomeçar. Com outra mudança junto, recomeça.
+        assert!(only_pace_changed(&a.hello, &old));
+        assert!(!only_pace_changed(&Hello { hz: 30, ..a.hello }, &old));
+        assert!(!only_pace_changed(&Hello { flags: CONSTANT | ASKS_444, ..a.hello }, &old));
+        assert!(!only_pace_changed(&old, &old));
+        // Vale o pedido de quem lidera (o primeiro); o do segundo não muda a sala.
+        let guests = vec![a, b];
+        assert!(asks_constant(&guests));
+        assert!(!asks_constant(&guests[1..]));
     }
 
     fn guest(perms: u8, local: bool) -> (Guest, Arc<FakeLink>) {

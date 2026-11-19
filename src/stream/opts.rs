@@ -89,8 +89,6 @@ pub struct Opts {
     pub monitor: u32,
     /// Janela compartilhada no lugar da tela (hwnd e processo dela); 0 é a tela inteira.
     pub window: (u64, u32),
-    /// Repete o último quadro para manter o ritmo, mesmo com a tela parada.
-    pub constant: bool,
     /// Programa cujo som vai sozinho (nome do exe); vazio manda o som do PC.
     pub sound_app: String,
     /// Tira do som o primeiro programa de chamada aberto (Discord, Teams, Zoom...).
@@ -120,7 +118,7 @@ pub const MIC_DEFAULT: &str = "padrao";
 
 /// As opções do host que cada aparelho que assiste pode ter diferentes (imagem, som e o mouse e o
 /// teclado). Nome, pessoas, rede, controles e atalhos valem para todos.
-pub const PER_CLIENT: [&str; 17] = [
+pub const PER_CLIENT: [&str; 16] = [
     "hdr_desligar",
     "resolucao",
     "quadros",
@@ -130,7 +128,6 @@ pub const PER_CLIENT: [&str; 17] = [
     "dez_bits",
     "permitir_444",
     "monitor",
-    "ritmo_constante",
     "som_programa",
     "sem_chamadas",
     "um_por_vez",
@@ -158,7 +155,6 @@ impl Default for Opts {
             allow444: true,
             monitor: 0,
             window: (0, 0),
-            constant: false,
             sound_app: String::new(),
             no_calls: true,
             one_at_a_time: true,
@@ -204,7 +200,6 @@ impl Opts {
                 "permitir_444" => o.allow444 = flag(v),
                 "monitor" => o.monitor = v.parse().unwrap_or(0),
                 "janela" => o.window = v.split_once(':').and_then(|(h, p)| Some((h.parse().ok()?, p.parse().ok()?))).unwrap_or((0, 0)),
-                "ritmo_constante" => o.constant = flag(v),
                 "som_programa" => o.sound_app = clean(v, 80),
                 "sem_chamadas" => o.no_calls = flag(v),
                 "um_por_vez" => o.one_at_a_time = flag(v),
@@ -227,7 +222,7 @@ impl Opts {
         let b = |x: bool| x as u8;
         format!(
             "hdr_desligar={}\npessoas={}\ncontroles={}\nconvite={}\nnome={}\nresolucao={}\nquadros={}\nbanda={}\ncodec={}\nprioridade={}\n\
-dez_bits={}\npermitir_444={}\nmonitor={}\nritmo_constante={}\nsom_programa={}\nsem_chamadas={}\num_por_vez={}\nhost_primeiro={}\n\
+dez_bits={}\npermitir_444={}\nmonitor={}\nsom_programa={}\nsem_chamadas={}\num_por_vez={}\nhost_primeiro={}\n\
 sem_cadeia={}\nporta={}\njanela={}:{}\nupnp={}\natalho_emergencia={}\ngpu={}\nsom_saida={}\nsom_entrada={}\nconvite_minutos={}\n",
             b(self.hdr_off),
             self.guests,
@@ -242,7 +237,6 @@ sem_cadeia={}\nporta={}\njanela={}:{}\nupnp={}\natalho_emergencia={}\ngpu={}\nso
             b(self.ten_bit),
             b(self.allow444),
             self.monitor,
-            b(self.constant),
             self.sound_app,
             b(self.no_calls),
             b(self.one_at_a_time),
@@ -283,7 +277,23 @@ sem_cadeia={}\nporta={}\njanela={}:{}\nupnp={}\natalho_emergencia={}\ngpu={}\nso
             return Self::parse(&all);
         }
         let own = std::fs::read_to_string(Self::client_path(id)).unwrap_or_default();
-        Self::parse(&Self::merge(&all, &own))
+        Self::parse(&Self::merge(&all, &Self::old_reduced(&own)))
+    }
+
+    /// Arquivo de antes da 1.9.1, com todas as linhas (`codec=auto` também): congelava o aparelho,
+    /// e trocar o codec ou os quadros em «Todos os aparelhos» não chegava nele. Ficam só as linhas
+    /// que diferem do padrão; o resto volta a seguir as de todos. A próxima gravação pela página o
+    /// reescreve no formato novo, que nunca tem `ritmo_constante` (o ritmo passou a quem assiste depois da 1.9.1).
+    fn old_reduced(own: &str) -> String {
+        let has = |k: &str| own.lines().any(|l| l.split_once('=').is_some_and(|(x, _)| x.trim() == k));
+        if !(has("ritmo_constante") && PER_CLIENT.iter().all(|k| has(k))) {
+            return own.to_string();
+        }
+        let def = Opts::default().text();
+        own.lines()
+            .filter(|l| l.split_once('=').is_some_and(|(k, _)| PER_CLIENT.contains(&k.trim())) && !def.lines().any(|d| d == l.trim()))
+            .map(|l| format!("{l}\n"))
+            .collect()
     }
 
     /// O texto de todos e, depois, as linhas próprias que podem mudar (a última linha vence).
@@ -301,7 +311,7 @@ sem_cadeia={}\nporta={}\njanela={}:{}\nupnp={}\natalho_emergencia={}\ngpu={}\nso
 
     /// Grava a configuração própria de um aparelho: só as opções de [`PER_CLIENT`] que ficaram
     /// diferentes das de todos (`all`). As iguais continuam seguindo as de todos; gravar todas
-    /// congelava o aparelho, e ligar o ritmo constante em «Todos os aparelhos» não chegava nele.
+    /// congelava o aparelho, e trocar o codec em «Todos os aparelhos» não chegava nele.
     #[cfg_attr(not(feature = "stream"), allow(dead_code))]
     pub fn save_for(&self, id: &str, all: &Opts) -> std::io::Result<()> {
         let p = Self::client_path(id);
@@ -381,6 +391,8 @@ pub struct ClientOpts {
     pub pad_keys: bool,
     /// Quadros por segundo pedidos ao host; 0 é o automático (os Hz desta tela).
     pub fps: u32,
+    /// Pede ao host o ritmo constante: com a tela parada, ele repete o último quadro.
+    pub constant: bool,
     /// Placa de vídeo que decodifica e mostra (nome do Windows); vazio usa a do Windows.
     pub gpu: String,
     /// Mouse e teclado entre PCs: quem fica na esquerda, no meio e na direita. `eu` é este PC;
@@ -418,6 +430,7 @@ impl Default for ClientOpts {
             key_menu: (MOD_CTRL | MOD_ALT | MOD_SHIFT, b'P' as u32),
             key_full: (MOD_CTRL | MOD_ALT | MOD_SHIFT, b'F' as u32),
             fps: 0,
+            constant: false,
             key_cad: (MOD_CTRL | MOD_ALT, VK_END),
             key_disc: (MOD_CTRL | MOD_ALT | MOD_SHIFT, b'D' as u32),
             key_imm: (MOD_CTRL | MOD_ALT | MOD_SHIFT, b'I' as u32),
@@ -461,6 +474,7 @@ impl ClientOpts {
                 "atalho_medidor" => o.key_meter = keys_parse(v, o.key_meter),
                 "atalho_som" => o.key_sound = keys_parse(v, o.key_sound),
                 "quadros" => o.fps = v.parse::<u32>().ok().filter(|f| CLIENT_FPS.contains(f)).unwrap_or(0),
+                "ritmo_constante" => o.constant = flag(v),
                 "gpu" => o.gpu = clean(v, 128),
                 "telas" => o.screens = screens_parse(v),
                 "atalho_travar_mouse" => o.key_lock = keys_parse(v, o.key_lock),
@@ -475,7 +489,7 @@ impl ClientOpts {
         let b = |x: bool| x as u8;
         format!(
             "tela_cheia={}\nvsync={}\nimersivo={}\nmedidor={}\naviso={}\nmudo={}\nmicrofone={}\npedir_444={}\ncontrole_fundo={}\nteclado_controle={}\n\
-quadros={}\natalho_menu={}\natalho_tela_cheia={}\natalho_ctrl_alt_del={}\natalho_desconectar={}\natalho_imersivo={}\natalho_medidor={}\natalho_som={}\ngpu={}\ntelas={}\natalho_travar_mouse={}\nvrr={}\nsuper_resolucao={}\n",
+quadros={}\natalho_menu={}\natalho_tela_cheia={}\natalho_ctrl_alt_del={}\natalho_desconectar={}\natalho_imersivo={}\natalho_medidor={}\natalho_som={}\ngpu={}\ntelas={}\natalho_travar_mouse={}\nvrr={}\nsuper_resolucao={}\nritmo_constante={}\n",
             b(self.fullscreen),
             b(self.vsync),
             self.immersive,
@@ -499,6 +513,7 @@ quadros={}\natalho_menu={}\natalho_tela_cheia={}\natalho_ctrl_alt_del={}\natalho
             keys_text(self.key_lock),
             b(self.vrr),
             b(self.upscale),
+            b(self.constant),
         )
     }
 
@@ -538,7 +553,6 @@ mod tests {
             allow444: false,
             monitor: 2,
             window: (0x2a0b4, 1234),
-            constant: true,
             sound_app: "game.exe".into(),
             no_calls: false,
             one_at_a_time: false,
@@ -561,7 +575,7 @@ mod tests {
         assert_eq!(Opts::parse("janela=x:5").window, (0, 0));
         // Arquivo da 0.11.0: o resto fica no padrão.
         assert_eq!(Opts::parse("hdr_desligar=1\npessoas=2\ncontroles=auto\nconvite=total\n"), Opts { hdr_off: true, guests: 2, invite: TOTAL, ..Opts::default() });
-        let c = ClientOpts { fullscreen: false, vsync: true, vrr: true, upscale: true, immersive: 1, meter: 2, warn: false, mute: true, mic: true, ask444: true, pad_background: true, pad_keys: true, fps: 60, gpu: "AMD Radeon(TM) Graphics".into(), key_menu: (MOD_ALT, 0x70), key_sound: (MOD_CTRL, b'M' as u32), ..ClientOpts::default() };
+        let c = ClientOpts { fullscreen: false, vsync: true, vrr: true, upscale: true, immersive: 1, meter: 2, warn: false, mute: true, mic: true, ask444: true, pad_background: true, pad_keys: true, fps: 60, constant: true, gpu: "AMD Radeon(TM) Graphics".into(), key_menu: (MOD_ALT, 0x70), key_sound: (MOD_CTRL, b'M' as u32), ..ClientOpts::default() };
         assert_eq!(ClientOpts::parse(&c.text()), c);
         let c = ClientOpts { screens: ["eu".into(), "".into(), "31ded57656ab".into()], key_lock: (MOD_CTRL, b'L' as u32), ..ClientOpts::default() };
         assert_eq!(ClientOpts::parse(&c.text()), c);
@@ -589,24 +603,38 @@ mod tests {
 
     #[test]
     fn own_settings_keep_only_what_differs() {
-        let all = Opts { constant: false, codec: "hevc".into(), ..Opts::default() };
+        let all = Opts { fps: 0, codec: "hevc".into(), ..Opts::default() };
         let mine = Opts { codec: "av1".into(), ..all.clone() };
         // Só o codec é do aparelho: o resto segue as de todos.
         assert_eq!(mine.own_text(&all), "codec=av1\n");
-        // Ligar o ritmo constante em todos chega no aparelho, que mantém o codec dele.
-        let later = Opts { constant: true, ..all.clone() };
+        // Mudar os quadros em todos chega no aparelho, que mantém o codec dele.
+        let later = Opts { fps: 60, ..all.clone() };
         let got = Opts::parse(&Opts::merge(&later.text(), &mine.own_text(&all)));
-        assert!(got.constant);
+        assert_eq!(got.fps, 60);
         assert_eq!(got.codec, "av1");
         // Sem nada diferente, a configuração própria fica vazia.
         assert_eq!(all.own_text(&all), "");
     }
 
     #[test]
+    fn old_full_own_file_follows_all_again() {
+        // O arquivo do JAEL-NOTEBOOK, gravado pela 1.9.0 com todas as linhas.
+        let old = "hdr_desligar=0\nresolucao=0\nquadros=60\nbanda=0\ncodec=auto\nprioridade=2\ndez_bits=1\npermitir_444=1\nmonitor=0\nritmo_constante=0\n\
+som_programa=\nsem_chamadas=1\num_por_vez=1\nhost_primeiro=1\ngpu=NVIDIA GeForce RTX 4070 SUPER\nsom_saida=\nsom_entrada=padrao\n";
+        assert_eq!(Opts::old_reduced(old), "quadros=60\nprioridade=2\ngpu=NVIDIA GeForce RTX 4070 SUPER\nsom_entrada=padrao\n");
+        // O codec de todos (hevc) volta a valer; o que o aparelho mudou fica.
+        let all = Opts { codec: "hevc".into(), priority: 0, ..Opts::default() };
+        let got = Opts::parse(&Opts::merge(&all.text(), &Opts::old_reduced(old)));
+        assert_eq!((got.codec.as_str(), got.fps, got.priority), ("hevc", 60, 2));
+        // O arquivo novo, só com o que difere, fica como está (mesmo com `codec=auto`).
+        assert_eq!(Opts::old_reduced("codec=auto\nquadros=60\n"), "codec=auto\nquadros=60\n");
+    }
+
+    #[test]
     fn what_restarts_the_video() {
         let o = Opts::default();
         // Ritmo, som, mouse e teclado mudam sem recomeçar.
-        assert!(!o.video_differs(&Opts { constant: true, no_calls: false, sound_app: "game.exe".into(), one_at_a_time: false, host_first: false, guests: 2, ..Opts::default() }));
+        assert!(!o.video_differs(&Opts { no_calls: false, sound_app: "game.exe".into(), one_at_a_time: false, host_first: false, guests: 2, ..Opts::default() }));
         for v in [Opts { fps: 30, ..Opts::default() }, Opts { mbps: 80, ..Opts::default() }, Opts { priority: 2, ..Opts::default() }, Opts { gpu: "Outra".into(), ..Opts::default() }, Opts { monitor: 1, ..Opts::default() }, Opts { window: (7, 8), ..Opts::default() }] {
             assert!(o.video_differs(&v), "{v:?}");
         }
