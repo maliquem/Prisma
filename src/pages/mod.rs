@@ -23,6 +23,7 @@ mod plan_edit;
 pub mod report;
 pub mod search;
 mod services;
+pub mod shaders;
 #[cfg(feature = "stream")]
 pub mod share;
 pub mod shortcuts;
@@ -76,6 +77,7 @@ pub enum Page {
     Nvidia,
     Capture,
     Share,
+    Shaders,
     Controllers,
     Shortcuts,
     Widget,
@@ -183,6 +185,15 @@ const ICON_SHARE: Icon = &[
     &[(12., 8.5), (12., 13.5)],
 ];
 
+/// Tela com linhas de varredura.
+const ICON_SHADER: Icon = &[
+    &[(3., 5.), (21., 5.), (21., 17.), (3., 17.), (3., 5.)],
+    &[(6., 8.5), (18., 8.5)],
+    &[(6., 11.), (18., 11.)],
+    &[(6., 13.5), (18., 13.5)],
+    &[(9., 20.), (15., 20.)],
+];
+
 const ICON_DISK: Icon = &[
     &[(4., 6.), (20., 6.), (20., 18.), (4., 18.), (4., 6.)],
     &[(4., 12.), (20., 12.)],
@@ -249,9 +260,9 @@ pub fn nav_page(i: usize) -> Option<(Page, Icon)> {
     action_nav().nth(i).map(|n| (n.0, n.2))
 }
 
-/// Ordem das ações "Página ..." (33 a 56): a da barra lateral antes dos grupos, com Cópias, Atalhos e Desempenho
-/// no fim. Nunca muda, mesmo que a barra mude: os números já gravados dependem dela.
-const ACTION_PAGES: [Page; 24] = [
+/// Ordem das ações "Página ..." (33 a 57): a da barra lateral antes dos grupos, com Cópias, Atalhos, Desempenho e
+/// Shaders no fim. Nunca muda, mesmo que a barra mude: os números já gravados dependem dela.
+const ACTION_PAGES: [Page; 25] = [
     Page::Monitor,
     Page::Meter,
     Page::Storage,
@@ -276,6 +287,7 @@ const ACTION_PAGES: [Page; 24] = [
     Page::Copies,
     Page::Shortcuts,
     Page::Performance,
+    Page::Shaders,
 ];
 
 /// Os itens da barra lateral na ordem das ações "Página ...".
@@ -341,6 +353,7 @@ const NAV: &[(Page, &str, Icon)] = &[
     (Page::Nvidia, "Driver NVIDIA", ICON_GPU),
     (Page::Capture, "Captura", ICON_CAP),
     (Page::Share, "Compartilhar tela", ICON_SHARE),
+    (Page::Shaders, "Shaders", ICON_SHADER),
     (Page::Volume, "Som", ICON_VOL),
     (Page::Controllers, "Controles", ICON_PAD),
     (Page::Shortcuts, "Atalhos", ICON_KEYS),
@@ -349,7 +362,7 @@ const NAV: &[(Page, &str, Icon)] = &[
 ];
 
 /// Grupos da barra lateral: nome e quantos itens seguidos de `NAV` entram nele.
-const GROUPS: [(&str, usize); 5] = [("Sistema", 7), ("Manutenção", 6), ("Jogos e tela", 6), ("Entrada e som", 3), ("Prisma", 2)];
+const GROUPS: [(&str, usize); 5] = [("Sistema", 7), ("Manutenção", 6), ("Jogos e tela", 7), ("Entrada e som", 3), ("Prisma", 2)];
 
 /// Grupo do item `i` de `NAV`.
 fn group_of(i: usize) -> usize {
@@ -501,6 +514,7 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
         Page::Nvidia => nvidia::draw(&mut ui, app, area),
         Page::Capture => capture::draw(&mut ui, app, area),
         Page::Share => share::draw(&mut ui, app, area),
+        Page::Shaders => shaders::draw(&mut ui, app, area),
         Page::Controllers => controllers::draw(&mut ui, app, area),
         Page::Shortcuts => shortcuts::draw(&mut ui, app, area),
         Page::Widget => widget::draw(&mut ui, app, area),
@@ -690,6 +704,7 @@ mod tests {
         assert!(nav_page(21).is_some_and(|n| n.0 == Page::Copies));
         assert!(nav_page(22).is_some_and(|n| n.0 == Page::Shortcuts));
         assert!(nav_page(23).is_some_and(|n| n.0 == Page::Performance));
-        assert!(nav_page(24).is_none());
+        assert!(nav_page(24).is_some_and(|n| n.0 == Page::Shaders));
+        assert!(nav_page(25).is_none());
     }
 }

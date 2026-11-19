@@ -2814,3 +2814,87 @@ o que cada programa pode usar	what each program can use
 Pico (sessão)	Peak (session)
 Clock do núcleo · 60 s	Core clock · 60 s
 Temperatura · 60 s	Temperature · 60 s
+Shaders	Shaders
+Filtros do RetroArch (.slang) por cima de qualquer jogo: CRT, scanlines, NTSC, nitidez. Um perfil por jogo.	RetroArch (.slang) filters on top of any game: CRT, scanlines, NTSC, sharpness. One profile per game.
+Nenhum jogo ainda. Use Adicionar no cartão Jogo e escolha o .exe; depois baixe a biblioteca e adicione um passe.	No games yet. Use Add on the Game card and pick the .exe; then download the library and add a pass.
+Nenhum jogo	No game
+{} · 1 passe	{} · 1 pass
+{} · {} passes	{} · {} passes
+Anti-cheat: o shader não entra neste jogo	Anti-cheat: the shader does not apply to this game
+Aplicando agora	Applying now
+Ligado: entra quando o jogo abrir	On: applies when the game opens
+Biblioteca de shaders	Shader library
+Extraindo… pode levar alguns minutos.	Extracting… this may take a few minutes.
+Baixando de github.com/libretro/slang-shaders: {} MB	Downloading from github.com/libretro/slang-shaders: {} MB
+O download falhou. Tente de novo.	Download failed. Try again.
+Instalada: {} presets.	Installed: {} presets.
+Não baixada. Não vem com o Prisma por causa das licenças.	Not downloaded. It does not come with Prisma because of licenses.
+Baixar	Download
+Trocar…	Change…
+Liga / desliga	On / off
+Menu no jogo	In-game menu
+Próximo perfil	Next profile
+Comparar (segurar)	Compare (hold)
+Passes	Passes
+Testar com imagem	Test with image
+Cena 2D (320×240)	2D scene (320×240)
+Barras de cor e grade	Color bars and grid
+Abrir imagem ou captura…	Open image or capture…
+Adicionar passe	Add pass
+Carregar preset	Load preset
+nada	nothing
+Nenhum passe. Adicione um preset.	No passes. Add a preset.
+{} · {} parâmetros	{} · {} parameters
+Ligar ou desligar só este passe	Turn only this pass on or off
+O nº 1 roda primeiro, sobre a imagem do jogo; o último fica por cima. Cada linha pode ser um preset inteiro (.slangp) ou um .slang avulso.	No. 1 runs first, on the game image; the last one ends up on top. Each row can be a whole preset (.slangp) or a standalone .slang.
+Como aplicar	How to apply
+Por cima	Overlay
+Injeção (em breve)	Injection (coming soon)
+Bloqueado: este jogo tem anti-cheat	Blocked: this game has anti-cheat
+Em breve: aplicar dentro do jogo, sem o quadro de atraso	Coming soon: apply inside the game, without the frame of delay
+Janela por cima do jogo, capturando a imagem. DX9 a 12, Vulkan e OpenGL.	A window over the game, capturing the image. DX9 to 12, Vulkan and OpenGL.
+Resolução de entrada	Input resolution
+Original	Original
+240 linhas	240 lines
+480 linhas	480 lines
+720 linhas	720 lines
+÷2	÷2
+÷3	÷3
+÷4	÷4
+Automática acha o tamanho do pixel do jogo e entrega ao filtro a resolução original.	Automatic finds the game's pixel size and gives the filter the original resolution.
+Gravar e transmitir com o shader	Record and stream with the shader
+Captura e Compartilhar tela usam a imagem já filtrada	Capture and Share screen use the already filtered image
+Anti-cheat detectado: o Prisma não aplica shader neste jogo, nem por cima.	Anti-cheat detected: Prisma does not apply shaders to this game, not even as an overlay.
+Em tela cheia exclusiva o filtro some. Use janela sem borda ou ligue o Fullscreenizer para este jogo.	In exclusive fullscreen the filter disappears. Use borderless window or turn on Fullscreenizer for this game.
+Ligar Fullscreenizer	Turn on Fullscreenizer
+Monitor em HDR: a imagem é convertida para SDR antes do filtro (brilho acima do branco é cortado).	HDR monitor: the image is converted to SDR before the filter (brightness above white is clipped).
+Salvar perfil	Save profile
+Salvar como preset…	Save as preset…
+Perfil salvo para este jogo	Profile saved for this game
+Voltou ao último salvo	Back to the last saved
+Parâmetros	Parameters
+Restaurar padrão	Restore default
+Buscar parâmetro (ex.: mask, scan, gamma)	Search parameter (e.g. mask, scan, gamma)
+Só os alterados	Only changed
+Nenhum passe.	No passes.
+Este passe não tem parâmetros.	This pass has no parameters.
+padrão	default
+Mínimo, máximo e passo vêm do próprio shader. A mudança aparece no jogo na hora; laranja é diferente do padrão. Botão direito volta o valor.	Minimum, maximum and step come from the shader itself. The change shows in the game right away; orange means different from default. Right-click resets the value.
+Carregar preset (substitui os passes)	Load preset (replaces the passes)
+Buscar em {} presets (ex.: lottes, ntsc, vhs)	Search {} presets (e.g. lottes, ntsc, vhs)
+A biblioteca está vazia. Baixe no cartão Biblioteca ou escolha outra pasta em Trocar.	The library is empty. Download it on the Library card or pick another folder with Change.
+Preset (.slangp) entra como um passe com todas as passadas dele; .slang entra como uma passada só.	A preset (.slangp) is added as one pass with all its passes; a .slang is added as a single pass.
+Carregar	Load
+Adicionar ao fim	Add to end
+Não deu para gravar o perfil	Could not save the profile
+Este jogo não tem perfil de shader	This game has no shader profile
+Shader ligado	Shader on
+Shader desligado	Shader off
+Preset exportado	Preset exported
+Não deu para gravar o preset	Could not save the preset
+Página Shaders	Shaders page
+Shader liga / desliga	Shader on / off
+Presets de shader	Shader presets
+Perfil do jogo	Game profile
+Imagem do jogo	Game image
+{} já está em uso por outro programa	{} is already used by another program
