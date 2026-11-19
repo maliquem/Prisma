@@ -697,6 +697,27 @@ unsafe fn key_event(h: HWND, k: &mut Keys, m: u32, w: WPARAM, l: LPARAM) -> bool
     true
 }
 
+/// O que mudou na aba Cliente e o menu da conexão também tem, como escolhas do menu.
+fn page_picks(co: &ClientOpts, new: &ClientOpts) -> Vec<hud::Pick> {
+    let mut p = Vec::new();
+    if new.immersive != co.immersive {
+        p.push(hud::Pick::Immersive(new.immersive));
+    }
+    if new.fps != co.fps {
+        p.push(hud::Pick::Fps(new.fps));
+    }
+    if new.meter != co.meter {
+        p.push(hud::Pick::Meter(new.meter));
+    }
+    // As outras o menu troca: entram só quando a página deixou diferente.
+    for (on, pick) in [(new.warn != co.warn, hud::Pick::Warn), (new.vsync != co.vsync, hud::Pick::Vsync), (new.ask444 != co.ask444, hud::Pick::Ask444), (new.constant != co.constant, hud::Pick::Constant), (new.pad_background != co.pad_background, hud::Pick::PadBackground), (new.pad_keys != co.pad_keys, hud::Pick::PadKeys)] {
+        if on {
+            p.push(pick);
+        }
+    }
+    p
+}
+
 /// Um atalho daqui disparou com Ctrl, Alt e Shift já apertados no host: uma tecla sem uso antes de
 /// soltá-los, senão o Alt+Shift e o Ctrl+Shift trocam o teclado de lá (e o Shift ficava preso).
 fn shortcut_used(k: &mut Keys) {
@@ -1187,6 +1208,7 @@ pub(super) fn open(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64
 
 unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) -> Result<()> {
     let mut co = ClientOpts::load();
+    let mut page_at = Instant::now();
     {
         let mut k = KEYS.lock().unwrap();
         k.key_menu = co.key_menu;
@@ -1470,6 +1492,16 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
             clipped = want_clip;
         }
         let mut picks: Vec<hud::Pick> = std::mem::take(&mut KEYS.lock().unwrap().acts);
+        // A aba Cliente mudou `cliente.txt`: o que o menu também tem vale já, como se escolhido nele.
+        if page_at.elapsed() >= Duration::from_secs(1) {
+            page_at = Instant::now();
+            let fresh = ClientOpts::load();
+            if fresh != co {
+                picks.extend(page_picks(&co, &fresh));
+                // O resto (atalhos, placa...) vem da página; o menu grava por cima só o que muda.
+                co = ClientOpts { immersive: co.immersive, fps: co.fps, meter: co.meter, warn: co.warn, vsync: co.vsync, ask444: co.ask444, constant: co.constant, pad_background: co.pad_background, pad_keys: co.pad_keys, ..fresh };
+            }
+        }
         // O menu fechou: a escolha entra com as outras.
         if let Some(p) = hud::menu_poll(hwnd) {
             picks.extend(p);
@@ -2007,6 +2039,16 @@ fn meter_name(m: u8) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn page_changes_become_menu_picks() {
+        let co = ClientOpts::default();
+        assert!(page_picks(&co, &co).is_empty());
+        // A página pôs o imersivo Tudo e ligou o ritmo constante; a placa não é do menu.
+        let new = ClientOpts { immersive: 7, constant: !co.constant, gpu: "Outra".into(), ..co.clone() };
+        let p = page_picks(&co, &new);
+        assert!(matches!(p[..], [hud::Pick::Immersive(7), hud::Pick::Constant]), "{p:?}");
+    }
 
     #[test]
     fn vrr_keeps_frames_inside_the_screen_rate() {

@@ -92,6 +92,8 @@ struct State {
     job: isize,
     opts: Option<Opts>,
     client: Option<ClientOpts>,
+    /// Quando `cliente.txt` mudou por último: o menu da conexão também grava nele.
+    client_at: Option<std::time::SystemTime>,
     /// Trabalho do serviço (instalar ou remover) rodando.
     service_busy: bool,
     tab: usize,
@@ -432,6 +434,12 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let mut guard = STATE.lock().unwrap();
     let st = guard.get_or_insert_with(test_setup);
     let opts = st.opts.get_or_insert_with(Opts::load).clone();
+    // O menu da conexão gravou outra coisa: a aba mostra o mesmo que ele.
+    let at = std::fs::metadata(ClientOpts::path()).and_then(|m| m.modified()).ok();
+    if at != st.client_at {
+        st.client_at = at;
+        st.client = None;
+    }
     let client = st.client.get_or_insert_with(ClientOpts::load).clone();
     let mut new_opts = opts.clone();
     let mut new_client = client.clone();
