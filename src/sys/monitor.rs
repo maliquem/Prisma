@@ -210,7 +210,7 @@ pub fn read_cpu(prev: &mut Vec<CpuTimes>, threads: &mut Vec<f32>) -> f32 {
     }
 }
 
-struct GpuCounters {
+pub(super) struct GpuCounters {
     query: PDH_HQUERY,
     engine: PDH_HCOUNTER,
     memory: PDH_HCOUNTER,
@@ -235,7 +235,7 @@ impl GpuCounters {
         }
     }
 
-    fn array(counter: PDH_HCOUNTER, buf: &mut Vec<u8>) -> Vec<(String, f64)> {
+    pub(super) fn array(counter: PDH_HCOUNTER, buf: &mut Vec<u8>) -> Vec<(String, f64)> {
         let mut out = Vec::new();
         unsafe {
             let mut size = 0u32;
@@ -340,7 +340,7 @@ pub fn disk_of(disks: &[(String, f32)], drive: &str) -> Option<usize> {
 }
 
 /// Instâncias têm a forma `pid_1234_luid_0x..._phys_0...`.
-fn instance_pid(name: &str) -> Option<u32> {
+pub(super) fn instance_pid(name: &str) -> Option<u32> {
     name.strip_prefix("pid_")?.split('_').next()?.parse().ok()
 }
 

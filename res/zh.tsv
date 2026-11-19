@@ -1508,6 +1508,10 @@ ponta a ponta	端到端
 rede	网络
 q/s	fps
 decodificação	解码
+GPU do host	主机 GPU
+GPU daqui	本机 GPU
+codificação	编码
+cópia	复制
 fila	队列
 perdidos	丢失
 Mandar Ctrl+Alt+Del	发送 Ctrl+Alt+Del

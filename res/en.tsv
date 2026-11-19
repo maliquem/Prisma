@@ -1514,6 +1514,10 @@ ponta a ponta	end to end
 rede	network
 q/s	fps
 decodificação	decoding
+GPU do host	Host GPU
+GPU daqui	This PC's GPU
+codificação	encoding
+cópia	copy
 fila	queue
 perdidos	lost
 Mandar Ctrl+Alt+Del	Send Ctrl+Alt+Del

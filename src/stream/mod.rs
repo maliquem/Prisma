@@ -46,6 +46,7 @@ mod opts;
 pub use opts::*;
 
 use crate::capture::mux::Codec;
+pub use crate::sys::gpuuse::GpuUse;
 
 pub const PORT: u16 = 47_600;
 
@@ -343,6 +344,13 @@ pub enum Input {
     /// Mouse e teclado: o mouse saiu desta tela para a de outro PC. Quem recebe esconde o cursor
     /// até o mouse voltar ou o mouse de lá se mexer. Versões antigas ignoram.
     Away,
+    /// Teclado: o Caps Lock e o Num Lock de quem assiste. O host acerta os dele por eles; as
+    /// teclas em si não vão, senão os dois lados trocariam e podiam ficar diferentes.
+    Locks { caps: bool, num: bool },
+    /// Teclado: um atalho de quem assiste usou Ctrl, Alt e Shift, que já desceram no host. Ele
+    /// toca uma tecla sem uso antes de soltá-los, senão o Alt+Shift e o Ctrl+Shift trocam o
+    /// teclado dele (ABNT2, US-Internacional...).
+    Mask,
 }
 
 pub const INPUT_SIZE: usize = 8;
@@ -357,6 +365,8 @@ impl Input {
             Input::Wheel { delta, horizontal } => (3, horizontal as u8, delta as u16, 0),
             Input::Key { scan, extended, down } => (4, down as u8 | (extended as u8) << 1, scan, 0),
             Input::Away => (5, 0, 0, 0),
+            Input::Locks { caps, num } => (6, caps as u8 | (num as u8) << 1, 0, 0),
+            Input::Mask => (7, 0, 0, 0),
         };
         out.push(k);
         out.push(f);
@@ -373,6 +383,8 @@ impl Input {
             3 => Input::Wheel { delta: a as i16, horizontal: f & 1 != 0 },
             4 => Input::Key { scan: a, extended: f & 2 != 0, down: f & 1 != 0 },
             5 => Input::Away,
+            6 => Input::Locks { caps: f & 1 != 0, num: f & 2 != 0 },
+            7 => Input::Mask,
             _ => return None,
         })
     }
@@ -422,9 +434,11 @@ pub enum Msg<'a> {
     /// `flags`: [`SEES_HDR`] e [`DECODES_444`].
     Hello { w: u32, h: u32, hz: u32, codecs: u8, pid: u32, flags: u8 },
     KeyReq,
-    Ping { t: i64 },
-    /// Resposta ao Ping, com a hora do host para acertar os relógios.
-    Pong { t: i64, host: i64 },
+    /// `gpu`: quem assiste está com o medidor detalhado e quer o uso da GPU do host (byte no fim; host antigo ignora).
+    Ping { t: i64, gpu: bool },
+    /// Resposta ao Ping, com a hora do host para acertar os relógios e, se pedido, o uso da GPU
+    /// dele (no fim; quem assiste antigo ignora, host antigo não manda).
+    Pong { t: i64, host: i64, gpu: Option<GpuUse> },
     Bye,
     /// Bloco de som, com número de sequência.
     Audio { seq: u32, pts: i64, data: &'a [u8] },
@@ -555,14 +569,20 @@ pub fn write(out: &mut Vec<u8>, m: &Msg) {
             out.push(flags);
         }
         Msg::KeyReq => head(out, Kind::KeyReq),
-        Msg::Ping { t } => {
+        Msg::Ping { t, gpu } => {
             head(out, Kind::Ping);
             out.extend_from_slice(&t.to_le_bytes());
+            if gpu {
+                out.push(1);
+            }
         }
-        Msg::Pong { t, host } => {
+        Msg::Pong { t, host, gpu } => {
             head(out, Kind::Pong);
             out.extend_from_slice(&t.to_le_bytes());
             out.extend_from_slice(&host.to_le_bytes());
+            if let Some(g) = gpu {
+                out.extend_from_slice(&g.bytes());
+            }
         }
         Msg::Bye => head(out, Kind::Bye),
         Msg::Audio { seq, pts, data } => {
@@ -694,8 +714,8 @@ pub fn read(b: &[u8]) -> Option<Msg<'_>> {
         2 => Msg::Info { codec: codec_of(*b.get(4)?)?, w: u32_at(b, 5)?, h: u32_at(b, 9)?, fps: u32_at(b, 13)?, perms: *b.get(17)?, recover: *b.get(18)? != 0, hdr10: *b.get(19)? != 0, yuv444: *b.get(20)? != 0, priority: b.get(21).copied().unwrap_or(255) },
         3 => Msg::Hello { w: u32_at(b, 4)?, h: u32_at(b, 8)?, hz: u32_at(b, 12)?, codecs: *b.get(16)?, pid: u32_at(b, 17)?, flags: *b.get(21)? },
         4 => Msg::KeyReq,
-        5 => Msg::Ping { t: i64_at(b, 4)? },
-        6 => Msg::Pong { t: i64_at(b, 4)?, host: i64_at(b, 12)? },
+        5 => Msg::Ping { t: i64_at(b, 4)?, gpu: b.get(12) == Some(&1) },
+        6 => Msg::Pong { t: i64_at(b, 4)?, host: i64_at(b, 12)?, gpu: b.get(20..).and_then(GpuUse::from_bytes) },
         7 => Msg::Bye,
         8 => Msg::Audio { seq: u32_at(b, 4)?, pts: i64_at(b, 8)?, data: b.get(16..)? },
         9 => {
@@ -894,8 +914,14 @@ mod tests {
         round(Msg::Hello { w: 3840, h: 2160, hz: 119, codecs: 7, pid: 4321, flags: SEES_HDR | DECODES_444 });
         round(Msg::Audio { seq: 9, pts: 10, data: &[0, 1, 2, 3] });
         round(Msg::KeyReq);
-        round(Msg::Ping { t: 123 });
-        round(Msg::Pong { t: 1, host: 2 });
+        round(Msg::Ping { t: 123, gpu: false });
+        round(Msg::Ping { t: 123, gpu: true });
+        round(Msg::Pong { t: 1, host: 2, gpu: None });
+        round(Msg::Pong { t: 1, host: 2, gpu: Some(GpuUse { total: 90, d3: 5, encode: 30, decode: 0, copy: 2 }) });
+        // Host antigo: Pong sem a GPU; quem assiste antigo lê só os dois relógios.
+        let mut old = Vec::new();
+        write(&mut old, &Msg::Pong { t: 1, host: 2, gpu: Some(GpuUse::default()) });
+        assert!(matches!(read(&old[..20]), Some(Msg::Pong { t: 1, host: 2, gpu: None })));
         round(Msg::Bye);
         round(Msg::Fec { frame: 4, pts: -9, key: true, count: 30, idx: 2, rec: 6, data: &[5, 6] });
         round(Msg::Loss { permille: 123 });
@@ -917,6 +943,8 @@ mod tests {
             Input::Wheel { delta: -120, horizontal: true },
             Input::Key { scan: 0x1D, extended: true, down: false },
             Input::Away,
+            Input::Locks { caps: false, num: true },
+            Input::Mask,
         ];
         let mut b = Vec::new();
         write_input(&mut b, 41, &evs);

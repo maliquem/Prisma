@@ -22,6 +22,7 @@ pub mod hdr;
 pub mod hdrcal;
 pub mod index;
 pub mod keepalive;
+pub mod gpuuse;
 pub mod kmt;
 pub mod mft;
 pub mod monitor;
