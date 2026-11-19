@@ -4,6 +4,7 @@
 //! - DXGI com D3D11: `Present`, `Present1`, `ResizeBuffers`. Com D3D10, a cadeia roda num D3D11 nosso no mesmo
 //!   adaptador (`Bridge`). D3D12 só avisa a API (`api`) e passa.
 //! - D3D9 e 9Ex: `Present`, `PresentEx`, `Reset`, `ResetEx`.
+//! - OpenGL: `wglSwapBuffers`, com a cadeia num contexto GL nosso no mesmo HDC (`Gl`).
 //! O motor (`prisma.exe --shader-profile`) conversa pela memória de `prisma_shader::link`: perfil, sinal de vida,
 //! `compare`. O perfil é relido a cada 250 ms, como no motor por cima.
 
@@ -13,10 +14,13 @@ use std::ffi::c_void;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::*};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
+use glow::HasContext;
+
 use librashader::runtime::d3d9::FilterChain as Chain9;
+use librashader::runtime::gl::{FilterChain as ChainGl, GLImage as ChainGlImage};
 use librashader::runtime::{Size, Viewport};
 use prisma_shader::chain::{self, Engine, Tracker};
 use prisma_shader::link::*;
@@ -29,6 +33,8 @@ use windows::Win32::Graphics::Direct3D11::*;
 use windows::Win32::Graphics::Direct3D9::*;
 use windows::Win32::Graphics::Dxgi::Common::*;
 use windows::Win32::Graphics::Dxgi::*;
+use windows::Win32::Graphics::Gdi::{WindowFromDC, HDC};
+use windows::Win32::Graphics::OpenGL::*;
 use windows::Win32::System::LibraryLoader::*;
 use windows::Win32::System::Memory::*;
 use windows::Win32::System::SystemInformation::GetTickCount64;
@@ -884,6 +890,321 @@ unsafe fn dummy_window() -> Res<HWND> {
     Ok(CreateWindowExW(WINDOW_EX_STYLE(0), w!("STATIC"), None, WINDOW_STYLE(0), 0, 0, 2, 2, None, None, None, None)?)
 }
 
+// ---------- OpenGL ----------
+
+type SwapBuffers = unsafe extern "system" fn(HDC) -> BOOL;
+static GL: Mutex<Option<Gl>> = Mutex::new(None);
+/// Endereço do `wglSwapBuffers` desviado (o `SwapBuffers` do GDI também passa por ele).
+static GL_SWAP: AtomicUsize = AtomicUsize::new(0);
+
+unsafe extern "system" fn on_swap(hdc: HDC) -> BOOL {
+    guard(|| gl_present(hdc));
+    let at = GL_SWAP.load(Relaxed);
+    let f: SwapBuffers = std::mem::transmute(lock(&DETOURS).iter().find(|d| d.0 == at).map_or(at, |d| d.1));
+    f(hdc)
+}
+
+/// A cadeia roda num contexto GL nosso no mesmo HDC: o back buffer é da janela, não do contexto, e o estado do
+/// jogo (programa, texturas, alvos) fica intocado sem precisar guardar e repor.
+unsafe fn gl_present(hdc: HDC) {
+    let Some(s) = shared() else { return };
+    s.presents.fetch_add(1, Relaxed);
+    let hwnd = WindowFromDC(hdc);
+    if !is_game(s, hwnd) {
+        return;
+    }
+    s.api.store(API_GL, Relaxed);
+    if !alive(s) {
+        return;
+    }
+    let (dc, rc) = (wglGetCurrentDC(), wglGetCurrentContext());
+    let mut g = lock(&GL);
+    if g.as_ref().is_some_and(|x| x.hdc != hdc.0 as usize) {
+        *g = None;
+    }
+    if g.is_none() {
+        let key = fail_key(s);
+        if *lock(&FAIL) != Some(key) {
+            match Gl::new(hdc, s) {
+                Ok(x) => *g = Some(x),
+                Err(e) => {
+                    *lock(&FAIL) = Some(key);
+                    say!("shader: OpenGL não abriu: {e}");
+                }
+            }
+        }
+    }
+    if let Some(x) = g.as_mut().filter(|x| x.errors < MAX_ERRORS) {
+        let r = match wglMakeCurrent(hdc, x.rc) {
+            Ok(()) => x.frame(s, hwnd),
+            Err(e) => Err(e.into()),
+        };
+        match r {
+            Ok(()) => x.errors = 0,
+            Err(e) => {
+                x.errors += 1;
+                say!("shader: {e}");
+                if x.errors >= MAX_ERRORS {
+                    say!("shader: {MAX_ERRORS} erros seguidos, efeito desligado nesta janela");
+                }
+            }
+        }
+    }
+    drop(g);
+    let _ = wglMakeCurrent(dc, rc);
+}
+
+/// Textura com o seu alvo de desenho.
+struct Tex {
+    size: (u32, u32),
+    tex: glow::Texture,
+    fbo: glow::Framebuffer,
+}
+
+impl Tex {
+    /// Refaz `slot` quando o tamanho muda.
+    unsafe fn fit(gl: &glow::Context, slot: &mut Option<Tex>, w: u32, h: u32) -> Res<()> {
+        if slot.as_ref().is_some_and(|t| t.size == (w, h)) {
+            return Ok(());
+        }
+        if let Some(t) = slot.take() {
+            gl.delete_framebuffer(t.fbo);
+            gl.delete_texture(t.tex);
+        }
+        let tex = gl.create_texture()?;
+        gl.bind_texture(glow::TEXTURE_2D, Some(tex));
+        gl.tex_storage_2d(glow::TEXTURE_2D, 1, glow::RGBA8, w as i32, h as i32);
+        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::NEAREST as i32);
+        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::NEAREST as i32);
+        gl.bind_texture(glow::TEXTURE_2D, None);
+        let fbo = gl.create_framebuffer()?;
+        gl.bind_framebuffer(glow::FRAMEBUFFER, Some(fbo));
+        gl.framebuffer_texture_2d(glow::FRAMEBUFFER, glow::COLOR_ATTACHMENT0, glow::TEXTURE_2D, Some(tex), 0);
+        gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+        *slot = Some(Tex { size: (w, h), tex, fbo });
+        Ok(())
+    }
+
+    fn image(&self) -> ChainGlImage {
+        ChainGlImage { handle: Some(self.tex), format: glow::RGBA8, size: Size::new(self.size.0, self.size.1) }
+    }
+}
+
+/// Copia de `src` para `dst` (o alvo de cada um, ou o back buffer com `None`), por ponto.
+unsafe fn blit(gl: &glow::Context, src: Option<glow::Framebuffer>, from: [i32; 4], dst: Option<glow::Framebuffer>, to: [i32; 4]) {
+    gl.bind_framebuffer(glow::READ_FRAMEBUFFER, src);
+    gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, dst);
+    if src.is_none() {
+        gl.read_buffer(glow::BACK);
+    }
+    if dst.is_none() {
+        gl.draw_buffer(glow::BACK);
+    }
+    gl.blit_framebuffer(from[0], from[1], from[2], from[3], to[0], to[1], to[2], to[3], glow::COLOR_BUFFER_BIT, glow::NEAREST);
+}
+
+struct Gl {
+    hdc: usize,
+    rc: HGLRC,
+    ctx: Arc<glow::Context>,
+    t: Tracker,
+    chain: Option<ChainGl>,
+    defaults: HashMap<String, f32>,
+    polled: Instant,
+    seq: u32,
+    input: Option<Tex>,
+    small: Option<Tex>,
+    out: Option<Tex>,
+    detect: blocks::Detect,
+    /// Faixas do meio para o detector (horizontal e vertical), copiadas num quadro e lidas no seguinte.
+    strips: [Option<Tex>; 2],
+    pending: bool,
+    frame: usize,
+    errors: u32,
+}
+
+// O contexto GL só é usado na linha que apresenta, sempre debaixo do `Mutex`.
+unsafe impl Send for Gl {}
+
+impl Drop for Gl {
+    fn drop(&mut self) {
+        unsafe {
+            // A cadeia apaga os objetos dela no contexto atual: tem de ser o nosso, nunca o do jogo.
+            if wglMakeCurrent(HDC(self.hdc as _), self.rc).is_ok() {
+                self.chain = None;
+            } else {
+                std::mem::forget(self.chain.take());
+            }
+            let _ = wglMakeCurrent(HDC::default(), HGLRC::default());
+            let _ = wglDeleteContext(self.rc);
+        }
+    }
+}
+
+/// As funções do contexto atual. As do GL 1.1 só saem da opengl32.dll; as outras, do driver pelo wglGetProcAddress.
+unsafe fn glow_context() -> glow::Context {
+    let lib = GetModuleHandleW(w!("opengl32.dll")).unwrap_or_default();
+    glow::Context::from_loader_function_cstr(|name| {
+        let n = PCSTR(name.as_ptr() as *const u8);
+        match wglGetProcAddress(n) {
+            Some(f) if !matches!(f as usize, 1 | 2 | 3 | usize::MAX) => f as *const c_void,
+            _ => GetProcAddress(lib, n).map_or(std::ptr::null(), |f| f as *const c_void),
+        }
+    })
+}
+
+impl Gl {
+    unsafe fn new(hdc: HDC, s: &Shared) -> Res<Self> {
+        let rc = wglCreateContext(hdc)?;
+        if let Err(e) = wglMakeCurrent(hdc, rc) {
+            let _ = wglDeleteContext(rc);
+            return Err(e.into());
+        }
+        let ctx = glow_context();
+        let seq = s.seq.load(Acquire);
+        let t = Tracker::open(&s.path()).inspect_err(|_| {
+            let _ = wglMakeCurrent(HDC::default(), HGLRC::default());
+            let _ = wglDeleteContext(rc);
+        })?;
+        let mut x = Self { hdc: hdc.0 as usize, rc, ctx: Arc::new(ctx), t, chain: None, defaults: HashMap::new(), polled: Instant::now(), seq, input: None, small: None, out: None, detect: Default::default(), strips: [None, None], pending: false, frame: 0, errors: 0 };
+        x.build();
+        say!("shader: OpenGL pronto, perfil {}", x.t.path.display());
+        Ok(x)
+    }
+
+    fn build(&mut self) {
+        self.chain = None;
+        self.defaults.clear();
+        let paths = self.t.on_paths();
+        if paths.is_empty() {
+            return;
+        }
+        let t = Instant::now();
+        match chain::join(&paths).and_then(|p| unsafe { ChainGl::load_from_preset(p, self.ctx.clone(), None) }.map_err(Into::into)) {
+            Ok(c) => {
+                self.defaults = chain::defaults(&c);
+                chain::apply(&c, &self.defaults, &self.t.profile);
+                self.chain = Some(c);
+                say!("shader: cadeia OpenGL de {} preset(s) carregada em {} ms", paths.len(), t.elapsed().as_millis());
+            }
+            Err(e) => say!("shader: {e}"),
+        }
+    }
+
+    /// Com o nosso contexto atual no HDC do jogo.
+    unsafe fn frame(&mut self, s: &Shared, hwnd: HWND) -> Res<()> {
+        if self.polled.elapsed().as_millis() >= 250 {
+            self.polled = Instant::now();
+            let seq = s.seq.load(Acquire);
+            if seq != self.seq {
+                self.seq = seq;
+                self.t.switch(&s.path());
+                say!("shader: perfil {}", self.t.path.display());
+            }
+            let c = self.t.poll();
+            if c.input {
+                self.detect = Default::default();
+            }
+            if c.chain {
+                self.build();
+            } else if let Some(ch) = self.chain.as_ref().filter(|_| c.params) {
+                chain::apply(ch, &self.defaults, &self.t.profile);
+            }
+        }
+        let p = &self.t.profile;
+        if !p.on || !p.inject || s.flags.load(Relaxed) & FLAG_COMPARE != 0 || self.chain.is_none() {
+            return Ok(());
+        }
+        let mut r = RECT::default();
+        GetClientRect(hwnd, &mut r)?;
+        let (w, h) = (r.right as u32, r.bottom as u32);
+        if w == 0 || h == 0 {
+            return Ok(());
+        }
+        let gl = &*self.ctx.clone();
+        if self.input.as_ref().is_none_or(|t| t.size != (w, h)) {
+            self.detect = Default::default();
+            say!("shader: back buffer {w}x{h} (OpenGL)");
+        }
+        Tex::fit(gl, &mut self.input, w, h)?;
+        Tex::fit(gl, &mut self.out, w, h)?;
+        let (wi, hi) = (w as i32, h as i32);
+        let input = self.input.as_ref().unwrap().fbo;
+        blit(gl, None, [0, 0, wi, hi], Some(input), [0, 0, wi, hi]);
+        if self.t.profile.input == "auto" {
+            self.detect_blocks(w, h)?;
+        }
+        let mut src = self.input.as_ref().unwrap().image();
+        if let Some(k) = blocks::reduce_for(&self.t.profile.input, h, self.detect.found) {
+            let size = blocks::reduced_size(w, h, k);
+            if self.small.as_ref().is_none_or(|t| t.size != size) {
+                say!("shader: entrada {w}x{h} → {}x{}", size.0, size.1);
+            }
+            Tex::fit(gl, &mut self.small, size.0, size.1)?;
+            let small = self.small.as_ref().unwrap();
+            // Um ponto do centro de cada bloco, como o PS_REDUCE; o GL conta as linhas de baixo para cima.
+            let (x0, y1) = (k[2], h as f32 - k[3]);
+            let from = [x0, y1 - size.1 as f32 * k[1], x0 + size.0 as f32 * k[0], y1].map(|v| v.round() as i32);
+            blit(gl, Some(input), from, Some(small.fbo), [0, 0, size.0 as i32, size.1 as i32]);
+            src = small.image();
+        }
+        let out = self.out.as_ref().unwrap();
+        let vp = Viewport { x: 0.0, y: 0.0, mvp: None, output: &out.image(), size: Size::new(w, h) };
+        self.chain.as_mut().unwrap().frame(&src, &vp, self.frame, None)?;
+        blit(gl, Some(out.fbo), [0, 0, wi, hi], None, [0, 0, wi, hi]);
+        gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+        gl.flush();
+        self.frame += 1;
+        s.drawn.fetch_add(1, Relaxed);
+        Ok(())
+    }
+
+    /// O mesmo detector de blocos do D3D11, com as faixas lidas no quadro seguinte ao da cópia (sem esperar a GPU).
+    unsafe fn detect_blocks(&mut self, w: u32, h: u32) -> Res<()> {
+        let gl = &*self.ctx.clone();
+        let st = 32.min(w).min(h);
+        if self.strips[0].as_ref().is_none_or(|t| t.size != (w, st)) {
+            self.pending = false;
+        }
+        Tex::fit(gl, &mut self.strips[0], w, st)?;
+        Tex::fit(gl, &mut self.strips[1], st, h)?;
+        if !self.detect.due() {
+            return Ok(());
+        }
+        let (a, b) = (self.strips[0].as_ref().unwrap(), self.strips[1].as_ref().unwrap());
+        if self.pending {
+            self.pending = false;
+            let found = blocks::detect(&read_gl(gl, a), w as usize, &read_gl(gl, b), h as usize, st as usize);
+            self.detect.vote(found);
+            return Ok(());
+        }
+        let input = self.input.as_ref().unwrap().fbo;
+        let (y0, x0) = (((h - st) / 2) as i32, ((w - st) / 2) as i32);
+        let (wi, hi, si) = (w as i32, h as i32, st as i32);
+        blit(gl, Some(input), [0, y0, wi, y0 + si], Some(a.fbo), [0, 0, wi, si]);
+        blit(gl, Some(input), [x0, 0, x0 + si, hi], Some(b.fbo), [0, 0, si, hi]);
+        self.pending = true;
+        Ok(())
+    }
+}
+
+/// A textura em pixels BGRA sem alfa, de cima para baixo (o GL guarda de baixo para cima).
+unsafe fn read_gl(gl: &glow::Context, t: &Tex) -> Vec<u32> {
+    let (w, h) = t.size;
+    let mut buf = vec![0u8; (w * h * 4) as usize];
+    gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(t.fbo));
+    gl.read_pixels(0, 0, w as i32, h as i32, glow::BGRA, glow::UNSIGNED_BYTE, glow::PixelPackData::Slice(Some(&mut buf)));
+    buf.chunks_exact((w * 4) as usize).rev().flat_map(|row| row.chunks_exact(4).map(|p| u32::from_le_bytes([p[0], p[1], p[2], 0]))).collect()
+}
+
+unsafe fn install_gl() -> Res<()> {
+    // Carregar a opengl32.dll num jogo que não usa OpenGL não faz nada: o driver só entra com um contexto.
+    let lib = LoadLibraryW(w!("opengl32.dll"))?;
+    let at = GetProcAddress(lib, s!("wglSwapBuffers")).ok_or("sem wglSwapBuffers")? as usize;
+    GL_SWAP.store(at, Relaxed);
+    detour(at, on_swap as *const () as usize)
+}
+
 // ---------- entrada ----------
 
 /// Log da DLL ao lado dos logs do motor: `shaders\logs\<perfil>-injecao.log`.
@@ -912,9 +1233,9 @@ unsafe extern "system" fn start(_: *mut c_void) -> u32 {
     s.state.store(STATE_LOADED, SeqCst);
     s.magic.store(MAGIC, SeqCst);
     SHARED.store(view.Value as usize, SeqCst);
-    let (dxgi, d9) = (install_dxgi(), install_d9());
-    say!("shader: injeção no pid {}: DXGI {:?}, D3D9 {:?}", GetCurrentProcessId(), dxgi, d9);
-    s.state.store(if dxgi.is_ok() || d9.is_ok() { STATE_READY } else { STATE_FAILED }, SeqCst);
+    let (dxgi, d9, gl) = (install_dxgi(), install_d9(), install_gl());
+    say!("shader: injeção no pid {}: DXGI {:?}, D3D9 {:?}, OpenGL {:?}", GetCurrentProcessId(), dxgi, d9, gl);
+    s.state.store(if dxgi.is_ok() || d9.is_ok() || gl.is_ok() { STATE_READY } else { STATE_FAILED }, SeqCst);
     0
 }
 
@@ -944,5 +1265,110 @@ mod tests {
             // O D3D10.0 não tem BGRA: o back buffer dele é RGBA.
             Bridge::new(&dev, &d10, 720, 480, DXGI_FORMAT_R8G8B8A8_UNORM).unwrap();
         }
+    }
+
+    const IN: (u32, u32) = (240, 160);
+    const OUT: (u32, u32) = (720, 480);
+
+    /// Xadrez colorido em BGRA, de cima para baixo.
+    fn picture() -> Vec<u8> {
+        let (w, h) = IN;
+        (0..h).flat_map(|y| (0..w).flat_map(move |x| [(y * 255 / h) as u8, (x * 255 / w) as u8, if (x / 8 + y / 8) % 2 == 0 { 230 } else { 40 }, 255])).collect()
+    }
+
+    unsafe fn run_d3d11(preset: &str, frames: usize) -> Vec<u32> {
+        use librashader::runtime::d3d11::FilterChain;
+        let (mut dev, mut ctx) = (None, None);
+        D3D11CreateDevice(None, D3D_DRIVER_TYPE_HARDWARE, HMODULE::default(), D3D11_CREATE_DEVICE_FLAG(0), None, D3D11_SDK_VERSION, Some(&mut dev), None, Some(&mut ctx)).unwrap();
+        let (dev, ctx) = (dev.unwrap(), ctx.unwrap());
+        let mut desc = D3D11_TEXTURE2D_DESC { Width: IN.0, Height: IN.1, MipLevels: 1, ArraySize: 1, Format: DXGI_FORMAT_B8G8R8A8_UNORM, SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 }, Usage: D3D11_USAGE_DEFAULT, BindFlags: D3D11_BIND_SHADER_RESOURCE.0 as u32, CPUAccessFlags: 0, MiscFlags: 0 };
+        let img = picture();
+        let data = D3D11_SUBRESOURCE_DATA { pSysMem: img.as_ptr() as _, SysMemPitch: IN.0 * 4, SysMemSlicePitch: 0 };
+        let (mut t, mut srv) = (None, None);
+        dev.CreateTexture2D(&desc, Some(&data), Some(&mut t)).unwrap();
+        dev.CreateShaderResourceView(&t.unwrap(), None, Some(&mut srv)).unwrap();
+        let (out, _) = texture(&dev, OUT.0, OUT.1, DXGI_FORMAT_B8G8R8A8_UNORM, true).unwrap();
+        let rt = rtv(&dev, &out).unwrap();
+        let mut chain = FilterChain::load_from_preset(chain::join(&[preset.into()]).unwrap(), &dev, None).unwrap();
+        let vp = Viewport { x: 0.0, y: 0.0, mvp: None, output: &rt, size: Size::new(OUT.0, OUT.1) };
+        for f in 0..frames {
+            chain.frame(None, srv.as_ref().unwrap(), &vp, f, None).unwrap();
+        }
+        (desc.Width, desc.Height, desc.Usage, desc.BindFlags, desc.CPUAccessFlags) = (OUT.0, OUT.1, D3D11_USAGE_STAGING, 0, D3D11_CPU_ACCESS_READ.0 as u32);
+        let mut st = None;
+        dev.CreateTexture2D(&desc, None, Some(&mut st)).unwrap();
+        let st = st.unwrap();
+        ctx.CopyResource(&st, &out);
+        let mut m = D3D11_MAPPED_SUBRESOURCE::default();
+        ctx.Map(&st, 0, D3D11_MAP_READ, 0, Some(&mut m)).unwrap();
+        let px = (0..OUT.1).flat_map(|y| std::slice::from_raw_parts((m.pData as *const u8).add((y * m.RowPitch) as usize) as *const u32, OUT.0 as usize).iter().map(|p| p & 0xFF_FFFF)).collect();
+        ctx.Unmap(&st, 0);
+        px
+    }
+
+    unsafe extern "system" fn wndproc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT {
+        DefWindowProcW(h, m, w, l)
+    }
+
+    /// Como no jogo: a imagem sobe de baixo para cima (a do back buffer) e a saída é lida pelo `read_gl`.
+    unsafe fn run_gl(preset: &str, frames: usize) -> Vec<u32> {
+        use windows::Win32::Graphics::Gdi::{GetDC, ReleaseDC};
+        let inst: HINSTANCE = GetModuleHandleW(None).unwrap().into();
+        let class = w!("PrismaTesteGL");
+        RegisterClassW(&WNDCLASSW { style: CS_OWNDC, lpfnWndProc: Some(wndproc), hInstance: inst, lpszClassName: class, ..Default::default() });
+        let hwnd = CreateWindowExW(WINDOW_EX_STYLE(0), class, class, WS_OVERLAPPEDWINDOW, 0, 0, 64, 64, None, None, Some(inst), None).unwrap();
+        let dc = GetDC(Some(hwnd));
+        let pfd = PIXELFORMATDESCRIPTOR { nSize: size_of::<PIXELFORMATDESCRIPTOR>() as u16, nVersion: 1, dwFlags: PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER, iPixelType: PFD_TYPE_RGBA, cColorBits: 32, ..Default::default() };
+        SetPixelFormat(dc, ChoosePixelFormat(dc, &pfd), &pfd).unwrap();
+        let rc = wglCreateContext(dc).unwrap();
+        wglMakeCurrent(dc, rc).unwrap();
+        let gl = Arc::new(glow_context());
+        let (mut input, mut out) = (None, None);
+        Tex::fit(&gl, &mut input, IN.0, IN.1).unwrap();
+        Tex::fit(&gl, &mut out, OUT.0, OUT.1).unwrap();
+        let (input, out) = (input.unwrap(), out.unwrap());
+        let up: Vec<u8> = picture().chunks_exact(IN.0 as usize * 4).rev().flatten().copied().collect();
+        gl.bind_texture(glow::TEXTURE_2D, Some(input.tex));
+        gl.tex_sub_image_2d(glow::TEXTURE_2D, 0, 0, 0, IN.0 as i32, IN.1 as i32, glow::BGRA, glow::UNSIGNED_BYTE, glow::PixelUnpackData::Slice(Some(&up)));
+        let mut chain = ChainGl::load_from_preset(chain::join(&[preset.into()]).unwrap(), gl.clone(), None).unwrap();
+        let vp = Viewport { x: 0.0, y: 0.0, mvp: None, output: &out.image(), size: Size::new(OUT.0, OUT.1) };
+        for f in 0..frames {
+            chain.frame(&input.image(), &vp, f, None).unwrap();
+        }
+        let px = read_gl(&gl, &out);
+        drop(chain);
+        let _ = wglMakeCurrent(HDC::default(), HGLRC::default());
+        let _ = wglDeleteContext(rc);
+        ReleaseDC(Some(hwnd), dc);
+        let _ = DestroyWindow(hwnd);
+        px
+    }
+
+    /// A cadeia OpenGL dá a mesma imagem que a D3D11. Precisa de um preset: `PRISMA_TEST_PRESET=<.slangp>`;
+    /// com `PRISMA_TEST_OUT=<pasta>` grava as duas saídas em BMP.
+    #[test]
+    fn gl_igual_d3d11() {
+        let Ok(preset) = std::env::var("PRISMA_TEST_PRESET") else { return };
+        let frames = 8;
+        let (a, b) = unsafe { (run_d3d11(&preset, frames), run_gl(&preset, frames)) };
+        let ch = |v: &[u32]| v.iter().flat_map(|p| p.to_le_bytes().into_iter().take(3)).map(f64::from).collect::<Vec<_>>();
+        let (ca, cb) = (ch(&a), ch(&b));
+        let mean = |v: &[f64]| v.iter().sum::<f64>() / v.len() as f64;
+        let diff = |x: &[f64], y: &[f64]| x.iter().zip(y).map(|(p, q)| (p - q).abs()).sum::<f64>() / x.len() as f64;
+        // O GL sai uma linha acima (as linhas do quadro contam de baixo para cima); o mesmo acontece no RetroArch em GL.
+        let row = OUT.0 as usize * 3;
+        let shifted = diff(&ca[..ca.len() - row], &cb[row..]);
+        eprintln!("média d3d11 {:.1}, gl {:.1}; diferença {:.2}, com o gl uma linha acima {:.2}", mean(&ca), mean(&cb), diff(&ca, &cb), shifted);
+        if let Ok(dir) = std::env::var("PRISMA_TEST_OUT") {
+            for (name, px) in [("d3d11.bmp", &a), ("gl.bmp", &b)] {
+                let mut f = Vec::with_capacity(54 + px.len() * 4);
+                let size = (54 + px.len() * 4) as u32;
+                f.extend(b"BM".iter().copied().chain(size.to_le_bytes()).chain([0; 4]).chain(54u32.to_le_bytes()));
+                f.extend(40u32.to_le_bytes().into_iter().chain((OUT.0 as i32).to_le_bytes()).chain((-(OUT.1 as i32)).to_le_bytes()).chain(1u16.to_le_bytes()).chain(32u16.to_le_bytes()).chain([0; 24]));
+                f.extend(px.iter().flat_map(|p| (p | 0xFF00_0000).to_le_bytes()));
+                std::fs::write(Path::new(&dir).join(name), f).unwrap();
+            }
+        }
+        assert!((mean(&ca) - mean(&cb)).abs() < 2.0 && shifted < 8.0);
     }
 }
