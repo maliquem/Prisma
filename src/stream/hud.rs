@@ -10,7 +10,7 @@ use windows::core::*;
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Gdi::ClientToScreen;
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows::Win32::UI::Input::KeyboardAndMouse::{VIRTUAL_KEY, VK_DOWN, VK_ESCAPE, VK_LEFT, VK_RETURN, VK_RIGHT, VK_SPACE, VK_TAB, VK_UP};
+use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyState, VIRTUAL_KEY, VK_CONTROL, VK_DOWN, VK_ESCAPE, VK_LEFT, VK_MENU, VK_RETURN, VK_RIGHT, VK_SHIFT, VK_SPACE, VK_TAB, VK_UP};
 use windows::Win32::UI::WindowsAndMessaging::*;
 
 use crate::i18n::tr;
@@ -233,6 +233,10 @@ pub struct MenuState {
     pub vsync: bool,
     /// Pedir 4:4:4; `None` quando a placa daqui não decodifica.
     pub ask444: Option<bool>,
+    /// Ritmo constante pedido ao host.
+    pub constant: bool,
+    /// O atalho do menu, que também o fecha.
+    pub key_menu: crate::stream::opts::Keys,
     pub pad_background: bool,
     /// Teclado como controle; `None` sem a permissão de controle.
     pub pad_keys: Option<bool>,
@@ -253,6 +257,7 @@ pub enum Pick {
     Sound,
     Vsync,
     Ask444,
+    Constant,
     PadBackground,
     PadKeys,
     CtrlAltDel,
@@ -306,7 +311,7 @@ fn segments(st: &MenuState, row: usize) -> Vec<(String, Pick, bool)> {
 fn menu_height(st: &MenuState) -> f32 {
     let head = if st.video.is_empty() { 44.0 } else { 64.0 };
     let segs = 3.0 * (26.0 + SEG + 10.0);
-    head + ROW + segs + 7.0 * ROW + 13.0 + ROW + PAD
+    head + ROW + segs + 8.0 * ROW + 13.0 + ROW + PAD
 }
 
 /// Desenha o menu e devolve as áreas que se clicam.
@@ -396,6 +401,8 @@ fn draw_menu(c: &crate::ui::gfx::Canvas, r: crate::ui::gfx::Rect, st: &MenuState
     y += ROW;
     toggle(&mut hits, y, "Pedir 4:4:4", "", st.ask444, Pick::Ask444);
     y += ROW;
+    toggle(&mut hits, y, "Ritmo constante", "", Some(st.constant), Pick::Constant);
+    y += ROW;
     toggle(&mut hits, y, "Controle em segundo plano", "", Some(st.pad_background), Pick::PadBackground);
     y += ROW;
     toggle(&mut hits, y, "Teclado como controle", "", st.pad_keys, Pick::PadKeys);
@@ -444,6 +451,12 @@ unsafe extern "system" fn menu_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
                 true
             }
             WM_KEYDOWN | WM_SYSKEYDOWN => {
+                // O atalho do menu fecha o menu (com ele na frente, o atalho chega aqui).
+                let mods = crate::stream::opts::mods_now(GetKeyState(VK_CONTROL.0 as i32) < 0, GetKeyState(VK_MENU.0 as i32) < 0, GetKeyState(VK_SHIFT.0 as i32) < 0);
+                if MENU_STATE.with(|s| s.borrow().as_ref().is_some_and(|st| st.key_menu == (mods, w.0 as u32))) {
+                    o.done = true;
+                    return true;
+                }
                 let n = o.hits.len();
                 let step = |from: Option<usize>, fwd: bool| -> Option<usize> {
                     let mut i = from.unwrap_or(if fwd { n - 1 } else { 0 });
@@ -576,6 +589,8 @@ pub fn test_menu(dir: &str) {
                 keyboard: i != 2,
                 vsync: false,
                 ask444: Some(true),
+                constant: false,
+                key_menu: (all, b'P' as u32),
                 pad_background: false,
                 pad_keys: (i != 2).then_some(false),
                 video: "3840x2160 AV1 HDR10 · 120 q/s · direto pela internet, 12 ms".into(),

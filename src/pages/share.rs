@@ -1175,8 +1175,6 @@ fn host_tab(ui: &mut Ui, app: &mut App, st: &mut State, all: &mut Opts, x: f32, 
     y += 44.0;
     let fps_r = row(ui, ix, y, iw, "Quadros por segundo", ctl);
     y += 44.0;
-    let pace_r = row(ui, ix, y, iw, "Ritmo dos quadros", ctl);
-    y += 44.0;
     let prio_r = row(ui, ix, y, iw, "Prioridade", ctl);
     y += 44.0;
     let codec_r = row(ui, ix, y, iw, "Codec", ctl);
@@ -1265,7 +1263,6 @@ fn host_tab(ui: &mut Ui, app: &mut App, st: &mut State, all: &mut Opts, x: f32, 
     pick(ui, "sh-res", res_r, &rv, opt(&RES.map(|r| r.1)), &mut o.res);
     let fps_names: Vec<String> = FPS.iter().map(|&f| if f == 0 { crate::i18n::tr("Automático").into_owned() } else { f.to_string() }).collect();
     pick(ui, "sh-fps", fps_r, &FPS, fps_names, &mut o.fps);
-    pick(ui, "sh-pace", pace_r, &[false, true], opt(&["Só quando a tela muda", "Constante"]), &mut o.constant);
     pick(ui, "sh-prio", prio_r, &[0u8, 1, 2], opt(&["Menor atraso", "Equilíbrio", "Qualidade"]), &mut o.priority);
     let codec_vals: Vec<&str> = stream::CODECS.to_vec();
     let mut cur = o.codec.as_str();
@@ -1427,6 +1424,8 @@ fn client_tab(ui: &mut Ui, app: &App, c: &mut ClientOpts, x: f32, top: f32, w: f
     y += 44.0;
     let cfps_r = row(ui, rx, y, rw, "Quadros por segundo", rctl);
     y += 44.0;
+    let pace_r = row(ui, rx, y, rw, "Ritmo dos quadros", rctl);
+    y += 44.0;
     let cgpu_r = row(ui, rx, y, rw, "Placa de vídeo", rctl);
     y += 46.0;
     ui.check("sh-warn", rect(rx, y, rw, 30.0), "Avisar quando a conexão piorar", &mut c.warn);
@@ -1472,6 +1471,7 @@ fn client_tab(ui: &mut Ui, app: &App, c: &mut ClientOpts, x: f32, top: f32, w: f
     let cfps = crate::stream::CLIENT_FPS;
     let cfps_names: Vec<String> = cfps.iter().map(|&f| if f == 0 { crate::i18n::tr("Automático").into_owned() } else { f.to_string() }).collect();
     pick(ui, "sh-cfps", cfps_r, &cfps, cfps_names, &mut c.fps);
+    pick(ui, "sh-pace", pace_r, &[false, true], opt(&["Só quando a tela muda", "Constante"]), &mut c.constant);
     gpu_pick(ui, "sh-cgpu", cgpu_r, "A do Windows", &mut c.gpu);
 }
 

@@ -1566,6 +1566,7 @@ aparelho desligado	device unplugged
 Cada atalho troca a saída e a entrada padrão do Windows de uma vez. Use Adicionar.	Each shortcut switches the Windows default output and input at once. Use Add.
 Não deu para mudar na hora. Vale na próxima conexão.	Could not change it right away. It applies on the next connection.
 Pedir 4:4:4	Ask for 4:4:4
+Ritmo constante	Constant frame pacing
 Controle em segundo plano	Controller in the background
 Teclado como controle	Keyboard as controller
 VSync	VSync
@@ -1883,6 +1884,7 @@ Acesso de «{}» mudou na hora	Access for “{}” changed right away
 Opções do host aplicadas na conexão	Host options applied to the connection
 «{}» mudou os quadros por segundo	“{}” changed the frame rate
 «{}» mudou o pedido de 4:4:4	“{}” changed the 4:4:4 request
+«{}» mudou o ritmo dos quadros	“{}” changed the frame pacing
 Mouse travado nesta tela	Mouse locked to this screen
 Mouse destravado	Mouse unlocked
 Sim: parear e perguntar a cada conexão (recomendado).	Yes: pair and ask on every connection (recommended).
