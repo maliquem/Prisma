@@ -185,7 +185,8 @@ pub fn toggle_focused(app: &mut App) {
     let Some((_, _, exe)) = app.fg_info() else { return };
     let path = sp::path_for(Path::new(&exe));
     let Ok(mut p) = Profile::load(&path) else {
-        app.toast.info("Este jogo não tem perfil de shader");
+        let key = app.cfg.hk_shader[1].label();
+        app.toast.info(&crate::i18n::tr("Este jogo não tem perfil de shader: {} abre o menu e cria um").replace("{}", &key));
         return;
     };
     p.on = !p.on;
@@ -200,6 +201,67 @@ pub fn toggle_focused(app: &mut App) {
         if s.profiles.get(s.sel).is_some_and(|e| e.0 == path) {
             s.mtime = mtime(&path);
         }
+    }
+    app.invalidate();
+}
+
+/// Atalho do menu num jogo sem perfil (ou com ele desligado): cria o perfil ligado, no modo padrão, com o nome do
+/// catálogo ou o título da janela, e abre o motor já com o menu. Com o motor rodando, quem abre o menu é ele.
+pub fn menu_focused(app: &mut App) {
+    let Some((hwnd, pid, exe)) = app.fg_info() else { return };
+    // Nem o Windows (Explorer incluído) nem o Prisma (este ou outra cópia, como o motor de outro perfil).
+    let me = std::env::current_exe().ok().and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned())).unwrap_or_default();
+    if pid == std::process::id() || exe.eq_ignore_ascii_case(&me) || crate::optimizer::is_system(&exe) {
+        return;
+    }
+    let Some(full) = crate::sys::procs::image_path(pid) else { return };
+    let path = sp::path_for(Path::new(&full));
+    if running(&path) {
+        return;
+    }
+    if crate::meter::anti_cheat(&full) {
+        app.toast.info("Jogo com anti-cheat: o shader não entra nele");
+        return;
+    }
+    let new = !path.exists();
+    let mut p = if new {
+        let low = full.to_lowercase();
+        let title = crate::sys::procs::window_title(hwnd);
+        let name = crate::sys::stores::games().into_iter().find(|e| e.path.to_lowercase() == low).map(|e| e.name).or_else(|| (!title.trim().is_empty()).then(|| title.trim().to_string()));
+        Profile { name: name.unwrap_or_else(|| app_name(&exe).to_string()), exe: full.clone().into(), ..Profile::default() }
+    } else {
+        match Profile::load(&path) {
+            Ok(p) => p,
+            Err(_) => return,
+        }
+    };
+    p.on = true;
+    if p.save(&path).is_err() {
+        app.toast.info("Não deu para gravar o perfil");
+        return;
+    }
+    if !sp::keys_path().exists() {
+        write_keys(app);
+    }
+    if new {
+        // O liga/desliga passa a valer: agora há perfil.
+        app.register_hotkeys();
+        app.toast.info(&crate::i18n::tr("Perfil de shader criado: {}").replace("{}", &p.name));
+    }
+    let log = format!("{}.log", path.file_stem().unwrap_or_default().to_string_lossy());
+    let mut runs = RUNS.lock().unwrap_or_else(|e| e.into_inner());
+    for r in runs.iter_mut().filter(|r| r.profile == path) {
+        if let Some(c) = r.child.take() {
+            stop(c);
+        }
+    }
+    runs.retain(|r| r.profile != path);
+    if let Some(child) = spawn(&[format!("--shader-profile={}", path.display()), "--shader-menu".into()], &log) {
+        runs.push(Run { profile: path.clone(), child: Some(child), ended: false });
+    }
+    drop(runs);
+    if let Some(s) = st().as_mut() {
+        reload(s, Some(&path));
     }
     app.invalidate();
 }
@@ -255,8 +317,8 @@ fn job() -> windows::Win32::Foundation::HANDLE {
     windows::Win32::Foundation::HANDLE(*j as *mut _)
 }
 
-/// Inicia o próprio Prisma com `arg`, sem console; o que ele diz vai para `shaders\logs\<log>`.
-fn spawn(arg: String, log: &str) -> Option<Child> {
+/// Inicia o próprio Prisma com `args`, sem console; o que ele diz vai para `shaders\logs\<log>`.
+fn spawn(args: &[String], log: &str) -> Option<Child> {
     use std::os::windows::io::AsRawHandle;
     use std::os::windows::process::CommandExt;
     let dir = sp::root().join("logs");
@@ -264,7 +326,7 @@ fn spawn(arg: String, log: &str) -> Option<Child> {
     let out = std::fs::File::create(dir.join(log)).ok()?;
     let err = out.try_clone().ok()?;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    let child = std::process::Command::new(std::env::current_exe().ok()?).arg(arg).stdin(std::process::Stdio::null()).stdout(out).stderr(err).creation_flags(CREATE_NO_WINDOW).spawn().ok()?;
+    let child = std::process::Command::new(std::env::current_exe().ok()?).args(args).stdin(std::process::Stdio::null()).stdout(out).stderr(err).creation_flags(CREATE_NO_WINDOW).spawn().ok()?;
     unsafe {
         let _ = windows::Win32::System::JobObjects::AssignProcessToJobObject(job(), windows::Win32::Foundation::HANDLE(child.as_raw_handle()));
     }
@@ -288,7 +350,7 @@ fn preview(img: &str) {
     if let Some(old) = PREVIEW.lock().unwrap_or_else(|e| e.into_inner()).take() {
         stop(old);
     }
-    let c = spawn(format!("--shader-preview={},{img}", path.display()), "preview.log");
+    let c = spawn(&[format!("--shader-preview={},{img}", path.display())], "preview.log");
     *PREVIEW.lock().unwrap_or_else(|e| e.into_inner()) = c;
 }
 
@@ -326,7 +388,7 @@ pub fn tick(app: &mut App) {
                 continue;
             }
             let log = format!("{}.log", path.file_stem().unwrap_or_default().to_string_lossy());
-            if let Some(child) = spawn(format!("--shader-profile={}", path.display()), &log) {
+            if let Some(child) = spawn(&[format!("--shader-profile={}", path.display())], &log) {
                 runs.push(Run { profile: path.clone(), child: Some(child), ended: false });
             }
         }

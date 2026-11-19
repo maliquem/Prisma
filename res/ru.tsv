@@ -2881,7 +2881,7 @@ Preset (.slangp) entra como um passe com todas as passadas dele; .slang entra co
 Carregar	Загрузить
 Adicionar ao fim	Добавить в конец
 Não deu para gravar o perfil	Не удалось сохранить профиль
-Este jogo não tem perfil de shader	У этой игры нет профиля shader
+Este jogo não tem perfil de shader: {} abre o menu e cria um	У этой игры нет профиля shader: {} открывает меню и создаёт его
 Shader ligado	Shader включён
 Shader desligado	Shader выключен
 Preset importado	Preset импортирован
@@ -2897,3 +2897,19 @@ Presets de shader	Preset для shader
 Perfil do jogo	Профиль игры
 Imagem do jogo	Изображение игры
 {} já está em uso por outro programa	{} уже занято другой программой
+Jogo com anti-cheat: o shader não entra nele	Игра с античитом: shader не применяется
+Perfil de shader criado: {}	Профиль shader создан: {}
+Menu do shader no jogo	Меню shader в игре
+Shaders · {}	Shaders · {}
+Shader	Shader
+Perfil	Профиль
+Presets	Preset
+Biblioteca	Библиотека
+Biblioteca · {}	Библиотека · {}
+ligado	вкл
+desligado	выкл
+↑↓ escolher · ←→ mudar · Enter abrir · Esc fechar	↑↓ выбор · ←→ изменить · Enter открыть · Esc закрыть
+←→ ajustar · Enter padrão · Esc voltar	←→ настроить · Enter по умолч. · Esc назад
+↑↓ escolher · Enter abrir · Esc voltar	↑↓ выбор · Enter открыть · Esc назад
+Baixe a biblioteca na página Shaders	Скачайте библиотеку на странице «Shaders»
+Nenhum preset aqui	Здесь нет preset

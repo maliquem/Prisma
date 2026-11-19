@@ -2881,7 +2881,7 @@ Preset (.slangp) entra como um passe com todas as passadas dele; .slang entra co
 Carregar	加载
 Adicionar ao fim	添加到末尾
 Não deu para gravar o perfil	无法保存配置
-Este jogo não tem perfil de shader	此游戏没有 shader 配置
+Este jogo não tem perfil de shader: {} abre o menu e cria um	此游戏没有 shader 配置：按 {} 打开菜单并创建
 Shader ligado	Shader 已开启
 Shader desligado	Shader 已关闭
 Preset importado	Preset 已导入
@@ -2897,3 +2897,19 @@ Presets de shader	Shader preset
 Perfil do jogo	游戏配置
 Imagem do jogo	游戏画面
 {} já está em uso por outro programa	{} 已被其他程序占用
+Jogo com anti-cheat: o shader não entra nele	反作弊游戏：shader 不会应用
+Perfil de shader criado: {}	已创建 shader 配置：{}
+Menu do shader no jogo	游戏内 shader 菜单
+Shaders · {}	Shaders · {}
+Shader	Shader
+Perfil	配置
+Presets	Preset
+Biblioteca	库
+Biblioteca · {}	库 · {}
+ligado	开
+desligado	关
+↑↓ escolher · ←→ mudar · Enter abrir · Esc fechar	↑↓ 选择 · ←→ 更改 · Enter 打开 · Esc 关闭
+←→ ajustar · Enter padrão · Esc voltar	←→ 调整 · Enter 默认 · Esc 返回
+↑↓ escolher · Enter abrir · Esc voltar	↑↓ 选择 · Enter 打开 · Esc 返回
+Baixe a biblioteca na página Shaders	请在 Shaders 页面下载库
+Nenhum preset aqui	这里没有 preset

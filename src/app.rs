@@ -239,7 +239,7 @@ fn hk_place_page(id: i32) -> &'static str {
         HK_METER_C | HK_METER_F | HK_METER_O | HK_LIMIT_T | HK_LIMIT_UP | HK_LIMIT_DOWN | HK_LOG | HK_METER_KEYS => "Medidor",
         HK_FIND => "Pesquisar",
         HK_MACRO => "Controles",
-        HK_SHADER => "Shaders",
+        HK_SHADER | HK_SHADER_MENU => "Shaders",
         id if id >= HK_RUN => "Atalhos",
         _ => "Som",
     }
@@ -268,6 +268,7 @@ const HK_FIND: i32 = 23;
 const HK_MACRO: i32 = 24;
 const HK_SHOW: i32 = 25;
 const HK_SHADER: i32 = 26;
+const HK_SHADER_MENU: i32 = 27;
 const HK_VOL_UP: i32 = 10;
 const HK_VOL_DOWN: i32 = 11;
 const HK_MUTE: i32 = 12;
@@ -1198,7 +1199,7 @@ impl App {
     pub fn register_hotkeys(&mut self) {
         self.unhook_force_key();
         unsafe {
-            for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER, HK_FIND, HK_MACRO, HK_SHOW, HK_SHADER, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE] {
+            for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER, HK_FIND, HK_MACRO, HK_SHOW, HK_SHADER, HK_SHADER_MENU, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE] {
                 let _ = UnregisterHotKey(Some(self.hub), id);
             }
             for i in 0..SND_KEYS_MAX as i32 {
@@ -1301,6 +1302,8 @@ impl App {
         if crate::pages::shaders::in_use() {
             list.push((HK_SHADER, c.hk_shader[0], "Shader liga / desliga", true));
         }
+        // O menu sempre: no jogo sem perfil é ele que cria um. Com o motor rodando, quem abre o menu é o motor.
+        list.push((HK_SHADER_MENU, c.hk_shader[1], "Menu do shader no jogo", true));
         if c.search_on {
             list.push((HK_FIND, c.hk_find, "Pesquisar arquivos", true));
         }
@@ -1340,6 +1343,7 @@ impl App {
             HK_MACRO => &mut c.hk_macro,
             HK_SHOW => &mut c.hk_show,
             HK_SHADER => &mut c.hk_shader[0],
+            HK_SHADER_MENU => &mut c.hk_shader[1],
             id if id >= HK_RUN => &mut c.run_keys.get_mut((id - HK_RUN) as usize)?.key,
             id if id >= HK_SND => &mut c.snd_keys.get_mut((id - HK_SND) as usize)?.key,
             _ => return None,
@@ -1428,6 +1432,7 @@ impl App {
             HK_MACRO => self.macro_toggle(None),
             HK_SHOW => self.show_main(),
             HK_SHADER => crate::pages::shaders::toggle_focused(self),
+            HK_SHADER_MENU => crate::pages::shaders::menu_focused(self),
             HK_VOL_UP => self.volume(audio::Change::Step(self.cfg.vol_step as i32)),
             HK_VOL_DOWN => self.volume(audio::Change::Step(-(self.cfg.vol_step as i32))),
             HK_MUTE => self.volume(audio::Change::ToggleMute),

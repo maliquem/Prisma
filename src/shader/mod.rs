@@ -33,7 +33,6 @@ use windows::Win32::UI::HiDpi::*;
 use windows::Win32::UI::Input::KeyboardAndMouse::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
-const HK_MENU: i32 = 1;
 const HK_NEXT: i32 = 2;
 
 pub fn run_args() -> bool {
@@ -222,20 +221,18 @@ fn overlay_window() -> Res<HWND> {
     }
 }
 
-/// `toggle` é do app; aqui só o menu e o próximo perfil. O RegisterHotKey só segura a tecla longe do jogo (onde o
-/// jogo deixa); quem age é o `Press`, que também pega nos jogos que bloqueiam atalhos. Atalho de outro programa:
-/// fica sem ele.
+/// `toggle` e `menu` são do app (o menu também cria o perfil do jogo que não tem); aqui só o próximo perfil. O
+/// RegisterHotKey só segura a tecla longe do jogo (onde o jogo deixa); quem age é o `Press`, que também pega nos
+/// jogos que bloqueiam atalhos, inclusive o do menu. Atalho de outro programa: fica sem ele.
 fn hold_keys(keys: &crate::shader_profile::Keys) {
-    for (id, k, what) in [(HK_MENU, keys.menu, "menu; ele continua abrindo pelo controle com Select+L1"), (HK_NEXT, keys.next, "próximo perfil")] {
-        if k.vk != 0 && unsafe { RegisterHotKey(None, id, HOT_KEY_MODIFIERS(k.mods) | MOD_NOREPEAT, k.vk) }.is_err() {
-            eprintln!("shader: {} já é de outro programa, sem esse atalho ({what})", k.label());
-        }
+    let k = keys.next;
+    if k.vk != 0 && unsafe { RegisterHotKey(None, HK_NEXT, HOT_KEY_MODIFIERS(k.mods) | MOD_NOREPEAT, k.vk) }.is_err() {
+        eprintln!("shader: {} já é de outro programa, sem esse atalho (próximo perfil)", k.label());
     }
 }
 
 fn free_keys() {
     unsafe {
-        let _ = UnregisterHotKey(None, HK_MENU);
         let _ = UnregisterHotKey(None, HK_NEXT);
     }
 }
