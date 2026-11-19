@@ -1246,7 +1246,7 @@ fn host_tab(ui: &mut Ui, app: &mut App, st: &mut State, all: &mut Opts, x: f32, 
     let note = if target.is_some() {
         "Configuração própria: vale quando este aparelho conecta. Com mais de uma pessoa ao mesmo tempo, vale a de quem conectou primeiro. Nome, pessoas, rede, controles e atalhos são os de todos."
     } else {
-        "Com prioridade, quem assiste para por 1 segundo quando alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. O Windows só deixa tirar um programa de chamada (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), e só da saída padrão: sai o que estiver tocando. Uma saída escolhida manda o que toca nela. GPU em desempenho máximo: o driver NVIDIA deixa o Prisma em \"Preferir desempenho máximo\" enquanto alguém assiste e volta ao de antes no fim. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante."
+        "Com prioridade, quem assiste para por 1 segundo quando alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. O Windows só deixa tirar um programa de chamada (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), e só da saída padrão: sai o que estiver tocando. Uma saída escolhida manda o que toca nela. GPU em desempenho máximo: enquanto alguém assiste, o clock da placa NVIDIA não desce abaixo do clock base, e fica livre de novo no fim; precisa do serviço ou do Prisma como administrador. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante."
     };
     ui.c.text_wrap(rect(rx, y, rw, (r.bottom() - y - 12.0).max(0.0)), note, 12.0, MUTED, Weight::Regular);
 
