@@ -178,14 +178,14 @@ unsafe extern "system" fn on_present(this: Ptr, sync: u32, flags: u32) -> i32 {
     hdr::present(this, flags);
     pace(flags);
     let old: Present = std::mem::transmute(OLD_PRESENT.load(Relaxed));
-    old(this, sync, flags)
+    hdr::passthrough(|| old(this, sync, flags))
 }
 
 unsafe extern "system" fn on_present1(this: Ptr, sync: u32, flags: u32, params: *const c_void) -> i32 {
     hdr::present(this, flags);
     pace(flags);
     let old: Present1 = std::mem::transmute(OLD_PRESENT1.load(Relaxed));
-    old(this, sync, flags, params)
+    hdr::passthrough(|| old(this, sync, flags, params))
 }
 
 /// Troca uma entrada da tabela de funções. O original fica guardado antes de a nova valer.

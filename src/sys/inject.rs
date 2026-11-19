@@ -174,8 +174,10 @@ impl Limiter {
             // número do jogo no ambiente, como a Steam faz, ele segue nesta cópia.
             let mut env: Vec<u16> = Vec::new();
             if let Some(id) = super::stores::steam_app_id(std::path::Path::new(exe)) {
-                for (k, v) in std::env::vars().filter(|(k, _)| !k.eq_ignore_ascii_case("SteamAppId") && !k.eq_ignore_ascii_case("SteamGameId")).chain([("SteamAppId".into(), id.clone()), ("SteamGameId".into(), id)]) {
-                    env.extend(format!("{k}={v}").encode_utf16().chain(Some(0)));
+                // `vars_os`: `vars` derruba o Prisma com uma variável que não seja Unicode válido.
+                let steam = |k: &std::ffi::OsStr| k.eq_ignore_ascii_case("SteamAppId") || k.eq_ignore_ascii_case("SteamGameId");
+                for (k, v) in std::env::vars_os().filter(|(k, _)| !steam(k)).chain([("SteamAppId".into(), id.clone().into()), ("SteamGameId".into(), id.into())]) {
+                    env.extend(k.encode_wide().chain(Some(b'=' as u16)).chain(v.encode_wide()).chain(Some(0)));
                 }
                 env.push(0);
             }
@@ -276,8 +278,8 @@ unsafe fn load_remote(process: HANDLE, path: &std::path::Path) -> bool {
         let load = GetModuleHandleW(w!("kernel32.dll")).ok().and_then(|k| GetProcAddress(k, s!("LoadLibraryW")));
         if let Some(load) = load {
             if let Ok(t) = CreateRemoteThread(process, None, 0, Some(std::mem::transmute(load)), Some(at), 0, None) {
-                let mut code = 0;
-                ok = WaitForSingleObject(t, WAIT_SECS as u32 * 1000) == WAIT_OBJECT_0 && GetExitCodeThread(t, &mut code).is_ok() && code != 0;
+                // O código de saída é o HMODULE cortado em 32 bits e pode dar zero: quem diz se carregou é o estado na memória.
+                ok = WaitForSingleObject(t, WAIT_SECS as u32 * 1000) == WAIT_OBJECT_0;
                 let _ = CloseHandle(t);
             }
         }
@@ -373,4 +375,24 @@ pub fn test(pid: u32, fps: u32, secs: u64) -> String {
         out += &format!("{i} s: {:?} estado {s:?}\n", l.status);
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::HdrProfile;
+
+    #[test]
+    fn hdr_from_profile() {
+        let p = |peak, full, black| HdrProfile { peak, full, black, ..Default::default() };
+        // Sem perfil: TV comum, paper white 200.
+        let h = Hdr::from_profile(None);
+        assert_eq!((h.peak, h.paper, h.black), (1000.0, 200.0, 0.0));
+        // Paper white nunca passa do brilho de tela cheia; preto fica entre 0 e 1.
+        let h = Hdr::from_profile(Some(&p(600.0, 150.0, 3.0)));
+        assert_eq!((h.peak, h.paper, h.black), (600.0, 150.0, 1.0));
+        // Medida sem tela cheia usa o pico; pico ruim volta ao padrão.
+        let h = Hdr::from_profile(Some(&p(50.0, 0.0, 0.05)));
+        assert_eq!((h.peak, h.paper, h.black), (1000.0, 200.0, 0.05));
+    }
 }
