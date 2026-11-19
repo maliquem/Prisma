@@ -36,6 +36,7 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 const SLOT_PRESENT: usize = 8;
 const SLOT_RESIZE: usize = 13;
 const SLOT_PRESENT1: usize = 22;
+const SLOT_RESIZE1: usize = 39;
 const SLOT_D9_RESET: usize = 16;
 const SLOT_D9_PRESENT: usize = 17;
 const SLOT_D9_PRESENT_EX: usize = 121;
@@ -46,6 +47,7 @@ const MAX_ERRORS: u32 = 10;
 type Present = unsafe extern "system" fn(*mut c_void, u32, u32) -> HRESULT;
 type Present1 = unsafe extern "system" fn(*mut c_void, u32, u32, *const c_void) -> HRESULT;
 type Resize = unsafe extern "system" fn(*mut c_void, u32, u32, u32, DXGI_FORMAT, u32) -> HRESULT;
+type Resize1 = unsafe extern "system" fn(*mut c_void, u32, u32, u32, DXGI_FORMAT, u32, *const u32, *const *mut c_void) -> HRESULT;
 type D9Present = unsafe extern "system" fn(*mut c_void, *const c_void, *const c_void, HWND, *const c_void) -> HRESULT;
 type D9PresentEx = unsafe extern "system" fn(*mut c_void, *const c_void, *const c_void, HWND, *const c_void, u32) -> HRESULT;
 type D9Reset = unsafe extern "system" fn(*mut c_void, *mut c_void) -> HRESULT;
@@ -152,14 +154,25 @@ unsafe extern "system" fn on_present1(this: *mut c_void, sync: u32, flags: u32, 
 }
 
 /// O ResizeBuffers falha se sobrar referência ao back buffer: as nossas saem antes.
-unsafe extern "system" fn on_resize(this: *mut c_void, n: u32, w: u32, h: u32, fmt: DXGI_FORMAT, flags: u32) -> HRESULT {
+/// O ResizeBuffers falha com o back buffer ainda preso: o que é nosso dele sai antes.
+fn drop_bb(this: *mut c_void) {
     guard(|| {
         if let Some(x) = lock(&DX11).as_mut().filter(|x| x.sc == this as usize) {
             x.bb = None;
         }
     });
+}
+
+unsafe extern "system" fn on_resize(this: *mut c_void, n: u32, w: u32, h: u32, fmt: DXGI_FORMAT, flags: u32) -> HRESULT {
+    drop_bb(this);
     let f: Resize = std::mem::transmute(orig(this, SLOT_RESIZE));
     f(this, n, w, h, fmt, flags)
+}
+
+unsafe extern "system" fn on_resize1(this: *mut c_void, n: u32, w: u32, h: u32, fmt: DXGI_FORMAT, flags: u32, mask: *const u32, queue: *const *mut c_void) -> HRESULT {
+    drop_bb(this);
+    let f: Resize1 = std::mem::transmute(orig(this, SLOT_RESIZE1));
+    f(this, n, w, h, fmt, flags, mask, queue)
 }
 
 unsafe fn dx11_present(this: *mut c_void, flags: u32) {
@@ -371,6 +384,10 @@ unsafe fn install_dxgi() -> Res<()> {
         let mut ok = patch(t, SLOT_PRESENT, on_present as *const () as usize) && patch(t, SLOT_RESIZE, on_resize as *const () as usize);
         if let Ok(sc1) = sc.cast::<IDXGISwapChain1>() {
             ok &= patch(vtable(&sc1), SLOT_PRESENT1, on_present1 as *const () as usize);
+        }
+        // Só a tabela de quem é IDXGISwapChain3 chega à entrada 39.
+        if let Ok(sc3) = sc.cast::<IDXGISwapChain3>() {
+            ok &= patch(vtable(&sc3), SLOT_RESIZE1, on_resize1 as *const () as usize);
         }
         if ok { Ok(()) } else { Err("VirtualProtect".to_string()) }
     });
