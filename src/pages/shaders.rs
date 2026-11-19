@@ -9,11 +9,9 @@ use std::time::Instant;
 
 use super::picker::{self, Target};
 use super::*;
-use crate::shader_profile::{self as sp, Pass, Profile};
+use crate::shader_profile::{self as sp, params, Keys, Param, Pass, Profile};
 
 const ZIP_URL: &str = "https://github.com/libretro/slang-shaders/archive/refs/heads/master.zip";
-/// Chaves de `teclas.txt`, na ordem de `Config::hk_shader`.
-const KEYS: [&str; 4] = ["toggle", "menu", "next", "compare"];
 const KEY_NAMES: [&str; 4] = ["Liga / desliga", "Menu no jogo", "Próximo perfil", "Comparar (segurar)"];
 const INPUTS: [(&str, &str); 8] = [("auto", "Automática"), ("full", "Original"), ("240", "240 linhas"), ("480", "480 linhas"), ("720", "720 linhas"), ("d2", "÷2"), ("d3", "÷3"), ("d4", "÷4")];
 /// Pedidos ao `WM_PICK_SHADER` (janelas do Windows, fora do desenho).
@@ -21,36 +19,6 @@ pub const PICK_EXE: usize = 0;
 pub const PICK_IMAGE: usize = 1;
 pub const PICK_EXPORT: usize = 2;
 pub const PICK_LIB: usize = 3;
-
-// provisório até a Parte A: o motor entrega `Param` e `params(profile)` com a junção de verdade.
-#[derive(Clone, Debug)]
-pub struct Param {
-    pub name: String,
-    pub desc: String,
-    pub initial: f32,
-    pub min: f32,
-    pub max: f32,
-    pub step: f32,
-    /// Passe (linha `pass=`) onde o parâmetro aparece primeiro.
-    pub pass: usize,
-}
-
-// provisório até a Parte A: lê cada preset sozinho; nome repetido em dois passes é um valor só (fica no primeiro).
-pub fn params(profile: &Profile) -> Vec<Param> {
-    use librashader::presets::{get_parameter_meta, ShaderFeatures, ShaderPreset};
-    let mut out: Vec<Param> = Vec::new();
-    for (i, p) in profile.passes.iter().enumerate() {
-        let Ok(preset) = ShaderPreset::try_parse(&p.path, ShaderFeatures::NONE) else { continue };
-        let Ok(meta) = get_parameter_meta(&preset) else { continue };
-        for m in meta {
-            let name = m.id.to_string();
-            if !out.iter().any(|o| o.name == name) {
-                out.push(Param { name, desc: m.description.to_string(), initial: m.initial, min: m.minimum, max: m.maximum, step: m.step, pass: i });
-            }
-        }
-    }
-    out
-}
 
 struct Browse {
     /// Carregar preset: troca todos os passes pelo escolhido.
@@ -188,9 +156,8 @@ fn monitor_hdr() -> bool {
 
 /// `teclas.txt`, que o motor lê: o mesmo `mods,vk` do config.
 fn write_keys(app: &App) {
-    let s: String = KEYS.iter().zip(app.cfg.hk_shader).map(|(k, h)| format!("{k}={},{}\n", h.mods, h.vk)).collect();
-    let _ = std::fs::create_dir_all(sp::root());
-    let _ = crate::config::write_safe(&sp::keys_path(), s);
+    let [toggle, menu, next, compare] = app.cfg.hk_shader;
+    let _ = Keys { toggle, menu, next, compare }.save(&sp::keys_path());
 }
 
 /// Algum perfil existe: só então o atalho liga/desliga ocupa a combinação no Windows.
@@ -478,7 +445,7 @@ fn top_dir(rel: &str) -> &str {
     rel.split_once('\\').map_or("", |d| d.0)
 }
 
-// provisório até a Parte A: um `#reference` por passe ligado; a junção numa cadeia só é do motor.
+// shortcut: um `#reference` por passe ligado; serve para um passe, cadeia de vários pede gravar o `chain::join` do motor como .slangp.
 fn export(app: &mut App, to: &str) {
     let Some(p) = st().as_mut().and_then(|s| s.cur().cloned()) else { return };
     let mut s = String::from("# Exportado pelo Prisma\n");
@@ -902,7 +869,7 @@ fn params_card(ui: &mut Ui, s: &mut St, r: Rect) {
     for (i, m) in rows.iter().enumerate().take(last).skip(first) {
         let y = list.y + i as f32 * ROW;
         let row = rect(list.x, y, list.w, ROW - 4.0);
-        let v = cur.param(&m.name).unwrap_or(m.initial);
+        let v = cur.param(&m.name).unwrap_or(m.default);
         let changed = cur.param(&m.name).is_some();
         let x = list.x + 4.0;
         let w = list.w - 8.0;
@@ -912,9 +879,9 @@ fn params_card(ui: &mut Ui, s: &mut St, r: Rect) {
         let mut t = if span > 0.0 { (v - m.min) / span } else { 0.0 };
         if ui.slider(&format!("shd-p-{}", m.name), rect(x + 6.0, y + 22.0, w - 12.0, 20.0), &mut t) {
             let nv = snap(m, m.min + t * span);
-            set = Some((m.name.clone(), ((nv - m.initial).abs() > m.step.abs() * 0.01 + f32::EPSILON).then_some(nv)));
+            set = Some((m.name.clone(), ((nv - m.default).abs() > m.step.abs() * 0.01 + f32::EPSILON).then_some(nv)));
         }
-        let range = format!("{}   {} · {} {}   {}", fmt(m.min, m.step), m.name, crate::i18n::tr("padrão"), fmt(m.initial, m.step), fmt(m.max, m.step));
+        let range = format!("{}   {} · {} {}   {}", fmt(m.min, m.step), m.name, crate::i18n::tr("padrão"), fmt(m.default, m.step), fmt(m.max, m.step));
         ui.c.text_raw(rect(x, y + 42.0, w, 16.0), &range, 11.0, MUTED, Align::Center, Weight::Regular);
         // Botão direito volta o valor ao padrão.
         if ui.right_hit(row) && changed {
@@ -1046,7 +1013,7 @@ mod tests {
     use super::*;
 
     fn p(min: f32, max: f32, step: f32) -> Param {
-        Param { name: "x".into(), desc: String::new(), initial: 0.0, min, max, step, pass: 0 }
+        Param { name: "x".into(), desc: String::new(), default: 0.0, min, max, step, pass: 0 }
     }
 
     #[test]
