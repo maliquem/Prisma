@@ -304,6 +304,8 @@ unsafe fn one(d: &D3d, mon: HMONITOR, codec: Codec, r: &Run) -> Result<String> {
         ConvOut::Ayuv
     } else if hdr10 {
         ConvOut::P010
+    } else if r.fmt.deep {
+        ConvOut::P010Sdr
     } else {
         ConvOut::Nv12
     };
@@ -314,7 +316,7 @@ unsafe fn one(d: &D3d, mon: HMONITOR, codec: Codec, r: &Run) -> Result<String> {
     let mut dec = if r.fmt.yuv444 {
         None
     } else {
-        match Decoder::new(&d.dev, codec, out_w, out_h, r.fps, enc.header().as_deref(), r.fmt.hdr10) {
+        match Decoder::new(&d.dev, codec, out_w, out_h, r.fps, enc.header().as_deref(), r.fmt.hdr10 || r.fmt.deep) {
             Ok(x) => Some(x),
             Err(e) => {
                 dec_err = Some(format!("{e:?}"));
@@ -662,10 +664,11 @@ pub fn bench(arg: &str) {
     // Sem o quadrado, mede o que estiver na tela, como um jogo ou um vídeo.
     let square = p.next() != Some("0");
     let dd = p.next() == Some("dd");
-    // `PRISMA_FMT=hdr10` ou `444` mede o vídeo de 10 bits ou o 4:4:4 (só no NVENC direto).
+    // `PRISMA_FMT=hdr10`, `10` ou `444` mede o HDR10, os 10 bits SDR ou o 4:4:4 (só no NVENC direto).
     let fmt = match std::env::var("PRISMA_FMT").as_deref() {
-        Ok("hdr10") => VideoFmt { hdr10: true, yuv444: false },
-        Ok("444") => VideoFmt { hdr10: false, yuv444: true },
+        Ok("hdr10") => VideoFmt { hdr10: true, ..Default::default() },
+        Ok("444") => VideoFmt { yuv444: true, ..Default::default() },
+        Ok("10") => VideoFmt { deep: true, ..Default::default() },
         _ => VideoFmt::default(),
     };
     let run = Run { secs, out_h, mbps, fps, dd, fmt };

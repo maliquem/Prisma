@@ -1436,7 +1436,7 @@ Equilíbrio	Equilibrado
 Qualidade	Calidad
 Codec	Códec
 Limite de banda	Límite de ancho de banda
-HDR10 de 10 bits quando as duas telas estão em HDR	HDR10 de 10 bits cuando las dos pantallas están en HDR
+10 bits: HDR10 com as duas telas em HDR, e degradês sem faixas para quem pede	10 bits: HDR10 con las dos pantallas en HDR, y degradados sin bandas para quien lo pide
 Aceitar 4:4:4 quando quem assiste pede	Aceptar 4:4:4 cuando quien mira lo pida
 Os automáticos seguem quem assiste: a altura da tela, o menor entre os Hz dos dois lados e o melhor codec que os dois têm. O 4:4:4 e o HDR10 caem sozinhos se o outro lado não tiver.	Los valores automáticos siguen a quien mira: la altura de su pantalla, la frecuencia más baja de los dos lados y el mejor códec que ambos tengan. 4:4:4 y HDR10 se desactivan solos si el otro lado no los tiene.
 PyroWave: uns 200 Mbit/s em 1080p60 e mais em 4K. Só na rede local ou pela VPN (ZeroTier, Tailscale), nunca pelo relé; fora delas, e com quem assiste numa versão sem ele, vale o automático.	PyroWave: unos 200 Mbit/s en 1080p60 y más en 4K. Solo en la red local o por VPN (ZeroTier, Tailscale), nunca por el relé; fuera de ellas, o si quien mira tiene una versión sin él, se usa el automático.
@@ -1448,6 +1448,8 @@ Tirar do som o programa de chamada	Dejar fuera del sonido la app de llamadas
 Uma pessoa por vez no mouse e no teclado	Una persona a la vez en el ratón y el teclado
 O mouse e o teclado deste PC têm prioridade	El ratón y el teclado de este PC tienen prioridad
 Recusar conexões enquanto este PC assiste a outro	Rechazar conexiones mientras este PC ve a otro
+GPU em desempenho máximo enquanto compartilha	GPU en máximo rendimiento mientras se comparte
+GPU em desempenho máximo enquanto compartilha (sem efeito: só placas NVIDIA)	GPU en máximo rendimiento mientras se comparte (sin efecto: solo tarjetas NVIDIA)
 Com prioridade, quem assiste para por 1 segundo sempre que alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. Programas de chamada: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack e Signal. O Windows só deixa tirar um: sai do som o que estiver tocando, e a escolha muda durante a conexão. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante. Num notebook com duas placas, a outra placa codifica com uma cópia a mais da imagem.	Con prioridad, el visor se pausa 1 segundo cada vez que alguien aquí mueve el ratón o escribe. Una persona a la vez: el turno pasa tras 2 segundos sin entrada. Apps de llamadas: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack y Signal. Windows solo deja quitar una: queda fuera del sonido la que esté sonando, y la elección cambia durante la conexión. Los cambios se aplican al momento; los de la imagen reinician el vídeo un instante. En un portátil con dos tarjetas gráficas, la otra tarjeta codifica con una copia más de la imagen.
 Janela de quem assiste	Ventana del visor
 Abrir em tela cheia sem borda	Abrir en pantalla completa sin bordes
@@ -1459,6 +1461,7 @@ Só o mouse	Solo ratón
 Só o teclado	Solo teclado
 Mouse e teclado	Ratón y teclado
 Pedir 4:4:4 (texto mais nítido; HEVC só em NVIDIA ou Intel)	Pedir 4:4:4 (texto más nítido; en HEVC necesita NVIDIA o Intel)
+Pedir 10 bits (degradês sem faixas; host com NVIDIA)	Pedir 10 bits (degradados sin bandas; host con NVIDIA)
 Começar sem o som do outro PC	Empezar sin el sonido del otro PC
 No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. No Tudo, vai qualquer tecla, mesmo as que um programa deste PC pegaria. Os atalhos desta janela sempre funcionam aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga. Telas lado a lado valem para Mouse e teclado, na lista de PCs: o mouse passa pela borda de uma tela para a vizinha, sem vídeo. Um PC sem posição vai para a primeira livre ao lado deste.	En el modo inmersivo, en pantalla completa, el ratón se queda dentro de la ventana, y la tecla Windows y Alt+Tab van al otro PC. En Todo, pasa cualquier tecla, incluso las que captaría un programa de este PC. Los atajos de esta ventana siempre funcionan aquí. En una pantalla con G-SYNC o FreeSync, deja el VSync desactivado: la imagen no se rasga. Las pantallas lado a lado sirven para Ratón y teclado, en la lista de PC: el ratón pasa por el borde de una pantalla a la de al lado, sin vídeo. Un PC sin posición va a la primera libre junto a este.
 Medidor e avisos	Medidor y avisos
@@ -1564,6 +1567,7 @@ aparelho desligado	dispositivo desconectado
 Cada atalho troca a saída e a entrada padrão do Windows de uma vez. Use Adicionar.	Cada atajo cambia a la vez la salida y la entrada predeterminadas de Windows. Usa Añadir.
 Não deu para mudar na hora. Vale na próxima conexão.	No se pudo cambiar al instante. Se aplica en la próxima conexión.
 Pedir 4:4:4	Pedir 4:4:4
+Pedir 10 bits	Pedir 10 bits
 Ritmo constante	Ritmo de fotogramas constante
 Controle em segundo plano	Mando en segundo plano
 Teclado como controle	Teclado como mando
@@ -1872,7 +1876,7 @@ Configuração própria para este aparelho	Configuración propia para este dispo
 Saída capturada	Salida capturada
 Entrada junto	Mezclar entrada
 Configuração própria: vale quando este aparelho conecta. Com mais de uma pessoa ao mesmo tempo, vale a de quem conectou primeiro. Nome, pessoas, rede, controles e atalhos são os de todos.	Configuración propia: vale cuando este dispositivo se conecta. Con más de una persona a la vez, vale la de quien se conectó primero. Nombre, personas, red, mandos y atajos son los de todos.
-Com prioridade, quem assiste para por 1 segundo quando alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. O Windows só deixa tirar um programa de chamada (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), e só da saída padrão: sai o que estiver tocando. Uma saída escolhida manda o que toca nela. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante.	Con prioridad, el visor se pausa 1 segundo cada vez que alguien aquí mueve el ratón o escribe. Una persona a la vez: el turno pasa tras 2 segundos sin entrada. Windows solo deja quitar una app de llamadas (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), y solo de la salida predeterminada: queda fuera la que esté sonando. Una salida elegida envía lo que suena en ella. Los cambios se aplican al momento; los de la imagen reinician el vídeo un instante.
+Com prioridade, quem assiste para por 1 segundo quando alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. O Windows só deixa tirar um programa de chamada (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), e só da saída padrão: sai o que estiver tocando. Uma saída escolhida manda o que toca nela. GPU em desempenho máximo: o driver NVIDIA deixa o Prisma em "Preferir desempenho máximo" enquanto alguém assiste e volta ao de antes no fim. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante.	Con prioridad, el visor se pausa 1 segundo cada vez que alguien aquí mueve el ratón o escribe. Una persona a la vez: el turno pasa tras 2 segundos sin entrada. Windows solo deja quitar una app de llamadas (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), y solo de la salida predeterminada: queda fuera la que esté sonando. Una salida elegida envía lo que suena en ella. GPU en máximo rendimiento: el controlador NVIDIA deja Prisma en "Preferir rendimiento máximo" mientras alguien mira y vuelve al ajuste anterior al terminar. Los cambios se aplican al momento; los de la imagen reinician el vídeo un instante.
 A padrão do Windows	La predeterminada de Windows
 Desligada agora	Apagada ahora
 Nenhuma	Ninguna
@@ -1882,6 +1886,7 @@ Acesso de «{}» mudou na hora	El acceso de “{}” cambió al instante
 Opções do host aplicadas na conexão	Opciones del host aplicadas a la conexión
 «{}» mudou os quadros por segundo	“{}” cambió los fotogramas por segundo
 «{}» mudou o pedido de 4:4:4	“{}” cambió la solicitud de 4:4:4
+«{}» mudou o pedido de 10 bits	“{}” cambió la solicitud de 10 bits
 «{}» mudou o ritmo dos quadros	“{}” cambió el ritmo de fotogramas
 Mouse travado nesta tela	Ratón bloqueado en esta pantalla
 Mouse destravado	Ratón desbloqueado

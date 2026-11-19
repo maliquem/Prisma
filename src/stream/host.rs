@@ -48,7 +48,7 @@ pub(super) struct Hello {
     hz: u32,
     codecs: u8,
     pub(super) pid: u32,
-    pub(super) flags: u8,
+    pub(super) flags: u16,
 }
 
 impl Hello {
@@ -243,7 +243,7 @@ impl HdrOff {
             return HdrOff(None);
         }
         let Some((adapter, output, true)) = crate::sys::hdr::hdr_output() else { return HdrOff(None) };
-        let mark = format!("{} {} {}\n", adapter.LowPart, adapter.HighPart, output);
+        let mark = format!("{} {} {} {}\n", adapter.LowPart, adapter.HighPart, output, std::process::id());
         if std::fs::create_dir_all(super::dir()).and_then(|_| std::fs::write(hdr_mark(), mark)).is_err() {
             eprintln!("HDR: não deu para gravar a marca de volta; o HDR fica ligado");
             return HdrOff(None);
@@ -266,6 +266,83 @@ impl Drop for HdrOff {
                 eprintln!("HDR do Windows ligado de novo");
             }
             let _ = std::fs::remove_file(hdr_mark());
+        }
+    }
+}
+
+/// Opção GPU em desempenho máximo: o perfil deste .exe no driver NVIDIA fica em "Preferir
+/// desempenho máximo" enquanto alguém assiste. O valor de antes fica numa marca até voltar, para
+/// voltar mesmo se o Prisma cair (veja [`restore_hdr`]).
+struct GpuMax(Option<(String, Option<u32>)>);
+
+fn gpu_mark() -> std::path::PathBuf {
+    super::dir().join("gpu_maximo.txt")
+}
+
+/// A marca: o .exe, o valor de antes (`-`: nada gravado) e o processo que mudou, um por linha.
+fn gpu_mark_text(exe: &str, old: Option<u32>, pid: u32) -> String {
+    format!("{exe}\n{}\n{pid}\n", old.map_or("-".into(), |v| v.to_string()))
+}
+
+fn gpu_mark_parse(s: &str) -> Option<(String, Option<u32>, Option<u32>)> {
+    let mut l = s.lines().map(str::trim);
+    let exe = l.next().filter(|e| !e.is_empty())?;
+    let old = match l.next()? {
+        "-" => None,
+        v => Some(v.parse().ok()?),
+    };
+    Some((exe.to_string(), old, l.next().and_then(|p| p.parse().ok())))
+}
+
+/// A marca é de outro processo que ainda está compartilhando (o serviço, com o Prisma aberto ao lado)?
+fn held_by_other(pid: Option<u32>) -> bool {
+    pid.is_some_and(|p| p != std::process::id() && crate::sys::procs::is_alive(p))
+}
+
+/// Devolve o perfil do .exe ao valor de antes. Sem valor de antes, tira também o perfil vazio que o Prisma criou.
+fn gpu_back(exe: &str, old: Option<u32>) -> bool {
+    let ok = crate::sys::drs::apply(exe, &[(crate::sys::drs::PREFERRED_PSTATE, old)]);
+    if ok && old.is_none() {
+        crate::sys::drs::forget(exe);
+    }
+    ok
+}
+
+impl GpuMax {
+    fn new() -> Self {
+        if !Opts::load().gpu_max {
+            return GpuMax(None);
+        }
+        let Some(exe) = std::env::current_exe().ok().and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_lowercase())) else { return GpuMax(None) };
+        let Some(old) = crate::sys::drs::own(&exe, crate::sys::drs::PREFERRED_PSTATE) else {
+            eprintln!("GPU em desempenho máximo: sem driver NVIDIA, a opção não faz nada aqui");
+            return GpuMax(None);
+        };
+        if old == Some(1) {
+            return GpuMax(None);
+        }
+        if std::fs::create_dir_all(super::dir()).and_then(|_| std::fs::write(gpu_mark(), gpu_mark_text(&exe, old, std::process::id()))).is_err() {
+            eprintln!("GPU em desempenho máximo: não deu para gravar a marca de volta; o driver fica como está");
+            return GpuMax(None);
+        }
+        if crate::sys::drs::apply(&exe, &[(crate::sys::drs::PREFERRED_PSTATE, Some(1))]) {
+            eprintln!("GPU em desempenho máximo enquanto alguém assiste ({exe})");
+            GpuMax(Some((exe, old)))
+        } else {
+            let _ = std::fs::remove_file(gpu_mark());
+            eprintln!("GPU em desempenho máximo: o driver não aceitou (sem o serviço, precisa do Prisma como administrador)");
+            GpuMax(None)
+        }
+    }
+}
+
+impl Drop for GpuMax {
+    fn drop(&mut self) {
+        if let Some((exe, old)) = &self.0 {
+            if gpu_back(exe, *old) {
+                eprintln!("GPU de volta ao gerenciamento de energia de antes");
+                let _ = std::fs::remove_file(gpu_mark());
+            }
         }
     }
 }
@@ -378,13 +455,25 @@ pub fn emergency_key() {
         .ok();
 }
 
-/// No início do Prisma: se uma sessão caiu com o HDR desligado, liga de volta.
+/// No início do Prisma: se uma sessão caiu com o HDR desligado, liga de volta. Pula as marcas de
+/// outro processo vivo (a sessão ainda está aberta); as deste processo voltam (tecla de emergência).
 pub fn restore_hdr() {
     crate::sys::vdd::restore();
+    // A GPU em desempenho máximo também volta; sem conseguir (sem permissão), a marca fica para o serviço.
+    for path in [super::user_dir().join("gpu_maximo.txt"), super::service_dir().join("gpu_maximo.txt")] {
+        let Some((exe, old, pid)) = std::fs::read_to_string(&path).ok().and_then(|s| gpu_mark_parse(&s)) else { continue };
+        if !held_by_other(pid) && gpu_back(&exe, old) {
+            crate::config::log("compartilhar: GPU de volta ao gerenciamento de energia de antes, depois de uma sessão interrompida");
+            let _ = std::fs::remove_file(&path);
+        }
+    }
     for path in [super::user_dir().join("hdr_desligado.txt"), super::service_dir().join("hdr_desligado.txt")] {
         let Ok(s) = std::fs::read_to_string(&path) else { continue };
         let v: Vec<i64> = s.split_whitespace().filter_map(|x| x.parse().ok()).collect();
-        if let [low, high, output] = v[..] {
+        if held_by_other(v.get(3).map(|&p| p as u32)) {
+            continue;
+        }
+        if let [low, high, output, ..] = v[..] {
             let adapter = windows::Win32::Foundation::LUID { LowPart: low as u32, HighPart: high as i32 };
             if crate::sys::hdr::set_hdr(adapter, output as u32, true) {
                 crate::config::log("compartilhar: HDR ligado de volta depois de uma sessão interrompida");
@@ -399,6 +488,7 @@ pub fn restore_hdr() {
 pub(super) fn serve(d: &D3d, first: Joiner, joins: Option<&mpsc::Receiver<Joiner>>) -> Option<(Hello, SocketAddr)> {
     *LEAD.lock().unwrap() = first.id.clone();
     let _hdr = HdrOff::new(&first.hello);
+    let _gpu = GpuMax::new();
     let h = &first.hello;
     let _virtual = crate::sys::vdd::Virtual::for_monitor(room_opts().monitor, h.w, h.h, h.hz, h.flags & SEES_HDR != 0);
     let mut room = Room { guests: vec![Guest::new(first)], bridge: None, bridge_err: None, anti_cheat: false, checked: Instant::now() - Duration::from_secs(10), clip: None, clip_id: 0, frame_id: 0, wave_failed: false };
@@ -922,10 +1012,10 @@ impl Injector {
             Input::Wheel { .. } if !self.inside() => return None,
             Input::Wheel { delta, horizontal } => Self::mouse(if horizontal { MOUSEEVENTF_HWHEEL } else { MOUSEEVENTF_WHEEL }, 0, 0, delta as i32),
             Input::Key { scan, extended, down } => {
-                if down {
-                    self.keys.insert((scan, extended));
-                } else {
-                    self.keys.remove(&(scan, extended));
+                let changed = if down { self.keys.insert((scan, extended)) } else { self.keys.remove(&(scan, extended)) };
+                // Para achar o Shift preso: o registro guarda cada Ctrl, Alt e Shift que desce e sobe.
+                if let Some(name) = mod_name(scan, extended).filter(|_| changed) {
+                    eprintln!("teclado: {name} {}", if down { "desce" } else { "sobe" });
                 }
                 Self::key(scan, extended, down)
             }
@@ -979,6 +1069,9 @@ impl Injector {
         // Só uma janela: ela vem para frente antes; se o Windows não deixar, nada vai, para o
         // teclado não cair noutro programa.
         if fresh && self.win.is_some_and(|(h, pid)| !bring_front(h, pid)) {
+            // As subidas deste pacote também não vão: o que estava apertado sobe agora, senão
+            // um Shift ficava preso até a pessoa sair.
+            self.release();
             let n = (events.len() / INPUT_SIZE) as u32;
             if n > 0 {
                 self.next = Some(first.wrapping_add(n));
@@ -1011,6 +1104,10 @@ impl Injector {
 
     /// Solta tudo que ficou apertado, para nenhuma tecla ficar presa quando quem assiste sai.
     pub(super) fn release(&mut self) {
+        let mods: Vec<&str> = self.keys.iter().filter_map(|&(s, e)| mod_name(s, e)).collect();
+        if !mods.is_empty() {
+            eprintln!("teclado: solta tudo ({})", mods.join(", "));
+        }
         let mut list: Vec<INPUT> = self.keys.drain().map(|(s, e)| Self::key(s, e, false)).collect();
         for (i, down) in self.buttons.iter_mut().enumerate() {
             if std::mem::take(down) {
@@ -1023,6 +1120,19 @@ impl Injector {
             }
         }
     }
+}
+
+/// O nome de um Ctrl, Alt ou Shift pelo scan code, para o registro.
+fn mod_name(scan: u16, extended: bool) -> Option<&'static str> {
+    Some(match (scan, extended) {
+        (0x2A, false) => "Shift esquerdo",
+        (0x36, _) => "Shift direito",
+        (0x1D, false) => "Ctrl esquerdo",
+        (0x1D, true) => "Ctrl direito",
+        (0x38, false) => "Alt esquerdo",
+        (0x38, true) => "Alt direito",
+        _ => return None,
+    })
 }
 
 /// Teclas que o host toca por um pedido de teclado de quem assiste: as travas que estão diferentes
@@ -1187,6 +1297,19 @@ fn pads_tick(room: &mut Room, out: &mut Vec<u8>, repeat_info: bool) {
     }
 }
 
+/// O formato no registro: ", HDR10", ", 4:4:4", ", 10 bits" ou nada.
+fn fmt_extra(vf: VideoFmt) -> &'static str {
+    if vf.hdr10 {
+        ", HDR10"
+    } else if vf.yuv444 {
+        ", 4:4:4"
+    } else if vf.deep {
+        ", 10 bits"
+    } else {
+        ""
+    }
+}
+
 /// O vídeo que já está saindo serve para quem chegou? (O PyroWave também pede o caminho perto,
 /// que quem chama confere pelo canal.)
 fn fits(hello: &Hello, codec: VideoCodec, vf: VideoFmt) -> bool {
@@ -1194,6 +1317,9 @@ fn fits(hello: &Hello, codec: VideoCodec, vf: VideoFmt) -> bool {
         VideoCodec::Wave => return hello.codecs & WAVE != 0 && (!vf.hdr10 || hello.flags & SEES_HDR != 0),
         VideoCodec::Std(c) => c,
     };
+    if vf.deep && hello.flags & ASKS_10 == 0 {
+        return false;
+    }
     if vf.yuv444 {
         return hello.flags & DECODES_444 != 0;
     }
@@ -1465,7 +1591,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     // O tamanho e os Hz seguem quem chegou primeiro; os codecs e formatos, o que todos aceitam.
     let lead = room.guests[0].hello;
     let codecs = room.guests.iter().fold(0xFF, |m, g| m & g.hello.codecs);
-    let flags = room.guests.iter().fold(0xFF, |m, g| m & g.hello.flags);
+    let flags = room.guests.iter().fold(0xFFFF, |m, g| m & g.hello.flags);
     // Automático: a altura da tela de quem assiste, sem passar da daqui nem do limite das opções.
     let want_h = if lead.h == 0 { src_h } else { lead.h };
     let want_h = if opts.res > 0 { want_h.min(opts.res) } else { want_h };
@@ -1484,18 +1610,24 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
         _ => None,
     };
     // Formato do vídeo, do melhor ao comum. HDR10 quando as telas estão em HDR; 4:4:4 quando quem
-    // assiste pede, porque gasta mais rede. Se o NVENC daqui não fizer, cai para o próximo.
+    // assiste pede, porque gasta mais rede; 10 bits com a tela SDR quando todos pedem. Se o NVENC
+    // daqui não fizer, cai para o próximo.
     let want444 = flags & DECODES_444 != 0 && opts.allow444;
     let ten_bit = std::env::var("PRISMA_HDR10").map(|v| v != "0").unwrap_or(opts.ten_bit);
     let want_hdr = color.hdr && flags & SEES_HDR != 0 && ten_bit;
-    let full = VideoFmt { hdr10: false, yuv444: true };
-    let ten = VideoFmt { hdr10: true, yuv444: false };
+    let want_deep = !want_hdr && flags & ASKS_10 != 0 && ten_bit;
+    let full = VideoFmt { yuv444: true, ..Default::default() };
+    let ten = VideoFmt { hdr10: true, ..Default::default() };
+    let deep = VideoFmt { deep: true, ..Default::default() };
     let mut tries: Vec<(Codec, VideoFmt)> = Vec::new();
     if want444 {
         tries.push((Codec::Hevc, full));
     }
     if want_hdr {
         tries.extend([(Codec::Av1, ten), (Codec::Hevc, ten)]);
+    }
+    if want_deep {
+        tries.extend([(Codec::Av1, deep), (Codec::Hevc, deep)]);
     }
     tries.extend([Codec::Av1, Codec::Hevc, Codec::H264].map(|c| (c, VideoFmt::default())));
     let mbps = std::env::var("PRISMA_MBPS").ok().and_then(|v| v.parse::<u32>().ok()).or((opts.mbps > 0).then_some(opts.mbps));
@@ -1511,7 +1643,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
         } else if !far.is_empty() {
             eprintln!("PyroWave só na rede local ou pela VPN, e {} não está: fica o automático", far.join(", "));
         } else {
-            let vf = VideoFmt { hdr10: want_hdr, yuv444: flags & ASKS_444 != 0 && opts.allow444 };
+            let vf = VideoFmt { hdr10: want_hdr, yuv444: flags & ASKS_444 != 0 && opts.allow444, deep: false };
             let bits = mbps.map(|m| m as u64 * 1_000_000).unwrap_or_else(|| super::wave::auto_bits(out_w, out_h, fps, vf));
             match super::wave::WaveEncoder::new(d, src_w, src_h, out_w, out_h, fps, bits, vf) {
                 Ok(w) => {
@@ -1550,17 +1682,13 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
         let bits = if vf.yuv444 { (bits as u64 * 3 / 2).min(150_000_000) as u32 } else { bits };
         match LiveEncoder::open(&d.dev, c, out_w, out_h, fps, bits, vf) {
             Ok(e) => {
-                let extra = match (vf.hdr10, vf.yuv444) {
-                    (true, _) => ", HDR10",
-                    (_, true) => ", 4:4:4",
-                    _ => "",
-                };
+                let extra = fmt_extra(vf);
                 eprintln!("vídeo: {}x{} a {} quadros/s, {}{}, {:.1} Mbit/s ({})", out_w, out_h, fps, codec_name(VideoCodec::Std(c)), extra, bits as f64 / 1e6, e.name());
                 made = Some((e, c, vf));
                 top_bits = bits;
                 break;
             }
-            Err(e) if vf != VideoFmt::default() => eprintln!("vídeo: {}{} recusado ({}); tentando o próximo", codec_name(VideoCodec::Std(c)), if vf.hdr10 { " HDR10" } else { " 4:4:4" }, e.message()),
+            Err(e) if vf != VideoFmt::default() => eprintln!("vídeo: {}{} recusado ({}); tentando o próximo", codec_name(VideoCodec::Std(c)), fmt_extra(vf).trim_start_matches(", "), e.message()),
             Err(_) => {}
         }
     }
@@ -1577,6 +1705,8 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                 ConvOut::Ayuv
             } else if vf.hdr10 {
                 ConvOut::P010
+            } else if vf.deep {
+                ConvOut::P010Sdr
             } else {
                 ConvOut::Nv12
             };
@@ -1651,7 +1781,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
 
     let mut out = Vec::with_capacity(MTU);
     let mut buf = vec![0u8; 2048];
-    let info = |perms: u8| Msg::Info { codec, w: out_w, h: out_h, fps, perms, recover: enc.recovers(), hdr10: vf.hdr10, yuv444: vf.yuv444, priority };
+    let info = |perms: u8| Msg::Info { codec, w: out_w, h: out_h, fps, perms, recover: enc.recovers(), hdr10: vf.hdr10, yuv444: vf.yuv444, priority, deep: vf.deep };
     let infos: Vec<Vec<u8>> = (0..=255u8).map(|p| {
         let mut b = Vec::new();
         write(&mut b, &info(p));
@@ -1861,6 +1991,8 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                                 super::notice("«{}» mudou os quadros por segundo", &g.name);
                             } else if (h.flags ^ g.hello.flags) & ASKS_444 != 0 {
                                 super::notice("«{}» mudou o pedido de 4:4:4", &g.name);
+                            } else if (h.flags ^ g.hello.flags) & ASKS_10 != 0 {
+                                super::notice("«{}» mudou o pedido de 10 bits", &g.name);
                             }
                             g.hello = h;
                             result = End::Again;
@@ -2169,6 +2301,19 @@ mod tests {
     use super::*;
 
     #[test]
+    fn gpu_mark_round_trip() {
+        assert_eq!(gpu_mark_parse(&gpu_mark_text("prisma.exe", Some(5), 42)), Some(("prisma.exe".into(), Some(5), Some(42))));
+        assert_eq!(gpu_mark_parse(&gpu_mark_text("prisma.exe", None, 42)), Some(("prisma.exe".into(), None, Some(42))));
+        // Marca de antes do processo: volta sempre.
+        assert_eq!(gpu_mark_parse("prisma.exe\n-\n"), Some(("prisma.exe".into(), None, None)));
+        assert!(!held_by_other(None) && !held_by_other(Some(std::process::id())));
+        // Marca quebrada não mexe no driver.
+        assert_eq!(gpu_mark_parse("prisma.exe\nx\n"), None);
+        assert_eq!(gpu_mark_parse("\n-\n"), None);
+        assert_eq!(gpu_mark_parse("prisma.exe"), None);
+    }
+
+    #[test]
     fn feeds_on_the_capture_rhythm_and_repeats_only_when_constant() {
         let i = 10_000_000 / 60;
         let ms = |v: i64| v * 10_000;
@@ -2342,16 +2487,21 @@ mod tests {
         let plain = VideoFmt::default();
         assert!(fits(&h(2, 0), VideoCodec::Std(Codec::Hevc), plain));
         assert!(!fits(&h(1, 0), VideoCodec::Std(Codec::Hevc), plain));
-        assert!(!fits(&h(7, 0), VideoCodec::Std(Codec::Av1), VideoFmt { hdr10: true, yuv444: false }));
-        assert!(fits(&h(7, SEES_HDR), VideoCodec::Std(Codec::Av1), VideoFmt { hdr10: true, yuv444: false }));
-        assert!(!fits(&h(7, SEES_HDR), VideoCodec::Std(Codec::Hevc), VideoFmt { hdr10: false, yuv444: true }));
-        assert!(fits(&h(0, DECODES_444), VideoCodec::Std(Codec::Hevc), VideoFmt { hdr10: false, yuv444: true }));
+        assert!(!fits(&h(7, 0), VideoCodec::Std(Codec::Av1), VideoFmt { hdr10: true, yuv444: false, deep: false }));
+        assert!(fits(&h(7, SEES_HDR), VideoCodec::Std(Codec::Av1), VideoFmt { hdr10: true, yuv444: false, deep: false }));
+        assert!(!fits(&h(7, SEES_HDR), VideoCodec::Std(Codec::Hevc), VideoFmt { hdr10: false, yuv444: true, deep: false }));
+        assert!(fits(&h(0, DECODES_444), VideoCodec::Std(Codec::Hevc), VideoFmt { hdr10: false, yuv444: true, deep: false }));
         assert!(fits(&h(WAVE, 0), VideoCodec::Wave, plain));
         assert!(!fits(&h(7, DECODES_444), VideoCodec::Wave, plain));
         // O PyroWave 4:4:4 serve a quem o tem, peça ou não; o HDR10 pede a tela em HDR.
-        assert!(fits(&h(WAVE, 0), VideoCodec::Wave, VideoFmt { hdr10: false, yuv444: true }));
-        assert!(!fits(&h(WAVE, ASKS_444), VideoCodec::Wave, VideoFmt { hdr10: true, yuv444: true }));
-        assert!(fits(&h(WAVE, SEES_HDR), VideoCodec::Wave, VideoFmt { hdr10: true, yuv444: true }));
+        assert!(fits(&h(WAVE, 0), VideoCodec::Wave, VideoFmt { hdr10: false, yuv444: true, deep: false }));
+        assert!(!fits(&h(WAVE, ASKS_444), VideoCodec::Wave, VideoFmt { hdr10: true, yuv444: true, deep: false }));
+        assert!(fits(&h(WAVE, SEES_HDR), VideoCodec::Wave, VideoFmt { hdr10: true, yuv444: true, deep: false }));
+        // Os 10 bits SDR só vão a quem pediu (quem não conhece o pedido decodifica em 8).
+        let deep = VideoFmt { deep: true, ..plain };
+        assert!(!fits(&h(7, 0), VideoCodec::Std(Codec::Hevc), deep));
+        assert!(fits(&h(7, ASKS_10), VideoCodec::Std(Codec::Av1), deep));
+        assert!(!fits(&h(1, ASKS_10), VideoCodec::Std(Codec::Av1), deep));
     }
 
     #[test]

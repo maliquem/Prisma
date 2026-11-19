@@ -815,7 +815,7 @@ pub fn bench(arg: &str) {
     let image = parts.next().filter(|s| !s.is_empty()).unwrap_or("docs/guide/welcome-pt.png").to_string();
     // Formato do PyroWave: 420 (o padrão), 444, hdr ou hdr444.
     let f = parts.next().unwrap_or("");
-    let vf = VideoFmt { hdr10: f.starts_with("hdr"), yuv444: f.ends_with("444") };
+    let vf = VideoFmt { hdr10: f.starts_with("hdr"), yuv444: f.ends_with("444"), deep: false };
     let r = unsafe {
         let _ = windows::Win32::System::Com::CoInitializeEx(None, windows::Win32::System::Com::COINIT_MULTITHREADED);
         let _ = windows::Win32::Media::MediaFoundation::MFStartup(windows::Win32::Media::MediaFoundation::MF_VERSION, windows::Win32::Media::MediaFoundation::MFSTARTUP_LITE);

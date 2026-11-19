@@ -1189,7 +1189,7 @@ fn host_tab(ui: &mut Ui, app: &mut App, st: &mut State, all: &mut Opts, x: f32, 
     y += 44.0;
     let mbps_r = row(ui, ix, y, iw, "Limite de banda", ctl);
     y += 46.0;
-    ui.check("sh-10", rect(ix, y, iw, 30.0), "HDR10 de 10 bits quando as duas telas estão em HDR", &mut o.ten_bit);
+    ui.check("sh-10", rect(ix, y, iw, 30.0), "10 bits: HDR10 com as duas telas em HDR, e degradês sem faixas para quem pede", &mut o.ten_bit);
     y += 32.0;
     ui.check("sh-444", rect(ix, y, iw, 30.0), "Aceitar 4:4:4 quando quem assiste pede", &mut o.allow444);
     y += 32.0;
@@ -1234,12 +1234,19 @@ fn host_tab(ui: &mut Ui, app: &mut App, st: &mut State, all: &mut Opts, x: f32, 
     if target.is_none() {
         ui.check("sh-chain", rect(rx, y, rw, 30.0), "Recusar conexões enquanto este PC assiste a outro", &mut all.no_chain);
         y += 32.0;
+        let label = if crate::pages::nvidia::available() {
+            "GPU em desempenho máximo enquanto compartilha"
+        } else {
+            "GPU em desempenho máximo enquanto compartilha (sem efeito: só placas NVIDIA)"
+        };
+        ui.check("sh-gpumax", rect(rx, y, rw, 30.0), label, &mut all.gpu_max);
+        y += 32.0;
     }
     y += 6.0;
     let note = if target.is_some() {
         "Configuração própria: vale quando este aparelho conecta. Com mais de uma pessoa ao mesmo tempo, vale a de quem conectou primeiro. Nome, pessoas, rede, controles e atalhos são os de todos."
     } else {
-        "Com prioridade, quem assiste para por 1 segundo quando alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. O Windows só deixa tirar um programa de chamada (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), e só da saída padrão: sai o que estiver tocando. Uma saída escolhida manda o que toca nela. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante."
+        "Com prioridade, quem assiste para por 1 segundo quando alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. O Windows só deixa tirar um programa de chamada (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), e só da saída padrão: sai o que estiver tocando. Uma saída escolhida manda o que toca nela. GPU em desempenho máximo: o driver NVIDIA deixa o Prisma em \"Preferir desempenho máximo\" enquanto alguém assiste e volta ao de antes no fim. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante."
     };
     ui.c.text_wrap(rect(rx, y, rw, (r.bottom() - y - 12.0).max(0.0)), note, 12.0, MUTED, Weight::Regular);
 
@@ -1353,11 +1360,12 @@ fn host_tab(ui: &mut Ui, app: &mut App, st: &mut State, all: &mut Opts, x: f32, 
         None => {
             if edit != before {
                 let name = all.name.clone();
-                let (guests, chain) = (all.guests, all.no_chain);
+                let (guests, chain, gpu_max) = (all.guests, all.no_chain, all.gpu_max);
                 *all = edit;
                 all.name = name;
                 all.guests = guests;
                 all.no_chain = chain;
+                all.gpu_max = gpu_max;
             }
         }
         Some(id) => {
@@ -1402,6 +1410,8 @@ fn client_tab(ui: &mut Ui, app: &App, c: &mut ClientOpts, x: f32, top: f32, w: f
     let imm_r = row(ui, ix, y, iw, "Modo imersivo", ctl);
     y += 46.0;
     ui.check("sh-ask444", rect(ix, y, iw, 30.0), "Pedir 4:4:4 (texto mais nítido; HEVC só em NVIDIA ou Intel)", &mut c.ask444);
+    y += 34.0;
+    ui.check("sh-ask10", rect(ix, y, iw, 30.0), "Pedir 10 bits (degradês sem faixas; host com NVIDIA)", &mut c.ask10);
     y += 34.0;
     ui.check("sh-mute", rect(ix, y, iw, 30.0), "Começar sem o som do outro PC", &mut c.mute);
     y += 34.0;

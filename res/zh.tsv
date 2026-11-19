@@ -1436,7 +1436,7 @@ Equilíbrio	平衡
 Qualidade	画质
 Codec	编解码器
 Limite de banda	带宽限制
-HDR10 de 10 bits quando as duas telas estão em HDR	两块屏幕都处于 HDR 时使用 10 位 HDR10
+10 bits: HDR10 com as duas telas em HDR, e degradês sem faixas para quem pede	10 位：两块屏幕都处于 HDR 时使用 HDR10，并为有需要的用户提供无色带渐变
 Aceitar 4:4:4 quando quem assiste pede	观看方请求时接受 4:4:4
 Os automáticos seguem quem assiste: a altura da tela, o menor entre os Hz dos dois lados e o melhor codec que os dois têm. O 4:4:4 e o HDR10 caem sozinhos se o outro lado não tiver.	自动值跟随观看方：其屏幕高度、两端中较低的刷新率，以及双方都有的最佳编解码器。另一端不支持时，4:4:4 和 HDR10 会自动关闭。
 PyroWave: uns 200 Mbit/s em 1080p60 e mais em 4K. Só na rede local ou pela VPN (ZeroTier, Tailscale), nunca pelo relé; fora delas, e com quem assiste numa versão sem ele, vale o automático.	PyroWave：1080p60 约需 200 Mbit/s，4K 更多。仅限局域网或 VPN（ZeroTier、Tailscale），绝不经过中继；在此之外，或观看方的版本没有它时，使用自动。
@@ -1448,6 +1448,8 @@ Tirar do som o programa de chamada	声音中排除通话应用
 Uma pessoa por vez no mouse e no teclado	鼠标和键盘一次一人
 O mouse e o teclado deste PC têm prioridade	此电脑的鼠标和键盘优先
 Recusar conexões enquanto este PC assiste a outro	此电脑正在观看其他电脑时拒绝连接
+GPU em desempenho máximo enquanto compartilha	共享时 GPU 以最高性能运行
+GPU em desempenho máximo enquanto compartilha (sem efeito: só placas NVIDIA)	共享时 GPU 以最高性能运行（无效：仅限 NVIDIA 显卡）
 Com prioridade, quem assiste para por 1 segundo sempre que alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. Programas de chamada: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack e Signal. O Windows só deixa tirar um: sai do som o que estiver tocando, e a escolha muda durante a conexão. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante. Num notebook com duas placas, a outra placa codifica com uma cópia a mais da imagem.	开启优先时，每当这里有人移动鼠标或打字，观看方会暂停 1 秒。一次一人：2 秒无输入后轮换。通话应用：Discord、Teams、Zoom、WhatsApp、Skype、Telegram、Slack 和 Signal。Windows 只允许排除一个：正在发声的那个会被排除在声音之外，并且在连接期间会随之改变。更改会立即生效；画面相关的更改会让视频短暂重新开始。在有两块显卡的笔记本上，另一块显卡编码时会多复制一次画面。
 Janela de quem assiste	观看窗口
 Abrir em tela cheia sem borda	以无边框全屏打开
@@ -1459,6 +1461,7 @@ Só o mouse	仅鼠标
 Só o teclado	仅键盘
 Mouse e teclado	鼠标和键盘
 Pedir 4:4:4 (texto mais nítido; HEVC só em NVIDIA ou Intel)	请求 4:4:4（文字更清晰；HEVC 需要 NVIDIA 或 Intel）
+Pedir 10 bits (degradês sem faixas; host com NVIDIA)	请求 10 位（渐变无色带；主机需为 NVIDIA）
 Começar sem o som do outro PC	开始时不播放另一台电脑的声音
 No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. No Tudo, vai qualquer tecla, mesmo as que um programa deste PC pegaria. Os atalhos desta janela sempre funcionam aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga. Telas lado a lado valem para Mouse e teclado, na lista de PCs: o mouse passa pela borda de uma tela para a vizinha, sem vídeo. Um PC sem posição vai para a primeira livre ao lado deste.	在沉浸模式下，全屏时鼠标会留在窗口内，Windows 键和 Alt+Tab 会发送到另一台电脑。在“全部”模式下，任何按键都会发送，即使是这台电脑上的程序会拦截的按键。本窗口的快捷键在这里始终有效。在支持 G-SYNC 或 FreeSync 的屏幕上，请关闭垂直同步：画面不会撕裂。并排屏幕用于电脑列表中的“鼠标和键盘”：鼠标越过一个屏幕的边缘进入相邻屏幕，没有视频。没有位置的电脑会放到这台电脑旁边第一个空位。
 Medidor e avisos	监视和警告
@@ -1564,6 +1567,7 @@ aparelho desligado	设备已拔出
 Cada atalho troca a saída e a entrada padrão do Windows de uma vez. Use Adicionar.	每个快捷键会同时切换 Windows 默认输出和输入。请使用“添加”。
 Não deu para mudar na hora. Vale na próxima conexão.	无法立即更改。将在下次连接时生效。
 Pedir 4:4:4	请求 4:4:4
+Pedir 10 bits	请求 10 位
 Ritmo constante	恒定帧节奏
 Controle em segundo plano	后台时也发送手柄
 Teclado como controle	把键盘当作手柄
@@ -1872,7 +1876,7 @@ Configuração própria para este aparelho	此设备使用单独设置
 Saída capturada	捕获的输出
 Entrada junto	混入输入
 Configuração própria: vale quando este aparelho conecta. Com mais de uma pessoa ao mesmo tempo, vale a de quem conectou primeiro. Nome, pessoas, rede, controles e atalhos são os de todos.	单独设置：此设备连接时生效。多人同时连接时，以最先连接者的设置为准。名称、人数、网络、手柄和快捷键对所有设备通用。
-Com prioridade, quem assiste para por 1 segundo quando alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. O Windows só deixa tirar um programa de chamada (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), e só da saída padrão: sai o que estiver tocando. Uma saída escolhida manda o que toca nela. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante.	开启优先时，每当这里有人移动鼠标或打字，观看方会暂停 1 秒。一次一人：2 秒无输入后轮换。Windows 只允许排除一个通话应用（Discord、Teams、Zoom、WhatsApp、Skype、Telegram、Slack、Signal），且仅限默认输出：正在发声的那个会被排除。选定的输出会发送其中播放的内容。更改会立即生效；画面相关的更改会让视频短暂重新开始。
+Com prioridade, quem assiste para por 1 segundo quando alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. O Windows só deixa tirar um programa de chamada (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), e só da saída padrão: sai o que estiver tocando. Uma saída escolhida manda o que toca nela. GPU em desempenho máximo: o driver NVIDIA deixa o Prisma em "Preferir desempenho máximo" enquanto alguém assiste e volta ao de antes no fim. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante.	开启优先时，每当这里有人移动鼠标或打字，观看方会暂停 1 秒。一次一人：2 秒无输入后轮换。Windows 只允许排除一个通话应用（Discord、Teams、Zoom、WhatsApp、Skype、Telegram、Slack、Signal），且仅限默认输出：正在发声的那个会被排除。选定的输出会发送其中播放的内容。GPU 最高性能：有人观看期间，NVIDIA 驱动会将 Prisma 设为“首选最高性能”，结束后恢复原设置。更改会立即生效；画面相关的更改会让视频短暂重新开始。
 A padrão do Windows	Windows 默认
 Desligada agora	当前已关闭
 Nenhuma	无
@@ -1882,6 +1886,7 @@ Acesso de «{}» mudou na hora	“{}”的权限已立即更改
 Opções do host aplicadas na conexão	主机选项已应用到连接
 «{}» mudou os quadros por segundo	“{}”更改了帧率
 «{}» mudou o pedido de 4:4:4	“{}”更改了 4:4:4 请求
+«{}» mudou o pedido de 10 bits	“{}”更改了 10 位请求
 «{}» mudou o ritmo dos quadros	“{}”更改了帧节奏
 Mouse travado nesta tela	鼠标已锁定在此屏幕
 Mouse destravado	鼠标已解锁

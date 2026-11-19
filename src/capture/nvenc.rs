@@ -117,7 +117,7 @@ impl Nvenc {
         let (maj, min) = ver.major_minor();
         me.name = format!(
             "NVENC direto (API {maj}.{min}{}{}{})",
-            if fmt.hdr10 { ", HDR10" } else if fmt.yuv444 { ", 4:4:4" } else { "" },
+            if fmt.hdr10 { ", HDR10" } else if fmt.yuv444 { ", 4:4:4" } else if fmt.deep { ", 10 bits" } else { "" },
             if me.intra_refresh { ", renovação gradual" } else { "" },
             if me.can_invalidate { ", invalida referência perdida" } else { "" }
         );
@@ -145,7 +145,7 @@ impl Nvenc {
         if self.fmt.yuv444 && (codec == Codec::Av1 || self.cap(guid, NV_ENC_CAPS::SUPPORT_YUV444_ENCODE) == 0) {
             return Err(Error::new(E_FAIL, "NVENC: esta placa não codifica 4:4:4 neste codec"));
         }
-        if self.fmt.hdr10 && self.cap(guid, NV_ENC_CAPS::SUPPORT_10BIT_ENCODE) == 0 {
+        if (self.fmt.hdr10 || self.fmt.deep) && self.cap(guid, NV_ENC_CAPS::SUPPORT_10BIT_ENCODE) == 0 {
             return Err(Error::new(E_FAIL, "NVENC: esta placa não codifica 10 bits neste codec"));
         }
         self.intra_refresh = self.cap(guid, NV_ENC_CAPS::SUPPORT_INTRA_REFRESH) != 0;
@@ -220,11 +220,11 @@ impl Nvenc {
         // Uma volta de renovação a cada 2 segundos, espalhada por um quarto de segundo.
         let period = fps * 2;
         let cnt = (fps / 4).max(4);
-        let (ten, full) = (self.fmt.hdr10, self.fmt.yuv444);
+        let (ten, full) = (self.fmt.hdr10 || self.fmt.deep, self.fmt.yuv444);
         // Bit de profundidade em campo próprio desde a API 12.2; antes, num pedaço do campo de bits.
         let new_depth = self.ver >= NvencApiVersion::V12_2;
         // Cor: BT.2020 com PQ no HDR10, BT.709 no resto (quem assiste converte de volta com a mesma).
-        let (prim, transfer, matrix) = if ten { (9, 16, 9) } else { (1, 1, 1) };
+        let (prim, transfer, matrix) = if self.fmt.hdr10 { (9, 16, 9) } else { (1, 1, 1) };
         if full {
             cfg.profileGUID = if codec == Codec::H264 { NV_ENC_H264_PROFILE_HIGH_444_GUID } else { NV_ENC_HEVC_PROFILE_FREXT_GUID };
         } else if ten && codec == Codec::Hevc {
@@ -294,11 +294,11 @@ impl Nvenc {
         cfg
     }
 
-    /// Formato da textura que entra: NV12, P010 (HDR10) ou AYUV (4:4:4).
+    /// Formato da textura que entra: NV12, P010 (HDR10 ou 10 bits SDR) ou AYUV (4:4:4).
     fn buffer_format(&self) -> NV_ENC_BUFFER_FORMAT {
         if self.fmt.yuv444 {
             NV_ENC_BUFFER_FORMAT::AYUV
-        } else if self.fmt.hdr10 {
+        } else if self.fmt.hdr10 || self.fmt.deep {
             NV_ENC_BUFFER_FORMAT::YUV420_10BIT
         } else {
             NV_ENC_BUFFER_FORMAT::NV12

@@ -153,11 +153,12 @@ pub(crate) struct Converter {
     next: usize,
 }
 
-/// Saída do conversor: NV12 (comum), P010 (HDR10) ou AYUV (4:4:4, feito num shader, ver [`Prep`]).
+/// Saída do conversor: NV12 (comum), P010 (HDR10), P010Sdr (10 bits com BT.709) ou AYUV (4:4:4, feito num shader, ver [`Prep`]).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum ConvOut {
     Nv12,
     P010,
+    P010Sdr,
     #[cfg_attr(not(any(debug_assertions, feature = "stream")), allow(dead_code))]
     Ayuv,
 }
@@ -212,7 +213,7 @@ impl Converter {
         let vp = vd.CreateVideoProcessor(&en, 0)?;
         let (in_cs, out_cs) = match out {
             ConvOut::P010 => (DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020, DXGI_COLOR_SPACE_YCBCR_STUDIO_G2084_LEFT_P2020),
-            ConvOut::Nv12 => (DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709, DXGI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P709),
+            ConvOut::Nv12 | ConvOut::P010Sdr => (DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709, DXGI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P709),
             ConvOut::Ayuv => return Err(Error::new(E_INVALIDARG, "o processador de vídeo não grava AYUV; use Prep")),
         };
         vc.VideoProcessorSetStreamColorSpace1(&vp, 0, in_cs);
@@ -220,7 +221,7 @@ impl Converter {
         vc.VideoProcessorSetStreamFrameFormat(&vp, 0, D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE);
         let fmt = match out {
             ConvOut::Nv12 => DXGI_FORMAT_NV12,
-            ConvOut::P010 => DXGI_FORMAT_P010,
+            ConvOut::P010 | ConvOut::P010Sdr => DXGI_FORMAT_P010,
             ConvOut::Ayuv => DXGI_FORMAT_AYUV,
         };
         let mut outputs = Vec::new();

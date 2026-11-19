@@ -42,7 +42,7 @@ struct Frame {
 }
 
 enum Event {
-    Info { codec: VideoCodec, w: u32, h: u32, fps: u32, perms: u8, hdr10: bool, yuv444: bool, priority: u8 },
+    Info { codec: VideoCodec, w: u32, h: u32, fps: u32, perms: u8, hdr10: bool, yuv444: bool, priority: u8, deep: bool },
     Frame(Frame),
     /// Um quadro do PyroWave: os pacotes que chegaram (todos, ou o que deu antes do próximo quadro).
     Wave { pts: i64, parts: Vec<Vec<u8>> },
@@ -229,7 +229,7 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
                 }
                 break;
             }
-            Some(Msg::Info { codec, w, h, fps, perms, recover: r, hdr10, yuv444, priority }) => {
+            Some(Msg::Info { codec, w, h, fps, perms, recover: r, hdr10, yuv444, priority, deep }) => {
                 if !sane_video(w, h, fps) {
                     eprintln!("vídeo do host recusado: {w}x{h} a {fps} FPS");
                     continue;
@@ -238,7 +238,7 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
                 wave = codec == VideoCodec::Wave;
                 sh.got_info.store(true, Ordering::Relaxed);
                 sh.perms.store(perms, Ordering::Relaxed);
-                push(Event::Info { codec, w, h, fps, perms, hdr10, yuv444, priority });
+                push(Event::Info { codec, w, h, fps, perms, hdr10, yuv444, priority, deep });
             }
             Some(Msg::Clip { id, part, parts, data }) => {
                 if let (Some(c), Some(t)) = (&clip, clip_in.add(id, part, parts, data)) {
@@ -705,7 +705,34 @@ unsafe fn key_event(h: HWND, k: &mut Keys, m: u32, w: WPARAM, l: LPARAM) -> bool
         k.held.retain(|x| *x != (scan, extended));
     }
     k.pending.push(Input::Key { scan, extended, down });
+    // Com os dois Shifts apertados, o Windows não manda a subida do primeiro que sobe: ele ficava
+    // apertado no host. Ctrl, Alt e Shift que já subiram aqui sobem lá também.
+    for (s, e) in stale_mods(&k.held, (scan, extended), |vk| GetKeyState(vk.0 as i32) < 0) {
+        eprintln!("teclado: {s:#x} subiu sem aviso do Windows; sobe no host também");
+        k.held.retain(|x| *x != (s, e));
+        k.pending.push(Input::Key { scan: s, extended: e, down: false });
+    }
     true
+}
+
+/// Ctrl, Alt e Shift que estão em `held` mas já não estão apertados (`is_down`), fora a tecla deste evento.
+fn stale_mods(held: &[(u16, bool)], now: (u16, bool), is_down: impl Fn(VIRTUAL_KEY) -> bool) -> Vec<(u16, bool)> {
+    held.iter()
+        .copied()
+        .filter(|&k| k != now)
+        .filter(|&k| {
+            let vk = match k {
+                (0x2A, false) => VK_LSHIFT,
+                (0x36, _) => VK_RSHIFT,
+                (0x1D, false) => VK_LCONTROL,
+                (0x1D, true) => VK_RCONTROL,
+                (0x38, false) => VK_LMENU,
+                (0x38, true) => VK_RMENU,
+                _ => return false,
+            };
+            !is_down(vk)
+        })
+        .collect()
 }
 
 /// O que a aba Cliente mudou no arquivo desde a última leitura (`seen` → `new`) e o menu da
@@ -725,6 +752,7 @@ fn page_picks(seen: &ClientOpts, new: &ClientOpts, co: &ClientOpts) -> Vec<hud::
         (page!(warn), hud::Pick::Warn),
         (page!(vsync), hud::Pick::Vsync),
         (page!(ask444), hud::Pick::Ask444),
+        (page!(ask10), hud::Pick::Ask10),
         (page!(constant), hud::Pick::Constant),
         (page!(pad_background), hud::Pick::PadBackground),
         (page!(pad_keys), hud::Pick::PadKeys),
@@ -805,7 +833,18 @@ unsafe fn super_res(d: &D3d, vc: &ID3D11VideoContext1, vp: &ID3D11VideoProcessor
     }
 }
 
-/// Converte o quadro decodificado (NV12, ou P010 no HDR10) para a tela e encaixa com faixas pretas.
+/// O formato no título e nos avisos: (HDR10, 4:4:4, 10 bits SDR).
+fn fmt_label(v: (bool, bool, bool)) -> &'static str {
+    match v {
+        (true, true, _) => " 4:4:4 HDR10",
+        (true, _, _) => " HDR10",
+        (_, true, _) => " 4:4:4",
+        (_, _, true) => " 10 bits",
+        _ => "",
+    }
+}
+
+/// Converte o quadro decodificado (NV12, ou P010 no HDR10 e nos 10 bits) para a tela e encaixa com faixas pretas.
 struct Scaler {
     vd: ID3D11VideoDevice,
     vc: ID3D11VideoContext1,
@@ -1384,6 +1423,9 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     if co.constant {
         flags |= CONSTANT;
     }
+    if co.ask10 {
+        flags |= ASKS_10;
+    }
     if ask444 && !can444 && codecs & WAVE == 0 {
         eprintln!("4:4:4: esta placa não decodifica HEVC 4:4:4; fica o 4:2:0");
     }
@@ -1444,11 +1486,11 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     let mut info: Option<(VideoCodec, u32, u32, u32)> = None;
     let mut lat = super::LatLog::new("ponta a ponta");
     // O último Info do host, para avisar quando ele muda alguma coisa.
-    let mut seen_info: Option<(VideoCodec, u32, u32, u32, u8, bool, bool, u8)> = None;
+    let mut seen_info: Option<(VideoCodec, u32, u32, u32, u8, bool, bool, u8, bool)> = None;
     // Prioridade do host (255: versão que não manda).
     let mut host_priority = 255u8;
     // HDR10 e 4:4:4 do vídeo atual; a janela em HDR10.
-    let mut vfmt = (false, false);
+    let mut vfmt = (false, false, false);
     let mut hdr_out = false;
     // 4:4:4: o NVDEC e o desenho, com a hora do último quadro novo.
     #[cfg(feature = "stream")]
@@ -1515,7 +1557,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
             if fresh != seen {
                 picks.extend(page_picks(&seen, &fresh, &co));
                 // O resto (atalhos, placa...) vem da página; o menu grava por cima só o que muda.
-                co = ClientOpts { immersive: co.immersive, fps: co.fps, meter: co.meter, warn: co.warn, vsync: co.vsync, ask444: co.ask444, constant: co.constant, pad_background: co.pad_background, pad_keys: co.pad_keys, ..fresh.clone() };
+                co = ClientOpts { immersive: co.immersive, fps: co.fps, meter: co.meter, warn: co.warn, vsync: co.vsync, ask444: co.ask444, ask10: co.ask10, constant: co.constant, pad_background: co.pad_background, pad_keys: co.pad_keys, ..fresh.clone() };
                 seen = fresh;
                 set_keys(&mut KEYS.lock().unwrap(), &co);
             }
@@ -1532,12 +1574,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                 let _ = ClipCursor(None);
                 clipped = false;
             }
-            let extra = match vfmt {
-                (true, true) => " 4:4:4 HDR10",
-                (true, _) => " HDR10",
-                (_, true) => " 4:4:4",
-                _ => "",
-            };
+            let extra = fmt_label(vfmt);
             let label = |k: opts::Keys| if k.1 == 0 { String::new() } else { crate::config::Hotkey::new(k.0, k.1).label() };
             let st = hud::MenuState {
                 fullscreen: SAVED.lock().unwrap().is_some(),
@@ -1550,6 +1587,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                 keyboard: KEYS.lock().unwrap().keyboard,
                 vsync: co.vsync,
                 ask444: (can444 || codecs & WAVE != 0).then_some(flags & ASKS_444 != 0),
+                ask10: flags & ASKS_10 != 0,
                 constant: co.constant,
                 key_menu: co.key_menu,
                 pad_background: sh.pad_background.load(Ordering::Relaxed),
@@ -1627,6 +1665,16 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                     link.send(&again);
                     link.send(&again);
                 }
+                hud::Pick::Ask10 => {
+                    co.ask10 = !co.ask10;
+                    let _ = co.save();
+                    note = Some(format!("10 bits: {}", on_off(co.ask10)));
+                    flags = flags & !ASKS_10 | if co.ask10 { ASKS_10 } else { 0 };
+                    let mut again = Vec::new();
+                    write(&mut again, &Msg::Hello { w: screen_w, h: screen_h, hz: ask_hz(co.fps), codecs, pid: std::process::id(), flags });
+                    link.send(&again);
+                    link.send(&again);
+                }
                 hud::Pick::Constant => {
                     co.constant = !co.constant;
                     let _ = co.save();
@@ -1678,7 +1726,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         let mut last: Option<Decoded> = None;
         for e in events {
             match e {
-                Event::Info { codec, w, h, fps, perms, hdr10, yuv444, priority } => {
+                Event::Info { codec, w, h, fps, perms, hdr10, yuv444, priority, deep } => {
                     host_priority = priority;
                     {
                         let mut k = KEYS.lock().unwrap();
@@ -1693,15 +1741,10 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                         k.video = (w, h);
                     }
                     // O host mudou o vídeo ou as permissões no meio da conexão: avisa o que ficou.
-                    let now_seen = (codec, w, h, fps, perms, hdr10, yuv444, priority);
+                    let now_seen = (codec, w, h, fps, perms, hdr10, yuv444, priority, deep);
                     if let (Some(before), Some(hd)) = (seen_info, &mut hud) {
                         if before != now_seen {
-                            let fmt = match (hdr10, yuv444) {
-                                (true, true) => " 4:4:4 HDR10",
-                                (true, false) => " HDR10",
-                                (false, true) => " 4:4:4",
-                                _ => "",
-                            };
+                            let fmt = fmt_label((hdr10, yuv444, deep));
                             let mut text = format!("{}: {w}x{h} {}{fmt} · {fps} FPS", crate::i18n::tr("Vídeo do host"), codec_name(codec));
                             if before.4 != perms {
                                 text = format!("{}: {}", crate::i18n::tr("Acesso mudou"), crate::i18n::tr(&perms_text(perms)));
@@ -1712,9 +1755,9 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                         }
                     }
                     seen_info = Some(now_seen);
-                    if info != Some((codec, w, h, fps)) || vfmt != (hdr10, yuv444) {
+                    if info != Some((codec, w, h, fps)) || vfmt != (hdr10, yuv444, deep) {
                         info = Some((codec, w, h, fps));
-                        vfmt = (hdr10, yuv444);
+                        vfmt = (hdr10, yuv444, deep);
                         scaler = None;
                         dec = None;
                         wave = None;
@@ -1734,7 +1777,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                             }
                         }
                         if codec == VideoCodec::Wave {
-                            wave = match super::wave::WaveDecoder::new(&d, w, h, VideoFmt { hdr10, yuv444 }) {
+                            wave = match super::wave::WaveDecoder::new(&d, w, h, VideoFmt { hdr10, yuv444, deep: false }) {
                                 Ok(x) => {
                                     eprintln!("PyroWave {}: Vulkan aberto em {:.0} ms", super::wave::fmt_name(x.vf), x.open_ms());
                                     Some(x)
@@ -1765,7 +1808,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                             #[cfg(not(feature = "stream"))]
                             eprintln!("o 4:4:4 só existe compilando com --features stream");
                         } else if let VideoCodec::Std(c) = codec {
-                            dec = match Decoder::new(&d.dev, c, w, h, fps, None, hdr10) {
+                            dec = match Decoder::new(&d.dev, c, w, h, fps, None, hdr10 || deep) {
                                 Ok(x) => Some(x),
                                 Err(e) => {
                                     eprintln!("sem decodificador para {}: {e:?}", codec_name(codec));
@@ -1919,7 +1962,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                     lost_total,
                     shown: second.shown,
                     // O que está no ar (a descrição do host), não o que foi pedido.
-                    video: info.map(|(c, w, h, _)| format!("{w}x{h} {} · {} · {} bits", codec_name(c), if vfmt.1 { "4:4:4" } else { "4:2:0" }, if vfmt.0 { 10 } else { 8 })).unwrap_or_default(),
+                    video: info.map(|(c, w, h, _)| format!("{w}x{h} {} · {} · {} bits", codec_name(c), if vfmt.1 { "4:4:4" } else { "4:2:0" }, if vfmt.0 || vfmt.2 { 10 } else { 8 })).unwrap_or_default(),
                     route: link.route(),
                     priority: host_priority,
                 };
@@ -1927,12 +1970,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                 h.update(hwnd, co.meter, co.warn, info.is_some().then_some(&sample));
             }
             lost_mark = lost_total;
-            let extra = match vfmt {
-                (true, true) => " 4:4:4 HDR10",
-                (true, _) => " HDR10",
-                (_, true) => " 4:4:4",
-                _ => "",
-            };
+            let extra = fmt_label(vfmt);
             let title = match info {
                 Some((c, w, h, _)) => format!(
                     "Prisma · {}x{} {}{} · {:.0} q/s · {:.1} Mbit/s · rede {:.1} ms · ponta a ponta {:.1} ms · perdidos {} · {}{}",
@@ -2061,6 +2099,16 @@ fn meter_name(m: u8) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shift_released_without_message_goes_up() {
+        // Os dois Shifts desceram; o esquerdo subiu sem WM_KEYUP e o direito sobe agora.
+        let held = [(0x2A, false), (0x36, false), (0x1E, false)];
+        let down = |vk: VIRTUAL_KEY| vk == VK_RSHIFT;
+        assert_eq!(stale_mods(&held, (0x36, false), down), vec![(0x2A, false)]);
+        // Tudo apertado de verdade: nada sobe, e a tecla A não é modificador.
+        assert!(stale_mods(&held, (0x1E, false), |_| true).is_empty());
+    }
 
     #[test]
     fn client_shortcuts_reach_the_hook() {

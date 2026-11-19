@@ -1442,7 +1442,7 @@ Equilíbrio	Balanced
 Qualidade	Quality
 Codec	Codec
 Limite de banda	Bandwidth limit
-HDR10 de 10 bits quando as duas telas estão em HDR	10-bit HDR10 when both screens are in HDR
+10 bits: HDR10 com as duas telas em HDR, e degradês sem faixas para quem pede	10-bit: HDR10 when both screens are in HDR, and banding-free gradients for those who ask
 Aceitar 4:4:4 quando quem assiste pede	Accept 4:4:4 when the viewer asks
 Os automáticos seguem quem assiste: a altura da tela, o menor entre os Hz dos dois lados e o melhor codec que os dois têm. O 4:4:4 e o HDR10 caem sozinhos se o outro lado não tiver.	The automatic values follow the viewer: the screen height, the lower refresh rate of the two sides and the best codec both have. 4:4:4 and HDR10 drop on their own if the other side lacks them.
 PyroWave: uns 200 Mbit/s em 1080p60 e mais em 4K. Só na rede local ou pela VPN (ZeroTier, Tailscale), nunca pelo relé; fora delas, e com quem assiste numa versão sem ele, vale o automático.	PyroWave: about 200 Mbit/s at 1080p60 and more at 4K. Only on the local network or over a VPN (ZeroTier, Tailscale), never through the relay; outside them, or with a viewer on a version without it, automatic applies.
@@ -1454,6 +1454,8 @@ Tirar do som o programa de chamada	Leave the call app out of the sound
 Uma pessoa por vez no mouse e no teclado	One person at a time on the mouse and keyboard
 O mouse e o teclado deste PC têm prioridade	This PC's mouse and keyboard come first
 Recusar conexões enquanto este PC assiste a outro	Refuse connections while this PC is viewing another
+GPU em desempenho máximo enquanto compartilha	GPU at maximum performance while sharing
+GPU em desempenho máximo enquanto compartilha (sem efeito: só placas NVIDIA)	GPU at maximum performance while sharing (no effect: NVIDIA cards only)
 Com prioridade, quem assiste para por 1 segundo sempre que alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. Programas de chamada: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack e Signal. O Windows só deixa tirar um: sai do som o que estiver tocando, e a escolha muda durante a conexão. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante. Num notebook com duas placas, a outra placa codifica com uma cópia a mais da imagem.	With priority, the viewer pauses for 1 second whenever someone here moves the mouse or types. One person at a time: the turn passes after 2 seconds without input. Call apps: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack and Signal. Windows only allows leaving out one: the one that is playing is left out of the sound, and the choice changes during the connection. Changes apply right away; picture changes restart the video for a moment. On a laptop with two graphics cards, the other card encodes with one extra copy of the picture.
 Janela de quem assiste	Viewer window
 Abrir em tela cheia sem borda	Open in borderless fullscreen
@@ -1465,6 +1467,7 @@ Só o mouse	Mouse only
 Só o teclado	Keyboard only
 Mouse e teclado	Mouse and keyboard
 Pedir 4:4:4 (texto mais nítido; HEVC só em NVIDIA ou Intel)	Ask for 4:4:4 (sharper text; HEVC needs NVIDIA or Intel)
+Pedir 10 bits (degradês sem faixas; host com NVIDIA)	Ask for 10-bit (banding-free gradients; NVIDIA host)
 Começar sem o som do outro PC	Start without the other PC's sound
 No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. No Tudo, vai qualquer tecla, mesmo as que um programa deste PC pegaria. Os atalhos desta janela sempre funcionam aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga. Telas lado a lado valem para Mouse e teclado, na lista de PCs: o mouse passa pela borda de uma tela para a vizinha, sem vídeo. Um PC sem posição vai para a primeira livre ao lado deste.	In immersive mode, in fullscreen, the mouse stays inside the window, and the Windows key and Alt+Tab go to the other PC. In Everything, any key goes through, even ones a program on this PC would catch. The shortcuts of this window always work here. On a G-SYNC or FreeSync screen, leave VSync off: the picture does not tear. Screens side by side are for Mouse and keyboard, in the PC list: the mouse goes past the edge of one screen to the next one, with no video. A PC with no position goes to the first free one next to this PC.
 Medidor e avisos	Meter and warnings
@@ -1570,6 +1573,7 @@ aparelho desligado	device unplugged
 Cada atalho troca a saída e a entrada padrão do Windows de uma vez. Use Adicionar.	Each shortcut switches the Windows default output and input at once. Use Add.
 Não deu para mudar na hora. Vale na próxima conexão.	Could not change it right away. It applies on the next connection.
 Pedir 4:4:4	Ask for 4:4:4
+Pedir 10 bits	Ask for 10-bit
 Ritmo constante	Constant frame pacing
 Controle em segundo plano	Controller in the background
 Teclado como controle	Keyboard as controller
@@ -1878,7 +1882,7 @@ Configuração própria para este aparelho	Own settings for this device
 Saída capturada	Captured output
 Entrada junto	Mix in input
 Configuração própria: vale quando este aparelho conecta. Com mais de uma pessoa ao mesmo tempo, vale a de quem conectou primeiro. Nome, pessoas, rede, controles e atalhos são os de todos.	Own settings: they apply when this device connects. With more than one person at once, the settings of whoever connected first apply. Name, people, network, controllers and shortcuts are shared by all.
-Com prioridade, quem assiste para por 1 segundo quando alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. O Windows só deixa tirar um programa de chamada (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), e só da saída padrão: sai o que estiver tocando. Uma saída escolhida manda o que toca nela. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante.	With priority, the viewer pauses for 1 second whenever someone here moves the mouse or types. One person at a time: the turn passes after 2 seconds without input. Windows only allows leaving out one call app (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), and only from the default output: the one that is playing is left out. A chosen output sends what plays on it. Changes apply right away; picture changes restart the video for a moment.
+Com prioridade, quem assiste para por 1 segundo quando alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. O Windows só deixa tirar um programa de chamada (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), e só da saída padrão: sai o que estiver tocando. Uma saída escolhida manda o que toca nela. GPU em desempenho máximo: o driver NVIDIA deixa o Prisma em "Preferir desempenho máximo" enquanto alguém assiste e volta ao de antes no fim. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante.	With priority, the viewer pauses for 1 second whenever someone here moves the mouse or types. One person at a time: the turn passes after 2 seconds without input. Windows only allows leaving out one call app (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), and only from the default output: the one that is playing is left out. A chosen output sends what plays on it. GPU at maximum performance: the NVIDIA driver keeps Prisma on "Prefer maximum performance" while someone is watching and goes back to the previous setting at the end. Changes apply right away; picture changes restart the video for a moment.
 A padrão do Windows	Windows default
 Desligada agora	Off right now
 Nenhuma	None
@@ -1888,6 +1892,7 @@ Acesso de «{}» mudou na hora	Access for “{}” changed right away
 Opções do host aplicadas na conexão	Host options applied to the connection
 «{}» mudou os quadros por segundo	“{}” changed the frame rate
 «{}» mudou o pedido de 4:4:4	“{}” changed the 4:4:4 request
+«{}» mudou o pedido de 10 bits	“{}” changed the 10-bit request
 «{}» mudou o ritmo dos quadros	“{}” changed the frame pacing
 Mouse travado nesta tela	Mouse locked to this screen
 Mouse destravado	Mouse unlocked
