@@ -14,6 +14,7 @@ pub mod guide;
 mod hdr;
 pub mod meter;
 mod monitor;
+mod perf;
 pub mod news;
 pub mod nvidia;
 mod optimize;
@@ -56,6 +57,7 @@ use crate::ui::Ui;
 #[derive(Clone, Copy, PartialEq)]
 pub enum Page {
     Monitor,
+    Performance,
     Meter,
     Storage,
     Analyze,
@@ -151,6 +153,12 @@ const ICON_ADJ: Icon = &[
     &[(8., 15.), (8., 19.)],
 ];
 
+/// Velocímetro: arco e ponteiro.
+const ICON_PERF: Icon = &[
+    &[(4., 17.), (3.5, 13.), (5., 9.), (8., 6.), (12., 5.), (16., 6.), (19., 9.), (20.5, 13.), (20., 17.)],
+    &[(12., 15.), (16., 9.)],
+];
+
 const ICON_GPU: Icon = &[
     &[(3., 7.), (21., 7.), (21., 17.), (3., 17.), (3., 7.)],
     &[(9., 9.5), (11.5, 10.), (12.5, 12.), (11.5, 14.), (9., 14.5), (6.5, 14.), (5.5, 12.), (6.5, 10.), (9., 9.5)],
@@ -241,9 +249,9 @@ pub fn nav_page(i: usize) -> Option<(Page, Icon)> {
     action_nav().nth(i).map(|n| (n.0, n.2))
 }
 
-/// Ordem das ações "Página ..." (33 a 55): a da barra lateral antes dos grupos, com Cópias e Atalhos
+/// Ordem das ações "Página ..." (33 a 56): a da barra lateral antes dos grupos, com Cópias, Atalhos e Desempenho
 /// no fim. Nunca muda, mesmo que a barra mude: os números já gravados dependem dela.
-const ACTION_PAGES: [Page; 23] = [
+const ACTION_PAGES: [Page; 24] = [
     Page::Monitor,
     Page::Meter,
     Page::Storage,
@@ -267,6 +275,7 @@ const ACTION_PAGES: [Page; 23] = [
     Page::Adjust,
     Page::Copies,
     Page::Shortcuts,
+    Page::Performance,
 ];
 
 /// Os itens da barra lateral na ordem das ações "Página ...".
@@ -314,6 +323,7 @@ pub fn nav_step(page: Page, d: i8) -> Page {
 /// Barra lateral, em grupos (`GROUPS`). Mudar a ordem não mexe nas ações "Página ..." (`ACTION_PAGES`).
 const NAV: &[(Page, &str, Icon)] = &[
     (Page::Monitor, "Monitor", ICON_MON),
+    (Page::Performance, "Desempenho", ICON_PERF),
     (Page::Storage, "Discos e redes", ICON_DISK),
     (Page::Analyze, "Espaço em disco", ICON_MAP),
     (Page::Startup, "Inicialização", ICON_BOOT),
@@ -339,7 +349,7 @@ const NAV: &[(Page, &str, Icon)] = &[
 ];
 
 /// Grupos da barra lateral: nome e quantos itens seguidos de `NAV` entram nele.
-const GROUPS: [(&str, usize); 5] = [("Sistema", 6), ("Manutenção", 6), ("Jogos e tela", 6), ("Entrada e som", 3), ("Prisma", 2)];
+const GROUPS: [(&str, usize); 5] = [("Sistema", 7), ("Manutenção", 6), ("Jogos e tela", 6), ("Entrada e som", 3), ("Prisma", 2)];
 
 /// Grupo do item `i` de `NAV`.
 fn group_of(i: usize) -> usize {
@@ -472,6 +482,7 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
     }
     match app.page {
         Page::Monitor => monitor::draw(&mut ui, app, area),
+        Page::Performance => perf::draw(&mut ui, app, area),
         Page::Meter => meter::draw(&mut ui, app, area),
         Page::Storage => storage::draw(&mut ui, app, area),
         Page::Analyze => analyze::draw(&mut ui, app, area),
@@ -678,6 +689,7 @@ mod tests {
         assert!(nav_page(1).is_some_and(|n| n.0 == Page::Meter));
         assert!(nav_page(21).is_some_and(|n| n.0 == Page::Copies));
         assert!(nav_page(22).is_some_and(|n| n.0 == Page::Shortcuts));
-        assert!(nav_page(23).is_none());
+        assert!(nav_page(23).is_some_and(|n| n.0 == Page::Performance));
+        assert!(nav_page(24).is_none());
     }
 }

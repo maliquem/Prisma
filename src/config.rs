@@ -257,6 +257,8 @@ pub struct Config {
     pub widget_dock_left: bool,
     /// Clique no widget preso abre o painel detalhado.
     pub widget_panel: bool,
+    /// Desempenho: mede as engines da GPU e o resto também com a janela fechada.
+    pub perf_always: bool,
     pub power_auto: bool,
     pub plan_game: String,
     pub plan_rest: String,
@@ -448,6 +450,7 @@ impl Default for Config {
             widget_dock: false,
             widget_dock_left: false,
             widget_panel: false,
+            perf_always: false,
             power_auto: true,
             plan_game: "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c".into(),
             plan_rest: "381b4222-f694-41f0-9685-ff5bb260df2e".into(),
@@ -708,6 +711,7 @@ impl Config {
                 "widget_dock" => c.widget_dock = b,
                 "widget_dock_left" => c.widget_dock_left = b,
                 "widget_panel" => c.widget_panel = b,
+                "perf_always" => c.perf_always = b,
                 "power_auto" => c.power_auto = b,
                 "plan_game" => c.plan_game = v.into(),
                 "plan_rest" => c.plan_rest = v.into(),
@@ -940,6 +944,7 @@ impl Config {
         let _ = writeln!(s, "widget_dock={}", b(self.widget_dock));
         let _ = writeln!(s, "widget_dock_left={}", b(self.widget_dock_left));
         let _ = writeln!(s, "widget_panel={}", b(self.widget_panel));
+        let _ = writeln!(s, "perf_always={}", b(self.perf_always));
         let _ = writeln!(s, "power_auto={}", b(self.power_auto));
         let _ = writeln!(s, "plan_game={}", self.plan_game);
         let _ = writeln!(s, "plan_rest={}", self.plan_rest);

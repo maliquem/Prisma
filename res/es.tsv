@@ -2732,3 +2732,53 @@ Abre o instalador da VB-Audio: clique em Remove Driver. O Windows pede permissã
 O VB-CABLE é da VB-Audio, donationware de terceiros: o uso pessoal é livre, com doação opcional, e o uso profissional ou em empresa pede licenças pagas na loja da VB-Audio. O Prisma vai baixar o pacote da página oficial (vb-audio.com), conferir a soma e abrir o instalador da VB-Audio, que pede permissão de administrador. Nele, clique em Install Driver; o PC pode pedir para reiniciar. Para desfazer: este cartão, Remover.	VB-CABLE es de VB-Audio, donationware de terceros: el uso personal es libre, con donación opcional, y el uso profesional o en empresa requiere licencias de pago en la tienda de VB-Audio. Prisma descargará el paquete de la página oficial (vb-audio.com), comprobará la suma y abrirá el instalador de VB-Audio, que pide permiso de administrador. En él, haz clic en Install Driver; el PC puede pedir reiniciar. Para deshacerlo: esta tarjeta, Quitar.
 o arquivo baixado não confere com o pacote oficial	el archivo descargado no coincide con el paquete oficial
 o pacote guardado sumiu	el paquete guardado desapareció
+Página Desempenho	Página Rendimiento
+Medir com a janela fechada	Medir con la ventana cerrada
+Uso total	Uso total
+thread mais cheia:	hilo más cargado:
+base	base
+pelo PawnIO	vía PawnIO
+threads	hilos
+handles	identificadores
+Uso total · 60 s	Uso total · 60 s
+Por thread (uso e clock)	Por hilo (uso y reloj)
+Modificada	Modificada
+Em espera (cache)	En espera (caché)
+Livre	Libre
+de	de
+em uso	en uso
+Composição	Composición
+Em uso · 60 s	En uso · 60 s
+slots	ranuras
+Comprometida	Confirmada
+Cache	Caché
+Pool paginado	Grupo paginado
+Pool não paginado	Grupo no paginado
+Pentes	Módulos
+Dedicada	Dedicada
+Compartilhada	Compartida
+Programas usando	Programas usando
+sai da RAM	sale de la RAM
+maior:	mayor:
+Outros	Otros
+Dedicada por programa	Dedicada por programa
+Dedicada · 60 s	Dedicada · 60 s
+Limite de energia	Límite de energía
+Lentidão do hardware	Ralentización del hardware
+Ociosa	Inactiva
+só na NVIDIA	solo en NVIDIA
+maior engine:	mayor motor:
+Clock do núcleo	Reloj del núcleo
+Clock da memória	Reloj de la memoria
+máx.	máx.
+controlador	controlador
+ventoinha	ventilador
+Consumo	Consumo
+limite	límite
+Limite do clock	Límite de reloj
+Programas por engine	Programas por motor
+Toque numa linha para abrir	Toca una fila para abrir
+RAM em uso	RAM en uso
+VRAM dedicada	VRAM dedicada
+VRAM compartilhada	VRAM compartida
+Abrir no Medidor	Abrir en el Medidor

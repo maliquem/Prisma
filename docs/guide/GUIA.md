@@ -33,7 +33,19 @@ Mostra o que está usando o PC agora: CPU por núcleo, GPU, RAM e VRAM, e o uso 
 - **Buscar:** o campo ao lado das abas filtra a lista pelo nome do programa ou do arquivo. Digite só números para achar pelo PID.
 - **Ordem por nome:** clicar em **Programa** ordena por nome e separa a lista como no Gerenciador de Tarefas: **Aplicativos** (os programas com janela aberta) no topo, depois **Em segundo plano** e **Processos do Windows**, cada grupo com quantos são.
 - **Reiniciar o Explorer:** quando a barra de tarefas, o menu Iniciar ou a área de trabalho travam. O Prisma pergunta antes, fecha o Explorer pelo PID e ele volta sozinho em alguns segundos. As janelas de pasta abertas fecham.
-- **Não dá para:** ver temperatura e consumo da CPU, porque isso exige um driver de kernel. A coluna de rede exige o Prisma como administrador. A temperatura da GPU depende do driver da NVIDIA.
+- **Desempenho:** clicar num cartão CPU, GPU, RAM ou VRAM abre a página Desempenho já naquela seção.
+- **Não dá para:** ver o consumo da CPU, porque isso exige um driver de kernel. A temperatura da CPU aparece no Desempenho, com o PawnIO. A coluna de rede exige o Prisma como administrador. A temperatura da GPU depende do driver da NVIDIA.
+
+## Desempenho
+
+Mostra GPU, CPU, RAM e VRAM em quatro seções, escolhidas no seletor no alto da página. Cada uma tem o uso, os gráficos dos últimos 60 segundos e a lista de programas que usam aquela parte do PC.
+
+- **GPU:** uso total, clock do núcleo e da memória, temperatura e consumo, e o motivo de o clock estar abaixo do máximo. Clock, consumo e motivo aparecem só com placa NVIDIA; com AMD ou Intel aparece "—". Também mostra o uso de cada engine (3D, Copy, Encode, Decode e Compute).
+- **CPU:** uso total, clock, processos, threads e tempo ligado, com o uso e o clock de cada thread. A temperatura precisa do PawnIO: sem leitura aparece "—", e o botão para instalar aparece se ele não estiver instalado.
+- **RAM:** barra com a memória em uso, modificada, em espera (cache) e livre. Mostra também comprometida, cache, pools paginado e não paginado, disponível, e os pentes (tipo, velocidade e slots).
+- **VRAM:** dedicada, compartilhada (que sai da RAM) e quantos programas usam a placa. A barra mostra a dedicada de cada programa, e a tabela, a dedicada e a compartilhada de cada um.
+- **Detalhe do programa:** clique numa linha da tabela para ver tudo o que se mede dele. Ali ficam **Abrir no Medidor** (leva o programa ao Medidor, onde fica o limite de FPS) e **Finalizar tarefa** (pergunta antes). Outro clique na linha fecha o detalhe.
+- **Medir com a janela fechada:** opção que mantém as leituras extras rodando sempre, para os gráficos já estarem prontos ao abrir a página. Desligada, que é o padrão, essas leituras rodam só com a página aberta.
 
 ## Medidor
 

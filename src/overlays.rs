@@ -555,7 +555,7 @@ fn mma(h: &std::collections::VecDeque<f32>) -> String {
     format!("{lo:.0}% / {:.0}% / {hi:.0}%", h.iter().sum::<f32>() / h.len() as f32)
 }
 
-fn uptime(secs: u64) -> String {
+pub(crate) fn uptime(secs: u64) -> String {
     let (d, h, m) = (secs / 86400, secs / 3600 % 24, secs / 60 % 60);
     if d > 0 {
         format!("{d} d {h} h {m} min")

@@ -2732,3 +2732,53 @@ Abre o instalador da VB-Audio: clique em Remove Driver. O Windows pede permissã
 O VB-CABLE é da VB-Audio, donationware de terceiros: o uso pessoal é livre, com doação opcional, e o uso profissional ou em empresa pede licenças pagas na loja da VB-Audio. O Prisma vai baixar o pacote da página oficial (vb-audio.com), conferir a soma e abrir o instalador da VB-Audio, que pede permissão de administrador. Nele, clique em Install Driver; o PC pode pedir para reiniciar. Para desfazer: este cartão, Remover.	VB-CABLE — продукт VB-Audio, donationware стороннего разработчика: личное использование бесплатно, пожертвование по желанию, а для профессионального или корпоративного использования нужны платные лицензии в магазине VB-Audio. Prisma скачает пакет с официальной страницы (vb-audio.com), проверит контрольную сумму и откроет установщик VB-Audio, который запросит права администратора. В нём нажмите Install Driver; ПК может предложить перезагрузиться. Чтобы отменить: эта карточка, «Удалить».
 o arquivo baixado não confere com o pacote oficial	скачанный файл не совпадает с официальным пакетом
 o pacote guardado sumiu	сохранённый пакет пропал
+Página Desempenho	Страница «Производительность»
+Medir com a janela fechada	Измерять при закрытом окне
+Uso total	Общая загрузка
+thread mais cheia:	самый загруженный поток:
+base	базовая
+pelo PawnIO	через PawnIO
+threads	потоков
+handles	дескрипторов
+Uso total · 60 s	Общая загрузка · 60 с
+Por thread (uso e clock)	По потокам (загрузка и частота)
+Modificada	Изменённая
+Em espera (cache)	Ожидание (кэш)
+Livre	Свободно
+de	из
+em uso	используется
+Composição	Состав
+Em uso · 60 s	Используется · 60 с
+slots	слотов
+Comprometida	Выделено
+Cache	Кэш
+Pool paginado	Выгружаемый пул
+Pool não paginado	Невыгружаемый пул
+Pentes	Модули
+Dedicada	Выделенная
+Compartilhada	Общая
+Programas usando	Программы, использующие
+sai da RAM	берётся из ОЗУ
+maior:	макс.:
+Outros	Другие
+Dedicada por programa	Выделенная по программам
+Dedicada · 60 s	Выделенная · 60 с
+Limite de energia	Предел мощности
+Lentidão do hardware	Замедление оборудования
+Ociosa	Простой
+só na NVIDIA	только NVIDIA
+maior engine:	макс. движок:
+Clock do núcleo	Частота ядра
+Clock da memória	Частота памяти
+máx.	макс.
+controlador	контроллер
+ventoinha	вентилятор
+Consumo	Потребление
+limite	предел
+Limite do clock	Предел частоты
+Programas por engine	Программы по движкам
+Toque numa linha para abrir	Нажмите строку, чтобы открыть
+RAM em uso	ОЗУ используется
+VRAM dedicada	Выделенная VRAM
+VRAM compartilhada	Общая VRAM
+Abrir no Medidor	Открыть в «Счётчике»

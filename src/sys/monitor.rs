@@ -36,6 +36,10 @@ pub struct Group {
     /// Bytes por segundo.
     pub disk: u64,
     pub net: u64,
+    /// Só com a página Desempenho aberta: uso de cada tipo de engine, VRAM compartilhada e threads.
+    pub eng: [f32; super::perf::ENGINES],
+    pub shared: u64,
+    pub threads: u32,
 }
 
 /// Uma linha da aba Detalhes: um processo, não o programa inteiro.
@@ -72,6 +76,10 @@ pub struct Snapshot {
     pub cpu_temp: Option<f32>,
     /// False quando falta administrador e a coluna de rede não tem dados.
     pub net_ok: bool,
+    /// Leituras da página Desempenho; vazio quando ela não pede (`PERF`).
+    pub perf: super::perf::Reading,
+    pub hist_eng: [VecDeque<f32>; super::perf::ENGINES],
+    pub base_mhz: f32,
 }
 
 impl Snapshot {
@@ -103,6 +111,8 @@ pub static METER: AtomicBool = AtomicBool::new(false);
 pub static GPU_TEMP: AtomicBool = AtomicBool::new(false);
 /// Atualiza a cada segundo, sem as leituras caras do modo detalhado.
 pub static FAST: AtomicBool = AtomicBool::new(false);
+/// Página Desempenho aberta, ou a opção de medir com a janela fechada ligada.
+pub static PERF: AtomicBool = AtomicBool::new(false);
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
@@ -121,6 +131,7 @@ struct Proc {
     time: i64,
     ram: u64,
     io: u64,
+    threads: u32,
     exe: String,
 }
 
@@ -152,9 +163,9 @@ fn read_processes(buf: &mut Vec<u8>, threads: Option<&mut HashMap<u32, u32>>) ->
             let pid = (p.add(80) as *const usize).read_unaligned() as u32;
             let reads = (p.add(232) as *const u64).read_unaligned();
             let writes = (p.add(240) as *const u64).read_unaligned();
+            let nthreads = (p.add(4) as *const u32).read_unaligned();
             if let Some(map) = &mut threads {
-                let n = (p.add(4) as *const u32).read_unaligned() as usize;
-                for i in 0..n {
+                for i in 0..nthreads as usize {
                     let tid = (p.add(256 + i * 80 + 48) as *const usize).read_unaligned() as u32;
                     map.insert(tid, pid);
                 }
@@ -165,7 +176,7 @@ fn read_processes(buf: &mut Vec<u8>, threads: Option<&mut HashMap<u32, u32>>) ->
                 } else {
                     String::from_utf16_lossy(std::slice::from_raw_parts(name_ptr, name_len))
                 };
-                out.push(Proc { pid, time: user + kernel, ram: private, io: reads + writes, exe });
+                out.push(Proc { pid, time: user + kernel, ram: private, io: reads + writes, threads: nthreads, exe });
             }
             if next == 0 {
                 break;
@@ -235,7 +246,10 @@ impl GpuCounters {
         }
     }
 
-    fn array(counter: PDH_HCOUNTER, buf: &mut Vec<u8>) -> Vec<(String, f64)> {
+}
+
+/// Valores de um contador com `*`: (instância, valor).
+pub(super) fn counter_array(counter: PDH_HCOUNTER, buf: &mut Vec<u8>) -> Vec<(String, f64)> {
         let mut out = Vec::new();
         unsafe {
             let mut size = 0u32;
@@ -260,18 +274,19 @@ impl GpuCounters {
             }
         }
         out
-    }
+}
 
+impl GpuCounters {
     fn read(&self, buf: &mut Vec<u8>) -> (HashMap<u32, f32>, HashMap<u32, u64>, f32) {
         let mut gpu: HashMap<u32, f32> = HashMap::new();
         let mut vram: HashMap<u32, u64> = HashMap::new();
         unsafe { PdhCollectQueryData(self.query) };
-        for (name, v) in Self::array(self.engine, buf) {
+        for (name, v) in counter_array(self.engine, buf) {
             if let Some(pid) = instance_pid(&name) {
                 *gpu.entry(pid).or_default() += v as f32;
             }
         }
-        for (name, v) in Self::array(self.memory, buf) {
+        for (name, v) in counter_array(self.memory, buf) {
             if let Some(pid) = instance_pid(&name) {
                 *vram.entry(pid).or_default() += v as u64;
             }
@@ -322,7 +337,7 @@ impl DiskBusy {
     /// (instância, % ativo) desde a leitura anterior. A instância é "0 C: D:": número e letras.
     pub fn read(&mut self) -> Vec<(String, f32)> {
         unsafe { PdhCollectQueryData(self.query) };
-        GpuCounters::array(self.idle, &mut self.buf).into_iter().map(|(n, idle)| (n, (100.0 - idle as f32).clamp(0.0, 100.0))).collect()
+        counter_array(self.idle, &mut self.buf).into_iter().map(|(n, idle)| (n, (100.0 - idle as f32).clamp(0.0, 100.0))).collect()
     }
 }
 
@@ -340,7 +355,7 @@ pub fn disk_of(disks: &[(String, f32)], drive: &str) -> Option<usize> {
 }
 
 /// Instâncias têm a forma `pid_1234_luid_0x..._phys_0...`.
-fn instance_pid(name: &str) -> Option<u32> {
+pub(super) fn instance_pid(name: &str) -> Option<u32> {
     name.strip_prefix("pid_")?.split('_').next()?.parse().ok()
 }
 
@@ -401,6 +416,8 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
     let mut pbuf = vec![0u8; 1 << 20];
     let mut cbuf = Vec::new();
     let mut counters: Option<GpuCounters> = None;
+    let mut perf_counters: Option<super::perf::Counters> = None;
+    let mut h_eng: [VecDeque<f32>; super::perf::ENGINES] = Default::default();
     let mut cpu_temp: Option<super::cputemp::CpuTemp> = None;
     let mut cpu_temp_at: Option<Instant> = None;
     let mut last = Instant::now();
@@ -408,6 +425,7 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
     let (mut h_cpu, mut h_gpu, mut h_ram, mut h_vram) =
         (VecDeque::new(), VecDeque::new(), VecDeque::new(), VecDeque::new());
     loop {
+        let perf_on = PERF.load(Ordering::Relaxed);
         let detail = DETAIL.load(Ordering::Relaxed) || METER.load(Ordering::Relaxed);
         let cpu = read_cpu(&mut prev_cpu, &mut threads);
         let elapsed = last.elapsed().as_secs_f32().max(0.05);
@@ -421,7 +439,7 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
             let _ = GlobalMemoryStatusEx(&mut mem);
         }
         // A biblioteca da NVIDIA pesa cerca de 20 MB: só fica carregada com a janela aberta.
-        let want_nvml = detail || PANEL.load(Ordering::Relaxed);
+        let want_nvml = detail || perf_on || PANEL.load(Ordering::Relaxed);
         if want_nvml && nvml.is_none() {
             nvml = Nvml::load();
             if let Some(n) = &nvml {
@@ -432,7 +450,7 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
             nvml = None;
         }
         // O driver só fica aberto enquanto alguém mostra a temperatura; sem ele, tenta de novo a cada 30 s.
-        if (detail && super::cputemp::WANTED.load(Ordering::Relaxed)) || super::cputemp::WIDGET.load(Ordering::Relaxed) {
+        if (detail && super::cputemp::WANTED.load(Ordering::Relaxed)) || perf_on || super::cputemp::WIDGET.load(Ordering::Relaxed) {
             if cpu_temp.is_none() && cpu_temp_at.map_or(true, |t| t.elapsed().as_secs() >= 30) {
                 cpu_temp_at = Some(Instant::now());
                 cpu_temp = super::cputemp::CpuTemp::open();
@@ -472,7 +490,7 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
         let mut groups: HashMap<String, Group> = HashMap::with_capacity(procs.len());
         let mut times = HashMap::with_capacity(procs.len());
         let (mut pgpu, mut pvram, mut perf) = (HashMap::new(), HashMap::new(), 0.0);
-        if detail || GPU_WANTED.load(Ordering::Relaxed) {
+        if detail || perf_on || GPU_WANTED.load(Ordering::Relaxed) {
             if counters.is_none() {
                 counters = GpuCounters::new();
             }
@@ -482,6 +500,12 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
         } else {
             counters = None;
         }
+        if perf_on && perf_counters.is_none() {
+            perf_counters = super::perf::Counters::new();
+        } else if !perf_on {
+            perf_counters = None;
+        }
+        let pr = perf_counters.as_mut().map(|c| c.read()).unwrap_or_default();
         let mut rows = Vec::with_capacity(if detail { procs.len() } else { 0 });
         for p in procs {
             let before = prev_time.get(&p.pid).copied().unwrap_or(p.time);
@@ -522,6 +546,13 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
             g.vram += row.vram;
             g.net += row.net;
             g.disk += row.disk;
+            g.threads += p.threads;
+            if let Some(e) = pr.pid_eng.get(&p.pid) {
+                for (a, b) in g.eng.iter_mut().zip(e) {
+                    *a += b;
+                }
+            }
+            g.shared += pr.pid_shared.get(&p.pid).copied().unwrap_or(0);
             if detail {
                 rows.push(row);
             }
@@ -540,11 +571,14 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
         push(&mut h_ram, mem.dwMemoryLoad as f32);
         let vp = if gpu.total > 0 { gpu.used as f32 / gpu.total as f32 * 100.0 } else { 0.0 };
         push(&mut h_vram, vp);
+        for (h, v) in h_eng.iter_mut().zip(pr.eng) {
+            push(h, v);
+        }
         {
             let mut s = out.lock().unwrap();
             s.cpu = cpu;
             s.threads = threads.clone();
-            if detail && perf > 0.0 {
+            if (detail || perf_on) && perf > 0.0 {
                 s.ghz = perf / 100.0 * mhz / 1000.0;
             }
             s.ram_used = ram_used;
@@ -561,11 +595,14 @@ fn run(out: Arc<Mutex<Snapshot>>, hub: isize, msg: u32) {
             s.procs = rows;
             s.detail = detail;
             s.net_ok = trace.is_some();
+            s.perf = pr;
+            s.hist_eng = h_eng.clone();
+            s.base_mhz = mhz;
         }
         unsafe {
             let _ = PostMessageW(Some(HWND(hub as *mut _)), msg, WPARAM(0), LPARAM(0));
         }
-        let fast = detail || FAST.load(Ordering::Relaxed);
+        let fast = detail || perf_on || FAST.load(Ordering::Relaxed);
         std::thread::sleep(Duration::from_millis(if fast { 1000 } else { 2000 }));
     }
 }

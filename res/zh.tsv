@@ -2732,3 +2732,53 @@ Abre o instalador da VB-Audio: clique em Remove Driver. O Windows pede permissã
 O VB-CABLE é da VB-Audio, donationware de terceiros: o uso pessoal é livre, com doação opcional, e o uso profissional ou em empresa pede licenças pagas na loja da VB-Audio. O Prisma vai baixar o pacote da página oficial (vb-audio.com), conferir a soma e abrir o instalador da VB-Audio, que pede permissão de administrador. Nele, clique em Install Driver; o PC pode pedir para reiniciar. Para desfazer: este cartão, Remover.	VB-CABLE 由 VB-Audio 提供，是第三方的 donationware：个人使用免费，可自愿捐赠；专业或企业使用需要在 VB-Audio 商店购买付费许可。Prisma 会从官方页面（vb-audio.com）下载安装包，校验其校验和，并打开 VB-Audio 安装程序，该程序会请求管理员权限。在其中点击 Install Driver；电脑可能要求重启。如需撤销：此卡片中的“移除”。
 o arquivo baixado não confere com o pacote oficial	下载的文件与官方安装包不一致
 o pacote guardado sumiu	已保存的安装包不见了
+Página Desempenho	性能页面
+Medir com a janela fechada	窗口关闭时也测量
+Uso total	总使用率
+thread mais cheia:	最忙线程：
+base	基础
+pelo PawnIO	通过 PawnIO
+threads	线程
+handles	句柄
+Uso total · 60 s	总使用率 · 60 秒
+Por thread (uso e clock)	按线程（使用率和频率）
+Modificada	已修改
+Em espera (cache)	待机（缓存）
+Livre	空闲
+de	/
+em uso	已用
+Composição	组成
+Em uso · 60 s	已用 · 60 秒
+slots	插槽
+Comprometida	已提交
+Cache	缓存
+Pool paginado	分页缓冲池
+Pool não paginado	非分页缓冲池
+Pentes	内存条
+Dedicada	专用
+Compartilhada	共享
+Programas usando	使用中的程序
+sai da RAM	来自内存
+maior:	最高：
+Outros	其他
+Dedicada por programa	各程序专用
+Dedicada · 60 s	专用 · 60 秒
+Limite de energia	功耗限制
+Lentidão do hardware	硬件降速
+Ociosa	空闲
+só na NVIDIA	仅限 NVIDIA
+maior engine:	最高引擎：
+Clock do núcleo	核心频率
+Clock da memória	显存频率
+máx.	最大
+controlador	控制器
+ventoinha	风扇
+Consumo	功耗
+limite	上限
+Limite do clock	频率上限
+Programas por engine	按引擎分程序
+Toque numa linha para abrir	点按一行以打开
+RAM em uso	内存已用
+VRAM dedicada	专用显存
+VRAM compartilhada	共享显存
+Abrir no Medidor	在性能监视中打开

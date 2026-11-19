@@ -33,7 +33,19 @@ Shows what is using your PC right now: CPU per core, GPU, RAM and VRAM, plus the
 - **Search:** the field next to the tabs filters the list by program or file name. Type only numbers to find a PID.
 - **Sort by name:** clicking **Program** sorts by name and splits the list like Task Manager: **Apps** (programs with an open window) on top, then **Background processes** and **Windows processes**, each group with its count.
 - **Restart Explorer:** for when the taskbar, the Start menu or the desktop freezes. Prisma asks first, ends Explorer by its PID and it comes back on its own in a few seconds. Open folder windows close.
-- **You can't:** see CPU temperature and power, because they require a kernel driver. The network column requires Prisma as administrator. GPU temperature depends on the NVIDIA driver.
+- **Performance:** clicking a CPU, GPU, RAM or VRAM card opens the Performance page on that section.
+- **You can't:** see CPU power, because it requires a kernel driver. CPU temperature shows on the Performance page, with PawnIO. The network column requires Prisma as administrator. GPU temperature depends on the NVIDIA driver.
+
+## Performance
+
+Shows GPU, CPU, RAM and VRAM in four sections, chosen in the selector at the top of the page. Each one has its use, charts of the last 60 seconds, and the list of programs that use that part of the PC.
+
+- **GPU:** total use, core and memory clock, temperature and power, and the reason the clock is below its maximum. Clock, power and reason show only with an NVIDIA card; with AMD or Intel a dash shows. It also shows the use of each engine (3D, Copy, Encode, Decode and Compute).
+- **CPU:** total use, clock, processes, threads and uptime, with the use and clock of each thread. Temperature needs PawnIO: without a reading a dash shows, plus a button to install it if PawnIO is missing.
+- **RAM:** a bar with memory in use, modified, standby (cache) and free. It also shows committed, cache, paged and non-paged pools, available, and the memory sticks (type, speed and slots).
+- **VRAM:** dedicated, shared (shared comes from RAM) and how many programs use the card. The bar shows each program's dedicated memory, and the table shows the dedicated and shared memory of each one.
+- **Program detail:** click a row in the table to see everything measured for that program. There you find **Open in Meter** (sends the program to the Meter, where the FPS limit is) and **End task** (asks first). Clicking the row again closes the detail.
+- **Measure with the window closed:** keeps the extra readings running all the time, so the charts are ready when you open the page. Off by default: then these readings run only while the page is open.
 
 ## Meter
 
