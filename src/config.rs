@@ -431,7 +431,7 @@ impl Default for Config {
             hk_find: Hotkey::new(MOD_CTRL | MOD_ALT, 0x20),
             hk_macro: Hotkey::new(0, 0),
             // P e A já são das fotos: menu M e comparar C.
-            hk_shader: [Hotkey::new(MOD_CTRL | MOD_ALT, b'S' as u32), Hotkey::new(MOD_CTRL | MOD_ALT, b'M' as u32), Hotkey::new(MOD_CTRL | MOD_ALT, b'D' as u32), Hotkey::new(MOD_CTRL | MOD_ALT, b'C' as u32)],
+            hk_shader: [Hotkey::new(MOD_CTRL | MOD_ALT, b'H' as u32), Hotkey::new(MOD_CTRL | MOD_ALT, b'M' as u32), Hotkey::new(MOD_CTRL | MOD_ALT, b'D' as u32), Hotkey::new(MOD_CTRL | MOD_ALT, b'C' as u32)],
             shader_lib: String::new(),
             search_on: false,
             search_drives: String::new(),
@@ -1251,6 +1251,18 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn atalhos_padrao_nao_se_repetem() {
+        let c = Config::default();
+        let mut v = vec![c.hk_fullscreen, c.hk_widget, c.hk_optimize, c.hk_force, c.hk_find, c.hk_shot, c.hk_shot_full, c.hk_shot_win, c.hk_record, c.hk_record_full, c.hk_replay];
+        v.extend([c.hk_meter_compact, c.hk_meter_full, c.hk_meter_off, c.hk_log, c.hk_meter_keys, c.hk_limit_toggle, c.hk_limit_up, c.hk_limit_down]);
+        v.extend(c.hk_shader);
+        v.retain(|k| k.vk != 0);
+        for (i, a) in v.iter().enumerate() {
+            assert!(!v[i + 1..].contains(a), "{} repetido", a.label());
+        }
+    }
 
     #[test]
     fn radial_parses_eight_valid_actions() {

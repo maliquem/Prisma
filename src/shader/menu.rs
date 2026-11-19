@@ -43,6 +43,7 @@ pub struct Menu {
     params: Vec<Param>,
     params_of: Vec<std::path::PathBuf>,
     pad_prev: u16,
+    nav: [super::Press; 6],
     shown: bool,
 }
 
@@ -52,7 +53,7 @@ unsafe extern "system" fn wndproc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRES
 
 impl Menu {
     pub fn new() -> Self {
-        Self { layer: None, open: false, keys_on: false, sel: 0, pass: None, params: vec![], params_of: vec![], pad_prev: 0, shown: false }
+        Self { layer: None, open: false, keys_on: false, sel: 0, pass: None, params: vec![], params_of: vec![], pad_prev: 0, nav: Default::default(), shown: false }
     }
 
     pub fn toggle(&mut self) {
@@ -69,9 +70,14 @@ impl Menu {
         }
     }
 
-    pub fn hotkey(&mut self, id: i32, eng: &mut Engine, dev: &ID3D11Device) {
-        if let Some(k) = id.checked_sub(HK_BASE).and_then(|i| KEYS.get(i as usize)) {
-            self.key(*k, eng, dev);
+    /// ↑↓←→ Enter Esc com o menu aberto e o jogo em foco, pelo estado da tecla (`Press`): os atalhos de
+    /// `set_keys` só seguram a tecla longe do jogo, onde ele deixa.
+    pub fn keys(&mut self, fg: bool, eng: &mut Engine, dev: &ID3D11Device) {
+        for (i, (vk, k)) in NAV.iter().zip(KEYS).enumerate() {
+            let down = fg && self.open && unsafe { GetAsyncKeyState(vk.0 as i32) } < 0;
+            if self.nav[i].hit(down, matches!(k, Key::Up | Key::Down | Key::Left | Key::Right)) {
+                self.key(k, eng, dev);
+            }
         }
     }
 

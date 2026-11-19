@@ -2886,6 +2886,7 @@ Shader ligado	Shader activado
 Shader desligado	Shader desactivado
 Preset exportado	Preset exportado
 Não deu para gravar o preset	No se pudo guardar el preset
+Não deu para juntar os passes num preset	No se pudieron unir los pases en un preset
 Página Shaders	Página Shaders
 Shader liga / desliga	Shader activado / desactivado
 Presets de shader	Presets de shader

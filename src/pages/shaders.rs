@@ -445,19 +445,16 @@ fn top_dir(rel: &str) -> &str {
     rel.split_once('\\').map_or("", |d| d.0)
 }
 
-// shortcut: um `#reference` por passe ligado; serve para um passe, cadeia de vários pede gravar o `chain::join` do motor como .slangp.
+/// A cadeia ligada, juntada pelo motor, num .slangp comum.
 fn export(app: &mut App, to: &str) {
     let Some(p) = st().as_mut().and_then(|s| s.cur().cloned()) else { return };
-    let mut s = String::from("# Exportado pelo Prisma\n");
-    for pass in p.passes.iter().filter(|x| x.on) {
-        s += &format!("#reference \"{}\"\n", pass.path.display());
-    }
-    for (n, v) in &p.params {
-        s += &format!("{n} = \"{v}\"\n");
-    }
-    match crate::config::write_safe(Path::new(to), s) {
-        Ok(()) => app.toast.info("Preset exportado"),
-        Err(_) => app.toast.info("Não deu para gravar o preset"),
+    match crate::shader::slangp(&p) {
+        Ok(text) if crate::config::write_safe(Path::new(to), &text).is_ok() => app.toast.info("Preset exportado"),
+        Ok(_) => app.toast.info("Não deu para gravar o preset"),
+        Err(e) => {
+            crate::config::log(&format!("shader: exportar {}: {e}", p.name));
+            app.toast.info("Não deu para juntar os passes num preset");
+        }
     }
 }
 
@@ -724,7 +721,7 @@ fn left_card(ui: &mut Ui, app: &mut App, s: &mut St, r: Rect) {
             }
             2 => cur.passes[i].on = !cur.passes[i].on,
             _ => {
-                cur.passes.remove(i);
+                sp::remove_pass(cur, i);
                 pass = pass.min(cur.passes.len().saturating_sub(1));
             }
         }

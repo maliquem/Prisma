@@ -98,6 +98,10 @@ static FORCE_VK: AtomicU32 = AtomicU32::new(0);
 static FORCE_MODS: AtomicU32 = AtomicU32::new(0);
 static FORCE_HUB: AtomicIsize = AtomicIsize::new(0);
 static FORCE_HELD: AtomicBool = AtomicBool::new(false);
+/// Liga/desliga do shader também pelo gancho: há jogos que bloqueiam os atalhos do Windows com eles em foco.
+static SHADER_VK: AtomicU32 = AtomicU32::new(0);
+static SHADER_MODS: AtomicU32 = AtomicU32::new(0);
+static SHADER_HELD: AtomicBool = AtomicBool::new(false);
 /// Ctrl+Shift+Esc pelo gancho, quando o Windows não deixa trocar o Gerenciador no registro.
 static TM_HOOK: AtomicBool = AtomicBool::new(false);
 static TM_HELD: AtomicBool = AtomicBool::new(false);
@@ -157,6 +161,18 @@ unsafe extern "system" fn key_hook(code: i32, w: WPARAM, l: LPARAM) -> LRESULT {
                     }
                     return LRESULT(1);
                 }
+            }
+        }
+        if vk == SHADER_VK.load(Ordering::Relaxed) {
+            let press = w.0 as u32 == WM_KEYDOWN || w.0 as u32 == WM_SYSKEYDOWN;
+            if !press {
+                SHADER_HELD.store(false, Ordering::Relaxed);
+            } else if held_mods() == SHADER_MODS.load(Ordering::Relaxed) {
+                if !SHADER_HELD.swap(true, Ordering::Relaxed) {
+                    let hub = HWND(FORCE_HUB.load(Ordering::Relaxed) as *mut _);
+                    let _ = PostMessageW(Some(hub), WM_HOTKEY, WPARAM(HK_SHADER as usize), LPARAM(0));
+                }
+                return LRESULT(1);
             }
         }
         if vk == FORCE_VK.load(Ordering::Relaxed) {
@@ -1223,7 +1239,13 @@ impl App {
             if norepeat {
                 m |= MOD_NOREPEAT;
             }
-            if unsafe { RegisterHotKey(Some(self.hub), id, m, hk.vk) }.is_err() {
+            if unsafe { RegisterHotKey(Some(self.hub), id, m, hk.vk) }.is_ok() {
+                // Só a combinação que é nossa: a de outro programa continua dele.
+                if id == HK_SHADER {
+                    SHADER_VK.store(hk.vk, Ordering::Relaxed);
+                    SHADER_MODS.store(hk.mods, Ordering::Relaxed);
+                }
+            } else {
                 if id == HK_FORCE {
                     force_hook = Some(hk);
                 } else {
@@ -1242,6 +1264,7 @@ impl App {
         if let Some(hk) = force_hook {
             self.hook_force_key(hk);
         }
+        self.sync_hook();
     }
 
     /// Atalhos globais: número, combinação, nome da função e se ignora a repetição da tecla.
@@ -1423,11 +1446,12 @@ impl App {
 
     fn unhook_force_key(&mut self) {
         FORCE_VK.store(0, Ordering::Relaxed);
+        SHADER_VK.store(0, Ordering::Relaxed);
         self.sync_hook();
     }
 
-    /// Um gancho só para as duas teclas: Fechar à força quando outro programa tem a combinação,
-    /// e Ctrl+Shift+Esc quando o Windows recusou a troca do Gerenciador.
+    /// Um gancho só para as teclas: Fechar à força quando outro programa tem a combinação, Ctrl+Shift+Esc
+    /// quando o Windows recusou a troca do Gerenciador, Ctrl+V no Explorer e o liga/desliga do shader.
     pub fn sync_hook(&mut self) {
         FORCE_HUB.store(self.hub.0 as isize, Ordering::Relaxed);
         // A versão de teste só pega o Ctrl+Shift+Esc quando o teste pede: o PC continua em uso.
@@ -1438,7 +1462,7 @@ impl App {
         };
         TM_HOOK.store(tm, Ordering::Relaxed);
         PASTE_HOOK.store(self.cfg.paste_key, Ordering::Relaxed);
-        let want = tm || self.cfg.paste_key || FORCE_VK.load(Ordering::Relaxed) != 0;
+        let want = tm || self.cfg.paste_key || FORCE_VK.load(Ordering::Relaxed) != 0 || SHADER_VK.load(Ordering::Relaxed) != 0;
         if want && self.force_hook.is_none() {
             let inst = unsafe { GetModuleHandleW(None) }.unwrap_or_default();
             self.force_hook = unsafe { SetWindowsHookExW(WH_KEYBOARD_LL, Some(key_hook), Some(inst.into()), 0) }.ok();
@@ -4871,6 +4895,9 @@ mod window_tests {
         // Linha nova da página Atalhos (fora do registro anterior) com a combinação do Fullscreenizer.
         let run = [(HK_FULL, f), (HK_FIND, Hotkey::new(3, 0x20)), (HK_WIDGET, Hotkey::default()), (HK_RUN, f)];
         assert_eq!(hk_conflict(&old, &run), Some((HK_RUN, HK_FULL)));
+        // O liga/desliga do shader aparece quando o primeiro perfil liga: pega a tecla de um programa da página Atalhos.
+        let spotify = Hotkey::new(3, 0x53);
+        assert_eq!(hk_conflict(&[(HK_RUN, spotify)], &[(HK_RUN, spotify), (HK_SHADER, spotify)]), Some((HK_SHADER, HK_RUN)));
         assert_eq!(hk_place_page(HK_RUN), "Atalhos");
         assert_eq!(hk_place_page(HK_SHOW), "Configurações");
         // Volume não tem campo próprio: fica fora.

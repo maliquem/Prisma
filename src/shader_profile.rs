@@ -171,6 +171,14 @@ pub fn params(profile: &Profile) -> Vec<Param> {
     out
 }
 
+/// Tira o passe `i` e os valores de parâmetro que eram só dele (outro passe com o mesmo nome segura o valor).
+pub fn remove_pass(p: &mut Profile, i: usize) {
+    let before = params(p);
+    p.passes.remove(i);
+    let after = params(p);
+    p.params.retain(|(n, _)| !before.iter().any(|x| x.pass == i && &x.name == n) || after.iter().any(|x| &x.name == n));
+}
+
 /// Perfis salvos do mesmo jogo na pasta `dir` (`<exe>*.txt` com o mesmo `exe`), em ordem de nome. O `exe`
 /// separa `game.txt` de `game2.txt`, que é de outro jogo.
 pub fn siblings(dir: &Path, exe: &Path) -> Vec<PathBuf> {
@@ -232,7 +240,7 @@ compare={}
 ", h(self.toggle), h(self.menu), h(self.next), h(self.compare))
     }
 
-    /// Sem arquivo, os padrões do config (Ctrl+Alt+S/M/D/C; P e A são as fotos do Prisma).
+    /// Sem arquivo, os padrões do config (Ctrl+Alt+H/M/D/C; P e A são as fotos do Prisma, S costuma ser atalho de programa).
     pub fn load(path: &Path) -> Self {
         std::fs::read_to_string(path).map(|t| Self::parse(&t)).unwrap_or_default()
     }

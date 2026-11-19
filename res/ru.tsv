@@ -2886,6 +2886,7 @@ Shader ligado	Shader включён
 Shader desligado	Shader выключен
 Preset exportado	Preset экспортирован
 Não deu para gravar o preset	Не удалось сохранить preset
+Não deu para juntar os passes num preset	Не удалось объединить проходы в preset
 Página Shaders	Страница «Shaders»
 Shader liga / desliga	Shader вкл. / выкл.
 Presets de shader	Preset для shader

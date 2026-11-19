@@ -55,6 +55,71 @@ pub fn join(paths: &[PathBuf]) -> Res<ShaderPreset> {
     Ok(o)
 }
 
+/// A cadeia ligada do perfil como um .slangp comum (caminhos absolutos), com os valores do perfil por cima:
+/// o "Salvar como preset…" da página. Abre no RetroArch e de volta no Prisma como um passe só.
+pub fn slangp(p: &Profile) -> Res<String> {
+    use librashader::presets::{ScaleFactor, ScaleType};
+    use librashader::{FilterMode, WrapMode};
+    use std::fmt::Write;
+    let c = join(&on_paths(p))?;
+    let wrap = |w: WrapMode| match w {
+        WrapMode::ClampToBorder => "clamp_to_border",
+        WrapMode::ClampToEdge => "clamp_to_edge",
+        WrapMode::Repeat => "repeat",
+        WrapMode::MirroredRepeat => "mirrored_repeat",
+    };
+    let mut s = format!("# Prisma: {}\nshaders = {}\n", p.name, c.passes.len());
+    for (i, pass) in c.passes.iter().enumerate() {
+        let m = &pass.meta;
+        let _ = writeln!(s, "shader{i} = \"{}\"", pass.path.display());
+        if let Some(a) = &m.alias {
+            let _ = writeln!(s, "alias{i} = \"{a}\"");
+        }
+        let _ = writeln!(s, "filter_linear{i} = {}", m.filter == FilterMode::Linear);
+        let _ = writeln!(s, "wrap_mode{i} = {}", wrap(m.wrap_mode));
+        if m.frame_count_mod != 0 {
+            let _ = writeln!(s, "frame_count_mod{i} = {}", m.frame_count_mod);
+        }
+        let _ = writeln!(s, "srgb_framebuffer{i} = {}\nfloat_framebuffer{i} = {}\nmipmap_input{i} = {}", m.srgb_framebuffer, m.float_framebuffer, m.mipmap_input);
+        // Sem escala no original fica sem escala: o padrão do librashader (e do RetroArch) para cada passada.
+        if m.scaling.valid {
+            for (axis, sc) in [("x", &m.scaling.x), ("y", &m.scaling.y)] {
+                let kind = match sc.scale_type {
+                    ScaleType::Input => "source",
+                    ScaleType::Absolute => "absolute",
+                    ScaleType::Viewport => "viewport",
+                    ScaleType::Original => "original",
+                };
+                let f = match sc.factor {
+                    ScaleFactor::Float(f) => f.to_string(),
+                    ScaleFactor::Absolute(n) => n.to_string(),
+                };
+                let _ = writeln!(s, "scale_type_{axis}{i} = {kind}\nscale_{axis}{i} = {f}");
+            }
+        }
+    }
+    if !c.textures.is_empty() {
+        let names: Vec<&str> = c.textures.iter().map(|t| t.meta.name.as_ref()).collect();
+        let _ = writeln!(s, "textures = \"{}\"", names.join(";"));
+        for t in &c.textures {
+            let n = &t.meta.name;
+            let _ = writeln!(s, "{n} = \"{}\"\n{n}_linear = {}\n{n}_wrap_mode = {}\n{n}_mipmap = {}", t.path.display(), t.meta.filter_mode == FilterMode::Linear, wrap(t.meta.wrap_mode), t.meta.mipmap);
+        }
+    }
+    let mut vals: Vec<(String, f32)> = c.parameters.iter().map(|x| (x.name.to_string(), x.value)).collect();
+    for (n, v) in &p.params {
+        vals.retain(|x| &x.0 != n);
+        vals.push((n.clone(), *v));
+    }
+    if !vals.is_empty() {
+        let _ = writeln!(s, "parameters = \"{}\"", vals.iter().map(|x| x.0.as_str()).collect::<Vec<_>>().join(";"));
+        for (n, v) in vals {
+            let _ = writeln!(s, "{n} = \"{v}\"");
+        }
+    }
+    Ok(s)
+}
+
 /// O shader lê a saída de uma passada pelo número: `PassOutput1`, `PassFeedbackSize0`...
 fn uses_pass_number(text: &str) -> bool {
     ["PassOutput", "PassFeedback"].iter().any(|k| text.match_indices(k).any(|(i, _)| text[i + k.len()..].trim_start_matches("Size").starts_with(|c: char| c.is_ascii_digit())))
@@ -262,6 +327,29 @@ mod tests {
         let ps = crate::shader_profile::params(&prof);
         assert_eq!(ps.len(), 1);
         assert_eq!((ps[0].name.as_str(), ps[0].default, ps[0].pass, ps[0].step), ("A", 0.9, 0, 0.1));
+
+        // Salvar como preset: a cadeia vira um .slangp que o librashader lê de volta igual, com o valor do perfil.
+        prof.set_param("A", Some(0.4));
+        let out = dir.join("saida.slangp");
+        std::fs::write(&out, slangp(&prof).unwrap()).unwrap();
+        let back = ShaderPreset::try_parse(&out, ShaderFeatures::NONE).unwrap();
+        assert_eq!(back.passes.iter().map(|x| &x.path).collect::<Vec<_>>(), p.passes.iter().map(|x| &x.path).collect::<Vec<_>>());
+        assert_eq!(back.passes[2].meta.alias.as_deref(), Some("Fim"));
+        assert!(back.passes[1].meta.scaling.valid && f32::from(back.passes[1].meta.scaling.x.factor) == 2.0);
+        assert!(!back.passes[0].meta.scaling.valid);
+        assert_eq!(back.textures.len(), 1);
+        assert_eq!(back.parameters.iter().map(|x| (x.name.to_string(), x.value)).collect::<Vec<_>>(), [("A".to_string(), 0.4)]);
+
+        // Tirar um passe leva junto o valor que era só dele; o que outro passe ainda usa fica.
+        std::fs::write(a.join("c.slang"), SLANG.replace('A', "B")).unwrap();
+        std::fs::write(a.join("c.slangp"), "shaders = 1\nshader0 = c.slang\n").unwrap();
+        prof.passes.push(crate::shader_profile::Pass { on: true, path: a.join("c.slangp") });
+        prof.set_param("B", Some(0.3));
+        crate::shader_profile::remove_pass(&mut prof, 2);
+        assert_eq!(prof.params, [("A".to_string(), 0.4)]);
+        prof.set_param("B", Some(0.3));
+        crate::shader_profile::remove_pass(&mut prof, 1);
+        assert_eq!(prof.params, [("A".to_string(), 0.4), ("B".to_string(), 0.3)]);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

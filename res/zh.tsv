@@ -2886,6 +2886,7 @@ Shader ligado	Shader 已开启
 Shader desligado	Shader 已关闭
 Preset exportado	Preset 已导出
 Não deu para gravar o preset	无法保存 preset
+Não deu para juntar os passes num preset	无法将各 pass 合并为 preset
 Página Shaders	Shaders 页面
 Shader liga / desliga	Shader 开 / 关
 Presets de shader	Shader preset

@@ -10,6 +10,8 @@ mod chain;
 mod menu;
 mod preview;
 
+pub use chain::slangp;
+
 use std::time::Instant;
 
 use std::path::Path;
@@ -268,6 +270,35 @@ fn rtv(dev: &ID3D11Device, t: &ID3D11Texture2D) -> Res<ID3D11RenderTargetView> {
     Ok(v.unwrap())
 }
 
+/// Tecla lida pelo estado (`GetAsyncKeyState`) a cada volta do laço: chega também nos jogos que bloqueiam os
+/// atalhos do Windows (o Castlevania Advance Collection bloqueia). `repeat`: segurar repete, como as setas.
+#[derive(Default)]
+pub(crate) struct Press {
+    down: bool,
+    next: Option<Instant>,
+}
+
+impl Press {
+    pub(crate) fn hit(&mut self, down: bool, repeat: bool) -> bool {
+        let now = Instant::now();
+        let was = std::mem::replace(&mut self.down, down);
+        if !down {
+            return false;
+        }
+        if !was {
+            self.next = repeat.then(|| now + std::time::Duration::from_millis(400));
+            return true;
+        }
+        match self.next {
+            Some(t) if now >= t => {
+                self.next = Some(now + std::time::Duration::from_millis(80));
+                true
+            }
+            _ => false,
+        }
+    }
+}
+
 /// Atalho de `teclas.txt` apertado agora (para segurar: `compare`).
 fn held(k: crate::config::Hotkey) -> bool {
     use crate::config::{MOD_ALT, MOD_CTRL, MOD_SHIFT, MOD_WIN};
@@ -365,7 +396,9 @@ fn run(path: &Path) -> Res<()> {
     let swap = unsafe { factory.CreateSwapChainForHwnd(&d.dev, overlay, &desc, None, None)? };
     unsafe {
         let _ = factory.MakeWindowAssociation(overlay, DXGI_MWA_NO_ALT_ENTER);
-        // `toggle` é do app; aqui só o menu e o próximo perfil. Atalho de outro programa: fica sem ele.
+        // `toggle` é do app; aqui só o menu e o próximo perfil. O RegisterHotKey só segura a tecla longe do jogo
+        // (onde o jogo deixa); quem age é o `Press`, que também pega nos jogos que bloqueiam atalhos.
+        // Atalho de outro programa: fica sem ele.
         for (id, k, what) in [(HK_MENU, keys.menu, "menu; ele continua abrindo pelo controle com Select+L1"), (HK_NEXT, keys.next, "próximo perfil")] {
             if k.vk != 0 && RegisterHotKey(None, id, HOT_KEY_MODIFIERS(k.mods) | MOD_NOREPEAT, k.vk).is_err() {
                 eprintln!("shader: {} já é de outro programa, sem esse atalho ({what})", k.label());
@@ -381,19 +414,13 @@ fn run(path: &Path) -> Res<()> {
     let (mut size, mut pos, mut shown) = ((0u32, 0u32), (POINT { x: i32::MIN, y: 0 }, 0u32, 0u32), false);
     let (mut gpu, mut lat, mut frames, mut since, mut n) = (Vec::new(), Vec::new(), 0u32, Instant::now(), 0usize);
     let (mut polled, mut record) = (Instant::now(), None);
+    let (mut fg, mut menu_key, mut next_key) = (false, Press::default(), Press::default());
 
     let result: Res<()> = (|| loop {
         unsafe {
-            MsgWaitForMultipleObjects(Some(&[event]), false, if menu.open { 16 } else { 250 }, QS_ALLINPUT);
+            MsgWaitForMultipleObjects(Some(&[event]), false, if menu.open || fg { 16 } else { 250 }, QS_ALLINPUT);
             let mut msg = MSG::default();
             while PeekMessageW(&mut msg, None, 0, 0, PM_REMOVE).as_bool() {
-                if msg.message == WM_HOTKEY {
-                    match msg.wParam.0 as i32 {
-                        HK_MENU => menu.toggle(),
-                        HK_NEXT => eng.next(&d.dev, 1),
-                        id => menu.hotkey(id, &mut eng, &d.dev),
-                    }
-                }
                 let _ = TranslateMessage(&msg);
                 DispatchMessageW(&msg);
             }
@@ -410,7 +437,14 @@ fn run(path: &Path) -> Res<()> {
                     let _ = SetWindowDisplayAffinity(overlay, if eng.profile.record { WDA_NONE } else { WDA_EXCLUDEFROMCAPTURE });
                 }
             }
-            let fg = GetForegroundWindow() == game && !IsIconic(game).as_bool();
+            fg = GetForegroundWindow() == game && !IsIconic(game).as_bool();
+            if menu_key.hit(fg && held(keys.menu), false) {
+                menu.toggle();
+            }
+            if next_key.hit(fg && held(keys.next), false) {
+                eng.next(&d.dev, 1);
+            }
+            menu.keys(fg, &mut eng, &d.dev);
             menu.pad(&mut eng, &d.dev);
             menu.update(fg, client_area(game).map(|c| c.0), &mut eng);
             // `compare` segurado esconde a janela por cima: aparece o jogo sem efeito.
