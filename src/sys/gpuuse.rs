@@ -119,18 +119,19 @@ impl Watch {
             s.running = true;
             let me = self.0.clone();
             std::thread::spawn(move || {
-                let mut r = Reader::new();
+                // Sem o contador de GPU, `running` fica ligado e ninguém tenta de novo.
+                let Some(mut r) = Reader::new() else { return };
                 loop {
                     std::thread::sleep(Duration::from_secs(1));
                     let mut s = me.lock().unwrap();
-                    if r.is_none() || s.asked.is_none_or(|t| t.elapsed() > Duration::from_secs(3)) {
+                    if s.asked.is_none_or(|t| t.elapsed() > Duration::from_secs(3)) {
                         s.running = false;
                         s.last = None;
                         return;
                     }
                     drop(s);
-                    let v = r.as_mut().map(Reader::read);
-                    me.lock().unwrap().last = v;
+                    let v = r.read();
+                    me.lock().unwrap().last = Some(v);
                 }
             });
         }
