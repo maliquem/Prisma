@@ -243,7 +243,7 @@ impl HdrOff {
             return HdrOff(None);
         }
         let Some((adapter, output, true)) = crate::sys::hdr::hdr_output() else { return HdrOff(None) };
-        let mark = format!("{} {} {}\n", adapter.LowPart, adapter.HighPart, output);
+        let mark = format!("{} {} {} {}\n", adapter.LowPart, adapter.HighPart, output, std::process::id());
         if std::fs::create_dir_all(super::dir()).and_then(|_| std::fs::write(hdr_mark(), mark)).is_err() {
             eprintln!("HDR: não deu para gravar a marca de volta; o HDR fica ligado");
             return HdrOff(None);
@@ -279,21 +279,24 @@ fn gpu_mark() -> std::path::PathBuf {
     super::dir().join("gpu_maximo.txt")
 }
 
-/// A marca: o .exe na primeira linha e o valor de antes na segunda (`-`: nada gravado).
-fn gpu_mark_text(exe: &str, old: Option<u32>) -> String {
-    format!("{exe}
-{}
-", old.map_or("-".into(), |v| v.to_string()))
+/// A marca: o .exe, o valor de antes (`-`: nada gravado) e o processo que mudou, um por linha.
+fn gpu_mark_text(exe: &str, old: Option<u32>, pid: u32) -> String {
+    format!("{exe}\n{}\n{pid}\n", old.map_or("-".into(), |v| v.to_string()))
 }
 
-fn gpu_mark_parse(s: &str) -> Option<(String, Option<u32>)> {
+fn gpu_mark_parse(s: &str) -> Option<(String, Option<u32>, Option<u32>)> {
     let mut l = s.lines().map(str::trim);
     let exe = l.next().filter(|e| !e.is_empty())?;
     let old = match l.next()? {
         "-" => None,
         v => Some(v.parse().ok()?),
     };
-    Some((exe.to_string(), old))
+    Some((exe.to_string(), old, l.next().and_then(|p| p.parse().ok())))
+}
+
+/// A marca é de outro processo que ainda está compartilhando (o serviço, com o Prisma aberto ao lado)?
+fn held_by_other(pid: Option<u32>) -> bool {
+    pid.is_some_and(|p| p != std::process::id() && crate::sys::procs::is_alive(p))
 }
 
 /// Devolve o perfil do .exe ao valor de antes. Sem valor de antes, tira também o perfil vazio que o Prisma criou.
@@ -318,7 +321,7 @@ impl GpuMax {
         if old == Some(1) {
             return GpuMax(None);
         }
-        if std::fs::create_dir_all(super::dir()).and_then(|_| std::fs::write(gpu_mark(), gpu_mark_text(&exe, old))).is_err() {
+        if std::fs::create_dir_all(super::dir()).and_then(|_| std::fs::write(gpu_mark(), gpu_mark_text(&exe, old, std::process::id()))).is_err() {
             eprintln!("GPU em desempenho máximo: não deu para gravar a marca de volta; o driver fica como está");
             return GpuMax(None);
         }
@@ -452,13 +455,14 @@ pub fn emergency_key() {
         .ok();
 }
 
-/// No início do Prisma: se uma sessão caiu com o HDR desligado, liga de volta.
+/// No início do Prisma: se uma sessão caiu com o HDR desligado, liga de volta. Pula as marcas de
+/// outro processo vivo (a sessão ainda está aberta); as deste processo voltam (tecla de emergência).
 pub fn restore_hdr() {
     crate::sys::vdd::restore();
     // A GPU em desempenho máximo também volta; sem conseguir (sem permissão), a marca fica para o serviço.
     for path in [super::user_dir().join("gpu_maximo.txt"), super::service_dir().join("gpu_maximo.txt")] {
-        let Some((exe, old)) = std::fs::read_to_string(&path).ok().and_then(|s| gpu_mark_parse(&s)) else { continue };
-        if gpu_back(&exe, old) {
+        let Some((exe, old, pid)) = std::fs::read_to_string(&path).ok().and_then(|s| gpu_mark_parse(&s)) else { continue };
+        if !held_by_other(pid) && gpu_back(&exe, old) {
             crate::config::log("compartilhar: GPU de volta ao gerenciamento de energia de antes, depois de uma sessão interrompida");
             let _ = std::fs::remove_file(&path);
         }
@@ -466,7 +470,10 @@ pub fn restore_hdr() {
     for path in [super::user_dir().join("hdr_desligado.txt"), super::service_dir().join("hdr_desligado.txt")] {
         let Ok(s) = std::fs::read_to_string(&path) else { continue };
         let v: Vec<i64> = s.split_whitespace().filter_map(|x| x.parse().ok()).collect();
-        if let [low, high, output] = v[..] {
+        if held_by_other(v.get(3).map(|&p| p as u32)) {
+            continue;
+        }
+        if let [low, high, output, ..] = v[..] {
             let adapter = windows::Win32::Foundation::LUID { LowPart: low as u32, HighPart: high as i32 };
             if crate::sys::hdr::set_hdr(adapter, output as u32, true) {
                 crate::config::log("compartilhar: HDR ligado de volta depois de uma sessão interrompida");
@@ -2295,15 +2302,14 @@ mod tests {
 
     #[test]
     fn gpu_mark_round_trip() {
-        assert_eq!(gpu_mark_parse(&gpu_mark_text("prisma.exe", Some(5))), Some(("prisma.exe".into(), Some(5))));
-        assert_eq!(gpu_mark_parse(&gpu_mark_text("prisma.exe", None)), Some(("prisma.exe".into(), None)));
+        assert_eq!(gpu_mark_parse(&gpu_mark_text("prisma.exe", Some(5), 42)), Some(("prisma.exe".into(), Some(5), Some(42))));
+        assert_eq!(gpu_mark_parse(&gpu_mark_text("prisma.exe", None, 42)), Some(("prisma.exe".into(), None, Some(42))));
+        // Marca de antes do processo: volta sempre.
+        assert_eq!(gpu_mark_parse("prisma.exe\n-\n"), Some(("prisma.exe".into(), None, None)));
+        assert!(!held_by_other(None) && !held_by_other(Some(std::process::id())));
         // Marca quebrada não mexe no driver.
-        assert_eq!(gpu_mark_parse("prisma.exe
-x
-"), None);
-        assert_eq!(gpu_mark_parse("
--
-"), None);
+        assert_eq!(gpu_mark_parse("prisma.exe\nx\n"), None);
+        assert_eq!(gpu_mark_parse("\n-\n"), None);
         assert_eq!(gpu_mark_parse("prisma.exe"), None);
     }
 

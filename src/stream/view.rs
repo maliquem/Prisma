@@ -833,7 +833,6 @@ unsafe fn super_res(d: &D3d, vc: &ID3D11VideoContext1, vp: &ID3D11VideoProcessor
     }
 }
 
-/// Converte o quadro decodificado (NV12, ou P010 no HDR10) para a tela e encaixa com faixas pretas.
 /// O formato no título e nos avisos: (HDR10, 4:4:4, 10 bits SDR).
 fn fmt_label(v: (bool, bool, bool)) -> &'static str {
     match v {
@@ -845,6 +844,7 @@ fn fmt_label(v: (bool, bool, bool)) -> &'static str {
     }
 }
 
+/// Converte o quadro decodificado (NV12, ou P010 no HDR10 e nos 10 bits) para a tela e encaixa com faixas pretas.
 struct Scaler {
     vd: ID3D11VideoDevice,
     vc: ID3D11VideoContext1,
