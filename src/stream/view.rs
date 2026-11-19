@@ -75,6 +75,9 @@ struct Shared {
     /// Relógio do host menos o daqui, em 100 ns.
     offset: AtomicI64,
     lost: AtomicU32,
+    /// Medidor detalhado aberto: o Ping pede o uso da GPU do host, que chega aqui.
+    detail: AtomicBool,
+    host_gpu: Mutex<Option<GpuUse>>,
     bytes: AtomicU64,
     spk: Speaker,
     mute: bool,
@@ -152,7 +155,7 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
             last_hello = Instant::now();
         }
         if last_ping.elapsed() > Duration::from_millis(500) {
-            write(&mut out, &Msg::Ping { t: now() });
+            write(&mut out, &Msg::Ping { t: now(), gpu: sh.detail.load(Ordering::Relaxed) });
             link.send(&out);
             last_ping = Instant::now();
         }
@@ -296,7 +299,8 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
                     sh.spk.audio.lock().unwrap().extend(pcm);
                 }
             }
-            Some(Msg::Pong { t, host }) => {
+            Some(Msg::Pong { t, host, gpu }) => {
+                *sh.host_gpu.lock().unwrap() = gpu;
                 let back = now();
                 let rtt = back - t;
                 samples.push_back((rtt, host - (t + back) / 2));
@@ -588,11 +592,14 @@ unsafe extern "system" fn immersive_hook(code: i32, w: WPARAM, l: LPARAM) -> LRE
         if mine && k.flags.0 & LLKHF_INJECTED.0 == 0 {
             if let Ok(mut keys) = KEYS.try_lock() {
                 let (scan, extended) = (k.scanCode as u16, k.flags.0 & LLKHF_EXTENDED.0 != 0);
-                // Ctrl, Alt e Shift seguem pela janela, que confere os atalhos dela com eles.
-                let modifier = matches!(vk, VK_CONTROL | VK_LCONTROL | VK_RCONTROL | VK_MENU | VK_LMENU | VK_RMENU | VK_SHIFT | VK_LSHIFT | VK_RSHIFT);
+                // Ctrl, Alt e Shift (descer e subir) seguem pela janela, que confere os atalhos dela
+                // com eles: engolir a subida aqui deixava este PC achando que continuavam apertados,
+                // e os atalhos daqui iam para o host. As travas também, para trocarem aqui.
+                let passes = matches!(vk, VK_CONTROL | VK_LCONTROL | VK_RCONTROL | VK_MENU | VK_LMENU | VK_RMENU | VK_SHIFT | VK_LSHIFT | VK_RSHIFT | VK_CAPITAL | VK_NUMLOCK);
                 // A tecla que desceu para o host sobe para ele, mesmo se um modificador mudou no meio.
                 let all = keys.immersive & 4 != 0
-                    && (keys.held.contains(&(scan, extended)) || !modifier && !own_key(&keys, (opts::mods_now(ctrl, alt, GetAsyncKeyState(VK_SHIFT.0 as i32) < 0), vk.0 as u32), scan, extended));
+                    && !passes
+                    && (keys.held.contains(&(scan, extended)) || !own_key(&keys, (opts::mods_now(ctrl, alt, GetAsyncKeyState(VK_SHIFT.0 as i32) < 0), vk.0 as u32), scan, extended));
                 if keys.keyboard && ((grab && keys.immersive & 2 != 0) || all) {
                     let down = !matches!(w.0 as u32, WM_KEYUP | WM_SYSKEYUP);
                     if down {
@@ -631,31 +638,43 @@ unsafe fn key_event(h: HWND, k: &mut Keys, m: u32, w: WPARAM, l: LPARAM) -> bool
     let alt = GetKeyState(VK_MENU.0 as i32) < 0;
     let shift = GetKeyState(VK_SHIFT.0 as i32) < 0;
     let combo = (opts::mods_now(ctrl, alt, shift), w.0 as u32);
+    // Só a primeira descida: segurar o atalho não repete (nem reabre o menu que ele fechou).
+    let fire = down && l.0 & (1 << 30) == 0;
     if combo == k.key_full {
-        if down {
+        if fire {
             toggle_full(h);
+            shortcut_used(k);
         }
         return true;
     }
     if combo == k.key_menu {
-        // Segurar o atalho não reabre o menu que ele acabou de fechar.
-        if down && l.0 & (1 << 30) == 0 {
+        if fire {
             k.menu = true;
+            shortcut_used(k);
         }
         return true;
     }
     // Os atalhos de quem assiste ficam aqui e não vão para o host.
     for (keys, act) in [(k.key_disc, hud::Pick::Disconnect), (k.key_imm, hud::Pick::ImmersiveToggle), (k.key_meter, hud::Pick::MeterCycle), (k.key_sound, hud::Pick::Sound)] {
         if keys.1 != 0 && combo == keys {
-            if down && l.0 & (1 << 30) == 0 {
+            if fire {
                 k.acts.push(act);
+                shortcut_used(k);
             }
             return true;
         }
     }
     if k.keyboard && combo == k.key_cad {
-        if down {
+        if fire {
             k.sas = true;
+            shortcut_used(k);
+        }
+        return true;
+    }
+    // Caps e Num Lock trocam aqui; o host acerta os dele pelo estado (a tecla não vai).
+    if k.keyboard && matches!(VIRTUAL_KEY(w.0 as u16), VK_CAPITAL | VK_NUMLOCK) {
+        if !down {
+            k.pending.push(locks_now());
         }
         return true;
     }
@@ -680,6 +699,48 @@ unsafe fn key_event(h: HWND, k: &mut Keys, m: u32, w: WPARAM, l: LPARAM) -> bool
     }
     k.pending.push(Input::Key { scan, extended, down });
     true
+}
+
+/// O que a aba Cliente mudou no arquivo desde a última leitura (`seen` → `new`) e o menu da
+/// conexão também tem, como escolhas do menu. Só o que mudou no arquivo: um valor do menu que não
+/// chegou a ser gravado (arquivo ocupado) não é desfeito pela releitura.
+fn page_picks(seen: &ClientOpts, new: &ClientOpts, co: &ClientOpts) -> Vec<hud::Pick> {
+    macro_rules! page {
+        ($f:ident) => {
+            new.$f != seen.$f && new.$f != co.$f
+        };
+    }
+    [
+        (page!(immersive), hud::Pick::Immersive(new.immersive)),
+        (page!(fps), hud::Pick::Fps(new.fps)),
+        (page!(meter), hud::Pick::Meter(new.meter)),
+        // As outras o menu troca: entram só quando ficaram diferentes das da conexão.
+        (page!(warn), hud::Pick::Warn),
+        (page!(vsync), hud::Pick::Vsync),
+        (page!(ask444), hud::Pick::Ask444),
+        (page!(constant), hud::Pick::Constant),
+        (page!(pad_background), hud::Pick::PadBackground),
+        (page!(pad_keys), hud::Pick::PadKeys),
+    ]
+    .into_iter()
+    .filter(|x| x.0)
+    .map(|x| x.1)
+    .collect()
+}
+
+/// Um atalho daqui disparou com Ctrl, Alt e Shift já apertados no host: uma tecla sem uso antes de
+/// soltá-los, senão o Alt+Shift e o Ctrl+Shift trocam o teclado de lá (e o Shift ficava preso).
+fn shortcut_used(k: &mut Keys) {
+    if !k.held.is_empty() {
+        k.pending.push(Input::Mask);
+    }
+    release_all(k);
+}
+
+/// O Caps Lock e o Num Lock deste PC, para o host acertar os dele.
+fn locks_now() -> Input {
+    let on = |vk: VIRTUAL_KEY| unsafe { GetKeyState(vk.0 as i32) } & 1 != 0;
+    Input::Locks { caps: on(VK_CAPITAL), num: on(VK_NUMLOCK) }
 }
 
 /// Solta no host tudo que está apertado aqui, quando a janela perde o foco.
@@ -929,6 +990,11 @@ unsafe extern "system" fn wndproc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRES
             release_all(&mut KEYS.lock().unwrap());
             DefWindowProcW(h, m, w, l)
         }
+        // As travas podem ter mudado com a janela atrás.
+        WM_SETFOCUS => {
+            KEYS.lock().unwrap().pending.push(locks_now());
+            DefWindowProcW(h, m, w, l)
+        }
         // O cursor do host já vem na imagem: o daqui some em cima dela.
         WM_SETCURSOR if (l.0 & 0xFFFF) as u32 == HTCLIENT && KEYS.lock().unwrap().mouse => {
             SetCursor(None);
@@ -1152,6 +1218,9 @@ pub(super) fn open(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64
 
 unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) -> Result<()> {
     let mut co = ClientOpts::load();
+    let mut page_at = Instant::now();
+    // O que o arquivo tinha na última leitura.
+    let mut seen = co.clone();
     {
         let mut k = KEYS.lock().unwrap();
         k.key_menu = co.key_menu;
@@ -1333,6 +1402,8 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         rtt: AtomicI64::new(0),
         offset: AtomicI64::new(0),
         lost: AtomicU32::new(0),
+        detail: AtomicBool::new(false),
+        host_gpu: Mutex::new(None),
         bytes: AtomicU64::new(0),
         spk: Speaker::new(co.mute),
         mute: std::env::var("PRISMA_MUTE").is_ok_and(|v| v == "1"),
@@ -1400,6 +1471,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     let mut second = Stats::default();
     let mut last_shown = now();
     let mut tick = Instant::now();
+    let gpu_use = crate::sys::gpuuse::Watch::default();
     let mut bytes_mark = 0u64;
     let mut lost_mark = 0u32;
     let mut msg = MSG::default();
@@ -1435,6 +1507,17 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
             clipped = want_clip;
         }
         let mut picks: Vec<hud::Pick> = std::mem::take(&mut KEYS.lock().unwrap().acts);
+        // A aba Cliente mudou `cliente.txt`: o que o menu também tem vale já, como se escolhido nele.
+        if page_at.elapsed() >= Duration::from_secs(1) {
+            page_at = Instant::now();
+            let fresh = ClientOpts::load();
+            if fresh != seen {
+                picks.extend(page_picks(&seen, &fresh, &co));
+                // O resto (atalhos, placa...) vem da página; o menu grava por cima só o que muda.
+                co = ClientOpts { immersive: co.immersive, fps: co.fps, meter: co.meter, warn: co.warn, vsync: co.vsync, ask444: co.ask444, constant: co.constant, pad_background: co.pad_background, pad_keys: co.pad_keys, ..fresh.clone() };
+                seen = fresh;
+            }
+        }
         // O menu fechou: a escolha entra com as outras.
         if let Some(p) = hud::menu_poll(hwnd) {
             picks.extend(p);
@@ -1597,7 +1680,12 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                     host_priority = priority;
                     {
                         let mut k = KEYS.lock().unwrap();
-                        k.keyboard = perms & KEYBOARD != 0;
+                        let kb = perms & KEYBOARD != 0;
+                        // Com o teclado liberado, o host acerta as travas pelas daqui.
+                        if kb && !k.keyboard {
+                            k.pending.push(locks_now());
+                        }
+                        k.keyboard = kb;
                         k.mouse = perms & MOUSE != 0;
                         k.pad_keys = perms & PAD != 0 && sh.pad_keys.load(Ordering::Relaxed);
                         k.video = (w, h);
@@ -1813,8 +1901,12 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
             }
             let fps_now = second.shown as f64 / tick.elapsed().as_secs_f64();
             let lost_total = sh.lost.load(Ordering::Relaxed);
+            let detail = co.meter == 2;
+            sh.detail.store(detail, Ordering::Relaxed);
             if let Some(h) = &mut hud {
                 let sample = hud::Sample {
+                    gpu: if detail { gpu_use.get() } else { None },
+                    host_gpu: if detail { *sh.host_gpu.lock().unwrap() } else { None },
                     rtt_ms: rtt as f64 / 10_000.0,
                     e2e_ms: pct(&mut second.e2e.clone(), 0.5),
                     decode_ms: pct(&mut second.decode.clone(), 0.5),
@@ -1967,6 +2059,21 @@ fn meter_name(m: u8) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn page_changes_become_menu_picks() {
+        let co = ClientOpts::default();
+        assert!(page_picks(&co, &co, &co).is_empty());
+        // A página pôs o imersivo Tudo e ligou o ritmo constante; a placa não é do menu.
+        let new = ClientOpts { immersive: 7, constant: !co.constant, gpu: "Outra".into(), ..co.clone() };
+        let p = page_picks(&co, &new, &co);
+        assert!(matches!(p[..], [hud::Pick::Immersive(7), hud::Pick::Constant]), "{p:?}");
+        // O menu trocou o aviso e a gravação falhou: o arquivo igual não desfaz a troca.
+        let menu = ClientOpts { warn: !co.warn, ..co.clone() };
+        assert!(page_picks(&co, &co, &menu).is_empty());
+        // A gravação do menu chegou ao arquivo: já está na conexão, nada a escolher.
+        assert!(page_picks(&co, &menu, &menu).is_empty());
+    }
 
     #[test]
     fn vrr_keeps_frames_inside_the_screen_rate() {

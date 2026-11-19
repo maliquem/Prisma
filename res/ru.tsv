@@ -1508,6 +1508,10 @@ ponta a ponta	сквозная
 rede	сеть
 q/s	fps
 decodificação	декодирование
+GPU do host	GPU хоста
+GPU daqui	GPU этого ПК
+codificação	кодирование
+cópia	копирование
 fila	очередь
 perdidos	потеряно
 Mandar Ctrl+Alt+Del	Отправить Ctrl+Alt+Del

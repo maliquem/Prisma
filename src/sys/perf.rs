@@ -13,7 +13,9 @@ pub const ENGINES: usize = 5;
 pub struct Reading {
     /// Uso de cada tipo de engine (a engine mais cheia daquele tipo), em %.
     pub eng: [f32; ENGINES],
-    /// Por processo: uso de cada tipo de engine, em %.
+    /// A engine mais cheia de qualquer tipo (o "Video Codec" da AMD também), como no Gerenciador de Tarefas.
+    pub busiest: f32,
+    /// Por processo: uso de cada tipo de engine, somando as engines físicas daquele tipo, em %.
     pub pid_eng: HashMap<u32, [f32; ENGINES]>,
     pub pid_shared: HashMap<u32, u64>,
     /// Memória compartilhada da GPU em uso (sai da RAM).
@@ -52,18 +54,40 @@ fn value(c: PDH_HCOUNTER) -> f64 {
     }
 }
 
-/// Tipo e engine física de uma instância `pid_1_luid_0x0_0x1_phys_0_eng_3_engtype_VideoDecode`.
-fn engine_of(name: &str) -> Option<(usize, &str)> {
-    let (head, ty) = name.rsplit_once("_engtype_")?;
-    let kind = match ty {
+/// Tipo de engine de uma instância `pid_1_luid_0x0_0x1_phys_0_eng_3_engtype_VideoDecode`.
+fn engine_kind(name: &str) -> Option<usize> {
+    Some(match name.rsplit_once("_engtype_")?.1 {
         "3D" => 0,
         "Copy" => 1,
         "VideoEncode" => 2,
         "VideoDecode" => 3,
         t if t.starts_with("Compute") || t == "Cuda" => 4,
         _ => return None,
-    };
-    Some((kind, head.split_once("_luid_")?.1))
+    })
+}
+
+/// Soma as instâncias de `\GPU Engine(*)`: cada engine física com todos os processos (o tipo mostra a
+/// mais cheia, como o Gerenciador de Tarefas) e cada processo por tipo.
+// shortcut: junta as engines de todas as placas (iGPU incluída); separar por LUID se alguém tiver duas.
+pub(super) fn engines(items: &[(String, f64)]) -> Reading {
+    let mut r = Reading::default();
+    let mut by_engine: HashMap<&str, (Option<usize>, f32)> = HashMap::new();
+    for (name, v) in items {
+        let Some((_, engine)) = name.split_once("_luid_") else { continue };
+        let kind = engine_kind(engine);
+        by_engine.entry(engine).or_insert((kind, 0.0)).1 += *v as f32;
+        if let (Some(k), Some(pid)) = (kind, super::monitor::instance_pid(name)) {
+            r.pid_eng.entry(pid).or_default()[k] += *v as f32;
+        }
+    }
+    for (kind, v) in by_engine.into_values() {
+        let v = v.min(100.0);
+        r.busiest = r.busiest.max(v);
+        if let Some(k) = kind {
+            r.eng[k] = r.eng[k].max(v);
+        }
+    }
+    r
 }
 
 /// Posição de uma thread da instância "grupo,número" do `Processor Information`; os totais ficam de fora.
@@ -99,23 +123,14 @@ impl Counters {
         }
     }
 
+    /// False quando o Windows não tem o contador de engines da GPU (máquina virtual, driver antigo).
+    pub fn has_gpu(&self) -> bool {
+        self.engine != PDH_HCOUNTER::default()
+    }
+
     pub fn read(&mut self) -> Reading {
         unsafe { PdhCollectQueryData(self.query) };
-        let mut r = Reading::default();
-        // Soma os processos de cada engine física; o tipo mostra a mais cheia, como o Gerenciador de Tarefas.
-        // shortcut: junta as engines de todas as placas (iGPU incluída); separar por LUID se alguém tiver duas.
-        let mut by_engine: HashMap<String, (usize, f32)> = HashMap::new();
-        for (name, v) in super::monitor::counter_array(self.engine, &mut self.buf) {
-            let Some((kind, engine)) = engine_of(&name) else { continue };
-            by_engine.entry(engine.to_string()).or_insert((kind, 0.0)).1 += v as f32;
-            if let Some(pid) = super::monitor::instance_pid(&name) {
-                let e = r.pid_eng.entry(pid).or_default();
-                e[kind] = e[kind].max(v as f32);
-            }
-        }
-        for (kind, v) in by_engine.into_values() {
-            r.eng[kind] = r.eng[kind].max(v.min(100.0));
-        }
+        let mut r = engines(&super::monitor::counter_array(self.engine, &mut self.buf));
         for (name, v) in super::monitor::counter_array(self.pid_shared, &mut self.buf) {
             if let Some(pid) = super::monitor::instance_pid(&name) {
                 *r.pid_shared.entry(pid).or_default() += v as u64;
@@ -222,10 +237,10 @@ mod tests {
 
     #[test]
     fn engine_names() {
-        assert_eq!(engine_of("pid_12_luid_0x0_0xD1B3_phys_0_eng_3_engtype_VideoDecode"), Some((3, "0x0_0xD1B3_phys_0_eng_3")));
-        assert_eq!(engine_of("pid_12_luid_0x0_0xD1B3_phys_0_eng_0_engtype_3D").map(|e| e.0), Some(0));
-        assert_eq!(engine_of("pid_12_luid_0x0_0x1_phys_0_eng_9_engtype_Compute_1").map(|e| e.0), Some(4));
-        assert_eq!(engine_of("pid_12_luid_0x0_0x1_phys_0_eng_9_engtype_Security"), None);
+        assert_eq!(engine_kind("pid_12_luid_0x0_0xD1B3_phys_0_eng_3_engtype_VideoDecode"), Some(3));
+        assert_eq!(engine_kind("pid_12_luid_0x0_0xD1B3_phys_0_eng_0_engtype_3D"), Some(0));
+        assert_eq!(engine_kind("pid_12_luid_0x0_0x1_phys_0_eng_9_engtype_Compute_1"), Some(4));
+        assert_eq!(engine_kind("pid_12_luid_0x0_0x1_phys_0_eng_9_engtype_Security"), None);
         assert_eq!(thread_of("0,7"), Some((0, 7)));
         assert_eq!(thread_of("0,_Total"), None);
         assert_eq!(thread_of("_Total"), None);

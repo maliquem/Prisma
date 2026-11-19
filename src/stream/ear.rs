@@ -70,7 +70,7 @@ fn run(link: Arc<dyn Link>, name: &str) {
     let mut lat = super::LatLog::new("som");
     loop {
         if last_ping.elapsed() > Duration::from_millis(500) {
-            write(&mut out, &Msg::Ping { t: now() });
+            write(&mut out, &Msg::Ping { t: now(), gpu: false });
             link.send(&out);
             last_ping = Instant::now();
         }
@@ -171,8 +171,8 @@ pub(super) fn serve(link: Arc<dyn Link>, perms: u8, name: String, pid: u32, opus
                 match read(&buf[..n]) {
                     // Repetido contra perda: a resposta vai de novo.
                     Some(Msg::Hello { .. }) => link.send(&info),
-                    Some(Msg::Ping { t }) => {
-                        write(&mut out, &Msg::Pong { t, host: now() });
+                    Some(Msg::Ping { t, .. }) => {
+                        write(&mut out, &Msg::Pong { t, host: now(), gpu: None });
                         link.send(&out);
                     }
                     Some(Msg::Bye) => break,

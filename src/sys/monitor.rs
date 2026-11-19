@@ -221,7 +221,7 @@ pub fn read_cpu(prev: &mut Vec<CpuTimes>, threads: &mut Vec<f32>) -> f32 {
     }
 }
 
-struct GpuCounters {
+pub(super) struct GpuCounters {
     query: PDH_HQUERY,
     engine: PDH_HCOUNTER,
     memory: PDH_HCOUNTER,
