@@ -12,6 +12,8 @@ mod overlays;
 mod pages;
 mod paste;
 mod report;
+mod shader;
+mod shader_profile;
 #[cfg(debug_assertions)]
 mod selftest;
 mod startup;
@@ -92,6 +94,10 @@ fn main() {
     }
     // "Colar com o Prisma" do botão direito do Explorer: a janela de cópia, também sem o nome único.
     if paste::run_args() {
+        return;
+    }
+    // Shader do RetroArch por cima de um jogo (teste da Fase 0), também sem o nome único.
+    if shader::run_args() {
         return;
     }
     // Um link de convite (prisma://parear/...): a página Compartilhar tela pergunta se pareia.
