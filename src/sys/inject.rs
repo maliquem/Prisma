@@ -53,15 +53,33 @@ pub struct Limiter {
 }
 
 /// O arquivo tem nome pelo conteúdo: um jogo aberto com a versão anterior não impede a nova.
-fn dll_path() -> Option<std::path::PathBuf> {
-    let sum = DLL.iter().fold(0xcbf2_9ce4_8422_2325u64, |h, b| (h ^ *b as u64).wrapping_mul(0x100_0000_01b3));
-    let dir = crate::config::data_dir().join("limiter");
+fn dll_path(dll: &[u8], dir: &str, name: &str) -> Option<std::path::PathBuf> {
+    let sum = dll.iter().fold(0xcbf2_9ce4_8422_2325u64, |h, b| (h ^ *b as u64).wrapping_mul(0x100_0000_01b3));
+    let dir = crate::config::data_dir().join(dir);
     std::fs::create_dir_all(&dir).ok()?;
-    let path = dir.join(format!("prisma_hook_{sum:016x}.dll"));
-    if std::fs::read(&path).map_or(true, |d| d != DLL) {
-        std::fs::write(&path, DLL).ok()?;
+    let path = dir.join(format!("{name}_{sum:016x}.dll"));
+    if std::fs::read(&path).map_or(true, |d| d != dll) {
+        std::fs::write(&path, dll).ok()?;
     }
     Some(path)
+}
+
+/// Põe a DLL `dll` (gravada em `data_dir\<dir>`) na linha da janela do jogo pelo gancho exportado `name`. O
+/// gancho volta para quem chamou: solte depois que a DLL se prender (ela se prende sozinha ao carregar).
+pub fn load(pid: u32, dll: &[u8], dir: &str, name: &str) -> Option<HHOOK> {
+    let path = dll_path(dll, dir, name)?;
+    let tid = window_thread(pid)?;
+    let export = std::ffi::CString::new(name).ok()?;
+    unsafe {
+        let module = LoadLibraryExW(&HSTRING::from(path.as_path()), None, DONT_RESOLVE_DLL_REFERENCES).ok()?;
+        let hook = GetProcAddress(module, PCSTR(export.as_ptr() as *const u8)).and_then(|proc| {
+            let hook: HOOKPROC = Some(std::mem::transmute(proc));
+            SetWindowsHookExW(WH_GETMESSAGE, hook, Some(module.into()), tid).ok()
+        });
+        let _ = FreeLibrary(module);
+        let _ = PostThreadMessageW(tid, WM_NULL, WPARAM(0), LPARAM(0));
+        hook
+    }
 }
 
 fn window_thread(pid: u32) -> Option<u32> {
@@ -82,15 +100,7 @@ impl Limiter {
             let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
             let mut me = Self { pid, process, hook: None, map: HANDLE::default(), view: std::ptr::null(), since: Instant::now(), status: Status::Waiting };
             if !me.open() {
-                let path = dll_path()?;
-                let tid = window_thread(pid)?;
-                let module = LoadLibraryExW(&HSTRING::from(path.as_path()), None, DONT_RESOLVE_DLL_REFERENCES).ok()?;
-                let proc = GetProcAddress(module, s!("prisma_hook"))?;
-                let hook: HOOKPROC = Some(std::mem::transmute(proc));
-                me.hook = SetWindowsHookExW(WH_GETMESSAGE, hook, Some(module.into()), tid).ok();
-                let _ = FreeLibrary(module);
-                me.hook?;
-                let _ = PostThreadMessageW(tid, WM_NULL, WPARAM(0), LPARAM(0));
+                me.hook = Some(load(pid, DLL, "limiter", "prisma_hook")?);
             }
             Some(me)
         }

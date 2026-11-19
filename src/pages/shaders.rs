@@ -735,15 +735,33 @@ fn left_card(ui: &mut Ui, app: &mut App, s: &mut St, r: Rect) {
     y += 32.0;
     let lw = 170.0;
     ui.c.text(rect(ix, y, lw, 32.0), "Modo", 14.0, TEXT, Align::Left, Weight::Regular);
-    let mut m = 0;
-    ui.segment("shd-mode", ix + lw, y, 32.0, &["Por cima"], &mut m);
-    let sw = Ui::segment_width(&["Por cima"]);
-    let inj = rect(ix + lw + sw + 8.0, y, 170.0, 32.0);
-    ui.button_ex("shd-inj", inj, "Injeção (em breve)", false, false);
-    ui.tip(inj, if s.anti_cheat { "Bloqueado: este jogo tem anti-cheat" } else { "Em breve: aplicar dentro do jogo, sem o quadro de atraso" });
+    // `api=` vem do motor (módulos do jogo e primeiro Present): vazio é jogo ainda não aberto, ainda pode.
+    let can = !s.anti_cheat && (p.api.is_empty() || prisma_shader::link::api_supported(&p.api));
+    let names: &[&str] = if can { &["Por cima", "Injeção"] } else { &["Por cima"] };
+    let mut m = usize::from(can && p.inject);
+    if ui.segment("shd-mode", ix + lw, y, 32.0, names, &mut m) {
+        if let Some(c) = s.cur() {
+            c.inject = m == 1;
+        }
+        s.changed();
+        s.flush();
+        // O motor escolhe o modo ao abrir; a DLL já no jogo para sozinha ao ler mode=overlay.
+        restart();
+    }
+    if !can {
+        let inj = rect(ix + lw + Ui::segment_width(names) + 8.0, y, 120.0, 32.0);
+        ui.button_ex("shd-inj", inj, "Injeção", false, false);
+        ui.tip(inj, if s.anti_cheat { "Bloqueado: este jogo tem anti-cheat" } else { "Não suportado neste jogo: a injeção cobre DX11 e DX9, em jogos de 64 bits" });
+    }
     y += 36.0;
-    ui.c.text_wrap(rect(ix + lw, y, iw - lw, 34.0), "Janela por cima do jogo, capturando a imagem. DX9 a 12, Vulkan e OpenGL.", 12.0, MUTED, Weight::Regular);
-    y += 40.0;
+    let how = if can && p.inject {
+        "Dentro do jogo, na hora de mostrar o quadro: sem o quadro de atraso e sem janela por cima. DX11 e DX9, jogos de 64 bits."
+    } else {
+        "Janela por cima do jogo, capturando a imagem. DX9 a 12, Vulkan e OpenGL."
+    };
+    // Três linhas: o texto da Injeção quebra em três, e mais ainda traduzido.
+    ui.c.text_wrap(rect(ix + lw, y, iw - lw, 50.0), how, 12.0, MUTED, Weight::Regular);
+    y += 56.0;
 
     ui.c.text(rect(ix, y, lw, 36.0), "Resolução de entrada", 14.0, TEXT, Align::Left, Weight::Regular);
     let opts: Vec<String> = INPUTS.iter().map(|o| crate::i18n::tr(o.1).into_owned()).collect();
@@ -773,9 +791,10 @@ fn left_card(ui: &mut Ui, app: &mut App, s: &mut St, r: Rect) {
     let exe = p.exe.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let warn = |ui: &mut Ui, y: &mut f32, text: &str, button: Option<&str>| -> bool {
         let tw = if button.is_some() { iw - 182.0 } else { iw };
-        ui.c.text_wrap(rect(ix, *y, tw, 40.0), text, 12.0, WARN, Weight::Regular);
-        let hit = button.is_some_and(|b| ui.button("shd-fs", rect(ix + iw - 170.0, *y + 4.0, 170.0, 32.0), b, false));
-        *y += 46.0;
+        // Até três linhas: em inglês o aviso de tela cheia ao lado do botão quebra em três.
+        ui.c.text_wrap(rect(ix, *y, tw, 50.0), text, 12.0, WARN, Weight::Regular);
+        let hit = button.is_some_and(|b| ui.button("shd-fs", rect(ix + iw - 170.0, *y + 9.0, 170.0, 32.0), b, false));
+        *y += 56.0;
         hit
     };
     if s.anti_cheat {

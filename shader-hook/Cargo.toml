@@ -1,0 +1,23 @@
+[package]
+name = "prisma_shader_hook"
+version = "0.1.0"
+edition = "2021"
+license-file = "../LICENSE"
+description = "Shaders do Prisma dentro do jogo (modo Injeção), carregado só quando a pessoa pede"
+
+[lib]
+crate-type = ["cdylib"]
+
+[workspace]
+
+[dependencies]
+prisma-shader = { path = "../crates/prisma-shader" }
+# O D3D9 só aqui: o motor por cima e o limitador não precisam dele.
+librashader = { version = "0.12.1", default-features = false, features = ["runtime-d3d11", "runtime-d3d11-seh", "runtime-d3d9", "presets", "preprocess"] }
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Graphics_Direct3D", "Win32_Graphics_Direct3D11", "Win32_Graphics_Direct3D9", "Win32_Graphics_Dxgi", "Win32_Graphics_Dxgi_Common", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true

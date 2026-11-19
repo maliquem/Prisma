@@ -5,6 +5,7 @@
 //! - `prisma.exe --shader-preview=<perfil.txt>,<scene|bars|imagem>`: a mesma cadeia numa janela de prévia.
 //! O formato do perfil e de `teclas.txt` mora em `shader_profile.rs`.
 
+mod inject;
 mod menu;
 mod preview;
 
@@ -221,13 +222,31 @@ fn overlay_window() -> Res<HWND> {
     }
 }
 
+/// `toggle` é do app; aqui só o menu e o próximo perfil. O RegisterHotKey só segura a tecla longe do jogo (onde o
+/// jogo deixa); quem age é o `Press`, que também pega nos jogos que bloqueiam atalhos. Atalho de outro programa:
+/// fica sem ele.
+fn hold_keys(keys: &crate::shader_profile::Keys) {
+    for (id, k, what) in [(HK_MENU, keys.menu, "menu; ele continua abrindo pelo controle com Select+L1"), (HK_NEXT, keys.next, "próximo perfil")] {
+        if k.vk != 0 && unsafe { RegisterHotKey(None, id, HOT_KEY_MODIFIERS(k.mods) | MOD_NOREPEAT, k.vk) }.is_err() {
+            eprintln!("shader: {} já é de outro programa, sem esse atalho ({what})", k.label());
+        }
+    }
+}
+
+fn free_keys() {
+    unsafe {
+        let _ = UnregisterHotKey(None, HK_MENU);
+        let _ = UnregisterHotKey(None, HK_NEXT);
+    }
+}
+
 fn run(path: &Path) -> Res<()> {
     unsafe {
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
     }
-    let exe = crate::shader_profile::Profile::load(path).map_err(|e| format!("{}: {e}", path.display()))?.exe;
-    let stem = exe.file_stem().map(|s| s.to_string_lossy().to_string()).filter(|s| !s.is_empty()).ok_or("perfil sem exe")?;
+    let prof = crate::shader_profile::Profile::load(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let stem = prof.exe.file_stem().map(|s| s.to_string_lossy().to_string()).filter(|s| !s.is_empty()).ok_or("perfil sem exe")?;
     eprintln!("esperando a janela de {stem}");
     let game = loop {
         if let Some(h) = find_window(&stem) {
@@ -241,6 +260,10 @@ fn run(path: &Path) -> Res<()> {
         return Err(format!("jogo com anti-cheat, o shader não entra: {game_path}").into());
     }
     eprintln!("jogo: {game_path} ({})", crate::sys::procs::window_title(game));
+    // Injeção: o efeito vai dentro do jogo; se não servir nele, o perfil volta para Por cima e segue aqui.
+    if prof.inject && inject::run(path, game)? {
+        return Ok(());
+    }
 
     let mc = crate::capture::monitor_color(unsafe { windows::Win32::Graphics::Gdi::MonitorFromWindow(game, windows::Win32::Graphics::Gdi::MONITOR_DEFAULTTONEAREST) });
     eprintln!("monitor em HDR: {} (branco do SDR {} nits)", if mc.hdr { "sim" } else { "não" }, mc.white_nits);
@@ -293,15 +316,8 @@ fn run(path: &Path) -> Res<()> {
     let swap = unsafe { factory.CreateSwapChainForHwnd(&d.dev, overlay, &desc, None, None)? };
     unsafe {
         let _ = factory.MakeWindowAssociation(overlay, DXGI_MWA_NO_ALT_ENTER);
-        // `toggle` é do app; aqui só o menu e o próximo perfil. O RegisterHotKey só segura a tecla longe do jogo
-        // (onde o jogo deixa); quem age é o `Press`, que também pega nos jogos que bloqueiam atalhos.
-        // Atalho de outro programa: fica sem ele.
-        for (id, k, what) in [(HK_MENU, keys.menu, "menu; ele continua abrindo pelo controle com Select+L1"), (HK_NEXT, keys.next, "próximo perfil")] {
-            if k.vk != 0 && RegisterHotKey(None, id, HOT_KEY_MODIFIERS(k.mods) | MOD_NOREPEAT, k.vk).is_err() {
-                eprintln!("shader: {} já é de outro programa, sem esse atalho ({what})", k.label());
-            }
-        }
     }
+    hold_keys(&keys);
     let mut menu = menu::Menu::new();
 
     let mut timer = GpuTimer::new(&d.dev)?;
@@ -437,9 +453,8 @@ fn run(path: &Path) -> Res<()> {
         }
     })();
 
+    free_keys();
     unsafe {
-        let _ = UnregisterHotKey(None, HK_MENU);
-        let _ = UnregisterHotKey(None, HK_NEXT);
         let _ = pool.RemoveFrameArrived(token);
         let _ = session.Close();
         let _ = pool.Close();

@@ -1,0 +1,667 @@
+//! Shaders do Prisma dentro do jogo (modo Injeção): a mesma cadeia do motor por cima, aplicada no back buffer
+//! antes do Present, sem janela por cima. Entra como o limitador (`hook/`): `SetWindowsHookEx` só na linha da
+//! janela do jogo, dispositivo falso para achar as tabelas de funções, e se prende até o jogo fechar.
+//! - DXGI com D3D11: `Present`, `Present1`, `ResizeBuffers`. D3D10 e D3D12 só avisam a API (`api`) e passam.
+//! - D3D9 e 9Ex: `Present`, `PresentEx`, `Reset`, `ResetEx`.
+//! O motor (`prisma.exe --shader-profile`) conversa pela memória de `prisma_shader::link`: perfil, sinal de vida,
+//! `compare`. O perfil é relido a cada 250 ms, como no motor por cima.
+
+use std::cell::Cell;
+use std::collections::HashMap;
+use std::ffi::c_void;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::*};
+use std::sync::{Mutex, MutexGuard};
+use std::time::Instant;
+
+use librashader::runtime::d3d9::FilterChain as Chain9;
+use librashader::runtime::{Size, Viewport};
+use prisma_shader::chain::{self, Engine, Tracker};
+use prisma_shader::link::*;
+use prisma_shader::{blocks, rtv, say, texture, FullPass, Res, PS_COPY};
+use windows::core::*;
+use windows::Win32::Foundation::*;
+use windows::Win32::Graphics::Direct3D::*;
+use windows::Win32::Graphics::Direct3D11::*;
+use windows::Win32::Graphics::Direct3D9::*;
+use windows::Win32::Graphics::Dxgi::Common::*;
+use windows::Win32::Graphics::Dxgi::*;
+use windows::Win32::System::LibraryLoader::*;
+use windows::Win32::System::Memory::*;
+use windows::Win32::System::SystemInformation::GetTickCount64;
+use windows::Win32::System::Threading::*;
+use windows::Win32::UI::WindowsAndMessaging::*;
+
+const SLOT_PRESENT: usize = 8;
+const SLOT_RESIZE: usize = 13;
+const SLOT_PRESENT1: usize = 22;
+const SLOT_D9_RESET: usize = 16;
+const SLOT_D9_PRESENT: usize = 17;
+const SLOT_D9_PRESENT_EX: usize = 121;
+const SLOT_D9_RESET_EX: usize = 132;
+/// Erros seguidos no desenho até desligar o efeito (o jogo segue sem ele).
+const MAX_ERRORS: u32 = 10;
+
+type Present = unsafe extern "system" fn(*mut c_void, u32, u32) -> HRESULT;
+type Present1 = unsafe extern "system" fn(*mut c_void, u32, u32, *const c_void) -> HRESULT;
+type Resize = unsafe extern "system" fn(*mut c_void, u32, u32, u32, DXGI_FORMAT, u32) -> HRESULT;
+type D9Present = unsafe extern "system" fn(*mut c_void, *const c_void, *const c_void, HWND, *const c_void) -> HRESULT;
+type D9PresentEx = unsafe extern "system" fn(*mut c_void, *const c_void, *const c_void, HWND, *const c_void, u32) -> HRESULT;
+type D9Reset = unsafe extern "system" fn(*mut c_void, *mut c_void) -> HRESULT;
+type D9ResetEx = unsafe extern "system" fn(*mut c_void, *mut c_void, *mut c_void) -> HRESULT;
+
+static STARTED: AtomicBool = AtomicBool::new(false);
+static SHARED: AtomicUsize = AtomicUsize::new(0);
+/// (tabela, entrada, função original): o D3D9 comum e o 9Ex podem ter tabelas diferentes.
+static PATCHES: Mutex<Vec<(usize, usize, usize)>> = Mutex::new(Vec::new());
+static DX11: Mutex<Option<Dx11>> = Mutex::new(None);
+static D9: Mutex<Option<D9>> = Mutex::new(None);
+static LOG: Mutex<Option<std::fs::File>> = Mutex::new(None);
+/// Perfil (`seq` e data do arquivo) com que a cadeia não abriu: tentar de novo a cada quadro só enchia o log.
+/// Outro perfil, ou o mesmo gravado de novo, tenta.
+static FAIL: Mutex<Option<(u32, Option<std::time::SystemTime>)>> = Mutex::new(None);
+
+fn fail_key(s: &Shared) -> (u32, Option<std::time::SystemTime>) {
+    (s.seq.load(Acquire), std::fs::metadata(s.path()).and_then(|m| m.modified()).ok())
+}
+
+thread_local! {
+    /// Já dentro de um gancho nesta linha: o nosso desenho não passa de novo pelo efeito.
+    static BUSY: Cell<bool> = const { Cell::new(false) };
+}
+
+fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+fn log(s: &str) {
+    if let Some(f) = lock(&LOG).as_mut() {
+        let _ = writeln!(f, "{s}");
+    }
+}
+
+fn shared() -> Option<&'static Shared> {
+    let at = SHARED.load(Relaxed);
+    (at != 0).then(|| unsafe { &*(at as *const Shared) })
+}
+
+/// O motor deu sinal há pouco: sem ele (fechou ou caiu), o jogo volta a ser mostrado como era.
+fn alive(s: &Shared) -> bool {
+    (unsafe { GetTickCount64() }) <= s.beat.load(Relaxed) + BEAT_MS
+}
+
+/// Só a janela do jogo que o motor achou recebe o efeito (não um lançador ou janela de ferramenta do mesmo exe).
+fn is_game(s: &Shared, hwnd: HWND) -> bool {
+    let want = s.hwnd.load(Relaxed);
+    want == 0 || hwnd.0 as u64 == want || unsafe { GetAncestor(hwnd, GA_ROOT) }.0 as u64 == want
+}
+
+/// Roda `f` uma vez por chamada do jogo, sem repetir dentro do nosso próprio desenho. Um pânico fica aqui: o jogo
+/// não cai por causa do efeito.
+fn guard(f: impl FnOnce()) {
+    if BUSY.get() {
+        return;
+    }
+    BUSY.set(true);
+    if std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).is_err() {
+        log("shader: erro interno no gancho (pânico), efeito desligado neste quadro");
+    }
+    BUSY.set(false);
+}
+
+/// A função original de `slot` na tabela de `this`.
+unsafe fn orig(this: *mut c_void, slot: usize) -> usize {
+    let table = *(this as *const usize);
+    let list = lock(&PATCHES);
+    list.iter().find(|p| p.0 == table && p.1 == slot).or_else(|| list.iter().find(|p| p.1 == slot)).map_or(0, |p| p.2)
+}
+
+/// Troca uma entrada da tabela de funções. O original fica guardado antes de a nova valer.
+unsafe fn patch(table: *mut usize, slot: usize, new: usize) -> bool {
+    let at = table.add(slot);
+    if *at == new {
+        return true;
+    }
+    let mut old = PAGE_PROTECTION_FLAGS(0);
+    if VirtualProtect(at as *const c_void, 8, PAGE_READWRITE, &mut old).is_err() {
+        return false;
+    }
+    lock(&PATCHES).push((table as usize, slot, *at));
+    (*(at as *const AtomicUsize)).store(new, SeqCst);
+    let _ = VirtualProtect(at as *const c_void, 8, old, &mut old);
+    true
+}
+
+unsafe fn vtable<T: Interface>(obj: &T) -> *mut usize {
+    *(obj.as_raw() as *const *mut usize)
+}
+
+// ---------- DXGI / D3D11 ----------
+
+unsafe extern "system" fn on_present(this: *mut c_void, sync: u32, flags: u32) -> HRESULT {
+    guard(|| dx11_present(this, flags));
+    let f: Present = std::mem::transmute(orig(this, SLOT_PRESENT));
+    f(this, sync, flags)
+}
+
+unsafe extern "system" fn on_present1(this: *mut c_void, sync: u32, flags: u32, params: *const c_void) -> HRESULT {
+    guard(|| dx11_present(this, flags));
+    let f: Present1 = std::mem::transmute(orig(this, SLOT_PRESENT1));
+    f(this, sync, flags, params)
+}
+
+/// O ResizeBuffers falha se sobrar referência ao back buffer: as nossas saem antes.
+unsafe extern "system" fn on_resize(this: *mut c_void, n: u32, w: u32, h: u32, fmt: DXGI_FORMAT, flags: u32) -> HRESULT {
+    guard(|| {
+        if let Some(x) = lock(&DX11).as_mut().filter(|x| x.sc == this as usize) {
+            x.bb = None;
+        }
+    });
+    let f: Resize = std::mem::transmute(orig(this, SLOT_RESIZE));
+    f(this, n, w, h, fmt, flags)
+}
+
+unsafe fn dx11_present(this: *mut c_void, flags: u32) {
+    let Some(s) = shared() else { return };
+    if flags & DXGI_PRESENT_TEST.0 != 0 {
+        return;
+    }
+    s.presents.fetch_add(1, Relaxed);
+    let Some(sc) = IDXGISwapChain::from_raw_borrowed(&this) else { return };
+    let Ok(desc) = sc.GetDesc() else { return };
+    if !is_game(s, desc.OutputWindow) {
+        return;
+    }
+    let Ok(dev) = sc.GetDevice::<ID3D11Device>() else {
+        // DXGI sem D3D11 por trás: D3D12 (ou D3D10). O motor lê `api` e volta para a janela por cima.
+        if s.api.load(Relaxed) == 0 {
+            let api = if GetModuleHandleW(w!("d3d12.dll")).is_ok() { API_DX12 } else { API_DX10 };
+            s.api.store(api, Relaxed);
+            say!("shader: o jogo apresenta em {}, a injeção não cobre", api_name(api));
+        }
+        return;
+    };
+    s.api.store(API_DX11, Relaxed);
+    if !alive(s) {
+        return;
+    }
+    let mut g = lock(&DX11);
+    if g.as_ref().is_some_and(|x| x.sc != this as usize) {
+        say!("shader: outra swapchain, recomeçando");
+        *g = None;
+    }
+    if g.is_none() {
+        let key = fail_key(s);
+        if *lock(&FAIL) == Some(key) {
+            return;
+        }
+        match Dx11::new(this as usize, dev, s) {
+            Ok(x) => *g = Some(x),
+            Err(e) => {
+                *lock(&FAIL) = Some(key);
+                say!("shader: D3D11 não abriu: {e}");
+                return;
+            }
+        }
+    }
+    let x = g.as_mut().unwrap();
+    if x.errors >= MAX_ERRORS {
+        return;
+    }
+    match x.frame(sc, &desc, s) {
+        Ok(()) => x.errors = 0,
+        Err(e) => {
+            x.errors += 1;
+            x.bb = None;
+            say!("shader: {e}");
+            if x.errors >= MAX_ERRORS {
+                say!("shader: {MAX_ERRORS} erros seguidos, efeito desligado até o jogo fechar");
+            }
+        }
+    }
+}
+
+/// O que depende do back buffer: some no ResizeBuffers.
+struct Bb {
+    key: (u32, u32, DXGI_FORMAT, u32),
+    /// Cópia do back buffer (o back buffer não tem leitura por shader).
+    raw: (ID3D11Texture2D, ID3D11ShaderResourceView),
+    /// Em BGRA, quando o back buffer é RGBA: o detector de blocos e a redução leem BGRA.
+    bgra: Option<(ID3D11Texture2D, ID3D11ShaderResourceView, ID3D11RenderTargetView)>,
+    out: ID3D11RenderTargetView,
+}
+
+struct Dx11 {
+    sc: usize,
+    dev: ID3D11Device,
+    ctx: ID3D11DeviceContext1,
+    /// Estado do contexto só nosso: o do jogo fica guardado do jeito que estava (`SwapDeviceContextState`).
+    state: ID3DDeviceContextState,
+    eng: Engine,
+    copy: FullPass,
+    polled: Instant,
+    seq: u32,
+    bb: Option<Bb>,
+    warned: bool,
+    errors: u32,
+}
+
+impl Dx11 {
+    unsafe fn new(sc: usize, dev: ID3D11Device, s: &Shared) -> Res<Self> {
+        let ctx: ID3D11DeviceContext1 = dev.GetImmediateContext()?.cast()?;
+        let single = dev.GetCreationFlags() & D3D11_CREATE_DEVICE_SINGLETHREADED.0 as u32 != 0;
+        let flags = if single { D3D11_1_CREATE_DEVICE_CONTEXT_STATE_SINGLETHREADED.0 as u32 } else { 0 };
+        let mut state = None;
+        dev.cast::<ID3D11Device1>()?.CreateDeviceContextState(flags, &[dev.GetFeatureLevel()], D3D11_SDK_VERSION, &ID3D11Device::IID, None, Some(&mut state))?;
+        let state = state.ok_or("sem estado de contexto")?;
+        let seq = s.seq.load(Acquire);
+        // A cadeia carrega aqui (o jogo para um instante na primeira vez), já no estado nosso.
+        let mut prev = None;
+        ctx.SwapDeviceContextState(&state, Some(&mut prev));
+        let made = Engine::open(&s.path(), &dev, false).and_then(|eng| Ok((eng, FullPass::new(&dev, PS_COPY)?)));
+        ctx.ClearState();
+        if let Some(p) = prev {
+            ctx.SwapDeviceContextState(&p, None);
+        }
+        let (eng, copy) = made?;
+        say!("shader: D3D11 pronto, perfil {}", eng.path.display());
+        Ok(Self { sc, dev, ctx, state, eng, copy, polled: Instant::now(), seq, bb: None, warned: false, errors: 0 })
+    }
+
+    unsafe fn frame(&mut self, sc: &IDXGISwapChain, desc: &DXGI_SWAP_CHAIN_DESC, s: &Shared) -> Res<()> {
+        let mut prev = None;
+        self.ctx.SwapDeviceContextState(&self.state, Some(&mut prev));
+        let r = self.draw(sc, desc, s);
+        // Nada nosso fica preso ao back buffer (o ResizeBuffers do jogo pede todas as referências soltas).
+        self.ctx.ClearState();
+        if let Some(p) = prev {
+            self.ctx.SwapDeviceContextState(&p, None);
+        }
+        r
+    }
+
+    unsafe fn draw(&mut self, sc: &IDXGISwapChain, desc: &DXGI_SWAP_CHAIN_DESC, s: &Shared) -> Res<()> {
+        if self.polled.elapsed().as_millis() >= 250 {
+            self.polled = Instant::now();
+            let seq = s.seq.load(Acquire);
+            if seq != self.seq {
+                self.seq = seq;
+                self.eng.switch(&self.dev, &s.path());
+                say!("shader: perfil {}", self.eng.path.display());
+            } else {
+                self.eng.poll(&self.dev);
+            }
+        }
+        let p = &self.eng.profile;
+        if !p.on || !p.inject || s.flags.load(Relaxed) & FLAG_COMPARE != 0 || !self.eng.active() {
+            return Ok(());
+        }
+        let (w, h, fmt, samples) = (desc.BufferDesc.Width, desc.BufferDesc.Height, desc.BufferDesc.Format, desc.SampleDesc.Count);
+        // Cor do back buffer: só 8 bits por canal. HDR (16 bits ou 10 bits) fica sem efeito.
+        let (base, rgba) = match fmt {
+            DXGI_FORMAT_B8G8R8A8_UNORM | DXGI_FORMAT_B8G8R8A8_UNORM_SRGB => (DXGI_FORMAT_B8G8R8A8_UNORM, false),
+            DXGI_FORMAT_R8G8B8A8_UNORM | DXGI_FORMAT_R8G8B8A8_UNORM_SRGB => (DXGI_FORMAT_R8G8B8A8_UNORM, true),
+            other => {
+                if !self.warned {
+                    self.warned = true;
+                    let why = if matches!(other, DXGI_FORMAT_R16G16B16A16_FLOAT | DXGI_FORMAT_R10G10B10A2_UNORM) { "HDR" } else { "formato" };
+                    say!("shader: back buffer em {other:?} ({why}), efeito desligado neste jogo");
+                }
+                return Ok(());
+            }
+        };
+        let back: ID3D11Texture2D = sc.GetBuffer(0)?;
+        let key = (w, h, fmt, samples);
+        if self.bb.as_ref().is_none_or(|b| b.key != key) {
+            self.bb = None;
+            let raw = texture(&self.dev, w, h, base, false)?;
+            let bgra = if rgba {
+                let (t, v) = texture(&self.dev, w, h, DXGI_FORMAT_B8G8R8A8_UNORM, true)?;
+                let r = rtv(&self.dev, &t)?;
+                Some((t, v, r))
+            } else {
+                None
+            };
+            // shortcut: back buffer _SRGB sai com a saída em sRGB de novo (fica mais claro); raro em flip model.
+            self.bb = Some(Bb { key, raw, bgra, out: rtv(&self.dev, &back)? });
+            say!("shader: back buffer {w}x{h} {fmt:?}, {samples} amostra(s)");
+        }
+        let b = self.bb.as_ref().unwrap();
+        if samples > 1 {
+            self.ctx.ResolveSubresource(&b.raw.0, 0, &back, 0, base);
+        } else {
+            self.ctx.CopyResource(&b.raw.0, &back);
+        }
+        let input = match &b.bgra {
+            Some((t, v, r)) => {
+                self.copy.draw(&self.ctx, &b.raw.1, r, [0.0, 0.0, w as f32, h as f32], [0.0; 4])?;
+                (t, v)
+            }
+            None => (&b.raw.0, &b.raw.1),
+        };
+        self.eng.render(&self.dev, &self.ctx, input, (w, h), &b.out, [0.0, 0.0, w as f32, h as f32])?;
+        s.drawn.fetch_add(1, Relaxed);
+        Ok(())
+    }
+}
+
+unsafe fn install_dxgi() -> Res<()> {
+    let window = dummy_window()?;
+    let desc = DXGI_SWAP_CHAIN_DESC {
+        BufferDesc: DXGI_MODE_DESC { Width: 2, Height: 2, Format: DXGI_FORMAT_R8G8B8A8_UNORM, ..Default::default() },
+        SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+        BufferUsage: DXGI_USAGE_RENDER_TARGET_OUTPUT,
+        BufferCount: 1,
+        OutputWindow: window,
+        Windowed: TRUE,
+        ..Default::default()
+    };
+    let (mut sc, mut dev) = (None, None);
+    let mut made = Err(Error::empty());
+    for driver in [D3D_DRIVER_TYPE_HARDWARE, D3D_DRIVER_TYPE_WARP] {
+        made = D3D11CreateDeviceAndSwapChain(None, driver, HMODULE::default(), D3D11_CREATE_DEVICE_FLAG(0), None, D3D11_SDK_VERSION, Some(&desc), Some(&mut sc), Some(&mut dev), None, None);
+        if made.is_ok() {
+            break;
+        }
+    }
+    let done = made.map_err(|e| e.to_string()).and_then(|_| {
+        let sc: IDXGISwapChain = sc.ok_or("sem swapchain")?;
+        let t = vtable(&sc);
+        let mut ok = patch(t, SLOT_PRESENT, on_present as *const () as usize) && patch(t, SLOT_RESIZE, on_resize as *const () as usize);
+        if let Ok(sc1) = sc.cast::<IDXGISwapChain1>() {
+            ok &= patch(vtable(&sc1), SLOT_PRESENT1, on_present1 as *const () as usize);
+        }
+        if ok { Ok(()) } else { Err("VirtualProtect".to_string()) }
+    });
+    drop(dev);
+    let _ = DestroyWindow(window);
+    Ok(done?)
+}
+
+// ---------- D3D9 ----------
+
+unsafe extern "system" fn on_d9_present(this: *mut c_void, a: *const c_void, b: *const c_void, w: HWND, r: *const c_void) -> HRESULT {
+    guard(|| d9_present(this, w));
+    let f: D9Present = std::mem::transmute(orig(this, SLOT_D9_PRESENT));
+    f(this, a, b, w, r)
+}
+
+unsafe extern "system" fn on_d9_present_ex(this: *mut c_void, a: *const c_void, b: *const c_void, w: HWND, r: *const c_void, flags: u32) -> HRESULT {
+    guard(|| d9_present(this, w));
+    let f: D9PresentEx = std::mem::transmute(orig(this, SLOT_D9_PRESENT_EX));
+    f(this, a, b, w, r, flags)
+}
+
+/// O Reset do D3D9 só funciona sem nada nosso em D3DPOOL_DEFAULT: a cadeia inteira sai e volta no próximo Present.
+unsafe extern "system" fn on_d9_reset(this: *mut c_void, pp: *mut c_void) -> HRESULT {
+    guard(|| drop(lock(&D9).take()));
+    let f: D9Reset = std::mem::transmute(orig(this, SLOT_D9_RESET));
+    f(this, pp)
+}
+
+unsafe extern "system" fn on_d9_reset_ex(this: *mut c_void, pp: *mut c_void, mode: *mut c_void) -> HRESULT {
+    guard(|| drop(lock(&D9).take()));
+    let f: D9ResetEx = std::mem::transmute(orig(this, SLOT_D9_RESET_EX));
+    f(this, pp, mode)
+}
+
+unsafe fn d9_present(this: *mut c_void, over: HWND) {
+    let Some(s) = shared() else { return };
+    s.presents.fetch_add(1, Relaxed);
+    let Some(dev) = IDirect3DDevice9::from_raw_borrowed(&this) else { return };
+    let mut hwnd = over;
+    if hwnd.is_invalid() {
+        let mut pp = D3DPRESENT_PARAMETERS::default();
+        if let Ok(sc) = dev.GetSwapChain(0) {
+            let _ = sc.GetPresentParameters(&mut pp);
+        }
+        hwnd = pp.hDeviceWindow;
+        if hwnd.is_invalid() {
+            let mut cp = D3DDEVICE_CREATION_PARAMETERS::default();
+            let _ = dev.GetCreationParameters(&mut cp);
+            hwnd = cp.hFocusWindow;
+        }
+    }
+    if !is_game(s, hwnd) {
+        return;
+    }
+    s.api.store(API_D3D9, Relaxed);
+    if !alive(s) {
+        return;
+    }
+    let mut g = lock(&D9);
+    if g.as_ref().is_some_and(|x| x.dev != this as usize) {
+        *g = None;
+    }
+    if g.is_none() {
+        let key = fail_key(s);
+        if *lock(&FAIL) == Some(key) {
+            return;
+        }
+        match D9::new(this as usize, dev, s) {
+            Ok(x) => *g = Some(x),
+            Err(e) => {
+                *lock(&FAIL) = Some(key);
+                say!("shader: D3D9 não abriu: {e}");
+                return;
+            }
+        }
+    }
+    let x = g.as_mut().unwrap();
+    if x.errors >= MAX_ERRORS {
+        return;
+    }
+    match x.frame(dev, s) {
+        Ok(()) => x.errors = 0,
+        Err(e) => {
+            x.errors += 1;
+            say!("shader: {e}");
+            if x.errors >= MAX_ERRORS {
+                say!("shader: {MAX_ERRORS} erros seguidos, efeito desligado até o próximo Reset");
+            }
+        }
+    }
+}
+
+struct D9 {
+    dev: usize,
+    t: Tracker,
+    chain: Option<Chain9>,
+    defaults: HashMap<String, f32>,
+    polled: Instant,
+    seq: u32,
+    /// Cópia do back buffer (o librashader lê textura em D3DPOOL_DEFAULT).
+    input: Option<((u32, u32, D3DFORMAT), IDirect3DTexture9, IDirect3DSurface9)>,
+    small: Option<((u32, u32), IDirect3DTexture9, IDirect3DSurface9)>,
+    sb: Option<IDirect3DStateBlock9>,
+    frame: usize,
+    warned: bool,
+    errors: u32,
+}
+
+// Os objetos D3D9 só são usados na linha que apresenta, sempre debaixo do `Mutex`.
+unsafe impl Send for D9 {}
+
+impl D9 {
+    unsafe fn new(dev_ptr: usize, dev: &IDirect3DDevice9, s: &Shared) -> Res<Self> {
+        let seq = s.seq.load(Acquire);
+        let mut x = Self { dev: dev_ptr, t: Tracker::open(&s.path())?, chain: None, defaults: HashMap::new(), polled: Instant::now(), seq, input: None, small: None, sb: None, frame: 0, warned: false, errors: 0 };
+        x.build(dev);
+        say!("shader: D3D9 pronto, perfil {}", x.t.path.display());
+        Ok(x)
+    }
+
+    fn build(&mut self, dev: &IDirect3DDevice9) {
+        self.chain = None;
+        self.defaults.clear();
+        let paths = self.t.on_paths();
+        if paths.is_empty() {
+            return;
+        }
+        let t = Instant::now();
+        match chain::join(&paths).and_then(|p| unsafe { Chain9::load_from_preset(p, dev, None) }.map_err(Into::into)) {
+            Ok(c) => {
+                self.defaults = chain::defaults(&c);
+                chain::apply(&c, &self.defaults, &self.t.profile);
+                self.chain = Some(c);
+                say!("shader: cadeia D3D9 de {} preset(s) carregada em {} ms", paths.len(), t.elapsed().as_millis());
+            }
+            Err(e) => say!("shader: {e}"),
+        }
+    }
+
+    unsafe fn frame(&mut self, dev: &IDirect3DDevice9, s: &Shared) -> Res<()> {
+        if self.polled.elapsed().as_millis() >= 250 {
+            self.polled = Instant::now();
+            let seq = s.seq.load(Acquire);
+            if seq != self.seq {
+                self.seq = seq;
+                self.t.switch(&s.path());
+                say!("shader: perfil {}", self.t.path.display());
+            }
+            let c = self.t.poll();
+            if c.chain {
+                self.build(dev);
+            } else if let Some(ch) = self.chain.as_ref().filter(|_| c.params) {
+                chain::apply(ch, &self.defaults, &self.t.profile);
+            }
+        }
+        let p = &self.t.profile;
+        if !p.on || !p.inject || s.flags.load(Relaxed) & FLAG_COMPARE != 0 || self.chain.is_none() {
+            return Ok(());
+        }
+        let back = dev.GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO)?;
+        let mut d = D3DSURFACE_DESC::default();
+        back.GetDesc(&mut d)?;
+        if matches!(d.Format, D3DFMT_A2R10G10B10 | D3DFMT_A2B10G10R10 | D3DFMT_A16B16G16R16F) {
+            if !self.warned {
+                self.warned = true;
+                say!("shader: back buffer em {:?} (HDR), efeito desligado neste jogo", d.Format);
+            }
+            return Ok(());
+        }
+        let key = (d.Width, d.Height, d.Format);
+        if self.input.as_ref().is_none_or(|i| i.0 != key) {
+            let (t, sf) = target(dev, d.Width, d.Height, d.Format)?;
+            self.input = Some((key, t, sf));
+            say!("shader: back buffer {}x{} {:?}", d.Width, d.Height, d.Format);
+        }
+        let (_, tex, surf) = self.input.as_ref().unwrap();
+        dev.StretchRect(&back, std::ptr::null(), surf, std::ptr::null(), D3DTEXF_NONE)?;
+        let mut input = tex;
+        // Redução fixa (240/480/720/d2..d4) por StretchRect de ponto; o `auto` (detector de blocos) é só do D3D11.
+        if let Some(k) = blocks::reduce_for(&p.input, d.Height, None) {
+            let size = blocks::reduced_size(d.Width, d.Height, k);
+            if self.small.as_ref().is_none_or(|x| x.0 != size) {
+                let (t, sf) = target(dev, size.0, size.1, d.Format)?;
+                self.small = Some((size, t, sf));
+                say!("shader: entrada {}x{} → {}x{}", d.Width, d.Height, size.0, size.1);
+            }
+            let (_, t, sf) = self.small.as_ref().unwrap();
+            dev.StretchRect(surf, std::ptr::null(), sf, std::ptr::null(), D3DTEXF_POINT)?;
+            input = t;
+        }
+        // O bloco de estado guarda o do jogo; alvo e profundidade ficam fora dele e voltam à mão.
+        match &self.sb {
+            Some(sb) => sb.Capture()?,
+            None => self.sb = Some(dev.CreateStateBlock(D3DSBT_ALL)?),
+        }
+        let (rt, ds) = (dev.GetRenderTarget(0).ok(), dev.GetDepthStencilSurface().ok());
+        let vp = Viewport { x: 0.0, y: 0.0, mvp: None, output: &back, size: Size::new(d.Width, d.Height) };
+        let r = self.chain.as_mut().unwrap().frame(input, &vp, self.frame, None);
+        let _ = self.sb.as_ref().unwrap().Apply();
+        if let Some(rt) = &rt {
+            let _ = dev.SetRenderTarget(0, rt);
+        }
+        let _ = dev.SetDepthStencilSurface(ds.as_ref());
+        r?;
+        self.frame += 1;
+        s.drawn.fetch_add(1, Relaxed);
+        Ok(())
+    }
+}
+
+unsafe fn target(dev: &IDirect3DDevice9, w: u32, h: u32, fmt: D3DFORMAT) -> Res<(IDirect3DTexture9, IDirect3DSurface9)> {
+    let mut t = None;
+    dev.CreateTexture(w, h, 1, D3DUSAGE_RENDERTARGET as u32, fmt, D3DPOOL_DEFAULT, &mut t, std::ptr::null_mut())?;
+    let t = t.ok_or("sem textura")?;
+    let sf = t.GetSurfaceLevel(0)?;
+    Ok((t, sf))
+}
+
+unsafe fn install_d9() -> Res<()> {
+    let window = dummy_window()?;
+    let r = (|| -> Res<()> {
+        let mut pp = D3DPRESENT_PARAMETERS { BackBufferWidth: 2, BackBufferHeight: 2, BackBufferCount: 1, SwapEffect: D3DSWAPEFFECT_DISCARD, hDeviceWindow: window, Windowed: TRUE, ..Default::default() };
+        let behavior = (D3DCREATE_SOFTWARE_VERTEXPROCESSING | D3DCREATE_DISABLE_DRIVER_MANAGEMENT) as u32;
+        let mut ok = true;
+        // Comum e 9Ex: as tabelas podem ser diferentes, as duas recebem o gancho.
+        if let Some(d3d) = Direct3DCreate9(D3D_SDK_VERSION) {
+            let mut dev = None;
+            d3d.CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, window, behavior, &mut pp, &mut dev)?;
+            let t = vtable(&dev.ok_or("sem dispositivo")?);
+            ok &= patch(t, SLOT_D9_RESET, on_d9_reset as *const () as usize) && patch(t, SLOT_D9_PRESENT, on_d9_present as *const () as usize);
+        }
+        let d3d = Direct3DCreate9Ex(D3D_SDK_VERSION)?;
+        let mut dev = None;
+        d3d.CreateDeviceEx(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, window, behavior, &mut pp, std::ptr::null_mut(), &mut dev)?;
+        let t = vtable(&dev.ok_or("sem dispositivo 9Ex")?);
+        ok &= patch(t, SLOT_D9_RESET, on_d9_reset as *const () as usize)
+            && patch(t, SLOT_D9_PRESENT, on_d9_present as *const () as usize)
+            && patch(t, SLOT_D9_PRESENT_EX, on_d9_present_ex as *const () as usize)
+            && patch(t, SLOT_D9_RESET_EX, on_d9_reset_ex as *const () as usize);
+        if ok { Ok(()) } else { Err("VirtualProtect".into()) }
+    })();
+    let _ = DestroyWindow(window);
+    r
+}
+
+unsafe fn dummy_window() -> Res<HWND> {
+    Ok(CreateWindowExW(WINDOW_EX_STYLE(0), w!("STATIC"), None, WINDOW_STYLE(0), 0, 0, 2, 2, None, None, None, None)?)
+}
+
+// ---------- entrada ----------
+
+/// Log da DLL ao lado dos logs do motor: `shaders\logs\<perfil>-injecao.log`.
+fn open_log(profile: &Path) {
+    let Some(root) = profile.parent().and_then(Path::parent) else { return };
+    let dir = root.join("logs");
+    let _ = std::fs::create_dir_all(&dir);
+    let stem = profile.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    let path: PathBuf = dir.join(format!("{stem}-injecao.log"));
+    *lock(&LOG) = std::fs::OpenOptions::new().create(true).append(true).open(path).ok();
+}
+
+unsafe extern "system" fn start(_: *mut c_void) -> u32 {
+    let mut module = HMODULE::default();
+    // O Windows solta o módulo quando o gancho sai: preso aqui, ele fica até o jogo fechar.
+    let _ = GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_PIN | GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, PCWSTR(start as *const u16), &mut module);
+    let name = HSTRING::from(map_name(GetCurrentProcessId()));
+    let Ok(map) = CreateFileMappingW(INVALID_HANDLE_VALUE, None, PAGE_READWRITE, 0, std::mem::size_of::<Shared>() as u32, &name) else { return 1 };
+    let view = MapViewOfFile(map, FILE_MAP_ALL_ACCESS, 0, 0, 0);
+    if view.Value.is_null() {
+        return 1;
+    }
+    let s = &*(view.Value as *const Shared);
+    open_log(&s.path());
+    prisma_shader::set_log(log);
+    s.state.store(STATE_LOADED, SeqCst);
+    s.magic.store(MAGIC, SeqCst);
+    SHARED.store(view.Value as usize, SeqCst);
+    let (dxgi, d9) = (install_dxgi(), install_d9());
+    say!("shader: injeção no pid {}: DXGI {:?}, D3D9 {:?}", GetCurrentProcessId(), dxgi, d9);
+    s.state.store(if dxgi.is_ok() || d9.is_ok() { STATE_READY } else { STATE_FAILED }, SeqCst);
+    0
+}
+
+/// O Windows chama isto na linha da janela do jogo. O trabalho vai para outra linha, para não segurar o jogo.
+#[no_mangle]
+pub unsafe extern "system" fn prisma_shader_hook(code: i32, w: WPARAM, l: LPARAM) -> LRESULT {
+    if !STARTED.swap(true, SeqCst) {
+        if let Ok(t) = CreateThread(None, 0, Some(start), None, THREAD_CREATION_FLAGS(0), None) {
+            let _ = CloseHandle(t);
+        }
+    }
+    CallNextHookEx(None, code, w, l)
+}

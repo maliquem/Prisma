@@ -4,6 +4,7 @@
 
 pub mod blocks;
 pub mod chain;
+pub mod link;
 pub mod profile;
 
 use std::sync::OnceLock;

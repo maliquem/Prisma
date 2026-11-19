@@ -325,8 +325,9 @@ pub fn safe_cap(hz: f32) -> u32 {
     (hz * 3600.0 / (hz + 3600.0)).floor() as u32
 }
 
-fn scan(pid: u32) -> Option<Found> {
-    let mut out = Found::default();
+/// Módulos carregados no processo: (nome em minúsculas, caminho).
+fn modules(pid: u32) -> Option<Vec<(String, String)>> {
+    let mut out = Vec::new();
     unsafe {
         let snap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, pid).ok()?;
         let mut m = MODULEENTRY32W { dwSize: std::mem::size_of::<MODULEENTRY32W>() as u32, ..Default::default() };
@@ -335,28 +336,56 @@ fn scan(pid: u32) -> Option<Found> {
             let end = m.szModule.iter().position(|c| *c == 0).unwrap_or(m.szModule.len());
             let name = String::from_utf16_lossy(&m.szModule[..end]).to_ascii_lowercase();
             let end = m.szExePath.iter().position(|c| *c == 0).unwrap_or(m.szExePath.len());
-            let path = String::from_utf16_lossy(&m.szExePath[..end]);
-            let found = |label: &str| (label.to_string(), fileinfo::version(&path).unwrap_or_default());
-            if name == "nvngx_dlss.dll" {
-                (out.upscaler, out.version) = found("DLSS");
-            } else if name.starts_with("libxess") && out.upscaler.is_empty() {
-                (out.upscaler, out.version) = found("XeSS");
-            } else if (name.starts_with("ffx_fsr") || name.starts_with("amd_fidelityfx")) && out.upscaler.is_empty() {
-                (out.upscaler, out.version) = found("FSR");
-            }
-            if name == "nvngx_dlssg.dll" || name == "sl.dlss_g.dll" {
-                out.frame_gen = "DLSS FG".to_string();
-            } else if name.starts_with("libxess_fg") && out.frame_gen.is_empty() {
-                out.frame_gen = "XeSS FG".to_string();
-            } else if name.starts_with("ffx_frameinterpolation") && out.frame_gen.is_empty() {
-                out.frame_gen = "FSR FG".to_string();
-            }
-            if name == "sl.reflex.dll" || name == "nvlowlatencyvk.dll" {
-                out.reflex = true;
-            }
+            out.push((name, String::from_utf16_lossy(&m.szExePath[..end])));
             more = Module32NextW(snap, &mut m).is_ok();
         }
         let _ = CloseHandle(snap);
+    }
+    Some(out)
+}
+
+/// API de vídeo pelos módulos carregados no jogo: dx11, d3d9, dx12, vulkan, opengl ou vazio (nada carregado
+/// ainda). Jogo DX12 costuma carregar o d3d11 também: nesse caso a DLL de injeção confere no primeiro Present.
+pub fn video_api(pid: u32) -> String {
+    let names: Vec<String> = modules(pid).unwrap_or_default().into_iter().map(|m| m.0).collect();
+    let has = |n: &str| names.iter().any(|x| x == n);
+    let api = if has("d3d11.dll") {
+        "dx11"
+    } else if has("d3d12.dll") {
+        "dx12"
+    } else if has("d3d9.dll") {
+        "d3d9"
+    } else if has("vulkan-1.dll") {
+        "vulkan"
+    } else if has("opengl32.dll") {
+        "opengl"
+    } else {
+        ""
+    };
+    api.to_string()
+}
+
+fn scan(pid: u32) -> Option<Found> {
+    let mut out = Found::default();
+    for (name, path) in modules(pid)? {
+        let found = |label: &str| (label.to_string(), fileinfo::version(&path).unwrap_or_default());
+        if name == "nvngx_dlss.dll" {
+            (out.upscaler, out.version) = found("DLSS");
+        } else if name.starts_with("libxess") && out.upscaler.is_empty() {
+            (out.upscaler, out.version) = found("XeSS");
+        } else if (name.starts_with("ffx_fsr") || name.starts_with("amd_fidelityfx")) && out.upscaler.is_empty() {
+            (out.upscaler, out.version) = found("FSR");
+        }
+        if name == "nvngx_dlssg.dll" || name == "sl.dlss_g.dll" {
+            out.frame_gen = "DLSS FG".to_string();
+        } else if name.starts_with("libxess_fg") && out.frame_gen.is_empty() {
+            out.frame_gen = "XeSS FG".to_string();
+        } else if name.starts_with("ffx_frameinterpolation") && out.frame_gen.is_empty() {
+            out.frame_gen = "FSR FG".to_string();
+        }
+        if name == "sl.reflex.dll" || name == "nvlowlatencyvk.dll" {
+            out.reflex = true;
+        }
     }
     Some(out)
 }

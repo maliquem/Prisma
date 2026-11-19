@@ -2843,10 +2843,10 @@ Ligar ou desligar só este passe	仅开启或关闭此 pass
 O nº 1 roda primeiro, sobre a imagem do jogo; o último fica por cima. Cada linha pode ser um preset inteiro (.slangp) ou um .slang avulso.	第 1 个最先运行，作用于游戏画面；最后一个在最上层。每一行可以是完整的 preset (.slangp)，也可以是单独的 .slang。
 Como aplicar	应用方式
 Por cima	叠加
-Injeção (em breve)	注入（即将推出）
 Bloqueado: este jogo tem anti-cheat	已阻止：此游戏有反作弊
-Em breve: aplicar dentro do jogo, sem o quadro de atraso	即将推出：在游戏内部应用，没有一帧的延迟
 Janela por cima do jogo, capturando a imagem. DX9 a 12, Vulkan e OpenGL.	覆盖在游戏上的窗口，捕获画面。DX9 至 12、Vulkan 和 OpenGL。
+Não suportado neste jogo: a injeção cobre DX11 e DX9, em jogos de 64 bits	此游戏不支持：注入仅支持 DX11 和 DX9，且仅限 64 位游戏
+Dentro do jogo, na hora de mostrar o quadro: sem o quadro de atraso e sem janela por cima. DX11 e DX9, jogos de 64 bits.	在游戏内部、显示画面的时刻应用：没有一帧的延迟，也没有覆盖窗口。DX11 和 DX9，64 位游戏。
 Resolução de entrada	输入分辨率
 Original	原始
 240 linhas	240 行

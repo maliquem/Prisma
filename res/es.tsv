@@ -2843,10 +2843,10 @@ Ligar ou desligar só este passe	Activar o desactivar solo este pase
 O nº 1 roda primeiro, sobre a imagem do jogo; o último fica por cima. Cada linha pode ser um preset inteiro (.slangp) ou um .slang avulso.	El n.º 1 va primero, sobre la imagen del juego; el último queda encima. Cada fila puede ser un preset completo (.slangp) o un .slang suelto.
 Como aplicar	Cómo aplicar
 Por cima	Superpuesto
-Injeção (em breve)	Inyección (próximamente)
 Bloqueado: este jogo tem anti-cheat	Bloqueado: este juego tiene antitrampas
-Em breve: aplicar dentro do jogo, sem o quadro de atraso	Próximamente: aplicar dentro del juego, sin el fotograma de retraso
 Janela por cima do jogo, capturando a imagem. DX9 a 12, Vulkan e OpenGL.	Ventana sobre el juego que captura la imagen. DX9 a 12, Vulkan y OpenGL.
+Não suportado neste jogo: a injeção cobre DX11 e DX9, em jogos de 64 bits	No compatible con este juego: la inyección cubre DX11 y DX9, en juegos de 64 bits
+Dentro do jogo, na hora de mostrar o quadro: sem o quadro de atraso e sem janela por cima. DX11 e DX9, jogos de 64 bits.	Dentro del juego, al mostrar el fotograma: sin fotograma de retraso y sin ventana encima. DX11 y DX9, juegos de 64 bits.
 Resolução de entrada	Resolución de entrada
 Original	Original
 240 linhas	240 líneas
