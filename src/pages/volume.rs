@@ -268,7 +268,8 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let outputs = audio::devices(false);
     let inputs = audio::devices(true);
     let n = app.cfg.snd_keys.len();
-    let kh = 56.0 + n.max(1) as f32 * 44.0;
+    // Duas linhas por atalho: aparelhos em cima, equalizador embaixo (nomes de aparelho são longos).
+    let kh = 56.0 + n.max(1) as f32 * 88.0;
     let k = rect(x, top + 144.0, w, kh);
     ui.card(k);
     ui.title(rect(k.x + 16.0, k.y + 12.0, k.w - 160.0, 22.0), "Atalhos de aparelho padrão");
@@ -277,7 +278,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         app.cfg.save();
     }
     if n == 0 {
-        ui.c.text_wrap(rect(k.x + 16.0, k.y + 46.0, k.w - 32.0, 40.0), "Cada atalho troca a saída e a entrada padrão do Windows de uma vez. Use Adicionar.", 12.0, MUTED, Weight::Regular);
+        ui.c.text_wrap(rect(k.x + 16.0, k.y + 46.0, k.w - 32.0, 40.0), "Cada atalho troca a saída e a entrada padrão do Windows de uma vez e, se quiser, o perfil do equalizador da saída. Use Adicionar.", 12.0, MUTED, Weight::Regular);
     }
     let fw = 200.0f32.min(k.w * 0.24);
     let dw = ((k.w - 32.0 - fw - 40.0 - 2.0 * 64.0 - 24.0) / 2.0).max(80.0);
@@ -285,7 +286,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let mut drop = None;
     let mut selects = Vec::new();
     for i in 0..n {
-        let ry = k.y + 46.0 + i as f32 * 44.0;
+        let ry = k.y + 46.0 + i as f32 * 88.0;
         let mut hk = app.cfg.snd_keys[i].key;
         if ui.hotkey(&format!("snd-k{i}"), rect(k.x + 16.0, ry, fw, 36.0), &mut hk) {
             app.cfg.snd_keys[i].key = hk;
@@ -295,7 +296,8 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         ui.c.text(rect(ox, ry, 60.0, 36.0), "Saída", 12.0, MUTED, Align::Left, Weight::Regular);
         let ix = ox + 64.0 + dw + 12.0;
         ui.c.text(rect(ix, ry, 60.0, 36.0), "Entrada", 12.0, MUTED, Align::Left, Weight::Regular);
-        selects.push((i, rect(ox + 64.0, ry, dw, 36.0), rect(ix + 64.0, ry, dw, 36.0)));
+        ui.c.text(rect(ox, ry + 44.0, 60.0, 36.0), "EQ", 12.0, MUTED, Align::Left, Weight::Regular);
+        selects.push((i, rect(ox + 64.0, ry, dw, 36.0), rect(ix + 64.0, ry, dw, 36.0), rect(ox + 64.0, ry + 44.0, dw, 36.0)));
         let b = rect(k.right() - 44.0, ry + 6.0, 24.0, 24.0);
         if ui.is_hover(b) {
             ui.c.round(b, 6.0, BORDER);
@@ -313,7 +315,16 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     // Listas dos atalhos por último, para abrirem por cima da lista de programas.
     let keep_side = |list: &[audio::Device]| -> Vec<String> { std::iter::once(crate::i18n::tr("Não mudar").into_owned()).chain(list.iter().map(|d| d.name.clone())).collect() };
     let (out_names, in_names) = (keep_side(&outputs), keep_side(&inputs));
-    for (i, ro, ri) in selects {
+    for (i, ro, ri, re) in selects {
+        // Perfis da saída do atalho; sem saída escolhida, só "Não mudar".
+        let out = &app.cfg.snd_keys[i].output;
+        let profiles = if out.is_empty() { Vec::new() } else { crate::sys::eq::profiles(&crate::sys::eq::guid_of(out)) };
+        let mut sel = profiles.iter().position(|p| *p == app.cfg.snd_keys[i].eq).map_or(0, |p| p + 1);
+        let names: Vec<String> = std::iter::once(crate::i18n::tr("Não mudar").into_owned()).chain(profiles.iter().cloned()).collect();
+        if ui.select(&format!("snd-ke{i}"), re, &names, &mut sel) {
+            app.cfg.snd_keys[i].eq = if sel == 0 { String::new() } else { profiles[sel - 1].clone() };
+            app.cfg.save();
+        }
         for (capture, r, names, list) in [(false, ro, &out_names, &outputs), (true, ri, &in_names, &inputs)] {
             let cur = if capture { &app.cfg.snd_keys[i].input } else { &app.cfg.snd_keys[i].output };
             let mut sel = list.iter().position(|d| &d.id == cur).map_or(0, |p| p + 1);
@@ -324,6 +335,8 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
                     e.input = id;
                 } else {
                     e.output = id;
+                    // O perfil é do aparelho antigo.
+                    e.eq.clear();
                 }
                 app.cfg.save();
             }

@@ -1570,7 +1570,7 @@ Não mudar	不更改
 Aparelho padrão	默认设备
 não deu para trocar	无法切换
 aparelho desligado	设备已拔出
-Cada atalho troca a saída e a entrada padrão do Windows de uma vez. Use Adicionar.	每个快捷键会同时切换 Windows 默认输出和输入。请使用“添加”。
+Cada atalho troca a saída e a entrada padrão do Windows de uma vez e, se quiser, o perfil do equalizador da saída. Use Adicionar.	每个快捷键会同时切换 Windows 默认输出和输入，也可按需切换输出的均衡器配置文件。请使用“添加”。
 Não deu para mudar na hora. Vale na próxima conexão.	无法立即更改。将在下次连接时生效。
 Pedir 4:4:4	请求 4:4:4
 Pedir 10 bits	请求 10 位

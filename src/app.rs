@@ -2165,6 +2165,14 @@ impl App {
                 None => said.push(format!("{}: {}", crate::i18n::tr(label), crate::i18n::tr("aparelho desligado"))),
             }
         }
+        if !k.eq.is_empty() && !k.output.is_empty() {
+            let g = crate::sys::eq::guid_of(&k.output);
+            let r = crate::pages::equalizer::set_profile(self, &g, &k.eq);
+            if let Err(e) = &r {
+                self.log(&format!("equalizador: {e}"));
+            }
+            said.push(format!("{}: {}", crate::i18n::tr("Equalizador"), if r.is_ok() { k.eq.clone() } else { crate::i18n::tr("não deu para trocar").into_owned() }));
+        }
         if !said.is_empty() {
             self.toast.info(&said.join(" · "));
         }

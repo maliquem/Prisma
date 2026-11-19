@@ -157,6 +157,20 @@ pub struct SndKey {
     pub key: Hotkey,
     pub output: String,
     pub input: String,
+    /// Perfil de equalizador da saída ("" não muda).
+    pub eq: String,
+}
+
+impl SndKey {
+    /// Linha `snd_key=` do config.ini: `mods,vk|saída|entrada|perfil de EQ`.
+    pub fn line(&self) -> String {
+        format!("{},{}|{}|{}|{}", self.key.mods, self.key.vk, self.output, self.input, self.eq)
+    }
+    /// O perfil de EQ veio depois: linhas antigas têm só três partes.
+    pub fn parse(v: &str) -> Option<Self> {
+        let p: Vec<&str> = v.splitn(4, '|').collect();
+        (p.len() >= 3).then(|| Self { key: Hotkey::parse(p[0]), output: p[1].into(), input: p[2].into(), eq: p.get(3).copied().unwrap_or_default().into() })
+    }
 }
 
 /// Atalho da página Atalhos: abre um programa, como administrador se `admin`.
@@ -771,12 +785,7 @@ impl Config {
                         c.eq_devs.push((p[0].into(), p[1].into()));
                     }
                 }
-                "snd_key" => {
-                    let p: Vec<&str> = v.splitn(3, '|').collect();
-                    if p.len() == 3 {
-                        c.snd_keys.push(SndKey { key: Hotkey::parse(p[0]), output: p[1].into(), input: p[2].into() });
-                    }
-                }
+                "snd_key" => c.snd_keys.extend(SndKey::parse(v)),
                 "run_key" => c.run_keys.extend(RunKey::parse(v)),
                 "run_key_uac" => c.run_key_uac = b,
                 "snd_keep" => c.snd_keep = v.parse().unwrap_or(0),
@@ -1059,7 +1068,7 @@ impl Config {
             let _ = writeln!(s, "eq_dev={guid}|{profile}");
         }
         for k in &self.snd_keys {
-            let _ = writeln!(s, "snd_key={},{}|{}|{}", k.key.mods, k.key.vk, k.output, k.input);
+            let _ = writeln!(s, "snd_key={}", k.line());
         }
         for k in &self.run_keys {
             let _ = writeln!(s, "run_key={}", k.line());
@@ -1262,6 +1271,16 @@ mod tests {
         for (i, a) in v.iter().enumerate() {
             assert!(!v[i + 1..].contains(a), "{} repetido", a.label());
         }
+    }
+
+    #[test]
+    fn atalho_de_aparelho_le_linha_antiga_e_nova() {
+        let old = SndKey::parse("6,97|{s}.{a}|{e}.{b}").unwrap();
+        assert_eq!((old.output.as_str(), old.input.as_str(), old.eq.as_str()), ("{s}.{a}", "{e}.{b}", ""));
+        let new = SndKey { eq: "Jogos".into(), ..old };
+        let back = SndKey::parse(&new.line()).unwrap();
+        assert_eq!((back.key, back.output, back.input, back.eq), (new.key, new.output, new.input, new.eq));
+        assert!(SndKey::parse("6,97|só a saída").is_none());
     }
 
     #[test]

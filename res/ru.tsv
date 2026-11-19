@@ -1570,7 +1570,7 @@ Não mudar	Не менять
 Aparelho padrão	Устройство по умолчанию
 não deu para trocar	не удалось переключить
 aparelho desligado	устройство отключено
-Cada atalho troca a saída e a entrada padrão do Windows de uma vez. Use Adicionar.	Каждое сочетание сразу переключает вывод и ввод Windows по умолчанию. Нажмите «Добавить».
+Cada atalho troca a saída e a entrada padrão do Windows de uma vez e, se quiser, o perfil do equalizador da saída. Use Adicionar.	Каждое сочетание сразу переключает вывод и ввод Windows по умолчанию и, при желании, профиль эквалайзера вывода. Нажмите «Добавить».
 Não deu para mudar na hora. Vale na próxima conexão.	Не удалось изменить сразу. Применится при следующем подключении.
 Pedir 4:4:4	Запрашивать 4:4:4
 Pedir 10 bits	Запрашивать 10 бит
