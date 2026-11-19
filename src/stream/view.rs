@@ -597,9 +597,11 @@ unsafe extern "system" fn immersive_hook(code: i32, w: WPARAM, l: LPARAM) -> LRE
                 // e os atalhos daqui iam para o host. As travas também, para trocarem aqui.
                 let passes = matches!(vk, VK_CONTROL | VK_LCONTROL | VK_RCONTROL | VK_MENU | VK_LMENU | VK_RMENU | VK_SHIFT | VK_LSHIFT | VK_RSHIFT | VK_CAPITAL | VK_NUMLOCK);
                 // A tecla que desceu para o host sobe para ele, mesmo se um modificador mudou no meio.
+                // O Alt vem do estado da tecla: com Ctrl junto, o Windows não marca o LLKHF_ALTDOWN, e
+                // os atalhos Ctrl+Alt+Shift daqui iam para o host.
                 let all = keys.immersive & 4 != 0
                     && !passes
-                    && (keys.held.contains(&(scan, extended)) || !own_key(&keys, (opts::mods_now(ctrl, alt, GetAsyncKeyState(VK_SHIFT.0 as i32) < 0), vk.0 as u32), scan, extended));
+                    && (keys.held.contains(&(scan, extended)) || !own_key(&keys, (opts::mods_now(ctrl, GetAsyncKeyState(VK_MENU.0 as i32) < 0, GetAsyncKeyState(VK_SHIFT.0 as i32) < 0), vk.0 as u32), scan, extended));
                 if keys.keyboard && ((grab && keys.immersive & 2 != 0) || all) {
                     let down = !matches!(w.0 as u32, WM_KEYUP | WM_SYSKEYUP);
                     if down {
@@ -616,6 +618,11 @@ unsafe extern "system" fn immersive_hook(code: i32, w: WPARAM, l: LPARAM) -> LRE
         }
     }
     CallNextHookEx(None, code, w, l)
+}
+
+/// Os atalhos de quem assiste, para a janela e o gancho do Tudo.
+fn set_keys(k: &mut Keys, co: &ClientOpts) {
+    (k.key_menu, k.key_full, k.key_cad, k.key_disc, k.key_imm, k.key_meter, k.key_sound) = (co.key_menu, co.key_full, co.key_cad, co.key_disc, co.key_imm, co.key_meter, co.key_sound);
 }
 
 /// Tecla que fica com a janela de quem assiste: os atalhos dela e as do teclado como controle.
@@ -1223,13 +1230,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     let mut seen = co.clone();
     {
         let mut k = KEYS.lock().unwrap();
-        k.key_menu = co.key_menu;
-        k.key_full = co.key_full;
-        k.key_cad = co.key_cad;
-        k.key_disc = co.key_disc;
-        k.key_imm = co.key_imm;
-        k.key_meter = co.key_meter;
-        k.key_sound = co.key_sound;
+        set_keys(&mut k, &co);
         k.acts.clear();
         k.immersive = co.immersive;
     }
@@ -1516,6 +1517,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                 // O resto (atalhos, placa...) vem da página; o menu grava por cima só o que muda.
                 co = ClientOpts { immersive: co.immersive, fps: co.fps, meter: co.meter, warn: co.warn, vsync: co.vsync, ask444: co.ask444, constant: co.constant, pad_background: co.pad_background, pad_keys: co.pad_keys, ..fresh.clone() };
                 seen = fresh;
+                set_keys(&mut KEYS.lock().unwrap(), &co);
             }
         }
         // O menu fechou: a escolha entra com as outras.
@@ -2059,6 +2061,17 @@ fn meter_name(m: u8) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn client_shortcuts_reach_the_hook() {
+        let mut k = Keys { keyboard: true, mouse: false, pad_keys: false, video: (0, 0), pending: Vec::new(), held: Vec::new(), buttons: [false; 5], sas: false, menu: false, key_menu: (0, 0), key_full: (0, 0), key_cad: (0, 0), key_disc: (0, 0), key_imm: (0, 0), key_meter: (0, 0), key_sound: (0, 0), acts: Vec::new(), immersive: 7 };
+        let co = ClientOpts { key_disc: (crate::config::MOD_CTRL, b'Q' as u32), ..ClientOpts::default() };
+        set_keys(&mut k, &co);
+        // Menu padrão com Ctrl, Alt e Shift apertados fica aqui; só com Ctrl e Shift (o Alt que faltava), vai.
+        assert!(own_key(&k, (opts::mods_now(true, true, true), b'P' as u32), 0x19, false));
+        assert!(!own_key(&k, (opts::mods_now(true, false, true), b'P' as u32), 0x19, false));
+        assert!(own_key(&k, (crate::config::MOD_CTRL, b'Q' as u32), 0x10, false));
+    }
 
     #[test]
     fn page_changes_become_menu_picks() {
