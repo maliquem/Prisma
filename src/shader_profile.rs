@@ -134,15 +134,19 @@ pub struct Param {
     pub pass: usize,
 }
 
-/// Parâmetros de todos os passes do perfil (ligados ou não), na ordem em que aparecem nos shaders. O padrão já
-/// vem com o `parameters` do preset. Nome repetido em dois passes fica só no primeiro (um valor só na cadeia).
-/// Passe que não abre fica de fora.
+/// Parâmetros de todos os passes do perfil (ligados ou não), na ordem em que aparecem nos shaders. O padrão é o
+/// da cadeia: o `parameters` do último preset ligado que mexe nele vence, como na junção. Nome repetido em dois
+/// passes fica só no primeiro (um valor só na cadeia). Passe que não abre fica de fora.
 pub fn params(profile: &Profile) -> Vec<Param> {
     use librashader::preprocess::ShaderSource;
     use librashader::presets::{ShaderFeatures, ShaderPreset};
     let mut out: Vec<Param> = Vec::new();
+    let mut chain_values = Vec::new();
     for (i, pass) in profile.passes.iter().enumerate() {
         let Ok(preset) = ShaderPreset::try_parse(&pass.path, ShaderFeatures::NONE) else { continue };
+        if pass.on {
+            chain_values.extend(preset.parameters.iter().map(|o| (o.name.to_string(), o.value)));
+        }
         for sp in &preset.passes {
             let Ok(src) = ShaderSource::load(&sp.path, ShaderFeatures::NONE) else { continue };
             // O librashader guarda os parâmetros num mapa sem ordem: a posição do #pragma no texto devolve a ordem.
@@ -159,18 +163,26 @@ pub fn params(profile: &Profile) -> Vec<Param> {
             }
         }
     }
+    for (name, v) in chain_values {
+        if let Some(x) = out.iter_mut().find(|x| x.name == name) {
+            x.default = v;
+        }
+    }
     out
 }
 
-/// Perfis salvos do mesmo jogo na pasta `dir` (`<exe>*.txt`), em ordem de nome.
+/// Perfis salvos do mesmo jogo na pasta `dir` (`<exe>*.txt` com o mesmo `exe`), em ordem de nome. O `exe`
+/// separa `game.txt` de `game2.txt`, que é de outro jogo.
 pub fn siblings(dir: &Path, exe: &Path) -> Vec<PathBuf> {
-    let stem = exe.file_stem().map(|s| s.to_string_lossy().to_lowercase()).unwrap_or_default();
+    let stem_of = |p: &Path| p.file_stem().map(|s| s.to_string_lossy().to_lowercase()).unwrap_or_default();
+    let stem = stem_of(exe);
     let mut v: Vec<PathBuf> = std::fs::read_dir(dir)
         .into_iter()
         .flatten()
         .flatten()
         .map(|e| e.path())
         .filter(|p| p.file_name().map(|n| n.to_string_lossy().to_lowercase()).is_some_and(|n| n.starts_with(&stem) && n.ends_with(".txt")))
+        .filter(|p| Profile::load(p).is_ok_and(|x| stem_of(&x.exe) == stem))
         .collect();
     v.sort();
     v
@@ -251,8 +263,8 @@ compare=lixo
     fn perfis_do_mesmo_jogo() {
         let dir = std::env::temp_dir().join(format!("prisma_perfis_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        for f in ["game.txt", "game-crt.txt", "outro.txt", "game.tmp"] {
-            std::fs::write(dir.join(f), "").unwrap();
+        for (f, exe) in [("game.txt", "Game.exe"), ("game-crt.txt", "game.exe"), ("game2.txt", "Game2.exe"), ("outro.txt", "outro.exe"), ("game.tmp", "Game.exe")] {
+            std::fs::write(dir.join(f), format!("exe=C:\\y\\{exe}\n")).unwrap();
         }
         let v = siblings(&dir, Path::new(r"C:\x\Game.exe"));
         let names: Vec<_> = v.iter().map(|p| p.file_name().unwrap().to_string_lossy().to_string()).collect();

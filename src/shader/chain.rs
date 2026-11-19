@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+use librashader::preprocess::ShaderSource;
 use librashader::presets::{ShaderFeatures, ShaderPreset};
 use librashader::runtime::d3d11::FilterChain;
 use librashader::runtime::{FilterChainParameters, Size, Viewport};
@@ -18,8 +19,8 @@ use crate::shader_profile::Profile;
 /// Junta os presets numa cadeia só, na ordem: as passadas uma atrás da outra (renumeradas), as texturas sem
 /// repetir nome (a primeira vence) e os valores de `parameters` (o último vence). O librashader resolve o
 /// `#reference` e deixa os caminhos absolutos ao ler cada preset, então não precisa de .slangp temporário.
-/// shortcut: shader que lê `PassOutputN` de um preset do meio enxerga a numeração da cadeia toda (como o
-/// "acrescentar preset" do RetroArch); os presets comuns usam `alias` e não sofrem com isso.
+/// Preset depois do primeiro que lê uma passada pelo número (`PassOutput1`) enxergaria a passada errada da
+/// cadeia: a junção é recusada com o nome dele.
 pub fn join(paths: &[PathBuf]) -> Res<ShaderPreset> {
     let mut out: Option<ShaderPreset> = None;
     for p in paths {
@@ -28,6 +29,12 @@ pub fn join(paths: &[PathBuf]) -> Res<ShaderPreset> {
             out = Some(next);
             continue;
         };
+        for pass in &next.passes {
+            let src = ShaderSource::load(&pass.path, ShaderFeatures::NONE).map_err(|e| format!("{}: {e}", pass.path.display()))?;
+            if uses_pass_number(&src.vertex) || uses_pass_number(&src.fragment) {
+                return Err(format!("{}: lê uma passada pelo número (PassOutputN) e só funciona como primeiro preset da cadeia", p.display()).into());
+            }
+        }
         let base = o.passes.len() as i32;
         for mut pass in next.passes {
             pass.meta.id += base;
@@ -48,6 +55,11 @@ pub fn join(paths: &[PathBuf]) -> Res<ShaderPreset> {
     Ok(o)
 }
 
+/// O shader lê a saída de uma passada pelo número: `PassOutput1`, `PassFeedbackSize0`...
+fn uses_pass_number(text: &str) -> bool {
+    ["PassOutput", "PassFeedback"].iter().any(|k| text.match_indices(k).any(|(i, _)| text[i + k.len()..].trim_start_matches("Size").starts_with(|c: char| c.is_ascii_digit())))
+}
+
 fn on_paths(p: &Profile) -> Vec<PathBuf> {
     p.passes.iter().filter(|x| x.on).map(|x| x.path.clone()).collect()
 }
@@ -61,7 +73,7 @@ pub struct Engine {
     defaults: HashMap<String, f32>,
     detect: Detect,
     in_size: (u32, u32),
-    small: Option<((u32, u32), ID3D11Texture2D, ID3D11ShaderResourceView)>,
+    small: Option<((u32, u32), ID3D11RenderTargetView, ID3D11ShaderResourceView)>,
     reduce: FullPass,
     copy: FullPass,
     frame: usize,
@@ -178,15 +190,15 @@ impl Engine {
             self.detect.step(dev, ctx, src.0, w, h)?;
         }
         let mut input = src.1;
-        if let Some(k) = blocks::reduce_for(&self.profile.input, w, h, self.detect.found) {
+        if let Some(k) = blocks::reduce_for(&self.profile.input, h, self.detect.found) {
             let size = blocks::reduced_size(w, h, k);
             if self.small.as_ref().is_none_or(|s| s.0 != size) {
                 let (t, v) = texture(dev, size.0, size.1, DXGI_FORMAT_B8G8R8A8_UNORM, true)?;
-                self.small = Some((size, t, v));
+                self.small = Some((size, super::rtv(dev, &t)?, v));
                 eprintln!("shader: entrada {}x{} → {}x{}", w, h, size.0, size.1);
             }
-            let (_, t, v) = self.small.as_ref().unwrap();
-            self.reduce.draw(ctx, src.1, &super::rtv(dev, t)?, [0.0, 0.0, size.0 as f32, size.1 as f32], k)?;
+            let (_, rt, v) = self.small.as_ref().unwrap();
+            self.reduce.draw(ctx, src.1, rt, [0.0, 0.0, size.0 as f32, size.1 as f32], k)?;
             input = v;
         }
         let viewport = Viewport { x: vp[0], y: vp[1], mvp: None, output: out, size: Size::new(vp[2] as u32, vp[3] as u32) };
@@ -236,12 +248,20 @@ mod tests {
         assert_eq!(p.textures.len(), 1);
         assert_eq!(p.parameters.iter().map(|x| (x.name.to_string(), x.value)).collect::<Vec<_>>(), [("A".to_string(), 0.9)]);
 
-        // A lista para a tela: um A só, no primeiro passe, com o padrão do preset dele.
+        // Preset que lê PassOutput0 só entra como primeiro.
+        std::fs::write(a.join("z.slang"), SLANG.replace("texture(Source", "texture(PassOutput0")).unwrap();
+        std::fs::write(a.join("z.slangp"), "shaders = 1\nshader0 = z.slang\n").unwrap();
+        let err = join(&[a.join("a.slangp"), a.join("z.slangp")]).unwrap_err().to_string();
+        assert!(err.contains("z.slangp") && err.contains("PassOutputN"), "{err}");
+        assert!(join(&[a.join("z.slangp"), a.join("a.slangp")]).is_ok());
+        assert!(uses_pass_number("PassFeedbackSize2.x") && !uses_pass_number("PassOutput;") && !uses_pass_number("OriginalHistory1"));
+
+        // A lista para a tela: um A só, no primeiro passe, com o padrão que vale na cadeia (o do último preset).
         let mut prof = Profile::default();
         prof.passes = vec![crate::shader_profile::Pass { on: true, path: a.join("a.slangp") }, crate::shader_profile::Pass { on: true, path: dir.join("b.slangp") }];
         let ps = crate::shader_profile::params(&prof);
         assert_eq!(ps.len(), 1);
-        assert_eq!((ps[0].name.as_str(), ps[0].default, ps[0].pass, ps[0].step), ("A", 0.2, 0, 0.1));
+        assert_eq!((ps[0].name.as_str(), ps[0].default, ps[0].pass, ps[0].step), ("A", 0.9, 0, 0.1));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

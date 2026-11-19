@@ -51,11 +51,8 @@ pub fn run_args() -> bool {
     true
 }
 
-/// Janela do jogo: um número é o hwnd; senão, a primeira janela visível do exe com esse nome.
+/// Janela do jogo: a primeira janela visível do exe com esse nome.
 fn find_window(target: &str) -> Option<HWND> {
-    if let Ok(n) = target.parse::<usize>() {
-        return Some(HWND(n as *mut _));
-    }
     let want = target.trim_end_matches(".exe").to_ascii_lowercase();
     crate::sys::procs::top_windows().into_iter().find(|h| {
         crate::sys::procs::image_path(crate::sys::procs::window_pid(*h)).is_some_and(|p| {
@@ -369,9 +366,9 @@ fn run(path: &Path) -> Res<()> {
     unsafe {
         let _ = factory.MakeWindowAssociation(overlay, DXGI_MWA_NO_ALT_ENTER);
         // `toggle` é do app; aqui só o menu e o próximo perfil. Atalho de outro programa: fica sem ele.
-        for (id, k, what) in [(HK_MENU, keys.menu, "menu"), (HK_NEXT, keys.next, "próximo perfil")] {
+        for (id, k, what) in [(HK_MENU, keys.menu, "menu; ele continua abrindo pelo controle com Select+L1"), (HK_NEXT, keys.next, "próximo perfil")] {
             if k.vk != 0 && RegisterHotKey(None, id, HOT_KEY_MODIFIERS(k.mods) | MOD_NOREPEAT, k.vk).is_err() {
-                eprintln!("{} ({what}) já é de outro programa: sem esse atalho", k.label());
+                eprintln!("shader: {} já é de outro programa, sem esse atalho ({what})", k.label());
             }
         }
     }
