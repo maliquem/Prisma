@@ -96,7 +96,7 @@ fn main() {
     if paste::run_args() {
         return;
     }
-    // Shader do RetroArch por cima de um jogo (teste da Fase 0), também sem o nome único.
+    // Motor de shaders (--shader-profile) e prévia (--shader-preview), também sem o nome único.
     if shader::run_args() {
         return;
     }

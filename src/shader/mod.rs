@@ -1,14 +1,19 @@
-//! Shaders do RetroArch (.slangp) por cima de um jogo, sem entrar nele (Fase 0 do estudo de shaders,
-//! caminho B): captura a janela do jogo, passa pelo librashader e mostra numa janela por cima que deixa
-//! os cliques passarem. Processo à parte:
-//! `prisma.exe --shader=<exe ou hwnd>,<preset.slangp>[,nome=valor...]`
-//! Ctrl+Alt+S liga e desliga o shader; Ctrl+Alt+Q sai. A cada 5 s escreve FPS, GPU e atraso.
+//! Shaders do RetroArch (.slangp) por cima de um jogo, sem entrar nele: captura a janela do jogo, passa pela
+//! cadeia do perfil (librashader) e mostra numa janela por cima que deixa os cliques passarem. Processos à parte,
+//! que o app abre e fecha:
+//! - `prisma.exe --shader-profile=<perfil.txt>`: espera o jogo do perfil, aplica e acompanha o arquivo.
+//! - `prisma.exe --shader-preview=<perfil.txt>,<scene|bars|imagem>`: a mesma cadeia numa janela de prévia.
+//! O formato do perfil e de `teclas.txt` mora em `shader_profile.rs`.
+
+mod blocks;
+mod chain;
+mod menu;
+mod preview;
 
 use std::time::Instant;
 
-use librashader::presets::{get_parameter_meta, ShaderFeatures, ShaderPreset};
-use librashader::runtime::d3d11::FilterChain;
-use librashader::runtime::{FilterChainParameters, Size, Viewport};
+use std::path::Path;
+
 use windows::core::*;
 use windows::Graphics::Capture::*;
 use windows::Graphics::DirectX::DirectXPixelFormat;
@@ -28,17 +33,20 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 
 type Res<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-const HK_TOGGLE: i32 = 1;
-const HK_QUIT: i32 = 2;
+const HK_MENU: i32 = 1;
+const HK_NEXT: i32 = 2;
 
 pub fn run_args() -> bool {
-    let Some(arg) = std::env::args().find_map(|a| a.strip_prefix("--shader=").map(str::to_string)) else { return false };
-    unsafe {
-        // No release o exe não tem console: escreve no do terminal que chamou.
-        let _ = windows::Win32::System::Console::AttachConsole(windows::Win32::System::Console::ATTACH_PARENT_PROCESS);
-    }
-    if let Err(e) = run(&arg) {
+    let arg = |k: &str| std::env::args().find_map(|a| a.strip_prefix(k).map(|v| v.trim_matches('"').to_string()));
+    let r = match (arg("--shader-profile="), arg("--shader-preview=")) {
+        (Some(p), _) => run(Path::new(&p)),
+        (_, Some(a)) => preview::run(&a),
+        _ => return false,
+    };
+    // Erro (anti-cheat, perfil ilegível) vai para a saída de erro, que o app manda para o log, e sai com 1.
+    if let Err(e) = r {
         eprintln!("shader: {e}");
+        std::process::exit(1);
     }
     true
 }
@@ -172,13 +180,6 @@ fn texture(dev: &ID3D11Device, w: u32, h: u32, fmt: DXGI_FORMAT, rt: bool) -> Re
 /// o que os shaders do RetroArch esperam. A janela por cima é SDR e o DWM a mostra com o mesmo branco.
 /// A captura em 8 bits de uma tela HDR sai com outra conversão do Windows, fria e lavada.
 /// shortcut: o que passa do branco do SDR (brilho de jogo HDR) é cortado; para jogo HDR, saída em scRGB.
-struct ToSdr {
-    vs: ID3D11VertexShader,
-    ps: ID3D11PixelShader,
-    smp: ID3D11SamplerState,
-    cb: ID3D11Buffer,
-}
-
 const PS_TO_SDR: &str = r#"
 Texture2D tex : register(t0);
 SamplerState smp : register(s0);
@@ -193,11 +194,37 @@ float4 main(float4 p : SV_Position, float2 t : T) : SV_Target {
 }
 "#;
 
-impl ToSdr {
-    fn new(dev: &ID3D11Device, white_nits: f32) -> Res<Self> {
+/// Um ponto do centro de cada bloco: (bloco x, bloco y, começo x, começo y), em pixels da entrada.
+const PS_REDUCE: &str = r#"
+Texture2D tex : register(t0);
+cbuffer C : register(b0) { float4 k; };
+float4 main(float4 p : SV_Position, float2 t : T) : SV_Target {
+    return tex.Load(int3(p.xy * k.xy + k.zw, 0));
+}
+"#;
+
+/// Cópia esticada sem filtro (prévia sem efeito, cadeia vazia).
+const PS_COPY: &str = r#"
+Texture2D tex : register(t0);
+SamplerState smp : register(s0);
+float4 main(float4 p : SV_Position, float2 t : T) : SV_Target {
+    return float4(tex.Sample(smp, t).rgb, 1);
+}
+"#;
+
+/// Um desenho de tela inteira com um pixel shader nosso e 4 constantes, amostragem por ponto.
+struct FullPass {
+    vs: ID3D11VertexShader,
+    ps: ID3D11PixelShader,
+    smp: ID3D11SamplerState,
+    cb: ID3D11Buffer,
+}
+
+impl FullPass {
+    fn new(dev: &ID3D11Device, ps_src: &str) -> Res<Self> {
         use crate::capture::hdr::{compile, VS};
         unsafe {
-            let (vb, pb) = (compile(VS, s!("vs_5_0"))?, compile(PS_TO_SDR, s!("ps_5_0"))?);
+            let (vb, pb) = (compile(VS, s!("vs_5_0"))?, compile(ps_src, s!("ps_5_0"))?);
             let (mut vs, mut ps, mut smp, mut cb) = (None, None, None, None);
             dev.CreateVertexShader(&vb, None, Some(&mut vs))?;
             dev.CreatePixelShader(&pb, None, Some(&mut ps))?;
@@ -210,20 +237,18 @@ impl ToSdr {
                 ..Default::default()
             };
             dev.CreateSamplerState(&sd, Some(&mut smp))?;
-            let scale = [80.0 / white_nits.max(80.0), 0.0, 0.0, 0.0];
-            let bd = D3D11_BUFFER_DESC { ByteWidth: 16, Usage: D3D11_USAGE_IMMUTABLE, BindFlags: D3D11_BIND_CONSTANT_BUFFER.0 as u32, ..Default::default() };
-            let init = D3D11_SUBRESOURCE_DATA { pSysMem: scale.as_ptr() as *const _, ..Default::default() };
-            dev.CreateBuffer(&bd, Some(&init), Some(&mut cb))?;
+            let bd = D3D11_BUFFER_DESC { ByteWidth: 16, Usage: D3D11_USAGE_DEFAULT, BindFlags: D3D11_BIND_CONSTANT_BUFFER.0 as u32, ..Default::default() };
+            dev.CreateBuffer(&bd, None, Some(&mut cb))?;
             Ok(Self { vs: vs.unwrap(), ps: ps.unwrap(), smp: smp.unwrap(), cb: cb.unwrap() })
         }
     }
 
-    fn draw(&self, dev: &ID3D11Device, ctx: &ID3D11DeviceContext, input: &ID3D11ShaderResourceView, out: &ID3D11Texture2D, w: u32, h: u32) -> Res<()> {
+    /// Desenha `input` em `out`, no retângulo `vp` (x, y, largura, altura).
+    fn draw(&self, ctx: &ID3D11DeviceContext, input: &ID3D11ShaderResourceView, out: &ID3D11RenderTargetView, vp: [f32; 4], k: [f32; 4]) -> Res<()> {
         unsafe {
-            let mut rtv = None;
-            dev.CreateRenderTargetView(out, None, Some(&mut rtv))?;
-            ctx.OMSetRenderTargets(Some(&[rtv]), None);
-            ctx.RSSetViewports(Some(&[D3D11_VIEWPORT { Width: w as f32, Height: h as f32, MaxDepth: 1.0, ..Default::default() }]));
+            ctx.UpdateSubresource(&self.cb, 0, None, k.as_ptr() as *const _, 0, 0);
+            ctx.OMSetRenderTargets(Some(&[Some(out.clone())]), None);
+            ctx.RSSetViewports(Some(&[D3D11_VIEWPORT { TopLeftX: vp[0], TopLeftY: vp[1], Width: vp[2], Height: vp[3], MinDepth: 0.0, MaxDepth: 1.0 }]));
             ctx.IASetPrimitiveTopology(windows::Win32::Graphics::Direct3D::D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             ctx.IASetInputLayout(None);
             ctx.VSSetShader(&self.vs, None);
@@ -238,6 +263,20 @@ impl ToSdr {
         }
         Ok(())
     }
+}
+
+fn rtv(dev: &ID3D11Device, t: &ID3D11Texture2D) -> Res<ID3D11RenderTargetView> {
+    let mut v = None;
+    unsafe { dev.CreateRenderTargetView(t, None, Some(&mut v))? };
+    Ok(v.unwrap())
+}
+
+/// Atalho de `teclas.txt` apertado agora (para segurar: `compare`).
+fn held(k: crate::config::Hotkey) -> bool {
+    use crate::config::{MOD_ALT, MOD_CTRL, MOD_SHIFT, MOD_WIN};
+    let down = |vk: u16| unsafe { GetAsyncKeyState(vk as i32) } < 0;
+    let need = |m: u32, vk: VIRTUAL_KEY| k.mods & m == 0 || down(vk.0);
+    k.vk != 0 && down(k.vk as u16) && need(MOD_CTRL, VK_CONTROL) && need(MOD_ALT, VK_MENU) && need(MOD_SHIFT, VK_SHIFT) && (k.mods & MOD_WIN == 0 || down(VK_LWIN.0) || down(VK_RWIN.0))
 }
 
 unsafe extern "system" fn wndproc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT {
@@ -257,44 +296,36 @@ fn overlay_window() -> Res<HWND> {
     }
 }
 
-fn run(arg: &str) -> Res<()> {
-    let mut parts = arg.split(',');
-    let target = parts.next().unwrap_or_default();
-    let preset_path = parts.next().ok_or("falta o preset: --shader=<exe ou hwnd>,<preset.slangp>")?.trim_matches('"').to_string();
-    let sets: Vec<(String, f32)> = parts.filter_map(|p| p.split_once('=').and_then(|(k, v)| Some((k.trim().to_string(), v.trim().parse().ok()?)))).collect();
-
+fn run(path: &Path) -> Res<()> {
     unsafe {
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
     }
-    let game = find_window(target).ok_or_else(|| format!("janela não achada: {target}"))?;
-    let path = crate::sys::procs::image_path(crate::sys::procs::window_pid(game)).unwrap_or_default();
+    let exe = crate::shader_profile::Profile::load(path).map_err(|e| format!("{}: {e}", path.display()))?.exe;
+    let stem = exe.file_stem().map(|s| s.to_string_lossy().to_string()).filter(|s| !s.is_empty()).ok_or("perfil sem exe")?;
+    eprintln!("esperando a janela de {stem}");
+    let game = loop {
+        if let Some(h) = find_window(&stem) {
+            break h;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    };
+    let game_path = crate::sys::procs::image_path(crate::sys::procs::window_pid(game)).unwrap_or_default();
     // Decisão do estudo: jogo com anti-cheat não recebe shader, nem por cima.
-    if crate::meter::anti_cheat(&path) {
-        return Err(format!("jogo com anti-cheat, o shader não entra: {path}").into());
+    if crate::meter::anti_cheat(&game_path) {
+        return Err(format!("jogo com anti-cheat, o shader não entra: {game_path}").into());
     }
-    eprintln!("jogo: {path} ({})", crate::sys::procs::window_title(game));
+    eprintln!("jogo: {game_path} ({})", crate::sys::procs::window_title(game));
 
     let mc = crate::capture::monitor_color(unsafe { windows::Win32::Graphics::Gdi::MonitorFromWindow(game, windows::Win32::Graphics::Gdi::MONITOR_DEFAULTTONEAREST) });
     eprintln!("monitor em HDR: {} (branco do SDR {} nits)", if mc.hdr { "sim" } else { "não" }, mc.white_nits);
     let d = crate::capture::d3d()?;
-    let t = Instant::now();
-    let mut chain = unsafe { FilterChain::load_from_path(&preset_path, ShaderFeatures::NONE, &d.dev, None)? };
-    eprintln!("preset carregado em {} ms", t.elapsed().as_millis());
-    if let Ok(meta) = ShaderPreset::try_parse(&preset_path, ShaderFeatures::NONE).map_err(|e| e.to_string()).and_then(|p| get_parameter_meta(&p).map(|m| m.collect::<Vec<_>>()).map_err(|e| e.to_string())) {
-        for m in meta {
-            eprintln!("  parâmetro {} = {} ({} a {}, passo {}) {}", m.id, m.initial, m.minimum, m.maximum, m.step, m.description);
-        }
-    }
-    for (k, v) in &sets {
-        match chain.parameters().set_parameter_value(k, *v) {
-            Some(old) => eprintln!("  {k}: {old} -> {v}"),
-            None => eprintln!("  {k}: parâmetro não existe neste preset"),
-        }
-    }
+    let mut eng = chain::Engine::open(path, &d.dev)?;
+    let keys = crate::shader_profile::Keys::load(&crate::shader_profile::keys_path());
 
-    // Em HDR a captura vem em 16 bits por cor e passa pelo ToSdr antes do preset.
-    let to_sdr = if mc.hdr { Some(ToSdr::new(&d.dev, mc.white_nits)?) } else { None };
+    // Em HDR a captura vem em 16 bits por cor e passa pelo PS_TO_SDR antes da cadeia.
+    let to_sdr = if mc.hdr { Some(FullPass::new(&d.dev, PS_TO_SDR)?) } else { None };
+    let sdr_scale = [80.0 / mc.white_nits.max(80.0), 0.0, 0.0, 0.0];
     let (fmt, raw_fmt) = if mc.hdr {
         (DirectXPixelFormat::R16G16B16A16Float, DXGI_FORMAT_R16G16B16A16_FLOAT)
     } else {
@@ -337,31 +368,33 @@ fn run(arg: &str) -> Res<()> {
     let swap = unsafe { factory.CreateSwapChainForHwnd(&d.dev, overlay, &desc, None, None)? };
     unsafe {
         let _ = factory.MakeWindowAssociation(overlay, DXGI_MWA_NO_ALT_ENTER);
-        // Tecla já usada por outro programa não impede o teste: só fica sem o atalho.
-        for (id, key, what) in [(HK_TOGGLE, 'S', "ligar e desligar"), (HK_QUIT, 'Q', "sair")] {
-            if RegisterHotKey(None, id, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, key as u32).is_err() {
-                eprintln!("Ctrl+Alt+{key} ({what}) já é de outro programa: sem esse atalho");
+        // `toggle` é do app; aqui só o menu e o próximo perfil. Atalho de outro programa: fica sem ele.
+        for (id, k, what) in [(HK_MENU, keys.menu, "menu"), (HK_NEXT, keys.next, "próximo perfil")] {
+            if k.vk != 0 && RegisterHotKey(None, id, HOT_KEY_MODIFIERS(k.mods) | MOD_NOREPEAT, k.vk).is_err() {
+                eprintln!("{} ({what}) já é de outro programa: sem esse atalho", k.label());
             }
         }
     }
+    let mut menu = menu::Menu::new();
 
     let mut timer = GpuTimer::new(&d.dev)?;
-    // raw: o recorte da captura; src: a entrada do preset (a própria raw sem HDR).
+    // raw: o recorte da captura; src: a entrada da cadeia (a própria raw sem HDR).
     let mut raw: Option<(ID3D11Texture2D, ID3D11ShaderResourceView)> = None;
     let mut src: Option<(ID3D11Texture2D, ID3D11ShaderResourceView)> = None;
-    let mut rtv: Option<ID3D11RenderTargetView> = None;
-    let (mut size, mut pos, mut shown, mut on) = ((0u32, 0u32), (POINT { x: i32::MIN, y: 0 }, 0u32, 0u32), false, true);
+    let (mut size, mut pos, mut shown) = ((0u32, 0u32), (POINT { x: i32::MIN, y: 0 }, 0u32, 0u32), false);
     let (mut gpu, mut lat, mut frames, mut since, mut n) = (Vec::new(), Vec::new(), 0u32, Instant::now(), 0usize);
+    let (mut polled, mut record) = (Instant::now(), None);
 
     let result: Res<()> = (|| loop {
         unsafe {
-            MsgWaitForMultipleObjects(Some(&[event]), false, 250, QS_ALLINPUT);
+            MsgWaitForMultipleObjects(Some(&[event]), false, if menu.open { 16 } else { 250 }, QS_ALLINPUT);
             let mut msg = MSG::default();
             while PeekMessageW(&mut msg, None, 0, 0, PM_REMOVE).as_bool() {
                 if msg.message == WM_HOTKEY {
                     match msg.wParam.0 as i32 {
-                        HK_QUIT => return Ok(()),
-                        _ => on = !on,
+                        HK_MENU => menu.toggle(),
+                        HK_NEXT => eng.next(&d.dev, 1),
+                        id => menu.hotkey(id, &mut eng, &d.dev),
                     }
                 }
                 let _ = TranslateMessage(&msg);
@@ -371,7 +404,20 @@ fn run(arg: &str) -> Res<()> {
                 eprintln!("o jogo fechou");
                 return Ok(());
             }
-            let visible = on && GetForegroundWindow() == game && !IsIconic(game).as_bool();
+            if polled.elapsed().as_millis() >= 250 {
+                polled = Instant::now();
+                eng.poll(&d.dev);
+                // record=1: a janela por cima entra na captura do monitor (gravar e transmitir com o shader).
+                if record != Some(eng.profile.record) {
+                    record = Some(eng.profile.record);
+                    let _ = SetWindowDisplayAffinity(overlay, if eng.profile.record { WDA_NONE } else { WDA_EXCLUDEFROMCAPTURE });
+                }
+            }
+            let fg = GetForegroundWindow() == game && !IsIconic(game).as_bool();
+            menu.pad(&mut eng, &d.dev);
+            menu.update(fg, client_area(game).map(|c| c.0), &mut eng);
+            // `compare` segurado esconde a janela por cima: aparece o jogo sem efeito.
+            let visible = fg && eng.profile.on && eng.active() && !held(keys.compare);
             if !visible && shown {
                 let _ = ShowWindow(overlay, SW_HIDE);
                 shown = false;
@@ -407,38 +453,31 @@ fn run(arg: &str) -> Res<()> {
             }
             // Qualquer resolução: tamanho novo refaz a textura de entrada e a swapchain; o librashader acompanha a viewport.
             if (w, h) != size {
-                rtv = None;
                 swap.ResizeBuffers(2, w, h, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_SWAP_CHAIN_FLAG(flags as i32))?;
                 raw = Some(texture(&d.dev, w, h, raw_fmt, false)?);
                 src = if mc.hdr { Some(texture(&d.dev, w, h, DXGI_FORMAT_B8G8R8A8_UNORM, true)?) } else { raw.clone() };
                 size = (w, h);
                 eprintln!("tamanho {w}x{h}");
             }
-            // Posição ou tamanho novos: a janela por cima acompanha a área do jogo.
+            // Posição ou tamanho novos: a janela por cima acompanha a área do jogo, e o menu fica acima dela.
             if !shown || (at, w, h) != pos {
                 SetWindowPos(overlay, Some(HWND_TOPMOST), at.x, at.y, w as i32, h as i32, SWP_NOACTIVATE | SWP_SHOWWINDOW)?;
                 pos = (at, w, h);
                 shown = true;
+                menu.raise();
             }
             let ((raw_tex, raw_srv), (src_tex, srv)) = (raw.as_ref().unwrap(), src.as_ref().unwrap());
             let bx = D3D11_BOX { left: crop.left as u32, top: crop.top as u32, front: 0, right: crop.right as u32, bottom: crop.bottom as u32, back: 1 };
             d.ctx.CopySubresourceRegion(raw_tex, 0, 0, 0, 0, &tex, 0, Some(&bx));
             frame.Close()?;
-            if rtv.is_none() {
-                let back: ID3D11Texture2D = swap.GetBuffer(0)?;
-                let mut v = None;
-                d.dev.CreateRenderTargetView(&back, None, Some(&mut v))?;
-                rtv = v;
-            }
-            let out = rtv.as_ref().unwrap();
+            let out = rtv(&d.dev, &swap.GetBuffer::<ID3D11Texture2D>(0)?)?;
             if let Some(ms) = timer.begin(&d.ctx, n) {
                 gpu.push(ms);
             }
             if let Some(t) = &to_sdr {
-                t.draw(&d.dev, &d.ctx, raw_srv, src_tex, w, h)?;
+                t.draw(&d.ctx, raw_srv, &rtv(&d.dev, src_tex)?, [0.0, 0.0, w as f32, h as f32], sdr_scale)?;
             }
-            let vp = Viewport { x: 0.0, y: 0.0, mvp: None, output: out, size: Size::new(w, h) };
-            chain.frame(None, srv, &vp, n, None)?;
+            eng.render(&d.dev, &d.ctx, (src_tex, srv), (w, h), &out, [0.0, 0.0, w as f32, h as f32])?;
             timer.end(&d.ctx, n);
             let present = if tearing { DXGI_PRESENT_ALLOW_TEARING } else { DXGI_PRESENT(0) };
             swap.Present(0, present).ok()?;
@@ -449,17 +488,20 @@ fn run(arg: &str) -> Res<()> {
                 // O formato da captura foi escolhido ao abrir: HDR ligado ou desligado no meio erra as cores.
                 let now = crate::capture::monitor_color(windows::Win32::Graphics::Gdi::MonitorFromWindow(game, windows::Win32::Graphics::Gdi::MONITOR_DEFAULTTONEAREST));
                 if now.hdr != mc.hdr || now.white_nits != mc.white_nits {
-                    return Err("o HDR do monitor mudou: abra o teste de novo".into());
+                    return Err("o HDR do monitor mudou: o shader precisa abrir de novo".into());
                 }
                 let secs = since.elapsed().as_secs_f64();
-                eprintln!(
-                    "{w}x{h} {:.0} fps | GPU do preset {:.2} ms (p95 {:.2}) | quadro recebido até o Present {:.1} ms (p95 {:.1})",
-                    frames as f64 / secs,
-                    pct(&mut gpu, 0.5),
-                    pct(&mut gpu, 0.95),
-                    pct(&mut lat, 0.5),
-                    pct(&mut lat, 0.95)
-                );
+                // No release só com PRISMA_SHADER_STATS: o log do app não ganha uma linha a cada 5 s.
+                if cfg!(debug_assertions) || std::env::var_os("PRISMA_SHADER_STATS").is_some() {
+                    eprintln!(
+                        "{w}x{h} {:.0} fps | GPU da cadeia {:.2} ms (p95 {:.2}) | quadro recebido até o Present {:.1} ms (p95 {:.1})",
+                        frames as f64 / secs,
+                        pct(&mut gpu, 0.5),
+                        pct(&mut gpu, 0.95),
+                        pct(&mut lat, 0.5),
+                        pct(&mut lat, 0.95)
+                    );
+                }
                 (frames, since) = (0, Instant::now());
                 gpu.clear();
                 lat.clear();
@@ -468,8 +510,8 @@ fn run(arg: &str) -> Res<()> {
     })();
 
     unsafe {
-        let _ = UnregisterHotKey(None, HK_TOGGLE);
-        let _ = UnregisterHotKey(None, HK_QUIT);
+        let _ = UnregisterHotKey(None, HK_MENU);
+        let _ = UnregisterHotKey(None, HK_NEXT);
         let _ = pool.RemoveFrameArrived(token);
         let _ = session.Close();
         let _ = pool.Close();
@@ -482,6 +524,9 @@ fn run(arg: &str) -> Res<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use librashader::presets::ShaderFeatures;
+    use librashader::runtime::d3d11::FilterChain;
+    use librashader::runtime::{FilterChainParameters, Size, Viewport};
 
     /// HDR: o branco do SDR (280 nits = 3.5 em scRGB) vira 255; metade da luz vira ~188 (curva sRGB);
     /// acima do branco é cortado; vermelho e azul não trocam.
@@ -504,7 +549,7 @@ mod tests {
             (tex, srv.unwrap())
         };
         let (out, _) = texture(&d.dev, 4, 1, DXGI_FORMAT_B8G8R8A8_UNORM, true).unwrap();
-        ToSdr::new(&d.dev, 280.0).unwrap().draw(&d.dev, &d.ctx, &srv, &out, 4, 1).unwrap();
+        FullPass::new(&d.dev, PS_TO_SDR).unwrap().draw(&d.ctx, &srv, &rtv(&d.dev, &out).unwrap(), [0.0, 0.0, 4.0, 1.0], [80.0 / 280.0, 0.0, 0.0, 0.0]).unwrap();
         let got = unsafe {
             let mut desc = D3D11_TEXTURE2D_DESC::default();
             out.GetDesc(&mut desc);
