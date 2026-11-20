@@ -107,7 +107,7 @@ Na foto: Enter ou Ctrl + C copia, Ctrl + S salva, Ctrl + Z desfaz e Esc cancela.
 - Não use injeção em jogos online. A detecção de anti-cheat reconhece arquivos e títulos conhecidos, e não achar nada não prova que o jogo não tem. Em qualquer jogo, dá para escolher Driver como método na aba Medidor.
 - Jogos em DirectX 9 e Vulkan usam o limite do driver, que vale ao reabrir.
 - Jogo em tela cheia exclusiva precisa estar em modo janela antes do Fullscreenizer.
-- Shaders: não entram em jogo com anti-cheat nem em tela cheia exclusiva (use janela sem borda ou o Fullscreenizer), monitor em HDR vira SDR antes do filtro, e o modo Injeção ainda não funciona.
+- Shaders: não entram em jogo com anti-cheat nem em tela cheia exclusiva (use janela sem borda ou o Fullscreenizer), monitor em HDR vira SDR antes do filtro, e o modo Injeção cobre DX9 a 12, OpenGL e Vulkan, em 32 e 64 bits.
 - Sem temperatura e consumo da CPU, porque exigem driver de kernel.
 - Os perfis não prometem FPS. O valor é privacidade e menos ruído.
 - Apps removidos voltam pela Loja, e a volta pode falhar.

@@ -238,8 +238,6 @@ pub struct Config {
     /// Shaders: liga/desliga, menu no jogo, próximo perfil e comparar (`shader_profile::KEYS`). Só o
     /// primeiro é do app; os quatro vão para `teclas.txt`, que o motor lê.
     pub hk_shader: [Hotkey; 4],
-    /// Pasta da biblioteca de shaders; vazio é `shaders\lib`.
-    pub shader_lib: String,
     /// Pesquisa de arquivos ligada: o índice fica na memória.
     pub search_on: bool,
     /// Letras dos discos da pesquisa. Vazio: todos, menos os com problema de saúde.
@@ -446,7 +444,6 @@ impl Default for Config {
             hk_macro: Hotkey::new(0, 0),
             // P e A já são das fotos: menu M e comparar C.
             hk_shader: [Hotkey::new(MOD_CTRL | MOD_ALT, b'H' as u32), Hotkey::new(MOD_CTRL | MOD_ALT, b'M' as u32), Hotkey::new(MOD_CTRL | MOD_ALT, b'D' as u32), Hotkey::new(MOD_CTRL | MOD_ALT, b'C' as u32)],
-            shader_lib: String::new(),
             search_on: false,
             search_drives: String::new(),
             search_apps: true,
@@ -585,18 +582,8 @@ fn default_capture_dir() -> String {
 }
 
 /// Instalado guarda em %APPDATA%; portátil guarda ao lado do programa.
-/// Grava num temporário ao lado e troca: o arquivo nunca fica pela metade se o PC cair no meio.
-pub fn write_safe(path: &std::path::Path, data: impl AsRef<[u8]>) -> std::io::Result<()> {
-    use std::io::Write;
-    let tmp = path.with_extension("tmp");
-    {
-        let mut f = std::fs::File::create(&tmp)?;
-        f.write_all(data.as_ref())?;
-        // No disco antes de trocar: uma queda logo depois não deixa o arquivo vazio.
-        f.sync_all()?;
-    }
-    std::fs::rename(tmp, path)
-}
+/// Grava num temporário ao lado e troca (fica em `prisma-shader`, que a DLL de injeção também usa).
+pub use prisma_shader::write_safe;
 
 /// Radial de fábrica (índices de `remap::ACTIONS`). Stick direito: teclado, foto da tela, salvar
 /// replay, Medidor compacto, som, bateria, Otimizar e gravar a tela. Stick esquerdo (dois círculos):
@@ -713,7 +700,6 @@ impl Config {
                         *slot = Hotkey::parse(h);
                     }
                 }
-                "shader_lib" => c.shader_lib = v.into(),
                 "search_on" => c.search_on = v == "1",
                 "search_drives" => c.search_drives = v.chars().filter(|c| c.is_ascii_uppercase() || *c == '-').collect(),
                 "search_apps" => c.search_apps = v == "1",
@@ -942,7 +928,6 @@ impl Config {
         hk(&mut s, "hk_find", self.hk_find);
         hk(&mut s, "hk_macro", self.hk_macro);
         let _ = writeln!(s, "hk_shader={}", self.hk_shader.map(|h| format!("{},{}", h.mods, h.vk)).join(";"));
-        let _ = writeln!(s, "shader_lib={}", self.shader_lib);
         let _ = writeln!(s, "search_on={}", self.search_on as u8);
         let _ = writeln!(s, "search_drives={}", self.search_drives);
         let _ = writeln!(s, "search_apps={}", self.search_apps as u8);

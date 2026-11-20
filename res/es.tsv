@@ -1180,6 +1180,10 @@ Injeção desligada: o jogo caiu com ela.	Inyección desactivada: el juego fall�
 Injeção desligada: o jogo caiu	Inyección desactivada: el juego falló
 Injeção bloqueada: anti-cheat detectado.	Inyección bloqueada: antitrampas detectado.
 Injeção parada: geração de quadros carregada.	Inyección detenida: generación de fotogramas cargada.
+A Injeção não cobre a API deste jogo ({}); voltou para Por cima.	La Inyección no cubre la API de este juego ({}); volvió a Superpuesto.
+A DLL da Injeção não entrou no jogo; voltou para Por cima.	La DLL de la Inyección no entró en el juego; volvió a Superpuesto.
+Nenhum quadro do jogo passou pela Injeção; voltou para Por cima.	Ningún fotograma del juego pasó por la Inyección; volvió a Superpuesto.
+O jogo fechou com erro durante a Injeção; voltou para Por cima.	El juego se cerró con un error durante la Inyección; volvió a Superpuesto.
 A injeção não carregou neste jogo.	La inyección no cargó en este juego.
 Usar injeção neste jogo?	¿Usar inyección en este juego?
 O limite passa a mudar na hora, mas um módulo do Prisma entra no jogo, e isso pode derrubá-lo. Não use em jogo online: um anti-cheat pode punir mesmo sem ter sido detectado aqui. Se o jogo cair, a injeção desliga sozinha.	El límite cambia al instante, pero un módulo de Prisma entra en el juego, lo que puede hacerlo fallar. No lo uses en línea: un antitrampas puede castigarte aunque aquí no se haya detectado ninguno. Si el juego falla, la inyección se desactiva sola.
@@ -2824,7 +2828,6 @@ O download falhou. Tente de novo.	La descarga falló. Inténtalo de nuevo.
 Instalada: {} presets.	Instalada: {} presets.
 Não baixada. Não vem com o Prisma por causa das licenças.	No descargada. No viene con Prisma por las licencias.
 Baixar	Descargar
-Trocar…	Cambiar…
 Liga / desliga	Activar / desactivar
 Menu no jogo	Menú en el juego
 Próximo perfil	Siguiente perfil
@@ -2833,7 +2836,8 @@ Passes	Pases
 Testar com imagem	Probar con imagen
 Cena 2D (320×240)	Escena 2D (320×240)
 Barras de cor e grade	Barras de color y cuadrícula
-Abrir imagem ou captura…	Abrir imagen o captura…
+Importar preset…	Importar preset…
+Abrir imagem ou captura…Abrir imagen o captura…
 Adicionar passe	Añadir pase
 Carregar preset	Cargar preset
 nada	nada
@@ -2843,10 +2847,10 @@ Ligar ou desligar só este passe	Activar o desactivar solo este pase
 O nº 1 roda primeiro, sobre a imagem do jogo; o último fica por cima. Cada linha pode ser um preset inteiro (.slangp) ou um .slang avulso.	El n.º 1 va primero, sobre la imagen del juego; el último queda encima. Cada fila puede ser un preset completo (.slangp) o un .slang suelto.
 Como aplicar	Cómo aplicar
 Por cima	Superpuesto
-Injeção (em breve)	Inyección (próximamente)
 Bloqueado: este jogo tem anti-cheat	Bloqueado: este juego tiene antitrampas
-Em breve: aplicar dentro do jogo, sem o quadro de atraso	Próximamente: aplicar dentro del juego, sin el fotograma de retraso
 Janela por cima do jogo, capturando a imagem. DX9 a 12, Vulkan e OpenGL.	Ventana sobre el juego que captura la imagen. DX9 a 12, Vulkan y OpenGL.
+Não suportado neste jogo: a injeção cobre DX9 a 12, OpenGL e Vulkan	No compatible con este juego: la inyección cubre DX9 a 12, OpenGL y Vulkan
+Dentro do jogo, na hora de mostrar o quadro: sem o quadro de atraso e sem janela por cima. DX9 a 12, OpenGL e Vulkan; HDR fica sem efeito.	Dentro del juego, al mostrar el fotograma: sin fotograma de retraso y sin ventana encima. DX9 a 12, OpenGL y Vulkan; sin efecto en HDR.
 Resolução de entrada	Resolución de entrada
 Original	Original
 240 linhas	240 líneas
@@ -2863,7 +2867,7 @@ Em tela cheia exclusiva o filtro some. Use janela sem borda ou ligue o Fullscree
 Ligar Fullscreenizer	Activar Fullscreenizer
 Monitor em HDR: a imagem é convertida para SDR antes do filtro (brilho acima do branco é cortado).	Monitor en HDR: la imagen se convierte a SDR antes del filtro (el brillo por encima del blanco se recorta).
 Salvar perfil	Guardar perfil
-Salvar como preset…	Guardar como preset…
+Salvar como preset	Guardar como preset
 Perfil salvo para este jogo	Perfil guardado para este juego
 Voltou ao último salvo	Vuelto al último guardado
 Parâmetros	Parámetros
@@ -2876,20 +2880,40 @@ padrão	predeterminado
 Mínimo, máximo e passo vêm do próprio shader. A mudança aparece no jogo na hora; laranja é diferente do padrão. Botão direito volta o valor.	El mínimo, el máximo y el paso vienen del propio shader. El cambio se ve en el juego al instante; naranja es distinto del predeterminado. Clic derecho restaura el valor.
 Carregar preset (substitui os passes)	Cargar preset (reemplaza los pases)
 Buscar em {} presets (ex.: lottes, ntsc, vhs)	Buscar en {} presets (p. ej.: lottes, ntsc, vhs)
-A biblioteca está vazia. Baixe no cartão Biblioteca ou escolha outra pasta em Trocar.	La biblioteca está vacía. Descárgala en la tarjeta Biblioteca o elige otra carpeta con Cambiar.
+A biblioteca está vazia. Baixe no cartão Biblioteca ou importe um preset.	La biblioteca está vacía. Descárgala en la tarjeta Biblioteca o importa un preset.
 Preset (.slangp) entra como um passe com todas as passadas dele; .slang entra como uma passada só.	Un preset (.slangp) entra como un pase con todas sus pasadas; un .slang entra como una sola pasada.
 Carregar	Cargar
 Adicionar ao fim	Añadir al final
 Não deu para gravar o perfil	No se pudo guardar el perfil
-Este jogo não tem perfil de shader	Este juego no tiene perfil de shader
+Este jogo não tem perfil de shader: {} abre o menu e cria um	Este juego no tiene perfil de shader: {} abre el menú y crea uno
 Shader ligado	Shader activado
 Shader desligado	Shader desactivado
-Preset exportado	Preset exportado
+Preset importado	Preset importado
 Não deu para gravar o preset	No se pudo guardar el preset
 Não deu para juntar os passes num preset	No se pudieron unir los pases en un preset
+Meus presets	Mis presets
+Faltam arquivos do preset importado (baixe a biblioteca ou copie para ela): {}	Faltan archivos del preset importado (descarga la biblioteca o cópialos en ella): {}
+Não deu para importar o preset	No se pudo importar el preset
+Preset salvo em shaders\{}	Preset guardado en shaders\{}
 Página Shaders	Página Shaders
 Shader liga / desliga	Shader activado / desactivado
 Presets de shader	Presets de shader
 Perfil do jogo	Perfil del juego
 Imagem do jogo	Imagen del juego
 {} já está em uso por outro programa	{} ya lo usa otro programa
+Jogo com anti-cheat: o shader não entra nele	Juego con anti-cheat: el shader no se aplica
+Perfil de shader criado: {}	Perfil de shader creado: {}
+Menu do shader no jogo	Menú del shader en el juego
+Shaders · {}	Shaders · {}
+Shader	Shader
+Perfil	Perfil
+Presets	Presets
+Biblioteca	Biblioteca
+Biblioteca · {}	Biblioteca · {}
+ligado	activado
+desligado	desactivado
+↑↓ escolher · ←→ mudar · Enter abrir · Esc fechar	↑↓ elegir · ←→ cambiar · Enter abrir · Esc cerrar
+←→ ajustar · Enter padrão · Esc voltar	←→ ajustar · Enter predeterminado · Esc volver
+↑↓ escolher · Enter abrir · Esc voltar	↑↓ elegir · Enter abrir · Esc volver
+Baixe a biblioteca na página Shaders	Descarga la biblioteca en la página Shaders
+Nenhum preset aqui	Ningún preset aquí

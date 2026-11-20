@@ -22,7 +22,9 @@ jobs:
           if ("v$v" -ne $env:GITHUB_REF_NAME) { throw "Cargo.toml has $v, tag is $env:GITHUB_REF_NAME" }
 
       - name: Build
-        run: cargo build --release --locked
+        run: |
+          rustup target add i686-pc-windows-msvc
+          cargo build --release --locked
 
       - name: Package
         shell: pwsh

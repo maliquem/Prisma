@@ -24,6 +24,8 @@ if (-not $info.isDraft) { throw "$tag não está em rascunho." }
 
 # 3. Compila e assina aqui.
 $env:RUSTUP_HOME = 'K:\rust\rustup'; $env:CARGO_HOME = 'K:\rust\cargo'; $env:PATH = "K:\rust\cargo\bin;$env:PATH"
+# A DLL de shaders sai também em 32 bits, para os jogos de 32 bits.
+rustup target add i686-pc-windows-msvc
 cargo test --locked
 if ($LASTEXITCODE) { throw 'Os testes falharam.' }
 cargo build --release --locked

@@ -1,0 +1,10 @@
+[package]
+name = "prisma-shader"
+version = "0.1.0"
+edition = "2021"
+description = "Shaders do RetroArch no Prisma: perfil, junção dos presets, detector de blocos e a cadeia D3D11, divididos pelo motor por cima e pela DLL de injeção"
+
+[dependencies]
+# librashader pela MPL-2.0; o "seh" segura falhas do compilador de shader do Windows em vez de derrubar o processo.
+librashader = { version = "0.12.1", default-features = false, features = ["runtime-d3d11", "runtime-d3d11-seh", "presets", "preprocess"] }
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Graphics_Direct3D", "Win32_Graphics_Direct3D11", "Win32_Graphics_Direct3D_Fxc", "Win32_Graphics_Dxgi_Common"] }

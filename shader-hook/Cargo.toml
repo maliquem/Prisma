@@ -1,0 +1,33 @@
+[package]
+name = "prisma_shader_hook"
+version = "0.1.0"
+edition = "2021"
+license-file = "../LICENSE"
+description = "Shaders do Prisma dentro do jogo (modo Injeção), carregado só quando a pessoa pede"
+
+[lib]
+crate-type = ["cdylib"]
+
+[workspace]
+
+[dependencies]
+prisma-shader = { path = "../crates/prisma-shader" }
+# Desvio no código da função (D3D9, OpenGL, Vulkan): a tabela de funções nem sempre é a do jogo.
+retour = "=0.4.0-alpha.4"
+# O D3D9 só aqui: o motor por cima e o limitador não precisam dele.
+librashader = { version = "0.12.1", default-features = false, features = ["runtime-d3d11", "runtime-d3d11-seh", "runtime-d3d9", "runtime-gl", "runtime-vk", "presets", "preprocess"] }
+# O Vulkan do librashader fala por ele (a mesma versão dele).
+ash = "0.38"
+# O OpenGL do librashader fala por ele.
+glow = "0.17"
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Graphics_Direct3D", "Win32_Graphics_Direct3D10", "Win32_Graphics_Direct3D11", "Win32_Graphics_Direct3D11on12", "Win32_Graphics_Direct3D12", "Win32_Graphics_Direct3D9", "Win32_Graphics_Dxgi", "Win32_Graphics_Dxgi_Common", "Win32_Graphics_Gdi", "Win32_Graphics_OpenGL", "Win32_System_LibraryLoader", "Win32_System_Diagnostics_Debug", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Kernel", "Win32_System_Memory", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+# Sem panic = "abort": o `guard` segura o pânico do efeito para o jogo não cair.
+strip = true
+
+# Cópia que lê os registradores da tabela CTAB do bytecode em vez do D3DX9_43.dll (ver vendor/.../src/util.rs).
+[patch.crates-io]
+librashader-runtime-d3d9 = { path = "vendor/librashader-runtime-d3d9" }

@@ -105,7 +105,7 @@ On a photo: Enter or Ctrl + C copies, Ctrl + S saves, Ctrl + Z undoes and Esc ca
 ## Limits
 
 - A game in exclusive fullscreen must be in windowed mode before using Fullscreenizer.
-- Shaders do not apply to games with anti-cheat or in exclusive fullscreen (use a borderless window or Fullscreenizer), an HDR monitor is converted to SDR before the filter, and injection mode is not ready yet.
+- Shaders do not apply to games with anti-cheat or in exclusive fullscreen (use a borderless window or Fullscreenizer), an HDR monitor is converted to SDR before the filter, and injection mode covers DX9 to 12, OpenGL and Vulkan, in 32 and 64 bits.
 - Do not use injection in online games. Anti-cheat detection recognizes known files and titles, and finding nothing does not prove a game has none. You can choose Driver as the method for any game in the Meter page.
 - DirectX 9 and Vulkan games use the driver limit, which applies on reopening.
 - No CPU temperature or power reading, since they need a kernel driver.

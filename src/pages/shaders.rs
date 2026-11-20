@@ -17,8 +17,7 @@ const INPUTS: [(&str, &str); 8] = [("auto", "Automática"), ("full", "Original")
 /// Pedidos ao `WM_PICK_SHADER` (janelas do Windows, fora do desenho).
 pub const PICK_EXE: usize = 0;
 pub const PICK_IMAGE: usize = 1;
-pub const PICK_EXPORT: usize = 2;
-pub const PICK_LIB: usize = 3;
+pub const PICK_IMPORT: usize = 2;
 
 struct Browse {
     /// Carregar preset: troca todos os passes pelo escolhido.
@@ -46,6 +45,8 @@ struct St {
     browse: Option<Browse>,
     /// Presets da biblioteca, caminhos relativos com `\`.
     lib: Option<Vec<String>>,
+    /// Arquivos que o último preset importado pede e não existem.
+    missing: Vec<String>,
     anti_cheat: bool,
     hdr: bool,
     loaded: bool,
@@ -80,14 +81,6 @@ fn st() -> std::sync::MutexGuard<'static, Option<St>> {
     ST.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-pub fn lib_dir(app: &App) -> PathBuf {
-    if app.cfg.shader_lib.is_empty() {
-        sp::lib_dir()
-    } else {
-        PathBuf::from(&app.cfg.shader_lib)
-    }
-}
-
 fn load_all() -> Vec<(PathBuf, Profile)> {
     let mut v: Vec<(PathBuf, Profile)> = std::fs::read_dir(sp::profiles_dir())
         .into_iter()
@@ -120,6 +113,7 @@ impl St {
         self.anti_cheat = crate::meter::anti_cheat(&p.exe.to_string_lossy());
         self.mtime = mtime(&path);
         self.pass = p.passes.len().saturating_sub(1);
+        self.missing.clear();
         self.saved = Some(p);
     }
 
@@ -191,7 +185,8 @@ pub fn toggle_focused(app: &mut App) {
     let Some((_, _, exe)) = app.fg_info() else { return };
     let path = sp::path_for(Path::new(&exe));
     let Ok(mut p) = Profile::load(&path) else {
-        app.toast.info("Este jogo não tem perfil de shader");
+        let key = app.cfg.hk_shader[1].label();
+        app.toast.info(&crate::i18n::tr("Este jogo não tem perfil de shader: {} abre o menu e cria um").replace("{}", &key));
         return;
     };
     p.on = !p.on;
@@ -210,20 +205,99 @@ pub fn toggle_focused(app: &mut App) {
     app.invalidate();
 }
 
+/// Atalho do menu num jogo sem perfil (ou com ele desligado): cria o perfil ligado, no modo padrão, com o nome do
+/// catálogo ou o título da janela, e abre o motor já com o menu. Com o motor rodando, quem abre o menu é ele.
+pub fn menu_focused(app: &mut App) {
+    let Some((hwnd, pid, exe)) = app.fg_info() else { return };
+    // Nem o Windows (Explorer incluído) nem o Prisma (este ou outra cópia, como o motor de outro perfil).
+    let me = std::env::current_exe().ok().and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned())).unwrap_or_default();
+    if pid == std::process::id() || exe.eq_ignore_ascii_case(&me) || crate::optimizer::is_system(&exe) {
+        return;
+    }
+    let Some(full) = crate::sys::procs::image_path(pid) else { return };
+    let path = sp::path_for(Path::new(&full));
+    if running(&path) {
+        return;
+    }
+    if crate::meter::anti_cheat(&full) {
+        app.toast.info("Jogo com anti-cheat: o shader não entra nele");
+        return;
+    }
+    let new = !path.exists();
+    let mut p = if new {
+        let low = full.to_lowercase();
+        let title = crate::sys::procs::window_title(hwnd);
+        let name = crate::sys::stores::games().into_iter().find(|e| e.path.to_lowercase() == low).map(|e| e.name).or_else(|| (!title.trim().is_empty()).then(|| title.trim().to_string()));
+        Profile { name: name.unwrap_or_else(|| app_name(&exe).to_string()), exe: full.clone().into(), ..Profile::default() }
+    } else {
+        match Profile::load(&path) {
+            Ok(p) => p,
+            Err(_) => return,
+        }
+    };
+    p.on = true;
+    if p.save(&path).is_err() {
+        app.toast.info("Não deu para gravar o perfil");
+        return;
+    }
+    if !sp::keys_path().exists() {
+        write_keys(app);
+    }
+    if new {
+        // O liga/desliga passa a valer: agora há perfil.
+        app.register_hotkeys();
+        app.toast.info(&crate::i18n::tr("Perfil de shader criado: {}").replace("{}", &p.name));
+    }
+    let log = format!("{}.log", path.file_stem().unwrap_or_default().to_string_lossy());
+    let mut runs = RUNS.lock().unwrap_or_else(|e| e.into_inner());
+    for r in runs.iter_mut().filter(|r| r.profile == path) {
+        if let Some(c) = r.child.take() {
+            stop(c);
+        }
+    }
+    runs.retain(|r| r.profile != path);
+    if let Some(child) = spawn(&[format!("--shader-profile={}", path.display()), "--shader-menu".into()], &log) {
+        runs.push(Run { profile: path.clone(), child: Some(child), ended: false });
+    }
+    drop(runs);
+    if let Some(s) = st().as_mut() {
+        reload(s, Some(&path));
+    }
+    app.invalidate();
+}
+
 /// Resposta das janelas do Windows (`WM_PICK_SHADER`).
 pub fn picked(app: &mut App, kind: usize, path: String) {
     match kind {
         PICK_EXE => add_game(app, &path),
         PICK_IMAGE => preview(&path),
-        PICK_EXPORT => export(app, &path),
-        _ => {
-            app.cfg.shader_lib = path;
-            app.cfg.save();
-            if let Some(s) = st().as_mut() {
-                s.lib = None;
-            }
-        }
+        _ => import(app, Path::new(&path)),
     }
+}
+
+/// Importar preset: copia para `shaders\` com os caminhos na biblioteca e troca os passes por ele, como o
+/// Carregar preset.
+fn import(app: &mut App, from: &Path) {
+    let (to, missing) = match sp::import(from, &sp::root()) {
+        Ok(x) => x,
+        Err(e) => {
+            crate::config::log(&format!("shader: importar {}: {e}", from.display()));
+            app.toast.info("Não deu para importar o preset");
+            return;
+        }
+    };
+    let mut g = st();
+    let Some(s) = g.as_mut() else { return };
+    let Some(c) = s.cur() else { return };
+    c.passes.clear();
+    c.params.clear();
+    sp::add_pass(c, to);
+    s.pass = 0;
+    s.missing = missing;
+    s.lib = None;
+    s.changed();
+    s.flush();
+    app.toast.info("Preset importado");
 }
 
 fn job() -> windows::Win32::Foundation::HANDLE {
@@ -243,8 +317,8 @@ fn job() -> windows::Win32::Foundation::HANDLE {
     windows::Win32::Foundation::HANDLE(*j as *mut _)
 }
 
-/// Inicia o próprio Prisma com `arg`, sem console; o que ele diz vai para `shaders\logs\<log>`.
-fn spawn(arg: String, log: &str) -> Option<Child> {
+/// Inicia o próprio Prisma com `args`, sem console; o que ele diz vai para `shaders\logs\<log>`.
+fn spawn(args: &[String], log: &str) -> Option<Child> {
     use std::os::windows::io::AsRawHandle;
     use std::os::windows::process::CommandExt;
     let dir = sp::root().join("logs");
@@ -252,7 +326,7 @@ fn spawn(arg: String, log: &str) -> Option<Child> {
     let out = std::fs::File::create(dir.join(log)).ok()?;
     let err = out.try_clone().ok()?;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    let child = std::process::Command::new(std::env::current_exe().ok()?).arg(arg).stdin(std::process::Stdio::null()).stdout(out).stderr(err).creation_flags(CREATE_NO_WINDOW).spawn().ok()?;
+    let child = std::process::Command::new(std::env::current_exe().ok()?).args(args).stdin(std::process::Stdio::null()).stdout(out).stderr(err).creation_flags(CREATE_NO_WINDOW).spawn().ok()?;
     unsafe {
         let _ = windows::Win32::System::JobObjects::AssignProcessToJobObject(job(), windows::Win32::Foundation::HANDLE(child.as_raw_handle()));
     }
@@ -276,7 +350,7 @@ fn preview(img: &str) {
     if let Some(old) = PREVIEW.lock().unwrap_or_else(|e| e.into_inner()).take() {
         stop(old);
     }
-    let c = spawn(format!("--shader-preview={},{img}", path.display()), "preview.log");
+    let c = spawn(&[format!("--shader-preview={},{img}", path.display())], "preview.log");
     *PREVIEW.lock().unwrap_or_else(|e| e.into_inner()) = c;
 }
 
@@ -314,7 +388,7 @@ pub fn tick(app: &mut App) {
                 continue;
             }
             let log = format!("{}.log", path.file_stem().unwrap_or_default().to_string_lossy());
-            if let Some(child) = spawn(format!("--shader-profile={}", path.display()), &log) {
+            if let Some(child) = spawn(&[format!("--shader-profile={}", path.display())], &log) {
                 runs.push(Run { profile: path.clone(), child: Some(child), ended: false });
             }
         }
@@ -358,8 +432,8 @@ fn running(profile: &Path) -> bool {
     RUNS.lock().unwrap_or_else(|e| e.into_inner()).iter().any(|r| r.profile == profile && !r.ended)
 }
 
-/// Baixa o zip do GitHub, extrai ao lado da biblioteca e troca só as pastas que vieram nele: o que for do
-/// jogador (`meus\`, ou uma pasta do RetroArch escolhida em Trocar) fica.
+/// Baixa o zip do GitHub, extrai ao lado da biblioteca e troca só as pastas que vieram nele: o que o jogador pôs
+/// lá dentro fica.
 fn download(lib: PathBuf) {
     {
         let mut d = DL.lock().unwrap_or_else(|e| e.into_inner());
@@ -445,11 +519,32 @@ fn top_dir(rel: &str) -> &str {
     rel.split_once('\\').map_or("", |d| d.0)
 }
 
-/// A cadeia ligada, juntada pelo motor, num .slangp comum.
-fn export(app: &mut App, to: &str) {
-    let Some(p) = st().as_mut().and_then(|s| s.cur().cloned()) else { return };
-    match crate::shader::slangp(&p) {
-        Ok(text) if crate::config::write_safe(Path::new(to), &text).is_ok() => app.toast.info("Preset exportado"),
+/// Presets do jogador (importados ou salvos), em `shaders\`, como `..\nome.slangp` relativo à biblioteca: na lista
+/// eles formam a pasta "..", mostrada como Meus presets.
+fn mine() -> Vec<String> {
+    let mut v: Vec<String> = std::fs::read_dir(sp::root())
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| e.path().extension().is_some_and(|x| x.eq_ignore_ascii_case("slangp")))
+        .map(|e| format!("..\\{}", e.file_name().to_string_lossy()))
+        .collect();
+    v.sort_by_key(|s| s.to_lowercase());
+    v
+}
+
+/// Salvar como preset: a cadeia ligada, juntada pelo motor, num .slangp em `shaders\` com o nome do perfil e
+/// caminhos relativos, que funciona também na pasta `shaders\` do RetroArch.
+fn export(app: &mut App, s: &mut St) {
+    let Some(p) = s.cur().cloned() else { return };
+    let root = sp::root();
+    let name: String = p.name.chars().map(|c| if c.is_alphanumeric() || " -_.()".contains(c) { c } else { '_' }).collect();
+    let to = sp::free_name(&root, if name.trim().is_empty() { "preset" } else { name.trim() });
+    match crate::shader::slangp(&p, &root) {
+        Ok(text) if crate::config::write_safe(&to, &text).is_ok() => {
+            s.lib = None;
+            app.toast.info(&crate::i18n::tr("Preset salvo em shaders\\{}").replace("{}", &to.file_name().unwrap_or_default().to_string_lossy()));
+        }
         Ok(_) => app.toast.info("Não deu para gravar o preset"),
         Err(e) => {
             crate::config::log(&format!("shader: exportar {}: {e}", p.name));
@@ -499,7 +594,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let top = 88.0;
     let cw = ((w - 24.0) / 3.0).floor();
     game_card(ui, app, s, rect(x, top, cw, 176.0));
-    lib_card(ui, app, s, rect(x + cw + 12.0, top, cw, 176.0));
+    lib_card(ui, s, rect(x + cw + 12.0, top, cw, 176.0));
     keys_card(ui, app, rect(x + 2.0 * (cw + 12.0), top, w - 2.0 * (cw + 12.0), 176.0));
 
     let y0 = top + 188.0;
@@ -561,12 +656,12 @@ fn game_card(ui: &mut Ui, app: &mut App, s: &mut St, r: Rect) {
     ui.c.text_fit(rect(ix, r.y + 110.0, iw, 20.0), state, 13.0, color, Align::Left, Weight::Regular);
 }
 
-fn lib_card(ui: &mut Ui, app: &mut App, s: &mut St, r: Rect) {
+fn lib_card(ui: &mut Ui, s: &mut St, r: Rect) {
     ui.card(r);
     ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Biblioteca de shaders");
     let ix = r.x + 16.0;
     let iw = r.w - 32.0;
-    let lib = lib_dir(app);
+    let lib = sp::lib_dir();
     let (on, got, total, extracting, err) = {
         let d = DL.lock().unwrap_or_else(|e| e.into_inner());
         (d.on, d.got, d.total, d.extracting, d.err)
@@ -596,13 +691,10 @@ fn lib_card(ui: &mut Ui, app: &mut App, s: &mut St, r: Rect) {
         ui.c.round(rect(bar.x, bar.y, bar.w * f.min(1.0), 4.0), 2.0, ACCENT);
     }
     let y = r.y + 108.0;
-    ui.c.text_fit(rect(ix, y, iw - 180.0, 32.0), &lib.to_string_lossy(), 12.0, TEXT2, Align::Left, Weight::Regular);
-    if ui.button("shd-lib-open", rect(r.right() - 186.0, y, 80.0, 32.0), "Abrir", false) {
+    ui.c.text_fit(rect(ix, y, iw - 100.0, 32.0), &lib.to_string_lossy(), 12.0, TEXT2, Align::Left, Weight::Regular);
+    if ui.button("shd-lib-open", rect(r.right() - 96.0, y, 80.0, 32.0), "Abrir", false) {
         let _ = std::fs::create_dir_all(&lib);
         let _ = std::process::Command::new("explorer").arg(&lib).spawn();
-    }
-    if ui.button("shd-lib-pick", rect(r.right() - 100.0, y, 84.0, 32.0), "Trocar…", false) {
-        pick(app, PICK_LIB);
     }
 }
 
@@ -671,7 +763,7 @@ fn left_card(ui: &mut Ui, app: &mut App, s: &mut St, r: Rect) {
         ui.c.text(rect(ix, y, iw, 24.0), "Nenhum passe. Adicione um preset.", 13.0, MUTED, Align::Left, Weight::Regular);
         y += 32.0;
     }
-    let lib = lib_dir(app);
+    let (root, lib) = (sp::root(), sp::lib_dir());
     let mut act: Option<(usize, i8)> = None;
     let n = p.passes.len();
     for (i, pass) in p.passes.iter().enumerate() {
@@ -684,7 +776,7 @@ fn left_card(ui: &mut Ui, app: &mut App, s: &mut St, r: Rect) {
         let color = if pass.on { TEXT } else { MUTED };
         ui.c.text_raw(rect(ix, y, 22.0, 42.0), &format!("{}", i + 1), 14.0, ACCENT, Align::Left, Weight::Semibold);
         let name = pass.path.file_stem().unwrap_or_default().to_string_lossy().into_owned();
-        let rel = pass.path.strip_prefix(&lib).unwrap_or(&pass.path).to_string_lossy().into_owned();
+        let rel = pass.path.strip_prefix(&lib).or_else(|_| pass.path.strip_prefix(&root)).unwrap_or(&pass.path).to_string_lossy().into_owned();
         let np = s.params.iter().filter(|x| x.pass == i).count();
         let tw = iw - 22.0 - 150.0;
         ui.c.text_fit(rect(ix + 22.0, y + 3.0, tw, 20.0), &name, 14.0, color, Align::Left, Weight::Semibold);
@@ -735,15 +827,34 @@ fn left_card(ui: &mut Ui, app: &mut App, s: &mut St, r: Rect) {
     y += 32.0;
     let lw = 170.0;
     ui.c.text(rect(ix, y, lw, 32.0), "Modo", 14.0, TEXT, Align::Left, Weight::Regular);
-    let mut m = 0;
-    ui.segment("shd-mode", ix + lw, y, 32.0, &["Por cima"], &mut m);
-    let sw = Ui::segment_width(&["Por cima"]);
-    let inj = rect(ix + lw + sw + 8.0, y, 170.0, 32.0);
-    ui.button_ex("shd-inj", inj, "Injeção (em breve)", false, false);
-    ui.tip(inj, if s.anti_cheat { "Bloqueado: este jogo tem anti-cheat" } else { "Em breve: aplicar dentro do jogo, sem o quadro de atraso" });
+    // `api=` vem do motor (módulos do jogo e primeiro Present): vazio é jogo ainda não aberto, ainda pode.
+    let can = !s.anti_cheat && (p.api.is_empty() || prisma_shader::link::api_supported(&p.api));
+    let names: &[&str] = if can { &["Por cima", "Injeção"] } else { &["Por cima"] };
+    let mut m = usize::from(can && p.inject);
+    if ui.segment("shd-mode", ix + lw, y, 32.0, names, &mut m) {
+        if let Some(c) = s.cur() {
+            c.inject = m == 1;
+            c.fallback.clear();
+        }
+        s.changed();
+        s.flush();
+        // O motor escolhe o modo ao abrir; a DLL já no jogo para sozinha ao ler mode=overlay.
+        restart();
+    }
+    if !can {
+        let inj = rect(ix + lw + Ui::segment_width(names) + 8.0, y, 120.0, 32.0);
+        ui.button_ex("shd-inj", inj, "Injeção", false, false);
+        ui.tip(inj, if s.anti_cheat { "Bloqueado: este jogo tem anti-cheat" } else { "Não suportado neste jogo: a injeção cobre DX9 a 12, OpenGL e Vulkan" });
+    }
     y += 36.0;
-    ui.c.text_wrap(rect(ix + lw, y, iw - lw, 34.0), "Janela por cima do jogo, capturando a imagem. DX9 a 12, Vulkan e OpenGL.", 12.0, MUTED, Weight::Regular);
-    y += 40.0;
+    let how = if can && p.inject {
+        "Dentro do jogo, na hora de mostrar o quadro: sem o quadro de atraso e sem janela por cima. DX9 a 12, OpenGL e Vulkan; HDR fica sem efeito."
+    } else {
+        "Janela por cima do jogo, capturando a imagem. DX9 a 12, Vulkan e OpenGL."
+    };
+    // Três linhas: o texto da Injeção quebra em três, e mais ainda traduzido.
+    ui.c.text_wrap(rect(ix + lw, y, iw - lw, 50.0), how, 12.0, MUTED, Weight::Regular);
+    y += 56.0;
 
     ui.c.text(rect(ix, y, lw, 36.0), "Resolução de entrada", 14.0, TEXT, Align::Left, Weight::Regular);
     let opts: Vec<String> = INPUTS.iter().map(|o| crate::i18n::tr(o.1).into_owned()).collect();
@@ -773,9 +884,10 @@ fn left_card(ui: &mut Ui, app: &mut App, s: &mut St, r: Rect) {
     let exe = p.exe.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let warn = |ui: &mut Ui, y: &mut f32, text: &str, button: Option<&str>| -> bool {
         let tw = if button.is_some() { iw - 182.0 } else { iw };
-        ui.c.text_wrap(rect(ix, *y, tw, 40.0), text, 12.0, WARN, Weight::Regular);
-        let hit = button.is_some_and(|b| ui.button("shd-fs", rect(ix + iw - 170.0, *y + 4.0, 170.0, 32.0), b, false));
-        *y += 46.0;
+        // Até três linhas: em inglês o aviso de tela cheia ao lado do botão quebra em três.
+        ui.c.text_wrap(rect(ix, *y, tw, 50.0), text, 12.0, WARN, Weight::Regular);
+        let hit = button.is_some_and(|b| ui.button("shd-fs", rect(ix + iw - 170.0, *y + 9.0, 170.0, 32.0), b, false));
+        *y += 56.0;
         hit
     };
     if s.anti_cheat {
@@ -788,6 +900,20 @@ fn left_card(ui: &mut Ui, app: &mut App, s: &mut St, r: Rect) {
         }
         app.cfg.save();
     }
+    if !s.missing.is_empty() {
+        warn(ui, &mut y, &crate::i18n::tr("Faltam arquivos do preset importado (baixe a biblioteca ou copie para ela): {}").replace("{}", &s.missing.join(", ")), None);
+    }
+    // O motor tirou a Injeção deste jogo: o motivo, até o jogador escolher o modo de novo.
+    let why = match p.fallback.as_str() {
+        "api" => Some(crate::i18n::tr("A Injeção não cobre a API deste jogo ({}); voltou para Por cima.").replace("{}", &p.api)),
+        "dll" => Some(crate::i18n::tr("A DLL da Injeção não entrou no jogo; voltou para Por cima.").into_owned()),
+        "frames" => Some(crate::i18n::tr("Nenhum quadro do jogo passou pela Injeção; voltou para Por cima.").into_owned()),
+        "crash" => Some(crate::i18n::tr("O jogo fechou com erro durante a Injeção; voltou para Por cima.").into_owned()),
+        _ => None,
+    };
+    if let Some(w) = why.filter(|_| !p.inject) {
+        warn(ui, &mut y, &w, None);
+    }
     if s.hdr {
         warn(ui, &mut y, "Monitor em HDR: a imagem é convertida para SDR antes do filtro (brilho acima do branco é cortado).", None);
     }
@@ -799,8 +925,9 @@ fn left_card(ui: &mut Ui, app: &mut App, s: &mut St, r: Rect) {
         s.saved = s.cur().cloned();
         app.toast.info("Perfil salvo para este jogo");
     }
-    if ui.button("shd-export", rect(ix + iw - 2.0 * bw - 8.0, y, bw, 36.0), "Salvar como preset…", false) {
-        pick(app, PICK_EXPORT);
+    if ui.button("shd-export", rect(ix + iw - 2.0 * bw - 8.0, y, bw, 36.0), "Salvar como preset", false) {
+        s.flush();
+        export(app, s);
     }
     let dirty = s.saved.as_ref() != s.profiles.get(s.sel).map(|p| &p.1);
     if ui.button_ex("shd-undo", rect(ix + iw - 3.0 * bw - 16.0, y, bw, 36.0), "Descartar", false, dirty) {
@@ -897,8 +1024,9 @@ fn params_card(ui: &mut Ui, s: &mut St, r: Rect) {
 
 /// Navegador da biblioteca: pastas à esquerda, presets à direita, busca em tudo.
 fn browse_sheet(ui: &mut Ui, app: &mut App, s: &mut St) {
-    let lib = lib_dir(app);
-    let all = s.lib.get_or_insert_with(|| scan(&lib)).clone();
+    let lib = sp::lib_dir();
+    let mut all = s.lib.get_or_insert_with(|| scan(&lib)).clone();
+    all.extend(mine());
     let Some(b) = s.browse.as_mut() else { return };
     let r = ui.sheet(760.0, 540.0);
     let ix = r.x + 20.0;
@@ -926,7 +1054,7 @@ fn browse_sheet(ui: &mut Ui, app: &mut App, s: &mut St) {
     });
     let body = rect(ix, r.y + 96.0, iw, r.h - 96.0 - 64.0);
     if all.is_empty() {
-        ui.c.text_wrap(rect(body.x, body.y, body.w, 40.0), "A biblioteca está vazia. Baixe no cartão Biblioteca ou escolha outra pasta em Trocar.", 13.0, MUTED, Weight::Regular);
+        ui.c.text_wrap(rect(body.x, body.y, body.w, 40.0), "A biblioteca está vazia. Baixe no cartão Biblioteca ou importe um preset.", 13.0, MUTED, Weight::Regular);
     }
     let dw = 200.0;
     let dl = rect(body.x, body.y, dw, body.h);
@@ -938,7 +1066,11 @@ fn browse_sheet(ui: &mut Ui, app: &mut App, s: &mut St) {
         if on {
             ui.c.round(row, 6.0, CARD);
         }
-        let label = if d.is_empty() { "." } else { d.as_str() };
+        let label = match d.as_str() {
+            "" => ".",
+            ".." => "Meus presets",
+            d => d,
+        };
         ui.c.text_fit(rect(row.x + 10.0, row.y, row.w - 50.0, 28.0), label, 13.0, if on { TEXT } else { TEXT2 }, Align::Left, Weight::Regular);
         ui.c.text_raw(rect(row.right() - 44.0, row.y, 36.0, 28.0), &n.to_string(), 12.0, MUTED, Align::Right, Weight::Regular);
         if ui.hit(&format!("shd-bd{i}"), row) {
@@ -976,7 +1108,15 @@ fn browse_sheet(ui: &mut Ui, app: &mut App, s: &mut St) {
     }
     ui.end_scroll();
     let fy = r.bottom() - 52.0;
-    ui.c.text_wrap(rect(ix, fy, iw - 330.0, 36.0), "Preset (.slangp) entra como um passe com todas as passadas dele; .slang entra como uma passada só.", 11.0, MUTED, Weight::Regular);
+    if b.replace {
+        // Um .slangp de qualquer lugar, do RetroArch inclusive: vai para Meus presets com os caminhos na biblioteca.
+        if ui.button("shd-bimport", rect(ix, fy, 170.0, 36.0), "Importar preset…", false) {
+            pick(app, PICK_IMPORT);
+            close = true;
+        }
+    } else {
+        ui.c.text_wrap(rect(ix, fy, iw - 330.0, 36.0), "Preset (.slangp) entra como um passe com todas as passadas dele; .slang entra como uma passada só.", 11.0, MUTED, Weight::Regular);
+    }
     if ui.button("shd-bcancel", rect(r.right() - 320.0, fy, 130.0, 36.0), "Cancelar", false) {
         close = true;
     }
@@ -991,7 +1131,7 @@ fn browse_sheet(ui: &mut Ui, app: &mut App, s: &mut St) {
                 c.passes.clear();
                 c.params.clear();
             }
-            c.passes.push(Pass { on: true, path: lib.join(&f) });
+            sp::add_pass(c, f.strip_prefix("..\\").map_or_else(|| lib.join(&f), |m| sp::root().join(m)));
             let n = c.passes.len();
             s.pass = n - 1;
             s.changed();

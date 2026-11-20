@@ -16,6 +16,7 @@ fn main() {
     // mesma pasta rodaria dentro do Prisma. As carregadas depois ficam com o `main`.
     println!("cargo:rustc-link-arg=/DEPENDENTLOADFLAG:0x800");
     build_hook();
+    build_shader_hook();
     build_apo();
 }
 
@@ -47,4 +48,28 @@ fn build_hook() {
         .status()
         .expect("falha ao chamar o cargo");
     assert!(done.success(), "falha ao compilar o limitador");
+}
+
+/// Os shaders no modo Injeção: outra DLL, para o limitador continuar pequeno. Sai no mesmo perfil do programa
+/// (debug no `cargo build`), sem `--locked`: o Cargo.lock dela não é guardado, como o do APO.
+fn build_shader_hook() {
+    for p in ["shader-hook/src", "shader-hook/Cargo.toml", "shader-hook/vendor", "crates/prisma-shader/src", "crates/prisma-shader/Cargo.toml"] {
+        println!("cargo:rerun-if-changed={p}");
+    }
+    let out = std::path::Path::new(&std::env::var("OUT_DIR").unwrap()).join("shader-hook");
+    // A de 64 bits e, para os jogos de 32 bits, a mesma DLL em i686 com o ajudante que a prende no jogo
+    // (precisa de `rustup target add i686-pc-windows-msvc`).
+    for target in [None, Some("i686-pc-windows-msvc")] {
+        let mut cmd = std::process::Command::new(std::env::var("CARGO").unwrap());
+        cmd.args(["build", "--manifest-path", "shader-hook/Cargo.toml", "--target-dir"]).arg(&out);
+        match target {
+            Some(t) => cmd.args(["--target", t]),
+            None => cmd.arg("--lib"),
+        };
+        if std::env::var("PROFILE").as_deref() == Ok("release") {
+            cmd.arg("--release");
+        }
+        let hint = if target.is_some() { " (falta o alvo? rode: rustup target add i686-pc-windows-msvc)" } else { "" };
+        assert!(cmd.status().expect("falha ao chamar o cargo").success(), "falha ao compilar a DLL de shaders ({target:?}){hint}");
+    }
 }

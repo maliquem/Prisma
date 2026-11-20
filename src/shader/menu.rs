@@ -1,6 +1,6 @@
-//! Menu dentro do jogo: ligar e desligar, trocar de perfil, passes com liga e desliga e os parâmetros do passe
-//! escolhido. Janela transparente acima da janela por cima, sem foco: enquanto está aberto, ↑↓←→ Enter Esc
-//! viram atalhos globais (soltos ao fechar) e o controle XInput navega (Select+L1 abre e fecha, direcional, A, B).
+//! Menu dentro do jogo: ligar e desligar, trocar de perfil, escolher um preset (os do jogador em `shaders\` ou
+//! a biblioteca, pasta por pasta), passes com liga e desliga e os parâmetros do passe escolhido. Janela
+//! transparente acima da janela por cima, sem foco: enquanto está aberto, ↑↓←→ Enter Esc viram atalhos globais (soltos ao fechar) e o controle XInput navega (Select+L1 abre e fecha, direcional, A, B).
 //! Cada mudança grava no perfil, então a página do app vê na hora.
 
 use windows::core::w;
@@ -10,7 +10,7 @@ use windows::Win32::UI::Input::KeyboardAndMouse::*;
 use windows::Win32::UI::Input::XboxController::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
-use super::chain::Engine;
+use prisma_shader::chain::Engine;
 use crate::shader_profile::Param;
 use crate::ui::gfx::{self, rect, Align, Weight};
 use crate::ui::layered::{create_overlay, Layered};
@@ -32,14 +32,27 @@ const KEYS: [Key; 6] = [Key::Up, Key::Down, Key::Left, Key::Right, Key::Ok, Key:
 const W: f32 = 380.0;
 const ROW: f32 = 28.0;
 const VISIBLE: usize = 14;
+/// Linhas fixas do menu principal (Shader, Perfil, Presets, Biblioteca); os passes vêm depois.
+const FIRST_PASS: usize = 4;
+
+#[derive(Clone, Copy, PartialEq)]
+enum View {
+    Main,
+    /// Parâmetros do passe i.
+    Params(usize),
+    /// Lista de presets: `true` na biblioteca (com pastas), `false` nos do jogador.
+    Files(bool),
+}
 
 pub struct Menu {
     layer: Option<Layered>,
     pub open: bool,
     keys_on: bool,
     sel: usize,
-    /// Some(i): mostrando os parâmetros do passe i.
-    pass: Option<usize>,
+    view: View,
+    /// Pasta e itens da lista de presets aberta, com `true` nas pastas (o menu redesenha a cada quadro).
+    dir: std::path::PathBuf,
+    files: Vec<(std::path::PathBuf, bool)>,
     params: Vec<Param>,
     params_of: Vec<std::path::PathBuf>,
     pad_prev: u16,
@@ -53,12 +66,14 @@ unsafe extern "system" fn wndproc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRES
 
 impl Menu {
     pub fn new() -> Self {
-        Self { layer: None, open: false, keys_on: false, sel: 0, pass: None, params: vec![], params_of: vec![], pad_prev: 0, nav: Default::default(), shown: false }
+        // `--shader-menu`: o app abriu o motor pelo atalho do menu, que já vem aberto.
+        let open = std::env::args().any(|a| a == "--shader-menu");
+        Self { layer: None, open, keys_on: false, sel: 0, view: View::Main, dir: Default::default(), files: vec![], params: vec![], params_of: vec![], pad_prev: 0, nav: Default::default(), shown: false }
     }
 
     pub fn toggle(&mut self) {
         self.open = !self.open;
-        (self.sel, self.pass) = (0, None);
+        (self.sel, self.view) = (0, View::Main);
     }
 
     /// Põe o menu de volta acima da janela por cima (que acabou de aparecer).
@@ -120,18 +135,44 @@ impl Menu {
             return;
         }
         let rows = self.rows(eng);
-        match (k, self.pass) {
+        match (k, self.view) {
             (Key::Up, _) => self.sel = (self.sel + rows.max(1) - 1) % rows.max(1),
             (Key::Down, _) => self.sel = (self.sel + 1) % rows.max(1),
-            (Key::Back, None) => self.toggle(),
-            (Key::Back, Some(i)) => (self.pass, self.sel) = (None, 2 + i),
-            (_, None) => match self.sel {
+            (Key::Back, View::Main) => self.toggle(),
+            (Key::Back, View::Params(i)) => (self.view, self.sel) = (View::Main, FIRST_PASS + i),
+            // Na biblioteca sobe uma pasta, com a de onde veio escolhida; da raiz volta ao menu.
+            (Key::Back, View::Files(lib)) => match self.dir.parent().filter(|_| lib && self.dir != crate::shader_profile::lib_dir()).map(|d| d.to_path_buf()) {
+                Some(up) => {
+                    let from = self.dir.clone();
+                    self.list(lib, up);
+                    self.sel = self.files.iter().position(|(f, _)| *f == from).unwrap_or(0);
+                }
+                None => (self.view, self.sel) = (View::Main, if lib { 3 } else { 2 }),
+            },
+            (_, View::Main) => match self.sel {
                 0 => eng.edit(dev, |p| p.on = !p.on),
                 1 => eng.next(dev, if k == Key::Left { -1 } else { 1 }),
-                s if k == Key::Ok => (self.pass, self.sel) = (Some(s - 2), 0),
-                s => eng.edit(dev, |p| p.passes[s - 2].on ^= true),
+                2 if k == Key::Ok => self.list(false, crate::shader_profile::root()),
+                3 if k == Key::Ok => self.list(true, crate::shader_profile::lib_dir()),
+                2 | 3 => {}
+                s if k == Key::Ok => (self.view, self.sel) = (View::Params(s - FIRST_PASS), 0),
+                s => eng.edit(dev, |p| p.passes[s - FIRST_PASS].on ^= true),
             },
-            (_, Some(i)) => {
+            (Key::Ok, View::Files(lib)) => match self.files.get(self.sel).cloned() {
+                Some((d, true)) => self.list(lib, d),
+                // O preset escolhido toma o lugar dos passes, como o Carregar preset da página.
+                Some((f, false)) => {
+                    eng.edit(dev, |p| {
+                        p.passes.clear();
+                        p.params.clear();
+                        crate::shader_profile::add_pass(p, f);
+                    });
+                    (self.view, self.sel) = (View::Main, FIRST_PASS);
+                }
+                None => {}
+            },
+            (_, View::Files(_)) => {}
+            (_, View::Params(i)) => {
                 let Some(p) = self.params.iter().filter(|p| p.pass == i).nth(self.sel).cloned() else { return };
                 let cur = eng.profile.param(&p.name).unwrap_or(p.default);
                 let v = match k {
@@ -147,10 +188,26 @@ impl Menu {
     }
 
     fn rows(&self, eng: &Engine) -> usize {
-        match self.pass {
-            None => 2 + eng.profile.passes.len(),
-            Some(i) => self.params.iter().filter(|p| p.pass == i).count(),
+        match self.view {
+            View::Main => FIRST_PASS + eng.profile.passes.len(),
+            View::Params(i) => self.params.iter().filter(|p| p.pass == i).count(),
+            View::Files(_) => self.files.len(),
         }
+    }
+
+    /// Abre a lista de presets em `dir`: pastas primeiro (só na biblioteca, menos as `shaders` de cada uma, que
+    /// têm os passes soltos), depois os .slangp (e os .slang da biblioteca).
+    fn list(&mut self, lib: bool, dir: std::path::PathBuf) {
+        let ext = |p: &std::path::Path, e: &str| p.extension().is_some_and(|x| x.eq_ignore_ascii_case(e));
+        let mut v: Vec<(std::path::PathBuf, bool)> = std::fs::read_dir(&dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|e| (e.path(), e.file_type().is_ok_and(|t| t.is_dir())))
+            .filter(|(p, d)| if *d { lib && !p.file_name().is_some_and(|n| n.eq_ignore_ascii_case("shaders")) } else { ext(p, "slangp") || (lib && ext(p, "slang")) })
+            .collect();
+        v.sort_by_cached_key(|(p, d)| (!d, p.file_stem().map(|n| n.to_string_lossy().to_lowercase())));
+        (self.view, self.dir, self.files, self.sel) = (View::Files(lib), dir, v, 0);
     }
 
     /// Mostra, esconde e redesenha. Menu aberto com o jogo fora de foco fecha: as setas não ficam presas.
@@ -176,8 +233,8 @@ impl Menu {
             self.params_of = paths;
         }
         self.sel = self.sel.min(self.rows(eng).saturating_sub(1));
-        if self.pass.is_some_and(|i| i >= eng.profile.passes.len()) {
-            (self.pass, self.sel) = (None, 0);
+        if matches!(self.view, View::Params(i) if i >= eng.profile.passes.len()) {
+            (self.view, self.sel) = (View::Main, 0);
         }
         let lines = self.lines(eng);
         let layer = self.layer.get_or_insert_with(|| {
@@ -191,11 +248,20 @@ impl Menu {
         });
         let h = 52.0 + lines.len().min(VISIBLE) as f32 * ROW + 30.0;
         let first = self.sel.saturating_sub(VISIBLE - 1);
-        let (sel, title) = (self.sel, match self.pass {
-            None => format!("Shaders · {}", eng.path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default()),
-            Some(i) => eng.profile.passes.get(i).map(|p| stem(&p.path)).unwrap_or_default(),
+        let (sel, title) = (self.sel, match self.view {
+            View::Main => format!("Shaders · {}", eng.path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default()),
+            View::Params(i) => eng.profile.passes.get(i).map(|p| stem(&p.path)).unwrap_or_default(),
+            View::Files(false) => "Presets".into(),
+            View::Files(true) => match self.dir.strip_prefix(crate::shader_profile::lib_dir()) {
+                Ok(r) if !r.as_os_str().is_empty() => format!("Biblioteca · {}", r.display()),
+                _ => "Biblioteca".into(),
+            },
         });
-        let hint = if self.pass.is_some() { "←→ ajustar · Enter padrão · Esc voltar" } else { "↑↓ escolher · ←→ mudar · Enter parâmetros · Esc fechar" };
+        let hint = match self.view {
+            View::Main => "↑↓ escolher · ←→ mudar · Enter abrir · Esc fechar",
+            View::Params(_) => "←→ ajustar · Enter padrão · Esc voltar",
+            View::Files(_) => "↑↓ escolher · Enter abrir · Esc voltar",
+        };
         layer.paint(at.x + 24, at.y + 24, W, h, |c, r| {
             c.round(r, 10.0, gfx::BG.alpha(0.94));
             c.round_line(r.inset(0.5), 10.0, gfx::BORDER, 1.0);
@@ -223,13 +289,18 @@ impl Menu {
     fn lines(&self, eng: &Engine) -> Vec<(String, String, bool)> {
         let p = &eng.profile;
         let onoff = |b: bool| if b { "ligado" } else { "desligado" }.to_string();
-        match self.pass {
-            None => {
-                let mut v = vec![("Shader".into(), onoff(p.on), false), ("Perfil".into(), format!("◂ {} ▸", stem(&eng.path)), false)];
+        match self.view {
+            View::Main => {
+                let mut v = vec![("Shader".into(), onoff(p.on), false), ("Perfil".into(), format!("◂ {} ▸", stem(&eng.path)), false), ("Presets".into(), "▸".into(), false), ("Biblioteca".into(), "▸".into(), false)];
                 v.extend(p.passes.iter().map(|x| (stem(&x.path), onoff(x.on), false)));
                 v
             }
-            Some(i) => self
+            View::Files(lib) if self.files.is_empty() => {
+                let why = if lib && !crate::shader_profile::lib_dir().exists() { "Baixe a biblioteca na página Shaders" } else { "Nenhum preset aqui" };
+                vec![(why.into(), String::new(), false)]
+            }
+            View::Files(_) => self.files.iter().map(|(f, d)| if *d { (f.file_name().unwrap_or_default().to_string_lossy().into_owned(), "▸".into(), false) } else { (stem(f), String::new(), false) }).collect(),
+            View::Params(i) => self
                 .params
                 .iter()
                 .filter(|x| x.pass == i)

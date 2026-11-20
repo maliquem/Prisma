@@ -2,21 +2,12 @@
 //! SDR: mesma curva da foto, em shader. HDR10: leva para BT.2020 e PQ.
 
 use windows::core::*;
-use windows::Win32::Graphics::Direct3D::Fxc::*;
 use windows::Win32::Graphics::Direct3D::*;
 use windows::Win32::Graphics::Direct3D11::*;
 #[cfg(any(debug_assertions, feature = "stream"))]
 use windows::Win32::Graphics::Dxgi::Common::*;
 
-pub(crate) const VS: &str = r#"
-struct O { float4 p : SV_Position; float2 t : T; };
-O main(uint id : SV_VertexID) {
-    O o;
-    o.t = float2((id << 1) & 2, id & 2);
-    o.p = float4(o.t * float2(2, -2) + float2(-1, 1), 0, 1);
-    return o;
-}
-"#;
+pub(crate) use prisma_shader::{compile, VS};
 
 const PS_SDR: &str = r#"
 Texture2D tex : register(t0);
@@ -54,31 +45,6 @@ float4 main(float4 p : SV_Position, float2 t : T) : SV_Target {
     return float4(pq(c), 1);
 }
 "#;
-
-pub(crate) unsafe fn compile(src: &str, target: PCSTR) -> Result<Vec<u8>> {
-    let mut blob = None;
-    let mut err = None;
-    let r = D3DCompile(
-        src.as_ptr() as *const _,
-        src.len(),
-        None,
-        None,
-        None,
-        s!("main"),
-        target,
-        D3DCOMPILE_OPTIMIZATION_LEVEL3,
-        0,
-        &mut blob,
-        Some(&mut err),
-    );
-    if let Some(e) = &err {
-        let m = std::slice::from_raw_parts(e.GetBufferPointer() as *const u8, e.GetBufferSize());
-        eprintln!("shader: {}", String::from_utf8_lossy(m));
-    }
-    r?;
-    let b: ID3DBlob = blob.unwrap();
-    Ok(std::slice::from_raw_parts(b.GetBufferPointer() as *const u8, b.GetBufferSize()).to_vec())
-}
 
 #[cfg(any(debug_assertions, feature = "stream"))]
 /// RGB para YUV 4:4:4 (BT.709, faixa limitada), gravado como AYUV: na memória V, U, Y e A.

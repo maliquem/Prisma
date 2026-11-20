@@ -1180,6 +1180,10 @@ Injeção desligada: o jogo caiu com ela.	注入已关闭：游戏曾因此崩�
 Injeção desligada: o jogo caiu	注入已关闭：游戏崩溃了
 Injeção bloqueada: anti-cheat detectado.	注入已阻止：检测到反作弊。
 Injeção parada: geração de quadros carregada.	注入已停止：已加载帧生成。
+A Injeção não cobre a API deste jogo ({}); voltou para Por cima.	注入不支持此游戏的 API（{}）；已恢复为“叠加”。
+A DLL da Injeção não entrou no jogo; voltou para Por cima.	注入 DLL 未能进入游戏；已恢复为“叠加”。
+Nenhum quadro do jogo passou pela Injeção; voltou para Por cima.	游戏没有任何画面帧经过注入；已恢复为“叠加”。
+O jogo fechou com erro durante a Injeção; voltou para Por cima.	游戏在注入期间因错误而关闭；已恢复为“叠加”。
 A injeção não carregou neste jogo.	注入没有在此游戏中加载。
 Usar injeção neste jogo?	在此游戏中使用注入？
 O limite passa a mudar na hora, mas um módulo do Prisma entra no jogo, e isso pode derrubá-lo. Não use em jogo online: um anti-cheat pode punir mesmo sem ter sido detectado aqui. Se o jogo cair, a injeção desliga sozinha.	限制会立即改变，但 Prisma 的模块会进入游戏，可能导致崩溃。不要在联机时使用：即使这里没检测到反作弊，也可能受到处罚。如果游戏崩溃，注入会自动关闭。
@@ -2824,7 +2828,6 @@ O download falhou. Tente de novo.	下载失败。请重试。
 Instalada: {} presets.	已安装：{} 个 preset。
 Não baixada. Não vem com o Prisma por causa das licenças.	未下载。因许可原因，Prisma 不自带。
 Baixar	下载
-Trocar…	更改…
 Liga / desliga	开 / 关
 Menu no jogo	游戏内菜单
 Próximo perfil	下一个配置
@@ -2833,7 +2836,8 @@ Passes	Pass
 Testar com imagem	用图像测试
 Cena 2D (320×240)	2D 场景 (320×240)
 Barras de cor e grade	色条和网格
-Abrir imagem ou captura…	打开图像或截图…
+Importar preset…	导入 preset…
+Abrir imagem ou captura…打开图像或截图…
 Adicionar passe	添加 pass
 Carregar preset	加载 preset
 nada	无
@@ -2843,10 +2847,10 @@ Ligar ou desligar só este passe	仅开启或关闭此 pass
 O nº 1 roda primeiro, sobre a imagem do jogo; o último fica por cima. Cada linha pode ser um preset inteiro (.slangp) ou um .slang avulso.	第 1 个最先运行，作用于游戏画面；最后一个在最上层。每一行可以是完整的 preset (.slangp)，也可以是单独的 .slang。
 Como aplicar	应用方式
 Por cima	叠加
-Injeção (em breve)	注入（即将推出）
 Bloqueado: este jogo tem anti-cheat	已阻止：此游戏有反作弊
-Em breve: aplicar dentro do jogo, sem o quadro de atraso	即将推出：在游戏内部应用，没有一帧的延迟
 Janela por cima do jogo, capturando a imagem. DX9 a 12, Vulkan e OpenGL.	覆盖在游戏上的窗口，捕获画面。DX9 至 12、Vulkan 和 OpenGL。
+Não suportado neste jogo: a injeção cobre DX9 a 12, OpenGL e Vulkan	此游戏不支持：注入支持 DX9 至 12、OpenGL 和 Vulkan
+Dentro do jogo, na hora de mostrar o quadro: sem o quadro de atraso e sem janela por cima. DX9 a 12, OpenGL e Vulkan; HDR fica sem efeito.	在游戏内部、显示画面的时刻应用：没有一帧的延迟，也没有覆盖窗口。支持 DX9 至 12、OpenGL 和 Vulkan；HDR 无效果。
 Resolução de entrada	输入分辨率
 Original	原始
 240 linhas	240 行
@@ -2863,7 +2867,7 @@ Em tela cheia exclusiva o filtro some. Use janela sem borda ou ligue o Fullscree
 Ligar Fullscreenizer	开启 Fullscreenizer
 Monitor em HDR: a imagem é convertida para SDR antes do filtro (brilho acima do branco é cortado).	HDR 显示器：画面会先转换为 SDR 再经过滤镜（高于白色的亮度会被裁掉）。
 Salvar perfil	保存配置
-Salvar como preset…	另存为 preset…
+Salvar como preset	另存为 preset
 Perfil salvo para este jogo	已为此游戏保存配置
 Voltou ao último salvo	已恢复到上次保存
 Parâmetros	参数
@@ -2876,20 +2880,40 @@ padrão	默认
 Mínimo, máximo e passo vêm do próprio shader. A mudança aparece no jogo na hora; laranja é diferente do padrão. Botão direito volta o valor.	最小值、最大值和步长来自 shader 本身。更改会立即在游戏中显示；橙色表示与默认值不同。右键可恢复该值。
 Carregar preset (substitui os passes)	加载 preset（替换所有 pass）
 Buscar em {} presets (ex.: lottes, ntsc, vhs)	在 {} 个 preset 中搜索（例如：lottes、ntsc、vhs）
-A biblioteca está vazia. Baixe no cartão Biblioteca ou escolha outra pasta em Trocar.	库是空的。请在“库”卡片上下载，或用“更改”选择其他文件夹。
+A biblioteca está vazia. Baixe no cartão Biblioteca ou importe um preset.	库是空的。请在“库”卡片上下载，或导入 preset。
 Preset (.slangp) entra como um passe com todas as passadas dele; .slang entra como uma passada só.	Preset (.slangp) 会连同它的所有 pass 作为一个 pass 加入；.slang 则作为单个 pass 加入。
 Carregar	加载
 Adicionar ao fim	添加到末尾
 Não deu para gravar o perfil	无法保存配置
-Este jogo não tem perfil de shader	此游戏没有 shader 配置
+Este jogo não tem perfil de shader: {} abre o menu e cria um	此游戏没有 shader 配置：按 {} 打开菜单并创建
 Shader ligado	Shader 已开启
 Shader desligado	Shader 已关闭
-Preset exportado	Preset 已导出
+Preset importado	Preset 已导入
 Não deu para gravar o preset	无法保存 preset
 Não deu para juntar os passes num preset	无法将各 pass 合并为 preset
+Meus presets	我的 preset
+Faltam arquivos do preset importado (baixe a biblioteca ou copie para ela): {}	导入的 preset 缺少文件（请下载库，或将文件复制到库中）：{}
+Não deu para importar o preset	无法导入 preset
+Preset salvo em shaders\{}	Preset 已保存到 shaders\{}
 Página Shaders	Shaders 页面
 Shader liga / desliga	Shader 开 / 关
 Presets de shader	Shader preset
 Perfil do jogo	游戏配置
 Imagem do jogo	游戏画面
 {} já está em uso por outro programa	{} 已被其他程序占用
+Jogo com anti-cheat: o shader não entra nele	反作弊游戏：shader 不会应用
+Perfil de shader criado: {}	已创建 shader 配置：{}
+Menu do shader no jogo	游戏内 shader 菜单
+Shaders · {}	Shaders · {}
+Shader	Shader
+Perfil	配置
+Presets	Preset
+Biblioteca	库
+Biblioteca · {}	库 · {}
+ligado	开
+desligado	关
+↑↓ escolher · ←→ mudar · Enter abrir · Esc fechar	↑↓ 选择 · ←→ 更改 · Enter 打开 · Esc 关闭
+←→ ajustar · Enter padrão · Esc voltar	←→ 调整 · Enter 默认 · Esc 返回
+↑↓ escolher · Enter abrir · Esc voltar	↑↓ 选择 · Enter 打开 · Esc 返回
+Baixe a biblioteca na página Shaders	请在 Shaders 页面下载库
+Nenhum preset aqui	这里没有 preset

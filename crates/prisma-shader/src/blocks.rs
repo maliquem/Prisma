@@ -4,7 +4,7 @@
 use windows::Win32::Graphics::Direct3D11::*;
 use windows::Win32::Graphics::Dxgi::Common::*;
 
-use super::Res;
+use crate::{say, Res};
 
 /// Tamanho dos blocos e onde o primeiro começa, em pixels, em cada eixo. Eixo sem blocos fica 1×0.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -86,9 +86,17 @@ pub struct Detect {
 }
 
 impl Detect {
-    pub fn step(&mut self, dev: &ID3D11Device, ctx: &ID3D11DeviceContext, src: &ID3D11Texture2D, w: u32, h: u32) -> Res<()> {
+    /// Hora de ler as faixas (conta os quadros de espera entre as leituras).
+    pub fn due(&mut self) -> bool {
         if self.wait > 0 {
             self.wait -= 1;
+            return false;
+        }
+        true
+    }
+
+    pub fn step(&mut self, dev: &ID3D11Device, ctx: &ID3D11DeviceContext, src: &ID3D11Texture2D, w: u32, h: u32) -> Res<()> {
+        if !self.due() {
             return Ok(());
         }
         let s = STRIP.min(w).min(h);
@@ -113,7 +121,7 @@ impl Detect {
     }
 
     /// Um resultado lido. Sem resposta (tela lisa) não conta nem zera a contagem.
-    fn vote(&mut self, v: Option<Blocks>) {
+    pub fn vote(&mut self, v: Option<Blocks>) {
         self.wait = 6;
         let Some(v) = v else { return };
         if self.votes.last() != Some(&v) {
@@ -129,8 +137,8 @@ impl Detect {
         if new != self.found {
             self.found = new;
             match new {
-                Some(b) => eprintln!("shader: blocos {}x{} (começo {},{})", b.bx, b.by, b.ox, b.oy),
-                None => eprintln!("shader: sem blocos de pixels, entrada na resolução original"),
+                Some(b) => say!("shader: blocos {}x{} (começo {},{})", b.bx, b.by, b.ox, b.oy),
+                None => say!("shader: sem blocos de pixels, entrada na resolução original"),
             }
         }
     }
