@@ -1439,6 +1439,19 @@ impl App {
         }
     }
 
+    /// Se o jogo da frente, aberto com o HDR do Prisma, tem HDR próprio: o gancho vê o que ele entrega e
+    /// o perfil do jogo guarda.
+    fn hdr_watch(&mut self) {
+        let Some(g) = self.cfg.hdr_games.iter_mut().find(|g| g.mode == crate::sys::autohdr::PRISMA && g.exe.eq_ignore_ascii_case(&self.fg_exe)) else { return };
+        let Some(live) = crate::sys::inject::HdrLive::connect(self.fg_pid) else { return };
+        let (mode, frames) = live.native();
+        if let Some(n) = crate::sys::autohdr::detect(g.native, mode, frames) {
+            g.native = n;
+            self.cfg.save();
+            self.invalidate();
+        }
+    }
+
     pub(crate) fn fg_info(&self) -> Option<(HWND, u32, String)> {
         unsafe {
             let h = GetForegroundWindow();
@@ -3495,6 +3508,7 @@ impl App {
         }
         let fg_exe = self.fg_exe.clone();
         self.usage.note(&self.snap.groups, &fg_exe, secs);
+        self.hdr_watch();
 
         let ev = self.detector.tick(&self.cfg, self.snap.cpu, self.snap.gpu.util, &self.snap.groups);
         match ev {
@@ -4435,7 +4449,7 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                 with(|a| {
                     let exe = procs::exe_name(&path);
                     if !a.cfg.hdr_games.iter().any(|g| g.exe.eq_ignore_ascii_case(&exe)) {
-                        a.cfg.hdr_games.push(crate::config::HdrGame { exe, path, mode: 0, prisma: None });
+                        a.cfg.hdr_games.push(crate::config::HdrGame { exe, path, ..Default::default() });
                     }
                     a.cfg.save();
                     a.invalidate();

@@ -53,15 +53,29 @@ struct Shared {
     hdr_native: AtomicU32,
     hdr_gpu_us: AtomicU32,
     hdr_split_frames: AtomicU64,
+    hdr_src_peak: AtomicU32,
+    hdr_src_black: AtomicU32,
+    hdr_src_paper: AtomicU32,
+    hdr_scan: AtomicU32,
+    scan_gen: AtomicU32,
+    scan_frames: AtomicU32,
+    scan_peak: AtomicU32,
+    scan_p999: AtomicU32,
+    scan_p99: AtomicU32,
+    scan_med: AtomicU32,
+    scan_black: AtomicU32,
+    scan_ui: AtomicU32,
+    scan_white: AtomicU32,
+    scan_mode: AtomicU32,
 }
 
-const _: () = assert!(std::mem::size_of::<Shared>() == 112);
+const _: () = assert!(std::mem::size_of::<Shared>() == 168);
 
 /// `Shared::hdr_split` do gancho: um passe de tela cheia depois da interface juntou tudo de novo.
 pub const SPLIT_LATE: u32 = 2;
 
 /// Ajustes do HDR próprio. Pico, paper white e preto em nits; o resto são números puros.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Hdr {
     pub on: bool,
     pub peak: f32,
@@ -72,6 +86,27 @@ pub struct Hdr {
     pub black: f32,
     /// Brilho da interface em nits; zero deixa a interface junto com a cena.
     pub ui: f32,
+    /// O que o jogo em HDR entrega, pelo Analisar: pico, preto e branco da interface em nits. Zero é não
+    /// medido: o gancho usa o que a tela informa.
+    pub src_peak: f32,
+    pub src_black: f32,
+    pub src_paper: f32,
+}
+
+/// O que o Analisar mediu, em nits: pico e preto (o mais claro e o mais escuro dos quadros), p99,9 e p99 do
+/// maior canal, mediana da cena, brilho da interface (0 sem ela separada), a fração da cena em branco de
+/// papel ou acima e a saída do jogo (0 SDR, 1 HDR10, 2 scRGB).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Scan {
+    pub frames: u32,
+    pub peak: f32,
+    pub p999: f32,
+    pub p99: f32,
+    pub med: f32,
+    pub black: f32,
+    pub ui: f32,
+    pub white: f32,
+    pub mode: u32,
 }
 
 impl Hdr {
@@ -81,7 +116,7 @@ impl Hdr {
         let peak = if peak > 80.0 { peak } else { 1000.0 };
         // Paper white até o brilho de tela inteira branca: o brilho médio não aciona o limitador da TV.
         let paper = 200f32.min(if full > 80.0 { full } else { peak });
-        Self { on: true, peak, paper, gamma: 2.2, sat: 1.0, boost: 1.0, black: black.clamp(0.0, 1.0), ui: 0.0 }
+        Self { on: true, peak, paper, gamma: 2.2, sat: 1.0, boost: 1.0, black: black.clamp(0.0, 1.0), ..Self::default() }
     }
 }
 
@@ -349,7 +384,7 @@ pub fn is_crash(code: u32) -> bool {
 
 fn write_hdr(s: &Shared, h: &Hdr) {
     s.hdr_on.store(h.on as u32, Relaxed);
-    for (at, v) in [(&s.hdr_peak, h.peak), (&s.hdr_paper, h.paper), (&s.hdr_gamma, h.gamma), (&s.hdr_sat, h.sat), (&s.hdr_boost, h.boost), (&s.hdr_black, h.black), (&s.hdr_ui, h.ui)] {
+    for (at, v) in [(&s.hdr_peak, h.peak), (&s.hdr_paper, h.paper), (&s.hdr_gamma, h.gamma), (&s.hdr_sat, h.sat), (&s.hdr_boost, h.boost), (&s.hdr_black, h.black), (&s.hdr_ui, h.ui), (&s.hdr_src_peak, h.src_peak), (&s.hdr_src_black, h.src_black), (&s.hdr_src_paper, h.src_paper)] {
         at.store(v.to_bits(), Relaxed);
     }
 }
@@ -380,7 +415,28 @@ impl HdrLive {
     pub fn get(&self) -> Hdr {
         let s = self.shared();
         let f = |a: &AtomicU32| f32::from_bits(a.load(Relaxed));
-        Hdr { on: s.hdr_on.load(Relaxed) != 0, peak: f(&s.hdr_peak), paper: f(&s.hdr_paper), gamma: f(&s.hdr_gamma), sat: f(&s.hdr_sat), boost: f(&s.hdr_boost), black: f(&s.hdr_black), ui: f(&s.hdr_ui) }
+        Hdr { on: s.hdr_on.load(Relaxed) != 0, peak: f(&s.hdr_peak), paper: f(&s.hdr_paper), gamma: f(&s.hdr_gamma), sat: f(&s.hdr_sat), boost: f(&s.hdr_boost), black: f(&s.hdr_black), ui: f(&s.hdr_ui), src_peak: f(&s.hdr_src_peak), src_black: f(&s.hdr_src_black), src_paper: f(&s.hdr_src_paper) }
+    }
+
+    /// Saída do jogo no último quadro (0 SDR, 1 HDR10, 2 scRGB) e quadros desenhados pelo passe do HDR.
+    pub fn native(&self) -> (u32, u64) {
+        let s = self.shared();
+        (s.hdr_native.load(Relaxed), s.hdr_frames.load(Relaxed))
+    }
+
+    /// Liga o Analisar com a medida `gen` (diferente da anterior); 0 desliga.
+    pub fn scan_set(&self, gen: u32) {
+        self.shared().hdr_scan.store(gen, Relaxed);
+    }
+
+    /// O que a medida `gen` somou até agora; nada antes do primeiro quadro que conta.
+    pub fn scan(&self, gen: u32) -> Option<Scan> {
+        let s = self.shared();
+        if s.scan_gen.load(Acquire) != gen {
+            return None;
+        }
+        let f = |a: &AtomicU32| f32::from_bits(a.load(Relaxed));
+        Some(Scan { frames: s.scan_frames.load(Relaxed), peak: f(&s.scan_peak), p999: f(&s.scan_p999), p99: f(&s.scan_p99), med: f(&s.scan_med), black: f(&s.scan_black), ui: f(&s.scan_ui), white: f(&s.scan_white), mode: s.scan_mode.load(Relaxed) })
     }
 
     pub fn set(&self, h: &Hdr) {
@@ -440,7 +496,7 @@ pub fn test_hdr(out: &str, exe: &str, params: &str, args: &str) {
         }
     };
     let mut log = format!("pid {} calibração {:?}\n", l.pid, (hdr.peak, hdr.paper, hdr.black));
-    let mut i = 0;
+    let (mut i, mut scan) = (0, 0);
     while l.exit_code().is_none() {
         std::thread::sleep(std::time::Duration::from_secs(1));
         for line in std::fs::read_to_string(params).unwrap_or_default().lines() {
@@ -455,12 +511,18 @@ pub fn test_hdr(out: &str, exe: &str, params: &str, args: &str) {
                 "boost" => hdr.boost = v,
                 "black" => hdr.black = v,
                 "ui" => hdr.ui = v,
+                // Analisar: um número novo começa outra medida, 0 para.
+                "scan" => scan = v as u32,
                 _ => {}
             }
         }
         l.set_hdr(&hdr);
         l.update(0);
         log += &format!("{i} s: {:?} hdr {:?} saída, interface, quadros separados {:?} {hdr:?}\n", l.status, l.hdr_stats().map(|(c, f, e)| (c, f, format!("{e:#x}"))), l.hdr_split());
+        if let Some(live) = HdrLive::connect(l.pid) {
+            live.scan_set(scan);
+            log += &format!("   saída do jogo, quadros {:?} gpu {:?} ms análise {:?}\n", live.native(), live.gpu_ms(), live.scan(scan));
+        }
         // A cada 5 s, a tela de verdade: a luminância que saiu e uma foto em SDR.
         if i % 5 == 4 {
             if let Ok(f) = crate::capture::grab(crate::capture::cursor_monitor()) {

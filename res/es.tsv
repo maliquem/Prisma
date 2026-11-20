@@ -2982,6 +2982,24 @@ Realce dos claros	Realce de luces
 Voltar à calibração	Volver a la calibración
 O driver NVIDIA só aceita o RTX HDR com o Prisma aberto como administrador.	El driver de NVIDIA solo acepta RTX HDR con Prisma abierto como administrador.
 Menu dentro do jogo	Menú dentro del juego
+Deixar nativo	Dejar nativo
+Melhorar com o Prisma	Mejorar con Prisma
+Tem HDR próprio	Tiene HDR propio
+Não tem HDR próprio	No tiene HDR propio
+Detectar sozinho	Detectar solo
+HDR próprio: sim, visto no jogo.	HDR propio: sí, visto en el juego.
+HDR próprio: não visto. O jogo só saiu em SDR com o HDR do Prisma.	HDR propio: no visto. El juego solo salió en SDR con el HDR de Prisma.
+HDR próprio: sim, marcado à mão.	HDR propio: sí, marcado a mano.
+HDR próprio: não, marcado à mão.	HDR propio: no, marcado a mano.
+HDR próprio: ainda não se sabe. Abrir o jogo uma vez com o HDR do Prisma descobre; até lá, todas as opções.	HDR propio: aún no se sabe. Abrir el juego una vez con el HDR de Prisma lo descubre; hasta entonces, todas las opciones.
+Voltar ao automático	Volver al automático
+Analisando: {} quadros	Analizando: {} fotogramas
+Sem análise ainda.	Aún sin análisis.
+Sem análise ainda: use Analisar no menu do HDR dentro do jogo.	Aún sin análisis: usa Analizar en el menú del HDR dentro del juego.
+Não deu para medir: jogue uns segundos com a cena andando e tente de novo.	No se pudo medir: juega unos segundos con la escena en movimiento e inténtalo de nuevo.
+Análise do SDR do jogo: {}% da cena em branco de papel ou acima	Análisis del SDR del juego: {}% de la escena en paper white o por encima
+Análise do HDR do jogo: pico {} nits, preto {} nits	Análisis del HDR del juego: pico {} nits, negro {} nits
+Análise do HDR do jogo: pico {} nits, preto {} nits, interface {} nits	Análisis del HDR del juego: pico {} nits, negro {} nits, interfaz {} nits
 Menu do HDR no jogo	Menú del HDR en el juego
 Salvar no perfil do jogo?	¿Guardar en el perfil del juego?
 Os ajustes já valem agora. Salvar guarda para as próximas vezes que o jogo abrir.	Los ajustes ya se aplican ahora. Guardar los conserva para las próximas veces que se abra el juego.

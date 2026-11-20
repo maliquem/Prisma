@@ -20,7 +20,7 @@ use windows::Win32::Graphics::Dxgi::*;
 use windows::Win32::Graphics::Gdi::{MonitorFromWindow, MONITOR_DEFAULTTONEAREST};
 use windows::Win32::UI::WindowsAndMessaging::IsWindow;
 
-use crate::{hdr12, patch, unpatch, Ptr, Shared};
+use crate::{hdr12, patch, scan, unpatch, Ptr, Shared};
 
 const SLOT_CREATE: usize = 10;
 const SLOT_CREATE_HWND: usize = 15;
@@ -103,6 +103,8 @@ static TEX: AtomicUsize = AtomicUsize::new(0);
 static SIZE: AtomicU64 = AtomicU64::new(0);
 static ON_BB: AtomicBool = AtomicBool::new(false);
 static PHASE: AtomicU32 = AtomicU32::new(PHASE_NONE);
+/// Pico que a tela do jogo informa ao Windows (bits de f32), lido quando a cadeia nasce.
+static SCREEN_PEAK: AtomicU32 = AtomicU32::new(0);
 
 thread_local! {
     /// Nosso código rodando nesta linha (criar, redimensionar, desenhar, o resto do Present): os
@@ -116,12 +118,18 @@ pub(crate) const SHADER: &str = r#"
 #ifdef VULKAN
 [[vk::binding(0)]] Texture2D<float4> tex;
 [[vk::binding(1)]] Texture2D<float4> scene;
-[[vk::push_constant]] cbuffer C { float paper, peak, gamma, sat, boost, black, ui; uint srgb, on, split, mode, pad; };
+[[vk::push_constant]] cbuffer C { float paper, peak, gamma, sat, boost, black, ui; uint srgb, on, split, mode; float src_peak, src_black, src_paper; uint pad0, pad1; };
+#ifdef SCAN
+[[vk::binding(2)]] RWByteAddressBuffer hist;
+#endif
 #else
 Texture2D<float4> tex : register(t0);
 Texture2D<float4> scene : register(t1);
-cbuffer C : register(b0) { float paper, peak, gamma, sat, boost, black, ui; uint srgb, on, split, mode, pad; };
-#define RS "RootConstants(num32BitConstants=12, b0), DescriptorTable(SRV(t0, numDescriptors=2))"
+cbuffer C : register(b0) { float paper, peak, gamma, sat, boost, black, ui; uint srgb, on, split, mode; float src_peak, src_black, src_paper; uint pad0, pad1; };
+#ifdef SCAN
+RWByteAddressBuffer hist : register(u0);
+#endif
+#define RS "RootConstants(num32BitConstants=16, b0), DescriptorTable(SRV(t0, numDescriptors=2)), UAV(u0)"
 #endif
 static const float3 LUM = float3(0.2126, 0.7152, 0.0722);
 static const float3x3 BT2020_TO_709 = { 1.6605, -0.5876, -0.0728, -0.1246, 1.1329, -0.0083, -0.0182, -0.1006, 1.1187 };
@@ -135,18 +143,40 @@ float3 pq_nits(float3 v) {
     float3 e = pow(saturate(v), 1 / 78.84375);
     return 10000 * pow(max(e - 0.8359375, 0) / (18.8515625 - 18.6875 * e), 1 / 0.1593017578125);
 }
-// HDR do jogo: os nits que ele pediu, reajustados para a tela. O jogo supõe paper white de 203 nits.
+float pq_of(float n) {
+    float y = pow(saturate(n / 10000), 0.1593017578125);
+    return pow((0.8359375 + 18.8515625 * y) / (1 + 18.6875 * y), 78.84375);
+}
+float nits_of(float e) { return pq_nits(e.xxx).x; }
+// BT.2390: o que o jogo entrega, de lb a lw nits, cabe no preto e no pico da tela. Abaixo do joelho fica
+// igual; acima, uma curva de Hermite encosta no pico; o preto da tela entra pelo termo (1-e)^4.
+float eetf(float n, float lb, float lw) {
+    float pb = pq_of(lb), range = max(pq_of(lw) - pb, 1e-4);
+    float e = max(pq_of(n) - pb, 0) / range;
+    float lo = max(pq_of(black) - pb, 0) / range, hi = (pq_of(peak) - pb) / range;
+    float ks = 1.5 * hi - 0.5;
+    if (e > ks && ks < 1) {
+        float t = saturate((e - ks) / (1 - ks)), t2 = t * t, t3 = t2 * t;
+        e = (2 * t3 - 3 * t2 + 1) * ks + (t3 - 2 * t2 + t) * (1 - ks) + (-2 * t3 + 3 * t2) * hi;
+    }
+    e += lo * pow(saturate(1 - e), 4);
+    return nits_of(e * range + pb);
+}
+// HDR do jogo: os nits que ele pediu, reajustados para a tela. Sem medida, o jogo supõe paper white de
+// 203 nits e pico igual ao da tela.
+float3 game_nits(float3 raw) { return mode == 1 ? mul(BT2020_TO_709, pq_nits(raw)) : raw * 80; }
 float4 native(float3 raw, bool hud) {
-    float3 n = mode == 1 ? mul(BT2020_TO_709, pq_nits(raw)) : raw * 80;
+    float3 n = game_nits(raw);
     if (!on) return float4(n / 80, 1);
-    if (hud) return float4(min(n * ui / 203, peak) / 80, 1);
-    n *= paper / 203;
+    if (hud) return float4(min(n * ui / src_paper, peak) / 80, 1);
+    float k = paper / src_paper, lw = src_peak * k;
+    n *= k;
     float y = dot(n, LUM);
     n = y + (n - y) * sat;
-    // Ombro suave: até 70% do pico fica igual, acima encosta no pico sem cortar.
-    float m = max(max(n.r, n.g), n.b), k = 0.7 * peak;
-    if (m > k) n *= (k + (peak - k) * (1 - exp((k - m) / (peak - k)))) / m;
-    n = n * (1 - black / peak) + black;
+    // Jogo que para abaixo do pico da tela: os brilhos sobem até ele, como no SDR.
+    float m = max(max(n.r, n.g), n.b), t = saturate(m / lw), up = max(peak / lw - 1, 0) * boost;
+    float o = eetf(m * (1 + up * t * t * t), src_black * k, lw * (1 + up));
+    n = m > 1e-6 ? n * (o / m) : float3(o, o, o);
     return float4(min(n, peak) / 80, 1);
 }
 float4 ps(float4 p : SV_Position) : SV_Target {
@@ -170,6 +200,38 @@ float4 ps(float4 p : SV_Position) : SV_Target {
     n = n * (1 - black / peak) + black;
     return float4(min(n, peak) / 80, 1);
 }
+#ifdef SCAN
+// Analisar: histograma do quadro do jogo antes da nossa curva, em faixas de 1/8 de oitava de 1/256 a
+// 15 mil nits. Cena (Y e maior canal) e interface (Y) à parte; a CPU soma e tira os percentis.
+groupshared uint bins[528];
+uint bin_of(float n) { return n <= 0 ? 0 : (uint)clamp((log2(n) + 8) * 8, 0, 175); }
+[numthreads(16, 16, 1)]
+void cs(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex) {
+    for (uint i = gi; i < 528; i += 256) bins[i] = 0;
+    GroupMemoryBarrierWithGroupSync();
+    uint w, h;
+    tex.GetDimensions(w, h);
+    uint2 at = id.xy * 2;
+    if (at.x < w && at.y < h) {
+        float3 raw = tex.Load(int3(at, 0)).rgb;
+        bool hud = split && any(abs(raw - scene.Load(int3(at, 0)).rgb) > 0.004);
+        float3 c = saturate(srgb ? encode_srgb(saturate(raw)) : raw);
+        float3 n = max(mode ? game_nits(raw) : pow(c, 2.2) * 100, 0);
+        float y = dot(n, LUM);
+        uint dummy;
+        if (hud) {
+            InterlockedAdd(bins[352 + bin_of(y)], 1, dummy);
+        } else {
+            InterlockedAdd(bins[bin_of(y)], 1, dummy);
+            InterlockedAdd(bins[176 + bin_of(max(max(n.r, n.g), n.b))], 1, dummy);
+        }
+    }
+    GroupMemoryBarrierWithGroupSync();
+    for (uint j = gi; j < 528; j += 256) {
+        if (bins[j]) hist.InterlockedAdd(j * 4, bins[j]);
+    }
+}
+#endif
 "#;
 
 #[repr(C)]
@@ -186,7 +248,11 @@ pub(crate) struct Params {
     on: u32,
     split: u32,
     mode: u32,
-    pad: u32,
+    /// O que o jogo entrega no HDR dele: pico, preto e paper white em nits.
+    src_peak: f32,
+    src_black: f32,
+    src_paper: f32,
+    pad: [u32; 2],
 }
 
 /// O que o jogo pediu: o buffer dele segue isso, não a cadeia de verdade.
@@ -247,6 +313,76 @@ struct Proxy {
     rtv: Option<ID3D11RenderTargetView>,
     /// Sem consultas na placa, o passe roda sem medida.
     timer: Option<Timer>,
+    /// Sem compute (placa antiga), o Analisar não mede neste jogo.
+    scan: Option<Scan>,
+}
+
+/// O histograma do Analisar: o `cs`, o buffer que ele soma e três cópias lidas dois quadros depois.
+struct Scan {
+    cs: ID3D11ComputeShader,
+    buf: ID3D11Buffer,
+    uav: ID3D11UnorderedAccessView,
+    staging: Vec<ID3D11Buffer>,
+    n: usize,
+    ring: scan::Ring,
+}
+
+impl Scan {
+    unsafe fn new(dev: &ID3D11Device) -> Result<Self> {
+        let csb = compile(s!("cs_5_0"), s!("cs"))?;
+        let mut cs = None;
+        dev.CreateComputeShader(bytes(&csb), None, Some(&mut cs))?;
+        let bd = D3D11_BUFFER_DESC {
+            ByteWidth: scan::BYTES as u32,
+            Usage: D3D11_USAGE_DEFAULT,
+            BindFlags: D3D11_BIND_UNORDERED_ACCESS.0 as u32,
+            MiscFlags: D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS.0 as u32,
+            ..Default::default()
+        };
+        let mut buf = None;
+        dev.CreateBuffer(&bd, None, Some(&mut buf))?;
+        let buf = buf.ok_or(Error::from(E_FAIL))?;
+        let mut ud = D3D11_UNORDERED_ACCESS_VIEW_DESC { Format: DXGI_FORMAT_R32_TYPELESS, ViewDimension: D3D11_UAV_DIMENSION_BUFFER, ..Default::default() };
+        ud.Anonymous.Buffer = D3D11_BUFFER_UAV { FirstElement: 0, NumElements: scan::WORDS as u32, Flags: D3D11_BUFFER_UAV_FLAG_RAW.0 as u32 };
+        let mut uav = None;
+        dev.CreateUnorderedAccessView(&buf, Some(&ud), Some(&mut uav))?;
+        let sd = D3D11_BUFFER_DESC { ByteWidth: scan::BYTES as u32, Usage: D3D11_USAGE_STAGING, CPUAccessFlags: D3D11_CPU_ACCESS_READ.0 as u32, ..Default::default() };
+        let staging = (0..3)
+            .map(|_| {
+                let mut b = None;
+                dev.CreateBuffer(&sd, None, Some(&mut b))?;
+                b.ok_or(Error::from(E_FAIL))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(Self { cs: cs.ok_or(Error::from(E_FAIL))?, buf, uav: uav.ok_or(Error::from(E_FAIL))?, staging, n: 0, ring: scan::Ring::new(3) })
+    }
+
+    /// Soma o quadro no buffer, copia para a vaga da vez e lê a de dois quadros atrás, se a placa já acabou.
+    unsafe fn run(&mut self, ctx: &ID3D11DeviceContext1, s: &Shared, w: Want, views: [Option<ID3D11ShaderResourceView>; 2], cb: &ID3D11Buffer) {
+        if !self.ring.start(s) {
+            return;
+        }
+        ctx.CSSetShader(&self.cs, None);
+        ctx.CSSetShaderResources(0, Some(&views));
+        ctx.CSSetConstantBuffers(0, Some(&[Some(cb.clone())]));
+        ctx.CSSetUnorderedAccessViews(0, 1, Some(&Some(self.uav.clone())), None);
+        ctx.Dispatch(w.width.div_ceil(scan::TILE), w.height.div_ceil(scan::TILE), 1);
+        ctx.CSSetUnorderedAccessViews(0, 1, Some(&None), None);
+        ctx.CSSetShaderResources(0, Some(&[None, None]));
+        let (put, get) = (self.n % 3, (self.n + 1) % 3);
+        ctx.CopyResource(&self.staging[put], &self.buf);
+        self.ring.wrote(put);
+        self.n += 1;
+        if !self.ring.ready(get) {
+            return;
+        }
+        let mut m = D3D11_MAPPED_SUBRESOURCE::default();
+        if ctx.Map(&self.staging[get], 0, D3D11_MAP_READ, D3D11_MAP_FLAG_DO_NOT_WAIT.0 as u32, Some(&mut m)).is_ok() {
+            let cur = std::slice::from_raw_parts(m.pData as *const u32, scan::WORDS).to_vec();
+            ctx.Unmap(&self.staging[get], 0);
+            self.ring.feed(s, w.mode(), &cur);
+        }
+    }
 }
 
 /// Tempo de GPU do passe, como `prisma_shader::GpuTimer` (o gancho não puxa o librashader): carimbos lidos
@@ -342,7 +478,10 @@ pub fn passthrough<T>(f: impl FnOnce() -> T) -> T {
 
 pub(crate) unsafe fn compile(target: PCSTR, entry: PCSTR) -> Result<ID3DBlob> {
     let mut blob = None;
-    D3DCompile(SHADER.as_ptr() as *const _, SHADER.len(), None, None, None, entry, target, D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &mut blob, None)?;
+    // O buffer do histograma só existe no `cs`: o passe de sempre não o declara.
+    let scan = [D3D_SHADER_MACRO { Name: s!("SCAN"), Definition: s!("1") }, D3D_SHADER_MACRO::default()];
+    let defines = (entry.as_bytes() == b"cs").then_some(scan.as_ptr());
+    D3DCompile(SHADER.as_ptr() as *const _, SHADER.len(), None, defines, None, entry, target, D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &mut blob, None)?;
     blob.ok_or_else(|| E_FAIL.into())
 }
 
@@ -384,6 +523,7 @@ impl Proxy {
         let bd = D3D11_BUFFER_DESC { ByteWidth: std::mem::size_of::<Params>() as u32, Usage: D3D11_USAGE_DEFAULT, BindFlags: D3D11_BIND_CONSTANT_BUFFER.0 as u32, ..Default::default() };
         device.CreateBuffer(&bd, None, Some(&mut cb))?;
         let timer = Timer::new(&device);
+        let scan = Scan::new(&device).ok();
         let mut me = Self {
             chain: chain as usize,
             hwnd: hwnd.0 as usize,
@@ -401,6 +541,7 @@ impl Proxy {
             scene_srv: None,
             rtv: None,
             timer,
+            scan,
         };
         me.rebuild(chain)?;
         Ok(me)
@@ -477,7 +618,7 @@ impl Proxy {
         Ok(())
     }
 
-    unsafe fn draw(&self, p: Params) {
+    unsafe fn draw(&mut self, p: Params, s: &Shared) {
         let (Some(tex), Some(srv), Some(rtv)) = (&self.tex, &self.srv, &self.rtv) else { return };
         if let Some(r) = &self.resolved {
             self.ctx.ResolveSubresource(r, 0, tex, 0, self.want.format);
@@ -485,6 +626,9 @@ impl Proxy {
         let mut prev = None;
         self.ctx.SwapDeviceContextState(&self.state, Some(&mut prev));
         self.ctx.UpdateSubresource(&self.cb, 0, None, &p as *const _ as *const c_void, 0, 0);
+        if let Some(sc) = &mut self.scan {
+            sc.run(&self.ctx, s, self.want, [Some(srv.clone()), self.scene_srv.clone()], &self.cb);
+        }
         self.ctx.IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         self.ctx.VSSetShader(&self.vs, None);
         self.ctx.PSSetShader(&self.ps, None);
@@ -520,19 +664,27 @@ fn ui_of(s: &Shared) -> f32 {
 pub(crate) fn params(s: &Shared, srgb: bool, mode: u32, split: bool) -> Params {
     let f = |a: &AtomicU32| f32::from_bits(a.load(Relaxed));
     let peak = f(&s.hdr_peak).max(80.0);
+    // Pico do jogo sem medida: o que a tela diz ao Windows, que é o que o jogo lê; sem isso, 1000.
+    let measured = f(&s.hdr_src_peak);
+    let src_peak = [measured, f32::from_bits(SCREEN_PEAK.load(Relaxed))].into_iter().find(|v| *v >= 80.0).unwrap_or(1000.0).min(10_000.0);
+    // Sem medida o jogo já ocupa a tela até o pico: subir os brilhos só com o pico dele medido.
+    let boost = if mode != MODE_SDR && measured < 80.0 { 0.0 } else { f(&s.hdr_boost).clamp(0.0, 1.0) };
     Params {
         paper: f(&s.hdr_paper).clamp(80.0, peak),
         peak,
         gamma: f(&s.hdr_gamma).clamp(1.0, 3.0),
         sat: f(&s.hdr_sat).clamp(0.0, 2.0),
-        boost: f(&s.hdr_boost).clamp(0.0, 1.0),
+        boost,
         black: f(&s.hdr_black).clamp(0.0, 1.0),
         ui: ui_of(s).min(peak),
         srgb: srgb as u32,
         on: (s.hdr_on.load(Relaxed) != 0) as u32,
         split: split as u32,
         mode,
-        pad: 0,
+        src_peak,
+        src_black: f(&s.hdr_src_black).clamp(0.0, src_peak / 2.0),
+        src_paper: Some(f(&s.hdr_src_paper)).filter(|v| *v >= 40.0).unwrap_or(203.0).min(src_peak),
+        pad: [0; 2],
     }
 }
 
@@ -574,10 +726,11 @@ pub unsafe fn present(chain: Ptr, flags: u32) {
     let pr = params(s, is_srgb(p.want.format), p.want.mode(), split == SPLIT_ON);
     // A vaga sai do proxy enquanto mede: `draw` empresta o proxy inteiro.
     let mut timer = p.timer.take();
+    let ctx = p.ctx.clone();
     let ms = passthrough(|| match timer.as_mut() {
-        Some(t) => t.time(&p.ctx, || p.draw(pr)),
+        Some(t) => t.time(&ctx, || p.draw(pr, s)),
         None => {
-            p.draw(pr);
+            p.draw(pr, s);
             0.0
         }
     });
@@ -604,6 +757,7 @@ pub(crate) unsafe fn screen_hdr(hwnd: HWND) -> bool {
         for o in (0..).map_while(|i| a.EnumOutputs(i).ok()) {
             if let Ok(d) = o.cast::<IDXGIOutput6>().and_then(|o| o.GetDesc1()) {
                 if d.Monitor == monitor {
+                    SCREEN_PEAK.store(d.MaxLuminance.to_bits(), Relaxed);
                     return d.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020;
                 }
             }
@@ -1057,9 +1211,10 @@ mod tests {
         unsafe {
             compile(s!("vs_5_0"), s!("vs")).unwrap();
             compile(s!("ps_5_0"), s!("ps")).unwrap();
+            compile(s!("cs_5_0"), s!("cs")).unwrap();
         }
         // cbuffer C: 7 floats e 5 uints.
-        assert_eq!(std::mem::size_of::<Params>(), 48);
+        assert_eq!(std::mem::size_of::<Params>(), 64);
     }
 
     #[test]

@@ -5,6 +5,7 @@
 mod hdr;
 mod hdr12;
 mod hdrvk;
+mod scan;
 
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU32, AtomicU64, AtomicUsize, Ordering::*};
@@ -68,9 +69,27 @@ pub(crate) struct Shared {
     /// Escrito pelo jogo: tempo de GPU do passe do HDR em µs (média), para o medidor do Prisma.
     pub hdr_gpu_us: AtomicU32,
     pub hdr_split_frames: AtomicU64,
+    /// O que o jogo entrega, medido pelo Analisar (bits de f32, 0 = não medido): pico, preto e paper white.
+    pub hdr_src_peak: AtomicU32,
+    pub hdr_src_black: AtomicU32,
+    pub hdr_src_paper: AtomicU32,
+    /// Analisar: número da medida pedida pelo Prisma; zero não mede.
+    pub hdr_scan: AtomicU32,
+    /// Escritos pelo jogo durante o Analisar (`scan::Stats`): a medida a que pertencem, quadros aceitos,
+    /// nits (bits de f32) e a saída do jogo (`hdr::MODE_*`).
+    pub scan_gen: AtomicU32,
+    pub scan_frames: AtomicU32,
+    pub scan_peak: AtomicU32,
+    pub scan_p999: AtomicU32,
+    pub scan_p99: AtomicU32,
+    pub scan_med: AtomicU32,
+    pub scan_black: AtomicU32,
+    pub scan_ui: AtomicU32,
+    pub scan_white: AtomicU32,
+    pub scan_mode: AtomicU32,
 }
 
-const _: () = assert!(std::mem::size_of::<Shared>() == 112);
+const _: () = assert!(std::mem::size_of::<Shared>() == 168);
 
 #[repr(C)]
 #[derive(Clone, Copy)]

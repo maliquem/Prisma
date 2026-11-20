@@ -471,7 +471,7 @@ pub fn set_auto_hdr(app: &mut App, exe: &str, path: &str, mode: u8) -> bool {
     }
     match app.cfg.hdr_games.iter_mut().find(|h| h.exe.eq_ignore_ascii_case(exe)) {
         Some(h) => h.mode = mode,
-        None => app.cfg.hdr_games.push(crate::config::HdrGame { exe: exe.to_string(), path: path.to_string(), mode, prisma: None }),
+        None => app.cfg.hdr_games.push(crate::config::HdrGame { exe: exe.to_string(), path: path.to_string(), mode, ..Default::default() }),
     }
     true
 }

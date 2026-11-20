@@ -56,16 +56,33 @@ pub struct HdrGame {
     pub path: String,
     /// Números em `sys::autohdr` (padrão, Auto HDR, desligado, 10 bits, RTX HDR, Prisma).
     pub mode: u8,
-    /// Ajustes do HDR do Prisma; sem eles, os da calibração.
+    /// Ajustes do HDR do Prisma no modo Manual; sem eles é o Automático (`sys::autohdr::resolve`).
     pub prisma: Option<crate::sys::inject::Hdr>,
+    /// Se o jogo tem HDR próprio (`sys::autohdr::NATIVE_*`).
+    pub native: u8,
+    /// Ajuste fino do Automático: o quanto cada ajuste sai da base, na ordem de `pages::hdr::KNOBS`.
+    pub tune: [f32; 7],
+    /// A última medida do Analisar.
+    pub scan: Option<crate::sys::inject::Scan>,
 }
 
 impl HdrGame {
-    /// Linha `hdr_game=` do config.ini: `exe|modo|caminho`, e os ajustes do HDR do Prisma quando há (o brilho da interface veio depois: linha com 6 vale 0).
+    /// Linha `hdr_game=` do config.ini: `exe|modo|caminho`, os ajustes do Manual quando há (o brilho da
+    /// interface veio depois: linha com 6 vale 0) e por fim `|native=`, `|tune=` e `|scan=`. Versões
+    /// antigas pulam esses: não são números.
     pub fn line(&self) -> String {
         let mut s = format!("{}|{}|{}", self.exe, self.mode, self.path);
         if let Some(h) = self.prisma {
             s += &format!("|{}|{}|{}|{}|{}|{}|{}", h.peak, h.paper, h.gamma, h.sat, h.boost, h.black, h.ui);
+        }
+        if self.native != 0 {
+            s += &format!("|native={}", self.native);
+        }
+        if self.tune.iter().any(|v| *v != 0.0) {
+            s += &format!("|tune={}", self.tune.map(|v| v.to_string()).join(","));
+        }
+        if let Some(c) = self.scan {
+            s += &format!("|scan={},{},{},{},{},{},{},{},{}", c.frames, c.peak, c.p999, c.p99, c.med, c.black, c.ui, c.white, c.mode);
         }
         s
     }
@@ -75,8 +92,21 @@ impl HdrGame {
             return None;
         }
         let f: Vec<f32> = p[3..].iter().filter_map(|v| v.parse().ok()).collect();
-        let prisma = (f.len() >= 6).then(|| crate::sys::inject::Hdr { on: true, peak: f[0], paper: f[1], gamma: f[2], sat: f[3], boost: f[4], black: f[5], ui: f.get(6).copied().unwrap_or(0.0) });
-        Some(Self { exe: p[0].into(), mode: p[1].parse().unwrap_or(0), path: p[2].into(), prisma })
+        let prisma = (f.len() >= 6).then(|| crate::sys::inject::Hdr { on: true, peak: f[0], paper: f[1], gamma: f[2], sat: f[3], boost: f[4], black: f[5], ui: f.get(6).copied().unwrap_or(0.0), ..Default::default() });
+        let tag = |k: &str| p[3..].iter().find_map(|v| v.strip_prefix(k)?.strip_prefix('='));
+        let list = |k: &str| tag(k).map_or(Vec::new(), |v| v.split(',').filter_map(|x| x.parse::<f32>().ok()).collect());
+        let tune = list("tune");
+        let c = list("scan");
+        let scan = (c.len() >= 9).then(|| crate::sys::inject::Scan { frames: c[0] as u32, peak: c[1], p999: c[2], p99: c[3], med: c[4], black: c[5], ui: c[6], white: c[7], mode: c[8] as u32 });
+        Some(Self {
+            exe: p[0].into(),
+            mode: p[1].parse().unwrap_or(0),
+            path: p[2].into(),
+            prisma,
+            native: tag("native").and_then(|v| v.parse().ok()).unwrap_or(0),
+            tune: std::array::from_fn(|i| tune.get(i).copied().unwrap_or(0.0)),
+            scan,
+        })
     }
 }
 
@@ -1430,9 +1460,15 @@ mod tests {
         let old = HdrGame::parse(r"a.exe|1|C:\a b\a.exe").unwrap();
         assert_eq!((old.mode, old.path.as_str(), old.prisma), (1, r"C:\a b\a.exe", None));
         assert_eq!(HdrGame::parse(&old.line()).unwrap().line(), old.line());
-        let h = crate::sys::inject::Hdr { on: true, peak: 1000.0, paper: 203.5, gamma: 2.2, sat: 1.1, boost: 0.5, black: 0.25, ui: 150.0 };
-        let g = HdrGame { prisma: Some(h), mode: 5, ..old };
-        assert_eq!(HdrGame::parse(&g.line()).unwrap().prisma, Some(h));
+        let h = crate::sys::inject::Hdr { on: true, peak: 1000.0, paper: 203.5, gamma: 2.2, sat: 1.1, boost: 0.5, black: 0.25, ui: 150.0, ..Default::default() };
+        let scan = crate::sys::inject::Scan { frames: 600, peak: 980.5, p999: 700.0, p99: 400.0, med: 20.25, black: 0.01, ui: 250.0, white: 0.03, mode: 1 };
+        let g = HdrGame { prisma: Some(h), mode: 5, native: 2, tune: [10.0, 0.0, 0.0, 0.0, -0.5, 0.0, 0.0], scan: Some(scan), ..old.clone() };
+        let back = HdrGame::parse(&g.line()).unwrap();
+        assert_eq!((back.prisma, back.native, back.tune, back.scan), (Some(h), 2, g.tune, Some(scan)));
+        // Automático com medida, sem os ajustes do Manual: os números marcados não viram ajustes.
+        let auto = HdrGame { prisma: None, ..g };
+        assert_eq!(HdrGame::parse(&auto.line()).unwrap().prisma, None);
+        assert_eq!(HdrGame::parse(&old.line()).unwrap().native, 0);
         // Linha de antes do brilho da interface: ele fica desligado.
         assert_eq!(HdrGame::parse(r"a.exe|5|C:\a.exe|1000|203.5|2.2|1.1|0.5|0.25").unwrap().prisma, Some(crate::sys::inject::Hdr { ui: 0.0, ..h }));
         // Ajuste faltando: fica sem os ajustes, com a escolha mantida.
