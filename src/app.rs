@@ -2622,7 +2622,9 @@ impl App {
     pub fn meter_input(&mut self, input: crate::meter::Input) {
         let (exe, pid) = (self.meter.session.exe.clone(), self.meter.session.pid);
         let act = self.meter.input(input);
-        if let Some((row, option)) = act {
+        if let Some((crate::meter::Row::Open, which)) = act {
+            self.meter_open(which, pid);
+        } else if let Some((row, option)) = act {
             if exe.is_empty() {
                 self.toast.info("Abra um jogo para usar o limitador.");
             } else {
@@ -2631,6 +2633,19 @@ impl App {
             }
         }
         self.meter_paint();
+    }
+
+    /// Botões do completo. O shader: o motor do jogo abre o menu dele; sem motor, o mesmo caminho do atalho do
+    /// menu (cria o perfil e abre já com o menu). O HDR: ainda sem menu no jogo, abre a página HDR do Prisma.
+    fn meter_open(&mut self, which: usize, pid: u32) {
+        if which == crate::meter::OPEN_SHADER {
+            if !crate::shader::cost::ask_menu(prisma_shader::link::COST_SHADER, pid) {
+                crate::pages::shaders::menu_focused(self);
+            }
+            return;
+        }
+        self.show_main();
+        self.go(Page::Hdr);
     }
 
     /// Atalhos do limitador: valem para o jogo aberto, mesmo fora da lista.

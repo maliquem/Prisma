@@ -340,6 +340,8 @@ pub struct Config {
     /// Jogos sem abrir há tantos dias saem da lista do Medidor (0: nunca). As escolhas ficam.
     pub meter_hide_days: u32,
     pub hk_meter_keys: Hotkey,
+    /// O completo só recebe o mouse depois do atalho `hk_meter_keys` (o jeito antigo); falso: direto, com o cursor em cima.
+    pub meter_need_key: bool,
     pub hk_limit_toggle: Hotkey,
     pub hk_limit_up: Hotkey,
     pub hk_limit_down: Hotkey,
@@ -525,6 +527,7 @@ impl Default for Config {
             hk_log: Hotkey::new(MOD_CTRL | MOD_ALT, b'4' as u32),
             meter_log_min: 5,
             meter_log_auto: false,
+            meter_need_key: false,
             meter_hide_days: 0,
             hk_meter_keys: Hotkey::new(MOD_CTRL | MOD_ALT, b'5' as u32),
             hk_limit_toggle: Hotkey::new(MOD_CTRL | MOD_ALT, b'3' as u32),
@@ -820,6 +823,7 @@ impl Config {
                 "meter_log_time" => c.meter_log_min = [1, 5, 10, 0].get(v.parse::<usize>().unwrap_or(1)).copied().unwrap_or(5),
                 "meter_log_min" => c.meter_log_min = v.parse().unwrap_or(5),
                 "meter_log_auto" => c.meter_log_auto = v == "1",
+                "meter_need_key" => c.meter_need_key = v == "1",
                 "meter_hide_days" => c.meter_hide_days = v.parse().unwrap_or(0),
                 "hk_meter_keys" => c.hk_meter_keys = Hotkey::parse(v),
                 "hk_limit_toggle" => c.hk_limit_toggle = Hotkey::parse(v),
@@ -1094,6 +1098,7 @@ impl Config {
         s.push_str(&format!("meter_pos_compact={}\nmeter_pos_full={}\n", self.meter_pos_compact, self.meter_pos_full));
         hk(&mut s, "hk_log", self.hk_log);
         s.push_str(&format!("meter_log_min={}\nmeter_log_auto={}\nmeter_hide_days={}\n", self.meter_log_min, self.meter_log_auto as u8, self.meter_hide_days));
+        let _ = writeln!(s, "meter_need_key={}", self.meter_need_key as u8);
         hk(&mut s, "hk_meter_keys", self.hk_meter_keys);
         hk(&mut s, "hk_limit_toggle", self.hk_limit_toggle);
         hk(&mut s, "hk_limit_up", self.hk_limit_up);
@@ -1214,6 +1219,7 @@ impl Config {
                 self.meter_log_min = d.meter_log_min;
                 self.meter_log_auto = d.meter_log_auto;
                 self.hk_meter_keys = d.hk_meter_keys;
+                self.meter_need_key = d.meter_need_key;
                 self.hk_limit_toggle = d.hk_limit_toggle;
                 self.hk_limit_up = d.hk_limit_up;
                 self.hk_limit_down = d.hk_limit_down;

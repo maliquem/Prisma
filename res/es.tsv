@@ -2947,3 +2947,14 @@ O filtro entra quando o jogo é menor que o monitor: o Prisma cria o perfil de s
 Filtro de upscale: baixe os filtros na página Fullscreenizer	Filtro de escalado: descarga los filtros en la página Fullscreenizer
 Este jogo já tem perfil de shader: o filtro de upscale fica com ele	Este juego ya tiene perfil de shader: el filtro de escalado se queda con él
 Filtro de upscale: não deu para gravar o perfil	Filtro de escalado: no se pudo guardar el perfil
+{} ms	{} ms
+Shader e HDR do Prisma	Shader y HDR de Prisma
+Menu do shader	Menú del shader
+Menu do HDR	Menú del HDR
+sem medida	sin medir
+{} ms · {}% da GPU	{} ms · {}% de la GPU
+Shader · {}	Shader · {}
+HDR · {}	HDR · {}
+HDR do Prisma	HDR de Prisma
+Clique para mudar. Teclado: {}	Clic para cambiar. Teclado: {}
+Mexer no medidor completo só depois do atalho Controles no medidor	Usar el medidor completo solo después del atajo Controles en el medidor

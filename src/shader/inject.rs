@@ -159,6 +159,7 @@ fn run_in(path: &Path, game: HWND, pid: u32, process: HANDLE, files: &[Vec<u8>; 
     let keys = crate::shader_profile::Keys::load(&crate::shader_profile::keys_path());
     super::hold_keys(&keys);
     let mut menu = menu::Menu::new();
+    let mut cost = super::cost::CostMap::create(COST_SHADER, pid);
     let (mut fg, mut menu_key, mut next_key) = (false, Press::default(), Press::default());
     let (since, mut polled, mut ready, mut sent) = (Instant::now(), Instant::now(), None, eng.path.clone());
     // Último Present visto: queda na injeção acontece com o jogo desenhando; a do jogo saindo, depois de parar.
@@ -239,6 +240,11 @@ fn run_in(path: &Path, game: HWND, pid: u32, process: HANDLE, files: &[Vec<u8>; 
                 frame_ms = prisma_shader::ema(frame_ms, counted.1.elapsed().as_secs_f64() * 1000.0 / (now - counted.0) as f64);
             }
             counted = (now, Instant::now());
+            // Aqui o motor não tem cadeia (`active` é falso): quem desenha é a DLL, pronta.
+            let on = eng.profile.on && ready.is_some();
+            if cost.as_mut().is_some_and(|c| c.tick(on, s.gpu_us.load(Relaxed) as f64 / 1000.0, frame_ms, &eng.path)) {
+                menu.toggle();
+            }
         }
         fg = unsafe { GetForegroundWindow() == game && !IsIconic(game).as_bool() };
         if menu_key.hit(fg && held(keys.menu), false) {

@@ -2947,3 +2947,14 @@ O filtro entra quando o jogo é menor que o monitor: o Prisma cria o perfil de s
 Filtro de upscale: baixe os filtros na página Fullscreenizer	放大滤镜：请在 Fullscreenizer 页面下载滤镜
 Este jogo já tem perfil de shader: o filtro de upscale fica com ele	此游戏已有 shader 配置：放大滤镜由它负责
 Filtro de upscale: não deu para gravar o perfil	放大滤镜：无法保存配置
+{} ms	{} 毫秒
+Shader e HDR do Prisma	Prisma 的 Shader 和 HDR
+Menu do shader	Shader 菜单
+Menu do HDR	HDR 菜单
+sem medida	未测量
+{} ms · {}% da GPU	{} 毫秒 · 占 GPU {}%
+Shader · {}	Shader · {}
+HDR · {}	HDR · {}
+HDR do Prisma	Prisma HDR
+Clique para mudar. Teclado: {}	点击可更改。键盘：{}
+Mexer no medidor completo só depois do atalho Controles no medidor	完整面板需先按快捷键“监视中的控制”后才能操作
