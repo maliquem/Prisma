@@ -5,7 +5,7 @@ use super::reg::{self, Hive};
 use crate::config::HdrGame;
 use crate::pages::hdr::{knob, KNOBS};
 use crate::sys::drs;
-use crate::sys::inject::Hdr;
+use crate::sys::inject::{Hdr, HdrLive};
 
 const ROOT: &str = "Software\\Microsoft\\Direct3D";
 const PREFIX: &str = "Prisma ";
@@ -36,6 +36,48 @@ pub const NATIVE_YES: u8 = 3;
 pub const NATIVE_NO: u8 = 4;
 /// Quadros em SDR até o jogo contar como não visto: uns 10 s a 60 fps, passando das telas de abertura.
 const NOT_SEEN_FRAMES: u64 = 600;
+
+/// Medidas do Analisar que o Prisma liga sozinho num buffer de 10 bits sem espaço de cor, para saber se
+/// o jogo manda HDR10 sem dizer (o ELDEN RING faz isso). Duas, alternadas: só um número novo zera a soma.
+pub const GUESS_SCAN: u32 = 0x5051_0000;
+const GUESS_SCANS: [u32; 2] = [GUESS_SCAN, GUESS_SCAN + 1];
+/// Lido como SDR, o branco do jogo chega a ~100 nits. O HDR10 lido assim fica abaixo de 65 até o sinal
+/// de ~2500 nits: o ELDEN RING dá 40. Abaixo de 10 é tela escura (carregando), que não diz nada.
+/// shortcut: jogo SDR que passa 600 quadros com imagem e sem nada acima de 82% do sinal passa por HDR10;
+/// a aba marca "não" à mão.
+const GUESS_FRAMES: u32 = 600;
+const GUESS_PEAK: std::ops::Range<f32> = 10.0..65.0;
+
+/// Se 600 quadros que o Analisar leu como SDR parecem HDR10; nada enquanto mede.
+pub fn guess_pq(frames: u32, peak: f32) -> Option<bool> {
+    (frames >= GUESS_FRAMES).then(|| GUESS_PEAK.contains(&peak))
+}
+
+/// Uma passada num jogo aberto com o HDR do Prisma: o buffer de 10 bits sem espaço de cor do jogo com HDR
+/// próprio é lido como HDR10. Sem saber ainda, o Analisar mede em ciclos de 600 quadros até ver HDR10: o
+/// ELDEN RING sai SDR no menu e só manda HDR10 em jogo. O estado novo do HDR próprio, se mudou.
+/// shortcut: num jogo SDR de 10 bits a medida não para; custa ~0 de GPU (medido no DQ7R).
+pub fn watch(live: &HdrLive, native: u8) -> Option<u8> {
+    live.set_pq(has_native(native));
+    let (mode, frames) = live.native();
+    let mut seen = detect(native, mode, frames);
+    if live.untold() && native != NATIVE_NO && !has_native(native) {
+        match live.scanning() {
+            0 => live.scan_set(GUESS_SCAN),
+            g if GUESS_SCANS.contains(&g) => {
+                if let Some(pq) = live.scan(g).and_then(|s| guess_pq(s.frames, s.peak)) {
+                    // O outro número recomeça a medida do zero; achado o HDR10, para.
+                    live.scan_set(if pq { 0 } else { g ^ 1 });
+                    if pq {
+                        seen = Some(NATIVE_SEEN);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    seen
+}
 
 pub fn has_native(n: u8) -> bool {
     n == NATIVE_SEEN || n == NATIVE_YES
@@ -211,36 +253,65 @@ fn game_hdr(cfg: &crate::config::Config, name: &str) -> Option<Hdr> {
     Some(resolve(calibrated(cfg, &primary_gdi()), g))
 }
 
+/// Processos de anti-cheat que só rodam com um jogo protegido aberto.
+const AC_RUNNING: [&str; 4] = ["start_protected_game", "easyanticheat", "beservice", "bedaisy"];
+
+/// Se o HDR do Prisma pode entrar no jogo `path`. O anti-cheat achado na pasta barra, a não ser que a pessoa
+/// tenha marcado o jogo para ignorar (offline, mods); com um anti-cheat rodando agora, nunca.
+pub fn allowed(cfg: &crate::config::Config, path: &str) -> Result<(), String> {
+    let name = super::procs::exe_name(path);
+    let running = super::procs::running_exes();
+    if running.iter().any(|n| AC_RUNNING.iter().any(|a| n.starts_with(a))) || name.to_ascii_lowercase().starts_with(AC_RUNNING[0]) {
+        return Err("anti-cheat rodando".into());
+    }
+    let off = cfg.hdr_games.iter().any(|g| g.ac_off && g.exe.eq_ignore_ascii_case(&name));
+    if !off && crate::meter::anti_cheat(path) {
+        return Err("anti-cheat detectado".into());
+    }
+    Ok(())
+}
+
+/// Passa os ajustes ao vivo até o jogo fechar.
+fn serve(l: &crate::sys::inject::Limiter, name: &str, mut hdr: Hdr) {
+    let path = crate::config::config_path();
+    let mut seen = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
+    // Com a aba fechada ninguém roda `watch`: o HDR10 sem espaço de cor sai do que o config guarda.
+    let live = crate::sys::inject::HdrLive::connect(l.pid);
+    let pq = |cfg: &crate::config::Config| cfg.hdr_games.iter().any(|g| g.exe.eq_ignore_ascii_case(name) && has_native(g.native));
+    if let Some(live) = &live {
+        live.set_pq(pq(&crate::config::Config::load()));
+    }
+    while l.exit_code().is_none() {
+        std::thread::sleep(std::time::Duration::from_millis(250));
+        let now = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
+        if now != seen {
+            seen = now;
+            // Config lido no meio da gravação: fica com o último que valeu.
+            let cfg = crate::config::Config::load();
+            if let Some(live) = &live {
+                live.set_pq(pq(&cfg));
+            }
+            if let Some(h) = game_hdr(&cfg, name).filter(|h| *h != hdr) {
+                hdr = h;
+                l.set_hdr(&hdr);
+            }
+        }
+    }
+    // A interface não saiu separada nenhuma vez: ficou junto com a cena, como antes.
+    if let Some((_, how, 0)) = l.hdr_split().filter(|_| hdr.ui >= 1.0) {
+        let why = if how == crate::sys::inject::SPLIT_LATE { "passe de tela cheia depois da interface" } else { "nada desenhado no buffer depois da cena" };
+        crate::config::log(&format!("HDR do Prisma: {name} sem brilho da interface separado ({why})"));
+    }
+}
+
 fn run(exe: &str, args: &[String]) {
     let name = super::procs::exe_name(exe);
     let cfg = crate::config::Config::load();
     let line = join(args);
-    if let Some(mut hdr) = game_hdr(&cfg, &name) {
-        let launched = crate::sys::inject::Limiter::launch(exe, &line, &hdr);
-        if let Err(e) = &launched {
-            crate::config::log(&format!("HDR do Prisma: {name} abre sem ele ({e})"));
-        }
-        if let Ok(l) = launched {
-            let path = crate::config::config_path();
-            let mut seen = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
-            while l.exit_code().is_none() {
-                std::thread::sleep(std::time::Duration::from_millis(250));
-                let now = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
-                if now != seen {
-                    seen = now;
-                    // Config lido no meio da gravação: fica com o último que valeu.
-                    if let Some(h) = game_hdr(&crate::config::Config::load(), &name).filter(|h| *h != hdr) {
-                        hdr = h;
-                        l.set_hdr(&hdr);
-                    }
-                }
-            }
-            // A interface não saiu separada nenhuma vez: ficou junto com a cena, como antes.
-            if let Some((_, how, 0)) = l.hdr_split().filter(|_| hdr.ui >= 1.0) {
-                let why = if how == crate::sys::inject::SPLIT_LATE { "passe de tela cheia depois da interface" } else { "nada desenhado no buffer depois da cena" };
-                crate::config::log(&format!("HDR do Prisma: {name} sem brilho da interface separado ({why})"));
-            }
-            return;
+    if let Some(hdr) = game_hdr(&cfg, &name) {
+        match allowed(&cfg, exe).and_then(|_| crate::sys::inject::Limiter::launch(exe, &line, &hdr)) {
+            Ok(l) => return serve(&l, &name, hdr),
+            Err(e) => crate::config::log(&format!("HDR do Prisma: {name} abre sem ele ({e})")),
         }
     }
     let dir = std::path::Path::new(exe).parent().map(|p| p.to_path_buf()).unwrap_or_default();
@@ -272,6 +343,11 @@ mod tests {
         assert_eq!(detect(NATIVE_NOT_SEEN, 1, 5000), Some(NATIVE_SEEN));
         assert_eq!(detect(NATIVE_NO, 2, 5000), None);
         assert_eq!(detect(NATIVE_SEEN, 0, 5000), None);
+        // 10 bits sem espaço de cor: o ELDEN RING lido como SDR (pico 40) é HDR10; o DQ7R (103) é SDR.
+        assert_eq!(guess_pq(100, 40.0), None);
+        assert_eq!(guess_pq(GUESS_FRAMES, 40.0), Some(true));
+        assert_eq!(guess_pq(GUESS_FRAMES, 103.0), Some(false));
+        assert_eq!(guess_pq(GUESS_FRAMES, 2.0), Some(false));
     }
 
     #[test]

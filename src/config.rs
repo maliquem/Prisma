@@ -64,11 +64,13 @@ pub struct HdrGame {
     pub tune: [f32; 7],
     /// A última medida do Analisar.
     pub scan: Option<crate::sys::inject::Scan>,
+    /// A pessoa abre este jogo sem o anti-cheat (offline, mods): o achado na pasta não barra o HDR do Prisma.
+    pub ac_off: bool,
 }
 
 impl HdrGame {
     /// Linha `hdr_game=` do config.ini: `exe|modo|caminho`, os ajustes do Manual quando há (o brilho da
-    /// interface veio depois: linha com 6 vale 0) e por fim `|native=`, `|tune=` e `|scan=`. Versões
+    /// interface veio depois: linha com 6 vale 0) e por fim `|native=`, `|tune=`, `|scan=` e `|ac=off`. Versões
     /// antigas pulam esses: não são números.
     pub fn line(&self) -> String {
         let mut s = format!("{}|{}|{}", self.exe, self.mode, self.path);
@@ -83,6 +85,9 @@ impl HdrGame {
         }
         if let Some(c) = self.scan {
             s += &format!("|scan={},{},{},{},{},{},{},{},{}", c.frames, c.peak, c.p999, c.p99, c.med, c.black, c.ui, c.white, c.mode);
+        }
+        if self.ac_off {
+            s += "|ac=off";
         }
         s
     }
@@ -106,6 +111,7 @@ impl HdrGame {
             native: tag("native").and_then(|v| v.parse().ok()).unwrap_or(0),
             tune: std::array::from_fn(|i| tune.get(i).copied().unwrap_or(0.0)),
             scan,
+            ac_off: tag("ac") == Some("off"),
         })
     }
 }
@@ -1462,9 +1468,10 @@ mod tests {
         assert_eq!(HdrGame::parse(&old.line()).unwrap().line(), old.line());
         let h = crate::sys::inject::Hdr { on: true, peak: 1000.0, paper: 203.5, gamma: 2.2, sat: 1.1, boost: 0.5, black: 0.25, ui: 150.0, ..Default::default() };
         let scan = crate::sys::inject::Scan { frames: 600, peak: 980.5, p999: 700.0, p99: 400.0, med: 20.25, black: 0.01, ui: 250.0, white: 0.03, mode: 1 };
-        let g = HdrGame { prisma: Some(h), mode: 5, native: 2, tune: [10.0, 0.0, 0.0, 0.0, -0.5, 0.0, 0.0], scan: Some(scan), ..old.clone() };
+        let g = HdrGame { prisma: Some(h), mode: 5, native: 2, tune: [10.0, 0.0, 0.0, 0.0, -0.5, 0.0, 0.0], scan: Some(scan), ac_off: true, ..old.clone() };
         let back = HdrGame::parse(&g.line()).unwrap();
-        assert_eq!((back.prisma, back.native, back.tune, back.scan), (Some(h), 2, g.tune, Some(scan)));
+        assert_eq!((back.prisma, back.native, back.tune, back.scan, back.ac_off), (Some(h), 2, g.tune, Some(scan), true));
+        assert!(!old.ac_off);
         // Automático com medida, sem os ajustes do Manual: os números marcados não viram ajustes.
         let auto = HdrGame { prisma: None, ..g };
         assert_eq!(HdrGame::parse(&auto.line()).unwrap().prisma, None);

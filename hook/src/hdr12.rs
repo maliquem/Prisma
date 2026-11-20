@@ -380,7 +380,7 @@ impl Proxy {
         }
         let mut scan = self.scan.as_mut().and_then(|sc| sc.ring.start(s).then_some(sc));
         if let Some(sc) = scan.as_mut() {
-            sc.take(s, i, self.want.mode());
+            sc.take(s, i, self.want.mode(hdr::pq(s)));
         }
         f.alloc.Reset()?;
         let l = &f.list;
@@ -461,9 +461,10 @@ pub(crate) unsafe fn present(s: &Shared, chain: Ptr) -> bool {
         _ => hdr::PHASE_NONE,
     };
     let split = hdr::split_of(s, phase);
-    let pr = hdr::params(s, hdr::is_srgb(p.want.format), p.want.mode(), split == hdr::SPLIT_ON);
+    let mode = p.want.mode(hdr::pq(s));
+    let pr = hdr::params(s, hdr::is_srgb(p.want.format), mode, split == hdr::SPLIT_ON);
     match hdr::passthrough(|| p.draw(i, pr, s)) {
-        Ok(ms) => hdr::report(s, ms, split, p.want.mode()),
+        Ok(ms) => hdr::report(s, ms, split, mode, p.want.untold()),
         Err(e) => hdr::note(e.code()),
     }
     true

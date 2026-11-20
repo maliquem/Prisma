@@ -87,9 +87,13 @@ pub(crate) struct Shared {
     pub scan_ui: AtomicU32,
     pub scan_white: AtomicU32,
     pub scan_mode: AtomicU32,
+    /// Escrito pelo Prisma: o jogo manda HDR10 no buffer de 10 bits sem dizer o espaço de cor (`hdr::Want::untold`).
+    pub hdr_pq: AtomicU32,
+    /// Escrito pelo jogo: o último quadro veio desse buffer, que pode ser SDR ou HDR10.
+    pub hdr_untold: AtomicU32,
 }
 
-const _: () = assert!(std::mem::size_of::<Shared>() == 168);
+const _: () = assert!(std::mem::size_of::<Shared>() == 176);
 
 #[repr(C)]
 #[derive(Clone, Copy)]

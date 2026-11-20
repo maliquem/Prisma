@@ -263,21 +263,29 @@ pub(crate) struct Want {
     pub format: DXGI_FORMAT,
     samples: u32,
     pub usage: u32,
-    /// O espaço de cor que o jogo deu à cadeia: G2084 no buffer de 10 bits é HDR10.
-    space: DXGI_COLOR_SPACE_TYPE,
+    /// O espaço de cor que o jogo deu à cadeia: G2084 no buffer de 10 bits é HDR10. Nenhum: o jogo não
+    /// disse (o ELDEN RING manda HDR10 assim).
+    space: Option<DXGI_COLOR_SPACE_TYPE>,
 }
 
 impl Want {
     fn new(width: u32, height: u32, format: DXGI_FORMAT, samples: u32, usage: u32) -> Self {
-        Self { width, height, format, samples, usage, space: DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709 }
+        Self { width, height, format, samples, usage, space: None }
     }
 
-    pub fn mode(&self) -> u32 {
+    /// `pq`: o Prisma diz que o jogo manda HDR10 no buffer de 10 bits sem espaço de cor (`Shared::hdr_pq`).
+    pub fn mode(&self, pq: bool) -> u32 {
         match (self.format, self.space) {
             (DXGI_FORMAT_R16G16B16A16_FLOAT, _) => MODE_SCRGB,
-            (DXGI_FORMAT_R10G10B10A2_UNORM, DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020) => MODE_HDR10,
+            (DXGI_FORMAT_R10G10B10A2_UNORM, Some(DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020)) => MODE_HDR10,
+            (DXGI_FORMAT_R10G10B10A2_UNORM, None) if pq => MODE_HDR10,
             _ => MODE_SDR,
         }
+    }
+
+    /// Buffer de 10 bits sem espaço de cor dado pelo jogo: pode ser SDR ou HDR10.
+    pub fn untold(&self) -> bool {
+        self.format == DXGI_FORMAT_R10G10B10A2_UNORM && self.space.is_none()
     }
 }
 
@@ -380,7 +388,7 @@ impl Scan {
         if ctx.Map(&self.staging[get], 0, D3D11_MAP_READ, D3D11_MAP_FLAG_DO_NOT_WAIT.0 as u32, Some(&mut m)).is_ok() {
             let cur = std::slice::from_raw_parts(m.pData as *const u32, scan::WORDS).to_vec();
             ctx.Unmap(&self.staging[get], 0);
-            self.ring.feed(s, w.mode(), &cur);
+            self.ring.feed(s, w.mode(pq(s)), &cur);
         }
     }
 }
@@ -494,13 +502,13 @@ pub(crate) fn is_srgb(f: DXGI_FORMAT) -> bool {
 }
 
 /// O buffer de uma cadeia aceita vista _SRGB sobre formato UNORM (o Unity faz isso); textura comum só
-/// aceita se nascer sem tipo. A vista sem formato ganha o pedido em `view_desc`.
+/// aceita se nascer sem tipo. A vista sem formato ganha o pedido em `view_desc`. Formato sem par _SRGB
+/// (10 bits, FP16) fica com tipo: o ELDEN RING lê o formato do buffer e cai com um sem tipo.
 pub(crate) fn typeless(f: DXGI_FORMAT) -> DXGI_FORMAT {
     match f {
         DXGI_FORMAT_R8G8B8A8_UNORM | DXGI_FORMAT_R8G8B8A8_UNORM_SRGB => DXGI_FORMAT_R8G8B8A8_TYPELESS,
         DXGI_FORMAT_B8G8R8A8_UNORM | DXGI_FORMAT_B8G8R8A8_UNORM_SRGB => DXGI_FORMAT_B8G8R8A8_TYPELESS,
         DXGI_FORMAT_B8G8R8X8_UNORM | DXGI_FORMAT_B8G8R8X8_UNORM_SRGB => DXGI_FORMAT_B8G8R8X8_TYPELESS,
-        DXGI_FORMAT_R10G10B10A2_UNORM => DXGI_FORMAT_R10G10B10A2_TYPELESS,
         f => f,
     }
 }
@@ -508,7 +516,7 @@ pub(crate) fn typeless(f: DXGI_FORMAT) -> DXGI_FORMAT {
 /// Formato que, num buffer de cadeia, vale o do buffer: `UNKNOWN` (o Unreal pede assim) ou o sem tipo
 /// que o `GetDesc` do nosso buffer devolve.
 fn untyped(f: DXGI_FORMAT) -> bool {
-    matches!(f, DXGI_FORMAT_UNKNOWN | DXGI_FORMAT_R8G8B8A8_TYPELESS | DXGI_FORMAT_B8G8R8A8_TYPELESS | DXGI_FORMAT_B8G8R8X8_TYPELESS | DXGI_FORMAT_R10G10B10A2_TYPELESS)
+    matches!(f, DXGI_FORMAT_UNKNOWN | DXGI_FORMAT_R8G8B8A8_TYPELESS | DXGI_FORMAT_B8G8R8A8_TYPELESS | DXGI_FORMAT_B8G8R8X8_TYPELESS)
 }
 
 /// Descrição de vista sobre um buffer do jogo (`want` acha o proxy dele): sem descrição ou sem formato,
@@ -723,9 +731,15 @@ pub(crate) fn split_of(s: &Shared, phase: u32) -> u32 {
     }
 }
 
+/// O Prisma marcou que o jogo manda HDR10 sem dizer (`Want::untold`).
+pub(crate) fn pq(s: &Shared) -> bool {
+    s.hdr_pq.load(Relaxed) == 1
+}
+
 /// O que a aba e o menu do jogo mostram do último quadro.
-pub(crate) fn report(s: &Shared, ms: f64, split: u32, mode: u32) {
+pub(crate) fn report(s: &Shared, ms: f64, split: u32, mode: u32, untold: bool) {
     s.hdr_gpu_us.store((ms * 1000.0) as u32, Relaxed);
+    s.hdr_untold.store(untold as u32, Relaxed);
     s.hdr_frames.fetch_add(1, Relaxed);
     s.hdr_split.store(split, Relaxed);
     s.hdr_native.store(mode, Relaxed);
@@ -748,7 +762,7 @@ pub unsafe fn present(chain: Ptr, flags: u32) {
     let mine = p.tex.as_ref().is_some_and(|t| t.as_raw() as usize == TEX.load(Relaxed));
     let phase = if mine { PHASE.swap(PHASE_NONE, Relaxed) } else { PHASE_NONE };
     let split = split_of(s, phase);
-    let pr = params(s, is_srgb(p.want.format), p.want.mode(), split == SPLIT_ON);
+    let pr = params(s, is_srgb(p.want.format), p.want.mode(pq(s)), split == SPLIT_ON);
     // A vaga sai do proxy enquanto mede: `draw` empresta o proxy inteiro.
     let mut timer = p.timer.take();
     let ctx = p.ctx.clone();
@@ -760,7 +774,7 @@ pub unsafe fn present(chain: Ptr, flags: u32) {
         }
     });
     p.timer = timer;
-    report(s, ms, split, p.want.mode());
+    report(s, ms, split, p.want.mode(pq(s)), p.want.untold());
 }
 
 /// Ajusta o pedido do jogo para a cadeia de verdade: FP16, troca por flip, sem MSAA.
@@ -933,7 +947,7 @@ unsafe extern "system" fn on_get_desc1(this: Ptr, out: *mut DXGI_SWAP_CHAIN_DESC
 /// buffer dele: HDR10 no de 10 bits, scRGB no FP16, SDR no resto.
 unsafe extern "system" fn on_set_color_space(this: Ptr, space: DXGI_COLOR_SPACE_TYPE) -> HRESULT {
     if !INSIDE.get() {
-        let set = |w: &mut Want| if takes(w.format, space) { w.space = space; S_OK } else { DXGI_ERROR_UNSUPPORTED };
+        let set = |w: &mut Want| if takes(w.format, space) { w.space = Some(space); S_OK } else { DXGI_ERROR_UNSUPPORTED };
         if let Some(p) = proxies().iter_mut().find(|p| p.chain == this as usize) {
             return set(&mut p.want);
         }
@@ -1254,31 +1268,38 @@ mod tests {
 
     #[test]
     fn views_without_format_get_the_game_format() {
-        let w = Want::new(1920, 1080, DXGI_FORMAT_R10G10B10A2_UNORM, 1, 0);
+        let w = Want::new(1920, 1080, DXGI_FORMAT_B8G8R8A8_UNORM, 1, 0);
         let make = |w: Want| D3D11_RENDER_TARGET_VIEW_DESC { Format: w.format, ..Default::default() };
         let ask = |format| D3D11_RENDER_TARGET_VIEW_DESC { Format: format, ViewDimension: D3D11_RTV_DIMENSION_TEXTURE2DARRAY, ..Default::default() };
         let run = |d: Option<&D3D11_RENDER_TARGET_VIEW_DESC>| unsafe { view_desc(d.map_or(std::ptr::null(), |d| d as *const _ as *const c_void), || Some(w), make) };
         // Sem descrição; e como o Unreal faz, formato vazio (ou o sem tipo do `GetDesc`) com o resto mantido.
-        assert_eq!(run(None).map(|d| d.Format), Some(DXGI_FORMAT_R10G10B10A2_UNORM));
-        for f in [DXGI_FORMAT_UNKNOWN, DXGI_FORMAT_R10G10B10A2_TYPELESS] {
+        assert_eq!(run(None).map(|d| d.Format), Some(DXGI_FORMAT_B8G8R8A8_UNORM));
+        for f in [DXGI_FORMAT_UNKNOWN, typeless(w.format)] {
             let d = run(Some(&ask(f))).unwrap();
-            assert_eq!((d.Format, d.ViewDimension), (DXGI_FORMAT_R10G10B10A2_UNORM, D3D11_RTV_DIMENSION_TEXTURE2DARRAY));
+            assert_eq!((d.Format, d.ViewDimension), (DXGI_FORMAT_B8G8R8A8_UNORM, D3D11_RTV_DIMENSION_TEXTURE2DARRAY));
         }
-        // Formato dado pelo jogo fica.
-        assert!(run(Some(&ask(DXGI_FORMAT_R10G10B10A2_UNORM))).is_none());
+        // Formato dado pelo jogo fica; 10 bits não tem par _SRGB e nasce com tipo.
+        assert!(run(Some(&ask(DXGI_FORMAT_B8G8R8A8_UNORM_SRGB))).is_none());
+        assert_eq!(typeless(DXGI_FORMAT_R10G10B10A2_UNORM), DXGI_FORMAT_R10G10B10A2_UNORM);
     }
 
     #[test]
     fn color_space_by_format() {
         let mut w = Want::new(1920, 1080, DXGI_FORMAT_R10G10B10A2_UNORM, 1, 0);
-        assert_eq!(w.mode(), MODE_SDR);
+        // Sem espaço de cor dado: SDR, ou HDR10 quando o Prisma marcou o jogo.
+        assert!(w.untold());
+        assert_eq!((w.mode(false), w.mode(true)), (MODE_SDR, MODE_HDR10));
         assert!(takes(w.format, DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020));
-        w.space = DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020;
-        assert_eq!(w.mode(), MODE_HDR10);
+        w.space = Some(DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709);
+        assert!(!w.untold());
+        assert_eq!(w.mode(true), MODE_SDR);
+        w.space = Some(DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020);
+        assert_eq!(w.mode(false), MODE_HDR10);
         assert!(!takes(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020));
         assert!(takes(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709));
         let f = Want::new(1920, 1080, DXGI_FORMAT_R16G16B16A16_FLOAT, 1, 0);
-        assert_eq!(f.mode(), MODE_SCRGB);
+        assert!(!f.untold());
+        assert_eq!(f.mode(false), MODE_SCRGB);
         assert!(takes(f.format, DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709));
     }
 }

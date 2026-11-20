@@ -445,7 +445,7 @@ fn games_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen) {
     let all: Vec<(u8, &str)> = autohdr::MODES.iter().filter(|m| m.0 != autohdr::RTX || autohdr::nvidia()).map(|m| (m.0, m.1)).collect();
     let calibrated = Hdr::from_profile(app.cfg.hdr_profiles.iter().rfind(|p| p.screen == s.name));
     let (mut change, mut remove, mut tuned, mut launch, mut hotkey_changed) = (None, None, false, None, false);
-    let (mut mark, mut way, mut reset) = (None, None, None);
+    let (mut mark, mut way, mut reset, mut ac) = (None, None, None, None);
     let mut y = r.y + 72.0;
     for i in chosen(app).into_iter() {
         let g = &app.cfg.hdr_games[i];
@@ -507,17 +507,32 @@ fn games_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen) {
         }
         let p = rect(r.x + 52.0, y, r.w - 68.0, PRISMA_H - 12.0);
         let (anti_cheat, steam) = game_facts(&g.path);
+        // Pela Steam o jogo com anti-cheat abre pelo lançador dele (start_protected_game), que o Prisma recusa.
+        let steam = steam.filter(|_| !(anti_cheat && g.ac_off));
         if anti_cheat {
-            ui.c.text_wrap(rect(p.x, p.y, p.w, 40.0), "Bloqueado: este jogo tem anti-cheat, e o HDR do Prisma precisa entrar no jogo. Escolha Auto HDR ou RTX HDR.", 13.0, WARN, Weight::Regular);
-            y += PRISMA_H;
-            continue;
-        }
-        let how = if steam.is_some() {
-            "Jogo da Steam: cole a linha abaixo em Propriedades > Opções de inicialização. Depois é só abrir pela Steam."
+            // Marcado, a caixa fica no lugar da explicação de como abrir.
+            let at = if g.ac_off {
+                p.y
+            } else {
+                ui.c.text_wrap(rect(p.x, p.y, p.w, 40.0), "Bloqueado: este jogo tem anti-cheat, e o HDR do Prisma precisa entrar no jogo. Escolha Auto HDR ou RTX HDR, ou marque abaixo se você abre o jogo sem o anti-cheat.", 13.0, WARN, Weight::Regular);
+                p.y + 44.0
+            };
+            let mut off = g.ac_off;
+            if ui.check(&format!("hdr-ac{i}"), rect(p.x, at, p.w, 36.0), "Abro sem o anti-cheat (offline, mods); com ele rodando, o Prisma não entra", &mut off) {
+                ac = Some((i, off));
+            }
+            if !g.ac_off {
+                y += PRISMA_H;
+                continue;
+            }
         } else {
-            "Abra o jogo pelo botão Abrir com HDR, ou use a linha abaixo nas opções de inicialização do launcher."
-        };
-        ui.c.text_wrap(rect(p.x, p.y, p.w, 36.0), how, 13.0, TEXT2, Weight::Regular);
+            let how = if steam.is_some() {
+                "Jogo da Steam: cole a linha abaixo em Propriedades > Opções de inicialização. Depois é só abrir pela Steam."
+            } else {
+                "Abra o jogo pelo botão Abrir com HDR, ou use a linha abaixo nas opções de inicialização do launcher."
+            };
+            ui.c.text_wrap(rect(p.x, p.y, p.w, 36.0), how, 13.0, TEXT2, Weight::Regular);
+        }
         let line = autohdr::launch_option();
         ui.c.text(rect(p.x, p.y + 40.0, p.w - 290.0, 32.0), &line, 12.0, MUTED, Align::Left, Weight::Regular);
         if ui.button(&format!("hdr-gc{i}"), rect(p.right() - 280.0, p.y + 38.0, 120.0, 34.0), "Copiar linha", false) {
@@ -580,6 +595,10 @@ fn games_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen) {
     }
     if let Some((i, n)) = mark {
         app.cfg.hdr_games[i].native = n;
+        app.cfg.save();
+    }
+    if let Some((i, off)) = ac {
+        app.cfg.hdr_games[i].ac_off = off;
         app.cfg.save();
     }
     if hotkey_changed {

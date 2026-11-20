@@ -952,7 +952,8 @@ unsafe extern "system" fn present(queue: vk::Queue, info: *const vk::PresentInfo
             match c.draw(queue, idx, &waits, pr, s) {
                 Ok(ms) => {
                     waits = vec![c.r.sems[idx]];
-                    hdr::report(s, ms, split, c.mode);
+                    // O Vulkan sempre diz o espaço de cor da cadeia.
+                    hdr::report(s, ms, split, c.mode, false);
                 }
                 Err(e) => note(e),
             }
