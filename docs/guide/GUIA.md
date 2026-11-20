@@ -61,7 +61,7 @@ Fica no alto da tela e mostra o FPS, a linha de frame time, a latência, CPU, GP
 
 Em **A mais na barra compacta**, na aba Medidor, você acrescenta RAM, temperatura da CPU, temperatura da GPU e o plano de energia. As temperaturas aparecem ao lado do uso de cada uma.
 
-Com um jogo da lista em foco, a barra mostra o modo do limitador: **Sem limite**, **Auto** com o limite (ou **Auto: medindo** nos primeiros 5 minutos) ou **Manual** com o limite. Ele fica aceso quando o limite está agindo, pela injeção ou pelo driver, e apagado quando não está.
+Com um jogo da lista em foco, a barra mostra o modo do limitador: **Sem limite**, **Auto** com o limite (ou **Auto: medindo** nos primeiros 5 minutos) ou **Manual** com o limite. Ele fica aceso quando o limite está agindo, pela injeção ou pelo driver, e apagado quando não está. Com um shader do Prisma na tela (Por cima ou Injeção), aparece o aviso **Shader**; com o HDR do Prisma agindo no jogo, inclusive melhorando o HDR que o jogo já tem, aparece **HDR do Prisma**. Sem números: o custo de cada um fica no painel completo.
 
 ![Barra compacta do medidor](meter-compact-pt.png)
 
@@ -79,8 +79,9 @@ Fica à direita ou à esquerda da tela e mostra tudo em uma coluna. Atalho: Ctrl
 - **Upscaling, geração de quadros e Reflex:** mostra o que foi carregado pelo jogo.
 - **Temperatura da CPU:** aparece abaixo da CPU. O Windows não entrega essa leitura sozinho, então ela precisa do PawnIO, um driver gratuito, aberto e assinado pela Microsoft, o mesmo tipo de driver que o Steam usa. Na aba Medidor, **Instalar PawnIO** baixa o instalador oficial, confere a assinatura e abre ele para você aceitar. Para tirar depois, use Aplicativos instalados do Windows. Sem ele, a linha diz Precisa do PawnIO.
 - **Plano de energia:** mostra o plano do Windows em uso. Com os controles abertos, clique nele (ou aperte Enter) para abrir a lista e escolher outro; as setas trocam pelo vizinho.
+- **Shader e HDR do Prisma:** com um jogo aberto, **Menu do shader** abre o menu de shader dentro do jogo (sem perfil, ele cria um, como Ctrl + Alt + M) e **Menu do HDR** abre o menu do HDR do Prisma dentro do jogo, como Ctrl + Alt + I (com o jogo sem o HDR do Prisma, abre a página HDR, onde ele se liga). Com as setas do teclado (depois de Ctrl + Alt + 5), a seta para a esquerda abre o do shader e a para a direita, o do HDR. Com um shader ou o HDR do Prisma na tela, cada um ganha uma linha com o perfil, o tempo de GPU em ms e a parte da GPU, por exemplo **Shader · jogo-crt: 1,20 ms · 7,5% da GPU**.
 
-Para usar os botões do painel dentro do jogo, aperte **Ctrl + Alt + 5**. O jogo continua em primeiro plano, e isso libera o mouse e o teclado: as setas andam pelas opções e mudam a escolhida, e o clique também funciona. Para escrever o limite, digite o número e aperte Enter. Aperte o atalho de novo, ou Esc, para voltar ao jogo. Ctrl + Alt + 0 esconde o medidor e zera as medições.
+Os botões do painel funcionam direto: com o cursor em cima do painel, o clique vai para ele, e fora dele o mouse e o teclado continuam com o jogo, que segue em primeiro plano. Para usar o teclado no painel, aperte **Ctrl + Alt + 5**, que libera também o teclado: as setas andam pelas opções e mudam a escolhida, e o clique também funciona. Para escrever o limite, digite o número e aperte Enter; clicar no número do limite também libera o teclado. Aperte o atalho de novo, ou Esc, para voltar ao jogo. Para o jeito antigo, em que o painel só aceita o mouse depois do atalho, ligue **Mexer no medidor completo só depois do atalho Controles no medidor** na aba Medidor. Ctrl + Alt + 0 esconde o medidor e zera as medições.
 
 ### Limitador de FPS
 

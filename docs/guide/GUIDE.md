@@ -61,7 +61,7 @@ Sits at the top of the screen and shows FPS, the frame time line, latency, CPU, 
 
 In **Extra in the compact bar**, on the Meter page, you add RAM, CPU temperature, GPU temperature and the power plan. Each temperature sits next to its usage.
 
-With a listed game in focus, the bar shows the limiter mode: **No limit**, **Auto** with the limit (or **Auto: measuring** in the first 5 minutes) or **Manual** with the limit. It lights up when the limit is acting, by injection or by the driver, and stays dim when it is not.
+With a listed game in focus, the bar shows the limiter mode: **No limit**, **Auto** with the limit (or **Auto: measuring** in the first 5 minutes) or **Manual** with the limit. It lights up when the limit is acting, by injection or by the driver, and stays dim when it is not. With a Prisma shader on screen (Overlay or Injection), the **Shader** badge shows; with Prisma HDR acting on the game, including when it improves the game's own HDR, **Prisma HDR** shows. No numbers: the cost of each is in the full panel.
 
 ![Compact meter bar](meter-compact-en.png)
 
@@ -79,8 +79,9 @@ Sits on the right or left of the screen and shows everything in one column. Shor
 - **Upscaling, frame generation and Reflex:** shows what the game loaded.
 - **CPU temperature:** appears below the CPU. Windows does not give this reading by itself, so it needs PawnIO, a free, open driver signed by Microsoft, the same kind of driver Steam uses. On the Meter page, **Install PawnIO** downloads the official installer, checks its signature and opens it for you to accept. To remove it later, use Windows Installed apps. Without it, the line says Needs PawnIO.
 - **Power plan:** shows the Windows plan in use. With the controls open, click it (or press Enter) to open the list and pick another; the arrows switch to the next one.
+- **Prisma shader and HDR:** with a game open, **Shader menu** opens the in-game shader menu (with no profile it creates one, like Ctrl + Alt + M) and **HDR menu** opens the in-game Prisma HDR menu, like Ctrl + Alt + I (if the game is not running with Prisma HDR, it opens the HDR page, where you turn it on). With the arrow keys (after Ctrl + Alt + 5), left opens the shader one and right the HDR one. With a shader or Prisma HDR on screen, each gets a line with the profile, the GPU time in ms and the share of the GPU, for example **Shader · game-crt: 1.20 ms · 7.5% of GPU**.
 
-To use the panel buttons inside a game, press **Ctrl + Alt + 5**. The game stays in front, and this unlocks the mouse and keyboard: arrows move through the options and change the chosen one, and clicks work too. To write the limit, type the number and press Enter. Press the shortcut again, or Esc, to go back to the game. Ctrl + Alt + 0 hides the meter and resets the readings.
+The panel buttons work right away: with the cursor over the panel, clicks go to it, and outside it the mouse and keyboard stay with the game, which stays in front. To use the keyboard in the panel, press **Ctrl + Alt + 5**, which unlocks the keyboard too: arrows move through the options and change the chosen one, and clicks work too. To write the limit, type the number and press Enter; clicking the limit number unlocks the keyboard too. Press the shortcut again, or Esc, to go back to the game. For the old way, where the panel takes the mouse only after the shortcut, turn on **Use the full meter only after the Controls in the meter shortcut** in the Meter page. Ctrl + Alt + 0 hides the meter and resets the readings.
 
 ### FPS limiter
 

@@ -2951,8 +2951,18 @@ Filtro de upscale: baixe os filtros na página Fullscreenizer	放大滤镜：请
 Ajustar: abre o perfil de shader deste jogo na página Shaders, com valores só dele. Aparece depois que o filtro de upscale entrou no jogo.	调整：在 Shaders 页面打开此游戏的着色器配置，其中的值仅属于该游戏。放大滤镜应用到游戏后才会出现。
 Este jogo já tem perfil de shader: o filtro de upscale fica com ele	此游戏已有 shader 配置：放大滤镜由它负责
 Filtro de upscale: não deu para gravar o perfil	放大滤镜：无法保存配置
-HDR do jogo	游戏 HDR
+{} ms	{} 毫秒
+Shader e HDR do Prisma	Prisma 的 Shader 和 HDR
+Menu do shader	Shader 菜单
+Menu do HDR	HDR 菜单
+sem medida	未测量
+{} ms · {}% da GPU	{} 毫秒 · 占 GPU {}%
+Shader · {}	Shader · {}
+HDR · {}	HDR · {}
 HDR do Prisma	Prisma HDR
+Clique para mudar. Teclado: {}	点击可更改。键盘：{}
+Mexer no medidor completo só depois do atalho Controles no medidor	完整面板需先按快捷键“监视中的控制”后才能操作
+HDR do jogo	游戏 HDR
 Auto HDR 10 bits	自动 HDR 10 位
 Auto 10 bits	自动 10 位
 Um HDR por jogo. Vale a partir da próxima vez que o jogo abrir.	每个游戏单独设置 HDR。下次打开游戏时生效。

@@ -197,6 +197,10 @@ fn limiter(ui: &mut Ui, app: &mut App, r: Rect) {
         hk |= ui.hotkey(key, rect(kx, r.y + 82.0, w, 36.0), target);
     }
     ui.label(rect(r.x + 16.0, r.y + 126.0, r.w - 32.0, 18.0), "A injeção muda o limite na hora. Se falhar ou houver anti-cheat, ele vai para o driver e vale ao reabrir o jogo.", MUTED);
+    // Padrão: o completo aceita o mouse com o cursor em cima dele, e o jogo segue com o controle.
+    if ui.check("mt-needkey", rect(r.x + 16.0, r.y + 150.0, r.w - 32.0, 32.0), "Mexer no medidor completo só depois do atalho Controles no medidor", &mut app.cfg.meter_need_key) {
+        app.cfg.save();
+    }
     if hk {
         app.cfg.save();
         app.register_hotkeys();
@@ -479,7 +483,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let w = a.w - 56.0;
     let top = 88.0;
     let view = rect(x, top, w, a.h - top - 20.0);
-    let (h1, h2, hl, hr) = (272.0, 330.0, 154.0, 172.0);
+    let (h1, h2, hl, hr) = (272.0, 330.0, 192.0, 172.0);
     let n = shown(app).len();
     let note = if app.cfg.meter_games.len() > n || SHOW_IDLE.load(std::sync::atomic::Ordering::Relaxed) { 34.0 } else { 0.0 };
     let h3 = 88.0 + note + n.max(1) as f32 * if is_narrow(w) { ROW_NARROW } else { ROW };

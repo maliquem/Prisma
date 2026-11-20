@@ -2951,8 +2951,18 @@ Filtro de upscale: baixe os filtros na página Fullscreenizer	Фильтр ап�
 Ajustar: abre o perfil de shader deste jogo na página Shaders, com valores só dele. Aparece depois que o filtro de upscale entrou no jogo.	Настроить: открывает шейдерный профиль этой игры на странице «Shaders» только с её значениями. Появляется после того, как фильтр апскейла подключён к игре.
 Este jogo já tem perfil de shader: o filtro de upscale fica com ele	У этой игры уже есть профиль shader: фильтр апскейла остаётся за ним
 Filtro de upscale: não deu para gravar o perfil	Фильтр апскейла: не удалось сохранить профиль
-HDR do jogo	HDR игры
+{} ms	{} мс
+Shader e HDR do Prisma	Shader и HDR Prisma
+Menu do shader	Меню shader
+Menu do HDR	Меню HDR
+sem medida	нет замера
+{} ms · {}% da GPU	{} мс · {}% GPU
+Shader · {}	Shader · {}
+HDR · {}	HDR · {}
 HDR do Prisma	HDR Prisma
+Clique para mudar. Teclado: {}	Нажмите, чтобы изменить. Клавиатура: {}
+Mexer no medidor completo só depois do atalho Controles no medidor	Полным счётчиком можно пользоваться только после сочетания «Управление в счётчике»
+HDR do jogo	HDR игры
 Auto HDR 10 bits	Auto HDR 10 бит
 Auto 10 bits	Auto 10 бит
 Um HDR por jogo. Vale a partir da próxima vez que o jogo abrir.	Свой HDR для каждой игры. Применится при следующем запуске игры.

@@ -2957,8 +2957,18 @@ Filtro de upscale: baixe os filtros na página Fullscreenizer	Upscale filter: do
 Ajustar: abre o perfil de shader deste jogo na página Shaders, com valores só dele. Aparece depois que o filtro de upscale entrou no jogo.	Tune: opens this game's shader profile on the Shaders page, with values just for it. Appears once the upscale filter has been applied to the game.
 Este jogo já tem perfil de shader: o filtro de upscale fica com ele	This game already has a shader profile: the upscale filter stays with it
 Filtro de upscale: não deu para gravar o perfil	Upscale filter: could not save the profile
-HDR do jogo	Game HDR
+Shader e HDR do Prisma	Prisma shader and HDR
+Menu do shader	Shader menu
+Menu do HDR	HDR menu
+sem medida	not measured
+{} ms · {}% da GPU	{} ms · {}% of GPU
+Shader · {}	Shader · {}
+HDR · {}	HDR · {}
 HDR do Prisma	Prisma HDR
+Clique para mudar. Teclado: {}	Click to change. Keyboard: {}
+Mexer no medidor completo só depois do atalho Controles no medidor	Use the full meter only after the Controls in the meter shortcut
+{} ms	{} ms
+HDR do jogo	Game HDR
 Auto HDR 10 bits	Auto HDR 10-bit
 Auto 10 bits	Auto 10-bit
 Um HDR por jogo. Vale a partir da próxima vez que o jogo abrir.	One HDR per game. Applies the next time the game opens.

@@ -51,7 +51,7 @@ struct Shared {
     hdr_ui: AtomicU32,
     hdr_split: AtomicU32,
     hdr_native: AtomicU32,
-    pad2: u32,
+    hdr_gpu_us: AtomicU32,
     hdr_split_frames: AtomicU64,
 }
 
@@ -385,6 +385,15 @@ impl HdrLive {
 
     pub fn set(&self, h: &Hdr) {
         write_hdr(self.shared(), h);
+    }
+
+    /// Tempo de GPU do passe do HDR em ms (média), com ele agindo no jogo: curva ligada e uma cadeia com proxy
+    /// medida, inclusive quando o jogo já sai em HDR e o Prisma reajusta. O gancho zera o tempo quando a última
+    /// cadeia com proxy sai; os primeiros quadros, ainda sem medida, também ficam de fora.
+    pub fn gpu_ms(&self) -> Option<f64> {
+        let s = self.shared();
+        let us = s.hdr_gpu_us.load(Relaxed);
+        (s.hdr_on.load(Relaxed) != 0 && us > 0).then(|| us as f64 / 1000.0)
     }
 }
 

@@ -153,6 +153,8 @@ const TYPE_LIMIT: usize = 2;
 
 /// Controles abertos: só aí o medidor recebe mouse e teclado.
 static CONTROLS: AtomicBool = AtomicBool::new(false);
+/// Interação direta: o completo recebe o mouse sem o atalho, só com o cursor em cima dele; o teclado fica com o jogo.
+static MOUSE: AtomicBool = AtomicBool::new(false);
 /// Janela do completo, para o gancho do teclado mandar as teclas.
 static FULL_HWND: AtomicIsize = AtomicIsize::new(0);
 /// Tecla que o gancho pegou, entregue ao painel.
@@ -265,27 +267,42 @@ pub enum Row {
     Method,
     Preset,
     Power,
+    /// Botões que abrem um menu no jogo: `OPEN_SHADER` e, depois dele, o do HDR.
+    Open,
 }
+
+pub const OPEN_SHADER: usize = 0;
+
+/// De winuser.h: no crate windows ele só vem com a feature Win32_UI_Controls.
+const WM_MOUSELEAVE: u32 = 0x02A3;
 
 unsafe extern "system" fn meter_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT {
     let open = CONTROLS.load(Relaxed);
+    let mouse = open || (MOUSE.load(Relaxed) && h.0 as isize == FULL_HWND.load(Relaxed));
     let point = || {
         let scale = GetDpiForWindow(h) as f32 / 96.0;
         ((l.0 & 0xffff) as i16 as f32 / scale, ((l.0 >> 16) & 0xffff) as i16 as f32 / scale)
     };
     match m {
-        WM_NCHITTEST => LRESULT(if open { HTCLIENT as isize } else { HTTRANSPARENT as isize }),
+        WM_NCHITTEST => LRESULT(if mouse { HTCLIENT as isize } else { HTTRANSPARENT as isize }),
         WM_MOUSEACTIVATE => LRESULT(MA_NOACTIVATE as isize),
         WM_METER_KEY if open => {
             crate::app::with(|a| a.meter_input(Input::Key(w.0 as u32)));
             LRESULT(0)
         }
-        WM_MOUSEMOVE if open => {
+        WM_MOUSEMOVE if mouse => {
+            // Avisa quando o cursor sai, para o destaque do botão não ficar aceso.
+            let mut t = TRACKMOUSEEVENT { cbSize: std::mem::size_of::<TRACKMOUSEEVENT>() as u32, dwFlags: TME_LEAVE, hwndTrack: h, dwHoverTime: 0 };
+            let _ = TrackMouseEvent(&mut t);
             let (x, y) = point();
             crate::app::with(|a| a.meter_input(Input::Move(x, y)));
             LRESULT(0)
         }
-        WM_LBUTTONUP if open => {
+        WM_MOUSELEAVE if mouse => {
+            crate::app::with(|a| a.meter_input(Input::Move(-1.0, -1.0)));
+            LRESULT(0)
+        }
+        WM_LBUTTONUP if mouse => {
             let (x, y) = point();
             crate::app::with(|a| a.meter_input(Input::Click(x, y)));
             LRESULT(0)
@@ -488,9 +505,11 @@ pub fn write_preset(g: &MeterGame) -> bool {
 impl Meter {
     pub fn new() -> Self {
         register(w!("PrismaMeter"), meter_proc);
+        let full = surface();
+        FULL_HWND.store(full.hwnd.0 as isize, Relaxed);
         Self {
             compact: surface(),
-            full: surface(),
+            full,
             tracker: None,
             view: VIEW_OFF,
             hidden: false,
@@ -528,7 +547,8 @@ impl Meter {
         }
     }
 
-    fn hide_all(&self) {
+    fn hide_all(&mut self) {
+        self.set_mouse(false);
         unsafe {
             let _ = ShowWindow(self.compact.hwnd, SW_HIDE);
             let _ = ShowWindow(self.full.hwnd, SW_HIDE);
@@ -686,25 +706,45 @@ impl Meter {
         }
         CONTROLS.store(on, Relaxed);
         self.typing = None;
-        let h = self.full.hwnd;
-        FULL_HWND.store(h.0 as isize, Relaxed);
+        self.clickable(on || MOUSE.load(Relaxed));
         unsafe {
-            let ex = GetWindowLongPtrW(h, GWL_EXSTYLE);
             if on {
                 self.back = GetForegroundWindow();
                 self.row = 0;
-                SetWindowLongPtrW(h, GWL_EXSTYLE, ex & !(WS_EX_TRANSPARENT.0 as isize));
                 let mut hook = HOOK.lock().unwrap();
                 if hook.is_none() {
                     *hook = SetWindowsHookExW(WH_KEYBOARD_LL, Some(controls_hook), None, 0).ok().map(|h| h.0 as isize);
                 }
             } else {
                 self.hover = None;
-                SetWindowLongPtrW(h, GWL_EXSTYLE, ex | WS_EX_TRANSPARENT.0 as isize);
                 if let Some(hk) = HOOK.lock().unwrap().take() {
                     let _ = UnhookWindowsHookEx(HHOOK(hk as *mut _));
                 }
             }
+        }
+    }
+
+    /// O completo recebe o mouse (sem `WS_EX_TRANSPARENT`) ou deixa ele passar para o jogo.
+    fn clickable(&self, on: bool) {
+        let h = self.full.hwnd;
+        unsafe {
+            let ex = GetWindowLongPtrW(h, GWL_EXSTYLE);
+            let t = WS_EX_TRANSPARENT.0 as isize;
+            SetWindowLongPtrW(h, GWL_EXSTYLE, if on { ex & !t } else { ex | t });
+        }
+    }
+
+    /// Interação direta com o completo (o padrão; `meter_need_key` volta ao jeito do atalho).
+    fn set_mouse(&mut self, on: bool) {
+        if MOUSE.swap(on, Relaxed) == on {
+            return;
+        }
+        if !on {
+            self.hover = None;
+            self.plans_open = false;
+        }
+        if !self.interacting() {
+            self.clickable(on);
         }
     }
 
@@ -718,6 +758,10 @@ impl Meter {
                 self.typing = None;
                 let hit = at(&self.hits, x, y);
                 if hit == Some((Row::Fps, TYPE_LIMIT)) {
+                    // No clique direto o teclado é do jogo: digitar abre os controles, que pegam as teclas.
+                    if !self.interacting() {
+                        self.set_controls(true);
+                    }
                     self.start_typing();
                     return None;
                 }
@@ -784,7 +828,8 @@ impl Meter {
             LEFT | RIGHT => {
                 let row = *self.rows.get(self.row)?;
                 let forward = key == RIGHT;
-                if row == Row::Fps {
+                // Nos botões dos menus, cada seta abre o do seu lado.
+                if row == Row::Fps || row == Row::Open {
                     return Some((row, forward as usize));
                 }
                 if row == Row::Power {
@@ -848,7 +893,7 @@ impl Meter {
                 self.session.inject_note = (option == 0 && protected).then_some("Injeção bloqueada: anti-cheat detectado.");
             }
             Row::Preset => g.preset = option as u8,
-            Row::Fps | Row::Power => {}
+            Row::Fps | Row::Power | Row::Open => {}
         }
         self.limit_write = Some((g.exe.clone(), Instant::now()));
     }
@@ -1214,12 +1259,14 @@ impl Meter {
         }
         match self.view {
             VIEW_COMPACT => {
+                self.set_mouse(false);
                 self.draw_compact(cfg, snap);
                 unsafe {
                     let _ = ShowWindow(self.full.hwnd, SW_HIDE);
                 }
             }
             VIEW_FULL => {
+                self.set_mouse(!cfg.meter_need_key);
                 self.draw_full(cfg, snap, hdr_light);
                 unsafe {
                     let _ = ShowWindow(self.compact.hwnd, SW_HIDE);
@@ -1248,6 +1295,9 @@ impl Meter {
             _ => (format!("{} {}", crate::i18n::tr("Manual"), g.limit_fps), engaged),
         });
         let lim_w = lim.as_ref().map_or(0.0, |l| measure(&l.0, 12.0, Weight::Semibold, None).0 + 30.0 + 12.0);
+        // Só um aviso por efeito do Prisma na tela, sem números: o custo fica no completo.
+        let fx: Vec<&str> = self.effects().iter().map(|e| if e.0 == "HDR" { "HDR do Prisma" } else { "Shader" }).collect();
+        let fx_w: f32 = fx.iter().map(|t| measure(t, 12.0, Weight::Semibold, None).0 + 20.0 + 6.0).sum();
         // Itens a mais: a temperatura vai junto do uso, a RAM e o plano depois da VRAM.
         let extra = cfg.meter_compact;
         let temp = |on: bool, t: Option<f32>| on.then(|| t.map_or("— °C".to_string(), |v| format!("{v:.0} °C")));
@@ -1263,7 +1313,7 @@ impl Meter {
         let ram_w = ram.as_ref().map_or(0.0, |(u, t)| 24.0 + measure("RAM", 12.0, Weight::Regular, None).0 + value_w(u) + measure(t, 12.0, Weight::Regular, None).0 + 10.0);
         let plan = (extra & COMPACT_POWER != 0).then(|| self.plans.iter().find(|p| p.0.eq_ignore_ascii_case(&self.plan_active)).map_or("—".to_string(), |p| p.1.clone()));
         let plan_w = plan.as_ref().map_or(0.0, |p| 24.0 + measure(p, 12.0, Weight::Semibold, None).0 + 4.0);
-        let grow = lim_w + (cpu_adv - 70.0) + (gpu_adv - 70.0) + ram_w + plan_w;
+        let grow = lim_w + fx_w + (cpu_adv - 70.0) + (gpu_adv - 70.0) + ram_w + plan_w;
         let w = if tag.is_some() { COMPACT_W + 104.0 } else { COMPACT_W } + rec_w + grow;
         let x = match cfg.meter_pos_compact {
             0 => mon.left + (EDGE * scale) as i32,
@@ -1307,6 +1357,14 @@ impl Meter {
                 c.circle(chip.x + 11.0, chip.y + 11.0, 3.5, if *on { ACCENT } else { TEXT2 });
                 c.text_raw(rect(chip.x + 20.0, chip.y, cw - 26.0, chip.h), text, 12.0, if *on { ACCENT } else { TEXT2 }, Align::Left, Weight::Semibold);
                 x += lim_w;
+            }
+            for t in &fx {
+                let cw = measure(t, 12.0, Weight::Semibold, None).0 + 20.0;
+                let chip = rect(x - 4.0, 9.0, cw, 22.0);
+                c.round(chip, 11.0, ACCENT.alpha(0.18));
+                c.round_line(chip, 11.0, ACCENT, 1.0);
+                c.text(chip, t, 12.0, ACCENT, Align::Center, Weight::Semibold);
+                x += cw + 6.0;
             }
             c.line(x, 10.0, x, 30.0, rgb(0x3a3f49), 1.0);
             x += 12.0;
@@ -1379,6 +1437,18 @@ impl Meter {
         }
         let l = self.log.as_ref()?;
         Some(l.limit.map_or(clock(l.seen), |v| format!("{} / {}", clock(l.seen), clock(v))))
+    }
+
+    /// Efeitos do Prisma na tela do jogo: (tipo, perfil, ms de GPU, ms do quadro; 0 usa o do medidor), lidos de
+    /// quem desenha. Os ajustes do HDR são por jogo: o perfil dele leva o nome do jogo.
+    fn effects(&self) -> Vec<(&'static str, String, f64, f64)> {
+        let pid = self.session.pid;
+        if pid == 0 {
+            return Vec::new();
+        }
+        let shader = crate::shader::cost::read(pid).map(|(n, ms, f)| ("Shader", n, ms, f));
+        let hdr = crate::sys::inject::HdrLive::connect(pid).and_then(|l| l.gpu_ms()).map(|ms| ("HDR", crate::pages::app_name(&self.session.exe).to_string(), ms, 0.0));
+        shader.into_iter().chain(hdr).collect()
     }
 
     fn limit_tag(&self, cfg: &Config) -> Option<String> {
@@ -1469,6 +1539,8 @@ impl Meter {
                 "Enter aplica. Esc cancela.".to_string()
             } else if open {
                 "Setas, mouse ou números. Esc fecha.".to_string()
+            } else if MOUSE.load(Relaxed) {
+                format!("Clique para mudar. Teclado: {}", cfg.hk_meter_keys.label())
             } else {
                 format!("Controles: {}", cfg.hk_meter_keys.label())
             };
@@ -1514,10 +1586,24 @@ impl Meter {
                 _ => out.push(Line::Pair("Tela".into(), "HDR desligado".into(), TEXT)),
             }
         }
+        if playing {
+            // Shader e HDR do Prisma: botões dos menus no jogo e o custo de cada efeito ligado.
+            out.push(Line::Head("Shader e HDR do Prisma".into()));
+            out.push(Line::Buttons(vec!["Menu do shader".into(), "Menu do HDR".into()], Row::Open));
+            for (kind, name, ms, frame) in self.effects() {
+                let frame = if frame > 0.0 { frame } else { s.ms as f64 };
+                let cost = match (ms > 0.0, prisma_shader::gpu_share(ms, frame)) {
+                    (false, _) => "sem medida".to_string(),
+                    (true, Some(pct)) => format!("{} ms · {}% da GPU", num(ms as f32, 2), num(pct as f32, 1)),
+                    (true, None) => format!("{} ms", num(ms as f32, 2)),
+                };
+                out.push(Line::Pair(format!("{kind} · {name}"), cost, TEXT));
+            }
+        }
         if on(ITEM_POWER) || open {
             let at = self.plans.iter().position(|p| p.0.eq_ignore_ascii_case(&self.plan_active));
             let name = at.map_or("—".to_string(), |i| self.plans[i].1.clone());
-            let list = if self.plans_open && open { self.plans.iter().map(|p| p.1.clone()).collect() } else { Vec::new() };
+            let list = if self.plans_open && (open || MOUSE.load(Relaxed)) { self.plans.iter().map(|p| p.1.clone()).collect() } else { Vec::new() };
             out.push(Line::Drop("Plano de energia".into(), Row::Power, name, list, at));
         }
         if on(ITEM_LOG) || self.log.is_some() {
@@ -1651,6 +1737,8 @@ enum Line {
     Usage(&'static str, f32),
     /// O registro de dados está gravando, com o tempo.
     Rec(String),
+    /// Botões lado a lado, sem estado: o clique devolve a linha e a posição.
+    Buttons(Vec<String>, Row),
 }
 
 impl Line {
@@ -1670,12 +1758,13 @@ impl Line {
             Line::Stepper(..) => 36.0,
             Line::Usage(..) => 48.0,
             Line::Rec(_) => 34.0,
+            Line::Buttons(..) => 34.0,
         }
     }
 
     fn row(&self) -> Option<Row> {
         match self {
-            Line::Choice(_, row, ..) | Line::Stepper(_, row, ..) | Line::Drop(_, row, ..) => Some(*row),
+            Line::Choice(_, row, ..) | Line::Stepper(_, row, ..) | Line::Drop(_, row, ..) | Line::Buttons(_, row) => Some(*row),
             _ => None,
         }
     }
@@ -1690,7 +1779,8 @@ impl Line {
     /// Botões da linha. Cada um guarda onde está, para o clique achar a opção.
     fn controls(&self, c: &Canvas, x: f32, y: f32, w: f32, focus: Option<Row>, hover: Option<(Row, usize)>, hits: &mut Vec<(Rect, Row, usize)>) {
         let chip = |c: &Canvas, r: Rect, text: &str, on: bool, row: Row, i: usize, hits: &mut Vec<(Rect, Row, usize)>| {
-            let hot = hover == Some((row, i));
+            // Os botões dos menus não têm rótulo: a linha em foco acende os dois.
+            let hot = hover == Some((row, i)) || (row == Row::Open && focus == Some(row));
             c.round(r, 6.0, if on { ACCENT } else if hot { CARD2 } else { rgb(0x1b1d22) });
             if !on {
                 c.round_line(r, 6.0, rgb(0x5a6170), 1.0);
@@ -1699,6 +1789,12 @@ impl Line {
             hits.push((r, row, i));
         };
         match self {
+            Line::Buttons(names, row) => {
+                let bw = (w - 4.0 * (names.len() - 1) as f32) / names.len() as f32;
+                for (i, n) in names.iter().enumerate() {
+                    chip(c, rect(x + i as f32 * (bw + 4.0), y + 2.0, bw, 26.0), n, false, *row, i, hits);
+                }
+            }
             Line::Choice(name, row, options, selected) => {
                 c.text(rect(x, y, w, 20.0), name, 12.0, if focus == Some(*row) { ACCENT } else { TEXT2 }, Align::Left, Weight::Regular);
                 let sizes: Vec<f32> = options.iter().map(|o| measure(o, 12.0, Weight::Semibold, None).0 + 16.0).collect();
@@ -1799,7 +1895,7 @@ impl Line {
                     c.round(rect(bx, y + 38.0 - h, bw, h), 2.0, if *v >= 90.0 { WARN } else { ACCENT });
                 }
             }
-            Line::Choice(..) | Line::Stepper(..) | Line::Drop(..) => {}
+            Line::Choice(..) | Line::Stepper(..) | Line::Drop(..) | Line::Buttons(..) => {}
             Line::Usage(name, pct) => {
                 c.line(x, y + 6.0, x + w, y + 6.0, rgb(0x3a3f49), 1.0);
                 c.text(rect(x, y + 10.0, w * 0.5, 36.0), name, 30.0, WHITE, Align::Left, Weight::Semibold);

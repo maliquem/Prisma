@@ -5,6 +5,7 @@
 //! - `prisma.exe --shader-preview=<perfil.txt>,<scene|bars|imagem>`: a mesma cadeia numa janela de prévia.
 //! O formato do perfil e de `teclas.txt` mora em `shader_profile.rs`.
 
+pub mod cost;
 pub mod files;
 mod inject;
 mod menu;
@@ -264,6 +265,7 @@ fn run(path: &Path) -> Res<()> {
     }
     hold_keys(&keys);
     let mut menu = menu::Menu::new();
+    let mut cost = cost::CostMap::create(crate::sys::procs::window_pid(game));
 
     let mut timer = GpuTimer::new(&d.dev)?;
     // raw: o recorte da captura; src: a entrada da cadeia (a própria raw sem HDR).
@@ -295,6 +297,10 @@ fn run(path: &Path) -> Res<()> {
                 if record != Some(eng.profile.record) {
                     record = Some(eng.profile.record);
                     let _ = SetWindowDisplayAffinity(overlay, if eng.profile.record { WDA_NONE } else { WDA_EXCLUDEFROMCAPTURE });
+                }
+                // O medidor do app mostra o custo e pode pedir o menu (botão Shader).
+                if cost.as_mut().is_some_and(|c| c.tick(shown, load.0, load.1, &eng.path)) {
+                    menu.toggle();
                 }
             }
             fg = GetForegroundWindow() == game && !IsIconic(game).as_bool();

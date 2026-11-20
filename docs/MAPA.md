@@ -16,7 +16,8 @@ Convenção: `arquivo:linha nome`. "Atalho" é a combinação global (chaves `hk
 | `src/app.rs` | Estado central (`App`) e janelas (`hub_proc`, `main_proc`). Recebe atalhos, bandeja, ações dos controles e pedidos do Launcher. |
 | `src/config.rs` | `config.ini` (`data_dir`, linha 610). Structs `Config`, `Hotkey`, `Profile`, `FsApp`, `SndApp`, `SndKey`, `MeterGame`, `HdrGame`. Leitura em `load`, gravação em `save`. |
 | `src/overlays.rs` | Janelas por cima da tela: Widget, Toast (avisos), Prompt (pergunta), Hud (gravação), Keyboard (teclado do controle), Radial. |
-| `src/meter.rs` | Medidor de FPS, CPU e GPU (janela, limite de FPS, registro). |
+| `src/meter.rs` | Medidor de FPS, CPU e GPU (janela, limite de FPS, registro, custo do shader e do HDR do Prisma). |
+| `src/shader/cost.rs` | `CostMap`: o motor de shader publica perfil, ms de GPU e pedido de menu para o medidor (`read`, `ask_menu`). O HDR do Prisma não passa por aqui: usa `hdr_gpu_us` da memória do gancho. |
 | `src/startup.rs` | Instalação, desinstalação, tarefa de inicialização, elevação (administrador), setup. |
 | `src/optimizer.rs` | Escolha e fechamento de programas da página Otimizar. |
 | `src/link.rs` | Ponte com o Prisma Launcher: `caps`, `wait_of`, `on_link`. |
@@ -258,6 +259,8 @@ A barra lateral é `NAV` (`src/pages/mod.rs:324`), em cinco grupos (`GROUPS` `:3
 | Opções gerais | Página | `pages/meter.rs:57` `general`; `:116` `items`; `:206` `log` | |
 | Driver de medição (PawnIO) | Página | `pages/meter.rs:148` `pawnio_installed`; `:158` `pawnio_row` | |
 | Limite seguro e anti-trapaça | Automático | `meter.rs:324` `safe_cap`; `:404` `anti_cheat`; `:428` `driver_limit`; `:437` `uses_injection`; `:442` `write_limit`; `:446` `write_preset` | |
+| Clique direto no medidor completo | Mouse sobre o painel | `meter::set_mouse` `meter.rs:738` (estático `MOUSE`); `clickable` `meter.rs:728` tira `WS_EX_TRANSPARENT`; `meter_proc` só pega o mouse com o cursor em cima (`WM_MOUSELEAVE` local) | Config `meter_need_key` (`config.rs:344`, check em `pages/meter.rs`): ligado, volta ao jeito antigo, só depois de `HK_METER_KEYS`. |
+| Shader e HDR do Prisma no medidor | Botões **Menu do shader**/**Menu do HDR** (`Line::Buttons` `meter.rs:1741`, `Row::Open`; nos controles, seta esquerda/direita) | `meter_open` `app.rs:2665` (shader: `shader::cost::ask_menu`, senão `menu_focused`; HDR: `hdr_menu_key`, o mesmo do atalho, ou a página HDR sem o HDR do Prisma no jogo); linhas de custo e avisos do compacto por `effects` `meter.rs:1444` | Shader: memória `Local\PrismaShaderCost-<pid>` (`prisma_shader::link::Cost` `link.rs:94`, `cost_name` `:110`), escrita por `src/shader/cost.rs` (`CostMap`) nos dois modos (`shader/mod.rs`, `shader/inject.rs`). HDR: o gancho mede o passe com consultas de tempo do D3D11 (`Timer` `hook/src/hdr.rs:244`) e grava `hdr_gpu_us` (`:556`, zerado quando sai o último proxy); o app lê com `HdrLive::gpu_ms` `sys/inject.rs:393` (curva ligada e tempo medido, inclusive no HDR nativo reajustado). |
 | Detectar DLSS | Automático | `meter.rs:186` `has_dlss` | |
 | Primeiro limite de FPS | Automático | `meter.rs:1782` `first_limit` | |
 | Mostrar e iniciar o Medidor | Automático | `meter::show` `meter.rs:638`; `meter::start` `meter.rs:1036`; `meter::leave` `meter.rs:1133` | |
