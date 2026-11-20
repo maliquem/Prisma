@@ -494,7 +494,7 @@ pub(crate) fn is_srgb(f: DXGI_FORMAT) -> bool {
 }
 
 /// O buffer de uma cadeia aceita vista _SRGB sobre formato UNORM (o Unity faz isso); textura comum só
-/// aceita se nascer sem tipo. Vista sem descrição ganha o formato pedido em `view`.
+/// aceita se nascer sem tipo. A vista sem formato ganha o pedido em `view_desc`.
 pub(crate) fn typeless(f: DXGI_FORMAT) -> DXGI_FORMAT {
     match f {
         DXGI_FORMAT_R8G8B8A8_UNORM | DXGI_FORMAT_R8G8B8A8_UNORM_SRGB => DXGI_FORMAT_R8G8B8A8_TYPELESS,
@@ -503,6 +503,31 @@ pub(crate) fn typeless(f: DXGI_FORMAT) -> DXGI_FORMAT {
         DXGI_FORMAT_R10G10B10A2_UNORM => DXGI_FORMAT_R10G10B10A2_TYPELESS,
         f => f,
     }
+}
+
+/// Formato que, num buffer de cadeia, vale o do buffer: `UNKNOWN` (o Unreal pede assim) ou o sem tipo
+/// que o `GetDesc` do nosso buffer devolve.
+fn untyped(f: DXGI_FORMAT) -> bool {
+    matches!(f, DXGI_FORMAT_UNKNOWN | DXGI_FORMAT_R8G8B8A8_TYPELESS | DXGI_FORMAT_B8G8R8A8_TYPELESS | DXGI_FORMAT_B8G8R8X8_TYPELESS | DXGI_FORMAT_R10G10B10A2_TYPELESS)
+}
+
+/// Descrição de vista sobre um buffer do jogo (`want` acha o proxy dele): sem descrição ou sem formato,
+/// ganha o formato que o jogo pediu; o resto da descrição dele fica. `None`: a do jogo serve como está.
+pub(crate) unsafe fn view_desc<D: Copy>(desc: *const c_void, want: impl FnOnce() -> Option<Want>, make: impl FnOnce(Want) -> D) -> Option<D> {
+    // Toda descrição de vista (D3D11 e D3D12) começa pelo formato.
+    let given = (!desc.is_null()).then(|| *(desc as *const DXGI_FORMAT));
+    if INSIDE.get() || given.is_some_and(|f| !untyped(f)) {
+        return None;
+    }
+    let w = want()?;
+    Some(match given {
+        None => make(w),
+        Some(_) => {
+            let mut d = *(desc as *const D);
+            *(&mut d as *mut D as *mut DXGI_FORMAT) = w.format;
+            d
+        }
+    })
 }
 
 impl Proxy {
@@ -1086,16 +1111,13 @@ unsafe extern "system" fn on_resize1(this: Ptr, count: u32, w: u32, h: u32, form
     resize(this, count, format, flags, |c, f, fl| old(this, c, w, h, f, fl, mask, queues))
 }
 
-/// Vista pedida sem descrição sobre o buffer do jogo: ele nasce sem tipo, então ganha o formato que o
-/// jogo pediu, como aconteceria num buffer de cadeia.
-unsafe fn view<D>(old: &AtomicUsize, this: Ptr, res: Ptr, desc: *const c_void, out: *mut Ptr, make: impl FnOnce(Want) -> D) -> HRESULT {
+/// Vista sobre o buffer do jogo: ele nasce sem tipo, então a vista sem formato ganha o que o jogo pediu,
+/// como aconteceria num buffer de cadeia.
+unsafe fn view<D: Copy>(old: &AtomicUsize, this: Ptr, res: Ptr, desc: *const c_void, out: *mut Ptr, make: impl FnOnce(Want) -> D) -> HRESULT {
     let old: CreateView = std::mem::transmute(old.load(Relaxed));
-    let want = (desc.is_null() && !INSIDE.get()).then(|| proxies().iter().find(|p| p.tex.as_ref().is_some_and(|t| t.as_raw() == res)).map(|p| p.want)).flatten();
-    match want {
-        Some(w) => {
-            let d = make(w);
-            old(this, res, &d as *const D as *const c_void, out)
-        }
+    let want = || proxies().iter().find(|p| p.tex.as_ref().is_some_and(|t| t.as_raw() == res)).map(|p| p.want);
+    match view_desc(desc, want, make) {
+        Some(d) => old(this, res, &d as *const D as *const c_void, out),
         None => old(this, res, desc, out),
     }
 }
@@ -1228,6 +1250,22 @@ mod tests {
         assert_eq!(step(PHASE_NONE, false), (PHASE_NONE, false));
         // Dois passes de tela cheia seguidos: a cena é o último.
         assert_eq!(step(PHASE_SCENE, true), (PHASE_SCENE, true));
+    }
+
+    #[test]
+    fn views_without_format_get_the_game_format() {
+        let w = Want::new(1920, 1080, DXGI_FORMAT_R10G10B10A2_UNORM, 1, 0);
+        let make = |w: Want| D3D11_RENDER_TARGET_VIEW_DESC { Format: w.format, ..Default::default() };
+        let ask = |format| D3D11_RENDER_TARGET_VIEW_DESC { Format: format, ViewDimension: D3D11_RTV_DIMENSION_TEXTURE2DARRAY, ..Default::default() };
+        let run = |d: Option<&D3D11_RENDER_TARGET_VIEW_DESC>| unsafe { view_desc(d.map_or(std::ptr::null(), |d| d as *const _ as *const c_void), || Some(w), make) };
+        // Sem descrição; e como o Unreal faz, formato vazio (ou o sem tipo do `GetDesc`) com o resto mantido.
+        assert_eq!(run(None).map(|d| d.Format), Some(DXGI_FORMAT_R10G10B10A2_UNORM));
+        for f in [DXGI_FORMAT_UNKNOWN, DXGI_FORMAT_R10G10B10A2_TYPELESS] {
+            let d = run(Some(&ask(f))).unwrap();
+            assert_eq!((d.Format, d.ViewDimension), (DXGI_FORMAT_R10G10B10A2_UNORM, D3D11_RTV_DIMENSION_TEXTURE2DARRAY));
+        }
+        // Formato dado pelo jogo fica.
+        assert!(run(Some(&ask(DXGI_FORMAT_R10G10B10A2_UNORM))).is_none());
     }
 
     #[test]
