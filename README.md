@@ -16,6 +16,8 @@ Prisma is one file, `Prisma.exe`. Windows may warn about an unknown publisher th
 
 On the first open, the welcome screen asks if you want to install, give administrator permission, replace Task Manager and replace the Windows copy (Ctrl+V in Explorer folders through the Prisma copy window). The first three come checked, the copy one does not, and Windows asks for permission once. The screen also opens the guide, which explains each feature and what it can and can't do. It appears only once, unless you uncheck **Don't show again**.
 
+A second step lists Prisma's features with what each one does, all on. Uncheck the ones you won't use: they leave the sidebar and stop running in the background. You can change this later in **Settings**, **Features** tab.
+
 - **Portable:** run it from any folder. Settings stay in `PrismaData`, next to the program, and nothing is registered in Windows. With administrator, Windows asks every time it opens.
 - **Installed:** Prisma moves to Program Files, gets a Start menu shortcut and appears in the Windows program list. With administrator, it opens without asking. You can also install later, in **Settings**.
 

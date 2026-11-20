@@ -3067,3 +3067,20 @@ Procurando...	正在查找...
 Nunca conferido	从未检查
 Última conferência: {}	上次检查：{}
 Página Atualizações	“更新”页面
+Gráficos de processador, placa de vídeo, memória, discos e rede.	处理器、显卡、内存、磁盘和网络的图表。
+O que ocupa espaço em cada disco, pasta por pasta.	每个磁盘上什么占用空间，逐个文件夹查看。
+Programas que abrem com o Windows, para ligar ou desligar.	随 Windows 启动的程序，可开启或关闭。
+Serviços do Windows, com o que cada um faz.	Windows 服务，并说明每项的作用。
+Remove programas e as sobras que eles deixam.	卸载程序及其残留文件。
+Cópias com pausa e conferência, e listas para rodar na hora marcada.	带暂停和校验的复制，以及按设定时间运行的列表。
+Avisa quando sai driver da NVIDIA ou atualização do Windows e diz se vale instalar.	NVIDIA 驱动或 Windows 更新发布时提醒你，并告诉你值不值得安装。
+Fecha programas parados antes de jogar. Nada é fechado sem você confirmar.	游戏前关闭闲置程序。未经你确认不会关闭任何程序。
+Troca o plano de energia sozinho entre repouso, carga alta e jogo.	在空闲、高负载和游戏之间自动切换电源计划。
+Ajustes do driver da NVIDIA para cada jogo.	为每个游戏设置 NVIDIA 驱动选项。
+Fotos, gravação da tela e replay dos últimos segundos. Tudo fica no seu PC.	截图、录屏和最近几秒的回放。一切都保存在你的电脑上。
+Filtros do RetroArch por cima de qualquer jogo: CRT, scanlines, nitidez.	在任何游戏上叠加 RetroArch 滤镜：CRT、扫描线、锐化。
+Botões, macros, menu radial e teclado na tela para controles.	为手柄提供按键、宏、轮盘菜单和屏幕键盘。
+Uso, temperatura, plano de energia, HDR e VRR por cima de tudo.	在所有内容上方显示使用率、温度、电源计划、HDR 和 VRR。
+Funções	功能
+Funções do Prisma	Prisma 功能
+Desmarque o que você não vai usar: some da barra lateral e para de rodar. Isso muda depois em Configurações.	取消勾选不会用到的功能：它会从侧边栏消失并停止运行。之后可在“设置”中更改。

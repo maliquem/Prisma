@@ -1,4 +1,5 @@
-//! Boas-vindas: três escolhas marcadas por padrão e a da cópia desmarcada, aplicadas de uma vez só.
+//! Boas-vindas: três escolhas marcadas por padrão e a da cópia desmarcada, aplicadas de uma vez só;
+//! depois, a lista de funções (todas ligadas), que vale na hora.
 
 use super::*;
 use crate::startup::Plan;
@@ -15,11 +16,13 @@ pub struct Choices {
     pub paste: bool,
     /// Não mostrar novamente.
     pub hide: bool,
+    /// Segundo passo: a lista de funções.
+    pub funcs: bool,
 }
 
 impl Choices {
     pub fn new() -> Self {
-        Self { install: true, admin: true, taskmgr: true, paste: false, hide: true }
+        Self { install: true, admin: true, taskmgr: true, paste: false, hide: true, funcs: false }
     }
 }
 
@@ -71,6 +74,9 @@ fn finish(ui: &mut Ui, app: &mut App, c: Choices) {
 
 pub fn draw(ui: &mut Ui, app: &mut App, full: Rect) {
     let Some(mut c) = app.welcome else { return };
+    if c.funcs {
+        return draw_funcs(ui, app, full, c);
+    }
     let w = W.min(full.w - 48.0);
     let x = (full.w - w) / 2.0;
     let total = 574.0;
@@ -115,6 +121,27 @@ pub fn draw(ui: &mut Ui, app: &mut App, full: Rect) {
     app.welcome = Some(c);
     if ui.button("w-guide", guide, "Abrir o guia", false) {
         app.page = Page::Guide;
+        ui.s.needs_redraw = true;
+    }
+    if ui.button("w-next", go, "Continuar", true) {
+        app.welcome = Some(Choices { funcs: true, ..c });
+        ui.s.needs_redraw = true;
+    }
+}
+
+/// Segundo passo: o que fica ligado. Cada marca vale na hora; Continuar aplica o primeiro passo.
+fn draw_funcs(ui: &mut Ui, app: &mut App, full: Rect, c: Choices) {
+    let w = 900f32.min(full.w - 48.0);
+    let x = (full.w - w) / 2.0;
+    let top = 24.0;
+    ui.c.text(rect(x, top, w, 38.0), "Funções do Prisma", 24.0, TEXT, Align::Left, Weight::Semibold);
+    let sub = "Desmarque o que você não vai usar: some da barra lateral e para de rodar. Isso muda depois em Configurações.";
+    ui.c.text_wrap(rect(x, top + 44.0, w, 40.0), sub, 14.0, MUTED, Weight::Regular);
+    let bottom = full.h - 24.0 - 44.0;
+    super::funcs_list(ui, app, rect(x, top + 88.0, w, bottom - 12.0 - (top + 88.0)));
+    let go = rect(x + w - 150.0, bottom, 150.0, 44.0);
+    if ui.button("w-back", rect(go.x - 158.0, bottom, 150.0, 44.0), "Voltar", false) {
+        app.welcome = Some(Choices { funcs: false, ..c });
         ui.s.needs_redraw = true;
     }
     if ui.button("w-go", go, "Continuar", true) {

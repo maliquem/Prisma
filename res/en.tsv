@@ -3073,3 +3073,20 @@ Procurando...	Searching...
 Nunca conferido	Never checked
 Última conferência: {}	Last check: {}
 Página Atualizações	Updates page
+Gráficos de processador, placa de vídeo, memória, discos e rede.	Charts for processor, graphics card, memory, disks and network.
+O que ocupa espaço em cada disco, pasta por pasta.	What takes up space on each disk, folder by folder.
+Programas que abrem com o Windows, para ligar ou desligar.	Programs that start with Windows, to turn on or off.
+Serviços do Windows, com o que cada um faz.	Windows services, with what each one does.
+Remove programas e as sobras que eles deixam.	Removes programs and the leftovers they leave behind.
+Cópias com pausa e conferência, e listas para rodar na hora marcada.	Copies with pause and verification, and lists that run at a set time.
+Avisa quando sai driver da NVIDIA ou atualização do Windows e diz se vale instalar.	Tells you when an NVIDIA driver or Windows update comes out and whether it is worth installing.
+Fecha programas parados antes de jogar. Nada é fechado sem você confirmar.	Closes idle programs before you play. Nothing is closed without your confirmation.
+Troca o plano de energia sozinho entre repouso, carga alta e jogo.	Switches the power plan on its own between idle, heavy load and gaming.
+Ajustes do driver da NVIDIA para cada jogo.	NVIDIA driver settings for each game.
+Fotos, gravação da tela e replay dos últimos segundos. Tudo fica no seu PC.	Screenshots, screen recording and a replay of the last seconds. Everything stays on your PC.
+Filtros do RetroArch por cima de qualquer jogo: CRT, scanlines, nitidez.	RetroArch filters on top of any game: CRT, scanlines, sharpening.
+Botões, macros, menu radial e teclado na tela para controles.	Buttons, macros, radial menu and on-screen keyboard for controllers.
+Uso, temperatura, plano de energia, HDR e VRR por cima de tudo.	Usage, temperature, power plan, HDR and VRR on top of everything.
+Funções	Features
+Funções do Prisma	Prisma features
+Desmarque o que você não vai usar: some da barra lateral e para de rodar. Isso muda depois em Configurações.	Uncheck what you won't use: it leaves the sidebar and stops running. You can change this later in Settings.

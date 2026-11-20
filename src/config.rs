@@ -472,6 +472,8 @@ pub struct Config {
     /// Última versão aberta neste PC. Abrir uma mais nova mostra as novidades desde ela.
     pub seen_version: String,
     pub welcome: bool,
+    /// Funções desligadas, pela posição em `pages::ACTION_PAGES` (não muda). Vazio: todas ligadas.
+    pub funcs_off: Vec<u8>,
     pub always_admin: bool,
     /// Entradas do Prisma no menu do botão direito do Explorer.
     pub explorer_menu: bool,
@@ -627,6 +629,7 @@ impl Default for Config {
             safe_key: String::new(),
             seen_version: String::new(),
             welcome: true,
+            funcs_off: Vec::new(),
             always_admin: false,
             explorer_menu: false,
             un_restore: true,
@@ -662,6 +665,15 @@ pub fn radial_default() -> [u8; crate::sys::radial::ALL] {
 /// Oito, dezesseis ou todas as ações separadas por vírgula (oito: o stick esquerdo fica com o de
 /// fábrica; dezesseis: sem opções de direcional); qualquer valor fora da lista invalida tudo.
 /// `GROUP` só vale nos 16 lugares.
+/// `funcs_off`: números separados por vírgula; o que não for número fica de fora.
+fn parse_funcs(v: &str) -> Vec<u8> {
+    v.split(',').filter_map(|x| x.trim().parse().ok()).collect()
+}
+
+fn funcs_line(off: &[u8]) -> String {
+    off.iter().map(|n| n.to_string()).collect::<Vec<_>>().join(",")
+}
+
 fn parse_radial(v: &str) -> Option<[u8; crate::sys::radial::ALL]> {
     use crate::sys::{radial::{ALL, EMPTY, GROUP, PROFILES, PROGRAM, SLOTS}, remap};
     let list: Vec<u8> = v.split(',').enumerate().map(|(i, x)| x.trim().parse::<u8>().ok().filter(|&a| a == EMPTY || a == PROGRAM || ((a == GROUP || a == PROFILES) && i < SLOTS) || a == remap::MACRO_REC || ((a as usize) < remap::ACTIONS.len() && a != remap::RADIAL))).collect::<Option<_>>()?;
@@ -949,6 +961,7 @@ impl Config {
                 "safe_key" => c.safe_key = v.trim().to_string(),
                 "seen_version" => c.seen_version = v.to_string(),
                 "welcome" => c.welcome = b,
+                "funcs_off" => c.funcs_off = parse_funcs(v),
                 "always_admin" => c.always_admin = b,
                 "explorer_menu" => c.explorer_menu = b,
                 "un_restore" => c.un_restore = b,
@@ -1097,6 +1110,7 @@ impl Config {
         let _ = writeln!(s, "safe_key={}", self.safe_key);
         let _ = writeln!(s, "seen_version={}", self.seen_version);
         let _ = writeln!(s, "welcome={}", b(self.welcome));
+        let _ = writeln!(s, "funcs_off={}", funcs_line(&self.funcs_off));
         let _ = writeln!(s, "always_admin={}", b(self.always_admin));
         let _ = writeln!(s, "explorer_menu={}", b(self.explorer_menu));
         let _ = writeln!(s, "un_restore={}", b(self.un_restore));
@@ -1409,6 +1423,15 @@ mod tests {
         // Ajuste faltando: fica sem os ajustes, com a escolha mantida.
         assert_eq!(HdrGame::parse(r"a.exe|5|C:\a.exe|1000|200").map(|g| (g.mode, g.prisma)), Some((5, None)));
         assert!(HdrGame::parse("a.exe|5").is_none());
+    }
+
+    #[test]
+    fn funcs_off_round_trip() {
+        assert_eq!(parse_funcs(&funcs_line(&[2, 17, 25])), vec![2, 17, 25]);
+        // Linha vazia ou ausente (quem atualiza): nenhuma desligada.
+        assert!(parse_funcs("").is_empty());
+        assert!(Config::default().funcs_off.is_empty());
+        assert_eq!(parse_funcs("3, x,300,4"), vec![3, 4]);
     }
 
     #[test]
