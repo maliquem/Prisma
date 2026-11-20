@@ -2856,6 +2856,7 @@ O modo Injeção não está baixado: este jogo usa Por cima até baixar.	注入�
 Baixar o modo Injeção	下载注入模式
 O arquivo baixado não tem a assinatura do Prisma. Nada foi alterado.	下载的文件没有 Prisma 签名。未做任何更改。
 Não consegui baixar do GitHub. Tente de novo.	无法从 GitHub 下载。请重试。
+Esta versão do Prisma ainda não tem o modo Injeção publicado no GitHub.	此版本的 Prisma 尚未在 GitHub 上发布注入模式。
 Resolução de entrada	输入分辨率
 Original	原始
 240 linhas	240 行

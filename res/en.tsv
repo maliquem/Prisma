@@ -2862,6 +2862,7 @@ O modo Injeção não está baixado: este jogo usa Por cima até baixar.	Injecti
 Baixar o modo Injeção	Download Injection mode
 O arquivo baixado não tem a assinatura do Prisma. Nada foi alterado.	The downloaded file does not carry the Prisma signature. Nothing was changed.
 Não consegui baixar do GitHub. Tente de novo.	Could not download from GitHub. Try again.
+Esta versão do Prisma ainda não tem o modo Injeção publicado no GitHub.	This version of Prisma does not have Injection mode published on GitHub yet.
 Resolução de entrada	Input resolution
 Original	Original
 240 linhas	240 lines

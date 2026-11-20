@@ -174,24 +174,26 @@ pub fn download(url: &str) -> Result<Vec<u8>, ()> {
 }
 
 /// Baixa direto para `path`, sem o limite de `MAX_SIZE` (a biblioteca de shaders passa dele).
-/// `progress` recebe o que já veio e o total (0 quando o servidor não diz).
-pub fn download_to(url: &str, path: &std::path::Path, mut progress: impl FnMut(usize, usize)) -> Result<(), ()> {
+/// `progress` recebe o que já veio e o total (0 quando o servidor não diz). O erro traz o status HTTP (0 quando
+/// nem chegou resposta ou a gravação falhou): 404 é arquivo que não existe na versão.
+pub fn download_to(url: &str, path: &std::path::Path, mut progress: impl FnMut(usize, usize)) -> Result<(), u32> {
     use std::io::Write;
-    let r = send(url, "", true)?;
+    let r = send(url, "", true).map_err(|_| 0u32)?;
     if r.status != 200 {
-        return Err(());
+        return Err(r.status);
     }
-    let mut f = std::io::BufWriter::new(std::fs::File::create(path).map_err(|_| ())?);
+    let mut f = std::io::BufWriter::new(std::fs::File::create(path).map_err(|_| 0u32)?);
     let (mut got, mut ok) = (0, true);
     read(&r, |c| {
         ok &= f.write_all(c).is_ok();
         got += c.len();
         progress(got, r.total as usize);
-    })?;
+    })
+    .map_err(|_| 0u32)?;
     if ok && f.flush().is_ok() {
         Ok(())
     } else {
-        Err(())
+        Err(0)
     }
 }
 
