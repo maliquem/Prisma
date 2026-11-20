@@ -2,7 +2,7 @@ use super::*;
 use super::picker::{self, Target as Pick};
 use crate::config::HdrProfile;
 use crate::sys::autohdr;
-use crate::sys::inject::Hdr;
+use crate::sys::inject::{Hdr, Scan};
 use crate::sys::hdr::{Edid, Info, Light, Profile, Screen};
 use crate::sys::hdrcal::{self, Phase, Spec, Start, Target};
 use crate::sys::patterns::{Measured, WINDOWS};
@@ -328,7 +328,9 @@ fn saved_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen, list: &[HdrProfil
 }
 
 /// Painel dos ajustes do HDR do Prisma, abaixo da linha do jogo.
-const PRISMA_H: f32 = 348.0;
+const PRISMA_H: f32 = 394.0;
+/// Linha do HDR próprio do jogo.
+const NATIVE_ROW: f32 = 44.0;
 /// Ajustes ao vivo: nome, mínimo e máximo.
 pub const KNOBS: [(&str, f32, f32); 7] = [("Pico", 200.0, 4000.0), ("Paper white", 80.0, 400.0), ("Gama", 1.8, 2.6), ("Saturação", 0.5, 1.5), ("Realce dos claros", 0.0, 2.0), ("Preto", 0.0, 1.0), ("Brilho da interface", 0.0, 400.0)];
 
@@ -344,7 +346,7 @@ fn chosen(app: &App) -> Option<usize> {
 }
 
 fn games_height(app: &App) -> f32 {
-    80.0 + chosen(app).map_or(0.0, |i| GAME_ROW + if app.cfg.hdr_games[i].mode == autohdr::PRISMA { PRISMA_H } else { 0.0 })
+    80.0 + chosen(app).map_or(0.0, |i| GAME_ROW + NATIVE_ROW + if app.cfg.hdr_games[i].mode == autohdr::PRISMA { PRISMA_H } else { 0.0 })
 }
 
 /// Anti-cheat e jogo da Steam lidos uma vez por jogo: as buscas olham pastas inteiras.
@@ -365,6 +367,32 @@ pub(crate) fn knob(h: &mut Hdr, i: usize) -> &mut f32 {
     }
 }
 
+/// O quanto o Automático saiu da base, com sinal.
+fn delta_text(i: usize, d: f32) -> String {
+    let a = d.abs();
+    let v = match i {
+        0 | 1 | 6 => format!("{a:.0}"),
+        2 => format!("{a:.2}"),
+        3 => format!("{:.0}%", a * 100.0),
+        4 => format!("{a:.1}x"),
+        _ => format!("{a:.2}"),
+    };
+    format!("{}{v}", if d > 0.0 { "+" } else { "−" })
+}
+
+/// Uma linha com o que o Analisar mediu (aba e menu dentro do jogo).
+pub(crate) fn scan_text(s: &Scan) -> String {
+    if s.mode == 0 {
+        return format!("Análise do SDR do jogo: {:.0}% da cena em branco de papel ou acima", s.white * 100.0);
+    }
+    let base = format!("Análise do HDR do jogo: pico {} nits, preto {} nits", nits(s.peak), nits(s.black));
+    if s.ui > 0.0 {
+        format!("{base}, interface {} nits", nits(s.ui))
+    } else {
+        base
+    }
+}
+
 fn knob_text(i: usize, v: f32) -> String {
     match i {
         0 | 1 => format!("{v:.0} nits"),
@@ -379,8 +407,8 @@ fn knob_text(i: usize, v: f32) -> String {
 }
 
 /// Os ajustes do HDR do Prisma em `cols` colunas, 48 de altura por linha (aba HDR e menu dentro do
-/// jogo). `true` quando algum mudou.
-pub fn knobs(ui: &mut Ui, id: &str, p: Rect, cols: usize, h: &mut Hdr) -> bool {
+/// jogo); com `base` (Automático), o quanto cada um saiu dela embaixo do valor. `true` quando algum mudou.
+pub fn knobs(ui: &mut Ui, id: &str, p: Rect, cols: usize, h: &mut Hdr, base: Option<Hdr>) -> bool {
     let cw = (p.w - 24.0 * (cols - 1) as f32) / cols as f32;
     let mut moved = false;
     for (k, (name, lo, hi)) in KNOBS.into_iter().enumerate() {
@@ -394,6 +422,12 @@ pub fn knobs(ui: &mut Ui, id: &str, p: Rect, cols: usize, h: &mut Hdr) -> bool {
             moved = true;
         }
         ui.c.text(rect(kx + cw - 92.0, ky, 92.0, 30.0), &knob_text(k, *v), 13.0, TEXT, Align::Right, Weight::Regular);
+        if let Some(mut b) = base {
+            let d = *v - *knob(&mut b, k);
+            if d.abs() > 1e-3 {
+                ui.c.text(rect(kx + cw - 92.0, ky + 26.0, 92.0, 18.0), &delta_text(k, d), 11.0, MUTED, Align::Right, Weight::Regular);
+            }
+        }
     }
     moved
 }
@@ -408,10 +442,10 @@ fn games_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen) {
         ("Um HDR por jogo. O Auto HDR está desligado nas configurações do Windows: ligue lá para ele valer.", WARN)
     };
     ui.c.text(rect(r.x + 16.0, r.y + 44.0, r.w - 32.0, 22.0), text, 13.0, color, Align::Left, Weight::Regular);
-    let modes: Vec<_> = autohdr::MODES.iter().filter(|m| m.0 != autohdr::RTX || autohdr::nvidia()).collect();
-    let options: Vec<String> = modes.iter().map(|m| m.1.to_string()).collect();
+    let all: Vec<(u8, &str)> = autohdr::MODES.iter().filter(|m| m.0 != autohdr::RTX || autohdr::nvidia()).map(|m| (m.0, m.1)).collect();
     let calibrated = Hdr::from_profile(app.cfg.hdr_profiles.iter().rfind(|p| p.screen == s.name));
     let (mut change, mut remove, mut tuned, mut launch, mut hotkey_changed) = (None, None, false, None, false);
+    let (mut mark, mut way, mut reset) = (None, None, None);
     let mut y = r.y + 72.0;
     for i in chosen(app).into_iter() {
         let g = &app.cfg.hdr_games[i];
@@ -424,6 +458,19 @@ fn games_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen) {
         if ui.select("hdr-game", rect(r.x + 52.0, y + 4.0, r.w - 368.0, 36.0), &names, &mut at) {
             PICK.set((order[at], app.cfg.hdr_games.len()));
         }
+        // Com HDR próprio sobra deixar o do jogo ou melhorar com o Prisma; sem ele, os HDR que criam um.
+        let mut modes: Vec<(u8, &str)> = if autohdr::has_native(g.native) {
+            vec![(autohdr::DEFAULT, "Deixar nativo"), (autohdr::PRISMA, "Melhorar com o Prisma")]
+        } else if autohdr::lacks_native(g.native) {
+            all.iter().copied().filter(|m| [autohdr::AUTO, autohdr::AUTO10, autohdr::RTX, autohdr::PRISMA].contains(&m.0)).collect()
+        } else {
+            all.clone()
+        };
+        // A escolha de antes fica à vista mesmo fora da lista.
+        if let Some(m) = all.iter().find(|m| m.0 == g.mode).filter(|_| !modes.iter().any(|m| m.0 == g.mode)) {
+            modes.insert(0, *m);
+        }
+        let options: Vec<String> = modes.iter().map(|m| m.1.to_string()).collect();
         let mut sel = modes.iter().position(|m| m.0 == g.mode).unwrap_or(0);
         if ui.select("hdr-mode", rect(r.right() - 300.0, y + 4.0, 240.0, 36.0), &options, &mut sel) {
             change = Some((i, modes[sel].0));
@@ -437,6 +484,24 @@ fn games_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen) {
             remove = Some(i);
         }
         y += GAME_ROW;
+        let (said, color) = match g.native {
+            autohdr::NATIVE_SEEN => ("HDR próprio: sim, visto no jogo.", TEXT2),
+            autohdr::NATIVE_NOT_SEEN => ("HDR próprio: não visto. O jogo só saiu em SDR com o HDR do Prisma.", TEXT2),
+            autohdr::NATIVE_YES => ("HDR próprio: sim, marcado à mão.", TEXT2),
+            autohdr::NATIVE_NO => ("HDR próprio: não, marcado à mão.", TEXT2),
+            _ => ("HDR próprio: ainda não se sabe. Abrir o jogo uma vez com o HDR do Prisma descobre; até lá, todas as opções.", MUTED),
+        };
+        ui.c.text_wrap(rect(r.x + 52.0, y, r.w - 368.0, 36.0), said, 12.0, color, Weight::Regular);
+        let marks = ["Detectar sozinho", "Tem HDR próprio", "Não tem HDR próprio"].map(String::from);
+        let mut m = match g.native {
+            autohdr::NATIVE_YES => 1,
+            autohdr::NATIVE_NO => 2,
+            _ => 0,
+        };
+        if ui.select("hdr-native", rect(r.right() - 300.0, y, 240.0, 36.0), &marks, &mut m) {
+            mark = Some((i, [autohdr::NATIVE_UNKNOWN, autohdr::NATIVE_YES, autohdr::NATIVE_NO][m]));
+        }
+        y += NATIVE_ROW;
         if g.mode != autohdr::PRISMA {
             continue;
         }
@@ -462,19 +527,33 @@ fn games_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen) {
         if ui.button(&format!("hdr-go{i}"), rect(p.right() - 150.0, p.y + 38.0, 150.0, 34.0), if steam.is_some() { "Abrir pela Steam" } else { "Abrir com HDR" }, true) {
             launch = Some((g.path.clone(), steam));
         }
-        let mut h = g.prisma.unwrap_or(calibrated);
-        let mut moved = knobs(ui, &format!("hdr-k{i}"), rect(p.x, p.y + 86.0, p.w, 192.0), 2, &mut h);
-        if ui.button(&format!("hdr-gr{i}"), rect(p.x, p.y + 284.0, 200.0, 34.0), "Voltar à calibração", false) {
-            h = calibrated;
-            moved = true;
+        // Automático: a calibração da tela e a análise, com o ajuste fino guardado como diferença.
+        let auto = g.prisma.is_none();
+        let base = autohdr::auto_base(calibrated, g);
+        let mut h = autohdr::resolve(calibrated, g);
+        let ways = ["Automático", "Manual"].map(String::from);
+        let mut w = usize::from(!auto);
+        if ui.select(&format!("hdr-way{i}"), rect(p.x, p.y + 86.0, 200.0, 36.0), &ways, &mut w) {
+            way = Some((i, w == 0, h));
+        }
+        let said = g.scan.map_or_else(|| "Sem análise ainda: use Analisar no menu do HDR dentro do jogo.".to_string(), |s| scan_text(&s));
+        ui.c.text_wrap(rect(p.x + 216.0, p.y + 86.0, p.w - 216.0, 36.0), &said, 12.0, TEXT2, Weight::Regular);
+        let moved = knobs(ui, &format!("hdr-k{i}"), rect(p.x, p.y + 132.0, p.w, 192.0), 2, &mut h, auto.then_some(base));
+        if ui.button(&format!("hdr-gr{i}"), rect(p.x, p.y + 330.0, 200.0, 34.0), "Voltar ao automático", false) {
+            reset = Some(i);
         }
         // O mesmo ajuste com o jogo na frente: o atalho abre o menu por cima dele.
-        ui.c.text(rect(p.x + 224.0, p.y + 286.0, 170.0, 30.0), "Menu dentro do jogo", 13.0, TEXT2, Align::Left, Weight::Regular);
-        if ui.hotkey("hk-hdr-menu", rect(p.x + 394.0, p.y + 284.0, 220.0, 34.0), &mut app.cfg.hk_hdr_menu) {
+        ui.c.text(rect(p.x + 224.0, p.y + 332.0, 170.0, 30.0), "Menu dentro do jogo", 13.0, TEXT2, Align::Left, Weight::Regular);
+        if ui.hotkey("hk-hdr-menu", rect(p.x + 394.0, p.y + 330.0, 220.0, 34.0), &mut app.cfg.hk_hdr_menu) {
             hotkey_changed = true;
         }
-        if moved && app.cfg.hdr_games[i].prisma != Some(h) {
-            app.cfg.hdr_games[i].prisma = Some(h);
+        let g = &mut app.cfg.hdr_games[i];
+        if moved && auto {
+            let t = autohdr::tune_of(base, h);
+            tuned |= g.tune != t;
+            g.tune = t;
+        } else if moved && g.prisma != Some(h) {
+            g.prisma = Some(h);
             tuned = true;
         }
         y += PRISMA_H;
@@ -488,6 +567,20 @@ fn games_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen) {
         app.cfg.save();
     } else if tuned {
         SAVED.set((last, true));
+    }
+    if let Some((i, to_auto, h)) = way {
+        // Manual começa do que o Automático dava.
+        app.cfg.hdr_games[i].prisma = (!to_auto).then_some(h);
+        app.cfg.save();
+    }
+    if let Some(i) = reset {
+        let g = &mut app.cfg.hdr_games[i];
+        (g.prisma, g.tune) = (None, [0.0; 7]);
+        app.cfg.save();
+    }
+    if let Some((i, n)) = mark {
+        app.cfg.hdr_games[i].native = n;
+        app.cfg.save();
     }
     if hotkey_changed {
         app.cfg.save();
@@ -506,9 +599,6 @@ fn games_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen) {
         let g = &mut app.cfg.hdr_games[i];
         if autohdr::apply(&g.exe, mode) {
             g.mode = mode;
-            if mode == autohdr::PRISMA && g.prisma.is_none() {
-                g.prisma = Some(calibrated);
-            }
         } else if mode == autohdr::RTX && !crate::startup::is_elevated() {
             app.toast.info("O driver NVIDIA só aceita o RTX HDR com o Prisma aberto como administrador.");
         } else {

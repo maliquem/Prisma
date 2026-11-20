@@ -2982,6 +2982,24 @@ Realce dos claros	高光增强
 Voltar à calibração	返回校准
 O driver NVIDIA só aceita o RTX HDR com o Prisma aberto como administrador.	NVIDIA 驱动只有在 Prisma 以管理员身份运行时才接受 RTX HDR。
 Menu dentro do jogo	游戏内菜单
+Deixar nativo	保持原生
+Melhorar com o Prisma	用 Prisma 增强
+Tem HDR próprio	自带 HDR
+Não tem HDR próprio	没有自带 HDR
+Detectar sozinho	自动检测
+HDR próprio: sim, visto no jogo.	自带 HDR：有，已在游戏中看到。
+HDR próprio: não visto. O jogo só saiu em SDR com o HDR do Prisma.	自带 HDR：未看到。使用 Prisma HDR 时游戏只输出了 SDR。
+HDR próprio: sim, marcado à mão.	自带 HDR：有，手动标记。
+HDR próprio: não, marcado à mão.	自带 HDR：没有，手动标记。
+HDR próprio: ainda não se sabe. Abrir o jogo uma vez com o HDR do Prisma descobre; até lá, todas as opções.	自带 HDR：尚不清楚。用 Prisma HDR 打开游戏一次即可查明；在此之前显示所有选项。
+Voltar ao automático	恢复自动
+Analisando: {} quadros	正在分析：{} 帧
+Sem análise ainda.	尚无分析。
+Sem análise ainda: use Analisar no menu do HDR dentro do jogo.	尚无分析：请在游戏内 HDR 菜单中使用“分析”。
+Não deu para medir: jogue uns segundos com a cena andando e tente de novo.	无法测量：请在画面运动的情况下玩几秒后再试。
+Análise do SDR do jogo: {}% da cena em branco de papel ou acima	游戏 SDR 分析：场景中 {}% 达到或高于纸白
+Análise do HDR do jogo: pico {} nits, preto {} nits	游戏 HDR 分析：峰值 {} 尼特，黑色 {} 尼特
+Análise do HDR do jogo: pico {} nits, preto {} nits, interface {} nits	游戏 HDR 分析：峰值 {} 尼特，黑色 {} 尼特，界面 {} 尼特
 Menu do HDR no jogo	游戏内 HDR 菜单
 Salvar no perfil do jogo?	保存到游戏配置文件？
 Os ajustes já valem agora. Salvar guarda para as próximas vezes que o jogo abrir.	调整已立即生效。保存后，下次打开游戏时仍会沿用。

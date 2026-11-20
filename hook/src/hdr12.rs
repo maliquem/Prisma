@@ -16,7 +16,7 @@ use windows::Win32::Graphics::Dxgi::Common::*;
 use windows::Win32::Graphics::Dxgi::*;
 
 use crate::hdr::{self, Params, Want, INSIDE};
-use crate::{patch, Ptr, Shared};
+use crate::{patch, scan, Ptr, Shared};
 
 const SLOT_CREATE_SRV: usize = 18;
 const SLOT_CREATE_UAV: usize = 19;
@@ -28,6 +28,9 @@ const SLOT_OM_SET: usize = 46;
 const USAGE_UAV: u32 = 0x400;
 /// O DXGI aceita até 16 buffers; a separação da interface acompanha os 8 primeiros.
 const MAX: usize = 8;
+const BUFFERS: usize = 16;
+/// O jogo e a cena são lidos pelo passe e pelo `cs` do Analisar.
+const READ: D3D12_RESOURCE_STATES = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
 
 type CreateView = unsafe extern "system" fn(Ptr, Ptr, *const c_void, D3D12_CPU_DESCRIPTOR_HANDLE);
 type CreateUav = unsafe extern "system" fn(Ptr, Ptr, Ptr, *const c_void, D3D12_CPU_DESCRIPTOR_HANDLE);
@@ -94,6 +97,65 @@ pub(crate) struct Proxy {
     rtv: Option<ID3D12DescriptorHeap>,
     scene: Option<ID3D12Resource>,
     timer: Option<Timer>,
+    /// Sem ele o Analisar não mede neste jogo.
+    scan: Option<Scan>,
+}
+
+/// O histograma do Analisar: o `cs`, o buffer que ele soma e uma vaga de leitura por índice da cadeia,
+/// lida quando a cerca do índice volta.
+struct Scan {
+    pso: ID3D12PipelineState,
+    buf: ID3D12Resource,
+    read: ID3D12Resource,
+    ring: scan::Ring,
+}
+
+unsafe fn buffer(device: &ID3D12Device, kind: D3D12_HEAP_TYPE, size: u64, flags: D3D12_RESOURCE_FLAGS, state: D3D12_RESOURCE_STATES) -> Result<ID3D12Resource> {
+    let props = D3D12_HEAP_PROPERTIES { Type: kind, ..Default::default() };
+    let desc = D3D12_RESOURCE_DESC {
+        Dimension: D3D12_RESOURCE_DIMENSION_BUFFER,
+        Width: size,
+        Height: 1,
+        DepthOrArraySize: 1,
+        MipLevels: 1,
+        SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+        Layout: D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+        Flags: flags,
+        ..Default::default()
+    };
+    let mut out = None;
+    device.CreateCommittedResource(&props, D3D12_HEAP_FLAG_NONE, &desc, state, None, &mut out)?;
+    out.ok_or_else(|| E_FAIL.into())
+}
+
+impl Scan {
+    unsafe fn new(device: &ID3D12Device, root: &ID3D12RootSignature) -> Result<Self> {
+        let cs = hdr::compile(s!("cs_5_0"), s!("cs"))?;
+        let pd = D3D12_COMPUTE_PIPELINE_STATE_DESC {
+            pRootSignature: std::mem::transmute_copy(root),
+            CS: D3D12_SHADER_BYTECODE { pShaderBytecode: cs.GetBufferPointer(), BytecodeLength: cs.GetBufferSize() },
+            ..Default::default()
+        };
+        let pso = device.CreateComputePipelineState(&pd)?;
+        let buf = buffer(device, D3D12_HEAP_TYPE_DEFAULT, scan::BYTES, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)?;
+        let read = buffer(device, D3D12_HEAP_TYPE_READBACK, scan::BYTES * BUFFERS as u64, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST)?;
+        Ok(Self { pso, buf, read, ring: scan::Ring::new(BUFFERS) })
+    }
+
+    /// A soma que o índice `i` copiou da última vez, se é desta medida.
+    unsafe fn take(&mut self, s: &Shared, i: usize, mode: u32) {
+        if !self.ring.ready(i) {
+            return;
+        }
+        let at = i * scan::BYTES as usize;
+        let range = D3D12_RANGE { Begin: at, End: at + scan::BYTES as usize };
+        let mut ptr = std::ptr::null_mut();
+        if self.read.Map(0, Some(&range), Some(&mut ptr)).is_ok() {
+            let cur = std::slice::from_raw_parts((ptr as *const u8).add(at) as *const u32, scan::WORDS).to_vec();
+            self.read.Unmap(0, Some(&D3D12_RANGE::default()));
+            self.ring.feed(s, mode, &cur);
+        }
+    }
 }
 
 // Os objetos COM só são usados com a trava pega.
@@ -195,7 +257,8 @@ impl Proxy {
         };
         let pso = device.CreateGraphicsPipelineState(&pd)?;
         let fence = device.CreateFence(0, D3D12_FENCE_FLAG_NONE)?;
-        let mut me = Self { chain: chain as usize, hwnd: hwnd.0 as usize, want, queue, device, root, pso, fence, value: 0, frames: Vec::new(), srv: None, rtv: None, scene: None, timer: None };
+        let scan = Scan::new(&device, &root).ok();
+        let mut me = Self { chain: chain as usize, hwnd: hwnd.0 as usize, want, queue, device, root, pso, fence, value: 0, frames: Vec::new(), srv: None, rtv: None, scene: None, timer: None, scan };
         me.rebuild(chain)?;
         me.timer = me.timer().ok();
         hook_device(me.device.as_raw());
@@ -301,7 +364,7 @@ impl Proxy {
     }
 
     /// Grava e manda o passe do índice `i`; devolve a média do tempo de GPU em ms.
-    unsafe fn draw(&mut self, i: usize, p: Params) -> Result<f64> {
+    unsafe fn draw(&mut self, i: usize, p: Params, s: &Shared) -> Result<f64> {
         let (Some(srv), Some(rtv), Some(scene)) = (&self.srv, &self.rtv, &self.scene) else { return Ok(0.0) };
         let f = self.frames.get(i).ok_or(Error::from(E_FAIL))?;
         self.wait(f.done);
@@ -315,40 +378,58 @@ impl Proxy {
                 t.read.Unmap(0, Some(&D3D12_RANGE::default()));
             }
         }
+        let mut scan = self.scan.as_mut().and_then(|sc| sc.ring.start(s).then_some(sc));
+        if let Some(sc) = scan.as_mut() {
+            sc.take(s, i, self.want.mode());
+        }
         f.alloc.Reset()?;
         let l = &f.list;
         l.Reset(&f.alloc, &self.pso)?;
         l.ResourceBarrier(&[
-            transition(&f.game, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
+            transition(&f.game, D3D12_RESOURCE_STATE_PRESENT, READ),
             transition(&f.real, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET),
-            transition(scene, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
+            transition(scene, D3D12_RESOURCE_STATE_COPY_DEST, READ),
         ]);
         l.SetDescriptorHeaps(&[Some(srv.clone())]);
-        l.SetGraphicsRootSignature(&self.root);
-        l.SetGraphicsRoot32BitConstants(0, (std::mem::size_of::<Params>() / 4) as u32, &p as *const Params as *const c_void, 0);
+        let consts = (std::mem::size_of::<Params>() / 4) as u32;
         let step = self.device.GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV) as u64;
         let mut table = srv.GetGPUDescriptorHandleForHeapStart();
         table.ptr += 2 * i as u64 * step;
-        l.SetGraphicsRootDescriptorTable(1, table);
+        let q = (2 * i) as u32;
+        if let Some(t) = &self.timer {
+            l.EndQuery(&t.heap, D3D12_QUERY_TYPE_TIMESTAMP, q);
+        }
         let (w, h) = (self.want.width, self.want.height);
+        if let Some(sc) = scan {
+            l.SetComputeRootSignature(&self.root);
+            l.SetComputeRoot32BitConstants(0, consts, &p as *const Params as *const c_void, 0);
+            l.SetComputeRootDescriptorTable(1, table);
+            l.SetComputeRootUnorderedAccessView(2, sc.buf.GetGPUVirtualAddress());
+            l.SetPipelineState(&sc.pso);
+            l.Dispatch(w.div_ceil(scan::TILE), h.div_ceil(scan::TILE), 1);
+            l.ResourceBarrier(&[transition(&sc.buf, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE)]);
+            l.CopyBufferRegion(&sc.read, i as u64 * scan::BYTES, &sc.buf, 0, scan::BYTES);
+            l.ResourceBarrier(&[transition(&sc.buf, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)]);
+            l.SetPipelineState(&self.pso);
+            sc.ring.wrote(i);
+        }
+        l.SetGraphicsRootSignature(&self.root);
+        l.SetGraphicsRoot32BitConstants(0, consts, &p as *const Params as *const c_void, 0);
+        l.SetGraphicsRootDescriptorTable(1, table);
         l.RSSetViewports(&[D3D12_VIEWPORT { Width: w as f32, Height: h as f32, MaxDepth: 1.0, ..Default::default() }]);
         l.RSSetScissorRects(&[RECT { left: 0, top: 0, right: w as i32, bottom: h as i32 }]);
         let target = at(rtv.GetCPUDescriptorHandleForHeapStart(), i, self.device.GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV));
         l.OMSetRenderTargets(1, Some(&target), false, None);
         l.IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        let q = (2 * i) as u32;
-        if let Some(t) = &self.timer {
-            l.EndQuery(&t.heap, D3D12_QUERY_TYPE_TIMESTAMP, q);
-        }
         l.DrawInstanced(3, 1, 0, 0);
         if let Some(t) = &self.timer {
             l.EndQuery(&t.heap, D3D12_QUERY_TYPE_TIMESTAMP, q + 1);
             l.ResolveQueryData(&t.heap, D3D12_QUERY_TYPE_TIMESTAMP, q, 2, &t.read, q as u64 * 8);
         }
         l.ResourceBarrier(&[
-            transition(&f.game, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PRESENT),
+            transition(&f.game, READ, D3D12_RESOURCE_STATE_PRESENT),
             transition(&f.real, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT),
-            transition(scene, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST),
+            transition(scene, READ, D3D12_RESOURCE_STATE_COPY_DEST),
         ]);
         l.Close()?;
         self.queue.ExecuteCommandLists(&[Some(l.cast()?)]);
@@ -381,7 +462,7 @@ pub(crate) unsafe fn present(s: &Shared, chain: Ptr) -> bool {
     };
     let split = hdr::split_of(s, phase);
     let pr = hdr::params(s, hdr::is_srgb(p.want.format), p.want.mode(), split == hdr::SPLIT_ON);
-    match hdr::passthrough(|| p.draw(i, pr)) {
+    match hdr::passthrough(|| p.draw(i, pr, s)) {
         Ok(ms) => hdr::report(s, ms, split, p.want.mode()),
         Err(e) => hdr::note(e.code()),
     }

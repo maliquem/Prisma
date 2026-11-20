@@ -1,13 +1,18 @@
 //! Menu do HDR do Prisma por cima do jogo: o atalho abre, os ajustes vão ao vivo pela memória
 //! compartilhada e, ao fechar com mudanças, ele pergunta se salva no perfil do jogo. O jogo segue
 //! com o foco: as teclas do menu chegam como atalhos registrados só enquanto ele está aberto.
+//! Analisar mede por uns segundos o que o jogo entrega e refaz o Automático com isso.
+
+use std::time::{Duration, Instant};
 
 use windows::core::*;
 use windows::Win32::Foundation::*;
 use windows::Win32::UI::Input::KeyboardAndMouse::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
+use crate::config::HdrGame;
 use crate::overlays::{focus_monitor, register};
+use crate::sys::autohdr;
 use crate::sys::inject::{Hdr, HdrLive};
 use crate::ui::gfx::*;
 use crate::ui::layered::{create_overlay, Layered};
@@ -21,6 +26,9 @@ const KNOBS_H: f32 = crate::pages::hdr::KNOBS.len() as f32 * 48.0;
 const KEYS: [VIRTUAL_KEY; 6] = [VK_ESCAPE, VK_RETURN, VK_UP, VK_DOWN, VK_LEFT, VK_RIGHT];
 /// Confere duas vezes por segundo se o jogo ainda está aberto e em foco.
 const TIMER_GAME: usize = 1;
+/// Analisar: quanto tempo mede e quantos quadros precisam contar (fora pausa e carregamento).
+const SCAN_TIME: Duration = Duration::from_secs(10);
+const SCAN_FRAMES: u32 = 60;
 
 enum Act {
     Close,
@@ -38,7 +46,16 @@ pub struct HdrMenu {
     name: String,
     start: Hdr,
     now: Hdr,
-    calibrated: Hdr,
+    /// Calibração da tela e a base do Automático do jogo (com a análise).
+    cal: Hdr,
+    base: Hdr,
+    /// Automático: o que mudar aqui vira ajuste fino sobre `base`. Fora dele, os ajustes do Manual.
+    auto: bool,
+    start_auto: bool,
+    /// Medida do Analisar em curso e quando começou.
+    scanning: Option<(u32, Instant)>,
+    /// O que a última análise mediu, ou por que não mediu.
+    note: String,
     asking: bool,
     /// Linha do ajuste que as setas mudam.
     row: usize,
@@ -60,7 +77,7 @@ unsafe extern "system" fn menu_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
             LRESULT(0)
         }
         WM_TIMER => {
-            crate::app::with(|a| a.hdr_menu.watch());
+            crate::app::with(|a| a.hdr_menu_watch());
             LRESULT(0)
         }
         _ => DefWindowProcW(h, m, w, l),
@@ -74,21 +91,43 @@ impl HdrMenu {
         // Fora de fotos e vídeos: o menu é só para quem joga.
         crate::capture::hide_from_capture(hwnd);
         let h = Hdr::from_profile(None);
-        Self { surface: Layered::new(hwnd), ui: UiState::default(), live: None, game: None, pid: 0, name: String::new(), start: h, now: h, calibrated: h, asking: false, row: 0 }
+        Self {
+            surface: Layered::new(hwnd),
+            ui: UiState::default(),
+            live: None,
+            game: None,
+            pid: 0,
+            name: String::new(),
+            start: h,
+            now: h,
+            cal: h,
+            base: h,
+            auto: true,
+            start_auto: true,
+            scanning: None,
+            note: String::new(),
+            asking: false,
+            row: 0,
+        }
     }
 
     pub fn is_open(&self) -> bool {
         self.live.is_some()
     }
 
-    fn open(&mut self, live: HdrLive, game: Option<usize>, pid: u32, name: String, calibrated: Hdr) {
+    fn open(&mut self, live: HdrLive, game: Option<(usize, &HdrGame)>, pid: u32, name: String, cal: Hdr) {
         self.start = live.get();
         self.now = self.start;
         self.live = Some(live);
-        self.game = game;
+        self.game = game.map(|g| g.0);
         self.pid = pid;
         self.name = name;
-        self.calibrated = calibrated;
+        self.cal = cal;
+        self.base = game.map_or(cal, |g| autohdr::auto_base(cal, g.1));
+        self.auto = game.is_none_or(|g| g.1.prisma.is_none());
+        self.start_auto = self.auto;
+        self.scanning = None;
+        self.note = game.and_then(|g| g.1.scan).map_or(String::new(), |s| crate::pages::hdr::scan_text(&s));
         self.asking = false;
         self.row = 0;
         self.ui = UiState::default();
@@ -106,6 +145,9 @@ impl HdrMenu {
     }
 
     fn hide(&mut self) {
+        if let (Some(l), Some(_)) = (&self.live, self.scanning.take()) {
+            l.scan_set(0);
+        }
         self.live = None;
         let hwnd = self.surface.hwnd;
         unsafe {
@@ -170,12 +212,18 @@ impl HdrMenu {
         if let Some(l) = &self.live {
             self.now = l.get();
         }
-        let h = if self.asking { 150.0 } else { 54.0 + KNOBS_H + 8.0 + 34.0 + PAD };
+        let h = if self.asking { 150.0 } else { 54.0 + KNOBS_H + 8.0 + 26.0 + 34.0 + PAD };
         // Canto superior esquerdo: o medidor fica no direito.
         let (x, y) = (mon.left + (24.0 * scale) as i32, mon.top + (24.0 * scale) as i32);
-        let (mut act, mut now, mut moved) = (None, self.now, false);
-        let (asking, calibrated, can_save, row) = (self.asking, self.calibrated, self.game.is_some(), self.row);
+        let (mut act, mut now, mut moved, mut to_auto, mut scan) = (None, self.now, false, false, false);
+        let (asking, base, auto, can_save, row) = (self.asking, self.base, self.auto, self.game.is_some(), self.row);
         let title = format!("{} · {}", crate::i18n::tr("HDR do Prisma"), self.name);
+        let note = match (self.scanning, &self.live) {
+            (Some((gen, _)), Some(l)) => format!("Analisando: {} quadros", l.scan(gen).map_or(0, |s| s.frames)),
+            _ if self.note.is_empty() && can_save => "Sem análise ainda.".to_string(),
+            _ => self.note.clone(),
+        };
+        let scanning = self.scanning.is_some();
         let ui = &mut self.ui;
         self.surface.paint(x, y, W, h, |c, r| {
             c.round(r, 14.0, rgb(0x14161c).alpha(0.96));
@@ -190,13 +238,19 @@ impl HdrMenu {
                     act = Some(Act::Discard);
                 }
             } else {
-                u.c.text(rect(PAD, 12.0, W - 2.0 * PAD, 26.0), &title, 14.0, WHITE, Align::Left, Weight::Semibold);
+                u.c.text(rect(PAD, 12.0, W - 2.0 * PAD - 110.0, 26.0), &title, 14.0, WHITE, Align::Left, Weight::Semibold);
+                let (way, color) = if auto { ("Automático", ACCENT) } else { ("Manual", TEXT2) };
+                u.c.text(rect(W - PAD - 110.0, 12.0, 110.0, 26.0), way, 13.0, color, Align::Right, Weight::Regular);
                 u.c.round(rect(PAD - 8.0, 54.0 + row as f32 * 48.0 - 6.0, W - 2.0 * PAD + 16.0, 42.0), 8.0, rgb(0x262a33));
-                moved = crate::pages::hdr::knobs(&mut u, "hm-k", rect(PAD, 54.0, W - 2.0 * PAD, KNOBS_H), 1, &mut now);
+                moved = crate::pages::hdr::knobs(&mut u, "hm-k", rect(PAD, 54.0, W - 2.0 * PAD, KNOBS_H), 1, &mut now, auto.then_some(base));
                 let by = h - PAD - 34.0;
-                if u.button("hm-cal", rect(PAD, by, 200.0, 34.0), "Voltar à calibração", false) {
-                    now = Hdr { on: now.on, ..calibrated };
-                    moved = true;
+                u.c.text(rect(PAD, by - 30.0, W - 2.0 * PAD, 24.0), &note, 12.0, TEXT2, Align::Left, Weight::Regular);
+                if u.button("hm-cal", rect(PAD, by, 180.0, 34.0), "Voltar ao automático", false) {
+                    now = Hdr { on: now.on, ..base };
+                    (moved, to_auto) = (true, true);
+                }
+                if can_save && u.button("hm-scan", rect(PAD + 190.0, by, 120.0, 34.0), if scanning { "Analisando" } else { "Analisar" }, false) {
+                    scan = !scanning;
                 }
                 if u.button("hm-close", rect(W - PAD - 110.0, by, 110.0, 34.0), "Fechar", true) {
                     act = Some(Act::Close);
@@ -207,6 +261,13 @@ impl HdrMenu {
         if moved {
             self.set(now);
         }
+        self.auto |= to_auto;
+        if let (true, Some(l)) = (scan, &self.live) {
+            // Número novo a cada medida, também entre aberturas do Prisma: o gancho recomeça a soma.
+            let gen = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(1, |d| d.as_millis() as u32) | 1;
+            l.scan_set(gen);
+            self.scanning = Some((gen, Instant::now()));
+        }
         // Sem perfil no config não há o que perguntar.
         if matches!(act, Some(Act::Close)) && !can_save {
             act = None;
@@ -216,7 +277,7 @@ impl HdrMenu {
     }
 
     fn changed(&self) -> bool {
-        self.now != self.start
+        self.now != self.start || self.auto != self.start_auto
     }
 }
 
@@ -231,11 +292,43 @@ impl crate::app::App {
             self.toast.info("Este jogo não está com o HDR do Prisma: abra-o com ele pela aba HDR.");
             return;
         };
-        let game = self.cfg.hdr_games.iter().position(|g| g.exe.eq_ignore_ascii_case(&exe));
+        let game = self.cfg.hdr_games.iter().enumerate().find(|g| g.1.exe.eq_ignore_ascii_case(&exe));
         // A calibração da tela onde o jogo está, a mesma que a aba HDR mostra para ela.
-        let calibrated = crate::sys::autohdr::calibrated(&self.cfg, &crate::overlays::monitor_name(front));
+        let cal = autohdr::calibrated(&self.cfg, &crate::overlays::monitor_name(front));
         let name = crate::pages::app_name(&exe).to_string();
-        self.hdr_menu.open(live, game, pid, name, calibrated);
+        self.hdr_menu.open(live, game, pid, name, cal);
+    }
+
+    /// Meio segundo: o menu some sem o jogo na frente e o Analisar mostra quantos quadros já somou. No
+    /// fim guarda a medida no perfil do jogo e refaz o Automático com ela, mantendo o ajuste fino.
+    pub(crate) fn hdr_menu_watch(&mut self) {
+        let m = &mut self.hdr_menu;
+        m.watch();
+        let (Some((gen, since)), Some(live)) = (m.scanning, &m.live) else { return };
+        if since.elapsed() < SCAN_TIME {
+            m.redraw();
+            return;
+        }
+        let got = live.scan(gen).filter(|s| s.frames >= SCAN_FRAMES);
+        live.scan_set(0);
+        m.scanning = None;
+        match (got, m.game.and_then(|i| self.cfg.hdr_games.get_mut(i))) {
+            (Some(sc), Some(g)) => {
+                g.scan = Some(sc);
+                let base = autohdr::auto_base(m.cal, g);
+                let now = if m.auto { autohdr::tuned(base, &autohdr::tune_of(m.base, m.now)) } else { Hdr { src_peak: base.src_peak, src_black: base.src_black, src_paper: base.src_paper, ..m.now } };
+                let quiet = !m.changed();
+                (m.base, m.note) = (base, crate::pages::hdr::scan_text(&sc));
+                m.set(now);
+                // Sem mudança pendente a medida já vai para o disco; com ela, vai junto ao salvar ou descartar.
+                if quiet {
+                    m.start = m.now;
+                    self.cfg.save();
+                }
+            }
+            _ => m.note = "Não deu para medir: jogue uns segundos com a cena andando e tente de novo.".to_string(),
+        }
+        m.redraw();
     }
 
     fn hdr_menu_close(&mut self) {
@@ -281,7 +374,11 @@ impl crate::app::App {
             Act::Save => {
                 let m = &mut self.hdr_menu;
                 if let Some(g) = m.game.and_then(|i| self.cfg.hdr_games.get_mut(i)) {
-                    g.prisma = Some(m.now);
+                    if m.auto {
+                        (g.prisma, g.tune) = (None, autohdr::tune_of(m.base, m.now));
+                    } else {
+                        g.prisma = Some(m.now);
+                    }
                     self.cfg.save();
                 }
                 m.hide();
@@ -292,6 +389,8 @@ impl crate::app::App {
                 let start = m.start;
                 m.set(start);
                 m.hide();
+                // Uma análise feita com mudanças pendentes fica no perfil.
+                self.cfg.save();
             }
         }
     }

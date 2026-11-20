@@ -8,7 +8,7 @@
 //! herdam as variáveis e carregam a camada, mas sem HDR pedido ela só repassa as chamadas.
 
 use crate::hdr::{self, Params, INSIDE};
-use crate::Ptr;
+use crate::{scan, Ptr, Shared};
 use ash::vk::{self, Handle};
 use std::cell::Cell;
 use std::collections::HashMap;
@@ -22,6 +22,7 @@ use windows::Win32::System::LibraryLoader::GetModuleFileNameW;
 const LAYER: &str = "VK_LAYER_PRISMA_hdr";
 const VS: &[u8] = include_bytes!("hdr_vs.spv");
 const PS: &[u8] = include_bytes!("hdr_ps.spv");
+const CS: &[u8] = include_bytes!("hdr_cs.spv");
 const MAX: usize = 8;
 const FP16: vk::Format = vk::Format::R16G16B16A16_SFLOAT;
 const SCRGB: vk::ColorSpaceKHR = vk::ColorSpaceKHR::EXTENDED_SRGB_LINEAR_EXT;
@@ -402,6 +403,17 @@ struct Res {
     queries: vk::QueryPool,
     cmd_pool: vk::CommandPool,
     cmds: Vec<vk::CommandBuffer>,
+    /// Analisar: o `cs`, o buffer que ele soma e as leituras (uma vaga por imagem, já mapeadas em `read_at`).
+    cs_set_layout: vk::DescriptorSetLayout,
+    cs_layout: vk::PipelineLayout,
+    cs_pipeline: vk::Pipeline,
+    cs_pool: vk::DescriptorPool,
+    cs_sets: Vec<vk::DescriptorSet>,
+    hist: vk::Buffer,
+    hist_mem: vk::DeviceMemory,
+    read: vk::Buffer,
+    read_mem: vk::DeviceMemory,
+    read_at: usize,
 }
 
 struct Chain {
@@ -415,6 +427,8 @@ struct Chain {
     /// Bits válidos do relógio da fila; zero: sem medida.
     mask: u64,
     ms: f64,
+    /// Sem ele o Analisar não mede neste jogo.
+    ring: Option<scan::Ring>,
 }
 
 unsafe impl Send for Chain {}
@@ -435,6 +449,13 @@ impl Drop for Chain {
             r.fences.iter().for_each(|f| d.destroy_fence(*f, None));
             r.sems.iter().for_each(|s| d.destroy_semaphore(*s, None));
             d.destroy_command_pool(r.cmd_pool, None);
+            d.destroy_descriptor_pool(r.cs_pool, None);
+            d.destroy_pipeline(r.cs_pipeline, None);
+            d.destroy_pipeline_layout(r.cs_layout, None);
+            d.destroy_descriptor_set_layout(r.cs_set_layout, None);
+            // Memória mapeada sai do mapa ao ser solta.
+            [r.hist, r.read].iter().for_each(|b| d.destroy_buffer(*b, None));
+            [r.hist_mem, r.read_mem].iter().for_each(|m| d.free_memory(*m, None));
             d.destroy_query_pool(r.queries, None);
             d.destroy_descriptor_pool(r.pool, None);
             d.destroy_pipeline(r.pipeline, None);
@@ -488,6 +509,57 @@ impl Chain {
             return Err(e);
         }
         Ok(mem)
+    }
+
+    /// Memória do tipo `want` presa ao buffer.
+    unsafe fn buffer_memory(&self, buf: vk::Buffer, want: vk::MemoryPropertyFlags) -> ash::prelude::VkResult<vk::DeviceMemory> {
+        let d = &self.dev.fns;
+        let req = d.get_buffer_memory_requirements(buf);
+        let m = &self.dev.mem;
+        let ty = (0..m.memory_type_count).find(|&i| req.memory_type_bits & (1 << i) != 0 && m.memory_types[i as usize].property_flags.contains(want));
+        let ty = ty.ok_or(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY)?;
+        let mem = d.allocate_memory(&vk::MemoryAllocateInfo::default().allocation_size(req.size).memory_type_index(ty), None)?;
+        if let Err(e) = d.bind_buffer_memory(buf, mem, 0) {
+            d.free_memory(mem, None);
+            return Err(e);
+        }
+        Ok(mem)
+    }
+
+    /// O `cs` do Analisar e os buffers dele, para `n` imagens. Falhar só deixa o Analisar de fora.
+    unsafe fn scan_build(&mut self, n: u32) -> ash::prelude::VkResult<()> {
+        let d = &self.dev.fns;
+        let bind = |b: u32, ty| vk::DescriptorSetLayoutBinding::default().binding(b).descriptor_type(ty).descriptor_count(1).stage_flags(vk::ShaderStageFlags::COMPUTE);
+        let binds = [bind(0, vk::DescriptorType::SAMPLED_IMAGE), bind(1, vk::DescriptorType::SAMPLED_IMAGE), bind(2, vk::DescriptorType::STORAGE_BUFFER)];
+        self.r.cs_set_layout = d.create_descriptor_set_layout(&vk::DescriptorSetLayoutCreateInfo::default().bindings(&binds), None)?;
+        let push = [vk::PushConstantRange { stage_flags: vk::ShaderStageFlags::COMPUTE, offset: 0, size: std::mem::size_of::<Params>() as u32 }];
+        let layouts = [self.r.cs_set_layout];
+        self.r.cs_layout = d.create_pipeline_layout(&vk::PipelineLayoutCreateInfo::default().set_layouts(&layouts).push_constant_ranges(&push), None)?;
+        let code = words(CS);
+        let module = d.create_shader_module(&vk::ShaderModuleCreateInfo::default().code(&code), None)?;
+        let stage = vk::PipelineShaderStageCreateInfo::default().stage(vk::ShaderStageFlags::COMPUTE).module(module).name(c"cs");
+        let made = d.create_compute_pipelines(vk::PipelineCache::null(), &[vk::ComputePipelineCreateInfo::default().stage(stage).layout(self.r.cs_layout)], None);
+        d.destroy_shader_module(module, None);
+        self.r.cs_pipeline = made.map(|p| p[0]).map_err(|(_, e)| e)?;
+        let info = |size, usage| vk::BufferCreateInfo::default().size(size).usage(usage).sharing_mode(vk::SharingMode::EXCLUSIVE);
+        self.r.hist = d.create_buffer(&info(scan::BYTES, vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_SRC), None)?;
+        self.r.hist_mem = self.buffer_memory(self.r.hist, vk::MemoryPropertyFlags::DEVICE_LOCAL).or_else(|_| self.buffer_memory(self.r.hist, vk::MemoryPropertyFlags::empty()))?;
+        self.r.read = d.create_buffer(&info(scan::BYTES * n as u64, vk::BufferUsageFlags::TRANSFER_DST), None)?;
+        self.r.read_mem = self.buffer_memory(self.r.read, vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT)?;
+        self.r.read_at = d.map_memory(self.r.read_mem, 0, vk::WHOLE_SIZE, vk::MemoryMapFlags::empty())? as usize;
+        let sizes = [vk::DescriptorPoolSize { ty: vk::DescriptorType::SAMPLED_IMAGE, descriptor_count: 2 * n }, vk::DescriptorPoolSize { ty: vk::DescriptorType::STORAGE_BUFFER, descriptor_count: n }];
+        self.r.cs_pool = d.create_descriptor_pool(&vk::DescriptorPoolCreateInfo::default().max_sets(n).pool_sizes(&sizes), None)?;
+        let layouts = vec![self.r.cs_set_layout; n as usize];
+        self.r.cs_sets = d.allocate_descriptor_sets(&vk::DescriptorSetAllocateInfo::default().descriptor_pool(self.r.cs_pool).set_layouts(&layouts))?;
+        let hist = [vk::DescriptorBufferInfo { buffer: self.r.hist, offset: 0, range: vk::WHOLE_SIZE }];
+        for (set, view) in self.r.cs_sets.iter().zip(&self.r.views) {
+            let game = [vk::DescriptorImageInfo { sampler: vk::Sampler::null(), image_view: *view, image_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL }];
+            let scene = [vk::DescriptorImageInfo { image_view: self.r.scene_view, ..game[0] }];
+            let write = vk::WriteDescriptorSet::default().dst_set(*set);
+            let image = write.descriptor_type(vk::DescriptorType::SAMPLED_IMAGE);
+            d.update_descriptor_sets(&[image.dst_binding(0).image_info(&game), image.dst_binding(1).image_info(&scene), write.dst_binding(2).descriptor_type(vk::DescriptorType::STORAGE_BUFFER).buffer_info(&hist)], &[]);
+        }
+        Ok(())
     }
 
     unsafe fn view(&self, image: vk::Image, format: vk::Format) -> ash::prelude::VkResult<vk::ImageView> {
@@ -581,6 +653,7 @@ impl Chain {
             self.r.sems.push(d.create_semaphore(&vk::SemaphoreCreateInfo::default(), None)?);
         }
         self.r.queries = d.create_query_pool(&vk::QueryPoolCreateInfo::default().query_type(vk::QueryType::TIMESTAMP).query_count(2 * n), None)?;
+        self.ring = self.scan_build(n).ok().map(|_| scan::Ring::new(n as usize));
 
         if reals.len() <= MAX {
             IMAGES.iter().enumerate().for_each(|(i, a)| a.store(self.r.images.get(i).map_or(0, |x| x.as_raw()), Relaxed));
@@ -659,7 +732,7 @@ impl Chain {
     }
 
     /// O passe do quadro `i`, esperando o jogo e avisando a apresentação por `sems[i]`.
-    unsafe fn draw(&mut self, queue: vk::Queue, i: usize, waits: &[vk::Semaphore], pr: Params) -> ash::prelude::VkResult<f64> {
+    unsafe fn draw(&mut self, queue: vk::Queue, i: usize, waits: &[vk::Semaphore], pr: Params, s: &Shared) -> ash::prelude::VkResult<f64> {
         if self.r.cmds.is_empty() {
             self.commands(queue)?;
         }
@@ -673,6 +746,11 @@ impl Chain {
             let ms = (t[1].wrapping_sub(t[0]) & self.mask) as f64 * self.dev.period as f64 / 1e6;
             self.ms = if self.ms <= 0.0 { ms } else { self.ms * 0.9 + ms * 0.1 };
         }
+        let mut ring = self.ring.as_mut().and_then(|g| g.start(s).then_some(g));
+        if let Some(g) = ring.as_mut().filter(|g| g.ready(i)) {
+            let cur = std::slice::from_raw_parts((r.read_at as *const u8).add(i * scan::BYTES as usize) as *const u32, scan::WORDS).to_vec();
+            g.feed(s, self.mode, &cur);
+        }
         d.reset_command_buffer(cmd, vk::CommandBufferResetFlags::empty())?;
         d.begin_command_buffer(cmd, &vk::CommandBufferBeginInfo::default().flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT))?;
         if self.mask != 0 {
@@ -684,12 +762,28 @@ impl Chain {
         if !self.scene_ready {
             pre.push(barrier(r.scene, vk::ImageLayout::UNDEFINED, read, vk::AccessFlags::empty(), vk::AccessFlags::SHADER_READ));
         }
-        d.cmd_pipeline_barrier(cmd, vk::PipelineStageFlags::ALL_COMMANDS, vk::PipelineStageFlags::FRAGMENT_SHADER, vk::DependencyFlags::empty(), &[], &[], &pre);
+        let shaders = vk::PipelineStageFlags::FRAGMENT_SHADER | vk::PipelineStageFlags::COMPUTE_SHADER;
+        d.cmd_pipeline_barrier(cmd, vk::PipelineStageFlags::ALL_COMMANDS, shaders, vk::DependencyFlags::empty(), &[], &[], &pre);
+        let bytes = std::slice::from_raw_parts(&pr as *const Params as *const u8, std::mem::size_of::<Params>());
+        if let Some(g) = ring {
+            let mem = |src, dst| [vk::MemoryBarrier::default().src_access_mask(src).dst_access_mask(dst)];
+            let (compute, transfer) = (vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::TRANSFER);
+            // A soma e a cópia do quadro anterior acabam antes desta soma.
+            d.cmd_pipeline_barrier(cmd, compute | transfer, compute, vk::DependencyFlags::empty(), &mem(vk::AccessFlags::SHADER_WRITE | vk::AccessFlags::TRANSFER_READ, vk::AccessFlags::SHADER_READ | vk::AccessFlags::SHADER_WRITE), &[], &[]);
+            d.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::COMPUTE, r.cs_pipeline);
+            d.cmd_bind_descriptor_sets(cmd, vk::PipelineBindPoint::COMPUTE, r.cs_layout, 0, &[r.cs_sets[i]], &[]);
+            d.cmd_push_constants(cmd, r.cs_layout, vk::ShaderStageFlags::COMPUTE, 0, bytes);
+            d.cmd_dispatch(cmd, self.extent.width.div_ceil(scan::TILE), self.extent.height.div_ceil(scan::TILE), 1);
+            d.cmd_pipeline_barrier(cmd, compute, transfer, vk::DependencyFlags::empty(), &mem(vk::AccessFlags::SHADER_WRITE, vk::AccessFlags::TRANSFER_READ), &[], &[]);
+            let region = [vk::BufferCopy { src_offset: 0, dst_offset: i as u64 * scan::BYTES, size: scan::BYTES }];
+            d.cmd_copy_buffer(cmd, r.hist, r.read, &region);
+            d.cmd_pipeline_barrier(cmd, transfer, vk::PipelineStageFlags::HOST, vk::DependencyFlags::empty(), &mem(vk::AccessFlags::TRANSFER_WRITE, vk::AccessFlags::HOST_READ), &[], &[]);
+            g.wrote(i);
+        }
         let area = vk::Rect2D { offset: vk::Offset2D::default(), extent: self.extent };
         d.cmd_begin_render_pass(cmd, &vk::RenderPassBeginInfo::default().render_pass(r.pass).framebuffer(r.fbs[i]).render_area(area), vk::SubpassContents::INLINE);
         d.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::GRAPHICS, r.pipeline);
         d.cmd_bind_descriptor_sets(cmd, vk::PipelineBindPoint::GRAPHICS, r.layout, 0, &[r.sets[i]], &[]);
-        let bytes = std::slice::from_raw_parts(&pr as *const Params as *const u8, std::mem::size_of::<Params>());
         d.cmd_push_constants(cmd, r.layout, vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT, 0, bytes);
         d.cmd_draw(cmd, 3, 1, 0, 0);
         d.cmd_end_render_pass(cmd);
@@ -789,7 +883,7 @@ unsafe extern "system" fn create_swapchain(device: vk::Device, info: *const vk::
         _ => hdr::MODE_SDR,
     };
     let srgb = matches!(g.image_format, vk::Format::B8G8R8A8_SRGB | vk::Format::R8G8B8A8_SRGB | vk::Format::A8B8G8R8_SRGB_PACK32);
-    let mut c = Chain { real: *out, dev, extent: g.image_extent, srgb, mode, r: Res::default(), scene_ready: false, mask: 0, ms: 0.0 };
+    let mut c = Chain { real: *out, dev, extent: g.image_extent, srgb, mode, r: Res::default(), scene_ready: false, mask: 0, ms: 0.0, ring: None };
     match c.build(g, find(g.p_next, vk::StructureType::IMAGE_FORMAT_LIST_CREATE_INFO)) {
         Ok(()) => {
             lock(&CHAINS).push(c);
@@ -855,7 +949,7 @@ unsafe extern "system" fn present(queue: vk::Queue, info: *const vk::PresentInfo
             };
             let split = hdr::split_of(s, phase);
             let pr = hdr::params(s, c.srgb, c.mode, split == hdr::SPLIT_ON);
-            match c.draw(queue, idx, &waits, pr) {
+            match c.draw(queue, idx, &waits, pr, s) {
                 Ok(ms) => {
                     waits = vec![c.r.sems[idx]];
                     hdr::report(s, ms, split, c.mode);
@@ -1106,7 +1200,8 @@ mod tests {
         use glslang_sys::*;
         use std::ffi::CString;
         let _process = glslang::Compiler::acquire().unwrap();
-        let code = CString::new(hdr::SHADER).unwrap();
+        // O histograma do Analisar só existe no `cs`, como no fxc.
+        let code = CString::new(if entry == "cs" { format!("#define SCAN 1\n{}", hdr::SHADER) } else { hdr::SHADER.to_string() }).unwrap();
         let messages = glslang_messages_t::READ_HLSL | glslang_messages_t::SPV_RULES | glslang_messages_t::VULKAN_RULES;
         // ResourceLimits é repr(transparent) sobre glslang_resource_t.
         let resource = &glslang::limits::DEFAULT_LIMITS as *const _ as *const glslang_resource_t;
@@ -1149,9 +1244,9 @@ mod tests {
     /// Mudou o HLSL: o teste regrava os `.spv` e falha uma vez, para o commit levar os dois juntos.
     #[test]
     fn spirv_matches_hlsl() {
-        use glslang_sys::glslang_stage_t::{Fragment, Vertex};
+        use glslang_sys::glslang_stage_t::{Compute, Fragment, Vertex};
         let mut stale = Vec::new();
-        for (stage, entry, have) in [(Vertex, "vs", VS), (Fragment, "ps", PS)] {
+        for (stage, entry, have) in [(Vertex, "vs", VS), (Fragment, "ps", PS), (Compute, "cs", CS)] {
             let fresh = spirv(stage, entry);
             if fresh != have {
                 std::fs::write(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join(format!("hdr_{entry}.spv")), &fresh).unwrap();

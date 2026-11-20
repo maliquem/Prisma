@@ -2982,6 +2982,24 @@ Realce dos claros	Усиление светов
 Voltar à calibração	Вернуться к калибровке
 O driver NVIDIA só aceita o RTX HDR com o Prisma aberto como administrador.	Драйвер NVIDIA принимает RTX HDR только если Prisma запущен от имени администратора.
 Menu dentro do jogo	Меню в игре
+Deixar nativo	Оставить родной
+Melhorar com o Prisma	Улучшить через Prisma
+Tem HDR próprio	Есть свой HDR
+Não tem HDR próprio	Нет своего HDR
+Detectar sozinho	Определять самому
+HDR próprio: sim, visto no jogo.	Свой HDR: да, замечен в игре.
+HDR próprio: não visto. O jogo só saiu em SDR com o HDR do Prisma.	Свой HDR: не замечен. С HDR Prisma игра выдавала только SDR.
+HDR próprio: sim, marcado à mão.	Свой HDR: да, отмечено вручную.
+HDR próprio: não, marcado à mão.	Свой HDR: нет, отмечено вручную.
+HDR próprio: ainda não se sabe. Abrir o jogo uma vez com o HDR do Prisma descobre; até lá, todas as opções.	Свой HDR: пока неизвестно. Один запуск игры с HDR Prisma это выяснит; до тех пор доступны все варианты.
+Voltar ao automático	Вернуть автоматический режим
+Analisando: {} quadros	Анализ: {} кадров
+Sem análise ainda.	Анализа пока нет.
+Sem análise ainda: use Analisar no menu do HDR dentro do jogo.	Анализа пока нет: нажмите «Анализировать» в меню HDR в игре.
+Não deu para medir: jogue uns segundos com a cena andando e tente de novo.	Измерить не удалось: поиграйте несколько секунд, пока сцена движется, и повторите.
+Análise do SDR do jogo: {}% da cena em branco de papel ou acima	Анализ SDR игры: {}% сцены на уровне paper white или выше
+Análise do HDR do jogo: pico {} nits, preto {} nits	Анализ HDR игры: пик {} нит, чёрный {} нит
+Análise do HDR do jogo: pico {} nits, preto {} nits, interface {} nits	Анализ HDR игры: пик {} нит, чёрный {} нит, интерфейс {} нит
 Menu do HDR no jogo	Меню HDR в игре
 Salvar no perfil do jogo?	Сохранить в профиле игры?
 Os ajustes já valem agora. Salvar guarda para as próximas vezes que o jogo abrir.	Настройки уже действуют. Сохранение оставит их для следующих запусков игры.
