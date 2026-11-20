@@ -37,7 +37,9 @@ pub struct Shared {
     pub hwnd: AtomicU64,
     /// Sobe quando o motor troca o perfil (`path`).
     pub seq: AtomicU32,
-    pad: u32,
+    /// Tempo de GPU da cadeia em µs (média), para o menu; 0 sem medida (só o D3D11, o D3D10 e o D3D12 medem).
+    /// Ocupa o antigo enchimento: o tamanho da memória não muda e uma DLL antiga no jogo ainda conecta.
+    pub gpu_us: AtomicU32,
     path: [AtomicU16; PATH_LEN],
 }
 

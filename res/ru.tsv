@@ -2912,8 +2912,10 @@ Biblioteca	Библиотека
 Biblioteca · {}	Библиотека · {}
 ligado	вкл
 desligado	выкл
-↑↓ escolher · ←→ mudar · Enter abrir · Esc fechar	↑↓ выбор · ←→ изменить · Enter открыть · Esc закрыть
-←→ ajustar · Enter padrão · Esc voltar	←→ настроить · Enter по умолч. · Esc назад
-↑↓ escolher · Enter abrir · Esc voltar	↑↓ выбор · Enter открыть · Esc назад
+↑↓ escolher · ←→ mudar · Enter abrir	↑↓ выбор · ←→ изменить · Enter открыть
+Ins adicionar passe · Del tirar passe · Backspace fechar	Ins добавить проход · Del убрать проход · Backspace закрыть
+←→ ajustar · Enter padrão · Backspace voltar	←→ настроить · Enter по умолч. · Backspace назад
+↑↓ escolher · Enter adicionar · Backspace voltar	↑↓ выбор · Enter добавить · Backspace назад
+↑↓ escolher · Enter trocar · Ins adicionar · Backspace voltar	↑↓ выбор · Enter заменить · Ins добавить · Backspace назад
 Baixe a biblioteca na página Shaders	Скачайте библиотеку на странице «Shaders»
 Nenhum preset aqui	Здесь нет preset

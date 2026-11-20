@@ -28,7 +28,7 @@ use librashader::runtime::vk::{FilterChain as ChainVk, VulkanImage as ChainVkIma
 use librashader::runtime::{Size, Viewport};
 use prisma_shader::chain::{self, Engine, Tracker};
 use prisma_shader::link::*;
-use prisma_shader::{blocks, rtv, say, texture, FullPass, Res, PS_COPY};
+use prisma_shader::{blocks, ema, rtv, say, texture, FullPass, GpuTimer, Res, PS_COPY};
 use windows::core::*;
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Direct3D::*;
@@ -539,6 +539,36 @@ struct Dx11 {
     bb: Option<Bb>,
     warned: bool,
     errors: u32,
+    load: Load,
+}
+
+/// Tempo de GPU da cadeia para o menu do motor (`Shared::gpu_us`). Sem consultas de carimbo fica sem medida.
+struct Load {
+    timer: Option<GpuTimer>,
+    n: usize,
+    ms: f64,
+}
+
+impl Load {
+    fn begin(&mut self, ctx: &ID3D11DeviceContext) {
+        if let Some(ms) = self.timer.as_mut().and_then(|t| t.begin(ctx, self.n)) {
+            self.ms = ema(self.ms, ms);
+        }
+    }
+
+    fn end(&mut self, ctx: &ID3D11DeviceContext, s: &Shared) {
+        if let Some(t) = &self.timer {
+            t.end(ctx, self.n);
+        }
+        self.n += 1;
+        s.gpu_us.store((self.ms * 1000.0) as u32, Relaxed);
+    }
+
+    /// Efeito parado: a medida some do menu e recomeça do zero.
+    fn stop(&mut self, s: &Shared) {
+        self.ms = 0.0;
+        s.gpu_us.store(0, Relaxed);
+    }
 }
 
 impl Dx11 {
@@ -560,7 +590,8 @@ impl Dx11 {
         }
         let (eng, copy) = made?;
         say!("shader: D3D11 pronto, perfil {}", eng.path.display());
-        Ok(Self { sc, hwnd: 0, last: Instant::now(), dev, d10, on12, ctx, state, eng, copy, polled: Instant::now(), seq, bb: None, warned: false, errors: 0 })
+        let load = Load { timer: GpuTimer::new(&dev).ok(), n: 0, ms: 0.0 };
+        Ok(Self { sc, hwnd: 0, last: Instant::now(), dev, d10, on12, ctx, state, eng, copy, polled: Instant::now(), seq, bb: None, warned: false, errors: 0, load })
     }
 
     unsafe fn frame(&mut self, sc: &IDXGISwapChain, desc: &DXGI_SWAP_CHAIN_DESC, s: &Shared) -> Res<()> {
@@ -589,6 +620,7 @@ impl Dx11 {
         }
         let p = &self.eng.profile;
         if !p.on || !p.inject || s.flags.load(Relaxed) & FLAG_COMPARE != 0 || !self.eng.active() {
+            self.load.stop(s);
             return Ok(());
         }
         let (w, h, fmt, samples) = (desc.BufferDesc.Width, desc.BufferDesc.Height, desc.BufferDesc.Format, desc.SampleDesc.Count);
@@ -597,6 +629,7 @@ impl Dx11 {
             DXGI_FORMAT_B8G8R8A8_UNORM | DXGI_FORMAT_B8G8R8A8_UNORM_SRGB => (DXGI_FORMAT_B8G8R8A8_UNORM, false),
             DXGI_FORMAT_R8G8B8A8_UNORM | DXGI_FORMAT_R8G8B8A8_UNORM_SRGB => (DXGI_FORMAT_R8G8B8A8_UNORM, true),
             other => {
+                self.load.stop(s);
                 if !self.warned {
                     self.warned = true;
                     let why = if matches!(other, DXGI_FORMAT_R16G16B16A16_FLOAT | DXGI_FORMAT_R10G10B10A2_UNORM) { "HDR" } else { "formato" };
@@ -653,7 +686,7 @@ impl Dx11 {
                 d10.Flush();
                 let q: &ID3D10Asynchronous = &br.q10;
                 finished(|| (Interface::vtable(q).GetData)(q.as_raw(), std::ptr::null_mut(), 0, 0) == S_OK)?;
-                Self::chain_pass(&mut self.eng, &self.copy, &self.dev, &self.ctx, b, &b.out[0], w, h)?;
+                Self::chain_pass(&mut self.eng, &mut self.load, s, &self.copy, &self.dev, &self.ctx, b, &b.out[0], w, h)?;
                 self.ctx.End(&br.q11);
                 self.ctx.Flush();
                 let c: &ID3D11DeviceContext = &self.ctx;
@@ -670,7 +703,7 @@ impl Dx11 {
                 let res = [Some(back.cast::<ID3D11Resource>()?)];
                 on12.AcquireWrappedResources(&res);
                 self.ctx.CopyResource(&b.raw.0, back);
-                let r = Self::chain_pass(&mut self.eng, &self.copy, &self.dev, &self.ctx, b, &b.out[i], w, h);
+                let r = Self::chain_pass(&mut self.eng, &mut self.load, s, &self.copy, &self.dev, &self.ctx, b, &b.out[i], w, h);
                 on12.ReleaseWrappedResources(&res);
                 self.ctx.Flush();
                 r?;
@@ -686,13 +719,21 @@ impl Dx11 {
                 }
             }
         }
-        Self::chain_pass(&mut self.eng, &self.copy, &self.dev, &self.ctx, b, &b.out[0], w, h)?;
+        Self::chain_pass(&mut self.eng, &mut self.load, s, &self.copy, &self.dev, &self.ctx, b, &b.out[0], w, h)?;
         s.drawn.fetch_add(1, Relaxed);
         Ok(())
     }
 
     /// Da cópia do back buffer (`raw`) até `out`, passando para BGRA quando precisa.
-    unsafe fn chain_pass(eng: &mut Engine, copy: &FullPass, dev: &ID3D11Device, ctx: &ID3D11DeviceContext1, b: &Bb, out: &ID3D11RenderTargetView, w: u32, h: u32) -> Res<()> {
+    /// Medido do começo ao fim (o tempo de GPU que o menu mostra).
+    unsafe fn chain_pass(eng: &mut Engine, load: &mut Load, s: &Shared, copy: &FullPass, dev: &ID3D11Device, ctx: &ID3D11DeviceContext1, b: &Bb, out: &ID3D11RenderTargetView, w: u32, h: u32) -> Res<()> {
+        load.begin(ctx);
+        let r = Self::chain_inner(eng, copy, dev, ctx, b, out, w, h);
+        load.end(ctx, s);
+        r
+    }
+
+    unsafe fn chain_inner(eng: &mut Engine, copy: &FullPass, dev: &ID3D11Device, ctx: &ID3D11DeviceContext1, b: &Bb, out: &ID3D11RenderTargetView, w: u32, h: u32) -> Res<()> {
         let input = match &b.bgra {
             Some((t, v, r)) => {
                 copy.draw(ctx, &b.raw.1, r, [0.0, 0.0, w as f32, h as f32], [0.0; 4])?;

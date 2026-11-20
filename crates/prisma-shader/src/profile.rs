@@ -161,13 +161,18 @@ pub fn params(profile: &Profile) -> Vec<Param> {
 /// Põe o preset no fim dos passes, com os valores dele (`parameters`, `#reference`) no perfil, como mudados: o
 /// "Restaurar padrão" volta ao valor do shader. Valor já no perfil com o mesmo nome dá lugar ao do preset novo.
 pub fn add_pass(p: &mut Profile, path: PathBuf) {
+    insert_pass(p, p.passes.len(), path);
+}
+
+/// `add_pass` na posição `at` (o menu no jogo põe depois do passe escolhido); além do fim vai para o fim.
+pub fn insert_pass(p: &mut Profile, at: usize, path: PathBuf) {
     use librashader::presets::{ShaderFeatures, ShaderPreset};
     if let Ok(preset) = ShaderPreset::try_parse(&path, ShaderFeatures::NONE) {
         for o in &preset.parameters {
             p.set_param(&o.name, Some(o.value));
         }
     }
-    p.passes.push(Pass { on: true, path });
+    p.passes.insert(at.min(p.passes.len()), Pass { on: true, path });
 }
 
 /// Tira o passe `i` e os valores de parâmetro que eram só dele (outro passe com o mesmo nome segura o valor).
@@ -222,6 +227,22 @@ mod tests {
         assert_eq!(p.param("hardScan"), Some(-14.0));
         assert_eq!(p.extra, vec!["futuro=x".to_string()]);
         assert_eq!(Profile::parse(&p.text()), p);
+    }
+
+    #[test]
+    fn insere_e_tira_passe() {
+        let mut p = Profile::default();
+        add_pass(&mut p, "a.slangp".into());
+        add_pass(&mut p, "c.slangp".into());
+        insert_pass(&mut p, 1, "b.slangp".into());
+        insert_pass(&mut p, 99, "d.slangp".into());
+        p.set_param("x", Some(1.0));
+        let names = |p: &Profile| p.passes.iter().map(|x| x.path.to_string_lossy().to_string()).collect::<Vec<_>>();
+        assert_eq!(names(&p), ["a.slangp", "b.slangp", "c.slangp", "d.slangp"]);
+        remove_pass(&mut p, 1);
+        assert_eq!(names(&p), ["a.slangp", "c.slangp", "d.slangp"]);
+        // Valor que nenhum passe lido declara fica (o preset pode só não abrir agora).
+        assert_eq!(p.param("x"), Some(1.0));
     }
 
     #[test]
