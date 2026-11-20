@@ -1335,7 +1335,7 @@ impl App {
             (HK_FORCE, c.hk_force, "Fechar à força", true),
             (HK_EXPLORER, c.hk_explorer, "Reiniciar o Explorer", true),
             (HK_MACRO, c.hk_macro, "Gravar macro e parar", true),
-            (HK_SHOW, c.hk_show, "Mostrar o Prisma", true),
+            (HK_SHOW, c.hk_show, "Mostrar ou esconder o Prisma", true),
             (HK_HDR_MENU, c.hk_hdr_menu, "Menu do HDR no jogo", true),
             (HK_VOL_UP, Hotkey::new(c.vol_mods, VK_VOL_UP), "Aumentar volume", false),
             (HK_VOL_DOWN, Hotkey::new(c.vol_mods, VK_VOL_DOWN), "Diminuir volume", false),
@@ -1475,7 +1475,7 @@ impl App {
             HK_EXPLORER => self.explorer_key(),
             HK_FIND => self.toggle_find(),
             HK_MACRO => self.macro_toggle(None),
-            HK_SHOW => self.show_main(),
+            HK_SHOW => self.toggle_main(),
             HK_SHADER => crate::pages::shaders::toggle_focused(self),
             HK_SHADER_MENU => crate::pages::shaders::menu_focused(self),
             HK_HDR_MENU => self.hdr_menu_key(),
@@ -3971,6 +3971,16 @@ impl App {
     pub fn sync_explorer_menu(&self) {
         if self.cfg.explorer_menu && self.installed {
             crate::sys::shellmenu::set(true);
+        }
+    }
+
+    /// O atalho de mostrar: com a janela na frente e em foco, volta para a bandeja como no X.
+    fn toggle_main(&mut self) {
+        match &self.main {
+            Some(m) if unsafe { GetForegroundWindow() == m.hwnd && !IsIconic(m.hwnd).as_bool() } => unsafe {
+                let _ = PostMessageW(Some(m.hwnd), WM_CLOSE, WPARAM(0), LPARAM(0));
+            },
+            _ => self.show_main(),
         }
     }
 
