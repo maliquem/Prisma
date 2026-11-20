@@ -885,6 +885,18 @@ pub fn focus_monitor() -> RECT {
     }
 }
 
+/// Tempo dos avisos escolhido em Configurações, em segundos.
+static NOTICE_SECS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(crate::config::TOAST_SECS_DEFAULT as u32);
+
+pub fn set_notice_secs(secs: u8) {
+    NOTICE_SECS.store(secs as u32, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Quanto todo aviso fica na tela, em ms: o tempo escolhido em Configurações.
+pub fn notice_ms() -> u32 {
+    NOTICE_SECS.load(std::sync::atomic::Ordering::Relaxed) * 1000
+}
+
 pub struct Toast {
     surface: Layered,
     timer: usize,
@@ -907,7 +919,7 @@ impl Toast {
         Self { surface: Layered::new(hwnd), timer: 0 }
     }
 
-    fn show(&mut self, w: f32, h: f32, bottom: f32, ms: u32, draw: impl FnOnce(&Canvas, Rect)) {
+    fn show(&mut self, w: f32, h: f32, bottom: f32, draw: impl FnOnce(&Canvas, Rect)) {
         let mon = focus_monitor();
         let hwnd = self.surface.hwnd;
         let scale = unsafe { windows::Win32::UI::HiDpi::GetDpiForWindow(hwnd) } as f32 / 96.0;
@@ -917,13 +929,13 @@ impl Toast {
         unsafe {
             let _ = SetWindowPos(hwnd, Some(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
             let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
-            self.timer = SetTimer(Some(hwnd), 1, ms, None);
+            self.timer = SetTimer(Some(hwnd), 1, notice_ms(), None);
         }
     }
 
     pub fn volume(&mut self, name: &str, vol: f32, muted: bool) {
         let name = name.to_string();
-        self.show(400.0, 62.0, 56.0, 1500, move |c, r| {
+        self.show(400.0, 62.0, 56.0, move |c, r| {
             c.round(r, 14.0, PANEL);
             c.text(rect(16.0, 10.0, 300.0, 22.0), &name, 14.0, WHITE, Align::Left, Weight::Regular);
             let t = if muted { "Mudo".to_string() } else { format!("{:.0}%", vol * 100.0) };
@@ -938,17 +950,13 @@ impl Toast {
         self.info_at(text, 56.0);
     }
 
-    /// Aviso a `bottom` DIPs do pé da tela, para não cobrir outra janela flutuante.
+    /// Aviso a `bottom` DIPs do pé da tela, para não cobrir outra janela flutuante. Cada `\n` é
+    /// uma linha a mais.
     pub fn info_at(&mut self, text: &str, bottom: f32) {
-        self.info_for(text, bottom, 1500);
-    }
-
-    /// Aviso que fica `ms` na tela.
-    pub fn info_for(&mut self, text: &str, bottom: f32, ms: u32) {
         crate::report::note(text);
         let text = text.to_string();
-        let tw = measure(&text, 14.0, Weight::Regular, None).0 + 32.0;
-        self.show(tw.max(120.0), 40.0, bottom, ms, move |c, r| {
+        let (tw, th) = measure(&text, 14.0, Weight::Regular, None);
+        self.show((tw + 32.0).max(120.0), (th + 21.0).max(40.0), bottom, move |c, r| {
             c.round(r, 10.0, PANEL);
             c.text(r, &text, 14.0, WHITE, Align::Center, Weight::Regular);
         });
@@ -1167,8 +1175,8 @@ impl MacroHud {
         Self { surface: Layered::new(hwnd) }
     }
 
-    /// `ms` > 0: some sozinho depois desse tempo.
-    fn show(&mut self, w: f32, ms: u32, draw: impl FnOnce(&Canvas, Rect)) {
+    /// `timed`: some sozinho depois do tempo dos avisos.
+    fn show(&mut self, w: f32, timed: bool, draw: impl FnOnce(&Canvas, Rect)) {
         let mon = focus_monitor();
         let hwnd = self.surface.hwnd;
         let scale = unsafe { windows::Win32::UI::HiDpi::GetDpiForWindow(hwnd) } as f32 / 96.0;
@@ -1179,8 +1187,8 @@ impl MacroHud {
             let _ = KillTimer(Some(hwnd), 1);
             let _ = SetWindowPos(hwnd, Some(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
             let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
-            if ms > 0 {
-                SetTimer(Some(hwnd), 1, ms, None);
+            if timed {
+                SetTimer(Some(hwnd), 1, notice_ms(), None);
             }
         }
     }
@@ -1195,7 +1203,7 @@ impl MacroHud {
         // Nome longo (outro idioma, tecla com modificadores): a caixa cresce até 640 e a letra encolhe.
         let lw = measure_raw(&last, 14.0, Weight::Semibold);
         let w = (84.0 + tw + 16.0 + iw + lw + 20.0).clamp(220.0, 640.0);
-        self.show(w, 0, move |c, r| {
+        self.show(w, false, move |c, r| {
             c.round(r, r.h / 2.0, rgb(0x0d0f14).alpha(0.86));
             c.circle(20.0, r.h / 2.0, 5.0, REC);
             c.text_raw(rect(32.0, 0.0, 48.0, r.h), &time, 14.0, WHITE, Align::Left, Weight::Semibold);
@@ -1208,12 +1216,12 @@ impl MacroHud {
         });
     }
 
-    /// Fim da gravação: o texto fica 3 s.
+    /// Fim da gravação: o texto fica o tempo dos avisos.
     pub fn done(&mut self, text: &str) {
         crate::report::note(text);
         let text = crate::i18n::tr(text).into_owned();
         let w = (measure_raw(&text, 14.0, Weight::Regular) + 40.0).clamp(160.0, 640.0);
-        self.show(w, 3000, move |c, r| {
+        self.show(w, true, move |c, r| {
             c.round(r, r.h / 2.0, rgb(0x0d0f14).alpha(0.86));
             c.text_fit(rect(20.0, 0.0, r.w - 40.0, r.h), &text, 14.0, WHITE, Align::Center, Weight::Regular);
         });
@@ -2127,6 +2135,40 @@ mod tests {
         assert!(dodge_up(r(690, 590), 700, 600, 520, 392));
         assert!(!dodge_up(r(900, 300), 700, 600, 520, 392));
         assert!(!dodge_up(r(100, 700), 700, 600, 520, 392));
+    }
+
+    /// Janelas de verdade: o aviso e o fim da macro somem no tempo dos avisos, em 3 s e em 15 s.
+    /// `cargo test notices_follow_chosen_time -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn notices_follow_chosen_time() {
+        for secs in [3u8, 15] {
+            set_notice_secs(secs);
+            let (mut toast, mut hud) = (Toast::new(), MacroHud::new());
+            toast.info("Teste do tempo dos avisos");
+            hud.done("Macro salva");
+            let wins = [toast.surface.hwnd, hud.surface.hwnd];
+            let t = std::time::Instant::now();
+            let mut gone = [None; 2];
+            while gone.contains(&None) && t.elapsed().as_secs() < 40 {
+                unsafe {
+                    let mut msg = MSG::default();
+                    while PeekMessageW(&mut msg, None, 0, 0, PM_REMOVE).as_bool() {
+                        DispatchMessageW(&msg);
+                    }
+                }
+                for (g, h) in gone.iter_mut().zip(wins) {
+                    if g.is_none() && !unsafe { IsWindowVisible(h) }.as_bool() {
+                        *g = Some(t.elapsed().as_secs_f32());
+                    }
+                }
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            println!("{secs} s: aviso {:?} s, macro {:?} s", gone[0], gone[1]);
+            for g in gone {
+                assert!(g.is_some_and(|g| (g - secs as f32).abs() < 0.5), "{secs} s: {gone:?}");
+            }
+        }
     }
 
     /// Custo de um quadro do radial e do teclado, os dois círculos e tudo aceso:

@@ -802,7 +802,7 @@ Volta as opções de ponto de restauração e de desinstalar sem janela ao padr�
 Volta as opções Ver log e Restauração ao padrão. Os ajustes aplicados continuam como estão: para reverter, use Desfazer.	Resets the Show log and Restore point options to default. Applied tweaks stay as they are: use Undo to revert them.
 Esvazia as listas de nunca fechar e sempre fechar, e as sugestões recusadas. Essa ação não fecha nenhum programa.	Empties the never-close and always-close lists and the declined suggestions. This does not close any program.
 Volta o modificador, o passo e o aviso na tela ao padrão.	Resets the modifier, step and on-screen notice to default.
-Volta os atalhos de Otimizar, Fechar à força, Reiniciar o Explorer e Mostrar ou esconder o Prisma, o idioma e a busca de atualização ao padrão.	Resets the Optimize, Force close, Restart Explorer and Show or hide Prisma shortcuts, language and update check to default.
+Volta os atalhos de Otimizar, Fechar à força, Reiniciar o Explorer e Mostrar ou esconder o Prisma, o idioma, o tempo dos avisos e a busca de atualização ao padrão.	Resets the Optimize, Force close, Restart Explorer and Show or hide Prisma shortcuts, the language, the notice duration and the update check to their defaults.
 Fechar à força	Force close
 Encerra na hora o programa em foco, mesmo travado. O que não foi salvo é perdido.	Ends the focused program at once, even if frozen. Anything unsaved is lost.
 {} fechado à força	{} force-closed
@@ -3090,3 +3090,6 @@ Uso, temperatura, plano de energia, HDR e VRR por cima de tudo.	Usage, temperatu
 Funções	Features
 Funções do Prisma	Prisma features
 Desmarque o que você não vai usar: some da barra lateral e para de rodar. Isso muda depois em Configurações.	Uncheck what you won't use: it leaves the sidebar and stops running. You can change this later in Settings.
+Tempo dos avisos	Notice duration
+Quanto tempo todo aviso do Prisma fica na tela. Padrão: 3 s.	How long every Prisma notice stays on screen. Default: 3 s.
+Assim fica o aviso do Prisma	This is how a Prisma notice looks

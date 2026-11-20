@@ -796,7 +796,7 @@ Volta as opções de ponto de restauração e de desinstalar sem janela ao padr�
 Volta as opções Ver log e Restauração ao padrão. Os ajustes aplicados continuam como estão: para reverter, use Desfazer.	将“显示日志”和“还原点”选项恢复默认。已应用的调整保持不变：用“撤销”还原。
 Esvazia as listas de nunca fechar e sempre fechar, e as sugestões recusadas. Essa ação não fecha nenhum programa.	清空从不关闭和始终关闭列表以及已拒绝的建议。不会关闭任何程序。
 Volta o modificador, o passo e o aviso na tela ao padrão.	将修饰键、步长和屏幕提示恢复默认。
-Volta os atalhos de Otimizar, Fechar à força, Reiniciar o Explorer e Mostrar ou esconder o Prisma, o idioma e a busca de atualização ao padrão.	将“优化”、“强制关闭”、“重启资源管理器”和“显示或隐藏 Prisma”快捷键、语言和更新检查恢复默认。
+Volta os atalhos de Otimizar, Fechar à força, Reiniciar o Explorer e Mostrar ou esconder o Prisma, o idioma, o tempo dos avisos e a busca de atualização ao padrão.	将“优化”、“强制关闭”、“重启资源管理器”和“显示或隐藏 Prisma”快捷键、语言、提示显示时长和更新检查恢复默认。
 Fechar à força	强制关闭
 Encerra na hora o programa em foco, mesmo travado. O que não foi salvo é perdido.	立即结束当前程序，即使它已卡死。未保存的内容会丢失。
 {} fechado à força	已强制关闭 {}
@@ -3084,3 +3084,6 @@ Uso, temperatura, plano de energia, HDR e VRR por cima de tudo.	在所有内容�
 Funções	功能
 Funções do Prisma	Prisma 功能
 Desmarque o que você não vai usar: some da barra lateral e para de rodar. Isso muda depois em Configurações.	取消勾选不会用到的功能：它会从侧边栏消失并停止运行。之后可在“设置”中更改。
+Tempo dos avisos	提示时长
+Quanto tempo todo aviso do Prisma fica na tela. Padrão: 3 s.	Prisma 的每条提示在屏幕上停留多久。默认：3 秒。
+Assim fica o aviso do Prisma	Prisma 提示就是这样显示的

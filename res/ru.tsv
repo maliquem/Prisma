@@ -796,7 +796,7 @@ Volta as opções de ponto de restauração e de desinstalar sem janela ao padr�
 Volta as opções Ver log e Restauração ao padrão. Os ajustes aplicados continuam como estão: para reverter, use Desfazer.	Сбрасывает параметры «Показать журнал» и «Точка восстановления» по умолчанию. Применённые настройки остаются: отмените их кнопкой «Отменить».
 Esvazia as listas de nunca fechar e sempre fechar, e as sugestões recusadas. Essa ação não fecha nenhum programa.	Очищает списки «никогда не закрывать» и «всегда закрывать» и отклонённые предложения. Программы не закрываются.
 Volta o modificador, o passo e o aviso na tela ao padrão.	Сбрасывает модификатор, шаг и уведомление на экране по умолчанию.
-Volta os atalhos de Otimizar, Fechar à força, Reiniciar o Explorer e Mostrar ou esconder o Prisma, o idioma e a busca de atualização ao padrão.	Сбрасывает клавиши «Оптимизировать», «Закрыть принудительно», «Перезапустить Проводник» и «Показать или скрыть Prisma», язык и проверку обновлений по умолчанию.
+Volta os atalhos de Otimizar, Fechar à força, Reiniciar o Explorer e Mostrar ou esconder o Prisma, o idioma, o tempo dos avisos e a busca de atualização ao padrão.	Сбрасывает клавиши «Оптимизировать», «Закрыть принудительно», «Перезапустить Проводник» и «Показать или скрыть Prisma», язык, длительность уведомлений и проверку обновлений по умолчанию.
 Fechar à força	Закрыть принудительно
 Encerra na hora o programa em foco, mesmo travado. O que não foi salvo é perdido.	Сразу завершает активную программу, даже зависшую. Несохранённое пропадёт.
 {} fechado à força	{}: закрыто принудительно
@@ -3084,3 +3084,6 @@ Uso, temperatura, plano de energia, HDR e VRR por cima de tudo.	Загрузка
 Funções	Функции
 Funções do Prisma	Функции Prisma
 Desmarque o que você não vai usar: some da barra lateral e para de rodar. Isso muda depois em Configurações.	Снимите галочку с того, чем не будете пользоваться: оно исчезнет с боковой панели и перестанет работать. Позже это можно изменить в настройках.
+Tempo dos avisos	Время уведомлений
+Quanto tempo todo aviso do Prisma fica na tela. Padrão: 3 s.	Как долго любое уведомление Prisma остаётся на экране. По умолчанию: 3 с.
+Assim fica o aviso do Prisma	Так выглядит уведомление Prisma

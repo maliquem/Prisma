@@ -46,12 +46,13 @@ pub fn priority_name(p: u8) -> Option<&'static str> {
     ["Menor atraso", "Equilíbrio", "Qualidade"].get(p as usize).copied()
 }
 
-/// Quanto tempo o aviso fica na tela.
-const WARN_FOR: Duration = Duration::from_secs(6);
-/// Quanto tempo fica a nota de uma opção trocada.
 /// Aviso de latência subindo, que no medidor simples vira uma seta.
 const WORSE: &str = "Conexão piorando: a latência está subindo";
-pub const NOTICE_FOR: Duration = Duration::from_millis(2500);
+
+/// Quanto o aviso e a nota de uma opção trocada ficam na tela: o tempo dos avisos de Configurações.
+fn shown_for() -> Duration {
+    Duration::from_millis(crate::overlays::notice_ms() as u64)
+}
 
 pub struct Hud {
     layer: Layered,
@@ -128,7 +129,7 @@ impl Hud {
                 }
             }
         }
-        if self.warn.is_some_and(|(_, t)| t.elapsed() > WARN_FOR) || !warn_on {
+        if self.warn.is_some_and(|(_, t)| t.elapsed() > shown_for()) || !warn_on {
             self.warn = None;
         }
         let iconic = unsafe { IsIconic(owner).as_bool() };
@@ -169,7 +170,7 @@ impl Hud {
         if let Some((w, _)) = self.warn.filter(|_| meter != 1 || s.is_none()) {
             lines.push((tr(w).into_owned(), WARN, 14.0, Weight::Semibold));
         }
-        if self.notice.as_ref().is_some_and(|n| n.1.elapsed() > NOTICE_FOR) {
+        if self.notice.as_ref().is_some_and(|n| n.1.elapsed() > shown_for()) {
             self.notice = None;
         }
         if let Some((n, _)) = &self.notice {

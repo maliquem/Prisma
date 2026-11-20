@@ -471,8 +471,6 @@ pub struct App {
     /// Página Cópias: histórico, listas e a lista aberta.
     pub cp: crate::pages::copies::Data,
     pub su: crate::pages::updates::Data,
-    /// Página que abre ao clicar na última notificação da bandeja.
-    pub tray_page: Page,
     pub boot_sig: Option<String>,
     pub services: Vec<services::Service>,
     pub svc_filter: u8,
@@ -698,7 +696,6 @@ pub fn start(background: bool) {
             boot_sel: None,
             cp: Default::default(),
             su: Default::default(),
-            tray_page: Page::Share,
             boot_sig: None,
             services: Vec::new(),
             svc_filter: 0,
@@ -1185,23 +1182,6 @@ unsafe fn tray_add(hub: HWND, add: bool) {
     let tip: Vec<u16> = "Prisma".encode_utf16().collect();
     nid.szTip[..tip.len()].copy_from_slice(&tip);
     let _ = Shell_NotifyIconW(if add { NIM_ADD } else { NIM_MODIFY }, &nid);
-}
-
-/// Notificação do Windows pelo ícone da bandeja (clicar abre `App::tray_page`).
-unsafe fn tray_notify(hub: HWND, title: &str, text: &str) {
-    let mut nid = NOTIFYICONDATAW {
-        cbSize: std::mem::size_of::<NOTIFYICONDATAW>() as u32,
-        hWnd: hub,
-        uID: 1,
-        uFlags: NIF_INFO,
-        dwInfoFlags: NIIF_INFO,
-        ..Default::default()
-    };
-    let t: Vec<u16> = title.encode_utf16().take(nid.szInfoTitle.len() - 1).collect();
-    nid.szInfoTitle[..t.len()].copy_from_slice(&t);
-    let b: Vec<u16> = text.encode_utf16().take(nid.szInfo.len() - 1).collect();
-    nid.szInfo[..b.len()].copy_from_slice(&b);
-    let _ = Shell_NotifyIconW(NIM_MODIFY, &nid);
 }
 
 fn tray_remove(hub: HWND) {
@@ -1810,12 +1790,6 @@ impl App {
         }
     }
 
-    /// Notificação da bandeja; clicar nela abre `page`.
-    pub fn notify(&mut self, page: Page, title: &str, text: &str) {
-        self.tray_page = page;
-        unsafe { tray_notify(self.hub, title, text) };
-    }
-
     pub fn go(&mut self, page: Page) {
         self.page = page;
         self.refresh_page();
@@ -1895,8 +1869,7 @@ impl App {
         if msgs.is_empty() {
             return;
         }
-        let text = msgs.join("\n");
-        self.notify(Page::Share, &title, &text);
+        self.toast.info(&format!("{title}\n{}", msgs.join("\n")));
         if self.page == Page::Share {
             self.invalidate();
         }
@@ -3327,6 +3300,7 @@ impl App {
             }
             Defaults::Settings => {
                 crate::i18n::set_lang(self.cfg.lang);
+                crate::overlays::set_notice_secs(self.cfg.toast_secs);
                 self.sync_explorer_menu();
                 self.register_hotkeys();
             }
@@ -3414,7 +3388,7 @@ impl App {
     #[cfg_attr(not(feature = "stream"), allow(dead_code))]
     pub fn share_ask(&mut self, name: &str, perms: &str, code: Option<&str>) -> std::sync::mpsc::Receiver<(bool, bool)> {
         let (tx, rx) = std::sync::mpsc::sync_channel(1);
-        self.toast.info_for(&format!("«{name}» está pedindo para entrar no compartilhamento de tela"), 56.0, 5000);
+        self.toast.info(&format!("«{name}» está pedindo para entrar no compartilhamento de tela"));
         let mut body = vec![format!("Permissões: {perms}.")];
         let (title, buttons): (String, &[(&'static str, bool)]) = match code {
             Some(code) => {
@@ -4665,16 +4639,6 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                 }
                 WM_RBUTTONUP => {
                     with(|a| a.tray_menu());
-                }
-                // Clicou na notificação de quem conectou: abre a aba Conectados.
-                x if x == NIN_BALLOONUSERCLICK => {
-                    with(|a| {
-                        if a.tray_page == Page::Share {
-                            crate::pages::share::open_room();
-                        }
-                        a.show_main();
-                        a.go(a.tray_page);
-                    });
                 }
                 _ => {}
             }
