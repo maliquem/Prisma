@@ -2976,3 +2976,15 @@ O jogo não usa o HDR do Prisma	El juego no usa el HDR de Prisma
 O Prisma não abriu o jogo	Prisma no abrió el juego
 Brilho da interface	Brillo de la interfaz
 Junto	Unido
+Atualizando…	Actualizando…
+Excluir para sempre	Eliminar para siempre
+Excluir para sempre?	¿Eliminar para siempre?
+{} arquivos, do maior para o menor. Ctrl e Shift escolhem vários.	{} archivos, del mayor al menor. Ctrl y Mayús seleccionan varios.
+{} escolhidos, {}	{} seleccionados, {}
+Clique num arquivo para escolher; o botão direito abre o menu.	Haz clic en un archivo para seleccionarlo; el botón derecho abre el menú.
+Arquivos do sistema	Archivos del sistema
+O Prisma não apaga arquivos do Windows, das pastas de programas nem os de paginação e hibernação.	Prisma no elimina archivos de Windows, de las carpetas de programas ni los de paginación e hibernación.
+{} arquivos, {} no total, serão apagados para sempre. Eles não vão para a Lixeira e não dá para recuperar.	{} archivos, {} en total, se eliminarán para siempre. No van a la Papelera y no se pueden recuperar.
+{} arquivos, {} no total, serão apagados para sempre. Eles não vão para a Lixeira e não dá para recuperar. {} arquivos do sistema ficam de fora.	{} archivos, {} en total, se eliminarán para siempre. No van a la Papelera y no se pueden recuperar. {} archivos del sistema quedan fuera.
+{} arquivos apagados, {} liberados	{} archivos eliminados, {} liberados
+Alguns arquivos não foram apagados	Algunos archivos no se eliminaron

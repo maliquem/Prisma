@@ -2982,3 +2982,15 @@ O jogo não usa o HDR do Prisma	The game doesn't use Prisma HDR
 O Prisma não abriu o jogo	Prisma didn't open the game
 Brilho da interface	Interface brightness
 Junto	Linked
+Atualizando…	Refreshing…
+Excluir para sempre	Delete permanently
+Excluir para sempre?	Delete permanently?
+{} arquivos, do maior para o menor. Ctrl e Shift escolhem vários.	{} files, largest first. Ctrl and Shift select several.
+{} escolhidos, {}	{} selected, {}
+Clique num arquivo para escolher; o botão direito abre o menu.	Click a file to select it; right-click opens the menu.
+Arquivos do sistema	System files
+O Prisma não apaga arquivos do Windows, das pastas de programas nem os de paginação e hibernação.	Prisma does not delete Windows files, files in program folders, or the paging and hibernation files.
+{} arquivos, {} no total, serão apagados para sempre. Eles não vão para a Lixeira e não dá para recuperar.	{} files, {} in total, will be deleted permanently. They do not go to the Recycle Bin and cannot be recovered.
+{} arquivos, {} no total, serão apagados para sempre. Eles não vão para a Lixeira e não dá para recuperar. {} arquivos do sistema ficam de fora.	{} files, {} in total, will be deleted permanently. They do not go to the Recycle Bin and cannot be recovered. {} system files are left out.
+{} arquivos apagados, {} liberados	{} files deleted, {} freed
+Alguns arquivos não foram apagados	Some files were not deleted

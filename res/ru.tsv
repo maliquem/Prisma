@@ -2976,3 +2976,15 @@ O jogo não usa o HDR do Prisma	Игра не использует HDR Prisma
 O Prisma não abriu o jogo	Prisma не запустил игру
 Brilho da interface	Яркость интерфейса
 Junto	Вместе
+Atualizando…	Обновление…
+Excluir para sempre	Удалить навсегда
+Excluir para sempre?	Удалить навсегда?
+{} arquivos, do maior para o menor. Ctrl e Shift escolhem vários.	Файлов: {}, от большего к меньшему. Ctrl и Shift выбирают несколько.
+{} escolhidos, {}	Выбрано: {}, {}
+Clique num arquivo para escolher; o botão direito abre o menu.	Щёлкните файл, чтобы выбрать его; правая кнопка открывает меню.
+Arquivos do sistema	Системные файлы
+O Prisma não apaga arquivos do Windows, das pastas de programas nem os de paginação e hibernação.	Prisma не удаляет файлы Windows, файлы из папок программ, а также файлы подкачки и гибернации.
+{} arquivos, {} no total, serão apagados para sempre. Eles não vão para a Lixeira e não dá para recuperar.	Файлов: {}, всего {}, будут удалены навсегда. Они не попадут в корзину, и восстановить их будет нельзя.
+{} arquivos, {} no total, serão apagados para sempre. Eles não vão para a Lixeira e não dá para recuperar. {} arquivos do sistema ficam de fora.	Файлов: {}, всего {}, будут удалены навсегда. Они не попадут в корзину, и восстановить их будет нельзя. Системных файлов не затронуто: {}.
+{} arquivos apagados, {} liberados	Удалено файлов: {}, освобождено: {}
+Alguns arquivos não foram apagados	Некоторые файлы не удалены

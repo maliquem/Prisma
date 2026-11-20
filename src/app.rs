@@ -449,6 +449,13 @@ pub struct App {
     /// Pasta pedida pelo menu do Explorer, aberta quando a análise do disco termina.
     pub scan_goto: Option<String>,
     pub scan_delete: Option<u32>,
+    /// Tipo aberto na lista de tipos: extensão, versão da análise e arquivos, do maior para o menor.
+    pub scan_type: Option<(String, u32, Vec<u32>)>,
+    /// Arquivos escolhidos na lista do tipo, e a linha do último clique (para o Shift).
+    pub scan_pick: Vec<u32>,
+    pub scan_anchor: usize,
+    /// Arquivos a apagar para sempre, já confirmados.
+    pub scan_purge: Vec<u32>,
     pub installed: bool,
     pub boot_items: Vec<autostart::Item>,
     pub boot_sel: Option<usize>,
@@ -669,6 +676,10 @@ pub fn start(background: bool) {
             scan_sel: None,
             scan_goto: None,
             scan_delete: None,
+            scan_type: None,
+            scan_pick: Vec::new(),
+            scan_anchor: 0,
+            scan_purge: Vec::new(),
             installed: crate::startup::is_installed(),
             boot_items: Vec::new(),
             boot_sel: None,

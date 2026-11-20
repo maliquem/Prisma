@@ -120,6 +120,9 @@ Mostra velocidade, tempo ativo e espaço de cada disco, com nota de saúde pelo 
 Analisa um disco inteiro e mostra pastas, maiores arquivos, tipos e um mapa visual.
 
 - **Dá para:** abrir no Explorador e, como administrador, mandar para a Lixeira.
+- **Atualizar a pasta:** em Pastas, **Atualizar** lê de novo só a pasta aberta, sem analisar o disco todo. O tamanho novo vale para ela e para as pastas acima, até o disco.
+- **Arquivos de um tipo:** clique num tipo em **Tipos de arquivo** para ver todos os arquivos dele no disco, do maior para o menor, com a pasta de cada um. Ctrl + clique junta ou tira um arquivo da escolha, Shift + clique pega vários seguidos. O botão direito abre no Explorador ou exclui.
+- **Excluir para sempre:** os arquivos escolhidos são apagados sem passar pela Lixeira e não dá para recuperar. Antes, o Prisma diz quantos são e quanto espaço liberam. Arquivo em uso ou sem permissão fica e aparece no fim. Arquivos do Windows, das pastas de programas e os de paginação e hibernação ficam de fora.
 - **Pelo Explorador:** com a opção ligada em Configurações, clique com o botão direito numa pasta, no fundo de uma pasta ou num disco e escolha **Ver o espaço em disco com o Prisma**. O Prisma analisa o disco e abre já nessa pasta. No Windows 11 a entrada fica em **Mostrar mais opções**.
 - **Não dá para:** usar a leitura rápida sem administrador ou em disco que não seja NTFS.
 

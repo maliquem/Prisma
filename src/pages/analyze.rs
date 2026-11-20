@@ -67,6 +67,51 @@ fn open_in_explorer(path: &str, select: bool) {
     let _ = std::process::Command::new(crate::sys::system_tool("explorer")).raw_arg(arg).spawn();
 }
 
+fn type_name(ext: &str) -> String {
+    if ext.is_empty() { "Sem extensão".to_string() } else { format!(".{ext}") }
+}
+
+/// Clique numa linha da lista do tipo: Ctrl junta ou tira, Shift pega do último clique até aqui.
+fn pick(app: &mut App, kids: &[u32], row: usize) {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyState, VIRTUAL_KEY, VK_CONTROL, VK_SHIFT};
+    let held = |k: VIRTUAL_KEY| unsafe { GetKeyState(k.0 as i32) } < 0;
+    let k = kids[row];
+    if held(VK_SHIFT) {
+        let a = app.scan_anchor.min(kids.len() - 1);
+        app.scan_pick = kids[a.min(row)..=a.max(row)].to_vec();
+    } else if held(VK_CONTROL) {
+        match app.scan_pick.iter().position(|x| *x == k) {
+            Some(p) => drop(app.scan_pick.remove(p)),
+            None => app.scan_pick.push(k),
+        }
+        app.scan_anchor = row;
+    } else {
+        (app.scan_pick, app.scan_anchor) = (vec![k], row);
+    }
+}
+
+/// Escolhidos que podem ser apagados para sempre, e quantos ficam de fora por serem do sistema.
+fn deletable(app: &App, s: &Scan) -> (Vec<u32>, usize) {
+    let ok: Vec<u32> = app.scan_pick.iter().copied().filter(|i| s.exists(*i) && !mft::system_file(&s.path(*i))).collect();
+    let skip = app.scan_pick.len() - ok.len();
+    (ok, skip)
+}
+
+fn ask_purge(ui: &mut Ui, app: &App, s: &Scan) {
+    let (ok, skip) = deletable(app, s);
+    if ok.is_empty() {
+        ui.notice("Arquivos do sistema", "O Prisma não apaga arquivos do Windows, das pastas de programas nem os de paginação e hibernação.");
+        return;
+    }
+    let size = fmt_size(ok.iter().map(|i| s.nodes[*i as usize].size).sum());
+    let body = if skip == 0 {
+        format!("{} arquivos, {size} no total, serão apagados para sempre. Eles não vão para a Lixeira e não dá para recuperar.", ok.len())
+    } else {
+        format!("{} arquivos, {size} no total, serão apagados para sempre. Eles não vão para a Lixeira e não dá para recuperar. {skip} arquivos do sistema ficam de fora.", ok.len())
+    };
+    ui.ask("scan-purge", "Excluir para sempre?", &body);
+}
+
 trait RawArg {
     fn raw_arg(&mut self, a: String) -> &mut Self;
 }
@@ -152,6 +197,40 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
             }
         }
     }
+    let purge = std::mem::take(&mut app.scan_purge);
+    if !purge.is_empty() {
+        let mut g = guard.lock().unwrap();
+        if let Some(s) = g.as_mut() {
+            let (mut n, mut freed, mut fails) = (0, 0, Vec::new());
+            // shortcut: apaga durante o desenho; milhares de arquivos seguram a tela alguns segundos, passar para uma thread se incomodar.
+            for i in purge {
+                let path = s.path(i);
+                if !s.exists(i) || mft::system_file(&path) {
+                    continue;
+                }
+                match std::fs::remove_file(&path) {
+                    Ok(()) => {
+                        freed += s.nodes[i as usize].size;
+                        n += 1;
+                        s.forget(i);
+                        app.log(&format!("apagou para sempre {path}"));
+                    }
+                    Err(e) => fails.push(format!("{path}: {e}")),
+                }
+            }
+            drop(g);
+            if n > 0 {
+                app.toast.info(&format!("{n} arquivos apagados, {} liberados", fmt_size(freed)));
+            }
+            if !fails.is_empty() {
+                let mut body = fails.iter().take(12).cloned().collect::<Vec<_>>().join("\n");
+                if fails.len() > 12 {
+                    body += &format!("\n{}", crate::i18n::tr(&format!("e mais {}", fails.len() - 12)));
+                }
+                ui.notice("Alguns arquivos não foram apagados", &body);
+            }
+        }
+    }
 
     let mut d = app.scan_drive;
     if ui.select("drv", sel, &opts, &mut d) {
@@ -160,17 +239,33 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
 }
 
 fn draw_result(ui: &mut Ui, app: &mut App, s: &Scan, area: Rect) {
-    let cur = match app.scan_at {
-        Some(c) if (c as usize) < s.nodes.len() && s.exists(c) => c,
-        _ => s.root,
-    };
+    // Pasta aberta que sumiu (apagada ou lida de novo): fica na mais próxima acima que ainda existe.
+    let mut cur = app.scan_at.filter(|c| (*c as usize) < s.nodes.len()).unwrap_or(s.root);
+    for _ in 0..512 {
+        if s.exists(cur) || cur == s.root {
+            break;
+        }
+        cur = s.nodes[cur as usize].parent;
+    }
     let lw = (area.w * 0.46).floor();
     let l = rect(area.x, area.y, lw, area.h);
     ui.card(l);
     let mut next = None;
     let path = s.path(cur);
+    // A lista do tipo aberto é refeita quando uma pasta foi lida de novo ou a análise é outra.
+    if let Some(t) = app.scan_type.as_mut().filter(|t| t.1 != s.version) {
+        t.2 = s.files_of(&t.0);
+        t.1 = s.version;
+        app.scan_pick.clear();
+    }
+    if app.scan_type.is_none() && app.scan_tab == 2 {
+        app.scan_tab = 0;
+    }
+    let mut tabs = vec!["Pastas".to_string(), "Maiores arquivos".to_string()];
+    tabs.extend(app.scan_type.as_ref().map(|t| type_name(&t.0)));
+    let tabs: Vec<&str> = tabs.iter().map(|t| t.as_str()).collect();
     let mut tab = app.scan_tab as usize;
-    if ui.segment("scan-tab", l.x + 12.0, l.y + 10.0, 36.0, &["Pastas", "Maiores arquivos"], &mut tab) {
+    if ui.segment("scan-tab", l.x + 12.0, l.y + 10.0, 36.0, &tabs, &mut tab) {
         app.scan_tab = tab as u8;
         ui.reset_scroll("tree");
     }
@@ -182,19 +277,34 @@ fn draw_result(ui: &mut Ui, app: &mut App, s: &Scan, area: Rect) {
         if ui.button_ex("up", rect(l.x + 12.0, l.y + 52.0, 44.0, 34.0), "←", false, cur != s.root) {
             next = Some(s.nodes[cur as usize].parent);
         }
-        ui.c.text(rect(l.x + 64.0, l.y + 52.0, l.w - 76.0, 34.0), &path, 13.0, TEXT2, Align::Left, Weight::Regular);
+        ui.c.text(rect(l.x + 64.0, l.y + 52.0, l.w - 196.0, 34.0), &path, 13.0, TEXT2, Align::Left, Weight::Regular);
+        // Lê de novo só esta pasta: a diferença de tamanho sobe até a raiz.
+        let busy = app.scan_progress.running.load(Ordering::Relaxed);
+        if ui.button_ex("scan-re", rect(l.right() - 124.0, l.y + 52.0, 112.0, 34.0), if busy { "Atualizando…" } else { "Atualizar" }, false, !busy) {
+            mft::refresh(path.clone(), cur, app.scan_progress.clone(), app.scan.clone());
+        }
     } else {
-        let t = format!("Os {} maiores arquivos do disco", s.largest.len());
+        let t = if app.scan_tab == 1 {
+            format!("Os {} maiores arquivos do disco", s.largest.len())
+        } else if app.scan_pick.is_empty() {
+            let n = app.scan_type.as_ref().map_or(0, |t| t.2.len());
+            format!("{n} arquivos, do maior para o menor. Ctrl e Shift escolhem vários.")
+        } else {
+            let size: u64 = app.scan_pick.iter().map(|i| s.nodes[*i as usize].size).sum();
+            format!("{} escolhidos, {}", app.scan_pick.len(), fmt_size(size))
+        };
         ui.c.text(rect(l.x + 16.0, l.y + 52.0, l.w - 32.0, 34.0), &t, 13.0, TEXT2, Align::Left, Weight::Regular);
     }
 
     let total = s.nodes[cur as usize].size.max(1);
     let big = s.largest.first().map_or(1, |f| s.nodes[*f as usize].size).max(1);
-    let kids: Vec<u32> = if app.scan_tab == 0 {
-        s.children(cur).iter().copied().filter(|k| s.exists(*k)).collect()
-    } else {
-        s.largest.clone()
+    let kids: Vec<u32> = match app.scan_tab {
+        0 => s.children(cur).iter().copied().filter(|k| s.exists(*k)).collect(),
+        1 => s.largest.clone(),
+        // Apagar ou ler de novo muda a versão, e a lista é refeita lá em cima: só tem o que existe.
+        _ => app.scan_type.as_ref().map_or(Vec::new(), |t| t.2.clone()),
     };
+    let typed = app.scan_tab == 2;
     ui.begin_scroll("tree", list, kids.len() as f32 * 40.0);
     let first = (ui.scroll_y() / 40.0) as usize;
     let last = first + (list.h / 40.0) as usize + 2;
@@ -202,7 +312,7 @@ fn draw_result(ui: &mut Ui, app: &mut App, s: &Scan, area: Rect) {
         let n = &s.nodes[k as usize];
         let y = list.y + row as f32 * 40.0;
         let r = rect(list.x, y, list.w, 38.0);
-        if sel == Some(k) {
+        if if typed { app.scan_pick.contains(&k) } else { sel == Some(k) } {
             ui.c.round(r, 6.0, CARD2);
         } else if ui.is_hover(r) {
             ui.c.round(r, 6.0, CARD2.alpha(0.5));
@@ -216,13 +326,27 @@ fn draw_result(ui: &mut Ui, app: &mut App, s: &Scan, area: Rect) {
                 entered = true;
             }
         }
-        if !entered && ui.hit(&format!("n{k}"), rect(r.x, r.y, r.w - 40.0, r.h)) {
+        if typed {
+            if ui.hit(&format!("n{k}"), r) {
+                pick(app, &kids, row);
+            }
+            if ui.right_hit(r) {
+                if !app.scan_pick.contains(&k) {
+                    (app.scan_pick, app.scan_anchor) = (vec![k], row);
+                }
+                ui.menu("scan-file", &[("Abrir no Explorador", true), ("Excluir para sempre", true)]);
+            }
+        } else if !entered && ui.hit(&format!("n{k}"), rect(r.x, r.y, r.w - 40.0, r.h)) {
             sel = Some(k);
         }
         let name = s.name(k);
         let color = if n.is_dir() { ACCENT } else { TEXT };
         ui.c.text(rect(r.x + 10.0, y + 2.0, r.w - 150.0, 22.0), name, 14.0, color, Align::Left, Weight::Regular);
         ui.c.text(rect(r.right() - 138.0, y + 2.0, 96.0, 22.0), &fmt_size(n.size), 13.0, TEXT, Align::Right, Weight::Regular);
+        if typed {
+            ui.c.text(rect(r.x + 10.0, y + 22.0, r.w - 20.0, 16.0), &s.path(n.parent), 11.0, MUTED, Align::Left, Weight::Regular);
+            continue;
+        }
         let frac = n.size as f32 / if app.scan_tab == 0 { total as f32 } else { big as f32 };
         let bar = r.w - 60.0;
         ui.c.round(rect(r.x + 10.0, y + 28.0, bar, 3.0), 1.5, SIDE);
@@ -230,21 +354,47 @@ fn draw_result(ui: &mut Ui, app: &mut App, s: &Scan, area: Rect) {
     }
     ui.end_scroll();
     app.scan_sel = sel;
+    match ui.menu_pick("scan-file") {
+        Some(0) => {
+            if let Some(f) = app.scan_pick.first() {
+                open_in_explorer(&s.path(*f), true);
+            }
+        }
+        Some(_) => ask_purge(ui, app, s),
+        None => {}
+    }
 
     // Ações sobre o item escolhido; sem escolha, valem para a pasta aberta.
     let f = rect(l.x + 12.0, l.bottom() - foot, l.w - 24.0, foot - 10.0);
-    let target = sel.unwrap_or(cur);
-    let tp = s.path(target);
-    ui.c.line(f.x, f.y, f.right(), f.y, LINE, 1.0);
-    ui.c.text(rect(f.x, f.y + 6.0, f.w, 34.0), &tp, 12.0, TEXT2, Align::Left, Weight::Regular);
-    let bw = (f.w - 8.0) / 2.0;
-    if ui.button("exp", rect(f.x, f.y + 42.0, bw, 44.0), "Abrir no Explorador", false) {
-        open_in_explorer(&tp, target != s.root);
+    if typed {
+        ui.c.line(f.x, f.y, f.right(), f.y, LINE, 1.0);
+        let first = app.scan_pick.first().map(|i| s.path(*i));
+        let tp = first.clone().unwrap_or_else(|| "Clique num arquivo para escolher; o botão direito abre o menu.".to_string());
+        ui.c.text(rect(f.x, f.y + 6.0, f.w, 34.0), &tp, 12.0, TEXT2, Align::Left, Weight::Regular);
+        let bw = (f.w - 8.0) / 2.0;
+        if ui.button_ex("exp-f", rect(f.x, f.y + 42.0, bw, 44.0), "Abrir no Explorador", false, first.is_some()) {
+            open_in_explorer(first.as_deref().unwrap_or_default(), true);
+        }
+        if ui.button_ex("del-f", rect(f.x + bw + 8.0, f.y + 42.0, bw, 44.0), "Excluir para sempre", false, first.is_some()) {
+            ask_purge(ui, app, s);
+        }
+    } else {
+        let target = sel.unwrap_or(cur);
+        let tp = s.path(target);
+        ui.c.line(f.x, f.y, f.right(), f.y, LINE, 1.0);
+        ui.c.text(rect(f.x, f.y + 6.0, f.w, 34.0), &tp, 12.0, TEXT2, Align::Left, Weight::Regular);
+        let bw = (f.w - 8.0) / 2.0;
+        if ui.button("exp", rect(f.x, f.y + 42.0, bw, 44.0), "Abrir no Explorador", false) {
+            open_in_explorer(&tp, target != s.root);
+        }
+        let can = app.elevated && sel.is_some() && !mft::protected(&tp);
+        let label = if app.elevated { "Apagar" } else { "Apagar pede admin" };
+        if ui.button_ex("del", rect(f.x + bw + 8.0, f.y + 42.0, bw, 44.0), label, false, can) {
+            ui.ask("scan-del", "Enviar para a Lixeira?", &tp);
+        }
     }
-    let can = app.elevated && sel.is_some() && !mft::protected(&tp);
-    let label = if app.elevated { "Apagar" } else { "Apagar pede admin" };
-    if ui.button_ex("del", rect(f.x + bw + 8.0, f.y + 42.0, bw, 44.0), label, false, can) {
-        ui.ask("scan-del", "Enviar para a Lixeira?", &tp);
+    if ui.answered("scan-purge") {
+        app.scan_purge = deletable(app, s).0;
     }
     if ui.answered("scan-del") {
         app.scan_delete = sel;
@@ -282,9 +432,20 @@ fn draw_result(ui: &mut Ui, app: &mut App, s: &Scan, area: Rect) {
     let list = rect(t.x + 8.0, t.y + 38.0, t.w - 16.0, t.h - 44.0);
     let vol = s.nodes[s.root as usize].size.max(1);
     ui.begin_scroll("types", list, s.types.len() as f32 * 30.0);
+    let mut open = None;
     for (i, ty) in s.types.iter().enumerate() {
         let y = list.y + i as f32 * 30.0;
-        let name = if ty.ext.is_empty() { "Sem extensão".to_string() } else { format!(".{}", ty.ext) };
+        let row = rect(list.x, y, list.w, 30.0);
+        if typed && app.scan_type.as_ref().is_some_and(|t| t.0 == ty.ext) {
+            ui.c.round(row, 6.0, CARD2);
+        } else if ui.is_hover(row) {
+            ui.c.round(row, 6.0, CARD2.alpha(0.5));
+        }
+        // Clique no tipo: lista os arquivos dele, do maior para o menor.
+        if ui.hit(&format!("ty{i}"), row) {
+            open = Some(ty.ext.clone());
+        }
+        let name = type_name(&ty.ext);
         ui.c.round(rect(list.x + 8.0, y + 9.0, 12.0, 12.0), 3.0, tint(&ty.ext));
         ui.c.text(rect(list.x + 28.0, y, 130.0, 30.0), &name, 13.0, TEXT, Align::Left, Weight::Regular);
         let info = format!("{} arquivos", ty.files);
@@ -294,6 +455,13 @@ fn draw_result(ui: &mut Ui, app: &mut App, s: &Scan, area: Rect) {
         ui.c.text(rect(list.right() - 92.0, y, 84.0, 30.0), &pct, 12.0, MUTED, Align::Right, Weight::Regular);
     }
     ui.end_scroll();
+    if let Some(e) = open {
+        // Versão 0 nunca é de uma análise: a lista é montada no próximo desenho.
+        app.scan_type = Some((e, 0, Vec::new()));
+        (app.scan_pick, app.scan_anchor, app.scan_tab) = (Vec::new(), 0, 2);
+        ui.reset_scroll("tree");
+        ui.s.needs_redraw = true;
+    }
 
     if let Some(n) = next {
         app.scan_at = Some(n);

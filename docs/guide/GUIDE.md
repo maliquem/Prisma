@@ -120,6 +120,9 @@ Shows speed, active time and space of each disk, with a SMART health grade: Good
 Scans a whole disk and shows folders, largest files, types and a visual map.
 
 - **You can:** open items in Explorer and, as administrator, send them to the Recycle Bin.
+- **Refresh a folder:** in Folders, **Update** reads only the open folder again, without scanning the whole disk. The new size applies to it and to the folders above it, up to the disk.
+- **Files of one type:** click a type in **File types** to see every file of that type on the disk, largest first, with each one's folder. Ctrl + click adds or removes a file from the selection, Shift + click picks a run of files. Right-click opens in Explorer or deletes.
+- **Delete permanently:** the selected files are deleted without going to the Recycle Bin and cannot be recovered. First Prisma says how many there are and how much space they free. A file in use or without permission stays and is listed at the end. Windows files, program folders and the page and hibernation files are left out.
 - **From Explorer:** with the option on in Settings, right-click a folder, the background of a folder or a drive and choose **See disk space with Prisma**. Prisma scans the disk and opens on that folder. On Windows 11 the entry is under **Show more options**.
 - **You can't:** use the fast scan without administrator or on a disk that is not NTFS.
 
