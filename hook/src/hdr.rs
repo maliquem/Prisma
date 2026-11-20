@@ -2,7 +2,8 @@
 //! No `Present`, um passe de tela cheia passa o quadro do jogo pela nossa curva: no SDR, gama 2.2,
 //! paper white, brilhos até o pico e saturação; no HDR do próprio jogo (HDR10 ou scRGB), o reajuste
 //! pela calibração (paper white, saturação, pico com ombro suave e preto). A interface pode sair
-//! separada da cena, com brilho próprio. Só D3D11 e só janela: o resto passa direto.
+//! separada da cena, com brilho próprio. D3D11 aqui, D3D12 em `hdr12.rs` (a cadeia, a calibração e a
+//! separação são as mesmas), Vulkan em `hdrvk.rs`. Só janela: o resto passa direto.
 
 use std::cell::Cell;
 use std::ffi::c_void;
@@ -19,7 +20,7 @@ use windows::Win32::Graphics::Dxgi::*;
 use windows::Win32::Graphics::Gdi::{MonitorFromWindow, MONITOR_DEFAULTTONEAREST};
 use windows::Win32::UI::WindowsAndMessaging::IsWindow;
 
-use crate::{patch, unpatch, Ptr, Shared};
+use crate::{hdr12, patch, unpatch, Ptr, Shared};
 
 const SLOT_CREATE: usize = 10;
 const SLOT_CREATE_HWND: usize = 15;
@@ -91,10 +92,10 @@ pub const MODE_SCRGB: u32 = 2;
 
 /// Separação da interface no quadro da vez: nada visto, cena guardada, interface por cima, ou um passe
 /// de tela cheia depois da interface (a separação falhou neste quadro).
-const PHASE_NONE: u32 = 0;
-const PHASE_SCENE: u32 = 1;
-const PHASE_UI: u32 = 2;
-const PHASE_LATE: u32 = 3;
+pub(crate) const PHASE_NONE: u32 = 0;
+pub(crate) const PHASE_SCENE: u32 = 1;
+pub(crate) const PHASE_UI: u32 = 2;
+pub(crate) const PHASE_LATE: u32 = 3;
 /// shortcut: um proxy só separa a interface (o mais novo); jogo com duas janelas D3D11 fica sem na outra.
 static CTX: AtomicUsize = AtomicUsize::new(0);
 /// O buffer do jogo que separa, e o tamanho dele (largura << 32 | altura). Zero: nenhum.
@@ -106,13 +107,22 @@ static PHASE: AtomicU32 = AtomicU32::new(PHASE_NONE);
 thread_local! {
     /// Nosso código rodando nesta linha (criar, redimensionar, desenhar, o resto do Present): os
     /// ganchos deixam passar direto. Evita trava dupla e mostra a cadeia de verdade a overlays.
-    static INSIDE: Cell<bool> = const { Cell::new(false) };
+    pub(crate) static INSIDE: Cell<bool> = const { Cell::new(false) };
 }
 
-const SHADER: &str = r#"
+/// O mesmo passe nas três APIs: o D3D11 e o D3D12 compilam pelo fxc, o Vulkan pelo glslang (`hdr.spv`,
+/// gerado no teste `spirv_matches_hlsl`). No D3D12 o `RS` é a assinatura raiz: constantes em b0, imagens em t0 e t1.
+pub(crate) const SHADER: &str = r#"
+#ifdef VULKAN
+[[vk::binding(0)]] Texture2D<float4> tex;
+[[vk::binding(1)]] Texture2D<float4> scene;
+[[vk::push_constant]] cbuffer C { float paper, peak, gamma, sat, boost, black, ui; uint srgb, on, split, mode, pad; };
+#else
 Texture2D<float4> tex : register(t0);
 Texture2D<float4> scene : register(t1);
 cbuffer C : register(b0) { float paper, peak, gamma, sat, boost, black, ui; uint srgb, on, split, mode, pad; };
+#define RS "RootConstants(num32BitConstants=12, b0), DescriptorTable(SRV(t0, numDescriptors=2))"
+#endif
 static const float3 LUM = float3(0.2126, 0.7152, 0.0722);
 static const float3x3 BT2020_TO_709 = { 1.6605, -0.5876, -0.0728, -0.1246, 1.1329, -0.0083, -0.0182, -0.1006, 1.1187 };
 float4 vs(uint id : SV_VertexID) : SV_Position {
@@ -164,7 +174,7 @@ float4 ps(float4 p : SV_Position) : SV_Target {
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-struct Params {
+pub(crate) struct Params {
     paper: f32,
     peak: f32,
     gamma: f32,
@@ -181,12 +191,12 @@ struct Params {
 
 /// O que o jogo pediu: o buffer dele segue isso, não a cadeia de verdade.
 #[derive(Clone, Copy)]
-struct Want {
-    width: u32,
-    height: u32,
-    format: DXGI_FORMAT,
+pub(crate) struct Want {
+    pub width: u32,
+    pub height: u32,
+    pub format: DXGI_FORMAT,
     samples: u32,
-    usage: u32,
+    pub usage: u32,
     /// O espaço de cor que o jogo deu à cadeia: G2084 no buffer de 10 bits é HDR10.
     space: DXGI_COLOR_SPACE_TYPE,
 }
@@ -196,7 +206,7 @@ impl Want {
         Self { width, height, format, samples, usage, space: DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709 }
     }
 
-    fn mode(&self) -> u32 {
+    pub fn mode(&self) -> u32 {
         match (self.format, self.space) {
             (DXGI_FORMAT_R16G16B16A16_FLOAT, _) => MODE_SCRGB,
             (DXGI_FORMAT_R10G10B10A2_UNORM, DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020) => MODE_HDR10,
@@ -298,7 +308,7 @@ fn proxies() -> MutexGuard<'static, Vec<Proxy>> {
     PROXIES.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-fn shared() -> Option<&'static Shared> {
+pub(crate) fn shared() -> Option<&'static Shared> {
     let at = crate::SHARED.load(Relaxed);
     (at != 0).then(|| unsafe { &*(at as *const Shared) })
 }
@@ -308,7 +318,7 @@ pub fn wanted() -> bool {
     shared().is_some_and(|s| s.hdr_proxy.load(Relaxed) != 0)
 }
 
-fn note(hr: HRESULT) {
+pub(crate) fn note(hr: HRESULT) {
     if let Some(s) = shared() {
         s.hdr_error.store(hr.0 as u32, Relaxed);
     }
@@ -319,7 +329,7 @@ fn want_of(chain: Ptr) -> Option<Want> {
     if INSIDE.get() {
         return None;
     }
-    proxies().iter().find(|p| p.chain == chain as usize).map(|p| p.want)
+    proxies().iter().find(|p| p.chain == chain as usize).map(|p| p.want).or_else(|| hdr12::proxies().iter().find(|p| p.chain == chain as usize).map(|p| p.want))
 }
 
 /// Roda `f` marcado como nosso: o resto do `Present` (e overlays pendurados nele) vê a cadeia de verdade.
@@ -330,23 +340,23 @@ pub fn passthrough<T>(f: impl FnOnce() -> T) -> T {
     r
 }
 
-unsafe fn compile(target: PCSTR, entry: PCSTR) -> Result<ID3DBlob> {
+pub(crate) unsafe fn compile(target: PCSTR, entry: PCSTR) -> Result<ID3DBlob> {
     let mut blob = None;
     D3DCompile(SHADER.as_ptr() as *const _, SHADER.len(), None, None, None, entry, target, D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &mut blob, None)?;
     blob.ok_or_else(|| E_FAIL.into())
 }
 
-unsafe fn bytes(b: &ID3DBlob) -> &[u8] {
+pub(crate) unsafe fn bytes(b: &ID3DBlob) -> &[u8] {
     std::slice::from_raw_parts(b.GetBufferPointer() as *const u8, b.GetBufferSize())
 }
 
-fn is_srgb(f: DXGI_FORMAT) -> bool {
+pub(crate) fn is_srgb(f: DXGI_FORMAT) -> bool {
     matches!(f, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB | DXGI_FORMAT_B8G8R8A8_UNORM_SRGB | DXGI_FORMAT_B8G8R8X8_UNORM_SRGB)
 }
 
 /// O buffer de uma cadeia aceita vista _SRGB sobre formato UNORM (o Unity faz isso); textura comum só
 /// aceita se nascer sem tipo. Vista sem descrição ganha o formato pedido em `view`.
-fn typeless(f: DXGI_FORMAT) -> DXGI_FORMAT {
+pub(crate) fn typeless(f: DXGI_FORMAT) -> DXGI_FORMAT {
     match f {
         DXGI_FORMAT_R8G8B8A8_UNORM | DXGI_FORMAT_R8G8B8A8_UNORM_SRGB => DXGI_FORMAT_R8G8B8A8_TYPELESS,
         DXGI_FORMAT_B8G8R8A8_UNORM | DXGI_FORMAT_B8G8R8A8_UNORM_SRGB => DXGI_FORMAT_B8G8R8A8_TYPELESS,
@@ -507,7 +517,7 @@ fn ui_of(s: &Shared) -> f32 {
     Some(f32::from_bits(s.hdr_ui.load(Relaxed))).filter(|v| *v >= 1.0).unwrap_or(0.0)
 }
 
-fn params(s: &Shared, w: Want, split: bool) -> Params {
+pub(crate) fn params(s: &Shared, srgb: bool, mode: u32, split: bool) -> Params {
     let f = |a: &AtomicU32| f32::from_bits(a.load(Relaxed));
     let peak = f(&s.hdr_peak).max(80.0);
     Params {
@@ -518,11 +528,32 @@ fn params(s: &Shared, w: Want, split: bool) -> Params {
         boost: f(&s.hdr_boost).clamp(0.0, 1.0),
         black: f(&s.hdr_black).clamp(0.0, 1.0),
         ui: ui_of(s).min(peak),
-        srgb: is_srgb(w.format) as u32,
+        srgb: srgb as u32,
         on: (s.hdr_on.load(Relaxed) != 0) as u32,
         split: split as u32,
-        mode: w.mode(),
+        mode,
         pad: 0,
+    }
+}
+
+/// Como sai o quadro, pela fase que a separação viu nele.
+pub(crate) fn split_of(s: &Shared, phase: u32) -> u32 {
+    match phase {
+        _ if ui_of(s) <= 0.0 => SPLIT_OFF,
+        PHASE_UI => SPLIT_ON,
+        PHASE_LATE => SPLIT_LATE,
+        _ => SPLIT_NONE,
+    }
+}
+
+/// O que a aba e o menu do jogo mostram do último quadro.
+pub(crate) fn report(s: &Shared, ms: f64, split: u32, mode: u32) {
+    s.hdr_gpu_us.store((ms * 1000.0) as u32, Relaxed);
+    s.hdr_frames.fetch_add(1, Relaxed);
+    s.hdr_split.store(split, Relaxed);
+    s.hdr_native.store(mode, Relaxed);
+    if split == SPLIT_ON {
+        s.hdr_split_frames.fetch_add(1, Relaxed);
     }
 }
 
@@ -532,17 +563,15 @@ pub unsafe fn present(chain: Ptr, flags: u32) {
     if flags & crate::PRESENT_TEST != 0 || INSIDE.get() {
         return;
     }
+    if hdr12::present(s, chain) {
+        return;
+    }
     let mut list = proxies();
     let Some(p) = list.iter_mut().find(|p| p.chain == chain as usize) else { return };
     let mine = p.tex.as_ref().is_some_and(|t| t.as_raw() as usize == TEX.load(Relaxed));
     let phase = if mine { PHASE.swap(PHASE_NONE, Relaxed) } else { PHASE_NONE };
-    let split = match phase {
-        _ if ui_of(s) <= 0.0 => SPLIT_OFF,
-        PHASE_UI => SPLIT_ON,
-        PHASE_LATE => SPLIT_LATE,
-        _ => SPLIT_NONE,
-    };
-    let pr = params(s, p.want, split == SPLIT_ON);
+    let split = split_of(s, phase);
+    let pr = params(s, is_srgb(p.want.format), p.want.mode(), split == SPLIT_ON);
     // A vaga sai do proxy enquanto mede: `draw` empresta o proxy inteiro.
     let mut timer = p.timer.take();
     let ms = passthrough(|| match timer.as_mut() {
@@ -553,13 +582,7 @@ pub unsafe fn present(chain: Ptr, flags: u32) {
         }
     });
     p.timer = timer;
-    s.hdr_gpu_us.store((ms * 1000.0) as u32, Relaxed);
-    s.hdr_frames.fetch_add(1, Relaxed);
-    s.hdr_split.store(split, Relaxed);
-    s.hdr_native.store(p.want.mode(), Relaxed);
-    if split == SPLIT_ON {
-        s.hdr_split_frames.fetch_add(1, Relaxed);
-    }
+    report(s, ms, split, p.want.mode());
 }
 
 /// Ajusta o pedido do jogo para a cadeia de verdade: FP16, troca por flip, sem MSAA.
@@ -573,7 +596,7 @@ unsafe fn d3d11(device: Ptr) -> Option<ID3D11Device> {
 
 /// HDR do Windows ligado na tela da janela. Com ele desligado o FP16 cortaria o brilho: o jogo fica como está.
 /// shortcut: vale na criação; ligar ou desligar o HDR com o jogo aberto pede reabrir o jogo.
-unsafe fn screen_hdr(hwnd: HWND) -> bool {
+pub(crate) unsafe fn screen_hdr(hwnd: HWND) -> bool {
     let Ok(factory) = CreateDXGIFactory1::<IDXGIFactory1>() else { return false };
     let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
     // Todas as placas: em notebook a tela costuma estar na integrada e o jogo na dedicada.
@@ -594,10 +617,13 @@ unsafe fn screen_hdr(hwnd: HWND) -> bool {
 unsafe fn created(hr: HRESULT, out: *mut Ptr, hwnd: HWND) -> HRESULT {
     if hr.is_ok() && !out.is_null() {
         let chain = *out as usize;
+        let keep = |c: usize, h: usize| c != chain && h != hwnd.0 as usize && IsWindow(Some(HWND(h as *mut c_void))).as_bool();
         let mut list = proxies();
-        list.retain(|p| p.chain != chain && p.hwnd != hwnd.0 as usize && IsWindow(Some(HWND(p.hwnd as *mut c_void))).as_bool());
+        list.retain(|p| keep(p.chain, p.hwnd));
+        let mut list12 = hdr12::proxies();
+        list12.retain(|p| keep(p.chain, p.hwnd));
         // Sem proxy nenhum o passe não roda mais: o medidor deixa de mostrar o custo dele.
-        if let Some(s) = shared().filter(|_| list.is_empty()) {
+        if let Some(s) = shared().filter(|_| list.is_empty() && list12.is_empty()) {
             s.hdr_gpu_us.store(0, Relaxed);
         }
     }
@@ -607,16 +633,27 @@ unsafe fn created(hr: HRESULT, out: *mut Ptr, hwnd: HWND) -> HRESULT {
 /// Cria a cadeia FP16 e o proxy; se algo falhar, cria a cadeia que o jogo pediu, sem HDR.
 unsafe fn proxied(device: Ptr, hwnd: HWND, want: Want, out: *mut Ptr, real: impl Fn() -> HRESULT, plain: impl Fn() -> HRESULT) -> HRESULT {
     let fit = !INSIDE.get() && !out.is_null() && wanted() && screen_hdr(hwnd);
-    let Some(dev) = d3d11(device).filter(|_| fit) else { return created(plain(), out, hwnd) };
+    // No D3D11 o jogo dá o dispositivo; no D3D12, a fila de comandos.
+    let (dev, queue) = if fit { (d3d11(device), hdr12::queue(device)) } else { (None, None) };
+    if dev.is_none() && queue.is_none() {
+        return created(plain(), out, hwnd);
+    }
     INSIDE.set(true);
     let mut hr = real();
     if hr.is_ok() {
         hook_chain(*out);
-        hook_device(&dev);
-        match Proxy::new(*out, hwnd, dev, want) {
-            Ok(p) => {
-                let _ = created(hr, out, hwnd);
-                proxies().push(p);
+        // Antes de entrar na lista: tira os proxies velhos deste endereço e desta janela.
+        let _ = created(hr, out, hwnd);
+        let made = match (dev, queue) {
+            (Some(dev), _) => {
+                hook_device(&dev);
+                Proxy::new(*out, hwnd, dev, want).map(|p| proxies().push(p))
+            }
+            (_, Some(q)) => hdr12::Proxy::new(*out, hwnd, q, want).map(|p| hdr12::proxies().push(p)),
+            _ => Err(E_FAIL.into()),
+        };
+        match made {
+            Ok(()) => {
                 if let Some(s) = shared() {
                     s.hdr_chains.fetch_add(1, Relaxed);
                 }
@@ -683,6 +720,10 @@ unsafe extern "system" fn on_get_buffer(this: Ptr, index: u32, riid: *const GUID
         if let Some(tex) = list.iter().find(|p| p.chain == this as usize).and_then(|p| p.tex.as_ref()) {
             return tex.query(riid, out);
         }
+        drop(list);
+        if let Some(p) = hdr12::proxies().iter().find(|p| p.chain == this as usize) {
+            return p.buffer(index, riid, out);
+        }
     }
     let old: GetBuffer = std::mem::transmute(OLD_GET_BUFFER.load(Relaxed));
     old(this, index, riid, out)
@@ -713,12 +754,12 @@ unsafe extern "system" fn on_get_desc1(this: Ptr, out: *mut DXGI_SWAP_CHAIN_DESC
 /// buffer dele: HDR10 no de 10 bits, scRGB no FP16, SDR no resto.
 unsafe extern "system" fn on_set_color_space(this: Ptr, space: DXGI_COLOR_SPACE_TYPE) -> HRESULT {
     if !INSIDE.get() {
+        let set = |w: &mut Want| if takes(w.format, space) { w.space = space; S_OK } else { DXGI_ERROR_UNSUPPORTED };
         if let Some(p) = proxies().iter_mut().find(|p| p.chain == this as usize) {
-            if !takes(p.want.format, space) {
-                return DXGI_ERROR_UNSUPPORTED;
-            }
-            p.want.space = space;
-            return S_OK;
+            return set(&mut p.want);
+        }
+        if let Some(p) = hdr12::proxies().iter_mut().find(|p| p.chain == this as usize) {
+            return set(&mut p.want);
         }
     }
     let old: SetColorSpace = std::mem::transmute(OLD_SET_COLOR_SPACE.load(Relaxed));
@@ -799,16 +840,22 @@ unsafe fn drawn(this: Ptr, count: u32, instances: u32) {
     }
     let Some(ctx) = ID3D11DeviceContext::from_raw_borrowed(&this) else { return };
     let full = count <= 6 && instances <= 1 && passthrough(|| fullscreen(ctx));
-    let next = match (full, phase) {
-        (true, PHASE_UI) => PHASE_LATE,
-        (true, _) => {
-            passthrough(|| snap(ctx));
-            PHASE_SCENE
-        }
-        (false, PHASE_SCENE) => PHASE_UI,
-        (_, p) => p,
-    };
+    let (next, take) = step(phase, full);
+    if take {
+        passthrough(|| snap(ctx));
+    }
     PHASE.store(next, Relaxed);
+}
+
+/// A fase depois de um desenho no buffer do jogo, e se a cena deve ser guardada agora. Vale nas três APIs.
+pub(crate) fn step(phase: u32, full: bool) -> (u32, bool) {
+    match (full, phase) {
+        (_, PHASE_LATE) => (PHASE_LATE, false),
+        (true, PHASE_UI) => (PHASE_LATE, false),
+        (true, _) => (PHASE_SCENE, true),
+        (false, PHASE_SCENE) => (PHASE_UI, false),
+        (_, p) => (p, false),
+    }
 }
 
 unsafe extern "system" fn on_om_set(this: Ptr, count: u32, rtvs: *const Ptr, dsv: Ptr) {
@@ -854,7 +901,10 @@ unsafe fn resize(this: Ptr, count: u32, format: DXGI_FORMAT, flags: u32, call: i
     let mut list = proxies();
     let Some(p) = list.iter_mut().find(|p| !INSIDE.get() && p.chain == this as usize) else {
         drop(list);
-        return call(count, format, flags);
+        if INSIDE.get() || !hdr12::has(this) {
+            return call(count, format, flags);
+        }
+        return hdr12::resize(this, count, format, flags & !GDI_COMPATIBLE, call);
     };
     p.drop_buffers();
     let hr = passthrough(|| call(if count == 0 { 0 } else { count.max(2) }, DXGI_FORMAT_R16G16B16A16_FLOAT, flags & !GDI_COMPATIBLE));
@@ -876,7 +926,7 @@ unsafe extern "system" fn on_resize(this: Ptr, count: u32, w: u32, h: u32, forma
     resize(this, count, format, flags, |c, f, fl| old(this, c, w, h, f, fl))
 }
 
-/// Máscara e filas são do D3D12, que nunca vira proxy: com D3D11 vêm nulas.
+/// Máscara e filas são do D3D12 e passam como vieram: o proxy guarda os buffers do jogo um por índice.
 unsafe extern "system" fn on_resize1(this: Ptr, count: u32, w: u32, h: u32, format: DXGI_FORMAT, flags: u32, mask: *const u32, queues: *const Ptr) -> HRESULT {
     let old: Resize1 = std::mem::transmute(OLD_RESIZE1.load(Relaxed));
     resize(this, count, format, flags, |c, f, fl| old(this, c, w, h, f, fl, mask, queues))
@@ -1010,6 +1060,19 @@ mod tests {
         }
         // cbuffer C: 7 floats e 5 uints.
         assert_eq!(std::mem::size_of::<Params>(), 48);
+    }
+
+    #[test]
+    fn split_phases() {
+        // Cena, interface por cima; um passe de tela cheia depois da interface desfaz a separação.
+        assert_eq!(step(PHASE_NONE, true), (PHASE_SCENE, true));
+        assert_eq!(step(PHASE_SCENE, false), (PHASE_UI, false));
+        assert_eq!(step(PHASE_UI, false), (PHASE_UI, false));
+        assert_eq!(step(PHASE_UI, true), (PHASE_LATE, false));
+        assert_eq!(step(PHASE_LATE, true), (PHASE_LATE, false));
+        assert_eq!(step(PHASE_NONE, false), (PHASE_NONE, false));
+        // Dois passes de tela cheia seguidos: a cena é o último.
+        assert_eq!(step(PHASE_SCENE, true), (PHASE_SCENE, true));
     }
 
     #[test]

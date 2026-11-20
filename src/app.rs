@@ -898,10 +898,10 @@ pub fn start(background: bool) {
                 let _ = std::fs::write(out, format!("cadeias, quadros, erro {stats:?}; saída, interface, quadros separados {split:?}; nits maior, média, p99 {nits:?}\n"));
                 std::process::exit(0);
             }
-            // Saída, jogo e arquivo de ajustes: --test-hdrgame=saida.txt|C:\jogo.exe|ajustes.txt
+            // Saída, jogo, arquivo de ajustes e, se houver, argumentos do jogo: --test-hdrgame=saida.txt|C:\jogo.exe|ajustes.txt|-force-vulkan
             if let Some(v) = a.strip_prefix("--test-hdrgame=") {
                 let p: Vec<&str> = v.split('|').collect();
-                crate::sys::inject::test_hdr(p[0], p[1], p[2]);
+                crate::sys::inject::test_hdr(p[0], p[1], p[2], p.get(3).copied().unwrap_or(""));
                 std::process::exit(0);
             }
             if let Some(v) = a.strip_prefix("--test-drs=") {
