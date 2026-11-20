@@ -179,9 +179,97 @@ fn relink(old: &str, from: &Path, lib: &Path, files: &mut Option<Vec<PathBuf>>) 
     best.map_or_else(|| old.to_string(), |(_, r)| lib_path(r))
 }
 
+/// Tipos de jogo do Fullscreenizer: cada um tem o seu filtro de upscale (o 3D quer nitidez, o 2D quer o
+/// pixel inteiro, o misto fica no meio).
+pub const KINDS: [&str; 3] = ["3D", "2D com 3D", "2D"];
+
+/// Filtros de upscale do Fullscreenizer: chave na config, nome na tela, preset na biblioteca (vazio: nenhum
+/// preset) e os tipos de jogo que o oferecem (bit 0 3D, 1 2D com 3D, 2 2D). `driver` só explica como ligar o do
+/// painel da placa: NIS, RSR e escala inteira não têm API pública que um programa use
+/// (research_notes/Upscale/estudo.md).
+pub const UPSCALE: [(&str, &str, &str, u8); 8] = [
+    ("", "Nenhum (o do Windows)", "", 0b111),
+    ("fsr", "AMD FSR 1 (nítido, 3D)", "edge-smoothing/fsr/fsr.slangp", 0b011),
+    ("nis", "NVIDIA NIS (nítido, 3D)", "edge-smoothing/nis/nis.slangp", 0b001),
+    ("lanczos", "Lanczos (suave)", "interpolation/lanczos2.slangp", 0b011),
+    ("sharp", "Pixels nítidos (pixel art)", "pixel-art-scaling/sharp-bilinear-simple.slangp", 0b110),
+    ("xbr", "xBR (pixel art, cantos lisos)", "edge-smoothing/xbr/xbr-lv2.slangp", 0b100),
+    ("scalefx", "ScaleFX (pixel art)", "edge-smoothing/scalefx/scalefx.slangp", 0b100),
+    ("driver", "Do driver (painel da placa)", "", 0b111),
+];
+
+/// Filtros que o tipo de jogo oferece, na ordem da tela.
+pub fn upscale_for(kind: usize) -> impl Iterator<Item = &'static (&'static str, &'static str, &'static str, u8)> {
+    UPSCALE.iter().filter(move |u| u.3 & (1 << kind) != 0)
+}
+
+/// Linha que marca o perfil como do Fullscreenizer: só esse ele troca e desliga.
+const MANAGED: &str = "fullscreenizer=1";
+
+/// Preset do filtro quando ele deve entrar: filtro do Prisma escolhido e o jogo, na proporção, crescendo no monitor.
+pub fn upscale_preset(filter: &str, native: (i32, i32), monitor: (i32, i32)) -> Option<&'static str> {
+    let rel = UPSCALE.iter().find(|u| u.0 == filter && !u.2.is_empty())?.2;
+    let (w, h) = native;
+    (w > 0 && h > 0 && (monitor.0 as f32 / w as f32).min(monitor.1 as f32 / h as f32) > 1.0).then_some(rel)
+}
+
+/// Entrada do motor: jogo de janela fixa desenha numa resolução só, que o Windows estica; o motor volta a ela
+/// (`LxA`). Janela redimensionável costuma desenhar no tamanho novo: a detecção de blocos decide.
+pub fn upscale_input(native: (i32, i32), resizable: bool) -> String {
+    if resizable { "auto".into() } else { format!("{}x{}", native.0, native.1) }
+}
+
+/// Liga o filtro no perfil do jogo (`perfis\<exe>.txt`), que o app abre como os outros. Perfil do jogador
+/// (sem a marca) fica como está. Devolve o motivo quando não liga.
+pub fn upscale_on(exe: &Path, rel: &str, input: &str) -> Result<(), &'static str> {
+    let preset = lib_dir().join(rel);
+    if !preset.exists() {
+        return Err("Filtro de upscale: baixe os filtros na página Fullscreenizer");
+    }
+    let path = path_for(exe);
+    let mut p = match Profile::load(&path) {
+        Ok(p) if !p.extra.iter().any(|l| l == MANAGED) => return Err("Este jogo já tem perfil de shader: o filtro de upscale fica com ele"),
+        Ok(p) => p,
+        Err(_) => Profile { name: format!("Fullscreenizer · {}", exe.file_stem().unwrap_or_default().to_string_lossy()), exe: exe.into(), extra: vec![MANAGED.into()], ..Profile::default() },
+    };
+    p.on = true;
+    p.inject = false;
+    p.input = input.to_string();
+    p.passes = vec![Pass { on: true, path: preset }];
+    p.params.clear();
+    p.save(&path).map_err(|_| "Filtro de upscale: não deu para gravar o perfil")
+}
+
+/// Desliga o filtro (só no perfil do Fullscreenizer).
+pub fn upscale_off(exe: &Path) {
+    let path = path_for(exe);
+    if let Ok(mut p) = Profile::load(&path) {
+        if p.on && p.extra.iter().any(|l| l == MANAGED) {
+            p.on = false;
+            let _ = p.save(&path);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn escolha_do_filtro() {
+        assert_eq!(upscale_preset("fsr", (800, 600), (1920, 1080)), Some("edge-smoothing/fsr/fsr.slangp"));
+        assert_eq!(upscale_preset("", (800, 600), (1920, 1080)), None, "nenhum");
+        assert_eq!(upscale_preset("driver", (800, 600), (1920, 1080)), None, "do painel, não do Prisma");
+        assert_eq!(upscale_preset("fsr", (1920, 1080), (1920, 1080)), None, "já na resolução do monitor");
+        assert_eq!(upscale_preset("fsr", (1600, 1080), (1920, 1080)), None, "na proporção não cresce");
+        assert_eq!(upscale_preset("fsr", (0, 0), (1920, 1080)), None);
+        assert_eq!(upscale_input((800, 600), false), "800x600");
+        assert_eq!(upscale_input((800, 600), true), "auto");
+        let keys = |k| upscale_for(k).map(|u| u.0).collect::<Vec<_>>();
+        assert_eq!(keys(0), ["", "fsr", "nis", "lanczos", "driver"]);
+        assert_eq!(keys(1), ["", "fsr", "lanczos", "sharp", "driver"]);
+        assert_eq!(keys(2), ["", "sharp", "xbr", "scalefx", "driver"]);
+    }
 
     /// Os três jeitos do RetroArch (relativo ao preset, absoluto e com o `:`), no `shaderN`, na textura e no
     /// `#reference`; sem o marcador, acha pelo fim do caminho; o que não existe volta na lista.

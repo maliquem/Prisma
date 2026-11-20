@@ -2925,3 +2925,25 @@ Ins adicionar passe · Del tirar passe · Backspace fechar	Ins add pass · Del r
 ↑↓ escolher · Enter trocar · Ins adicionar · Backspace voltar	↑↓ choose · Enter replace · Ins add · Backspace back
 Baixe a biblioteca na página Shaders	Download the library on the Shaders page
 Nenhum preset aqui	No presets here
+Proporção	Aspect ratio
+Manter (barras pretas)	Keep (black bars)
+Esticar	Stretch
+Escala inteira	Integer scale
+Filtros abertos	Open filters
+Baixar filtros	Download filters
+Baixados	Downloaded
+Filtro de upscale · {}	Upscale filter · {}
+2D com 3D	2D + 3D
+Nenhum (o do Windows)	None (Windows' own)
+AMD FSR 1 (nítido, 3D)	AMD FSR 1 (sharp, 3D)
+NVIDIA NIS (nítido, 3D)	NVIDIA NIS (sharp, 3D)
+Lanczos (suave)	Lanczos (smooth)
+Pixels nítidos (pixel art)	Sharp pixels (pixel art)
+xBR (pixel art, cantos lisos)	xBR (pixel art, smooth corners)
+ScaleFX (pixel art)	ScaleFX (pixel art)
+Do driver (painel da placa)	From the driver (graphics card panel)
+Filtro do driver: ligue no painel da placa. NVIDIA: Painel de Controle › Ajustar o tamanho e a posição da área de trabalho › Dimensionamento de imagem (NIS) ou Dimensionamento de número inteiro. AMD: Adrenalin › Gráficos › Radeon Super Resolution (pede tela cheia exclusiva). Intel: Centro de Comando Gráfico › Tela › Escala › Escala de número inteiro.	Driver filter: turn it on in the graphics card panel. NVIDIA: Control Panel › Adjust desktop size and position › Image Scaling (NIS) or Integer scaling. AMD: Adrenalin › Graphics › Radeon Super Resolution (needs exclusive fullscreen). Intel: Graphics Command Center › Display › Scaling › Integer scaling.
+O filtro entra quando o jogo é menor que o monitor: o Prisma cria o perfil de shader do jogo (página Shaders) e desenha por cima. Jogo com perfil de shader próprio ou anti-cheat fica sem ele.	The filter applies when the game is smaller than the monitor: Prisma creates the game's shader profile (Shaders page) and draws on top. A game with its own shader profile or anti-cheat goes without it.
+Filtro de upscale: baixe os filtros na página Fullscreenizer	Upscale filter: download the filters on the Fullscreenizer page
+Este jogo já tem perfil de shader: o filtro de upscale fica com ele	This game already has a shader profile: the upscale filter stays with it
+Filtro de upscale: não deu para gravar o perfil	Upscale filter: could not save the profile

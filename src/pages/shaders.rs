@@ -456,6 +456,21 @@ fn download(lib: PathBuf) {
     });
 }
 
+/// Baixa a biblioteca de fora da página Shaders: os filtros de upscale do Fullscreenizer vêm dela.
+pub fn download_lib() {
+    download(sp::lib_dir());
+}
+
+/// Download da biblioteca: `None` parado, `Some(fração)` baixando (1 extraindo); `Err` quando o último falhou.
+pub fn lib_progress() -> Result<Option<f32>, ()> {
+    let d = DL.lock().unwrap_or_else(|e| e.into_inner());
+    match (d.on, d.err) {
+        (true, _) => Ok(Some(if d.extracting { 1.0 } else if d.total > 0 { d.got as f32 / d.total as f32 } else { 0.0 })),
+        (false, true) => Err(()),
+        _ => Ok(None),
+    }
+}
+
 fn fetch(lib: &Path) -> Option<()> {
     use std::os::windows::process::CommandExt;
     let parent = lib.parent()?;

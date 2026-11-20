@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Fullscreenizer** keeps the game's aspect ratio with black bars by default, with **Stretch** and **Integer scale** options, and an **Upscale filter** for games smaller than the monitor, one per kind of game (3D, 2D + 3D, 2D): AMD FSR 1, NVIDIA NIS, Lanczos, sharp pixels, xBR, ScaleFX from the shader library (downloaded with the page's **Download filters** button, not shipped with Prisma), or directions for the graphics driver's own. / O **Fullscreenizer** mantém a proporção do jogo com barras pretas por padrão, com as opções **Esticar** e **Escala inteira**, e um **Filtro de upscale** para jogos menores que o monitor, um por tipo de jogo (3D, 2D com 3D, 2D): AMD FSR 1, NVIDIA NIS, Lanczos, pixels nítidos, xBR, ScaleFX da biblioteca de shaders (baixada pelo botão **Baixar filtros** da página, não vem com o Prisma), ou o caminho para ligar o do driver da placa.
 - **Shaders** in-game menu: Insert adds a pass (after the selected one, from the library or your presets) and Delete removes it, X and Y on a controller; Backspace goes back instead of Esc, which stays with the game; the title shows the chain's GPU time in ms and its share of the GPU. / Menu de **Shaders** no jogo: Insert adiciona um passe (depois do escolhido, da biblioteca ou dos seus presets) e Delete tira, X e Y no controle; Backspace volta no lugar do Esc, que fica com o jogo; o título mostra o tempo de GPU da cadeia em ms e a parte da GPU.
 
 ## 1.10.0
