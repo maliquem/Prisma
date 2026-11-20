@@ -2947,3 +2947,15 @@ O filtro entra quando o jogo é menor que o monitor: o Prisma cria o perfil de s
 Filtro de upscale: baixe os filtros na página Fullscreenizer	放大滤镜：请在 Fullscreenizer 页面下载滤镜
 Este jogo já tem perfil de shader: o filtro de upscale fica com ele	此游戏已有 shader 配置：放大滤镜由它负责
 Filtro de upscale: não deu para gravar o perfil	放大滤镜：无法保存配置
+Atualizando…	正在更新…
+Excluir para sempre	永久删除
+Excluir para sempre?	永久删除？
+{} arquivos, do maior para o menor. Ctrl e Shift escolhem vários.	{} 个文件，从大到小。按住 Ctrl 或 Shift 可多选。
+{} escolhidos, {}	已选 {} 个，{}
+Clique num arquivo para escolher; o botão direito abre o menu.	单击文件即可选择；右键打开菜单。
+Arquivos do sistema	系统文件
+O Prisma não apaga arquivos do Windows, das pastas de programas nem os de paginação e hibernação.	Prisma 不会删除 Windows 文件、程序文件夹中的文件，以及分页文件和休眠文件。
+{} arquivos, {} no total, serão apagados para sempre. Eles não vão para a Lixeira e não dá para recuperar.	{} 个文件，共 {}，将被永久删除。它们不会进入回收站，也无法恢复。
+{} arquivos, {} no total, serão apagados para sempre. Eles não vão para a Lixeira e não dá para recuperar. {} arquivos do sistema ficam de fora.	{} 个文件，共 {}，将被永久删除。它们不会进入回收站，也无法恢复。另有 {} 个系统文件不受影响。
+{} arquivos apagados, {} liberados	已删除 {} 个文件，释放 {}
+Alguns arquivos não foram apagados	部分文件未能删除

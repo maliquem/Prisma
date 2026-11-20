@@ -63,6 +63,25 @@ pub struct Scan {
     pub used_mft: bool,
     /// Maiores arquivos do disco, do maior para o menor.
     pub largest: Vec<u32>,
+    /// Muda quando uma pasta é lida de novo ou a análise é outra: listas guardadas fora ficam velhas.
+    pub version: u32,
+}
+
+static VERSION: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(1);
+
+fn next_version() -> u32 {
+    VERSION.fetch_add(1, Ordering::Relaxed)
+}
+
+/// Extensão como a lista de tipos agrupa (sem o ponto); vazia quando não tem ou é longa demais.
+fn ext(name: &str) -> &str {
+    name.rsplit_once('.').map(|e| e.1).filter(|e| e.len() <= 12).unwrap_or("")
+}
+
+/// Pastas e arquivos lidos do disco, com a pasta lida no índice 0.
+pub(crate) struct Walked {
+    nodes: Vec<Node>,
+    names: Vec<u8>,
 }
 
 impl Scan {
@@ -121,8 +140,7 @@ impl Scan {
             }
             self.files += 1;
             let name = self.name(i as u32);
-            let ext = name.rsplit_once('.').map(|e| e.1.to_ascii_lowercase()).filter(|e| e.len() <= 12).unwrap_or_default();
-            let e = types.entry(ext).or_default();
+            let e = types.entry(ext(name).to_ascii_lowercase()).or_default();
             e.0 += nd.size;
             e.1 += 1;
             let mut p = self.nodes[i].parent;
@@ -137,6 +155,17 @@ impl Scan {
                 p = d.parent;
             }
         }
+        self.index();
+        let mut t: Vec<TypeStat> = types.into_iter().map(|(ext, v)| TypeStat { ext, size: v.0, files: v.1 }).collect();
+        t.sort_unstable_by_key(|s| std::cmp::Reverse(s.size));
+        t.truncate(100);
+        self.types = t;
+        self.top_files();
+    }
+
+    /// Filhos de cada pasta, do maior para o menor.
+    fn index(&mut self) {
+        let n = self.nodes.len();
         let mut count = vec![0u32; n + 1];
         for (i, nd) in self.nodes.iter().enumerate() {
             if nd.used() && i as u32 != self.root {
@@ -164,18 +193,18 @@ impl Scan {
         }
         self.first = first;
         self.list = list;
-        let mut t: Vec<TypeStat> = types.into_iter().map(|(ext, v)| TypeStat { ext, size: v.0, files: v.1 }).collect();
-        t.sort_unstable_by_key(|s| std::cmp::Reverse(s.size));
-        t.truncate(100);
-        self.types = t;
+    }
 
-        let mut files: Vec<u32> = (0..n as u32).filter(|i| {
-            let v = &self.nodes[*i as usize];
-            v.used() && !v.is_dir()
-        }).collect();
+    /// Os 500 maiores arquivos.
+    fn top_files(&mut self) {
         let nodes = &self.nodes;
-        files.sort_unstable_by_key(|i| std::cmp::Reverse(nodes[*i as usize].size));
-        files.truncate(500);
+        let mut files: Vec<u32> = (0..nodes.len() as u32).filter(|i| nodes[*i as usize].used() && !nodes[*i as usize].is_dir()).collect();
+        let key = |i: &u32| std::cmp::Reverse(nodes[*i as usize].size);
+        if files.len() > 500 {
+            files.select_nth_unstable_by_key(499, key);
+            files.truncate(500);
+        }
+        files.sort_unstable_by_key(key);
         self.largest = files;
     }
 
@@ -185,8 +214,10 @@ impl Scan {
 
     /// Tira um item da análise depois de apagado, sem refazer a leitura.
     pub fn forget(&mut self, i: u32) {
-        let root = self.root;
         let n = self.nodes[i as usize];
+        if !n.used() {
+            return;
+        }
         let count = if n.is_dir() { n.files } else { 1 };
         let mut p = n.parent;
         for _ in 0..512 {
@@ -194,26 +225,101 @@ impl Scan {
             d.size = d.size.saturating_sub(n.size);
             d.alloc = d.alloc.saturating_sub(n.alloc);
             d.files = d.files.saturating_sub(count);
-            if p == root {
+            if p == self.root {
                 break;
             }
             p = d.parent;
         }
-        self.nodes[i as usize].flags &= !USED;
+        self.unmark(i);
+        self.sort_types();
         let nodes = &self.nodes;
-        self.largest.retain(|f| {
-            let mut c = *f;
-            for _ in 0..512 {
-                if !nodes[c as usize].used() {
-                    return false;
+        self.largest.retain(|f| nodes[*f as usize].used());
+    }
+
+    /// Desmarca o item e tudo dentro dele, tirando os arquivos da lista de tipos.
+    fn unmark(&mut self, i: u32) {
+        let mut stack = vec![i];
+        while let Some(c) = stack.pop() {
+            let n = self.nodes[c as usize];
+            self.nodes[c as usize].flags &= !USED;
+            if n.is_dir() {
+                stack.extend_from_slice(self.children(c));
+            } else if n.used() {
+                let e = ext(self.name(c)).to_ascii_lowercase();
+                if let Some(t) = self.types.iter_mut().find(|t| t.ext == e) {
+                    t.size = t.size.saturating_sub(n.size);
+                    t.files = t.files.saturating_sub(1);
                 }
-                if c == root {
-                    return true;
-                }
-                c = nodes[c as usize].parent;
             }
-            true
-        });
+        }
+    }
+
+    fn sort_types(&mut self) {
+        self.types.retain(|t| t.files > 0);
+        self.types.sort_unstable_by_key(|s| std::cmp::Reverse(s.size));
+    }
+
+    /// Troca o conteúdo da pasta `dir` pelo que foi lido de novo do disco. A diferença de
+    /// tamanho sobe pelas pastas acima até a raiz; o resto da análise fica como estava.
+    pub(crate) fn replace(&mut self, dir: u32, w: Walked) {
+        for k in self.children(dir).to_vec() {
+            self.unmark(k);
+        }
+        let old = self.nodes[dir as usize];
+        let base = self.nodes.len() as u32;
+        let off = self.names.len() as u32;
+        self.names.extend_from_slice(&w.names);
+        for mut n in w.nodes.into_iter().skip(1) {
+            n.parent = if n.parent == 0 { dir } else { base + n.parent - 1 };
+            n.name_off += off;
+            self.nodes.push(n);
+        }
+        let d = &mut self.nodes[dir as usize];
+        (d.size, d.alloc, d.files) = (0, 0, 0);
+        // Na leitura, cada filho vem depois da pasta dele: de trás para frente, as somas fecham.
+        for i in (base as usize..self.nodes.len()).rev() {
+            let n = self.nodes[i];
+            if !n.is_dir() {
+                let e = ext(self.name(i as u32)).to_ascii_lowercase();
+                match self.types.iter_mut().find(|t| t.ext == e) {
+                    Some(t) => {
+                        t.size += n.size;
+                        t.files += 1;
+                    }
+                    None => self.types.push(TypeStat { ext: e, size: n.size, files: 1 }),
+                }
+            }
+            let p = &mut self.nodes[n.parent as usize];
+            p.size += n.size;
+            p.alloc += n.alloc;
+            p.files += if n.is_dir() { n.files } else { 1 };
+        }
+        let new = self.nodes[dir as usize];
+        let mut p = dir;
+        for _ in 0..512 {
+            if p == self.root {
+                break;
+            }
+            p = self.nodes[p as usize].parent;
+            let a = &mut self.nodes[p as usize];
+            a.size = a.size.saturating_sub(old.size) + new.size;
+            a.alloc = a.alloc.saturating_sub(old.alloc) + new.alloc;
+            a.files = a.files.saturating_sub(old.files) + new.files;
+        }
+        self.index();
+        self.sort_types();
+        self.top_files();
+        self.version = next_version();
+    }
+
+    /// Arquivos com a extensão `e` (como em `types`), do maior para o menor.
+    pub fn files_of(&self, e: &str) -> Vec<u32> {
+        let nodes = &self.nodes;
+        let mut v: Vec<u32> = (0..nodes.len() as u32)
+            .filter(|&i| nodes[i as usize].used() && !nodes[i as usize].is_dir() && ext(self.name(i)).eq_ignore_ascii_case(e))
+            .collect();
+        v.sort_unstable_by_key(|i| std::cmp::Reverse(nodes[*i as usize].size));
+        v
     }
 }
 
@@ -228,6 +334,13 @@ pub fn protected(path: &str) -> bool {
             && !tail.contains('\\')
         || tail.starts_with("windows\\")
         || matches!(first, "pagefile.sys" | "hiberfil.sys" | "swapfile.sys" | "bootmgr")
+}
+
+/// Arquivo que o Prisma não apaga para sempre: os protegidos e tudo dentro das pastas de programas.
+pub fn system_file(path: &str) -> bool {
+    let low = path.to_ascii_lowercase();
+    let first = low.get(3..).unwrap_or("").split('\\').next().unwrap_or("");
+    protected(path) || matches!(first, "program files" | "program files (x86)" | "programdata")
 }
 
 /// Leitura crua de um volume. Alguns volumes recusam leitura direta; nesses,
@@ -488,6 +601,7 @@ fn scan_mft(drive: char, p: &Progress) -> Option<Scan> {
         elapsed: Duration::ZERO,
         used_mft: true,
         largest: Vec::new(),
+        version: next_version(),
     };
     s.nodes[ROOT as usize].flags |= USED | DIR;
     s.nodes[ROOT as usize].parent = ROOT;
@@ -619,12 +733,11 @@ pub(crate) fn read_table(drive: char, p: &Progress, with_times: bool) -> Option<
     }
 }
 
-/// Caminho lento: para discos que não são NTFS ou sem administrador.
-fn scan_walk(drive: char, p: &Progress) -> Scan {
-    let t0 = Instant::now();
+/// Lê a pasta `root` e tudo dentro dela. Para no meio se pedirem para cancelar.
+fn walk(root: std::path::PathBuf, p: &Progress) -> Walked {
     let mut nodes = vec![Node { flags: USED | DIR, ..Default::default() }];
     let mut names: Vec<u8> = Vec::new();
-    let mut stack = vec![(0u32, std::path::PathBuf::from(format!("{drive}:\\")))];
+    let mut stack = vec![(0u32, root)];
     while let Some((id, dir)) = stack.pop() {
         if p.cancel.load(Ordering::Relaxed) {
             break;
@@ -655,6 +768,13 @@ fn scan_walk(drive: char, p: &Progress) -> Scan {
             p.done.fetch_add(1, Ordering::Relaxed);
         }
     }
+    Walked { nodes, names }
+}
+
+/// Caminho lento: para discos que não são NTFS ou sem administrador.
+fn scan_walk(drive: char, p: &Progress) -> Scan {
+    let t0 = Instant::now();
+    let Walked { nodes, names } = walk(std::path::PathBuf::from(format!("{drive}:\\")), p);
     let mut s = Scan {
         drive,
         nodes,
@@ -667,6 +787,7 @@ fn scan_walk(drive: char, p: &Progress) -> Scan {
         elapsed: Duration::ZERO,
         used_mft: false,
         largest: Vec::new(),
+        version: next_version(),
     };
     s.finish();
     s.elapsed = t0.elapsed();
@@ -687,6 +808,25 @@ pub fn start(drive: char, p: Arc<Progress>, slot: Slot) {
     });
 }
 
+/// Lê de novo só a pasta `path` (o item `dir` da análise) e troca o conteúdo dela no `slot`,
+/// sem analisar o disco todo. Vale também para uma análise feita pela tabela do NTFS.
+pub fn refresh(path: String, dir: u32, p: Arc<Progress>, slot: Slot) {
+    p.done.store(0, Ordering::Relaxed);
+    p.total.store(0, Ordering::Relaxed);
+    p.cancel.store(false, Ordering::Relaxed);
+    p.running.store(true, Ordering::Relaxed);
+    let _ = std::thread::Builder::new().name("analise-pasta".into()).spawn(move || {
+        let w = walk(std::path::PathBuf::from(&path), &p);
+        if !p.cancel.load(Ordering::Relaxed) {
+            // Outra análise pode ter chegado no meio: só troca se a pasta ainda é a mesma.
+            if let Some(s) = slot.lock().unwrap().as_mut().filter(|s| s.find(&path) == Some(dir)) {
+                s.replace(dir, w);
+            }
+        }
+        p.running.store(false, Ordering::Relaxed);
+    });
+}
+
 /// Unidades fixas e removíveis com letra.
 pub fn drives() -> Vec<char> {
     let mask = unsafe { GetLogicalDrives() };
@@ -699,4 +839,134 @@ pub fn drives() -> Vec<char> {
             k == 2 || k == 3
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+
+    /// Pasta temporária só do teste, apagada no fim.
+    fn temp(tag: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("prisma-mft-{tag}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&d);
+        fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    fn put(dir: &Path, name: &str, len: usize) {
+        fs::create_dir_all(dir).unwrap();
+        fs::write(dir.join(name), vec![0u8; len]).unwrap();
+    }
+
+    fn scan_of(root: &Path) -> Scan {
+        let Walked { nodes, names } = walk(root.to_path_buf(), &Progress::default());
+        let mut s = Scan {
+            drive: 'X',
+            nodes,
+            root: 0,
+            names,
+            first: Vec::new(),
+            list: Vec::new(),
+            types: Vec::new(),
+            files: 0,
+            elapsed: Duration::ZERO,
+            used_mft: false,
+            largest: Vec::new(),
+            version: next_version(),
+        };
+        s.finish();
+        s
+    }
+
+    fn child(s: &Scan, parent: u32, name: &str) -> u32 {
+        *s.children(parent).iter().find(|k| s.exists(**k) && s.name(**k) == name).unwrap()
+    }
+
+    fn ty(s: &Scan, e: &str) -> (u64, u32) {
+        s.types.iter().find(|t| t.ext == e).map_or((0, 0), |t| (t.size, t.files))
+    }
+
+    #[test]
+    fn refresh_moves_the_difference_up_to_the_root() {
+        let root = temp("refresh");
+        put(&root, "top.bin", 1000);
+        put(&root.join("a"), "a.bin", 200);
+        put(&root.join("a").join("b"), "old.log", 10);
+        put(&root.join("a").join("b"), "keep.log", 5);
+        let mut s = scan_of(&root);
+        let a = child(&s, s.root, "a");
+        let b = child(&s, a, "b");
+        assert_eq!(s.nodes[s.root as usize].size, 1215);
+        let v = s.version;
+
+        let bp = root.join("a").join("b");
+        fs::remove_file(bp.join("old.log")).unwrap();
+        put(&bp.join("c"), "new.log", 100);
+        put(&bp, "new.iso", 3000);
+        s.replace(b, walk(bp.clone(), &Progress::default()));
+
+        assert_eq!(s.nodes[b as usize].size, 3105);
+        assert_eq!(s.nodes[b as usize].files, 3);
+        assert_eq!(s.nodes[a as usize].size, 3305);
+        assert_eq!(s.nodes[a as usize].files, 4);
+        assert_eq!(s.nodes[s.root as usize].size, 4305);
+        assert_eq!(s.nodes[s.root as usize].files, 5);
+        assert_eq!(ty(&s, "log"), (105, 2));
+        assert_eq!(ty(&s, "iso"), (3000, 1));
+        assert_eq!(s.largest.first().map(|f| s.name(*f)), Some("new.iso"));
+        assert_ne!(s.version, v);
+        // A pasta nova entra na árvore, com os filhos dela.
+        let c = child(&s, b, "c");
+        assert_eq!(s.name(child(&s, c, "new.log")), "new.log");
+        assert_eq!(s.children(b).first().map(|k| s.name(*k)), Some("new.iso"));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn files_of_a_type_from_largest_and_forget_updates_types() {
+        let root = temp("types");
+        put(&root, "x.log", 30);
+        put(&root, "y.LOG", 50);
+        put(&root, "z.txt", 99);
+        put(&root.join("sub"), "w.log", 40);
+        put(&root.join("sub"), "noext", 7);
+        let mut s = scan_of(&root);
+        let logs = s.files_of("log");
+        let sizes: Vec<u64> = logs.iter().map(|i| s.nodes[*i as usize].size).collect();
+        assert_eq!(sizes, [50, 40, 30]);
+        assert_eq!(s.files_of("").iter().map(|i| s.name(*i)).collect::<Vec<_>>(), ["noext"]);
+        assert_eq!(ty(&s, "log"), (120, 3));
+
+        s.forget(logs[0]);
+        assert_eq!(ty(&s, "log"), (70, 2));
+        assert_eq!(s.files_of("log").len(), 2);
+        // Apagar a pasta tira os arquivos de dentro dos tipos também.
+        s.forget(child(&s, s.root, "sub"));
+        assert_eq!(ty(&s, "log"), (30, 1));
+        assert_eq!(ty(&s, ""), (0, 0));
+        assert_eq!(s.nodes[s.root as usize].size, 129);
+        assert!(s.largest.iter().all(|f| s.exists(*f)));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn system_files_are_not_deleted() {
+        for p in [
+            r"C:\Windows\System32\kernel32.dll",
+            r"C:\pagefile.sys",
+            r"C:\hiberfil.sys",
+            r"C:\swapfile.sys",
+            r"C:\Program Files\App\app.exe",
+            r"D:\Program Files (x86)\Jogo\data.pak",
+            r"C:\ProgramData\x\y.db",
+            r"C:\$Recycle.Bin\a",
+        ] {
+            assert!(system_file(p), "{p}");
+        }
+        for p in [r"K:\src\build\a.obj", r"C:\Users\eu\Downloads\big.iso", r"D:\Jogos\Windows\x.bin"] {
+            assert!(!system_file(p), "{p}");
+        }
+    }
 }

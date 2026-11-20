@@ -2947,3 +2947,15 @@ O filtro entra quando o jogo é menor que o monitor: o Prisma cria o perfil de s
 Filtro de upscale: baixe os filtros na página Fullscreenizer	Фильтр апскейла: скачайте фильтры на странице «Fullscreenizer»
 Este jogo já tem perfil de shader: o filtro de upscale fica com ele	У этой игры уже есть профиль shader: фильтр апскейла остаётся за ним
 Filtro de upscale: não deu para gravar o perfil	Фильтр апскейла: не удалось сохранить профиль
+Atualizando…	Обновление…
+Excluir para sempre	Удалить навсегда
+Excluir para sempre?	Удалить навсегда?
+{} arquivos, do maior para o menor. Ctrl e Shift escolhem vários.	Файлов: {}, от большего к меньшему. Ctrl и Shift выбирают несколько.
+{} escolhidos, {}	Выбрано: {}, {}
+Clique num arquivo para escolher; o botão direito abre o menu.	Щёлкните файл, чтобы выбрать его; правая кнопка открывает меню.
+Arquivos do sistema	Системные файлы
+O Prisma não apaga arquivos do Windows, das pastas de programas nem os de paginação e hibernação.	Prisma не удаляет файлы Windows, файлы из папок программ, а также файлы подкачки и гибернации.
+{} arquivos, {} no total, serão apagados para sempre. Eles não vão para a Lixeira e não dá para recuperar.	Файлов: {}, всего {}, будут удалены навсегда. Они не попадут в корзину, и восстановить их будет нельзя.
+{} arquivos, {} no total, serão apagados para sempre. Eles não vão para a Lixeira e não dá para recuperar. {} arquivos do sistema ficam de fora.	Файлов: {}, всего {}, будут удалены навсегда. Они не попадут в корзину, и восстановить их будет нельзя. Системных файлов не затронуто: {}.
+{} arquivos apagados, {} liberados	Удалено файлов: {}, освобождено: {}
+Alguns arquivos não foram apagados	Некоторые файлы не удалены

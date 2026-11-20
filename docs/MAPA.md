@@ -270,13 +270,16 @@ A barra lateral é `NAV` (`src/pages/mod.rs:324`), em cinco grupos (`GROUPS` `:3
 | Ver redes (adaptadores) | Página | `pages/storage.rs:154` `draw_nets`; `sys/nets.rs:35` `list`; `:91` `sample` | |
 | Cores e nomes de saúde | Automático | `pages/storage.rs:6` `level_color`; `:15` `level_name`; `:32` `fmt_hours` | |
 
-### 4.4 Espaço em disco (`src/pages/analyze.rs`, `draw` linha 80)
+### 4.4 Espaço em disco (`src/pages/analyze.rs`, `draw` linha 125)
 
 | Função | Como é chamada | Onde no código | Observações |
 |---|---|---|---|
-| Mapa de pastas e arquivos (treemap) | Página | `pages/analyze.rs:80` `draw`; `:162` `draw_result`; `:26` `squarify` | |
+| Mapa de pastas e arquivos (treemap) | Página | `pages/analyze.rs:125` `draw`; `:245` `draw_result`; `:26` `squarify` | |
 | Abrir pasta no Explorer | Clique | `open_in_explorer` `pages/analyze.rs:65` | |
-| Leitura da tabela de arquivos (MFT) | Automático | `sys/mft.rs:686` `start`; `:699` `drives`; `:219` `protected` | `sys/mft.rs` não tem `#[test]`. |
+| Leitura da tabela de arquivos (MFT) | Automático | `sys/mft.rs:799` `start`; `:831` `drives`; `:327` `protected`; `:737` `walk` (varredura sem MFT, também a de uma pasta) | |
+| Atualizar a pasta aberta | Botão **Atualizar** na aba Pastas | `sys/mft.rs:813` `refresh` (lê só a pasta numa thread e troca se `find` ainda dá o mesmo item); `Scan::replace` `:264` (desmarca o conteúdo antigo, acrescenta o novo, a diferença sobe até a raiz; refaz `index` `:167`, tipos `sort_types` `:257` e `top_files` `:199`; muda `version`) | Vale para análise pela MFT ou varrendo. `App.scan_progress.running` fica ligado enquanto lê. |
+| Arquivos de um tipo | Clique num tipo em Tipos de arquivo (abre a 3ª aba) | `Scan::files_of` `sys/mft.rs:316`; `ext` `:77`; `App.scan_type` (extensão, `version`, lista), refeita quando `Scan.version` muda; `type_name` `pages/analyze.rs:70` | O disco todo, do maior para o menor. |
+| Escolher vários, Explorer e Excluir para sempre | Clique, Ctrl+clique, Shift+clique; botão direito (menu `scan-file`); botões do pé | `pick` `pages/analyze.rs:75` (`App.scan_pick`, `scan_anchor`); `deletable` `:94`; `ask_purge` `:100` (pergunta `scan-purge`); exclusão com `std::fs::remove_file` em `draw` (`App.scan_purge`), `Scan::forget` `sys/mft.rs:216` (tira também o conteúdo de pastas dos tipos, `unmark` `:240`) | Sem Lixeira. Pula e lista no fim os que falham (em uso, sem permissão). Recusa `system_file` `sys/mft.rs:340` (Windows, pastas de programas, ProgramData, paginação e hibernação). Testes: `sys/mft.rs` 3 (`refresh_moves_the_difference_up_to_the_root`, `files_of_a_type_from_largest_and_forget_updates_types`, `system_files_are_not_deleted`), em pasta temporária. |
 
 ### 4.5 Pesquisar (`src/pages/search.rs`, `draw` linha 862)
 
