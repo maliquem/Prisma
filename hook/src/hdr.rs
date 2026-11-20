@@ -833,6 +833,14 @@ unsafe fn proxied(device: Ptr, hwnd: HWND, want: Want, out: *mut Ptr, real: impl
     }
     INSIDE.set(true);
     let mut hr = real();
+    // Outro mod no caminho (ERSS com ForceHDR) pode trocar o FP16 pedido: o proxy desenharia num formato
+    // que não é o dele e o D3D12 derrubaria o dispositivo. Aí a cadeia fica como ele fez, sem o HDR do Prisma.
+    let fp16 = || IDXGISwapChain::from_raw_borrowed(&*out).and_then(|c| c.GetDesc().ok()).is_some_and(|d| d.BufferDesc.Format == DXGI_FORMAT_R16G16B16A16_FLOAT);
+    if hr.is_ok() && !fp16() {
+        note(DXGI_ERROR_UNSUPPORTED);
+        INSIDE.set(false);
+        return created(hr, out, hwnd);
+    }
     if hr.is_ok() {
         hook_chain(*out);
         // Antes de entrar na lista: tira os proxies velhos deste endereço e desta janela.

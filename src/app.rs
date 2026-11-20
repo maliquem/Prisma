@@ -82,6 +82,7 @@ const WM_PASTE_KEY: u32 = WM_APP + 99;
 const WM_PICK_RUN: u32 = WM_APP + 100;
 /// Janelas da página Shaders; o WPARAM diz qual (`pages::shaders::PICK_*`).
 pub const WM_PICK_SHADER: u32 = WM_APP + 104;
+const WM_PICK_MODS: u32 = WM_APP + 105;
 const WM_POW_OUT: u32 = WM_APP + 82;
 const WM_REPORT_PHOTO: u32 = WM_APP + 84;
 const WM_REPORT_DONE: u32 = WM_APP + 85;
@@ -561,6 +562,10 @@ pub fn start(background: bool) {
         let _ = ChangeWindowMessageFilterEx(hub, WM_SHOW, MSGFLT_ALLOW, None);
         let _ = ChangeWindowMessageFilterEx(hub, WM_COPYDATA, MSGFLT_ALLOW, None);
         let cfg = Config::load();
+        // Gancho na pasta do carregador de mods: um Prisma novo leva o gancho novo (o mapa muda junto).
+        for g in cfg.hdr_games.iter().filter(|g| !g.mods.is_empty()) {
+            crate::sys::inject::put_native(&g.mods);
+        }
         // Filtro de upscale que ficou ligado (o Prisma fechou com o jogo no Fullscreenizer): sem isso o motor
         // desenha por cima do jogo em janela na próxima vez.
         for a in cfg.fs_apps.iter().filter(|a| !a.path.is_empty()) {
@@ -1440,7 +1445,7 @@ impl App {
     }
 
     /// Se o jogo da frente, aberto com o HDR do Prisma, tem HDR próprio: o gancho vê o que ele entrega e
-    /// o perfil do jogo guarda.
+    /// o perfil do jogo guarda. Gancho posto por um carregador de mods recebe os ajustes aqui.
     fn hdr_watch(&mut self) {
         let Some(g) = self.cfg.hdr_games.iter_mut().find(|g| g.mode == crate::sys::autohdr::PRISMA && g.exe.eq_ignore_ascii_case(&self.fg_exe)) else { return };
         let Some(live) = crate::sys::inject::HdrLive::connect(self.fg_pid) else { return };
@@ -1449,6 +1454,7 @@ impl App {
             self.cfg.save();
             self.invalidate();
         }
+        crate::sys::autohdr::adopt(&self.cfg, &live, self.fg_pid, &self.fg_exe);
     }
 
     pub(crate) fn fg_info(&self) -> Option<(HWND, u32, String)> {
@@ -1600,6 +1606,13 @@ impl App {
     pub fn post_action(&self, id: i32) {
         unsafe {
             let _ = PostMessageW(Some(self.hub), WM_HOTKEY, WPARAM(id as usize), LPARAM(0));
+        }
+    }
+
+    /// Pasta de DLLs do carregador de mods do jogo `i` da aba HDR (`inject::put_native`).
+    pub fn pick_mods(&self, i: usize) {
+        unsafe {
+            let _ = PostMessageW(Some(self.hub), WM_PICK_MODS, WPARAM(i), LPARAM(0));
         }
     }
 
@@ -4629,6 +4642,20 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                         a.tool_src = dir;
                     } else {
                         a.tool_dst = dir;
+                    }
+                    a.invalidate();
+                });
+            }
+            LRESULT(0)
+        }
+        WM_PICK_MODS => {
+            if let Some(dir) = capture::choose_folder(h) {
+                with(|a| {
+                    if w.0 < a.cfg.hdr_games.len() && crate::sys::inject::put_native(&dir) {
+                        a.cfg.hdr_games[w.0].mods = dir;
+                        a.cfg.save();
+                    } else {
+                        a.toast.info("Não consegui gravar o gancho nessa pasta.");
                     }
                     a.invalidate();
                 });

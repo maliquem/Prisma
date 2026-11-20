@@ -2969,6 +2969,12 @@ Um HDR por jogo. Vale a partir da próxima vez que o jogo abrir.	每个游戏单
 Um HDR por jogo. O Auto HDR está desligado nas configurações do Windows: ligue lá para ele valer.	每个游戏单独设置 HDR。Windows 设置中自动 HDR 已关闭：请在那里开启，此项才会生效。
 Bloqueado: este jogo tem anti-cheat, e o HDR do Prisma precisa entrar no jogo. Escolha Auto HDR ou RTX HDR, ou marque abaixo se você abre o jogo sem o anti-cheat.	已锁定：此游戏有反作弊，而 Prisma HDR 需要注入游戏。请选择自动 HDR 或 RTX HDR，或在下方勾选“我在没有反作弊的情况下打开游戏”。
 Abro sem o anti-cheat (offline, mods); com ele rodando, o Prisma não entra	我不带反作弊启动（离线、模组）；反作弊运行时 Prisma 无法注入
+Pasta de mods	模组文件夹
+Tirar da pasta	从文件夹中移除
+Gancho na pasta de mods: abra o jogo pelo lançador dos mods, com o Prisma aberto.	模组文件夹中的钩子：请通过模组启动器打开游戏，并保持 Prisma 处于打开状态。
+Para jogo aberto por um lançador de mods (me3 do ELDEN RING Reforged): escolha a pasta de DLLs dele (dll\offline) e o gancho entra com o jogo, sem injeção.	适用于通过模组启动器打开的游戏（ELDEN RING Reforged 的 me3）：选择其 DLL 文件夹（dll\offline），钩子会随游戏加载，无需注入。
+Feche o jogo antes de tirar o gancho.	移除钩子前请先关闭游戏。
+Não consegui gravar o gancho nessa pasta.	无法将钩子写入该文件夹。
 Jogo da Steam: cole a linha abaixo em Propriedades > Opções de inicialização. Depois é só abrir pela Steam.	Steam 游戏：把下面这一行粘贴到 属性 > 启动选项 中。之后直接从 Steam 打开即可。
 Abra o jogo pelo botão Abrir com HDR, ou use a linha abaixo nas opções de inicialização do launcher.	用“以 HDR 打开”按钮打开游戏，或把下面这一行用在启动器的启动选项中。
 Copiar linha	复制该行

@@ -137,6 +137,7 @@ extern "system" {
     fn GetProcAddress(module: Ptr, name: *const u8) -> Ptr;
     fn VirtualProtect(at: Ptr, size: usize, protect: u32, old: *mut u32) -> i32;
     fn GetModuleHandleExW(flags: u32, name: *const c_void, module: *mut Ptr) -> i32;
+    fn GetModuleFileNameW(module: Ptr, name: *mut u16, size: u32) -> u32;
 }
 
 #[link(name = "user32")]
@@ -330,6 +331,14 @@ pub(crate) unsafe fn unpatch(table: *mut usize, slot: usize, ours: usize, keep: 
     }
 }
 
+/// Cópia na pasta de DLLs de um carregador de mods (me3 do ERR), com o nome de `inject::NATIVE_DLL`: ninguém do
+/// Prisma abriu o jogo, e estar ali já é o pedido do HDR. Os ajustes chegam depois, ao vivo.
+unsafe fn native(module: Ptr) -> bool {
+    let mut buf = [0u16; 1024];
+    let n = GetModuleFileNameW(module, buf.as_mut_ptr(), buf.len() as u32) as usize;
+    String::from_utf16_lossy(&buf[..n.min(buf.len())]).to_ascii_lowercase().ends_with("\\prisma_hdr.dll")
+}
+
 unsafe extern "system" fn start(_: Ptr) -> u32 {
     let mut module = std::ptr::null_mut();
     // O Windows solta o módulo quando o gancho sai: preso aqui, ele fica até o jogo fechar.
@@ -348,6 +357,9 @@ unsafe extern "system" fn start(_: Ptr) -> u32 {
     QueryPerformanceFrequency(&mut freq);
     FREQ.store(freq, Relaxed);
     TIMER.store(CreateWaitableTimerExW(std::ptr::null_mut(), std::ptr::null(), TIMER_HIGH_RES, TIMER_ALL) as usize, Relaxed);
+    if native(module) {
+        s.hdr_proxy.store(1, SeqCst);
+    }
     s.state.store(STATE_LOADED, SeqCst);
     s.magic.store(MAGIC, SeqCst);
     SHARED.store(view as usize, SeqCst);

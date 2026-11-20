@@ -196,6 +196,21 @@ pub fn load_wow(pid: u32, dll: &[u8], helper: &[u8], dir: &str, name: &str) -> O
     None
 }
 
+/// Nome do gancho na pasta de DLLs de um carregador de mods; com este nome ele liga o HDR sozinho (`hook::native`).
+pub const NATIVE_DLL: &str = "prisma_hdr.dll";
+
+/// Põe ou atualiza o gancho na pasta `dir` de DLLs de um carregador de mods (`dll\offline` do ERR): o carregador
+/// abre a DLL com o jogo, sem o Prisma injetar nada, e o Prisma só passa os ajustes (`autohdr::adopt`).
+pub fn put_native(dir: &str) -> bool {
+    let path = std::path::Path::new(dir).join(NATIVE_DLL);
+    std::fs::read(&path).is_ok_and(|d| d == DLL) || std::fs::write(&path, DLL).is_ok()
+}
+
+pub fn take_native(dir: &str) -> bool {
+    let path = std::path::Path::new(dir).join(NATIVE_DLL);
+    !path.exists() || std::fs::remove_file(path).is_ok()
+}
+
 fn window_thread(pid: u32) -> Option<u32> {
     let list = crate::sys::procs::top_windows();
     let hwnd = list.into_iter().find(|h| crate::sys::procs::window_pid(*h) == pid)?;
@@ -210,14 +225,22 @@ fn map_name(pid: u32) -> HSTRING {
 impl Limiter {
     /// Começa a carregar no jogo. Se já foi carregado antes, só reconecta.
     pub fn attach(pid: u32) -> Option<Self> {
-        unsafe {
-            let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
-            let mut me = Self { pid, process, hook: None, map: HANDLE::default(), view: std::ptr::null(), since: Instant::now(), status: Status::Waiting };
-            if !me.open() {
-                me.hook = Some(load(pid, DLL, "limiter", "prisma_hook")?);
-            }
-            Some(me)
+        let mut me = Self::new(pid)?;
+        if !me.open() {
+            me.hook = Some(load(pid, DLL, "limiter", "prisma_hook")?);
         }
+        Some(me)
+    }
+
+    /// Liga ao gancho que já está no jogo (posto por um carregador de mods, `put_native`), sem carregar nada.
+    pub fn adopt(pid: u32) -> Option<Self> {
+        let mut me = Self::new(pid)?;
+        me.open().then_some(me)
+    }
+
+    fn new(pid: u32) -> Option<Self> {
+        let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }.ok()?;
+        Some(Self { pid, process, hook: None, map: HANDLE::default(), view: std::ptr::null(), since: Instant::now(), status: Status::Waiting })
     }
 
     fn open(&mut self) -> bool {
