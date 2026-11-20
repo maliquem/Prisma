@@ -541,6 +541,11 @@ pub fn start(background: bool) {
         let _ = ChangeWindowMessageFilterEx(hub, WM_SHOW, MSGFLT_ALLOW, None);
         let _ = ChangeWindowMessageFilterEx(hub, WM_COPYDATA, MSGFLT_ALLOW, None);
         let cfg = Config::load();
+        // Filtro de upscale que ficou ligado (o Prisma fechou com o jogo no Fullscreenizer): sem isso o motor
+        // desenha por cima do jogo em janela na próxima vez.
+        for a in cfg.fs_apps.iter().filter(|a| !a.path.is_empty()) {
+            crate::shader_profile::upscale_off(std::path::Path::new(&a.path));
+        }
         monitor::PERF.store(cfg.perf_always, Ordering::Relaxed);
         let shared = monitor::spawn(hub.0 as isize, WM_TICK);
         let mut app = App {
@@ -2185,13 +2190,41 @@ impl App {
 
     fn toggle_fullscreen(&mut self) {
         let Some((h, _, exe)) = self.fg_info() else { return };
-        if let Some(on) = self.full.toggle(h) {
+        if let Some((on, warn)) = self.fs_toggle(h, &exe) {
             let msg = format!("{} · {} desfaz", if on { "Sem bordas" } else { "Janela restaurada" }, self.cfg.hk_fullscreen.label());
-            self.toast.info(&msg);
-            if on {
-                self.note_fullscreen(h, &exe);
-            }
+            self.toast.info(warn.unwrap_or(&msg));
         }
+    }
+
+    /// Liga ou desliga o Fullscreenizer na janela, com o filtro de upscale: (ligou, aviso do filtro).
+    fn fs_toggle(&mut self, h: HWND, exe: &str) -> Option<(bool, Option<&'static str>)> {
+        let r = self.full.toggle(h, self.cfg.fs_fit)?;
+        let path = procs::image_path(procs::window_pid(h)).unwrap_or_default();
+        let mut warn = None;
+        match r {
+            Some(a) => {
+                self.note_fullscreen(h, exe);
+                warn = self.fs_upscale(&path, exe, a);
+            }
+            None if !path.is_empty() => crate::shader_profile::upscale_off(std::path::Path::new(&path)),
+            None => {}
+        }
+        Some((r.is_some(), warn))
+    }
+
+    /// Jogo menor que o monitor com filtro escolhido: o perfil de shader do Fullscreenizer liga, e o motor de
+    /// shaders (modo Por cima) desenha o filtro sobre a janela. Anti-cheat: nada, como nos shaders.
+    fn fs_upscale(&self, path: &str, exe: &str, a: crate::sys::fullscreen::Applied) -> Option<&'static str> {
+        use crate::shader_profile as sp;
+        let kind = self.cfg.fs_apps.iter().find(|p| p.exe.eq_ignore_ascii_case(exe)).map_or(0, |p| p.kind);
+        let rel = sp::upscale_preset(&self.cfg.fs_filters[kind], a.native, a.monitor)?;
+        if path.is_empty() {
+            return None;
+        }
+        if crate::meter::anti_cheat(path) {
+            return Some("Jogo com anti-cheat: o shader não entra nele");
+        }
+        sp::upscale_on(std::path::Path::new(path), rel, &sp::upscale_input(a.native, a.resizable)).err()
     }
 
     /// Quem usou o Fullscreenizer uma vez entra na lista de programas salvos.
@@ -2202,8 +2235,8 @@ impl App {
     }
 
     pub fn toggle_window(&mut self, h: HWND, exe: &str) {
-        if self.full.toggle(h) == Some(true) {
-            self.note_fullscreen(h, exe);
+        if let Some((_, Some(w))) = self.fs_toggle(h, exe) {
+            self.toast.info(w);
         }
     }
 
@@ -3314,6 +3347,7 @@ impl App {
         self.last_tick = Instant::now();
 
         if let Some((h, pid, exe)) = self.fg_info() {
+            self.full.follow(h);
             if pid != self.fg_pid {
                 self.fg_pid = pid;
                 self.fg_exe = exe.clone();
@@ -3388,7 +3422,9 @@ impl App {
 
         self.meter_tick();
         self.widget.update(&self.cfg, &self.snap);
-        self.full.sweep();
+        for p in self.full.sweep().into_iter().filter(|p| !p.is_empty()) {
+            crate::shader_profile::upscale_off(std::path::Path::new(&p));
+        }
         self.update_tick();
         self.sound_tick();
         self.eq_tick();
@@ -3419,7 +3455,12 @@ impl App {
 
     fn apply_profile(&mut self, h: HWND, exe: &str) {
         if self.cfg.fs_auto(exe) && !self.full.is_on(h) {
-            self.full.apply(h);
+            if let Some(a) = self.full.apply(h, self.cfg.fs_fit) {
+                let path = procs::image_path(procs::window_pid(h)).unwrap_or_default();
+                if let Some(w) = self.fs_upscale(&path, exe, a) {
+                    self.toast.info(w);
+                }
+            }
         }
         let Some(p) = self.cfg.profile(exe).cloned() else { return };
         if p.volume >= 0 {

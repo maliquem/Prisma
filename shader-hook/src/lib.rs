@@ -1088,7 +1088,7 @@ impl D9 {
             d9_detect(&mut self.detect, &mut self.strips, dev, surf, w, h, d.Format)?;
         }
         // Redução por StretchRect de ponto.
-        if let Some(k) = blocks::reduce_for(&self.t.profile.input, h, self.detect.found) {
+        if let Some(k) = blocks::reduce_for(&self.t.profile.input, w, h, self.detect.found) {
             let size = blocks::reduced_size(w, h, k);
             if self.small.as_ref().is_none_or(|x| x.0 != size) {
                 let (t, sf) = target(dev, size.0, size.1, d.Format)?;
@@ -1499,7 +1499,7 @@ impl Gl {
             self.detect_blocks(w, h)?;
         }
         let mut src = self.input.as_ref().unwrap().image();
-        if let Some(k) = blocks::reduce_for(&self.t.profile.input, h, self.detect.found) {
+        if let Some(k) = blocks::reduce_for(&self.t.profile.input, w, h, self.detect.found) {
             let size = blocks::reduced_size(w, h, k);
             if self.small.as_ref().is_none_or(|t| t.size != size) {
                 say!("shader: entrada {w}x{h} → {}x{}", size.0, size.1);
@@ -2161,7 +2161,7 @@ impl VkDev {
         if self.t.profile.input == "auto" {
             self.copy_strips(cmd, sc_img, w, h)?;
         }
-        let k = blocks::reduce_for(&self.t.profile.input, h, self.detect.found);
+        let k = blocks::reduce_for(&self.t.profile.input, w, h, self.detect.found);
         let size = k.map_or((w, h), |k| blocks::reduced_size(w, h, k));
         if k.is_some() && self.small.as_ref().is_none_or(|i| i.size != size) {
             say!("shader: entrada {w}x{h} → {}x{}", size.0, size.1);

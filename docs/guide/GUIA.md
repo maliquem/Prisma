@@ -198,6 +198,16 @@ Conta como jogo o programa em foco que cobre a tela e usa a GPU ele mesmo, ou qu
 
 Deixa a janela em foco em tela cheia sem bordas. Atalho: Ctrl + Alt + F. Quem usa uma vez entra numa lista salva, onde dá para marcar Automático e aplicar sempre que o programa abrir.
 
+- **Proporção:** **Manter (barras pretas)**, o padrão, põe o jogo no meio do monitor no formato dele, com barras pretas nas sobras (um jogo 800×600 num monitor 16:9 fica com barras dos lados). **Esticar** cobre o monitor inteiro, como antes. **Escala inteira** usa o maior múltiplo do tamanho do jogo que cabe (640×480 vira 1280×960 num 1080p), com pixels todos do mesmo tamanho; jogo maior que o monitor cai para Manter.
+- **Filtro de upscale:** quando o jogo em janela é menor que o monitor, o Prisma pode aumentar a imagem com um filtro em vez do esticado borrado do Windows. Cada tipo de jogo tem o seu filtro, e o tipo de cada programa se escolhe na lista **Programas salvos** (o padrão é 3D):
+  - **3D:** **AMD FSR 1** e **NVIDIA NIS** (nítidos) ou **Lanczos** (suave).
+  - **2D com 3D** (sprites sobre cenário 3D): **AMD FSR 1**, **Lanczos** ou **Pixels nítidos**.
+  - **2D** (pixel art): **Pixels nítidos**, **xBR** ou **ScaleFX** (cantos lisos).
+
+  Os filtros não vêm com o Prisma: o botão **Baixar filtros** da página busca a biblioteca de shaders do RetroArch no GitHub uma vez (é a mesma do **Baixar** da página Shaders), e todos saem dela. O filtro é um perfil de shader do jogo, chamado **Fullscreenizer · <jogo>**, que liga junto com o Fullscreenizer e desliga quando ele sai ou o jogo fecha; dá para ajustar na página Shaders. O Prisma lê a imagem no tamanho que o jogo tinha em janela e aplica o filtro daí até o monitor.
+- **Do driver (painel da placa):** o NIS da NVIDIA, o Radeon Super Resolution da AMD e a escala inteira de NVIDIA, AMD e Intel só ligam no painel da placa. Escolher essa opção mostra o caminho no painel; o Prisma não liga nada.
+- **Não dá para:** usar com jogo em tela cheia exclusiva. Coloque o jogo em modo janela antes. O filtro de upscale não entra em jogo com anti-cheat nem em jogo que já tem perfil de shader seu (acrescente o FSR nesse perfil). Em jogo de janela redimensionável, que costuma desenhar no tamanho novo, o filtro só reduz a imagem quando acha blocos de pixels.
+
 - **Não dá para:** usar com jogo em tela cheia exclusiva. Coloque o jogo em modo janela antes.
 
 ## Shaders

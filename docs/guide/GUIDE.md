@@ -198,6 +198,16 @@ A game is the program in focus that covers the screen and uses the GPU itself, o
 
 Makes the window in focus borderless fullscreen. Shortcut: Ctrl + Alt + F. Anything you use it on goes into a saved list, where you can check Automatic to apply it whenever the program opens.
 
+- **Aspect ratio:** **Keep (black bars)**, the default, centers the game on the monitor in its own shape, with black bars in the leftover space (an 800×600 game on a 16:9 monitor gets bars on the sides). **Stretch** covers the whole monitor, as before. **Integer scale** uses the largest multiple of the game's size that fits (640×480 becomes 1280×960 on 1080p), with every pixel the same size; a game larger than the monitor falls back to Keep.
+- **Upscale filter:** when the windowed game is smaller than the monitor, Prisma can enlarge the image with a filter instead of the blurry Windows stretch. Each kind of game has its own filter, and you pick each program's kind in the **Saved programs** list (3D by default):
+  - **3D:** **AMD FSR 1** and **NVIDIA NIS** (sharp) or **Lanczos** (smooth).
+  - **2D + 3D** (sprites over 3D scenery): **AMD FSR 1**, **Lanczos** or **Sharp pixels**.
+  - **2D** (pixel art): **Sharp pixels**, **xBR** or **ScaleFX** (smooth corners).
+
+  The filters do not ship with Prisma: the page's **Download filters** button fetches RetroArch's shader library from GitHub once (the same one as **Download** on the Shaders page), and they all come from it. The filter is a shader profile for the game, named **Fullscreenizer · <game>**, that turns on with the Fullscreenizer and off when it ends or the game closes; you can tune it on the Shaders page. Prisma reads the image at the size the game had in a window and filters it from there up to the monitor.
+- **From the driver (graphics panel):** NVIDIA NIS, AMD Radeon Super Resolution and NVIDIA, AMD and Intel integer scaling only turn on in the graphics card's panel. Picking this option shows where in the panel; Prisma turns nothing on.
+- **You can't:** use it with a game in exclusive fullscreen. Put the game in windowed mode first. The upscale filter does not start in a game with anti-cheat or in a game that already has your own shader profile (add FSR to that profile). In a game with a resizable window, which usually draws at the new size, the filter only shrinks the image back when it finds pixel blocks.
+
 - **You can't:** use it with a game in exclusive fullscreen. Put the game in windowed mode first.
 
 ## Shaders

@@ -2919,3 +2919,25 @@ Ins adicionar passe · Del tirar passe · Backspace fechar	Ins добавить 
 ↑↓ escolher · Enter trocar · Ins adicionar · Backspace voltar	↑↓ выбор · Enter заменить · Ins добавить · Backspace назад
 Baixe a biblioteca na página Shaders	Скачайте библиотеку на странице «Shaders»
 Nenhum preset aqui	Здесь нет preset
+Proporção	Пропорции
+Manter (barras pretas)	Сохранять (чёрные полосы)
+Esticar	Растянуть
+Escala inteira	Целочисленный масштаб
+Filtros abertos	Открытые фильтры
+Baixar filtros	Скачать фильтры
+Baixados	Скачано
+Filtro de upscale · {}	Фильтр апскейла · {}
+2D com 3D	2D с 3D
+Nenhum (o do Windows)	Нет (средствами Windows)
+AMD FSR 1 (nítido, 3D)	AMD FSR 1 (чёткий, 3D)
+NVIDIA NIS (nítido, 3D)	NVIDIA NIS (чёткий, 3D)
+Lanczos (suave)	Lanczos (мягкий)
+Pixels nítidos (pixel art)	Чёткие пиксели (пиксель-арт)
+xBR (pixel art, cantos lisos)	xBR (пиксель-арт, гладкие углы)
+ScaleFX (pixel art)	ScaleFX (пиксель-арт)
+Do driver (painel da placa)	Драйвера (панель видеокарты)
+Filtro do driver: ligue no painel da placa. NVIDIA: Painel de Controle › Ajustar o tamanho e a posição da área de trabalho › Dimensionamento de imagem (NIS) ou Dimensionamento de número inteiro. AMD: Adrenalin › Gráficos › Radeon Super Resolution (pede tela cheia exclusiva). Intel: Centro de Comando Gráfico › Tela › Escala › Escala de número inteiro.	Фильтр драйвера: включите его в панели видеокарты. NVIDIA: Панель управления › Регулировка размера и положения рабочего стола › Масштабирование изображения (NIS) или Целочисленное масштабирование. AMD: Adrenalin › Графика › Radeon Super Resolution (нужен эксклюзивный полноэкранный режим). Intel: Центр управления графикой › Дисплей › Масштабирование › Целочисленное масштабирование.
+O filtro entra quando o jogo é menor que o monitor: o Prisma cria o perfil de shader do jogo (página Shaders) e desenha por cima. Jogo com perfil de shader próprio ou anti-cheat fica sem ele.	Фильтр работает, когда игра меньше монитора: Prisma создаёт профиль shader для игры (страница «Shaders») и рисует поверх. Игра со своим профилем shader или с античитом остаётся без него.
+Filtro de upscale: baixe os filtros na página Fullscreenizer	Фильтр апскейла: скачайте фильтры на странице «Fullscreenizer»
+Este jogo já tem perfil de shader: o filtro de upscale fica com ele	У этой игры уже есть профиль shader: фильтр апскейла остаётся за ним
+Filtro de upscale: não deu para gravar o perfil	Фильтр апскейла: не удалось сохранить профиль

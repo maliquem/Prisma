@@ -15,7 +15,7 @@ pub struct Profile {
     pub name: String,
     pub exe: PathBuf,
     pub on: bool,
-    /// auto | full | 240 | 480 | 720 | d2 | d3 | d4
+    /// auto | full | 240 | 480 | 720 | d2 | d3 | d4 | LxA (tamanho exato, do Fullscreenizer)
     pub input: String,
     pub record: bool,
     /// `mode=inject`: dentro do jogo, no Present; `mode=overlay` (padrão): janela por cima.

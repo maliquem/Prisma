@@ -49,8 +49,13 @@ pub fn detect(hs: &[u32], w: usize, vs: &[u32], h: usize, s: usize) -> Option<Bl
 
 /// Constantes do `PS_REDUCE` (bloco x, bloco y, começo x, começo y), ou `None` para a imagem inteira.
 /// `auto` usa os blocos achados (sem blocos, a original); 240/480/720 reduzem à altura, mantendo a proporção;
-/// d2/d3/d4 dividem.
-pub fn reduce_for(input: &str, h: u32, found: Option<Blocks>) -> Option<[f32; 4]> {
+/// d2/d3/d4 dividem; `LxA` (o Fullscreenizer grava o tamanho do jogo em janela) reduz exatamente a esse tamanho,
+/// com um ponto do centro de cada pixel original, que também desfaz o esticado suave do jogo.
+pub fn reduce_for(input: &str, w: u32, h: u32, found: Option<Blocks>) -> Option<[f32; 4]> {
+    if let Some((x, y)) = input.split_once('x').and_then(|(x, y)| Some((x.parse::<f32>().ok()?, y.parse::<f32>().ok()?))) {
+        let (bx, by) = (w as f32 / x, h as f32 / y);
+        return (x >= 1.0 && y >= 1.0 && (bx > 1.0 || by > 1.0)).then_some([bx.max(1.0), by.max(1.0), 0.0, 0.0]);
+    }
     match input {
         "d2" | "d3" | "d4" => {
             let b = input[1..].parse::<f32>().ok()?;
@@ -232,12 +237,17 @@ mod tests {
     #[test]
     fn reducao() {
         let f = Some(Blocks { bx: 4, by: 4, ox: 0, oy: 0 });
-        assert_eq!(reduce_for("auto", 960, f), Some([4.0, 4.0, 0.0, 0.0]));
-        assert_eq!(reduce_for("auto", 960, None), None);
-        assert_eq!(reduce_for("full", 960, f), None);
-        assert_eq!(reduce_for("d3", 960, None), Some([3.0, 3.0, 0.0, 0.0]));
-        assert_eq!(reduced_size(1280, 960, reduce_for("240", 960, None).unwrap()), (320, 240));
-        assert_eq!(reduce_for("720", 720, None), None, "já está na altura");
+        assert_eq!(reduce_for("auto", 1280, 960, f), Some([4.0, 4.0, 0.0, 0.0]));
+        assert_eq!(reduce_for("auto", 1280, 960, None), None);
+        assert_eq!(reduce_for("full", 1280, 960, f), None);
+        assert_eq!(reduce_for("d3", 1280, 960, None), Some([3.0, 3.0, 0.0, 0.0]));
+        assert_eq!(reduced_size(1280, 960, reduce_for("240", 1280, 960, None).unwrap()), (320, 240));
+        assert_eq!(reduce_for("720", 1280, 720, None), None, "já está na altura");
+        // Fullscreenizer: 800×600 em 1440×1080 volta a 800×600, mesmo esticado só num eixo.
+        assert_eq!(reduced_size(1440, 1080, reduce_for("800x600", 1440, 1080, None).unwrap()), (800, 600));
+        assert_eq!(reduced_size(1920, 1080, reduce_for("800x600", 1920, 1080, None).unwrap()), (800, 600));
+        assert_eq!(reduce_for("800x600", 800, 600, None), None, "já está no tamanho");
+        assert_eq!(reduce_for("0x600", 1440, 1080, None), None);
     }
 
     /// Três iguais seguidos trocam; tela lisa no meio não atrapalha; outro resultado no meio zera.

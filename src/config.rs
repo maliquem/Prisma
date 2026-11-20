@@ -129,6 +129,9 @@ pub fn vk_name(vk: u32) -> String {
     }
 }
 
+/// Filtro de upscale de cada tipo de jogo (`shader_profile::KINDS`) na config.
+const FS_FILTER_KEYS: [&str; 3] = ["fs_filter_3d", "fs_filter_mix", "fs_filter_2d"];
+
 /// Programa que já usou o Fullscreenizer.
 #[derive(Clone, Default, Debug)]
 pub struct FsApp {
@@ -136,6 +139,21 @@ pub struct FsApp {
     pub path: String,
     /// Aplica sozinho sempre que o programa abrir.
     pub auto: bool,
+    /// Tipo de jogo, que escolhe o filtro de upscale: índice em `shader_profile::KINDS` (0 3D).
+    pub kind: usize,
+}
+
+impl FsApp {
+    /// `exe|auto|caminho|tipo`; linha antiga, sem o tipo, fica 3D.
+    pub fn parse(v: &str) -> Option<Self> {
+        let p: Vec<&str> = v.splitn(4, '|').collect();
+        let kind = p.get(3).and_then(|k| k.parse().ok()).filter(|k| *k < crate::shader_profile::KINDS.len()).unwrap_or(0);
+        (p.len() >= 3).then(|| FsApp { exe: p[0].into(), auto: p[1] == "1", path: p[2].into(), kind })
+    }
+
+    pub fn line(&self) -> String {
+        format!("{}|{}|{}|{}", self.exe, if self.auto { "1" } else { "0" }, self.path, self.kind)
+    }
 }
 
 /// Programa com aparelho de som escolhido. Vazio usa o padrão do Windows.
@@ -292,6 +310,10 @@ pub struct Config {
     pub load_cpu_pct: u32,
     pub load_cpu_secs: u32,
     pub fs_apps: Vec<FsApp>,
+    /// Como o Fullscreenizer põe o jogo no monitor.
+    pub fs_fit: crate::sys::fullscreen::Fit,
+    /// Filtro de upscale do Fullscreenizer por tipo de jogo (chave de `shader_profile::UPSCALE`); vazio é nenhum.
+    pub fs_filters: [String; 3],
     pub hdr_profiles: Vec<HdrProfile>,
     pub hdr_games: Vec<HdrGame>,
     pub meter_games: Vec<MeterGame>,
@@ -484,6 +506,8 @@ impl Default for Config {
             load_cpu_pct: 35,
             load_cpu_secs: 20,
             fs_apps: Vec::new(),
+            fs_fit: Default::default(),
+            fs_filters: Default::default(),
             hdr_profiles: Vec::new(),
             hdr_games: Vec::new(),
             meter_games: Vec::new(),
@@ -824,10 +848,7 @@ impl Config {
                 }
                 "nv_game" => c.nv_games.push(v.to_string()),
                 "fs_app" => {
-                    let p: Vec<&str> = v.splitn(3, '|').collect();
-                    if p.len() == 3 {
-                        c.fs_apps.push(FsApp { exe: p[0].into(), auto: p[1] == "1", path: p[2].into() });
-                    }
+                    c.fs_apps.extend(FsApp::parse(v));
                 }
                 "profile" => {
                     let p: Vec<&str> = v.split('|').collect();
@@ -894,6 +915,8 @@ impl Config {
                 "explorer_menu" => c.explorer_menu = b,
                 "un_restore" => c.un_restore = b,
                 "tw_log" => c.tw_log = b,
+                "fs_fit" => c.fs_fit = crate::sys::fullscreen::Fit::parse(v),
+                k if FS_FILTER_KEYS.contains(&k) => c.fs_filters[FS_FILTER_KEYS.iter().position(|x| *x == k).unwrap_or(0)] = v.to_string(),
                 "un_silent" => c.un_silent = b,
                 "tm_hook" => c.tm_hook = b,
                 "paste_key" => c.paste_key = b,
@@ -908,7 +931,7 @@ impl Config {
         for p in c.profiles.iter_mut().filter(|p| p.borderless) {
             p.borderless = false;
             if !c.fs_apps.iter().any(|a| a.exe.eq_ignore_ascii_case(&p.exe)) {
-                c.fs_apps.push(FsApp { exe: p.exe.clone(), path: String::new(), auto: true });
+                c.fs_apps.push(FsApp { exe: p.exe.clone(), path: String::new(), auto: true, kind: 0 });
             }
         }
         c
@@ -1088,7 +1111,11 @@ impl Config {
             let _ = writeln!(s, "nv_game={g}");
         }
         for a in &self.fs_apps {
-            let _ = writeln!(s, "fs_app={}|{}|{}", a.exe, b(a.auto), a.path);
+            let _ = writeln!(s, "fs_app={}", a.line());
+        }
+        let _ = writeln!(s, "fs_fit={}", self.fs_fit.key());
+        for (k, f) in FS_FILTER_KEYS.iter().zip(&self.fs_filters) {
+            let _ = writeln!(s, "{k}={f}");
         }
         let _ = writeln!(s, "tw_log={}", b(self.tw_log));
         let _ = writeln!(s, "un_silent={}", b(self.un_silent));
@@ -1123,7 +1150,7 @@ impl Config {
         match self.fs_apps.iter_mut().find(|a| a.exe.eq_ignore_ascii_case(exe)) {
             Some(a) if a.path.is_empty() => a.path = path.to_string(),
             Some(_) => {}
-            None => self.fs_apps.push(FsApp { exe: exe.to_string(), path: path.to_string(), auto: false }),
+            None => self.fs_apps.push(FsApp { exe: exe.to_string(), path: path.to_string(), auto: false, kind: 0 }),
         }
     }
 
@@ -1166,6 +1193,8 @@ impl Config {
             }
             Defaults::Fullscreen => {
                 self.hk_fullscreen = d.hk_fullscreen;
+                self.fs_fit = d.fs_fit;
+                self.fs_filters = d.fs_filters;
                 for a in &mut self.fs_apps {
                     a.auto = false;
                 }
@@ -1302,6 +1331,16 @@ mod tests {
         assert!(t.ends_with("\nlang=2\n"));
         let dir = std::env::temp_dir().join(format!("prisma-cfg-{}", std::process::id()));
         assert!(read_text(&dir.join("nao-existe.ini")).unwrap().is_none());
+    }
+
+    #[test]
+    fn programa_do_fullscreenizer() {
+        let a = FsApp { exe: "jogo.exe".into(), auto: true, path: r"C:\Jogos\jogo.exe".into(), kind: 2 };
+        let b = FsApp::parse(&a.line()).unwrap();
+        assert_eq!((b.exe, b.auto, b.path, b.kind), (a.exe, a.auto, a.path, a.kind));
+        assert_eq!(FsApp::parse(r"jogo.exe|0|C:\jogo.exe").unwrap().kind, 0, "linha antiga fica 3D");
+        assert_eq!(FsApp::parse(r"jogo.exe|0|C:\jogo.exe|9").unwrap().kind, 0, "tipo que não existe");
+        assert!(FsApp::parse("jogo.exe|1").is_none());
     }
 
     #[test]

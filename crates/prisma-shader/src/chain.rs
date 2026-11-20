@@ -329,7 +329,7 @@ impl Engine {
             self.detect.step(dev, ctx, src.0, w, h)?;
         }
         let mut input = src.1;
-        if let Some(k) = blocks::reduce_for(&self.t.profile.input, h, self.detect.found) {
+        if let Some(k) = blocks::reduce_for(&self.t.profile.input, w, h, self.detect.found) {
             let size = blocks::reduced_size(w, h, k);
             if self.small.as_ref().is_none_or(|s| s.0 != size) {
                 let (t, v) = texture(dev, size.0, size.1, DXGI_FORMAT_B8G8R8A8_UNORM, true)?;

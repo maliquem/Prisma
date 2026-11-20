@@ -2919,3 +2919,25 @@ Ins adicionar passe · Del tirar passe · Backspace fechar	Ins añadir pase · D
 ↑↓ escolher · Enter trocar · Ins adicionar · Backspace voltar	↑↓ elegir · Enter reemplazar · Ins añadir · Backspace volver
 Baixe a biblioteca na página Shaders	Descarga la biblioteca en la página Shaders
 Nenhum preset aqui	Ningún preset aquí
+Proporção	Proporción
+Manter (barras pretas)	Mantener (barras negras)
+Esticar	Estirar
+Escala inteira	Escala entera
+Filtros abertos	Filtros abiertos
+Baixar filtros	Descargar filtros
+Baixados	Descargados
+Filtro de upscale · {}	Filtro de escalado · {}
+2D com 3D	2D con 3D
+Nenhum (o do Windows)	Ninguno (el de Windows)
+AMD FSR 1 (nítido, 3D)	AMD FSR 1 (nítido, 3D)
+NVIDIA NIS (nítido, 3D)	NVIDIA NIS (nítido, 3D)
+Lanczos (suave)	Lanczos (suave)
+Pixels nítidos (pixel art)	Píxeles nítidos (pixel art)
+xBR (pixel art, cantos lisos)	xBR (pixel art, esquinas lisas)
+ScaleFX (pixel art)	ScaleFX (pixel art)
+Do driver (painel da placa)	Del driver (panel de la tarjeta)
+Filtro do driver: ligue no painel da placa. NVIDIA: Painel de Controle › Ajustar o tamanho e a posição da área de trabalho › Dimensionamento de imagem (NIS) ou Dimensionamento de número inteiro. AMD: Adrenalin › Gráficos › Radeon Super Resolution (pede tela cheia exclusiva). Intel: Centro de Comando Gráfico › Tela › Escala › Escala de número inteiro.	Filtro del driver: actívalo en el panel de la tarjeta. NVIDIA: Panel de control › Ajustar el tamaño y la posición del escritorio › Escalado de imagen (NIS) o Escalado de enteros. AMD: Adrenalin › Gráficos › Radeon Super Resolution (requiere pantalla completa exclusiva). Intel: Centro de comandos de gráficos › Pantalla › Escalado › Escalado de enteros.
+O filtro entra quando o jogo é menor que o monitor: o Prisma cria o perfil de shader do jogo (página Shaders) e desenha por cima. Jogo com perfil de shader próprio ou anti-cheat fica sem ele.	El filtro actúa cuando el juego es más pequeño que el monitor: Prisma crea el perfil de shader del juego (página Shaders) y dibuja encima. Un juego con perfil de shader propio o anti-cheat se queda sin él.
+Filtro de upscale: baixe os filtros na página Fullscreenizer	Filtro de escalado: descarga los filtros en la página Fullscreenizer
+Este jogo já tem perfil de shader: o filtro de upscale fica com ele	Este juego ya tiene perfil de shader: el filtro de escalado se queda con él
+Filtro de upscale: não deu para gravar o perfil	Filtro de escalado: no se pudo guardar el perfil
