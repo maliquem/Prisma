@@ -328,9 +328,9 @@ fn saved_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen, list: &[HdrProfil
 }
 
 /// Painel dos ajustes do HDR do Prisma, abaixo da linha do jogo.
-const PRISMA_H: f32 = 300.0;
+const PRISMA_H: f32 = 348.0;
 /// Ajustes ao vivo: nome, mínimo e máximo.
-const KNOBS: [(&str, f32, f32); 6] = [("Pico", 200.0, 4000.0), ("Paper white", 80.0, 400.0), ("Gama", 1.8, 2.6), ("Saturação", 0.5, 1.5), ("Realce dos claros", 0.0, 2.0), ("Preto", 0.0, 1.0)];
+pub const KNOBS: [(&str, f32, f32); 7] = [("Pico", 200.0, 4000.0), ("Paper white", 80.0, 400.0), ("Gama", 1.8, 2.6), ("Saturação", 0.5, 1.5), ("Realce dos claros", 0.0, 2.0), ("Preto", 0.0, 1.0), ("Brilho da interface", 0.0, 400.0)];
 
 thread_local!(static PICK: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) });
 
@@ -360,7 +360,8 @@ fn knob(h: &mut Hdr, i: usize) -> &mut f32 {
         2 => &mut h.gamma,
         3 => &mut h.sat,
         4 => &mut h.boost,
-        _ => &mut h.black,
+        5 => &mut h.black,
+        _ => &mut h.ui,
     }
 }
 
@@ -370,11 +371,14 @@ fn knob_text(i: usize, v: f32) -> String {
         2 => format!("{v:.2}"),
         3 => format!("{:.0}%", v * 100.0),
         4 => format!("{v:.1}x"),
-        _ => format!("{v:.2} nits"),
+        5 => format!("{v:.2} nits"),
+        // Abaixo de 1 nit a interface fica junto com a cena.
+        _ if v < 1.0 => crate::i18n::tr("Junto").into_owned(),
+        _ => format!("{v:.0} nits"),
     }
 }
 
-/// Os seis ajustes do HDR do Prisma em `cols` colunas, 48 de altura por linha (aba HDR e menu dentro do
+/// Os ajustes do HDR do Prisma em `cols` colunas, 48 de altura por linha (aba HDR e menu dentro do
 /// jogo). `true` quando algum mudou.
 pub fn knobs(ui: &mut Ui, id: &str, p: Rect, cols: usize, h: &mut Hdr) -> bool {
     let cw = (p.w - 24.0 * (cols - 1) as f32) / cols as f32;
@@ -459,14 +463,14 @@ fn games_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen) {
             launch = Some((g.path.clone(), steam));
         }
         let mut h = g.prisma.unwrap_or(calibrated);
-        let mut moved = knobs(ui, &format!("hdr-k{i}"), rect(p.x, p.y + 86.0, p.w, 144.0), 2, &mut h);
-        if ui.button(&format!("hdr-gr{i}"), rect(p.x, p.y + 236.0, 200.0, 34.0), "Voltar à calibração", false) {
+        let mut moved = knobs(ui, &format!("hdr-k{i}"), rect(p.x, p.y + 86.0, p.w, 192.0), 2, &mut h);
+        if ui.button(&format!("hdr-gr{i}"), rect(p.x, p.y + 284.0, 200.0, 34.0), "Voltar à calibração", false) {
             h = calibrated;
             moved = true;
         }
         // O mesmo ajuste com o jogo na frente: o atalho abre o menu por cima dele.
-        ui.c.text(rect(p.x + 224.0, p.y + 238.0, 170.0, 30.0), "Menu dentro do jogo", 13.0, TEXT2, Align::Left, Weight::Regular);
-        if ui.hotkey("hk-hdr-menu", rect(p.x + 394.0, p.y + 236.0, 220.0, 34.0), &mut app.cfg.hk_hdr_menu) {
+        ui.c.text(rect(p.x + 224.0, p.y + 286.0, 170.0, 30.0), "Menu dentro do jogo", 13.0, TEXT2, Align::Left, Weight::Regular);
+        if ui.hotkey("hk-hdr-menu", rect(p.x + 394.0, p.y + 284.0, 220.0, 34.0), &mut app.cfg.hk_hdr_menu) {
             hotkey_changed = true;
         }
         if moved && app.cfg.hdr_games[i].prisma != Some(h) {

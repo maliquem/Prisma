@@ -14,8 +14,8 @@ use crate::ui::{Ui, UiState};
 
 const W: f32 = 460.0;
 const PAD: f32 = 16.0;
-/// Seis ajustes, um por linha.
-const KNOBS_H: f32 = 6.0 * 48.0;
+/// Os ajustes, um por linha.
+const KNOBS_H: f32 = crate::pages::hdr::KNOBS.len() as f32 * 48.0;
 
 enum Act {
     Close,

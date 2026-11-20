@@ -1,10 +1,12 @@
-//! HDR próprio: o jogo desenha num buffer SDR nosso, e a cadeia de troca de verdade vira FP16 scRGB.
-//! No `Present`, um passe de tela cheia passa o quadro do jogo pela nossa curva (gama 2.2, paper
-//! white, brilhos até o pico, saturação). Só D3D11 e só janela: o resto passa direto.
+//! HDR próprio: o jogo desenha num buffer nosso, e a cadeia de troca de verdade vira FP16 scRGB.
+//! No `Present`, um passe de tela cheia passa o quadro do jogo pela nossa curva: no SDR, gama 2.2,
+//! paper white, brilhos até o pico e saturação; no HDR do próprio jogo (HDR10 ou scRGB), o reajuste
+//! pela calibração (paper white, saturação, pico com ombro suave e preto). A interface pode sair
+//! separada da cena, com brilho próprio. Só D3D11 e só janela: o resto passa direto.
 
 use std::cell::Cell;
 use std::ffi::c_void;
-use std::sync::atomic::{AtomicUsize, Ordering::*};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering::*};
 use std::sync::{Mutex, MutexGuard};
 
 use windows::core::*;
@@ -25,11 +27,18 @@ const SLOT_GET_BUFFER: usize = 9;
 const SLOT_GET_DESC: usize = 12;
 const SLOT_RESIZE: usize = 13;
 const SLOT_GET_DESC1: usize = 18;
+const SLOT_CHECK_COLOR_SPACE: usize = 37;
 const SLOT_SET_COLOR_SPACE: usize = 38;
 const SLOT_RESIZE1: usize = 39;
 const SLOT_CREATE_SRV: usize = 7;
 const SLOT_CREATE_UAV: usize = 8;
 const SLOT_CREATE_RTV: usize = 9;
+const SLOT_DRAW_INDEXED: usize = 12;
+const SLOT_DRAW: usize = 13;
+const SLOT_DRAW_INDEXED_INSTANCED: usize = 20;
+const SLOT_DRAW_INSTANCED: usize = 21;
+const SLOT_OM_SET: usize = 33;
+const SLOT_OM_SET_UAV: usize = 34;
 const GDI_COMPATIBLE: u32 = 4;
 const USAGE_UAV: u32 = 0x400;
 
@@ -41,6 +50,13 @@ type GetDesc1 = unsafe extern "system" fn(Ptr, *mut DXGI_SWAP_CHAIN_DESC1) -> HR
 type Resize = unsafe extern "system" fn(Ptr, u32, u32, u32, DXGI_FORMAT, u32) -> HRESULT;
 type Resize1 = unsafe extern "system" fn(Ptr, u32, u32, u32, DXGI_FORMAT, u32, *const u32, *const Ptr) -> HRESULT;
 type SetColorSpace = unsafe extern "system" fn(Ptr, DXGI_COLOR_SPACE_TYPE) -> HRESULT;
+type CheckColorSpace = unsafe extern "system" fn(Ptr, DXGI_COLOR_SPACE_TYPE, *mut u32) -> HRESULT;
+type OmSet = unsafe extern "system" fn(Ptr, u32, *const Ptr, Ptr);
+type OmSetUav = unsafe extern "system" fn(Ptr, u32, *const Ptr, Ptr, u32, u32, *const Ptr, *const u32);
+type Draw = unsafe extern "system" fn(Ptr, u32, u32);
+type DrawIndexed = unsafe extern "system" fn(Ptr, u32, u32, i32);
+type DrawInstanced = unsafe extern "system" fn(Ptr, u32, u32, u32, u32);
+type DrawIndexedInstanced = unsafe extern "system" fn(Ptr, u32, u32, u32, i32, u32);
 type CreateView = unsafe extern "system" fn(Ptr, Ptr, *const c_void, *mut Ptr) -> HRESULT;
 
 static OLD_CREATE: AtomicUsize = AtomicUsize::new(0);
@@ -54,7 +70,38 @@ static OLD_SET_COLOR_SPACE: AtomicUsize = AtomicUsize::new(0);
 static OLD_CREATE_SRV: AtomicUsize = AtomicUsize::new(0);
 static OLD_CREATE_UAV: AtomicUsize = AtomicUsize::new(0);
 static OLD_CREATE_RTV: AtomicUsize = AtomicUsize::new(0);
+static OLD_CHECK_COLOR_SPACE: AtomicUsize = AtomicUsize::new(0);
+static OLD_OM_SET: AtomicUsize = AtomicUsize::new(0);
+static OLD_OM_SET_UAV: AtomicUsize = AtomicUsize::new(0);
+static OLD_DRAW: AtomicUsize = AtomicUsize::new(0);
+static OLD_DRAW_INDEXED: AtomicUsize = AtomicUsize::new(0);
+static OLD_DRAW_INSTANCED: AtomicUsize = AtomicUsize::new(0);
+static OLD_DRAW_INDEXED_INSTANCED: AtomicUsize = AtomicUsize::new(0);
 static PROXIES: Mutex<Vec<Proxy>> = Mutex::new(Vec::new());
+
+/// Como saiu o último quadro, em `Shared::hdr_split`.
+pub const SPLIT_NONE: u32 = 0; // nenhum passe de tela cheia no buffer: tudo junto, como antes
+pub const SPLIT_ON: u32 = 1; // cena guardada e interface separada
+pub const SPLIT_LATE: u32 = 2; // passe de tela cheia depois da interface: tudo junto
+pub const SPLIT_OFF: u32 = 3; // brilho da interface em zero
+/// O que o jogo entrega, em `Shared::hdr_native`.
+pub const MODE_SDR: u32 = 0;
+pub const MODE_HDR10: u32 = 1;
+pub const MODE_SCRGB: u32 = 2;
+
+/// Separação da interface no quadro da vez: nada visto, cena guardada, interface por cima, ou um passe
+/// de tela cheia depois da interface (a separação falhou neste quadro).
+const PHASE_NONE: u32 = 0;
+const PHASE_SCENE: u32 = 1;
+const PHASE_UI: u32 = 2;
+const PHASE_LATE: u32 = 3;
+/// shortcut: um proxy só separa a interface (o mais novo); jogo com duas janelas D3D11 fica sem na outra.
+static CTX: AtomicUsize = AtomicUsize::new(0);
+/// O buffer do jogo que separa, e o tamanho dele (largura << 32 | altura). Zero: nenhum.
+static TEX: AtomicUsize = AtomicUsize::new(0);
+static SIZE: AtomicU64 = AtomicU64::new(0);
+static ON_BB: AtomicBool = AtomicBool::new(false);
+static PHASE: AtomicU32 = AtomicU32::new(PHASE_NONE);
 
 thread_local! {
     /// Nosso código rodando nesta linha (criar, redimensionar, desenhar, o resto do Present): os
@@ -64,22 +111,48 @@ thread_local! {
 
 const SHADER: &str = r#"
 Texture2D<float4> tex : register(t0);
-cbuffer C : register(b0) { float paper, peak, gamma, sat, boost, black; uint srgb, on; };
+Texture2D<float4> scene : register(t1);
+cbuffer C : register(b0) { float paper, peak, gamma, sat, boost, black, ui; uint srgb, on, split, mode, pad; };
+static const float3 LUM = float3(0.2126, 0.7152, 0.0722);
+static const float3x3 BT2020_TO_709 = { 1.6605, -0.5876, -0.0728, -0.1246, 1.1329, -0.0083, -0.0182, -0.1006, 1.1187 };
 float4 vs(uint id : SV_VertexID) : SV_Position {
     float2 t = float2((id << 1) & 2, id & 2);
     return float4(t * float2(2, -2) + float2(-1, 1), 0, 1);
 }
 float3 encode_srgb(float3 l) { return l <= 0.0031308 ? l * 12.92 : 1.055 * pow(l, 1 / 2.4) - 0.055; }
 float3 decode_srgb(float3 v) { return v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4); }
+float3 pq_nits(float3 v) {
+    float3 e = pow(saturate(v), 1 / 78.84375);
+    return 10000 * pow(max(e - 0.8359375, 0) / (18.8515625 - 18.6875 * e), 1 / 0.1593017578125);
+}
+// HDR do jogo: os nits que ele pediu, reajustados para a tela. O jogo supõe paper white de 203 nits.
+float4 native(float3 raw, bool hud) {
+    float3 n = mode == 1 ? mul(BT2020_TO_709, pq_nits(raw)) : raw * 80;
+    if (!on) return float4(n / 80, 1);
+    if (hud) return float4(min(n * ui / 203, peak) / 80, 1);
+    n *= paper / 203;
+    float y = dot(n, LUM);
+    n = y + (n - y) * sat;
+    // Ombro suave: até 70% do pico fica igual, acima encosta no pico sem cortar.
+    float m = max(max(n.r, n.g), n.b), k = 0.7 * peak;
+    if (m > k) n *= (k + (peak - k) * (1 - exp((k - m) / (peak - k)))) / m;
+    n = n * (1 - black / peak) + black;
+    return float4(min(n, peak) / 80, 1);
+}
 float4 ps(float4 p : SV_Position) : SV_Target {
-    float3 c = tex.Load(int3(p.xy, 0)).rgb;
+    int3 at = int3(p.xy, 0);
+    float3 raw = tex.Load(at).rgb;
+    // Interface: o que mudou desde a cena guardada logo depois do passe de tela cheia.
+    bool hud = split && any(abs(raw - scene.Load(at).rgb) > 0.004);
+    if (mode) return native(raw, hud);
     // Buffer _SRGB: a leitura já decodificou pela curva por partes; volta ao valor que o jogo gravou.
-    c = saturate(srgb ? encode_srgb(saturate(c)) : c);
+    float3 c = saturate(srgb ? encode_srgb(saturate(raw)) : raw);
     // Desligado: o mesmo que o Windows faz com SDR, curva sRGB por partes no paper white.
     if (!on) return float4(decode_srgb(c) * paper / 80, 1);
     // Gama 2.2 pura: a curva por partes levanta os pretos.
     float3 l = pow(c, gamma);
-    float y = dot(l, float3(0.2126, 0.7152, 0.0722));
+    if (hud) return float4(min(l * ui, peak) / 80, 1);
+    float y = dot(l, LUM);
     l = max(y + (l - y) * sat, 0);
     // Só os brilhos sobem: o ganho cresce com y^3 e chega ao pico no branco.
     float gain = 1 + (peak / paper - 1) * boost * y * y * y;
@@ -98,8 +171,12 @@ struct Params {
     sat: f32,
     boost: f32,
     black: f32,
+    ui: f32,
     srgb: u32,
     on: u32,
+    split: u32,
+    mode: u32,
+    pad: u32,
 }
 
 /// O que o jogo pediu: o buffer dele segue isso, não a cadeia de verdade.
@@ -110,6 +187,32 @@ struct Want {
     format: DXGI_FORMAT,
     samples: u32,
     usage: u32,
+    /// O espaço de cor que o jogo deu à cadeia: G2084 no buffer de 10 bits é HDR10.
+    space: DXGI_COLOR_SPACE_TYPE,
+}
+
+impl Want {
+    fn new(width: u32, height: u32, format: DXGI_FORMAT, samples: u32, usage: u32) -> Self {
+        Self { width, height, format, samples, usage, space: DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709 }
+    }
+
+    fn mode(&self) -> u32 {
+        match (self.format, self.space) {
+            (DXGI_FORMAT_R16G16B16A16_FLOAT, _) => MODE_SCRGB,
+            (DXGI_FORMAT_R10G10B10A2_UNORM, DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020) => MODE_HDR10,
+            _ => MODE_SDR,
+        }
+    }
+}
+
+/// Os espaços de cor que a cadeia aceita do jogo: o que ele aceitaria numa cadeia do formato que pediu.
+fn takes(format: DXGI_FORMAT, space: DXGI_COLOR_SPACE_TYPE) -> bool {
+    match space {
+        DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709 => format != DXGI_FORMAT_R16G16B16A16_FLOAT,
+        DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 => format == DXGI_FORMAT_R10G10B10A2_UNORM,
+        DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709 => format == DXGI_FORMAT_R16G16B16A16_FLOAT,
+        _ => false,
+    }
 }
 
 struct Proxy {
@@ -127,6 +230,9 @@ struct Proxy {
     /// Com MSAA, a cópia resolvida que o shader lê.
     resolved: Option<ID3D11Texture2D>,
     srv: Option<ID3D11ShaderResourceView>,
+    /// A cena guardada logo depois do passe de tela cheia: o que difere dela é interface. Sem MSAA só.
+    scene: Option<ID3D11Texture2D>,
+    scene_srv: Option<ID3D11ShaderResourceView>,
     /// O buffer 0 da cadeia de verdade: no modelo flip do D3D11 ele sempre aponta o buffer da vez.
     rtv: Option<ID3D11RenderTargetView>,
 }
@@ -199,7 +305,10 @@ fn typeless(f: DXGI_FORMAT) -> DXGI_FORMAT {
 impl Proxy {
     unsafe fn new(chain: Ptr, hwnd: HWND, device: ID3D11Device, want: Want) -> Result<Self> {
         let d1: ID3D11Device1 = device.cast()?;
-        let ctx: ID3D11DeviceContext1 = device.GetImmediateContext()?.cast()?;
+        let imm = device.GetImmediateContext()?;
+        CTX.store(imm.as_raw() as usize, Relaxed);
+        hook_context(imm.as_raw());
+        let ctx: ID3D11DeviceContext1 = imm.cast()?;
         // Um estado de contexto só nosso: o do jogo volta intacto depois do passe.
         let single = device.GetCreationFlags() & D3D11_CREATE_DEVICE_SINGLETHREADED.0 as u32;
         let mut state = None;
@@ -223,6 +332,8 @@ impl Proxy {
             tex: None,
             resolved: None,
             srv: None,
+            scene: None,
+            scene_srv: None,
             rtv: None,
         };
         me.rebuild(chain)?;
@@ -231,7 +342,10 @@ impl Proxy {
 
     /// Solta tudo que segura buffers: o `ResizeBuffers` falha com algum preso.
     fn drop_buffers(&mut self) {
-        (self.tex, self.resolved, self.srv, self.rtv) = (None, None, None, None);
+        if let Some(t) = &self.tex {
+            let _ = TEX.compare_exchange(t.as_raw() as usize, 0, Relaxed, Relaxed);
+        }
+        (self.tex, self.resolved, self.srv, self.rtv, self.scene, self.scene_srv) = (None, None, None, None, None, None);
     }
 
     /// Refaz o buffer do jogo no tamanho atual da cadeia de verdade. Só com `INSIDE` ligado.
@@ -276,6 +390,20 @@ impl Proxy {
         };
         let mut srv = None;
         self.device.CreateShaderResourceView(&read, Some(&srv_desc(w.format, false)), Some(&mut srv))?;
+        if w.samples <= 1 {
+            // Sem a cópia da cena o jogo segue com tudo junto: falhar aqui não derruba o HDR.
+            let sd = D3D11_TEXTURE2D_DESC { BindFlags: D3D11_BIND_SHADER_RESOURCE.0 as u32, ..td };
+            let (mut scene, mut ssrv) = (None, None);
+            if self.device.CreateTexture2D(&sd, None, Some(&mut scene)).is_ok() {
+                if let Some(s) = &scene {
+                    if self.device.CreateShaderResourceView(s, Some(&srv_desc(w.format, false)), Some(&mut ssrv)).is_ok() {
+                        (self.scene, self.scene_srv) = (scene, ssrv);
+                        SIZE.store((w.width as u64) << 32 | w.height as u64, Relaxed);
+                        TEX.store(tex.as_raw() as usize, Relaxed);
+                    }
+                }
+            }
+        }
         (self.srv, self.rtv, self.tex) = (srv, rtv, Some(tex));
         if let Ok(c3) = real.cast::<IDXGISwapChain3>() {
             c3.SetColorSpace1(DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709)?;
@@ -294,14 +422,14 @@ impl Proxy {
         self.ctx.IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         self.ctx.VSSetShader(&self.vs, None);
         self.ctx.PSSetShader(&self.ps, None);
-        self.ctx.PSSetShaderResources(0, Some(&[Some(srv.clone())]));
+        self.ctx.PSSetShaderResources(0, Some(&[Some(srv.clone()), self.scene_srv.clone()]));
         self.ctx.PSSetConstantBuffers(0, Some(&[Some(self.cb.clone())]));
         self.ctx.OMSetRenderTargets(Some(&[Some(rtv.clone())]), None);
         let vp = D3D11_VIEWPORT { Width: self.want.width as f32, Height: self.want.height as f32, MaxDepth: 1.0, ..Default::default() };
         self.ctx.RSSetViewports(Some(&[vp]));
         self.ctx.Draw(3, 0);
         // Solta o buffer do jogo e o de verdade antes de devolver o estado: nada nosso fica preso.
-        self.ctx.PSSetShaderResources(0, Some(&[None]));
+        self.ctx.PSSetShaderResources(0, Some(&[None, None]));
         self.ctx.OMSetRenderTargets(None, None);
         if let Some(prev) = prev {
             self.ctx.SwapDeviceContextState(&prev, None);
@@ -318,8 +446,12 @@ fn srv_desc(format: DXGI_FORMAT, ms: bool) -> D3D11_SHADER_RESOURCE_VIEW_DESC {
     d
 }
 
-fn params(s: &Shared, srgb: bool) -> Params {
-    let f = |a: &std::sync::atomic::AtomicU32| f32::from_bits(a.load(Relaxed));
+fn ui_of(s: &Shared) -> f32 {
+    f32::from_bits(s.hdr_ui.load(Relaxed)).max(0.0)
+}
+
+fn params(s: &Shared, w: Want, split: bool) -> Params {
+    let f = |a: &AtomicU32| f32::from_bits(a.load(Relaxed));
     let peak = f(&s.hdr_peak).max(80.0);
     Params {
         paper: f(&s.hdr_paper).clamp(80.0, peak),
@@ -328,8 +460,12 @@ fn params(s: &Shared, srgb: bool) -> Params {
         sat: f(&s.hdr_sat).clamp(0.0, 2.0),
         boost: f(&s.hdr_boost).clamp(0.0, 1.0),
         black: f(&s.hdr_black).clamp(0.0, 1.0),
-        srgb: srgb as u32,
+        ui: ui_of(s).min(peak),
+        srgb: is_srgb(w.format) as u32,
         on: (s.hdr_on.load(Relaxed) != 0) as u32,
+        split: split as u32,
+        mode: w.mode(),
+        pad: 0,
     }
 }
 
@@ -341,8 +477,22 @@ pub unsafe fn present(chain: Ptr, flags: u32) {
     }
     let list = proxies();
     let Some(p) = list.iter().find(|p| p.chain == chain as usize) else { return };
-    passthrough(|| p.draw(params(s, is_srgb(p.want.format))));
+    let mine = p.tex.as_ref().is_some_and(|t| t.as_raw() as usize == TEX.load(Relaxed));
+    let phase = if mine { PHASE.swap(PHASE_NONE, Relaxed) } else { PHASE_NONE };
+    let split = match phase {
+        _ if ui_of(s) <= 0.0 => SPLIT_OFF,
+        PHASE_SCENE | PHASE_UI => SPLIT_ON,
+        PHASE_LATE => SPLIT_LATE,
+        _ => SPLIT_NONE,
+    };
+    // Sem nada desenhado depois da cena não há o que separar: o shader nem compara.
+    passthrough(|| p.draw(params(s, p.want, split == SPLIT_ON && phase == PHASE_UI)));
     s.hdr_frames.fetch_add(1, Relaxed);
+    s.hdr_split.store(split, Relaxed);
+    s.hdr_native.store(p.want.mode(), Relaxed);
+    if split == SPLIT_ON {
+        s.hdr_split_frames.fetch_add(1, Relaxed);
+    }
 }
 
 /// Ajusta o pedido do jogo para a cadeia de verdade: FP16, troca por flip, sem MSAA.
@@ -384,8 +534,7 @@ unsafe fn created(hr: HRESULT, out: *mut Ptr, hwnd: HWND) -> HRESULT {
 
 /// Cria a cadeia FP16 e o proxy; se algo falhar, cria a cadeia que o jogo pediu, sem HDR.
 unsafe fn proxied(device: Ptr, hwnd: HWND, want: Want, out: *mut Ptr, real: impl Fn() -> HRESULT, plain: impl Fn() -> HRESULT) -> HRESULT {
-    // FP16 pedido pelo jogo já é HDR dele: a curva cortaria os brilhos.
-    let fit = !INSIDE.get() && !out.is_null() && want.format != DXGI_FORMAT_R16G16B16A16_FLOAT && wanted() && screen_hdr(hwnd);
+    let fit = !INSIDE.get() && !out.is_null() && wanted() && screen_hdr(hwnd);
     let Some(dev) = d3d11(device).filter(|_| fit) else { return created(plain(), out, hwnd) };
     INSIDE.set(true);
     let mut hr = real();
@@ -425,7 +574,7 @@ unsafe extern "system" fn on_create(this: Ptr, device: Ptr, desc: *const DXGI_SW
     if !d.Windowed.as_bool() {
         return created(old(this, device, desc, out), out, d.OutputWindow);
     }
-    let want = Want { width: d.BufferDesc.Width, height: d.BufferDesc.Height, format: d.BufferDesc.Format, samples: d.SampleDesc.Count, usage: d.BufferUsage.0 };
+    let want = Want::new(d.BufferDesc.Width, d.BufferDesc.Height, d.BufferDesc.Format, d.SampleDesc.Count, d.BufferUsage.0);
     let mut real = d;
     real.BufferDesc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
     real.SampleDesc = DXGI_SAMPLE_DESC { Count: 1, Quality: 0 };
@@ -442,7 +591,7 @@ unsafe extern "system" fn on_create_hwnd(this: Ptr, device: Ptr, hwnd: HWND, des
         return created(old(this, device, hwnd, desc, fs, output, out), out, hwnd);
     }
     let d = *desc;
-    let want = Want { width: d.Width, height: d.Height, format: d.Format, samples: d.SampleDesc.Count, usage: d.BufferUsage.0 };
+    let want = Want::new(d.Width, d.Height, d.Format, d.SampleDesc.Count, d.BufferUsage.0);
     let mut real = d;
     real.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
     real.SampleDesc = DXGI_SAMPLE_DESC { Count: 1, Quality: 0 };
@@ -488,14 +637,144 @@ unsafe extern "system" fn on_get_desc1(this: Ptr, out: *mut DXGI_SWAP_CHAIN_DESC
     hr
 }
 
-/// O espaço de cor da cadeia é nosso (scRGB): o sRGB do jogo fica só de conta, e HDR10 falha como
-/// numa tela sem HDR, para o jogo seguir no SDR que a curva espera.
+/// O espaço de cor da cadeia de verdade é nosso (scRGB); o do jogo fica de conta e diz como ler o
+/// buffer dele: HDR10 no de 10 bits, scRGB no FP16, SDR no resto.
 unsafe extern "system" fn on_set_color_space(this: Ptr, space: DXGI_COLOR_SPACE_TYPE) -> HRESULT {
-    if want_of(this).is_some() {
-        return if space == DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709 { S_OK } else { DXGI_ERROR_UNSUPPORTED };
+    if !INSIDE.get() {
+        if let Some(p) = proxies().iter_mut().find(|p| p.chain == this as usize) {
+            if !takes(p.want.format, space) {
+                return DXGI_ERROR_UNSUPPORTED;
+            }
+            p.want.space = space;
+            return S_OK;
+        }
     }
     let old: SetColorSpace = std::mem::transmute(OLD_SET_COLOR_SPACE.load(Relaxed));
     old(this, space)
+}
+
+/// A cadeia de verdade é FP16 e só aceitaria scRGB: o jogo ouve o que valeria no formato dele.
+unsafe extern "system" fn on_check_color_space(this: Ptr, space: DXGI_COLOR_SPACE_TYPE, out: *mut u32) -> HRESULT {
+    if let Some(w) = want_of(this).filter(|_| !out.is_null()) {
+        *out = if takes(w.format, space) { DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT.0 as u32 } else { 0 };
+        return S_OK;
+    }
+    let old: CheckColorSpace = std::mem::transmute(OLD_CHECK_COLOR_SPACE.load(Relaxed));
+    old(this, space, out)
+}
+
+/// O alvo 0 é o buffer do jogo que separa a interface. Só no contexto imediato e com a separação ligada.
+unsafe fn track(this: Ptr, count: u32, rtvs: *const Ptr) {
+    if INSIDE.get() || this as usize != CTX.load(Relaxed) {
+        return;
+    }
+    let tex = TEX.load(Relaxed);
+    let on = tex != 0
+        && shared().is_some_and(|s| ui_of(s) > 0.0)
+        && count > 0
+        && !rtvs.is_null()
+        && ID3D11View::from_raw_borrowed(&*rtvs).and_then(|v| v.GetResource().ok()).is_some_and(|r| r.as_raw() as usize == tex);
+    ON_BB.store(on, Relaxed);
+    // O D3D11 troca as versões do `Draw` conforme o alvo preso: os ganchos voltam por cima.
+    if on {
+        hook_context(this);
+    }
+}
+
+/// Um triângulo ou um quadrado na tela toda lendo uma imagem do tamanho da tela: a cena indo para o
+/// buffer, depois do pós-processamento.
+unsafe fn fullscreen(ctx: &ID3D11DeviceContext) -> bool {
+    let size = SIZE.load(Relaxed);
+    let (w, h) = ((size >> 32) as f32, (size & 0xffff_ffff) as f32);
+    let (mut n, mut vp) = (1u32, D3D11_VIEWPORT::default());
+    ctx.RSGetViewports(&mut n, Some(&mut vp));
+    if n == 0 || h == 0.0 || vp.TopLeftX > 0.5 || vp.TopLeftY > 0.5 || vp.Width < w - 1.0 || vp.Height < h - 1.0 {
+        return false;
+    }
+
+    let mut srvs: [Option<ID3D11ShaderResourceView>; 4] = Default::default();
+    ctx.PSGetShaderResources(0, Some(&mut srvs));
+    srvs.iter().flatten().any(|v| {
+        let Ok(t) = v.GetResource().and_then(|r| r.cast::<ID3D11Texture2D>()) else { return false };
+        let mut d = D3D11_TEXTURE2D_DESC::default();
+        t.GetDesc(&mut d);
+        let (tw, th) = (d.Width as f32, d.Height as f32);
+
+        th > 0.0 && tw >= w / 2.0 && (tw / th - w / h).abs() < 0.02 * w / h
+    })
+}
+
+/// Guarda a cena: o que vier depois no buffer é interface.
+unsafe fn snap(ctx: &ID3D11DeviceContext) {
+    let tex = TEX.load(Relaxed);
+    let list = proxies();
+    if let Some(p) = list.iter().find(|p| p.tex.as_ref().is_some_and(|t| t.as_raw() as usize == tex)) {
+        if let (Some(t), Some(s)) = (&p.tex, &p.scene) {
+            ctx.CopyResource(s, t);
+        }
+    }
+}
+
+/// Depois de cada desenho no buffer do jogo: o passe de tela cheia guarda a cena, o resto é interface.
+/// Um passe de tela cheia depois da interface desfaz a separação neste quadro.
+unsafe fn drawn(this: Ptr, count: u32, instances: u32) {
+    if INSIDE.get() || !ON_BB.load(Relaxed) || this as usize != CTX.load(Relaxed) {
+        return;
+    }
+    let phase = PHASE.load(Relaxed);
+    if phase == PHASE_LATE {
+        return;
+    }
+    let Some(ctx) = ID3D11DeviceContext::from_raw_borrowed(&this) else { return };
+    let full = count <= 6 && instances <= 1 && passthrough(|| fullscreen(ctx));
+    let next = match (full, phase) {
+        (true, PHASE_UI) => PHASE_LATE,
+        (true, _) => {
+            passthrough(|| snap(ctx));
+            PHASE_SCENE
+        }
+        (false, PHASE_SCENE) => PHASE_UI,
+        (_, p) => p,
+    };
+    PHASE.store(next, Relaxed);
+}
+
+unsafe extern "system" fn on_om_set(this: Ptr, count: u32, rtvs: *const Ptr, dsv: Ptr) {
+    let old: OmSet = std::mem::transmute(OLD_OM_SET.load(Relaxed));
+    old(this, count, rtvs, dsv);
+    track(this, count, rtvs);
+}
+
+unsafe extern "system" fn on_om_set_uav(this: Ptr, count: u32, rtvs: *const Ptr, dsv: Ptr, start: u32, uavs: u32, views: *const Ptr, counts: *const u32) {
+    let old: OmSetUav = std::mem::transmute(OLD_OM_SET_UAV.load(Relaxed));
+    old(this, count, rtvs, dsv, start, uavs, views, counts);
+    if count != D3D11_KEEP_RENDER_TARGETS_AND_DEPTH_STENCIL {
+        track(this, count, rtvs);
+    }
+}
+
+unsafe extern "system" fn on_draw(this: Ptr, count: u32, start: u32) {
+    let old: Draw = std::mem::transmute(OLD_DRAW.load(Relaxed));
+    old(this, count, start);
+    drawn(this, count, 1);
+}
+
+unsafe extern "system" fn on_draw_indexed(this: Ptr, count: u32, start: u32, base: i32) {
+    let old: DrawIndexed = std::mem::transmute(OLD_DRAW_INDEXED.load(Relaxed));
+    old(this, count, start, base);
+    drawn(this, count, 1);
+}
+
+unsafe extern "system" fn on_draw_instanced(this: Ptr, count: u32, instances: u32, start: u32, first: u32) {
+    let old: DrawInstanced = std::mem::transmute(OLD_DRAW_INSTANCED.load(Relaxed));
+    old(this, count, instances, start, first);
+    drawn(this, count, instances);
+}
+
+unsafe extern "system" fn on_draw_indexed_instanced(this: Ptr, count: u32, instances: u32, start: u32, base: i32, first: u32) {
+    let old: DrawIndexedInstanced = std::mem::transmute(OLD_DRAW_INDEXED_INSTANCED.load(Relaxed));
+    old(this, count, instances, start, base, first);
+    drawn(this, count, instances);
 }
 
 /// `ResizeBuffers` e `ResizeBuffers1`: a cadeia de verdade segue FP16 e o buffer do jogo é refeito.
@@ -579,6 +858,7 @@ pub unsafe fn hook_chain(chain: Ptr) -> bool {
     }
     if let Ok(c3) = c.cast::<IDXGISwapChain3>() {
         let t3 = table(c3.as_raw());
+        patch(t3, SLOT_CHECK_COLOR_SPACE, on_check_color_space as usize, &OLD_CHECK_COLOR_SPACE);
         patch(t3, SLOT_SET_COLOR_SPACE, on_set_color_space as usize, &OLD_SET_COLOR_SPACE);
         patch(t3, SLOT_RESIZE1, on_resize1 as usize, &OLD_RESIZE1);
     }
@@ -592,6 +872,29 @@ unsafe fn hook_device(device: &ID3D11Device) {
     patch(t, SLOT_CREATE_SRV, on_create_srv as usize, &OLD_CREATE_SRV);
     patch(t, SLOT_CREATE_UAV, on_create_uav as usize, &OLD_CREATE_UAV);
     patch(t, SLOT_CREATE_RTV, on_create_rtv as usize, &OLD_CREATE_RTV);
+}
+
+/// Depois de cada `Present`: ele devolve ao contexto as versões do D3D11.
+pub unsafe fn rehook() {
+    let ctx = CTX.load(Relaxed);
+    if ctx != 0 {
+        hook_context(ctx as Ptr);
+    }
+}
+
+/// A tabela do contexto imediato fica dentro do objeto, e o D3D11 reescreve entradas dela no `Present`,
+/// no `SwapDeviceContextState` e ao prender o alvo: os ganchos voltam por cima nesses pontos, guardando
+/// a versão que o D3D11 pôs por último.
+/// shortcut: a interface só é vista pelos `Draw*` comuns do contexto imediato; contexto adiado,
+/// `DrawAuto` e os indiretos não contam. Ligar se aparecer jogo que desenhe a interface assim.
+unsafe fn hook_context(ctx: Ptr) {
+    let t = table(ctx);
+    patch(t, SLOT_DRAW_INDEXED, on_draw_indexed as usize, &OLD_DRAW_INDEXED);
+    patch(t, SLOT_DRAW, on_draw as usize, &OLD_DRAW);
+    patch(t, SLOT_DRAW_INDEXED_INSTANCED, on_draw_indexed_instanced as usize, &OLD_DRAW_INDEXED_INSTANCED);
+    patch(t, SLOT_DRAW_INSTANCED, on_draw_instanced as usize, &OLD_DRAW_INSTANCED);
+    patch(t, SLOT_OM_SET, on_om_set as usize, &OLD_OM_SET);
+    patch(t, SLOT_OM_SET_UAV, on_om_set_uav as usize, &OLD_OM_SET_UAV);
 }
 
 /// Uma fábrica descartável mostra a tabela que o jogo vai usar para criar a cadeia.
@@ -620,5 +923,34 @@ pub unsafe fn let_steam_in() {
     patch(t, SLOT_CREATE, on_create as usize, &OLD_CREATE);
     if let Some(t2) = t2 {
         patch(t2, SLOT_CREATE_HWND, on_create_hwnd as usize, &OLD_CREATE_HWND);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shader_compiles_and_params_match() {
+        unsafe {
+            compile(s!("vs_5_0"), s!("vs")).unwrap();
+            compile(s!("ps_5_0"), s!("ps")).unwrap();
+        }
+        // cbuffer C: 7 floats e 5 uints.
+        assert_eq!(std::mem::size_of::<Params>(), 48);
+    }
+
+    #[test]
+    fn color_space_by_format() {
+        let mut w = Want::new(1920, 1080, DXGI_FORMAT_R10G10B10A2_UNORM, 1, 0);
+        assert_eq!(w.mode(), MODE_SDR);
+        assert!(takes(w.format, DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020));
+        w.space = DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020;
+        assert_eq!(w.mode(), MODE_HDR10);
+        assert!(!takes(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020));
+        assert!(takes(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709));
+        let f = Want::new(1920, 1080, DXGI_FORMAT_R16G16B16A16_FLOAT, 1, 0);
+        assert_eq!(f.mode(), MODE_SCRGB);
+        assert!(takes(f.format, DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709));
     }
 }

@@ -48,9 +48,14 @@ struct Shared {
     hdr_chains: AtomicU32,
     hdr_error: AtomicU32,
     hdr_frames: AtomicU64,
+    hdr_ui: AtomicU32,
+    hdr_split: AtomicU32,
+    hdr_native: AtomicU32,
+    pad2: u32,
+    hdr_split_frames: AtomicU64,
 }
 
-const _: () = assert!(std::mem::size_of::<Shared>() == 88);
+const _: () = assert!(std::mem::size_of::<Shared>() == 112);
 
 /// Ajustes do HDR próprio. Pico, paper white e preto em nits; o resto são números puros.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -62,6 +67,8 @@ pub struct Hdr {
     pub sat: f32,
     pub boost: f32,
     pub black: f32,
+    /// Brilho da interface em nits; zero deixa a interface junto com a cena.
+    pub ui: f32,
 }
 
 impl Hdr {
@@ -71,7 +78,7 @@ impl Hdr {
         let peak = if peak > 80.0 { peak } else { 1000.0 };
         // Paper white até o brilho de tela inteira branca: o brilho médio não aciona o limitador da TV.
         let paper = 200f32.min(if full > 80.0 { full } else { peak });
-        Self { on: true, peak, paper, gamma: 2.2, sat: 1.0, boost: 1.0, black: black.clamp(0.0, 1.0) }
+        Self { on: true, peak, paper, gamma: 2.2, sat: 1.0, boost: 1.0, black: black.clamp(0.0, 1.0), ui: 0.0 }
     }
 }
 
@@ -218,6 +225,13 @@ impl Limiter {
         Some((s.hdr_chains.load(Relaxed), s.hdr_frames.load(Relaxed), s.hdr_error.load(Relaxed)))
     }
 
+    /// Saída do jogo (0 SDR, 1 HDR10, 2 scRGB), como saiu a interface no último quadro (0 sem passada
+    /// de cena, 1 separada, 2 tela cheia depois da interface, 3 desligada) e quadros com ela separada.
+    pub fn hdr_split(&self) -> Option<(u32, u32, u64)> {
+        let s = self.shared()?;
+        Some((s.hdr_native.load(Relaxed), s.hdr_split.load(Relaxed), s.hdr_split_frames.load(Relaxed)))
+    }
+
     /// Chamado uma vez por segundo: dá sinal de vida, passa o limite e confere se pegou.
     pub fn update(&mut self, fps: u32) {
         if self.view.is_null() {
@@ -295,7 +309,7 @@ pub fn is_crash(code: u32) -> bool {
 
 fn write_hdr(s: &Shared, h: &Hdr) {
     s.hdr_on.store(h.on as u32, Relaxed);
-    for (at, v) in [(&s.hdr_peak, h.peak), (&s.hdr_paper, h.paper), (&s.hdr_gamma, h.gamma), (&s.hdr_sat, h.sat), (&s.hdr_boost, h.boost), (&s.hdr_black, h.black)] {
+    for (at, v) in [(&s.hdr_peak, h.peak), (&s.hdr_paper, h.paper), (&s.hdr_gamma, h.gamma), (&s.hdr_sat, h.sat), (&s.hdr_boost, h.boost), (&s.hdr_black, h.black), (&s.hdr_ui, h.ui)] {
         at.store(v.to_bits(), Relaxed);
     }
 }
@@ -326,7 +340,7 @@ impl HdrLive {
     pub fn get(&self) -> Hdr {
         let s = self.shared();
         let f = |a: &AtomicU32| f32::from_bits(a.load(Relaxed));
-        Hdr { on: s.hdr_on.load(Relaxed) != 0, peak: f(&s.hdr_peak), paper: f(&s.hdr_paper), gamma: f(&s.hdr_gamma), sat: f(&s.hdr_sat), boost: f(&s.hdr_boost), black: f(&s.hdr_black) }
+        Hdr { on: s.hdr_on.load(Relaxed) != 0, peak: f(&s.hdr_peak), paper: f(&s.hdr_paper), gamma: f(&s.hdr_gamma), sat: f(&s.hdr_sat), boost: f(&s.hdr_boost), black: f(&s.hdr_black), ui: f(&s.hdr_ui) }
     }
 
     pub fn set(&self, h: &Hdr) {
@@ -364,7 +378,7 @@ impl Drop for Limiter {
 }
 
 /// Teste do HDR: abre o jogo com HDR e, a cada segundo até ele fechar, relê os ajustes de um
-/// arquivo (`on=1`, `peak=`, `paper=`, `gamma=`, `sat=`, `boost=`, `black=`, um por linha) e grava o estado.
+/// arquivo (`on=1`, `peak=`, `paper=`, `gamma=`, `sat=`, `boost=`, `black=`, `ui=`, um por linha) e grava o estado.
 #[cfg(debug_assertions)]
 pub fn test_hdr(out: &str, exe: &str, params: &str) {
     let cfg = crate::config::Config::load();
@@ -391,12 +405,13 @@ pub fn test_hdr(out: &str, exe: &str, params: &str) {
                 "sat" => hdr.sat = v,
                 "boost" => hdr.boost = v,
                 "black" => hdr.black = v,
+                "ui" => hdr.ui = v,
                 _ => {}
             }
         }
         l.set_hdr(&hdr);
         l.update(0);
-        log += &format!("{i} s: {:?} hdr {:?} {hdr:?}\n", l.status, l.hdr_stats().map(|(c, f, e)| (c, f, format!("{e:#x}"))));
+        log += &format!("{i} s: {:?} hdr {:?} saída, interface, quadros separados {:?} {hdr:?}\n", l.status, l.hdr_stats().map(|(c, f, e)| (c, f, format!("{e:#x}"))), l.hdr_split());
         // A cada 5 s, a tela de verdade: a luminância que saiu e uma foto em SDR.
         if i % 5 == 4 {
             if let Ok(f) = crate::capture::grab(crate::capture::cursor_monitor()) {

@@ -57,9 +57,17 @@ pub(crate) struct Shared {
     pub hdr_chains: AtomicU32,
     pub hdr_error: AtomicU32,
     pub hdr_frames: AtomicU64,
+    /// Brilho da interface em nits (bits de f32). Zero desliga a separação entre cena e interface.
+    pub hdr_ui: AtomicU32,
+    /// Escritos pelo jogo: como saiu o último quadro (`hdr::SPLIT_*`), a saída do jogo (`hdr::MODE_*`)
+    /// e quantos quadros saíram com a interface separada.
+    pub hdr_split: AtomicU32,
+    pub hdr_native: AtomicU32,
+    pad2: u32,
+    pub hdr_split_frames: AtomicU64,
 }
 
-const _: () = assert!(std::mem::size_of::<Shared>() == 88);
+const _: () = assert!(std::mem::size_of::<Shared>() == 112);
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -178,14 +186,18 @@ unsafe extern "system" fn on_present(this: Ptr, sync: u32, flags: u32) -> i32 {
     hdr::present(this, flags);
     pace(flags);
     let old: Present = std::mem::transmute(OLD_PRESENT.load(Relaxed));
-    hdr::passthrough(|| old(this, sync, flags))
+    let hr = hdr::passthrough(|| old(this, sync, flags));
+    hdr::rehook();
+    hr
 }
 
 unsafe extern "system" fn on_present1(this: Ptr, sync: u32, flags: u32, params: *const c_void) -> i32 {
     hdr::present(this, flags);
     pace(flags);
     let old: Present1 = std::mem::transmute(OLD_PRESENT1.load(Relaxed));
-    hdr::passthrough(|| old(this, sync, flags, params))
+    let hr = hdr::passthrough(|| old(this, sync, flags, params));
+    hdr::rehook();
+    hr
 }
 
 /// Troca uma entrada da tabela de funções. O original fica guardado antes de a nova valer.
