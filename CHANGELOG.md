@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Shaders** Injection mode is now a separate download: Prisma.exe is back to its old size, and choosing **Injection** shows **Download Injection mode**, which fetches the signed zip for the same Prisma version (until then the game uses Overlay, with a warning; after an update the new one downloads on its own). / O modo Injeção dos **Shaders** agora é baixado à parte: o Prisma.exe volta ao tamanho antigo, e escolher **Injeção** mostra **Baixar o modo Injeção**, que baixa o zip assinado da mesma versão do Prisma (até lá o jogo usa Por cima, com aviso; depois de uma atualização o novo vem sozinho).
 - **Shaders** in-game menu: Insert adds a pass (after the selected one, from the library or your presets) and Delete removes it, X and Y on a controller; Backspace goes back instead of Esc, which stays with the game; the title shows the chain's GPU time in ms and its share of the GPU. / Menu de **Shaders** no jogo: Insert adiciona um passe (depois do escolhido, da biblioteca ou dos seus presets) e Delete tira, X e Y no controle; Backspace volta no lugar do Esc, que fica com o jogo; o título mostra o tempo de GPU da cadeia em ms e a parte da GPU.
 
 ## 1.10.0

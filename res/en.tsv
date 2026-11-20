@@ -2854,9 +2854,14 @@ O nº 1 roda primeiro, sobre a imagem do jogo; o último fica por cima. Cada lin
 Como aplicar	How to apply
 Por cima	Overlay
 Bloqueado: este jogo tem anti-cheat	Blocked: this game has anti-cheat
-Janela por cima do jogo, capturando a imagem. DX9 a 12, Vulkan e OpenGL.	A window over the game, capturing the image. DX9 to 12, Vulkan and OpenGL.
+Janela por cima do jogo, capturando a imagem: pega em qualquer janela. A Injeção tem atraso menor, mas não pega em todo jogo nem com anti-cheat.	A window over the game, capturing the image: works on any window. Injection has lower delay, but not every game and no anti-cheat.
 Não suportado neste jogo: a injeção cobre DX9 a 12, OpenGL e Vulkan	Not supported in this game: injection covers DX9 to 12, OpenGL and Vulkan
-Dentro do jogo, na hora de mostrar o quadro: sem o quadro de atraso e sem janela por cima. DX9 a 12, OpenGL e Vulkan; HDR fica sem efeito.	Inside the game, when the frame is shown: no frame of delay and no window on top. DX9 to 12, OpenGL and Vulkan; no effect on HDR.
+Dentro do jogo, ao mostrar o quadro: atraso menor. Não pega em todo jogo (só DX9 a 12, OpenGL e Vulkan) nem com anti-cheat; HDR fica sem efeito.	Inside the game, when showing the frame: lower delay. Not every game (DX9 to 12, OpenGL and Vulkan only) and no anti-cheat; HDR has no effect.
+Baixando o modo Injeção: {} MB	Downloading Injection mode: {} MB
+O modo Injeção não está baixado: este jogo usa Por cima até baixar.	Injection mode is not downloaded: this game uses Overlay until it is.
+Baixar o modo Injeção	Download Injection mode
+O arquivo baixado não tem a assinatura do Prisma. Nada foi alterado.	The downloaded file does not carry the Prisma signature. Nothing was changed.
+Não consegui baixar do GitHub. Tente de novo.	Could not download from GitHub. Try again.
 Resolução de entrada	Input resolution
 Original	Original
 240 linhas	240 lines

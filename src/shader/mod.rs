@@ -5,6 +5,7 @@
 //! - `prisma.exe --shader-preview=<perfil.txt>,<scene|bars|imagem>`: a mesma cadeia numa janela de prévia.
 //! O formato do perfil e de `teclas.txt` mora em `shader_profile.rs`.
 
+pub mod files;
 mod inject;
 mod menu;
 mod preview;
@@ -200,8 +201,13 @@ fn run(path: &Path) -> Res<()> {
     }
     eprintln!("jogo: {game_path} ({})", crate::sys::procs::window_title(game));
     // Injeção: o efeito vai dentro do jogo; se não servir nele, o perfil volta para Por cima e segue aqui.
-    if prof.inject && inject::run(path, game)? {
-        return Ok(());
+    // Sem os arquivos baixados (ou de outra versão), fica Por cima sem mexer no perfil: a página avisa e baixa.
+    if prof.inject {
+        match files::load() {
+            Some(f) if inject::run(path, game, &f)? => return Ok(()),
+            Some(_) => {}
+            None => eprintln!("shader: o modo Injeção não está baixado para a versão {}; fica Por cima", files::VERSION),
+        }
     }
 
     let mc = crate::capture::monitor_color(unsafe { windows::Win32::Graphics::Gdi::MonitorFromWindow(game, windows::Win32::Graphics::Gdi::MONITOR_DEFAULTTONEAREST) });

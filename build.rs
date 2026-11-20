@@ -51,7 +51,8 @@ fn build_hook() {
 }
 
 /// Os shaders no modo Injeção: outra DLL, para o limitador continuar pequeno. Sai no mesmo perfil do programa
-/// (debug no `cargo build`), sem `--locked`: o Cargo.lock dela não é guardado, como o do APO.
+/// (debug no `cargo build`), sem `--locked`: o Cargo.lock dela não é guardado, como o do APO. Não vai dentro do
+/// exe: fica em `target\<perfil>\injecao`, que a release zipa (`Prisma-injecao.zip`) e o debug usa direto.
 fn build_shader_hook() {
     for p in ["shader-hook/src", "shader-hook/Cargo.toml", "shader-hook/vendor", "crates/prisma-shader/src", "crates/prisma-shader/Cargo.toml"] {
         println!("cargo:rerun-if-changed={p}");
@@ -72,4 +73,13 @@ fn build_shader_hook() {
         let hint = if target.is_some() { " (falta o alvo? rode: rustup target add i686-pc-windows-msvc)" } else { "" };
         assert!(cmd.status().expect("falha ao chamar o cargo").success(), "falha ao compilar a DLL de shaders ({target:?}){hint}");
     }
+    // shortcut: `out` é target\<perfil>\build\prisma-<hash>\out\shader-hook; trocar se o Cargo mudar esse formato.
+    let profile = std::env::var("PROFILE").unwrap();
+    let dest = out.ancestors().nth(4).expect("pasta do perfil").join("injecao");
+    std::fs::create_dir_all(&dest).expect("pasta injecao");
+    let i686 = out.join("i686-pc-windows-msvc").join(&profile);
+    for (from, to) in [(out.join(&profile).join("prisma_shader_hook.dll"), "prisma_shader_hook.dll"), (i686.join("prisma_shader_hook.dll"), "prisma_shader_hook32.dll"), (i686.join("prisma_hook32.exe"), "prisma_hook32.exe")] {
+        std::fs::copy(&from, dest.join(to)).unwrap_or_else(|e| panic!("copiar {}: {e}", from.display()));
+    }
+    std::fs::write(dest.join("versao.txt"), std::env::var("CARGO_PKG_VERSION").unwrap()).expect("versao.txt");
 }

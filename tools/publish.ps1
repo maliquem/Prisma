@@ -38,9 +38,15 @@ Copy-Item target\release\prisma.exe $exe
 $hash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
 [IO.File]::WriteAllText("$exe.sha256", "$hash  Prisma.exe`n")
 & "$PSScriptRoot\update-key.ps1" -Sign $exe -Version $Version
+# O modo Injeção vai num zip à parte, assinado como o exe: o Prisma só põe no jogo a DLL conferida e da mesma versão.
+$zip = Join-Path $out 'Prisma-injecao.zip'
+Compress-Archive -Path target\release\injecao\* -DestinationPath $zip
+$hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+[IO.File]::WriteAllText("$zip.sha256", "$hash  Prisma-injecao.zip`n")
+& "$PSScriptRoot\update-key.ps1" -Sign $zip -Version $Version
 
 # 4. Troca os arquivos do rascunho e publica.
-& $gh release upload $tag $exe "$exe.sha256" "$exe.sig" --clobber
+& $gh release upload $tag $exe "$exe.sha256" "$exe.sig" $zip "$zip.sha256" "$zip.sig" --clobber
 if ($LASTEXITCODE) { throw 'O envio falhou. O rascunho continua sem publicar.' }
 & $gh release edit $tag --draft=false
 "Publicado $tag, assinado."
