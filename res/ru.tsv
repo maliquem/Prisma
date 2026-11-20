@@ -2958,3 +2958,31 @@ HDR · {}	HDR · {}
 HDR do Prisma	HDR Prisma
 Clique para mudar. Teclado: {}	Нажмите, чтобы изменить. Клавиатура: {}
 Mexer no medidor completo só depois do atalho Controles no medidor	Полным счётчиком можно пользоваться только после сочетания «Управление в счётчике»
+HDR do jogo	HDR игры
+Auto HDR 10 bits	Auto HDR 10 бит
+Auto 10 bits	Auto 10 бит
+Um HDR por jogo. Vale a partir da próxima vez que o jogo abrir.	Свой HDR для каждой игры. Применится при следующем запуске игры.
+Um HDR por jogo. O Auto HDR está desligado nas configurações do Windows: ligue lá para ele valer.	Свой HDR для каждой игры. Auto HDR выключен в настройках Windows: включите его там, чтобы он работал.
+Bloqueado: este jogo tem anti-cheat, e o HDR do Prisma precisa entrar no jogo. Escolha Auto HDR ou RTX HDR.	Заблокировано: в игре есть античит, а HDR Prisma должен проникнуть в игру. Выберите Auto HDR или RTX HDR.
+Jogo da Steam: cole a linha abaixo em Propriedades > Opções de inicialização. Depois é só abrir pela Steam.	Игра из Steam: вставьте строку ниже в Свойства > Параметры запуска. Потом просто запускайте через Steam.
+Abra o jogo pelo botão Abrir com HDR, ou use a linha abaixo nas opções de inicialização do launcher.	Запустите игру кнопкой «Открыть с HDR» или используйте строку ниже в параметрах запуска лаунчера.
+Copiar linha	Копировать строку
+Linha copiada.	Строка скопирована.
+Não consegui copiar.	Не удалось скопировать.
+Abrir pela Steam	Открыть через Steam
+Abrir com HDR	Открыть с HDR
+Não consegui abrir o jogo.	Не удалось открыть игру.
+Paper white	Paper white
+Gama	Гамма
+Realce dos claros	Усиление светов
+Voltar à calibração	Вернуться к калибровке
+O driver NVIDIA só aceita o RTX HDR com o Prisma aberto como administrador.	Драйвер NVIDIA принимает RTX HDR только если Prisma запущен от имени администратора.
+Menu dentro do jogo	Меню в игре
+Menu do HDR no jogo	Меню HDR в игре
+Salvar no perfil do jogo?	Сохранить в профиле игры?
+Os ajustes já valem agora. Salvar guarda para as próximas vezes que o jogo abrir.	Настройки уже действуют. Сохранение оставит их для следующих запусков игры.
+Este jogo não está com o HDR do Prisma: abra-o com ele pela aba HDR.	Эта игра запущена без HDR Prisma: откройте её с ним на вкладке HDR.
+O jogo não usa o HDR do Prisma	Игра не использует HDR Prisma
+O Prisma não abriu o jogo	Prisma не запустил игру
+Brilho da interface	Яркость интерфейса
+Junto	Вместе

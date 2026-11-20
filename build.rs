@@ -38,7 +38,7 @@ fn build_apo() {
 
 /// O limitador é uma DLL própria, embutida no programa: tudo continua sendo um arquivo só.
 fn build_hook() {
-    println!("cargo:rerun-if-changed=hook/src/lib.rs");
+    println!("cargo:rerun-if-changed=hook/src");
     println!("cargo:rerun-if-changed=hook/Cargo.toml");
     let out = std::path::Path::new(&std::env::var("OUT_DIR").unwrap()).join("hook");
     let cargo = std::env::var("CARGO").unwrap();

@@ -213,6 +213,7 @@ fn caps_with(nvidia: bool) -> Vec<String> {
         cap::HDR_ON_LAUNCH,
         cap::SOUND_GAME_VOLUME,
         cap::SOUND_EQ,
+        cap::LAUNCH_HDR,
     ];
     if cfg!(feature = "stream") {
         caps.push(cap::SHARE_MODE);
@@ -237,7 +238,9 @@ pub fn start(hub: HWND) {
         Ok(s) => s,
         Err(e) => return crate::config::log(&format!("ponte com o launcher: sem nome do pipe ({e})")),
     };
-    serve_on(prisma_link::pipe_name(&sid), hub);
+    // Teste com o Prisma em uso aberto (ele prende o pipe): a versão de desenvolvimento usa outro nome.
+    let dev = std::env::var("PRISMA_LINK_PIPE").ok().filter(|_| cfg!(debug_assertions));
+    serve_on(dev.unwrap_or_else(|| prisma_link::pipe_name(&sid)), hub);
     if cfg!(feature = "stream") {
         serve_on(prisma_link::share_pipe_name(&sid), hub);
     }
@@ -497,6 +500,12 @@ impl App {
                 }
             }
             Request::Hdr { on } => Outcome::Later(Box::new(move || hdr_reply(on))),
+            Request::LaunchGame { exe, args } => {
+                if !autohdr::uses_prisma(&self.cfg, &exe) {
+                    return fail(code::NOT_SUPPORTED, "O jogo não usa o HDR do Prisma");
+                }
+                if autohdr::open(&exe, &args) { Outcome::Reply(Reply::Done) } else { fail(code::FAILED, "O Prisma não abriu o jogo") }
+            }
             Request::NvidiaCatalog => {
                 if !crate::pages::nvidia::available() {
                     return fail(code::NOT_SUPPORTED, "Sem placa NVIDIA");
@@ -607,8 +616,8 @@ impl App {
             _ => FpsLimit::Off,
         };
         let auto_hdr = match c.hdr_games.iter().find(|h| same(&h.exe)).map_or(0, |h| h.mode) {
-            1 => Some(true),
-            2 => Some(false),
+            autohdr::AUTO | autohdr::AUTO10 => Some(true),
+            autohdr::OFF | autohdr::RTX | autohdr::PRISMA => Some(false),
             _ => None,
         };
         let replay = ReplayOptions {
@@ -1031,6 +1040,7 @@ mod tests {
                 cap::CONTROLLERS_MAPPING, cap::CONTROLLERS_KEYBOARD, cap::OPTIONS, cap::METER_FPS_LIMIT,
                 cap::HDR_AUTO, cap::SOUND_DEVICES, cap::REPLAY_OPTIONS, cap::FULLSCREENIZER, cap::OPTIMIZE,
                 cap::METER_ON_LAUNCH, cap::HDR_ON_LAUNCH, cap::SOUND_GAME_VOLUME, cap::SOUND_EQ,
+                cap::LAUNCH_HDR,
             ] {
                 assert!(has(c), "{c}");
             }

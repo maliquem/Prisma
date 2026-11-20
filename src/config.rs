@@ -49,12 +49,35 @@ impl MeterGame {
     }
 }
 
-/// Escolha de Auto HDR de um jogo: 0 Windows decide, 1 força, 2 desliga.
+/// Escolha do HDR de um jogo.
 #[derive(Clone, Default, Debug)]
 pub struct HdrGame {
     pub exe: String,
     pub path: String,
+    /// Números em `sys::autohdr` (padrão, Auto HDR, desligado, 10 bits, RTX HDR, Prisma).
     pub mode: u8,
+    /// Ajustes do HDR do Prisma; sem eles, os da calibração.
+    pub prisma: Option<crate::sys::inject::Hdr>,
+}
+
+impl HdrGame {
+    /// Linha `hdr_game=` do config.ini: `exe|modo|caminho`, e os ajustes do HDR do Prisma quando há (o brilho da interface veio depois: linha com 6 vale 0).
+    pub fn line(&self) -> String {
+        let mut s = format!("{}|{}|{}", self.exe, self.mode, self.path);
+        if let Some(h) = self.prisma {
+            s += &format!("|{}|{}|{}|{}|{}|{}|{}", h.peak, h.paper, h.gamma, h.sat, h.boost, h.black, h.ui);
+        }
+        s
+    }
+    pub fn parse(v: &str) -> Option<Self> {
+        let p: Vec<&str> = v.split('|').collect();
+        if p.len() < 3 {
+            return None;
+        }
+        let f: Vec<f32> = p[3..].iter().filter_map(|v| v.parse().ok()).collect();
+        let prisma = (f.len() >= 6).then(|| crate::sys::inject::Hdr { on: true, peak: f[0], paper: f[1], gamma: f[2], sat: f[3], boost: f[4], black: f[5], ui: f.get(6).copied().unwrap_or(0.0) });
+        Some(Self { exe: p[0].into(), mode: p[1].parse().unwrap_or(0), path: p[2].into(), prisma })
+    }
 }
 
 /// Perfil feito pela calibração do Prisma, um por modo de imagem da TV.
@@ -343,6 +366,8 @@ pub struct Config {
     /// O completo só recebe o mouse depois do atalho `hk_meter_keys` (o jeito antigo); falso: direto, com o cursor em cima.
     pub meter_need_key: bool,
     pub hk_limit_toggle: Hotkey,
+    /// Abre o menu do HDR do Prisma por cima do jogo.
+    pub hk_hdr_menu: Hotkey,
     pub hk_limit_up: Hotkey,
     pub hk_limit_down: Hotkey,
     pub snd_keep: u8,
@@ -531,6 +556,7 @@ impl Default for Config {
             meter_hide_days: 0,
             hk_meter_keys: Hotkey::new(MOD_CTRL | MOD_ALT, b'5' as u32),
             hk_limit_toggle: Hotkey::new(MOD_CTRL | MOD_ALT, b'3' as u32),
+            hk_hdr_menu: Hotkey::new(MOD_CTRL | MOD_ALT, b'I' as u32),
             hk_limit_up: Hotkey::new(MOD_CTRL | MOD_ALT, 0x26),
             hk_limit_down: Hotkey::new(MOD_CTRL | MOD_ALT, 0x28),
             snd_keep: 0,
@@ -689,7 +715,7 @@ fn text_of(b: &[u8]) -> String {
     s.strip_prefix('\u{feff}').unwrap_or(&s).to_string()
 }
 
-fn config_path() -> PathBuf {
+pub fn config_path() -> PathBuf {
     data_dir().join("config.ini")
 }
 
@@ -827,6 +853,7 @@ impl Config {
                 "meter_hide_days" => c.meter_hide_days = v.parse().unwrap_or(0),
                 "hk_meter_keys" => c.hk_meter_keys = Hotkey::parse(v),
                 "hk_limit_toggle" => c.hk_limit_toggle = Hotkey::parse(v),
+                "hk_hdr_menu" => c.hk_hdr_menu = Hotkey::parse(v),
                 "hk_limit_up" => c.hk_limit_up = Hotkey::parse(v),
                 "hk_limit_down" => c.hk_limit_down = Hotkey::parse(v),
                 "meter_game" => {
@@ -837,12 +864,7 @@ impl Config {
                         c.meter_games.push(MeterGame { exe: p[0].into(), view: n(p[1]), limit_mode: n(p[2]), limit_fps: p[3].parse().unwrap_or(0), limit_real: p[4] == "1", measured: p[5] == "1", hdr: n(p[6]), preset: n(p[7]), path: p[8].into(), inject: p.get(9).map_or(true, |v| *v == "1"), inject_off: flag(10), power: p.get(11).map_or(String::new(), |v| v.to_string()), last: p.get(12).and_then(|v| v.parse().ok()).filter(|d| *d > 0).unwrap_or_else(today), show: p.get(13).map_or(0, |v| n(v)) });
                     }
                 }
-                "hdr_game" => {
-                    let p: Vec<&str> = v.split('|').collect();
-                    if p.len() == 3 {
-                        c.hdr_games.push(HdrGame { exe: p[0].into(), mode: p[1].parse().unwrap_or(0), path: p[2].into() });
-                    }
-                }
+                "hdr_game" => c.hdr_games.extend(HdrGame::parse(v)),
                 "hdr_profile" => {
                     let p: Vec<&str> = v.split('|').collect();
                     if p.len() == 6 {
@@ -1101,13 +1123,14 @@ impl Config {
         let _ = writeln!(s, "meter_need_key={}", self.meter_need_key as u8);
         hk(&mut s, "hk_meter_keys", self.hk_meter_keys);
         hk(&mut s, "hk_limit_toggle", self.hk_limit_toggle);
+        hk(&mut s, "hk_hdr_menu", self.hk_hdr_menu);
         hk(&mut s, "hk_limit_up", self.hk_limit_up);
         hk(&mut s, "hk_limit_down", self.hk_limit_down);
         for g in &self.meter_games {
             let _ = writeln!(s, "meter_game={}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}", g.exe, g.view, g.limit_mode, g.limit_fps, b(g.limit_real), b(g.measured), g.hdr, g.preset, g.path, b(g.inject), b(g.inject_off), g.power, g.last, g.show);
         }
         for g in &self.hdr_games {
-            let _ = writeln!(s, "hdr_game={}|{}|{}", g.exe, g.mode, g.path);
+            let _ = writeln!(s, "hdr_game={}", g.line());
         }
         for p in &self.hdr_profiles {
             let _ = writeln!(s, "hdr_profile={}|{}|{}|{}|{}|{}", p.screen, p.mode, p.file, p.peak, p.full, p.black);
@@ -1356,6 +1379,21 @@ mod tests {
         assert_eq!(RunKey::parse(&k.line()), Some(k));
         assert_eq!(RunKey::parse("3,84|0|").map(|k| (k.key.label(), k.admin)), Some(("Ctrl + Alt + T".into(), false)));
         assert_eq!(RunKey::parse("3,84"), None);
+    }
+
+    #[test]
+    fn hdr_game_round_trip() {
+        let old = HdrGame::parse(r"a.exe|1|C:\a b\a.exe").unwrap();
+        assert_eq!((old.mode, old.path.as_str(), old.prisma), (1, r"C:\a b\a.exe", None));
+        assert_eq!(HdrGame::parse(&old.line()).unwrap().line(), old.line());
+        let h = crate::sys::inject::Hdr { on: true, peak: 1000.0, paper: 203.5, gamma: 2.2, sat: 1.1, boost: 0.5, black: 0.25, ui: 150.0 };
+        let g = HdrGame { prisma: Some(h), mode: 5, ..old };
+        assert_eq!(HdrGame::parse(&g.line()).unwrap().prisma, Some(h));
+        // Linha de antes do brilho da interface: ele fica desligado.
+        assert_eq!(HdrGame::parse(r"a.exe|5|C:\a.exe|1000|203.5|2.2|1.1|0.5|0.25").unwrap().prisma, Some(crate::sys::inject::Hdr { ui: 0.0, ..h }));
+        // Ajuste faltando: fica sem os ajustes, com a escolha mantida.
+        assert_eq!(HdrGame::parse(r"a.exe|5|C:\a.exe|1000|200").map(|g| (g.mode, g.prisma)), Some((5, None)));
+        assert!(HdrGame::parse("a.exe|5").is_none());
     }
 
     #[test]

@@ -72,39 +72,57 @@ pub struct Screen {
     pub gdi: String,
 }
 
-/// Primeira tela que aceita HDR: adaptador, saída e se o HDR está ligado.
-pub fn hdr_output() -> Option<(LUID, u32, bool)> {
+/// Caminhos ativos das telas (origem e destino).
+fn active_paths() -> Option<Vec<DISPLAYCONFIG_PATH_INFO>> {
     unsafe {
         let (mut np, mut nm) = (0u32, 0u32);
         GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &mut np, &mut nm).ok().ok()?;
         let mut paths = vec![DISPLAYCONFIG_PATH_INFO::default(); np as usize];
         let mut modes = vec![DISPLAYCONFIG_MODE_INFO::default(); nm as usize];
         QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &mut np, paths.as_mut_ptr(), &mut nm, modes.as_mut_ptr(), None).ok().ok()?;
-        paths[..np as usize].iter().find_map(|p| {
-            let (adapter, id) = (p.targetInfo.adapterId, p.targetInfo.id);
-            let mut color = ColorInfo2::default();
-            (info_type(&mut color, DISPLAYCONFIG_DEVICE_INFO_TYPE(15), adapter, id) && color.value & 0x10 != 0).then_some((adapter, id, color.mode == 2))
-        })
+        paths.truncate(np as usize);
+        Some(paths)
     }
 }
 
-/// HDR ligado na tela com este nome GDI (o `szDevice` do monitor). None quando a tela não aparece.
+/// Primeira tela que aceita HDR: adaptador, saída e se o HDR está ligado.
+pub fn hdr_output() -> Option<(LUID, u32, bool)> {
+    active_paths()?.iter().find_map(|p| {
+        let (adapter, id) = (p.targetInfo.adapterId, p.targetInfo.id);
+        let mut color = ColorInfo2::default();
+        (info_type(&mut color, DISPLAYCONFIG_DEVICE_INFO_TYPE(15), adapter, id) && color.value & 0x10 != 0).then_some((adapter, id, color.mode == 2))
+    })
+}
+
+/// O caminho da tela com este nome GDI (o `szDevice` do monitor).
+fn path_of(gdi: &str) -> Option<DISPLAYCONFIG_PATH_INFO> {
+    active_paths()?.into_iter().find(|p| {
+        let mut source = DISPLAYCONFIG_SOURCE_DEVICE_NAME::default();
+        info_type(&mut source, DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME, p.sourceInfo.adapterId, p.sourceInfo.id) && wide_text(&source.viewGdiDeviceName).eq_ignore_ascii_case(gdi)
+    })
+}
+
+/// HDR ligado na tela com este nome GDI. None quando a tela não aparece.
 pub fn hdr_on(gdi: &str) -> Option<bool> {
-    unsafe {
-        let (mut np, mut nm) = (0u32, 0u32);
-        GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &mut np, &mut nm).ok().ok()?;
-        let mut paths = vec![DISPLAYCONFIG_PATH_INFO::default(); np as usize];
-        let mut modes = vec![DISPLAYCONFIG_MODE_INFO::default(); nm as usize];
-        QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &mut np, paths.as_mut_ptr(), &mut nm, modes.as_mut_ptr(), None).ok().ok()?;
-        paths[..np as usize].iter().find_map(|p| {
-            let mut source = DISPLAYCONFIG_SOURCE_DEVICE_NAME::default();
-            let mut color = ColorInfo2::default();
-            (info_type(&mut source, DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME, p.sourceInfo.adapterId, p.sourceInfo.id)
-                && wide_text(&source.viewGdiDeviceName).eq_ignore_ascii_case(gdi)
-                && info_type(&mut color, DISPLAYCONFIG_DEVICE_INFO_TYPE(15), p.targetInfo.adapterId, p.targetInfo.id))
-            .then_some(color.mode == 2)
-        })
-    }
+    let p = path_of(gdi)?;
+    let mut color = ColorInfo2::default();
+    info_type(&mut color, DISPLAYCONFIG_DEVICE_INFO_TYPE(15), p.targetInfo.adapterId, p.targetInfo.id).then_some(color.mode == 2)
+}
+
+/// Nome da tela com este nome GDI, o mesmo de `Screen::name` e dos perfis de calibração.
+pub fn screen_name(gdi: &str) -> Option<String> {
+    let p = path_of(gdi)?;
+    let mut name = DISPLAYCONFIG_TARGET_DEVICE_NAME::default();
+    info_type(&mut name, DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME, p.targetInfo.adapterId, p.targetInfo.id).then(|| wide_text(&name.monitorFriendlyDeviceName))
+}
+
+/// Nome GDI (`\\.\DISPLAY1`) do monitor.
+pub fn gdi_name(m: windows::Win32::Graphics::Gdi::HMONITOR) -> String {
+    use windows::Win32::Graphics::Gdi::{GetMonitorInfoW, MONITORINFO, MONITORINFOEXW};
+    let mut mi = MONITORINFOEXW::default();
+    mi.monitorInfo.cbSize = std::mem::size_of::<MONITORINFOEXW>() as u32;
+    let _ = unsafe { GetMonitorInfoW(m, &mut mi as *mut _ as *mut MONITORINFO) };
+    wide_text(&mi.szDevice)
 }
 
 /// Liga ou desliga o HDR e espera a tela chegar lá.

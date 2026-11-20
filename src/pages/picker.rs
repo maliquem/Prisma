@@ -64,7 +64,7 @@ fn add(app: &mut App, target: Target, path: &str) {
         Target::ShaderGame => super::shaders::add_game(app, path),
         Target::HdrGame => {
             if !app.cfg.hdr_games.iter().any(|g| g.exe.eq_ignore_ascii_case(&exe)) {
-                app.cfg.hdr_games.push(crate::config::HdrGame { exe, path: path.to_string(), mode: 0 });
+                app.cfg.hdr_games.push(crate::config::HdrGame { exe, path: path.to_string(), mode: 0, prisma: None });
             }
         }
     }

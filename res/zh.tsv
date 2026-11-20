@@ -2958,3 +2958,31 @@ HDR · {}	HDR · {}
 HDR do Prisma	Prisma HDR
 Clique para mudar. Teclado: {}	点击可更改。键盘：{}
 Mexer no medidor completo só depois do atalho Controles no medidor	完整面板需先按快捷键“监视中的控制”后才能操作
+HDR do jogo	游戏 HDR
+Auto HDR 10 bits	自动 HDR 10 位
+Auto 10 bits	自动 10 位
+Um HDR por jogo. Vale a partir da próxima vez que o jogo abrir.	每个游戏单独设置 HDR。下次打开游戏时生效。
+Um HDR por jogo. O Auto HDR está desligado nas configurações do Windows: ligue lá para ele valer.	每个游戏单独设置 HDR。Windows 设置中自动 HDR 已关闭：请在那里开启，此项才会生效。
+Bloqueado: este jogo tem anti-cheat, e o HDR do Prisma precisa entrar no jogo. Escolha Auto HDR ou RTX HDR.	已锁定：此游戏有反作弊，而 Prisma HDR 需要注入游戏。请选择自动 HDR 或 RTX HDR。
+Jogo da Steam: cole a linha abaixo em Propriedades > Opções de inicialização. Depois é só abrir pela Steam.	Steam 游戏：把下面这一行粘贴到 属性 > 启动选项 中。之后直接从 Steam 打开即可。
+Abra o jogo pelo botão Abrir com HDR, ou use a linha abaixo nas opções de inicialização do launcher.	用“以 HDR 打开”按钮打开游戏，或把下面这一行用在启动器的启动选项中。
+Copiar linha	复制该行
+Linha copiada.	已复制该行。
+Não consegui copiar.	无法复制。
+Abrir pela Steam	通过 Steam 打开
+Abrir com HDR	以 HDR 打开
+Não consegui abrir o jogo.	无法打开游戏。
+Paper white	纸白
+Gama	伽马
+Realce dos claros	高光增强
+Voltar à calibração	返回校准
+O driver NVIDIA só aceita o RTX HDR com o Prisma aberto como administrador.	NVIDIA 驱动只有在 Prisma 以管理员身份运行时才接受 RTX HDR。
+Menu dentro do jogo	游戏内菜单
+Menu do HDR no jogo	游戏内 HDR 菜单
+Salvar no perfil do jogo?	保存到游戏配置文件？
+Os ajustes já valem agora. Salvar guarda para as próximas vezes que o jogo abrir.	调整已立即生效。保存后，下次打开游戏时仍会沿用。
+Este jogo não está com o HDR do Prisma: abra-o com ele pela aba HDR.	此游戏未使用 Prisma HDR：请从 HDR 选项卡用它打开。
+O jogo não usa o HDR do Prisma	游戏未使用 Prisma HDR
+O Prisma não abriu o jogo	Prisma 未打开该游戏
+Brilho da interface	界面亮度
+Junto	联动

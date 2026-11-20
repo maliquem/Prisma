@@ -161,14 +161,8 @@ unsafe extern "system" fn widget_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> 
 }
 
 /// Nome GDI do monitor onde a janela está.
-fn monitor_name(h: HWND) -> String {
-    unsafe {
-        let m = MonitorFromWindow(h, MONITOR_DEFAULTTONEAREST);
-        let mut mi = MONITORINFOEXW::default();
-        mi.monitorInfo.cbSize = std::mem::size_of::<MONITORINFOEXW>() as u32;
-        let _ = GetMonitorInfoW(m, &mut mi as *mut _ as *mut MONITORINFO);
-        String::from_utf16_lossy(&mi.szDevice[..mi.szDevice.iter().position(|c| *c == 0).unwrap_or(0)])
-    }
+pub(crate) fn monitor_name(h: HWND) -> String {
+    crate::sys::hdr::gdi_name(unsafe { MonitorFromWindow(h, MONITOR_DEFAULTTONEAREST) })
 }
 
 impl Widget {
