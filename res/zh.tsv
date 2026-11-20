@@ -3018,7 +3018,6 @@ Instalado. Reinicie o PC para terminar	已安装。请重启电脑以完成
 Ainda rodando depois de 10 minutos; confira no Windows Update	10 分钟后仍在运行；请在 Windows Update 中查看
 Não deu certo; veja o registro de ações	未成功；请查看操作日志
 sem resposta da internet	网络无响应
-o modelo do Gemini não está disponível	Gemini 模型不可用
 a resposta veio num formato inesperado	返回的格式不符合预期
 A pesquisa falhou ({}). Tenta de novo em uma hora.	搜索失败（{}）。一小时后重试。
 Visto em {a}. Veredito depois de {b}, quando já houver relatos.	发现于 {a}。在 {b} 后给出结论，届时应已有用户反馈。
@@ -3058,7 +3057,6 @@ Chave guardada. O Gemini pesquisa os relatos com a busca do Google (megathreads 
 Sem chave, o veredito usa só as fontes oficiais: os problemas conhecidos da Microsoft e os da NVIDIA nas notas da versão.	没有密钥时，结论仅依据官方来源：Microsoft 的已知问题，以及 NVIDIA 发行说明中的问题。
 a chave do {} foi recusada	{} 密钥被拒绝
 o {} atingiu o limite de uso	{} 已达到使用上限
-acabou o saldo da conta do DeepSeek	DeepSeek 账户余额已用完
 o servidor do {} está ocupado ou fora do ar	{} 服务器繁忙或已离线
 Sem chave de IA, o veredito usa só as fontes oficiais acima.	没有 AI 密钥时，结论仅依据上方的官方来源。
 {a}: falhou ({b})	{a}：失败（{b}）
@@ -3068,9 +3066,6 @@ Chave do DeepSeek	DeepSeek 密钥
 Chave do DeepSeek guardada	DeepSeek 密钥已保存
 Pegar uma chave	获取密钥
 Pesquisar com	搜索方式
-Os dois pesquisam ao mesmo tempo e o Prisma junta os resultados: os problemas das duas listas sem repetir, a média da estimativa, e só recomenda instalar se os dois recomendarem. Se um falhar, vale o do outro.	两个同时搜索，Prisma 合并结果：两份列表中的问题去重，估计值取平均，只有两个都建议安装时才建议安装。如果一个失败，就采用另一个的结果。
-Só uma das chaves está guardada: a pesquisa usa só essa IA.	只保存了其中一个密钥：搜索只使用这个 AI。
-Chave guardada. O DeepSeek pesquisa os relatos com a busca própria (megathreads do r/nvidia e do r/Windows11, fórum da NVIDIA, Guru3D e sites de notícias) e dá o veredito. Ele não tem cota grátis: cada pesquisa gasta um pouco do saldo da conta.	密钥已保存。DeepSeek 用自带搜索查找用户反馈（r/nvidia 和 r/Windows11 的汇总帖、NVIDIA 论坛、Guru3D 和新闻网站），并给出结论。它没有免费额度：每次搜索都会消耗一点账户余额。
 Avisar antes de baixar atualizações do Windows e não trocar o driver de vídeo pelo Windows Update	下载 Windows 更新前先提醒，并且不通过 Windows Update 更换显卡驱动
 Usa a política do próprio Windows (pede administrador) e desfaz ao desmarcar. O serviço do Windows Update continua ligado.	使用 Windows 自带的策略（需要管理员权限），取消勾选即可撤销。Windows Update 服务仍保持开启。
 A % sem problemas é uma estimativa da IA a partir das reclamações nos fóruns: não existe essa estatística oficial.	“无问题”百分比是 AI 根据论坛上的抱怨做出的估算：并没有这样的官方统计。
@@ -3079,3 +3074,13 @@ Procurando...	正在查找...
 Nunca conferido	从未检查
 Última conferência: {}	上次检查：{}
 Página Atualizações	“更新”页面
+acabou o saldo da conta do {}	{} 账户余额已用完
+o modelo do {} não está disponível	{} 的模型不可用
+Chave do Claude	Claude 密钥
+Chave do Claude guardada	Claude 密钥已保存
+Chave do ChatGPT	ChatGPT 密钥
+Chave do ChatGPT guardada	ChatGPT 密钥已保存
+Claude (Haiku)	Claude (Haiku)
+Só uma das IAs marcadas tem chave: a pesquisa usa só ela.	勾选的 AI 中只有一个有密钥：搜索只使用它。
+Chave guardada. O {} pesquisa os relatos com a busca própria (megathreads do r/nvidia e do r/Windows11, fórum da NVIDIA, Guru3D e sites de notícias) e dá o veredito. Ele não tem cota grátis: cada pesquisa gasta um pouco do saldo da conta.	密钥已保存。{} 通过自带的搜索查找用户反馈（r/nvidia 和 r/Windows11 的汇总帖、NVIDIA 论坛、Guru3D 和新闻网站）并给出结论。它没有免费额度：每次搜索都会消耗一点账户余额。
+As IAs marcadas pesquisam ao mesmo tempo e o Prisma junta os resultados: os problemas de todas as listas sem repetir, a média da estimativa, e só recomenda instalar se todas recomendarem. Se uma falhar, valem as outras. Só o Gemini é grátis: as outras gastam um pouco do saldo da conta a cada pesquisa.	勾选的 AI 会同时搜索，Prisma 合并结果：所有列表中的问题去重合并，估算取平均值，只有全部都建议安装时才建议安装。如果有一个失败，则采用其他的结果。只有 Gemini 免费：其他的每次搜索都会消耗一点账户余额。

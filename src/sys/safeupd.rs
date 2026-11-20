@@ -51,14 +51,26 @@ pub enum Ai {
     #[default]
     Gemini,
     DeepSeek,
+    Claude,
+    ChatGpt,
 }
+
+/// Todas as IAs, na ordem em que aparecem e são chamadas: a primeira que responde junta os resultados.
+pub const ALL: [Ai; 4] = [Ai::Gemini, Ai::DeepSeek, Ai::Claude, Ai::ChatGpt];
 
 impl Ai {
     pub fn name(self) -> &'static str {
         match self {
             Ai::Gemini => "Gemini",
             Ai::DeepSeek => "DeepSeek",
+            Ai::Claude => "Claude",
+            Ai::ChatGpt => "ChatGPT",
         }
+    }
+
+    /// O bit da IA em `Config::safe_ais`.
+    pub fn bit(self) -> u8 {
+        1 << self as u8
     }
 }
 
@@ -503,12 +515,12 @@ pub fn reddit_win() -> String {
 /// substituto quando eles saírem do ar.
 const MODELS: [&str; 3] = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-flash-latest"];
 
-/// As IAs escolhidas (`mode` 0 Gemini, 1 DeepSeek, 2 os dois) que têm chave, na ordem: a primeira
-/// junta os resultados quando são duas. O DeepSeek é pago: fora do modo dele, nunca é chamado.
-pub fn chosen(mode: u8, gemini: &str, deepseek: &str) -> Vec<(Ai, String)> {
-    [(Ai::Gemini, gemini), (Ai::DeepSeek, deepseek)]
-        .into_iter()
-        .filter(|(a, k)| (mode == 2 || mode == *a as u8) && !k.trim().is_empty())
+/// As IAs marcadas em `mask` que têm chave (`keys` na ordem de `ALL`), na ordem de `ALL`. Só o Gemini
+/// é grátis: uma IA paga desmarcada nunca é chamada.
+pub fn chosen(mask: u8, keys: [&str; 4]) -> Vec<(Ai, String)> {
+    ALL.into_iter()
+        .zip(keys)
+        .filter(|(a, k)| mask & a.bit() != 0 && !k.trim().is_empty())
         .map(|(a, k)| (a, k.trim().to_string()))
         .collect()
 }
@@ -519,6 +531,8 @@ fn ask(ai: Ai, key: &str, prompt: &str, search: bool) -> Result<(String, Vec<Str
     match ai {
         Ai::Gemini => gemini(key, prompt, search),
         Ai::DeepSeek => deepseek(key, prompt, search),
+        Ai::Claude => claude(key, prompt, search),
+        Ai::ChatGpt => chatgpt(key, prompt, search),
     }
 }
 
@@ -583,6 +597,91 @@ pub fn deepseek_text(json: &str) -> Option<(String, Vec<String>)> {
     Some((text, pages))
 }
 
+const CLAUDE_MODEL: &str = "claude-haiku-5-5";
+
+/// O Claude (Haiku) pesquisa com a busca da Anthropic, no servidor, e responde numa chamada. Se a busca
+/// passa do limite de voltas do servidor (`pause_turn`), a chamada segue com a resposta parcial.
+fn claude(key: &str, prompt: &str, search: bool) -> Result<(String, Vec<String>), String> {
+    let mut body = serde_json::json!({"model":CLAUDE_MODEL,"max_tokens":16000,"messages":[{"role":"user","content":prompt}]});
+    if search {
+        body["tools"] = serde_json::json!([{"type":"web_search_20250305","name":"web_search","max_uses":8}]);
+    } else {
+        body["thinking"] = serde_json::json!({"type":"disabled"});
+    }
+    let headers = format!("x-api-key: {}\r\nanthropic-version: 2026-10-21\r\nContent-Type: application/json\r\n", key.trim());
+    for _ in 0..3 {
+        let Ok((status, text)) = super::update::post("https://api.anthropic.com/v1/messages", &headers, &body.to_string()) else { return Err("rede".into()) };
+        match status {
+            200 => {}
+            401 | 403 => return Err("chave".into()),
+            402 => return Err("saldo".into()),
+            400 if text.contains("credit balance") => return Err("saldo".into()),
+            404 => return Err("modelo".into()),
+            429 => return Err("limite".into()),
+            s => return Err(format!("http {s}")),
+        }
+        let v: Value = serde_json::from_str(&text).map_err(|_| "resposta".to_string())?;
+        if v["stop_reason"] != "pause_turn" {
+            return claude_text(&v).ok_or_else(|| "resposta".into());
+        }
+        if let Some(m) = body["messages"].as_array_mut() {
+            m.push(serde_json::json!({"role":"assistant","content":v["content"]}));
+        }
+    }
+    Err("resposta".into())
+}
+
+/// O texto da resposta do Claude e as páginas citadas (sem repetir). Uma recusa vem sem texto.
+pub fn claude_text(v: &Value) -> Option<(String, Vec<String>)> {
+    let blocks = v["content"].as_array()?.iter().filter(|b| b["type"] == "text");
+    let mut text = String::new();
+    let mut pages: Vec<String> = Vec::new();
+    for b in blocks {
+        text += b["text"].as_str().unwrap_or("");
+        for u in b["citations"].as_array().into_iter().flatten().filter_map(|c| c["url"].as_str()) {
+            if !pages.iter().any(|p| p == u) {
+                pages.push(u.to_string());
+            }
+        }
+    }
+    (!text.trim().is_empty()).then_some((text, pages))
+}
+
+const GPT_MODEL: &str = "gpt-5-mini";
+
+/// O ChatGPT pesquisa com a busca da OpenAI (API Responses), no servidor, e responde numa chamada.
+fn chatgpt(key: &str, prompt: &str, search: bool) -> Result<(String, Vec<String>), String> {
+    let mut body = serde_json::json!({"model":GPT_MODEL,"input":prompt,"reasoning":{"effort":"low"}});
+    if search {
+        body["tools"] = serde_json::json!([{"type":"web_search"}]);
+    }
+    let headers = format!("Authorization: Bearer {}\r\nContent-Type: application/json\r\n", key.trim());
+    let Ok((status, text)) = super::update::post("https://api.openai.com/v1/responses", &headers, &body.to_string()) else { return Err("rede".into()) };
+    match status {
+        200 => chatgpt_text(&text).ok_or_else(|| "resposta".into()),
+        401 => Err("chave".into()),
+        404 => Err("modelo".into()),
+        // O 429 serve para o limite por minuto e para a conta sem crédito.
+        429 if ["quota", "credit", "spend_limit", "usage_limit"].iter().any(|w| text.contains(w)) => Err("saldo".into()),
+        429 => Err("limite".into()),
+        s => Err(format!("http {s}")),
+    }
+}
+
+/// O texto da resposta do ChatGPT (os itens "message" da saída) e as páginas citadas.
+pub fn chatgpt_text(json: &str) -> Option<(String, Vec<String>)> {
+    let v: Value = serde_json::from_str(json).ok()?;
+    let parts: Vec<&Value> = v["output"].as_array()?.iter().filter(|o| o["type"] == "message").flat_map(|o| o["content"].as_array().into_iter().flatten()).filter(|c| c["type"] == "output_text").collect();
+    let text: String = parts.iter().filter_map(|c| c["text"].as_str()).collect();
+    let mut pages: Vec<String> = Vec::new();
+    for u in parts.iter().flat_map(|c| c["annotations"].as_array().into_iter().flatten()).filter(|a| a["type"] == "url_citation").filter_map(|a| a["url"].as_str()) {
+        if !pages.iter().any(|p| p == u) {
+            pages.push(u.to_string());
+        }
+    }
+    (!text.trim().is_empty()).then_some((text, pages))
+}
+
 fn sev(s: &str) -> Sev {
     match s.to_lowercase().as_str() {
         "high" | "grave" | "critical" | "severe" => Sev::High,
@@ -629,11 +728,11 @@ fn research(ai: Ai, key: &str, prompt: &str) -> Result<Verdict, String> {
     parse_verdict(&text, pages).ok_or_else(|| "resposta".into())
 }
 
-/// A IA junta as listas de problemas das duas pesquisas, sem buscar de novo.
+/// A IA junta as listas de problemas das pesquisas, sem buscar de novo.
 fn merge_bugs(ai: Ai, key: &str, got: &[(Ai, Verdict)]) -> Option<Vec<Bug>> {
     let lists: Vec<Value> = got.iter().map(|(a, v)| serde_json::json!({"ai": a.name(), "bugs": v.bugs.iter().map(|b| serde_json::json!({"text": b.text, "severity": format!("{:?}", b.sev).to_lowercase()})).collect::<Vec<_>>()})).collect();
     let prompt = format!(
-        "Two AIs researched the same update and listed its problems. Merge the lists into one: join entries that describe the same problem, keep every distinct problem and any \"unconfirmed\" mark, keep the language of the texts, most serious first, at most 10. Answer ONLY with one JSON object, no other text: {{\"bugs\":[{{\"text\":\"short description\",\"severity\":\"high|medium|low\"}}]}}. Lists: {}",
+        "Several AIs researched the same update and listed its problems. Merge the lists into one: join entries that describe the same problem, keep every distinct problem and any \"unconfirmed\" mark, keep the language of the texts, most serious first, at most 10. Answer ONLY with one JSON object, no other text: {{\"bugs\":[{{\"text\":\"short description\",\"severity\":\"high|medium|low\"}}]}}. Lists: {}",
         Value::Array(lists)
     );
     let bugs = bugs_of(&json_in(&ask(ai, key, &prompt, false).ok()?.0)?);
@@ -891,13 +990,41 @@ mod tests {
 
     #[test]
     fn so_chama_a_ia_escolhida() {
-        let ais = |m, g, d| chosen(m, g, d).into_iter().map(|(a, _)| a).collect::<Vec<_>>();
-        assert_eq!(ais(0, "g", "d"), vec![Ai::Gemini]);
-        assert_eq!(ais(1, "g", "d"), vec![Ai::DeepSeek]);
-        assert_eq!(ais(2, "g", "d"), vec![Ai::Gemini, Ai::DeepSeek]);
-        assert_eq!(ais(2, " ", "d"), vec![Ai::DeepSeek]);
-        assert!(ais(0, "", "d").is_empty());
-        assert_eq!(chosen(1, "", " k "), vec![(Ai::DeepSeek, "k".to_string())]);
+        let ais = |m, k| chosen(m, k).into_iter().map(|(a, _)| a).collect::<Vec<_>>();
+        let all = ["g", "d", "c", "o"];
+        assert_eq!(ais(1, all), vec![Ai::Gemini]);
+        assert_eq!(ais(2, all), vec![Ai::DeepSeek]);
+        assert_eq!(ais(4, all), vec![Ai::Claude]);
+        assert_eq!(ais(8, all), vec![Ai::ChatGpt]);
+        assert_eq!(ais(15, all), ALL.to_vec());
+        assert_eq!(ais(15, [" ", "d", "", "o"]), vec![Ai::DeepSeek, Ai::ChatGpt]);
+        assert!(ais(0, all).is_empty());
+        assert!(ais(1, ["", "d", "c", "o"]).is_empty());
+        assert_eq!(chosen(4, ["", "", " k ", ""]), vec![(Ai::Claude, "k".to_string())]);
+    }
+
+    #[test]
+    fn resposta_do_claude() {
+        let v: Value = serde_json::from_str(
+            r#"{"stop_reason":"end_turn","content":[{"type":"server_tool_use","name":"web_search"},{"type":"web_search_tool_result","content":[{"type":"web_search_result","url":"https://x"}]},{"type":"text","text":"Relatos: ","citations":[{"type":"web_search_result_location","url":"https://a"}]},{"type":"text","text":"{\"ok_percent\":70}","citations":[{"url":"https://a"},{"url":"https://b"}]}]}"#,
+        )
+        .unwrap();
+        let (text, pages) = claude_text(&v).unwrap();
+        assert_eq!(text, "Relatos: {\"ok_percent\":70}");
+        assert_eq!(pages, vec!["https://a".to_string(), "https://b".into()]);
+        // Recusa: sem texto.
+        assert!(claude_text(&serde_json::json!({"stop_reason":"refusal","content":[]})).is_none());
+    }
+
+    #[test]
+    fn resposta_do_chatgpt() {
+        let (text, pages) = chatgpt_text(
+            r#"{"output":[{"type":"web_search_call","action":{"type":"search"}},{"type":"message","content":[{"type":"output_text","text":"{\"ok_percent\":90}","annotations":[{"type":"url_citation","url":"https://a"},{"type":"url_citation","url":"https://a"}]}]}]}"#,
+        )
+        .unwrap();
+        assert_eq!(text, "{\"ok_percent\":90}");
+        assert_eq!(pages, vec!["https://a".to_string()]);
+        assert!(chatgpt_text(r#"{"output":[{"type":"reasoning"}]}"#).is_none());
     }
 
     #[test]

@@ -471,8 +471,12 @@ pub struct Config {
     pub safe_key: String,
     /// Chave da API do DeepSeek, como a do Gemini.
     pub safe_ds_key: String,
-    /// Quem pesquisa: 0 Gemini, 1 DeepSeek, 2 os dois juntos.
-    pub safe_ai: u8,
+    /// Chaves do Claude (Anthropic) e do ChatGPT (OpenAI), como a do Gemini.
+    pub safe_claude_key: String,
+    pub safe_gpt_key: String,
+    /// IAs marcadas para pesquisar, um bit cada na ordem de `safeupd::ALL` (1 Gemini, 2 DeepSeek,
+    /// 4 Claude, 8 ChatGPT).
+    pub safe_ais: u8,
     /// Última versão aberta neste PC. Abrir uma mais nova mostra as novidades desde ela.
     pub seen_version: String,
     pub welcome: bool,
@@ -630,7 +634,9 @@ impl Default for Config {
             safe_wait: 72,
             safe_key: String::new(),
             safe_ds_key: String::new(),
-            safe_ai: 0,
+            safe_claude_key: String::new(),
+            safe_gpt_key: String::new(),
+            safe_ais: 1,
             seen_version: String::new(),
             welcome: true,
             always_admin: false,
@@ -954,7 +960,11 @@ impl Config {
                 "safe_wait" => c.safe_wait = v.parse().unwrap_or(72),
                 "safe_key" => c.safe_key = v.trim().to_string(),
                 "safe_ds_key" => c.safe_ds_key = v.trim().to_string(),
-                "safe_ai" => c.safe_ai = v.parse().unwrap_or(0).min(2),
+                "safe_claude_key" => c.safe_claude_key = v.trim().to_string(),
+                "safe_gpt_key" => c.safe_gpt_key = v.trim().to_string(),
+                // Antes era um modo só: 0 Gemini, 1 DeepSeek, 2 os dois.
+                "safe_ai" => c.safe_ais = [1, 2, 3][v.parse::<usize>().unwrap_or(0).min(2)],
+                "safe_ais" => c.safe_ais = v.parse::<u8>().unwrap_or(1) & 15,
                 "seen_version" => c.seen_version = v.to_string(),
                 "welcome" => c.welcome = b,
                 "always_admin" => c.always_admin = b,
@@ -1104,7 +1114,9 @@ impl Config {
         let _ = writeln!(s, "safe_wait={}", self.safe_wait);
         let _ = writeln!(s, "safe_key={}", self.safe_key);
         let _ = writeln!(s, "safe_ds_key={}", self.safe_ds_key);
-        let _ = writeln!(s, "safe_ai={}", self.safe_ai);
+        let _ = writeln!(s, "safe_claude_key={}", self.safe_claude_key);
+        let _ = writeln!(s, "safe_gpt_key={}", self.safe_gpt_key);
+        let _ = writeln!(s, "safe_ais={}", self.safe_ais);
         let _ = writeln!(s, "seen_version={}", self.seen_version);
         let _ = writeln!(s, "welcome={}", b(self.welcome));
         let _ = writeln!(s, "always_admin={}", b(self.always_admin));

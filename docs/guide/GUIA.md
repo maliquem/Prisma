@@ -201,21 +201,20 @@ Quando sai driver ou atualização nova, o Prisma avisa na bandeja; o clique abr
 
 Com chave do Gemini, a pesquisa usa a busca do Google, nos megathreads do r/nvidia e do r/Windows11, nas notícias de tecnologia do último mês (TechPowerUp, Wccftech, Tom's Hardware, Windows Latest, BleepingComputer e outros) e nos fóruns (NVIDIA, Guru3D, Overclockers). Entram também problemas que começaram em versões anteriores e continuam na nova, como gravação demais no SSD ou uso alto da CPU parado, mesmo os que a empresa ainda não confirmou (marcados como não confirmados). A cota grátis passa de 500 pesquisas por dia.
 
-Com chave do DeepSeek, a IA pesquisa com a busca própria dela na web, nas mesmas fontes. O DeepSeek não tem cota grátis: cada pesquisa gasta um pouco do saldo da conta dele.
+Com chave do DeepSeek, do Claude ou do ChatGPT, a IA pesquisa com a busca própria dela na web, nas mesmas fontes. DeepSeek, Claude e ChatGPT não têm cota grátis: cada pesquisa gasta um pouco do saldo da conta naquela plataforma.
 
 Sem chave, o veredito usa só as fontes oficiais: os problemas conhecidos da Microsoft e os Open Issues da NVIDIA.
 
-Com **Os dois**, as duas IAs pesquisam ao mesmo tempo e o Prisma junta: a lista de problemas das duas, sem repetir; a % sem problemas é a média; e só diz **Recomendado instalar** se as duas recomendarem. Sob o veredito, uma linha por IA: "Gemini: recomenda instalar, 80% sem problemas" ou "DeepSeek: falhou (motivo)". Se uma falhar, vale o veredito da outra. Com só uma chave guardada, usa só essa IA.
+Com mais de uma IA marcada e com chave, todas pesquisam ao mesmo tempo e o Prisma junta: a lista de problemas de todas, sem repetir (se a junção falhar, o Prisma une ele mesmo, os graves primeiro); a % sem problemas é a média; e só diz **Recomendado instalar** se todas recomendarem. Sob o veredito, uma linha por IA: "Gemini: recomenda instalar, 80% sem problemas" ou "DeepSeek: falhou (motivo)". Se uma falhar, valem as outras. Com só uma IA marcada e com chave, usa só ela.
 
-O Reddit não deixa ler sem login, por isso o Prisma o alcança pela busca do Gemini ou do DeepSeek e pelos botões **Discussão no Reddit**.
+O Reddit não deixa ler sem login, por isso o Prisma o alcança pela busca de uma das IAs e pelos botões **Discussão no Reddit**.
 
 ### Opções
 
-- **Pesquisar com:** **Gemini**, **DeepSeek** ou **Os dois** (veja Veredito).
+- **Pesquisar com:** quatro caixas de marcar, uma por IA: **Gemini**, **DeepSeek**, **Claude (Haiku)** e **ChatGPT**. Marque qualquer combinação (ou nenhuma: aí só valem as fontes oficiais). Só o Gemini tem cota grátis; uma IA paga desmarcada nunca é chamada (veja Veredito).
 - **Conferir:** **Desligado** (padrão), **Todo dia**, **A cada 2 dias**, **A cada 3 dias** ou **Toda semana**. A conferência só roda com o Prisma aberto ou na bandeja; não cria tarefa no Agendador de Tarefas do Windows.
 - **Esperar relatos por:** 24 horas, **3 dias** (padrão) ou 4 dias.
-- **Chave do Gemini:** **Colar chave** usa a área de transferência; **Apagar chave**; **Pegar uma chave grátis** abre aistudio.google.com/apikey. A chave fica nas configurações do Prisma e não vai para o registro de ações.
-- **Chave do DeepSeek:** **Colar chave** usa a área de transferência; **Apagar chave**; **Pegar uma chave** abre platform.deepseek.com/api_keys. O DeepSeek não tem cota grátis. A chave fica nas configurações do Prisma e não vai para o registro de ações.
+- **Chave do Gemini**, **Chave do DeepSeek**, **Chave do Claude** e **Chave do ChatGPT:** uma linha para cada IA marcada, com **Colar chave** (usa a área de transferência), **Apagar chave** e o link para pegar a chave: **Pegar uma chave grátis** abre aistudio.google.com/apikey (Gemini); **Pegar uma chave** abre platform.deepseek.com/api_keys (DeepSeek), console.anthropic.com/settings/keys (Claude) ou platform.openai.com/api-keys (ChatGPT). Só o Gemini tem cota grátis. As chaves ficam nas configurações do Prisma e não vão para o registro de ações.
 - **Avisar antes de baixar atualizações do Windows e não trocar o driver de vídeo pelo Windows Update:** grava a política do próprio Windows. Pede a permissão de administrador. Desmarcar apaga esses valores.
 
 ### Permissão e reversão

@@ -14,10 +14,8 @@ const EVERY: [u32; 5] = [0, 1, 2, 3, 7];
 const EVERY_NAMES: [&str; 5] = ["Desligado", "Todo dia", "A cada 2 dias", "A cada 3 dias", "Toda semana"];
 const WAIT: [u32; 3] = [24, 72, 96];
 const WAIT_NAMES: [&str; 3] = ["24 horas", "3 dias", "4 dias"];
-const AI_NAMES: [&str; 3] = ["Gemini", "DeepSeek", "Os dois"];
-
 fn keys(cfg: &crate::config::Config) -> Vec<(Ai, String)> {
-    safeupd::chosen(cfg.safe_ai, &cfg.safe_key, &cfg.safe_ds_key)
+    safeupd::chosen(cfg.safe_ais, [&cfg.safe_key, &cfg.safe_ds_key, &cfg.safe_claude_key, &cfg.safe_gpt_key])
 }
 
 #[derive(Default)]
@@ -179,9 +177,9 @@ fn why(ai: &str, e: &str) -> String {
     let s = match e {
         "chave" => "a chave do {} foi recusada",
         "limite" => "o {} atingiu o limite de uso",
-        "saldo" => "acabou o saldo da conta do DeepSeek",
+        "saldo" => "acabou o saldo da conta do {}",
         "rede" => "sem resposta da internet",
-        "modelo" => "o modelo do Gemini não está disponível",
+        "modelo" => "o modelo do {} não está disponível",
         _ if e.starts_with("http") => "o servidor do {} está ocupado ou fora do ar",
         _ => "a resposta veio num formato inesperado",
     };
@@ -387,6 +385,8 @@ fn key_row(ui: &mut Ui, app: &mut App, x: f32, y: f32, lw: f32, ai: Ai) {
     let (label, saved, get, page) = match ai {
         Ai::Gemini => ("Chave do Gemini", "Chave do Gemini guardada", "Pegar uma chave grátis", "https://aistudio.google.com/apikey"),
         Ai::DeepSeek => ("Chave do DeepSeek", "Chave do DeepSeek guardada", "Pegar uma chave", "https://platform.deepseek.com/api_keys"),
+        Ai::Claude => ("Chave do Claude", "Chave do Claude guardada", "Pegar uma chave", "https://console.anthropic.com/settings/keys"),
+        Ai::ChatGpt => ("Chave do ChatGPT", "Chave do ChatGPT guardada", "Pegar uma chave", "https://platform.openai.com/api-keys"),
     };
     let id = ai.name();
     ui.c.text(rect(x, y, lw, 36.0), label, 14.0, TEXT2, Align::Left, Weight::Regular);
@@ -394,6 +394,8 @@ fn key_row(ui: &mut Ui, app: &mut App, x: f32, y: f32, lw: f32, ai: Ai) {
         match ai {
             Ai::Gemini => &mut cfg.safe_key,
             Ai::DeepSeek => &mut cfg.safe_ds_key,
+            Ai::Claude => &mut cfg.safe_claude_key,
+            Ai::ChatGpt => &mut cfg.safe_gpt_key,
         }
     }
     let has = !key(&mut app.cfg, ai).trim().is_empty();
@@ -439,26 +441,33 @@ fn options(ui: &mut Ui, app: &mut App, x: f32, y0: f32, w: f32) -> f32 {
     }
     y += 50.0;
     ui.c.text(rect(x, y, lw, 36.0), "Pesquisar com", 14.0, TEXT2, Align::Left, Weight::Regular);
-    let mut sel = app.cfg.safe_ai.min(2) as usize;
-    if ui.segment("su-ai", x + lw, y, 36.0, &AI_NAMES.map(|s| tr(s).into_owned()).iter().map(String::as_str).collect::<Vec<_>>(), &mut sel) {
-        app.cfg.safe_ai = sel as u8;
-        app.cfg.save();
+    let mut cx = x + lw;
+    for ai in safeupd::ALL {
+        let name = if ai == Ai::Claude { "Claude (Haiku)" } else { ai.name() };
+        let cw = measure(&tr(name), 14.0, Weight::Regular, None).0 + 48.0;
+        let mut on = app.cfg.safe_ais & ai.bit() != 0;
+        if ui.check(&format!("su-ai-{}", ai.name()), rect(cx, y, cw, 36.0), name, &mut on) {
+            app.cfg.safe_ais ^= ai.bit();
+            app.cfg.save();
+        }
+        cx += cw;
     }
     y += 44.0;
-    for ai in [Ai::Gemini, Ai::DeepSeek] {
-        if app.cfg.safe_ai == 2 || app.cfg.safe_ai == ai as u8 {
+    for ai in safeupd::ALL {
+        if app.cfg.safe_ais & ai.bit() != 0 {
             key_row(ui, app, x, y, lw, ai);
             y += 42.0;
         }
     }
-    let s = match (app.cfg.safe_ai, keys(&app.cfg).len()) {
-        (_, 0) => "Sem chave, o veredito usa só as fontes oficiais: os problemas conhecidos da Microsoft e os da NVIDIA nas notas da versão.",
-        (2, 2) => "Os dois pesquisam ao mesmo tempo e o Prisma junta os resultados: os problemas das duas listas sem repetir, a média da estimativa, e só recomenda instalar se os dois recomendarem. Se um falhar, vale o do outro.",
-        (2, _) => "Só uma das chaves está guardada: a pesquisa usa só essa IA.",
-        (1, _) => "Chave guardada. O DeepSeek pesquisa os relatos com a busca própria (megathreads do r/nvidia e do r/Windows11, fórum da NVIDIA, Guru3D e sites de notícias) e dá o veredito. Ele não tem cota grátis: cada pesquisa gasta um pouco do saldo da conta.",
-        _ => "Chave guardada. O Gemini pesquisa os relatos com a busca do Google (megathreads do r/nvidia e do r/Windows11, fórum da NVIDIA, Guru3D e sites de notícias) e dá o veredito. A cota grátis passa de 500 pesquisas por dia.",
+    let keys = keys(&app.cfg);
+    let s = match keys.as_slice() {
+        [] => tr("Sem chave, o veredito usa só as fontes oficiais: os problemas conhecidos da Microsoft e os da NVIDIA nas notas da versão.").into_owned(),
+        [_] if app.cfg.safe_ais.count_ones() > 1 => tr("Só uma das IAs marcadas tem chave: a pesquisa usa só ela.").into_owned(),
+        [(Ai::Gemini, _)] => tr("Chave guardada. O Gemini pesquisa os relatos com a busca do Google (megathreads do r/nvidia e do r/Windows11, fórum da NVIDIA, Guru3D e sites de notícias) e dá o veredito. A cota grátis passa de 500 pesquisas por dia.").into_owned(),
+        [(ai, _)] => tr("Chave guardada. O {} pesquisa os relatos com a busca própria (megathreads do r/nvidia e do r/Windows11, fórum da NVIDIA, Guru3D e sites de notícias) e dá o veredito. Ele não tem cota grátis: cada pesquisa gasta um pouco do saldo da conta.").replace("{}", ai.name()),
+        _ => tr("As IAs marcadas pesquisam ao mesmo tempo e o Prisma junta os resultados: os problemas de todas as listas sem repetir, a média da estimativa, e só recomenda instalar se todas recomendarem. Se uma falhar, valem as outras. Só o Gemini é grátis: as outras gastam um pouco do saldo da conta a cada pesquisa.").into_owned(),
     };
-    y += para(ui, x + lw, y, w - lw, s, 12.0, MUTED) + 14.0;
+    y += para(ui, x + lw, y, w - lw, &s, 12.0, MUTED) + 14.0;
     let mut on = app.su.policy;
     let label = "Avisar antes de baixar atualizações do Windows e não trocar o driver de vídeo pelo Windows Update";
     if ui.check("su-policy", rect(x, y, w, 36.0), label, &mut on) && app.su.op.is_none() {

@@ -3018,7 +3018,6 @@ Instalado. Reinicie o PC para terminar	Instalado. Reinicia el PC para terminar
 Ainda rodando depois de 10 minutos; confira no Windows Update	Sigue en marcha después de 10 minutos; revisa en Windows Update
 Não deu certo; veja o registro de ações	No funcionó; mira el registro de acciones
 sem resposta da internet	sin respuesta de internet
-o modelo do Gemini não está disponível	el modelo de Gemini no está disponible
 a resposta veio num formato inesperado	la respuesta llegó en un formato inesperado
 A pesquisa falhou ({}). Tenta de novo em uma hora.	La búsqueda falló ({}). Se intentará de nuevo en una hora.
 Visto em {a}. Veredito depois de {b}, quando já houver relatos.	Visto el {a}. Veredicto después del {b}, cuando ya haya reportes.
@@ -3058,7 +3057,6 @@ Chave guardada. O Gemini pesquisa os relatos com a busca do Google (megathreads 
 Sem chave, o veredito usa só as fontes oficiais: os problemas conhecidos da Microsoft e os da NVIDIA nas notas da versão.	Sin clave, el veredicto usa solo las fuentes oficiales: los problemas conocidos de Microsoft y los de NVIDIA en las notas de la versión.
 a chave do {} foi recusada	la clave de {} fue rechazada
 o {} atingiu o limite de uso	{} alcanzó el límite de uso
-acabou o saldo da conta do DeepSeek	se agotó el saldo de la cuenta de DeepSeek
 o servidor do {} está ocupado ou fora do ar	el servidor de {} está ocupado o fuera de servicio
 Sem chave de IA, o veredito usa só as fontes oficiais acima.	Sin clave de IA, el veredicto usa solo las fuentes oficiales de arriba.
 {a}: falhou ({b})	{a}: falló ({b})
@@ -3068,9 +3066,6 @@ Chave do DeepSeek	Clave de DeepSeek
 Chave do DeepSeek guardada	Clave de DeepSeek guardada
 Pegar uma chave	Conseguir una clave
 Pesquisar com	Buscar con
-Os dois pesquisam ao mesmo tempo e o Prisma junta os resultados: os problemas das duas listas sem repetir, a média da estimativa, e só recomenda instalar se os dois recomendarem. Se um falhar, vale o do outro.	Ambos buscan a la vez y Prisma une los resultados: los problemas de las dos listas sin repetir, el promedio de la estimación, y solo recomienda instalar si los dos lo recomiendan. Si uno falla, vale el del otro.
-Só uma das chaves está guardada: a pesquisa usa só essa IA.	Solo una de las claves está guardada: la búsqueda usa solo esa IA.
-Chave guardada. O DeepSeek pesquisa os relatos com a busca própria (megathreads do r/nvidia e do r/Windows11, fórum da NVIDIA, Guru3D e sites de notícias) e dá o veredito. Ele não tem cota grátis: cada pesquisa gasta um pouco do saldo da conta.	Clave guardada. DeepSeek busca los relatos con su propia búsqueda (megahilos de r/nvidia y r/Windows11, foro de NVIDIA, Guru3D y sitios de noticias) y da el veredicto. No tiene cuota gratis: cada búsqueda gasta un poco del saldo de la cuenta.
 Avisar antes de baixar atualizações do Windows e não trocar o driver de vídeo pelo Windows Update	Avisar antes de descargar actualizaciones de Windows y no cambiar el driver de vídeo mediante Windows Update
 Usa a política do próprio Windows (pede administrador) e desfaz ao desmarcar. O serviço do Windows Update continua ligado.	Usa la política del propio Windows (pide administrador) y se deshace al desmarcar. El servicio de Windows Update sigue activo.
 A % sem problemas é uma estimativa da IA a partir das reclamações nos fóruns: não existe essa estatística oficial.	El % sin problemas es una estimación de la IA a partir de las quejas en los foros: no existe esa estadística oficial.
@@ -3079,3 +3074,13 @@ Procurando...	Buscando...
 Nunca conferido	Nunca comprobado
 Última conferência: {}	Última comprobación: {}
 Página Atualizações	Página Actualizaciones
+acabou o saldo da conta do {}	se agotó el saldo de la cuenta de {}
+o modelo do {} não está disponível	el modelo de {} no está disponible
+Chave do Claude	Clave de Claude
+Chave do Claude guardada	Clave de Claude guardada
+Chave do ChatGPT	Clave de ChatGPT
+Chave do ChatGPT guardada	Clave de ChatGPT guardada
+Claude (Haiku)	Claude (Haiku)
+Só uma das IAs marcadas tem chave: a pesquisa usa só ela.	Solo una de las IA marcadas tiene clave: la búsqueda usa solo esa.
+Chave guardada. O {} pesquisa os relatos com a busca própria (megathreads do r/nvidia e do r/Windows11, fórum da NVIDIA, Guru3D e sites de notícias) e dá o veredito. Ele não tem cota grátis: cada pesquisa gasta um pouco do saldo da conta.	Clave guardada. {} busca los reportes con su propia búsqueda (megathreads de r/nvidia y r/Windows11, foro de NVIDIA, Guru3D y sitios de noticias) y da el veredicto. No tiene cuota gratuita: cada búsqueda gasta un poco del saldo de la cuenta.
+As IAs marcadas pesquisam ao mesmo tempo e o Prisma junta os resultados: os problemas de todas as listas sem repetir, a média da estimativa, e só recomenda instalar se todas recomendarem. Se uma falhar, valem as outras. Só o Gemini é grátis: as outras gastam um pouco do saldo da conta a cada pesquisa.	Las IA marcadas buscan al mismo tiempo y Prisma une los resultados: los problemas de todas las listas sin repetir, el promedio de la estimación, y solo recomienda instalar si todas lo recomiendan. Si una falla, valen las otras. Solo Gemini es gratis: las demás gastan un poco del saldo de la cuenta en cada búsqueda.

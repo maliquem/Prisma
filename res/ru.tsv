@@ -3018,7 +3018,6 @@ Instalado. Reinicie o PC para terminar	Установлено. Перезагр�
 Ainda rodando depois de 10 minutos; confira no Windows Update	Всё ещё выполняется спустя 10 минут; проверьте в Windows Update
 Não deu certo; veja o registro de ações	Не получилось; см. журнал действий
 sem resposta da internet	нет ответа из интернета
-o modelo do Gemini não está disponível	модель Gemini недоступна
 a resposta veio num formato inesperado	ответ пришёл в неожиданном формате
 A pesquisa falhou ({}). Tenta de novo em uma hora.	Поиск не удался ({}). Повторная попытка через час.
 Visto em {a}. Veredito depois de {b}, quando já houver relatos.	Замечено {a}. Вердикт после {b}, когда появятся отзывы.
@@ -3058,7 +3057,6 @@ Chave guardada. O Gemini pesquisa os relatos com a busca do Google (megathreads 
 Sem chave, o veredito usa só as fontes oficiais: os problemas conhecidos da Microsoft e os da NVIDIA nas notas da versão.	Без ключа вердикт опирается только на официальные источники: известные проблемы Microsoft и проблемы NVIDIA из примечаний к выпуску.
 a chave do {} foi recusada	ключ {} отклонён
 o {} atingiu o limite de uso	{} достиг лимита использования
-acabou o saldo da conta do DeepSeek	на счёте DeepSeek закончились средства
 o servidor do {} está ocupado ou fora do ar	сервер {} занят или недоступен
 Sem chave de IA, o veredito usa só as fontes oficiais acima.	Без ключа ИИ вердикт опирается только на официальные источники выше.
 {a}: falhou ({b})	{a}: сбой ({b})
@@ -3068,9 +3066,6 @@ Chave do DeepSeek	Ключ DeepSeek
 Chave do DeepSeek guardada	Ключ DeepSeek сохранён
 Pegar uma chave	Получить ключ
 Pesquisar com	Искать через
-Os dois pesquisam ao mesmo tempo e o Prisma junta os resultados: os problemas das duas listas sem repetir, a média da estimativa, e só recomenda instalar se os dois recomendarem. Se um falhar, vale o do outro.	Оба ищут одновременно, а Prisma объединяет результаты: проблемы из обоих списков без повторов, среднюю оценку, и рекомендует установку, только если рекомендуют оба. Если один сбоит, берётся результат другого.
-Só uma das chaves está guardada: a pesquisa usa só essa IA.	Сохранён только один из ключей: поиск использует только этот ИИ.
-Chave guardada. O DeepSeek pesquisa os relatos com a busca própria (megathreads do r/nvidia e do r/Windows11, fórum da NVIDIA, Guru3D e sites de notícias) e dá o veredito. Ele não tem cota grátis: cada pesquisa gasta um pouco do saldo da conta.	Ключ сохранён. DeepSeek ищет отзывы собственным поиском (мегатреды r/nvidia и r/Windows11, форум NVIDIA, Guru3D и новостные сайты) и выносит вердикт. Бесплатной квоты нет: каждый поиск тратит часть баланса счёта.
 Avisar antes de baixar atualizações do Windows e não trocar o driver de vídeo pelo Windows Update	Предупреждать перед загрузкой обновлений Windows и не менять видеодрайвер через Windows Update
 Usa a política do próprio Windows (pede administrador) e desfaz ao desmarcar. O serviço do Windows Update continua ligado.	Использует собственную политику Windows (нужны права администратора) и отменяется при снятии галочки. Служба Windows Update остаётся включённой.
 A % sem problemas é uma estimativa da IA a partir das reclamações nos fóruns: não existe essa estatística oficial.	Процент без проблем — это оценка ИИ по жалобам на форумах: официальной статистики нет.
@@ -3079,3 +3074,13 @@ Procurando...	Поиск...
 Nunca conferido	Никогда не проверялось
 Última conferência: {}	Последняя проверка: {}
 Página Atualizações	Страница «Обновления»
+acabou o saldo da conta do {}	на счёте {} закончились средства
+o modelo do {} não está disponível	модель {} недоступна
+Chave do Claude	Ключ Claude
+Chave do Claude guardada	Ключ Claude сохранён
+Chave do ChatGPT	Ключ ChatGPT
+Chave do ChatGPT guardada	Ключ ChatGPT сохранён
+Claude (Haiku)	Claude (Haiku)
+Só uma das IAs marcadas tem chave: a pesquisa usa só ela.	Ключ есть только у одного из выбранных ИИ: поиск использует только его.
+Chave guardada. O {} pesquisa os relatos com a busca própria (megathreads do r/nvidia e do r/Windows11, fórum da NVIDIA, Guru3D e sites de notícias) e dá o veredito. Ele não tem cota grátis: cada pesquisa gasta um pouco do saldo da conta.	Ключ сохранён. {} ищет отзывы через собственный поиск (мегатемы r/nvidia и r/Windows11, форум NVIDIA, Guru3D и новостные сайты) и выносит вердикт. Бесплатной квоты нет: каждый поиск расходует немного средств на счёте.
+As IAs marcadas pesquisam ao mesmo tempo e o Prisma junta os resultados: os problemas de todas as listas sem repetir, a média da estimativa, e só recomenda instalar se todas recomendarem. Se uma falhar, valem as outras. Só o Gemini é grátis: as outras gastam um pouco do saldo da conta a cada pesquisa.	Выбранные ИИ ищут одновременно, а Prisma объединяет результаты: проблемы из всех списков без повторов, среднее значение оценки, и рекомендует установку, только если её рекомендуют все. Если один не справится, используются остальные. Бесплатен только Gemini: остальные расходуют немного средств на счёте при каждом поиске.
