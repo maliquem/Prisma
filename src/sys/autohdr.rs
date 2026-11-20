@@ -120,7 +120,11 @@ fn run(exe: &str, args: &[String]) {
     let cfg = crate::config::Config::load();
     let line = join(args);
     if let Some(mut hdr) = game_hdr(&cfg, &name) {
-        if let Ok(l) = crate::sys::inject::Limiter::launch(exe, &line, &hdr) {
+        let launched = crate::sys::inject::Limiter::launch(exe, &line, &hdr);
+        if let Err(e) = &launched {
+            crate::config::log(&format!("HDR do Prisma: {name} abre sem ele ({e})"));
+        }
+        if let Ok(l) = launched {
             let path = crate::config::config_path();
             let mut seen = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
             while l.exit_code().is_none() {

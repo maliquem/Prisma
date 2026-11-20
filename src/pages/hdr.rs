@@ -336,10 +336,10 @@ fn games_height(app: &App) -> f32 {
     80.0 + app.cfg.hdr_games.iter().map(|g| GAME_ROW + if g.mode == autohdr::PRISMA { PRISMA_H } else { 0.0 }).sum::<f32>()
 }
 
-/// Anti-cheat lido uma vez por jogo: a busca olha a pasta inteira.
-fn has_anti_cheat(path: &str) -> bool {
-    thread_local!(static SEEN: std::cell::RefCell<std::collections::HashMap<String, bool>> = Default::default());
-    SEEN.with(|m| *m.borrow_mut().entry(path.to_string()).or_insert_with(|| crate::meter::anti_cheat(path)))
+/// Anti-cheat e jogo da Steam lidos uma vez por jogo: as buscas olham pastas inteiras.
+fn game_facts(path: &str) -> (bool, Option<String>) {
+    thread_local!(static SEEN: std::cell::RefCell<std::collections::HashMap<String, (bool, Option<String>)>> = Default::default());
+    SEEN.with(|m| m.borrow_mut().entry(path.to_string()).or_insert_with(|| (crate::meter::anti_cheat(path), crate::sys::stores::steam_app_id(std::path::Path::new(path)))).clone())
 }
 
 fn knob(h: &mut Hdr, i: usize) -> &mut f32 {
@@ -399,12 +399,12 @@ fn games_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen) {
             continue;
         }
         let p = rect(r.x + 52.0, y, r.w - 68.0, PRISMA_H - 12.0);
-        if has_anti_cheat(&g.path) {
+        let (anti_cheat, steam) = game_facts(&g.path);
+        if anti_cheat {
             ui.c.text_wrap(rect(p.x, p.y, p.w, 40.0), "Bloqueado: este jogo tem anti-cheat, e o HDR do Prisma precisa entrar no jogo. Escolha Auto HDR ou RTX HDR.", 13.0, WARN, Weight::Regular);
             y += PRISMA_H;
             continue;
         }
-        let steam = crate::sys::stores::steam_app_id(std::path::Path::new(&g.path));
         let how = if steam.is_some() {
             "Jogo da Steam: cole a linha abaixo em Propriedades > Opções de inicialização. Depois é só abrir pela Steam."
         } else {
@@ -420,7 +420,7 @@ fn games_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen) {
         if ui.button(&format!("hdr-go{i}"), rect(p.right() - 150.0, p.y + 38.0, 150.0, 34.0), if steam.is_some() { "Abrir pela Steam" } else { "Abrir com HDR" }, true) {
             launch = Some((g.path.clone(), steam));
         }
-        let mut h = g.prisma.unwrap_or(calibrated);
+        let (mut h, mut moved) = (g.prisma.unwrap_or(calibrated), false);
         let cw = (p.w - 24.0) / 2.0;
         for (k, (name, lo, hi)) in KNOBS.into_iter().enumerate() {
             let kx = p.x + (k % 2) as f32 * (cw + 24.0);
@@ -430,24 +430,29 @@ fn games_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen) {
             let mut t = ((*v - lo) / (hi - lo)).clamp(0.0, 1.0);
             if ui.slider(&format!("hdr-k{i}-{k}"), rect(kx + 150.0, ky + 3.0, cw - 250.0, 24.0), &mut t) {
                 *v = lo + t * (hi - lo);
-                tuned = true;
+                moved = true;
             }
             ui.c.text(rect(kx + cw - 92.0, ky, 92.0, 30.0), &knob_text(k, *v), 13.0, TEXT, Align::Right, Weight::Regular);
         }
         if ui.button(&format!("hdr-gr{i}"), rect(p.x, p.y + 236.0, 200.0, 34.0), "Voltar à calibração", false) {
             h = calibrated;
-            tuned = true;
+            moved = true;
         }
-        if tuned && g.prisma != Some(h) {
+        if moved && g.prisma != Some(h) {
             app.cfg.hdr_games[i].prisma = Some(h);
+            tuned = true;
         }
         y += PRISMA_H;
     }
-    // Ao vivo: quem abriu o jogo relê o config quando ele muda. No arraste, grava a cada 250 ms.
-    thread_local!(static SAVED: std::cell::Cell<Option<std::time::Instant>> = const { std::cell::Cell::new(None) });
-    if tuned && SAVED.get().is_none_or(|t| t.elapsed().as_millis() >= 250 || !ui.s.down) {
-        SAVED.set(Some(std::time::Instant::now()));
+    // Ao vivo: quem abriu o jogo relê o config quando ele muda. No arraste, grava a cada 250 ms, e o
+    // último valor grava ao soltar mesmo que o arraste tenha parado antes disso.
+    thread_local!(static SAVED: std::cell::Cell<(Option<std::time::Instant>, bool)> = const { std::cell::Cell::new((None, false)) });
+    let (last, pending) = SAVED.get();
+    if (tuned || pending) && last.is_none_or(|t| t.elapsed().as_millis() >= 250 || !ui.s.down) {
+        SAVED.set((Some(std::time::Instant::now()), false));
         app.cfg.save();
+    } else if tuned {
+        SAVED.set((last, true));
     }
     if let Some((path, steam)) = launch {
         let ok = match steam {

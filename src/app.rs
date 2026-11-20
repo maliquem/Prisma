@@ -848,8 +848,7 @@ pub fn start(background: bool) {
                 let (out, pid) = v.split_once('|').unwrap();
                 let stats = crate::sys::inject::Limiter::attach(pid.parse().unwrap()).and_then(|l| l.hdr_stats());
                 let nits = crate::capture::grab(crate::capture::cursor_monitor()).ok().and_then(|f| f.half.as_ref().map(|h| crate::capture::half_nits(h)));
-                let _ = std::fs::write(out, format!("cadeias, quadros, erro {stats:?}; nits maior, média, p99 {nits:?}
-"));
+                let _ = std::fs::write(out, format!("cadeias, quadros, erro {stats:?}; nits maior, média, p99 {nits:?}\n"));
                 std::process::exit(0);
             }
             // Saída, jogo e arquivo de ajustes: --test-hdrgame=saida.txt|C:\jogo.exe|ajustes.txt
