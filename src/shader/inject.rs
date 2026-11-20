@@ -18,19 +18,6 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 
 use super::{held, menu, Press};
 
-#[cfg(debug_assertions)]
-const DLL: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/shader-hook/debug/prisma_shader_hook.dll"));
-#[cfg(not(debug_assertions))]
-const DLL: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/shader-hook/release/prisma_shader_hook.dll"));
-/// Jogos de 32 bits: a mesma DLL em i686 e o ajudante que a prende no jogo.
-#[cfg(debug_assertions)]
-const DLL32: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/shader-hook/i686-pc-windows-msvc/debug/prisma_shader_hook.dll"));
-#[cfg(not(debug_assertions))]
-const DLL32: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/shader-hook/i686-pc-windows-msvc/release/prisma_shader_hook.dll"));
-#[cfg(debug_assertions)]
-const HELPER32: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/shader-hook/i686-pc-windows-msvc/debug/prisma_hook32.exe"));
-#[cfg(not(debug_assertions))]
-const HELPER32: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/shader-hook/i686-pc-windows-msvc/release/prisma_hook32.exe"));
 /// Tempo para a DLL carregar e se prender.
 const WAIT_SECS: u64 = 8;
 /// Tempo para o jogo carregar a API de vídeo depois de abrir a janela.
@@ -51,7 +38,7 @@ struct Link {
 
 impl Link {
     /// Abre a memória do jogo (ou cria), passa o perfil e a janela, e carrega a DLL se ela ainda não está lá.
-    fn attach(pid: u32, game: HWND, path: &Path, wow: bool) -> Res<Self> {
+    fn attach(pid: u32, game: HWND, path: &Path, wow: bool, files: &[Vec<u8>; 3]) -> Res<Self> {
         unsafe {
             let map = CreateFileMappingW(INVALID_HANDLE_VALUE, None, PAGE_READWRITE, 0, std::mem::size_of::<Shared>() as u32, &HSTRING::from(map_name(pid)))?;
             let view = MapViewOfFile(map, FILE_MAP_ALL_ACCESS, 0, 0, 0);
@@ -70,9 +57,9 @@ impl Link {
                 eprintln!("shader: a DLL já está no jogo, reconectando");
             } else {
                 let hook = if wow {
-                    crate::sys::inject::load_wow(pid, DLL32, HELPER32, "shaders", "prisma_shader_hook").map(Hook::Helper)
+                    crate::sys::inject::load_wow(pid, &files[1], &files[2], "shaders", "prisma_shader_hook").map(Hook::Helper)
                 } else {
-                    crate::sys::inject::load(pid, DLL, "shaders", "prisma_shader_hook").map(Hook::Own)
+                    crate::sys::inject::load(pid, &files[0], "shaders", "prisma_shader_hook").map(Hook::Own)
                 };
                 *me.hook.borrow_mut() = Some(hook.ok_or("a DLL não entrou no jogo")?);
             }
@@ -133,20 +120,20 @@ fn exit_code(process: HANDLE) -> Option<u32> {
 }
 
 /// Roda o modo Injeção até o jogo fechar (`Ok(true)`) ou até ele não servir (`Ok(false)`: o perfil já voltou
-/// para Por cima e quem chamou segue com a janela por cima).
-pub(super) fn run(path: &Path, game: HWND) -> Res<bool> {
+/// para Por cima e quem chamou segue com a janela por cima). `files`: os de `files::load`.
+pub(super) fn run(path: &Path, game: HWND, files: &[Vec<u8>; 3]) -> Res<bool> {
     // A DLL lê o perfil de dentro do jogo, com outra pasta atual.
     let path = &std::path::absolute(path)?;
     let pid = crate::sys::procs::window_pid(game);
     let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)? };
-    let r = run_in(path, game, pid, process);
+    let r = run_in(path, game, pid, process, files);
     unsafe {
         let _ = CloseHandle(process);
     }
     r
 }
 
-fn run_in(path: &Path, game: HWND, pid: u32, process: HANDLE) -> Res<bool> {
+fn run_in(path: &Path, game: HWND, pid: u32, process: HANDLE, files: &[Vec<u8>; 3]) -> Res<bool> {
     let d = crate::capture::d3d()?;
     // Sem cadeia aqui: o motor só acompanha o perfil para o menu; quem desenha é a DLL.
     let mut eng = Engine::open(path, &d.dev, true)?;
@@ -165,7 +152,7 @@ fn run_in(path: &Path, game: HWND, pid: u32, process: HANDLE) -> Res<bool> {
     if !api.is_empty() && !api_supported(&api) {
         return to_overlay(&mut eng, &d.dev, "api", &api);
     }
-    let link = match Link::attach(pid, game, &eng.path, wow) {
+    let link = match Link::attach(pid, game, &eng.path, wow, files) {
         Ok(l) => l,
         Err(e) => return to_overlay(&mut eng, &d.dev, "dll", &e.to_string()),
     };

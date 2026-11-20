@@ -62,8 +62,12 @@ struct Dl {
     total: usize,
     extracting: bool,
     err: bool,
+    /// Motivo da falha, no download do modo Injeção.
+    why: &'static str,
 }
-static DL: Mutex<Dl> = Mutex::new(Dl { on: false, got: 0, total: 0, extracting: false, err: false });
+static DL: Mutex<Dl> = Mutex::new(Dl { on: false, got: 0, total: 0, extracting: false, err: false, why: "" });
+/// Download do modo Injeção (`shader::files`).
+static INJ: Mutex<Dl> = Mutex::new(Dl { on: false, got: 0, total: 0, extracting: false, err: false, why: "" });
 
 /// Motores rodando: perfil, processo e se já terminou com o jogo ainda aberto (não volta a iniciar até o
 /// jogo fechar).
@@ -394,6 +398,11 @@ pub fn tick(app: &mut App) {
         }
     }
     drop(runs);
+    // Depois de uma atualização do Prisma, quem já tinha baixado a Injeção recebe a desta versão sozinho.
+    static STALE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if !STALE.swap(true, std::sync::atomic::Ordering::Relaxed) && crate::shader::files::stale() {
+        download_inject();
+    }
     if app.page != Page::Shaders || app.main.is_none() {
         return;
     }
@@ -506,6 +515,36 @@ fn fetch(lib: &Path) -> Option<()> {
     });
     let _ = std::fs::remove_dir_all(&tmp);
     res
+}
+
+/// Baixa o modo Injeção desta versão e reabre os motores, que escolhem o modo ao abrir.
+fn download_inject() {
+    {
+        let mut d = INJ.lock().unwrap_or_else(|e| e.into_inner());
+        if d.on {
+            return;
+        }
+        *d = Dl { on: true, ..Dl::default() };
+    }
+    std::thread::spawn(|| {
+        let r = crate::shader::files::download(|got, total| {
+            let mut d = INJ.lock().unwrap_or_else(|e| e.into_inner());
+            d.got = got;
+            d.total = total;
+        });
+        if let Err(e) = r {
+            crate::config::log(&format!("shader: download do modo Injeção falhou: {e}"));
+        }
+        {
+            let mut d = INJ.lock().unwrap_or_else(|e| e.into_inner());
+            d.on = false;
+            d.err = r.is_err();
+            d.why = r.err().unwrap_or("");
+        }
+        if r.is_ok() {
+            restart();
+        }
+    });
 }
 
 /// Presets da biblioteca: os .slangp e os .slang fora das pastas `shaders\` (que são as passadas dos presets).
@@ -863,13 +902,39 @@ fn left_card(ui: &mut Ui, app: &mut App, s: &mut St, r: Rect) {
     }
     y += 36.0;
     let how = if can && p.inject {
-        "Dentro do jogo, na hora de mostrar o quadro: sem o quadro de atraso e sem janela por cima. DX9 a 12, OpenGL e Vulkan; HDR fica sem efeito."
+        "Dentro do jogo, ao mostrar o quadro: atraso menor. Não pega em todo jogo (só DX9 a 12, OpenGL e Vulkan) nem com anti-cheat; HDR fica sem efeito."
     } else {
-        "Janela por cima do jogo, capturando a imagem. DX9 a 12, Vulkan e OpenGL."
+        "Janela por cima do jogo, capturando a imagem: pega em qualquer janela. A Injeção tem atraso menor, mas não pega em todo jogo nem com anti-cheat."
     };
     // Três linhas: o texto da Injeção quebra em três, e mais ainda traduzido.
     ui.c.text_wrap(rect(ix + lw, y, iw - lw, 50.0), how, 12.0, MUTED, Weight::Regular);
     y += 56.0;
+    // A Injeção não vem no exe: sem os arquivos desta versão o motor fica Por cima, e aqui se baixa.
+    if can && p.inject && !crate::shader::files::ready() {
+        let (on, got, total, err, why) = {
+            let d = INJ.lock().unwrap_or_else(|e| e.into_inner());
+            (d.on, d.got, d.total, d.err, d.why)
+        };
+        let bw = 200.0;
+        let text = if on {
+            crate::i18n::tr("Baixando o modo Injeção: {} MB").replace("{}", &format!("{:.1}", got as f32 / 1048576.0))
+        } else if err {
+            crate::i18n::tr(why).into_owned()
+        } else {
+            crate::i18n::tr("O modo Injeção não está baixado: este jogo usa Por cima até baixar.").into_owned()
+        };
+        ui.c.text_wrap(rect(ix, y, iw - bw - 12.0, 36.0), &text, 12.0, if on { MUTED } else { WARN }, Weight::Regular);
+        if ui.button_ex("shd-inj-dl", rect(ix + iw - bw, y, bw, 32.0), "Baixar o modo Injeção", true, !on) {
+            download_inject();
+        }
+        if on {
+            let bar = rect(ix, y + 38.0, iw, 4.0);
+            ui.c.round(bar, 2.0, BORDER);
+            let f = if total > 0 { got as f32 / total as f32 } else { 0.5 };
+            ui.c.round(rect(bar.x, bar.y, bar.w * f.min(1.0), 4.0), 2.0, ACCENT);
+        }
+        y += 48.0;
+    }
 
     ui.c.text(rect(ix, y, lw, 36.0), "Resolução de entrada", 14.0, TEXT, Align::Left, Weight::Regular);
     let mut opts: Vec<String> = INPUTS.iter().map(|o| crate::i18n::tr(o.1).into_owned()).collect();

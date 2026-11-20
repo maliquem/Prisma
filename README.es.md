@@ -105,7 +105,7 @@ En una foto: Enter o Ctrl + C copia, Ctrl + S guarda, Ctrl + Z deshace y Esc can
 ## Límites
 
 - Un juego en pantalla completa exclusiva debe estar en modo ventana antes de usar el Fullscreenizer.
-- Los Shaders no se aplican a juegos con antitrampas ni en pantalla completa exclusiva (usa una ventana sin bordes o el Fullscreenizer), un monitor HDR se convierte a SDR antes del filtro y el modo de inyección cubre DX9 a 12, OpenGL y Vulkan, en 32 y 64 bits.
+- Los Shaders no se aplican a juegos con antitrampas ni en pantalla completa exclusiva (usa una ventana sin bordes o el Fullscreenizer), un monitor HDR se convierte a SDR antes del filtro y el modo de inyección cubre DX9 a 12, OpenGL y Vulkan, en 32 y 64 bits; se descarga aparte desde la página Shaders (firmado, de la misma versión que Prisma).
 - No uses la inyección en juegos en línea. La detección de antitrampas reconoce archivos y títulos conocidos, y no encontrar nada no prueba que un juego no tenga. Puedes elegir Driver como método para cualquier juego en la página Medidor.
 - Los juegos DirectX 9 y Vulkan usan el límite del driver, que se aplica al reabrir.
 - No hay lectura de temperatura ni consumo de la CPU, porque necesitan un driver de núcleo.

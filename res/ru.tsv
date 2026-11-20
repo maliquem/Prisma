@@ -2848,9 +2848,15 @@ O nº 1 roda primeiro, sobre a imagem do jogo; o último fica por cima. Cada lin
 Como aplicar	Как применять
 Por cima	Поверх
 Bloqueado: este jogo tem anti-cheat	Заблокировано: в этой игре есть античит
-Janela por cima do jogo, capturando a imagem. DX9 a 12, Vulkan e OpenGL.	Окно поверх игры, захватывающее изображение. DX9–12, Vulkan и OpenGL.
+Janela por cima do jogo, capturando a imagem: pega em qualquer janela. A Injeção tem atraso menor, mas não pega em todo jogo nem com anti-cheat.	Окно поверх игры, захватывающее изображение: работает с любым окном. У внедрения задержка меньше, но оно работает не во всех играх и не с античитом.
 Não suportado neste jogo: a injeção cobre DX9 a 12, OpenGL e Vulkan	Не поддерживается в этой игре: внедрение работает с DX9–12, OpenGL и Vulkan
-Dentro do jogo, na hora de mostrar o quadro: sem o quadro de atraso e sem janela por cima. DX9 a 12, OpenGL e Vulkan; HDR fica sem efeito.	Внутри игры, в момент показа кадра: без кадра задержки и без окна поверх. DX9–12, OpenGL и Vulkan; HDR без эффекта.
+Dentro do jogo, ao mostrar o quadro: atraso menor. Não pega em todo jogo (só DX9 a 12, OpenGL e Vulkan) nem com anti-cheat; HDR fica sem efeito.	Внутри игры, при показе кадра: меньше задержка. Работает не во всех играх (только DX9–12, OpenGL и Vulkan) и не с античитом; HDR без эффекта.
+Baixando o modo Injeção: {} MB	Загрузка режима «Внедрение»: {} МБ
+O modo Injeção não está baixado: este jogo usa Por cima até baixar.	Режим «Внедрение» не загружен: до загрузки эта игра использует «Поверх».
+Baixar o modo Injeção	Скачать режим «Внедрение»
+O arquivo baixado não tem a assinatura do Prisma. Nada foi alterado.	У скачанного файла нет подписи Prisma. Ничего не изменено.
+Não consegui baixar do GitHub. Tente de novo.	Не удалось скачать с GitHub. Повторите попытку.
+Esta versão do Prisma ainda não tem o modo Injeção publicado no GitHub.	Для этой версии Prisma режим «Внедрение» ещё не опубликован на GitHub.
 Resolução de entrada	Входное разрешение
 Original	Оригинальное
 240 linhas	240 строк
