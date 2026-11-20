@@ -121,6 +121,74 @@ pub fn rtv(dev: &ID3D11Device, t: &ID3D11Texture2D) -> Res<ID3D11RenderTargetVie
     Ok(v.unwrap())
 }
 
+/// Tempo de GPU da cadeia por consultas de carimbo: lidas alguns quadros depois, sem esperar a GPU.
+pub struct GpuTimer {
+    slots: Vec<[ID3D11Query; 3]>,
+    used: Vec<bool>,
+}
+
+impl GpuTimer {
+    pub fn new(dev: &ID3D11Device) -> Res<Self> {
+        let make = |q| -> Res<ID3D11Query> {
+            let mut out = None;
+            unsafe { dev.CreateQuery(&D3D11_QUERY_DESC { Query: q, MiscFlags: 0 }, Some(&mut out))? };
+            Ok(out.ok_or("sem consulta")?)
+        };
+        let mut slots = Vec::new();
+        for _ in 0..4 {
+            slots.push([make(D3D11_QUERY_TIMESTAMP_DISJOINT)?, make(D3D11_QUERY_TIMESTAMP)?, make(D3D11_QUERY_TIMESTAMP)?]);
+        }
+        Ok(Self { used: vec![false; slots.len()], slots })
+    }
+
+    /// Lê o resultado antigo da vaga (se pronto), em ms, e começa a medir nela.
+    pub fn begin(&mut self, ctx: &ID3D11DeviceContext, n: usize) -> Option<f64> {
+        let i = n % self.slots.len();
+        let old = if self.used[i] { self.read(ctx, i) } else { None };
+        let [dis, a, _] = &self.slots[i];
+        unsafe {
+            ctx.Begin(dis);
+            ctx.End(a);
+        }
+        self.used[i] = true;
+        old
+    }
+
+    pub fn end(&self, ctx: &ID3D11DeviceContext, n: usize) {
+        let [dis, _, b] = &self.slots[n % self.slots.len()];
+        unsafe {
+            ctx.End(b);
+            ctx.End(dis);
+        }
+    }
+
+    // O GetData do windows-rs junta S_FALSE (ainda não pronto) com S_OK: a vtable devolve o HRESULT cru.
+    fn get<T: Default>(ctx: &ID3D11DeviceContext, q: &ID3D11Query) -> Option<T> {
+        let mut v = T::default();
+        let hr = unsafe {
+            (Interface::vtable(ctx).GetData)(Interface::as_raw(ctx), Interface::as_raw(q), &mut v as *mut T as *mut _, std::mem::size_of::<T>() as u32, D3D11_ASYNC_GETDATA_DONOTFLUSH.0 as u32)
+        };
+        (hr == windows::Win32::Foundation::S_OK).then_some(v)
+    }
+
+    fn read(&self, ctx: &ID3D11DeviceContext, i: usize) -> Option<f64> {
+        let [dis, a, b] = &self.slots[i];
+        let d: D3D11_QUERY_DATA_TIMESTAMP_DISJOINT = Self::get(ctx, dis)?;
+        let (t0, t1): (u64, u64) = (Self::get(ctx, a)?, Self::get(ctx, b)?);
+        (!d.Disjoint.as_bool() && d.Frequency > 0).then(|| (t1.saturating_sub(t0)) as f64 * 1000.0 / d.Frequency as f64)
+    }
+}
+
+/// Média que anda (o menu mostra o consumo sem tremer); `prev` 0 começa do valor novo.
+pub fn ema(prev: f64, x: f64) -> f64 {
+    if prev <= 0.0 { x } else { prev * 0.9 + x * 0.1 }
+}
+
+/// Parte da GPU que a cadeia usa, em %: o tempo dela dividido pelo intervalo entre quadros (até 100).
+pub fn gpu_share(ms: f64, frame_ms: f64) -> Option<f64> {
+    (ms > 0.0 && frame_ms > 0.0).then(|| (ms / frame_ms * 100.0).min(100.0))
+}
+
 /// Um desenho de tela inteira com um pixel shader nosso e 4 constantes, amostragem por ponto.
 pub struct FullPass {
     vs: ID3D11VertexShader,
@@ -170,5 +238,20 @@ impl FullPass {
             ctx.OMSetRenderTargets(None, None);
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn consumo_da_gpu() {
+        assert_eq!(gpu_share(2.0, 16.0), Some(12.5));
+        assert_eq!(gpu_share(40.0, 16.0), Some(100.0));
+        assert_eq!(gpu_share(0.0, 16.0), None);
+        assert_eq!(gpu_share(2.0, 0.0), None);
+        assert_eq!(ema(0.0, 3.0), 3.0);
+        assert!((ema(2.0, 12.0) - 3.0).abs() < 1e-9);
     }
 }

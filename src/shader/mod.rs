@@ -10,7 +10,7 @@ mod menu;
 mod preview;
 
 pub use prisma_shader::chain::slangp;
-use prisma_shader::{chain, rtv, texture, FullPass, Res};
+use prisma_shader::{chain, ema, rtv, texture, FullPass, GpuTimer, Res};
 
 use std::time::Instant;
 
@@ -81,64 +81,6 @@ fn qpc_100ns() -> i64 {
         let _ = QueryPerformanceFrequency(&mut f);
     }
     (t as i128 * 10_000_000 / f.max(1) as i128) as i64
-}
-
-/// Tempo de GPU do preset por consultas de carimbo: lidas alguns quadros depois, sem esperar a GPU.
-struct GpuTimer {
-    slots: Vec<[ID3D11Query; 3]>,
-    used: Vec<bool>,
-}
-
-impl GpuTimer {
-    fn new(dev: &ID3D11Device) -> Res<Self> {
-        let make = |q| -> Res<ID3D11Query> {
-            let mut out = None;
-            unsafe { dev.CreateQuery(&D3D11_QUERY_DESC { Query: q, MiscFlags: 0 }, Some(&mut out))? };
-            Ok(out.unwrap())
-        };
-        let mut slots = Vec::new();
-        for _ in 0..4 {
-            slots.push([make(D3D11_QUERY_TIMESTAMP_DISJOINT)?, make(D3D11_QUERY_TIMESTAMP)?, make(D3D11_QUERY_TIMESTAMP)?]);
-        }
-        Ok(Self { used: vec![false; slots.len()], slots })
-    }
-
-    /// Lê o resultado antigo da vaga (se pronto) e começa a medir nela.
-    fn begin(&mut self, ctx: &ID3D11DeviceContext, n: usize) -> Option<f64> {
-        let i = n % self.slots.len();
-        let old = if self.used[i] { self.read(ctx, i) } else { None };
-        let [dis, a, _] = &self.slots[i];
-        unsafe {
-            ctx.Begin(dis);
-            ctx.End(a);
-        }
-        self.used[i] = true;
-        old
-    }
-
-    fn end(&self, ctx: &ID3D11DeviceContext, n: usize) {
-        let [dis, _, b] = &self.slots[n % self.slots.len()];
-        unsafe {
-            ctx.End(b);
-            ctx.End(dis);
-        }
-    }
-
-    // O GetData do windows-rs junta S_FALSE (ainda não pronto) com S_OK: a vtable devolve o HRESULT cru.
-    fn get<T: Default>(ctx: &ID3D11DeviceContext, q: &ID3D11Query) -> Option<T> {
-        let mut v = T::default();
-        let hr = unsafe {
-            (Interface::vtable(ctx).GetData)(Interface::as_raw(ctx), Interface::as_raw(q), &mut v as *mut T as *mut _, std::mem::size_of::<T>() as u32, D3D11_ASYNC_GETDATA_DONOTFLUSH.0 as u32)
-        };
-        (hr == S_OK).then_some(v)
-    }
-
-    fn read(&self, ctx: &ID3D11DeviceContext, i: usize) -> Option<f64> {
-        let [dis, a, b] = &self.slots[i];
-        let d: D3D11_QUERY_DATA_TIMESTAMP_DISJOINT = Self::get(ctx, dis)?;
-        let (t0, t1): (u64, u64) = (Self::get(ctx, a)?, Self::get(ctx, b)?);
-        (!d.Disjoint.as_bool() && d.Frequency > 0).then(|| (t1.saturating_sub(t0)) as f64 * 1000.0 / d.Frequency as f64)
-    }
 }
 
 fn pct(v: &mut [f64], p: f64) -> f64 {
@@ -325,6 +267,8 @@ fn run(path: &Path) -> Res<()> {
     let (mut gpu, mut lat, mut frames, mut since, mut n) = (Vec::new(), Vec::new(), 0u32, Instant::now(), 0usize);
     let (mut polled, mut record) = (Instant::now(), None);
     let (mut fg, mut menu_key, mut next_key) = (false, Press::default(), Press::default());
+    // Consumo para o menu: ms da cadeia na GPU e intervalo entre quadros, em média.
+    let (mut load, mut presented) = ((0.0, 0.0), None::<Instant>);
 
     let result: Res<()> = (|| loop {
         unsafe {
@@ -356,6 +300,7 @@ fn run(path: &Path) -> Res<()> {
             }
             menu.keys(fg, &mut eng, &d.dev);
             menu.pad(&mut eng, &d.dev);
+            menu.load = Some(load);
             menu.update(fg, client_area(game).map(|c| c.0), &mut eng);
             // `compare` segurado esconde a janela por cima: aparece o jogo sem efeito.
             let visible = fg && eng.profile.on && eng.active() && !held(keys.compare);
@@ -378,6 +323,8 @@ fn run(path: &Path) -> Res<()> {
                 pool_size = content;
             }
             if !visible {
+                // Sem efeito na tela não há consumo: a medida recomeça quando ele volta.
+                (load, presented) = ((0.0, 0.0), None);
                 frame.Close()?;
                 continue;
             }
@@ -414,6 +361,7 @@ fn run(path: &Path) -> Res<()> {
             let out = rtv(&d.dev, &swap.GetBuffer::<ID3D11Texture2D>(0)?)?;
             if let Some(ms) = timer.begin(&d.ctx, n) {
                 gpu.push(ms);
+                load.0 = ema(load.0, ms);
             }
             if let Some(t) = &to_sdr {
                 t.draw(&d.ctx, raw_srv, &rtv(&d.dev, src_tex)?, [0.0, 0.0, w as f32, h as f32], sdr_scale)?;
@@ -422,6 +370,9 @@ fn run(path: &Path) -> Res<()> {
             timer.end(&d.ctx, n);
             let present = if tearing { DXGI_PRESENT_ALLOW_TEARING } else { DXGI_PRESENT(0) };
             swap.Present(0, present).ok()?;
+            if let Some(t) = presented.replace(Instant::now()) {
+                load.1 = ema(load.1, t.elapsed().as_secs_f64() * 1000.0);
+            }
             lat.push((qpc_100ns() - got) as f64 / 10_000.0);
             n += 1;
             frames += 1;

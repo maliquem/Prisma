@@ -2912,8 +2912,10 @@ Biblioteca	Biblioteca
 Biblioteca · {}	Biblioteca · {}
 ligado	activado
 desligado	desactivado
-↑↓ escolher · ←→ mudar · Enter abrir · Esc fechar	↑↓ elegir · ←→ cambiar · Enter abrir · Esc cerrar
-←→ ajustar · Enter padrão · Esc voltar	←→ ajustar · Enter predeterminado · Esc volver
-↑↓ escolher · Enter abrir · Esc voltar	↑↓ elegir · Enter abrir · Esc volver
+↑↓ escolher · ←→ mudar · Enter abrir	↑↓ elegir · ←→ cambiar · Enter abrir
+Ins adicionar passe · Del tirar passe · Backspace fechar	Ins añadir pase · Del quitar pase · Backspace cerrar
+←→ ajustar · Enter padrão · Backspace voltar	←→ ajustar · Enter predeterminado · Backspace volver
+↑↓ escolher · Enter adicionar · Backspace voltar	↑↓ elegir · Enter añadir · Backspace volver
+↑↓ escolher · Enter trocar · Ins adicionar · Backspace voltar	↑↓ elegir · Enter reemplazar · Ins añadir · Backspace volver
 Baixe a biblioteca na página Shaders	Descarga la biblioteca en la página Shaders
 Nenhum preset aqui	Ningún preset aquí

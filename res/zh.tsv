@@ -2912,8 +2912,10 @@ Biblioteca	库
 Biblioteca · {}	库 · {}
 ligado	开
 desligado	关
-↑↓ escolher · ←→ mudar · Enter abrir · Esc fechar	↑↓ 选择 · ←→ 更改 · Enter 打开 · Esc 关闭
-←→ ajustar · Enter padrão · Esc voltar	←→ 调整 · Enter 默认 · Esc 返回
-↑↓ escolher · Enter abrir · Esc voltar	↑↓ 选择 · Enter 打开 · Esc 返回
+↑↓ escolher · ←→ mudar · Enter abrir	↑↓ 选择 · ←→ 更改 · Enter 打开
+Ins adicionar passe · Del tirar passe · Backspace fechar	Ins 添加通道 · Del 移除通道 · Backspace 关闭
+←→ ajustar · Enter padrão · Backspace voltar	←→ 调整 · Enter 默认 · Backspace 返回
+↑↓ escolher · Enter adicionar · Backspace voltar	↑↓ 选择 · Enter 添加 · Backspace 返回
+↑↓ escolher · Enter trocar · Ins adicionar · Backspace voltar	↑↓ 选择 · Enter 替换 · Ins 添加 · Backspace 返回
 Baixe a biblioteca na página Shaders	请在 Shaders 页面下载库
 Nenhum preset aqui	这里没有 preset

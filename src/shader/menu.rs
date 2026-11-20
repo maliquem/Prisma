@@ -1,7 +1,9 @@
 //! Menu dentro do jogo: ligar e desligar, trocar de perfil, escolher um preset (os do jogador em `shaders\` ou
-//! a biblioteca, pasta por pasta), passes com liga e desliga e os parâmetros do passe escolhido. Janela
-//! transparente acima da janela por cima, sem foco: enquanto está aberto, ↑↓←→ Enter Esc viram atalhos globais (soltos ao fechar) e o controle XInput navega (Select+L1 abre e fecha, direcional, A, B).
-//! Cada mudança grava no perfil, então a página do app vê na hora.
+//! a biblioteca, pasta por pasta), passes com liga e desliga, Insert põe um passe e Delete tira, e os parâmetros
+//! do passe escolhido. No título, o consumo da cadeia na GPU (ms e %). Janela transparente acima da janela por
+//! cima, sem foco: enquanto está aberto, ↑↓←→ Enter Backspace Insert Delete viram atalhos globais (soltos ao
+//! fechar; o Esc fica com o jogo) e o controle XInput navega (Select+L1 abre e fecha, direcional, A, B, X põe e
+//! Y tira passe). Cada mudança grava no perfil, então a página do app vê na hora.
 
 use windows::core::w;
 use windows::Win32::Foundation::*;
@@ -16,7 +18,7 @@ use crate::ui::gfx::{self, rect, Align, Weight};
 use crate::ui::layered::{create_overlay, Layered};
 
 const HK_BASE: i32 = 100;
-const NAV: [VIRTUAL_KEY; 6] = [VK_UP, VK_DOWN, VK_LEFT, VK_RIGHT, VK_RETURN, VK_ESCAPE];
+const NAV: [VIRTUAL_KEY; 8] = [VK_UP, VK_DOWN, VK_LEFT, VK_RIGHT, VK_RETURN, VK_BACK, VK_INSERT, VK_DELETE];
 
 #[derive(Clone, Copy, PartialEq)]
 enum Key {
@@ -26,8 +28,10 @@ enum Key {
     Right,
     Ok,
     Back,
+    Add,
+    Remove,
 }
-const KEYS: [Key; 6] = [Key::Up, Key::Down, Key::Left, Key::Right, Key::Ok, Key::Back];
+const KEYS: [Key; 8] = [Key::Up, Key::Down, Key::Left, Key::Right, Key::Ok, Key::Back, Key::Add, Key::Remove];
 
 const W: f32 = 380.0;
 const ROW: f32 = 28.0;
@@ -56,8 +60,13 @@ pub struct Menu {
     params: Vec<Param>,
     params_of: Vec<std::path::PathBuf>,
     pad_prev: u16,
-    nav: [super::Press; 6],
+    nav: [super::Press; 8],
     shown: bool,
+    /// Lista de presets aberta pelo Insert: (posição dos passes onde o escolhido entra, sem trocar a cadeia; linha
+    /// do menu para onde o Backspace volta).
+    adding: Option<(usize, usize)>,
+    /// Consumo da cadeia: (ms de GPU, ms entre quadros), em média; `None` sem medida.
+    pub load: Option<(f64, f64)>,
 }
 
 unsafe extern "system" fn wndproc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT {
@@ -68,12 +77,12 @@ impl Menu {
     pub fn new() -> Self {
         // `--shader-menu`: o app abriu o motor pelo atalho do menu, que já vem aberto.
         let open = std::env::args().any(|a| a == "--shader-menu");
-        Self { layer: None, open, keys_on: false, sel: 0, view: View::Main, dir: Default::default(), files: vec![], params: vec![], params_of: vec![], pad_prev: 0, nav: Default::default(), shown: false }
+        Self { layer: None, open, keys_on: false, sel: 0, view: View::Main, dir: Default::default(), files: vec![], params: vec![], params_of: vec![], pad_prev: 0, nav: Default::default(), shown: false, adding: None, load: None }
     }
 
     pub fn toggle(&mut self) {
         self.open = !self.open;
-        (self.sel, self.view) = (0, View::Main);
+        (self.sel, self.view, self.adding) = (0, View::Main, None);
     }
 
     /// Põe o menu de volta acima da janela por cima (que acabou de aparecer).
@@ -85,7 +94,7 @@ impl Menu {
         }
     }
 
-    /// ↑↓←→ Enter Esc com o menu aberto e o jogo em foco, pelo estado da tecla (`Press`): os atalhos de
+    /// ↑↓←→ Enter Backspace Insert Delete com o menu aberto e o jogo em foco, pelo estado da tecla (`Press`): os atalhos de
     /// `set_keys` só seguram a tecla longe do jogo, onde ele deixa.
     pub fn keys(&mut self, fg: bool, eng: &mut Engine, dev: &ID3D11Device) {
         for (i, (vk, k)) in NAV.iter().zip(KEYS).enumerate() {
@@ -96,7 +105,8 @@ impl Menu {
         }
     }
 
-    /// Controle: Select+L1 abre e fecha; com o menu aberto, direcional, A (confirma) e B (volta).
+    /// Controle: Select+L1 abre e fecha; com o menu aberto, direcional, A (confirma), B (volta), X (põe passe) e
+    /// Y (tira passe).
     /// shortcut: o jogo também recebe esses botões (o XInput não deixa segurar), por isso o par Select+L1.
     pub fn pad(&mut self, eng: &mut Engine, dev: &ID3D11Device) {
         let b = (0..4)
@@ -122,6 +132,8 @@ impl Menu {
             (XINPUT_GAMEPAD_DPAD_RIGHT, Key::Right),
             (XINPUT_GAMEPAD_A, Key::Ok),
             (XINPUT_GAMEPAD_B, Key::Back),
+            (XINPUT_GAMEPAD_X, Key::Add),
+            (XINPUT_GAMEPAD_Y, Key::Remove),
         ];
         for (btn, k) in map {
             if new & btn.0 != 0 {
@@ -138,6 +150,19 @@ impl Menu {
         match (k, self.view) {
             (Key::Up, _) => self.sel = (self.sel + rows.max(1) - 1) % rows.max(1),
             (Key::Down, _) => self.sel = (self.sel + 1) % rows.max(1),
+            (Key::Remove, View::Main) if self.sel >= FIRST_PASS => {
+                let i = self.sel - FIRST_PASS;
+                eng.edit(dev, |p| crate::shader_profile::remove_pass(p, i));
+            }
+            (Key::Remove, _) | (Key::Add, View::Params(_)) => {}
+            // Depois do passe escolhido (fora de um passe, no fim), da lista de Presets se ela estiver escolhida,
+            // senão da biblioteca (sem ela baixada, dos presets do jogador).
+            (Key::Add, View::Main) => {
+                let at = self.sel.checked_sub(FIRST_PASS).map_or(eng.profile.passes.len(), |i| i + 1);
+                let (lib, from) = (self.sel != 2 && crate::shader_profile::lib_dir().exists(), self.sel);
+                self.list(lib, if lib { crate::shader_profile::lib_dir() } else { crate::shader_profile::root() });
+                self.adding = Some((at, from));
+            }
             (Key::Back, View::Main) => self.toggle(),
             (Key::Back, View::Params(i)) => (self.view, self.sel) = (View::Main, FIRST_PASS + i),
             // Na biblioteca sobe uma pasta, com a de onde veio escolhida; da raiz volta ao menu.
@@ -147,7 +172,7 @@ impl Menu {
                     self.list(lib, up);
                     self.sel = self.files.iter().position(|(f, _)| *f == from).unwrap_or(0);
                 }
-                None => (self.view, self.sel) = (View::Main, if lib { 3 } else { 2 }),
+                None => (self.view, self.sel) = (View::Main, self.adding.take().map_or(if lib { 3 } else { 2 }, |a| a.1)),
             },
             (_, View::Main) => match self.sel {
                 0 => eng.edit(dev, |p| p.on = !p.on),
@@ -158,8 +183,14 @@ impl Menu {
                 s if k == Key::Ok => (self.view, self.sel) = (View::Params(s - FIRST_PASS), 0),
                 s => eng.edit(dev, |p| p.passes[s - FIRST_PASS].on ^= true),
             },
-            (Key::Ok, View::Files(lib)) => match self.files.get(self.sel).cloned() {
+            (Key::Ok | Key::Add, View::Files(lib)) => match self.files.get(self.sel).cloned() {
                 Some((d, true)) => self.list(lib, d),
+                // Insert (ou a lista aberta por ele): o preset entra nos passes, sem trocar a cadeia.
+                Some((f, false)) if k == Key::Add || self.adding.is_some() => {
+                    let at = self.adding.take().map_or(eng.profile.passes.len(), |a| a.0).min(eng.profile.passes.len());
+                    eng.edit(dev, |p| crate::shader_profile::insert_pass(p, at, f));
+                    (self.view, self.sel) = (View::Main, FIRST_PASS + at);
+                }
                 // O preset escolhido toma o lugar dos passes, como o Carregar preset da página.
                 Some((f, false)) => {
                     eng.edit(dev, |p| {
@@ -246,7 +277,20 @@ impl Menu {
             }
             l
         });
-        let h = 52.0 + lines.len().min(VISIBLE) as f32 * ROW + 30.0;
+        let hint: &[&str] = match self.view {
+            View::Main => &["↑↓ escolher · ←→ mudar · Enter abrir", "Ins adicionar passe · Del tirar passe · Backspace fechar"],
+            View::Params(_) => &["←→ ajustar · Enter padrão · Backspace voltar"],
+            View::Files(_) if self.adding.is_some() => &["↑↓ escolher · Enter adicionar · Backspace voltar"],
+            View::Files(_) => &["↑↓ escolher · Enter trocar · Ins adicionar · Backspace voltar"],
+        };
+        let h = 52.0 + lines.len().min(VISIBLE) as f32 * ROW + 14.0 + 16.0 * hint.len() as f32;
+        let load = match self.load.filter(|l| l.0 > 0.0) {
+            Some((ms, frame)) => match prisma_shader::gpu_share(ms, frame) {
+                Some(pct) => format!("GPU {ms:.2} ms · {pct:.0}%"),
+                None => format!("GPU {ms:.2} ms"),
+            },
+            None => "GPU —".into(),
+        };
         let first = self.sel.saturating_sub(VISIBLE - 1);
         let (sel, title) = (self.sel, match self.view {
             View::Main => format!("Shaders · {}", eng.path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default()),
@@ -257,15 +301,11 @@ impl Menu {
                 _ => "Biblioteca".into(),
             },
         });
-        let hint = match self.view {
-            View::Main => "↑↓ escolher · ←→ mudar · Enter abrir · Esc fechar",
-            View::Params(_) => "←→ ajustar · Enter padrão · Esc voltar",
-            View::Files(_) => "↑↓ escolher · Enter abrir · Esc voltar",
-        };
         layer.paint(at.x + 24, at.y + 24, W, h, |c, r| {
             c.round(r, 10.0, gfx::BG.alpha(0.94));
             c.round_line(r.inset(0.5), 10.0, gfx::BORDER, 1.0);
-            c.text(rect(16.0, 12.0, W - 32.0, 26.0), &title, 15.0, gfx::TEXT, Align::Left, Weight::Semibold);
+            c.text_fit(rect(16.0, 12.0, W - 160.0, 26.0), &title, 15.0, gfx::TEXT, Align::Left, Weight::Semibold);
+            c.text(rect(W - 140.0, 12.0, 124.0, 26.0), &load, 12.0, gfx::MUTED, Align::Right, Weight::Regular);
             for (i, (label, value, changed)) in lines.iter().enumerate().skip(first).take(VISIBLE) {
                 let y = 46.0 + (i - first) as f32 * ROW;
                 if i == sel {
@@ -275,7 +315,9 @@ impl Menu {
                 c.text_fit(rect(16.0, y, W - 130.0, ROW), label, 13.0, col, Align::Left, Weight::Regular);
                 c.text(rect(W - 124.0, y, 108.0, ROW), value, 13.0, if *changed { gfx::WARN } else { col }, Align::Right, Weight::Regular);
             }
-            c.text_fit(rect(16.0, h - 30.0, W - 32.0, 22.0), hint, 11.0, gfx::MUTED, Align::Left, Weight::Regular);
+            for (i, line) in hint.iter().enumerate() {
+                c.text_fit(rect(16.0, h - 8.0 - 16.0 * (hint.len() - i) as f32, W - 32.0, 16.0), line, 11.0, gfx::MUTED, Align::Left, Weight::Regular);
+            }
         });
         if !self.shown {
             unsafe {

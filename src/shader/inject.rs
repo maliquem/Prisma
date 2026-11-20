@@ -176,6 +176,8 @@ fn run_in(path: &Path, game: HWND, pid: u32, process: HANDLE) -> Res<bool> {
     let (since, mut polled, mut ready, mut sent) = (Instant::now(), Instant::now(), None, eng.path.clone());
     // Último Present visto: queda na injeção acontece com o jogo desenhando; a do jogo saindo, depois de parar.
     let (mut presents, mut drawing) = (0, Instant::now());
+    // Intervalo entre quadros do jogo (Presents contados pela DLL), para a % da GPU no menu.
+    let (mut counted, mut frame_ms) = ((0u64, Instant::now()), 0.0);
     let result = loop {
         unsafe {
             MsgWaitForMultipleObjects(None, false, if menu.open || fg { 16 } else { 100 }, QS_ALLINPUT);
@@ -244,6 +246,12 @@ fn run_in(path: &Path, game: HWND, pid: u32, process: HANDLE) -> Res<bool> {
         if polled.elapsed().as_millis() >= 250 {
             polled = Instant::now();
             eng.poll(&d.dev);
+            let now = s.presents.load(Relaxed);
+            // O primeiro só marca o ponto: a DLL pode ter contado Presents antes (motor que voltou).
+            if counted.0 > 0 && now > counted.0 {
+                frame_ms = prisma_shader::ema(frame_ms, counted.1.elapsed().as_secs_f64() * 1000.0 / (now - counted.0) as f64);
+            }
+            counted = (now, Instant::now());
         }
         fg = unsafe { GetForegroundWindow() == game && !IsIconic(game).as_bool() };
         if menu_key.hit(fg && held(keys.menu), false) {
@@ -254,6 +262,9 @@ fn run_in(path: &Path, game: HWND, pid: u32, process: HANDLE) -> Res<bool> {
         }
         menu.keys(fg, &mut eng, &d.dev);
         menu.pad(&mut eng, &d.dev);
+        // Só o D3D11 (e o D3D10 e o D3D12, que passam por ele) mede; nas outras APIs o menu mostra "—".
+        let gpu = s.gpu_us.load(Relaxed);
+        menu.load = (gpu > 0).then(|| (gpu as f64 / 1000.0, frame_ms));
         menu.update(fg, super::client_area(game).map(|c| c.0), &mut eng);
         // Outro perfil (atalho ou menu): a DLL troca no próximo quadro.
         if eng.path != sent {

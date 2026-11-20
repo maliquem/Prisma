@@ -2918,8 +2918,10 @@ Biblioteca	Library
 Biblioteca · {}	Library · {}
 ligado	on
 desligado	off
-↑↓ escolher · ←→ mudar · Enter abrir · Esc fechar	↑↓ choose · ←→ change · Enter open · Esc close
-←→ ajustar · Enter padrão · Esc voltar	←→ adjust · Enter default · Esc back
-↑↓ escolher · Enter abrir · Esc voltar	↑↓ choose · Enter open · Esc back
+↑↓ escolher · ←→ mudar · Enter abrir	↑↓ choose · ←→ change · Enter open
+Ins adicionar passe · Del tirar passe · Backspace fechar	Ins add pass · Del remove pass · Backspace close
+←→ ajustar · Enter padrão · Backspace voltar	←→ adjust · Enter default · Backspace back
+↑↓ escolher · Enter adicionar · Backspace voltar	↑↓ choose · Enter add · Backspace back
+↑↓ escolher · Enter trocar · Ins adicionar · Backspace voltar	↑↓ choose · Enter replace · Ins add · Backspace back
 Baixe a biblioteca na página Shaders	Download the library on the Shaders page
 Nenhum preset aqui	No presets here
