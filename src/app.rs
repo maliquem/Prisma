@@ -2252,14 +2252,15 @@ impl App {
     fn fs_upscale(&self, path: &str, exe: &str, a: crate::sys::fullscreen::Applied) -> Option<&'static str> {
         use crate::shader_profile as sp;
         let kind = self.cfg.fs_apps.iter().find(|p| p.exe.eq_ignore_ascii_case(exe)).map_or(0, |p| p.kind);
-        let rel = sp::upscale_preset(&self.cfg.fs_filters[kind], a.native, a.monitor)?;
+        let key = &self.cfg.fs_filters[kind];
+        sp::upscale_preset(key, a.native, a.monitor)?;
         if path.is_empty() {
             return None;
         }
         if crate::meter::anti_cheat(path) {
             return Some("Jogo com anti-cheat: o shader não entra nele");
         }
-        sp::upscale_on(std::path::Path::new(path), rel, &sp::upscale_input(a.native, a.resizable)).err()
+        sp::upscale_on(std::path::Path::new(path), key, &sp::upscale_input(a.native, a.resizable)).err()
     }
 
     /// Quem usou o Fullscreenizer uma vez entra na lista de programas salvos.

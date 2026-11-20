@@ -2942,9 +2942,13 @@ Pixels nítidos (pixel art)	锐利像素（像素画）
 xBR (pixel art, cantos lisos)	xBR（像素画，平滑边角）
 ScaleFX (pixel art)	ScaleFX（像素画）
 Do driver (painel da placa)	由驱动提供（显卡控制面板）
-Filtro do driver: ligue no painel da placa. NVIDIA: Painel de Controle › Ajustar o tamanho e a posição da área de trabalho › Dimensionamento de imagem (NIS) ou Dimensionamento de número inteiro. AMD: Adrenalin › Gráficos › Radeon Super Resolution (pede tela cheia exclusiva). Intel: Centro de Comando Gráfico › Tela › Escala › Escala de número inteiro.	驱动滤镜：请在显卡控制面板中开启。NVIDIA：NVIDIA 控制面板 › 调整桌面尺寸和位置 › 图像缩放 (NIS) 或整数缩放。AMD：Adrenalin › 图形 › Radeon Super Resolution（需要独占全屏）。Intel：英特尔显卡控制中心 › 显示 › 缩放 › 整数缩放。
+Filtro do driver: o painel da placa só amplia o jogo em tela cheia exclusiva numa resolução menor que a do monitor, não na janela sem bordas. NVIDIA: Painel de Controle › Ajustar o tamanho e a posição da área de trabalho › Dimensionamento de imagem (NIS, com nitidez). AMD: Adrenalin › Gráficos › Radeon Super Resolution. Intel: Centro de Comando Gráfico › Tela › Escala.	驱动滤镜：显卡控制面板只会在独占全屏且分辨率低于显示器时放大游戏，无边框窗口无效。NVIDIA：NVIDIA 控制面板 › 调整桌面尺寸和位置 › 图像缩放 (NIS，带锐化)。AMD：Adrenalin › 图形 › Radeon Super Resolution。Intel：英特尔显卡控制中心 › 显示 › 缩放。
 O filtro entra quando o jogo é menor que o monitor: o Prisma cria o perfil de shader do jogo (página Shaders) e desenha por cima. Jogo com perfil de shader próprio ou anti-cheat fica sem ele.	游戏画面小于显示器时滤镜才会生效：Prisma 会为该游戏创建 shader 配置（Shaders 页面）并在其上绘制。自带 shader 配置或有反作弊的游戏不会使用它。
+Ajustes · {}	调整 · {}
+Este filtro não tem parâmetros.	此滤镜没有参数。
+Vale para todos os jogos com este filtro; o jogo ajustado à parte (ícone Ajustar dos salvos) fica com os dele. Com o jogo aberto, a mudança aparece na hora. Botão direito volta o valor.	对所有使用此滤镜的游戏生效；单独调整的游戏（“已保存的程序”中的“调整”图标）保留自己的设置。游戏打开时，更改立即生效。右键可恢复默认值。
 Filtro de upscale: baixe os filtros na página Fullscreenizer	放大滤镜：请在 Fullscreenizer 页面下载滤镜
+Ajustar: abre o perfil de shader deste jogo na página Shaders, com valores só dele. Aparece depois que o filtro de upscale entrou no jogo.	调整：在 Shaders 页面打开此游戏的着色器配置，其中的值仅属于该游戏。放大滤镜应用到游戏后才会出现。
 Este jogo já tem perfil de shader: o filtro de upscale fica com ele	此游戏已有 shader 配置：放大滤镜由它负责
 Filtro de upscale: não deu para gravar o perfil	放大滤镜：无法保存配置
 HDR do jogo	游戏 HDR

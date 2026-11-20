@@ -1,10 +1,44 @@
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use std::time::Instant;
+
 use super::picker::{self, Target};
 use super::*;
 use crate::config::Defaults;
-use crate::shader_profile::{upscale_for, KINDS, UPSCALE};
+use crate::shader_profile::{self as sp, upscale_for, Param, Profile, KINDS, UPSCALE};
 use crate::sys::fullscreen::Fit;
 
+/// Janela de ajustes de um filtro de upscale aberta.
+struct Tune {
+    title: String,
+    path: PathBuf,
+    prof: Profile,
+    params: Vec<Param>,
+    save_at: Option<Instant>,
+}
+
+static TUNE: Mutex<Option<Tune>> = Mutex::new(None);
+
+/// Grava o pendente; o motor dos jogos abertos lê o perfil de novo na hora.
+fn flush(app: &mut App, t: &mut Tune) {
+    if t.save_at.take().is_some() && sp::save_filter(&t.path, &t.prof).is_err() {
+        app.toast.info("Filtro de upscale: não deu para gravar o perfil");
+    }
+}
+
+/// Filtro com preset na biblioteca baixada, que tem o que ajustar.
+fn tunable(key: &str) -> bool {
+    UPSCALE.iter().any(|u| u.0 == key && !u.2.is_empty() && sp::lib_dir().join(u.2).exists())
+}
+
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
+    let mut tune = TUNE.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(t) = tune.as_mut() {
+        if t.save_at.is_some_and(|i| i.elapsed().as_millis() > 200) {
+            flush(app, t);
+        }
+        ui.block();
+    }
     header(ui, a, "Fullscreenizer", "Deixa a janela em foco em tela cheia sem bordas. O mesmo atalho desfaz.");
     defaults_button(ui, app, a.right() - 124.0, Defaults::Fullscreen, "Volta o atalho ao padrão e desliga o modo automático de todos os programas. A lista continua salva.");
     let x = a.x + 28.0;
@@ -58,14 +92,21 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         let opts: Vec<_> = upscale_for(n).collect();
         let names: Vec<String> = opts.iter().map(|u| crate::i18n::tr(u.1).into_owned()).collect();
         let mut k = opts.iter().position(|u| u.0 == app.cfg.fs_filters[n]).unwrap_or(0);
-        if ui.select(&format!("fs-filter{n}"), rect(sx, fc.y + 34.0, sw, 44.0), &names, &mut k) {
+        if ui.select(&format!("fs-filter{n}"), rect(sx, fc.y + 34.0, sw - 100.0, 44.0), &names, &mut k) {
             app.cfg.fs_filters[n] = opts[k].0.to_string();
             app.cfg.save();
+        }
+        let key = opts[k].0;
+        if ui.button_ex(&format!("fs-tune{n}"), rect(sx + sw - 92.0, fc.y + 34.0, 92.0, 44.0), "Ajustes", false, tunable(key)) {
+            if let Some((path, prof)) = sp::filter_profile(key) {
+                let params = sp::params(&prof);
+                *tune = Some(Tune { title: crate::i18n::tr(opts[k].1).into_owned(), path, prof, params, save_at: None });
+            }
         }
     }
     let chosen = |key: &str| app.cfg.fs_filters.iter().any(|f| f == key);
     let hint = if chosen("driver") {
-        "Filtro do driver: ligue no painel da placa. NVIDIA: Painel de Controle › Ajustar o tamanho e a posição da área de trabalho › Dimensionamento de imagem (NIS) ou Dimensionamento de número inteiro. AMD: Adrenalin › Gráficos › Radeon Super Resolution (pede tela cheia exclusiva). Intel: Centro de Comando Gráfico › Tela › Escala › Escala de número inteiro."
+        "Filtro do driver: o painel da placa só amplia o jogo em tela cheia exclusiva numa resolução menor que a do monitor, não na janela sem bordas. NVIDIA: Painel de Controle › Ajustar o tamanho e a posição da área de trabalho › Dimensionamento de imagem (NIS, com nitidez). AMD: Adrenalin › Gráficos › Radeon Super Resolution. Intel: Centro de Comando Gráfico › Tela › Escala."
     } else if app.cfg.fs_filters.iter().all(String::is_empty) {
         "Quem usa o Fullscreenizer uma vez entra na lista. Marque Automático para aplicar sempre que o programa abrir."
     } else {
@@ -111,6 +152,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     }
     ui.begin_scroll("fs-apps", list, app.cfg.fs_apps.len() as f32 * 48.0);
     let mut remove = None;
+    let mut open = None;
     let mut changed = false;
     let kinds = KINDS.map(|k| crate::i18n::tr(k).into_owned());
     let apps = &mut app.cfg.fs_apps;
@@ -118,7 +160,19 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         let y = list.y + i as f32 * 48.0;
         ui.c.line(list.x + 8.0, y, list.right() - 14.0, y, LINE, 1.0);
         ui.file_icon(&p.path, &p.exe, rect(list.x + 8.0, y + 12.0, 24.0, 24.0));
-        ui.c.text(rect(list.x + 42.0, y, list.w - 352.0, 48.0), app_name(&p.exe), 14.0, TEXT, Align::Left, Weight::Regular);
+        ui.c.text(rect(list.x + 42.0, y, list.w - 386.0, 48.0), app_name(&p.exe), 14.0, TEXT, Align::Left, Weight::Regular);
+        // O perfil de shader do jogo, com os ajustes só dele, abre na página Shaders. Ícone, que a linha é estreita.
+        let prof = sp::path_for(Path::new(&p.exe));
+        let has = prof.exists();
+        let tb = rect(list.right() - 334.0, y + 12.0, 24.0, 24.0);
+        if has && ui.is_hover(tb) {
+            ui.c.round(tb, 6.0, BORDER);
+        }
+        ui.c.icon(tb.x + 4.0, tb.y + 4.0, 16.0, &[&[(4., 7.), (20., 7.)], &[(4., 17.), (20., 17.)], &[(9., 4.), (9., 10.)], &[(15., 14.), (15., 20.)]], if has { TEXT2 } else { BORDER });
+        ui.tip(tb, "Ajustar: abre o perfil de shader deste jogo na página Shaders, com valores só dele. Aparece depois que o filtro de upscale entrou no jogo.");
+        if has && ui.hit(&format!("fsj{i}"), tb) {
+            open = Some(prof);
+        }
         changed |= ui.select(&format!("fsk{i}"), rect(list.right() - 300.0, y + 6.0, 122.0, 36.0), &kinds, &mut p.kind);
         changed |= ui.check(&format!("fsa{i}"), rect(list.right() - 170.0, y + 2.0, 120.0, 44.0), "Automático", &mut p.auto);
         let b = rect(list.right() - 44.0, y + 12.0, 24.0, 24.0);
@@ -138,4 +192,37 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     if changed {
         app.cfg.save();
     }
+    if let Some(prof) = open {
+        super::shaders::open_profile(app, &prof);
+    }
+    if let Some(t) = tune.as_mut() {
+        if tune_sheet(ui, t) {
+            flush(app, t);
+            *tune = None;
+        }
+    }
+}
+
+/// Parâmetros do filtro, que valem para todo jogo que segue ele. Devolve true ao fechar.
+fn tune_sheet(ui: &mut Ui, t: &mut Tune) -> bool {
+    let r = ui.sheet(640.0, 540.0);
+    let ix = r.x + 20.0;
+    let iw = r.w - 40.0;
+    let title = crate::i18n::tr("Ajustes · {}").replace("{}", &t.title);
+    ui.c.text_fit(rect(ix, r.y + 18.0, iw - 180.0, 26.0), &title, 17.0, TEXT, Align::Left, Weight::Semibold);
+    if ui.button_ex("fst-reset", rect(r.right() - 20.0 - 160.0, r.y + 14.0, 160.0, 32.0), "Restaurar padrão", false, !t.prof.params.is_empty()) {
+        t.prof.params.clear();
+        t.save_at.get_or_insert_with(Instant::now);
+    }
+    let list = rect(ix - 4.0, r.y + 60.0, iw + 8.0, r.h - 60.0 - 110.0);
+    if t.params.is_empty() {
+        ui.c.text(rect(ix, list.y, iw, 24.0), "Este filtro não tem parâmetros.", 13.0, MUTED, Align::Left, Weight::Regular);
+    }
+    let rows: Vec<&Param> = t.params.iter().collect();
+    if let Some((name, v)) = super::shaders::param_list(ui, "fst", list, &rows, &t.prof) {
+        t.prof.set_param(&name, v);
+        t.save_at.get_or_insert_with(Instant::now);
+    }
+    ui.c.text_wrap(rect(ix, r.bottom() - 102.0, iw, 50.0), "Vale para todos os jogos com este filtro; o jogo ajustado à parte (ícone Ajustar dos salvos) fica com os dele. Com o jogo aberto, a mudança aparece na hora. Botão direito volta o valor.", 11.0, MUTED, Weight::Regular);
+    ui.button("fst-close", rect(r.right() - 20.0 - 120.0, r.bottom() - 48.0, 120.0, 36.0), "Fechar", true)
 }

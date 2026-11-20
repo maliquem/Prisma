@@ -185,8 +185,8 @@ pub const KINDS: [&str; 3] = ["3D", "2D com 3D", "2D"];
 
 /// Filtros de upscale do Fullscreenizer: chave na config, nome na tela, preset na biblioteca (vazio: nenhum
 /// preset) e os tipos de jogo que o oferecem (bit 0 3D, 1 2D com 3D, 2 2D). `driver` só explica como ligar o do
-/// painel da placa: NIS, RSR e escala inteira não têm API pública que um programa use
-/// (research_notes/Upscale/estudo.md).
+/// painel da placa: NIS, RSR e escala inteira não têm API pública que um programa use, e o do driver só escala tela
+/// numa resolução menor que a do monitor, não a janela sem bordas (research_notes/Upscale/nvidia_driver.md).
 pub const UPSCALE: [(&str, &str, &str, u8); 8] = [
     ("", "Nenhum (o do Windows)", "", 0b111),
     ("fsr", "AMD FSR 1 (nítido, 3D)", "edge-smoothing/fsr/fsr.slangp", 0b011),
@@ -219,11 +219,63 @@ pub fn upscale_input(native: (i32, i32), resizable: bool) -> String {
     if resizable { "auto".into() } else { format!("{}x{}", native.0, native.1) }
 }
 
+/// Linha do perfil do jogo com os ajustes que vieram do filtro da última vez: iguais aos de agora, o jogo segue o
+/// filtro; diferentes, alguém ajustou o jogo (página Shaders ou menu no jogo) e eles ficam.
+const BASE: &str = "fullscreenizer_base=";
+
+fn base_line(params: &[(String, f32)]) -> String {
+    let mut v: Vec<String> = params.iter().map(|(n, x)| format!("{n}={x}")).collect();
+    v.sort();
+    format!("{BASE}{}", v.join(","))
+}
+
+/// O jogo segue os ajustes do filtro (não foi ajustado à parte). Perfil antigo, sem a linha: segue se não tem ajuste.
+fn follows_filter(p: &Profile) -> bool {
+    match p.extra.iter().find(|l| l.starts_with(BASE)) {
+        Some(l) => *l == base_line(&p.params),
+        None => p.params.is_empty(),
+    }
+}
+
+fn take_filter(p: &mut Profile, f: &Profile) {
+    p.params = f.params.clone();
+    p.extra.retain(|l| !l.starts_with(BASE));
+    p.extra.push(base_line(&p.params));
+}
+
+/// Ajustes de um filtro (`perfis\fullscreenizer\<chave>.txt`, fora da lista da página Shaders): o preset e os
+/// parâmetros que todo jogo com este filtro recebe. None para filtro sem preset (nenhum, driver).
+pub fn filter_profile(key: &str) -> Option<(PathBuf, Profile)> {
+    let (_, name, rel, _) = UPSCALE.iter().find(|u| u.0 == key && !u.2.is_empty())?;
+    let path = profiles_dir().join("fullscreenizer").join(format!("{key}.txt"));
+    let mut p = Profile::load(&path).unwrap_or_else(|_| Profile { name: format!("Fullscreenizer · {name}"), ..Profile::default() });
+    // A biblioteca pode ter mudado de lugar: o preset vem sempre da de agora.
+    p.passes = vec![Pass { on: true, path: lib_dir().join(rel) }];
+    Some((path, p))
+}
+
+/// Grava os ajustes do filtro e leva aos jogos que seguem ele; o motor de quem está aberto lê na hora.
+pub fn save_filter(path: &Path, f: &Profile) -> std::io::Result<()> {
+    f.save(path)?;
+    for e in std::fs::read_dir(profiles_dir())?.flatten() {
+        let gp = e.path();
+        if !gp.extension().is_some_and(|x| x.eq_ignore_ascii_case("txt")) {
+            continue;
+        }
+        let Ok(mut g) = Profile::load(&gp) else { continue };
+        if g.extra.iter().any(|l| l == MANAGED) && g.passes == f.passes && g.params != f.params && follows_filter(&g) {
+            take_filter(&mut g, f);
+            let _ = g.save(&gp);
+        }
+    }
+    Ok(())
+}
+
 /// Liga o filtro no perfil do jogo (`perfis\<exe>.txt`), que o app abre como os outros. Perfil do jogador
 /// (sem a marca) fica como está. Devolve o motivo quando não liga.
-pub fn upscale_on(exe: &Path, rel: &str, input: &str) -> Result<(), &'static str> {
-    let preset = lib_dir().join(rel);
-    if !preset.exists() {
+pub fn upscale_on(exe: &Path, key: &str, input: &str) -> Result<(), &'static str> {
+    let Some((_, f)) = filter_profile(key) else { return Ok(()) };
+    if !f.passes[0].path.exists() {
         return Err("Filtro de upscale: baixe os filtros na página Fullscreenizer");
     }
     let path = path_for(exe);
@@ -235,10 +287,10 @@ pub fn upscale_on(exe: &Path, rel: &str, input: &str) -> Result<(), &'static str
     p.on = true;
     p.inject = false;
     p.input = input.to_string();
-    // Mesmo filtro de antes: os ajustes feitos na página Shaders ficam.
-    if p.passes.len() != 1 || p.passes[0].path != preset {
-        p.passes = vec![Pass { on: true, path: preset }];
-        p.params.clear();
+    // Mesmo filtro de antes e jogo ajustado à parte: os ajustes dele ficam. Senão, os do filtro.
+    if p.passes != f.passes || follows_filter(&p) {
+        p.passes = f.passes.clone();
+        take_filter(&mut p, &f);
     }
     p.save(&path).map_err(|_| "Filtro de upscale: não deu para gravar o perfil")
 }
@@ -272,6 +324,26 @@ mod tests {
         assert_eq!(keys(0), ["", "fsr", "nis", "lanczos", "driver"]);
         assert_eq!(keys(1), ["", "fsr", "lanczos", "sharp", "driver"]);
         assert_eq!(keys(2), ["", "sharp", "xbr", "scalefx", "driver"]);
+    }
+
+    /// O jogo segue os ajustes do filtro até alguém ajustar ele à parte; perfil antigo sem ajuste também segue.
+    #[test]
+    fn jogo_segue_o_filtro() {
+        let f = Profile { params: vec![("sharp".into(), 0.5)], ..Profile::default() };
+        let mut g = Profile::default();
+        assert!(follows_filter(&g), "perfil antigo sem ajuste");
+        take_filter(&mut g, &f);
+        assert_eq!(g.params, f.params);
+        assert!(follows_filter(&g));
+        let g2 = Profile::parse(&g.text());
+        assert!(follows_filter(&g2), "a linha volta igual do arquivo");
+        g.set_param("sharp", Some(0.8));
+        assert!(!follows_filter(&g), "ajustado no jogo");
+        g.set_param("sharp", Some(0.5));
+        assert!(follows_filter(&g), "voltou ao do filtro");
+        assert!(!follows_filter(&Profile { params: vec![("x".into(), 1.0)], ..Profile::default() }), "perfil antigo ajustado");
+        assert!(filter_profile("driver").is_none() && filter_profile("").is_none());
+        assert_eq!(filter_profile("nis").unwrap().1.passes[0].path, lib_dir().join("edge-smoothing/nis/nis.slangp"));
     }
 
     /// Os três jeitos do RetroArch (relativo ao preset, absoluto e com o `:`), no `shaderN`, na textura e no
