@@ -82,6 +82,8 @@ fn ext(name: &str) -> &str {
 pub(crate) struct Walked {
     nodes: Vec<Node>,
     names: Vec<u8>,
+    /// Pastas que não abriram (sem permissão ou apagadas no meio da leitura).
+    denied: Vec<u32>,
 }
 
 impl Scan {
@@ -126,7 +128,6 @@ impl Scan {
     /// Soma tudo pelas pastas e monta os índices depois de ler os arquivos.
     fn finish(&mut self) {
         let n = self.nodes.len();
-        let mut types: HashMap<String, (u64, u32)> = HashMap::new();
         for i in 0..n {
             let nd = self.nodes[i];
             if !nd.used() {
@@ -138,11 +139,6 @@ impl Scan {
             if nd.is_dir() {
                 continue;
             }
-            self.files += 1;
-            let name = self.name(i as u32);
-            let e = types.entry(ext(name).to_ascii_lowercase()).or_default();
-            e.0 += nd.size;
-            e.1 += 1;
             let mut p = self.nodes[i].parent;
             for _ in 0..512 {
                 let d = &mut self.nodes[p as usize];
@@ -156,11 +152,28 @@ impl Scan {
             }
         }
         self.index();
+        self.count_types();
+        self.top_files();
+    }
+
+    /// Conta os arquivos e soma os tipos (os 100 maiores) de tudo que está na análise.
+    fn count_types(&mut self) {
+        let mut types: HashMap<String, (u64, u32)> = HashMap::new();
+        self.files = 0;
+        for i in 0..self.nodes.len() as u32 {
+            let nd = self.nodes[i as usize];
+            if !nd.used() || nd.is_dir() {
+                continue;
+            }
+            self.files += 1;
+            let e = types.entry(ext(self.name(i)).to_ascii_lowercase()).or_default();
+            e.0 += nd.size;
+            e.1 += 1;
+        }
         let mut t: Vec<TypeStat> = types.into_iter().map(|(ext, v)| TypeStat { ext, size: v.0, files: v.1 }).collect();
         t.sort_unstable_by_key(|s| std::cmp::Reverse(s.size));
         t.truncate(100);
         self.types = t;
-        self.top_files();
     }
 
     /// Filhos de cada pasta, do maior para o menor.
@@ -230,16 +243,21 @@ impl Scan {
             }
             p = d.parent;
         }
-        self.unmark(i);
+        self.files = self.files.saturating_sub(count as u64);
+        self.unmark(i, &[]);
         self.sort_types();
         let nodes = &self.nodes;
         self.largest.retain(|f| nodes[*f as usize].used());
+        self.version = next_version();
     }
 
-    /// Desmarca o item e tudo dentro dele, tirando os arquivos da lista de tipos.
-    fn unmark(&mut self, i: u32) {
+    /// Desmarca o item e tudo dentro dele (menos `keep`), tirando os arquivos da lista de tipos.
+    fn unmark(&mut self, i: u32, keep: &[u32]) {
         let mut stack = vec![i];
         while let Some(c) = stack.pop() {
+            if keep.contains(&c) {
+                continue;
+            }
             let n = self.nodes[c as usize];
             self.nodes[c as usize].flags &= !USED;
             if n.is_dir() {
@@ -261,12 +279,35 @@ impl Scan {
 
     /// Troca o conteúdo da pasta `dir` pelo que foi lido de novo do disco. A diferença de
     /// tamanho sobe pelas pastas acima até a raiz; o resto da análise fica como estava.
+    /// shortcut: a leitura por pastas conta cada hard link e usa o tamanho lógico; numa análise pela
+    /// tabela do NTFS a pasta pode mudar um pouco de tamanho. Analisar o disco de novo acerta.
     pub(crate) fn replace(&mut self, dir: u32, w: Walked) {
+        if w.denied.contains(&0) {
+            return; // a própria pasta não abriu: fica como estava
+        }
+        let base = self.nodes.len() as u32;
+        // Subpastas que não abriram agora (sem permissão) ficam com o que a análise já tinha.
+        let here = self.path(dir);
+        let twins: Vec<(u32, u32)> = w
+            .denied
+            .iter()
+            .filter_map(|&l| {
+                let mut rel = Vec::new();
+                let mut i = l;
+                while i != 0 {
+                    let n = w.nodes[i as usize];
+                    rel.push(std::str::from_utf8(&w.names[n.name_off as usize..][..n.name_len as usize]).unwrap_or("?"));
+                    i = n.parent;
+                }
+                rel.reverse();
+                self.find(&format!("{here}\\{}", rel.join("\\"))).map(|o| (base + l - 1, o))
+            })
+            .collect();
+        let keep: Vec<u32> = twins.iter().flat_map(|t| self.children(t.1).iter().copied()).collect();
         for k in self.children(dir).to_vec() {
-            self.unmark(k);
+            self.unmark(k, &keep);
         }
         let old = self.nodes[dir as usize];
-        let base = self.nodes.len() as u32;
         let off = self.names.len() as u32;
         self.names.extend_from_slice(&w.names);
         for mut n in w.nodes.into_iter().skip(1) {
@@ -274,21 +315,19 @@ impl Scan {
             n.name_off += off;
             self.nodes.push(n);
         }
+        for &(n, o) in &twins {
+            for c in self.children(o).to_vec() {
+                self.nodes[c as usize].parent = n;
+            }
+            let od = self.nodes[o as usize];
+            let d = &mut self.nodes[n as usize];
+            (d.size, d.alloc, d.files) = (od.size, od.alloc, od.files);
+        }
         let d = &mut self.nodes[dir as usize];
         (d.size, d.alloc, d.files) = (0, 0, 0);
         // Na leitura, cada filho vem depois da pasta dele: de trás para frente, as somas fecham.
         for i in (base as usize..self.nodes.len()).rev() {
             let n = self.nodes[i];
-            if !n.is_dir() {
-                let e = ext(self.name(i as u32)).to_ascii_lowercase();
-                match self.types.iter_mut().find(|t| t.ext == e) {
-                    Some(t) => {
-                        t.size += n.size;
-                        t.files += 1;
-                    }
-                    None => self.types.push(TypeStat { ext: e, size: n.size, files: 1 }),
-                }
-            }
             let p = &mut self.nodes[n.parent as usize];
             p.size += n.size;
             p.alloc += n.alloc;
@@ -307,7 +346,7 @@ impl Scan {
             a.files = a.files.saturating_sub(old.files) + new.files;
         }
         self.index();
-        self.sort_types();
+        self.count_types();
         self.top_files();
         self.version = next_version();
     }
@@ -737,12 +776,16 @@ pub(crate) fn read_table(drive: char, p: &Progress, with_times: bool) -> Option<
 fn walk(root: std::path::PathBuf, p: &Progress) -> Walked {
     let mut nodes = vec![Node { flags: USED | DIR, ..Default::default() }];
     let mut names: Vec<u8> = Vec::new();
+    let mut denied = Vec::new();
     let mut stack = vec![(0u32, root)];
     while let Some((id, dir)) = stack.pop() {
         if p.cancel.load(Ordering::Relaxed) {
             break;
         }
-        let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+        let Ok(rd) = std::fs::read_dir(&dir) else {
+            denied.push(id);
+            continue;
+        };
         for e in rd.flatten() {
             let Ok(meta) = e.metadata() else { continue };
             let name = e.file_name().to_string_lossy().to_string();
@@ -768,13 +811,13 @@ fn walk(root: std::path::PathBuf, p: &Progress) -> Walked {
             p.done.fetch_add(1, Ordering::Relaxed);
         }
     }
-    Walked { nodes, names }
+    Walked { nodes, names, denied }
 }
 
 /// Caminho lento: para discos que não são NTFS ou sem administrador.
 fn scan_walk(drive: char, p: &Progress) -> Scan {
     let t0 = Instant::now();
-    let Walked { nodes, names } = walk(std::path::PathBuf::from(format!("{drive}:\\")), p);
+    let Walked { nodes, names, .. } = walk(std::path::PathBuf::from(format!("{drive}:\\")), p);
     let mut s = Scan {
         drive,
         nodes,
@@ -861,7 +904,7 @@ mod tests {
     }
 
     fn scan_of(root: &Path) -> Scan {
-        let Walked { nodes, names } = walk(root.to_path_buf(), &Progress::default());
+        let Walked { nodes, names, .. } = walk(root.to_path_buf(), &Progress::default());
         let mut s = Scan {
             drive: 'X',
             nodes,
@@ -917,10 +960,38 @@ mod tests {
         assert_eq!(ty(&s, "iso"), (3000, 1));
         assert_eq!(s.largest.first().map(|f| s.name(*f)), Some("new.iso"));
         assert_ne!(s.version, v);
+        assert_eq!(s.files, 5);
         // A pasta nova entra na árvore, com os filhos dela.
         let c = child(&s, b, "c");
         assert_eq!(s.name(child(&s, c, "new.log")), "new.log");
         assert_eq!(s.children(b).first().map(|k| s.name(*k)), Some("new.iso"));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn refresh_keeps_folders_that_did_not_open() {
+        let root = temp("denied");
+        put(&root, "a.log", 5);
+        put(&root.join("sub"), "x.iso", 3000);
+        let mut s = scan_of(&root);
+        put(&root, "b.log", 7);
+        // Simula "sem permissão" em sub: a leitura nova não tem nada dentro dela.
+        let mut w = walk(root.clone(), &Progress::default());
+        let sub = w.nodes.iter().skip(1).position(|n| n.is_dir()).unwrap() as u32 + 1;
+        let kept = w.nodes.iter().filter(|n| n.parent == 0).count();
+        w.nodes.truncate(kept);
+        w.denied = vec![sub];
+        s.replace(s.root, w);
+        assert_eq!(s.nodes[s.root as usize].size, 3012);
+        assert_eq!(s.files, 3);
+        assert_eq!(ty(&s, "iso"), (3000, 1));
+        let sub = child(&s, s.root, "sub");
+        assert_eq!(s.nodes[sub as usize].size, 3000);
+        assert_eq!(s.name(child(&s, sub, "x.iso")), "x.iso");
+        // A própria pasta não abriu: nada muda.
+        let v = s.version;
+        s.replace(s.root, walk(root.join("nao-existe"), &Progress::default()));
+        assert_eq!((s.version, s.nodes[s.root as usize].size), (v, 3012));
         let _ = fs::remove_dir_all(&root);
     }
 
@@ -947,6 +1018,7 @@ mod tests {
         assert_eq!(ty(&s, "log"), (30, 1));
         assert_eq!(ty(&s, ""), (0, 0));
         assert_eq!(s.nodes[s.root as usize].size, 129);
+        assert_eq!(s.files, 2);
         assert!(s.largest.iter().all(|f| s.exists(*f)));
         let _ = fs::remove_dir_all(&root);
     }

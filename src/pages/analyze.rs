@@ -218,10 +218,6 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
                     Err(e) => fails.push(format!("{path}: {e}")),
                 }
             }
-            if let Some(t) = &mut app.scan_type {
-                t.2.retain(|i| s.exists(*i));
-            }
-            app.scan_pick.retain(|i| s.exists(*i));
             drop(g);
             if n > 0 {
                 app.toast.info(&format!("{n} arquivos apagados, {} liberados", fmt_size(freed)));
@@ -243,10 +239,14 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
 }
 
 fn draw_result(ui: &mut Ui, app: &mut App, s: &Scan, area: Rect) {
-    let cur = match app.scan_at {
-        Some(c) if (c as usize) < s.nodes.len() && s.exists(c) => c,
-        _ => s.root,
-    };
+    // Pasta aberta que sumiu (apagada ou lida de novo): fica na mais próxima acima que ainda existe.
+    let mut cur = app.scan_at.filter(|c| (*c as usize) < s.nodes.len()).unwrap_or(s.root);
+    for _ in 0..512 {
+        if s.exists(cur) || cur == s.root {
+            break;
+        }
+        cur = s.nodes[cur as usize].parent;
+    }
     let lw = (area.w * 0.46).floor();
     let l = rect(area.x, area.y, lw, area.h);
     ui.card(l);
@@ -301,7 +301,8 @@ fn draw_result(ui: &mut Ui, app: &mut App, s: &Scan, area: Rect) {
     let kids: Vec<u32> = match app.scan_tab {
         0 => s.children(cur).iter().copied().filter(|k| s.exists(*k)).collect(),
         1 => s.largest.clone(),
-        _ => app.scan_type.as_ref().map_or(Vec::new(), |t| t.2.iter().copied().filter(|k| s.exists(*k)).collect()),
+        // Apagar ou ler de novo muda a versão, e a lista é refeita lá em cima: só tem o que existe.
+        _ => app.scan_type.as_ref().map_or(Vec::new(), |t| t.2.clone()),
     };
     let typed = app.scan_tab == 2;
     ui.begin_scroll("tree", list, kids.len() as f32 * 40.0);
