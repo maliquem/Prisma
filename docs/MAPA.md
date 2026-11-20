@@ -27,7 +27,7 @@ Convenção: `arquivo:linha nome`. "Atalho" é a combinação global (chaves `hk
 | `src/paste.rs` | Janela do "Colar com o Prisma" (`--paste=<pasta>`, processo à parte, antes do nome único, `main.rs:101`). Motor em `src/sys/copy.rs`. |
 | `src/sys/copylist.rs` | Listas da página Cópias: `Job` (`:21`) e `When` (`:13`), arquivos das listas e do histórico (`jobs_path` `:62`, `history_path` `:66`), agenda (`last_slot` `:189`, `next_slot` `:203`, `due` `:203`). Página em `src/pages/copies.rs` (seção 4.23). |
 | `src/sys/safeupd.rs` | Atualizações seguras (lógica sem tela): `Driver` `:13`, `Sev` `:23`, `Watch` `:47`, `State` `:61` (guardado em `atualizacoes.json`; `load` `:81`, `save` `:85`); agenda `due` `:94`, `verdict_at` `:111`; driver NVIDIA `parse_nv` `:153`, `pfid` `:170`, `nv_latest` `:209`; notas em PDF `pdf_text` `:219`, `open_issues` `:349`; problemas da Microsoft `parse_known` `:406`, `win_official` `:426`; Gemini `gemini` `:478`, `parse_reply` `:506`; `run` `:577` (devolve o estado novo e os avisos, `Notice` `:570`). Página em `src/pages/updates.rs` (seção 4.27). |
-| `src/sys/winupd.rs` | Windows Update pela API WUA: `WinUpd` `:13`, `pending` `:67` (como usuário comum), `set_hidden` `:93` (Bloquear e Desbloquear), `install` `:101`; política do Windows: `policy_on` `:134`, `set_policy` `:139`; `run_elevated` `:153` (abre a cópia de administrador com `--wu=`); `run_arg` `:158` (hide, show, install, policy; sai com 0 ok, 2 pede reinício, 3 falhou; `main.rs:85`). Página em `src/pages/updates.rs` (seção 4.27). |
+| `src/sys/winupd.rs` | Windows Update pela API WUA: `WinUpd` `:13`, `pending` `:67` (como usuário comum), `set_hidden` `:93` (Bloquear e Desbloquear), `install` `:101`; política do Windows: `policy_on` `:134`, `set_policy` `:139`; `run_elevated` `:153` (abre a cópia de administrador com `--wu=`); `parse` `:164` (valida o pedido: só ids em formato GUID, `is_guid` `:158`, e `policy:0|1`; o resto é recusado); `run_arg` `:177` (hide, show, install, policy; sai com 0 ok, 2 pede reinício, 3 falhou; `main.rs:85`). Página em `src/pages/updates.rs` (seção 4.27). |
 | `src/pages/updates.rs` | Página Atualizações seguras (seção 4.27): `draw` `:402`; `tick` `:76` (a cada segundo: recolhe a conferência, manda o aviso na bandeja e começa a agenda); `start` `:52` (conferência numa thread); `elevated` `:64` (ações de administrador). |
 | `src/selftest.rs` | Testes de fumaça das flags `--test-*` (só build de debug). |
 | `src/pages/` | Uma página por arquivo (seção 4). `pages/mod.rs` tem a barra lateral (`NAV`, linha 340) e o desenho geral (`draw`, linha 394). |
@@ -648,7 +648,7 @@ A barra lateral é `NAV` (`src/pages/mod.rs:340`), em cinco grupos (`GROUPS` `:3
 | Ações do Windows Update (Bloquear, Desbloquear, Instalar) e política | Botões do cartão Windows Update e a caixa de Opções | `elevated` `updates.rs:64` (thread com `winupd::run_elevated` `sys/winupd.rs:153`); `windows` `:289`; `options` `:343` (`elevated(app, "policy", ...)` `:394`) | Cada ação pede UAC. Códigos: 0 pronto, 2 reinício, 259 ainda rodando, outro: registro de ações. |
 | Textos e datas | Desenho | `when` `:124`; `clip` `:135`; `wrap_h` `:146`; `para` `:151`; `host` `:157`; `error_text` `:162` | |
 
-Testes: 8 em `sys/safeupd.rs` (veredito, agenda, PDF, Microsoft, NVIDIA). `sys/winupd.rs` e `pages/updates.rs` não têm teste.
+Testes: 8 em `sys/safeupd.rs` (veredito, agenda, PDF, Microsoft, NVIDIA). 1 em `sys/winupd.rs` (pedido da cópia de administrador). `pages/updates.rs` não tem teste.
 
 ---
 

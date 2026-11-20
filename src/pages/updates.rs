@@ -56,8 +56,13 @@ fn start(app: &mut App, force: bool, manual: bool) {
     app.su.running = true;
     let (st, key, wait) = (app.su.st.clone(), app.cfg.safe_key.clone(), app.cfg.safe_wait);
     std::thread::spawn(move || {
-        let (st, notes) = safeupd::run(st, &key, wait, force);
-        *DONE.lock().unwrap() = Some((st, notes, manual));
+        // Sempre devolve um resultado: sem ele a página ficaria em "Procurando..." e a agenda pararia.
+        let old = st.clone();
+        let (st, notes) = std::panic::catch_unwind(|| safeupd::run(st, &key, wait, force)).unwrap_or_else(|_| {
+            crate::config::log("Atualizações seguras: a conferência falhou");
+            (safeupd::State { checked: safeupd::now(), ..old }, Vec::new())
+        });
+        *DONE.lock().unwrap_or_else(|e| e.into_inner()) = Some((st, notes, manual));
     });
 }
 

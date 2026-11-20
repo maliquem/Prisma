@@ -154,17 +154,37 @@ pub fn run_elevated(op: &str) -> Option<u32> {
     crate::startup::run_elevated_wait(&format!("--wu={op}"))
 }
 
+/// UpdateID da WUA: um GUID, "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx".
+fn is_guid(s: &str) -> bool {
+    s.len() == 36 && s.bytes().enumerate().all(|(i, b)| if matches!(i, 8 | 13 | 18 | 23) { b == b'-' } else { b.is_ascii_hexdigit() })
+}
+
+/// O pedido da cópia de administrador, validado: só os comandos conhecidos, ids que são GUIDs e
+/// `policy:0|1`. Qualquer outra coisa é recusada (roda como administrador).
+fn parse(op: &str) -> Option<(&str, Vec<&str>)> {
+    let (cmd, rest) = op.split_once(':')?;
+    match cmd {
+        "policy" => matches!(rest, "0" | "1").then(|| (cmd, vec![rest])),
+        "hide" | "show" | "install" => {
+            let ids: Vec<&str> = rest.split(',').collect();
+            ids.iter().all(|i| is_guid(i)).then_some((cmd, ids))
+        }
+        _ => None,
+    }
+}
+
 /// Cópia de administrador: lê `--wu=` e sai.
 pub fn run_arg() -> Option<i32> {
     let op = std::env::args().find_map(|a| a.strip_prefix("--wu=").map(str::to_string))?;
-    let (cmd, rest) = op.split_once(':').unwrap_or((&op, ""));
-    let ids: Vec<&str> = rest.split(',').filter(|s| !s.is_empty()).collect();
+    let Some((cmd, ids)) = parse(&op) else {
+        crate::config::log("Windows Update: pedido inválido recusado");
+        return Some(3);
+    };
     let r = match cmd {
         "hide" => set_hidden(&ids, true),
         "show" => set_hidden(&ids, false),
         "install" => install(&ids),
-        "policy" => Ok(if set_policy(rest == "1") { 0 } else { 3 }),
-        _ => Ok(3),
+        _ => Ok(if set_policy(ids[0] == "1") { 0 } else { 3 }),
     };
     let code = r.unwrap_or_else(|e| {
         crate::config::log(&format!("Windows Update ({cmd}): falhou {:#010x}", e.code().0));
@@ -172,4 +192,22 @@ pub fn run_arg() -> Option<i32> {
     });
     crate::config::log(&format!("Windows Update ({cmd}, {} itens): {code}", ids.len()));
     Some(code as i32)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pedido_de_administrador_so_aceita_o_esperado() {
+        let g = "3b4d2c1a-0f9e-4d8c-a7b6-112233445566";
+        assert_eq!(parse(&format!("hide:{g}")), Some(("hide", vec![g])));
+        assert_eq!(parse(&format!("install:{g},{g}")).map(|p| p.1.len()), Some(2));
+        assert_eq!(parse("policy:1"), Some(("policy", vec!["1"])));
+        for bad in ["policy:2", "policy:", "hide:", "hide:abc", "install:3b4d2c1a-0f9e-4d8c-a7b6-11223344556\"", "del:x", "hide", ""] {
+            assert!(parse(bad).is_none(), "{bad}");
+        }
+        assert!(parse(&format!("show:{g},")).is_none());
+        assert!(parse(&format!("show:{g} & calc")).is_none());
+    }
 }
