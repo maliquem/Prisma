@@ -494,13 +494,13 @@ pub(crate) fn is_srgb(f: DXGI_FORMAT) -> bool {
 }
 
 /// O buffer de uma cadeia aceita vista _SRGB sobre formato UNORM (o Unity faz isso); textura comum só
-/// aceita se nascer sem tipo. A vista sem formato ganha o pedido em `view_desc`.
+/// aceita se nascer sem tipo. A vista sem formato ganha o pedido em `view_desc`. Formato sem par _SRGB
+/// (10 bits, FP16) fica com tipo: o ELDEN RING lê o formato do buffer e cai com um sem tipo.
 pub(crate) fn typeless(f: DXGI_FORMAT) -> DXGI_FORMAT {
     match f {
         DXGI_FORMAT_R8G8B8A8_UNORM | DXGI_FORMAT_R8G8B8A8_UNORM_SRGB => DXGI_FORMAT_R8G8B8A8_TYPELESS,
         DXGI_FORMAT_B8G8R8A8_UNORM | DXGI_FORMAT_B8G8R8A8_UNORM_SRGB => DXGI_FORMAT_B8G8R8A8_TYPELESS,
         DXGI_FORMAT_B8G8R8X8_UNORM | DXGI_FORMAT_B8G8R8X8_UNORM_SRGB => DXGI_FORMAT_B8G8R8X8_TYPELESS,
-        DXGI_FORMAT_R10G10B10A2_UNORM => DXGI_FORMAT_R10G10B10A2_TYPELESS,
         f => f,
     }
 }
@@ -508,7 +508,7 @@ pub(crate) fn typeless(f: DXGI_FORMAT) -> DXGI_FORMAT {
 /// Formato que, num buffer de cadeia, vale o do buffer: `UNKNOWN` (o Unreal pede assim) ou o sem tipo
 /// que o `GetDesc` do nosso buffer devolve.
 fn untyped(f: DXGI_FORMAT) -> bool {
-    matches!(f, DXGI_FORMAT_UNKNOWN | DXGI_FORMAT_R8G8B8A8_TYPELESS | DXGI_FORMAT_B8G8R8A8_TYPELESS | DXGI_FORMAT_B8G8R8X8_TYPELESS | DXGI_FORMAT_R10G10B10A2_TYPELESS)
+    matches!(f, DXGI_FORMAT_UNKNOWN | DXGI_FORMAT_R8G8B8A8_TYPELESS | DXGI_FORMAT_B8G8R8A8_TYPELESS | DXGI_FORMAT_B8G8R8X8_TYPELESS)
 }
 
 /// Descrição de vista sobre um buffer do jogo (`want` acha o proxy dele): sem descrição ou sem formato,
@@ -1254,18 +1254,19 @@ mod tests {
 
     #[test]
     fn views_without_format_get_the_game_format() {
-        let w = Want::new(1920, 1080, DXGI_FORMAT_R10G10B10A2_UNORM, 1, 0);
+        let w = Want::new(1920, 1080, DXGI_FORMAT_B8G8R8A8_UNORM, 1, 0);
         let make = |w: Want| D3D11_RENDER_TARGET_VIEW_DESC { Format: w.format, ..Default::default() };
         let ask = |format| D3D11_RENDER_TARGET_VIEW_DESC { Format: format, ViewDimension: D3D11_RTV_DIMENSION_TEXTURE2DARRAY, ..Default::default() };
         let run = |d: Option<&D3D11_RENDER_TARGET_VIEW_DESC>| unsafe { view_desc(d.map_or(std::ptr::null(), |d| d as *const _ as *const c_void), || Some(w), make) };
         // Sem descrição; e como o Unreal faz, formato vazio (ou o sem tipo do `GetDesc`) com o resto mantido.
-        assert_eq!(run(None).map(|d| d.Format), Some(DXGI_FORMAT_R10G10B10A2_UNORM));
-        for f in [DXGI_FORMAT_UNKNOWN, DXGI_FORMAT_R10G10B10A2_TYPELESS] {
+        assert_eq!(run(None).map(|d| d.Format), Some(DXGI_FORMAT_B8G8R8A8_UNORM));
+        for f in [DXGI_FORMAT_UNKNOWN, typeless(w.format)] {
             let d = run(Some(&ask(f))).unwrap();
-            assert_eq!((d.Format, d.ViewDimension), (DXGI_FORMAT_R10G10B10A2_UNORM, D3D11_RTV_DIMENSION_TEXTURE2DARRAY));
+            assert_eq!((d.Format, d.ViewDimension), (DXGI_FORMAT_B8G8R8A8_UNORM, D3D11_RTV_DIMENSION_TEXTURE2DARRAY));
         }
-        // Formato dado pelo jogo fica.
-        assert!(run(Some(&ask(DXGI_FORMAT_R10G10B10A2_UNORM))).is_none());
+        // Formato dado pelo jogo fica; 10 bits não tem par _SRGB e nasce com tipo.
+        assert!(run(Some(&ask(DXGI_FORMAT_B8G8R8A8_UNORM_SRGB))).is_none());
+        assert_eq!(typeless(DXGI_FORMAT_R10G10B10A2_UNORM), DXGI_FORMAT_R10G10B10A2_UNORM);
     }
 
     #[test]
