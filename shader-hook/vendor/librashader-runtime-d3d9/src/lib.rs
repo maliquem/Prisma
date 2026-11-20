@@ -2,7 +2,6 @@
 #![cfg_attr(feature = "nightly", feature(type_alias_impl_trait))]
 
 mod binding;
-mod d3dx;
 mod draw_quad;
 pub mod error;
 mod filter_chain;

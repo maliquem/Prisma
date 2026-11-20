@@ -73,9 +73,11 @@ pub fn slangp(p: &Profile, base: &Path) -> Res<String> {
         let s = std::path::absolute(f).unwrap_or_else(|_| f.to_path_buf()).to_string_lossy().into_owned();
         PathBuf::from(s.strip_prefix(r"\\?\UNC\").map(|x| format!(r"\\{x}")).or_else(|| s.strip_prefix(r"\\?\").map(str::to_string)).unwrap_or(s))
     };
-    let base = &plain(base);
+    // Canônicos dos dois lados: com a pasta de dados atrás de junção ou `subst`, o caminho do librashader é o real.
+    let real = |f: &Path| plain(&std::fs::canonicalize(f).unwrap_or_else(|_| f.to_path_buf()));
+    let base = &real(base);
     let at = |f: &Path| {
-        let f = plain(f);
+        let f = real(f);
         f.strip_prefix(base).map_or_else(|_| f.display().to_string(), |r| r.to_string_lossy().replace('\\', "/"))
     };
     let mut s = format!("# Prisma: {}\nshaders = {}\n", p.name, c.passes.len());
@@ -410,6 +412,14 @@ mod tests {
         let out = dir.join("saida.slangp");
         let text = slangp(&prof, &dir).unwrap();
         assert!(text.contains("shader0 = \"a/x.slang\"") && text.contains("shader2 = \"b/sub/y.slang\"") && text.contains("LUT = \"a/lut.png\""), "{text}");
+        // A pasta vista por uma junção (como uma pasta de dados movida): o librashader dá o caminho real, e o
+        // preset sai relativo do mesmo jeito.
+        let j = dir.with_extension("j");
+        if std::process::Command::new("cmd").args(["/c", "mklink", "/J"]).arg(&j).arg(&dir).output().is_ok_and(|o| o.status.success()) {
+            let t = slangp(&prof, &j);
+            let _ = std::fs::remove_dir(&j);
+            assert!(t.unwrap().contains("shader0 = \"a/x.slang\""));
+        }
         std::fs::write(&out, text).unwrap();
         let back = ShaderPreset::try_parse(&out, ShaderFeatures::NONE).unwrap();
         assert_eq!(back.passes.iter().map(|x| &x.path).collect::<Vec<_>>(), p.passes.iter().map(|x| &x.path).collect::<Vec<_>>());

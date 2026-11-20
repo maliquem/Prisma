@@ -1186,6 +1186,10 @@ Injeção desligada: o jogo caiu com ela.	Injection off: the game crashed with i
 Injeção desligada: o jogo caiu	Injection off: the game crashed
 Injeção bloqueada: anti-cheat detectado.	Injection blocked: anti-cheat detected.
 Injeção parada: geração de quadros carregada.	Injection stopped: frame generation loaded.
+A Injeção não cobre a API deste jogo ({}); voltou para Por cima.	Injection does not cover this game's API ({}); back to Overlay.
+A DLL da Injeção não entrou no jogo; voltou para Por cima.	The Injection DLL did not get into the game; back to Overlay.
+Nenhum quadro do jogo passou pela Injeção; voltou para Por cima.	No game frame went through Injection; back to Overlay.
+O jogo fechou com erro durante a Injeção; voltou para Por cima.	The game closed with an error during Injection; back to Overlay.
 A injeção não carregou neste jogo.	Injection did not load in this game.
 Usar injeção neste jogo?	Use injection in this game?
 O limite passa a mudar na hora, mas um módulo do Prisma entra no jogo, e isso pode derrubá-lo. Não use em jogo online: um anti-cheat pode punir mesmo sem ter sido detectado aqui. Se o jogo cair, a injeção desliga sozinha.	The limit changes right away, but a Prisma module enters the game, which can crash it. Do not use it online: an anti-cheat can punish you even if none was detected here. If the game crashes, injection turns itself off.

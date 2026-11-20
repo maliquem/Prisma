@@ -116,9 +116,13 @@ impl Drop for Link {
 use std::sync::atomic::Ordering::*;
 
 /// Grava no perfil que ele volta para a janela por cima, com o motivo no log.
-fn to_overlay(eng: &mut Engine, dev: &ID3D11Device, why: &str) -> Res<bool> {
+/// `code` vai para o perfil (`fallback`) e a página diz o motivo; `why` só para o log.
+fn to_overlay(eng: &mut Engine, dev: &ID3D11Device, code: &str, why: &str) -> Res<bool> {
     eprintln!("shader: injeção não serve neste jogo ({why}); o perfil volta para Por cima");
-    eng.edit(dev, |p| p.inject = false);
+    eng.edit(dev, |p| {
+        p.inject = false;
+        p.fallback = code.to_string();
+    });
     Ok(false)
 }
 
@@ -159,11 +163,11 @@ fn run_in(path: &Path, game: HWND, pid: u32, process: HANDLE) -> Res<bool> {
         eng.edit(&d.dev, |p| p.api = api.clone());
     }
     if !api.is_empty() && !api_supported(&api) {
-        return to_overlay(&mut eng, &d.dev, &api);
+        return to_overlay(&mut eng, &d.dev, "api", &api);
     }
     let link = match Link::attach(pid, game, &eng.path, wow) {
         Ok(l) => l,
-        Err(e) => return to_overlay(&mut eng, &d.dev, &e.to_string()),
+        Err(e) => return to_overlay(&mut eng, &d.dev, "dll", &e.to_string()),
     };
     let keys = crate::shader_profile::Keys::load(&crate::shader_profile::keys_path());
     super::hold_keys(&keys);
@@ -194,11 +198,14 @@ fn run_in(path: &Path, game: HWND, pid: u32, process: HANDLE) -> Res<bool> {
             }
             // Sem Present há 250 ms o jogo já estava saindo: a queda é dele (o Castlevania Advance Collection cai
             // assim sem o Prisma), e o perfil fica na Injeção.
-            if code.is_some_and(crate::sys::inject::is_crash) && idle >= Duration::from_millis(250) {
+            if code.is_some_and(crate::sys::inject::is_crash) && presents > 0 && idle >= Duration::from_millis(250) {
                 eprintln!("shader: o jogo caiu ao sair ({:#x}), {} ms depois do último quadro; o perfil continua na Injeção", code.unwrap(), idle.as_millis());
             } else if code.is_some_and(crate::sys::inject::is_crash) {
                 eprintln!("shader: o jogo caiu com a injeção ({:#x}); o perfil volta para Por cima", code.unwrap());
-                eng.edit(&d.dev, |p| p.inject = false);
+                eng.edit(&d.dev, |p| {
+                    p.inject = false;
+                    p.fallback = "crash".into();
+                });
             }
             eprintln!("o jogo fechou");
             break Ok(true);
@@ -212,7 +219,7 @@ fn run_in(path: &Path, game: HWND, pid: u32, process: HANDLE) -> Res<bool> {
             None => {
                 let state = s.state.load(SeqCst);
                 if state == STATE_FAILED || (s.magic.load(SeqCst) != MAGIC && since.elapsed().as_secs() >= WAIT_SECS) {
-                    break to_overlay(&mut eng, &d.dev, "a DLL não carregou ou não achou o Present");
+                    break to_overlay(&mut eng, &d.dev, "dll", "a DLL não carregou ou não achou o Present");
                 }
                 if state == STATE_READY {
                     ready = Some(Instant::now());
@@ -222,7 +229,7 @@ fn run_in(path: &Path, game: HWND, pid: u32, process: HANDLE) -> Res<bool> {
             }
             // Nenhum Present passou pela DLL: o jogo apresenta por um caminho que ela não cobre.
             Some(t) if s.presents.load(Relaxed) == 0 && t.elapsed() >= API_WAIT => {
-                break to_overlay(&mut eng, &d.dev, "nenhum quadro passou pela DLL");
+                break to_overlay(&mut eng, &d.dev, "frames", "nenhum quadro passou pela DLL");
             }
             _ => {}
         }
@@ -231,7 +238,7 @@ fn run_in(path: &Path, game: HWND, pid: u32, process: HANDLE) -> Res<bool> {
             eprintln!("shader: o jogo apresenta em {seen}");
             eng.edit(&d.dev, |p| p.api = seen.to_string());
             if !api_supported(seen) {
-                break to_overlay(&mut eng, &d.dev, seen);
+                break to_overlay(&mut eng, &d.dev, "api", seen);
             }
         }
         if polled.elapsed().as_millis() >= 250 {

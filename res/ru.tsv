@@ -1180,6 +1180,10 @@ Injeção desligada: o jogo caiu com ela.	Внедрение выключено:
 Injeção desligada: o jogo caiu	Внедрение выключено: игра упала
 Injeção bloqueada: anti-cheat detectado.	Внедрение заблокировано: обнаружен античит.
 Injeção parada: geração de quadros carregada.	Внедрение остановлено: загружена генерация кадров.
+A Injeção não cobre a API deste jogo ({}); voltou para Por cima.	Внедрение не поддерживает API этой игры ({}); возвращён режим «Поверх».
+A DLL da Injeção não entrou no jogo; voltou para Por cima.	DLL внедрения не попала в игру; возвращён режим «Поверх».
+Nenhum quadro do jogo passou pela Injeção; voltou para Por cima.	Ни один кадр игры не прошёл через внедрение; возвращён режим «Поверх».
+O jogo fechou com erro durante a Injeção; voltou para Por cima.	Игра закрылась с ошибкой во время внедрения; возвращён режим «Поверх».
 A injeção não carregou neste jogo.	Внедрение не загрузилось в этой игре.
 Usar injeção neste jogo?	Использовать внедрение в этой игре?
 O limite passa a mudar na hora, mas um módulo do Prisma entra no jogo, e isso pode derrubá-lo. Não use em jogo online: um anti-cheat pode punir mesmo sem ter sido detectado aqui. Se o jogo cair, a injeção desliga sozinha.	Ограничение меняется сразу, но в игру входит модуль Prisma, что может её обрушить. Не используйте в сети: античит может наказать, даже если здесь он не обнаружен. Если игра упадёт, внедрение выключится само.

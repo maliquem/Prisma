@@ -1180,6 +1180,10 @@ Injeção desligada: o jogo caiu com ela.	注入已关闭：游戏曾因此崩�
 Injeção desligada: o jogo caiu	注入已关闭：游戏崩溃了
 Injeção bloqueada: anti-cheat detectado.	注入已阻止：检测到反作弊。
 Injeção parada: geração de quadros carregada.	注入已停止：已加载帧生成。
+A Injeção não cobre a API deste jogo ({}); voltou para Por cima.	注入不支持此游戏的 API（{}）；已恢复为“叠加”。
+A DLL da Injeção não entrou no jogo; voltou para Por cima.	注入 DLL 未能进入游戏；已恢复为“叠加”。
+Nenhum quadro do jogo passou pela Injeção; voltou para Por cima.	游戏没有任何画面帧经过注入；已恢复为“叠加”。
+O jogo fechou com erro durante a Injeção; voltou para Por cima.	游戏在注入期间因错误而关闭；已恢复为“叠加”。
 A injeção não carregou neste jogo.	注入没有在此游戏中加载。
 Usar injeção neste jogo?	在此游戏中使用注入？
 O limite passa a mudar na hora, mas um módulo do Prisma entra no jogo, e isso pode derrubá-lo. Não use em jogo online: um anti-cheat pode punir mesmo sem ter sido detectado aqui. Se o jogo cair, a injeção desliga sozinha.	限制会立即改变，但 Prisma 的模块会进入游戏，可能导致崩溃。不要在联机时使用：即使这里没检测到反作弊，也可能受到处罚。如果游戏崩溃，注入会自动关闭。

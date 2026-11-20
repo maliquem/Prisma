@@ -539,7 +539,7 @@ fn export(app: &mut App, s: &mut St) {
     let Some(p) = s.cur().cloned() else { return };
     let root = sp::root();
     let name: String = p.name.chars().map(|c| if c.is_alphanumeric() || " -_.()".contains(c) { c } else { '_' }).collect();
-    let to = root.join(format!("{}.slangp", if name.trim().is_empty() { "preset" } else { name.trim() }));
+    let to = sp::free_name(&root, if name.trim().is_empty() { "preset" } else { name.trim() });
     match crate::shader::slangp(&p, &root) {
         Ok(text) if crate::config::write_safe(&to, &text).is_ok() => {
             s.lib = None;
@@ -834,6 +834,7 @@ fn left_card(ui: &mut Ui, app: &mut App, s: &mut St, r: Rect) {
     if ui.segment("shd-mode", ix + lw, y, 32.0, names, &mut m) {
         if let Some(c) = s.cur() {
             c.inject = m == 1;
+            c.fallback.clear();
         }
         s.changed();
         s.flush();
@@ -901,6 +902,17 @@ fn left_card(ui: &mut Ui, app: &mut App, s: &mut St, r: Rect) {
     }
     if !s.missing.is_empty() {
         warn(ui, &mut y, &crate::i18n::tr("Faltam arquivos do preset importado (baixe a biblioteca ou copie para ela): {}").replace("{}", &s.missing.join(", ")), None);
+    }
+    // O motor tirou a Injeção deste jogo: o motivo, até o jogador escolher o modo de novo.
+    let why = match p.fallback.as_str() {
+        "api" => Some(crate::i18n::tr("A Injeção não cobre a API deste jogo ({}); voltou para Por cima.").replace("{}", &p.api)),
+        "dll" => Some(crate::i18n::tr("A DLL da Injeção não entrou no jogo; voltou para Por cima.").into_owned()),
+        "frames" => Some(crate::i18n::tr("Nenhum quadro do jogo passou pela Injeção; voltou para Por cima.").into_owned()),
+        "crash" => Some(crate::i18n::tr("O jogo fechou com erro durante a Injeção; voltou para Por cima.").into_owned()),
+        _ => None,
+    };
+    if let Some(w) = why.filter(|_| !p.inject) {
+        warn(ui, &mut y, &w, None);
     }
     if s.hdr {
         warn(ui, &mut y, "Monitor em HDR: a imagem é convertida para SDR antes do filtro (brilho acima do branco é cortado).", None);

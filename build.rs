@@ -53,7 +53,7 @@ fn build_hook() {
 /// Os shaders no modo Injeção: outra DLL, para o limitador continuar pequeno. Sai no mesmo perfil do programa
 /// (debug no `cargo build`), sem `--locked`: o Cargo.lock dela não é guardado, como o do APO.
 fn build_shader_hook() {
-    for p in ["shader-hook/src", "shader-hook/Cargo.toml", "shader-hook/build.rs", "shader-hook/vendor", "crates/prisma-shader/src", "crates/prisma-shader/Cargo.toml"] {
+    for p in ["shader-hook/src", "shader-hook/Cargo.toml", "shader-hook/vendor", "crates/prisma-shader/src", "crates/prisma-shader/Cargo.toml"] {
         println!("cargo:rerun-if-changed={p}");
     }
     let out = std::path::Path::new(&std::env::var("OUT_DIR").unwrap()).join("shader-hook");
@@ -69,6 +69,7 @@ fn build_shader_hook() {
         if std::env::var("PROFILE").as_deref() == Ok("release") {
             cmd.arg("--release");
         }
-        assert!(cmd.status().expect("falha ao chamar o cargo").success(), "falha ao compilar a DLL de shaders ({target:?})");
+        let hint = if target.is_some() { " (falta o alvo? rode: rustup target add i686-pc-windows-msvc)" } else { "" };
+        assert!(cmd.status().expect("falha ao chamar o cargo").success(), "falha ao compilar a DLL de shaders ({target:?}){hint}");
     }
 }

@@ -120,9 +120,17 @@ pub fn import(src: &Path, root: &Path) -> std::io::Result<(PathBuf, Vec<String>)
         out += &format!("{head}\"{new}\"\n");
     }
     std::fs::create_dir_all(root)?;
-    let to = root.join(src.file_name().unwrap_or("importado.slangp".as_ref()));
+    // Um preset que já está em `root` é reescrito no lugar; um de fora não toma o lugar de outro de mesmo nome.
+    let here = src.parent().and_then(|d| std::fs::canonicalize(d).ok()) == std::fs::canonicalize(root).ok();
+    let stem = src.file_stem().map_or("importado".into(), |s| s.to_string_lossy());
+    let to = if here { root.join(format!("{stem}.slangp")) } else { free_name(root, &stem) };
     crate::config::write_safe(&to, out)?;
     Ok((to, missing))
+}
+
+/// `dir/nome.slangp`, ou `nome (2).slangp`, `(3)`… se já existir: nunca grava por cima de um preset do jogador.
+pub fn free_name(dir: &Path, stem: &str) -> PathBuf {
+    (1..).map(|i| dir.join(if i == 1 { format!("{stem}.slangp") } else { format!("{stem} ({i}).slangp") })).find(|p| !p.exists()).unwrap()
 }
 
 /// Um caminho do preset importado, visto de `root` (veja `import`). `files` é a biblioteca toda, lida só se
@@ -157,14 +165,18 @@ fn relink(old: &str, from: &Path, lib: &Path, files: &mut Option<Vec<PathBuf>>) 
             (n > 0).then_some((n, r))
         })
         .max_by_key(|x| x.0);
-    if let Some((_, r)) = best {
-        return format!("{LIB}/{}", r.to_string_lossy().replace('\\', "/"));
+    let lib_path = |r: &Path| format!("{LIB}/{}", r.to_string_lossy().replace('\\', "/"));
+    // Pasta e arquivo batendo é a biblioteca; só o nome do arquivo perde para o arquivo ao lado do preset.
+    if let Some((n, r)) = best {
+        if n >= 2 {
+            return lib_path(r);
+        }
     }
     let f = from.join(old);
     if f.exists() {
         return std::path::absolute(&f).unwrap_or(f).display().to_string();
     }
-    old.to_string()
+    best.map_or_else(|| old.to_string(), |(_, r)| lib_path(r))
 }
 
 #[cfg(test)]
@@ -186,13 +198,15 @@ mod tests {
         let ra = d.join("RetroArch").join("config").join("Snes9x");
         std::fs::create_dir_all(&ra).unwrap();
         std::fs::write(ra.join("mine.slang"), "").unwrap();
+        // Mesmo nome de um da biblioteca, ao lado do preset: fica o de perto.
+        std::fs::write(ra.join("a.slang"), "").unwrap();
         let src = ra.join("Snes9x.slangp");
         std::fs::write(
             &src,
-            "#reference \":/shaders/shaders_slang/crt/crt-x.slangp\"\nshaders = 5\n\
+            "#reference \":/shaders/shaders_slang/crt/crt-x.slangp\"\nshaders = 6\n\
              shader0 = \"../../shaders/shaders_slang/crt/shaders/a.slang\"\n\
              shader1 = \"C:\\RetroArch\\shaders\\shaders_slang\\crt\\shaders\\a.slang\"\n\
-             shader2 = \"outro/lugar/crt/shaders/a.slang\"\nshader3 = mine.slang\nshader4 = \"sumiu.slang\"\n\
+             shader2 = \"outro/lugar/crt/shaders/a.slang\"\nshader3 = mine.slang\nshader4 = \"sumiu.slang\"\nshader5 = a.slang\n\
              alias0 = \"Reference\"\ntextures = \"frame;gone\"\nframe = \":/shaders/shaders_slang/crt/frame.png\"\n\
              frame_linear = true\ngone = \"nada/sumiu.png\"\nwarpX = \"0.000000\"\n",
         )
@@ -203,11 +217,12 @@ mod tests {
         let mine = std::path::absolute(ra.join("mine.slang")).unwrap();
         for l in [
             "#reference \"shaders_slang/crt/crt-x.slangp\"",
-            "shaders = 5",
+            "shaders = 6",
             "shader0 = \"shaders_slang/crt/shaders/a.slang\"",
             "shader1 = \"shaders_slang/crt/shaders/a.slang\"",
             "shader2 = \"shaders_slang/crt/shaders/a.slang\"",
             &format!("shader3 = \"{}\"", mine.display()),
+            &format!("shader5 = \"{}\"", std::path::absolute(ra.join("a.slang")).unwrap().display()),
             "alias0 = \"Reference\"",
             "frame = \"shaders_slang/crt/frame.png\"",
             "frame_linear = true",
@@ -216,6 +231,9 @@ mod tests {
             assert!(got.lines().any(|x| x == l), "{l}\n{got}");
         }
         assert_eq!(missing, ["sumiu.slang", "nada/sumiu.png"]);
+        // De novo: o primeiro fica, o novo ganha outro nome; o que já está em `root` é reescrito no lugar.
+        assert_eq!(import(&src, &root).unwrap().0, root.join("Snes9x (2).slangp"));
+        assert_eq!(import(&to, &root).unwrap().0, to);
         let _ = std::fs::remove_dir_all(&d);
     }
 

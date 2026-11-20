@@ -1180,6 +1180,10 @@ Injeção desligada: o jogo caiu com ela.	Inyección desactivada: el juego fall�
 Injeção desligada: o jogo caiu	Inyección desactivada: el juego falló
 Injeção bloqueada: anti-cheat detectado.	Inyección bloqueada: antitrampas detectado.
 Injeção parada: geração de quadros carregada.	Inyección detenida: generación de fotogramas cargada.
+A Injeção não cobre a API deste jogo ({}); voltou para Por cima.	La Inyección no cubre la API de este juego ({}); volvió a Superpuesto.
+A DLL da Injeção não entrou no jogo; voltou para Por cima.	La DLL de la Inyección no entró en el juego; volvió a Superpuesto.
+Nenhum quadro do jogo passou pela Injeção; voltou para Por cima.	Ningún fotograma del juego pasó por la Inyección; volvió a Superpuesto.
+O jogo fechou com erro durante a Injeção; voltou para Por cima.	El juego se cerró con un error durante la Inyección; volvió a Superpuesto.
 A injeção não carregou neste jogo.	La inyección no cargó en este juego.
 Usar injeção neste jogo?	¿Usar inyección en este juego?
 O limite passa a mudar na hora, mas um módulo do Prisma entra no jogo, e isso pode derrubá-lo. Não use em jogo online: um anti-cheat pode punir mesmo sem ter sido detectado aqui. Se o jogo cair, a injeção desliga sozinha.	El límite cambia al instante, pero un módulo de Prisma entra en el juego, lo que puede hacerlo fallar. No lo uses en línea: un antitrampas puede castigarte aunque aquí no se haya detectado ninguno. Si el juego falla, la inyección se desactiva sola.

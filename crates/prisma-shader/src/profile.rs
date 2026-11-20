@@ -22,6 +22,8 @@ pub struct Profile {
     pub inject: bool,
     /// API de vídeo que o motor viu no jogo (dx11, d3d9, dx12, vulkan, opengl); vazio antes de ver.
     pub api: String,
+    /// Por que o motor tirou a Injeção (api, dll, frames, crash), para a página dizer; vazio se não tirou.
+    pub fallback: String,
     pub passes: Vec<Pass>,
     /// Só os valores diferentes do padrão, na ordem em que foram gravados.
     pub params: Vec<(String, f32)>,
@@ -31,7 +33,7 @@ pub struct Profile {
 
 impl Default for Profile {
     fn default() -> Self {
-        Self { name: String::new(), exe: PathBuf::new(), on: true, input: "auto".into(), record: false, inject: false, api: String::new(), passes: vec![], params: vec![], extra: vec![] }
+        Self { name: String::new(), exe: PathBuf::new(), on: true, input: "auto".into(), record: false, inject: false, api: String::new(), fallback: String::new(), passes: vec![], params: vec![], extra: vec![] }
     }
 }
 
@@ -54,6 +56,7 @@ impl Profile {
                 "record" => p.record = v == "1",
                 "mode" => p.inject = v == "inject",
                 "api" => p.api = v.to_string(),
+                "fallback" => p.fallback = v.to_string(),
                 "pass" => match v.split_once('|') {
                     Some((on, path)) => p.passes.push(Pass { on: on == "1", path: path.into() }),
                     None => p.extra.push(line.to_string()),
@@ -74,6 +77,9 @@ impl Profile {
         let mut s = format!("name={}\nexe={}\non={}\ninput={}\nrecord={}\nmode={mode}\n", self.name, self.exe.display(), b(self.on), self.input, b(self.record));
         if !self.api.is_empty() {
             s += &format!("api={}\n", self.api);
+        }
+        if !self.fallback.is_empty() {
+            s += &format!("fallback={}\n", self.fallback);
         }
         for p in &self.passes {
             s += &format!("pass={}|{}\n", b(p.on), p.path.display());
@@ -208,10 +214,10 @@ mod tests {
 
     #[test]
     fn ida_e_volta() {
-        let t = "name=Castlevania\nexe=C:\\Jogos\\game.exe\non=1\ninput=auto\nrecord=0\nmode=inject\napi=dx11\npass=1|C:\\lib\\ntsc\\a.slangp\npass=0|C:\\lib\\crt\\b.slangp\nparam=hardScan=-14\nfuturo=x\n";
+        let t = "name=Castlevania\nexe=C:\\Jogos\\game.exe\non=1\ninput=auto\nrecord=0\nmode=inject\napi=dx11\nfallback=frames\npass=1|C:\\lib\\ntsc\\a.slangp\npass=0|C:\\lib\\crt\\b.slangp\nparam=hardScan=-14\nfuturo=x\n";
         let p = Profile::parse(t);
         assert_eq!(p.passes.len(), 2);
-        assert!(p.inject && p.api == "dx11" && !Profile::default().inject);
+        assert!(p.inject && p.api == "dx11" && p.fallback == "frames" && !Profile::default().inject);
         assert!(!p.passes[1].on);
         assert_eq!(p.param("hardScan"), Some(-14.0));
         assert_eq!(p.extra, vec!["futuro=x".to_string()]);

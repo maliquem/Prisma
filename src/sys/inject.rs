@@ -91,8 +91,17 @@ pub fn load_wow(pid: u32, dll: &[u8], helper: &[u8], dir: &str, name: &str) -> O
     let exe = dll_path(helper, dir, "prisma_hook32", "exe")?;
     let tid = window_thread(pid)?;
     let mut child = Command::new(exe).arg(&path).arg(name).arg(tid.to_string()).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().ok()?;
-    let mut line = String::new();
-    if child.stdout.take().is_some_and(|o| std::io::BufReader::new(o).read_line(&mut line).is_ok()) && line.trim() == "ok" {
+    // A resposta em outra linha: um ajudante preso (antivírus olhando o exe recém-gravado, jogo parado) não
+    // segura o motor; no estouro ele é fechado e quem chamou volta para Por cima.
+    let (tx, rx) = std::sync::mpsc::channel();
+    if let Some(o) = child.stdout.take() {
+        std::thread::spawn(move || {
+            let mut line = String::new();
+            let ok = std::io::BufReader::new(o).read_line(&mut line).is_ok() && line.trim() == "ok";
+            let _ = tx.send(ok);
+        });
+    }
+    if rx.recv_timeout(std::time::Duration::from_secs(WAIT_SECS)) == Ok(true) {
         return Some(child);
     }
     let _ = child.kill();
