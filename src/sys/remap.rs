@@ -158,7 +158,7 @@ pub fn abbr_ok(a: &str) -> bool {
 
 /// Ações do Prisma que um botão pode chamar: todas as que têm atalho, mais HDR, Bluetooth e
 /// bateria. A ordem é a do arquivo: só cresce no fim. `SOUND + n` troca para a combinação de som n.
-pub const ACTIONS: [&str; 58] = [
+pub const ACTIONS: [&str; 59] = [
     "Foto da área",
     "Foto da tela inteira",
     "Foto da janela em foco",
@@ -219,6 +219,7 @@ pub const ACTIONS: [&str; 58] = [
     "Página Atalhos",
     "Página Desempenho",
     "Página Shaders",
+    "Página Atualizações",
 ];
 /// Ação que abre e fecha o teclado do Prisma (`sys::osk`).
 pub const KEYBOARD: u8 = 26;
@@ -3606,7 +3607,7 @@ buzz 9
             "prisma-profile 1\nname x\ntext ob-g Oi\nlayer - B",
             "prisma-profile 1\nname x\ntext obg Oi\ntext obg Tchau\nlayer - B",
             "prisma-profile 1\nname x\ntext obg Oi\nlayer - B\nbind 0 A press text 1",
-            "prisma-profile 1\nname x\nlayer - B\nbind 0 A press action 58",
+            "prisma-profile 1\nname x\nlayer - B\nbind 0 A press action 59",
             "prisma-profile 1\nname x\nlayer - B\nbind 0 A press action 112",
             "prisma-profile 1\nname x\nlayer - B\nturbo A 1 500 on",
             "prisma-profile 1\nname x\nlayer - B\nturbo A 2 500 maybe",

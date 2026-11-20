@@ -180,6 +180,44 @@ A página Cópias fica na barra lateral, no grupo Manutenção, depois de Ferram
 - **Listas de cópia:** uma lista junta arquivos e pastas de vários lugares num destino só. Campos: **Nome**; **O que copiar**, com **Adicionar arquivos**, **Adicionar pasta** e **Tirar da lista**; **Para onde**, com **Escolher**; **Quando**: **Só quando eu mandar**, **Uma vez** (com dia, mês, hora e minuto), **Todo dia** ou **Dias da semana**; **Se o arquivo já existir no destino**: **Pular**, **Substituir** ou **Manter os dois**; **Conferir com hash (SHA-256)**; e **Mover em vez de copiar**. Os botões são **Copiar agora**, **Salvar** e **Apagar lista**. As listas ficam no arquivo copias.txt.
 - **Agendada:** a cópia agendada só roda com o Prisma aberto, na bandeja. Se o PC estava desligado na hora, ela roda quando o Prisma abrir. Nada entra no Agendador de Tarefas do Windows, e a janela da cópia agendada abre sem roubar o foco.
 
+## Atualizações seguras
+
+A página Atualizações fica na barra lateral, no grupo Manutenção, depois de Cópias. No alto, **Procurar agora** confere na hora. Ela tem três cartões: **Driver NVIDIA**, **Windows Update** e **Opções**.
+
+- **Driver NVIDIA:** mostra o driver instalado e o mais novo, pelo site de busca de drivers da NVIDIA e pelo nome da sua placa. Sem placa NVIDIA, o cartão diz isso. Ao lado ficam **Baixar**, **Notas da versão** (PDF da NVIDIA) e **Discussão no Reddit** (busca do megathread de drivers Game Ready no r/nvidia).
+- **Windows Update:** lista as atualizações pendentes, com título e KB. As bloqueadas aparecem marcadas como **Bloqueada**. Definições do Defender não contam como novidade. Marque uma ou mais e use **Bloquear** (esconde no Windows Update até você desbloquear), **Desbloquear** ou **Instalar** (baixa e instala; pode pedir para reiniciar). **Discussão no Reddit** abre a busca do megathread "Cumulative Updates" no r/Windows11 (r/Windows10 no Windows 10).
+- **Opções:** ajustes da conferência e da espera, descritos abaixo.
+
+### Veredito
+
+Quando sai driver ou atualização nova, o Prisma avisa na bandeja; o clique abre a página. Ele não opina na hora: espera o tempo escolhido em **Esperar relatos por** (24 horas, **3 dias** por padrão, ou 4 dias). Depois pesquisa e mostra:
+
+- **Recomendado instalar** ou **Melhor esperar**.
+- **N% sem problemas (estimativa)**. É uma estimativa da IA a partir das reclamações em fóruns. Não existe estatística oficial, e a tela diz isso.
+- Os bugs, cada um com gravidade **Grave**, **Médio** ou **Baixo**. No cartão do driver aparecem **Problemas que a NVIDIA admite** (os Open Issues das notas da versão); no cartão do Windows, **Problemas que a Microsoft admite** (os known issues da página release health da versão).
+- **Fontes**, com links.
+
+**Pesquisar agora** pula a espera e aparece enquanto não há veredito (e, depois de um veredito sem chave, quando há chave guardada). Se a pesquisa falhar, a tela mostra o motivo e pede para tentar de novo em uma hora.
+
+Com chave do Gemini, a pesquisa usa a busca do Google, começando pelos megathreads do r/nvidia e do r/Windows11, e depois fórum da NVIDIA, Guru3D, Overclockers, Windows Latest, BleepingComputer e Neowin. A cota grátis passa de 500 pesquisas por dia.
+
+Sem chave, o veredito usa só as fontes oficiais: os problemas conhecidos da Microsoft e os Open Issues da NVIDIA.
+
+O Reddit não deixa ler sem login, por isso o Prisma o alcança pela busca do Gemini e pelos botões **Discussão no Reddit**.
+
+### Opções
+
+- **Conferir:** **Desligado** (padrão), **Todo dia**, **A cada 2 dias**, **A cada 3 dias** ou **Toda semana**. A conferência só roda com o Prisma aberto ou na bandeja; não cria tarefa no Agendador de Tarefas do Windows.
+- **Esperar relatos por:** 24 horas, **3 dias** (padrão) ou 4 dias.
+- **Chave do Gemini:** **Colar chave** usa a área de transferência; **Apagar chave**; **Pegar uma chave grátis** abre aistudio.google.com/apikey. A chave fica nas configurações do Prisma e não vai para o registro de ações.
+- **Avisar antes de baixar atualizações do Windows e não trocar o driver de vídeo pelo Windows Update:** grava a política do próprio Windows. Pede a permissão de administrador. Desmarcar apaga esses valores.
+
+### Permissão e reversão
+
+- Cada ação no Windows Update pede a permissão de administrador (UAC) na hora. O Prisma abre uma cópia de si mesmo como administrador só para aquela ação. Não usa o serviço do Compartilhar tela.
+- Tudo é reversível: **Desbloquear** libera a atualização bloqueada, e desmarcar a caixa de política apaga os valores que ela gravou.
+- O serviço do Windows Update (wuauserv) continua ligado.
+
 ## Otimizar
 
 Sugere o que fechar antes de jogar e sempre pergunta. Blacklist nunca fecha, Whitelist sempre fecha, e a detecção automática sugere nomes para as duas listas. Atalho: Ctrl + Alt + O.

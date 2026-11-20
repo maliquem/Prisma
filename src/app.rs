@@ -461,6 +461,9 @@ pub struct App {
     pub boot_sel: Option<usize>,
     /// Página Cópias: histórico, listas e a lista aberta.
     pub cp: crate::pages::copies::Data,
+    pub su: crate::pages::updates::Data,
+    /// Página que abre ao clicar na última notificação da bandeja.
+    pub tray_page: Page,
     pub boot_sig: Option<String>,
     pub services: Vec<services::Service>,
     pub svc_filter: u8,
@@ -684,6 +687,8 @@ pub fn start(background: bool) {
             boot_items: Vec::new(),
             boot_sel: None,
             cp: Default::default(),
+            su: Default::default(),
+            tray_page: Page::Share,
             boot_sig: None,
             services: Vec::new(),
             svc_filter: 0,
@@ -1067,6 +1072,7 @@ pub fn start(background: bool) {
                 "--page=tweaks" => Page::Tweaks,
                 "--page=tools" => Page::Tools,
                 "--page=copies" => Page::Copies,
+                "--page=updates" => Page::Updates,
                 "--page=uninstall" => Page::Uninstall,
                 "--page=analyze" => Page::Analyze,
                 "--page=search" => Page::Search,
@@ -1163,7 +1169,7 @@ unsafe fn tray_add(hub: HWND, add: bool) {
     let _ = Shell_NotifyIconW(if add { NIM_ADD } else { NIM_MODIFY }, &nid);
 }
 
-/// Notificação do Windows pelo ícone da bandeja (clicar abre a aba Conectados).
+/// Notificação do Windows pelo ícone da bandeja (clicar abre `App::tray_page`).
 unsafe fn tray_notify(hub: HWND, title: &str, text: &str) {
     let mut nid = NOTIFYICONDATAW {
         cbSize: std::mem::size_of::<NOTIFYICONDATAW>() as u32,
@@ -1780,6 +1786,12 @@ impl App {
         }
     }
 
+    /// Notificação da bandeja; clicar nela abre `page`.
+    pub fn notify(&mut self, page: Page, title: &str, text: &str) {
+        self.tray_page = page;
+        unsafe { tray_notify(self.hub, title, text) };
+    }
+
     pub fn go(&mut self, page: Page) {
         self.page = page;
         self.refresh_page();
@@ -1813,9 +1825,7 @@ impl App {
             return;
         }
         let text = msgs.join("\n");
-        unsafe {
-            tray_notify(self.hub, &title, &text);
-        }
+        self.notify(Page::Share, &title, &text);
         if self.page == Page::Share {
             self.invalidate();
         }
@@ -3066,6 +3076,7 @@ impl App {
                 Some("tweaks") => self.page = Page::Tweaks,
                 Some("tools") => self.page = Page::Tools,
                 Some("copies") => self.page = Page::Copies,
+                Some("updates") => self.page = Page::Updates,
                 Some("optimize") => self.page = Page::Optimize,
                 Some("energy") => self.page = Page::Energy,
                 Some("fullscreen") => self.page = Page::Fullscreen,
@@ -3862,6 +3873,7 @@ impl App {
                 self.load_disks();
             }
             Page::Copies => crate::pages::copies::enter(self),
+            Page::Updates => crate::pages::updates::enter(self),
             Page::Search => {
                 self.load_disks();
                 self.find_drives = crate::sys::mft::drives();
@@ -4228,6 +4240,7 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                 } else if w.0 == TIMER_ROOM {
                     a.room_watch();
                     crate::pages::copies::tick(a);
+                    crate::pages::updates::tick(a);
                 } else if w.0 == TIMER_PADS {
                     if a.page == Page::Controllers && a.main.is_some() {
                         crate::pages::controllers::tick(a);
@@ -4529,9 +4542,11 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                 // Clicou na notificação de quem conectou: abre a aba Conectados.
                 x if x == NIN_BALLOONUSERCLICK => {
                     with(|a| {
-                        crate::pages::share::open_room();
+                        if a.tray_page == Page::Share {
+                            crate::pages::share::open_room();
+                        }
                         a.show_main();
-                        a.go(Page::Share);
+                        a.go(a.tray_page);
                     });
                 }
                 _ => {}

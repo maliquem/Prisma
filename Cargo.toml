@@ -38,6 +38,10 @@ mini-cuda = { version = "0.1", optional = true }
 # Controles virtuais do co-op: ViGEmBus (Nefarius) ou o servidor VIIPER, os dois clientes com licença MIT.
 vigem-client = { version = "0.1", optional = true, features = ["unstable_xtarget_notification"] }
 viiper-client = { version = "0.9", optional = true }
+# Atualizações seguras: respostas JSON da NVIDIA e do Gemini, e o texto das notas em PDF (já vinham por outras crates).
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+miniz_oxide = "0.8"
 
 [features]
 default = ["stream"]
@@ -114,6 +118,7 @@ features = [
     "Win32_System_SystemServices",
     "Win32_System_Threading",
     "Win32_System_Time",
+    "Win32_System_UpdateAgent",
     "Win32_System_Variant",
     "Win32_System_WinRT",
     "Win32_System_WinRT_Direct3D11",

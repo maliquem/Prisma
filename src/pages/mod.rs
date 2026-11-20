@@ -4,6 +4,7 @@ mod adjust;
 mod analyze;
 mod capture;
 pub mod copies;
+pub mod updates;
 pub mod controllers;
 pub mod pad_profiles;
 mod pad_hide;
@@ -69,6 +70,7 @@ pub enum Page {
     Tweaks,
     Tools,
     Copies,
+    Updates,
     Optimize,
     Energy,
     Fullscreen,
@@ -223,6 +225,7 @@ const ICON_TOOL: Icon = &[
     &[(5., 19.), (13., 11.)],
     &[(13., 11.), (12., 7.), (15., 4.), (19., 4.), (16., 7.), (17., 8.), (20., 5.), (20., 9.), (17., 12.), (13., 11.)],
 ];
+const ICON_UPD: Icon = &[&[(12., 4.), (12., 15.)], &[(7., 10.), (12., 15.), (17., 10.)], &[(4., 15.), (4., 20.), (20., 20.), (20., 15.)]];
 const ICON_COPY: Icon = &[&[(8., 8.), (20., 8.), (20., 20.), (8., 20.), (8., 8.)], &[(16., 8.), (16., 4.), (4., 4.), (4., 16.), (8., 16.)]];
 const ICON_BOOT: Icon = &[&[(12., 4.), (12., 16.)], &[(7., 9.), (12., 4.), (17., 9.)], &[(5., 20.), (19., 20.)]];
 const ICON_SVC: Icon = &[
@@ -260,9 +263,9 @@ pub fn nav_page(i: usize) -> Option<(Page, Icon)> {
     action_nav().nth(i).map(|n| (n.0, n.2))
 }
 
-/// Ordem das ações "Página ..." (33 a 57): a da barra lateral antes dos grupos, com Cópias, Atalhos, Desempenho e
-/// Shaders no fim. Nunca muda, mesmo que a barra mude: os números já gravados dependem dela.
-const ACTION_PAGES: [Page; 25] = [
+/// Ordem das ações "Página ..." (33 a 58): a da barra lateral antes dos grupos, com Cópias, Atalhos, Desempenho,
+/// Shaders e Atualizações no fim. Nunca muda, mesmo que a barra mude: os números já gravados dependem dela.
+const ACTION_PAGES: [Page; 26] = [
     Page::Monitor,
     Page::Meter,
     Page::Storage,
@@ -288,6 +291,7 @@ const ACTION_PAGES: [Page; 25] = [
     Page::Shortcuts,
     Page::Performance,
     Page::Shaders,
+    Page::Updates,
 ];
 
 /// Os itens da barra lateral na ordem das ações "Página ...".
@@ -345,6 +349,7 @@ const NAV: &[(Page, &str, Icon)] = &[
     (Page::Tweaks, "Ajustes do Windows", ICON_TW),
     (Page::Tools, "Ferramentas", ICON_TOOL),
     (Page::Copies, "Cópias", ICON_COPY),
+    (Page::Updates, "Atualizações", ICON_UPD),
     (Page::Optimize, "Otimizar", ICON_OPT),
     (Page::Energy, "Energia", ICON_POW),
     (Page::Meter, "Medidor", ICON_METER),
@@ -362,7 +367,7 @@ const NAV: &[(Page, &str, Icon)] = &[
 ];
 
 /// Grupos da barra lateral: nome e quantos itens seguidos de `NAV` entram nele.
-const GROUPS: [(&str, usize); 5] = [("Sistema", 7), ("Manutenção", 6), ("Jogos e tela", 7), ("Entrada e som", 3), ("Prisma", 2)];
+const GROUPS: [(&str, usize); 5] = [("Sistema", 7), ("Manutenção", 7), ("Jogos e tela", 7), ("Entrada e som", 3), ("Prisma", 2)];
 
 /// Grupo do item `i` de `NAV`.
 fn group_of(i: usize) -> usize {
@@ -506,6 +511,7 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
         Page::Tweaks => tweaks::draw(&mut ui, app, area),
         Page::Tools => tools::draw(&mut ui, app, area),
         Page::Copies => copies::draw(&mut ui, app, area),
+        Page::Updates => updates::draw(&mut ui, app, area),
         Page::Optimize => optimize::draw(&mut ui, app, area),
         Page::Energy => energy::draw(&mut ui, app, area),
         Page::Fullscreen => fullscreen::draw(&mut ui, app, area),
@@ -705,6 +711,7 @@ mod tests {
         assert!(nav_page(22).is_some_and(|n| n.0 == Page::Shortcuts));
         assert!(nav_page(23).is_some_and(|n| n.0 == Page::Performance));
         assert!(nav_page(24).is_some_and(|n| n.0 == Page::Shaders));
-        assert!(nav_page(25).is_none());
+        assert!(nav_page(25).is_some_and(|n| n.0 == Page::Updates));
+        assert!(nav_page(26).is_none());
     }
 }

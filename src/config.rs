@@ -463,6 +463,12 @@ pub struct Config {
     pub upd_checked: u64,
     /// Versão achada na última busca. Com ela, abrir de novo busca os detalhes para perguntar.
     pub upd_found: String,
+    /// Atualizações seguras: de quantos em quantos dias conferir o driver da NVIDIA e o Windows Update (0: desligado).
+    pub safe_every: u32,
+    /// Horas de espera pelos relatos antes do veredito.
+    pub safe_wait: u32,
+    /// Chave da API do Gemini, colada pela pessoa. Nunca vai para o registro de ações.
+    pub safe_key: String,
     /// Última versão aberta neste PC. Abrir uma mais nova mostra as novidades desde ela.
     pub seen_version: String,
     pub welcome: bool,
@@ -616,6 +622,9 @@ impl Default for Config {
             update_auto: true,
             upd_checked: 0,
             upd_found: String::new(),
+            safe_every: 0,
+            safe_wait: 72,
+            safe_key: String::new(),
             seen_version: String::new(),
             welcome: true,
             always_admin: false,
@@ -935,6 +944,9 @@ impl Config {
                 "update_auto" => c.update_auto = b,
                 "upd_checked" => c.upd_checked = v.parse().unwrap_or(0),
                 "upd_found" => c.upd_found = v.to_string(),
+                "safe_every" => c.safe_every = v.parse().unwrap_or(0),
+                "safe_wait" => c.safe_wait = v.parse().unwrap_or(72),
+                "safe_key" => c.safe_key = v.trim().to_string(),
                 "seen_version" => c.seen_version = v.to_string(),
                 "welcome" => c.welcome = b,
                 "always_admin" => c.always_admin = b,
@@ -1080,6 +1092,9 @@ impl Config {
         let _ = writeln!(s, "update_auto={}", b(self.update_auto));
         let _ = writeln!(s, "upd_checked={}", self.upd_checked);
         let _ = writeln!(s, "upd_found={}", self.upd_found);
+        let _ = writeln!(s, "safe_every={}", self.safe_every);
+        let _ = writeln!(s, "safe_wait={}", self.safe_wait);
+        let _ = writeln!(s, "safe_key={}", self.safe_key);
         let _ = writeln!(s, "seen_version={}", self.seen_version);
         let _ = writeln!(s, "welcome={}", b(self.welcome));
         let _ = writeln!(s, "always_admin={}", b(self.always_admin));
