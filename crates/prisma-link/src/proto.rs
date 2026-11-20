@@ -149,6 +149,15 @@ pub enum Request {
         #[serde(default)]
         exe: String,
     },
+    /// Abre o jogo `exe` (caminho do .exe) com `args` pelo Prisma, quando a escolha dele na aba HDR é
+    /// o HDR do Prisma (`launch.hdr`): o Prisma precisa entrar antes do jogo criar a imagem. Responde
+    /// `Done` se abriu; `Failed` com `not_supported` quando o jogo não usa o HDR do Prisma, e então
+    /// quem pediu abre o jogo como sempre.
+    LaunchGame {
+        exe: String,
+        #[serde(default)]
+        args: Vec<String>,
+    },
     #[serde(other)]
     Unknown,
 }
@@ -684,6 +693,10 @@ mod tests {
             (Request::ShareInviteForGame { exe: "g.exe".into(), minutes: None, to: None }, r#"{"type":"share_invite_for_game","exe":"g.exe"}"#),
             (Request::ShareInviteForGame { exe: "g.exe".into(), minutes: Some(30), to: Some("ana".into()) }, r#"{"type":"share_invite_for_game","exe":"g.exe","minutes":30,"to":"ana"}"#),
             (Request::ShareInviteCancel { exe: "g.exe".into() }, r#"{"type":"share_invite_cancel","exe":"g.exe"}"#),
+            (
+                Request::LaunchGame { exe: "C:/g/g.exe".into(), args: vec!["-w".into()] },
+                r#"{"type":"launch_game","exe":"C:/g/g.exe","args":["-w"]}"#,
+            ),
             (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::Fullscreenizer(true) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"fullscreenizer":true}}"#),
             (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::Optimize(false) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"optimize":false}}"#),
             (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::Meter(MeterView::Full) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"meter":"full"}}"#),

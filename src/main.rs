@@ -4,6 +4,7 @@ mod app;
 mod capture;
 mod config;
 mod crash;
+mod hdr_menu;
 mod i18n;
 mod link;
 mod optimizer;

@@ -91,6 +91,8 @@ pub mod cap {
     pub const SOUND_GAME_VOLUME: &str = "sound.game_volume";
     /// `OptionValue::EqProfile` e a lista `eq_profiles` no `Options`: perfil de equalizador do jogo.
     pub const SOUND_EQ: &str = "sound.eq";
+    /// `Request::LaunchGame`: o Prisma abre o jogo que usa o HDR do Prisma.
+    pub const LAUNCH_HDR: &str = "launch.hdr";
 }
 
 /// Códigos estáveis de `Reply::Failed`.

@@ -213,6 +213,7 @@ fn caps_with(nvidia: bool) -> Vec<String> {
         cap::HDR_ON_LAUNCH,
         cap::SOUND_GAME_VOLUME,
         cap::SOUND_EQ,
+        cap::LAUNCH_HDR,
     ];
     if cfg!(feature = "stream") {
         caps.push(cap::SHARE_MODE);
@@ -497,6 +498,12 @@ impl App {
                 }
             }
             Request::Hdr { on } => Outcome::Later(Box::new(move || hdr_reply(on))),
+            Request::LaunchGame { exe, args } => {
+                if !autohdr::uses_prisma(&self.cfg, &exe) {
+                    return fail(code::NOT_SUPPORTED, "O jogo não usa o HDR do Prisma");
+                }
+                if autohdr::open(&exe, &args) { Outcome::Reply(Reply::Done) } else { fail(code::FAILED, "O Prisma não abriu o jogo") }
+            }
             Request::NvidiaCatalog => {
                 if !crate::pages::nvidia::available() {
                     return fail(code::NOT_SUPPORTED, "Sem placa NVIDIA");
@@ -1031,6 +1038,7 @@ mod tests {
                 cap::CONTROLLERS_MAPPING, cap::CONTROLLERS_KEYBOARD, cap::OPTIONS, cap::METER_FPS_LIMIT,
                 cap::HDR_AUTO, cap::SOUND_DEVICES, cap::REPLAY_OPTIONS, cap::FULLSCREENIZER, cap::OPTIMIZE,
                 cap::METER_ON_LAUNCH, cap::HDR_ON_LAUNCH, cap::SOUND_GAME_VOLUME, cap::SOUND_EQ,
+                cap::LAUNCH_HDR,
             ] {
                 assert!(has(c), "{c}");
             }

@@ -325,6 +325,8 @@ pub struct Config {
     pub meter_hide_days: u32,
     pub hk_meter_keys: Hotkey,
     pub hk_limit_toggle: Hotkey,
+    /// Abre o menu do HDR do Prisma por cima do jogo.
+    pub hk_hdr_menu: Hotkey,
     pub hk_limit_up: Hotkey,
     pub hk_limit_down: Hotkey,
     pub snd_keep: u8,
@@ -508,6 +510,7 @@ impl Default for Config {
             meter_hide_days: 0,
             hk_meter_keys: Hotkey::new(MOD_CTRL | MOD_ALT, b'5' as u32),
             hk_limit_toggle: Hotkey::new(MOD_CTRL | MOD_ALT, b'3' as u32),
+            hk_hdr_menu: Hotkey::new(MOD_CTRL | MOD_ALT, b'I' as u32),
             hk_limit_up: Hotkey::new(MOD_CTRL | MOD_ALT, 0x26),
             hk_limit_down: Hotkey::new(MOD_CTRL | MOD_ALT, 0x28),
             snd_keep: 0,
@@ -813,6 +816,7 @@ impl Config {
                 "meter_hide_days" => c.meter_hide_days = v.parse().unwrap_or(0),
                 "hk_meter_keys" => c.hk_meter_keys = Hotkey::parse(v),
                 "hk_limit_toggle" => c.hk_limit_toggle = Hotkey::parse(v),
+                "hk_hdr_menu" => c.hk_hdr_menu = Hotkey::parse(v),
                 "hk_limit_up" => c.hk_limit_up = Hotkey::parse(v),
                 "hk_limit_down" => c.hk_limit_down = Hotkey::parse(v),
                 "meter_game" => {
@@ -1081,6 +1085,7 @@ impl Config {
         s.push_str(&format!("meter_log_min={}\nmeter_log_auto={}\nmeter_hide_days={}\n", self.meter_log_min, self.meter_log_auto as u8, self.meter_hide_days));
         hk(&mut s, "hk_meter_keys", self.hk_meter_keys);
         hk(&mut s, "hk_limit_toggle", self.hk_limit_toggle);
+        hk(&mut s, "hk_hdr_menu", self.hk_hdr_menu);
         hk(&mut s, "hk_limit_up", self.hk_limit_up);
         hk(&mut s, "hk_limit_down", self.hk_limit_down);
         for g in &self.meter_games {

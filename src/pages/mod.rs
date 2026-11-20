@@ -11,7 +11,7 @@ mod energy;
 pub mod equalizer;
 mod fullscreen;
 pub mod guide;
-mod hdr;
+pub(crate) mod hdr;
 pub mod meter;
 mod monitor;
 mod perf;

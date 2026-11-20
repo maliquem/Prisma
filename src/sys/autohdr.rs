@@ -110,6 +110,11 @@ fn join(args: &[String]) -> String {
     args.iter().map(|a| if a.is_empty() || a.contains(' ') { format!("\"{a}\"") } else { a.clone() }).collect::<Vec<_>>().join(" ")
 }
 
+/// A escolha do jogo `exe` (caminho ou nome) é o HDR do Prisma.
+pub fn uses_prisma(cfg: &crate::config::Config, exe: &str) -> bool {
+    game_hdr(cfg, &super::procs::exe_name(exe)).is_some()
+}
+
 fn game_hdr(cfg: &crate::config::Config, name: &str) -> Option<crate::sys::inject::Hdr> {
     let g = cfg.hdr_games.iter().find(|g| g.exe.eq_ignore_ascii_case(name) && g.mode == PRISMA)?;
     Some(g.prisma.unwrap_or_else(|| crate::sys::inject::Hdr::from_profile(cfg.hdr_profiles.last())))
@@ -146,13 +151,14 @@ fn run(exe: &str, args: &[String]) {
     let _ = std::process::Command::new(exe).args(args).current_dir(dir).status();
 }
 
-/// "Abrir com HDR" de um jogo fora da Steam: o Prisma abre outra cópia dele com `--hdr`, como usuário comum.
-pub fn open(path: &str) -> bool {
+/// "Abrir com HDR" de um jogo fora da Steam, ou o jogo que o Prisma Launcher pediu: o Prisma abre outra
+/// cópia dele com `--hdr`, como usuário comum.
+pub fn open(path: &str, args: &[String]) -> bool {
     let Ok(me) = std::env::current_exe() else { return false };
     let me = me.display().to_string();
     let dir = std::path::Path::new(path).parent().map(|p| p.display().to_string()).unwrap_or_default();
     if crate::startup::is_elevated() {
-        return super::quick::run_as_user(&me, &format!("--hdr \"{path}\""), &dir, Default::default());
+        return super::quick::run_as_user(&me, &format!("--hdr \"{path}\" {}", join(args)), &dir, Default::default());
     }
-    std::process::Command::new(me).arg("--hdr").arg(path).current_dir(dir).spawn().is_ok()
+    std::process::Command::new(me).arg("--hdr").arg(path).args(args).current_dir(dir).spawn().is_ok()
 }

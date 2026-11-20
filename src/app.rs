@@ -221,6 +221,7 @@ fn hk_place_page(id: i32) -> &'static str {
         HK_METER_C | HK_METER_F | HK_METER_O | HK_LIMIT_T | HK_LIMIT_UP | HK_LIMIT_DOWN | HK_LOG | HK_METER_KEYS => "Medidor",
         HK_FIND => "Pesquisar",
         HK_MACRO => "Controles",
+        HK_HDR_MENU => "HDR",
         id if id >= HK_RUN => "Atalhos",
         _ => "Som",
     }
@@ -248,6 +249,7 @@ const HK_EXPLORER: i32 = 22;
 const HK_FIND: i32 = 23;
 const HK_MACRO: i32 = 24;
 const HK_SHOW: i32 = 25;
+const HK_HDR_MENU: i32 = 26;
 const HK_VOL_UP: i32 = 10;
 const HK_VOL_DOWN: i32 = 11;
 const HK_MUTE: i32 = 12;
@@ -307,6 +309,7 @@ pub struct App {
     /// Até onde os avisos do compartilhamento já foram mostrados (ms desde 1970; 0 antes da primeira olhada).
     notices_since: u128,
     pub prompt: Prompt,
+    pub hdr_menu: crate::hdr_menu::HdrMenu,
     /// Pergunta do compartilhamento aberta no `prompt`: para onde vai a escolha (permitir,
     /// confiar) e se é um pareamento.
     pub share_ask: Option<(std::sync::mpsc::SyncSender<(bool, bool)>, bool)>,
@@ -539,6 +542,7 @@ pub fn start(background: bool) {
             room_seen: None,
             notices_since: 0,
             prompt: Prompt::new(),
+            hdr_menu: crate::hdr_menu::HdrMenu::new(),
             share_ask: None,
             usage: Usage::load(),
             hk_errors: Vec::new(),
@@ -1193,7 +1197,7 @@ impl App {
     pub fn register_hotkeys(&mut self) {
         self.unhook_force_key();
         unsafe {
-            for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER, HK_FIND, HK_MACRO, HK_SHOW, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE] {
+            for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER, HK_FIND, HK_MACRO, HK_SHOW, HK_HDR_MENU, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE] {
                 let _ = UnregisterHotKey(Some(self.hub), id);
             }
             for i in 0..SND_KEYS_MAX as i32 {
@@ -1280,6 +1284,7 @@ impl App {
             (HK_EXPLORER, c.hk_explorer, "Reiniciar o Explorer", true),
             (HK_MACRO, c.hk_macro, "Gravar macro e parar", true),
             (HK_SHOW, c.hk_show, "Mostrar o Prisma", true),
+            (HK_HDR_MENU, c.hk_hdr_menu, "Menu do HDR no jogo", true),
             (HK_VOL_UP, Hotkey::new(c.vol_mods, VK_VOL_UP), "Aumentar volume", false),
             (HK_VOL_DOWN, Hotkey::new(c.vol_mods, VK_VOL_DOWN), "Diminuir volume", false),
             (HK_MUTE, Hotkey::new(c.vol_mods, VK_MUTE), "Mudo", true),
@@ -1323,6 +1328,7 @@ impl App {
             HK_FIND => &mut c.hk_find,
             HK_MACRO => &mut c.hk_macro,
             HK_SHOW => &mut c.hk_show,
+            HK_HDR_MENU => &mut c.hk_hdr_menu,
             id if id >= HK_RUN => &mut c.run_keys.get_mut((id - HK_RUN) as usize)?.key,
             id if id >= HK_SND => &mut c.snd_keys.get_mut((id - HK_SND) as usize)?.key,
             _ => return None,
@@ -1361,7 +1367,7 @@ impl App {
         if on {
             self.unhook_force_key();
             unsafe {
-                for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER, HK_FIND, HK_MACRO, HK_SHOW] {
+                for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER, HK_FIND, HK_MACRO, HK_SHOW, HK_HDR_MENU] {
                     let _ = UnregisterHotKey(Some(self.hub), id);
                 }
                 // Os da página Atalhos também: a combinação gravada não pode abrir o programa.
@@ -1410,6 +1416,7 @@ impl App {
             HK_FIND => self.toggle_find(),
             HK_MACRO => self.macro_toggle(None),
             HK_SHOW => self.show_main(),
+            HK_HDR_MENU => self.hdr_menu_key(),
             HK_VOL_UP => self.volume(audio::Change::Step(self.cfg.vol_step as i32)),
             HK_VOL_DOWN => self.volume(audio::Change::Step(-(self.cfg.vol_step as i32))),
             HK_MUTE => self.volume(audio::Change::ToggleMute),

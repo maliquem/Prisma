@@ -207,10 +207,8 @@ impl Limiter {
 
     /// Muda os ajustes ao vivo: o jogo lê a cada quadro.
     pub fn set_hdr(&self, h: &Hdr) {
-        let Some(s) = (unsafe { self.view.as_ref() }) else { return };
-        s.hdr_on.store(h.on as u32, Relaxed);
-        for (at, v) in [(&s.hdr_peak, h.peak), (&s.hdr_paper, h.paper), (&s.hdr_gamma, h.gamma), (&s.hdr_sat, h.sat), (&s.hdr_boost, h.boost), (&s.hdr_black, h.black)] {
-            at.store(v.to_bits(), Relaxed);
+        if let Some(s) = unsafe { self.view.as_ref() } {
+            write_hdr(s, h);
         }
     }
 
@@ -293,6 +291,58 @@ unsafe fn load_remote(process: HANDLE, path: &std::path::Path) -> bool {
 
 pub fn is_crash(code: u32) -> bool {
     code & CRASH_MASK == CRASH_CODES && code != CTRL_C
+}
+
+fn write_hdr(s: &Shared, h: &Hdr) {
+    s.hdr_on.store(h.on as u32, Relaxed);
+    for (at, v) in [(&s.hdr_peak, h.peak), (&s.hdr_paper, h.paper), (&s.hdr_gamma, h.gamma), (&s.hdr_sat, h.sat), (&s.hdr_boost, h.boost), (&s.hdr_black, h.black)] {
+        at.store(v.to_bits(), Relaxed);
+    }
+}
+
+/// Os ajustes do HDR de um jogo que o Prisma abriu com ele (menu dentro do jogo): só a memória
+/// compartilhada, sem gancho e sem mexer no limite de FPS de quem mais estiver ligado ao jogo.
+pub struct HdrLive {
+    map: HANDLE,
+    view: *const Shared,
+}
+
+impl HdrLive {
+    pub fn connect(pid: u32) -> Option<Self> {
+        unsafe {
+            let map = OpenFileMappingW(FILE_MAP_ALL_ACCESS.0, false, &map_name(pid)).ok()?;
+            let view = MapViewOfFile(map, FILE_MAP_ALL_ACCESS, 0, 0, 0);
+            let me = Self { map, view: view.Value as *const Shared };
+            let s = me.view.as_ref()?;
+            (s.magic.load(SeqCst) == MAGIC && s.hdr_proxy.load(SeqCst) != 0).then_some(me)
+        }
+    }
+
+    fn shared(&self) -> &Shared {
+        // Só existe com a vista aberta (`connect`).
+        unsafe { &*self.view }
+    }
+
+    pub fn get(&self) -> Hdr {
+        let s = self.shared();
+        let f = |a: &AtomicU32| f32::from_bits(a.load(Relaxed));
+        Hdr { on: s.hdr_on.load(Relaxed) != 0, peak: f(&s.hdr_peak), paper: f(&s.hdr_paper), gamma: f(&s.hdr_gamma), sat: f(&s.hdr_sat), boost: f(&s.hdr_boost), black: f(&s.hdr_black) }
+    }
+
+    pub fn set(&self, h: &Hdr) {
+        write_hdr(self.shared(), h);
+    }
+}
+
+impl Drop for HdrLive {
+    fn drop(&mut self) {
+        unsafe {
+            if !self.view.is_null() {
+                let _ = UnmapViewOfFile(MEMORY_MAPPED_VIEW_ADDRESS { Value: self.view as *mut _ });
+            }
+            let _ = CloseHandle(self.map);
+        }
+    }
 }
 
 impl Drop for Limiter {
