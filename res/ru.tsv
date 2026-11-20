@@ -3017,8 +3017,6 @@ O Windows não deu a permissão de administrador	Windows не дал права 
 Instalado. Reinicie o PC para terminar	Установлено. Перезагрузите ПК для завершения
 Ainda rodando depois de 10 minutos; confira no Windows Update	Всё ещё выполняется спустя 10 минут; проверьте в Windows Update
 Não deu certo; veja o registro de ações	Не получилось; см. журнал действий
-a chave do Gemini foi recusada	ключ Gemini отклонён
-acabou a cota grátis do Gemini por hoje	бесплатная квота Gemini на сегодня исчерпана
 sem resposta da internet	нет ответа из интернета
 o modelo do Gemini não está disponível	модель Gemini недоступна
 a resposta veio num formato inesperado	ответ пришёл в неожиданном формате
@@ -3027,7 +3025,6 @@ Visto em {a}. Veredito depois de {b}, quando já houver relatos.	Замечен�
 Pesquisar agora	Искать сейчас
 Problemas que a {} admite	Проблемы, которые признаёт {}
 Nenhum listado.	Нет в списке.
-Sem a chave do Gemini, o veredito usa só as fontes oficiais acima.	Без ключа Gemini вердикт опирается только на официальные источники выше.
 Recomendado instalar	Рекомендуется установить
 Melhor esperar	Лучше подождать
 {}% sem problemas (estimativa)	{}% без проблем (оценка)
@@ -3059,6 +3056,21 @@ Apagar chave	Удалить ключ
 Pegar uma chave grátis	Получить бесплатный ключ
 Chave guardada. O Gemini pesquisa os relatos com a busca do Google (megathreads do r/nvidia e do r/Windows11, fórum da NVIDIA, Guru3D e sites de notícias) e dá o veredito. A cota grátis passa de 500 pesquisas por dia.	Ключ сохранён. Gemini ищет отзывы через поиск Google (мегатемы r/nvidia и r/Windows11, форум NVIDIA, Guru3D и новостные сайты) и выносит вердикт. Бесплатная квота — более 500 запросов в день.
 Sem chave, o veredito usa só as fontes oficiais: os problemas conhecidos da Microsoft e os da NVIDIA nas notas da versão.	Без ключа вердикт опирается только на официальные источники: известные проблемы Microsoft и проблемы NVIDIA из примечаний к выпуску.
+a chave do {} foi recusada	ключ {} отклонён
+o {} atingiu o limite de uso	{} достиг лимита использования
+acabou o saldo da conta do DeepSeek	на счёте DeepSeek закончились средства
+o servidor do {} está ocupado ou fora do ar	сервер {} занят или недоступен
+Sem chave de IA, o veredito usa só as fontes oficiais acima.	Без ключа ИИ вердикт опирается только на официальные источники выше.
+{a}: falhou ({b})	{a}: сбой ({b})
+{a}: recomenda instalar, {b}% sem problemas	{a}: рекомендует установить, {b}% без проблем
+{a}: melhor esperar, {b}% sem problemas	{a}: лучше подождать, {b}% без проблем
+Chave do DeepSeek	Ключ DeepSeek
+Chave do DeepSeek guardada	Ключ DeepSeek сохранён
+Pegar uma chave	Получить ключ
+Pesquisar com	Искать через
+Os dois pesquisam ao mesmo tempo e o Prisma junta os resultados: os problemas das duas listas sem repetir, a média da estimativa, e só recomenda instalar se os dois recomendarem. Se um falhar, vale o do outro.	Оба ищут одновременно, а Prisma объединяет результаты: проблемы из обоих списков без повторов, среднюю оценку, и рекомендует установку, только если рекомендуют оба. Если один сбоит, берётся результат другого.
+Só uma das chaves está guardada: a pesquisa usa só essa IA.	Сохранён только один из ключей: поиск использует только этот ИИ.
+Chave guardada. O DeepSeek pesquisa os relatos com a busca própria (megathreads do r/nvidia e do r/Windows11, fórum da NVIDIA, Guru3D e sites de notícias) e dá o veredito. Ele não tem cota grátis: cada pesquisa gasta um pouco do saldo da conta.	Ключ сохранён. DeepSeek ищет отзывы собственным поиском (мегатреды r/nvidia и r/Windows11, форум NVIDIA, Guru3D и новостные сайты) и выносит вердикт. Бесплатной квоты нет: каждый поиск тратит часть баланса счёта.
 Avisar antes de baixar atualizações do Windows e não trocar o driver de vídeo pelo Windows Update	Предупреждать перед загрузкой обновлений Windows и не менять видеодрайвер через Windows Update
 Usa a política do próprio Windows (pede administrador) e desfaz ao desmarcar. O serviço do Windows Update continua ligado.	Использует собственную политику Windows (нужны права администратора) и отменяется при снятии галочки. Служба Windows Update остаётся включённой.
 A % sem problemas é uma estimativa da IA a partir das reclamações nos fóruns: não existe essa estatística oficial.	Процент без проблем — это оценка ИИ по жалобам на форумах: официальной статистики нет.

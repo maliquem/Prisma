@@ -3017,8 +3017,6 @@ O Windows não deu a permissão de administrador	Windows 未授予管理员权�
 Instalado. Reinicie o PC para terminar	已安装。请重启电脑以完成
 Ainda rodando depois de 10 minutos; confira no Windows Update	10 分钟后仍在运行；请在 Windows Update 中查看
 Não deu certo; veja o registro de ações	未成功；请查看操作日志
-a chave do Gemini foi recusada	Gemini 密钥被拒绝
-acabou a cota grátis do Gemini por hoje	今天的 Gemini 免费额度已用完
 sem resposta da internet	网络无响应
 o modelo do Gemini não está disponível	Gemini 模型不可用
 a resposta veio num formato inesperado	返回的格式不符合预期
@@ -3027,7 +3025,6 @@ Visto em {a}. Veredito depois de {b}, quando já houver relatos.	发现于 {a}�
 Pesquisar agora	立即搜索
 Problemas que a {} admite	{} 承认的问题
 Nenhum listado.	未列出。
-Sem a chave do Gemini, o veredito usa só as fontes oficiais acima.	没有 Gemini 密钥时，结论仅依据上方的官方来源。
 Recomendado instalar	建议安装
 Melhor esperar	最好等一等
 {}% sem problemas (estimativa)	{}% 无问题（估算）
@@ -3059,6 +3056,21 @@ Apagar chave	删除密钥
 Pegar uma chave grátis	获取免费密钥
 Chave guardada. O Gemini pesquisa os relatos com a busca do Google (megathreads do r/nvidia e do r/Windows11, fórum da NVIDIA, Guru3D e sites de notícias) e dá o veredito. A cota grátis passa de 500 pesquisas por dia.	密钥已保存。Gemini 通过 Google 搜索查找用户反馈（r/nvidia 和 r/Windows11 的汇总帖、NVIDIA 论坛、Guru3D 和新闻网站）并给出结论。免费额度为每天 500 次以上搜索。
 Sem chave, o veredito usa só as fontes oficiais: os problemas conhecidos da Microsoft e os da NVIDIA nas notas da versão.	没有密钥时，结论仅依据官方来源：Microsoft 的已知问题，以及 NVIDIA 发行说明中的问题。
+a chave do {} foi recusada	{} 密钥被拒绝
+o {} atingiu o limite de uso	{} 已达到使用上限
+acabou o saldo da conta do DeepSeek	DeepSeek 账户余额已用完
+o servidor do {} está ocupado ou fora do ar	{} 服务器繁忙或已离线
+Sem chave de IA, o veredito usa só as fontes oficiais acima.	没有 AI 密钥时，结论仅依据上方的官方来源。
+{a}: falhou ({b})	{a}：失败（{b}）
+{a}: recomenda instalar, {b}% sem problemas	{a}：建议安装，{b}% 无问题
+{a}: melhor esperar, {b}% sem problemas	{a}：最好等一等，{b}% 无问题
+Chave do DeepSeek	DeepSeek 密钥
+Chave do DeepSeek guardada	DeepSeek 密钥已保存
+Pegar uma chave	获取密钥
+Pesquisar com	搜索方式
+Os dois pesquisam ao mesmo tempo e o Prisma junta os resultados: os problemas das duas listas sem repetir, a média da estimativa, e só recomenda instalar se os dois recomendarem. Se um falhar, vale o do outro.	两个同时搜索，Prisma 合并结果：两份列表中的问题去重，估计值取平均，只有两个都建议安装时才建议安装。如果一个失败，就采用另一个的结果。
+Só uma das chaves está guardada: a pesquisa usa só essa IA.	只保存了其中一个密钥：搜索只使用这个 AI。
+Chave guardada. O DeepSeek pesquisa os relatos com a busca própria (megathreads do r/nvidia e do r/Windows11, fórum da NVIDIA, Guru3D e sites de notícias) e dá o veredito. Ele não tem cota grátis: cada pesquisa gasta um pouco do saldo da conta.	密钥已保存。DeepSeek 用自带搜索查找用户反馈（r/nvidia 和 r/Windows11 的汇总帖、NVIDIA 论坛、Guru3D 和新闻网站），并给出结论。它没有免费额度：每次搜索都会消耗一点账户余额。
 Avisar antes de baixar atualizações do Windows e não trocar o driver de vídeo pelo Windows Update	下载 Windows 更新前先提醒，并且不通过 Windows Update 更换显卡驱动
 Usa a política do próprio Windows (pede administrador) e desfaz ao desmarcar. O serviço do Windows Update continua ligado.	使用 Windows 自带的策略（需要管理员权限），取消勾选即可撤销。Windows Update 服务仍保持开启。
 A % sem problemas é uma estimativa da IA a partir das reclamações nos fóruns: não existe essa estatística oficial.	“无问题”百分比是 AI 根据论坛上的抱怨做出的估算：并没有这样的官方统计。

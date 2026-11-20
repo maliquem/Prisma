@@ -201,15 +201,21 @@ When a new driver or update comes out, Prisma warns in the tray; clicking it ope
 
 With a Gemini key, the search uses Google, in the r/nvidia and r/Windows11 megathreads, in tech news from the last month (TechPowerUp, Wccftech, Tom's Hardware, Windows Latest, BleepingComputer and others) and in the forums (NVIDIA, Guru3D, Overclockers). It also lists problems that started in earlier versions and remain in the new one, such as excessive SSD writes or high CPU use at idle, even ones the company has not confirmed (marked as unconfirmed). The free quota is over 500 searches per day.
 
+With a DeepSeek key, the AI searches with its own web search, in the same sources. DeepSeek has no free quota: each search uses a little of the balance in your DeepSeek account.
+
 Without a key, the verdict uses only the official sources: Microsoft's known issues and NVIDIA's Open Issues.
 
-Reddit doesn't allow reading without logging in, so Prisma reaches it through the Gemini search and the **Reddit discussion** buttons.
+With **Both**, the two AIs search at the same time and Prisma merges them: the problem list from both, without repeats; the percentage without problems is the average; and it only says **Recommended: install** if both recommend it. Under the verdict, one line per AI: "Gemini: recommends install, 80% without problems" or "DeepSeek: failed (reason)". If one fails, the other's verdict is used. With only one key saved, only that AI is used.
+
+Reddit doesn't allow reading without logging in, so Prisma reaches it through the Gemini or DeepSeek search and the **Reddit discussion** buttons.
 
 ### Options
 
+- **Search with:** **Gemini**, **DeepSeek** or **Both** (see Verdict).
 - **Check:** **Off** (default), **Every day**, **Every 2 days**, **Every 3 days** or **Every week**. Checks run only while Prisma is open or in the tray; no task is added to the Windows Task Scheduler.
 - **Wait for reports for:** 24 hours, **3 days** (default) or 4 days.
 - **Gemini key:** **Paste key** uses the clipboard; **Delete key**; **Get a free key** opens aistudio.google.com/apikey. The key stays in Prisma's settings and is not written to the action log.
+- **DeepSeek key:** **Paste key** uses the clipboard; **Delete key**; **Get a key** opens platform.deepseek.com/api_keys. DeepSeek has no free quota. The key stays in Prisma's settings and is not written to the action log.
 - **Warn before downloading Windows updates and don't replace the video driver through Windows Update:** writes Windows' own policy. Asks for administrator permission. Unchecking it removes those values.
 
 ### Permission and undo

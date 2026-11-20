@@ -6,7 +6,7 @@ use std::sync::Mutex;
 
 use super::*;
 use crate::i18n::tr;
-use crate::sys::safeupd::{self, Notice, Sev, State, Watch};
+use crate::sys::safeupd::{self, Ai, Notice, Sev, State, Watch};
 use crate::sys::winupd;
 
 /// Dias entre as conferências (0: desligado) e horas de espera pelos relatos.
@@ -14,7 +14,11 @@ const EVERY: [u32; 5] = [0, 1, 2, 3, 7];
 const EVERY_NAMES: [&str; 5] = ["Desligado", "Todo dia", "A cada 2 dias", "A cada 3 dias", "Toda semana"];
 const WAIT: [u32; 3] = [24, 72, 96];
 const WAIT_NAMES: [&str; 3] = ["24 horas", "3 dias", "4 dias"];
-const KEY_PAGE: &str = "https://aistudio.google.com/apikey";
+const AI_NAMES: [&str; 3] = ["Gemini", "DeepSeek", "Os dois"];
+
+fn keys(cfg: &crate::config::Config) -> Vec<(Ai, String)> {
+    safeupd::chosen(cfg.safe_ai, &cfg.safe_key, &cfg.safe_ds_key)
+}
 
 #[derive(Default)]
 pub struct Data {
@@ -54,11 +58,11 @@ fn start(app: &mut App, force: bool, manual: bool) {
         return;
     }
     app.su.running = true;
-    let (st, key, wait) = (app.su.st.clone(), app.cfg.safe_key.clone(), app.cfg.safe_wait);
+    let (st, keys, wait) = (app.su.st.clone(), keys(&app.cfg), app.cfg.safe_wait);
     std::thread::spawn(move || {
         // Sempre devolve um resultado: sem ele a página ficaria em "Procurando..." e a agenda pararia.
         let old = st.clone();
-        let (st, notes) = std::panic::catch_unwind(|| safeupd::run(st, &key, wait, force)).unwrap_or_else(|_| {
+        let (st, notes) = std::panic::catch_unwind(|| safeupd::run(st, &keys, wait, force)).unwrap_or_else(|_| {
             crate::config::log("Atualizações seguras: a conferência falhou");
             (safeupd::State { checked: safeupd::now(), ..old }, Vec::new())
         });
@@ -170,15 +174,25 @@ fn host(url: &str) -> &str {
     s.split('/').next().unwrap_or(s).trim_start_matches("www.")
 }
 
-fn error_text(e: &str) -> String {
-    let why = match e.split('@').next().unwrap_or("") {
-        "chave" => "a chave do Gemini foi recusada",
-        "limite" => "acabou a cota grátis do Gemini por hoje",
+/// O motivo da falha de uma IA ("chave", "limite"...), na língua da tela.
+fn why(ai: &str, e: &str) -> String {
+    let s = match e {
+        "chave" => "a chave do {} foi recusada",
+        "limite" => "o {} atingiu o limite de uso",
+        "saldo" => "acabou o saldo da conta do DeepSeek",
         "rede" => "sem resposta da internet",
         "modelo" => "o modelo do Gemini não está disponível",
+        _ if e.starts_with("http") => "o servidor do {} está ocupado ou fora do ar",
         _ => "a resposta veio num formato inesperado",
     };
-    tr("A pesquisa falhou ({}). Tenta de novo em uma hora.").replace("{}", &tr(why))
+    tr(s).replace("{}", ai)
+}
+
+/// `e` é "IA:motivo@horário"; os estados de antes do DeepSeek não têm a IA.
+fn error_text(e: &str) -> String {
+    let e = e.split('@').next().unwrap_or("");
+    let (ai, e) = e.split_once(':').unwrap_or(("Gemini", e));
+    tr("A pesquisa falhou ({}). Tenta de novo em uma hora.").replace("{}", &why(ai, e))
 }
 
 /// Uma novidade: a espera, os problemas oficiais e o veredito. Devolve a altura.
@@ -190,7 +204,7 @@ fn watch(ui: &mut Ui, app: &mut App, x: f32, y0: f32, w: f32, wt: &Watch, compan
         y += para(ui, x, y, w - 190.0, &s, 13.0, TEXT2) + 6.0;
     }
     // Também depois de um veredito sem chave: a chave colada depois vale para esta novidade.
-    if wt.verdict.is_none() && (wt.judged == 0 || !app.cfg.safe_key.trim().is_empty()) {
+    if wt.verdict.is_none() && (wt.judged == 0 || !keys(&app.cfg).is_empty()) {
         if ui.button_ex(&format!("su-now-{key}"), rect(x + w - 180.0, y0 - 4.0, 180.0, 34.0), "Pesquisar agora", false, !app.su.running) {
             start(app, true, true);
         }
@@ -211,7 +225,7 @@ fn watch(ui: &mut Ui, app: &mut App, x: f32, y0: f32, w: f32, wt: &Watch, compan
     y += 6.0;
     let Some(v) = &wt.verdict else {
         if wt.judged != 0 {
-            y += para(ui, x, y, w, "Sem a chave do Gemini, o veredito usa só as fontes oficiais acima.", 13.0, MUTED) + 6.0;
+            y += para(ui, x, y, w, "Sem chave de IA, o veredito usa só as fontes oficiais acima.", 13.0, MUTED) + 6.0;
         }
         return y - y0;
     };
@@ -220,6 +234,20 @@ fn watch(ui: &mut Ui, app: &mut App, x: f32, y0: f32, w: f32, wt: &Watch, compan
     let pct = tr("{}% sem problemas (estimativa)").replace("{}", &v.ok_pct.to_string());
     ui.c.text_raw(rect(x + w * 0.5, y, w * 0.5, 26.0), &pct, 14.0, TEXT, Align::Right, Weight::Regular);
     y += 32.0;
+    // Com as duas IAs: o que cada uma disse, antes da lista juntada.
+    if v.views.len() > 1 {
+        for vw in &v.views {
+            let s = if !vw.error.is_empty() {
+                tr("{a}: falhou ({b})").replace("{b}", &why(vw.ai.name(), &vw.error))
+            } else if vw.recommend {
+                tr("{a}: recomenda instalar, {b}% sem problemas").replace("{b}", &vw.ok_pct.to_string())
+            } else {
+                tr("{a}: melhor esperar, {b}% sem problemas").replace("{b}", &vw.ok_pct.to_string())
+            };
+            y += para(ui, x, y, w, &s.replace("{a}", vw.ai.name()), 13.0, TEXT2) + 4.0;
+        }
+        y += 6.0;
+    }
     if v.bugs.is_empty() {
         y += para(ui, x, y, w, "Nenhum problema relatado.", 13.0, TEXT2) + 6.0;
     }
@@ -354,6 +382,43 @@ fn windows(ui: &mut Ui, app: &mut App, x: f32, y0: f32, w: f32) -> f32 {
     y - y0
 }
 
+/// Colar, apagar e pegar a chave de uma IA.
+fn key_row(ui: &mut Ui, app: &mut App, x: f32, y: f32, lw: f32, ai: Ai) {
+    let (label, saved, get, page) = match ai {
+        Ai::Gemini => ("Chave do Gemini", "Chave do Gemini guardada", "Pegar uma chave grátis", "https://aistudio.google.com/apikey"),
+        Ai::DeepSeek => ("Chave do DeepSeek", "Chave do DeepSeek guardada", "Pegar uma chave", "https://platform.deepseek.com/api_keys"),
+    };
+    let id = ai.name();
+    ui.c.text(rect(x, y, lw, 36.0), label, 14.0, TEXT2, Align::Left, Weight::Regular);
+    fn key(cfg: &mut crate::config::Config, ai: Ai) -> &mut String {
+        match ai {
+            Ai::Gemini => &mut cfg.safe_key,
+            Ai::DeepSeek => &mut cfg.safe_ds_key,
+        }
+    }
+    let has = !key(&mut app.cfg, ai).trim().is_empty();
+    let mut bx = x + lw;
+    let bw = measure(&tr("Colar chave"), 14.0, Weight::Semibold, None).0 + 32.0;
+    if ui.button(&format!("su-key-{id}"), rect(bx, y, bw, 36.0), "Colar chave", false) {
+        match crate::capture::clipboard_text(app.hub).map(|s| s.trim().to_string()).filter(|s| !s.is_empty() && !s.contains(char::is_whitespace)) {
+            Some(k) => {
+                *key(&mut app.cfg, ai) = k;
+                app.cfg.save();
+                app.toast.info(&tr(saved));
+            }
+            None => app.toast.info(&tr("Copie a chave antes de colar")),
+        }
+    }
+    bx += bw + 8.0;
+    let bw = measure(&tr("Apagar chave"), 14.0, Weight::Semibold, None).0 + 32.0;
+    if ui.button_ex(&format!("su-key-del-{id}"), rect(bx, y, bw, 36.0), "Apagar chave", false, has) {
+        key(&mut app.cfg, ai).clear();
+        app.cfg.save();
+    }
+    bx += bw + 8.0;
+    link(ui, &format!("su-key-get-{id}"), bx, y, get, page);
+}
+
 fn options(ui: &mut Ui, app: &mut App, x: f32, y0: f32, w: f32) -> f32 {
     let mut y = y0;
     card_title(ui, x, y, w, "Opções");
@@ -373,33 +438,25 @@ fn options(ui: &mut Ui, app: &mut App, x: f32, y0: f32, w: f32) -> f32 {
         app.cfg.save();
     }
     y += 50.0;
-    ui.c.text(rect(x, y, lw, 36.0), "Chave do Gemini", 14.0, TEXT2, Align::Left, Weight::Regular);
-    let has = !app.cfg.safe_key.trim().is_empty();
-    let mut bx = x + lw;
-    let bw = measure(&tr("Colar chave"), 14.0, Weight::Semibold, None).0 + 32.0;
-    if ui.button("su-key", rect(bx, y, bw, 36.0), "Colar chave", false) {
-        match crate::capture::clipboard_text(app.hub).map(|s| s.trim().to_string()).filter(|s| !s.is_empty() && !s.contains(char::is_whitespace)) {
-            Some(k) => {
-                app.cfg.safe_key = k;
-                app.cfg.save();
-                app.toast.info(&tr("Chave do Gemini guardada"));
-            }
-            None => app.toast.info(&tr("Copie a chave antes de colar")),
-        }
-    }
-    bx += bw + 8.0;
-    let bw = measure(&tr("Apagar chave"), 14.0, Weight::Semibold, None).0 + 32.0;
-    if ui.button_ex("su-key-del", rect(bx, y, bw, 36.0), "Apagar chave", false, has) {
-        app.cfg.safe_key.clear();
+    ui.c.text(rect(x, y, lw, 36.0), "Pesquisar com", 14.0, TEXT2, Align::Left, Weight::Regular);
+    let mut sel = app.cfg.safe_ai.min(2) as usize;
+    if ui.segment("su-ai", x + lw, y, 36.0, &AI_NAMES.map(|s| tr(s).into_owned()).iter().map(String::as_str).collect::<Vec<_>>(), &mut sel) {
+        app.cfg.safe_ai = sel as u8;
         app.cfg.save();
     }
-    bx += bw + 8.0;
-    link(ui, "su-key-get", bx, y, "Pegar uma chave grátis", KEY_PAGE);
-    y += 42.0;
-    let s = if has {
-        "Chave guardada. O Gemini pesquisa os relatos com a busca do Google (megathreads do r/nvidia e do r/Windows11, fórum da NVIDIA, Guru3D e sites de notícias) e dá o veredito. A cota grátis passa de 500 pesquisas por dia."
-    } else {
-        "Sem chave, o veredito usa só as fontes oficiais: os problemas conhecidos da Microsoft e os da NVIDIA nas notas da versão."
+    y += 44.0;
+    for ai in [Ai::Gemini, Ai::DeepSeek] {
+        if app.cfg.safe_ai == 2 || app.cfg.safe_ai == ai as u8 {
+            key_row(ui, app, x, y, lw, ai);
+            y += 42.0;
+        }
+    }
+    let s = match (app.cfg.safe_ai, keys(&app.cfg).len()) {
+        (_, 0) => "Sem chave, o veredito usa só as fontes oficiais: os problemas conhecidos da Microsoft e os da NVIDIA nas notas da versão.",
+        (2, 2) => "Os dois pesquisam ao mesmo tempo e o Prisma junta os resultados: os problemas das duas listas sem repetir, a média da estimativa, e só recomenda instalar se os dois recomendarem. Se um falhar, vale o do outro.",
+        (2, _) => "Só uma das chaves está guardada: a pesquisa usa só essa IA.",
+        (1, _) => "Chave guardada. O DeepSeek pesquisa os relatos com a busca própria (megathreads do r/nvidia e do r/Windows11, fórum da NVIDIA, Guru3D e sites de notícias) e dá o veredito. Ele não tem cota grátis: cada pesquisa gasta um pouco do saldo da conta.",
+        _ => "Chave guardada. O Gemini pesquisa os relatos com a busca do Google (megathreads do r/nvidia e do r/Windows11, fórum da NVIDIA, Guru3D e sites de notícias) e dá o veredito. A cota grátis passa de 500 pesquisas por dia.",
     };
     y += para(ui, x + lw, y, w - lw, s, 12.0, MUTED) + 14.0;
     let mut on = app.su.policy;

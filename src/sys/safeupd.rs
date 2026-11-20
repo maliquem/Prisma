@@ -1,8 +1,9 @@
 //! Atualizações seguras: o que saiu do driver da NVIDIA e do Windows Update, e se vale instalar.
 //!
 //! Fontes: o endpoint de busca do site da NVIDIA, as "Open Issues" das notas em PDF, os "known
-//! issues" da Microsoft (release health) e, com a chave da pessoa, o Gemini com a busca do Google,
-//! que lê os relatos (megathreads do r/nvidia e do r/Windows11, fórum da NVIDIA, Guru3D...).
+//! issues" da Microsoft (release health) e, com a chave da pessoa, o Gemini (busca do Google) e/ou o
+//! DeepSeek (busca própria), que leem os relatos (megathreads do r/nvidia e do r/Windows11, fórum da
+//! NVIDIA, Guru3D, sites de notícias...). Com os dois, os resultados são juntados num veredito só.
 //! Uma novidade é avisada logo ("saiu, aguardando relatos") e só ganha o veredito depois da espera.
 
 use super::winupd::WinUpd;
@@ -40,6 +41,34 @@ pub struct Verdict {
     pub ok_pct: u8,
     pub recommend: bool,
     pub sources: Vec<String>,
+    /// O que cada IA disse quando pesquisaram juntas (vazio com uma só).
+    #[serde(default)]
+    pub views: Vec<View>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Default, Debug, PartialEq)]
+pub enum Ai {
+    #[default]
+    Gemini,
+    DeepSeek,
+}
+
+impl Ai {
+    pub fn name(self) -> &'static str {
+        match self {
+            Ai::Gemini => "Gemini",
+            Ai::DeepSeek => "DeepSeek",
+        }
+    }
+}
+
+/// A parte de uma IA no veredito juntado; `error` quando ela falhou e o veredito ficou com a outra.
+#[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
+pub struct View {
+    pub ai: Ai,
+    pub ok_pct: u8,
+    pub recommend: bool,
+    pub error: String,
 }
 
 /// Uma novidade acompanhada: aparece, espera os relatos e ganha o veredito.
@@ -474,16 +503,38 @@ pub fn reddit_win() -> String {
 /// substituto quando eles saírem do ar.
 const MODELS: [&str; 3] = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-flash-latest"];
 
-/// Pergunta ao Gemini com a busca do Google. A chave vai só no cabeçalho, nunca no log.
-pub fn gemini(key: &str, prompt: &str) -> Result<Verdict, String> {
-    let body = serde_json::json!({"contents":[{"parts":[{"text":prompt}]}],"tools":[{"google_search":{}}]}).to_string();
+/// As IAs escolhidas (`mode` 0 Gemini, 1 DeepSeek, 2 os dois) que têm chave, na ordem: a primeira
+/// junta os resultados quando são duas. O DeepSeek é pago: fora do modo dele, nunca é chamado.
+pub fn chosen(mode: u8, gemini: &str, deepseek: &str) -> Vec<(Ai, String)> {
+    [(Ai::Gemini, gemini), (Ai::DeepSeek, deepseek)]
+        .into_iter()
+        .filter(|(a, k)| (mode == 2 || mode == *a as u8) && !k.trim().is_empty())
+        .map(|(a, k)| (a, k.trim().to_string()))
+        .collect()
+}
+
+/// Pergunta a uma IA; `search` liga a busca na web. Devolve o texto e as páginas que ela leu. A chave
+/// vai só no cabeçalho, nunca no log nem no endereço.
+fn ask(ai: Ai, key: &str, prompt: &str, search: bool) -> Result<(String, Vec<String>), String> {
+    match ai {
+        Ai::Gemini => gemini(key, prompt, search),
+        Ai::DeepSeek => deepseek(key, prompt, search),
+    }
+}
+
+fn gemini(key: &str, prompt: &str, search: bool) -> Result<(String, Vec<String>), String> {
+    let mut body = serde_json::json!({"contents":[{"parts":[{"text":prompt}]}]});
+    if search {
+        body["tools"] = serde_json::json!([{"google_search":{}}]);
+    }
+    let body = body.to_string();
     let headers = format!("x-goog-api-key: {}\r\nContent-Type: application/json\r\n", key.trim());
     let mut last = String::new();
     for m in MODELS {
         let url = format!("https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent");
         let Ok((status, text)) = super::update::post(&url, &headers, &body) else { return Err("rede".into()) };
         match status {
-            200 => return parse_reply(&text).ok_or_else(|| "resposta".into()),
+            200 => return gemini_text(&text).ok_or_else(|| "resposta".into()),
             404 => last = "modelo".into(),
             429 => return Err("limite".into()),
             400 | 401 | 403 => return Err("chave".into()),
@@ -491,6 +542,45 @@ pub fn gemini(key: &str, prompt: &str) -> Result<Verdict, String> {
         }
     }
     Err(last)
+}
+
+/// O texto da resposta do Gemini e as páginas da busca.
+pub fn gemini_text(json: &str) -> Option<(String, Vec<String>)> {
+    let v: Value = serde_json::from_str(json).ok()?;
+    let cand = &v["candidates"][0];
+    let text = cand["content"]["parts"].as_array()?.iter().filter_map(|p| p["text"].as_str()).collect();
+    let pages = cand["groundingMetadata"]["groundingChunks"].as_array().map(|a| a.iter().filter_map(|c| c["web"]["uri"].as_str()).map(str::to_string).collect()).unwrap_or_default();
+    Some((text, pages))
+}
+
+/// O DeepSeek pesquisa sozinho no servidor (busca e leitura de páginas) e devolve tudo numa resposta.
+/// Com o raciocínio ligado (o padrão) a busca é a profunda; a junção, sem busca, vai sem raciocínio.
+fn deepseek(key: &str, prompt: &str, search: bool) -> Result<(String, Vec<String>), String> {
+    let mut body = serde_json::json!({"model":"deepseek-flash","messages":[{"role":"user","content":prompt}]});
+    if search {
+        body["tools"] = serde_json::json!([{"type":"deepseek_web_search"},{"type":"deepseek_read_url"}]);
+    } else {
+        body["thinking"] = serde_json::json!({"type":"disabled"});
+    }
+    let headers = format!("Authorization: Bearer {}\r\nContent-Type: application/json\r\n", key.trim());
+    let Ok((status, text)) = super::update::post("https://api.deepseek.com/chat/completions", &headers, &body.to_string()) else { return Err("rede".into()) };
+    match status {
+        200 => deepseek_text(&text).ok_or_else(|| "resposta".into()),
+        401 => Err("chave".into()),
+        402 => Err("saldo".into()),
+        429 => Err("limite".into()),
+        s => Err(format!("http {s}")),
+    }
+}
+
+/// O texto da resposta do DeepSeek e as páginas citadas. Antes do JSON vêm quebras de linha (ele as
+/// manda enquanto pesquisa), e um erro depois do 200 vem no corpo, sem `choices`.
+pub fn deepseek_text(json: &str) -> Option<(String, Vec<String>)> {
+    let v: Value = serde_json::from_str(json.trim()).ok()?;
+    let m = &v["choices"][0]["message"];
+    let text = m["content"].as_str().filter(|t| !t.trim().is_empty())?.to_string();
+    let pages = m["annotations"].as_array().map(|a| a.iter().filter_map(|c| c["url_citation"]["url"].as_str()).map(str::to_string).collect()).unwrap_or_default();
+    Some((text, pages))
 }
 
 fn sev(s: &str) -> Sev {
@@ -501,15 +591,14 @@ fn sev(s: &str) -> Sev {
     }
 }
 
-/// O veredito na resposta do Gemini: o JSON pedido no texto (às vezes entre crases), e as páginas da
-/// busca quando ele não cita fontes.
-pub fn parse_reply(json: &str) -> Option<Verdict> {
-    let v: Value = serde_json::from_str(json).ok()?;
-    let cand = &v["candidates"][0];
-    let text: String = cand["content"]["parts"].as_array()?.iter().filter_map(|p| p["text"].as_str()).collect();
+/// O objeto JSON pedido no texto (às vezes entre crases).
+fn json_in(text: &str) -> Option<Value> {
     let (a, b) = (text.find('{')?, text.rfind('}')?);
-    let r: Value = serde_json::from_str(text.get(a..=b)?).ok()?;
-    let bugs = r["bugs"]
+    serde_json::from_str(text.get(a..=b)?).ok()
+}
+
+fn bugs_of(r: &Value) -> Vec<Bug> {
+    r["bugs"]
         .as_array()
         .map(|a| {
             a.iter()
@@ -519,15 +608,64 @@ pub fn parse_reply(json: &str) -> Option<Verdict> {
                 })
                 .collect()
         })
-        .unwrap_or_default();
+        .unwrap_or_default()
+}
+
+/// O veredito no texto da IA; as páginas da busca valem como fontes quando ela não cita nenhuma.
+pub fn parse_verdict(text: &str, pages: Vec<String>) -> Option<Verdict> {
+    let r = json_in(text)?;
     let ok_pct = r["ok_percent"].as_f64().or_else(|| r["ok_percent"].as_str().and_then(|s| s.trim_end_matches('%').parse().ok()))?.clamp(0.0, 100.0).round() as u8;
     let recommend = r["recommend"].as_bool().unwrap_or(false);
     let mut sources: Vec<String> = r["sources"].as_array().map(|a| a.iter().filter_map(|s| s.as_str()).filter(|s| s.starts_with("http")).map(str::to_string).collect()).unwrap_or_default();
     if sources.is_empty() {
-        sources = cand["groundingMetadata"]["groundingChunks"].as_array().map(|a| a.iter().filter_map(|c| c["web"]["uri"].as_str()).map(str::to_string).collect()).unwrap_or_default();
+        sources = pages;
     }
     sources.truncate(8);
-    Some(Verdict { bugs, ok_pct, recommend, sources })
+    Some(Verdict { bugs: bugs_of(&r), ok_pct, recommend, sources, views: Vec::new() })
+}
+
+fn research(ai: Ai, key: &str, prompt: &str) -> Result<Verdict, String> {
+    let (text, pages) = ask(ai, key, prompt, true)?;
+    parse_verdict(&text, pages).ok_or_else(|| "resposta".into())
+}
+
+/// A IA junta as listas de problemas das duas pesquisas, sem buscar de novo.
+fn merge_bugs(ai: Ai, key: &str, got: &[(Ai, Verdict)]) -> Option<Vec<Bug>> {
+    let lists: Vec<Value> = got.iter().map(|(a, v)| serde_json::json!({"ai": a.name(), "bugs": v.bugs.iter().map(|b| serde_json::json!({"text": b.text, "severity": format!("{:?}", b.sev).to_lowercase()})).collect::<Vec<_>>()})).collect();
+    let prompt = format!(
+        "Two AIs researched the same update and listed its problems. Merge the lists into one: join entries that describe the same problem, keep every distinct problem and any \"unconfirmed\" mark, keep the language of the texts, most serious first, at most 10. Answer ONLY with one JSON object, no other text: {{\"bugs\":[{{\"text\":\"short description\",\"severity\":\"high|medium|low\"}}]}}. Lists: {}",
+        Value::Array(lists)
+    );
+    let bugs = bugs_of(&json_in(&ask(ai, key, &prompt, false).ok()?.0)?);
+    (!bugs.is_empty()).then_some(bugs)
+}
+
+/// Junta os vereditos das IAs: a média da estimativa, recomenda só se todas recomendam e as fontes de
+/// todas. `bugs` é a lista que a IA juntou; sem ela, a união sem repetidos, os graves primeiro.
+pub fn combine(got: &[(Ai, Verdict)], bugs: Option<Vec<Bug>>) -> Verdict {
+    let n = got.len().max(1) as f32;
+    let bugs = bugs.unwrap_or_else(|| {
+        let mut all: Vec<Bug> = got.iter().flat_map(|(_, v)| v.bugs.iter().cloned()).collect();
+        all.sort_by_key(|b| b.sev as u8);
+        let mut seen = std::collections::HashSet::new();
+        all.retain(|b| seen.insert(b.text.to_lowercase()));
+        all.truncate(10);
+        all
+    });
+    let mut sources: Vec<String> = Vec::new();
+    for s in got.iter().flat_map(|(_, v)| &v.sources) {
+        if !sources.contains(s) {
+            sources.push(s.clone());
+        }
+    }
+    sources.truncate(10);
+    Verdict {
+        bugs,
+        ok_pct: (got.iter().map(|(_, v)| v.ok_pct as f32).sum::<f32>() / n).round() as u8,
+        recommend: !got.is_empty() && got.iter().all(|(_, v)| v.recommend),
+        sources,
+        views: Vec::new(),
+    }
 }
 
 /// A atualização pesa na lista do Windows: as definições do Defender saem várias vezes por dia.
@@ -554,26 +692,55 @@ fn track_win(slot: &mut Option<Watch>, kbs: &[String], now: u64) -> bool {
     track(slot, kbs.join(", "), now)
 }
 
-/// Roda o veredito de uma novidade: as fontes oficiais e, com chave, o Gemini.
-fn judge(w: &mut Watch, key: &str, official: impl FnOnce() -> Result<Vec<String>, ()>, prompt: impl FnOnce(&[String]) -> String, now: u64) {
+/// Roda o veredito de uma novidade: as fontes oficiais e, com chave, as IAs (juntas, ao mesmo tempo).
+/// Uma IA que falha não derruba o veredito da outra; só quando todas falham a pesquisa volta a tentar.
+fn judge(w: &mut Watch, keys: &[(Ai, String)], official: impl FnOnce() -> Result<Vec<String>, ()>, prompt: impl FnOnce(&[String]) -> String, now: u64) {
     if let Ok(o) = official() {
         w.official = o;
     }
-    if key.trim().is_empty() {
+    if keys.is_empty() {
         w.judged = now;
         return;
     }
-    match gemini(key, &prompt(&w.official)) {
-        Ok(v) => {
-            w.verdict = Some(v);
-            w.error.clear();
-            w.judged = now;
-        }
-        Err(e) => {
-            crate::config::log(&format!("Atualizações seguras: o Gemini falhou ({e})"));
-            w.error = format!("{e}@{now}");
+    let p = prompt(&w.official);
+    let res: Vec<(Ai, Result<Verdict, String>)> = std::thread::scope(|s| {
+        let hs: Vec<_> = keys.iter().map(|(ai, k)| (*ai, s.spawn(|| research(*ai, k, &p)))).collect();
+        hs.into_iter().map(|(ai, h)| (ai, h.join().unwrap_or_else(|_| Err("resposta".into())))).collect()
+    });
+    let mut views = Vec::new();
+    let mut got = Vec::new();
+    let mut err = String::new();
+    for (ai, r) in res {
+        match r {
+            Ok(v) => {
+                views.push(View { ai, ok_pct: v.ok_pct, recommend: v.recommend, error: String::new() });
+                got.push((ai, v));
+            }
+            Err(e) => {
+                crate::config::log(&format!("Atualizações seguras: o {} falhou ({e})", ai.name()));
+                views.push(View { ai, error: e.clone(), ..Default::default() });
+                if err.is_empty() {
+                    err = format!("{}:{e}", ai.name());
+                }
+            }
         }
     }
+    let Some(ai) = got.first().map(|(a, _)| *a) else {
+        w.error = format!("{err}@{now}");
+        return;
+    };
+    let mut v = if got.len() == 1 {
+        got.pop().map(|(_, v)| v).unwrap_or_default()
+    } else {
+        let key = keys.iter().find(|(a, _)| *a == ai).map_or("", |(_, k)| k.as_str());
+        combine(&got, merge_bugs(ai, key, &got))
+    };
+    if keys.len() > 1 {
+        v.views = views;
+    }
+    w.verdict = Some(v);
+    w.error.clear();
+    w.judged = now;
 }
 
 /// Avisos que a conferência devolve para a tela.
@@ -584,7 +751,7 @@ pub enum Notice {
 }
 
 /// Uma conferência completa (de outra thread: é rede e COM). `force` pesquisa já, sem esperar os relatos.
-pub fn run(mut st: State, key: &str, wait_h: u32, force: bool) -> (State, Vec<Notice>) {
+pub fn run(mut st: State, keys: &[(Ai, String)], wait_h: u32, force: bool) -> (State, Vec<Notice>) {
     let now = now();
     let mut notes = Vec::new();
     st.checked = now;
@@ -612,7 +779,7 @@ pub fn run(mut st: State, key: &str, wait_h: u32, force: bool) -> (State, Vec<No
     if let (Some(w), Some(d)) = (st.nv.as_mut(), st.driver.clone()) {
         if force && w.verdict.is_none() || waiting_done(w, wait_h, now) {
             let installed = st.installed.clone();
-            judge(w, key, || nv_official(&d), |o| nv_prompt(&d.version, &installed, o), now);
+            judge(w, keys, || nv_official(&d), |o| nv_prompt(&d.version, &installed, o), now);
             if w.judged != 0 {
                 notes.push(Notice::Verdict(format!("NVIDIA {}", d.version)));
             }
@@ -639,7 +806,7 @@ pub fn run(mut st: State, key: &str, wait_h: u32, force: bool) -> (State, Vec<No
     let ups: Vec<WinUpd> = st.updates.iter().filter(|u| counts(u)).cloned().collect();
     if let Some(w) = st.win.as_mut() {
         if force && w.verdict.is_none() || waiting_done(w, wait_h, now) {
-            judge(w, key, win_official, |o| win_prompt(&ups.iter().collect::<Vec<_>>(), o), now);
+            judge(w, keys, win_official, |o| win_prompt(&ups.iter().collect::<Vec<_>>(), o), now);
             if w.judged != 0 {
                 notes.push(Notice::Verdict("Windows Update".into()));
             }
@@ -690,7 +857,8 @@ mod tests {
     fn veredito_do_gemini() {
         let inner = "```json\n{\"bugs\":[{\"text\":\"Tela preta\",\"severity\":\"high\"},{\"text\":\"Flicker\",\"severity\":\"LOW\"},{\"text\":\" \",\"severity\":\"low\"}],\"ok_percent\":\"85%\",\"recommend\":false,\"sources\":[\"https://reddit.com/r/nvidia/x\",\"nada\"]}\n```";
         let j = serde_json::json!({"candidates":[{"content":{"parts":[{"text":inner}]}}]}).to_string();
-        let v = parse_reply(&j).unwrap();
+        let (t, p) = gemini_text(&j).unwrap();
+        let v = parse_verdict(&t, p).unwrap();
         assert_eq!(v.bugs, vec![Bug { text: "Tela preta".into(), sev: Sev::High }, Bug { text: "Flicker".into(), sev: Sev::Low }]);
         assert_eq!(v.ok_pct, 85);
         assert!(!v.recommend);
@@ -699,10 +867,54 @@ mod tests {
         let j = serde_json::json!({"candidates":[{"content":{"parts":[{"text":"{\"bugs\":[],\"ok_percent\":140,\"recommend\":true}"}]},
             "groundingMetadata":{"groundingChunks":[{"web":{"uri":"https://g/1"}}]}}]})
         .to_string();
-        let v = parse_reply(&j).unwrap();
+        let (t, p) = gemini_text(&j).unwrap();
+        let v = parse_verdict(&t, p).unwrap();
         assert_eq!((v.ok_pct, v.recommend), (100, true));
         assert_eq!(v.sources, vec!["https://g/1".to_string()]);
-        assert!(parse_reply("{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"sem json\"}]}}]}").is_none());
+        assert!(parse_verdict("sem json", Vec::new()).is_none());
+    }
+
+    #[test]
+    fn resposta_do_deepseek() {
+        let content = "{\"bugs\":[{\"text\":\"Grava demais no SSD (unconfirmed)\",\"severity\":\"medium\"}],\"ok_percent\":70,\"recommend\":false,\"sources\":[]}";
+        let j = serde_json::json!({"choices":[{"message":{"role":"assistant","content":content,
+            "annotations":[{"type":"url_citation","url_citation":{"url":"https://techpowerup.com/x","title":"t","start_index":0,"end_index":3}}]}}]});
+        // As quebras de linha que ele manda enquanto pesquisa.
+        let (t, p) = deepseek_text(&format!("\n\n{j}")).unwrap();
+        let v = parse_verdict(&t, p).unwrap();
+        assert_eq!(v.bugs, vec![Bug { text: "Grava demais no SSD (unconfirmed)".into(), sev: Sev::Medium }]);
+        assert_eq!(v.sources, vec!["https://techpowerup.com/x".to_string()]);
+        // Erro depois do 200, e conteúdo barrado pelo filtro.
+        assert!(deepseek_text("{\"error\":{\"message\":\"x\"},\"usage\":{}}").is_none());
+        assert!(deepseek_text("{\"choices\":[{\"message\":{\"content\":\"\"}}]}").is_none());
+    }
+
+    #[test]
+    fn so_chama_a_ia_escolhida() {
+        let ais = |m, g, d| chosen(m, g, d).into_iter().map(|(a, _)| a).collect::<Vec<_>>();
+        assert_eq!(ais(0, "g", "d"), vec![Ai::Gemini]);
+        assert_eq!(ais(1, "g", "d"), vec![Ai::DeepSeek]);
+        assert_eq!(ais(2, "g", "d"), vec![Ai::Gemini, Ai::DeepSeek]);
+        assert_eq!(ais(2, " ", "d"), vec![Ai::DeepSeek]);
+        assert!(ais(0, "", "d").is_empty());
+        assert_eq!(chosen(1, "", " k "), vec![(Ai::DeepSeek, "k".to_string())]);
+    }
+
+    #[test]
+    fn junta_as_duas_ias() {
+        let b = |t: &str, sev| Bug { text: t.into(), sev };
+        let g = Verdict { bugs: vec![b("Flicker", Sev::Low), b("Tela preta", Sev::High)], ok_pct: 80, recommend: true, sources: vec!["https://a".into(), "https://b".into()], views: Vec::new() };
+        let d = Verdict { bugs: vec![b("tela preta", Sev::High), b("SSD", Sev::Medium)], ok_pct: 65, recommend: false, sources: vec!["https://b".into(), "https://c".into()], views: Vec::new() };
+        let got = [(Ai::Gemini, g), (Ai::DeepSeek, d)];
+        // Sem a junção da IA: a união sem repetidos, os graves primeiro.
+        let v = combine(&got, None);
+        assert_eq!(v.bugs, vec![b("Tela preta", Sev::High), b("SSD", Sev::Medium), b("Flicker", Sev::Low)]);
+        assert_eq!((v.ok_pct, v.recommend), (73, false));
+        assert_eq!(v.sources, vec!["https://a".to_string(), "https://b".into(), "https://c".into()]);
+        // Com a lista juntada pela IA, e com uma só.
+        assert_eq!(combine(&got, Some(vec![b("x", Sev::Low)])).bugs, vec![b("x", Sev::Low)]);
+        let v = combine(&got[..1], None);
+        assert_eq!((v.ok_pct, v.recommend, v.bugs.len()), (80, true, 2));
     }
 
     #[test]
