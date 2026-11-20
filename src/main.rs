@@ -81,6 +81,10 @@ fn main() {
     if let Some(code) = sys::hidhide::run_arg() {
         std::process::exit(code);
     }
+    // Cópia de administrador que esconde, mostra ou instala atualizações do Windows e sai.
+    if let Some(code) = sys::winupd::run_arg() {
+        std::process::exit(code);
+    }
     // Cópia de administrador que instala ou remove o motor do equalizador e sai.
     if let Some(code) = sys::eqapo::run_arg() {
         std::process::exit(code);

@@ -3002,3 +3002,68 @@ O Prisma não apaga arquivos do Windows, das pastas de programas nem os de pagin
 {} arquivos, {} no total, serão apagados para sempre. Eles não vão para a Lixeira e não dá para recuperar. {} arquivos do sistema ficam de fora.	{} 个文件，共 {}，将被永久删除。它们不会进入回收站，也无法恢复。另有 {} 个系统文件不受影响。
 {} arquivos apagados, {} liberados	已删除 {} 个文件，释放 {}
 Alguns arquivos não foram apagados	部分文件未能删除
+A cada 2 dias	每 2 天
+A cada 3 dias	每 3 天
+Toda semana	每周
+24 horas	24 小时
+3 dias	3 天
+4 dias	4 天
+Saiu o driver {} da NVIDIA. Aguardando relatos antes do veredito.	NVIDIA 驱动 {} 已发布。等待用户反馈后再给出结论。
+{} atualizações novas do Windows. Aguardando relatos antes do veredito.	有 {} 个新的 Windows 更新。等待用户反馈后再给出结论。
+Veredito pronto: {}	结论已出：{}
+Atualizações seguras	安全更新
+Nada novo	没有新内容
+O Windows não deu a permissão de administrador	Windows 未授予管理员权限
+Instalado. Reinicie o PC para terminar	已安装。请重启电脑以完成
+Ainda rodando depois de 10 minutos; confira no Windows Update	10 分钟后仍在运行；请在 Windows Update 中查看
+Não deu certo; veja o registro de ações	未成功；请查看操作日志
+a chave do Gemini foi recusada	Gemini 密钥被拒绝
+acabou a cota grátis do Gemini por hoje	今天的 Gemini 免费额度已用完
+sem resposta da internet	网络无响应
+o modelo do Gemini não está disponível	Gemini 模型不可用
+a resposta veio num formato inesperado	返回的格式不符合预期
+A pesquisa falhou ({}). Tenta de novo em uma hora.	搜索失败（{}）。一小时后重试。
+Visto em {a}. Veredito depois de {b}, quando já houver relatos.	发现于 {a}。在 {b} 后给出结论，届时应已有用户反馈。
+Pesquisar agora	立即搜索
+Problemas que a {} admite	{} 承认的问题
+Nenhum listado.	未列出。
+Sem a chave do Gemini, o veredito usa só as fontes oficiais acima.	没有 Gemini 密钥时，结论仅依据上方的官方来源。
+Recomendado instalar	建议安装
+Melhor esperar	最好等一等
+{}% sem problemas (estimativa)	{}% 无问题（估算）
+Nenhum problema relatado.	未报告任何问题。
+Baixo	低
+Fontes:	来源：
+Ainda não conferido.	尚未检查。
+Nenhuma placa NVIDIA neste PC.	此电脑没有 NVIDIA 显卡。
+Instalado: {a}    Mais novo: {b}	已安装：{a}    最新：{b}
+Não consegui consultar o site da NVIDIA. Tento de novo na próxima conferência.	无法访问 NVIDIA 网站。下次检查时再试。
+Você já está no driver mais novo.	你已经是最新驱动。
+Notas da versão	发行说明
+Discussão no Reddit	Reddit 讨论
+Não consegui consultar o Windows Update ({}).	无法查询 Windows Update（{}）。
+Nenhuma atualização pendente.	没有待安装的更新。
+Bloqueada	已阻止
+Bloquear	阻止
+Desbloquear	取消阻止
+Baixando e instalando... o Windows pede a permissão de administrador.	正在下载并安装... Windows 会请求管理员权限。
+Aguardando a permissão de administrador...	正在等待管理员权限...
+Bloquear esconde a atualização no Windows Update até você desbloquear. Cada ação pede a permissão de administrador.	阻止会在 Windows Update 中隐藏该更新，直到你取消阻止。每个操作都会请求管理员权限。
+Conferir	检查
+Esperar relatos por	等待用户反馈
+Chave do Gemini	Gemini 密钥
+Colar chave	粘贴密钥
+Chave do Gemini guardada	Gemini 密钥已保存
+Copie a chave antes de colar	粘贴前请先复制密钥
+Apagar chave	删除密钥
+Pegar uma chave grátis	获取免费密钥
+Chave guardada. O Gemini pesquisa os relatos com a busca do Google (megathreads do r/nvidia e do r/Windows11, fórum da NVIDIA, Guru3D e sites de notícias) e dá o veredito. A cota grátis passa de 500 pesquisas por dia.	密钥已保存。Gemini 通过 Google 搜索查找用户反馈（r/nvidia 和 r/Windows11 的汇总帖、NVIDIA 论坛、Guru3D 和新闻网站）并给出结论。免费额度为每天 500 次以上搜索。
+Sem chave, o veredito usa só as fontes oficiais: os problemas conhecidos da Microsoft e os da NVIDIA nas notas da versão.	没有密钥时，结论仅依据官方来源：Microsoft 的已知问题，以及 NVIDIA 发行说明中的问题。
+Avisar antes de baixar atualizações do Windows e não trocar o driver de vídeo pelo Windows Update	下载 Windows 更新前先提醒，并且不通过 Windows Update 更换显卡驱动
+Usa a política do próprio Windows (pede administrador) e desfaz ao desmarcar. O serviço do Windows Update continua ligado.	使用 Windows 自带的策略（需要管理员权限），取消勾选即可撤销。Windows Update 服务仍保持开启。
+A % sem problemas é uma estimativa da IA a partir das reclamações nos fóruns: não existe essa estatística oficial.	“无问题”百分比是 AI 根据论坛上的抱怨做出的估算：并没有这样的官方统计。
+Avisa quando sai driver da NVIDIA ou atualização do Windows e diz se vale instalar, pelos relatos de quem já instalou.	NVIDIA 驱动或 Windows 更新发布时提醒你，并根据已安装用户的反馈说明是否值得安装。
+Procurando...	正在查找...
+Nunca conferido	从未检查
+Última conferência: {}	上次检查：{}
+Página Atualizações	“更新”页面

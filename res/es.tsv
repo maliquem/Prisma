@@ -3002,3 +3002,68 @@ O Prisma não apaga arquivos do Windows, das pastas de programas nem os de pagin
 {} arquivos, {} no total, serão apagados para sempre. Eles não vão para a Lixeira e não dá para recuperar. {} arquivos do sistema ficam de fora.	{} archivos, {} en total, se eliminarán para siempre. No van a la Papelera y no se pueden recuperar. {} archivos del sistema quedan fuera.
 {} arquivos apagados, {} liberados	{} archivos eliminados, {} liberados
 Alguns arquivos não foram apagados	Algunos archivos no se eliminaron
+A cada 2 dias	Cada 2 días
+A cada 3 dias	Cada 3 días
+Toda semana	Cada semana
+24 horas	24 horas
+3 dias	3 días
+4 dias	4 días
+Saiu o driver {} da NVIDIA. Aguardando relatos antes do veredito.	Ha salido el driver {} de NVIDIA. Esperando reportes antes del veredicto.
+{} atualizações novas do Windows. Aguardando relatos antes do veredito.	{} actualizaciones nuevas de Windows. Esperando reportes antes del veredicto.
+Veredito pronto: {}	Veredicto listo: {}
+Atualizações seguras	Actualizaciones seguras
+Nada novo	Nada nuevo
+O Windows não deu a permissão de administrador	Windows no dio el permiso de administrador
+Instalado. Reinicie o PC para terminar	Instalado. Reinicia el PC para terminar
+Ainda rodando depois de 10 minutos; confira no Windows Update	Sigue en marcha después de 10 minutos; revisa en Windows Update
+Não deu certo; veja o registro de ações	No funcionó; mira el registro de acciones
+a chave do Gemini foi recusada	se rechazó la clave de Gemini
+acabou a cota grátis do Gemini por hoje	se agotó la cuota gratuita de Gemini por hoy
+sem resposta da internet	sin respuesta de internet
+o modelo do Gemini não está disponível	el modelo de Gemini no está disponible
+a resposta veio num formato inesperado	la respuesta llegó en un formato inesperado
+A pesquisa falhou ({}). Tenta de novo em uma hora.	La búsqueda falló ({}). Se intentará de nuevo en una hora.
+Visto em {a}. Veredito depois de {b}, quando já houver relatos.	Visto el {a}. Veredicto después del {b}, cuando ya haya reportes.
+Pesquisar agora	Buscar ahora
+Problemas que a {} admite	Problemas que {} reconoce
+Nenhum listado.	Ninguno listado.
+Sem a chave do Gemini, o veredito usa só as fontes oficiais acima.	Sin la clave de Gemini, el veredicto usa solo las fuentes oficiales de arriba.
+Recomendado instalar	Se recomienda instalar
+Melhor esperar	Mejor esperar
+{}% sem problemas (estimativa)	{}% sin problemas (estimación)
+Nenhum problema relatado.	Ningún problema reportado.
+Baixo	Bajo
+Fontes:	Fuentes:
+Ainda não conferido.	Aún sin comprobar.
+Nenhuma placa NVIDIA neste PC.	No hay ninguna tarjeta NVIDIA en este PC.
+Instalado: {a}    Mais novo: {b}	Instalado: {a}    Más nuevo: {b}
+Não consegui consultar o site da NVIDIA. Tento de novo na próxima conferência.	No pude consultar el sitio de NVIDIA. Lo intento de nuevo en la próxima comprobación.
+Você já está no driver mais novo.	Ya tienes el driver más nuevo.
+Notas da versão	Notas de la versión
+Discussão no Reddit	Discusión en Reddit
+Não consegui consultar o Windows Update ({}).	No pude consultar Windows Update ({}).
+Nenhuma atualização pendente.	Ninguna actualización pendiente.
+Bloqueada	Bloqueada
+Bloquear	Bloquear
+Desbloquear	Desbloquear
+Baixando e instalando... o Windows pede a permissão de administrador.	Descargando e instalando... Windows pide el permiso de administrador.
+Aguardando a permissão de administrador...	Esperando el permiso de administrador...
+Bloquear esconde a atualização no Windows Update até você desbloquear. Cada ação pede a permissão de administrador.	Bloquear oculta la actualización en Windows Update hasta que la desbloquees. Cada acción pide el permiso de administrador.
+Conferir	Comprobar
+Esperar relatos por	Esperar reportes durante
+Chave do Gemini	Clave de Gemini
+Colar chave	Pegar clave
+Chave do Gemini guardada	Clave de Gemini guardada
+Copie a chave antes de colar	Copia la clave antes de pegar
+Apagar chave	Borrar clave
+Pegar uma chave grátis	Conseguir una clave gratis
+Chave guardada. O Gemini pesquisa os relatos com a busca do Google (megathreads do r/nvidia e do r/Windows11, fórum da NVIDIA, Guru3D e sites de notícias) e dá o veredito. A cota grátis passa de 500 pesquisas por dia.	Clave guardada. Gemini busca los reportes con la búsqueda de Google (megathreads de r/nvidia y r/Windows11, foro de NVIDIA, Guru3D y sitios de noticias) y da el veredicto. La cuota gratuita supera las 500 búsquedas al día.
+Sem chave, o veredito usa só as fontes oficiais: os problemas conhecidos da Microsoft e os da NVIDIA nas notas da versão.	Sin clave, el veredicto usa solo las fuentes oficiales: los problemas conocidos de Microsoft y los de NVIDIA en las notas de la versión.
+Avisar antes de baixar atualizações do Windows e não trocar o driver de vídeo pelo Windows Update	Avisar antes de descargar actualizaciones de Windows y no cambiar el driver de vídeo mediante Windows Update
+Usa a política do próprio Windows (pede administrador) e desfaz ao desmarcar. O serviço do Windows Update continua ligado.	Usa la política del propio Windows (pide administrador) y se deshace al desmarcar. El servicio de Windows Update sigue activo.
+A % sem problemas é uma estimativa da IA a partir das reclamações nos fóruns: não existe essa estatística oficial.	El % sin problemas es una estimación de la IA a partir de las quejas en los foros: no existe esa estadística oficial.
+Avisa quando sai driver da NVIDIA ou atualização do Windows e diz se vale instalar, pelos relatos de quem já instalou.	Avisa cuando sale un driver de NVIDIA o una actualización de Windows y dice si vale la pena instalar, según los reportes de quien ya lo instaló.
+Procurando...	Buscando...
+Nunca conferido	Nunca comprobado
+Última conferência: {}	Última comprobación: {}
+Página Atualizações	Página Actualizaciones

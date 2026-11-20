@@ -180,6 +180,44 @@ The Copies page is in the sidebar, in the Maintenance group, after Tools, with t
 - **Copy lists:** one list gathers files and folders from several places into one destination. Fields: **Name**; **What to copy**, with **Add files**, **Add folder** and **Remove from list**; **Where to**, with **Choose**; **When**: **Only when I start it**, **Once** (with day, month, hour and minute), **Every day** or **Days of the week**; **If the file already exists at the destination**: **Skip**, **Replace** or **Keep both**; **Verify with hash (SHA-256)**; and **Move instead of copying**. The buttons are **Copy now**, **Save** and **Delete list**. Lists are kept in the file copias.txt.
 - **Scheduled:** a scheduled copy runs only while Prisma is open, in the tray. If the PC was off at the set time, it runs when Prisma opens. Nothing is added to the Windows Task Scheduler, and the scheduled copy window opens without taking focus.
 
+## Safe updates
+
+The Updates page is in the sidebar, in the Maintenance group, after Copies. At the top, **Check now** checks right away. It has three cards: **NVIDIA driver**, **Windows Update** and **Options**.
+
+- **NVIDIA driver:** shows the installed driver and the newest one, from NVIDIA's driver search site, using your graphics card's name. Without an NVIDIA card, the card says so. Next to it are **Download**, **Release notes** (NVIDIA's PDF) and **Reddit discussion** (search for the Game Ready driver megathread on r/nvidia).
+- **Windows Update:** lists the pending Windows updates, with title and KB. Blocked ones are marked **Blocked**. Defender definitions don't count as news. Check one or more and use **Block** (hides it from Windows Update until you unblock it), **Unblock** or **Install** (downloads and installs; may ask to restart). **Reddit discussion** searches for the "Cumulative Updates" megathread on r/Windows11 (r/Windows10 on Windows 10).
+- **Options:** settings for checking and waiting, described below.
+
+### Verdict
+
+When a new driver or update comes out, Prisma warns in the tray; clicking it opens the page. It doesn't judge right away: it waits for the time set in **Wait for reports for** (24 hours, **3 days** by default, or 4 days). Then it searches and shows:
+
+- **Recommended: install** or **Better to wait**.
+- **N% without problems (estimate)**. This is an AI estimate from complaints on forums. There are no official statistics, and the screen says so.
+- The bugs, each marked **Severe**, **Medium** or **Low**. On the driver card, **Problems NVIDIA admits to** (the Open Issues in the release notes); on the Windows card, **Problems Microsoft admits to** (the known issues on the release health page for that version).
+- **Sources**, with links.
+
+**Search now** skips the wait and shows while there is no verdict (and, after a verdict made without a key, when a key is saved). If the search fails, the screen shows the reason and asks you to try again in an hour.
+
+With a Gemini key, the search uses Google, starting with the r/nvidia and r/Windows11 megathreads, then the NVIDIA forum, Guru3D, Overclockers, Windows Latest, BleepingComputer and Neowin. The free quota is over 500 searches per day.
+
+Without a key, the verdict uses only the official sources: Microsoft's known issues and NVIDIA's Open Issues.
+
+Reddit doesn't allow reading without logging in, so Prisma reaches it through the Gemini search and the **Reddit discussion** buttons.
+
+### Options
+
+- **Check:** **Off** (default), **Every day**, **Every 2 days**, **Every 3 days** or **Every week**. Checks run only while Prisma is open or in the tray; no task is added to the Windows Task Scheduler.
+- **Wait for reports for:** 24 hours, **3 days** (default) or 4 days.
+- **Gemini key:** **Paste key** uses the clipboard; **Delete key**; **Get a free key** opens aistudio.google.com/apikey. The key stays in Prisma's settings and is not written to the action log.
+- **Warn before downloading Windows updates and don't replace the video driver through Windows Update:** writes Windows' own policy. Asks for administrator permission. Unchecking it removes those values.
+
+### Permission and undo
+
+- Each Windows Update action asks for administrator permission (UAC) right away. Prisma opens a copy of itself as administrator only for that action. It does not use the Share screen service.
+- Everything is reversible: **Unblock** releases a blocked update, and unchecking the policy box removes the values it wrote.
+- The Windows Update service (wuauserv) stays on.
+
 ## Optimize
 
 Suggests what to close before playing and always asks. Blacklist never closes, Whitelist always closes, and automatic detection suggests names for both lists. Shortcut: Ctrl + Alt + O.

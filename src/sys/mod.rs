@@ -54,6 +54,8 @@ pub mod services;
 pub mod tools;
 pub mod tweaks;
 pub mod update;
+pub mod safeupd;
+pub mod winupd;
 pub mod uninstall;
 pub mod vbcable;
 pub mod vdd;

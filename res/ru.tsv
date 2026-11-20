@@ -3002,3 +3002,68 @@ O Prisma não apaga arquivos do Windows, das pastas de programas nem os de pagin
 {} arquivos, {} no total, serão apagados para sempre. Eles não vão para a Lixeira e não dá para recuperar. {} arquivos do sistema ficam de fora.	Файлов: {}, всего {}, будут удалены навсегда. Они не попадут в корзину, и восстановить их будет нельзя. Системных файлов не затронуто: {}.
 {} arquivos apagados, {} liberados	Удалено файлов: {}, освобождено: {}
 Alguns arquivos não foram apagados	Некоторые файлы не удалены
+A cada 2 dias	Каждые 2 дня
+A cada 3 dias	Каждые 3 дня
+Toda semana	Каждую неделю
+24 horas	24 часа
+3 dias	3 дня
+4 dias	4 дня
+Saiu o driver {} da NVIDIA. Aguardando relatos antes do veredito.	Вышел драйвер NVIDIA {}. Ждём отзывов пользователей перед вердиктом.
+{} atualizações novas do Windows. Aguardando relatos antes do veredito.	Новых обновлений Windows: {}. Ждём отзывов пользователей перед вердиктом.
+Veredito pronto: {}	Вердикт готов: {}
+Atualizações seguras	Безопасные обновления
+Nada novo	Ничего нового
+O Windows não deu a permissão de administrador	Windows не дал права администратора
+Instalado. Reinicie o PC para terminar	Установлено. Перезагрузите ПК для завершения
+Ainda rodando depois de 10 minutos; confira no Windows Update	Всё ещё выполняется спустя 10 минут; проверьте в Windows Update
+Não deu certo; veja o registro de ações	Не получилось; см. журнал действий
+a chave do Gemini foi recusada	ключ Gemini отклонён
+acabou a cota grátis do Gemini por hoje	бесплатная квота Gemini на сегодня исчерпана
+sem resposta da internet	нет ответа из интернета
+o modelo do Gemini não está disponível	модель Gemini недоступна
+a resposta veio num formato inesperado	ответ пришёл в неожиданном формате
+A pesquisa falhou ({}). Tenta de novo em uma hora.	Поиск не удался ({}). Повторная попытка через час.
+Visto em {a}. Veredito depois de {b}, quando já houver relatos.	Замечено {a}. Вердикт после {b}, когда появятся отзывы.
+Pesquisar agora	Искать сейчас
+Problemas que a {} admite	Проблемы, которые признаёт {}
+Nenhum listado.	Нет в списке.
+Sem a chave do Gemini, o veredito usa só as fontes oficiais acima.	Без ключа Gemini вердикт опирается только на официальные источники выше.
+Recomendado instalar	Рекомендуется установить
+Melhor esperar	Лучше подождать
+{}% sem problemas (estimativa)	{}% без проблем (оценка)
+Nenhum problema relatado.	Проблем не сообщается.
+Baixo	Низкий
+Fontes:	Источники:
+Ainda não conferido.	Ещё не проверялось.
+Nenhuma placa NVIDIA neste PC.	На этом ПК нет видеокарты NVIDIA.
+Instalado: {a}    Mais novo: {b}	Установлено: {a}    Новейший: {b}
+Não consegui consultar o site da NVIDIA. Tento de novo na próxima conferência.	Не удалось обратиться к сайту NVIDIA. Повторю при следующей проверке.
+Você já está no driver mais novo.	У вас уже самый новый драйвер.
+Notas da versão	Примечания к выпуску
+Discussão no Reddit	Обсуждение на Reddit
+Não consegui consultar o Windows Update ({}).	Не удалось обратиться к Windows Update ({}).
+Nenhuma atualização pendente.	Нет ожидающих обновлений.
+Bloqueada	Заблокировано
+Bloquear	Заблокировать
+Desbloquear	Разблокировать
+Baixando e instalando... o Windows pede a permissão de administrador.	Загрузка и установка... Windows запрашивает права администратора.
+Aguardando a permissão de administrador...	Ожидание прав администратора...
+Bloquear esconde a atualização no Windows Update até você desbloquear. Cada ação pede a permissão de administrador.	Блокировка скрывает обновление в Windows Update, пока вы его не разблокируете. Каждое действие запрашивает права администратора.
+Conferir	Проверить
+Esperar relatos por	Ждать отзывов
+Chave do Gemini	Ключ Gemini
+Colar chave	Вставить ключ
+Chave do Gemini guardada	Ключ Gemini сохранён
+Copie a chave antes de colar	Скопируйте ключ перед вставкой
+Apagar chave	Удалить ключ
+Pegar uma chave grátis	Получить бесплатный ключ
+Chave guardada. O Gemini pesquisa os relatos com a busca do Google (megathreads do r/nvidia e do r/Windows11, fórum da NVIDIA, Guru3D e sites de notícias) e dá o veredito. A cota grátis passa de 500 pesquisas por dia.	Ключ сохранён. Gemini ищет отзывы через поиск Google (мегатемы r/nvidia и r/Windows11, форум NVIDIA, Guru3D и новостные сайты) и выносит вердикт. Бесплатная квота — более 500 запросов в день.
+Sem chave, o veredito usa só as fontes oficiais: os problemas conhecidos da Microsoft e os da NVIDIA nas notas da versão.	Без ключа вердикт опирается только на официальные источники: известные проблемы Microsoft и проблемы NVIDIA из примечаний к выпуску.
+Avisar antes de baixar atualizações do Windows e não trocar o driver de vídeo pelo Windows Update	Предупреждать перед загрузкой обновлений Windows и не менять видеодрайвер через Windows Update
+Usa a política do próprio Windows (pede administrador) e desfaz ao desmarcar. O serviço do Windows Update continua ligado.	Использует собственную политику Windows (нужны права администратора) и отменяется при снятии галочки. Служба Windows Update остаётся включённой.
+A % sem problemas é uma estimativa da IA a partir das reclamações nos fóruns: não existe essa estatística oficial.	Процент без проблем — это оценка ИИ по жалобам на форумах: официальной статистики нет.
+Avisa quando sai driver da NVIDIA ou atualização do Windows e diz se vale instalar, pelos relatos de quem já instalou.	Сообщает о выходе драйвера NVIDIA или обновления Windows и подсказывает, стоит ли ставить, по отзывам тех, кто уже установил.
+Procurando...	Поиск...
+Nunca conferido	Никогда не проверялось
+Última conferência: {}	Последняя проверка: {}
+Página Atualizações	Страница «Обновления»
