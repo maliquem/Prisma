@@ -439,11 +439,11 @@ fn lang_name() -> &'static str {
     }
 }
 
-const ANSWER: &str = "Answer ONLY with one JSON object, no other text: {\"bugs\":[{\"text\":\"short description\",\"severity\":\"high|medium|low\"}],\"ok_percent\":0-100,\"recommend\":true|false,\"sources\":[\"url\", ...]}. ok_percent is your estimate of the share of users without problems, from how many complain. recommend is whether a typical gamer should install it now. Only list bugs that users actually report for this release, most serious first, at most 8.";
+const ANSWER: &str = "Answer ONLY with one JSON object, no other text: {\"bugs\":[{\"text\":\"short description\",\"severity\":\"high|medium|low\"}],\"ok_percent\":0-100,\"recommend\":true|false,\"sources\":[\"url\", ...]}. ok_percent is your estimate of the share of users without problems, from how many complain. recommend is whether a typical gamer should install it now. List the problems that affect this release, including ones that started in earlier releases and are still reported for it: crashes, stutter and black screens, but also background problems such as excessive SSD or disk writes, high CPU or power use at idle, and broken features. Do not drop a problem because only news sites report it or because the vendor has not confirmed it (then say \"unconfirmed\" in the text). Most serious first, at most 8.";
 
 pub fn nv_prompt(version: &str, installed: &str, official: &[String]) -> String {
     format!(
-        "You are checking if NVIDIA GeForce Game Ready driver {version} for Windows is safe to install (the user has {installed}). Search the web for user reports about {version}: first the r/nvidia megathread titled \"Game Ready Driver {version} FAQ/Discussion\", then the NVIDIA forums driver feedback thread, Guru3D, Overclockers and other recent discussions. NVIDIA lists these open issues: {}. Write bug texts in {}. {ANSWER}",
+        "You are checking if NVIDIA GeForce Game Ready driver {version} for Windows is safe to install (the user has {installed}). Run several web searches: the r/nvidia megathread titled \"Game Ready Driver {version} FAQ/Discussion\"; tech news from the last 30 days about NVIDIA driver {version} and about problems in recent NVIDIA drivers (TechPowerUp, Wccftech, Tom's Hardware, VideoCardz, Notebookcheck, PC Gamer, Neowin); then the NVIDIA forums driver feedback thread, Guru3D and Overclockers. NVIDIA lists these open issues: {}. Write bug texts in {}. {ANSWER}",
         if official.is_empty() { "none".into() } else { official.join("; ") },
         lang_name()
     )
@@ -452,7 +452,7 @@ pub fn nv_prompt(version: &str, installed: &str, official: &[String]) -> String 
 pub fn win_prompt(updates: &[&WinUpd], known: &[String]) -> String {
     let list: Vec<String> = updates.iter().map(|u| u.title.clone()).collect();
     format!(
-        "You are checking if these pending Windows updates are safe to install on a gaming PC ({}): {}. Search the web for user reports about them: first the r/Windows11 (or r/Windows10) megathread titled \"Cumulative Updates <release date>\" for this month, then Windows Latest, BleepingComputer, Neowin and other recent discussions. Microsoft lists these known issues: {}. Write bug texts in {}. {ANSWER}",
+        "You are checking if these pending Windows updates are safe to install on a gaming PC ({}): {}. Run several web searches: the r/Windows11 (or r/Windows10) megathread titled \"Cumulative Updates <release date>\" for this month; tech news from the last 30 days about these KBs and about problems in recent Windows updates (Windows Latest, BleepingComputer, Neowin, Windows Central, Tom's Hardware, The Register); then Microsoft Q&A and other recent discussions. Microsoft lists these known issues: {}. Write bug texts in {}. {ANSWER}",
         if win_build() >= 22000 { "Windows 11" } else { "Windows 10" },
         list.join("; "),
         if known.is_empty() { "none".into() } else { known.join("; ") },

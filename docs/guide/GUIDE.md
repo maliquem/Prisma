@@ -199,7 +199,7 @@ When a new driver or update comes out, Prisma warns in the tray; clicking it ope
 
 **Search now** skips the wait and shows while there is no verdict (and, after a verdict made without a key, when a key is saved). If the search fails, the screen shows the reason and asks you to try again in an hour.
 
-With a Gemini key, the search uses Google, starting with the r/nvidia and r/Windows11 megathreads, then the NVIDIA forum, Guru3D, Overclockers, Windows Latest, BleepingComputer and Neowin. The free quota is over 500 searches per day.
+With a Gemini key, the search uses Google, in the r/nvidia and r/Windows11 megathreads, in tech news from the last month (TechPowerUp, Wccftech, Tom's Hardware, Windows Latest, BleepingComputer and others) and in the forums (NVIDIA, Guru3D, Overclockers). It also lists problems that started in earlier versions and remain in the new one, such as excessive SSD writes or high CPU use at idle, even ones the company has not confirmed (marked as unconfirmed). The free quota is over 500 searches per day.
 
 Without a key, the verdict uses only the official sources: Microsoft's known issues and NVIDIA's Open Issues.
 

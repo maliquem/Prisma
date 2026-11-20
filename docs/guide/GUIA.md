@@ -199,7 +199,7 @@ Quando sai driver ou atualização nova, o Prisma avisa na bandeja; o clique abr
 
 **Pesquisar agora** pula a espera e aparece enquanto não há veredito (e, depois de um veredito sem chave, quando há chave guardada). Se a pesquisa falhar, a tela mostra o motivo e pede para tentar de novo em uma hora.
 
-Com chave do Gemini, a pesquisa usa a busca do Google, começando pelos megathreads do r/nvidia e do r/Windows11, e depois fórum da NVIDIA, Guru3D, Overclockers, Windows Latest, BleepingComputer e Neowin. A cota grátis passa de 500 pesquisas por dia.
+Com chave do Gemini, a pesquisa usa a busca do Google, nos megathreads do r/nvidia e do r/Windows11, nas notícias de tecnologia do último mês (TechPowerUp, Wccftech, Tom's Hardware, Windows Latest, BleepingComputer e outros) e nos fóruns (NVIDIA, Guru3D, Overclockers). Entram também problemas que começaram em versões anteriores e continuam na nova, como gravação demais no SSD ou uso alto da CPU parado, mesmo os que a empresa ainda não confirmou (marcados como não confirmados). A cota grátis passa de 500 pesquisas por dia.
 
 Sem chave, o veredito usa só as fontes oficiais: os problemas conhecidos da Microsoft e os Open Issues da NVIDIA.
 
