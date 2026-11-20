@@ -238,7 +238,9 @@ pub fn start(hub: HWND) {
         Ok(s) => s,
         Err(e) => return crate::config::log(&format!("ponte com o launcher: sem nome do pipe ({e})")),
     };
-    serve_on(prisma_link::pipe_name(&sid), hub);
+    // Teste com o Prisma em uso aberto (ele prende o pipe): a versão de desenvolvimento usa outro nome.
+    let dev = std::env::var("PRISMA_LINK_PIPE").ok().filter(|_| cfg!(debug_assertions));
+    serve_on(dev.unwrap_or_else(|| prisma_link::pipe_name(&sid)), hub);
     if cfg!(feature = "stream") {
         serve_on(prisma_link::share_pipe_name(&sid), hub);
     }

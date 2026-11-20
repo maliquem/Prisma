@@ -353,7 +353,7 @@ fn game_facts(path: &str) -> (bool, Option<String>) {
     SEEN.with(|m| m.borrow_mut().entry(path.to_string()).or_insert_with(|| (crate::meter::anti_cheat(path), crate::sys::stores::steam_app_id(std::path::Path::new(path)))).clone())
 }
 
-fn knob(h: &mut Hdr, i: usize) -> &mut f32 {
+pub(crate) fn knob(h: &mut Hdr, i: usize) -> &mut f32 {
     match i {
         0 => &mut h.peak,
         1 => &mut h.paper,

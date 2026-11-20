@@ -1,9 +1,10 @@
 //! Menu do HDR do Prisma por cima do jogo: o atalho abre, os ajustes vão ao vivo pela memória
-//! compartilhada e, ao fechar com mudanças, ele pergunta se salva no perfil do jogo.
+//! compartilhada e, ao fechar com mudanças, ele pergunta se salva no perfil do jogo. O jogo segue
+//! com o foco: as teclas do menu chegam como atalhos registrados só enquanto ele está aberto.
 
 use windows::core::*;
 use windows::Win32::Foundation::*;
-use windows::Win32::UI::Input::KeyboardAndMouse::{ReleaseCapture, SetCapture};
+use windows::Win32::UI::Input::KeyboardAndMouse::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
 use crate::overlays::{focus_monitor, register};
@@ -16,6 +17,10 @@ const W: f32 = 460.0;
 const PAD: f32 = 16.0;
 /// Os ajustes, um por linha.
 const KNOBS_H: f32 = crate::pages::hdr::KNOBS.len() as f32 * 48.0;
+/// Teclas do menu; o atalho de cada uma é a posição + 1.
+const KEYS: [VIRTUAL_KEY; 6] = [VK_ESCAPE, VK_RETURN, VK_UP, VK_DOWN, VK_LEFT, VK_RIGHT];
+/// Confere duas vezes por segundo se o jogo ainda está aberto e em foco.
+const TIMER_GAME: usize = 1;
 
 enum Act {
     Close,
@@ -29,11 +34,14 @@ pub struct HdrMenu {
     live: Option<HdrLive>,
     /// Posição do jogo em `hdr_games`; sem ela não há perfil onde salvar.
     game: Option<usize>,
+    pid: u32,
     name: String,
     start: Hdr,
     now: Hdr,
     calibrated: Hdr,
     asking: bool,
+    /// Linha do ajuste que as setas mudam.
+    row: usize,
 }
 
 unsafe extern "system" fn menu_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT {
@@ -43,6 +51,16 @@ unsafe extern "system" fn menu_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
             let scale = windows::Win32::UI::HiDpi::GetDpiForWindow(h) as f32 / 96.0;
             let (x, y) = ((l.0 & 0xffff) as i16 as f32 / scale, ((l.0 >> 16) & 0xffff) as i16 as f32 / scale);
             crate::app::with(|a| a.hdr_menu_mouse(m, x, y));
+            LRESULT(0)
+        }
+        WM_HOTKEY => {
+            if let Some(&k) = KEYS.get(w.0.wrapping_sub(1)) {
+                crate::app::with(|a| a.hdr_menu_keydown(k));
+            }
+            LRESULT(0)
+        }
+        WM_TIMER => {
+            crate::app::with(|a| a.hdr_menu.watch());
             LRESULT(0)
         }
         _ => DefWindowProcW(h, m, w, l),
@@ -56,34 +74,65 @@ impl HdrMenu {
         // Fora de fotos e vídeos: o menu é só para quem joga.
         crate::capture::hide_from_capture(hwnd);
         let h = Hdr::from_profile(None);
-        Self { surface: Layered::new(hwnd), ui: UiState::default(), live: None, game: None, name: String::new(), start: h, now: h, calibrated: h, asking: false }
+        Self { surface: Layered::new(hwnd), ui: UiState::default(), live: None, game: None, pid: 0, name: String::new(), start: h, now: h, calibrated: h, asking: false, row: 0 }
     }
 
     pub fn is_open(&self) -> bool {
         self.live.is_some()
     }
 
-    fn open(&mut self, live: HdrLive, game: Option<usize>, name: String, calibrated: Hdr) {
+    fn open(&mut self, live: HdrLive, game: Option<usize>, pid: u32, name: String, calibrated: Hdr) {
         self.start = live.get();
         self.now = self.start;
         self.live = Some(live);
         self.game = game;
+        self.pid = pid;
         self.name = name;
         self.calibrated = calibrated;
         self.asking = false;
+        self.row = 0;
         self.ui = UiState::default();
         self.redraw();
+        let hwnd = self.surface.hwnd;
         unsafe {
-            let _ = ShowWindow(self.surface.hwnd, SW_SHOWNOACTIVATE);
+            let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+            for (i, k) in KEYS.into_iter().enumerate() {
+                // Esc e Enter sem repetir: segurar não fecha e já salva. As setas repetem.
+                let once = if i < 2 { MOD_NOREPEAT } else { HOT_KEY_MODIFIERS(0) };
+                let _ = RegisterHotKey(Some(hwnd), i as i32 + 1, once, k.0 as u32);
+            }
+            SetTimer(Some(hwnd), TIMER_GAME, 500, None);
         }
     }
 
     fn hide(&mut self) {
         self.live = None;
+        let hwnd = self.surface.hwnd;
         unsafe {
+            for i in 1..=KEYS.len() as i32 {
+                let _ = UnregisterHotKey(Some(hwnd), i);
+            }
+            let _ = KillTimer(Some(hwnd), TIMER_GAME);
             let _ = ReleaseCapture();
-            let _ = ShowWindow(self.surface.hwnd, SW_HIDE);
+            let _ = ShowWindow(hwnd, SW_HIDE);
         }
+    }
+
+    /// O jogo fechou ou saiu da frente: o menu some e solta as teclas. Os ajustes ficam valendo.
+    fn watch(&mut self) {
+        let front = crate::sys::procs::window_pid(unsafe { GetForegroundWindow() });
+        if self.is_open() && (front != self.pid || !crate::sys::procs::is_alive(self.pid)) {
+            self.hide();
+        }
+    }
+
+    /// Setas para os lados: um centésimo da faixa do ajuste escolhido.
+    fn step(&mut self, dir: f32) {
+        let (_, lo, hi) = crate::pages::hdr::KNOBS[self.row];
+        let mut h = self.now;
+        let v = crate::pages::hdr::knob(&mut h, self.row);
+        *v = (*v + dir * (hi - lo) / 100.0).clamp(lo, hi);
+        self.set(h);
     }
 
     fn set(&mut self, h: Hdr) {
@@ -117,11 +166,15 @@ impl HdrMenu {
     fn redraw(&mut self) -> Option<Act> {
         let mon = focus_monitor();
         let scale = unsafe { windows::Win32::UI::HiDpi::GetDpiForWindow(self.surface.hwnd) } as f32 / 96.0;
+        // A aba HDR pode ter mudado os valores do jogo com o menu aberto.
+        if let Some(l) = &self.live {
+            self.now = l.get();
+        }
         let h = if self.asking { 150.0 } else { 54.0 + KNOBS_H + 8.0 + 34.0 + PAD };
         // Canto superior esquerdo: o medidor fica no direito.
         let (x, y) = (mon.left + (24.0 * scale) as i32, mon.top + (24.0 * scale) as i32);
         let (mut act, mut now, mut moved) = (None, self.now, false);
-        let (asking, calibrated, can_save) = (self.asking, self.calibrated, self.game.is_some());
+        let (asking, calibrated, can_save, row) = (self.asking, self.calibrated, self.game.is_some(), self.row);
         let title = format!("{} · {}", crate::i18n::tr("HDR do Prisma"), self.name);
         let ui = &mut self.ui;
         self.surface.paint(x, y, W, h, |c, r| {
@@ -138,6 +191,7 @@ impl HdrMenu {
                 }
             } else {
                 u.c.text(rect(PAD, 12.0, W - 2.0 * PAD, 26.0), &title, 14.0, WHITE, Align::Left, Weight::Semibold);
+                u.c.round(rect(PAD - 8.0, 54.0 + row as f32 * 48.0 - 6.0, W - 2.0 * PAD + 16.0, 42.0), 8.0, rgb(0x262a33));
                 moved = crate::pages::hdr::knobs(&mut u, "hm-k", rect(PAD, 54.0, W - 2.0 * PAD, KNOBS_H), 1, &mut now);
                 let by = h - PAD - 34.0;
                 if u.button("hm-cal", rect(PAD, by, 200.0, 34.0), "Voltar à calibração", false) {
@@ -172,16 +226,16 @@ impl crate::app::App {
         if self.hdr_menu.is_open() {
             return self.hdr_menu_close();
         }
-        let Some((_, pid, exe)) = self.fg_info() else { return };
+        let Some((front, pid, exe)) = self.fg_info() else { return };
         let Some(live) = HdrLive::connect(pid) else {
             self.toast.info("Este jogo não está com o HDR do Prisma: abra-o com ele pela aba HDR.");
             return;
         };
         let game = self.cfg.hdr_games.iter().position(|g| g.exe.eq_ignore_ascii_case(&exe));
-        // A mesma calibração que o jogo usa ao abrir sem ajustes próprios.
-        let calibrated = Hdr::from_profile(self.cfg.hdr_profiles.last());
+        // A calibração da tela onde o jogo está, a mesma que a aba HDR mostra para ela.
+        let calibrated = crate::sys::autohdr::calibrated(&self.cfg, &crate::overlays::monitor_name(front));
         let name = crate::pages::app_name(&exe).to_string();
-        self.hdr_menu.open(live, game, name, calibrated);
+        self.hdr_menu.open(live, game, pid, name, calibrated);
     }
 
     fn hdr_menu_close(&mut self) {
@@ -199,9 +253,32 @@ impl crate::app::App {
     }
 
     pub fn hdr_menu_mouse(&mut self, msg: u32, x: f32, y: f32) {
-        match self.hdr_menu.mouse(msg, x, y) {
-            Some(Act::Close) => self.hdr_menu_close(),
-            Some(Act::Save) => {
+        if let Some(act) = self.hdr_menu.mouse(msg, x, y) {
+            self.hdr_menu_act(act);
+        }
+    }
+
+    /// Esc e Enter fecham; na pergunta, Enter salva e Esc descarta. Setas: ajuste e valor.
+    fn hdr_menu_keydown(&mut self, k: VIRTUAL_KEY) {
+        let m = &mut self.hdr_menu;
+        let n = crate::pages::hdr::KNOBS.len();
+        match (k, m.asking) {
+            (VK_RETURN, true) => return self.hdr_menu_act(Act::Save),
+            (VK_ESCAPE, true) => return self.hdr_menu_act(Act::Discard),
+            (VK_ESCAPE | VK_RETURN, false) => return self.hdr_menu_close(),
+            (VK_UP, false) => m.row = (m.row + n - 1) % n,
+            (VK_DOWN, false) => m.row = (m.row + 1) % n,
+            (VK_LEFT, false) => m.step(-1.0),
+            (VK_RIGHT, false) => m.step(1.0),
+            _ => return,
+        }
+        m.redraw();
+    }
+
+    fn hdr_menu_act(&mut self, act: Act) {
+        match act {
+            Act::Close => self.hdr_menu_close(),
+            Act::Save => {
                 let m = &mut self.hdr_menu;
                 if let Some(g) = m.game.and_then(|i| self.cfg.hdr_games.get_mut(i)) {
                     g.prisma = Some(m.now);
@@ -210,13 +287,12 @@ impl crate::app::App {
                 m.hide();
                 self.invalidate();
             }
-            Some(Act::Discard) => {
+            Act::Discard => {
                 let m = &mut self.hdr_menu;
                 let start = m.start;
                 m.set(start);
                 m.hide();
             }
-            None => {}
         }
     }
 }

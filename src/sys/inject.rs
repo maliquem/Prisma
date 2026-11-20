@@ -385,7 +385,7 @@ impl Drop for Limiter {
 #[cfg(debug_assertions)]
 pub fn test_hdr(out: &str, exe: &str, params: &str) {
     let cfg = crate::config::Config::load();
-    let mut hdr = Hdr::from_profile(cfg.hdr_profiles.last());
+    let mut hdr = crate::sys::autohdr::calibrated(&cfg, &crate::sys::autohdr::primary_gdi());
     let mut l = match Limiter::launch(exe, "", &hdr) {
         Ok(l) => l,
         Err(e) => {
@@ -393,7 +393,7 @@ pub fn test_hdr(out: &str, exe: &str, params: &str) {
             return;
         }
     };
-    let mut log = format!("pid {} perfil {:?}\n", l.pid, cfg.hdr_profiles.last().map(|p| (&p.screen, p.peak, p.full, p.black)));
+    let mut log = format!("pid {} calibração {:?}\n", l.pid, (hdr.peak, hdr.paper, hdr.black));
     let mut i = 0;
     while l.exit_code().is_none() {
         std::thread::sleep(std::time::Duration::from_secs(1));

@@ -115,9 +115,21 @@ pub fn uses_prisma(cfg: &crate::config::Config, exe: &str) -> bool {
     game_hdr(cfg, &super::procs::exe_name(exe)).is_some()
 }
 
+/// A calibração da tela com este nome GDI: a mesma que a aba HDR mostra para ela.
+pub fn calibrated(cfg: &crate::config::Config, gdi: &str) -> crate::sys::inject::Hdr {
+    let screen = super::hdr::screen_name(gdi);
+    crate::sys::inject::Hdr::from_profile(cfg.hdr_profiles.iter().rfind(|p| screen.as_deref() == Some(p.screen.as_str())))
+}
+
+/// Nome GDI da tela principal, onde o jogo abre.
+pub fn primary_gdi() -> String {
+    use windows::Win32::Graphics::Gdi::{MonitorFromPoint, MONITOR_DEFAULTTOPRIMARY};
+    super::hdr::gdi_name(unsafe { MonitorFromPoint(Default::default(), MONITOR_DEFAULTTOPRIMARY) })
+}
+
 fn game_hdr(cfg: &crate::config::Config, name: &str) -> Option<crate::sys::inject::Hdr> {
     let g = cfg.hdr_games.iter().find(|g| g.exe.eq_ignore_ascii_case(name) && g.mode == PRISMA)?;
-    Some(g.prisma.unwrap_or_else(|| crate::sys::inject::Hdr::from_profile(cfg.hdr_profiles.last())))
+    Some(g.prisma.unwrap_or_else(|| calibrated(cfg, &primary_gdi())))
 }
 
 fn run(exe: &str, args: &[String]) {
