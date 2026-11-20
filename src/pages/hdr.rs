@@ -2,6 +2,7 @@ use super::*;
 use super::picker::{self, Target as Pick};
 use crate::config::HdrProfile;
 use crate::sys::autohdr;
+use crate::sys::inject::Hdr;
 use crate::sys::hdr::{Edid, Info, Light, Profile, Screen};
 use crate::sys::hdrcal::{self, Phase, Spec, Start, Target};
 use crate::sys::patterns::{Measured, WINDOWS};
@@ -326,25 +327,106 @@ fn saved_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen, list: &[HdrProfil
     }
 }
 
-fn games_card(ui: &mut Ui, app: &mut App, r: Rect) {
+/// Painel dos ajustes do HDR do Prisma, abaixo da linha do jogo.
+const PRISMA_H: f32 = 348.0;
+/// Ajustes ao vivo: nome, mínimo e máximo.
+pub const KNOBS: [(&str, f32, f32); 7] = [("Pico", 200.0, 4000.0), ("Paper white", 80.0, 400.0), ("Gama", 1.8, 2.6), ("Saturação", 0.5, 1.5), ("Realce dos claros", 0.0, 2.0), ("Preto", 0.0, 1.0), ("Brilho da interface", 0.0, 400.0)];
+
+thread_local!(static PICK: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) });
+
+/// Jogo mostrado na lista suspensa: o último escolhido, ou o que acabou de entrar.
+fn chosen(app: &App) -> Option<usize> {
+    let n = app.cfg.hdr_games.len();
+    let (i, seen) = PICK.get();
+    let i = if n > seen { n - 1 } else { i.min(n.saturating_sub(1)) };
+    PICK.set((i, n));
+    (n > 0).then_some(i)
+}
+
+fn games_height(app: &App) -> f32 {
+    80.0 + chosen(app).map_or(0.0, |i| GAME_ROW + if app.cfg.hdr_games[i].mode == autohdr::PRISMA { PRISMA_H } else { 0.0 })
+}
+
+/// Anti-cheat e jogo da Steam lidos uma vez por jogo: as buscas olham pastas inteiras.
+fn game_facts(path: &str) -> (bool, Option<String>) {
+    thread_local!(static SEEN: std::cell::RefCell<std::collections::HashMap<String, (bool, Option<String>)>> = Default::default());
+    SEEN.with(|m| m.borrow_mut().entry(path.to_string()).or_insert_with(|| (crate::meter::anti_cheat(path), crate::sys::stores::steam_app_id(std::path::Path::new(path)))).clone())
+}
+
+pub(crate) fn knob(h: &mut Hdr, i: usize) -> &mut f32 {
+    match i {
+        0 => &mut h.peak,
+        1 => &mut h.paper,
+        2 => &mut h.gamma,
+        3 => &mut h.sat,
+        4 => &mut h.boost,
+        5 => &mut h.black,
+        _ => &mut h.ui,
+    }
+}
+
+fn knob_text(i: usize, v: f32) -> String {
+    match i {
+        0 | 1 => format!("{v:.0} nits"),
+        2 => format!("{v:.2}"),
+        3 => format!("{:.0}%", v * 100.0),
+        4 => format!("{v:.1}x"),
+        5 => format!("{v:.2} nits"),
+        // Abaixo de 1 nit a interface fica junto com a cena.
+        _ if v < 1.0 => crate::i18n::tr("Junto").into_owned(),
+        _ => format!("{v:.0} nits"),
+    }
+}
+
+/// Os ajustes do HDR do Prisma em `cols` colunas, 48 de altura por linha (aba HDR e menu dentro do
+/// jogo). `true` quando algum mudou.
+pub fn knobs(ui: &mut Ui, id: &str, p: Rect, cols: usize, h: &mut Hdr) -> bool {
+    let cw = (p.w - 24.0 * (cols - 1) as f32) / cols as f32;
+    let mut moved = false;
+    for (k, (name, lo, hi)) in KNOBS.into_iter().enumerate() {
+        let kx = p.x + (k % cols) as f32 * (cw + 24.0);
+        let ky = p.y + (k / cols) as f32 * 48.0;
+        ui.c.text(rect(kx, ky, 150.0, 30.0), name, 13.0, TEXT2, Align::Left, Weight::Regular);
+        let v = knob(h, k);
+        let mut t = ((*v - lo) / (hi - lo)).clamp(0.0, 1.0);
+        if ui.slider(&format!("{id}-{k}"), rect(kx + 150.0, ky + 3.0, cw - 250.0, 24.0), &mut t) {
+            *v = lo + t * (hi - lo);
+            moved = true;
+        }
+        ui.c.text(rect(kx + cw - 92.0, ky, 92.0, 30.0), &knob_text(k, *v), 13.0, TEXT, Align::Right, Weight::Regular);
+    }
+    moved
+}
+
+fn games_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen) {
     ui.card(r);
-    ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 150.0, 22.0), "Auto HDR por jogo");
+    ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 150.0, 22.0), "HDR do jogo");
     picker::add_button(ui, app, rect(r.right() - 124.0, r.y + 8.0, 108.0, 32.0), Pick::HdrGame);
     let (text, color) = if autohdr::global_on() {
-        ("Só para jogos DX11 e DX12 sem HDR próprio. Vale a partir da próxima vez que o jogo abrir.", TEXT2)
+        ("Um HDR por jogo. Vale a partir da próxima vez que o jogo abrir.", TEXT2)
     } else {
-        ("O Auto HDR está desligado nas configurações do Windows. Ligue lá para valer.", WARN)
+        ("Um HDR por jogo. O Auto HDR está desligado nas configurações do Windows: ligue lá para ele valer.", WARN)
     };
     ui.c.text(rect(r.x + 16.0, r.y + 44.0, r.w - 32.0, 22.0), text, 13.0, color, Align::Left, Weight::Regular);
-    let options = ["Padrão do Windows".to_string(), "Forçar Auto HDR".to_string(), "Desligar Auto HDR".to_string()];
-    let (mut change, mut remove) = (None, None);
-    for (i, g) in app.cfg.hdr_games.iter().enumerate() {
-        let y = r.y + 72.0 + i as f32 * GAME_ROW;
+    let modes: Vec<_> = autohdr::MODES.iter().filter(|m| m.0 != autohdr::RTX || autohdr::nvidia()).collect();
+    let options: Vec<String> = modes.iter().map(|m| m.1.to_string()).collect();
+    let calibrated = Hdr::from_profile(app.cfg.hdr_profiles.iter().rfind(|p| p.screen == s.name));
+    let (mut change, mut remove, mut tuned, mut launch, mut hotkey_changed) = (None, None, false, None, false);
+    let mut y = r.y + 72.0;
+    for i in chosen(app).into_iter() {
+        let g = &app.cfg.hdr_games[i];
         ui.file_icon(&g.path, &g.exe, rect(r.x + 16.0, y + 9.0, 26.0, 26.0));
-        ui.c.text(rect(r.x + 52.0, y, r.w - 370.0, GAME_ROW), app_name(&g.exe), 14.0, TEXT, Align::Left, Weight::Regular);
-        let mut sel = g.mode as usize;
-        if ui.select(&format!("hdr-g{i}"), rect(r.right() - 300.0, y + 4.0, 240.0, 36.0), &options, &mut sel) {
-            change = Some((i, sel as u8));
+        // Em ordem de nome: com muitos jogos, achar um é rolar a lista.
+        let mut order: Vec<usize> = (0..app.cfg.hdr_games.len()).collect();
+        order.sort_by_cached_key(|&k| app_name(&app.cfg.hdr_games[k].exe).to_lowercase());
+        let names: Vec<String> = order.iter().map(|&k| app_name(&app.cfg.hdr_games[k].exe).to_string()).collect();
+        let mut at = order.iter().position(|&k| k == i).unwrap_or(0);
+        if ui.select("hdr-game", rect(r.x + 52.0, y + 4.0, r.w - 368.0, 36.0), &names, &mut at) {
+            PICK.set((order[at], app.cfg.hdr_games.len()));
+        }
+        let mut sel = modes.iter().position(|m| m.0 == g.mode).unwrap_or(0);
+        if ui.select("hdr-mode", rect(r.right() - 300.0, y + 4.0, 240.0, 36.0), &options, &mut sel) {
+            change = Some((i, modes[sel].0));
         }
         let b = rect(r.right() - 44.0, y + 10.0, 24.0, 24.0);
         if ui.is_hover(b) {
@@ -354,11 +436,81 @@ fn games_card(ui: &mut Ui, app: &mut App, r: Rect) {
         if ui.hit(&format!("hdr-gx{i}"), b) {
             remove = Some(i);
         }
+        y += GAME_ROW;
+        if g.mode != autohdr::PRISMA {
+            continue;
+        }
+        let p = rect(r.x + 52.0, y, r.w - 68.0, PRISMA_H - 12.0);
+        let (anti_cheat, steam) = game_facts(&g.path);
+        if anti_cheat {
+            ui.c.text_wrap(rect(p.x, p.y, p.w, 40.0), "Bloqueado: este jogo tem anti-cheat, e o HDR do Prisma precisa entrar no jogo. Escolha Auto HDR ou RTX HDR.", 13.0, WARN, Weight::Regular);
+            y += PRISMA_H;
+            continue;
+        }
+        let how = if steam.is_some() {
+            "Jogo da Steam: cole a linha abaixo em Propriedades > Opções de inicialização. Depois é só abrir pela Steam."
+        } else {
+            "Abra o jogo pelo botão Abrir com HDR, ou use a linha abaixo nas opções de inicialização do launcher."
+        };
+        ui.c.text_wrap(rect(p.x, p.y, p.w, 36.0), how, 13.0, TEXT2, Weight::Regular);
+        let line = autohdr::launch_option();
+        ui.c.text(rect(p.x, p.y + 40.0, p.w - 290.0, 32.0), &line, 12.0, MUTED, Align::Left, Weight::Regular);
+        if ui.button(&format!("hdr-gc{i}"), rect(p.right() - 280.0, p.y + 38.0, 120.0, 34.0), "Copiar linha", false) {
+            let ok = crate::capture::copy_text(app.paint_window.0, &line);
+            app.toast.info(if ok { "Linha copiada." } else { "Não consegui copiar." });
+        }
+        if ui.button(&format!("hdr-go{i}"), rect(p.right() - 150.0, p.y + 38.0, 150.0, 34.0), if steam.is_some() { "Abrir pela Steam" } else { "Abrir com HDR" }, true) {
+            launch = Some((g.path.clone(), steam));
+        }
+        let mut h = g.prisma.unwrap_or(calibrated);
+        let mut moved = knobs(ui, &format!("hdr-k{i}"), rect(p.x, p.y + 86.0, p.w, 192.0), 2, &mut h);
+        if ui.button(&format!("hdr-gr{i}"), rect(p.x, p.y + 284.0, 200.0, 34.0), "Voltar à calibração", false) {
+            h = calibrated;
+            moved = true;
+        }
+        // O mesmo ajuste com o jogo na frente: o atalho abre o menu por cima dele.
+        ui.c.text(rect(p.x + 224.0, p.y + 286.0, 170.0, 30.0), "Menu dentro do jogo", 13.0, TEXT2, Align::Left, Weight::Regular);
+        if ui.hotkey("hk-hdr-menu", rect(p.x + 394.0, p.y + 284.0, 220.0, 34.0), &mut app.cfg.hk_hdr_menu) {
+            hotkey_changed = true;
+        }
+        if moved && app.cfg.hdr_games[i].prisma != Some(h) {
+            app.cfg.hdr_games[i].prisma = Some(h);
+            tuned = true;
+        }
+        y += PRISMA_H;
+    }
+    // Ao vivo: quem abriu o jogo relê o config quando ele muda. No arraste, grava a cada 250 ms, e o
+    // último valor grava ao soltar mesmo que o arraste tenha parado antes disso.
+    thread_local!(static SAVED: std::cell::Cell<(Option<std::time::Instant>, bool)> = const { std::cell::Cell::new((None, false)) });
+    let (last, pending) = SAVED.get();
+    if (tuned || pending) && last.is_none_or(|t| t.elapsed().as_millis() >= 250 || !ui.s.down) {
+        SAVED.set((Some(std::time::Instant::now()), false));
+        app.cfg.save();
+    } else if tuned {
+        SAVED.set((last, true));
+    }
+    if hotkey_changed {
+        app.cfg.save();
+        app.register_hotkeys();
+    }
+    if let Some((path, steam)) = launch {
+        let ok = match steam {
+            Some(id) => crate::sys::quick::open_as_user(&format!("steam://rungameid/{id}")),
+            None => autohdr::open(&path, &[]),
+        };
+        if !ok {
+            app.toast.info("Não consegui abrir o jogo.");
+        }
     }
     if let Some((i, mode)) = change {
         let g = &mut app.cfg.hdr_games[i];
         if autohdr::apply(&g.exe, mode) {
             g.mode = mode;
+            if mode == autohdr::PRISMA && g.prisma.is_none() {
+                g.prisma = Some(calibrated);
+            }
+        } else if mode == autohdr::RTX && !crate::startup::is_elevated() {
+            app.toast.info("O driver NVIDIA só aceita o RTX HDR com o Prisma aberto como administrador.");
         } else {
             app.toast.info("Não consegui gravar a escolha.");
         }
@@ -366,7 +518,7 @@ fn games_card(ui: &mut Ui, app: &mut App, r: Rect) {
     }
     if let Some(i) = remove {
         let g = app.cfg.hdr_games.remove(i);
-        autohdr::apply(&g.exe, 0);
+        autohdr::apply(&g.exe, autohdr::DEFAULT);
         app.cfg.save();
     }
 }
@@ -430,7 +582,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let saved: Vec<HdrProfile> = app.cfg.hdr_profiles.iter().filter(|p| p.screen == s.name).cloned().collect();
     let shown = previous.is_empty() || s.profile.as_ref().is_some_and(|p| p.name.eq_ignore_ascii_case(&previous));
     let saved_h = if saved.is_empty() && shown { 0.0 } else { 54.0 + (saved.len() + !shown as usize) as f32 * 38.0 + 12.0 };
-    let games_h = 80.0 + app.cfg.hdr_games.len() as f32 * GAME_ROW;
+    let games_h = games_height(app);
     let total = cal_h + 12.0 + saved_h + games_h + 12.0 + note_h + h1 + h2 + h3 + 24.0;
     let view = rect(x, top, w, a.h - top - 20.0);
     ui.begin_scroll("hdr", view, total);
@@ -459,7 +611,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         saved_card(ui, app, rect(x, y, w, saved_h - 12.0), s, &saved, &previous);
         y += saved_h;
     }
-    games_card(ui, app, rect(x, y, w, games_h));
+    games_card(ui, app, rect(x, y, w, games_h), s);
     y += games_h + 12.0;
     if !notes.is_empty() {
         let r = rect(x, y, w, note_h - 12.0);

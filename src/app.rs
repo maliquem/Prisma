@@ -240,6 +240,7 @@ fn hk_place_page(id: i32) -> &'static str {
         HK_FIND => "Pesquisar",
         HK_MACRO => "Controles",
         HK_SHADER | HK_SHADER_MENU => "Shaders",
+        HK_HDR_MENU => "HDR",
         id if id >= HK_RUN => "Atalhos",
         _ => "Som",
     }
@@ -269,6 +270,7 @@ const HK_MACRO: i32 = 24;
 const HK_SHOW: i32 = 25;
 const HK_SHADER: i32 = 26;
 const HK_SHADER_MENU: i32 = 27;
+const HK_HDR_MENU: i32 = 28;
 const HK_VOL_UP: i32 = 10;
 const HK_VOL_DOWN: i32 = 11;
 const HK_MUTE: i32 = 12;
@@ -328,6 +330,7 @@ pub struct App {
     /// Até onde os avisos do compartilhamento já foram mostrados (ms desde 1970; 0 antes da primeira olhada).
     notices_since: u128,
     pub prompt: Prompt,
+    pub hdr_menu: crate::hdr_menu::HdrMenu,
     /// Pergunta do compartilhamento aberta no `prompt`: para onde vai a escolha (permitir,
     /// confiar) e se é um pareamento.
     pub share_ask: Option<(std::sync::mpsc::SyncSender<(bool, bool)>, bool)>,
@@ -565,6 +568,7 @@ pub fn start(background: bool) {
             room_seen: None,
             notices_since: 0,
             prompt: Prompt::new(),
+            hdr_menu: crate::hdr_menu::HdrMenu::new(),
             share_ask: None,
             usage: Usage::load(),
             hk_errors: Vec::new(),
@@ -716,6 +720,7 @@ pub fn start(background: bool) {
                         eprintln!("{}x{} hdr={} {:?}", f.w, f.h, f.half.is_some(), t.elapsed());
                         eprintln!("{:?}", capture::save_png(path, f.w, f.h, &f.bgra));
                         if let Some(h) = &f.half {
+                            eprintln!("nits maior, media, p99: {:?}", capture::half_nits(h));
                             eprintln!("{:?}", capture::save_jxr(&format!("{path}.jxr"), f.w, f.h, h));
                         }
                     }
@@ -832,7 +837,8 @@ pub fn start(background: bool) {
             if let Some(v) = a.strip_prefix("--test-autohdr=") {
                 let (exe, mode) = v.split_once('|').unwrap();
                 let ok = crate::sys::autohdr::apply(exe, mode.parse().unwrap());
-                println!("{ok}");
+                let rtx = [0x00DD_48FB, 0x0043_2F84, 0x1077_A11A].map(|id| crate::sys::drs::read(exe, id));
+                println!("{ok} rtx {rtx:?}");
                 std::process::exit(0);
             }
             if let Some(v) = a.strip_prefix("--test-plan=") {
@@ -865,6 +871,21 @@ pub fn start(background: bool) {
             if let Some(v) = a.strip_prefix("--test-inject=") {
                 let p: Vec<&str> = v.split('|').collect();
                 let _ = std::fs::write(p[0], crate::sys::inject::test(p[1].parse().unwrap(), p[2].parse().unwrap(), p[3].parse().unwrap()));
+                std::process::exit(0);
+            }
+            // Estado do HDR num jogo já aberto com ele e os nits da tela: --test-hdrstat=saida.txt|pid
+            if let Some(v) = a.strip_prefix("--test-hdrstat=") {
+                let (out, pid) = v.split_once('|').unwrap();
+                let l = crate::sys::inject::Limiter::attach(pid.parse().unwrap());
+                let (stats, split) = (l.as_ref().and_then(|l| l.hdr_stats()), l.as_ref().and_then(|l| l.hdr_split()));
+                let nits = crate::capture::grab(crate::capture::cursor_monitor()).ok().and_then(|f| f.half.as_ref().map(|h| crate::capture::half_nits(h)));
+                let _ = std::fs::write(out, format!("cadeias, quadros, erro {stats:?}; saída, interface, quadros separados {split:?}; nits maior, média, p99 {nits:?}\n"));
+                std::process::exit(0);
+            }
+            // Saída, jogo e arquivo de ajustes: --test-hdrgame=saida.txt|C:\jogo.exe|ajustes.txt
+            if let Some(v) = a.strip_prefix("--test-hdrgame=") {
+                let p: Vec<&str> = v.split('|').collect();
+                crate::sys::inject::test_hdr(p[0], p[1], p[2]);
                 std::process::exit(0);
             }
             if let Some(v) = a.strip_prefix("--test-drs=") {
@@ -1204,7 +1225,7 @@ impl App {
     pub fn register_hotkeys(&mut self) {
         self.unhook_force_key();
         unsafe {
-            for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER, HK_FIND, HK_MACRO, HK_SHOW, HK_SHADER, HK_SHADER_MENU, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE] {
+            for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER, HK_FIND, HK_MACRO, HK_SHOW, HK_SHADER, HK_SHADER_MENU, HK_HDR_MENU, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE] {
                 let _ = UnregisterHotKey(Some(self.hub), id);
             }
             for i in 0..SND_KEYS_MAX as i32 {
@@ -1298,6 +1319,7 @@ impl App {
             (HK_EXPLORER, c.hk_explorer, "Reiniciar o Explorer", true),
             (HK_MACRO, c.hk_macro, "Gravar macro e parar", true),
             (HK_SHOW, c.hk_show, "Mostrar o Prisma", true),
+            (HK_HDR_MENU, c.hk_hdr_menu, "Menu do HDR no jogo", true),
             (HK_VOL_UP, Hotkey::new(c.vol_mods, VK_VOL_UP), "Aumentar volume", false),
             (HK_VOL_DOWN, Hotkey::new(c.vol_mods, VK_VOL_DOWN), "Diminuir volume", false),
             (HK_MUTE, Hotkey::new(c.vol_mods, VK_MUTE), "Mudo", true),
@@ -1349,6 +1371,7 @@ impl App {
             HK_SHOW => &mut c.hk_show,
             HK_SHADER => &mut c.hk_shader[0],
             HK_SHADER_MENU => &mut c.hk_shader[1],
+            HK_HDR_MENU => &mut c.hk_hdr_menu,
             id if id >= HK_RUN => &mut c.run_keys.get_mut((id - HK_RUN) as usize)?.key,
             id if id >= HK_SND => &mut c.snd_keys.get_mut((id - HK_SND) as usize)?.key,
             _ => return None,
@@ -1387,7 +1410,7 @@ impl App {
         if on {
             self.unhook_force_key();
             unsafe {
-                for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER, HK_FIND, HK_MACRO, HK_SHOW, HK_SHADER] {
+                for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER, HK_FIND, HK_MACRO, HK_SHOW, HK_SHADER, HK_HDR_MENU] {
                     let _ = UnregisterHotKey(Some(self.hub), id);
                 }
                 // Os da página Atalhos também: a combinação gravada não pode abrir o programa.
@@ -1438,6 +1461,7 @@ impl App {
             HK_SHOW => self.show_main(),
             HK_SHADER => crate::pages::shaders::toggle_focused(self),
             HK_SHADER_MENU => crate::pages::shaders::menu_focused(self),
+            HK_HDR_MENU => self.hdr_menu_key(),
             HK_VOL_UP => self.volume(audio::Change::Step(self.cfg.vol_step as i32)),
             HK_VOL_DOWN => self.volume(audio::Change::Step(-(self.cfg.vol_step as i32))),
             HK_MUTE => self.volume(audio::Change::ToggleMute),
@@ -4267,7 +4291,7 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                 with(|a| {
                     let exe = procs::exe_name(&path);
                     if !a.cfg.hdr_games.iter().any(|g| g.exe.eq_ignore_ascii_case(&exe)) {
-                        a.cfg.hdr_games.push(crate::config::HdrGame { exe, path, mode: 0 });
+                        a.cfg.hdr_games.push(crate::config::HdrGame { exe, path, mode: 0, prisma: None });
                     }
                     a.cfg.save();
                     a.invalidate();

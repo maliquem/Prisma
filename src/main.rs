@@ -4,6 +4,7 @@ mod app;
 mod capture;
 mod config;
 mod crash;
+mod hdr_menu;
 mod i18n;
 mod link;
 mod optimizer;
@@ -98,6 +99,10 @@ fn main() {
     }
     // Motor de shaders (--shader-profile) e prévia (--shader-preview), também sem o nome único.
     if shader::run_args() {
+        return;
+    }
+    // Aberto pela Steam (`--hdr %command%`): abre o jogo com o HDR do Prisma, sem o nome único.
+    if sys::autohdr::run_args() {
         return;
     }
     // Um link de convite (prisma://parear/...): a página Compartilhar tela pergunta se pareia.

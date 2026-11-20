@@ -2947,3 +2947,32 @@ O filtro entra quando o jogo é menor que o monitor: o Prisma cria o perfil de s
 Filtro de upscale: baixe os filtros na página Fullscreenizer	Filtro de escalado: descarga los filtros en la página Fullscreenizer
 Este jogo já tem perfil de shader: o filtro de upscale fica com ele	Este juego ya tiene perfil de shader: el filtro de escalado se queda con él
 Filtro de upscale: não deu para gravar o perfil	Filtro de escalado: no se pudo guardar el perfil
+HDR do jogo	HDR del juego
+HDR do Prisma	HDR de Prisma
+Auto HDR 10 bits	Auto HDR de 10 bits
+Auto 10 bits	Auto 10 bits
+Um HDR por jogo. Vale a partir da próxima vez que o jogo abrir.	Un HDR por juego. Se aplica la próxima vez que se abra el juego.
+Um HDR por jogo. O Auto HDR está desligado nas configurações do Windows: ligue lá para ele valer.	Un HDR por juego. Auto HDR está desactivado en la configuración de Windows: actívalo allí para que surta efecto.
+Bloqueado: este jogo tem anti-cheat, e o HDR do Prisma precisa entrar no jogo. Escolha Auto HDR ou RTX HDR.	Bloqueado: este juego tiene anti-cheat y el HDR de Prisma necesita entrar en el juego. Elige Auto HDR o RTX HDR.
+Jogo da Steam: cole a linha abaixo em Propriedades > Opções de inicialização. Depois é só abrir pela Steam.	Juego de Steam: pega la línea de abajo en Propiedades > Opciones de lanzamiento. Después solo ábrelo desde Steam.
+Abra o jogo pelo botão Abrir com HDR, ou use a linha abaixo nas opções de inicialização do launcher.	Abre el juego con el botón Abrir con HDR, o usa la línea de abajo en las opciones de lanzamiento del launcher.
+Copiar linha	Copiar línea
+Linha copiada.	Línea copiada.
+Não consegui copiar.	No se pudo copiar.
+Abrir pela Steam	Abrir desde Steam
+Abrir com HDR	Abrir con HDR
+Não consegui abrir o jogo.	No se pudo abrir el juego.
+Paper white	Paper white
+Gama	Gamma
+Realce dos claros	Realce de luces
+Voltar à calibração	Volver a la calibración
+O driver NVIDIA só aceita o RTX HDR com o Prisma aberto como administrador.	El driver de NVIDIA solo acepta RTX HDR con Prisma abierto como administrador.
+Menu dentro do jogo	Menú dentro del juego
+Menu do HDR no jogo	Menú del HDR en el juego
+Salvar no perfil do jogo?	¿Guardar en el perfil del juego?
+Os ajustes já valem agora. Salvar guarda para as próximas vezes que o jogo abrir.	Los ajustes ya se aplican ahora. Guardar los conserva para las próximas veces que se abra el juego.
+Este jogo não está com o HDR do Prisma: abra-o com ele pela aba HDR.	Este juego no está usando el HDR de Prisma: ábrelo con él desde la pestaña HDR.
+O jogo não usa o HDR do Prisma	El juego no usa el HDR de Prisma
+O Prisma não abriu o jogo	Prisma no abrió el juego
+Brilho da interface	Brillo de la interfaz
+Junto	Unido
