@@ -92,8 +92,18 @@ pub fn ca() -> iroh::tls::CaTlsConfig {
 
 fn client(url: &str) -> std::result::Result<PkarrRelayClient, String> {
     let tls = ca().client_config(iroh::tls::default_provider()).map_err(|e| e.to_string())?;
-    let url: iroh::RelayUrl = url.parse().map_err(|e: iroh::RelayUrlParseError| e.to_string())?;
-    Ok(PkarrRelayClient::new(url.into(), tls, iroh::dns::DnsResolver::new()))
+    Ok(PkarrRelayClient::new(pkarr_url(url)?, tls, iroh::dns::DnsResolver::new()))
+}
+
+/// O endereço do relé pkarr, ao qual o cliente junta a chave com `push`. O `RelayUrl` do iroh 1.5
+/// põe uma `/` no fim do caminho, o que daria `/pkarr//chave`: a barra sai de novo.
+fn pkarr_url(url: &str) -> std::result::Result<<iroh::RelayUrl as std::ops::Deref>::Target, String> {
+    let r: iroh::RelayUrl = url.parse().map_err(|e: iroh::RelayUrlParseError| e.to_string())?;
+    let mut u = (*r).clone();
+    if let Ok(mut s) = u.path_segments_mut() {
+        s.pop_if_empty();
+    }
+    Ok(u)
 }
 
 /// O endereço do host como linhas do registro: `rele=URL` e `ip=IP:porta` (até 8, para caber).
@@ -215,6 +225,17 @@ fn read(values: &[String]) -> std::result::Result<EndpointAddr, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A chave fica logo depois do caminho do relé, sem `//` no meio.
+    #[test]
+    fn pkarr_url_takes_the_key_once() {
+        let want = ["https://dns.iroh.link/pkarr/chave", "https://relay.pkarr.org/chave", "https://pkarr.pubky.org/chave"];
+        for (r, w) in RELAYS.iter().zip(want) {
+            let mut u = pkarr_url(r).unwrap();
+            u.path_segments_mut().unwrap().push("chave");
+            assert_eq!(u.as_str(), w);
+        }
+    }
 
     #[test]
     fn addr_lines_order() {
