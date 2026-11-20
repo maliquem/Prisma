@@ -466,6 +466,18 @@ fn download(lib: PathBuf) {
 }
 
 /// Baixa a biblioteca de fora da página Shaders: os filtros de upscale do Fullscreenizer vêm dela.
+/// Abre a página com este perfil escolhido (botão Ajustar do Fullscreenizer).
+pub fn open_profile(app: &mut App, path: &Path) {
+    let mut g = st();
+    let s = g.get_or_insert_with(St::default);
+    if !s.loaded {
+        s.loaded = true;
+        s.hdr = monitor_hdr();
+    }
+    reload(s, Some(path));
+    app.page = Page::Shaders;
+}
+
 pub fn download_lib() {
     download(sp::lib_dir());
 }
@@ -1059,7 +1071,6 @@ fn params_card(ui: &mut Ui, s: &mut St, r: Rect) {
         .filter(|m| !s.only_changed || cur.param(&m.name).is_some())
         .collect();
     let list = rect(ix - 4.0, r.y + 120.0, iw + 8.0, r.h - 120.0 - 44.0);
-    const ROW: f32 = 64.0;
     if rows.is_empty() {
         let msg = if title.is_none() {
             "Nenhum passe."
@@ -1070,7 +1081,21 @@ fn params_card(ui: &mut Ui, s: &mut St, r: Rect) {
         };
         ui.c.text(rect(ix, list.y, iw, 24.0), msg, 13.0, MUTED, Align::Left, Weight::Regular);
     }
-    ui.begin_scroll("shd-params", list, rows.len() as f32 * ROW);
+    let set = param_list(ui, "shd", list, &rows, &cur);
+    if let Some((name, v)) = set {
+        if let Some(c) = s.cur() {
+            c.set_param(&name, v);
+        }
+        s.changed();
+    }
+    ui.c.text_wrap(rect(ix, r.bottom() - 40.0, iw, 34.0), "Mínimo, máximo e passo vêm do próprio shader. A mudança aparece no jogo na hora; laranja é diferente do padrão. Botão direito volta o valor.", 11.0, MUTED, Weight::Regular);
+}
+
+/// Lista de parâmetros com deslizantes (página Shaders e ajustes do Fullscreenizer): devolve o que mudou neste
+/// quadro, `None` no valor quando ele volta ao padrão.
+pub fn param_list(ui: &mut Ui, id: &str, list: Rect, rows: &[&Param], cur: &Profile) -> Option<(String, Option<f32>)> {
+    const ROW: f32 = 64.0;
+    ui.begin_scroll(&format!("{id}-params"), list, rows.len() as f32 * ROW);
     let first = (ui.scroll_y() / ROW) as usize;
     let last = first + (list.h / ROW) as usize + 2;
     let mut set: Option<(String, Option<f32>)> = None;
@@ -1085,7 +1110,7 @@ fn params_card(ui: &mut Ui, s: &mut St, r: Rect) {
         ui.c.text_raw(rect(x + w - 80.0, y + 2.0, 80.0, 20.0), &fmt(v, m.step), 13.0, if changed { WARN } else { TEXT2 }, Align::Right, Weight::Semibold);
         let span = m.max - m.min;
         let mut t = if span > 0.0 { (v - m.min) / span } else { 0.0 };
-        if ui.slider(&format!("shd-p-{}", m.name), rect(x + 6.0, y + 22.0, w - 12.0, 20.0), &mut t) {
+        if ui.slider(&format!("{id}-p-{}", m.name), rect(x + 6.0, y + 22.0, w - 12.0, 20.0), &mut t) {
             let nv = snap(m, m.min + t * span);
             set = Some((m.name.clone(), ((nv - m.default).abs() > m.step.abs() * 0.01 + f32::EPSILON).then_some(nv)));
         }
@@ -1097,13 +1122,7 @@ fn params_card(ui: &mut Ui, s: &mut St, r: Rect) {
         }
     }
     ui.end_scroll();
-    if let Some((name, v)) = set {
-        if let Some(c) = s.cur() {
-            c.set_param(&name, v);
-        }
-        s.changed();
-    }
-    ui.c.text_wrap(rect(ix, r.bottom() - 40.0, iw, 34.0), "Mínimo, máximo e passo vêm do próprio shader. A mudança aparece no jogo na hora; laranja é diferente do padrão. Botão direito volta o valor.", 11.0, MUTED, Weight::Regular);
+    set
 }
 
 /// Navegador da biblioteca: pastas à esquerda, presets à direita, busca em tudo.
