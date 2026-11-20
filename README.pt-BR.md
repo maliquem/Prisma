@@ -16,6 +16,8 @@ O Prisma é um único arquivo, `Prisma.exe`. O Windows pode avisar sobre editor 
 
 Ao abrir pela primeira vez, a tela de boas-vindas pergunta se você quer instalar, dar permissão de administrador, substituir o Gerenciador de Tarefas e substituir a cópia do Windows (o Ctrl+V nas pastas do Explorer pela janela de cópia do Prisma). As três primeiras vêm marcadas; a da cópia, não, e o Windows pede a permissão uma vez só. A tela também abre o guia, que explica cada função, o que dá e o que não dá para fazer. Ela só aparece uma vez, a não ser que você desmarque **Não mostrar novamente**.
 
+Um segundo passo lista as funções do Prisma com o que cada uma faz, todas ligadas. Desmarque as que você não vai usar: elas somem da barra lateral e param de rodar em segundo plano. Dá para mudar depois em **Configurações**, aba **Funções**.
+
 - **Portátil:** rode de qualquer pasta. As configurações ficam em `PrismaData`, ao lado do programa, e nada é registrado no Windows. Com administrador, o Windows pergunta a cada abertura.
 - **Instalado:** o Prisma vai para Arquivos de Programas, ganha atalho no menu Iniciar e aparece na lista de programas do Windows. Com administrador, abre sem perguntar. Também dá para instalar depois, em **Configurações**.
 

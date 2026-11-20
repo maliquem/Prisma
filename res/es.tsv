@@ -3067,3 +3067,20 @@ Procurando...	Buscando...
 Nunca conferido	Nunca comprobado
 Última conferência: {}	Última comprobación: {}
 Página Atualizações	Página Actualizaciones
+Gráficos de processador, placa de vídeo, memória, discos e rede.	Gráficos de procesador, tarjeta gráfica, memoria, discos y red.
+O que ocupa espaço em cada disco, pasta por pasta.	Qué ocupa espacio en cada disco, carpeta por carpeta.
+Programas que abrem com o Windows, para ligar ou desligar.	Programas que se abren con Windows, para activar o desactivar.
+Serviços do Windows, com o que cada um faz.	Servicios de Windows, con lo que hace cada uno.
+Remove programas e as sobras que eles deixam.	Quita programas y los restos que dejan.
+Cópias com pausa e conferência, e listas para rodar na hora marcada.	Copias con pausa y verificación, y listas que se ejecutan a la hora marcada.
+Avisa quando sai driver da NVIDIA ou atualização do Windows e diz se vale instalar.	Avisa cuando sale un driver de NVIDIA o una actualización de Windows y dice si conviene instalarlo.
+Fecha programas parados antes de jogar. Nada é fechado sem você confirmar.	Cierra programas inactivos antes de jugar. No se cierra nada sin que lo confirmes.
+Troca o plano de energia sozinho entre repouso, carga alta e jogo.	Cambia el plan de energía solo entre reposo, carga alta y juego.
+Ajustes do driver da NVIDIA para cada jogo.	Ajustes del driver de NVIDIA para cada juego.
+Fotos, gravação da tela e replay dos últimos segundos. Tudo fica no seu PC.	Capturas, grabación de pantalla y repetición de los últimos segundos. Todo se queda en tu PC.
+Filtros do RetroArch por cima de qualquer jogo: CRT, scanlines, nitidez.	Filtros de RetroArch sobre cualquier juego: CRT, scanlines, nitidez.
+Botões, macros, menu radial e teclado na tela para controles.	Botones, macros, menú radial y teclado en pantalla para mandos.
+Uso, temperatura, plano de energia, HDR e VRR por cima de tudo.	Uso, temperatura, plan de energía, HDR y VRR por encima de todo.
+Funções	Funciones
+Funções do Prisma	Funciones de Prisma
+Desmarque o que você não vai usar: some da barra lateral e para de rodar. Isso muda depois em Configurações.	Desmarca lo que no vayas a usar: desaparece de la barra lateral y deja de ejecutarse. Después puedes cambiarlo en Configuración.

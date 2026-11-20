@@ -4,7 +4,7 @@
 
 ## Getting started
 
-Prisma is a single file, Prisma.exe. The first time you open it, the welcome screen shows four choices. The first three come checked; **Replace the Windows copy** (Explorer's Ctrl+V through the Prisma copy window) comes unchecked. Uncheck what you don't want and click **Continue**. Windows asks for administrator permission once and applies everything together.
+Prisma is a single file, Prisma.exe. The first time you open it, the welcome screen shows four choices. The first three come checked; **Replace the Windows copy** (Explorer's Ctrl+V through the Prisma copy window) comes unchecked. Uncheck what you don't want and click **Continue**. The second step, **Prisma features**, lists the features with what each one does, all on: uncheck the ones you won't use (each mark applies right away) and click **Continue** again. Windows asks for administrator permission once and applies everything together.
 
 ![Welcome screen](welcome-en.png)
 
@@ -472,6 +472,7 @@ The game the launcher opens also enters game mode at once, without waiting for d
 - **Language:** Brazilian Portuguese, English, Spanish, Russian or Simplified Chinese. This guide and the version notes stay in English in the last three.
 - **Updates:** see the section below.
 - **Show the welcome screen on open:** brings the first screen back.
+- **Features tab:** the same list as the second welcome step, with an on/off box for each Prisma page. All come on, also after an update. A feature that is off leaves the sidebar, the controller actions and the tray menu, releases its shortcuts and stops what it runs in the background: the Meter and the limiter leave the game, the Widget hides, recording and replay stop, the Search index leaves memory (the saved one stays), the equalizer and **Keep the sound awake** stop, Share screen closes its connections, shaders close, and the scheduled checks of Copies and Safe updates don't run. Monitor and Settings can't be turned off, and NVIDIA driver only shows on PCs with an NVIDIA card. What was applied to Windows (the Explorer item, the Share screen services, the sound routes) stays until you undo it on its own page.
 
 Each page has a **Default** button that resets the options of that page only.
 

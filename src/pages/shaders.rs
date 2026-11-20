@@ -426,8 +426,9 @@ fn starts(path: &Path, p: &Profile, open: &std::collections::HashSet<String>) ->
     p.on && path == sp::path_for(&p.exe) && open.contains(&exe_of(p))
 }
 
-/// O motor lê `teclas.txt` só ao abrir: fecha os que rodam e o próximo `tick` abre de novo.
-fn restart() {
+/// O motor lê `teclas.txt` só ao abrir: fecha os que rodam e o próximo `tick` abre de novo
+/// (com a função Shaders desligada, o `tick` não roda e eles ficam fechados).
+pub fn restart() {
     for c in RUNS.lock().unwrap_or_else(|e| e.into_inner()).drain(..).filter_map(|r| r.child) {
         stop(c);
     }

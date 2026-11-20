@@ -3067,3 +3067,20 @@ Procurando...	Поиск...
 Nunca conferido	Никогда не проверялось
 Última conferência: {}	Последняя проверка: {}
 Página Atualizações	Страница «Обновления»
+Gráficos de processador, placa de vídeo, memória, discos e rede.	Графики процессора, видеокарты, памяти, дисков и сети.
+O que ocupa espaço em cada disco, pasta por pasta.	Что занимает место на каждом диске, папка за папкой.
+Programas que abrem com o Windows, para ligar ou desligar.	Программы, которые запускаются с Windows: можно включить или выключить.
+Serviços do Windows, com o que cada um faz.	Службы Windows с описанием того, что делает каждая.
+Remove programas e as sobras que eles deixam.	Удаляет программы и оставшиеся после них файлы.
+Cópias com pausa e conferência, e listas para rodar na hora marcada.	Копирование с паузой и проверкой и списки, запускаемые в заданное время.
+Avisa quando sai driver da NVIDIA ou atualização do Windows e diz se vale instalar.	Сообщает о выходе драйвера NVIDIA или обновления Windows и подсказывает, стоит ли ставить.
+Fecha programas parados antes de jogar. Nada é fechado sem você confirmar.	Закрывает неактивные программы перед игрой. Ничего не закрывается без вашего подтверждения.
+Troca o plano de energia sozinho entre repouso, carga alta e jogo.	Сам переключает схему питания между простоем, высокой нагрузкой и игрой.
+Ajustes do driver da NVIDIA para cada jogo.	Настройки драйвера NVIDIA для каждой игры.
+Fotos, gravação da tela e replay dos últimos segundos. Tudo fica no seu PC.	Снимки, запись экрана и повтор последних секунд. Всё остаётся на вашем ПК.
+Filtros do RetroArch por cima de qualquer jogo: CRT, scanlines, nitidez.	Фильтры RetroArch поверх любой игры: CRT, scanlines, резкость.
+Botões, macros, menu radial e teclado na tela para controles.	Кнопки, макросы, радиальное меню и экранная клавиатура для геймпадов.
+Uso, temperatura, plano de energia, HDR e VRR por cima de tudo.	Загрузка, температура, схема питания, HDR и VRR поверх всего.
+Funções	Функции
+Funções do Prisma	Функции Prisma
+Desmarque o que você não vai usar: some da barra lateral e para de rodar. Isso muda depois em Configurações.	Снимите галочку с того, чем не будете пользоваться: оно исчезнет с боковой панели и перестанет работать. Позже это можно изменить в настройках.

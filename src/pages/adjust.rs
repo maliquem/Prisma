@@ -2,10 +2,19 @@ use super::*;
 use crate::config::Defaults;
 
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
-    header(ui, a, "Configurações", "Início com o Windows, permissões e atalhos gerais.");
-    defaults_button(ui, app, a.right() - 124.0, Defaults::Settings, "Volta os atalhos de Otimizar, Fechar à força, Reiniciar o Explorer e Mostrar ou esconder o Prisma, o idioma e a busca de atualização ao padrão.");
+    // As abas ficam no cabeçalho, ao lado do Padrão: embaixo empurrariam a aba Geral para fora da janela.
+    let names = ["Geral", "Funções"].map(crate::i18n::tr);
+    let tabs_w: f32 = names.iter().map(|n| crate::ui::gfx::measure(n, 14.0, Weight::Semibold, None).0 + 32.0).sum();
+    let tx = a.right() - 124.0 - 12.0 - tabs_w;
+    header_room(ui, a, "Configurações", "Início com o Windows, permissões e atalhos gerais.", a.right() - tx + 12.0);
+    ui.tabs("adj-tab", tx, 31.0, &names, &mut app.adj_tab, true, None);
     let x = a.x + 28.0;
     let w = a.w - 56.0;
+    if app.adj_tab == 1 {
+        super::funcs_list(ui, app, rect(x, 88.0, w, a.h - 88.0 - 20.0));
+        return;
+    }
+    defaults_button(ui, app, a.right() - 124.0, Defaults::Settings, "Volta os atalhos de Otimizar, Fechar à força, Reiniciar o Explorer e Mostrar ou esconder o Prisma, o idioma e a busca de atualização ao padrão.");
     let top = 88.0;
     let r0 = rect(x, top, w, 150.0);
     ui.card(r0);

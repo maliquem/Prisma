@@ -4,7 +4,7 @@
 
 ## Primeiros passos
 
-O Prisma é um único arquivo, Prisma.exe. Na primeira vez que você abre, ele mostra a tela de boas-vindas com quatro escolhas. As três primeiras vêm marcadas; **Substituir a cópia do Windows** (o Ctrl+V do Explorer pela janela de cópia do Prisma) vem desmarcada. Desmarque o que não quiser e clique em **Continuar**. O Windows pede a permissão de administrador uma vez e aplica tudo junto.
+O Prisma é um único arquivo, Prisma.exe. Na primeira vez que você abre, ele mostra a tela de boas-vindas com quatro escolhas. As três primeiras vêm marcadas; **Substituir a cópia do Windows** (o Ctrl+V do Explorer pela janela de cópia do Prisma) vem desmarcada. Desmarque o que não quiser e clique em **Continuar**. O segundo passo, **Funções do Prisma**, lista as funções com o que cada uma faz, todas ligadas: desmarque as que você não vai usar (a marca vale na hora) e clique em **Continuar** de novo. O Windows pede a permissão de administrador uma vez e aplica tudo junto.
 
 ![Tela de boas-vindas](welcome-pt.png)
 
@@ -472,6 +472,7 @@ O jogo aberto pelo launcher também entra no modo jogo na hora, sem esperar a de
 - **Idioma:** português do Brasil, inglês, espanhol, russo ou chinês simplificado. Este guia e as novidades ficam em inglês nos três últimos.
 - **Atualizações:** veja a seção abaixo.
 - **Mostrar as boas-vindas ao abrir:** traz a tela inicial de volta.
+- **Aba Funções:** a mesma lista do segundo passo das boas-vindas, com liga e desliga para cada página do Prisma. Todas vêm ligadas, também para quem atualiza. Uma função desligada some da barra lateral, das ações dos controles e do menu da bandeja, solta os atalhos dela e para o que roda em segundo plano: o Medidor e o limitador saem do jogo, o Widget some, a gravação e o replay param, o índice da Pesquisa sai da memória (o salvo fica), o equalizador e o **Manter o som acordado** param, o Compartilhar tela fecha as conexões, os shaders fecham e as conferências agendadas de Cópias e Atualizações seguras não rodam. Monitor e Configurações não desligam, e o Driver NVIDIA só aparece em PC com placa NVIDIA. O que foi aplicado no Windows (o item do Explorer, os serviços do Compartilhar tela, as rotas de som) continua até ser desfeito na própria página.
 
 Cada tela tem um botão **Padrão**, que volta as opções só daquela tela.
 
