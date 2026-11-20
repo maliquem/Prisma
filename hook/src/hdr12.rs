@@ -491,29 +491,24 @@ pub(crate) unsafe fn resize(this: Ptr, count: u32, format: DXGI_FORMAT, flags: u
     hr
 }
 
-/// Vista pedida sem descrição sobre um buffer do jogo: ele nasce sem tipo, então ganha o formato pedido.
-unsafe fn format_of(res: Ptr, desc: *const c_void) -> Option<DXGI_FORMAT> {
-    if !desc.is_null() || res.is_null() || INSIDE.get() {
-        return None;
-    }
-    proxies().iter().find(|p| p.frames.iter().any(|f| f.game.as_raw() == res)).map(|p| p.want.format)
+/// Vista sobre um buffer do jogo: ele nasce sem tipo, então a vista sem formato ganha o pedido.
+unsafe fn view_desc<D: Copy>(res: Ptr, desc: *const c_void, make: impl FnOnce(DXGI_FORMAT) -> D) -> Option<D> {
+    let want = || proxies().iter().find(|p| !res.is_null() && p.frames.iter().any(|f| f.game.as_raw() == res)).map(|p| p.want);
+    hdr::view_desc(desc, want, |w| make(w.format))
 }
 
 unsafe extern "system" fn on_create_srv(this: Ptr, res: Ptr, desc: *const c_void, dest: D3D12_CPU_DESCRIPTOR_HANDLE) {
     let old: CreateView = std::mem::transmute(OLD_CREATE_SRV.load(Relaxed));
-    match format_of(res, desc) {
-        Some(f) => old(this, res, &srv_desc(f) as *const _ as *const c_void, dest),
+    match view_desc(res, desc, srv_desc) {
+        Some(d) => old(this, res, &d as *const _ as *const c_void, dest),
         None => old(this, res, desc, dest),
     }
 }
 
 unsafe extern "system" fn on_create_uav(this: Ptr, res: Ptr, counter: Ptr, desc: *const c_void, dest: D3D12_CPU_DESCRIPTOR_HANDLE) {
     let old: CreateUav = std::mem::transmute(OLD_CREATE_UAV.load(Relaxed));
-    match format_of(res, desc) {
-        Some(f) => {
-            let d = D3D12_UNORDERED_ACCESS_VIEW_DESC { Format: f, ViewDimension: D3D12_UAV_DIMENSION_TEXTURE2D, ..Default::default() };
-            old(this, res, counter, &d as *const _ as *const c_void, dest)
-        }
+    match view_desc(res, desc, |f| D3D12_UNORDERED_ACCESS_VIEW_DESC { Format: f, ViewDimension: D3D12_UAV_DIMENSION_TEXTURE2D, ..Default::default() }) {
+        Some(d) => old(this, res, counter, &d as *const _ as *const c_void, dest),
         None => old(this, res, counter, desc, dest),
     }
 }
@@ -523,11 +518,8 @@ unsafe extern "system" fn on_create_rtv(this: Ptr, res: Ptr, desc: *const c_void
     if !INSIDE.get() {
         track(res as usize, dest.ptr);
     }
-    match format_of(res, desc) {
-        Some(f) => {
-            let d = D3D12_RENDER_TARGET_VIEW_DESC { Format: f, ViewDimension: D3D12_RTV_DIMENSION_TEXTURE2D, ..Default::default() };
-            old(this, res, &d as *const _ as *const c_void, dest)
-        }
+    match view_desc(res, desc, |f| D3D12_RENDER_TARGET_VIEW_DESC { Format: f, ViewDimension: D3D12_RTV_DIMENSION_TEXTURE2D, ..Default::default() }) {
+        Some(d) => old(this, res, &d as *const _ as *const c_void, dest),
         None => old(this, res, desc, dest),
     }
 }
