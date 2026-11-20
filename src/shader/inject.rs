@@ -247,7 +247,8 @@ fn run_in(path: &Path, game: HWND, pid: u32, process: HANDLE) -> Res<bool> {
             polled = Instant::now();
             eng.poll(&d.dev);
             let now = s.presents.load(Relaxed);
-            if now > counted.0 {
+            // O primeiro só marca o ponto: a DLL pode ter contado Presents antes (motor que voltou).
+            if counted.0 > 0 && now > counted.0 {
                 frame_ms = prisma_shader::ema(frame_ms, counted.1.elapsed().as_secs_f64() * 1000.0 / (now - counted.0) as f64);
             }
             counted = (now, Instant::now());

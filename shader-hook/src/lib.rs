@@ -730,6 +730,9 @@ impl Dx11 {
         load.begin(ctx);
         let r = Self::chain_inner(eng, copy, dev, ctx, b, out, w, h);
         load.end(ctx, s);
+        if r.is_err() {
+            load.stop(s);
+        }
         r
     }
 

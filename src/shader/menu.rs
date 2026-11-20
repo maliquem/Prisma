@@ -62,8 +62,9 @@ pub struct Menu {
     pad_prev: u16,
     nav: [super::Press; 8],
     shown: bool,
-    /// Lista de presets aberta pelo Insert: o escolhido entra nessa posição dos passes, sem trocar a cadeia.
-    adding: Option<usize>,
+    /// Lista de presets aberta pelo Insert: (posição dos passes onde o escolhido entra, sem trocar a cadeia; linha
+    /// do menu para onde o Backspace volta).
+    adding: Option<(usize, usize)>,
     /// Consumo da cadeia: (ms de GPU, ms entre quadros), em média; `None` sem medida.
     pub load: Option<(f64, f64)>,
 }
@@ -158,9 +159,9 @@ impl Menu {
             // senão da biblioteca (sem ela baixada, dos presets do jogador).
             (Key::Add, View::Main) => {
                 let at = self.sel.checked_sub(FIRST_PASS).map_or(eng.profile.passes.len(), |i| i + 1);
-                let lib = self.sel != 2 && crate::shader_profile::lib_dir().exists();
+                let (lib, from) = (self.sel != 2 && crate::shader_profile::lib_dir().exists(), self.sel);
                 self.list(lib, if lib { crate::shader_profile::lib_dir() } else { crate::shader_profile::root() });
-                self.adding = Some(at);
+                self.adding = Some((at, from));
             }
             (Key::Back, View::Main) => self.toggle(),
             (Key::Back, View::Params(i)) => (self.view, self.sel) = (View::Main, FIRST_PASS + i),
@@ -171,7 +172,7 @@ impl Menu {
                     self.list(lib, up);
                     self.sel = self.files.iter().position(|(f, _)| *f == from).unwrap_or(0);
                 }
-                None => (self.view, self.sel, self.adding) = (View::Main, if lib { 3 } else { 2 }, None),
+                None => (self.view, self.sel) = (View::Main, self.adding.take().map_or(if lib { 3 } else { 2 }, |a| a.1)),
             },
             (_, View::Main) => match self.sel {
                 0 => eng.edit(dev, |p| p.on = !p.on),
@@ -186,7 +187,7 @@ impl Menu {
                 Some((d, true)) => self.list(lib, d),
                 // Insert (ou a lista aberta por ele): o preset entra nos passes, sem trocar a cadeia.
                 Some((f, false)) if k == Key::Add || self.adding.is_some() => {
-                    let at = self.adding.take().unwrap_or(eng.profile.passes.len()).min(eng.profile.passes.len());
+                    let at = self.adding.take().map_or(eng.profile.passes.len(), |a| a.0).min(eng.profile.passes.len());
                     eng.edit(dev, |p| crate::shader_profile::insert_pass(p, at, f));
                     (self.view, self.sel) = (View::Main, FIRST_PASS + at);
                 }
