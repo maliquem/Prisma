@@ -43,6 +43,8 @@ struct St {
     q: String,
     only_changed: bool,
     browse: Option<Browse>,
+    /// Salvar como preset: o nome sendo escrito.
+    naming: Option<String>,
     /// Presets da biblioteca, caminhos relativos com `\`.
     lib: Option<Vec<String>>,
     /// Arquivos que o último preset importado pede e não existem.
@@ -118,6 +120,7 @@ impl St {
         self.mtime = mtime(&path);
         self.pass = p.passes.len().saturating_sub(1);
         self.missing.clear();
+        self.naming = None;
         self.saved = Some(p);
     }
 
@@ -274,7 +277,11 @@ pub fn menu_focused(app: &mut App) {
 pub fn picked(app: &mut App, kind: usize, path: String) {
     match kind {
         PICK_EXE => add_game(app, &path),
-        PICK_IMAGE => preview(&path),
+        PICK_IMAGE => {
+            if let Some(s) = st().as_mut() {
+                preview(s, &path);
+            }
+        }
         _ => import(app, Path::new(&path)),
     }
 }
@@ -342,15 +349,11 @@ fn stop(mut c: Child) {
     let _ = c.wait();
 }
 
-/// Testar com imagem: janela do motor com `scene`, `bars` ou o caminho de uma imagem.
-fn preview(img: &str) {
-    let path = {
-        let mut g = st();
-        let Some(s) = g.as_mut() else { return };
-        s.flush();
-        let Some((p, _)) = s.profiles.get(s.sel) else { return };
-        p.clone()
-    };
+/// Testar com imagem: janela do motor com `scene`, `bars` ou o caminho de uma imagem. Recebe o `St` de quem
+/// chama: o desenho já segura o `ST`, e travar de novo na mesma thread congelava a janela.
+fn preview(s: &mut St, img: &str) {
+    s.flush();
+    let Some((path, _)) = s.profiles.get(s.sel) else { return };
     if let Some(old) = PREVIEW.lock().unwrap_or_else(|e| e.into_inner()).take() {
         stop(old);
     }
@@ -600,13 +603,24 @@ fn mine() -> Vec<String> {
     v
 }
 
-/// Salvar como preset: a cadeia ligada, juntada pelo motor, num .slangp em `shaders\` com o nome do perfil e
-/// caminhos relativos, que funciona também na pasta `shaders\` do RetroArch.
-fn export(app: &mut App, s: &mut St) {
+/// Nome de arquivo do preset: o que não é letra, número ou ` -_.()` vira `_`.
+fn preset_name(name: &str) -> String {
+    name.chars().map(|c| if c.is_alphanumeric() || " -_.()".contains(c) { c } else { '_' }).collect::<String>().trim().to_string()
+}
+
+/// Nome sugerido ao salvar como preset: o do perfil, sem repetir um que já existe.
+fn suggest(p: &Profile) -> String {
+    let name = preset_name(&p.name);
+    let to = sp::free_name(&sp::root(), if name.is_empty() { "preset" } else { &name });
+    to.file_stem().unwrap_or_default().to_string_lossy().into_owned()
+}
+
+/// Salvar como preset: a cadeia ligada, juntada pelo motor, em `shaders\<name>.slangp` com caminhos relativos,
+/// que funciona também na pasta `shaders\` do RetroArch.
+fn export(app: &mut App, s: &mut St, name: &str) {
     let Some(p) = s.cur().cloned() else { return };
     let root = sp::root();
-    let name: String = p.name.chars().map(|c| if c.is_alphanumeric() || " -_.()".contains(c) { c } else { '_' }).collect();
-    let to = sp::free_name(&root, if name.trim().is_empty() { "preset" } else { name.trim() });
+    let to = root.join(format!("{name}.slangp"));
     match crate::shader::slangp(&p, &root) {
         Ok(text) if crate::config::write_safe(&to, &text).is_ok() => {
             s.lib = None;
@@ -797,6 +811,10 @@ fn left_card(ui: &mut Ui, app: &mut App, s: &mut St, r: Rect) {
     let ix = r.x + 16.0;
     let iw = r.w - 32.0;
     let inner = rect(r.x, r.y + 4.0, r.w, r.h - 8.0);
+    if s.naming.is_some() {
+        // A caixa de nome fica no fim do cartão: rolado até o fim, o aviso embaixo dela fica à vista.
+        ui.stick_bottom("shd-left");
+    }
     ui.begin_scroll("shd-left", inner, s.left_h);
     let mut y = inner.y + 8.0;
     ui.title(rect(ix, y, iw, 22.0), "Passes");
@@ -806,8 +824,8 @@ fn left_card(ui: &mut Ui, app: &mut App, s: &mut St, r: Rect) {
         ui.menu("shd-test-m", &[("Cena 2D (320×240)", true), ("Barras de cor e grade", true), ("Abrir imagem ou captura…", true)]);
     }
     match ui.menu_pick("shd-test-m") {
-        Some(0) => preview("scene"),
-        Some(1) => preview("bars"),
+        Some(0) => preview(s, "scene"),
+        Some(1) => preview(s, "bars"),
         Some(_) => pick(app, PICK_IMAGE),
         None => {}
     }
@@ -840,6 +858,10 @@ fn left_card(ui: &mut Ui, app: &mut App, s: &mut St, r: Rect) {
         } else if ui.is_hover(row) {
             ui.c.round(row, 8.0, LINE);
         }
+        // A linha antes dos botões: o clique fica com o último controle registrado sob o mouse.
+        if ui.hit(&format!("shd-row{i}"), row) {
+            s.pass = i;
+        }
         let color = if pass.on { TEXT } else { MUTED };
         ui.c.text_raw(rect(ix, y, 22.0, 42.0), &format!("{}", i + 1), 14.0, ACCENT, Align::Left, Weight::Semibold);
         let name = pass.path.file_stem().unwrap_or_default().to_string_lossy().into_owned();
@@ -864,9 +886,6 @@ fn left_card(ui: &mut Ui, app: &mut App, s: &mut St, r: Rect) {
         ui.tip(cb, "Ligar ou desligar só este passe");
         if ui.button(&format!("shd-x{i}"), rect(bx + 112.0, y + 6.0, 30.0, 30.0), "✕", false) {
             act = Some((i, 3));
-        }
-        if act.is_none() && ui.hit(&format!("shd-row{i}"), row) {
-            s.pass = i;
         }
         y += 46.0;
     }
@@ -1017,14 +1036,42 @@ fn left_card(ui: &mut Ui, app: &mut App, s: &mut St, r: Rect) {
 
     y += 4.0;
     let bw = 150.0;
+    // Antes do "Salvar perfil": o "Salvar" do nome ocupa o mesmo lugar, e o perfil não pode ficar escondido embaixo.
+    if let Some(mut text) = s.naming.take() {
+        ui.search("shd-pname", rect(ix, y, iw - 2.0 * bw - 16.0, 36.0), &mut text, "Nome do preset");
+        let name = preset_name(&text);
+        let taken = sp::root().join(format!("{name}.slangp")).exists();
+        if taken {
+            ui.c.text_fit(rect(ix, y + 40.0, iw - 2.0 * bw - 16.0, 18.0), "Esse nome já existe", 12.0, WARN, Align::Left, Weight::Regular);
+        }
+        let ok = !name.is_empty() && !taken;
+        // Com o campo em foco, Enter e Esc chegam em `nav` em vez de virar texto.
+        let key = |vk| ui.focused("shd-pname") && ui.s.nav.iter().any(|&(k, _)| k == vk);
+        let (enter, esc) = (key(0x0D), key(0x1B));
+        let mut done = ui.button("shd-pname-no", rect(ix + iw - 2.0 * bw - 8.0, y, bw, 36.0), "Cancelar", false) || esc;
+        if ui.button_ex("shd-pname-ok", rect(ix + iw - bw, y, bw, 36.0), "Salvar", true, ok) || (enter && ok) {
+            s.flush();
+            export(app, s, &name);
+            done = true;
+        }
+        if !done {
+            s.naming = Some(text);
+        }
+        y += 66.0;
+        // O cartão cresce a linha do aviso: mais um desenho para a rolagem acompanhar.
+        ui.s.needs_redraw |= s.left_h != y - inner.y;
+        s.left_h = y - inner.y;
+        ui.end_scroll();
+        return;
+    }
     if ui.button("shd-save", rect(ix + iw - bw, y, bw, 36.0), "Salvar perfil", true) {
         s.flush();
         s.saved = s.cur().cloned();
         app.toast.info("Perfil salvo para este jogo");
     }
     if ui.button("shd-export", rect(ix + iw - 2.0 * bw - 8.0, y, bw, 36.0), "Salvar como preset", false) {
-        s.flush();
-        export(app, s);
+        s.naming = s.profiles.get(s.sel).map(|p| suggest(&p.1));
+        crate::ui::focus_on(ui.s, "shd-pname");
     }
     let dirty = s.saved.as_ref() != s.profiles.get(s.sel).map(|p| &p.1);
     if ui.button_ex("shd-undo", rect(ix + iw - 3.0 * bw - 16.0, y, bw, 36.0), "Descartar", false, dirty) {
@@ -1255,6 +1302,12 @@ mod tests {
 
     fn p(min: f32, max: f32, step: f32) -> Param {
         Param { name: "x".into(), desc: String::new(), default: 0.0, min, max, step, pass: 0 }
+    }
+
+    #[test]
+    fn nome_do_preset_vira_nome_de_arquivo() {
+        assert_eq!(preset_name("  CRT: Mega/Drive (2)  "), "CRT_ Mega_Drive (2)");
+        assert_eq!(preset_name("   "), "");
     }
 
     #[test]
