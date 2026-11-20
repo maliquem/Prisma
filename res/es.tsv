@@ -2967,7 +2967,8 @@ Auto HDR 10 bits	Auto HDR de 10 bits
 Auto 10 bits	Auto 10 bits
 Um HDR por jogo. Vale a partir da próxima vez que o jogo abrir.	Un HDR por juego. Se aplica la próxima vez que se abra el juego.
 Um HDR por jogo. O Auto HDR está desligado nas configurações do Windows: ligue lá para ele valer.	Un HDR por juego. Auto HDR está desactivado en la configuración de Windows: actívalo allí para que surta efecto.
-Bloqueado: este jogo tem anti-cheat, e o HDR do Prisma precisa entrar no jogo. Escolha Auto HDR ou RTX HDR.	Bloqueado: este juego tiene anti-cheat y el HDR de Prisma necesita entrar en el juego. Elige Auto HDR o RTX HDR.
+Bloqueado: este jogo tem anti-cheat, e o HDR do Prisma precisa entrar no jogo. Escolha Auto HDR ou RTX HDR, ou marque abaixo se você abre o jogo sem o anti-cheat.	Bloqueado: este juego tiene antitrampas y el HDR de Prisma necesita entrar en el juego. Elige Auto HDR o RTX HDR, o marca abajo si abres el juego sin el antitrampas.
+Abro sem o anti-cheat (offline, mods); com ele rodando, o Prisma não entra	Lo abro sin antitrampas (sin conexión, mods); si está activo, Prisma no entra
 Jogo da Steam: cole a linha abaixo em Propriedades > Opções de inicialização. Depois é só abrir pela Steam.	Juego de Steam: pega la línea de abajo en Propiedades > Opciones de lanzamiento. Después solo ábrelo desde Steam.
 Abra o jogo pelo botão Abrir com HDR, ou use a linha abaixo nas opções de inicialização do launcher.	Abre el juego con el botón Abrir con HDR, o usa la línea de abajo en las opciones de lanzamiento del launcher.
 Copiar linha	Copiar línea

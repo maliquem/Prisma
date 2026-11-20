@@ -67,9 +67,11 @@ struct Shared {
     scan_ui: AtomicU32,
     scan_white: AtomicU32,
     scan_mode: AtomicU32,
+    hdr_pq: AtomicU32,
+    hdr_untold: AtomicU32,
 }
 
-const _: () = assert!(std::mem::size_of::<Shared>() == 168);
+const _: () = assert!(std::mem::size_of::<Shared>() == 176);
 
 /// `Shared::hdr_split` do gancho: um passe de tela cheia depois da interface juntou tudo de novo.
 pub const SPLIT_LATE: u32 = 2;
@@ -237,11 +239,9 @@ impl Limiter {
     }
 
     /// Abre o jogo parado, carrega a DLL com o HDR pedido e só então solta: a cadeia de troca nasce
-    /// já com o proxy. Se a DLL não carregar, o jogo abre normal, sem HDR.
+    /// já com o proxy. Se a DLL não carregar, o jogo abre normal, sem HDR. Quem chama confere o anti-cheat
+    /// (`autohdr::allowed`).
     pub fn launch(exe: &str, args: &str, hdr: &Hdr) -> std::result::Result<Self, String> {
-        if crate::meter::anti_cheat(exe) {
-            return Err("anti-cheat detectado".into());
-        }
         unsafe {
             let mut kind = 0;
             if GetBinaryTypeW(&HSTRING::from(exe), &mut kind).is_err() || kind != SCS_64BIT_BINARY {
@@ -424,6 +424,21 @@ impl HdrLive {
         (s.hdr_native.load(Relaxed), s.hdr_frames.load(Relaxed))
     }
 
+    /// O último quadro veio de um buffer de 10 bits sem espaço de cor: SDR ou HDR10, o Prisma decide.
+    pub fn untold(&self) -> bool {
+        self.shared().hdr_untold.load(Relaxed) != 0
+    }
+
+    /// Lê esse buffer como HDR10.
+    pub fn set_pq(&self, on: bool) {
+        self.shared().hdr_pq.store(on as u32, Relaxed);
+    }
+
+    /// A medida do Analisar ligada agora; 0 nenhuma.
+    pub fn scanning(&self) -> u32 {
+        self.shared().hdr_scan.load(Relaxed)
+    }
+
     /// Liga o Analisar com a medida `gen` (diferente da anterior); 0 desliga.
     pub fn scan_set(&self, gen: u32) {
         self.shared().hdr_scan.store(gen, Relaxed);
@@ -497,6 +512,8 @@ pub fn test_hdr(out: &str, exe: &str, params: &str, args: &str) {
     };
     let mut log = format!("pid {} calibração {:?}\n", l.pid, (hdr.peak, hdr.paper, hdr.black));
     let (mut i, mut scan) = (0, 0);
+    // native=N: o HDR próprio passa pela detecção do app (autohdr::watch) em vez do Analisar à mão.
+    let mut native = None::<u8>;
     while l.exit_code().is_none() {
         std::thread::sleep(std::time::Duration::from_secs(1));
         for line in std::fs::read_to_string(params).unwrap_or_default().lines() {
@@ -513,6 +530,7 @@ pub fn test_hdr(out: &str, exe: &str, params: &str, args: &str) {
                 "ui" => hdr.ui = v,
                 // Analisar: um número novo começa outra medida, 0 para.
                 "scan" => scan = v as u32,
+                "native" if native.is_none() => native = Some(v as u8),
                 _ => {}
             }
         }
@@ -520,8 +538,16 @@ pub fn test_hdr(out: &str, exe: &str, params: &str, args: &str) {
         l.update(0);
         log += &format!("{i} s: {:?} hdr {:?} saída, interface, quadros separados {:?} {hdr:?}\n", l.status, l.hdr_stats().map(|(c, f, e)| (c, f, format!("{e:#x}"))), l.hdr_split());
         if let Some(live) = HdrLive::connect(l.pid) {
-            live.scan_set(scan);
-            log += &format!("   saída do jogo, quadros {:?} gpu {:?} ms análise {:?}\n", live.native(), live.gpu_ms(), live.scan(scan));
+            match native {
+                Some(n) => {
+                    if let Some(new) = crate::sys::autohdr::watch(&live, n) {
+                        native = Some(new);
+                    }
+                    log += &format!("   HDR próprio {native:?} sem espaço de cor {} análise {:#x}\n", live.untold(), live.scanning());
+                }
+                None => live.scan_set(scan),
+            }
+            log += &format!("   saída do jogo, quadros {:?} gpu {:?} ms análise {:?}\n", live.native(), live.gpu_ms(), live.scan(if native.is_some() { live.scanning() } else { scan }));
         }
         // A cada 5 s, a tela de verdade: a luminância que saiu e uma foto em SDR.
         if i % 5 == 4 {

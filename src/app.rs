@@ -1444,8 +1444,7 @@ impl App {
     fn hdr_watch(&mut self) {
         let Some(g) = self.cfg.hdr_games.iter_mut().find(|g| g.mode == crate::sys::autohdr::PRISMA && g.exe.eq_ignore_ascii_case(&self.fg_exe)) else { return };
         let Some(live) = crate::sys::inject::HdrLive::connect(self.fg_pid) else { return };
-        let (mode, frames) = live.native();
-        if let Some(n) = crate::sys::autohdr::detect(g.native, mode, frames) {
+        if let Some(n) = crate::sys::autohdr::watch(&live, g.native) {
             g.native = n;
             self.cfg.save();
             self.invalidate();
