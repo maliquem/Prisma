@@ -3,6 +3,8 @@
 //! limite zerado, deixa tudo passar direto.
 
 mod hdr;
+mod hdr12;
+mod hdrvk;
 
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU32, AtomicU64, AtomicUsize, Ordering::*};
@@ -326,6 +328,10 @@ unsafe extern "system" fn start(_: Ptr) -> u32 {
     s.state.store(STATE_LOADED, SeqCst);
     s.magic.store(MAGIC, SeqCst);
     SHARED.store(view as usize, SeqCst);
+    // A camada do Vulkan entra antes de o jogo seguir; o carregador lê as variáveis na primeira instância.
+    if hdr::wanted() {
+        hdrvk::setup(module);
+    }
     s.state.store(if install() { STATE_READY } else { STATE_FAILED }, SeqCst);
     if hdr::wanted() && steam_overlay_hooked() {
         hdr::let_steam_in();

@@ -429,10 +429,10 @@ impl Drop for Limiter {
 /// Teste do HDR: abre o jogo com HDR e, a cada segundo até ele fechar, relê os ajustes de um
 /// arquivo (`on=1`, `peak=`, `paper=`, `gamma=`, `sat=`, `boost=`, `black=`, `ui=`, um por linha) e grava o estado.
 #[cfg(debug_assertions)]
-pub fn test_hdr(out: &str, exe: &str, params: &str) {
+pub fn test_hdr(out: &str, exe: &str, params: &str, args: &str) {
     let cfg = crate::config::Config::load();
     let mut hdr = crate::sys::autohdr::calibrated(&cfg, &crate::sys::autohdr::primary_gdi());
-    let mut l = match Limiter::launch(exe, "", &hdr) {
+    let mut l = match Limiter::launch(exe, args, &hdr) {
         Ok(l) => l,
         Err(e) => {
             let _ = std::fs::write(out, format!("não abriu: {e}\n"));
