@@ -518,7 +518,7 @@ Todos podem ser trocados no programa. Se a combinação nova já é de outra fun
 - **Ctrl + Alt + P, A e J:** foto da área, da tela e da janela
 - **Ctrl + Alt + R e T:** gravar janela e gravar tela
 - **Ctrl + Alt + B:** salvar replay
-- **Mostrar o Prisma** (em Configurações, sem tecla de fábrica): traz a janela do Prisma para a frente, mesmo minimizada ou só na bandeja
+- **Mostrar ou esconder o Prisma** (em Configurações, sem tecla de fábrica): traz a janela do Prisma para a frente, mesmo minimizada ou só na bandeja; apertado de novo com o Prisma na frente e em foco, ele volta para a bandeja
 
 Os atalhos de Compartilhar tela mudam na aba Atalhos da página: Ctrl + Alt + Shift + Q no host desconecta todo mundo; na janela de quem assiste, Ctrl + Alt + Shift + P abre o menu da conexão, Ctrl + Alt + Shift + F alterna tela cheia, Ctrl + Alt + Shift + I liga e desliga o modo imersivo, Ctrl + Alt + Shift + M troca o medidor, Ctrl + Alt + Shift + S liga e desliga o som, Ctrl + Alt + End manda Ctrl + Alt + Del e Ctrl + Alt + Shift + D desconecta.
 

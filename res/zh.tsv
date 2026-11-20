@@ -796,7 +796,7 @@ Volta as opções de ponto de restauração e de desinstalar sem janela ao padr�
 Volta as opções Ver log e Restauração ao padrão. Os ajustes aplicados continuam como estão: para reverter, use Desfazer.	将“显示日志”和“还原点”选项恢复默认。已应用的调整保持不变：用“撤销”还原。
 Esvazia as listas de nunca fechar e sempre fechar, e as sugestões recusadas. Essa ação não fecha nenhum programa.	清空从不关闭和始终关闭列表以及已拒绝的建议。不会关闭任何程序。
 Volta o modificador, o passo e o aviso na tela ao padrão.	将修饰键、步长和屏幕提示恢复默认。
-Volta os atalhos de Otimizar, Fechar à força, Reiniciar o Explorer e Mostrar o Prisma, o idioma e a busca de atualização ao padrão.	将“优化”、“强制关闭”、“重启资源管理器”和“显示 Prisma”快捷键、语言和更新检查恢复默认。
+Volta os atalhos de Otimizar, Fechar à força, Reiniciar o Explorer e Mostrar ou esconder o Prisma, o idioma e a busca de atualização ao padrão.	将“优化”、“强制关闭”、“重启资源管理器”和“显示或隐藏 Prisma”快捷键、语言和更新检查恢复默认。
 Fechar à força	强制关闭
 Encerra na hora o programa em foco, mesmo travado. O que não foi salvo é perdido.	立即结束当前程序，即使它已卡死。未保存的内容会丢失。
 {} fechado à força	已强制关闭 {}
@@ -2637,7 +2637,7 @@ Como administrador	以管理员身份
 Pedir confirmação do Windows ao abrir atalhos como administrador	以管理员身份打开快捷方式时请求 Windows 确认
 O programa do atalho não abriu	快捷键对应的程序未能打开
 Página Atalhos	“快捷键”页面
-Mostrar o Prisma	显示 Prisma
+Mostrar ou esconder o Prisma	显示或隐藏 Prisma
 Grave (prateleira)	低架
 Agudo (prateleira)	高架
 Passa-baixa	低通

@@ -518,7 +518,7 @@ All of them can be changed in the program. If the new combination already belong
 - **Ctrl + Alt + P, A and J:** photo of an area, the screen and the window
 - **Ctrl + Alt + R and T:** record window and record screen
 - **Ctrl + Alt + B:** save replay
-- **Show Prisma** (in Settings, no default key): brings the Prisma window to the front, even when minimized or only in the tray
+- **Show or hide Prisma** (in Settings, no default key): brings the Prisma window to the front, even when minimized or only in the tray; pressed again with Prisma in front and focused, it goes back to the tray
 
 Share screen shortcuts are changed in the page's Shortcuts tab: Ctrl + Alt + Shift + Q on the host disconnects everyone; in the viewer window, Ctrl + Alt + Shift + P opens the connection menu, Ctrl + Alt + Shift + F toggles fullscreen, Ctrl + Alt + Shift + I turns immersive mode on and off, Ctrl + Alt + Shift + M switches the meter, Ctrl + Alt + Shift + S turns sound on and off, Ctrl + Alt + End sends Ctrl + Alt + Del and Ctrl + Alt + Shift + D disconnects.
 

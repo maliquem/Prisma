@@ -796,7 +796,7 @@ Volta as opções de ponto de restauração e de desinstalar sem janela ao padr�
 Volta as opções Ver log e Restauração ao padrão. Os ajustes aplicados continuam como estão: para reverter, use Desfazer.	Restablece las opciones Mostrar registro y Punto de restauración a lo predeterminado. Los ajustes aplicados siguen igual: usa Deshacer para revertirlos.
 Esvazia as listas de nunca fechar e sempre fechar, e as sugestões recusadas. Essa ação não fecha nenhum programa.	Vacía las listas de nunca cerrar y siempre cerrar y las sugerencias rechazadas. No cierra ningún programa.
 Volta o modificador, o passo e o aviso na tela ao padrão.	Restablece el modificador, el paso y el aviso en pantalla a lo predeterminado.
-Volta os atalhos de Otimizar, Fechar à força, Reiniciar o Explorer e Mostrar o Prisma, o idioma e a busca de atualização ao padrão.	Restablece los atajos de Optimizar, Forzar cierre, Reiniciar Explorador y Mostrar Prisma, el idioma y la comprobación de actualizaciones a lo predeterminado.
+Volta os atalhos de Otimizar, Fechar à força, Reiniciar o Explorer e Mostrar ou esconder o Prisma, o idioma e a busca de atualização ao padrão.	Restablece los atajos de Optimizar, Forzar cierre, Reiniciar Explorador y Mostrar u ocultar Prisma, el idioma y la comprobación de actualizaciones a lo predeterminado.
 Fechar à força	Forzar cierre
 Encerra na hora o programa em foco, mesmo travado. O que não foi salvo é perdido.	Termina al instante el programa en foco, aunque esté congelado. Se pierde lo no guardado.
 {} fechado à força	{} cerrado a la fuerza
@@ -2637,7 +2637,7 @@ Como administrador	Como administrador
 Pedir confirmação do Windows ao abrir atalhos como administrador	Pedir confirmación de Windows al abrir atajos como administrador
 O programa do atalho não abriu	El programa del atajo no se abrió
 Página Atalhos	Página Atajos
-Mostrar o Prisma	Mostrar Prisma
+Mostrar ou esconder o Prisma	Mostrar u ocultar Prisma
 Grave (prateleira)	Graves (shelf)
 Agudo (prateleira)	Agudos (shelf)
 Passa-baixa	Paso bajo

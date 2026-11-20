@@ -3,7 +3,7 @@ use crate::config::Defaults;
 
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     header(ui, a, "Configurações", "Início com o Windows, permissões e atalhos gerais.");
-    defaults_button(ui, app, a.right() - 124.0, Defaults::Settings, "Volta os atalhos de Otimizar, Fechar à força, Reiniciar o Explorer e Mostrar o Prisma, o idioma e a busca de atualização ao padrão.");
+    defaults_button(ui, app, a.right() - 124.0, Defaults::Settings, "Volta os atalhos de Otimizar, Fechar à força, Reiniciar o Explorer e Mostrar ou esconder o Prisma, o idioma e a busca de atualização ao padrão.");
     let x = a.x + 28.0;
     let w = a.w - 56.0;
     let top = 88.0;
@@ -144,7 +144,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     // Traz a janela para a frente, também minimizada ou só na bandeja.
     let rs = rect(re.right() + 12.0, r1.y, col, 92.0);
     ui.card(rs);
-    ui.label(rect(rs.x + 16.0, rs.y + 10.0, rs.w - 32.0, 18.0), "Mostrar o Prisma", TEXT2);
+    ui.label(rect(rs.x + 16.0, rs.y + 10.0, rs.w - 32.0, 18.0), "Mostrar ou esconder o Prisma", TEXT2);
     if ui.hotkey("hk-show", rect(rs.x + 16.0, rs.y + 34.0, field, 44.0), &mut app.cfg.hk_show) {
         app.cfg.save();
         app.register_hotkeys();
