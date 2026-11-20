@@ -71,9 +71,9 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     } else {
         "O filtro entra quando o jogo é menor que o monitor: o Prisma cria o perfil de shader do jogo (página Shaders) e desenha por cima. Jogo com perfil de shader próprio ou anti-cheat fica sem ele."
     };
-    ui.c.text_wrap(rect(x + 4.0, top + 100.0, w - 8.0, 44.0), hint, 13.0, TEXT2, Weight::Regular);
+    ui.c.text_wrap(rect(x + 4.0, top + 100.0, w - 8.0, 56.0), hint, 13.0, TEXT2, Weight::Regular);
 
-    let top = top + 152.0;
+    let top = top + 164.0;
     let h = a.h - top - 20.0;
     let t = rect(x, top, cw, h);
     ui.card(t);

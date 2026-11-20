@@ -872,9 +872,13 @@ fn left_card(ui: &mut Ui, app: &mut App, s: &mut St, r: Rect) {
     y += 56.0;
 
     ui.c.text(rect(ix, y, lw, 36.0), "Resolução de entrada", 14.0, TEXT, Align::Left, Weight::Regular);
-    let opts: Vec<String> = INPUTS.iter().map(|o| crate::i18n::tr(o.1).into_owned()).collect();
-    let mut i = INPUTS.iter().position(|o| o.0 == p.input).unwrap_or(0);
-    if ui.select("shd-input", rect(ix + lw, y, 200.0, 36.0), &opts, &mut i) {
+    let mut opts: Vec<String> = INPUTS.iter().map(|o| crate::i18n::tr(o.1).into_owned()).collect();
+    // Tamanho exato (`LxA`, do Fullscreenizer) aparece como mais uma opção, a última.
+    if !INPUTS.iter().any(|o| o.0 == p.input) {
+        opts.push(p.input.replace('x', " × "));
+    }
+    let mut i = INPUTS.iter().position(|o| o.0 == p.input).unwrap_or(INPUTS.len());
+    if ui.select("shd-input", rect(ix + lw, y, 200.0, 36.0), &opts, &mut i) && i < INPUTS.len() {
         if let Some(c) = s.cur() {
             c.input = INPUTS[i].0.to_string();
         }

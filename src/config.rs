@@ -143,6 +143,19 @@ pub struct FsApp {
     pub kind: usize,
 }
 
+impl FsApp {
+    /// `exe|auto|caminho|tipo`; linha antiga, sem o tipo, fica 3D.
+    pub fn parse(v: &str) -> Option<Self> {
+        let p: Vec<&str> = v.splitn(4, '|').collect();
+        let kind = p.get(3).and_then(|k| k.parse().ok()).filter(|k| *k < crate::shader_profile::KINDS.len()).unwrap_or(0);
+        (p.len() >= 3).then(|| FsApp { exe: p[0].into(), auto: p[1] == "1", path: p[2].into(), kind })
+    }
+
+    pub fn line(&self) -> String {
+        format!("{}|{}|{}|{}", self.exe, if self.auto { "1" } else { "0" }, self.path, self.kind)
+    }
+}
+
 /// Programa com aparelho de som escolhido. Vazio usa o padrão do Windows.
 #[derive(Clone, Default, Debug)]
 pub struct SndApp {
@@ -835,12 +848,7 @@ impl Config {
                 }
                 "nv_game" => c.nv_games.push(v.to_string()),
                 "fs_app" => {
-                    // exe|auto|caminho|tipo; linha antiga sem o tipo fica 3D.
-                    let p: Vec<&str> = v.splitn(4, '|').collect();
-                    if p.len() >= 3 {
-                        let kind = p.get(3).and_then(|k| k.parse().ok()).filter(|k| *k < crate::shader_profile::KINDS.len()).unwrap_or(0);
-                        c.fs_apps.push(FsApp { exe: p[0].into(), auto: p[1] == "1", path: p[2].into(), kind });
-                    }
+                    c.fs_apps.extend(FsApp::parse(v));
                 }
                 "profile" => {
                     let p: Vec<&str> = v.split('|').collect();
@@ -1103,7 +1111,7 @@ impl Config {
             let _ = writeln!(s, "nv_game={g}");
         }
         for a in &self.fs_apps {
-            let _ = writeln!(s, "fs_app={}|{}|{}|{}", a.exe, b(a.auto), a.path, a.kind);
+            let _ = writeln!(s, "fs_app={}", a.line());
         }
         let _ = writeln!(s, "fs_fit={}", self.fs_fit.key());
         for (k, f) in FS_FILTER_KEYS.iter().zip(&self.fs_filters) {
@@ -1323,6 +1331,16 @@ mod tests {
         assert!(t.ends_with("\nlang=2\n"));
         let dir = std::env::temp_dir().join(format!("prisma-cfg-{}", std::process::id()));
         assert!(read_text(&dir.join("nao-existe.ini")).unwrap().is_none());
+    }
+
+    #[test]
+    fn programa_do_fullscreenizer() {
+        let a = FsApp { exe: "jogo.exe".into(), auto: true, path: r"C:\Jogos\jogo.exe".into(), kind: 2 };
+        let b = FsApp::parse(&a.line()).unwrap();
+        assert_eq!((b.exe, b.auto, b.path, b.kind), (a.exe, a.auto, a.path, a.kind));
+        assert_eq!(FsApp::parse(r"jogo.exe|0|C:\jogo.exe").unwrap().kind, 0, "linha antiga fica 3D");
+        assert_eq!(FsApp::parse(r"jogo.exe|0|C:\jogo.exe|9").unwrap().kind, 0, "tipo que não existe");
+        assert!(FsApp::parse("jogo.exe|1").is_none());
     }
 
     #[test]

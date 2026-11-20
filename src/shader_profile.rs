@@ -235,8 +235,11 @@ pub fn upscale_on(exe: &Path, rel: &str, input: &str) -> Result<(), &'static str
     p.on = true;
     p.inject = false;
     p.input = input.to_string();
-    p.passes = vec![Pass { on: true, path: preset }];
-    p.params.clear();
+    // Mesmo filtro de antes: os ajustes feitos na página Shaders ficam.
+    if p.passes.len() != 1 || p.passes[0].path != preset {
+        p.passes = vec![Pass { on: true, path: preset }];
+        p.params.clear();
+    }
     p.save(&path).map_err(|_| "Filtro de upscale: não deu para gravar o perfil")
 }
 

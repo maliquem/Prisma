@@ -541,6 +541,11 @@ pub fn start(background: bool) {
         let _ = ChangeWindowMessageFilterEx(hub, WM_SHOW, MSGFLT_ALLOW, None);
         let _ = ChangeWindowMessageFilterEx(hub, WM_COPYDATA, MSGFLT_ALLOW, None);
         let cfg = Config::load();
+        // Filtro de upscale que ficou ligado (o Prisma fechou com o jogo no Fullscreenizer): sem isso o motor
+        // desenha por cima do jogo em janela na próxima vez.
+        for a in cfg.fs_apps.iter().filter(|a| !a.path.is_empty()) {
+            crate::shader_profile::upscale_off(std::path::Path::new(&a.path));
+        }
         monitor::PERF.store(cfg.perf_always, Ordering::Relaxed);
         let shared = monitor::spawn(hub.0 as isize, WM_TICK);
         let mut app = App {

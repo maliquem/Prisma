@@ -173,7 +173,11 @@ impl Fullscreenizer {
             self.saved.insert(hwnd.0 as isize, Saved { path, style, ex, rect, maximized, backdrop: back.map(|b| b.0 as isize) });
             SetWindowLongW(hwnd, GWL_STYLE, style & !(STYLE_OFF as i32));
             SetWindowLongW(hwnd, GWL_EXSTYLE, ex & !(EX_OFF as i32));
-            SetWindowPos(hwnd, Some(HWND_TOP), to.left, to.top, to.right - to.left, to.bottom - to.top, SWP_FRAMECHANGED | SWP_SHOWWINDOW).ok()?;
+            // Janela que não deixa mexer (de outro usuário, elevada): volta como estava, sem barras sobrando.
+            if SetWindowPos(hwnd, Some(HWND_TOP), to.left, to.top, to.right - to.left, to.bottom - to.top, SWP_FRAMECHANGED | SWP_SHOWWINDOW).is_err() {
+                self.restore(hwnd);
+                return None;
+            }
             if bars {
                 mark_fullscreen(hwnd, true);
             }
@@ -205,11 +209,18 @@ impl Fullscreenizer {
         }
     }
 
-    /// O jogo voltou para a frente: as barras voltam para logo abaixo dele.
+    /// As barras somem com o jogo minimizado (senão cobrem a área de trabalho de preto) e, com ele na frente,
+    /// voltam para logo abaixo dele.
     pub fn follow(&self, fg: HWND) {
-        if let Some(b) = self.saved.get(&(fg.0 as isize)).and_then(|s| s.backdrop) {
+        for (&h, s) in &self.saved {
+            let Some(b) = s.backdrop else { continue };
             unsafe {
-                let _ = SetWindowPos(HWND(b as *mut _), Some(fg), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                let (game, b) = (HWND(h as *mut _), HWND(b as *mut _));
+                if IsIconic(game).as_bool() {
+                    let _ = ShowWindow(b, SW_HIDE);
+                } else if game == fg {
+                    let _ = SetWindowPos(b, Some(game), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+                }
             }
         }
     }
