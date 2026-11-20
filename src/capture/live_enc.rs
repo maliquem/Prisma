@@ -19,6 +19,8 @@ pub struct VideoFmt {
     pub hdr10: bool,
     /// Cor inteira em cada pixel: texto pequeno e linhas finas sem borrão de cor.
     pub yuv444: bool,
+    /// 10 bits com a tela SDR (BT.709): degradês sem faixas. Só 4:2:0, só HEVC e AV1.
+    pub deep: bool,
 }
 
 pub enum LiveEncoder {

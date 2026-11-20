@@ -678,6 +678,8 @@ fn helper() {
         let Ok(ev) = OpenEventW(SYNCHRONIZATION_SYNCHRONIZE, false, STOP_EVENT) else { return };
         let _ = WaitForSingleObject(ev, INFINITE);
         eprintln!("ajudante: o serviço pediu para sair");
+        // Sai sem os `Drop` da sala: o HDR e a GPU voltam aqui, antes de o serviço parar.
+        super::host::restore_hdr();
         std::process::exit(0);
     });
     super::net::host_service();

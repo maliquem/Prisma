@@ -70,7 +70,7 @@ fn run(link: Arc<dyn Link>, name: &str) {
     let mut lat = super::LatLog::new("som");
     loop {
         if last_ping.elapsed() > Duration::from_millis(500) {
-            write(&mut out, &Msg::Ping { t: now() });
+            write(&mut out, &Msg::Ping { t: now(), gpu: false });
             link.send(&out);
             last_ping = Instant::now();
         }
@@ -151,7 +151,7 @@ pub(super) fn serve(link: Arc<dyn Link>, perms: u8, name: String, pid: u32, opus
         return;
     }
     let mut info = Vec::new();
-    write(&mut info, &Msg::Info { codec: VideoCodec::Std(Codec::H264), w: 0, h: 0, fps: 0, perms, recover: false, hdr10: false, yuv444: false, priority: 255 });
+    write(&mut info, &Msg::Info { codec: VideoCodec::Std(Codec::H264), w: 0, h: 0, fps: 0, perms, recover: false, hdr10: false, yuv444: false, priority: 255, deep: false });
     link.send(&info);
     eprintln!("«{name}» ouve o som daqui");
     crate::config::log(&format!("compartilhar: «{name}» ouve o som deste PC"));
@@ -171,8 +171,8 @@ pub(super) fn serve(link: Arc<dyn Link>, perms: u8, name: String, pid: u32, opus
                 match read(&buf[..n]) {
                     // Repetido contra perda: a resposta vai de novo.
                     Some(Msg::Hello { .. }) => link.send(&info),
-                    Some(Msg::Ping { t }) => {
-                        write(&mut out, &Msg::Pong { t, host: now() });
+                    Some(Msg::Ping { t, .. }) => {
+                        write(&mut out, &Msg::Pong { t, host: now(), gpu: None });
                         link.send(&out);
                     }
                     Some(Msg::Bye) => break,

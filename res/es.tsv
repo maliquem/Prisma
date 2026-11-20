@@ -1436,7 +1436,7 @@ Equilíbrio	Equilibrado
 Qualidade	Calidad
 Codec	Códec
 Limite de banda	Límite de ancho de banda
-HDR10 de 10 bits quando as duas telas estão em HDR	HDR10 de 10 bits cuando las dos pantallas están en HDR
+10 bits: HDR10 com as duas telas em HDR, e degradês sem faixas para quem pede	10 bits: HDR10 con las dos pantallas en HDR, y degradados sin bandas para quien lo pide
 Aceitar 4:4:4 quando quem assiste pede	Aceptar 4:4:4 cuando quien mira lo pida
 Os automáticos seguem quem assiste: a altura da tela, o menor entre os Hz dos dois lados e o melhor codec que os dois têm. O 4:4:4 e o HDR10 caem sozinhos se o outro lado não tiver.	Los valores automáticos siguen a quien mira: la altura de su pantalla, la frecuencia más baja de los dos lados y el mejor códec que ambos tengan. 4:4:4 y HDR10 se desactivan solos si el otro lado no los tiene.
 PyroWave: uns 200 Mbit/s em 1080p60 e mais em 4K. Só na rede local ou pela VPN (ZeroTier, Tailscale), nunca pelo relé; fora delas, e com quem assiste numa versão sem ele, vale o automático.	PyroWave: unos 200 Mbit/s en 1080p60 y más en 4K. Solo en la red local o por VPN (ZeroTier, Tailscale), nunca por el relé; fuera de ellas, o si quien mira tiene una versión sin él, se usa el automático.
@@ -1448,6 +1448,8 @@ Tirar do som o programa de chamada	Dejar fuera del sonido la app de llamadas
 Uma pessoa por vez no mouse e no teclado	Una persona a la vez en el ratón y el teclado
 O mouse e o teclado deste PC têm prioridade	El ratón y el teclado de este PC tienen prioridad
 Recusar conexões enquanto este PC assiste a outro	Rechazar conexiones mientras este PC ve a otro
+GPU em desempenho máximo enquanto compartilha	GPU en máximo rendimiento mientras se comparte
+GPU em desempenho máximo enquanto compartilha (sem efeito: só placas NVIDIA)	GPU en máximo rendimiento mientras se comparte (sin efecto: solo tarjetas NVIDIA)
 Com prioridade, quem assiste para por 1 segundo sempre que alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. Programas de chamada: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack e Signal. O Windows só deixa tirar um: sai do som o que estiver tocando, e a escolha muda durante a conexão. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante. Num notebook com duas placas, a outra placa codifica com uma cópia a mais da imagem.	Con prioridad, el visor se pausa 1 segundo cada vez que alguien aquí mueve el ratón o escribe. Una persona a la vez: el turno pasa tras 2 segundos sin entrada. Apps de llamadas: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack y Signal. Windows solo deja quitar una: queda fuera del sonido la que esté sonando, y la elección cambia durante la conexión. Los cambios se aplican al momento; los de la imagen reinician el vídeo un instante. En un portátil con dos tarjetas gráficas, la otra tarjeta codifica con una copia más de la imagen.
 Janela de quem assiste	Ventana del visor
 Abrir em tela cheia sem borda	Abrir en pantalla completa sin bordes
@@ -1459,6 +1461,7 @@ Só o mouse	Solo ratón
 Só o teclado	Solo teclado
 Mouse e teclado	Ratón y teclado
 Pedir 4:4:4 (texto mais nítido; HEVC só em NVIDIA ou Intel)	Pedir 4:4:4 (texto más nítido; en HEVC necesita NVIDIA o Intel)
+Pedir 10 bits (degradês sem faixas; host com NVIDIA)	Pedir 10 bits (degradados sin bandas; host con NVIDIA)
 Começar sem o som do outro PC	Empezar sin el sonido del otro PC
 No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. No Tudo, vai qualquer tecla, mesmo as que um programa deste PC pegaria. Os atalhos desta janela sempre funcionam aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga. Telas lado a lado valem para Mouse e teclado, na lista de PCs: o mouse passa pela borda de uma tela para a vizinha, sem vídeo. Um PC sem posição vai para a primeira livre ao lado deste.	En el modo inmersivo, en pantalla completa, el ratón se queda dentro de la ventana, y la tecla Windows y Alt+Tab van al otro PC. En Todo, pasa cualquier tecla, incluso las que captaría un programa de este PC. Los atajos de esta ventana siempre funcionan aquí. En una pantalla con G-SYNC o FreeSync, deja el VSync desactivado: la imagen no se rasga. Las pantallas lado a lado sirven para Ratón y teclado, en la lista de PC: el ratón pasa por el borde de una pantalla a la de al lado, sin vídeo. Un PC sin posición va a la primera libre junto a este.
 Medidor e avisos	Medidor y avisos
@@ -1468,11 +1471,11 @@ Detalhado	Detallado
 Avisar quando a conexão piorar	Avisar cuando la conexión empeore
 O simples mostra o atraso de ponta a ponta e uma bolinha verde, amarela ou vermelha. O detalhado mostra também a rede, o vídeo, os quadros por segundo, a banda, a decodificação, os quadros perdidos e o caminho. O aviso aparece quando a rede perde mais de 2% dos quadros, quando a latência varia mais de 10 ms ou sobe por 3 segundos seguidos. Os quadros por segundo pedidos não passam dos Hz desta tela; o automático usa os Hz dela. Tudo isso muda também pelo menu da conexão. A placa de vídeo vale na próxima conexão.	Simple muestra el retraso de extremo a extremo y un punto verde, amarillo o rojo. Detallado también muestra la red, el vídeo, los fotogramas por segundo, el ancho de banda, la decodificación, los fotogramas perdidos y la ruta. El aviso aparece cuando la red pierde más del 2% de los fotogramas, cuando la latencia varía más de 10 ms o sube 3 segundos seguidos. Los fotogramas por segundo pedidos nunca pasan de los Hz de esta pantalla; Automático usa sus Hz. Todo esto también se puede cambiar desde el menú de la conexión. La tarjeta gráfica se aplica en la próxima conexión.
 Portas	Puertos
-Porta UDP do host	Puerto UDP del anfitrión
+Porta fixa (UDP)	Puerto fijo (UDP)
 Automática	Automático
 Use um número de 1024 a 65535.	Usa un número de 1024 a 65535.
 Pedir ao roteador para abrir a porta (UPnP, NAT-PMP, PCP)	Pedir al router que abra el puerto (UPnP, NAT-PMP, PCP)
-Automática serve para quase todo mundo: o Prisma fura o NAT sem porta fixa. A porta fixa é para quem redireciona a porta no roteador. Ela vale na próxima vez que o compartilhamento ligar. O pedido ao roteador some sozinho quando a conexão acaba.	Automático funciona para casi todos: Prisma atraviesa el NAT sin puerto fijo. Un puerto fijo es para quien redirige el puerto en el router. Surte efecto la próxima vez que se empiece a compartir. La petición al router desaparece sola cuando termina la conexión.
+Automática serve para quase todo mundo: o Prisma fura o NAT sem porta fixa. Se a conexão sem VPN passar pelo relé, escolha uma porta fixa e abra essa porta UDP no roteador para este PC (ou deixe o pedido ao roteador abrir). Com CGNAT (a operadora divide o IP com outras casas) abrir a porta não adianta: use VPN ou IPv6. A porta vale na próxima vez que o compartilhamento ligar; se estiver ocupada, o Prisma usa uma aleatória. O pedido ao roteador some sozinho quando a conexão acaba.	Automático funciona para casi todos: Prisma atraviesa el NAT sin puerto fijo. Si la conexión sin VPN pasa por el relé, elige un puerto fijo y abre ese puerto UDP en el router para este PC (o deja que la petición al router lo abra). Con CGNAT (el operador comparte la IP con otras casas) abrir el puerto no sirve: usa VPN o IPv6. El puerto se aplica la próxima vez que se empiece a compartir; si está ocupado, Prisma usa uno aleatorio. La petición al router desaparece sola cuando termina la conexión.
 Como a conexão passa	Cómo viaja la conexión
 Última conexão:	Última conexión:
 Atalhos da conexão	Atajos de la conexión
@@ -1508,6 +1511,10 @@ ponta a ponta	de extremo a extremo
 rede	red
 q/s	fps
 decodificação	decodificación
+GPU do host	GPU del host
+GPU daqui	GPU de este PC
+codificação	codificación
+cópia	copia
 fila	cola
 perdidos	perdidos
 Mandar Ctrl+Alt+Del	Enviar Ctrl+Alt+Supr
@@ -1527,6 +1534,12 @@ Pela VPN	Por la VPN
 Direto na rede local	Directo en la red local
 Direto pela internet	Directo por internet
 Pelo relé da n0	Por el relé de n0
+Direto pela internet (IPv6)	Directo por internet (IPv6)
+Pelo relé fica lento: abra a porta fixa no host ou use VPN.	Por el relé va lento: abre el puerto fijo en el anfitrión o usa VPN.
+O host usa a porta	El anfitrión usa el puerto
+IP público	IP pública
+o roteador abriu a porta	el router abrió el puerto
+o roteador não abriu a porta sozinho	el router no abrió el puerto por sí solo
 UDP direto	UDP directo
 Conectando	Conectando
 O acesso muda na hora e fica salvo para as próximas conexões. Desconectar derruba só esta conexão: o aparelho continua pareado. Banir derruba e esquece o aparelho, que só volta com um convite novo.	El acceso cambia al instante y se guarda para las próximas conexiones. Desconectar corta solo esta conexión: el dispositivo sigue emparejado. Expulsar corta y olvida el dispositivo, que solo vuelve con una invitación nueva.
@@ -1560,6 +1573,7 @@ aparelho desligado	dispositivo desconectado
 Cada atalho troca a saída e a entrada padrão do Windows de uma vez. Use Adicionar.	Cada atajo cambia a la vez la salida y la entrada predeterminadas de Windows. Usa Añadir.
 Não deu para mudar na hora. Vale na próxima conexão.	No se pudo cambiar al instante. Se aplica en la próxima conexión.
 Pedir 4:4:4	Pedir 4:4:4
+Pedir 10 bits	Pedir 10 bits
 Ritmo constante	Ritmo de fotogramas constante
 Controle em segundo plano	Mando en segundo plano
 Teclado como controle	Teclado como mando
@@ -1868,7 +1882,7 @@ Configuração própria para este aparelho	Configuración propia para este dispo
 Saída capturada	Salida capturada
 Entrada junto	Mezclar entrada
 Configuração própria: vale quando este aparelho conecta. Com mais de uma pessoa ao mesmo tempo, vale a de quem conectou primeiro. Nome, pessoas, rede, controles e atalhos são os de todos.	Configuración propia: vale cuando este dispositivo se conecta. Con más de una persona a la vez, vale la de quien se conectó primero. Nombre, personas, red, mandos y atajos son los de todos.
-Com prioridade, quem assiste para por 1 segundo quando alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. O Windows só deixa tirar um programa de chamada (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), e só da saída padrão: sai o que estiver tocando. Uma saída escolhida manda o que toca nela. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante.	Con prioridad, el visor se pausa 1 segundo cada vez que alguien aquí mueve el ratón o escribe. Una persona a la vez: el turno pasa tras 2 segundos sin entrada. Windows solo deja quitar una app de llamadas (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), y solo de la salida predeterminada: queda fuera la que esté sonando. Una salida elegida envía lo que suena en ella. Los cambios se aplican al momento; los de la imagen reinician el vídeo un instante.
+Com prioridade, quem assiste para por 1 segundo quando alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. O Windows só deixa tirar um programa de chamada (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), e só da saída padrão: sai o que estiver tocando. Uma saída escolhida manda o que toca nela. GPU em desempenho máximo: enquanto alguém assiste, o clock da placa NVIDIA não desce abaixo do clock base, e fica livre de novo no fim; precisa do serviço ou do Prisma como administrador. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante.	Con prioridad, el visor se pausa 1 segundo cada vez que alguien aquí mueve el ratón o escribe. Una persona a la vez: el turno pasa tras 2 segundos sin entrada. Windows solo deja quitar una app de llamadas (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), y solo de la salida predeterminada: queda fuera la que esté sonando. Una salida elegida envía lo que suena en ella. GPU en máximo rendimiento: mientras alguien mira, el reloj de la tarjeta NVIDIA no baja del reloj base, y queda libre de nuevo al terminar; requiere el servicio o Prisma como administrador. Los cambios se aplican al momento; los de la imagen reinician el vídeo un instante.
 A padrão do Windows	La predeterminada de Windows
 Desligada agora	Apagada ahora
 Nenhuma	Ninguna
@@ -1878,6 +1892,7 @@ Acesso de «{}» mudou na hora	El acceso de “{}” cambió al instante
 Opções do host aplicadas na conexão	Opciones del host aplicadas a la conexión
 «{}» mudou os quadros por segundo	“{}” cambió los fotogramas por segundo
 «{}» mudou o pedido de 4:4:4	“{}” cambió la solicitud de 4:4:4
+«{}» mudou o pedido de 10 bits	“{}” cambió la solicitud de 10 bits
 «{}» mudou o ritmo dos quadros	“{}” cambió el ritmo de fotogramas
 Mouse travado nesta tela	Ratón bloqueado en esta pantalla
 Mouse destravado	Ratón desbloqueado
@@ -2732,3 +2747,64 @@ Abre o instalador da VB-Audio: clique em Remove Driver. O Windows pede permissã
 O VB-CABLE é da VB-Audio, donationware de terceiros: o uso pessoal é livre, com doação opcional, e o uso profissional ou em empresa pede licenças pagas na loja da VB-Audio. O Prisma vai baixar o pacote da página oficial (vb-audio.com), conferir a soma e abrir o instalador da VB-Audio, que pede permissão de administrador. Nele, clique em Install Driver; o PC pode pedir para reiniciar. Para desfazer: este cartão, Remover.	VB-CABLE es de VB-Audio, donationware de terceros: el uso personal es libre, con donación opcional, y el uso profesional o en empresa requiere licencias de pago en la tienda de VB-Audio. Prisma descargará el paquete de la página oficial (vb-audio.com), comprobará la suma y abrirá el instalador de VB-Audio, que pide permiso de administrador. En él, haz clic en Install Driver; el PC puede pedir reiniciar. Para deshacerlo: esta tarjeta, Quitar.
 o arquivo baixado não confere com o pacote oficial	el archivo descargado no coincide con el paquete oficial
 o pacote guardado sumiu	el paquete guardado desapareció
+Página Desempenho	Página Rendimiento
+Medir com a janela fechada	Medir con la ventana cerrada
+Uso total	Uso total
+thread mais cheia:	hilo más cargado:
+base	base
+pelo PawnIO	vía PawnIO
+threads	hilos
+handles	identificadores
+Uso total · 60 s	Uso total · 60 s
+Por thread (uso e clock)	Por hilo (uso y reloj)
+Modificada	Modificada
+Em espera (cache)	En espera (caché)
+Livre	Libre
+de	de
+em uso	en uso
+Composição	Composición
+Em uso · 60 s	En uso · 60 s
+slots	ranuras
+Comprometida	Confirmada
+Cache	Caché
+Pool paginado	Grupo paginado
+Pool não paginado	Grupo no paginado
+Pentes	Módulos
+Dedicada	Dedicada
+Compartilhada	Compartida
+Programas usando	Programas usando
+sai da RAM	sale de la RAM
+maior:	mayor:
+Outros	Otros
+Dedicada por programa	Dedicada por programa
+Dedicada · 60 s	Dedicada · 60 s
+Limite de energia	Límite de energía
+Lentidão do hardware	Ralentización del hardware
+Ociosa	Inactiva
+só na NVIDIA	solo en NVIDIA
+maior engine:	mayor motor:
+Clock do núcleo	Reloj del núcleo
+Clock da memória	Reloj de la memoria
+máx.	máx.
+controlador	controlador
+ventoinha	ventilador
+Consumo	Consumo
+limite	límite
+Limite do clock	Límite de reloj
+Programas por engine	Programas por motor
+Toque numa linha para abrir	Toca una fila para abrir
+RAM em uso	RAM en uso
+VRAM dedicada	VRAM dedicada
+VRAM compartilhada	VRAM compartida
+Abrir no Medidor	Abrir en el Medidor
+Tempo real	Tiempo real
+Alta	Alta
+Acima do normal	Por encima de lo normal
+Abaixo do normal	Por debajo de lo normal
+Baixa	Baja
+Thread mais cheia	Hilo más ocupado
+Orçamento da placa	Presupuesto de GPU
+o que cada programa pode usar	lo que puede usar cada programa
+Pico (sessão)	Pico (sesión)
+Clock do núcleo · 60 s	Reloj del núcleo · 60 s
+Temperatura · 60 s	Temperatura · 60 s

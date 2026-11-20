@@ -145,7 +145,7 @@ fn items(ui: &mut Ui, app: &mut App, r: Rect) {
 }
 
 /// O PawnIO está instalado? Perguntar abre o dispositivo: no máximo a cada 5 segundos.
-fn pawnio_installed() -> bool {
+pub(super) fn pawnio_installed() -> bool {
     static SEEN: std::sync::Mutex<Option<(std::time::Instant, bool)>> = std::sync::Mutex::new(None);
     let mut g = SEEN.lock().unwrap();
     if g.as_ref().map_or(true, |s| s.0.elapsed().as_secs() >= 5) {
@@ -155,7 +155,7 @@ fn pawnio_installed() -> bool {
 }
 
 /// Temperatura da CPU: o driver PawnIO, e o botão que instala ele.
-fn pawnio_row(ui: &mut Ui, r: Rect) {
+pub(super) fn pawnio_row(ui: &mut Ui, r: Rect) {
     use crate::sys::cputemp::setup::{self, STATE};
     let state = STATE.load(std::sync::atomic::Ordering::Relaxed);
     let bw = 180.0;

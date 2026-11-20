@@ -701,7 +701,7 @@ fn run(me: u8, targets: Vec<(String, u8)>, lock_key: Keys) {
         for (i, slot) in peers.iter_mut().enumerate() {
             let Some(p) = slot else { continue };
             if p.last_ping.elapsed() > Duration::from_millis(500) {
-                write(&mut out, &Msg::Ping { t: now() });
+                write(&mut out, &Msg::Ping { t: now(), gpu: false });
                 p.link.send(&out);
                 p.last_ping = Instant::now();
             }
@@ -785,7 +785,7 @@ pub(super) fn serve(link: Arc<dyn Link>, perms: u8, name: String) {
     let mut info = Vec::new();
     write(
         &mut info,
-        &Msg::Info { codec: VideoCodec::Std(Codec::H264), w: (r.right - r.left) as u32, h: (r.bottom - r.top) as u32, fps: 0, perms, recover: false, hdr10: false, yuv444: false, priority: 255 },
+        &Msg::Info { codec: VideoCodec::Std(Codec::H264), w: (r.right - r.left) as u32, h: (r.bottom - r.top) as u32, fps: 0, perms, recover: false, hdr10: false, yuv444: false, priority: 255, deep: false },
     );
     link.send(&info);
     let mut inj = host::Injector::new(mon, perms);
@@ -821,8 +821,8 @@ pub(super) fn serve(link: Arc<dyn Link>, perms: u8, name: String) {
                 match read(&buf[..n]) {
                     // Repetido contra perda: a resposta vai de novo.
                     Some(Msg::Hello { .. }) => link.send(&info),
-                    Some(Msg::Ping { t }) => {
-                        write(&mut out, &Msg::Pong { t, host: now() });
+                    Some(Msg::Ping { t, .. }) => {
+                        write(&mut out, &Msg::Pong { t, host: now(), gpu: None });
                         link.send(&out);
                     }
                     Some(Msg::Input { first, events }) => {

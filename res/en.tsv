@@ -1442,7 +1442,7 @@ Equilíbrio	Balanced
 Qualidade	Quality
 Codec	Codec
 Limite de banda	Bandwidth limit
-HDR10 de 10 bits quando as duas telas estão em HDR	10-bit HDR10 when both screens are in HDR
+10 bits: HDR10 com as duas telas em HDR, e degradês sem faixas para quem pede	10-bit: HDR10 when both screens are in HDR, and banding-free gradients for those who ask
 Aceitar 4:4:4 quando quem assiste pede	Accept 4:4:4 when the viewer asks
 Os automáticos seguem quem assiste: a altura da tela, o menor entre os Hz dos dois lados e o melhor codec que os dois têm. O 4:4:4 e o HDR10 caem sozinhos se o outro lado não tiver.	The automatic values follow the viewer: the screen height, the lower refresh rate of the two sides and the best codec both have. 4:4:4 and HDR10 drop on their own if the other side lacks them.
 PyroWave: uns 200 Mbit/s em 1080p60 e mais em 4K. Só na rede local ou pela VPN (ZeroTier, Tailscale), nunca pelo relé; fora delas, e com quem assiste numa versão sem ele, vale o automático.	PyroWave: about 200 Mbit/s at 1080p60 and more at 4K. Only on the local network or over a VPN (ZeroTier, Tailscale), never through the relay; outside them, or with a viewer on a version without it, automatic applies.
@@ -1454,6 +1454,8 @@ Tirar do som o programa de chamada	Leave the call app out of the sound
 Uma pessoa por vez no mouse e no teclado	One person at a time on the mouse and keyboard
 O mouse e o teclado deste PC têm prioridade	This PC's mouse and keyboard come first
 Recusar conexões enquanto este PC assiste a outro	Refuse connections while this PC is viewing another
+GPU em desempenho máximo enquanto compartilha	GPU at maximum performance while sharing
+GPU em desempenho máximo enquanto compartilha (sem efeito: só placas NVIDIA)	GPU at maximum performance while sharing (no effect: NVIDIA cards only)
 Com prioridade, quem assiste para por 1 segundo sempre que alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. Programas de chamada: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack e Signal. O Windows só deixa tirar um: sai do som o que estiver tocando, e a escolha muda durante a conexão. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante. Num notebook com duas placas, a outra placa codifica com uma cópia a mais da imagem.	With priority, the viewer pauses for 1 second whenever someone here moves the mouse or types. One person at a time: the turn passes after 2 seconds without input. Call apps: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack and Signal. Windows only allows leaving out one: the one that is playing is left out of the sound, and the choice changes during the connection. Changes apply right away; picture changes restart the video for a moment. On a laptop with two graphics cards, the other card encodes with one extra copy of the picture.
 Janela de quem assiste	Viewer window
 Abrir em tela cheia sem borda	Open in borderless fullscreen
@@ -1465,6 +1467,7 @@ Só o mouse	Mouse only
 Só o teclado	Keyboard only
 Mouse e teclado	Mouse and keyboard
 Pedir 4:4:4 (texto mais nítido; HEVC só em NVIDIA ou Intel)	Ask for 4:4:4 (sharper text; HEVC needs NVIDIA or Intel)
+Pedir 10 bits (degradês sem faixas; host com NVIDIA)	Ask for 10-bit (banding-free gradients; NVIDIA host)
 Começar sem o som do outro PC	Start without the other PC's sound
 No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. No Tudo, vai qualquer tecla, mesmo as que um programa deste PC pegaria. Os atalhos desta janela sempre funcionam aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga. Telas lado a lado valem para Mouse e teclado, na lista de PCs: o mouse passa pela borda de uma tela para a vizinha, sem vídeo. Um PC sem posição vai para a primeira livre ao lado deste.	In immersive mode, in fullscreen, the mouse stays inside the window, and the Windows key and Alt+Tab go to the other PC. In Everything, any key goes through, even ones a program on this PC would catch. The shortcuts of this window always work here. On a G-SYNC or FreeSync screen, leave VSync off: the picture does not tear. Screens side by side are for Mouse and keyboard, in the PC list: the mouse goes past the edge of one screen to the next one, with no video. A PC with no position goes to the first free one next to this PC.
 Medidor e avisos	Meter and warnings
@@ -1474,11 +1477,11 @@ Detalhado	Detailed
 Avisar quando a conexão piorar	Warn when the connection gets worse
 O simples mostra o atraso de ponta a ponta e uma bolinha verde, amarela ou vermelha. O detalhado mostra também a rede, o vídeo, os quadros por segundo, a banda, a decodificação, os quadros perdidos e o caminho. O aviso aparece quando a rede perde mais de 2% dos quadros, quando a latência varia mais de 10 ms ou sobe por 3 segundos seguidos. Os quadros por segundo pedidos não passam dos Hz desta tela; o automático usa os Hz dela. Tudo isso muda também pelo menu da conexão. A placa de vídeo vale na próxima conexão.	Simple shows the end-to-end delay and a green, yellow or red dot. Detailed also shows the network, the video, frames per second, bandwidth, decoding, lost frames and the route. The warning appears when the network loses more than 2% of frames, when latency varies by more than 10 ms or rises for 3 seconds in a row. The requested frames per second never go above this screen's Hz; Automatic uses its Hz. All of this can also be changed from the connection menu. The graphics card applies on the next connection.
 Portas	Ports
-Porta UDP do host	Host UDP port
+Porta fixa (UDP)	Fixed port (UDP)
 Automática	Automatic
 Use um número de 1024 a 65535.	Use a number from 1024 to 65535.
 Pedir ao roteador para abrir a porta (UPnP, NAT-PMP, PCP)	Ask the router to open the port (UPnP, NAT-PMP, PCP)
-Automática serve para quase todo mundo: o Prisma fura o NAT sem porta fixa. A porta fixa é para quem redireciona a porta no roteador. Ela vale na próxima vez que o compartilhamento ligar. O pedido ao roteador some sozinho quando a conexão acaba.	Automatic works for almost everyone: Prisma gets through NAT without a fixed port. A fixed port is for people who forward the port on the router. It takes effect the next time sharing starts. The router request goes away on its own when the connection ends.
+Automática serve para quase todo mundo: o Prisma fura o NAT sem porta fixa. Se a conexão sem VPN passar pelo relé, escolha uma porta fixa e abra essa porta UDP no roteador para este PC (ou deixe o pedido ao roteador abrir). Com CGNAT (a operadora divide o IP com outras casas) abrir a porta não adianta: use VPN ou IPv6. A porta vale na próxima vez que o compartilhamento ligar; se estiver ocupada, o Prisma usa uma aleatória. O pedido ao roteador some sozinho quando a conexão acaba.	Automatic works for almost everyone: Prisma gets through NAT without a fixed port. If the connection without VPN goes through the relay, pick a fixed port and open that UDP port on the router for this PC (or let the router request open it). With CGNAT (the ISP shares the IP with other homes) opening the port won't help: use a VPN or IPv6. The port applies the next time sharing starts; if it is busy, Prisma uses a random one. The router request goes away on its own when the connection ends.
 Como a conexão passa	How the connection travels
 Última conexão:	Last connection:
 Atalhos da conexão	Connection shortcuts
@@ -1514,6 +1517,10 @@ ponta a ponta	end to end
 rede	network
 q/s	fps
 decodificação	decoding
+GPU do host	Host GPU
+GPU daqui	This PC's GPU
+codificação	encoding
+cópia	copy
 fila	queue
 perdidos	lost
 Mandar Ctrl+Alt+Del	Send Ctrl+Alt+Del
@@ -1533,6 +1540,12 @@ Pela VPN	Through the VPN
 Direto na rede local	Direct on the local network
 Direto pela internet	Direct over the internet
 Pelo relé da n0	Through the n0 relay
+Direto pela internet (IPv6)	Directly over the internet (IPv6)
+Pelo relé fica lento: abra a porta fixa no host ou use VPN.	Through the relay is slow: open the fixed port on the host or use a VPN.
+O host usa a porta	The host uses port
+IP público	public IP
+o roteador abriu a porta	the router opened the port
+o roteador não abriu a porta sozinho	the router did not open the port by itself
 UDP direto	Direct UDP
 Conectando	Connecting
 O acesso muda na hora e fica salvo para as próximas conexões. Desconectar derruba só esta conexão: o aparelho continua pareado. Banir derruba e esquece o aparelho, que só volta com um convite novo.	Access changes right away and is saved for the next connections. Disconnect drops only this connection: the device stays paired. Ban drops and forgets the device, which can only come back with a new invite.
@@ -1566,6 +1579,7 @@ aparelho desligado	device unplugged
 Cada atalho troca a saída e a entrada padrão do Windows de uma vez. Use Adicionar.	Each shortcut switches the Windows default output and input at once. Use Add.
 Não deu para mudar na hora. Vale na próxima conexão.	Could not change it right away. It applies on the next connection.
 Pedir 4:4:4	Ask for 4:4:4
+Pedir 10 bits	Ask for 10-bit
 Ritmo constante	Constant frame pacing
 Controle em segundo plano	Controller in the background
 Teclado como controle	Keyboard as controller
@@ -1874,7 +1888,7 @@ Configuração própria para este aparelho	Own settings for this device
 Saída capturada	Captured output
 Entrada junto	Mix in input
 Configuração própria: vale quando este aparelho conecta. Com mais de uma pessoa ao mesmo tempo, vale a de quem conectou primeiro. Nome, pessoas, rede, controles e atalhos são os de todos.	Own settings: they apply when this device connects. With more than one person at once, the settings of whoever connected first apply. Name, people, network, controllers and shortcuts are shared by all.
-Com prioridade, quem assiste para por 1 segundo quando alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. O Windows só deixa tirar um programa de chamada (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), e só da saída padrão: sai o que estiver tocando. Uma saída escolhida manda o que toca nela. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante.	With priority, the viewer pauses for 1 second whenever someone here moves the mouse or types. One person at a time: the turn passes after 2 seconds without input. Windows only allows leaving out one call app (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), and only from the default output: the one that is playing is left out. A chosen output sends what plays on it. Changes apply right away; picture changes restart the video for a moment.
+Com prioridade, quem assiste para por 1 segundo quando alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. O Windows só deixa tirar um programa de chamada (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), e só da saída padrão: sai o que estiver tocando. Uma saída escolhida manda o que toca nela. GPU em desempenho máximo: enquanto alguém assiste, o clock da placa NVIDIA não desce abaixo do clock base, e fica livre de novo no fim; precisa do serviço ou do Prisma como administrador. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante.	With priority, the viewer pauses for 1 second whenever someone here moves the mouse or types. One person at a time: the turn passes after 2 seconds without input. Windows only allows leaving out one call app (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), and only from the default output: the one that is playing is left out. A chosen output sends what plays on it. GPU at maximum performance: while someone is watching, the NVIDIA card's clock doesn't drop below its base clock, and it's free again at the end; needs the service or Prisma running as administrator. Changes apply right away; picture changes restart the video for a moment.
 A padrão do Windows	Windows default
 Desligada agora	Off right now
 Nenhuma	None
@@ -1884,6 +1898,7 @@ Acesso de «{}» mudou na hora	Access for “{}” changed right away
 Opções do host aplicadas na conexão	Host options applied to the connection
 «{}» mudou os quadros por segundo	“{}” changed the frame rate
 «{}» mudou o pedido de 4:4:4	“{}” changed the 4:4:4 request
+«{}» mudou o pedido de 10 bits	“{}” changed the 10-bit request
 «{}» mudou o ritmo dos quadros	“{}” changed the frame pacing
 Mouse travado nesta tela	Mouse locked to this screen
 Mouse destravado	Mouse unlocked
@@ -2738,3 +2753,64 @@ Abre o instalador da VB-Audio: clique em Remove Driver. O Windows pede permissã
 O VB-CABLE é da VB-Audio, donationware de terceiros: o uso pessoal é livre, com doação opcional, e o uso profissional ou em empresa pede licenças pagas na loja da VB-Audio. O Prisma vai baixar o pacote da página oficial (vb-audio.com), conferir a soma e abrir o instalador da VB-Audio, que pede permissão de administrador. Nele, clique em Install Driver; o PC pode pedir para reiniciar. Para desfazer: este cartão, Remover.	VB-CABLE is by VB-Audio, third-party donationware: personal use is free, with optional donation, and professional or business use requires paid licenses from the VB-Audio store. Prisma will download the package from the official page (vb-audio.com), verify the checksum and open the VB-Audio installer, which asks for administrator permission. In it, click Install Driver; the PC may ask to restart. To undo: this card, Remove.
 o arquivo baixado não confere com o pacote oficial	the downloaded file does not match the official package
 o pacote guardado sumiu	the saved package is gone
+Página Desempenho	Performance page
+Medir com a janela fechada	Measure with the window closed
+Uso total	Total usage
+thread mais cheia:	busiest thread:
+base	base
+pelo PawnIO	via PawnIO
+threads	threads
+handles	handles
+Uso total · 60 s	Total usage · 60 s
+Por thread (uso e clock)	Per thread (usage and clock)
+Modificada	Modified
+Em espera (cache)	Standby (cache)
+Livre	Free
+de	of
+em uso	in use
+Composição	Composition
+Em uso · 60 s	In use · 60 s
+slots	slots
+Comprometida	Committed
+Cache	Cache
+Pool paginado	Paged pool
+Pool não paginado	Non-paged pool
+Pentes	Modules
+Dedicada	Dedicated
+Compartilhada	Shared
+Programas usando	Programs using
+sai da RAM	comes from RAM
+maior:	top:
+Outros	Others
+Dedicada por programa	Dedicated per program
+Dedicada · 60 s	Dedicated · 60 s
+Limite de energia	Power limit
+Lentidão do hardware	Hardware slowdown
+Ociosa	Idle
+só na NVIDIA	NVIDIA only
+maior engine:	top engine:
+Clock do núcleo	Core clock
+Clock da memória	Memory clock
+máx.	max
+controlador	controller
+ventoinha	fan
+Consumo	Power draw
+limite	limit
+Limite do clock	Clock limit
+Programas por engine	Programs per engine
+Toque numa linha para abrir	Tap a row to open
+RAM em uso	RAM in use
+VRAM dedicada	Dedicated VRAM
+VRAM compartilhada	Shared VRAM
+Abrir no Medidor	Open in Meter
+Tempo real	Realtime
+Alta	High
+Acima do normal	Above normal
+Abaixo do normal	Below normal
+Baixa	Low
+Thread mais cheia	Busiest thread
+Orçamento da placa	GPU budget
+o que cada programa pode usar	what each program can use
+Pico (sessão)	Peak (session)
+Clock do núcleo · 60 s	Core clock · 60 s
+Temperatura · 60 s	Temperature · 60 s

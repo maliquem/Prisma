@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prisma — Shaders (mockup)</title>
+<style>
+:root{--bg:#17191d;--side:#1d2025;--card:#24272e;--card2:#2c3038;--border:#3b404b;--text:#e8eaee;--text2:#c3c7cf;--muted:#a4a9b4;--accent:#7cc4ff;--warn:#ffb26b;--ok:#7ee0a1;--bad:#ff7b7b;--ground:#0e0f12}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--text);font:14px "Segoe UI Variable","Segoe UI",sans-serif;padding:24px}
+.note{max-width:1280px;margin:0 auto 14px;color:var(--muted);font-size:13px}
+h3.sec{max-width:1280px;margin:34px auto 10px;font-size:16px;font-weight:600}
+.win{max-width:1280px;margin:0 auto;display:flex;background:var(--bg);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+nav.side{width:190px;background:var(--side);padding:16px 10px;flex:none}
+nav.side .logo{font-weight:600;font-size:16px;margin:0 8px 18px}
+nav.side a{display:block;padding:7px 10px;border-radius:6px;color:var(--text2);text-decoration:none;margin-bottom:2px}
+nav.side a.on{background:var(--card2);color:var(--accent)}
+main{flex:1;padding:22px 26px;min-width:0}
+h1{font-size:22px;margin:0 0 4px;font-weight:600}
+.sub{color:var(--muted);margin-bottom:16px}
+.top{display:grid;grid-template-columns:1.15fr 1.1fr 1fr;gap:14px;margin-bottom:14px;align-items:stretch}
+.cols{display:grid;grid-template-columns:1fr 350px;gap:14px;align-items:start}
+.card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px}
+.card h2{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:0 0 10px;font-weight:600;display:flex;justify-content:space-between;align-items:center;gap:8px}
+button,select{background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font:inherit;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.pri{background:var(--accent);color:#0b1a26;border-color:var(--accent);font-weight:600}
+button.sm{padding:2px 7px;font-size:12px}
+button:disabled{opacity:.4;cursor:default}
+select.big{flex:1;min-width:0;padding:7px 8px}
+.pill{display:inline-block;font-size:12px;padding:1px 7px;border-radius:10px;border:1px solid var(--border);color:var(--muted)}
+.pill.ok{color:var(--ok);border-color:#3c6b4f}.pill.warn{color:var(--warn);border-color:#6e5233}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.meta{color:var(--muted);font-size:12px;margin-top:8px;line-height:1.6}
+.toggle{position:relative;width:38px;height:20px;background:#454b57;border-radius:10px;cursor:pointer;flex:none}
+.toggle::after{content:"";position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#dfe3ea;transition:.15s}
+.toggle.on{background:var(--accent)}.toggle.on::after{left:20px}
+.keys{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px}
+.keys div{display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:13px}
+kbd{background:var(--card2);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:12px;white-space:nowrap}
+.stack .p{display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;background:var(--card2);cursor:pointer}
+.stack .p.on{border-color:var(--accent)}
+.stack .p.off .nm{opacity:.45;text-decoration:line-through}
+.stack .num{width:22px;height:22px;border-radius:50%;background:#3a4252;display:grid;place-items:center;font-size:12px;flex:none}
+.stack .nm{flex:1;min-width:0}
+.stack .nm b{display:block;font-weight:500}
+.stack .nm small{color:var(--muted)}
+.flow{color:var(--muted);font-size:12px;margin:2px 0 10px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.flow span{background:var(--card2);padding:2px 8px;border-radius:4px}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.seg button{border:0;border-radius:0;background:transparent}
+.seg button.on{background:var(--card2);color:var(--accent)}
+.opt{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--border);gap:10px}
+.opt .l small{display:block;color:var(--muted)}
+.warnbox{border:1px solid #6e5233;background:#2d261f;color:#f2d3b0;border-radius:6px;padding:8px 10px;font-size:13px;margin-top:8px}
+input[type=search]{width:100%;background:var(--card2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 8px;font:inherit;margin-bottom:8px}
+.prm{padding:7px 0;border-top:1px solid #333843}
+.prm .top2{display:flex;justify-content:space-between;gap:8px;font-size:13px}
+.prm .v{color:var(--accent);font-variant-numeric:tabular-nums}
+.prm .v.ch{color:var(--warn)}
+.prm .rng{color:var(--muted);font-size:12px;display:flex;justify-content:space-between}
+.prm input[type=range]{width:100%;accent-color:var(--accent)}
+.prm .id{font-family:Consolas,monospace}
+.plist{max-height:500px;overflow:auto;padding-right:4px}
+.bar{height:5px;background:var(--card2);border-radius:3px;overflow:hidden;margin-top:8px}
+.bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+.path{font-family:Consolas,monospace;font-size:12px;color:var(--text2);background:var(--card2);padding:3px 7px;border-radius:4px}
+.callout{position:relative}
+.tag{position:absolute;top:-9px;right:8px;background:#ffd36b;color:#2a2000;font-size:12px;font-weight:600;padding:1px 6px;border-radius:4px}
+/* diálogos */
+.dlg{position:fixed;inset:0;background:#000a;display:none;place-items:center;z-index:5}
+.dlg.open{display:grid}
+.dlg .box{width:1100px;max-width:96vw;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:16px}
+.dhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;font-size:17px;font-weight:600}
+.browser{display:grid;grid-template-columns:200px 1fr;gap:10px;height:360px}
+.browser .dirs,.browser .files{background:var(--card);border:1px solid var(--border);border-radius:6px;overflow:auto;padding:6px}
+.browser div.i{padding:5px 8px;border-radius:4px;cursor:pointer}
+.browser div.i:hover{background:var(--card2)}
+.browser div.i.on{background:var(--card2);color:var(--accent)}
+.prev{display:grid;grid-template-columns:1fr 330px;gap:14px}
+.prev canvas{width:100%;aspect-ratio:4/3;background:#000;display:block;image-rendering:pixelated}
+.ab{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+/* dentro do jogo */
+.game{max-width:1280px;margin:0 auto;position:relative;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:#000}
+.game canvas{width:100%;aspect-ratio:16/9;display:block}
+.osd{position:absolute;left:24px;top:24px;width:330px;background:rgba(20,22,26,.86);backdrop-filter:blur(6px);border:1px solid #ffffff22;border-radius:10px;padding:12px;font-size:13px}
+.osd .hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.osd .hd b{font-size:14px}
+.osd .ps div{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:5px;cursor:pointer}
+.osd .ps div.on{background:#ffffff14;color:var(--accent)}
+.osd .ps input{accent-color:var(--accent)}
+.osd .prm{border-color:#ffffff1a}
+.osd .foot{color:var(--muted);font-size:12px;margin-top:8px;line-height:1.7}
+.toastg{position:absolute;right:24px;top:24px;background:rgba(20,22,26,.86);border:1px solid #ffffff22;border-radius:8px;padding:8px 12px;font-size:13px}
+@media (max-width:1100px){.top,.cols,.prev{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<p class="note">Mockup clicável. O efeito nas imagens é uma imitação feita no navegador (linhas, máscara, brilho); no app roda o shader de verdade. Mexa nos deslizantes, troque o jogo no menu, abra “Testar com imagem”.</p>
+
+<div class="win">
+<nav class="side">
+  <div class="logo">◆ Prisma</div>
+  <a href="#">Medidor</a><a href="#">Otimizar</a><a href="#">Controles</a><a href="#">Captura</a><a href="#">Som</a><a href="#">HDR</a>
+  <a href="#" class="on">Shaders</a>
+  <a href="#">Driver NVIDIA</a><a href="#">Energia</a><a href="#">Ajustes</a>
+</nav>
+
+<main>
+  <h1>Shaders</h1>
+  <div class="sub">Filtros do RetroArch (.slang) por cima de qualquer jogo: CRT, scanlines, NTSC, nitidez. Um perfil por jogo.</div>
+
+  <div class="top">
+    <div class="card callout">
+      <span class="tag">1 · jogo</span>
+      <h2>Jogo <span class="row"><span id="gstate" class="pill"></span><div class="toggle on" id="gtog" title="Shader ligado neste jogo" onclick="games[gi].on=!games[gi].on;draw()"></div></span></h2>
+      <div class="row"><select class="big" id="gsel" onchange="pick(+this.value)"></select><button onclick="addGame()">+ Adicionar</button></div>
+      <div class="meta" id="gmeta"></div>
+    </div>
+    <div class="card callout">
+      <span class="tag">2 · biblioteca</span>
+      <h2>Biblioteca de shaders</h2>
+      <div class="row" style="justify-content:space-between"><small style="color:var(--muted);flex:1;min-width:150px" id="libst">Não baixados. Não vêm com o Prisma por causa das licenças.</small><button class="pri" id="dlbtn" onclick="download()">Baixar do RetroArch</button></div>
+      <div class="bar"><i id="dlbar"></i></div>
+      <div class="row" style="margin-top:8px"><span class="path">%LOCALAPPDATA%\Prisma\shaders</span><button class="sm">Abrir</button><button class="sm">Trocar…</button></div>
+    </div>
+    <div class="card callout">
+      <span class="tag">3 · atalhos</span>
+      <h2>Atalhos <button class="sm">Mudar…</button></h2>
+      <div class="keys">
+        <div>Liga / desliga<kbd>Ctrl+Alt+S</kbd></div>
+        <div>Menu no jogo<kbd>Ctrl+Alt+P</kbd></div>
+        <div>Próximo perfil<kbd>Ctrl+Alt+D</kbd></div>
+        <div>Comparar (segurar)<kbd>Ctrl+Alt+A</kbd></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cols">
+    <div class="card callout">
+      <span class="tag">4 · passes do jogo</span>
+      <h2>Passes <span class="row"><button class="sm" onclick="openPrev()">Testar com imagem</button><button class="sm" onclick="openDlg()">+ Adicionar passe</button><button class="sm" onclick="openDlg(true)">Carregar preset…</button></span></h2>
+      <div class="flow"><span>Jogo</span>→<span id="flowmid">…</span>→<span>Tela</span></div>
+      <div class="stack" id="stack"></div>
+      <small style="color:var(--muted)">O nº 1 roda primeiro, sobre a imagem do jogo; o último fica “por cima”. Cada linha pode ser um preset inteiro (.slangp, com várias passadas dentro) ou um .slang avulso.</small>
+
+      <h2 style="margin-top:16px">Como aplicar</h2>
+      <div class="opt"><div class="l">Modo<small id="modehint"></small></div>
+        <div class="seg" id="modeseg"><button onclick="setMode(0)">Por cima</button><button id="injbtn" onclick="setMode(1)">Injeção</button></div></div>
+      <div class="opt"><div class="l">Resolução de entrada<small>Automática: detectado 320×240 (cada pixel do jogo = 9×9 na tela). O CRT recebe 240 linhas, não 2160; máscara ajustada para 4K.</small></div>
+        <select><option selected>Automática</option><option>Original</option><option>240 linhas</option><option>480 linhas</option><option>720 linhas</option><option>÷2</option><option>÷3</option><option>÷4</option></select></div>
+      <div class="opt"><div class="l">Gravar e transmitir com o shader<small>Captura e Compartilhar tela usam a imagem já filtrada</small></div><div class="toggle" onclick="this.classList.toggle('on')"></div></div>
+      <div id="warns"></div>
+
+      <div class="row" style="justify-content:flex-end;margin-top:12px">
+        <button onclick="toast('Voltou ao último salvo')">Descartar</button>
+        <button onclick="toast('Exportado como .slangp (abre no RetroArch também)')">Salvar como preset…</button>
+        <button class="pri" onclick="toast('Perfil salvo para este jogo')">Salvar perfil</button>
+      </div>
+      <div id="toast" style="color:var(--ok);text-align:right;font-size:12px;height:16px;margin-top:4px"></div>
+    </div>
+
+    <div class="card callout">
+      <span class="tag">5 · parâmetros</span>
+      <h2><span id="ptitle">Parâmetros</span> <button class="sm" onclick="resetAll()">Restaurar padrão</button></h2>
+      <input type="search" id="pq" placeholder="Buscar parâmetro (ex.: mask, scan, gamma)" oninput="drawParams()">
+      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:6px"><input type="checkbox" id="onlych" onchange="drawParams()"> só os alterados</label>
+      <div class="plist" id="plist"></div>
+      <small style="color:var(--muted);display:block;margin-top:8px">Mínimo, máximo e passo vêm do próprio shader. A mudança aparece no jogo na hora; laranja = diferente do padrão. Duplo clique volta o valor.</small>
+    </div>
+  </div>
+</main>
+</div>
+
+<h3 class="sec">Dentro do jogo — Ctrl+Alt+P abre este menu por cima do jogo (teclado, mouse ou controle)</h3>
+<div class="game">
+  <canvas id="gcv" width="1280" height="720"></canvas>
+  <div class="osd">
+    <div class="hd"><b>◆ Shaders · <span id="oname"></span></b><div class="toggle on" id="otog" onclick="games[gi].on=!games[gi].on;draw()"></div></div>
+    <select id="oprof" style="width:100%;margin-bottom:8px" onchange="toast2('Perfil trocado: '+this.value)"><option>Perfil do jogo</option><option>CRT forte</option><option>Só scanlines</option></select>
+    <div class="ps" id="ops"></div>
+    <div id="oprm" style="margin-top:6px"></div>
+    <div class="row" style="margin-top:8px;justify-content:space-between"><button class="sm" onclick="toast2('Mais parâmetros: abre a lista completa com busca')">Todos os parâmetros…</button><button class="sm pri" onclick="toast2('Salvo no perfil do jogo')">Salvar</button></div>
+    <div class="foot">↑↓ escolher · ←→ mudar valor · Enter liga/desliga passe<br>Controle: Select+L1 abre · D-pad · A/B · Esc ou Select fecha</div>
+  </div>
+  <div class="toastg" id="t2" style="display:none"></div>
+</div>
+
+<!-- diálogo: adicionar passe -->
+<div class="dlg" id="dlg" onclick="if(event.target===this)closeDlg()">
+  <div class="box" style="width:760px">
+    <div class="dhead"><span id="dlgt">Adicionar passe</span><button class="sm" onclick="closeDlg()">✕</button></div>
+    <input type="search" placeholder="Buscar em 2662 presets (ex.: lottes, ntsc, vhs)">
+    <div class="browser"><div class="dirs" id="dirs"></div><div class="files" id="files"></div></div>
+    <div class="row" style="justify-content:space-between;margin-top:10px">
+      <small style="color:var(--muted)">Preset (.slangp) entra como um passe com todas as passadas dele; .slang entra como uma passada só.</small>
+      <span class="row"><button onclick="closeDlg()">Cancelar</button><button class="pri" onclick="addPass()">Adicionar ao fim</button></span>
+    </div>
+  </div>
+</div>
+
+<!-- diálogo: testar com imagem -->
+<div class="dlg" id="prev" onclick="if(event.target===this)closePrev()">
+  <div class="box">
+    <div class="dhead"><span>Testar com imagem · <span id="pvname"></span></span><button class="sm" onclick="closePrev()">✕</button></div>
+    <div class="prev">
+      <div>
+        <canvas id="pcv" width="960" height="720" onmousedown="cmp=1;redraw()" onmouseup="cmp=0;redraw()" onmouseleave="cmp=0;redraw()"></canvas>
+        <div class="row" style="margin-top:8px;justify-content:space-between">
+          <span class="row">Imagem:
+            <select id="img" onchange="setImg(this.value)"><option value="scene">Cena 2D (320×240)</option><option value="bars">Barras de cor e grade</option><option value="file">Abrir imagem ou captura…</option></select>
+            <select id="zoom" onchange="redraw()"><option value="1">Tela inteira</option><option value="3">Zoom 3×</option></select>
+          </span>
+          <small style="color:var(--muted)">Segure o clique na imagem para ver sem efeito</small>
+        </div>
+        <input type="file" id="file" accept="image/*" style="display:none" onchange="loadFile(this)">
+      </div>
+      <div>
+        <div class="meta" style="margin:0 0 8px">Entrada <b id="pvres">320×240</b> · saída 1920×1440 · GPU estimada 0,3 ms</div>
+        <div id="pvparams" class="plist" style="max-height:470px"></div>
+        <div class="row" style="justify-content:flex-end;margin-top:10px"><button onclick="closePrev()">Fechar</button><button class="pri" onclick="closePrev();toast('Valores levados ao perfil')">Usar no perfil</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const P={
+ lottes:{name:'crt-lottes',file:'crt/crt-lottes.slangp',passes:1,params:[
+  ['hardScan','hardScan',-8,-20,0,1],['hardPix','hardPix',-3,-20,0,1],['warpX','warpX',.031,0,.125,.01],['warpY','warpY',.041,0,.125,.01],
+  ['maskDark','maskDark',.5,0,2,.1],['maskLight','maskLight',1.5,0,2,.1],['shadowMask','shadowMask',3,0,4,1],['brightBoost','brightness boost',1,0,2,.05],
+  ['hardBloomPix','bloom-x soft',-1.5,-2,-.5,.1],['hardBloomScan','bloom-y soft',-2,-4,-1,.1],['bloomAmount','bloom ammount',.15,0,1,.05],['shape','filter kernel shape',2,0,10,.05]]},
+ ntsc:{name:'ntsc-adaptive',file:'ntsc/ntsc-adaptive.slangp',passes:2,params:[
+  ['quality','NTSC Preset (Svideo=0 Composite=1 RF=2 Custom=-1)',1,-1,2,1],['ntsc_sat','NTSC Color Saturation',1,0,2,.01],['ntsc_bright','NTSC Brightness',1,0,1.5,.01],
+  ['ntsc_scale','NTSC Resolution Scaling',1,.2,3,.05],['ntsc_phase','NTSC Phase: Auto | 2 phase | 3 phase',1,1,3,1],['ntsc_fields','NTSC Merge Fields',0,0,1,1],
+  ['cust_artifacting','NTSC Custom Artifacting Value',0,0,5,.1],['cust_fringing','NTSC Custom Fringing Value',0,0,5,.1]]},
+ lines:{name:'scanlines',file:'scanlines/scanline.slangp',passes:1,params:[['LINES','Intensidade das linhas',.35,0,1,.05]]},
+ sharp:{name:'fast-sharpen',file:'sharpen/fast-sharpen.slangp',passes:1,params:[['SHARPEN','Sharpen strength',1.2,0,2,.05],['CONTR','Contrast',.05,0,.25,.01]]},
+};
+const games=[
+ {name:"Castlevania Advance Collection",exe:"game.exe",api:"DX9",ac:false,on:true,stack:[{k:'ntsc',on:true},{k:'lottes',on:true}],warn:[]},
+ {name:"Castlevania Belmont's Curse",exe:"Castlevania Belmont's Curse.exe",api:"DX11",ac:false,on:true,stack:[{k:'lines',on:true}],warn:['hdr']},
+ {name:"Celeste",exe:"Celeste.exe",api:"OpenGL",ac:false,on:false,stack:[{k:'sharp',on:true}],warn:['fse']},
+ {name:"Street Fighter 6",exe:"StreetFighter6.exe",api:"DX12",ac:true,on:true,stack:[{k:'lottes',on:true}],warn:[]},
+];
+let gi=0,sel=1,mode=0,vals={},cmp=0;
+const $=id=>document.getElementById(id);
+const key=(k,id)=>gi+'/'+k+'/'+id;
+const val=(k,id)=>{const d=P[k].params.find(p=>p[0]==id);return vals[key(k,id)]??d[2]};
+
+function pick(i){gi=i;sel=games[i].stack.length-1;mode=0;draw()}
+function drawTop(){const g=games[gi];
+ $('gsel').innerHTML=games.map((x,i)=>`<option value="${i}" ${i==gi?'selected':''}>${x.name}</option>`).join('');
+ $('gmeta').innerHTML=`${g.exe} · ${g.api} · ${g.stack.length} passe(s) · ${g.on?'<span style="color:var(--ok)">ligado</span>':'desligado'}`;
+ $('gtog').classList.toggle('on',g.on);
+ const st=$('gstate');st.className='pill '+(g.ac?'warn':'ok');st.textContent=g.ac?'anti-cheat':'sem anti-cheat'}
+function drawStack(){const g=games[gi];
+ $('stack').innerHTML=g.stack.map((s,i)=>{const p=P[s.k];return `<div class="p ${i==sel?'on':''} ${s.on?'':'off'}" onclick="sel=${i};draw()">
+  <div class="num">${i+1}</div><div class="nm"><b>${p.name}</b><small>${p.file} · ${p.passes} passada(s) · ${p.params.length} parâmetros</small></div>
+  <button class="sm" title="Rodar antes" ${i==0?'disabled':''} onclick="event.stopPropagation();mv(${i},-1)">▲</button>
+  <button class="sm" title="Rodar depois" ${i==g.stack.length-1?'disabled':''} onclick="event.stopPropagation();mv(${i},1)">▼</button>
+  <div class="toggle ${s.on?'on':''}" title="Ligar/desligar só este passe" onclick="event.stopPropagation();tog(${i})"></div>
+  <button class="sm" title="Remover" onclick="event.stopPropagation();rm(${i})">✕</button></div>`}).join('')||'<small style="color:var(--muted)">Nenhum passe. Adicione um preset.</small>';
+ $('flowmid').textContent=g.stack.filter(s=>s.on).map(s=>P[s.k].name).join(' → ')||'nada'}
+function mv(i,d){const s=games[gi].stack;[s[i],s[i+d]]=[s[i+d],s[i]];sel=i+d;draw()}
+function tog(i){games[gi].stack[i].on=!games[gi].stack[i].on;draw()}
+function rm(i){games[gi].stack.splice(i,1);sel=Math.max(0,Math.min(sel,games[gi].stack.length-1));draw()}
+
+function paramsHtml(q,only,limit){const s=games[gi].stack[sel];if(!s)return'<small style="color:var(--muted)">Nenhum passe.</small>';
+ let ps=P[s.k].params.filter(([id,d])=>(id+d).toLowerCase().includes(q));if(limit)ps=ps.slice(0,limit);
+ return ps.map(([id,d,def,mn,mx,st])=>{const v=val(s.k,id);if(only&&v==def)return'';const dec=(String(st).split('.')[1]||'').length;
+  return `<div class="prm" ondblclick="setv('${s.k}','${id}',${def})"><div class="top2"><span>${d}</span><span class="v ${v!=def?'ch':''}">${(+v).toFixed(dec)}</span></div>
+  <input type="range" min="${mn}" max="${mx}" step="${st}" value="${v}" oninput="setv('${s.k}','${id}',this.value)">
+  <div class="rng"><span>${mn}</span><span class="id">${id} · padrão ${def}</span><span>${mx}</span></div></div>`}).join('')||'<small style="color:var(--muted)">Nada encontrado.</small>'}
+function drawParams(){const s=games[gi].stack[sel];$('ptitle').textContent=s?P[s.k].name:'Parâmetros';
+ $('plist').innerHTML=paramsHtml($('pq').value.toLowerCase(),$('onlych').checked);
+ if($('prev').classList.contains('open'))$('pvparams').innerHTML=paramsHtml('',false);
+ $('oprm').innerHTML=paramsHtml('',false,3)}
+function setv(k,id,v){vals[key(k,id)]=+v;drawParams();redraw()}
+function resetAll(){const s=games[gi].stack[sel];if(!s)return;P[s.k].params.forEach(([id])=>delete vals[key(s.k,id)]);drawParams();redraw()}
+function setMode(m){if(m==1&&games[gi].ac)return;mode=m;drawMode()}
+function drawMode(){const g=games[gi],b=$('modeseg').children;b[0].classList.toggle('on',mode==0);b[1].classList.toggle('on',mode==1);
+ $('injbtn').disabled=g.ac;$('injbtn').title=g.ac?'Bloqueado: este jogo tem anti-cheat':'';
+ $('modehint').textContent=mode==0?'Janela por cima do jogo, capturando a imagem. DX9–12, Vulkan e OpenGL. Custo medido: ~0,2 ms de GPU.':'Entra no jogo e aplica antes da tela: sem o quadro de atraso do modo por cima. Só para jogos sem anti-cheat.';
+ let w='';if(g.ac)w+='<div class="warnbox">Anti-cheat detectado (Easy Anti-Cheat). A injeção fica bloqueada; o modo “por cima” não toca no jogo.</div>';
+ if(g.warn.includes('fse'))w+='<div class="warnbox">Em tela cheia exclusiva o filtro some. Use janela sem borda ou ligue o Fullscreenizer para este jogo. <button class="sm">Ligar Fullscreenizer</button></div>';
+ if(g.warn.includes('hdr'))w+='<div class="warnbox">Monitor em HDR: a imagem é convertida para SDR antes do filtro (brilho acima do branco é cortado).</div>';
+ $('warns').innerHTML=w}
+function drawOsd(){const g=games[gi];$('oname').textContent=g.name;$('otog').classList.toggle('on',g.on);
+ $('ops').innerHTML=g.stack.map((s,i)=>`<div class="${i==sel?'on':''}" onclick="sel=${i};draw()"><input type="checkbox" ${s.on?'checked':''} onclick="event.stopPropagation();tog(${i})"> ${i+1}. ${P[s.k].name}</div>`).join('')}
+function draw(){drawTop();drawStack();drawParams();drawMode();drawOsd();redraw()}
+function addGame(){const n=prompt('Mockup: no app abre a lista de jogos instalados (Steam, Epic, GOG) e “Procurar .exe…”. Nome:');if(n){games.push({name:n,exe:'novo.exe',api:'?',ac:false,on:true,stack:[],warn:[]});pick(games.length-1)}}
+function toast(t){$('toast').textContent=t;setTimeout(()=>$('toast').textContent='',2200)}
+function toast2(t){const e=$('t2');e.textContent=t;e.style.display='block';setTimeout(()=>e.style.display='none',1800)}
+
+/* imagem de teste e imitação do efeito */
+let src=document.createElement('canvas');
+function scene(){src.width=320;src.height=240;const c=src.getContext('2d');
+ const sky=['#1b1440','#2a1d5c','#3d2a78','#5a3a8c','#7d4a96','#a85c8e'];sky.forEach((s,i)=>{c.fillStyle=s;c.fillRect(0,i*24,320,24)});
+ c.fillStyle='#f4e9b8';c.beginPath();c.arc(250,46,18,0,7);c.fill();c.fillStyle='#d8c98e';c.fillRect(244,40,4,4);c.fillRect(256,50,5,3);
+ c.fillStyle='#1a1226';[[30,90,40,110],[70,70,20,130],[90,110,70,90],[160,60,24,140],[184,100,50,100]].forEach(r=>c.fillRect(...r));
+ for(let x=30;x<70;x+=8)c.fillRect(x,82,5,8);for(let x=160;x<184;x+=6)c.fillRect(x,54,4,6);
+ c.fillStyle='#ffd66b';[[78,92],[108,130],[170,80],[200,120],[44,120]].forEach(([x,y])=>c.fillRect(x,y,4,6));
+ for(let y=200;y<240;y+=8)for(let x=0;x<320;x+=8){c.fillStyle=((x+y)/8)%2?'#4a3a2a':'#5d4a34';c.fillRect(x,y,8,8)}
+ c.fillStyle='#2f8a3c';c.fillRect(0,196,320,6);
+ const hero=['..rr..','.rrrr.','..ff..','.bbbb.','bbbbbb','.b..b.','.k..k.'];const col={r:'#c0392b',f:'#f2c79b',b:'#2e5fb3',k:'#222'};
+ hero.forEach((row,y)=>[...row].forEach((ch,x)=>{if(col[ch]){c.fillStyle=col[ch];c.fillRect(120+x*3,175+y*3,3,3)}}));
+ c.fillStyle='#fff';c.font='bold 10px monospace';c.fillText('SCORE 004200',8,14);c.fillStyle='#ff5c5c';for(let i=0;i<5;i++)c.fillRect(250+i*12,6,8,8)}
+function bars(){src.width=320;src.height=240;const c=src.getContext('2d');
+ ['#fff','#ff0','#0ff','#0f0','#f0f','#f00','#00f','#000'].forEach((s,i)=>{c.fillStyle=s;c.fillRect(i*40,0,40,150)});
+ for(let i=0;i<16;i++){c.fillStyle=`rgb(${i*17},${i*17},${i*17})`;c.fillRect(i*20,150,20,30)}
+ c.fillStyle='#000';c.fillRect(0,180,320,60);c.strokeStyle='#fff';for(let x=0;x<320;x+=16){c.fillStyle=x%32?'#fff':'#000';c.fillRect(x,180,1,60)}for(let y=180;y<240;y+=8)c.fillRect(0,y,320,1)}
+function setImg(v){if(v=='file'){$('file').click();return}v=='bars'?bars():scene();$('pvres').textContent=src.width+'×'+src.height;redraw()}
+function loadFile(inp){const f=inp.files[0];if(!f)return;const im=new Image();im.onload=()=>{src.width=im.width;src.height=im.height;src.getContext('2d').drawImage(im,0,0);$('pvres').textContent=im.width+'×'+im.height+' (detectado)';redraw()};im.src=URL.createObjectURL(f)}
+function fx(){const s={scan:0,mask:0,bright:1,sat:1,con:1,warp:0};const g=games[gi];if(!g.on||cmp)return s;
+ g.stack.filter(p=>p.on).forEach(p=>{const v=id=>val(p.k,id);
+  if(p.k=='lottes'){s.scan=Math.max(s.scan,.15+.7*(-v('hardScan'))/20);s.mask=Math.max(s.mask,v('shadowMask')?(2-v('maskDark'))/2*.55:0);s.bright*=v('brightBoost');s.warp=Math.max(s.warp,v('warpX')+v('warpY'))}
+  if(p.k=='lines')s.scan=Math.max(s.scan,v('LINES'));
+  if(p.k=='ntsc'){s.sat*=v('ntsc_sat');s.bright*=v('ntsc_bright')}
+  if(p.k=='sharp')s.con*=1+v('CONTR')*2});return s}
+function render(cv,zoom){const c=cv.getContext('2d'),W=cv.width,H=cv.height,f=fx();
+ c.fillStyle='#000';c.fillRect(0,0,W,H);
+ const sh=src.height/zoom,sw=src.width/zoom,scale=Math.min(W/sw,H/sh),dw=sw*scale,dh=sh*scale,ox=(W-dw)/2,oy=(H-dh)/2;
+ c.imageSmoothingEnabled=false;c.filter=`brightness(${f.bright}) saturate(${f.sat}) contrast(${f.con})`;
+ c.drawImage(src,(src.width-sw)/2,(src.height-sh)/2,sw,sh,ox,oy,dw,dh);c.filter='none';
+ const lh=dh/sh;if(f.scan>0){c.fillStyle=`rgba(0,0,0,${Math.min(f.scan,.9)})`;for(let y=0;y<sh;y++)c.fillRect(ox,oy+y*lh+lh*.55,dw,lh*.45)}
+ if(f.mask>0){const m=Math.max(1,Math.round(lh/3));c.globalAlpha=f.mask;c.globalCompositeOperation='multiply';
+  ['#ff4040','#40ff40','#4040ff'].forEach((col,i)=>{c.fillStyle=col;for(let x=ox+i*m;x<ox+dw;x+=3*m)c.fillRect(x,oy,m,dh)});
+  c.globalAlpha=1;c.globalCompositeOperation='source-over'}
+ cv.style.borderRadius=(f.warp*120)+'px'}
+function redraw(){if($('prev').classList.contains('open'))render($('pcv'),+$('zoom').value);
+ const keep=src;render($('gcv'),1)}
+function openPrev(){$('pvname').textContent=games[gi].stack[sel]?P[games[gi].stack[sel].k].name:'';$('prev').classList.add('open');drawParams();redraw()}
+function closePrev(){$('prev').classList.remove('open')}
+
+const tree={crt:['crt-lottes.slangp','crt-guest-advanced.slangp','crt-royale.slangp','crt-easymode.slangp','crt-geom.slangp'],ntsc:['ntsc-adaptive.slangp','blargg.slangp','mame-ntsc.slangp','ntsc-256px-composite.slangp'],scanlines:['scanline.slangp','scanlines-sine-abs.slangp'],sharpen:['fast-sharpen.slangp','adaptive-sharpen.slangp'],vhs:['vhs.slangp','gristleVHS.slangp'],handheld:['lcd-grid-v2.slangp','gameboy.slangp'],'Meus shaders':['linhas.slangp']};
+let dsel='crt',fsel=0;
+function drawDlg(){$('dirs').innerHTML=Object.keys(tree).map(d=>`<div class="i ${d==dsel?'on':''}" onclick="dsel='${d}';fsel=0;drawDlg()">📁 ${d} <small style="color:var(--muted)">${tree[d].length}</small></div>`).join('');
+ $('files').innerHTML=tree[dsel].map((f,i)=>`<div class="i ${i==fsel?'on':''}" onclick="fsel=${i};drawDlg()" ondblclick="addPass()">${f}</div>`).join('')}
+function openDlg(preset){$('dlgt').textContent=preset?'Carregar preset (substitui os passes)':'Adicionar passe';$('dlg').classList.add('open');drawDlg()}
+function closeDlg(){$('dlg').classList.remove('open')}
+function addPass(){const f=tree[dsel][fsel];const k=f.includes('lottes')?'lottes':f.includes('ntsc')?'ntsc':f.includes('sharp')?'sharp':'lines';
+ if($('dlgt').textContent.startsWith('Carregar'))games[gi].stack=[];games[gi].stack.push({k,on:true});sel=games[gi].stack.length-1;closeDlg();draw()}
+function download(){const b=$('dlbtn'),bar=$('dlbar');b.disabled=true;let p=0;const t=setInterval(()=>{p+=7;bar.style.width=Math.min(p,100)+'%';$('libst').textContent=p<100?`Baixando de github.com/libretro/slang-shaders… ${Math.min(p,100)}%`:'Instalados: 2662 presets (18/11/2026).';if(p>=100){clearInterval(t);b.disabled=false;b.textContent='Atualizar'}},120)}
+scene();draw();
+</script>
+</body>
+</html>

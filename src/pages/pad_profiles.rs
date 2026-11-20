@@ -1197,7 +1197,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
             let got: Vec<&Bind> = all.iter().filter(|b| b.button == target && target != 0 && b.with == 0).collect();
             if !got.is_empty() {
                 let what: Vec<String> = got.iter().map(|b| format!("{} → {}", tr(WHENS.iter().find(|w| w.0 == b.when).map_or("", |w| w.1)), describe(b.out, &p))).collect();
-                text = tr("Vem da camada {}: ").replace("{}", &p.layers[l as usize].name) + &what.join(", ");
+                text = tr("Vem da camada {}: ").replace("{}", &p.layers[l as usize].name) + what.join(", ").as_str();
                 break;
             }
             from = p.layers[l as usize].parent;

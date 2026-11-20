@@ -36,6 +36,9 @@ pub struct Sample {
     pub route: String,
     /// Prioridade do host: 0 menor atraso, 1 equilíbrio, 2 qualidade; outro valor, sem informação.
     pub priority: u8,
+    /// Uso da GPU daqui e do host (só no medidor detalhado; o host antigo não manda).
+    pub gpu: Option<super::GpuUse>,
+    pub host_gpu: Option<super::GpuUse>,
 }
 
 /// A prioridade do host, como a página dele escreve.
@@ -151,7 +154,16 @@ impl Hud {
                 };
                 lines.push((video, TEXT, 13.0, Weight::Regular));
                 lines.push((format!("{} {} ms · {} {} · {} {}", tr("decodificação"), n(s.decode_ms, 2), tr("fila"), s.queue, tr("perdidos"), s.lost_total), MUTED, 13.0, Weight::Regular));
+                if let Some(g) = s.host_gpu {
+                    lines.push((format!("{} {}% · Prisma: 3D {}% · {} {}% · {} {}%", tr("GPU do host"), g.total, g.d3, tr("codificação"), g.encode, tr("cópia"), g.copy), MUTED, 13.0, Weight::Regular));
+                }
+                if let Some(g) = s.gpu {
+                    lines.push((format!("{} {}% · Prisma: 3D {}% · {} {}%", tr("GPU daqui"), g.total, g.d3, tr("decodificação"), g.decode), MUTED, 13.0, Weight::Regular));
+                }
                 lines.push((s.route.clone(), MUTED, 13.0, Weight::Regular));
+                if s.route.starts_with("pelo relé") {
+                    lines.push((tr(super::RELAY_TIP).into_owned(), WARN, 13.0, Weight::Regular));
+                }
             }
         }
         if let Some((w, _)) = self.warn.filter(|_| meter != 1 || s.is_none()) {
@@ -233,6 +245,8 @@ pub struct MenuState {
     pub vsync: bool,
     /// Pedir 4:4:4; `None` quando a placa daqui não decodifica.
     pub ask444: Option<bool>,
+    /// Pedir 10 bits com a tela SDR.
+    pub ask10: bool,
     /// Ritmo constante pedido ao host.
     pub constant: bool,
     /// O atalho do menu, que também o fecha.
@@ -257,6 +271,7 @@ pub enum Pick {
     Sound,
     Vsync,
     Ask444,
+    Ask10,
     Constant,
     PadBackground,
     PadKeys,
@@ -311,7 +326,7 @@ fn segments(st: &MenuState, row: usize) -> Vec<(String, Pick, bool)> {
 fn menu_height(st: &MenuState) -> f32 {
     let head = if st.video.is_empty() { 44.0 } else { 64.0 };
     let segs = 3.0 * (26.0 + SEG + 10.0);
-    head + ROW + segs + 8.0 * ROW + 13.0 + ROW + PAD
+    head + ROW + segs + 9.0 * ROW + 13.0 + ROW + PAD
 }
 
 /// Desenha o menu e devolve as áreas que se clicam.
@@ -400,6 +415,8 @@ fn draw_menu(c: &crate::ui::gfx::Canvas, r: crate::ui::gfx::Rect, st: &MenuState
     toggle(&mut hits, y, "VSync", "", Some(st.vsync), Pick::Vsync);
     y += ROW;
     toggle(&mut hits, y, "Pedir 4:4:4", "", st.ask444, Pick::Ask444);
+    y += ROW;
+    toggle(&mut hits, y, "Pedir 10 bits", "", Some(st.ask10), Pick::Ask10);
     y += ROW;
     toggle(&mut hits, y, "Ritmo constante", "", Some(st.constant), Pick::Constant);
     y += ROW;
@@ -589,6 +606,7 @@ pub fn test_menu(dir: &str) {
                 keyboard: i != 2,
                 vsync: false,
                 ask444: Some(true),
+                ask10: false,
                 constant: false,
                 key_menu: (all, b'P' as u32),
                 pad_background: false,

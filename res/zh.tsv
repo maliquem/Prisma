@@ -1436,7 +1436,7 @@ Equilíbrio	平衡
 Qualidade	画质
 Codec	编解码器
 Limite de banda	带宽限制
-HDR10 de 10 bits quando as duas telas estão em HDR	两块屏幕都处于 HDR 时使用 10 位 HDR10
+10 bits: HDR10 com as duas telas em HDR, e degradês sem faixas para quem pede	10 位：两块屏幕都处于 HDR 时使用 HDR10，并为有需要的用户提供无色带渐变
 Aceitar 4:4:4 quando quem assiste pede	观看方请求时接受 4:4:4
 Os automáticos seguem quem assiste: a altura da tela, o menor entre os Hz dos dois lados e o melhor codec que os dois têm. O 4:4:4 e o HDR10 caem sozinhos se o outro lado não tiver.	自动值跟随观看方：其屏幕高度、两端中较低的刷新率，以及双方都有的最佳编解码器。另一端不支持时，4:4:4 和 HDR10 会自动关闭。
 PyroWave: uns 200 Mbit/s em 1080p60 e mais em 4K. Só na rede local ou pela VPN (ZeroTier, Tailscale), nunca pelo relé; fora delas, e com quem assiste numa versão sem ele, vale o automático.	PyroWave：1080p60 约需 200 Mbit/s，4K 更多。仅限局域网或 VPN（ZeroTier、Tailscale），绝不经过中继；在此之外，或观看方的版本没有它时，使用自动。
@@ -1448,6 +1448,8 @@ Tirar do som o programa de chamada	声音中排除通话应用
 Uma pessoa por vez no mouse e no teclado	鼠标和键盘一次一人
 O mouse e o teclado deste PC têm prioridade	此电脑的鼠标和键盘优先
 Recusar conexões enquanto este PC assiste a outro	此电脑正在观看其他电脑时拒绝连接
+GPU em desempenho máximo enquanto compartilha	共享时 GPU 以最高性能运行
+GPU em desempenho máximo enquanto compartilha (sem efeito: só placas NVIDIA)	共享时 GPU 以最高性能运行（无效：仅限 NVIDIA 显卡）
 Com prioridade, quem assiste para por 1 segundo sempre que alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. Programas de chamada: Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack e Signal. O Windows só deixa tirar um: sai do som o que estiver tocando, e a escolha muda durante a conexão. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante. Num notebook com duas placas, a outra placa codifica com uma cópia a mais da imagem.	开启优先时，每当这里有人移动鼠标或打字，观看方会暂停 1 秒。一次一人：2 秒无输入后轮换。通话应用：Discord、Teams、Zoom、WhatsApp、Skype、Telegram、Slack 和 Signal。Windows 只允许排除一个：正在发声的那个会被排除在声音之外，并且在连接期间会随之改变。更改会立即生效；画面相关的更改会让视频短暂重新开始。在有两块显卡的笔记本上，另一块显卡编码时会多复制一次画面。
 Janela de quem assiste	观看窗口
 Abrir em tela cheia sem borda	以无边框全屏打开
@@ -1459,6 +1461,7 @@ Só o mouse	仅鼠标
 Só o teclado	仅键盘
 Mouse e teclado	鼠标和键盘
 Pedir 4:4:4 (texto mais nítido; HEVC só em NVIDIA ou Intel)	请求 4:4:4（文字更清晰；HEVC 需要 NVIDIA 或 Intel）
+Pedir 10 bits (degradês sem faixas; host com NVIDIA)	请求 10 位（渐变无色带；主机需为 NVIDIA）
 Começar sem o som do outro PC	开始时不播放另一台电脑的声音
 No modo imersivo, em tela cheia, o mouse fica preso na janela, e a tecla Windows e o Alt+Tab vão para o outro PC. No Tudo, vai qualquer tecla, mesmo as que um programa deste PC pegaria. Os atalhos desta janela sempre funcionam aqui. Numa tela com G-SYNC ou FreeSync, deixe o VSync desligado: a imagem não rasga. Telas lado a lado valem para Mouse e teclado, na lista de PCs: o mouse passa pela borda de uma tela para a vizinha, sem vídeo. Um PC sem posição vai para a primeira livre ao lado deste.	在沉浸模式下，全屏时鼠标会留在窗口内，Windows 键和 Alt+Tab 会发送到另一台电脑。在“全部”模式下，任何按键都会发送，即使是这台电脑上的程序会拦截的按键。本窗口的快捷键在这里始终有效。在支持 G-SYNC 或 FreeSync 的屏幕上，请关闭垂直同步：画面不会撕裂。并排屏幕用于电脑列表中的“鼠标和键盘”：鼠标越过一个屏幕的边缘进入相邻屏幕，没有视频。没有位置的电脑会放到这台电脑旁边第一个空位。
 Medidor e avisos	监视和警告
@@ -1468,11 +1471,11 @@ Detalhado	详细
 Avisar quando a conexão piorar	连接变差时警告
 O simples mostra o atraso de ponta a ponta e uma bolinha verde, amarela ou vermelha. O detalhado mostra também a rede, o vídeo, os quadros por segundo, a banda, a decodificação, os quadros perdidos e o caminho. O aviso aparece quando a rede perde mais de 2% dos quadros, quando a latência varia mais de 10 ms ou sobe por 3 segundos seguidos. Os quadros por segundo pedidos não passam dos Hz desta tela; o automático usa os Hz dela. Tudo isso muda também pelo menu da conexão. A placa de vídeo vale na próxima conexão.	简单显示端到端延迟和一个绿、黄或红点。详细还会显示网络、视频、每秒帧数、带宽、解码、丢帧和路由。网络丢帧超过 2%、延迟波动超过 10 毫秒或连续 3 秒上升时会出现警告。请求的每秒帧数不会超过此屏幕的刷新率；“自动”使用其刷新率。这些也都可以在连接菜单中更改。显卡在下次连接时生效。
 Portas	端口
-Porta UDP do host	主机 UDP 端口
+Porta fixa (UDP)	固定端口 (UDP)
 Automática	自动
 Use um número de 1024 a 65535.	请使用 1024 到 65535 之间的数字。
 Pedir ao roteador para abrir a porta (UPnP, NAT-PMP, PCP)	请求路由器开放端口（UPnP、NAT-PMP、PCP）
-Automática serve para quase todo mundo: o Prisma fura o NAT sem porta fixa. A porta fixa é para quem redireciona a porta no roteador. Ela vale na próxima vez que o compartilhamento ligar. O pedido ao roteador some sozinho quando a conexão acaba.	“自动”几乎适用于所有人：Prisma 无需固定端口即可穿越 NAT。固定端口适合在路由器上做端口转发的人。下次开始共享时生效。连接结束后，对路由器的请求会自动撤销。
+Automática serve para quase todo mundo: o Prisma fura o NAT sem porta fixa. Se a conexão sem VPN passar pelo relé, escolha uma porta fixa e abra essa porta UDP no roteador para este PC (ou deixe o pedido ao roteador abrir). Com CGNAT (a operadora divide o IP com outras casas) abrir a porta não adianta: use VPN ou IPv6. A porta vale na próxima vez que o compartilhamento ligar; se estiver ocupada, o Prisma usa uma aleatória. O pedido ao roteador some sozinho quando a conexão acaba.	“自动”几乎适用于所有人：Prisma 无需固定端口即可穿越 NAT。如果不用 VPN 时连接走中继，请选择固定端口，并在路由器上为这台电脑开放该 UDP 端口（或让对路由器的请求来开放）。遇到 CGNAT（运营商与其他住户共用 IP）时开放端口无济于事：请使用 VPN 或 IPv6。该端口在下次开始共享时生效；若已被占用，Prisma 会使用随机端口。连接结束后，对路由器的请求会自动撤销。
 Como a conexão passa	连接如何传输
 Última conexão:	最近一次连接：
 Atalhos da conexão	连接快捷键
@@ -1508,6 +1511,10 @@ ponta a ponta	端到端
 rede	网络
 q/s	fps
 decodificação	解码
+GPU do host	主机 GPU
+GPU daqui	本机 GPU
+codificação	编码
+cópia	复制
 fila	队列
 perdidos	丢失
 Mandar Ctrl+Alt+Del	发送 Ctrl+Alt+Del
@@ -1527,6 +1534,12 @@ Pela VPN	通过 VPN
 Direto na rede local	局域网直连
 Direto pela internet	互联网直连
 Pelo relé da n0	通过 n0 中继
+Direto pela internet (IPv6)	通过互联网直连 (IPv6)
+Pelo relé fica lento: abra a porta fixa no host ou use VPN.	经中继速度较慢：请在主机上开放固定端口或使用 VPN。
+O host usa a porta	主机使用端口
+IP público	公网 IP
+o roteador abriu a porta	路由器已开放端口
+o roteador não abriu a porta sozinho	路由器未自动开放端口
 UDP direto	直接 UDP
 Conectando	正在连接
 O acesso muda na hora e fica salvo para as próximas conexões. Desconectar derruba só esta conexão: o aparelho continua pareado. Banir derruba e esquece o aparelho, que só volta com um convite novo.	访问权限立即更改，并保存给之后的连接。“断开”只断开这次连接：设备仍保持配对。“封禁”会断开并忘记该设备，只能凭新的邀请回来。
@@ -1560,6 +1573,7 @@ aparelho desligado	设备已拔出
 Cada atalho troca a saída e a entrada padrão do Windows de uma vez. Use Adicionar.	每个快捷键会同时切换 Windows 默认输出和输入。请使用“添加”。
 Não deu para mudar na hora. Vale na próxima conexão.	无法立即更改。将在下次连接时生效。
 Pedir 4:4:4	请求 4:4:4
+Pedir 10 bits	请求 10 位
 Ritmo constante	恒定帧节奏
 Controle em segundo plano	后台时也发送手柄
 Teclado como controle	把键盘当作手柄
@@ -1868,7 +1882,7 @@ Configuração própria para este aparelho	此设备使用单独设置
 Saída capturada	捕获的输出
 Entrada junto	混入输入
 Configuração própria: vale quando este aparelho conecta. Com mais de uma pessoa ao mesmo tempo, vale a de quem conectou primeiro. Nome, pessoas, rede, controles e atalhos são os de todos.	单独设置：此设备连接时生效。多人同时连接时，以最先连接者的设置为准。名称、人数、网络、手柄和快捷键对所有设备通用。
-Com prioridade, quem assiste para por 1 segundo quando alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. O Windows só deixa tirar um programa de chamada (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), e só da saída padrão: sai o que estiver tocando. Uma saída escolhida manda o que toca nela. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante.	开启优先时，每当这里有人移动鼠标或打字，观看方会暂停 1 秒。一次一人：2 秒无输入后轮换。Windows 只允许排除一个通话应用（Discord、Teams、Zoom、WhatsApp、Skype、Telegram、Slack、Signal），且仅限默认输出：正在发声的那个会被排除。选定的输出会发送其中播放的内容。更改会立即生效；画面相关的更改会让视频短暂重新开始。
+Com prioridade, quem assiste para por 1 segundo quando alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. O Windows só deixa tirar um programa de chamada (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), e só da saída padrão: sai o que estiver tocando. Uma saída escolhida manda o que toca nela. GPU em desempenho máximo: enquanto alguém assiste, o clock da placa NVIDIA não desce abaixo do clock base, e fica livre de novo no fim; precisa do serviço ou do Prisma como administrador. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante.	开启优先时，每当这里有人移动鼠标或打字，观看方会暂停 1 秒。一次一人：2 秒无输入后轮换。Windows 只允许排除一个通话应用（Discord、Teams、Zoom、WhatsApp、Skype、Telegram、Slack、Signal），且仅限默认输出：正在发声的那个会被排除。选定的输出会发送其中播放的内容。GPU 最高性能：有人观看期间，NVIDIA 显卡的频率不会低于基础频率，结束后恢复自由；需要服务或以管理员身份运行 Prisma。更改会立即生效；画面相关的更改会让视频短暂重新开始。
 A padrão do Windows	Windows 默认
 Desligada agora	当前已关闭
 Nenhuma	无
@@ -1878,6 +1892,7 @@ Acesso de «{}» mudou na hora	“{}”的权限已立即更改
 Opções do host aplicadas na conexão	主机选项已应用到连接
 «{}» mudou os quadros por segundo	“{}”更改了帧率
 «{}» mudou o pedido de 4:4:4	“{}”更改了 4:4:4 请求
+«{}» mudou o pedido de 10 bits	“{}”更改了 10 位请求
 «{}» mudou o ritmo dos quadros	“{}”更改了帧节奏
 Mouse travado nesta tela	鼠标已锁定在此屏幕
 Mouse destravado	鼠标已解锁
@@ -2732,3 +2747,64 @@ Abre o instalador da VB-Audio: clique em Remove Driver. O Windows pede permissã
 O VB-CABLE é da VB-Audio, donationware de terceiros: o uso pessoal é livre, com doação opcional, e o uso profissional ou em empresa pede licenças pagas na loja da VB-Audio. O Prisma vai baixar o pacote da página oficial (vb-audio.com), conferir a soma e abrir o instalador da VB-Audio, que pede permissão de administrador. Nele, clique em Install Driver; o PC pode pedir para reiniciar. Para desfazer: este cartão, Remover.	VB-CABLE 由 VB-Audio 提供，是第三方的 donationware：个人使用免费，可自愿捐赠；专业或企业使用需要在 VB-Audio 商店购买付费许可。Prisma 会从官方页面（vb-audio.com）下载安装包，校验其校验和，并打开 VB-Audio 安装程序，该程序会请求管理员权限。在其中点击 Install Driver；电脑可能要求重启。如需撤销：此卡片中的“移除”。
 o arquivo baixado não confere com o pacote oficial	下载的文件与官方安装包不一致
 o pacote guardado sumiu	已保存的安装包不见了
+Página Desempenho	性能页面
+Medir com a janela fechada	窗口关闭时也测量
+Uso total	总使用率
+thread mais cheia:	最忙线程：
+base	基础
+pelo PawnIO	通过 PawnIO
+threads	线程
+handles	句柄
+Uso total · 60 s	总使用率 · 60 秒
+Por thread (uso e clock)	按线程（使用率和频率）
+Modificada	已修改
+Em espera (cache)	待机（缓存）
+Livre	空闲
+de	/
+em uso	已用
+Composição	组成
+Em uso · 60 s	已用 · 60 秒
+slots	插槽
+Comprometida	已提交
+Cache	缓存
+Pool paginado	分页缓冲池
+Pool não paginado	非分页缓冲池
+Pentes	内存条
+Dedicada	专用
+Compartilhada	共享
+Programas usando	使用中的程序
+sai da RAM	来自内存
+maior:	最高：
+Outros	其他
+Dedicada por programa	各程序专用
+Dedicada · 60 s	专用 · 60 秒
+Limite de energia	功耗限制
+Lentidão do hardware	硬件降速
+Ociosa	空闲
+só na NVIDIA	仅限 NVIDIA
+maior engine:	最高引擎：
+Clock do núcleo	核心频率
+Clock da memória	显存频率
+máx.	最大
+controlador	控制器
+ventoinha	风扇
+Consumo	功耗
+limite	上限
+Limite do clock	频率上限
+Programas por engine	按引擎分程序
+Toque numa linha para abrir	点按一行以打开
+RAM em uso	内存已用
+VRAM dedicada	专用显存
+VRAM compartilhada	共享显存
+Abrir no Medidor	在性能监视中打开
+Tempo real	实时
+Alta	高
+Acima do normal	高于正常
+Abaixo do normal	低于正常
+Baixa	低
+Thread mais cheia	最忙线程
+Orçamento da placa	显卡预算
+o que cada programa pode usar	每个程序可使用的量
+Pico (sessão)	峰值（本次）
+Clock do núcleo · 60 s	核心频率 · 60 秒
+Temperatura · 60 s	温度 · 60 秒

@@ -92,6 +92,8 @@ struct State {
     job: isize,
     opts: Option<Opts>,
     client: Option<ClientOpts>,
+    /// Quando `cliente.txt` mudou por último: o menu da conexão também grava nele.
+    client_at: Option<std::time::SystemTime>,
     /// Trabalho do serviço (instalar ou remover) rodando.
     service_busy: bool,
     tab: usize,
@@ -326,6 +328,8 @@ fn route_text(route: &str) -> String {
         "Pela VPN"
     } else if route.starts_with("direto na rede local") {
         "Direto na rede local"
+    } else if route.starts_with("direto pela internet por IPv6") {
+        "Direto pela internet (IPv6)"
     } else if route.starts_with("direto pela internet") {
         "Direto pela internet"
     } else if route.starts_with("pelo relé") {
@@ -432,6 +436,12 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let mut guard = STATE.lock().unwrap();
     let st = guard.get_or_insert_with(test_setup);
     let opts = st.opts.get_or_insert_with(Opts::load).clone();
+    // O menu da conexão gravou outra coisa: a aba mostra o mesmo que ele.
+    let at = std::fs::metadata(ClientOpts::path()).and_then(|m| m.modified()).ok();
+    if at != st.client_at {
+        st.client_at = at;
+        st.client = None;
+    }
     let client = st.client.get_or_insert_with(ClientOpts::load).clone();
     let mut new_opts = opts.clone();
     let mut new_client = client.clone();
@@ -1181,7 +1191,7 @@ fn host_tab(ui: &mut Ui, app: &mut App, st: &mut State, all: &mut Opts, x: f32, 
     y += 44.0;
     let mbps_r = row(ui, ix, y, iw, "Limite de banda", ctl);
     y += 46.0;
-    ui.check("sh-10", rect(ix, y, iw, 30.0), "HDR10 de 10 bits quando as duas telas estão em HDR", &mut o.ten_bit);
+    ui.check("sh-10", rect(ix, y, iw, 30.0), "10 bits: HDR10 com as duas telas em HDR, e degradês sem faixas para quem pede", &mut o.ten_bit);
     y += 32.0;
     ui.check("sh-444", rect(ix, y, iw, 30.0), "Aceitar 4:4:4 quando quem assiste pede", &mut o.allow444);
     y += 32.0;
@@ -1226,12 +1236,19 @@ fn host_tab(ui: &mut Ui, app: &mut App, st: &mut State, all: &mut Opts, x: f32, 
     if target.is_none() {
         ui.check("sh-chain", rect(rx, y, rw, 30.0), "Recusar conexões enquanto este PC assiste a outro", &mut all.no_chain);
         y += 32.0;
+        let label = if crate::pages::nvidia::available() {
+            "GPU em desempenho máximo enquanto compartilha"
+        } else {
+            "GPU em desempenho máximo enquanto compartilha (sem efeito: só placas NVIDIA)"
+        };
+        ui.check("sh-gpumax", rect(rx, y, rw, 30.0), label, &mut all.gpu_max);
+        y += 32.0;
     }
     y += 6.0;
     let note = if target.is_some() {
         "Configuração própria: vale quando este aparelho conecta. Com mais de uma pessoa ao mesmo tempo, vale a de quem conectou primeiro. Nome, pessoas, rede, controles e atalhos são os de todos."
     } else {
-        "Com prioridade, quem assiste para por 1 segundo quando alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. O Windows só deixa tirar um programa de chamada (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), e só da saída padrão: sai o que estiver tocando. Uma saída escolhida manda o que toca nela. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante."
+        "Com prioridade, quem assiste para por 1 segundo quando alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. O Windows só deixa tirar um programa de chamada (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), e só da saída padrão: sai o que estiver tocando. Uma saída escolhida manda o que toca nela. GPU em desempenho máximo: enquanto alguém assiste, o clock da placa NVIDIA não desce abaixo do clock base, e fica livre de novo no fim; precisa do serviço ou do Prisma como administrador. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante."
     };
     ui.c.text_wrap(rect(rx, y, rw, (r.bottom() - y - 12.0).max(0.0)), note, 12.0, MUTED, Weight::Regular);
 
@@ -1345,11 +1362,12 @@ fn host_tab(ui: &mut Ui, app: &mut App, st: &mut State, all: &mut Opts, x: f32, 
         None => {
             if edit != before {
                 let name = all.name.clone();
-                let (guests, chain) = (all.guests, all.no_chain);
+                let (guests, chain, gpu_max) = (all.guests, all.no_chain, all.gpu_max);
                 *all = edit;
                 all.name = name;
                 all.guests = guests;
                 all.no_chain = chain;
+                all.gpu_max = gpu_max;
             }
         }
         Some(id) => {
@@ -1394,6 +1412,8 @@ fn client_tab(ui: &mut Ui, app: &App, c: &mut ClientOpts, x: f32, top: f32, w: f
     let imm_r = row(ui, ix, y, iw, "Modo imersivo", ctl);
     y += 46.0;
     ui.check("sh-ask444", rect(ix, y, iw, 30.0), "Pedir 4:4:4 (texto mais nítido; HEVC só em NVIDIA ou Intel)", &mut c.ask444);
+    y += 34.0;
+    ui.check("sh-ask10", rect(ix, y, iw, 30.0), "Pedir 10 bits (degradês sem faixas; host com NVIDIA)", &mut c.ask10);
     y += 34.0;
     ui.check("sh-mute", rect(ix, y, iw, 30.0), "Começar sem o som do outro PC", &mut c.mute);
     y += 34.0;
@@ -1485,7 +1505,7 @@ fn net_tab(ui: &mut Ui, app: &mut App, st: &mut State, o: &mut Opts, x: f32, top
     let iw = l.w - 32.0;
     ui.title(rect(ix, l.y + 12.0, iw, 22.0), "Portas");
     let mut y = l.y + 44.0;
-    let port_r = row(ui, ix, y, iw, "Porta UDP do host", 160.0);
+    let port_r = row(ui, ix, y, iw, "Porta fixa (UDP)", 160.0);
     let field = st.port_field.get_or_insert_with(|| if o.port == 0 { String::new() } else { o.port.to_string() });
     field.retain(|c| c.is_ascii_digit());
     field.truncate(5);
@@ -1502,9 +1522,15 @@ fn net_tab(ui: &mut Ui, app: &mut App, st: &mut State, o: &mut Opts, x: f32, top
     y += 24.0;
     ui.check("sh-upnp", rect(ix, y, iw, 30.0), "Pedir ao roteador para abrir a porta (UPnP, NAT-PMP, PCP)", &mut o.upnp);
     y += 40.0;
+    // O `rede.txt` fica no disco depois que o host para: só vale com o host no ar.
+    let live = stream::service::installed() || st.host.as_mut().is_some_and(Proc::alive);
+    if let Some(seen) = live.then(|| std::fs::read_to_string(stream::net_path()).unwrap_or_default()).and_then(|t| net_seen(&t, o.upnp)) {
+        ui.c.text_wrap(rect(ix, y, iw, 36.0), &seen, 12.0, ACCENT, Weight::Regular);
+        y += 40.0;
+    }
     ui.c.text_wrap(
         rect(ix, y, iw, (l.bottom() - y - 12.0).max(0.0)),
-        "Automática serve para quase todo mundo: o Prisma fura o NAT sem porta fixa. A porta fixa é para quem redireciona a porta no roteador. Ela vale na próxima vez que o compartilhamento ligar. O pedido ao roteador some sozinho quando a conexão acaba.",
+        "Automática serve para quase todo mundo: o Prisma fura o NAT sem porta fixa. Se a conexão sem VPN passar pelo relé, escolha uma porta fixa e abra essa porta UDP no roteador para este PC (ou deixe o pedido ao roteador abrir). Com CGNAT (a operadora divide o IP com outras casas) abrir a porta não adianta: use VPN ou IPv6. A porta vale na próxima vez que o compartilhamento ligar; se estiver ocupada, o Prisma usa uma aleatória. O pedido ao roteador some sozinho quando a conexão acaba.",
         12.0,
         MUTED,
         Weight::Regular,
@@ -1523,7 +1549,28 @@ fn net_tab(ui: &mut Ui, app: &mut App, st: &mut State, o: &mut Opts, x: f32, top
     if let Some(route) = lines.iter().rev().find_map(|l| l.strip_prefix("conectado: ")) {
         let t = format!("{} {route}", crate::i18n::tr("Última conexão:"));
         ui.c.text_raw(rect(rx, r.bottom() - 40.0, rw, 24.0), &t, 13.0, ACCENT, Align::Left, Weight::Regular);
+        if route.starts_with("pelo relé") {
+            ui.c.text(rect(rx, r.bottom() - 64.0, rw, 24.0), stream::RELAY_TIP, 12.0, WARN, Align::Left, Weight::Regular);
+        }
     }
+}
+
+/// A linha "o host vê" da aba Rede, a partir do `rede.txt` que o host grava.
+fn net_seen(text: &str, upnp: bool) -> Option<String> {
+    use crate::i18n::tr;
+    let get = |k: &str| text.lines().find_map(|l| l.strip_prefix(k)).filter(|v| !v.is_empty());
+    let port = get("porta=")?;
+    let mut parts = vec![format!("{} {port}", tr("O host usa a porta"))];
+    if let Some(ip) = get("ip4=") {
+        parts.push(format!("{} {ip}", tr("IP público")));
+    }
+    if let Some(ip) = get("ip6=") {
+        parts.push(format!("IPv6 {ip}"));
+    }
+    if upnp {
+        parts.push(tr(if get("upnp=") == Some("1") { "o roteador abriu a porta" } else { "o roteador não abriu a porta sozinho" }).into_owned());
+    }
+    Some(parts.join(" · "))
 }
 
 /// Aviso antes de baixar e instalar o driver da tela virtual: o que entra no PC e como desfazer.
@@ -1855,5 +1902,17 @@ pub fn shutdown() {
         if had_host {
             stream::host::restore_hdr();
         }
+    }
+}
+
+#[cfg(test)]
+mod net_seen_tests {
+    #[test]
+    fn reads_rede_txt() {
+        let opened = crate::i18n::tr("o roteador abriu a porta").into_owned();
+        let t = super::net_seen("ip4=200.1.2.3\nporta=50000\nupnp=1\n", true).unwrap();
+        assert!(t.contains("50000") && t.contains("200.1.2.3") && t.contains(&opened), "{t}");
+        assert_eq!(super::net_seen("porta=50000\nupnp=0\n", false).unwrap().split(" · ").count(), 1);
+        assert!(super::net_seen("", true).is_none());
     }
 }

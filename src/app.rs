@@ -445,6 +445,9 @@ pub struct App {
     pub sel_pid: Option<u32>,
     /// Alvo do menu aberto no Monitor: programa, processos e o primeiro PID.
     pub mon_target: Option<(String, Vec<u32>)>,
+    /// Desempenho: seção aberta (GPU, CPU, RAM, VRAM) e o programa aberto no detalhe.
+    pub perf_tab: u8,
+    pub perf_sel: Option<String>,
     pub svc_target: Option<(String, String)>,
     tool_logs: std::collections::HashMap<usize, tools::Shared>,
     exe_names: std::collections::HashMap<String, String>,
@@ -517,6 +520,7 @@ pub fn start(background: bool) {
         let _ = ChangeWindowMessageFilterEx(hub, WM_SHOW, MSGFLT_ALLOW, None);
         let _ = ChangeWindowMessageFilterEx(hub, WM_COPYDATA, MSGFLT_ALLOW, None);
         let cfg = Config::load();
+        monitor::PERF.store(cfg.perf_always, Ordering::Relaxed);
         let shared = monitor::spawn(hub.0 as isize, WM_TICK);
         let mut app = App {
             hub,
@@ -652,6 +656,8 @@ pub fn start(background: bool) {
             explorer_armed: None,
             sel_pid: None,
             mon_target: None,
+            perf_tab: 0,
+            perf_sel: None,
             svc_target: None,
             tool_logs: std::collections::HashMap::new(),
             exe_names: std::collections::HashMap::new(),
@@ -2860,6 +2866,10 @@ impl App {
             self.find_opts = true;
         }
         let el = self.started.elapsed().as_secs();
+        // Sem janela o `refresh_page` não liga as leituras do Desempenho: liga já, para encherem até a foto.
+        if arg("--test-page=").is_some_and(|p| p.starts_with("perf")) {
+            monitor::PERF.store(true, Ordering::Relaxed);
+        }
         if el + 2 >= delay {
             if let Some(q) = arg("--test-query=") {
                 if self.find.q.is_empty() {
@@ -2915,6 +2925,10 @@ impl App {
                 Some("sound") => self.page = Page::Volume,
                 Some("guide") => self.page = Page::Guide,
                 Some("monitor") => self.page = Page::Monitor,
+                Some(p @ ("perf" | "perf-cpu" | "perf-ram" | "perf-vram")) => {
+                    self.page = Page::Performance;
+                    self.perf_tab = ["perf", "perf-cpu", "perf-ram", "perf-vram"].iter().position(|t| *t == p).unwrap_or(0) as u8;
+                }
                 Some("storage") => self.page = Page::Storage,
                 Some("search") => self.page = Page::Search,
                 Some("startup") => self.page = Page::Startup,
@@ -3739,6 +3753,7 @@ impl App {
         monitor::FAST.store(fast && self.main.is_some(), Ordering::Relaxed);
         let detail = matches!(self.page, Page::Monitor | Page::Optimize);
         monitor::DETAIL.store(detail && self.main.is_some(), Ordering::Relaxed);
+        monitor::PERF.store((self.page == Page::Performance && self.main.is_some()) || self.cfg.perf_always, Ordering::Relaxed);
     }
 
     fn refresh_windows(&mut self) {
@@ -4780,6 +4795,7 @@ unsafe extern "system" fn main_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
                 a.guide = None;
                 monitor::FAST.store(false, Ordering::Relaxed);
                 monitor::DETAIL.store(false, Ordering::Relaxed);
+                monitor::PERF.store(a.cfg.perf_always, Ordering::Relaxed);
                 a.cfg.save();
                 let me = windows::Win32::System::Threading::GetCurrentProcess();
                 let _ = windows::Win32::System::Memory::SetProcessWorkingSetSizeEx(me, usize::MAX, usize::MAX, Default::default());

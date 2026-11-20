@@ -27,7 +27,7 @@ mod opus;
 pub use opus::Decoder as OpusDecoder;
 pub use fec::Rx as FecRx;
 #[cfg(feature = "stream")]
-pub use net::{device_rows, forget_device, me, presence_keep, presence_of, revoke_invite, set_device, wake_device, wake_note, DeviceRow, Presence, CODE_FAIL, CODE_LINE, CODE_OK, EXPIRES_LINE, INVITE_MINUTES};
+pub use net::{device_rows, forget_device, me, net_path, presence_keep, presence_of, revoke_invite, set_device, wake_device, wake_note, DeviceRow, Presence, CODE_FAIL, CODE_LINE, CODE_OK, EXPIRES_LINE, INVITE_MINUTES};
 pub use net::unix_now;
 pub(crate) mod pads;
 mod screen;
@@ -46,6 +46,7 @@ mod opts;
 pub use opts::*;
 
 use crate::capture::mux::Codec;
+pub use crate::sys::gpuuse::GpuUse;
 
 pub const PORT: u16 = 47_600;
 
@@ -110,6 +111,8 @@ pub fn take_notices(since: &mut u128) -> Vec<String> {
 
 /// O começo das linhas de latência que os modos escrevem no registro deles; a página mostra.
 pub const LAT_LINE: &str = "latência: ";
+/// A dica quando a conexão pela internet cai no relé da n0 (o caminho começa com "pelo relé").
+pub const RELAY_TIP: &str = "Pelo relé fica lento: abra a porta fixa no host ou use VPN.";
 
 /// Junta as medidas de latência e escreve uma linha no registro a cada 5 segundos: a média, a
 /// menor e a maior da rede (ida e volta) e, quando há, a do que a pessoa sente (`extra`, com nome).
@@ -343,6 +346,13 @@ pub enum Input {
     /// Mouse e teclado: o mouse saiu desta tela para a de outro PC. Quem recebe esconde o cursor
     /// até o mouse voltar ou o mouse de lá se mexer. Versões antigas ignoram.
     Away,
+    /// Teclado: o Caps Lock e o Num Lock de quem assiste. O host acerta os dele por eles; as
+    /// teclas em si não vão, senão os dois lados trocariam e podiam ficar diferentes.
+    Locks { caps: bool, num: bool },
+    /// Teclado: um atalho de quem assiste usou Ctrl, Alt e Shift, que já desceram no host. Ele
+    /// toca uma tecla sem uso antes de soltá-los, senão o Alt+Shift e o Ctrl+Shift trocam o
+    /// teclado dele (ABNT2, US-Internacional...).
+    Mask,
 }
 
 pub const INPUT_SIZE: usize = 8;
@@ -357,6 +367,8 @@ impl Input {
             Input::Wheel { delta, horizontal } => (3, horizontal as u8, delta as u16, 0),
             Input::Key { scan, extended, down } => (4, down as u8 | (extended as u8) << 1, scan, 0),
             Input::Away => (5, 0, 0, 0),
+            Input::Locks { caps, num } => (6, caps as u8 | (num as u8) << 1, 0, 0),
+            Input::Mask => (7, 0, 0, 0),
         };
         out.push(k);
         out.push(f);
@@ -373,36 +385,41 @@ impl Input {
             3 => Input::Wheel { delta: a as i16, horizontal: f & 1 != 0 },
             4 => Input::Key { scan: a, extended: f & 2 != 0, down: f & 1 != 0 },
             5 => Input::Away,
+            6 => Input::Locks { caps: f & 1 != 0, num: f & 2 != 0 },
+            7 => Input::Mask,
             _ => return None,
         })
     }
 }
 
 /// `Hello.flags`: a tela de quem assiste está em HDR.
-pub const SEES_HDR: u8 = 1;
+pub const SEES_HDR: u16 = 1;
 /// `Hello.flags`: quem assiste pede 4:4:4 (`PRISMA_444=1`) e decodifica HEVC 4:4:4 (NVDEC numa placa
 /// NVIDIA).
-pub const DECODES_444: u8 = 2;
+pub const DECODES_444: u16 = 2;
 /// `Hello.flags`: só mouse, teclado e área de transferência, sem vídeo nem som (o mouse passa
 /// da borda desta tela para a do host). Host de versão anterior manda o vídeo assim mesmo.
 #[cfg_attr(not(feature = "stream"), allow(dead_code))]
-pub const NO_VIDEO: u8 = 4;
+pub const NO_VIDEO: u16 = 4;
 /// `Hello.flags`: só o som do host, sem vídeo (Só o som). Host de versão anterior manda o vídeo
 /// assim mesmo.
 #[cfg_attr(not(feature = "stream"), allow(dead_code))]
-pub const SOUND_ONLY: u8 = 8;
+pub const SOUND_ONLY: u16 = 8;
 /// `Hello.flags`: quem assiste pede 4:4:4. Vale para o PyroWave, que decodifica 4:4:4 em qualquer
 /// placa; o HEVC 4:4:4 ainda pede também [`DECODES_444`].
-pub const ASKS_444: u8 = 16;
+pub const ASKS_444: u16 = 16;
 /// `Hello.flags`: quem assiste refaz pedaços perdidos com a paridade ([`Msg::Fec`]) e mede a perda
 /// ([`Msg::Loss`]). Só ele recebe a paridade.
-pub const FEC_OK: u8 = 32;
+pub const FEC_OK: u16 = 32;
 /// `Hello.flags`: quem assiste decodifica o som em Opus ([`Msg::Opus`]). O host só manda Opus
 /// fora da rede local; na rede local o som continua PCM.
-pub const OPUS_OK: u8 = 64;
+pub const OPUS_OK: u16 = 64;
 /// `Hello.flags`: quem assiste pede o ritmo constante (com a tela parada, o host repete o último
 /// quadro). Sem o bit, o host manda só quando a tela muda. Mudar só ele não recomeça o vídeo.
-pub const CONSTANT: u8 = 128;
+pub const CONSTANT: u16 = 128;
+/// `Hello.flags` (segundo byte, no fim; host antigo ignora): quem assiste pede 10 bits com a tela
+/// SDR, para tirar as faixas dos degradês. O host aceita com a opção de 10 bits e um NVENC que faça.
+pub const ASKS_10: u16 = 256;
 
 /// O que um pacote diz.
 #[derive(Debug, PartialEq)]
@@ -413,18 +430,21 @@ pub enum Msg<'a> {
     /// Como o vídeo está saindo: codec, tamanho e quadros por segundo.
     /// `perms` são as permissões de quem assiste ([`SOUND`], [`PAD`], [`KEYBOARD`], [`MOUSE`]); `recover`, se ele se recupera de um quadro
     /// perdido sem quadro-chave (quem assiste avisa com `Nack` e segue mostrando). `hdr10`: 10 bits,
-    /// BT.2020 com PQ. `yuv444`: HEVC com a cor inteira em cada pixel.
+    /// BT.2020 com PQ. `yuv444`: HEVC com a cor inteira em cada pixel. `deep`: 10 bits com a tela SDR
+    /// (BT.709); só vai a quem pediu [`ASKS_10`] (byte no fim, depois do `priority`).
     /// `priority`: 0 menor atraso, 1 equilibrado, 2 qualidade; 255 quando o host é de uma versão
     /// que não manda (o byte veio depois, no fim, e as versões antigas o ignoram).
-    Info { codec: VideoCodec, w: u32, h: u32, fps: u32, perms: u8, recover: bool, hdr10: bool, yuv444: bool, priority: u8 },
+    Info { codec: VideoCodec, w: u32, h: u32, fps: u32, perms: u8, recover: bool, hdr10: bool, yuv444: bool, priority: u8, deep: bool },
     /// Quem assiste chegou: tamanho e Hz da tela dele, codecs que ele decodifica (bits 0 H.264,
     /// 1 HEVC, 2 AV1, 3 PyroWave) e o número do processo, para o host tirar o som dele quando os dois estão no mesmo PC.
     /// `flags`: [`SEES_HDR`] e [`DECODES_444`].
-    Hello { w: u32, h: u32, hz: u32, codecs: u8, pid: u32, flags: u8 },
+    Hello { w: u32, h: u32, hz: u32, codecs: u8, pid: u32, flags: u16 },
     KeyReq,
-    Ping { t: i64 },
-    /// Resposta ao Ping, com a hora do host para acertar os relógios.
-    Pong { t: i64, host: i64 },
+    /// `gpu`: quem assiste está com o medidor detalhado e quer o uso da GPU do host (byte no fim; host antigo ignora).
+    Ping { t: i64, gpu: bool },
+    /// Resposta ao Ping, com a hora do host para acertar os relógios e, se pedido, o uso da GPU
+    /// dele (no fim; quem assiste antigo ignora, host antigo não manda).
+    Pong { t: i64, host: i64, gpu: Option<GpuUse> },
     Bye,
     /// Bloco de som, com número de sequência.
     Audio { seq: u32, pts: i64, data: &'a [u8] },
@@ -533,7 +553,7 @@ pub fn write(out: &mut Vec<u8>, m: &Msg) {
             out.extend_from_slice(&pts.to_le_bytes());
             out.extend_from_slice(data);
         }
-        Msg::Info { codec, w, h, fps, perms, recover, hdr10, yuv444, priority } => {
+        Msg::Info { codec, w, h, fps, perms, recover, hdr10, yuv444, priority, deep } => {
             head(out, Kind::Info);
             out.push(codec_id(codec));
             out.extend_from_slice(&w.to_le_bytes());
@@ -544,6 +564,7 @@ pub fn write(out: &mut Vec<u8>, m: &Msg) {
             out.push(hdr10 as u8);
             out.push(yuv444 as u8);
             out.push(priority);
+            out.push(deep as u8);
         }
         Msg::Hello { w, h, hz, codecs, pid, flags } => {
             head(out, Kind::Hello);
@@ -552,17 +573,26 @@ pub fn write(out: &mut Vec<u8>, m: &Msg) {
             out.extend_from_slice(&hz.to_le_bytes());
             out.push(codecs);
             out.extend_from_slice(&pid.to_le_bytes());
-            out.push(flags);
+            out.push(flags as u8);
+            if flags > 0xFF {
+                out.push((flags >> 8) as u8);
+            }
         }
         Msg::KeyReq => head(out, Kind::KeyReq),
-        Msg::Ping { t } => {
+        Msg::Ping { t, gpu } => {
             head(out, Kind::Ping);
             out.extend_from_slice(&t.to_le_bytes());
+            if gpu {
+                out.push(1);
+            }
         }
-        Msg::Pong { t, host } => {
+        Msg::Pong { t, host, gpu } => {
             head(out, Kind::Pong);
             out.extend_from_slice(&t.to_le_bytes());
             out.extend_from_slice(&host.to_le_bytes());
+            if let Some(g) = gpu {
+                out.extend_from_slice(&g.bytes());
+            }
         }
         Msg::Bye => head(out, Kind::Bye),
         Msg::Audio { seq, pts, data } => {
@@ -691,11 +721,11 @@ pub fn read(b: &[u8]) -> Option<Msg<'_>> {
             pts: i64_at(b, 16)?,
             data: b.get(VIDEO_HEAD..)?,
         },
-        2 => Msg::Info { codec: codec_of(*b.get(4)?)?, w: u32_at(b, 5)?, h: u32_at(b, 9)?, fps: u32_at(b, 13)?, perms: *b.get(17)?, recover: *b.get(18)? != 0, hdr10: *b.get(19)? != 0, yuv444: *b.get(20)? != 0, priority: b.get(21).copied().unwrap_or(255) },
-        3 => Msg::Hello { w: u32_at(b, 4)?, h: u32_at(b, 8)?, hz: u32_at(b, 12)?, codecs: *b.get(16)?, pid: u32_at(b, 17)?, flags: *b.get(21)? },
+        2 => Msg::Info { codec: codec_of(*b.get(4)?)?, w: u32_at(b, 5)?, h: u32_at(b, 9)?, fps: u32_at(b, 13)?, perms: *b.get(17)?, recover: *b.get(18)? != 0, hdr10: *b.get(19)? != 0, yuv444: *b.get(20)? != 0, priority: b.get(21).copied().unwrap_or(255), deep: b.get(22) == Some(&1) },
+        3 => Msg::Hello { w: u32_at(b, 4)?, h: u32_at(b, 8)?, hz: u32_at(b, 12)?, codecs: *b.get(16)?, pid: u32_at(b, 17)?, flags: *b.get(21)? as u16 | (b.get(22).copied().unwrap_or(0) as u16) << 8 },
         4 => Msg::KeyReq,
-        5 => Msg::Ping { t: i64_at(b, 4)? },
-        6 => Msg::Pong { t: i64_at(b, 4)?, host: i64_at(b, 12)? },
+        5 => Msg::Ping { t: i64_at(b, 4)?, gpu: b.get(12) == Some(&1) },
+        6 => Msg::Pong { t: i64_at(b, 4)?, host: i64_at(b, 12)?, gpu: b.get(20..).and_then(GpuUse::from_bytes) },
         7 => Msg::Bye,
         8 => Msg::Audio { seq: u32_at(b, 4)?, pts: i64_at(b, 8)?, data: b.get(16..)? },
         9 => {
@@ -875,11 +905,14 @@ mod tests {
     #[test]
     fn packets_round_trip() {
         round(Msg::Video { key: true, more: true, idx: 3, count: 9, frame: 77, pts: -5, data: &[1, 2, 3] });
-        round(Msg::Info { codec: VideoCodec::Std(Codec::Av1), w: 1920, h: 1080, fps: 60, perms: SOUND | PAD, recover: true, hdr10: true, yuv444: false, priority: 2 });
-        round(Msg::Info { codec: VideoCodec::Wave, w: 1920, h: 1080, fps: 60, perms: 0, recover: true, hdr10: false, yuv444: false, priority: 1 });
+        round(Msg::Info { codec: VideoCodec::Std(Codec::Av1), w: 1920, h: 1080, fps: 60, perms: SOUND | PAD, recover: true, hdr10: true, yuv444: false, priority: 2, deep: false });
+        round(Msg::Info { codec: VideoCodec::Wave, w: 1920, h: 1080, fps: 60, perms: 0, recover: true, hdr10: false, yuv444: false, priority: 1, deep: true });
         // Host de versão anterior: sem o byte da prioridade, que vira "sem informação".
         let mut old = Vec::new();
-        write(&mut old, &Msg::Info { codec: VideoCodec::Std(Codec::Hevc), w: 1280, h: 720, fps: 30, perms: 0, recover: false, hdr10: false, yuv444: true, priority: 0 });
+        write(&mut old, &Msg::Info { codec: VideoCodec::Std(Codec::Hevc), w: 1280, h: 720, fps: 30, perms: 0, recover: false, hdr10: false, yuv444: true, priority: 0, deep: false });
+        old.pop();
+        // Host da 1.9: sem o byte dos 10 bits, o vídeo é de 8.
+        assert!(matches!(read(&old), Some(Msg::Info { priority: 0, deep: false, yuv444: true, .. })));
         old.pop();
         assert!(matches!(read(&old), Some(Msg::Info { priority: 255, yuv444: true, fps: 30, .. })));
         round(Msg::Pad { pad: 4, seq: 65535, on: true, state: PadState { buttons: 0xF00F, lt: 255, rt: 1, lx: -32768, ly: 32767, rx: -1, ry: 0 } });
@@ -892,10 +925,21 @@ mod tests {
         round(Msg::Mic(&[1, 2, 3, 4]));
         round(Msg::Nack { frame: 77 });
         round(Msg::Hello { w: 3840, h: 2160, hz: 119, codecs: 7, pid: 4321, flags: SEES_HDR | DECODES_444 });
+        round(Msg::Hello { w: 1920, h: 1080, hz: 60, codecs: 7, pid: 1, flags: CONSTANT | ASKS_10 });
+        // Sem bit do segundo byte, o Hello sai do tamanho antigo (a versão anterior lê igual).
+        let mut plain = Vec::new();
+        write(&mut plain, &Msg::Hello { w: 1, h: 1, hz: 60, codecs: 7, pid: 1, flags: CONSTANT });
+        assert_eq!(plain.len(), 22);
         round(Msg::Audio { seq: 9, pts: 10, data: &[0, 1, 2, 3] });
         round(Msg::KeyReq);
-        round(Msg::Ping { t: 123 });
-        round(Msg::Pong { t: 1, host: 2 });
+        round(Msg::Ping { t: 123, gpu: false });
+        round(Msg::Ping { t: 123, gpu: true });
+        round(Msg::Pong { t: 1, host: 2, gpu: None });
+        round(Msg::Pong { t: 1, host: 2, gpu: Some(GpuUse { total: 90, d3: 5, encode: 30, decode: 0, copy: 2 }) });
+        // Host antigo: Pong sem a GPU; quem assiste antigo lê só os dois relógios.
+        let mut old = Vec::new();
+        write(&mut old, &Msg::Pong { t: 1, host: 2, gpu: Some(GpuUse::default()) });
+        assert!(matches!(read(&old[..20]), Some(Msg::Pong { t: 1, host: 2, gpu: None })));
         round(Msg::Bye);
         round(Msg::Fec { frame: 4, pts: -9, key: true, count: 30, idx: 2, rec: 6, data: &[5, 6] });
         round(Msg::Loss { permille: 123 });
@@ -917,6 +961,8 @@ mod tests {
             Input::Wheel { delta: -120, horizontal: true },
             Input::Key { scan: 0x1D, extended: true, down: false },
             Input::Away,
+            Input::Locks { caps: false, num: true },
+            Input::Mask,
         ];
         let mut b = Vec::new();
         write_input(&mut b, 41, &evs);
