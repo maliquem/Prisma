@@ -87,9 +87,9 @@ pub fn api_supported(api: &str) -> bool {
     matches!(api, "dx11" | "dx10" | "dx12" | "d3d9" | "opengl" | "vulkan")
 }
 
-/// Custo de um efeito do Prisma no jogo, para o medidor do app: `Local\PrismaCost-<tipo>-<pid do jogo>`
-/// (`cost_name`). Quem desenha (o motor de shader, o HDR do Prisma) cria a memória e escreve com `publish`;
-/// o app abre, lê com `read` e sobe `menu` para pedir o menu do efeito no jogo.
+/// Custo do shader do Prisma no jogo, para o medidor do app: `Local\PrismaShaderCost-<pid do jogo>` (`cost_name`).
+/// O motor de shader (nos dois modos) cria a memória e escreve com `publish`; o app abre, lê com `read` e sobe
+/// `menu` para pedir o menu de shader no jogo. O HDR do Prisma manda o dele pela memória do gancho (`hdr_gpu_us`).
 #[repr(C)]
 pub struct Cost {
     /// `GetTickCount64` da última escrita: parado há mais de `COST_STALE_MS`, o efeito saiu.
@@ -107,11 +107,8 @@ pub struct Cost {
 
 pub const COST_NAME_LEN: usize = 64;
 pub const COST_STALE_MS: u64 = 2000;
-pub const COST_SHADER: &str = "shader";
-pub const COST_HDR: &str = "hdr";
-
-pub fn cost_name(kind: &str, pid: u32) -> String {
-    format!("Local\\PrismaCost-{kind}-{pid}")
+pub fn cost_name(pid: u32) -> String {
+    format!("Local\\PrismaShaderCost-{pid}")
 }
 
 impl Cost {

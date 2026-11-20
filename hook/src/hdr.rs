@@ -235,6 +235,60 @@ struct Proxy {
     scene_srv: Option<ID3D11ShaderResourceView>,
     /// O buffer 0 da cadeia de verdade: no modelo flip do D3D11 ele sempre aponta o buffer da vez.
     rtv: Option<ID3D11RenderTargetView>,
+    /// Sem consultas na placa, o passe roda sem medida.
+    timer: Option<Timer>,
+}
+
+/// Tempo de GPU do passe, como `prisma_shader::GpuTimer` (o gancho não puxa o librashader): carimbos lidos
+/// alguns quadros depois, sem esperar a GPU.
+struct Timer {
+    slots: Vec<[ID3D11Query; 3]>,
+    n: usize,
+    ms: f64,
+}
+
+impl Timer {
+    unsafe fn new(dev: &ID3D11Device) -> Option<Self> {
+        let make = |q| {
+            let mut out = None;
+            dev.CreateQuery(&D3D11_QUERY_DESC { Query: q, MiscFlags: 0 }, Some(&mut out)).ok()?;
+            out
+        };
+        let slots = (0..4).map(|_| Some([make(D3D11_QUERY_TIMESTAMP_DISJOINT)?, make(D3D11_QUERY_TIMESTAMP)?, make(D3D11_QUERY_TIMESTAMP)?])).collect::<Option<Vec<_>>>()?;
+        Some(Self { slots, n: 0, ms: 0.0 })
+    }
+
+    /// Mede `f` na vaga da vez, depois de ler o que ela mediu da última vez; devolve a média em ms (0 sem medida ainda).
+    unsafe fn time(&mut self, ctx: &ID3D11DeviceContext, f: impl FnOnce()) -> f64 {
+        let i = self.n % self.slots.len();
+        if self.n >= self.slots.len() {
+            if let Some(ms) = self.read(ctx, i) {
+                self.ms = if self.ms <= 0.0 { ms } else { self.ms * 0.9 + ms * 0.1 };
+            }
+        }
+        let [dis, a, b] = &self.slots[i];
+        ctx.Begin(dis);
+        ctx.End(a);
+        f();
+        ctx.End(b);
+        ctx.End(dis);
+        self.n += 1;
+        self.ms
+    }
+
+    // O GetData do windows-rs junta S_FALSE (ainda não pronto) com S_OK: a vtable devolve o HRESULT cru.
+    unsafe fn get<T: Default>(ctx: &ID3D11DeviceContext, q: &ID3D11Query) -> Option<T> {
+        let mut v = T::default();
+        let hr = (Interface::vtable(ctx).GetData)(Interface::as_raw(ctx), Interface::as_raw(q), &mut v as *mut T as *mut _, std::mem::size_of::<T>() as u32, D3D11_ASYNC_GETDATA_DONOTFLUSH.0 as u32);
+        (hr == S_OK).then_some(v)
+    }
+
+    unsafe fn read(&self, ctx: &ID3D11DeviceContext, i: usize) -> Option<f64> {
+        let [dis, a, b] = &self.slots[i];
+        let d: D3D11_QUERY_DATA_TIMESTAMP_DISJOINT = Self::get(ctx, dis)?;
+        let (t0, t1): (u64, u64) = (Self::get(ctx, a)?, Self::get(ctx, b)?);
+        (!d.Disjoint.as_bool() && d.Frequency > 0).then(|| t1.saturating_sub(t0) as f64 * 1000.0 / d.Frequency as f64)
+    }
 }
 
 // Os objetos COM só são usados com a trava pega.
@@ -319,6 +373,7 @@ impl Proxy {
         device.CreatePixelShader(bytes(&psb), None, Some(&mut ps))?;
         let bd = D3D11_BUFFER_DESC { ByteWidth: std::mem::size_of::<Params>() as u32, Usage: D3D11_USAGE_DEFAULT, BindFlags: D3D11_BIND_CONSTANT_BUFFER.0 as u32, ..Default::default() };
         device.CreateBuffer(&bd, None, Some(&mut cb))?;
+        let timer = Timer::new(&device);
         let mut me = Self {
             chain: chain as usize,
             hwnd: hwnd.0 as usize,
@@ -335,6 +390,7 @@ impl Proxy {
             scene: None,
             scene_srv: None,
             rtv: None,
+            timer,
         };
         me.rebuild(chain)?;
         Ok(me)
@@ -476,8 +532,8 @@ pub unsafe fn present(chain: Ptr, flags: u32) {
     if flags & crate::PRESENT_TEST != 0 || INSIDE.get() {
         return;
     }
-    let list = proxies();
-    let Some(p) = list.iter().find(|p| p.chain == chain as usize) else { return };
+    let mut list = proxies();
+    let Some(p) = list.iter_mut().find(|p| p.chain == chain as usize) else { return };
     let mine = p.tex.as_ref().is_some_and(|t| t.as_raw() as usize == TEX.load(Relaxed));
     let phase = if mine { PHASE.swap(PHASE_NONE, Relaxed) } else { PHASE_NONE };
     let split = match phase {
@@ -486,7 +542,18 @@ pub unsafe fn present(chain: Ptr, flags: u32) {
         PHASE_LATE => SPLIT_LATE,
         _ => SPLIT_NONE,
     };
-    passthrough(|| p.draw(params(s, p.want, split == SPLIT_ON)));
+    let pr = params(s, p.want, split == SPLIT_ON);
+    // A vaga sai do proxy enquanto mede: `draw` empresta o proxy inteiro.
+    let mut timer = p.timer.take();
+    let ms = passthrough(|| match timer.as_mut() {
+        Some(t) => t.time(&p.ctx, || p.draw(pr)),
+        None => {
+            p.draw(pr);
+            0.0
+        }
+    });
+    p.timer = timer;
+    s.hdr_gpu_us.store((ms * 1000.0) as u32, Relaxed);
     s.hdr_frames.fetch_add(1, Relaxed);
     s.hdr_split.store(split, Relaxed);
     s.hdr_native.store(p.want.mode(), Relaxed);
@@ -527,7 +594,12 @@ unsafe fn screen_hdr(hwnd: HWND) -> bool {
 unsafe fn created(hr: HRESULT, out: *mut Ptr, hwnd: HWND) -> HRESULT {
     if hr.is_ok() && !out.is_null() {
         let chain = *out as usize;
-        proxies().retain(|p| p.chain != chain && p.hwnd != hwnd.0 as usize && IsWindow(Some(HWND(p.hwnd as *mut c_void))).as_bool());
+        let mut list = proxies();
+        list.retain(|p| p.chain != chain && p.hwnd != hwnd.0 as usize && IsWindow(Some(HWND(p.hwnd as *mut c_void))).as_bool());
+        // Sem proxy nenhum o passe não roda mais: o medidor deixa de mostrar o custo dele.
+        if let Some(s) = shared().filter(|_| list.is_empty()) {
+            s.hdr_gpu_us.store(0, Relaxed);
+        }
     }
     hr
 }

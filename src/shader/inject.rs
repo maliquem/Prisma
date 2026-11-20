@@ -159,7 +159,7 @@ fn run_in(path: &Path, game: HWND, pid: u32, process: HANDLE, files: &[Vec<u8>; 
     let keys = crate::shader_profile::Keys::load(&crate::shader_profile::keys_path());
     super::hold_keys(&keys);
     let mut menu = menu::Menu::new();
-    let mut cost = super::cost::CostMap::create(COST_SHADER, pid);
+    let mut cost = super::cost::CostMap::create(pid);
     let (mut fg, mut menu_key, mut next_key) = (false, Press::default(), Press::default());
     let (since, mut polled, mut ready, mut sent) = (Instant::now(), Instant::now(), None, eng.path.clone());
     // Último Present visto: queda na injeção acontece com o jogo desenhando; a do jogo saindo, depois de parar.

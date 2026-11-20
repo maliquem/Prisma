@@ -828,7 +828,8 @@ impl Meter {
             LEFT | RIGHT => {
                 let row = *self.rows.get(self.row)?;
                 let forward = key == RIGHT;
-                if row == Row::Fps {
+                // Nos botões dos menus, cada seta abre o do seu lado.
+                if row == Row::Fps || row == Row::Open {
                     return Some((row, forward as usize));
                 }
                 if row == Row::Power {
@@ -1438,16 +1439,16 @@ impl Meter {
         Some(l.limit.map_or(clock(l.seen), |v| format!("{} / {}", clock(l.seen), clock(v))))
     }
 
-    /// Efeitos do Prisma na tela do jogo: (tipo, perfil, ms de GPU, ms do quadro), lidos de quem desenha.
+    /// Efeitos do Prisma na tela do jogo: (tipo, perfil, ms de GPU, ms do quadro; 0 usa o do medidor), lidos de
+    /// quem desenha. Os ajustes do HDR são por jogo: o perfil dele leva o nome do jogo.
     fn effects(&self) -> Vec<(&'static str, String, f64, f64)> {
-        use prisma_shader::link::{COST_HDR, COST_SHADER};
-        if self.session.pid == 0 {
+        let pid = self.session.pid;
+        if pid == 0 {
             return Vec::new();
         }
-        [("Shader", COST_SHADER), ("HDR", COST_HDR)]
-            .into_iter()
-            .filter_map(|(label, kind)| crate::shader::cost::read(kind, self.session.pid).map(|(n, ms, f)| (label, n, ms, f)))
-            .collect()
+        let shader = crate::shader::cost::read(pid).map(|(n, ms, f)| ("Shader", n, ms, f));
+        let hdr = crate::sys::inject::HdrLive::connect(pid).and_then(|l| l.gpu_ms()).map(|ms| ("HDR", crate::pages::app_name(&self.session.exe).to_string(), ms, 0.0));
+        shader.into_iter().chain(hdr).collect()
     }
 
     fn limit_tag(&self, cfg: &Config) -> Option<String> {
@@ -1763,7 +1764,7 @@ impl Line {
 
     fn row(&self) -> Option<Row> {
         match self {
-            Line::Choice(_, row, ..) | Line::Stepper(_, row, ..) | Line::Drop(_, row, ..) => Some(*row),
+            Line::Choice(_, row, ..) | Line::Stepper(_, row, ..) | Line::Drop(_, row, ..) | Line::Buttons(_, row) => Some(*row),
             _ => None,
         }
     }
@@ -1778,7 +1779,8 @@ impl Line {
     /// Botões da linha. Cada um guarda onde está, para o clique achar a opção.
     fn controls(&self, c: &Canvas, x: f32, y: f32, w: f32, focus: Option<Row>, hover: Option<(Row, usize)>, hits: &mut Vec<(Rect, Row, usize)>) {
         let chip = |c: &Canvas, r: Rect, text: &str, on: bool, row: Row, i: usize, hits: &mut Vec<(Rect, Row, usize)>| {
-            let hot = hover == Some((row, i));
+            // Os botões dos menus não têm rótulo: a linha em foco acende os dois.
+            let hot = hover == Some((row, i)) || (row == Row::Open && focus == Some(row));
             c.round(r, 6.0, if on { ACCENT } else if hot { CARD2 } else { rgb(0x1b1d22) });
             if !on {
                 c.round_line(r, 6.0, rgb(0x5a6170), 1.0);

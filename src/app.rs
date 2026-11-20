@@ -2660,16 +2660,19 @@ impl App {
     }
 
     /// Botões do completo. O shader: o motor do jogo abre o menu dele; sem motor, o mesmo caminho do atalho do
-    /// menu (cria o perfil e abre já com o menu). O HDR: ainda sem menu no jogo, abre a página HDR do Prisma.
+    /// menu (cria o perfil e abre já com o menu). O HDR: com o HDR do Prisma no jogo, o menu dele (o mesmo do
+    /// atalho, que pega o jogo em foco: o medidor não tira o foco); sem ele, a página HDR, onde se liga.
     fn meter_open(&mut self, which: usize, pid: u32) {
         if which == crate::meter::OPEN_SHADER {
-            if !crate::shader::cost::ask_menu(prisma_shader::link::COST_SHADER, pid) {
+            if !crate::shader::cost::ask_menu(pid) {
                 crate::pages::shaders::menu_focused(self);
             }
-            return;
+        } else if self.hdr_menu.is_open() || crate::sys::inject::HdrLive::connect(pid).is_some() {
+            self.hdr_menu_key();
+        } else {
+            self.show_main();
+            self.go(Page::Hdr);
         }
-        self.show_main();
-        self.go(Page::Hdr);
     }
 
     /// Atalhos do limitador: valem para o jogo aberto, mesmo fora da lista.

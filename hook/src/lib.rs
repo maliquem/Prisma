@@ -63,7 +63,8 @@ pub(crate) struct Shared {
     /// e quantos quadros saíram com a interface separada.
     pub hdr_split: AtomicU32,
     pub hdr_native: AtomicU32,
-    pad2: u32,
+    /// Escrito pelo jogo: tempo de GPU do passe do HDR em µs (média), para o medidor do Prisma.
+    pub hdr_gpu_us: AtomicU32,
     pub hdr_split_frames: AtomicU64,
 }
 

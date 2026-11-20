@@ -265,7 +265,7 @@ fn run(path: &Path) -> Res<()> {
     }
     hold_keys(&keys);
     let mut menu = menu::Menu::new();
-    let mut cost = cost::CostMap::create(prisma_shader::link::COST_SHADER, crate::sys::procs::window_pid(game));
+    let mut cost = cost::CostMap::create(crate::sys::procs::window_pid(game));
 
     let mut timer = GpuTimer::new(&d.dev)?;
     // raw: o recorte da captura; src: a entrada da cadeia (a própria raw sem HDR).

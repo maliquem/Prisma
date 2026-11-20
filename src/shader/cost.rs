@@ -1,5 +1,5 @@
-//! Custo dos efeitos do Prisma no jogo, para o medidor (`prisma_shader::link::Cost`): o motor de shader escreve
-//! (nos dois modos) e o app lê. O HDR do Prisma usa a mesma memória com o tipo `COST_HDR`.
+//! Custo do shader do Prisma no jogo, para o medidor (`prisma_shader::link::Cost`): o motor de shader escreve
+//! (nos dois modos) e o app lê.
 
 use std::path::Path;
 use std::sync::atomic::Ordering::Relaxed;
@@ -20,8 +20,8 @@ pub struct CostMap {
 }
 
 impl CostMap {
-    fn map(kind: &str, pid: u32, owner: bool) -> Option<Self> {
-        let name = HSTRING::from(cost_name(kind, pid));
+    fn map(pid: u32, owner: bool) -> Option<Self> {
+        let name = HSTRING::from(cost_name(pid));
         unsafe {
             let map = if owner {
                 CreateFileMappingW(INVALID_HANDLE_VALUE, None, PAGE_READWRITE, 0, std::mem::size_of::<Cost>() as u32, &name).ok()?
@@ -39,8 +39,8 @@ impl CostMap {
     }
 
     /// O motor do jogo `pid` cria a memória e passa a escrever nela.
-    pub fn create(kind: &str, pid: u32) -> Option<Self> {
-        Self::map(kind, pid, true)
+    pub fn create(pid: u32) -> Option<Self> {
+        Self::map(pid, true)
     }
 
     fn c(&self) -> &Cost {
@@ -72,14 +72,14 @@ fn now() -> u64 {
     unsafe { GetTickCount64() }
 }
 
-/// (perfil, ms de GPU, ms do quadro) do efeito `kind` no jogo `pid`, com ele na tela.
-pub fn read(kind: &str, pid: u32) -> Option<(String, f64, f64)> {
-    CostMap::map(kind, pid, false)?.c().read(now())
+/// (perfil, ms de GPU, ms do quadro) do shader no jogo `pid`, com ele na tela.
+pub fn read(pid: u32) -> Option<(String, f64, f64)> {
+    CostMap::map(pid, false)?.c().read(now())
 }
 
-/// Pede ao efeito `kind` do jogo `pid` que abra ou feche o menu dele. Falso sem ninguém escrevendo.
-pub fn ask_menu(kind: &str, pid: u32) -> bool {
-    let Some(m) = CostMap::map(kind, pid, false) else { return false };
+/// Pede ao motor de shader do jogo `pid` que abra ou feche o menu. Falso sem motor escrevendo.
+pub fn ask_menu(pid: u32) -> bool {
+    let Some(m) = CostMap::map(pid, false) else { return false };
     let alive = now().saturating_sub(m.c().beat.load(Relaxed)) <= prisma_shader::link::COST_STALE_MS;
     if alive {
         m.c().menu.fetch_add(1, Relaxed);
