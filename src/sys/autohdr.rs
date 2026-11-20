@@ -144,6 +144,11 @@ fn run(exe: &str, args: &[String]) {
                     }
                 }
             }
+            // A interface não saiu separada nenhuma vez: ficou junto com a cena, como antes.
+            if let Some((_, how, 0)) = l.hdr_split().filter(|_| hdr.ui >= 1.0) {
+                let why = if how == crate::sys::inject::SPLIT_LATE { "passe de tela cheia depois da interface" } else { "nada desenhado no buffer depois da cena" };
+                crate::config::log(&format!("HDR do Prisma: {name} sem brilho da interface separado ({why})"));
+            }
             return;
         }
     }

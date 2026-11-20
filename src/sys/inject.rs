@@ -57,6 +57,9 @@ struct Shared {
 
 const _: () = assert!(std::mem::size_of::<Shared>() == 112);
 
+/// `Shared::hdr_split` do gancho: um passe de tela cheia depois da interface juntou tudo de novo.
+pub const SPLIT_LATE: u32 = 2;
+
 /// Ajustes do HDR próprio. Pico, paper white e preto em nits; o resto são números puros.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Hdr {
@@ -225,8 +228,8 @@ impl Limiter {
         Some((s.hdr_chains.load(Relaxed), s.hdr_frames.load(Relaxed), s.hdr_error.load(Relaxed)))
     }
 
-    /// Saída do jogo (0 SDR, 1 HDR10, 2 scRGB), como saiu a interface no último quadro (0 sem passada
-    /// de cena, 1 separada, 2 tela cheia depois da interface, 3 desligada) e quadros com ela separada.
+    /// Saída do jogo (0 SDR, 1 HDR10, 2 scRGB), como saiu a interface no último quadro (0 nada desenhado
+    /// depois da cena, 1 separada, 2 tela cheia depois da interface, 3 desligada) e quadros com ela separada.
     pub fn hdr_split(&self) -> Option<(u32, u32, u64)> {
         let s = self.shared()?;
         Some((s.hdr_native.load(Relaxed), s.hdr_split.load(Relaxed), s.hdr_split_frames.load(Relaxed)))

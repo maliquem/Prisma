@@ -80,7 +80,7 @@ static OLD_DRAW_INDEXED_INSTANCED: AtomicUsize = AtomicUsize::new(0);
 static PROXIES: Mutex<Vec<Proxy>> = Mutex::new(Vec::new());
 
 /// Como saiu o último quadro, em `Shared::hdr_split`.
-pub const SPLIT_NONE: u32 = 0; // nenhum passe de tela cheia no buffer: tudo junto, como antes
+pub const SPLIT_NONE: u32 = 0; // nada desenhado depois de um passe de tela cheia: tudo junto, como antes
 pub const SPLIT_ON: u32 = 1; // cena guardada e interface separada
 pub const SPLIT_LATE: u32 = 2; // passe de tela cheia depois da interface: tudo junto
 pub const SPLIT_OFF: u32 = 3; // brilho da interface em zero
@@ -447,7 +447,8 @@ fn srv_desc(format: DXGI_FORMAT, ms: bool) -> D3D11_SHADER_RESOURCE_VIEW_DESC {
 }
 
 fn ui_of(s: &Shared) -> f32 {
-    f32::from_bits(s.hdr_ui.load(Relaxed)).max(0.0)
+    // Abaixo de 1 nit a aba mostra "Junto": a interface fica com a cena.
+    Some(f32::from_bits(s.hdr_ui.load(Relaxed))).filter(|v| *v >= 1.0).unwrap_or(0.0)
 }
 
 fn params(s: &Shared, w: Want, split: bool) -> Params {
@@ -481,12 +482,11 @@ pub unsafe fn present(chain: Ptr, flags: u32) {
     let phase = if mine { PHASE.swap(PHASE_NONE, Relaxed) } else { PHASE_NONE };
     let split = match phase {
         _ if ui_of(s) <= 0.0 => SPLIT_OFF,
-        PHASE_SCENE | PHASE_UI => SPLIT_ON,
+        PHASE_UI => SPLIT_ON,
         PHASE_LATE => SPLIT_LATE,
         _ => SPLIT_NONE,
     };
-    // Sem nada desenhado depois da cena não há o que separar: o shader nem compara.
-    passthrough(|| p.draw(params(s, p.want, split == SPLIT_ON && phase == PHASE_UI)));
+    passthrough(|| p.draw(params(s, p.want, split == SPLIT_ON)));
     s.hdr_frames.fetch_add(1, Relaxed);
     s.hdr_split.store(split, Relaxed);
     s.hdr_native.store(p.want.mode(), Relaxed);
