@@ -14,7 +14,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         super::funcs_list(ui, app, rect(x, 88.0, w, a.h - 88.0 - 20.0));
         return;
     }
-    defaults_button(ui, app, a.right() - 124.0, Defaults::Settings, "Volta os atalhos de Otimizar, Fechar à força, Reiniciar o Explorer e Mostrar ou esconder o Prisma, o idioma e a busca de atualização ao padrão.");
+    defaults_button(ui, app, a.right() - 124.0, Defaults::Settings, "Volta os atalhos de Otimizar, Fechar à força, Reiniciar o Explorer e Mostrar ou esconder o Prisma, o idioma, o tempo dos avisos e a busca de atualização ao padrão.");
     let top = 88.0;
     let r0 = rect(x, top, w, 150.0);
     ui.card(r0);
@@ -112,17 +112,23 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     ui.c.text_fit(rect(rp.x + 426.0, rp.y + 78.0, rp.w - 442.0, 32.0), "Arrastar com o mouse continua com o Windows.", 13.0, MUTED, Align::Left, Weight::Regular);
 
     let top = top + 128.0;
-    let rf = rect(x, top + 250.0, w, 76.0);
+    let col = (w - 36.0) / 4.0;
+    let field = (col - 32.0).min(240.0);
+    // O tempo dos avisos divide a linha com Fechar à força, na largura de uma coluna de baixo.
+    let rf = rect(x, top + 250.0, w - col - 12.0, 76.0);
     ui.card(rf);
     ui.c.text(rect(rf.x + 16.0, rf.y + 10.0, rf.w - 290.0, 26.0), "Fechar à força", 15.0, TEXT, Align::Left, Weight::Semibold);
-    ui.c.text(rect(rf.x + 16.0, rf.y + 38.0, rf.w - 290.0, 22.0), "Encerra na hora o programa em foco, mesmo travado. O que não foi salvo é perdido.", 13.0, MUTED, Align::Left, Weight::Regular);
+    ui.c.text_wrap(rect(rf.x + 16.0, rf.y + 36.0, rf.w - 290.0, 36.0), "Encerra na hora o programa em foco, mesmo travado. O que não foi salvo é perdido.", 13.0, MUTED, Weight::Regular);
     if ui.hotkey("hk-force", rect(rf.right() - 256.0, rf.y + 16.0, 240.0, 44.0), &mut app.cfg.hk_force) {
         app.cfg.save();
         app.register_hotkeys();
     }
 
-    let col = (w - 36.0) / 4.0;
-    let field = (col - 32.0).min(240.0);
+    let rn = rect(rf.right() + 12.0, rf.y, col, 76.0);
+    ui.card(rn);
+    ui.label(rect(rn.x + 16.0, rn.y + 8.0, rn.w - 32.0, 18.0), "Tempo dos avisos", TEXT2);
+    ui.tip(rn, "Quanto tempo todo aviso do Prisma fica na tela. Padrão: 3 s.");
+
     let r1 = rect(x, top + 338.0, col, 92.0);
     ui.card(r1);
     ui.label(rect(r1.x + 16.0, r1.y + 10.0, r1.w - 32.0, 18.0), "Atalho de Otimizar", TEXT2);
@@ -175,7 +181,15 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         }
     }
 
-    // Lista por último, para abrir por cima do resto.
+    // Listas por último, para abrir por cima do resto.
+    let opts: Vec<String> = crate::config::TOAST_SECS.iter().map(|s| format!("{s} s")).collect();
+    let mut v = crate::config::TOAST_SECS.iter().position(|s| *s == app.cfg.toast_secs).unwrap_or(0);
+    if ui.select("toast-secs", rect(rn.x + 16.0, rn.y + 28.0, field, 40.0), &opts, &mut v) {
+        app.cfg.toast_secs = crate::config::TOAST_SECS[v];
+        app.cfg.save();
+        crate::overlays::set_notice_secs(app.cfg.toast_secs);
+        app.toast.info("Assim fica o aviso do Prisma");
+    }
     let opts: Vec<String> = crate::i18n::NAMES.iter().map(|n| n.to_string()).collect();
     let mut v = app.cfg.lang as usize;
     if ui.select("lang", rect(rl.x + 16.0, rl.y + 34.0, field, 44.0), &opts, &mut v) {

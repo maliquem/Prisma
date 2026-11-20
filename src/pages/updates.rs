@@ -96,7 +96,7 @@ pub fn tick(app: &mut App) {
             })
             .collect();
         if !msgs.is_empty() {
-            app.notify(Page::Updates, &tr("Atualizações seguras"), &msgs.join("\n"));
+            app.toast.info(&format!("{}\n{}", tr("Atualizações seguras"), msgs.join("\n")));
         } else if manual {
             app.toast.info(&tr("Nada novo"));
         }

@@ -48,6 +48,7 @@ fn main() {
     }
     let cfg = config::Config::load();
     i18n::set_lang(cfg.lang);
+    overlays::set_notice_secs(cfg.toast_secs);
     let background = std::env::args().any(|a| a == "--background");
     if std::env::args().any(|a| a == "--uninstall") {
         if startup::is_installed() && !startup::is_elevated() {

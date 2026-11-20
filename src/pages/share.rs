@@ -1867,7 +1867,7 @@ pub fn tick(app: &mut App) {
     }
     if let Some((text, name)) = stream::wake_note() {
         // O aviso traduz o texto pronto pelo modelo com {}.
-        app.toast.info_for(&text.replace("{}", &name), 56.0, 5000);
+        app.toast.info(&text.replace("{}", &name));
     }
     let req = STATE.lock().unwrap().as_mut().and_then(|s| s.share_req.take());
     let Some((title, text, link)) = req else { return };
@@ -1876,12 +1876,6 @@ pub fn tick(app: &mut App) {
         crate::capture::copy_text(app.hub, &text);
         app.toast.info("O Windows não abriu a janela de compartilhar: o convite foi copiado.");
     }
-}
-
-/// A notificação de quem conectou foi clicada: a página abre na aba Conectados.
-pub fn open_room() {
-    let mut guard = STATE.lock().unwrap();
-    guard.get_or_insert_with(test_setup).tab = TABS.len();
 }
 
 /// O co-op está transmitindo: os controles dele podem estar no VIIPER.

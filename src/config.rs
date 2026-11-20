@@ -474,6 +474,8 @@ pub struct Config {
     pub welcome: bool,
     /// Funções desligadas, pela posição em `pages::ACTION_PAGES` (não muda). Vazio: todas ligadas.
     pub funcs_off: Vec<u8>,
+    /// Segundos que todo aviso do Prisma fica na tela, um de `TOAST_SECS`.
+    pub toast_secs: u8,
     pub always_admin: bool,
     /// Entradas do Prisma no menu do botão direito do Explorer.
     pub explorer_menu: bool,
@@ -630,6 +632,7 @@ impl Default for Config {
             seen_version: String::new(),
             welcome: true,
             funcs_off: Vec::new(),
+            toast_secs: TOAST_SECS_DEFAULT,
             always_admin: false,
             explorer_menu: false,
             un_restore: true,
@@ -668,6 +671,15 @@ pub fn radial_default() -> [u8; crate::sys::radial::ALL] {
 /// `funcs_off`: números separados por vírgula; o que não for número fica de fora.
 fn parse_funcs(v: &str) -> Vec<u8> {
     v.split(',').filter_map(|x| x.trim().parse().ok()).collect()
+}
+
+/// Tempos que Configurações oferece para os avisos, em segundos.
+pub const TOAST_SECS: [u8; 9] = [2, 3, 4, 5, 7, 10, 15, 20, 30];
+pub const TOAST_SECS_DEFAULT: u8 = 3;
+
+/// `toast_secs`: fora da lista fica o padrão.
+fn parse_toast_secs(v: &str) -> u8 {
+    v.trim().parse().ok().filter(|s| TOAST_SECS.contains(s)).unwrap_or(TOAST_SECS_DEFAULT)
 }
 
 fn funcs_line(off: &[u8]) -> String {
@@ -962,6 +974,7 @@ impl Config {
                 "seen_version" => c.seen_version = v.to_string(),
                 "welcome" => c.welcome = b,
                 "funcs_off" => c.funcs_off = parse_funcs(v),
+                "toast_secs" => c.toast_secs = parse_toast_secs(v),
                 "always_admin" => c.always_admin = b,
                 "explorer_menu" => c.explorer_menu = b,
                 "un_restore" => c.un_restore = b,
@@ -1111,6 +1124,7 @@ impl Config {
         let _ = writeln!(s, "seen_version={}", self.seen_version);
         let _ = writeln!(s, "welcome={}", b(self.welcome));
         let _ = writeln!(s, "funcs_off={}", funcs_line(&self.funcs_off));
+        let _ = writeln!(s, "toast_secs={}", self.toast_secs);
         let _ = writeln!(s, "always_admin={}", b(self.always_admin));
         let _ = writeln!(s, "explorer_menu={}", b(self.explorer_menu));
         let _ = writeln!(s, "un_restore={}", b(self.un_restore));
@@ -1304,6 +1318,7 @@ impl Config {
                 self.hk_show = d.hk_show;
                 self.update_auto = d.update_auto;
                 self.lang = d.lang;
+                self.toast_secs = d.toast_secs;
             }
             Defaults::Tweaks => {
                 self.tw_log = d.tw_log;
@@ -1432,6 +1447,18 @@ mod tests {
         assert!(parse_funcs("").is_empty());
         assert!(Config::default().funcs_off.is_empty());
         assert_eq!(parse_funcs("3, x,300,4"), vec![3, 4]);
+    }
+
+    #[test]
+    fn toast_secs_round_trip() {
+        for n in TOAST_SECS {
+            assert_eq!(parse_toast_secs(&n.to_string()), n);
+        }
+        // Valor fora da lista ou sujeira: o padrão, 3 s, o mesmo de quem atualiza (linha ausente).
+        assert_eq!(Config::default().toast_secs, 3);
+        for v in ["0", "", "1", "8", "31", "x"] {
+            assert_eq!(parse_toast_secs(v), 3, "{v:?}");
+        }
     }
 
     #[test]
