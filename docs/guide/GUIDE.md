@@ -93,7 +93,7 @@ With the limiter on, each game keeps its own limit. In the game list on the Mete
 - **Driver method:** writes the limit to the NVIDIA driver. It applies only the next time the game opens.
 - **Limiting:** Real FPS counts the frames the game makes. With generation counts the frames that reach the screen.
 - **DLSS profile:** chooses the profile the NVIDIA driver uses for that game. It applies on reopening the game. It only appears for games that ship DLSS; for the others, the column says No DLSS.
-- **Auto HDR:** the same Auto HDR per game choice as the HDR tab (Default, Force or Turn off). Changing it here changes it there.
+- **Auto HDR:** the same Auto HDR per game choice as the HDR tab (Default, Off, Auto HDR, Auto 10 bits, RTX HDR or Prisma). Changing it here changes it there.
 - **Power:** the Windows power plan that turns on when the game opens. When it closes, the previous plan comes back, unless someone changed it in between. **Don't change** leaves it as it is, and then automatic Power applies.
 - **Remove from the list after not opening for:** a game unused for 7, 14, 30, 60 or 90 days leaves the list, so it doesn't grow too long. Its choices stay saved and apply when it opens again, and it comes back to the list. **Show all** also shows the unused ones. The default is never.
 - **Shortcuts:** Ctrl + Alt + 3 switches the mode of the game in focus: Automatic, Manual, No limit and back to Automatic. The meter shows the chosen mode. Ctrl + Alt + up or down arrow changes the limit. The limit goes from 20 to 1023.
@@ -230,7 +230,8 @@ The Sound page has two tabs at the top: **Programs** (what is above in this sect
 A reading panel with the display mode, the active calibration profile, the brightness each source declares, what Windows tells games, the declared Dolby Vision and the accepted sound formats. It warns when something doesn't match.
 
 - **Calibration:** opens fullscreen test patterns and saves one profile per TV picture mode.
-- **Auto HDR per game:** forces, turns off or leaves it to Windows, in DX11 and DX12 games, without injecting anything.
+- **Game HDR:** one HDR per game, only one on at a time: Windows default, Off, Auto HDR, Auto HDR 10 bits, RTX HDR (NVIDIA cards only, and the driver only accepts it with Prisma running as administrator) or Prisma HDR. Auto HDR and RTX HDR apply the next time the game opens, without injecting anything.
+- **Prisma HDR:** Prisma enters the game (DirectX 11, windowed or borderless) and turns the SDR picture into HDR using the display calibration. Peak, paper white, gamma, saturation, highlight boost and black change live with the game open; "Back to calibration" undoes them. The game must open through Prisma: on Steam, paste the line shown into Properties > Launch Options and open the game from Steam (the Steam overlay keeps working); outside Steam, use "Open with HDR". Games with anti-cheat are blocked. Needs Windows HDR on; in exclusive fullscreen the game runs without Prisma HDR.
 - **Sound delay test:** plays a click with a flash, to compare with and without spatial sound.
 - **You can't:** change what the TV does: the profile only informs Windows, and Windows may keep telling games the old values for a while. Direct reading of the display data exists only on NVIDIA cards.
 

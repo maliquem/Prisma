@@ -49,12 +49,15 @@ impl MeterGame {
     }
 }
 
-/// Escolha de Auto HDR de um jogo: 0 Windows decide, 1 força, 2 desliga.
+/// Escolha do HDR de um jogo.
 #[derive(Clone, Default, Debug)]
 pub struct HdrGame {
     pub exe: String,
     pub path: String,
+    /// Números em `sys::autohdr` (padrão, Auto HDR, desligado, 10 bits, RTX HDR, Prisma).
     pub mode: u8,
+    /// Ajustes do HDR do Prisma; sem eles, os da calibração.
+    pub prisma: Option<crate::sys::inject::Hdr>,
 }
 
 /// Perfil feito pela calibração do Prisma, um por modo de imagem da TV.
@@ -653,7 +656,7 @@ fn text_of(b: &[u8]) -> String {
     s.strip_prefix('\u{feff}').unwrap_or(&s).to_string()
 }
 
-fn config_path() -> PathBuf {
+pub fn config_path() -> PathBuf {
     data_dir().join("config.ini")
 }
 
@@ -802,8 +805,10 @@ impl Config {
                 }
                 "hdr_game" => {
                     let p: Vec<&str> = v.split('|').collect();
-                    if p.len() == 3 {
-                        c.hdr_games.push(HdrGame { exe: p[0].into(), mode: p[1].parse().unwrap_or(0), path: p[2].into() });
+                    if p.len() >= 3 {
+                        let f: Vec<f32> = p[3..].iter().filter_map(|v| v.parse().ok()).collect();
+                        let prisma = (f.len() == 6).then(|| crate::sys::inject::Hdr { on: true, peak: f[0], paper: f[1], gamma: f[2], sat: f[3], boost: f[4], black: f[5] });
+                        c.hdr_games.push(HdrGame { exe: p[0].into(), mode: p[1].parse().unwrap_or(0), path: p[2].into(), prisma });
                     }
                 }
                 "hdr_profile" => {
@@ -1069,7 +1074,11 @@ impl Config {
             let _ = writeln!(s, "meter_game={}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}", g.exe, g.view, g.limit_mode, g.limit_fps, b(g.limit_real), b(g.measured), g.hdr, g.preset, g.path, b(g.inject), b(g.inject_off), g.power, g.last, g.show);
         }
         for g in &self.hdr_games {
-            let _ = writeln!(s, "hdr_game={}|{}|{}", g.exe, g.mode, g.path);
+            let _ = write!(s, "hdr_game={}|{}|{}", g.exe, g.mode, g.path);
+            if let Some(h) = g.prisma {
+                let _ = write!(s, "|{}|{}|{}|{}|{}|{}", h.peak, h.paper, h.gamma, h.sat, h.boost, h.black);
+            }
+            s.push('\n');
         }
         for p in &self.hdr_profiles {
             let _ = writeln!(s, "hdr_profile={}|{}|{}|{}|{}|{}", p.screen, p.mode, p.file, p.peak, p.full, p.black);

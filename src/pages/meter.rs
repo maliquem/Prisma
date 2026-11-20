@@ -345,9 +345,12 @@ fn games(ui: &mut Ui, app: &mut App, r: Rect) {
             power = Some((i, plans[s].0.clone()));
         }
         // A mesma escolha da aba HDR: mudar aqui muda lá.
-        let mut s = app.cfg.hdr_games.iter().find(|h| h.exe.eq_ignore_ascii_case(&g.exe)).map_or(0, |h| h.mode as usize);
-        if ui.select(&format!("mt-v{i}"), row(view_x, 112.0), &opts(&["Padrão", "Forçar", "Desligar"]), &mut s) {
-            auto_hdr = Some((g.exe.clone(), g.path.clone(), s as u8));
+        use crate::sys::autohdr::{MODES, RTX};
+        let modes: Vec<_> = MODES.iter().filter(|m| m.0 != RTX || crate::sys::autohdr::nvidia()).collect();
+        let mode = app.cfg.hdr_games.iter().find(|h| h.exe.eq_ignore_ascii_case(&g.exe)).map_or(0, |h| h.mode);
+        let mut s = modes.iter().position(|m| m.0 == mode).unwrap_or(0);
+        if ui.select(&format!("mt-v{i}"), row(view_x, 112.0), &opts(&modes.iter().map(|m| m.2).collect::<Vec<_>>()), &mut s) {
+            auto_hdr = Some((g.exe.clone(), g.path.clone(), modes[s].0));
         }
         let g = &mut app.cfg.meter_games[i];
         let mut s = g.limit_mode as usize;
@@ -457,14 +460,14 @@ fn games(ui: &mut Ui, app: &mut App, r: Rect) {
     }
 }
 
-/// Auto HDR do jogo (0 o Windows decide, 1 força, 2 desliga), a mesma escolha da aba HDR. Não grava o config.
+/// HDR do jogo (números em `sys::autohdr`), a mesma escolha da aba HDR. Não grava o config.
 pub fn set_auto_hdr(app: &mut App, exe: &str, path: &str, mode: u8) -> bool {
     if !crate::sys::autohdr::apply(exe, mode) {
         return false;
     }
     match app.cfg.hdr_games.iter_mut().find(|h| h.exe.eq_ignore_ascii_case(exe)) {
         Some(h) => h.mode = mode,
-        None => app.cfg.hdr_games.push(crate::config::HdrGame { exe: exe.to_string(), path: path.to_string(), mode }),
+        None => app.cfg.hdr_games.push(crate::config::HdrGame { exe: exe.to_string(), path: path.to_string(), mode, prisma: None }),
     }
     true
 }

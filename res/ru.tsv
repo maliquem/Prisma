@@ -2808,3 +2808,23 @@ o que cada programa pode usar	доступно каждой программе
 Pico (sessão)	Пик (сеанс)
 Clock do núcleo · 60 s	Частота ядра · 60 с
 Temperatura · 60 s	Температура · 60 с
+HDR do jogo	HDR игры
+HDR do Prisma	HDR Prisma
+Auto HDR 10 bits	Auto HDR 10 бит
+Auto 10 bits	Auto 10 бит
+Um HDR por jogo. Vale a partir da próxima vez que o jogo abrir.	Свой HDR для каждой игры. Применится при следующем запуске игры.
+Um HDR por jogo. O Auto HDR está desligado nas configurações do Windows: ligue lá para ele valer.	Свой HDR для каждой игры. Auto HDR выключен в настройках Windows: включите его там, чтобы он работал.
+Bloqueado: este jogo tem anti-cheat, e o HDR do Prisma precisa entrar no jogo. Escolha Auto HDR ou RTX HDR.	Заблокировано: в игре есть античит, а HDR Prisma должен проникнуть в игру. Выберите Auto HDR или RTX HDR.
+Jogo da Steam: cole a linha abaixo em Propriedades > Opções de inicialização. Depois é só abrir pela Steam.	Игра из Steam: вставьте строку ниже в Свойства > Параметры запуска. Потом просто запускайте через Steam.
+Abra o jogo pelo botão Abrir com HDR, ou use a linha abaixo nas opções de inicialização do launcher.	Запустите игру кнопкой «Открыть с HDR» или используйте строку ниже в параметрах запуска лаунчера.
+Copiar linha	Копировать строку
+Linha copiada.	Строка скопирована.
+Não consegui copiar.	Не удалось скопировать.
+Abrir pela Steam	Открыть через Steam
+Abrir com HDR	Открыть с HDR
+Não consegui abrir o jogo.	Не удалось открыть игру.
+Paper white	Paper white
+Gama	Гамма
+Realce dos claros	Усиление светов
+Voltar à calibração	Вернуться к калибровке
+O driver NVIDIA só aceita o RTX HDR com o Prisma aberto como administrador.	Драйвер NVIDIA принимает RTX HDR только если Prisma запущен от имени администратора.

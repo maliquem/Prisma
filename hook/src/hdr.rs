@@ -17,7 +17,7 @@ use windows::Win32::Graphics::Dxgi::*;
 use windows::Win32::Graphics::Gdi::{MonitorFromWindow, MONITOR_DEFAULTTONEAREST};
 use windows::Win32::UI::WindowsAndMessaging::IsWindow;
 
-use crate::{patch, Ptr, Shared};
+use crate::{patch, unpatch, Ptr, Shared};
 
 const SLOT_CREATE: usize = 10;
 const SLOT_CREATE_HWND: usize = 15;
@@ -602,4 +602,23 @@ pub unsafe fn install() -> bool {
         done &= patch(table(f2.as_raw()), SLOT_CREATE_HWND, on_create_hwnd as usize, &OLD_CREATE_HWND);
     }
     done
+}
+
+/// O overlay da Steam desiste de ligar os ganchos dele se a tabela da fábrica já aponta para nós, e o
+/// Shift+Tab some. Com o gancho dele pronto, a tabela volta ao Windows por um instante, uma fábrica
+/// nossa passa por ele (que liga os dele) e a nossa troca volta por cima, chamando a dele.
+// shortcut: se o jogo criar a cadeia antes disto, o overlay fica de fora nesta abertura.
+pub unsafe fn let_steam_in() {
+    let Ok(factory) = CreateDXGIFactory1::<IDXGIFactory1>() else { return };
+    let t = table(factory.as_raw());
+    let t2 = factory.cast::<IDXGIFactory2>().ok().map(|f| table(f.as_raw()));
+    unpatch(t, SLOT_CREATE, on_create as usize, &OLD_CREATE);
+    if let Some(t2) = t2 {
+        unpatch(t2, SLOT_CREATE_HWND, on_create_hwnd as usize, &OLD_CREATE_HWND);
+    }
+    drop(CreateDXGIFactory1::<IDXGIFactory1>());
+    patch(t, SLOT_CREATE, on_create as usize, &OLD_CREATE);
+    if let Some(t2) = t2 {
+        patch(t2, SLOT_CREATE_HWND, on_create_hwnd as usize, &OLD_CREATE_HWND);
+    }
 }

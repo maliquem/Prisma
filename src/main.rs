@@ -100,6 +100,10 @@ fn main() {
     if shader::run_args() {
         return;
     }
+    // Aberto pela Steam (`--hdr %command%`): abre o jogo com o HDR do Prisma, sem o nome único.
+    if sys::autohdr::run_args() {
+        return;
+    }
     // Um link de convite (prisma://parear/...): a página Compartilhar tela pergunta se pareia.
     #[cfg(feature = "stream")]
     let link = stream::weblink::take_arg();

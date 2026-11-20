@@ -807,7 +807,8 @@ pub fn start(background: bool) {
             if let Some(v) = a.strip_prefix("--test-autohdr=") {
                 let (exe, mode) = v.split_once('|').unwrap();
                 let ok = crate::sys::autohdr::apply(exe, mode.parse().unwrap());
-                println!("{ok}");
+                let rtx = [0x00DD_48FB, 0x0043_2F84, 0x1077_A11A].map(|id| crate::sys::drs::read(exe, id));
+                println!("{ok} rtx {rtx:?}");
                 std::process::exit(0);
             }
             if let Some(v) = a.strip_prefix("--test-plan=") {
@@ -840,6 +841,15 @@ pub fn start(background: bool) {
             if let Some(v) = a.strip_prefix("--test-inject=") {
                 let p: Vec<&str> = v.split('|').collect();
                 let _ = std::fs::write(p[0], crate::sys::inject::test(p[1].parse().unwrap(), p[2].parse().unwrap(), p[3].parse().unwrap()));
+                std::process::exit(0);
+            }
+            // Estado do HDR num jogo já aberto com ele e os nits da tela: --test-hdrstat=saida.txt|pid
+            if let Some(v) = a.strip_prefix("--test-hdrstat=") {
+                let (out, pid) = v.split_once('|').unwrap();
+                let stats = crate::sys::inject::Limiter::attach(pid.parse().unwrap()).and_then(|l| l.hdr_stats());
+                let nits = crate::capture::grab(crate::capture::cursor_monitor()).ok().and_then(|f| f.half.as_ref().map(|h| crate::capture::half_nits(h)));
+                let _ = std::fs::write(out, format!("cadeias, quadros, erro {stats:?}; nits maior, média, p99 {nits:?}
+"));
                 std::process::exit(0);
             }
             // Saída, jogo e arquivo de ajustes: --test-hdrgame=saida.txt|C:\jogo.exe|ajustes.txt
@@ -4182,7 +4192,7 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                 with(|a| {
                     let exe = procs::exe_name(&path);
                     if !a.cfg.hdr_games.iter().any(|g| g.exe.eq_ignore_ascii_case(&exe)) {
-                        a.cfg.hdr_games.push(crate::config::HdrGame { exe, path, mode: 0 });
+                        a.cfg.hdr_games.push(crate::config::HdrGame { exe, path, mode: 0, prisma: None });
                     }
                     a.cfg.save();
                     a.invalidate();

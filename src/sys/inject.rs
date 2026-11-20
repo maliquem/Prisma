@@ -156,7 +156,7 @@ impl Limiter {
 
     /// Abre o jogo parado, carrega a DLL com o HDR pedido e só então solta: a cadeia de troca nasce
     /// já com o proxy. Se a DLL não carregar, o jogo abre normal, sem HDR.
-    pub fn launch(exe: &str, hdr: &Hdr) -> std::result::Result<Self, String> {
+    pub fn launch(exe: &str, args: &str, hdr: &Hdr) -> std::result::Result<Self, String> {
         if crate::meter::anti_cheat(exe) {
             return Err("anti-cheat detectado".into());
         }
@@ -169,7 +169,7 @@ impl Limiter {
             let dir = std::path::Path::new(exe).parent().ok_or("caminho sem pasta")?;
             let si = STARTUPINFOW { cb: std::mem::size_of::<STARTUPINFOW>() as u32, ..Default::default() };
             let mut pi = PROCESS_INFORMATION::default();
-            let mut line: Vec<u16> = format!("\"{exe}\"").encode_utf16().chain(Some(0)).collect();
+            let mut line: Vec<u16> = format!("\"{exe}\" {args}").trim_end().encode_utf16().chain(Some(0)).collect();
             // Aberto fora da Steam, o jogo pode se reabrir por ela, e a cópia nova viria sem a DLL. Com o
             // número do jogo no ambiente, como a Steam faz, ele segue nesta cópia.
             let mut env: Vec<u16> = Vec::new();
@@ -319,7 +319,7 @@ impl Drop for Limiter {
 pub fn test_hdr(out: &str, exe: &str, params: &str) {
     let cfg = crate::config::Config::load();
     let mut hdr = Hdr::from_profile(cfg.hdr_profiles.last());
-    let mut l = match Limiter::launch(exe, &hdr) {
+    let mut l = match Limiter::launch(exe, "", &hdr) {
         Ok(l) => l,
         Err(e) => {
             let _ = std::fs::write(out, format!("não abriu: {e}\n"));

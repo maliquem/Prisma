@@ -263,6 +263,35 @@ unsafe fn install() -> bool {
     done
 }
 
+/// O overlay da Steam entra no jogo depois que ele começa a rodar e liga os ganchos dele pondo um salto
+/// no `CreateDXGIFactory1`. Espera até 10 s por isso; fora da Steam, só gasta a espera nesta linha.
+unsafe fn steam_overlay_hooked() -> bool {
+    let f = GetProcAddress(LoadLibraryW(wide("dxgi.dll").as_ptr()), b"CreateDXGIFactory1 ".as_ptr()) as *const u8;
+    if f.is_null() {
+        return false;
+    }
+    let name = wide("gameoverlayrenderer64.dll");
+    for _ in 0..10_000 {
+        let mut overlay = std::ptr::null_mut();
+        let jump = *f == 0xE9 || (*f == 0xFF && *f.add(1) == 0x25);
+        if jump && GetModuleHandleExW(0, name.as_ptr() as *const c_void, &mut overlay) != 0 {
+            return true;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    false
+}
+
+/// Devolve a entrada original, se ela ainda for a nossa.
+pub(crate) unsafe fn unpatch(table: *mut usize, slot: usize, ours: usize, keep: &AtomicUsize) {
+    let at = table.add(slot);
+    let mut old = 0;
+    if *at == ours && VirtualProtect(at as Ptr, 8, PAGE_READWRITE, &mut old) != 0 {
+        (*(at as *const AtomicUsize)).store(keep.load(SeqCst), SeqCst);
+        VirtualProtect(at as Ptr, 8, old, &mut old);
+    }
+}
+
 unsafe extern "system" fn start(_: Ptr) -> u32 {
     let mut module = std::ptr::null_mut();
     // O Windows solta o módulo quando o gancho sai: preso aqui, ele fica até o jogo fechar.
@@ -285,6 +314,9 @@ unsafe extern "system" fn start(_: Ptr) -> u32 {
     s.magic.store(MAGIC, SeqCst);
     SHARED.store(view as usize, SeqCst);
     s.state.store(if install() { STATE_READY } else { STATE_FAILED }, SeqCst);
+    if hdr::wanted() && steam_overlay_hooked() {
+        hdr::let_steam_in();
+    }
     0
 }
 

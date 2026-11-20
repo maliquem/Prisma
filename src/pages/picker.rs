@@ -60,7 +60,7 @@ fn add(app: &mut App, target: Target, path: &str) {
         Target::RunKey(i) => super::shortcuts::set_program(app, i as usize, path),
         Target::HdrGame => {
             if !app.cfg.hdr_games.iter().any(|g| g.exe.eq_ignore_ascii_case(&exe)) {
-                app.cfg.hdr_games.push(crate::config::HdrGame { exe, path: path.to_string(), mode: 0 });
+                app.cfg.hdr_games.push(crate::config::HdrGame { exe, path: path.to_string(), mode: 0, prisma: None });
             }
         }
     }

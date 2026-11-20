@@ -607,8 +607,8 @@ impl App {
             _ => FpsLimit::Off,
         };
         let auto_hdr = match c.hdr_games.iter().find(|h| same(&h.exe)).map_or(0, |h| h.mode) {
-            1 => Some(true),
-            2 => Some(false),
+            autohdr::AUTO | autohdr::AUTO10 => Some(true),
+            autohdr::OFF | autohdr::RTX | autohdr::PRISMA => Some(false),
             _ => None,
         };
         let replay = ReplayOptions {
