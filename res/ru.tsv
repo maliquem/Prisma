@@ -2930,6 +2930,7 @@ Proporção	Пропорции
 Manter (barras pretas)	Сохранять (чёрные полосы)
 Esticar	Растянуть
 Escala inteira	Целочисленный масштаб
+Manter: o jogo que aceita mudar de tamanho ocupa o monitor inteiro na proporção dele; o de tamanho fixo fica com barras pretas. Esticar cobre o monitor sempre.	Сохранять: игра, которая умеет менять размер, занимает весь монитор в своих пропорциях; игра с фиксированным размером получает чёрные полосы. Растянуть всегда заполняет монитор.
 Filtros abertos	Открытые фильтры
 Baixar filtros	Скачать фильтры
 Baixados	Скачано

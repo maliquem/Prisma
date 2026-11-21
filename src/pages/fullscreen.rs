@@ -58,6 +58,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     ui.label(rect(r1.x + 16.0, r1.y + 10.0, fw, 18.0), "Proporção", TEXT2);
     let fits = ["Manter (barras pretas)", "Esticar", "Escala inteira"].map(|s| crate::i18n::tr(s).into_owned());
     let mut f = Fit::ALL.iter().position(|x| *x == app.cfg.fs_fit).unwrap_or(0);
+    ui.tip(rect(r1.x + 16.0, r1.y + 34.0, fw, 44.0), "Manter: o jogo que aceita mudar de tamanho ocupa o monitor inteiro na proporção dele; o de tamanho fixo fica com barras pretas. Esticar cobre o monitor sempre.");
     if ui.select("fs-fit", rect(r1.x + 16.0, r1.y + 34.0, fw, 44.0), &fits, &mut f) {
         app.cfg.fs_fit = Fit::ALL[f];
         app.cfg.save();
