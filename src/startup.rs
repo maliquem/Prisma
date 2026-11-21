@@ -293,7 +293,12 @@ fn copy_tree(from: &std::path::Path, to: &std::path::Path) {
     let Ok(rd) = std::fs::read_dir(from) else { return };
     for e in rd.flatten() {
         let dst = to.join(e.file_name());
-        if e.path().is_dir() {
+        let Ok(ft) = e.file_type() else { continue };
+        // Junções e atalhos ficam de fora: um que aponte para a própria pasta faria a cópia não parar.
+        if ft.is_symlink() {
+            continue;
+        }
+        if ft.is_dir() {
             copy_tree(&e.path(), &dst);
         } else if let Err(err) = std::fs::copy(e.path(), &dst) {
             crate::config::log(&format!("instalação: não copiou {} ({err})", e.path().display()));
@@ -452,6 +457,17 @@ mod tests {
         super::copy_tree(&d.join("src"), &d.join("dst"));
         assert_eq!(std::fs::read(d.join(r"dst\config.ini")).unwrap(), b"a");
         assert_eq!(std::fs::read(d.join(r"dst\perfis\jogo\p.ini")).unwrap(), b"b");
+        // Uma junção de volta para a origem fica de fora (antes, recursão sem fim).
+        let out = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(d.join(r"src\volta"))
+            .arg(d.join("src"))
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+        super::copy_tree(&d.join("src"), &d.join("dst2"));
+        assert!(d.join(r"dst2\perfis\jogo\p.ini").exists());
+        assert!(!d.join(r"dst2\volta").exists());
         let _ = std::fs::remove_dir_all(&d);
     }
 }

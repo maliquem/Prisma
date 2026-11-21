@@ -424,31 +424,46 @@ fn copy_file(e: &Entry, st: &State, mv: bool, buf: Option<&mut [u8]>, moved: &mu
 
 /// Só leitura no destino faz a troca de nome dar "acesso negado"; a cópia leva o atributo junto, então
 /// um arquivo copiado uma vez não seria substituído nunca mais.
-fn clear_readonly(p: &Path) {
-    if let Ok(m) = std::fs::metadata(p) {
-        let mut perm = m.permissions();
-        if perm.readonly() {
-            perm.set_readonly(false);
-            let _ = std::fs::set_permissions(p, perm);
-        }
+/// Devolve os atributos de antes quando tirou, para pôr de volta se a troca falhar.
+fn clear_readonly(p: &Path) -> Option<std::fs::Permissions> {
+    let old = std::fs::metadata(p).ok()?.permissions();
+    if !old.readonly() {
+        return None;
+    }
+    let mut perm = old.clone();
+    perm.set_readonly(false);
+    std::fs::set_permissions(p, perm).ok()?;
+    Some(old)
+}
+
+/// A troca falhou (destino aberto em outro programa): o antigo fica como estava, só leitura inclusive.
+fn restore_readonly(p: &Path, old: Option<std::fs::Permissions>) {
+    if let Some(perm) = old {
+        let _ = std::fs::set_permissions(p, perm);
     }
 }
 
 /// Põe `tmp` no lugar de `dst`, que pode estar só leitura.
 fn replace_file(tmp: &Path, dst: &Path) -> std::io::Result<()> {
-    clear_readonly(dst);
-    std::fs::rename(tmp, dst)
+    let old = clear_readonly(dst);
+    let res = std::fs::rename(tmp, dst);
+    if res.is_err() {
+        restore_readonly(dst, old);
+    }
+    res
 }
 
 /// Troca o nome de um arquivo, por cima do destino só com `replace`. False em outro disco ou com erro.
 fn rename_file(src: &Path, dst: &Path, replace: bool) -> bool {
-    if replace {
-        clear_readonly(dst);
-    }
     use windows::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVE_FILE_FLAGS};
+    let old = if replace { clear_readonly(dst) } else { None };
     let (s, d) = (windows::core::HSTRING::from(src.as_os_str()), windows::core::HSTRING::from(dst.as_os_str()));
     let flags = if replace { MOVEFILE_REPLACE_EXISTING } else { MOVE_FILE_FLAGS(0) };
-    unsafe { MoveFileExW(&s, &d, flags) }.is_ok()
+    let ok = unsafe { MoveFileExW(&s, &d, flags) }.is_ok();
+    if !ok {
+        restore_readonly(dst, old);
+    }
+    ok
 }
 
 /// Quantos arquivos ao mesmo tempo: 4 de SSD para SSD, onde muitos arquivos pequenos ganham com
@@ -1134,26 +1149,45 @@ mod tests {
     #[test]
     fn replacing_a_read_only_copy_works() {
         let d = scratch("somenteleitura");
-        let a = d.join(r"src\a.txt");
-        let mut perm = std::fs::metadata(&a).unwrap().permissions();
-        perm.set_readonly(true);
-        std::fs::set_permissions(&a, perm).unwrap();
-        // A segunda cópia cai em cima da primeira, que levou o só leitura junto.
-        for _ in 0..2 {
-            let st = state(REPLACE, false);
-            run(&[d.join("src")], &d.join("dst"), false, &st, |_| None);
-            assert!(st.errors.lock().unwrap().is_empty());
-        }
         let b = d.join(r"dst\src\a.txt");
+        let novo = d.join("novo.txt");
+        let ro = |p: &Path| std::fs::metadata(p).unwrap().permissions().readonly();
+        let set_ro = |p: &Path, on: bool| {
+            let mut perm = std::fs::metadata(p).unwrap().permissions();
+            perm.set_readonly(on);
+            std::fs::set_permissions(p, perm).unwrap();
+        };
+        let st = state(REPLACE, false);
+        run(&[d.join("src")], &d.join("dst"), false, &st, |_| None);
+        // Copiar por cima de um destino só leitura.
+        std::fs::write(&b, b"velho").unwrap();
+        set_ro(&b, true);
+        let st = state(REPLACE, false);
+        run(&[d.join("src")], &d.join("dst"), false, &st, |_| None);
+        assert!(st.errors.lock().unwrap().is_empty(), "{:?}", st.errors.lock().unwrap());
         assert_eq!(std::fs::read(&b).unwrap(), b"alfa");
-        // Mover (troca de nome no mesmo disco) por cima de um destino só leitura.
-        std::fs::write(d.join("novo.txt"), b"novo").unwrap();
-        assert!(std::fs::metadata(&b).unwrap().permissions().readonly());
-        assert!(rename_file(&d.join("novo.txt"), &b, true));
+        // A troca do temporário, sozinha.
+        set_ro(&b, true);
+        std::fs::write(&novo, b"novo").unwrap();
+        replace_file(&novo, &b).unwrap();
         assert_eq!(std::fs::read(&b).unwrap(), b"novo");
-        for f in [&a, &b] {
-            clear_readonly(f);
+        // Mover (troca de nome no mesmo disco) por cima de um destino só leitura.
+        set_ro(&b, true);
+        std::fs::write(&novo, b"movido").unwrap();
+        assert!(rename_file(&novo, &b, true));
+        assert_eq!(std::fs::read(&b).unwrap(), b"movido");
+        // Destino aberto em outro programa: a troca falha e o só leitura volta.
+        set_ro(&b, true);
+        std::fs::write(&novo, b"x").unwrap();
+        {
+            let _open = std::fs::OpenOptions::new().read(true).share_mode(0).open(&b).unwrap();
+            assert!(replace_file(&novo, &b).is_err());
+            assert!(ro(&b));
+            assert!(!rename_file(&novo, &b, true));
+            assert!(ro(&b));
         }
+        assert_eq!(std::fs::read(&b).unwrap(), b"movido");
+        set_ro(&b, false);
         let _ = std::fs::remove_dir_all(&d);
     }
 }

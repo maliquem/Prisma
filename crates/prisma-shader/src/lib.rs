@@ -40,14 +40,48 @@ macro_rules! say {
 /// Grava num temporário ao lado e troca: o arquivo nunca fica pela metade se o PC cair no meio.
 pub fn write_safe(path: &std::path::Path, data: impl AsRef<[u8]>) -> std::io::Result<()> {
     use std::io::Write;
-    let tmp = path.with_extension("tmp");
-    {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    // Temporário só desta gravação: duas ao mesmo tempo (threads, ou o app e o gancho) não se atropelam.
+    static N: AtomicU32 = AtomicU32::new(0);
+    let name = path.file_name().unwrap_or_default().to_string_lossy();
+    let tmp = path.with_file_name(format!("{name}.{}-{}.tmp", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
+    let res = (|| {
         let mut f = std::fs::File::create(&tmp)?;
         f.write_all(data.as_ref())?;
         // No disco antes de trocar: uma queda logo depois não deixa o arquivo vazio.
         f.sync_all()?;
+        drop(f);
+        std::fs::rename(&tmp, path)
+    })();
+    if res.is_err() {
+        let _ = std::fs::remove_file(&tmp);
     }
-    std::fs::rename(tmp, path)
+    res
+}
+
+#[cfg(test)]
+mod write_safe_tests {
+    #[test]
+    fn parallel_writes_all_land() {
+        let d = std::env::temp_dir().join(format!("prisma_write_safe_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        let p = d.join("c.ini");
+        // Com um temporário só para todos, um escrevia por cima do outro e alguma gravação falhava.
+        std::thread::scope(|s| {
+            for i in 0..8u8 {
+                let p = &p;
+                // Erro de troca simultânea no mesmo destino pode acontecer; aqui importa o que sobra.
+                s.spawn(move || (0..50).for_each(|_| drop(super::write_safe(p, [i; 64]))));
+            }
+        });
+        let data = std::fs::read(&p).unwrap();
+        let left = std::fs::read_dir(&d).unwrap().count();
+        let _ = std::fs::remove_dir_all(&d);
+        // Com um temporário só para todos, uma gravação trocava o arquivo da outra pela metade.
+        assert!(data.len() == 64 && data.iter().all(|&b| b == data[0]), "arquivo misturado");
+        assert_eq!(left, 1, "sobrou temporário");
+    }
 }
 
 /// Triângulo que cobre a tela, sem buffer de vértices.

@@ -1276,7 +1276,9 @@ impl Config {
         // Antivírus, backup ou OneDrive podem segurar o arquivo por um instante: tenta como o read_text.
         let mut tries = 0;
         while let Err(e) = write_safe(&path, &s) {
-            if tries >= 5 {
+            // Só arquivo preso (acesso negado, em uso) passa sozinho; disco cheio não muda esperando.
+            let busy = e.kind() == std::io::ErrorKind::PermissionDenied || matches!(e.raw_os_error(), Some(5 | 32));
+            if !busy || tries >= 5 {
                 log(&format!("o config.ini não gravou ({e}): a mudança se perde ao fechar"));
                 break;
             }
