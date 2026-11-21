@@ -95,7 +95,9 @@ unsafe fn strip(hwnd: HWND) -> bool {
     if style as u32 & STYLE_OFF == 0 && ex as u32 & EX_OFF == 0 {
         return false;
     }
-    SetWindowLongW(hwnd, GWL_STYLE, style & !(STYLE_OFF as i32));
+    // WS_POPUP: o DefWindowProc só obedece o WM_GETMINMAXINFO (que o SDL2 trava no tamanho atual quando a janela
+    // não é redimensionável) em janela que não é popup; sem ele o SetWindowPos fica preso no tamanho antigo.
+    SetWindowLongW(hwnd, GWL_STYLE, (style & !(STYLE_OFF as i32)) | WS_POPUP.0 as i32);
     SetWindowLongW(hwnd, GWL_EXSTYLE, ex & !(EX_OFF as i32));
     true
 }
@@ -211,17 +213,11 @@ impl Fullscreenizer {
                 let _ = DestroyWindow(HWND(b as *mut _));
                 mark_fullscreen(hwnd, false);
             }
+            // Primeiro o tamanho, ainda como popup (sem o limite do WM_GETMINMAXINFO); depois o estilo de volta.
+            let _ = SetWindowPos(hwnd, None, s.rect.left, s.rect.top, s.rect.right - s.rect.left, s.rect.bottom - s.rect.top, SWP_NOZORDER | SWP_SHOWWINDOW);
             SetWindowLongW(hwnd, GWL_STYLE, s.style);
             SetWindowLongW(hwnd, GWL_EXSTYLE, s.ex);
-            let _ = SetWindowPos(
-                hwnd,
-                None,
-                s.rect.left,
-                s.rect.top,
-                s.rect.right - s.rect.left,
-                s.rect.bottom - s.rect.top,
-                SWP_FRAMECHANGED | SWP_NOZORDER | SWP_SHOWWINDOW,
-            );
+            let _ = SetWindowPos(hwnd, None, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER);
             if s.maximized {
                 let _ = ShowWindow(hwnd, SW_MAXIMIZE);
             }
@@ -362,6 +358,45 @@ mod tests {
             assert_eq!(client(h), (1680, 720), "cobre o monitor 21:9 sem borda");
             full.restore(h);
             assert_ne!(GetWindowLongW(h, GWL_STYLE) as u32 & WS_CAPTION.0, 0, "restaurar devolve o título");
+            let _ = DestroyWindow(h);
+        }
+    }
+
+    /// Liga depois de criar a janela: o SDL2 trava mínimo e máximo no tamanho atual quando ela não é redimensionável.
+    static LOCK_SIZE: AtomicBool = AtomicBool::new(false);
+
+    unsafe extern "system" fn sdl_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT {
+        if m == WM_GETMINMAXINFO && LOCK_SIZE.load(SeqCst) {
+            let mut r = RECT::default();
+            let _ = GetWindowRect(h, &mut r);
+            let size = POINT { x: r.right - r.left, y: r.bottom - r.top };
+            let mm = &mut *(l.0 as *mut MINMAXINFO);
+            (mm.ptMinTrackSize, mm.ptMaxTrackSize, mm.ptMaxSize) = (size, size, size);
+            return LRESULT(0);
+        }
+        DefWindowProcW(h, m, w, l)
+    }
+
+    #[test]
+    fn jogo_sdl_nao_redimensionavel() {
+        let mon = RECT { left: 0, top: 0, right: 1680, bottom: 720 };
+        unsafe {
+            let class = w!("PrismaTesteSdl");
+            RegisterClassW(&WNDCLASSW { lpfnWndProc: Some(sdl_proc), lpszClassName: class, ..Default::default() });
+            let style = WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
+            let h = CreateWindowExW(WINDOW_EX_STYLE(0), class, w!("SDL_app"), style, 50, 40, 800, 600, None, None, None, None).unwrap();
+            LOCK_SIZE.store(true, SeqCst);
+            let mut orig = RECT::default();
+            GetWindowRect(h, &mut orig).unwrap();
+            let mut full = Fullscreenizer::default();
+            assert!(!full.apply_on(h, mon, Fit::Stretch).unwrap().resizable);
+            let mut r = RECT::default();
+            GetWindowRect(h, &mut r).unwrap();
+            assert_eq!((r.left, r.top, r.right, r.bottom), (0, 0, 1680, 720), "cobre o monitor apesar do limite do SDL");
+            full.restore(h);
+            GetWindowRect(h, &mut r).unwrap();
+            assert_eq!((r.left, r.top, r.right, r.bottom), (orig.left, orig.top, orig.right, orig.bottom), "volta ao tamanho original");
+            assert_eq!(GetWindowLongW(h, GWL_STYLE) as u32 & style.0, style.0, "devolve o título");
             let _ = DestroyWindow(h);
         }
     }
