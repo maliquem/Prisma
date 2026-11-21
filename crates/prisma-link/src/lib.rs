@@ -12,7 +12,7 @@ mod server;
 
 pub use frame::{read_frame, write_frame};
 pub use proto::{
-    AudioDevice, Capabilities, Controller, FpsLimit, GameInvite, InviteState, MeterView, NvidiaKind, NvidiaSetting, NvidiaValue, OptionValue, Page,
+    AudioDevice, Capabilities, Controller, FpsLimit, GameInvite, HdrMode, InviteState, MeterView, NvidiaKind, NvidiaSetting, NvidiaValue, OptionValue, Page,
     PowerPlan, ReplayOptions, ReplayResolution, Reply, Request, ShareMode, StoreGame, VolumeChange,
 };
 
@@ -95,6 +95,14 @@ pub mod cap {
     pub const LAUNCH_HDR: &str = "launch.hdr";
     /// `Request::Games`: o Prisma recebe a lista de jogos das lojas para a aba Jogos.
     pub const GAMES: &str = "games";
+    /// `OptionValue::HdrMode` e `Reply::Options::hdr_mode`: o modo de HDR do jogo, o da aba HDR.
+    pub const HDR_MODE: &str = "hdr.mode";
+    /// `OptionValue::NativeHdr`: a marca "o jogo tem HDR próprio".
+    pub const HDR_NATIVE: &str = "hdr.native";
+    /// `OptionValue::Shaders`: liga e desliga os shaders do jogo.
+    pub const SHADERS: &str = "shaders";
+    /// `OptionValue::ShaderPreset` e a lista `shader_presets` no `Options`.
+    pub const SHADERS_PRESET: &str = "shaders.preset";
 }
 
 /// Códigos estáveis de `Reply::Failed`.

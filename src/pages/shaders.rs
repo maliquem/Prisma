@@ -603,6 +603,88 @@ fn mine() -> Vec<String> {
     v
 }
 
+/// Presets que o jogador escolhe na barra do launcher: os dele e os .slangp da biblioteca, no formato da lista
+/// do Carregar preset (`..\nome.slangp` e `crt\nome.slangp`).
+fn presets(lib: Vec<String>) -> impl Iterator<Item = String> {
+    mine().into_iter().chain(lib.into_iter().filter(|p| p.to_lowercase().ends_with(".slangp")))
+}
+
+/// A biblioteca lida há pouco: o launcher pergunta o tempo todo e a pasta tem milhares de arquivos.
+static LIB_SCAN: Mutex<Option<(Instant, Vec<String>)>> = Mutex::new(None);
+
+/// `presets` para o `Reply::Options`, só até onde cabe no quadro do pipe (`MAX_FRAME` é de 64 KB).
+/// shortcut: o que passa do limite não aparece no launcher; a página Shaders mostra todos.
+pub fn offered() -> Vec<String> {
+    let lib = {
+        let mut g = LIB_SCAN.lock().unwrap_or_else(|e| e.into_inner());
+        match &*g {
+            Some((at, v)) if at.elapsed().as_secs() < 30 => v.clone(),
+            _ => {
+                let v = scan(&sp::lib_dir());
+                *g = Some((Instant::now(), v.clone()));
+                v
+            }
+        }
+    };
+    fit(presets(lib), 40_000)
+}
+
+fn fit(list: impl Iterator<Item = String>, budget: usize) -> Vec<String> {
+    let mut used = 0;
+    // 6 bytes por item: as aspas, a vírgula e as barras que o JSON dobra.
+    list.take_while(|p| {
+        used += p.len() + 6;
+        used <= budget
+    })
+    .collect()
+}
+
+/// O arquivo do preset `name`, se é um dos de `presets` (o launcher não escolhe caminho).
+pub fn preset_file(name: &str) -> Option<PathBuf> {
+    presets(scan(&sp::lib_dir())).any(|p| p == name).then(|| name.strip_prefix("..\\").map_or_else(|| sp::lib_dir().join(name), |m| sp::root().join(m)))
+}
+
+/// O preset do perfil na forma de `presets`: vazio sem passes ou com uma cadeia de vários.
+pub fn preset_of(p: &Profile) -> String {
+    let [pass] = p.passes.as_slice() else { return String::new() };
+    let rel = match pass.path.strip_prefix(sp::lib_dir()) {
+        Ok(r) => r.to_path_buf(),
+        Err(_) => match pass.path.strip_prefix(sp::root()) {
+            Ok(r) => Path::new("..").join(r),
+            Err(_) => return String::new(),
+        },
+    };
+    rel.to_string_lossy().replace('/', "\\")
+}
+
+/// Barra do launcher: muda o perfil de shader do jogo `path` (o .exe inteiro), criando o perfil se não houver;
+/// o perfil novo nasce com `on`. O motor lê o arquivo, como quando a página grava.
+pub fn edit_game(app: &mut App, path: &str, on: bool, f: impl FnOnce(&mut Profile)) -> Result<(), &'static str> {
+    // Antes de ler: um ajuste da página ainda sem gravar não pode cair por cima do que o launcher grava.
+    if let Some(s) = st().as_mut() {
+        s.flush();
+    }
+    let file = sp::path_for(Path::new(path));
+    let new = !file.exists();
+    let mut p = if new {
+        Profile { name: app_name(&crate::sys::procs::exe_name(path)).to_string(), exe: path.into(), on, ..Profile::default() }
+    } else {
+        Profile::load(&file).map_err(|_| "Não deu para gravar o perfil")?
+    };
+    f(&mut p);
+    p.save(&file).map_err(|_| "Não deu para gravar o perfil")?;
+    if new {
+        if !sp::keys_path().exists() {
+            write_keys(app);
+        }
+        app.register_hotkeys();
+    }
+    if let Some(s) = st().as_mut() {
+        reload(s, None);
+    }
+    Ok(())
+}
+
 /// Nome de arquivo do preset: o que não é letra, número ou ` -_.()` vira `_`.
 fn preset_name(name: &str) -> String {
     name.chars().map(|c| if c.is_alphanumeric() || " -_.()".contains(c) { c } else { '_' }).collect::<String>().trim().to_string()
@@ -1331,6 +1413,22 @@ mod tests {
         assert_eq!(scan(&d), vec!["crt\\crt-lottes.slangp".to_string(), "meus\\a.slang".to_string()]);
         assert_eq!(top_dir("crt\\crt-lottes.slangp"), "crt");
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn preset_do_perfil_e_a_lista_do_launcher() {
+        let pass = |path: PathBuf| Pass { on: true, path };
+        let one = |path: PathBuf| Profile { passes: vec![pass(path)], ..Profile::default() };
+        assert_eq!(preset_of(&one(sp::lib_dir().join("crt").join("crt-lottes.slangp"))), "crt\\crt-lottes.slangp");
+        assert_eq!(preset_of(&one(sp::root().join("meu.slangp"))), "..\\meu.slangp");
+        assert_eq!(preset_of(&one(PathBuf::from(r"C:\fora\x.slangp"))), "");
+        assert_eq!(preset_of(&Profile::default()), "");
+        let two = Profile { passes: vec![pass(sp::root().join("a.slangp")), pass(sp::root().join("b.slangp"))], ..Profile::default() };
+        assert_eq!(preset_of(&two), "");
+        // O quadro do pipe é de 64 KB: a lista para quando o orçamento acaba, sem cortar um item no meio.
+        let list = ["a".repeat(10), "b".repeat(10), "c".repeat(10)];
+        assert_eq!(fit(list.iter().cloned(), 32), vec![list[0].clone(), list[1].clone()]);
+        assert!(fit(list.iter().cloned(), 0).is_empty());
     }
 
     #[test]
