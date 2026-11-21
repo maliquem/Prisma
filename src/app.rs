@@ -1163,6 +1163,8 @@ fn share_start() {
 }
 
 pub fn shutdown() {
+    // O TerminateProcess não manda o Up: sem isto, tecla ou clique segurado pelo controle fica preso no Windows.
+    crate::sys::remap::release_held();
     crate::sys::pads::release_pads();
     crate::pages::share::shutdown();
     with(|a| a.meter.leave(&mut a.cfg));

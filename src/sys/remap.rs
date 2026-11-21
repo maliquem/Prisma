@@ -4,7 +4,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use super::pads::{self, Buttons, Input};
@@ -1825,7 +1825,7 @@ struct Run {
     ac: bool,
     ac_seen: HashMap<String, bool>,
     /// Ligações de teclado e mouse do perfil em uso, como perfil de botões, e a tecla de cada bit.
-    kbd: Option<(Profile, Vec<u16>)>,
+    kbd: Option<(Arc<Profile>, Vec<u16>)>,
     /// Teclas apertadas (bits) e as que o Prisma engoliu ao apertar (a soltura também fica com ele).
     kheld: Buttons,
     kswallow: Buttons,
@@ -1859,6 +1859,8 @@ fn pad_switch(r: &mut Run, key: &str, to: usize, acts: &mut Vec<Act>, events: &m
     let name = r.profiles[to].name.clone();
     if r.fixed.contains_key(key) {
         r.fixed.insert(key.to_string(), name.clone());
+        // `send` descarta o Up da macro: sem parar aqui, a do perfil antigo segue (e o laço, para sempre).
+        super::macros::stop_pad(key);
         acts.extend(r.engines.get_mut(key).map(|e| e.0.release_all()).unwrap_or_default());
         pads::buzz(r.profiles[to].buzz);
         events.push(pads::Event::PadProfile { key: key.to_string(), name });
@@ -1900,6 +1902,17 @@ fn pick_for(profiles: &[Profile], exe: &str, keep: Option<usize>, last: Option<&
 /// Último perfil usado em cada programa: uma linha "exe<TAB>perfil" (fora da pasta dos perfis).
 fn last_path() -> std::path::PathBuf {
     crate::config::data_dir().join("pad_last.txt")
+}
+
+/// Grava o último perfil de cada programa fora do `RUN` (o gancho de teclado também o pega e não espera
+/// o disco). A trava faz quem lê por último gravar por último.
+fn save_last() {
+    std::thread::spawn(|| {
+        static WRITE: Mutex<()> = Mutex::new(());
+        let _w = WRITE.lock().unwrap();
+        let Some(text) = RUN.lock().unwrap().as_ref().map(|r| r.last.iter().map(|(e, n)| format!("{e}\t{n}\n")).collect::<String>()) else { return };
+        let _ = crate::config::write_safe(&last_path(), text);
+    });
 }
 
 fn load_last() -> HashMap<String, String> {
@@ -1951,7 +1964,7 @@ fn key_profile(p: &Profile) -> Option<(Profile, Vec<u16>)> {
 /// Perfil em uso mudou (ou o mapeamento ligou, desligou ou parou): refaz as teclas e diz ao gancho
 /// se ele é preciso (1 teclado, 2 mouse).
 fn set_keys(r: &mut Run) {
-    r.kbd = key_profile(&r.profiles[r.cur]);
+    r.kbd = key_profile(&r.profiles[r.cur]).map(|(p, s)| (Arc::new(p), s));
     r.kheld = 0;
     r.kswallow = 0;
     r.typed.clear();
@@ -2035,11 +2048,13 @@ pub fn remove(name: &str) {
 /// Relê os perfis. Solta tudo antes: as camadas e as teclas podem ter mudado.
 fn reload() {
     super::macros::stop_all();
+    // O disco é lido antes de travar: o gancho de teclado também pega o `RUN`.
+    let fresh = load_profiles();
     let acts = {
         let mut g = RUN.lock().unwrap();
         let Some(r) = g.as_mut() else { return };
         let name = r.profiles[r.cur].name.clone();
-        r.profiles = load_profiles();
+        r.profiles = fresh;
         r.cur = r.profiles.iter().position(|p| p.name == name).unwrap_or(0);
         r.want = None;
         set_keys(r);
@@ -2062,8 +2077,9 @@ pub fn configure(kbm: bool, games: Vec<String>) {
             KBM.store(kbm, Ordering::Relaxed);
             r.exe.clear();
             *FOCUS.lock().unwrap() = (None, 0, false);
+            // Só aqui: `set_keys` zera as teclas apertadas, e mexer em outra opção não deve soltá-las.
+            set_keys(r);
         }
-        set_keys(r);
     }
     super::pads::poke();
 }
@@ -2343,7 +2359,6 @@ pub fn feed(key: &str, inp: &Input, arrived: Instant) {
 /// como eventos; teclas e cliques vão para `acts`.
 fn handle(r: &mut Run, key: &str, step: Vec<Act>, acts: &mut Vec<Act>, events: &mut Vec<pads::Event>) {
     let mine = prof_of(r, key);
-    let strings = r.profiles[mine].strings.clone();
     for a in step {
                 match a {
                     Act::Cmd(Out::Action(n)) => events.push(pads::Event::Action { id: n, pad: key.to_string() }),
@@ -2352,10 +2367,10 @@ fn handle(r: &mut Run, key: &str, step: Vec<Act>, acts: &mut Vec<Act>, events: &
                             super::osk::type_text(&t.text);
                         }
                     }
-                    Act::Cmd(Out::Run(n)) => events.extend(strings.get(n as usize).map(|s| pads::Event::Run { path: s.clone() })),
+                    Act::Cmd(Out::Run(n)) => events.extend(r.profiles[mine].strings.get(n as usize).map(|s| pads::Event::Run { path: s.clone() })),
                     Act::Cmd(Out::Profile(n)) => {
                         // Troca na mão: vale até o foco mudar de programa.
-                        if let Some(to) = strings.get(n as usize).and_then(|s| r.profiles.iter().position(|p| p.name == *s)) {
+                        if let Some(to) = r.profiles[mine].strings.get(n as usize).and_then(|s| r.profiles.iter().position(|p| p.name == *s)) {
                             pad_switch(r, key, to, acts, events);
                         }
                     }
@@ -2417,7 +2432,7 @@ pub fn key_event(vk: u16, down: bool) -> bool {
         let Some(r) = g.as_mut() else { return false };
         let Some(i) = r.kbd.as_ref().and_then(|k| k.1.iter().position(|&s| s == vk)) else { return false };
         let bit: Buttons = 1 << i;
-        let kp = r.kbd.as_ref().unwrap().0.clone();
+        let kp = Arc::clone(&r.kbd.as_ref().unwrap().0);
         let live = ON.load(Ordering::Relaxed) && !STOPPED.load(Ordering::Relaxed) && !super::nav::front() && !FRONT_ADMIN.load(Ordering::Relaxed) && !r.ac;
         let e = r.engines.entry(KBD.into()).or_insert_with(|| (Engine { prev: 0, ..Engine::default() }, None));
         if down && r.kheld & bit != 0 {
@@ -2518,7 +2533,7 @@ pub fn key_tick() {
     {
         let mut g = RUN.lock().unwrap();
         let Some(r) = g.as_mut() else { return };
-        if let Some(kp) = r.kbd.as_ref().map(|k| k.0.clone()) {
+        if let Some(kp) = r.kbd.as_ref().map(|k| Arc::clone(&k.0)) {
             let held = r.kheld;
             if let Some(e) = r.engines.get_mut(KBD) {
                 let step = e.0.step(&kp, &Input { buttons: held, ..Default::default() }, now);
@@ -2549,8 +2564,7 @@ fn switch(r: &mut Run, to: usize) -> Vec<Act> {
     let name = &r.profiles[to].name;
     if r.profiles[to].games.contains(&r.exe) && r.last.get(&r.exe) != Some(name) {
         r.last.insert(r.exe.clone(), name.clone());
-        let text: String = r.last.iter().map(|(e, n)| format!("{e}\t{n}\n")).collect();
-        let _ = crate::config::write_safe(&last_path(), text);
+        save_last();
     }
     pads::buzz(r.profiles[to].buzz);
     set_keys(r);
@@ -2616,10 +2630,12 @@ pub fn release_held() {
 
 /// O controle saiu: solta o que ele segurava.
 pub fn forget(key: &str) {
-    super::macros::stop_pad(key);
+    super::macros::forget(key);
     super::nav::forget(key);
     super::osk::forget(key);
     super::radial::forget(key);
+    CHORD.lock().unwrap().retain(|k| k != key);
+    MODE_HELD.lock().unwrap().retain(|k| k != key);
     let acts = RUN.lock().unwrap().as_mut().and_then(|r| r.engines.remove(key)).map(|mut e| e.0.release_all()).unwrap_or_default();
     send(&acts);
 }
@@ -2652,9 +2668,10 @@ pub fn swallowed(key: &str) -> pads::Buttons {
     b
 }
 
+static MODE_HELD: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
 fn mode_swap(key: &str, on: bool) -> bool {
-    static HELD: Mutex<Vec<String>> = Mutex::new(Vec::new());
-    let mut h = HELD.lock().unwrap();
+    let mut h = MODE_HELD.lock().unwrap();
     match (on, h.iter().position(|k| k == key)) {
         (true, None) => {
             h.push(key.to_string());
@@ -2912,6 +2929,70 @@ mod tests {
         pad_switch(&mut r, "pad2", 0, &mut acts, &mut events);
         assert_eq!((r.cur, r.fixed["pad2"].as_str()), (0, BASE));
         assert!(matches!(&events[..], [pads::Event::PadProfile { key, .. }] if key == "pad2"));
+    }
+
+    fn test_run() -> Run {
+        Run { profiles: vec![Profile::base(), Profile::base()], cur: 0, games: vec![], engines: HashMap::new(), want: None, lat: vec![], warned: HashSet::new(), ac: false, ac_seen: HashMap::new(), kbd: None, kheld: 0, kswallow: 0, typed: String::new(), exe: String::new(), last: HashMap::new(), pids: HashMap::new(), fixed: HashMap::new() }
+    }
+
+    #[test]
+    fn switching_a_pads_own_profile_stops_its_macros() {
+        let mut r = test_run();
+        r.profiles[1].name = "Corrida".into();
+        r.fixed.insert("switch-a".into(), "Corrida".into());
+        let mine = super::super::macros::fake_running("switch-a", 0);
+        let (mut acts, mut events) = (vec![], vec![]);
+        pad_switch(&mut r, "switch-a", 0, &mut acts, &mut events);
+        assert!(mine.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn handle_sorts_engine_output_into_keys_and_events() {
+        let mut r = test_run();
+        r.profiles[1].name = "Corrida".into();
+        r.profiles[0].strings = vec!["Corrida".into(), "C:/jogo.exe".into()];
+        r.fixed.insert("handle-a".into(), BASE.into());
+        let (mut acts, mut events) = (vec![], vec![]);
+        let step = vec![Act::Cmd(Out::Action(3)), Act::Cmd(Out::Run(1)), Act::Down(Out::Key(0x41, 0)), Act::Turbo(pads::A), Act::Turbo(pads::A), Act::Cmd(Out::Run(9)), Act::Cmd(Out::Profile(0))];
+        handle(&mut r, "handle-a", step, &mut acts, &mut events);
+        // Teclas seguem para o SendInput; o resto vira evento, e um número sem texto não faz nada.
+        assert_eq!(acts, [Act::Down(Out::Key(0x41, 0))]);
+        assert!(matches!(&events[0], pads::Event::Action { id: 3, pad } if pad == "handle-a"));
+        assert!(matches!(&events[1], pads::Event::Run { path } if path == "C:/jogo.exe"));
+        assert!(matches!(&events[2], pads::Event::Turbo { on: true, .. }) && matches!(&events[3], pads::Event::Turbo { on: false, .. }));
+        // O perfil do controle com perfil próprio muda só o dele.
+        assert_eq!(r.fixed["handle-a"], "Corrida");
+        assert!(matches!(&events[4], pads::Event::PadProfile { key, name } if key == "handle-a" && name == "Corrida"));
+        assert_eq!(events.len(), 5);
+    }
+
+    #[test]
+    fn keys_of_the_profile_become_button_bits() {
+        assert!(key_profile(&Profile::base()).is_none());
+        let mut p = Profile::base();
+        let key = |button, with| Bind { button, with, when: When::Press, out: Out::Key(0x0D, 0) };
+        p.layers[0].keys = vec![key(0x41, 0), key(0x42, 0x41), key(0x41, 0)];
+        let (kp, slots) = key_profile(&p).unwrap();
+        // Uma tecla, um bit, na ordem em que aparece; a combinação usa o bit da outra.
+        assert_eq!(slots, [0x41, 0x42]);
+        let b = &kp.layers[0].binds;
+        assert_eq!((b[0].button, b[0].with), (1, 0));
+        assert_eq!((b[1].button, b[1].with), (2, 1));
+        assert!(kp.layers[0].keys.is_empty() && kp.turbo.is_empty());
+        // Passando do limite, as últimas ficam de fora e o resto continua funcionando.
+        p.layers[0].keys = (1..=KEY_SLOTS as u64 + 3).map(|v| key(0x30 + v, 0)).collect();
+        let (kp, slots) = key_profile(&p).unwrap();
+        assert_eq!((slots.len(), kp.layers[0].binds.len()), (KEY_SLOTS, KEY_SLOTS));
+    }
+
+    #[test]
+    fn forgetting_a_pad_drops_its_chord_and_mode_swap_marks() {
+        let hold = Input { buttons: pads::GUIDE, lt: 1.0, ..Default::default() };
+        assert!(chord("forget-c", &hold));
+        assert!(mode_swap("forget-c", true));
+        forget("forget-c");
+        assert!(!CHORD.lock().unwrap().iter().any(|k| k == "forget-c"));
+        assert!(!MODE_HELD.lock().unwrap().iter().any(|k| k == "forget-c"));
     }
 
     #[test]

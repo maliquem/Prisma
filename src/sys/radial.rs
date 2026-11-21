@@ -274,6 +274,9 @@ fn step(r: &mut Radial, inp: &Input) -> (Option<u8>, bool, bool) {
 
 /// O controle `key` saiu: fecha o radial que era dele (sem ele, ninguém mais fecharia).
 pub fn forget(key: &str) {
+    if let Some(m) = TRIG.lock().unwrap().as_mut() {
+        m.remove(key);
+    }
     let mut s = STATE.lock().unwrap();
     if matches!(&*s, State::Open(r) if r.pad.as_deref() == Some(key)) {
         *s = State::Closed;
@@ -481,6 +484,13 @@ const GAMEBAR_NAME: &str = "UseNexusForGameBarEnabled";
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn forgetting_a_pad_drops_its_trigger_state() {
+        TRIG.lock().unwrap().get_or_insert_with(HashMap::new).insert("forget-radial".into(), Trig::default());
+        forget("forget-radial");
+        assert!(!TRIG.lock().unwrap().as_ref().unwrap().contains_key("forget-radial"));
+    }
 
     fn inp(buttons: pads::Buttons, rx: f32, ry: f32) -> Input {
         Input {

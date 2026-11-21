@@ -89,6 +89,14 @@ pub fn stop_pad(pad: &str) {
     }
 }
 
+/// O controle saiu: para as macros dele e esquece o que segurava.
+pub fn forget(pad: &str) {
+    stop_pad(pad);
+    if let Some(m) = HELD.lock().unwrap().as_mut() {
+        m.remove(pad);
+    }
+}
+
 /// Roda os passos: uma vez, ou de novo até `stop`. No fim, solta o que ficou apertado.
 fn run(steps: &[Step], mode: Mode, stop: &AtomicBool, mut send: impl FnMut(&[Act])) {
     let mut held: Vec<Out> = vec![];
@@ -447,9 +455,27 @@ fn hooks() {
     }
 }
 
+/// Uma macro "rodando" de mentira, para os testes de quem a para.
+#[cfg(test)]
+pub(super) fn fake_running(pad: &str, n: u8) -> Arc<AtomicBool> {
+    let stop = Arc::new(AtomicBool::new(false));
+    RUNNING.lock().unwrap().get_or_insert_with(HashMap::new).insert((pad.into(), n), (Mode::Held, stop.clone()));
+    stop
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn forgetting_a_pad_stops_its_macros_and_drops_its_held_buttons() {
+        let mine = fake_running("forget-a", 0);
+        pad_input("forget-a", &mut Input::default(), Instant::now());
+        forget("forget-a");
+        assert!(mine.load(Ordering::Relaxed));
+        assert!(!RUNNING.lock().unwrap().as_ref().unwrap().keys().any(|k| k.0 == "forget-a"));
+        assert!(!HELD.lock().unwrap().as_ref().unwrap().contains_key("forget-a"));
+    }
 
     #[test]
     fn recorder_keeps_waits_and_drops_repeats_and_loose_ends() {
