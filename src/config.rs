@@ -1057,6 +1057,8 @@ impl Config {
         if !power_seen {
             c.meter_items |= crate::meter::ITEM_POWER;
         }
+        // Versões antigas criaram linha para o vigia de travamento e o lançador, que nascem com o jogo.
+        c.meter_games.retain(|g| !crate::sys::power::is_helper(&g.exe));
         // A lista substitui a lembrança antiga por programa.
         for p in c.profiles.iter_mut().filter(|p| p.borderless) {
             p.borderless = false;

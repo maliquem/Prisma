@@ -254,15 +254,27 @@ const NOT_GAMES: &[&str] = &[
     "vlc.exe", "mpc-hc64.exe", "mpc-hc.exe", "mpc-be64.exe", "mpv.exe", "potplayermini64.exe", "potplayermini.exe", "kodi.exe", "plex.exe", "stremio.exe", "photos.exe", "applicationframehost.exe",
     "parsecd.exe", "moonlight.exe", "anydesk.exe", "teamviewer.exe", "mstsc.exe", "msrdc.exe", "rustdesk.exe",
     "discord.exe", "obs64.exe", "spotify.exe", "powerpnt.exe", "resolve.exe", "blender.exe", "photoshop.exe", "afterfx.exe", "adobe premiere pro.exe",
-    "steam.exe", "steamwebhelper.exe", "epicgameslauncher.exe", "galaxyclient.exe", "eadesktop.exe", "upc.exe", "battle.net.exe", "xboxpcapp.exe", "gamebar.exe", "playnite.fullscreenapp.exe", "playnite.desktopapp.exe",
-    "losslessscaling.exe", "wallpaper64.exe", "wallpaper32.exe", "nvidia overlay.exe", "explorer.exe", "prisma.exe",
-    // O Prisma Launcher abre o jogo e fica aberto; o vigia de travamento do Unity nasce com o jogo.
-    "prisma-launcher.exe", "unitycrashhandler64.exe", "unitycrashhandler32.exe",
+    "gamebar.exe", "playnite.fullscreenapp.exe", "playnite.desktopapp.exe",
+    "losslessscaling.exe", "wallpaper64.exe", "wallpaper32.exe", "nvidia overlay.exe",
 ];
+
+/// Programas de apoio que nascem com o jogo ou ficam abertos ao lado dele: o Windows, o Prisma e o
+/// Prisma Launcher (prendia a sessão do Medidor com 0 FPS), as lojas e os vigias de travamento.
+const HELPERS: &[&str] = &[
+    "explorer.exe", "searchhost.exe", "startmenuexperiencehost.exe", "shellexperiencehost.exe", "textinputhost.exe", "lockapp.exe",
+    "prisma.exe", "prisma-launcher.exe", "unitycrashhandler64.exe", "unitycrashhandler32.exe",
+    "steam.exe", "steamwebhelper.exe", "epicgameslauncher.exe", "galaxyclient.exe", "eadesktop.exe", "upc.exe", "battle.net.exe", "xboxpcapp.exe",
+];
+
+/// Programa de apoio (lista acima, ou vigia de travamento de outra engine): nunca ganha linha de jogo.
+pub fn is_helper(exe: &str) -> bool {
+    let low = exe.to_ascii_lowercase();
+    HELPERS.contains(&low.as_str()) || ["crashhandler", "crashreport", "crashpad", "crashsender"].iter().any(|c| low.contains(c))
+}
 
 /// Programa que nunca é jogo, mesmo em tela cheia.
 pub fn not_game(exe: &str) -> bool {
-    NOT_GAMES.iter().any(|n| exe.eq_ignore_ascii_case(n))
+    is_helper(exe) || NOT_GAMES.iter().any(|n| exe.eq_ignore_ascii_case(n))
 }
 
 pub fn in_library(path: &str) -> bool {
@@ -397,6 +409,7 @@ mod tests {
     fn launcher_and_crash_handler_are_not_games() {
         assert!(not_game("Prisma-Launcher.exe") && not_game("UnityCrashHandler64.exe"));
         assert!(!not_game("Castlevania Belmont's Curse.exe"));
+        assert!(is_helper("CrashReportClient.exe") && is_helper("Steam.exe") && !is_helper("CrashBandicootNSTrilogy.exe") && !is_helper("vlc.exe"));
     }
 
     #[test]

@@ -43,6 +43,8 @@ struct St {
     eq: Vec<String>,
     /// O jogo (exe, nome) de onde copiar os ajustes, esperando a confirmação.
     copy: Option<(String, String)>,
+    /// A janela de escolher de qual jogo copiar está aberta, com o que foi digitado.
+    copying: Option<String>,
 }
 
 thread_local! {
@@ -92,7 +94,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
                 s.scan = Some(f);
             }
         }
-        if s.scan.is_some() {
+        if s.scan.is_some() || s.copying.is_some() {
             ui.block();
         }
         match s.open.clone() {
@@ -101,6 +103,9 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         }
         if s.scan.is_some() {
             scan_sheet(ui, app, &mut s);
+        }
+        if s.copying.is_some() {
+            copy_sheet(ui, app, &mut s);
         }
     });
 }
@@ -192,9 +197,22 @@ fn list(ui: &mut Ui, app: &mut App, a: Rect, s: &mut St) {
         let funcs = func_names(r.funcs);
         let fw = if funcs.is_empty() { 0.0 } else { crate::ui::gfx::measure(&funcs, 12.0, Weight::Regular, None).0.min(rr.w * 0.4) + 16.0 };
         ui.c.text_fit(rect(rr.x + 48.0, top + 6.0, rr.w - 60.0 - fw, 22.0), &r.name, 14.0, TEXT, Align::Left, Weight::Regular);
-        let missing = gm::info(&r.path, hub(app)).is_some_and(|i| !i.exists) && !r.path.is_empty();
+        let info = gm::info(&r.path, hub(app));
+        let missing = info.is_some_and(|i| !i.exists) && !r.path.is_empty();
         let sub = if missing { format!("{} · {}", r.exe, crate::i18n::tr("exe não encontrado")) } else { r.exe.clone() };
-        ui.c.text_fit(rect(rr.x + 48.0, top + 28.0, rr.w - 60.0 - fw, 18.0), &sub, 12.0, if missing { WARN } else { MUTED }, Align::Left, Weight::Regular);
+        let sw = rr.w - 60.0 - fw;
+        ui.c.text_fit(rect(rr.x + 48.0, top + 28.0, sw, 18.0), &sub, 12.0, if missing { WARN } else { MUTED }, Align::Left, Weight::Regular);
+        // A API e o anti-cheat, em etiquetas depois do exe, as que couberem.
+        let mut tx = rr.x + 48.0 + crate::ui::gfx::measure(&sub, 12.0, Weight::Regular, None).0 + 10.0;
+        for t in tags(app, r, info) {
+            let tw = crate::ui::gfx::measure(&t, 11.0, Weight::Regular, None).0 + 14.0;
+            if tx + tw > rr.x + 48.0 + sw {
+                break;
+            }
+            ui.c.round_line(rect(tx, top + 29.0, tw, 17.0), 8.5, BORDER2, 1.0);
+            ui.c.text(rect(tx, top + 29.0, tw, 17.0), &t, 11.0, TEXT2, Align::Center, Weight::Regular);
+            tx += tw + 6.0;
+        }
         if !funcs.is_empty() {
             ui.c.text_fit(rect(rr.right() - fw, top, fw - 12.0, ROW - 4.0), &funcs, 12.0, TEXT2, Align::Right, Weight::Regular);
         }
@@ -203,6 +221,28 @@ fn list(ui: &mut Ui, app: &mut App, a: Rect, s: &mut St) {
     if let Some(r) = open {
         open_game(app, s, &r);
     }
+}
+
+/// A API que o jogo mostrou rodando, quando já se viu (vale mais que a lida do exe).
+fn seen_api(app: &App, exe: &str) -> Option<u8> {
+    app.cfg.game_apis.iter().find(|(e, _)| e.eq_ignore_ascii_case(exe)).map(|(_, a)| *a)
+}
+
+/// As etiquetas da linha: a API e o anti-cheat. `info` vem de `gm::info`, que guarda o que mediu. A API só
+/// adivinhada pelos arquivos leva "?", como o "provável" da página.
+fn tags(app: &App, r: &Row, info: Option<gm::Info>) -> Vec<String> {
+    let mut out = Vec::new();
+    if let Some(a) = seen_api(app, &r.exe).filter(|a| *a != 0) {
+        out.push(gm::api_names(a));
+    } else if let Some(i) = info.filter(|i| i.api != 0) {
+        out.push(if i.guessed { format!("{}?", gm::api_names(i.api)) } else { gm::api_names(i.api) });
+    }
+    match info.and_then(|i| i.anti_cheat) {
+        Some("") => out.push(crate::i18n::tr("Anti-cheat").into_owned()),
+        Some(n) => out.push(n.to_string()),
+        None => {}
+    }
+    out
 }
 
 /// "Medidor · HDR · Som": o que o jogo tem de ajuste.
@@ -291,7 +331,7 @@ fn game(ui: &mut Ui, app: &mut App, a: Rect, s: &mut St, g: &(String, String, St
     let ir = rect(x, top, w, info_h);
     ui.card(ir);
     let folder = Path::new(path).parent().map(|p| p.display().to_string()).unwrap_or_default();
-    let seen = app.cfg.game_apis.iter().find(|(e, _)| e.eq_ignore_ascii_case(exe)).map(|(_, a)| *a);
+    let seen = seen_api(app, exe);
     let api = match info {
         _ if seen.is_some() => crate::i18n::tr("API: {} (visto rodando)").replace("{}", &gm::api_names(seen.unwrap_or(0))),
         None if !path.is_empty() => crate::i18n::tr("API: medindo…").into_owned(),
@@ -319,14 +359,9 @@ fn game(ui: &mut Ui, app: &mut App, a: Rect, s: &mut St, g: &(String, String, St
         ry += 44.0;
         r
     };
-    if !sources.is_empty() {
-        let names: Vec<String> = std::iter::once(crate::i18n::tr("Copiar ajustes de…").into_owned()).chain(sources.iter().map(|r| r.name.clone())).collect();
-        let mut k = 0;
-        if ui.select("gm-copy", next(), &names, &mut k) && k > 0 {
-            let from = sources[k - 1];
-            s.copy = Some((from.exe.clone(), from.name.clone()));
-            ui.ask("gm-copy", &crate::i18n::tr("Copiar os ajustes de {}?").replace("{}", &from.name), "Onde o outro jogo tem ajuste (Medidor, Energia, HDR, Som, Controle, Shader e Fullscreenizer), o deste jogo é trocado pelo dele. O driver NVIDIA não é copiado.");
-        }
+    if !sources.is_empty() && ui.button("gm-copy-open", next(), "Copiar ajustes de…", false) {
+        s.copying = Some(String::new());
+        crate::ui::focus_on(ui.s, "gm-cq");
     }
     if ui.answered("gm-copy") {
         if let Some((from, name)) = s.copy.take() {
@@ -701,9 +736,10 @@ fn energy(ui: &mut Ui, app: &mut App, r: Rect, exe: &str, path: &str) {
 }
 
 fn hdr(ui: &mut Ui, app: &mut App, r: Rect, exe: &str, path: &str) {
-    let modes: Vec<_> = autohdr::MODES.iter().filter(|m| m.0 != autohdr::RTX || autohdr::nvidia()).collect();
     let at = app.cfg.hdr_games.iter().position(|h| h.exe.eq_ignore_ascii_case(exe));
     let mode = at.map_or(autohdr::DEFAULT, |i| app.cfg.hdr_games[i].mode);
+    // As mesmas opções da aba HDR: mudam com o jogo ter HDR próprio ou não.
+    let modes = super::hdr::mode_options(at.map_or(autohdr::NATIVE_UNKNOWN, |i| app.cfg.hdr_games[i].native), mode);
     let names: Vec<String> = modes.iter().map(|m| m.1.to_string()).collect();
     let mut k = modes.iter().position(|m| m.0 == mode).unwrap_or(0);
     if ui.select("gm-hm", row(ui, r, 0, "Modo"), &names, &mut k) {
@@ -731,18 +767,29 @@ fn hdr(ui: &mut Ui, app: &mut App, r: Rect, exe: &str, path: &str) {
 }
 
 fn sound(ui: &mut Ui, app: &mut App, r: Rect, exe: &str, path: &str, outputs: &[crate::sys::audio::Device], profiles: &[String]) {
+    super::volume::flush_save(app);
     let entry = app.cfg.snd_apps.iter().find(|a| a.exe.eq_ignore_ascii_case(exe)).cloned().unwrap_or_default();
     let mut k = 0;
     let mut pinned = entry.pinned;
+    // Sem volume guardado, vale o do jogo aberto (ou 100%): o controle nunca parte do zero.
+    let running = app.sessions.iter().find(|s| s.exe.eq_ignore_ascii_case(exe)).map(|s| s.volume);
+    let kept = if entry.volume >= 0 { entry.volume as f32 / 100.0 } else { running.unwrap_or(1.0) };
     if ui.check("gm-sp", rect(r.x + 10.0, r.y + 44.0, r.w - 20.0, 44.0), "Guardar o volume deste jogo", &mut pinned) {
-        super::volume::set_pinned(app, exe, path, pinned, Some(if entry.volume >= 0 { entry.volume as f32 / 100.0 } else { 1.0 }));
+        super::volume::set_pinned(app, exe, path, pinned, Some(kept));
     }
     k += 1;
     if entry.pinned {
-        let mut v = entry.volume.max(0) as f32 / 100.0;
-        if ui.slider("gm-sv", row(ui, r, k, "Volume"), &mut v) {
-            super::volume::set_pinned(app, exe, path, true, Some(v));
+        let mut v = kept;
+        let line = row(ui, r, k, "Volume");
+        if ui.slider("gm-sv", rect(line.x, line.y, line.w - 56.0, line.h), &mut v) {
+            super::volume::slide_pinned(app, exe, path, v);
+            // Já vale no jogo aberto, como na aba Som.
+            for s in app.sessions.iter_mut().filter(|s| s.exe.eq_ignore_ascii_case(exe)) {
+                s.set_volume(v);
+                s.volume = v;
+            }
         }
+        ui.c.text(rect(line.right() - 48.0, line.y, 48.0, line.h), &format!("{:.0}%", v * 100.0), 14.0, TEXT, Align::Right, Weight::Regular);
         k += 1;
     }
     let names: Vec<String> = std::iter::once(crate::i18n::tr("Padrão do Windows").into_owned()).chain(outputs.iter().map(|d| d.name.clone())).collect();
@@ -841,6 +888,60 @@ fn nvidia(ui: &mut Ui, app: &mut App, r: Rect, exe: &str, s: &mut St) {
             app.cfg.save();
         }
         Some(false) => app.toast.info("Não consegui gravar no driver NVIDIA."),
+        None => {}
+    }
+}
+
+/// Escolher de qual jogo copiar os ajustes: digitar filtra os jogos com ajuste, e clicar num pede a confirmação.
+fn copy_sheet(ui: &mut Ui, app: &mut App, s: &mut St) {
+    let Some(exe) = s.open.as_ref().map(|g| g.0.clone()) else {
+        s.copying = None;
+        return;
+    };
+    let mut q = s.copying.take().unwrap_or_default();
+    let r = ui.sheet(520.0, 480.0);
+    let ix = r.x + 20.0;
+    let iw = r.w - 40.0;
+    ui.c.text(rect(ix, r.y + 16.0, iw, 26.0), "Copiar ajustes de…", 17.0, TEXT, Align::Left, Weight::Semibold);
+    ui.search("gm-cq", rect(ix, r.y + 52.0, iw, 36.0), &mut q, "Buscar jogo");
+    let mut rows = gm::rows(&app.cfg, &gm::extra(), mask(app));
+    let mut needle = Vec::new();
+    crate::sys::index::fold(&q, &mut needle);
+    rows.retain(|g| g.funcs != 0 && !g.exe.eq_ignore_ascii_case(&exe) && gm::matches(g, &needle));
+    gm::sort(&mut rows, 0);
+    const H: f32 = 48.0;
+    let list = rect(ix - 4.0, r.y + 100.0, iw + 8.0, r.h - 100.0 - 64.0);
+    if rows.is_empty() {
+        ui.c.text_wrap(rect(ix, list.y + 4.0, iw, 40.0), "Nenhum jogo com esse nome.", 13.0, MUTED, Weight::Regular);
+    }
+    ui.begin_scroll("gm-cl", list, rows.len() as f32 * H);
+    let mut pick = None;
+    for (i, g) in rows.iter().enumerate() {
+        let y = list.y + i as f32 * H;
+        if y + H < list.y + ui.scroll_y() || y > list.bottom() + ui.scroll_y() {
+            continue;
+        }
+        let rr = rect(list.x, y, list.w, H - 4.0);
+        if ui.is_hover(rr) {
+            ui.c.round(rr, 8.0, CARD);
+        }
+        if ui.hit_as(&format!("gm-cp{}", if g.path.is_empty() { &g.exe } else { &g.path }), rr, &g.name, crate::ui::a11y::Role::Item, None) {
+            pick = Some(g.clone());
+        }
+        ui.file_icon(&g.path, &g.exe, rect(rr.x + 10.0, y + 9.0, 26.0, 26.0));
+        let funcs = func_names(g.funcs);
+        let fw = if funcs.is_empty() { 0.0 } else { crate::ui::gfx::measure(&funcs, 12.0, Weight::Regular, None).0.min(rr.w * 0.4) + 16.0 };
+        ui.c.text_fit(rect(rr.x + 48.0, y, rr.w - 60.0 - fw, rr.h), &g.name, 14.0, TEXT, Align::Left, Weight::Regular);
+        ui.c.text_fit(rect(rr.right() - fw, y, fw - 12.0, rr.h), &funcs, 12.0, TEXT2, Align::Right, Weight::Regular);
+    }
+    ui.end_scroll();
+    let close = ui.button("gm-cq-no", rect(r.right() - 20.0 - 120.0, r.bottom() - 52.0, 120.0, 36.0), "Cancelar", false);
+    match pick {
+        Some(g) => {
+            ui.ask("gm-copy", &crate::i18n::tr("Copiar os ajustes de {}?").replace("{}", &g.name), "Onde o outro jogo tem ajuste (Medidor, Energia, HDR, Som, Controle, Shader e Fullscreenizer), o deste jogo é trocado pelo dele. O driver NVIDIA não é copiado.");
+            s.copy = Some((g.exe, g.name));
+        }
+        None if !close => s.copying = Some(q),
         None => {}
     }
 }

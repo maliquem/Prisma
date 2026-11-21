@@ -30,14 +30,23 @@ fn device_select(ui: &mut Ui, key: &str, r: Rect, list: &[audio::Device], cur: &
     None
 }
 
-fn draw_list(ui: &mut Ui, app: &mut App, t: Rect, outputs: &[audio::Device], inputs: &[audio::Device]) {
-    {
-        let mut at = SAVE_AT.lock().unwrap();
-        if at.is_some_and(|t| t.elapsed().as_millis() > 600) {
-            *at = None;
-            app.cfg.save();
-        }
+/// Grava o volume do programa fixo que o arraste mudou, depois que ele parou um instante.
+pub fn flush_save(app: &mut App) {
+    let mut at = SAVE_AT.lock().unwrap();
+    if at.is_some_and(|t| t.elapsed().as_millis() > 600) {
+        *at = None;
+        app.cfg.save();
     }
+}
+
+/// Volume de programa fixo no arraste: muda já na config e pede a gravação para `flush_save`.
+pub fn slide_pinned(app: &mut App, exe: &str, path: &str, v: f32) {
+    app.cfg.snd_entry(exe, path).volume = (v * 100.0).round() as i32;
+    *SAVE_AT.lock().unwrap() = Some(std::time::Instant::now());
+}
+
+fn draw_list(ui: &mut Ui, app: &mut App, t: Rect, outputs: &[audio::Device], inputs: &[audio::Device]) {
+    flush_save(app);
     ui.title(rect(t.x + 16.0, t.y + 12.0, 300.0, 22.0), "Programas");
     picker::add_button(ui, app, rect(t.right() - 124.0, t.y + 8.0, 108.0, 32.0), Target::Sound);
 
@@ -116,8 +125,7 @@ fn draw_list(ui: &mut Ui, app: &mut App, t: Rect, outputs: &[audio::Device], inp
                     app.sessions[*j].volume = v;
                 }
                 if r.pinned {
-                    app.cfg.snd_entry(&r.exe, &r.path).volume = (v * 100.0).round() as i32;
-                    *SAVE_AT.lock().unwrap() = Some(std::time::Instant::now());
+                    slide_pinned(app, &r.exe, &r.path, v);
                 }
             }
             let t = format!("{:.0}%", v * 100.0);

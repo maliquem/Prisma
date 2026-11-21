@@ -2699,7 +2699,7 @@ impl App {
         // O jogo aberto entra na lista, para guardar o limite, o HDR e o perfil dele.
         if view != crate::meter::VIEW_OFF && !self.meter.session.exe.is_empty() {
             let (exe, pid) = (self.meter.session.exe.clone(), self.meter.session.pid);
-            self.add_meter_game(&exe, &procs::image_path(pid).unwrap_or_default());
+            self.add_session_game(&exe, pid);
             if let Some(g) = self.cfg.meter_games.iter_mut().find(|g| g.exe.eq_ignore_ascii_case(&exe)) {
                 g.view = if view == crate::meter::VIEW_FULL { 1 } else { 0 };
             }
@@ -2743,7 +2743,7 @@ impl App {
         self.meter_session();
         if !self.meter.session.exe.is_empty() {
             let (exe, pid) = (self.meter.session.exe.clone(), self.meter.session.pid);
-            self.add_meter_game(&exe, &procs::image_path(pid).unwrap_or_default());
+            self.add_session_game(&exe, pid);
             self.cfg.save();
         }
         self.meter.show(crate::meter::VIEW_FULL);
@@ -2763,7 +2763,7 @@ impl App {
             if exe.is_empty() {
                 self.toast.info("Abra um jogo para usar o limitador.");
             } else {
-                self.add_meter_game(&exe, &procs::image_path(pid).unwrap_or_default());
+                self.add_session_game(&exe, pid);
                 self.meter.act(&mut self.cfg, row, option);
             }
         }
@@ -2793,7 +2793,7 @@ impl App {
             self.toast.info("Abra um jogo para usar o limitador.");
             return;
         }
-        self.add_meter_game(&exe, &procs::image_path(pid).unwrap_or_default());
+        self.add_session_game(&exe, pid);
         let text = self.meter.change_limit(&mut self.cfg, change);
         if self.meter.view == crate::meter::VIEW_OFF {
             self.toast.info(&text);
@@ -2821,7 +2821,7 @@ impl App {
         }
         if let Some(path) = procs::image_path(self.fg_pid) {
             let exe = procs::exe_name(&path);
-            if !not_meter_game(&exe) && self.cfg.meter_games.iter().any(|g| g.exe.eq_ignore_ascii_case(&exe)) {
+            if !crate::sys::power::is_helper(&exe) && self.cfg.meter_games.iter().any(|g| g.exe.eq_ignore_ascii_case(&exe)) {
                 return Some((exe, self.fg_pid, path));
             }
         }
@@ -2840,7 +2840,7 @@ impl App {
         }
         let path = procs::image_path(pid)?;
         let exe = procs::exe_name(&path);
-        (!not_meter_game(&exe)).then_some((exe, pid, path))
+        (!crate::sys::power::is_helper(&exe)).then_some((exe, pid, path))
     }
 
     /// Sem jogo na sessão, o atalho usa o programa em foco.
@@ -2913,6 +2913,13 @@ impl App {
     /// A mesma linha sem o teto (`limit_fps` 0), que pede a taxa da tela: para mostrar a cada quadro.
     pub fn meter_row(exe: &str, path: &str) -> crate::config::MeterGame {
         crate::config::MeterGame { exe: exe.to_string(), path: path.to_string(), limit_real: true, inject: true, last: crate::config::today(), ..Default::default() }
+    }
+
+    /// Entra o jogo do foco ou da sessão do Medidor, sem programa de apoio (vigia de travamento, lançador).
+    fn add_session_game(&mut self, exe: &str, pid: u32) {
+        if !crate::sys::power::is_helper(exe) {
+            self.add_meter_game(exe, &procs::image_path(pid).unwrap_or_default());
+        }
     }
 
     pub fn add_meter_game(&mut self, exe: &str, path: &str) {
@@ -5268,13 +5275,6 @@ fn work_area_at_cursor() -> RECT {
         let _ = GetCursorPos(&mut pt);
         work_area_of(MonitorFromPoint(pt, MONITOR_DEFAULTTOPRIMARY))
     }
-}
-
-/// Programa em foco que nunca é o jogo do Medidor: o Windows, o próprio Prisma, o Prisma Launcher
-/// (fica aberto com o jogo e prendia a sessão nele, com 0 FPS) e o vigia de travamento do Unity.
-fn not_meter_game(exe: &str) -> bool {
-    const SHELL: [&str; 10] = ["explorer.exe", "searchhost.exe", "startmenuexperiencehost.exe", "shellexperiencehost.exe", "textinputhost.exe", "lockapp.exe", "prisma.exe", "prisma-launcher.exe", "unitycrashhandler64.exe", "unitycrashhandler32.exe"];
-    SHELL.iter().any(|s| exe.eq_ignore_ascii_case(s))
 }
 
 /// Frequência do monitor arredondada: 119 vira 120 e 59 vira 60.
