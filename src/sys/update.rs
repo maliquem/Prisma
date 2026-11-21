@@ -146,7 +146,7 @@ pub fn post(url: &str, headers: &str, data: &str) -> Result<(u32, String), ()> {
 /// Uma conexão só, para a API, o hash e quando as partes falham.
 fn get(url: &str, mut progress: impl FnMut(usize, usize)) -> Result<(u32, Vec<u8>), ()> {
     let r = send(url, "Accept: application/vnd.github+json\r\n", true)?;
-    let mut body = Vec::with_capacity(r.total as usize);
+    let mut body = Vec::with_capacity((r.total as usize).min(MAX_SIZE));
     let mut big = false;
     read(&r, |c| {
         body.extend_from_slice(c);

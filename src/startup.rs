@@ -287,6 +287,20 @@ fn reg_add(name: &str, ty: &str, value: &str) {
         .output();
 }
 
+/// Copia a pasta inteira, com as subpastas (perfis, backups, planos...). O que falhar vai para o log.
+fn copy_tree(from: &std::path::Path, to: &std::path::Path) {
+    let _ = std::fs::create_dir_all(to);
+    let Ok(rd) = std::fs::read_dir(from) else { return };
+    for e in rd.flatten() {
+        let dst = to.join(e.file_name());
+        if e.path().is_dir() {
+            copy_tree(&e.path(), &dst);
+        } else if let Err(err) = std::fs::copy(e.path(), &dst) {
+            crate::config::log(&format!("instalação: não copiou {} ({err})", e.path().display()));
+        }
+    }
+}
+
 /// Copia para Arquivos de Programas, registra no Windows e leva as configurações junto.
 /// Lá dentro só administrador escreve, então abrir como administrador sem pedir é seguro.
 pub fn install(admin: bool) -> bool {
@@ -324,11 +338,7 @@ pub fn install(admin: bool) -> bool {
     if let Some(p) = portable {
         if p.is_dir() && !target.join("config.ini").exists() {
             let _ = std::fs::create_dir_all(&target);
-            if let Ok(rd) = std::fs::read_dir(&p) {
-                for e in rd.flatten() {
-                    let _ = std::fs::copy(e.path(), target.join(e.file_name()));
-                }
-            }
+            copy_tree(&p, &target);
         }
     }
     // Numa reinstalação a pasta já existe: a escolha de agora vale mais que a guardada.
@@ -427,5 +437,21 @@ pub fn refresh_version(admin: bool) {
             let exe = install_dir().join("prisma.exe").display().to_string();
             make_shortcut(&exe, &shortcut().display().to_string());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn copy_tree_keeps_subfolders() {
+        let d = std::env::temp_dir().join(format!("prisma_inst_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join(r"src\perfis\jogo")).unwrap();
+        std::fs::write(d.join(r"src\config.ini"), b"a").unwrap();
+        std::fs::write(d.join(r"src\perfis\jogo\p.ini"), b"b").unwrap();
+        super::copy_tree(&d.join("src"), &d.join("dst"));
+        assert_eq!(std::fs::read(d.join(r"dst\config.ini")).unwrap(), b"a");
+        assert_eq!(std::fs::read(d.join(r"dst\perfis\jogo\p.ini")).unwrap(), b"b");
+        let _ = std::fs::remove_dir_all(&d);
     }
 }

@@ -126,7 +126,7 @@ pub fn load() -> State {
 pub fn save(st: &State) {
     let _ = std::fs::create_dir_all(crate::config::data_dir());
     if let Ok(b) = serde_json::to_vec(st) {
-        let _ = std::fs::write(path(), b);
+        let _ = crate::config::write_safe(&path(), b);
     }
 }
 
@@ -238,7 +238,7 @@ fn gpus(name: &str) -> Option<String> {
     let j = http_text("https://raw.githubusercontent.com/ZenitH-AT/nvidia-data/main/gpu-data.json")?;
     let id = pfid(&j, name);
     if id.is_some() {
-        let _ = std::fs::write(&cache, &j);
+        let _ = crate::config::write_safe(&cache, &j);
     }
     id
 }

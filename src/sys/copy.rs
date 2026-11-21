@@ -402,7 +402,7 @@ fn copy_file(e: &Entry, st: &State, mv: bool, buf: Option<&mut [u8]>, moved: &mu
         Some(b) => copy_verified(&e.src, target, e.size, replace, st, b, moved).map(Some),
         None => copy_with_progress(&e.src, target, e.size, replace, st, moved).map(|_| None),
     };
-    let res = res.and_then(|h| tmp.as_ref().map_or(Ok(()), |t| std::fs::rename(t, &dst)).map(|_| h));
+    let res = res.and_then(|h| tmp.as_ref().map_or(Ok(()), |t| replace_file(t, &dst)).map(|_| h));
     match res {
         Ok(h) => Done::Copied(dst, h),
         Err(err) => {
@@ -422,8 +422,29 @@ fn copy_file(e: &Entry, st: &State, mv: bool, buf: Option<&mut [u8]>, moved: &mu
     }
 }
 
+/// Só leitura no destino faz a troca de nome dar "acesso negado"; a cópia leva o atributo junto, então
+/// um arquivo copiado uma vez não seria substituído nunca mais.
+fn clear_readonly(p: &Path) {
+    if let Ok(m) = std::fs::metadata(p) {
+        let mut perm = m.permissions();
+        if perm.readonly() {
+            perm.set_readonly(false);
+            let _ = std::fs::set_permissions(p, perm);
+        }
+    }
+}
+
+/// Põe `tmp` no lugar de `dst`, que pode estar só leitura.
+fn replace_file(tmp: &Path, dst: &Path) -> std::io::Result<()> {
+    clear_readonly(dst);
+    std::fs::rename(tmp, dst)
+}
+
 /// Troca o nome de um arquivo, por cima do destino só com `replace`. False em outro disco ou com erro.
 fn rename_file(src: &Path, dst: &Path, replace: bool) -> bool {
+    if replace {
+        clear_readonly(dst);
+    }
     use windows::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVE_FILE_FLAGS};
     let (s, d) = (windows::core::HSTRING::from(src.as_os_str()), windows::core::HSTRING::from(dst.as_os_str()));
     let flags = if replace { MOVEFILE_REPLACE_EXISTING } else { MOVE_FILE_FLAGS(0) };
@@ -1107,6 +1128,32 @@ mod tests {
         run(&[d.join("src")], &d.join("dst"), false, &st, |_| None);
         assert_eq!(st.phase.load(Relaxed), CANCELED);
         assert!(!d.join("dst\\src\\a.txt").exists());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn replacing_a_read_only_copy_works() {
+        let d = scratch("somenteleitura");
+        let a = d.join(r"src\a.txt");
+        let mut perm = std::fs::metadata(&a).unwrap().permissions();
+        perm.set_readonly(true);
+        std::fs::set_permissions(&a, perm).unwrap();
+        // A segunda cópia cai em cima da primeira, que levou o só leitura junto.
+        for _ in 0..2 {
+            let st = state(REPLACE, false);
+            run(&[d.join("src")], &d.join("dst"), false, &st, |_| None);
+            assert!(st.errors.lock().unwrap().is_empty());
+        }
+        let b = d.join(r"dst\src\a.txt");
+        assert_eq!(std::fs::read(&b).unwrap(), b"alfa");
+        // Mover (troca de nome no mesmo disco) por cima de um destino só leitura.
+        std::fs::write(d.join("novo.txt"), b"novo").unwrap();
+        assert!(std::fs::metadata(&b).unwrap().permissions().readonly());
+        assert!(rename_file(&d.join("novo.txt"), &b, true));
+        assert_eq!(std::fs::read(&b).unwrap(), b"novo");
+        for f in [&a, &b] {
+            clear_readonly(f);
+        }
         let _ = std::fs::remove_dir_all(&d);
     }
 }

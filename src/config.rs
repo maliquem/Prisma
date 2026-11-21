@@ -1273,7 +1273,16 @@ impl Config {
         }
         let path = config_path();
         let _ = std::fs::create_dir_all(path.parent().unwrap());
-        let _ = write_safe(&path, s);
+        // Antivírus, backup ou OneDrive podem segurar o arquivo por um instante: tenta como o read_text.
+        let mut tries = 0;
+        while let Err(e) = write_safe(&path, &s) {
+            if tries >= 5 {
+                log(&format!("o config.ini não gravou ({e}): a mudança se perde ao fechar"));
+                break;
+            }
+            tries += 1;
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
     }
 
     /// Entrada do programa na lista de som, criada se ainda não existir.

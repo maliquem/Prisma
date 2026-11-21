@@ -152,7 +152,7 @@ fn write_cache(all: &[Entry]) {
     if let Some(d) = p.parent() {
         let _ = std::fs::create_dir_all(d);
     }
-    let _ = std::fs::write(p, s);
+    let _ = crate::config::write_safe(&p, s);
 }
 
 fn read_cache() -> Option<Vec<Entry>> {

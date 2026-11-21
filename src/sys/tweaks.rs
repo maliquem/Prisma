@@ -318,7 +318,9 @@ fn save_journal(list: &[Entry]) {
         s.push_str(&format!("{}\t{}\t{}\t{}\n", e.tweak, e.target, e.before, e.after));
     }
     let _ = std::fs::create_dir_all(crate::config::data_dir());
-    let _ = std::fs::write(journal_path(), s);
+    if let Err(e) = crate::config::write_safe(&journal_path(), s) {
+        crate::config::log(&format!("o diário dos ajustes não gravou ({e}): desfazer pode ficar incompleto"));
+    }
 }
 
 fn hex(b: &[u8]) -> String {
