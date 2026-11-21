@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.1.0
 
 - **Shortcuts**: a global shortcut that Windows refused because another program held it (like the other copy of Prisma, installed or test) is now tried again every 5 seconds, and works by itself once the other copy closes; before, it stayed dead until Prisma restarted or the shortcut was changed. / **Atalhos**: um atalho global que o Windows recusou porque outro programa o segurava (como a outra cópia do Prisma, instalada ou de teste) agora é tentado de novo a cada 5 segundos, e passa a funcionar sozinho quando a outra cópia fecha; antes ele ficava parado até o Prisma reiniciar ou o atalho ser trocado.
 - **Prisma Launcher link**: the launcher can now read and change each game's HDR mode, the "game has its own HDR" mark, the shaders switch and the shader preset (new `hdr.mode`, `hdr.native`, `shaders` and `shaders.preset` capabilities); a launcher on the older protocol keeps working. / **Ponte com o Prisma Launcher**: o launcher agora lê e muda o modo de HDR de cada jogo, a marca "o jogo tem HDR próprio", a chave dos shaders e o preset de shader (capacidades novas `hdr.mode`, `hdr.native`, `shaders` e `shaders.preset`); um launcher no protocolo antigo continua funcionando.
