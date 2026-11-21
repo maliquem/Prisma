@@ -5,7 +5,8 @@
 //! para a cadeia, na fila do jogo.
 //! shortcut: carregador do Vulkan antigo (sem `VK_ADD_LAYER_PATH`), `vulkan-1.dll` própria do jogo e caminho com
 //! letras fora do ASCII ficam sem HDR; trocar por camada implícita só se aparecer jogo assim. Processos filhos
-//! herdam as variáveis e carregam a camada, mas sem HDR pedido ela só repassa as chamadas.
+//! herdam as variáveis e carregam a camada, mas sem a memória do Prisma o `start` não liga nada e ela só repassa
+//! as chamadas. Limpar as variáveis depois da primeira instância tiraria o HDR do jogo que cria outra.
 
 use crate::hdr::{self, Params, INSIDE};
 use crate::{scan, Ptr, Shared};

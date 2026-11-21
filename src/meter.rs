@@ -481,7 +481,11 @@ pub fn anti_cheat_name(path: &str) -> Option<&'static str> {
         }
         generic.then_some("")
     };
-    check(dir).or_else(|| dir.parent().and_then(check))
+    // O Unreal deixa o EasyAntiCheat na raiz do jogo, três pastas acima do `Binaries\Win64` do exe. A busca para na
+    // raiz da biblioteca (ou do disco): ali só há pastas de outros jogos.
+    const LIBRARIES: [&str; 4] = ["common", "epic games", "gog games", "xboxgames"];
+    let library = |d: &&std::path::Path| d.parent().is_none() || d.file_name().is_some_and(|n| LIBRARIES.iter().any(|l| n.eq_ignore_ascii_case(l)));
+    check(dir).or_else(|| dir.ancestors().skip(1).take(3).take_while(|d| !library(d)).find_map(check))
 }
 
 fn entry<'a>(cfg: &'a Config, exe: &str) -> Option<&'a MeterGame> {
@@ -994,9 +998,15 @@ impl Meter {
         }
         if self.limiter.is_none() && !self.session.inject_tried && focused && (live || self.tracker.is_none()) && self.session.started.is_some_and(|t| t.elapsed().as_secs() >= INJECT_AFTER) && value > 0 {
             self.session.inject_tried = true;
-            crate::config::log("medidor: carregando o limitador no jogo");
             // Sem rastreamento não há alvo medido: vale o processo do jogo.
-            self.limiter = Limiter::attach(if self.target != 0 { self.target } else { self.session.pid });
+            let pid = if self.target != 0 { self.target } else { self.session.pid };
+            // O filho pode ser outro exe, em outra pasta: o anti-cheat dele também conta, e sem caminho não entra.
+            if pid != self.session.pid && crate::sys::procs::image_path(pid).map_or(true, |p| anti_cheat(&p)) {
+                self.fall_back(cfg, "Anti-cheat: limite vale ao reabrir.", "anti-cheat no processo filho");
+                return;
+            }
+            crate::config::log("medidor: carregando o limitador no jogo");
+            self.limiter = Limiter::attach(pid);
             self.limiter_exe = self.session.exe.clone();
             if self.limiter.is_none() {
                 self.fall_back(cfg, "Injeção falhou. Limite vale ao reabrir.", "o módulo não carregou");
@@ -1937,4 +1947,49 @@ impl Line {
 /// Teto inicial do automático, abaixo da taxa da tela.
 pub fn first_limit(hz: f32) -> u32 {
     safe_cap(hz).max(30)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::anti_cheat_name;
+
+    /// Monta `files` (pastas terminam em `/`) numa pasta temporária e devolve o caminho do `exe` dentro dela.
+    fn tree(name: &str, files: &[&str], exe: &str) -> (std::path::PathBuf, String) {
+        let root = std::env::temp_dir().join(format!("prisma-ac-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        for f in files.iter().chain([&exe]) {
+            let p = root.join(f);
+            if f.ends_with('/') {
+                std::fs::create_dir_all(&p).unwrap();
+            } else {
+                std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+                std::fs::write(&p, b"").unwrap();
+            }
+        }
+        let path = root.join(exe).to_string_lossy().into_owned();
+        (root, path)
+    }
+
+    #[test]
+    fn unreal_eac_at_game_root() {
+        let (root, exe) = tree("eac", &["Jogo/EasyAntiCheat/", "Jogo/start_protected_game.exe"], "Jogo/Jogo/Binaries/Win64/Jogo-Win64-Shipping.exe");
+        assert_eq!(anti_cheat_name(&exe), Some("Easy Anti-Cheat"));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn battleye_at_game_root() {
+        let (root, exe) = tree("be", &["Jogo/BattlEye/BEService_x64.exe"], "Jogo/Jogo/Binaries/Win64/Jogo.exe");
+        assert_eq!(anti_cheat_name(&exe), Some("BattlEye"));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn clean_game_and_library_root() {
+        // O sinal acima de `steamapps\common` é de outro jogo: não conta.
+        let (root, exe) = tree("lib", &["steamapps/EasyAntiCheat/", "steamapps/common/Outro/"], "steamapps/common/Limpo/Bin/Limpo.exe");
+        assert_eq!(anti_cheat_name(&exe), None);
+        let _ = std::fs::remove_dir_all(root);
+        assert_eq!(anti_cheat_name(r"C:\Jogos\steamapps\common\Counter-Strike Global Offensive\cs2.exe"), Some("VAC"));
+    }
 }

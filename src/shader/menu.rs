@@ -181,7 +181,12 @@ impl Menu {
                 3 if k == Key::Ok => self.list(true, crate::shader_profile::lib_dir()),
                 2 | 3 => {}
                 s if k == Key::Ok => (self.view, self.sel) = (View::Params(s - FIRST_PASS), 0),
-                s => eng.edit(dev, |p| p.passes[s - FIRST_PASS].on ^= true),
+                // A lista pode ter encolhido pela página antes do `update` acertar a linha.
+                s => eng.edit(dev, |p| {
+                    if let Some(x) = p.passes.get_mut(s - FIRST_PASS) {
+                        x.on ^= true;
+                    }
+                }),
             },
             (Key::Ok | Key::Add, View::Files(lib)) => match self.files.get(self.sel).cloned() {
                 Some((d, true)) => self.list(lib, d),
