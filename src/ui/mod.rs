@@ -210,16 +210,7 @@ impl UiState {
         if let Some(c) = cur.filter(|_| area != 0) {
             if let Some(i) = pick(ts, from, dir, |t| t.area == area) {
                 let t = ts[i];
-                let want = if t.r.y < t.clip.y {
-                    t.r.y - t.clip.y - 8.0
-                } else if t.r.bottom() > t.clip.bottom() {
-                    t.r.bottom() - t.clip.bottom() + 8.0
-                } else {
-                    0.0
-                };
-                let moved = if want != 0.0 { self.scroll_by(area, want) } else { 0.0 };
-                let (x, y) = t.center();
-                return Some((x, (y - moved).clamp(t.clip.y + 2.0, t.clip.bottom() - 2.0)));
+                return Some(self.reveal(t));
             }
             // Lista que só desenha as linhas à vista: rola um pedaço e as próximas aparecem.
             if dir & 1 == 1 {
@@ -233,22 +224,37 @@ impl UiState {
         pick(ts, from, dir, |t| t.shown()).map(|i| ts[i].center())
     }
 
-    /// Teclado: Tab leva ao próximo controle à vista na ordem do desenho (Shift+Tab, ao anterior),
-    /// dando a volta. Devolve onde pôr o cursor.
+    /// Rola a lista do alvo `t` até ele caber na vista e devolve onde pôr o cursor.
+    fn reveal(&mut self, t: Target) -> (f32, f32) {
+        let want = if t.r.y < t.clip.y {
+            t.r.y - t.clip.y - 8.0
+        } else if t.r.bottom() > t.clip.bottom() {
+            t.r.bottom() - t.clip.bottom() + 8.0
+        } else {
+            0.0
+        };
+        let moved = if want != 0.0 && t.area != 0 { self.scroll_by(t.area, want) } else { 0.0 };
+        let (x, y) = t.center();
+        (x, (y - moved).clamp(t.clip.y + 2.0, t.clip.bottom() - 2.0))
+    }
+
+    /// Teclado: Tab leva ao próximo controle na ordem do desenho (Shift+Tab, ao anterior), dando a
+    /// volta; os de uma lista rolável fora da vista entram também e a lista rola até eles. Devolve
+    /// onde pôr o cursor.
     pub fn tab_move(&mut self, back: bool) -> Option<(f32, f32)> {
         let (mx, my) = (self.mx, self.my);
-        let shown: Vec<&Target> = self.last.iter().filter(|t| t.shown()).collect();
-        let n = shown.len();
+        let all: Vec<Target> = self.last.iter().copied().filter(|t| t.shown() || t.area != 0).collect();
+        let n = all.len();
         if n == 0 {
             return None;
         }
-        let k = match shown.iter().rposition(|t| t.r.contains(mx, my)) {
+        let k = match all.iter().rposition(|t| t.shown() && t.r.contains(mx, my)) {
             Some(c) if back => (c + n - 1) % n,
             Some(c) => (c + 1) % n,
             None if back => n - 1,
             None => 0,
         };
-        Some(shown[k].center())
+        Some(self.reveal(all[k]))
     }
 
     /// Rola a lista `area` em `d` e devolve quanto andou de fato.
@@ -1361,5 +1367,19 @@ mod tests {
         assert_eq!(s.tab_move(true), Some((60.0, 115.0)));
         (s.mx, s.my) = (60.0, 115.0);
         assert_eq!(s.tab_move(false), Some((60.0, 25.0)));
+    }
+
+    #[test]
+    fn tab_scrolls_a_list_to_the_next_row() {
+        let (list, id) = (rect(0.0, 100.0, 400.0, 100.0), 7);
+        let mut s = UiState::default();
+        s.scroll_max.insert(id, 500.0);
+        // Duas linhas à vista e a terceira abaixo da vista da lista.
+        s.last = vec![t(10.0, 110.0, id, list), t(10.0, 150.0, id, list), t(10.0, 230.0, id, list)];
+        (s.mx, s.my) = (20.0, 165.0);
+        // Tab: o cursor desce até a linha de fora, e a lista rola até ela caber.
+        let to = s.tab_move(false).unwrap();
+        assert_eq!(s.scroll[&id], 68.0);
+        assert!(list.contains(to.0, to.1));
     }
 }

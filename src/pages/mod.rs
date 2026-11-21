@@ -427,9 +427,8 @@ fn group_of(i: usize) -> usize {
 const HELP: &[(Page, &str, Icon)] = &[(Page::Guide, "Guia e tutorial", ICON_HELP), (Page::Report, "Reportar bug", ICON_BUG)];
 
 const SIDE_W: f32 = 216.0;
-/// Altura do nome de um grupo na barra lateral; sem espaço para ele, fica só um vão de `GROUP_GAP`.
+/// Altura do nome de um grupo na barra lateral.
 const GROUP_CAP: f32 = 18.0;
-const GROUP_GAP: f32 = 8.0;
 const KOFI_URL: &str = "https://ko-fi.com/maliquem";
 const KOFI_ICON: &[u8] = include_bytes!("../../res/kofi.bgra");
 
@@ -479,23 +478,20 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
 
     let mut y = 52.0;
     let nav: Vec<_> = NAV.iter().enumerate().filter(|(_, n)| shown(&app.cfg, n.0)).collect();
-    // Em janela baixa as linhas apertam para não entrar no cartão de energia, e os nomes dos grupos
-    // viram só um vão entre eles.
-    let free = full.h - 100.0 - y;
-    let groups = GROUPS.len() as f32;
-    let captions = (free - groups * GROUP_CAP) / nav.len() as f32 >= 22.0;
-    let sep = if captions { GROUP_CAP } else { GROUP_GAP };
-    let step = ((free - groups * sep) / nav.len() as f32).min(33.0).floor();
+    // Em janela baixa a lista rola, com a barra à direita, e o cartão de energia fica parado embaixo.
+    let free = (full.h - 100.0 - y).max(64.0);
+    let mut groups = nav.iter().map(|(i, _)| group_of(*i)).collect::<Vec<_>>();
+    groups.dedup();
+    let step = 33.0;
+    ui.begin_scroll("side", rect(0.0, y, SIDE_W - 8.0, free), nav.len() as f32 * step + groups.len() as f32 * GROUP_CAP);
     let mut group = usize::MAX;
     for (i, (page, label, icon, _)) in nav {
         if group_of(i) != group {
             group = group_of(i);
-            if captions {
-                ui.c.text(rect(24.0, y, SIDE_W - 48.0, sep), GROUPS[group].0, 12.0, MUTED, Align::Left, Weight::Semibold);
-            }
-            y += sep;
+            ui.c.text(rect(24.0, y, SIDE_W - 48.0, GROUP_CAP), GROUPS[group].0, 12.0, MUTED, Align::Left, Weight::Semibold);
+            y += GROUP_CAP;
         }
-        let r = rect(12.0, y, SIDE_W - 24.0, step - 1.0);
+        let r = rect(12.0, y, SIDE_W - 28.0, step - 1.0);
         let current = app.page == *page;
         let hover = ui.is_hover(r);
         if current || hover {
@@ -516,6 +512,7 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
         }
         y += step;
     }
+    ui.end_scroll();
 
     // Energia desligada: sem o cartão dela.
     if is_on(&app.cfg, Page::Energy) {

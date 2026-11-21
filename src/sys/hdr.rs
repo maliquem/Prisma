@@ -162,6 +162,8 @@ pub struct Info {
 pub struct State {
     pub info: Option<Arc<Info>>,
     pub busy: bool,
+    /// A leitura em curso foi pedida no botão "Ler de novo" (a da página, a cada tick, não conta).
+    pub asked: bool,
 }
 
 pub type Shared = Arc<Mutex<State>>;
@@ -590,6 +592,7 @@ pub fn load(shared: Shared, window: isize) {
         let mut s = shared.lock().unwrap();
         s.info = Some(Arc::new(info));
         s.busy = false;
+        s.asked = false;
         drop(s);
         let _ = InvalidateRect(Some(HWND(window as *mut _)), None, false);
     });
