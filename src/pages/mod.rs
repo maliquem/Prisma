@@ -40,8 +40,6 @@ pub mod share {
     pub fn shutdown() {}
 
     pub fn tick(_app: &mut App) {}
-
-    pub fn open_room() {}
 }
 mod startup;
 mod storage;
@@ -263,6 +261,38 @@ pub fn nav_page(i: usize) -> Option<(Page, Icon)> {
     action_nav().nth(i).map(|n| (n.0, n.2))
 }
 
+/// Nome da página na barra lateral; fora dela, vazio.
+pub fn nav_label(p: Page) -> &'static str {
+    NAV.iter().find(|n| n.0 == p).map_or("", |n| n.1)
+}
+
+/// Funções que não desligam: o início e Configurações, onde se religa o resto.
+const ALWAYS: [Page; 2] = [Page::Monitor, Page::Adjust];
+
+/// A função `p` está ligada (`Config::funcs_off`, pela posição em `ACTION_PAGES`). Fora da lista
+/// (Guia, Reportar bug, Novidades) e `ALWAYS`: sempre.
+pub fn is_on(cfg: &crate::config::Config, p: Page) -> bool {
+    ALWAYS.contains(&p) || ACTION_PAGES.iter().position(|&a| a == p).is_none_or(|i| !cfg.funcs_off.contains(&(i as u8)))
+}
+
+pub fn set_on(cfg: &mut crate::config::Config, p: Page, on: bool) {
+    let Some(i) = ACTION_PAGES.iter().position(|&a| a == p) else { return };
+    cfg.funcs_off.retain(|&n| n != i as u8);
+    if !on && !ALWAYS.contains(&p) {
+        cfg.funcs_off.push(i as u8);
+    }
+}
+
+/// Aparece na barra lateral e na lista de funções: o Driver NVIDIA só com placa NVIDIA.
+fn exists(p: Page) -> bool {
+    p != Page::Nvidia || nvidia::available()
+}
+
+/// Item da barra lateral à vista: ligado e existe neste PC.
+pub fn shown(cfg: &crate::config::Config, p: Page) -> bool {
+    is_on(cfg, p) && exists(p)
+}
+
 /// Ordem das ações "Página ..." (33 a 58): a da barra lateral antes dos grupos, com Cópias, Atalhos, Desempenho,
 /// Shaders e Atualizações no fim. Nunca muda, mesmo que a barra mude: os números já gravados dependem dela.
 const ACTION_PAGES: [Page; 26] = [
@@ -295,7 +325,7 @@ const ACTION_PAGES: [Page; 26] = [
 ];
 
 /// Os itens da barra lateral na ordem das ações "Página ...".
-fn action_nav() -> impl Iterator<Item = &'static (Page, &'static str, Icon)> {
+fn action_nav() -> impl Iterator<Item = &'static (Page, &'static str, Icon, &'static str)> {
     ACTION_PAGES.iter().filter_map(|p| NAV.iter().find(|n| n.0 == *p))
 }
 
@@ -330,40 +360,41 @@ pub fn action_icon(id: u8) -> Icon {
 
 /// Página seguinte (`d` = 1) ou anterior (-1) da barra lateral, dando a volta; de fora dela (Guia,
 /// Reportar bug), a primeira ou a última.
-pub fn nav_step(page: Page, d: i8) -> Page {
-    let nav: Vec<Page> = NAV.iter().map(|n| n.0).filter(|&p| p != Page::Nvidia || nvidia::available()).collect();
+pub fn nav_step(cfg: &crate::config::Config, page: Page, d: i8) -> Page {
+    let nav: Vec<Page> = NAV.iter().map(|n| n.0).filter(|&p| shown(cfg, p)).collect();
     let i = nav.iter().position(|&p| p == page).map_or(if d > 0 { -1 } else { 0 }, |i| i as isize);
     nav[(i + d as isize).rem_euclid(nav.len() as isize) as usize]
 }
 
-/// Barra lateral, em grupos (`GROUPS`). Mudar a ordem não mexe nas ações "Página ..." (`ACTION_PAGES`).
-const NAV: &[(Page, &str, Icon)] = &[
-    (Page::Monitor, "Monitor", ICON_MON),
-    (Page::Performance, "Desempenho", ICON_PERF),
-    (Page::Storage, "Discos e redes", ICON_DISK),
-    (Page::Analyze, "Espaço em disco", ICON_MAP),
-    (Page::Startup, "Inicialização", ICON_BOOT),
-    (Page::Services, "Serviços", ICON_SVC),
-    (Page::Uninstall, "Desinstalar", ICON_DEL),
-    (Page::Search, "Pesquisar", ICON_FIND),
-    (Page::Tweaks, "Ajustes do Windows", ICON_TW),
-    (Page::Tools, "Ferramentas", ICON_TOOL),
-    (Page::Copies, "Cópias", ICON_COPY),
-    (Page::Updates, "Atualizações", ICON_UPD),
-    (Page::Optimize, "Otimizar", ICON_OPT),
-    (Page::Energy, "Energia", ICON_POW),
-    (Page::Meter, "Medidor", ICON_METER),
-    (Page::Fullscreen, "Fullscreenizer", ICON_WIN),
-    (Page::Hdr, "HDR", ICON_HDR),
-    (Page::Nvidia, "Driver NVIDIA", ICON_GPU),
-    (Page::Capture, "Captura", ICON_CAP),
-    (Page::Share, "Compartilhar tela", ICON_SHARE),
-    (Page::Shaders, "Shaders", ICON_SHADER),
-    (Page::Volume, "Som", ICON_VOL),
-    (Page::Controllers, "Controles", ICON_PAD),
-    (Page::Shortcuts, "Atalhos", ICON_KEYS),
-    (Page::Widget, "Widget", ICON_WID),
-    (Page::Adjust, "Configurações", ICON_ADJ),
+/// Barra lateral, em grupos (`GROUPS`): página, nome, ícone e o que ela faz (na lista de funções de
+/// Configurações e das boas-vindas). Mudar a ordem não mexe nas ações "Página ..." (`ACTION_PAGES`).
+const NAV: &[(Page, &str, Icon, &str)] = &[
+    (Page::Monitor, "Monitor", ICON_MON, "Programas abertos, uso do PC e fechar o que travou."),
+    (Page::Performance, "Desempenho", ICON_PERF, "Gráficos de processador, placa de vídeo, memória, discos e rede."),
+    (Page::Storage, "Discos e redes", ICON_DISK, "Tudo que está ligado no PC, em tempo real."),
+    (Page::Analyze, "Espaço em disco", ICON_MAP, "O que ocupa espaço em cada disco, pasta por pasta."),
+    (Page::Startup, "Inicialização", ICON_BOOT, "Programas que abrem com o Windows, para ligar ou desligar."),
+    (Page::Services, "Serviços", ICON_SVC, "Serviços do Windows, com o que cada um faz."),
+    (Page::Uninstall, "Desinstalar", ICON_DEL, "Remove programas e as sobras que eles deixam."),
+    (Page::Search, "Pesquisar", ICON_FIND, "Acha arquivos e pastas pelo nome em todos os discos, enquanto você digita."),
+    (Page::Tweaks, "Ajustes do Windows", ICON_TW, "Só o que tem efeito comprovado. Tudo pode ser desfeito."),
+    (Page::Tools, "Ferramentas", ICON_TOOL, "O que o Windows esconde em linha de comando, com resultado em português."),
+    (Page::Copies, "Cópias", ICON_COPY, "Cópias com pausa e conferência, e listas para rodar na hora marcada."),
+    (Page::Updates, "Atualizações", ICON_UPD, "Avisa quando sai driver da NVIDIA ou atualização do Windows e diz se vale instalar."),
+    (Page::Optimize, "Otimizar", ICON_OPT, "Fecha programas parados antes de jogar. Nada é fechado sem você confirmar."),
+    (Page::Energy, "Energia", ICON_POW, "Troca o plano de energia sozinho entre repouso, carga alta e jogo."),
+    (Page::Meter, "Medidor", ICON_METER, "Leitor de performance, limitador de FPS e HDR automático por jogo."),
+    (Page::Fullscreen, "Fullscreenizer", ICON_WIN, "Deixa a janela em foco em tela cheia sem bordas. O mesmo atalho desfaz."),
+    (Page::Hdr, "HDR", ICON_HDR, "O que a tela, o perfil e o Windows estão informando, e a calibração própria."),
+    (Page::Nvidia, "Driver NVIDIA", ICON_GPU, "Ajustes do driver da NVIDIA para cada jogo."),
+    (Page::Capture, "Captura", ICON_CAP, "Fotos, gravação da tela e replay dos últimos segundos. Tudo fica no seu PC."),
+    (Page::Share, "Compartilhar tela", ICON_SHARE, "Acesso remoto e co-op pela internet, sem conta. Em teste."),
+    (Page::Shaders, "Shaders", ICON_SHADER, "Filtros do RetroArch por cima de qualquer jogo: CRT, scanlines, nitidez."),
+    (Page::Volume, "Som", ICON_VOL, "Volume, aparelhos e equalizador de cada saída e de cada programa."),
+    (Page::Controllers, "Controles", ICON_PAD, "Botões, macros, menu radial e teclado na tela para controles."),
+    (Page::Shortcuts, "Atalhos", ICON_KEYS, "Combinações de teclas que abrem programas de qualquer lugar do Windows."),
+    (Page::Widget, "Widget", ICON_WID, "Uso, temperatura, plano de energia, HDR e VRR por cima de tudo."),
+    (Page::Adjust, "Configurações", ICON_ADJ, ""),
 ];
 
 /// Grupos da barra lateral: nome e quantos itens seguidos de `NAV` entram nele.
@@ -392,6 +423,10 @@ const KOFI_URL: &str = "https://ko-fi.com/maliquem";
 const KOFI_ICON: &[u8] = include_bytes!("../../res/kofi.bgra");
 
 pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
+    // Função desligada (por um aviso, pelo controle ou agora mesmo): fica em Configurações, onde se religa.
+    if !shown(&app.cfg, app.page) && NAV.iter().any(|n| n.0 == app.page) {
+        app.page = Page::Adjust;
+    }
     // O guia abre por cima das boas-vindas, que continuam esperando a resposta.
     if app.welcome.is_some() && app.page != Page::Guide {
         if let Some(t) = &mut app.report.text {
@@ -432,8 +467,7 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
     }
 
     let mut y = 52.0;
-    // Driver NVIDIA só aparece com placa NVIDIA.
-    let nav: Vec<_> = NAV.iter().enumerate().filter(|(_, n)| n.0 != Page::Nvidia || nvidia::available()).collect();
+    let nav: Vec<_> = NAV.iter().enumerate().filter(|(_, n)| shown(&app.cfg, n.0)).collect();
     // Em janela baixa as linhas apertam para não entrar no cartão de energia, e os nomes dos grupos
     // viram só um vão entre eles.
     let free = full.h - 100.0 - y;
@@ -442,7 +476,7 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
     let sep = if captions { GROUP_CAP } else { GROUP_GAP };
     let step = ((free - groups * sep) / nav.len() as f32).min(33.0).floor();
     let mut group = usize::MAX;
-    for (i, (page, label, icon)) in nav {
+    for (i, (page, label, icon, _)) in nav {
         if group_of(i) != group {
             group = group_of(i);
             if captions {
@@ -472,25 +506,10 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
         y += step;
     }
 
-    let chip = rect(12.0, full.h - 88.0, SIDE_W - 24.0, 76.0);
-    ui.c.round(chip, 10.0, CARD);
-    let plan = app.plans.iter().find(|p| p.id == app.active_plan).map(|p| p.name.as_str()).unwrap_or("Plano desconhecido");
-    let state = if !app.cfg.power_auto && !app.cfg.plan_fixed.is_empty() {
-        "Plano fixo"
-    } else if !app.cfg.power_auto {
-        "Troca desligada"
-    } else {
-        match app.detector.mode {
-            crate::sys::power::Mode::Rest => "Repouso",
-            crate::sys::power::Mode::Load => "Carga alta",
-            crate::sys::power::Mode::Game => "Modo jogo ativo",
-        }
-    };
-    let cx = chip.x + 12.0;
-    ui.c.text(rect(cx, chip.y + 8.0, chip.w - 24.0, 18.0), "Energia automática", 12.0, MUTED, Align::Left, Weight::Regular);
-    // O nome do plano vem do Windows (e pode ser traduzido): diminui até caber.
-    ui.c.text_fit(rect(cx, chip.y + 27.0, chip.w - 24.0, 20.0), plan, 14.0, TEXT, Align::Left, Weight::Semibold);
-    ui.c.text(rect(cx, chip.y + 48.0, chip.w - 24.0, 18.0), state, 12.0, ACCENT, Align::Left, Weight::Regular);
+    // Energia desligada: sem o cartão dela.
+    if is_on(&app.cfg, Page::Energy) {
+        energy_chip(&ui, app, rect(12.0, full.h - 88.0, SIDE_W - 24.0, 76.0));
+    }
 
     let area = rect(SIDE_W, 0.0, full.w - SIDE_W, full.h);
     if app.page != Page::Report {
@@ -532,6 +551,74 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
     update_prompt(&mut ui, app);
     hotkey_prompt(&mut ui, app);
     ui.end();
+}
+
+/// Cartão da Energia automática, no pé da barra lateral.
+fn energy_chip(ui: &Ui, app: &App, chip: Rect) {
+    ui.c.round(chip, 10.0, CARD);
+    let plan = app.plans.iter().find(|p| p.id == app.active_plan).map(|p| p.name.as_str()).unwrap_or("Plano desconhecido");
+    let state = if !app.cfg.power_auto && !app.cfg.plan_fixed.is_empty() {
+        "Plano fixo"
+    } else if !app.cfg.power_auto {
+        "Troca desligada"
+    } else {
+        match app.detector.mode {
+            crate::sys::power::Mode::Rest => "Repouso",
+            crate::sys::power::Mode::Load => "Carga alta",
+            crate::sys::power::Mode::Game => "Modo jogo ativo",
+        }
+    };
+    let cx = chip.x + 12.0;
+    ui.c.text(rect(cx, chip.y + 8.0, chip.w - 24.0, 18.0), "Energia automática", 12.0, MUTED, Align::Left, Weight::Regular);
+    // O nome do plano vem do Windows (e pode ser traduzido): diminui até caber.
+    ui.c.text_fit(rect(cx, chip.y + 27.0, chip.w - 24.0, 20.0), plan, 14.0, TEXT, Align::Left, Weight::Semibold);
+    ui.c.text(rect(cx, chip.y + 48.0, chip.w - 24.0, 18.0), state, 12.0, ACCENT, Align::Left, Weight::Regular);
+}
+
+/// Liga e desliga as funções, em Configurações e nas boas-vindas: nome, o que faz e a caixa, em
+/// duas colunas por grupo. Sai de `NAV`: página nova entra sozinha.
+pub fn funcs_list(ui: &mut Ui, app: &mut App, r: Rect) {
+    const ROW: f32 = 84.0;
+    const CAP: f32 = 30.0;
+    let col = ((r.w - 28.0) / 2.0).floor();
+    // Primeiro onde fica cada coisa (a rolagem pede a altura toda), depois o desenho.
+    let mut cells: Vec<(Option<usize>, usize, Rect)> = Vec::new();
+    let (mut y, mut group, mut k) = (0.0, usize::MAX, 0);
+    for (i, _) in NAV.iter().enumerate().filter(|(_, n)| exists(n.0) && !ALWAYS.contains(&n.0)) {
+        if group_of(i) != group {
+            group = group_of(i);
+            if k % 2 == 1 {
+                y += ROW;
+            }
+            k = 0;
+            cells.push((Some(group), i, rect(r.x, r.y + y, r.w, CAP)));
+            y += CAP;
+        }
+        let x = if k % 2 == 0 { r.x } else { r.x + col + 12.0 };
+        cells.push((None, i, rect(x, r.y + y, col, ROW - 8.0)));
+        k += 1;
+        if k % 2 == 0 {
+            y += ROW;
+        }
+    }
+    if k % 2 == 1 {
+        y += ROW;
+    }
+    ui.begin_scroll("funcs", r, y);
+    for (cap, i, c) in cells {
+        if let Some(g) = cap {
+            ui.c.text(rect(c.x, c.y + 6.0, c.w, c.h - 6.0), GROUPS[g].0, 13.0, MUTED, Align::Left, Weight::Semibold);
+            continue;
+        }
+        let (page, label, _, what) = NAV[i];
+        ui.card(c);
+        let mut on = is_on(&app.cfg, page);
+        if ui.check(&format!("func-{label}"), rect(c.x + 14.0, c.y + 6.0, c.w - 28.0, 28.0), label, &mut on) {
+            app.set_func(page, on);
+        }
+        ui.c.text_wrap(rect(c.x + 42.0, c.y + 34.0, c.w - 56.0, c.h - 38.0), what, 12.0, MUTED, Weight::Regular);
+    }
+    ui.end_scroll();
 }
 
 /// Atalho recém-gravado que já tinha dono: outra função do Prisma ou outro programa.
@@ -713,5 +800,28 @@ mod tests {
         assert!(nav_page(24).is_some_and(|n| n.0 == Page::Shaders));
         assert!(nav_page(25).is_some_and(|n| n.0 == Page::Updates));
         assert!(nav_page(26).is_none());
+    }
+
+    /// Tudo começa ligado; desligar e religar volta ao começo; o início e Configurações não desligam,
+    /// e a escolha gravada no config volta igual.
+    #[test]
+    fn functions_turn_off_and_back_on() {
+        use super::*;
+        let mut cfg = crate::config::Config::default();
+        assert!(NAV.iter().all(|n| is_on(&cfg, n.0)));
+        set_on(&mut cfg, Page::Meter, false);
+        set_on(&mut cfg, Page::Meter, false);
+        set_on(&mut cfg, Page::Adjust, false);
+        set_on(&mut cfg, Page::Monitor, false);
+        assert_eq!(cfg.funcs_off, vec![1]);
+        assert!(!is_on(&cfg, Page::Meter) && is_on(&cfg, Page::Adjust) && is_on(&cfg, Page::Monitor));
+        assert!(is_on(&cfg, Page::Guide));
+        // Config editado à mão com Configurações desligada: continua ligada.
+        cfg.funcs_off.push(ACTION_PAGES.iter().position(|&p| p == Page::Adjust).unwrap() as u8);
+        assert!(is_on(&cfg, Page::Adjust));
+        set_on(&mut cfg, Page::Meter, true);
+        assert!(is_on(&cfg, Page::Meter));
+        // Toda função que desliga tem o que ela faz, para a lista.
+        assert!(NAV.iter().filter(|n| !ALWAYS.contains(&n.0)).all(|n| !n.3.is_empty()), "função sem descrição");
     }
 }

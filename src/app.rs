@@ -229,20 +229,27 @@ fn hk_conflict(old: &[(i32, Hotkey)], now: &[(i32, Hotkey)]) -> Option<(i32, i32
         .find_map(|(id, hk)| now.iter().find(|(o, ohk)| o != id && ohk == hk).map(|(o, _)| (*id, *o)))
 }
 
-/// Página onde se muda o atalho `id` (nome da barra lateral).
+/// Página onde se muda o atalho `id` (nome da barra lateral): a da função dona, menos o de Otimizar,
+/// que fica em Configurações.
 fn hk_place_page(id: i32) -> &'static str {
+    if id == HK_OPT { "Configurações" } else { crate::pages::nav_label(hk_page(id)) }
+}
+
+/// Função dona do atalho `id`: desligada, o atalho não fica preso no Windows.
+fn hk_page(id: i32) -> Page {
     match id {
-        HK_FULL => "Fullscreenizer",
-        HK_WIDGET => "Widget",
-        HK_OPT | HK_FORCE | HK_EXPLORER | HK_SHOW => "Configurações",
-        HK_SHOT | HK_SHOT_FULL | HK_SHOT_WIN | HK_REC | HK_REC_FULL | HK_REPLAY => "Captura",
-        HK_METER_C | HK_METER_F | HK_METER_O | HK_LIMIT_T | HK_LIMIT_UP | HK_LIMIT_DOWN | HK_LOG | HK_METER_KEYS => "Medidor",
-        HK_FIND => "Pesquisar",
-        HK_MACRO => "Controles",
-        HK_SHADER | HK_SHADER_MENU => "Shaders",
-        HK_HDR_MENU => "HDR",
-        id if id >= HK_RUN => "Atalhos",
-        _ => "Som",
+        HK_FULL => Page::Fullscreen,
+        HK_WIDGET => Page::Widget,
+        HK_OPT => Page::Optimize,
+        HK_FORCE | HK_EXPLORER | HK_SHOW => Page::Adjust,
+        HK_SHOT | HK_SHOT_FULL | HK_SHOT_WIN | HK_REC | HK_REC_FULL | HK_REPLAY => Page::Capture,
+        HK_METER_C | HK_METER_F | HK_METER_O | HK_LIMIT_T | HK_LIMIT_UP | HK_LIMIT_DOWN | HK_LOG | HK_METER_KEYS => Page::Meter,
+        HK_FIND => Page::Search,
+        HK_MACRO => Page::Controllers,
+        HK_SHADER | HK_SHADER_MENU => Page::Shaders,
+        HK_HDR_MENU => Page::Hdr,
+        id if id >= HK_RUN => Page::Shortcuts,
+        _ => Page::Volume,
     }
 }
 
@@ -361,6 +368,8 @@ pub struct App {
     pub health: disks::HealthMap,
     pub nets: Vec<nets::Net>,
     pub tw_tab: u8,
+    /// Aba de Configurações: 0 Geral, 1 Funções.
+    pub adj_tab: usize,
     pub tw_layers: Vec<char>,
     pub tw_on: HashSet<&'static str>,
     pub tw_journal: Vec<tweaks::Entry>,
@@ -462,8 +471,6 @@ pub struct App {
     /// Página Cópias: histórico, listas e a lista aberta.
     pub cp: crate::pages::copies::Data,
     pub su: crate::pages::updates::Data,
-    /// Página que abre ao clicar na última notificação da bandeja.
-    pub tray_page: Page,
     pub boot_sig: Option<String>,
     pub services: Vec<services::Service>,
     pub svc_filter: u8,
@@ -559,7 +566,7 @@ pub fn start(background: bool) {
         for a in cfg.fs_apps.iter().filter(|a| !a.path.is_empty()) {
             crate::shader_profile::upscale_off(std::path::Path::new(&a.path));
         }
-        monitor::PERF.store(cfg.perf_always, Ordering::Relaxed);
+        monitor::PERF.store(cfg.perf_always && crate::pages::is_on(&cfg, Page::Performance), Ordering::Relaxed);
         let shared = monitor::spawn(hub.0 as isize, WM_TICK);
         let mut app = App {
             hub,
@@ -604,6 +611,7 @@ pub fn start(background: bool) {
             health: Default::default(),
             nets: Vec::new(),
             tw_tab: 0,
+            adj_tab: 0,
             tw_layers: Vec::new(),
             tw_on: HashSet::new(),
             tw_journal: tweaks::load_journal(),
@@ -688,7 +696,6 @@ pub fn start(background: bool) {
             boot_sel: None,
             cp: Default::default(),
             su: Default::default(),
-            tray_page: Page::Share,
             boot_sig: None,
             services: Vec::new(),
             svc_filter: 0,
@@ -898,10 +905,10 @@ pub fn start(background: bool) {
                 let _ = std::fs::write(out, format!("cadeias, quadros, erro {stats:?}; saída, interface, quadros separados {split:?}; nits maior, média, p99 {nits:?}\n"));
                 std::process::exit(0);
             }
-            // Saída, jogo e arquivo de ajustes: --test-hdrgame=saida.txt|C:\jogo.exe|ajustes.txt
+            // Saída, jogo, arquivo de ajustes e, se houver, argumentos do jogo: --test-hdrgame=saida.txt|C:\jogo.exe|ajustes.txt|-force-vulkan
             if let Some(v) = a.strip_prefix("--test-hdrgame=") {
                 let p: Vec<&str> = v.split('|').collect();
-                crate::sys::inject::test_hdr(p[0], p[1], p[2]);
+                crate::sys::inject::test_hdr(p[0], p[1], p[2], p.get(3).copied().unwrap_or(""));
                 std::process::exit(0);
             }
             if let Some(v) = a.strip_prefix("--test-drs=") {
@@ -1098,15 +1105,15 @@ pub fn start(background: bool) {
         }
         app.refresh_plans();
         // Plano fixo vale também depois de reiniciar; com a troca ligada, quem decide é o detector.
-        if !app.cfg.power_auto && !app.cfg.plan_fixed.is_empty() {
+        if !app.cfg.power_auto && !app.cfg.plan_fixed.is_empty() && app.on(Page::Energy) {
             app.apply_power_choice();
         }
-        if app.cfg.search_on {
+        if app.search_live() {
             app.load_disks();
         }
         app.register_hotkeys();
-        crate::sys::keepalive::set(app.cfg.snd_keep);
-        app.widget.set_visible(app.cfg.widget_on);
+        crate::sys::keepalive::set(if app.on(Page::Volume) { app.cfg.snd_keep } else { 0 });
+        app.widget.set_visible(app.cfg.widget_on && app.on(Page::Widget));
         tray_add(hub, true);
         let testing = std::env::args().any(|a| a.starts_with("--test-"));
         if !testing {
@@ -1118,21 +1125,29 @@ pub fn start(background: bool) {
             std::thread::spawn(|| crate::sys::copy::set_menu(true));
         }
         #[cfg(feature = "stream")]
-        if !testing {
+        if !testing && app.on(Page::Share) {
             if crate::stream::weblink::has_pending() {
                 app.page = Page::Share;
             }
-            std::thread::spawn(crate::stream::weblink::register);
-            std::thread::spawn(|| {
-                if let Some(line) = crate::stream::service::refresh_copy() {
-                    crate::config::log(&format!("compartilhar: {line}"));
-                }
-            });
+            share_start();
         }
         APP.with(|a| *a.borrow_mut() = Some(app));
         if open {
             let _ = PostMessageW(Some(hub), WM_SHOW, WPARAM(0), LPARAM(0));
         }
+    }
+}
+
+/// O que o Compartilhar faz ao abrir o Prisma, e de novo quando a função é religada.
+fn share_start() {
+    #[cfg(feature = "stream")]
+    {
+        std::thread::spawn(crate::stream::weblink::register);
+        std::thread::spawn(|| {
+            if let Some(line) = crate::stream::service::refresh_copy() {
+                crate::config::log(&format!("compartilhar: {line}"));
+            }
+        });
     }
 }
 
@@ -1167,23 +1182,6 @@ unsafe fn tray_add(hub: HWND, add: bool) {
     let tip: Vec<u16> = "Prisma".encode_utf16().collect();
     nid.szTip[..tip.len()].copy_from_slice(&tip);
     let _ = Shell_NotifyIconW(if add { NIM_ADD } else { NIM_MODIFY }, &nid);
-}
-
-/// Notificação do Windows pelo ícone da bandeja (clicar abre `App::tray_page`).
-unsafe fn tray_notify(hub: HWND, title: &str, text: &str) {
-    let mut nid = NOTIFYICONDATAW {
-        cbSize: std::mem::size_of::<NOTIFYICONDATAW>() as u32,
-        hWnd: hub,
-        uID: 1,
-        uFlags: NIF_INFO,
-        dwInfoFlags: NIIF_INFO,
-        ..Default::default()
-    };
-    let t: Vec<u16> = title.encode_utf16().take(nid.szInfoTitle.len() - 1).collect();
-    nid.szInfoTitle[..t.len()].copy_from_slice(&t);
-    let b: Vec<u16> = text.encode_utf16().take(nid.szInfo.len() - 1).collect();
-    nid.szInfo[..b.len()].copy_from_slice(&b);
-    let _ = Shell_NotifyIconW(NIM_MODIFY, &nid);
 }
 
 fn tray_remove(hub: HWND) {
@@ -1335,7 +1333,7 @@ impl App {
             (HK_FORCE, c.hk_force, "Fechar à força", true),
             (HK_EXPLORER, c.hk_explorer, "Reiniciar o Explorer", true),
             (HK_MACRO, c.hk_macro, "Gravar macro e parar", true),
-            (HK_SHOW, c.hk_show, "Mostrar o Prisma", true),
+            (HK_SHOW, c.hk_show, "Mostrar ou esconder o Prisma", true),
             (HK_HDR_MENU, c.hk_hdr_menu, "Menu do HDR no jogo", true),
             (HK_VOL_UP, Hotkey::new(c.vol_mods, VK_VOL_UP), "Aumentar volume", false),
             (HK_VOL_DOWN, Hotkey::new(c.vol_mods, VK_VOL_DOWN), "Diminuir volume", false),
@@ -1357,6 +1355,7 @@ impl App {
         for (i, k) in c.run_keys.iter().take(RUN_KEYS_MAX).enumerate() {
             list.push((HK_RUN + i as i32, k.key, "Abrir programa", true));
         }
+        list.retain(|e| crate::pages::is_on(c, hk_page(e.0)));
         list
     }
 
@@ -1440,6 +1439,18 @@ impl App {
         }
     }
 
+    /// Se o jogo da frente, aberto com o HDR do Prisma, tem HDR próprio: o gancho vê o que ele entrega e
+    /// o perfil do jogo guarda.
+    fn hdr_watch(&mut self) {
+        let Some(g) = self.cfg.hdr_games.iter_mut().find(|g| g.mode == crate::sys::autohdr::PRISMA && g.exe.eq_ignore_ascii_case(&self.fg_exe)) else { return };
+        let Some(live) = crate::sys::inject::HdrLive::connect(self.fg_pid) else { return };
+        if let Some(n) = crate::sys::autohdr::watch(&live, g.native) {
+            g.native = n;
+            self.cfg.save();
+            self.invalidate();
+        }
+    }
+
     pub(crate) fn fg_info(&self) -> Option<(HWND, u32, String)> {
         unsafe {
             let h = GetForegroundWindow();
@@ -1453,6 +1464,10 @@ impl App {
     }
 
     fn on_hotkey(&mut self, id: i32) {
+        // Também chega das ações dos controles e da bandeja, que não passam pelo registro dos atalhos.
+        if !self.on(hk_page(id)) {
+            return;
+        }
         match id {
             HK_FULL => self.toggle_fullscreen(),
             HK_WIDGET => self.toggle_widget(),
@@ -1475,7 +1490,7 @@ impl App {
             HK_EXPLORER => self.explorer_key(),
             HK_FIND => self.toggle_find(),
             HK_MACRO => self.macro_toggle(None),
-            HK_SHOW => self.show_main(),
+            HK_SHOW => self.toggle_main(),
             HK_SHADER => crate::pages::shaders::toggle_focused(self),
             HK_SHADER_MENU => crate::pages::shaders::menu_focused(self),
             HK_HDR_MENU => self.hdr_menu_key(),
@@ -1512,8 +1527,9 @@ impl App {
             self.cfg.tm_hook && !self.replaces_tm
         };
         TM_HOOK.store(tm, Ordering::Relaxed);
-        PASTE_HOOK.store(self.cfg.paste_key, Ordering::Relaxed);
-        let want = tm || self.cfg.paste_key || FORCE_VK.load(Ordering::Relaxed) != 0 || SHADER_VK.load(Ordering::Relaxed) != 0;
+        let paste = self.cfg.paste_key && self.on(Page::Copies);
+        PASTE_HOOK.store(paste, Ordering::Relaxed);
+        let want = tm || paste || FORCE_VK.load(Ordering::Relaxed) != 0 || SHADER_VK.load(Ordering::Relaxed) != 0;
         if want && self.force_hook.is_none() {
             let inst = unsafe { GetModuleHandleW(None) }.unwrap_or_default();
             self.force_hook = unsafe { SetWindowsHookExW(WH_KEYBOARD_LL, Some(key_hook), Some(inst.into()), 0) }.ok();
@@ -1786,14 +1802,55 @@ impl App {
         }
     }
 
-    /// Notificação da bandeja; clicar nela abre `page`.
-    pub fn notify(&mut self, page: Page, title: &str, text: &str) {
-        self.tray_page = page;
-        unsafe { tray_notify(self.hub, title, text) };
-    }
-
     pub fn go(&mut self, page: Page) {
         self.page = page;
+        self.refresh_page();
+        self.invalidate();
+    }
+
+    /// Função `p` ligada (Configurações > Funções).
+    pub fn on(&self, p: Page) -> bool {
+        pages::is_on(&self.cfg, p)
+    }
+
+    fn perf_always(&self) -> bool {
+        self.cfg.perf_always && self.on(Page::Performance)
+    }
+
+    /// Liga ou desliga uma função: desligada, some da barra lateral e para o que ela roda sozinha
+    /// (atalhos, relógios, overlays e serviços do próprio Prisma).
+    pub fn set_func(&mut self, page: Page, on: bool) {
+        pages::set_on(&mut self.cfg, page, on);
+        self.cfg.save();
+        match page {
+            Page::Meter if !on => {
+                self.meter.leave(&mut self.cfg);
+                self.meter_timer();
+            }
+            Page::Widget => self.widget.set_visible(on && self.cfg.widget_on),
+            Page::Search => self.search_sync(),
+            Page::Capture if !on => {
+                if self.rec_start.is_some() {
+                    self.toggle_record(true);
+                }
+                self.stop_engine();
+            }
+            Page::Capture => self.replay_changed(),
+            Page::Volume => {
+                crate::sys::keepalive::set(if on { self.cfg.snd_keep } else { 0 });
+                if !on {
+                    let _ = crate::sys::eq::apply(None);
+                    self.eq_last = None;
+                }
+            }
+            Page::Energy if on => self.apply_power_choice(),
+            Page::Share if on => share_start(),
+            Page::Share => pages::share::shutdown(),
+            Page::Shaders if !on => pages::shaders::restart(),
+            _ => {}
+        }
+        self.register_hotkeys();
+        self.apply_pads();
         self.refresh_page();
         self.invalidate();
     }
@@ -1824,8 +1881,7 @@ impl App {
         if msgs.is_empty() {
             return;
         }
-        let text = msgs.join("\n");
-        self.notify(Page::Share, &title, &text);
+        self.toast.info(&format!("{title}\n{}", msgs.join("\n")));
         if self.page == Page::Share {
             self.invalidate();
         }
@@ -2822,18 +2878,31 @@ impl App {
     pub fn set_search(&mut self, on: bool) {
         self.cfg.search_on = on;
         self.cfg.save();
-        if on {
+        if !on {
+            crate::sys::index::turn_off();
+        }
+        self.search_sync();
+        self.register_hotkeys();
+        self.invalidate();
+    }
+
+    /// A pesquisa roda: ligada na página dela e a função Pesquisar ligada.
+    fn search_live(&self) -> bool {
+        self.cfg.search_on && self.on(Page::Search)
+    }
+
+    /// Índice e janelinha conforme `search_live`. A função desligada só tira o índice da memória: o salvo fica.
+    fn search_sync(&mut self) {
+        if self.search_live() {
             self.load_disks();
             self.find_drives = mft::drives();
             self.sync_index();
         } else {
-            crate::sys::index::turn_off();
+            crate::sys::index::set(false, Vec::new());
             self.find.clear();
             self.pop.clear();
             self.close_find();
         }
-        self.register_hotkeys();
-        self.invalidate();
     }
 
     /// Discos marcados na pesquisa. Sem escolha, todos menos os com problema de saúde.
@@ -2850,7 +2919,7 @@ impl App {
     /// Passa ao índice o que ler. Na escolha automática, espera a saúde dos discos: um disco
     /// com problema não pode ser lido inteiro antes de se saber disso.
     fn sync_index(&mut self) {
-        if !self.cfg.search_on {
+        if !self.search_live() {
             return;
         }
         if self.cfg.search_drives.is_empty() && self.health.lock().unwrap().len() < self.disks.len() {
@@ -2871,7 +2940,7 @@ impl App {
     fn show_find(&mut self) {
         use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
         use crate::pages::search::{pop_height, POP_SEARCH, POP_W};
-        if !self.cfg.search_on {
+        if !self.search_live() {
             return;
         }
         self.pop.clear();
@@ -3085,6 +3154,13 @@ impl App {
                 Some("capture") => self.page = Page::Capture,
                 Some("widget") => self.page = Page::Widget,
                 Some("adjust") => self.page = Page::Adjust,
+                Some("adjust-funcs") => {
+                    self.page = Page::Adjust;
+                    self.adj_tab = 1;
+                }
+                Some("welcome-funcs") => {
+                    self.welcome = Some(crate::pages::welcome::Choices { funcs: true, ..crate::pages::welcome::Choices::new() })
+                }
                 Some("report") => self.page = Page::Report,
                 _ => {}
             }
@@ -3236,6 +3312,7 @@ impl App {
             }
             Defaults::Settings => {
                 crate::i18n::set_lang(self.cfg.lang);
+                crate::overlays::set_notice_secs(self.cfg.toast_secs);
                 self.sync_explorer_menu();
                 self.register_hotkeys();
             }
@@ -3323,7 +3400,7 @@ impl App {
     #[cfg_attr(not(feature = "stream"), allow(dead_code))]
     pub fn share_ask(&mut self, name: &str, perms: &str, code: Option<&str>) -> std::sync::mpsc::Receiver<(bool, bool)> {
         let (tx, rx) = std::sync::mpsc::sync_channel(1);
-        self.toast.info_for(&format!("«{name}» está pedindo para entrar no compartilhamento de tela"), 56.0, 5000);
+        self.toast.info(&format!("«{name}» está pedindo para entrar no compartilhamento de tela"));
         let mut body = vec![format!("Permissões: {perms}.")];
         let (title, buttons): (String, &[(&'static str, bool)]) = match code {
             Some(code) => {
@@ -3394,8 +3471,10 @@ impl App {
         #[cfg(debug_assertions)]
         self.test_shot_tick();
         crate::sys::cmds::term_tick();
-        crate::pages::shaders::tick(self);
-        if self.cfg.search_on {
+        if self.on(Page::Shaders) {
+            crate::pages::shaders::tick(self);
+        }
+        if self.search_live() {
             self.sync_index();
             let hub = self.hub.0 as isize;
             if self.page == Page::Search && self.main.is_some() {
@@ -3412,7 +3491,9 @@ impl App {
         self.last_tick = Instant::now();
 
         if let Some((h, pid, exe)) = self.fg_info() {
-            self.full.follow(h);
+            if self.on(Page::Fullscreen) {
+                self.full.follow(h);
+            }
             if pid != self.fg_pid {
                 self.fg_pid = pid;
                 self.fg_exe = exe.clone();
@@ -3426,14 +3507,15 @@ impl App {
         }
         let fg_exe = self.fg_exe.clone();
         self.usage.note(&self.snap.groups, &fg_exe, secs);
+        self.hdr_watch();
 
         let ev = self.detector.tick(&self.cfg, self.snap.cpu, self.snap.gpu.util, &self.snap.groups);
         match ev {
             Event::Enter { game } => {
-                if game.is_some() && self.cfg.replay_on {
+                if game.is_some() && self.cfg.replay_on && self.on(Page::Capture) {
                     self.start_engine(true);
                 }
-                if self.cfg.power_auto {
+                if self.cfg.power_auto && self.on(Page::Energy) {
                     let mut plan = self.cfg.plan_game.clone();
                     if let Some(p) = game.as_ref().and_then(|g| self.cfg.profile(g)) {
                         if !p.plan.is_empty() {
@@ -3446,7 +3528,7 @@ impl App {
                     #[cfg(feature = "stream")]
                     self.link_game_entered(&g);
                     let skip = self.cfg.opt_skip.iter().any(|e| e.eq_ignore_ascii_case(&g));
-                    if self.cfg.on_game != 2 && !skip && self.asked.insert(g.clone()) {
+                    if self.cfg.on_game != 2 && self.on(Page::Optimize) && !skip && self.asked.insert(g.clone()) {
                         if self.cfg.on_game == 1 {
                             self.close_selected();
                         } else {
@@ -3459,12 +3541,15 @@ impl App {
                 if self.rec_start.is_none() {
                     self.stop_engine();
                 }
-                if self.cfg.power_auto {
-                    let plan = self.cfg.plan_rest.clone();
-                    self.apply_plan(&plan);
-                } else {
-                    // O plano fixo volta se algo trocou durante o jogo (o plano por jogo do Medidor, por exemplo).
-                    self.apply_power_choice();
+                if self.on(Page::Energy) {
+                    // Na troca automática, o plano de repouso; senão o fixo volta se algo trocou durante o
+                    // jogo (o plano por jogo do Medidor, por exemplo).
+                    if self.cfg.power_auto {
+                        let plan = self.cfg.plan_rest.clone();
+                        self.apply_plan(&plan);
+                    } else {
+                        self.apply_power_choice();
+                    }
                 }
             }
             Event::None => {}
@@ -3485,14 +3570,18 @@ impl App {
             self.pending.remove(i);
         }
 
-        self.meter_tick();
+        if self.on(Page::Meter) {
+            self.meter_tick();
+        }
         self.widget.update(&self.cfg, &self.snap);
         for p in self.full.sweep().into_iter().filter(|p| !p.is_empty()) {
             crate::shader_profile::upscale_off(std::path::Path::new(&p));
         }
         self.update_tick();
-        self.sound_tick();
-        self.eq_tick();
+        if self.on(Page::Volume) {
+            self.sound_tick();
+            self.eq_tick();
+        }
         if let Some(t) = self.tm_check {
             self.replaces_tm = crate::startup::replaces_taskmgr();
             if t.elapsed().as_secs() > 6 {
@@ -3513,13 +3602,13 @@ impl App {
         if !self.cfg.replay_on && self.rec_start.is_none() {
             self.stop_engine();
         }
-        if self.cfg.replay_on && self.detector.mode == Mode::Game {
+        if self.cfg.replay_on && self.on(Page::Capture) && self.detector.mode == Mode::Game {
             self.start_engine(true);
         }
     }
 
     fn apply_profile(&mut self, h: HWND, exe: &str) {
-        if self.cfg.fs_auto(exe) && !self.full.is_on(h) {
+        if self.on(Page::Fullscreen) && self.cfg.fs_auto(exe) && !self.full.is_on(h) {
             if let Some(a) = self.full.apply(h, self.cfg.fs_fit) {
                 let path = procs::image_path(procs::window_pid(h)).unwrap_or_default();
                 if let Some(w) = self.fs_upscale(&path, exe, a) {
@@ -3534,6 +3623,7 @@ impl App {
             }
         }
         match p.widget {
+            _ if !self.on(Page::Widget) => {}
             1 if !self.widget.visible => self.widget.set_visible(true),
             2 if self.widget.visible => self.widget.set_visible(false),
             _ => {}
@@ -3681,7 +3771,7 @@ impl App {
             Cmd::Back => {
                 m.ui.cancel();
             }
-            Cmd::Page(d) => page = Some(crate::pages::nav_step(self.page, d)),
+            Cmd::Page(d) => page = Some(crate::pages::nav_step(&self.cfg, self.page, d)),
             Cmd::Tab(d) => m.ui.pad_tab = Some(d),
             Cmd::Hide => unsafe {
                 m.ui.pad = false;
@@ -3716,7 +3806,7 @@ impl App {
         let (mut to, mut page) = (None, None);
         match vk {
             0x09 if ctrl => m.ui.pad_tab = Some(if shift { -1 } else { 1 }),
-            0x21 | 0x22 if ctrl => page = Some(crate::pages::nav_step(self.page, if vk == 0x21 { -1 } else { 1 })),
+            0x21 | 0x22 if ctrl => page = Some(crate::pages::nav_step(&self.cfg, self.page, if vk == 0x21 { -1 } else { 1 })),
             0x09 => to = m.ui.tab_move(shift),
             0x25..=0x28 if !ctrl => to = m.ui.pad_move(Some((vk - 0x25) as u8)),
             0x0D | 0x20 if woke => to = m.ui.pad_move(None),
@@ -3791,7 +3881,7 @@ impl App {
             }
             n if n >= crate::sys::remap::PAGES && n < crate::sys::remap::SOUND => {
                 if let Some((page, _)) = crate::pages::nav_page((n - crate::sys::remap::PAGES) as usize) {
-                    if page != Page::Nvidia || crate::pages::nvidia::available() {
+                    if crate::pages::shown(&self.cfg, page) {
                         self.go(page);
                         self.show_main();
                     }
@@ -3811,11 +3901,13 @@ impl App {
     /// são os jogos do Medidor (usam o perfil Base).
     pub fn apply_pads(&self) {
         crate::sys::pads::set_limits(self.cfg.pad_low, self.cfg.pad_jitter_ms);
-        crate::sys::remap::configure(self.cfg.pad_map, self.cfg.meter_games.iter().map(|g| g.exe.clone()).collect());
+        // Controles desligado: o Prisma ainda lê os controles para navegar nele mesmo, mas não mapeia nem abre o radial.
+        let pads = self.on(Page::Controllers);
+        crate::sys::remap::configure(self.cfg.pad_map && pads, self.cfg.meter_games.iter().map(|g| g.exe.clone()).collect());
         crate::sys::remap::set_reopen_last(self.cfg.pad_reopen_last);
         crate::sys::remap::set_fixed(&self.cfg.pad_fixed);
-        crate::sys::dsx::set_enabled(self.cfg.dsx_udp);
-        crate::sys::xbridge::configure(self.cfg.pad_xbox, self.cfg.pad_xbox_merge);
+        crate::sys::dsx::set_enabled(self.cfg.dsx_udp && pads);
+        crate::sys::xbridge::configure(self.cfg.pad_xbox && pads, self.cfg.pad_xbox_merge);
         let c = &self.cfg;
         crate::sys::radial::set_programs(c.pad_radial_prog.clone().map(|(_, p)| p));
         crate::sys::osk::configure(c.pad_osk_two, c.pad_osk_letters_right, c.pad_osk_dodge, c.pad_osk_repeat, c.pad_osk_repeat_ms);
@@ -3823,7 +3915,7 @@ impl App {
             slots: c.pad_radial,
             two: c.pad_radial_two,
             left: c.pad_radial_left,
-            button: [0, crate::sys::pads::BACK, crate::sys::pads::GUIDE][c.pad_radial_btn.min(2) as usize],
+            button: if pads { [0, crate::sys::pads::BACK, crate::sys::pads::GUIDE][c.pad_radial_btn.min(2) as usize] } else { 0 },
             hold: std::time::Duration::from_millis(c.pad_radial_ms as u64),
             tap_opens: c.pad_radial_tap,
             keep: c.pad_radial_keep,
@@ -3904,7 +3996,7 @@ impl App {
         monitor::FAST.store(fast && self.main.is_some(), Ordering::Relaxed);
         let detail = matches!(self.page, Page::Monitor | Page::Optimize);
         monitor::DETAIL.store(detail && self.main.is_some(), Ordering::Relaxed);
-        monitor::PERF.store((self.page == Page::Performance && self.main.is_some()) || self.cfg.perf_always, Ordering::Relaxed);
+        monitor::PERF.store((self.page == Page::Performance && self.main.is_some()) || self.perf_always(), Ordering::Relaxed);
     }
 
     fn refresh_windows(&mut self) {
@@ -3971,6 +4063,16 @@ impl App {
     pub fn sync_explorer_menu(&self) {
         if self.cfg.explorer_menu && self.installed {
             crate::sys::shellmenu::set(true);
+        }
+    }
+
+    /// O atalho de mostrar: com a janela na frente e em foco, volta para a bandeja como no X.
+    fn toggle_main(&mut self) {
+        match &self.main {
+            Some(m) if unsafe { GetForegroundWindow() == m.hwnd && !IsIconic(m.hwnd).as_bool() } => unsafe {
+                let _ = PostMessageW(Some(m.hwnd), WM_CLOSE, WPARAM(0), LPARAM(0));
+            },
+            _ => self.show_main(),
         }
     }
 
@@ -4122,10 +4224,16 @@ impl App {
             let menu = CreatePopupMenu().unwrap();
             let item = |s: &str| HSTRING::from(crate::i18n::tr(s).as_ref());
             let _ = AppendMenuW(menu, MF_STRING, TRAY_OPEN as usize, &item("Abrir o Prisma"));
-            let flag = if self.widget.visible { MF_CHECKED } else { MF_UNCHECKED };
-            let _ = AppendMenuW(menu, MF_STRING | flag, TRAY_WIDGET as usize, w!("Widget"));
-            let _ = AppendMenuW(menu, MF_STRING, TRAY_OPT as usize, &item("Otimizar agora"));
-            let _ = AppendMenuW(menu, MF_STRING, TRAY_SHOT as usize, &item("Tirar foto da área"));
+            if self.on(Page::Widget) {
+                let flag = if self.widget.visible { MF_CHECKED } else { MF_UNCHECKED };
+                let _ = AppendMenuW(menu, MF_STRING | flag, TRAY_WIDGET as usize, w!("Widget"));
+            }
+            if self.on(Page::Optimize) {
+                let _ = AppendMenuW(menu, MF_STRING, TRAY_OPT as usize, &item("Otimizar agora"));
+            }
+            if self.on(Page::Capture) {
+                let _ = AppendMenuW(menu, MF_STRING, TRAY_SHOT as usize, &item("Tirar foto da área"));
+            }
             let _ = AppendMenuW(menu, MF_SEPARATOR, 0, None);
             let _ = AppendMenuW(menu, MF_STRING, TRAY_EXIT as usize, &item("Sair"));
             let mut p = POINT::default();
@@ -4238,9 +4346,15 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                 if w.0 == TIMER_METER {
                     a.meter_paint();
                 } else if w.0 == TIMER_ROOM {
-                    a.room_watch();
-                    crate::pages::copies::tick(a);
-                    crate::pages::updates::tick(a);
+                    if a.on(Page::Share) {
+                        a.room_watch();
+                    }
+                    if a.on(Page::Copies) {
+                        crate::pages::copies::tick(a);
+                    }
+                    if a.on(Page::Updates) {
+                        crate::pages::updates::tick(a);
+                    }
                 } else if w.0 == TIMER_PADS {
                     if a.page == Page::Controllers && a.main.is_some() {
                         crate::pages::controllers::tick(a);
@@ -4334,7 +4448,7 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                 with(|a| {
                     let exe = procs::exe_name(&path);
                     if !a.cfg.hdr_games.iter().any(|g| g.exe.eq_ignore_ascii_case(&exe)) {
-                        a.cfg.hdr_games.push(crate::config::HdrGame { exe, path, mode: 0, prisma: None });
+                        a.cfg.hdr_games.push(crate::config::HdrGame { exe, path, ..Default::default() });
                     }
                     a.cfg.save();
                     a.invalidate();
@@ -4538,16 +4652,6 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                 }
                 WM_RBUTTONUP => {
                     with(|a| a.tray_menu());
-                }
-                // Clicou na notificação de quem conectou: abre a aba Conectados.
-                x if x == NIN_BALLOONUSERCLICK => {
-                    with(|a| {
-                        if a.tray_page == Page::Share {
-                            crate::pages::share::open_room();
-                        }
-                        a.show_main();
-                        a.go(a.tray_page);
-                    });
                 }
                 _ => {}
             }
@@ -4964,7 +5068,7 @@ unsafe extern "system" fn main_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
                 a.guide = None;
                 monitor::FAST.store(false, Ordering::Relaxed);
                 monitor::DETAIL.store(false, Ordering::Relaxed);
-                monitor::PERF.store(a.cfg.perf_always, Ordering::Relaxed);
+                monitor::PERF.store(a.perf_always(), Ordering::Relaxed);
                 a.cfg.save();
                 let me = windows::Win32::System::Threading::GetCurrentProcess();
                 let _ = windows::Win32::System::Memory::SetProcessWorkingSetSizeEx(me, usize::MAX, usize::MAX, Default::default());
@@ -5022,6 +5126,9 @@ mod window_tests {
         assert_eq!(hk_conflict(&[(HK_RUN, spotify)], &[(HK_RUN, spotify), (HK_SHADER, spotify)]), Some((HK_SHADER, HK_RUN)));
         assert_eq!(hk_place_page(HK_RUN), "Atalhos");
         assert_eq!(hk_place_page(HK_SHOW), "Configurações");
+        assert_eq!(hk_place_page(HK_OPT), "Configurações");
+        assert_eq!(hk_place_page(HK_LOG), "Medidor");
+        assert_eq!(hk_place_page(HK_SND + 3), "Som");
         // Volume não tem campo próprio: fica fora.
         let list = [(HK_VOL_UP, f, "", false), (HK_FULL, f, "", true)];
         assert_eq!(hk_keys(&list), vec![(HK_FULL, f)]);

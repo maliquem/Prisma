@@ -796,7 +796,7 @@ Volta as opções de ponto de restauração e de desinstalar sem janela ao padr�
 Volta as opções Ver log e Restauração ao padrão. Os ajustes aplicados continuam como estão: para reverter, use Desfazer.	Сбрасывает параметры «Показать журнал» и «Точка восстановления» по умолчанию. Применённые настройки остаются: отмените их кнопкой «Отменить».
 Esvazia as listas de nunca fechar e sempre fechar, e as sugestões recusadas. Essa ação não fecha nenhum programa.	Очищает списки «никогда не закрывать» и «всегда закрывать» и отклонённые предложения. Программы не закрываются.
 Volta o modificador, o passo e o aviso na tela ao padrão.	Сбрасывает модификатор, шаг и уведомление на экране по умолчанию.
-Volta os atalhos de Otimizar, Fechar à força, Reiniciar o Explorer e Mostrar o Prisma, o idioma e a busca de atualização ao padrão.	Сбрасывает клавиши «Оптимизировать», «Закрыть принудительно», «Перезапустить Проводник» и «Показать Prisma», язык и проверку обновлений по умолчанию.
+Volta os atalhos de Otimizar, Fechar à força, Reiniciar o Explorer e Mostrar ou esconder o Prisma, o idioma, o tempo dos avisos e a busca de atualização ao padrão.	Сбрасывает клавиши «Оптимизировать», «Закрыть принудительно», «Перезапустить Проводник» и «Показать или скрыть Prisma», язык, длительность уведомлений и проверку обновлений по умолчанию.
 Fechar à força	Закрыть принудительно
 Encerra na hora o programa em foco, mesmo travado. O que não foi salvo é perdido.	Сразу завершает активную программу, даже зависшую. Несохранённое пропадёт.
 {} fechado à força	{}: закрыто принудительно
@@ -2637,7 +2637,7 @@ Como administrador	От имени администратора
 Pedir confirmação do Windows ao abrir atalhos como administrador	Запрашивать подтверждение Windows при запуске ярлыков от имени администратора
 O programa do atalho não abriu	Программа сочетания клавиш не открылась
 Página Atalhos	Страница «Сочетания клавиш»
-Mostrar o Prisma	Показать Prisma
+Mostrar ou esconder o Prisma	Показать или скрыть Prisma
 Grave (prateleira)	НЧ (полочный)
 Agudo (prateleira)	ВЧ (полочный)
 Passa-baixa	ФНЧ
@@ -2874,6 +2874,7 @@ Ligar Fullscreenizer	Включить Fullscreenizer
 Monitor em HDR: a imagem é convertida para SDR antes do filtro (brilho acima do branco é cortado).	Монитор в HDR: изображение преобразуется в SDR перед фильтром (яркость выше белого обрезается).
 Salvar perfil	Сохранить профиль
 Salvar como preset	Сохранить как preset
+Nome do preset	Название preset
 Perfil salvo para este jogo	Профиль сохранён для этой игры
 Voltou ao último salvo	Возврат к последнему сохранённому
 Parâmetros	Параметры
@@ -2967,7 +2968,8 @@ Auto HDR 10 bits	Auto HDR 10 бит
 Auto 10 bits	Auto 10 бит
 Um HDR por jogo. Vale a partir da próxima vez que o jogo abrir.	Свой HDR для каждой игры. Применится при следующем запуске игры.
 Um HDR por jogo. O Auto HDR está desligado nas configurações do Windows: ligue lá para ele valer.	Свой HDR для каждой игры. Auto HDR выключен в настройках Windows: включите его там, чтобы он работал.
-Bloqueado: este jogo tem anti-cheat, e o HDR do Prisma precisa entrar no jogo. Escolha Auto HDR ou RTX HDR.	Заблокировано: в игре есть античит, а HDR Prisma должен проникнуть в игру. Выберите Auto HDR или RTX HDR.
+Bloqueado: este jogo tem anti-cheat, e o HDR do Prisma precisa entrar no jogo. Escolha Auto HDR ou RTX HDR, ou marque abaixo se você abre o jogo sem o anti-cheat.	Заблокировано: в игре есть античит, а HDR Prisma должен проникнуть в игру. Выберите Auto HDR или RTX HDR либо отметьте ниже, если запускаете игру без античита.
+Abro sem o anti-cheat (offline, mods); com ele rodando, o Prisma não entra	Запускаю без античита (офлайн, моды); если он работает, Prisma не внедряется
 Jogo da Steam: cole a linha abaixo em Propriedades > Opções de inicialização. Depois é só abrir pela Steam.	Игра из Steam: вставьте строку ниже в Свойства > Параметры запуска. Потом просто запускайте через Steam.
 Abra o jogo pelo botão Abrir com HDR, ou use a linha abaixo nas opções de inicialização do launcher.	Запустите игру кнопкой «Открыть с HDR» или используйте строку ниже в параметрах запуска лаунчера.
 Copiar linha	Копировать строку
@@ -2982,6 +2984,24 @@ Realce dos claros	Усиление светов
 Voltar à calibração	Вернуться к калибровке
 O driver NVIDIA só aceita o RTX HDR com o Prisma aberto como administrador.	Драйвер NVIDIA принимает RTX HDR только если Prisma запущен от имени администратора.
 Menu dentro do jogo	Меню в игре
+Deixar nativo	Оставить родной
+Melhorar com o Prisma	Улучшить через Prisma
+Tem HDR próprio	Есть свой HDR
+Não tem HDR próprio	Нет своего HDR
+Detectar sozinho	Определять самому
+HDR próprio: sim, visto no jogo.	Свой HDR: да, замечен в игре.
+HDR próprio: não visto. O jogo só saiu em SDR com o HDR do Prisma.	Свой HDR: не замечен. С HDR Prisma игра выдавала только SDR.
+HDR próprio: sim, marcado à mão.	Свой HDR: да, отмечено вручную.
+HDR próprio: não, marcado à mão.	Свой HDR: нет, отмечено вручную.
+HDR próprio: ainda não se sabe. Abrir o jogo uma vez com o HDR do Prisma descobre; até lá, todas as opções.	Свой HDR: пока неизвестно. Один запуск игры с HDR Prisma это выяснит; до тех пор доступны все варианты.
+Voltar ao automático	Вернуть автоматический режим
+Analisando: {} quadros	Анализ: {} кадров
+Sem análise ainda.	Анализа пока нет.
+Sem análise ainda: use Analisar no menu do HDR dentro do jogo.	Анализа пока нет: нажмите «Анализировать» в меню HDR в игре.
+Não deu para medir: jogue uns segundos com a cena andando e tente de novo.	Измерить не удалось: поиграйте несколько секунд, пока сцена движется, и повторите.
+Análise do SDR do jogo: {}% da cena em branco de papel ou acima	Анализ SDR игры: {}% сцены на уровне paper white или выше
+Análise do HDR do jogo: pico {} nits, preto {} nits	Анализ HDR игры: пик {} нит, чёрный {} нит
+Análise do HDR do jogo: pico {} nits, preto {} nits, interface {} nits	Анализ HDR игры: пик {} нит, чёрный {} нит, интерфейс {} нит
 Menu do HDR no jogo	Меню HDR в игре
 Salvar no perfil do jogo?	Сохранить в профиле игры?
 Os ajustes já valem agora. Salvar guarda para as próximas vezes que o jogo abrir.	Настройки уже действуют. Сохранение оставит их для следующих запусков игры.
@@ -3084,3 +3104,23 @@ Claude (Haiku)	Claude (Haiku)
 Só uma das IAs marcadas tem chave: a pesquisa usa só ela.	Ключ есть только у одного из выбранных ИИ: поиск использует только его.
 Chave guardada. O {} pesquisa os relatos com a busca própria (megathreads do r/nvidia e do r/Windows11, fórum da NVIDIA, Guru3D e sites de notícias) e dá o veredito. Ele não tem cota grátis: cada pesquisa gasta um pouco do saldo da conta.	Ключ сохранён. {} ищет отзывы через собственный поиск (мегатемы r/nvidia и r/Windows11, форум NVIDIA, Guru3D и новостные сайты) и выносит вердикт. Бесплатной квоты нет: каждый поиск расходует немного средств на счёте.
 As IAs marcadas pesquisam ao mesmo tempo e o Prisma junta os resultados: os problemas de todas as listas sem repetir, a média da estimativa, e só recomenda instalar se todas recomendarem. Se uma falhar, valem as outras. Só o Gemini é grátis: as outras gastam um pouco do saldo da conta a cada pesquisa.	Выбранные ИИ ищут одновременно, а Prisma объединяет результаты: проблемы из всех списков без повторов, среднее значение оценки, и рекомендует установку, только если её рекомендуют все. Если один не справится, используются остальные. Бесплатен только Gemini: остальные расходуют немного средств на счёте при каждом поиске.
+Gráficos de processador, placa de vídeo, memória, discos e rede.	Графики процессора, видеокарты, памяти, дисков и сети.
+O que ocupa espaço em cada disco, pasta por pasta.	Что занимает место на каждом диске, папка за папкой.
+Programas que abrem com o Windows, para ligar ou desligar.	Программы, которые запускаются с Windows: можно включить или выключить.
+Serviços do Windows, com o que cada um faz.	Службы Windows с описанием того, что делает каждая.
+Remove programas e as sobras que eles deixam.	Удаляет программы и оставшиеся после них файлы.
+Cópias com pausa e conferência, e listas para rodar na hora marcada.	Копирование с паузой и проверкой и списки, запускаемые в заданное время.
+Avisa quando sai driver da NVIDIA ou atualização do Windows e diz se vale instalar.	Сообщает о выходе драйвера NVIDIA или обновления Windows и подсказывает, стоит ли ставить.
+Fecha programas parados antes de jogar. Nada é fechado sem você confirmar.	Закрывает неактивные программы перед игрой. Ничего не закрывается без вашего подтверждения.
+Troca o plano de energia sozinho entre repouso, carga alta e jogo.	Сам переключает схему питания между простоем, высокой нагрузкой и игрой.
+Ajustes do driver da NVIDIA para cada jogo.	Настройки драйвера NVIDIA для каждой игры.
+Fotos, gravação da tela e replay dos últimos segundos. Tudo fica no seu PC.	Снимки, запись экрана и повтор последних секунд. Всё остаётся на вашем ПК.
+Filtros do RetroArch por cima de qualquer jogo: CRT, scanlines, nitidez.	Фильтры RetroArch поверх любой игры: CRT, scanlines, резкость.
+Botões, macros, menu radial e teclado na tela para controles.	Кнопки, макросы, радиальное меню и экранная клавиатура для геймпадов.
+Uso, temperatura, plano de energia, HDR e VRR por cima de tudo.	Загрузка, температура, схема питания, HDR и VRR поверх всего.
+Funções	Функции
+Funções do Prisma	Функции Prisma
+Desmarque o que você não vai usar: some da barra lateral e para de rodar. Isso muda depois em Configurações.	Снимите галочку с того, чем не будете пользоваться: оно исчезнет с боковой панели и перестанет работать. Позже это можно изменить в настройках.
+Tempo dos avisos	Время уведомлений
+Quanto tempo todo aviso do Prisma fica na tela. Padrão: 3 s.	Как долго любое уведомление Prisma остаётся на экране. По умолчанию: 3 с.
+Assim fica o aviso do Prisma	Так выглядит уведомление Prisma

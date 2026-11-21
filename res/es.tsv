@@ -796,7 +796,7 @@ Volta as opções de ponto de restauração e de desinstalar sem janela ao padr�
 Volta as opções Ver log e Restauração ao padrão. Os ajustes aplicados continuam como estão: para reverter, use Desfazer.	Restablece las opciones Mostrar registro y Punto de restauración a lo predeterminado. Los ajustes aplicados siguen igual: usa Deshacer para revertirlos.
 Esvazia as listas de nunca fechar e sempre fechar, e as sugestões recusadas. Essa ação não fecha nenhum programa.	Vacía las listas de nunca cerrar y siempre cerrar y las sugerencias rechazadas. No cierra ningún programa.
 Volta o modificador, o passo e o aviso na tela ao padrão.	Restablece el modificador, el paso y el aviso en pantalla a lo predeterminado.
-Volta os atalhos de Otimizar, Fechar à força, Reiniciar o Explorer e Mostrar o Prisma, o idioma e a busca de atualização ao padrão.	Restablece los atajos de Optimizar, Forzar cierre, Reiniciar Explorador y Mostrar Prisma, el idioma y la comprobación de actualizaciones a lo predeterminado.
+Volta os atalhos de Otimizar, Fechar à força, Reiniciar o Explorer e Mostrar ou esconder o Prisma, o idioma, o tempo dos avisos e a busca de atualização ao padrão.	Restablece los atajos de Optimizar, Forzar cierre, Reiniciar Explorador y Mostrar u ocultar Prisma, el idioma, la duración de los avisos y la comprobación de actualizaciones a lo predeterminado.
 Fechar à força	Forzar cierre
 Encerra na hora o programa em foco, mesmo travado. O que não foi salvo é perdido.	Termina al instante el programa en foco, aunque esté congelado. Se pierde lo no guardado.
 {} fechado à força	{} cerrado a la fuerza
@@ -2637,7 +2637,7 @@ Como administrador	Como administrador
 Pedir confirmação do Windows ao abrir atalhos como administrador	Pedir confirmación de Windows al abrir atajos como administrador
 O programa do atalho não abriu	El programa del atajo no se abrió
 Página Atalhos	Página Atajos
-Mostrar o Prisma	Mostrar Prisma
+Mostrar ou esconder o Prisma	Mostrar u ocultar Prisma
 Grave (prateleira)	Graves (shelf)
 Agudo (prateleira)	Agudos (shelf)
 Passa-baixa	Paso bajo
@@ -2874,6 +2874,7 @@ Ligar Fullscreenizer	Activar Fullscreenizer
 Monitor em HDR: a imagem é convertida para SDR antes do filtro (brilho acima do branco é cortado).	Monitor en HDR: la imagen se convierte a SDR antes del filtro (el brillo por encima del blanco se recorta).
 Salvar perfil	Guardar perfil
 Salvar como preset	Guardar como preset
+Nome do preset	Nombre del preset
 Perfil salvo para este jogo	Perfil guardado para este juego
 Voltou ao último salvo	Vuelto al último guardado
 Parâmetros	Parámetros
@@ -2967,7 +2968,8 @@ Auto HDR 10 bits	Auto HDR de 10 bits
 Auto 10 bits	Auto 10 bits
 Um HDR por jogo. Vale a partir da próxima vez que o jogo abrir.	Un HDR por juego. Se aplica la próxima vez que se abra el juego.
 Um HDR por jogo. O Auto HDR está desligado nas configurações do Windows: ligue lá para ele valer.	Un HDR por juego. Auto HDR está desactivado en la configuración de Windows: actívalo allí para que surta efecto.
-Bloqueado: este jogo tem anti-cheat, e o HDR do Prisma precisa entrar no jogo. Escolha Auto HDR ou RTX HDR.	Bloqueado: este juego tiene anti-cheat y el HDR de Prisma necesita entrar en el juego. Elige Auto HDR o RTX HDR.
+Bloqueado: este jogo tem anti-cheat, e o HDR do Prisma precisa entrar no jogo. Escolha Auto HDR ou RTX HDR, ou marque abaixo se você abre o jogo sem o anti-cheat.	Bloqueado: este juego tiene antitrampas y el HDR de Prisma necesita entrar en el juego. Elige Auto HDR o RTX HDR, o marca abajo si abres el juego sin el antitrampas.
+Abro sem o anti-cheat (offline, mods); com ele rodando, o Prisma não entra	Lo abro sin antitrampas (sin conexión, mods); si está activo, Prisma no entra
 Jogo da Steam: cole a linha abaixo em Propriedades > Opções de inicialização. Depois é só abrir pela Steam.	Juego de Steam: pega la línea de abajo en Propiedades > Opciones de lanzamiento. Después solo ábrelo desde Steam.
 Abra o jogo pelo botão Abrir com HDR, ou use a linha abaixo nas opções de inicialização do launcher.	Abre el juego con el botón Abrir con HDR, o usa la línea de abajo en las opciones de lanzamiento del launcher.
 Copiar linha	Copiar línea
@@ -2982,6 +2984,24 @@ Realce dos claros	Realce de luces
 Voltar à calibração	Volver a la calibración
 O driver NVIDIA só aceita o RTX HDR com o Prisma aberto como administrador.	El driver de NVIDIA solo acepta RTX HDR con Prisma abierto como administrador.
 Menu dentro do jogo	Menú dentro del juego
+Deixar nativo	Dejar nativo
+Melhorar com o Prisma	Mejorar con Prisma
+Tem HDR próprio	Tiene HDR propio
+Não tem HDR próprio	No tiene HDR propio
+Detectar sozinho	Detectar solo
+HDR próprio: sim, visto no jogo.	HDR propio: sí, visto en el juego.
+HDR próprio: não visto. O jogo só saiu em SDR com o HDR do Prisma.	HDR propio: no visto. El juego solo salió en SDR con el HDR de Prisma.
+HDR próprio: sim, marcado à mão.	HDR propio: sí, marcado a mano.
+HDR próprio: não, marcado à mão.	HDR propio: no, marcado a mano.
+HDR próprio: ainda não se sabe. Abrir o jogo uma vez com o HDR do Prisma descobre; até lá, todas as opções.	HDR propio: aún no se sabe. Abrir el juego una vez con el HDR de Prisma lo descubre; hasta entonces, todas las opciones.
+Voltar ao automático	Volver al automático
+Analisando: {} quadros	Analizando: {} fotogramas
+Sem análise ainda.	Aún sin análisis.
+Sem análise ainda: use Analisar no menu do HDR dentro do jogo.	Aún sin análisis: usa Analizar en el menú del HDR dentro del juego.
+Não deu para medir: jogue uns segundos com a cena andando e tente de novo.	No se pudo medir: juega unos segundos con la escena en movimiento e inténtalo de nuevo.
+Análise do SDR do jogo: {}% da cena em branco de papel ou acima	Análisis del SDR del juego: {}% de la escena en paper white o por encima
+Análise do HDR do jogo: pico {} nits, preto {} nits	Análisis del HDR del juego: pico {} nits, negro {} nits
+Análise do HDR do jogo: pico {} nits, preto {} nits, interface {} nits	Análisis del HDR del juego: pico {} nits, negro {} nits, interfaz {} nits
 Menu do HDR no jogo	Menú del HDR en el juego
 Salvar no perfil do jogo?	¿Guardar en el perfil del juego?
 Os ajustes já valem agora. Salvar guarda para as próximas vezes que o jogo abrir.	Los ajustes ya se aplican ahora. Guardar los conserva para las próximas veces que se abra el juego.
@@ -3084,3 +3104,23 @@ Claude (Haiku)	Claude (Haiku)
 Só uma das IAs marcadas tem chave: a pesquisa usa só ela.	Solo una de las IA marcadas tiene clave: la búsqueda usa solo esa.
 Chave guardada. O {} pesquisa os relatos com a busca própria (megathreads do r/nvidia e do r/Windows11, fórum da NVIDIA, Guru3D e sites de notícias) e dá o veredito. Ele não tem cota grátis: cada pesquisa gasta um pouco do saldo da conta.	Clave guardada. {} busca los reportes con su propia búsqueda (megathreads de r/nvidia y r/Windows11, foro de NVIDIA, Guru3D y sitios de noticias) y da el veredicto. No tiene cuota gratuita: cada búsqueda gasta un poco del saldo de la cuenta.
 As IAs marcadas pesquisam ao mesmo tempo e o Prisma junta os resultados: os problemas de todas as listas sem repetir, a média da estimativa, e só recomenda instalar se todas recomendarem. Se uma falhar, valem as outras. Só o Gemini é grátis: as outras gastam um pouco do saldo da conta a cada pesquisa.	Las IA marcadas buscan al mismo tiempo y Prisma une los resultados: los problemas de todas las listas sin repetir, el promedio de la estimación, y solo recomienda instalar si todas lo recomiendan. Si una falla, valen las otras. Solo Gemini es gratis: las demás gastan un poco del saldo de la cuenta en cada búsqueda.
+Gráficos de processador, placa de vídeo, memória, discos e rede.	Gráficos de procesador, tarjeta gráfica, memoria, discos y red.
+O que ocupa espaço em cada disco, pasta por pasta.	Qué ocupa espacio en cada disco, carpeta por carpeta.
+Programas que abrem com o Windows, para ligar ou desligar.	Programas que se abren con Windows, para activar o desactivar.
+Serviços do Windows, com o que cada um faz.	Servicios de Windows, con lo que hace cada uno.
+Remove programas e as sobras que eles deixam.	Quita programas y los restos que dejan.
+Cópias com pausa e conferência, e listas para rodar na hora marcada.	Copias con pausa y verificación, y listas que se ejecutan a la hora marcada.
+Avisa quando sai driver da NVIDIA ou atualização do Windows e diz se vale instalar.	Avisa cuando sale un driver de NVIDIA o una actualización de Windows y dice si conviene instalarlo.
+Fecha programas parados antes de jogar. Nada é fechado sem você confirmar.	Cierra programas inactivos antes de jugar. No se cierra nada sin que lo confirmes.
+Troca o plano de energia sozinho entre repouso, carga alta e jogo.	Cambia el plan de energía solo entre reposo, carga alta y juego.
+Ajustes do driver da NVIDIA para cada jogo.	Ajustes del driver de NVIDIA para cada juego.
+Fotos, gravação da tela e replay dos últimos segundos. Tudo fica no seu PC.	Capturas, grabación de pantalla y repetición de los últimos segundos. Todo se queda en tu PC.
+Filtros do RetroArch por cima de qualquer jogo: CRT, scanlines, nitidez.	Filtros de RetroArch sobre cualquier juego: CRT, scanlines, nitidez.
+Botões, macros, menu radial e teclado na tela para controles.	Botones, macros, menú radial y teclado en pantalla para mandos.
+Uso, temperatura, plano de energia, HDR e VRR por cima de tudo.	Uso, temperatura, plan de energía, HDR y VRR por encima de todo.
+Funções	Funciones
+Funções do Prisma	Funciones de Prisma
+Desmarque o que você não vai usar: some da barra lateral e para de rodar. Isso muda depois em Configurações.	Desmarca lo que no vayas a usar: desaparece de la barra lateral y deja de ejecutarse. Después puedes cambiarlo en Configuración.
+Tempo dos avisos	Duración de avisos
+Quanto tempo todo aviso do Prisma fica na tela. Padrão: 3 s.	Cuánto tiempo permanece en pantalla cada aviso de Prisma. Predeterminado: 3 s.
+Assim fica o aviso do Prisma	Así se ve un aviso de Prisma

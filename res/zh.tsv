@@ -796,7 +796,7 @@ Volta as opções de ponto de restauração e de desinstalar sem janela ao padr�
 Volta as opções Ver log e Restauração ao padrão. Os ajustes aplicados continuam como estão: para reverter, use Desfazer.	将“显示日志”和“还原点”选项恢复默认。已应用的调整保持不变：用“撤销”还原。
 Esvazia as listas de nunca fechar e sempre fechar, e as sugestões recusadas. Essa ação não fecha nenhum programa.	清空从不关闭和始终关闭列表以及已拒绝的建议。不会关闭任何程序。
 Volta o modificador, o passo e o aviso na tela ao padrão.	将修饰键、步长和屏幕提示恢复默认。
-Volta os atalhos de Otimizar, Fechar à força, Reiniciar o Explorer e Mostrar o Prisma, o idioma e a busca de atualização ao padrão.	将“优化”、“强制关闭”、“重启资源管理器”和“显示 Prisma”快捷键、语言和更新检查恢复默认。
+Volta os atalhos de Otimizar, Fechar à força, Reiniciar o Explorer e Mostrar ou esconder o Prisma, o idioma, o tempo dos avisos e a busca de atualização ao padrão.	将“优化”、“强制关闭”、“重启资源管理器”和“显示或隐藏 Prisma”快捷键、语言、提示显示时长和更新检查恢复默认。
 Fechar à força	强制关闭
 Encerra na hora o programa em foco, mesmo travado. O que não foi salvo é perdido.	立即结束当前程序，即使它已卡死。未保存的内容会丢失。
 {} fechado à força	已强制关闭 {}
@@ -2637,7 +2637,7 @@ Como administrador	以管理员身份
 Pedir confirmação do Windows ao abrir atalhos como administrador	以管理员身份打开快捷方式时请求 Windows 确认
 O programa do atalho não abriu	快捷键对应的程序未能打开
 Página Atalhos	“快捷键”页面
-Mostrar o Prisma	显示 Prisma
+Mostrar ou esconder o Prisma	显示或隐藏 Prisma
 Grave (prateleira)	低架
 Agudo (prateleira)	高架
 Passa-baixa	低通
@@ -2874,6 +2874,7 @@ Ligar Fullscreenizer	开启 Fullscreenizer
 Monitor em HDR: a imagem é convertida para SDR antes do filtro (brilho acima do branco é cortado).	HDR 显示器：画面会先转换为 SDR 再经过滤镜（高于白色的亮度会被裁掉）。
 Salvar perfil	保存配置
 Salvar como preset	另存为 preset
+Nome do preset	preset 名称
 Perfil salvo para este jogo	已为此游戏保存配置
 Voltou ao último salvo	已恢复到上次保存
 Parâmetros	参数
@@ -2967,7 +2968,8 @@ Auto HDR 10 bits	自动 HDR 10 位
 Auto 10 bits	自动 10 位
 Um HDR por jogo. Vale a partir da próxima vez que o jogo abrir.	每个游戏单独设置 HDR。下次打开游戏时生效。
 Um HDR por jogo. O Auto HDR está desligado nas configurações do Windows: ligue lá para ele valer.	每个游戏单独设置 HDR。Windows 设置中自动 HDR 已关闭：请在那里开启，此项才会生效。
-Bloqueado: este jogo tem anti-cheat, e o HDR do Prisma precisa entrar no jogo. Escolha Auto HDR ou RTX HDR.	已锁定：此游戏有反作弊，而 Prisma HDR 需要注入游戏。请选择自动 HDR 或 RTX HDR。
+Bloqueado: este jogo tem anti-cheat, e o HDR do Prisma precisa entrar no jogo. Escolha Auto HDR ou RTX HDR, ou marque abaixo se você abre o jogo sem o anti-cheat.	已锁定：此游戏有反作弊，而 Prisma HDR 需要注入游戏。请选择自动 HDR 或 RTX HDR，或在下方勾选“我在没有反作弊的情况下打开游戏”。
+Abro sem o anti-cheat (offline, mods); com ele rodando, o Prisma não entra	我不带反作弊启动（离线、模组）；反作弊运行时 Prisma 无法注入
 Jogo da Steam: cole a linha abaixo em Propriedades > Opções de inicialização. Depois é só abrir pela Steam.	Steam 游戏：把下面这一行粘贴到 属性 > 启动选项 中。之后直接从 Steam 打开即可。
 Abra o jogo pelo botão Abrir com HDR, ou use a linha abaixo nas opções de inicialização do launcher.	用“以 HDR 打开”按钮打开游戏，或把下面这一行用在启动器的启动选项中。
 Copiar linha	复制该行
@@ -2982,6 +2984,24 @@ Realce dos claros	高光增强
 Voltar à calibração	返回校准
 O driver NVIDIA só aceita o RTX HDR com o Prisma aberto como administrador.	NVIDIA 驱动只有在 Prisma 以管理员身份运行时才接受 RTX HDR。
 Menu dentro do jogo	游戏内菜单
+Deixar nativo	保持原生
+Melhorar com o Prisma	用 Prisma 增强
+Tem HDR próprio	自带 HDR
+Não tem HDR próprio	没有自带 HDR
+Detectar sozinho	自动检测
+HDR próprio: sim, visto no jogo.	自带 HDR：有，已在游戏中看到。
+HDR próprio: não visto. O jogo só saiu em SDR com o HDR do Prisma.	自带 HDR：未看到。使用 Prisma HDR 时游戏只输出了 SDR。
+HDR próprio: sim, marcado à mão.	自带 HDR：有，手动标记。
+HDR próprio: não, marcado à mão.	自带 HDR：没有，手动标记。
+HDR próprio: ainda não se sabe. Abrir o jogo uma vez com o HDR do Prisma descobre; até lá, todas as opções.	自带 HDR：尚不清楚。用 Prisma HDR 打开游戏一次即可查明；在此之前显示所有选项。
+Voltar ao automático	恢复自动
+Analisando: {} quadros	正在分析：{} 帧
+Sem análise ainda.	尚无分析。
+Sem análise ainda: use Analisar no menu do HDR dentro do jogo.	尚无分析：请在游戏内 HDR 菜单中使用“分析”。
+Não deu para medir: jogue uns segundos com a cena andando e tente de novo.	无法测量：请在画面运动的情况下玩几秒后再试。
+Análise do SDR do jogo: {}% da cena em branco de papel ou acima	游戏 SDR 分析：场景中 {}% 达到或高于纸白
+Análise do HDR do jogo: pico {} nits, preto {} nits	游戏 HDR 分析：峰值 {} 尼特，黑色 {} 尼特
+Análise do HDR do jogo: pico {} nits, preto {} nits, interface {} nits	游戏 HDR 分析：峰值 {} 尼特，黑色 {} 尼特，界面 {} 尼特
 Menu do HDR no jogo	游戏内 HDR 菜单
 Salvar no perfil do jogo?	保存到游戏配置文件？
 Os ajustes já valem agora. Salvar guarda para as próximas vezes que o jogo abrir.	调整已立即生效。保存后，下次打开游戏时仍会沿用。
@@ -3084,3 +3104,23 @@ Claude (Haiku)	Claude (Haiku)
 Só uma das IAs marcadas tem chave: a pesquisa usa só ela.	勾选的 AI 中只有一个有密钥：搜索只使用它。
 Chave guardada. O {} pesquisa os relatos com a busca própria (megathreads do r/nvidia e do r/Windows11, fórum da NVIDIA, Guru3D e sites de notícias) e dá o veredito. Ele não tem cota grátis: cada pesquisa gasta um pouco do saldo da conta.	密钥已保存。{} 通过自带的搜索查找用户反馈（r/nvidia 和 r/Windows11 的汇总帖、NVIDIA 论坛、Guru3D 和新闻网站）并给出结论。它没有免费额度：每次搜索都会消耗一点账户余额。
 As IAs marcadas pesquisam ao mesmo tempo e o Prisma junta os resultados: os problemas de todas as listas sem repetir, a média da estimativa, e só recomenda instalar se todas recomendarem. Se uma falhar, valem as outras. Só o Gemini é grátis: as outras gastam um pouco do saldo da conta a cada pesquisa.	勾选的 AI 会同时搜索，Prisma 合并结果：所有列表中的问题去重合并，估算取平均值，只有全部都建议安装时才建议安装。如果有一个失败，则采用其他的结果。只有 Gemini 免费：其他的每次搜索都会消耗一点账户余额。
+Gráficos de processador, placa de vídeo, memória, discos e rede.	处理器、显卡、内存、磁盘和网络的图表。
+O que ocupa espaço em cada disco, pasta por pasta.	每个磁盘上什么占用空间，逐个文件夹查看。
+Programas que abrem com o Windows, para ligar ou desligar.	随 Windows 启动的程序，可开启或关闭。
+Serviços do Windows, com o que cada um faz.	Windows 服务，并说明每项的作用。
+Remove programas e as sobras que eles deixam.	卸载程序及其残留文件。
+Cópias com pausa e conferência, e listas para rodar na hora marcada.	带暂停和校验的复制，以及按设定时间运行的列表。
+Avisa quando sai driver da NVIDIA ou atualização do Windows e diz se vale instalar.	NVIDIA 驱动或 Windows 更新发布时提醒你，并告诉你值不值得安装。
+Fecha programas parados antes de jogar. Nada é fechado sem você confirmar.	游戏前关闭闲置程序。未经你确认不会关闭任何程序。
+Troca o plano de energia sozinho entre repouso, carga alta e jogo.	在空闲、高负载和游戏之间自动切换电源计划。
+Ajustes do driver da NVIDIA para cada jogo.	为每个游戏设置 NVIDIA 驱动选项。
+Fotos, gravação da tela e replay dos últimos segundos. Tudo fica no seu PC.	截图、录屏和最近几秒的回放。一切都保存在你的电脑上。
+Filtros do RetroArch por cima de qualquer jogo: CRT, scanlines, nitidez.	在任何游戏上叠加 RetroArch 滤镜：CRT、扫描线、锐化。
+Botões, macros, menu radial e teclado na tela para controles.	为手柄提供按键、宏、轮盘菜单和屏幕键盘。
+Uso, temperatura, plano de energia, HDR e VRR por cima de tudo.	在所有内容上方显示使用率、温度、电源计划、HDR 和 VRR。
+Funções	功能
+Funções do Prisma	Prisma 功能
+Desmarque o que você não vai usar: some da barra lateral e para de rodar. Isso muda depois em Configurações.	取消勾选不会用到的功能：它会从侧边栏消失并停止运行。之后可在“设置”中更改。
+Tempo dos avisos	提示时长
+Quanto tempo todo aviso do Prisma fica na tela. Padrão: 3 s.	Prisma 的每条提示在屏幕上停留多久。默认：3 秒。
+Assim fica o aviso do Prisma	Prisma 提示就是这样显示的

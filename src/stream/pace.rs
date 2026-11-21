@@ -108,7 +108,11 @@ mod tests {
         let pk: Vec<Vec<u8>> = (0..100u8).map(|i| vec![i]).collect();
         let t0 = Instant::now();
         p.frame(vec![(c.clone(), true), (old.clone(), false)], pk, 90, Duration::from_millis(20));
-        std::thread::sleep(Duration::from_millis(60));
+        // Espera até chegar tudo (com folga para a máquina ocupada rodando os outros testes), no lugar de um sono fixo.
+        let end = Instant::now() + Duration::from_secs(2);
+        while c.0.lock().unwrap().len() < 100 && Instant::now() < end {
+            std::thread::sleep(Duration::from_millis(5));
+        }
         let got = c.0.lock().unwrap();
         assert_eq!(got.iter().map(|g| g.0).collect::<Vec<_>>(), (0..100u8).collect::<Vec<_>>());
         // Quem não pediu o FEC fica sem a paridade.

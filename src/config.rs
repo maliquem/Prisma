@@ -56,16 +56,38 @@ pub struct HdrGame {
     pub path: String,
     /// Números em `sys::autohdr` (padrão, Auto HDR, desligado, 10 bits, RTX HDR, Prisma).
     pub mode: u8,
-    /// Ajustes do HDR do Prisma; sem eles, os da calibração.
+    /// Ajustes do HDR do Prisma no modo Manual; sem eles é o Automático (`sys::autohdr::resolve`).
     pub prisma: Option<crate::sys::inject::Hdr>,
+    /// Se o jogo tem HDR próprio (`sys::autohdr::NATIVE_*`).
+    pub native: u8,
+    /// Ajuste fino do Automático: o quanto cada ajuste sai da base, na ordem de `pages::hdr::KNOBS`.
+    pub tune: [f32; 7],
+    /// A última medida do Analisar.
+    pub scan: Option<crate::sys::inject::Scan>,
+    /// A pessoa abre este jogo sem o anti-cheat (offline, mods): o achado na pasta não barra o HDR do Prisma.
+    pub ac_off: bool,
 }
 
 impl HdrGame {
-    /// Linha `hdr_game=` do config.ini: `exe|modo|caminho`, e os ajustes do HDR do Prisma quando há (o brilho da interface veio depois: linha com 6 vale 0).
+    /// Linha `hdr_game=` do config.ini: `exe|modo|caminho`, os ajustes do Manual quando há (o brilho da
+    /// interface veio depois: linha com 6 vale 0) e por fim `|native=`, `|tune=`, `|scan=` e `|ac=off`. Versões
+    /// antigas pulam esses: não são números.
     pub fn line(&self) -> String {
         let mut s = format!("{}|{}|{}", self.exe, self.mode, self.path);
         if let Some(h) = self.prisma {
             s += &format!("|{}|{}|{}|{}|{}|{}|{}", h.peak, h.paper, h.gamma, h.sat, h.boost, h.black, h.ui);
+        }
+        if self.native != 0 {
+            s += &format!("|native={}", self.native);
+        }
+        if self.tune.iter().any(|v| *v != 0.0) {
+            s += &format!("|tune={}", self.tune.map(|v| v.to_string()).join(","));
+        }
+        if let Some(c) = self.scan {
+            s += &format!("|scan={},{},{},{},{},{},{},{},{}", c.frames, c.peak, c.p999, c.p99, c.med, c.black, c.ui, c.white, c.mode);
+        }
+        if self.ac_off {
+            s += "|ac=off";
         }
         s
     }
@@ -75,8 +97,22 @@ impl HdrGame {
             return None;
         }
         let f: Vec<f32> = p[3..].iter().filter_map(|v| v.parse().ok()).collect();
-        let prisma = (f.len() >= 6).then(|| crate::sys::inject::Hdr { on: true, peak: f[0], paper: f[1], gamma: f[2], sat: f[3], boost: f[4], black: f[5], ui: f.get(6).copied().unwrap_or(0.0) });
-        Some(Self { exe: p[0].into(), mode: p[1].parse().unwrap_or(0), path: p[2].into(), prisma })
+        let prisma = (f.len() >= 6).then(|| crate::sys::inject::Hdr { on: true, peak: f[0], paper: f[1], gamma: f[2], sat: f[3], boost: f[4], black: f[5], ui: f.get(6).copied().unwrap_or(0.0), ..Default::default() });
+        let tag = |k: &str| p[3..].iter().find_map(|v| v.strip_prefix(k)?.strip_prefix('='));
+        let list = |k: &str| tag(k).map_or(Vec::new(), |v| v.split(',').filter_map(|x| x.parse::<f32>().ok()).collect());
+        let tune = list("tune");
+        let c = list("scan");
+        let scan = (c.len() >= 9).then(|| crate::sys::inject::Scan { frames: c[0] as u32, peak: c[1], p999: c[2], p99: c[3], med: c[4], black: c[5], ui: c[6], white: c[7], mode: c[8] as u32 });
+        Some(Self {
+            exe: p[0].into(),
+            mode: p[1].parse().unwrap_or(0),
+            path: p[2].into(),
+            prisma,
+            native: tag("native").and_then(|v| v.parse().ok()).unwrap_or(0),
+            tune: std::array::from_fn(|i| tune.get(i).copied().unwrap_or(0.0)),
+            scan,
+            ac_off: tag("ac") == Some("off"),
+        })
     }
 }
 
@@ -480,6 +516,10 @@ pub struct Config {
     /// Última versão aberta neste PC. Abrir uma mais nova mostra as novidades desde ela.
     pub seen_version: String,
     pub welcome: bool,
+    /// Funções desligadas, pela posição em `pages::ACTION_PAGES` (não muda). Vazio: todas ligadas.
+    pub funcs_off: Vec<u8>,
+    /// Segundos que todo aviso do Prisma fica na tela, um de `TOAST_SECS`.
+    pub toast_secs: u8,
     pub always_admin: bool,
     /// Entradas do Prisma no menu do botão direito do Explorer.
     pub explorer_menu: bool,
@@ -639,6 +679,8 @@ impl Default for Config {
             safe_ais: 1,
             seen_version: String::new(),
             welcome: true,
+            funcs_off: Vec::new(),
+            toast_secs: TOAST_SECS_DEFAULT,
             always_admin: false,
             explorer_menu: false,
             un_restore: true,
@@ -674,6 +716,24 @@ pub fn radial_default() -> [u8; crate::sys::radial::ALL] {
 /// Oito, dezesseis ou todas as ações separadas por vírgula (oito: o stick esquerdo fica com o de
 /// fábrica; dezesseis: sem opções de direcional); qualquer valor fora da lista invalida tudo.
 /// `GROUP` só vale nos 16 lugares.
+/// `funcs_off`: números separados por vírgula; o que não for número fica de fora.
+fn parse_funcs(v: &str) -> Vec<u8> {
+    v.split(',').filter_map(|x| x.trim().parse().ok()).collect()
+}
+
+/// Tempos que Configurações oferece para os avisos, em segundos.
+pub const TOAST_SECS: [u8; 9] = [2, 3, 4, 5, 7, 10, 15, 20, 30];
+pub const TOAST_SECS_DEFAULT: u8 = 3;
+
+/// `toast_secs`: fora da lista fica o padrão.
+fn parse_toast_secs(v: &str) -> u8 {
+    v.trim().parse().ok().filter(|s| TOAST_SECS.contains(s)).unwrap_or(TOAST_SECS_DEFAULT)
+}
+
+fn funcs_line(off: &[u8]) -> String {
+    off.iter().map(|n| n.to_string()).collect::<Vec<_>>().join(",")
+}
+
 fn parse_radial(v: &str) -> Option<[u8; crate::sys::radial::ALL]> {
     use crate::sys::{radial::{ALL, EMPTY, GROUP, PROFILES, PROGRAM, SLOTS}, remap};
     let list: Vec<u8> = v.split(',').enumerate().map(|(i, x)| x.trim().parse::<u8>().ok().filter(|&a| a == EMPTY || a == PROGRAM || ((a == GROUP || a == PROFILES) && i < SLOTS) || a == remap::MACRO_REC || ((a as usize) < remap::ACTIONS.len() && a != remap::RADIAL))).collect::<Option<_>>()?;
@@ -962,11 +1022,11 @@ impl Config {
                 "safe_ds_key" => c.safe_ds_key = v.trim().to_string(),
                 "safe_claude_key" => c.safe_claude_key = v.trim().to_string(),
                 "safe_gpt_key" => c.safe_gpt_key = v.trim().to_string(),
-                // Antes era um modo só: 0 Gemini, 1 DeepSeek, 2 os dois.
-                "safe_ai" => c.safe_ais = [1, 2, 3][v.parse::<usize>().unwrap_or(0).min(2)],
                 "safe_ais" => c.safe_ais = v.parse::<u8>().unwrap_or(1) & 15,
                 "seen_version" => c.seen_version = v.to_string(),
                 "welcome" => c.welcome = b,
+                "funcs_off" => c.funcs_off = parse_funcs(v),
+                "toast_secs" => c.toast_secs = parse_toast_secs(v),
                 "always_admin" => c.always_admin = b,
                 "explorer_menu" => c.explorer_menu = b,
                 "un_restore" => c.un_restore = b,
@@ -1119,6 +1179,8 @@ impl Config {
         let _ = writeln!(s, "safe_ais={}", self.safe_ais);
         let _ = writeln!(s, "seen_version={}", self.seen_version);
         let _ = writeln!(s, "welcome={}", b(self.welcome));
+        let _ = writeln!(s, "funcs_off={}", funcs_line(&self.funcs_off));
+        let _ = writeln!(s, "toast_secs={}", self.toast_secs);
         let _ = writeln!(s, "always_admin={}", b(self.always_admin));
         let _ = writeln!(s, "explorer_menu={}", b(self.explorer_menu));
         let _ = writeln!(s, "un_restore={}", b(self.un_restore));
@@ -1312,6 +1374,7 @@ impl Config {
                 self.hk_show = d.hk_show;
                 self.update_auto = d.update_auto;
                 self.lang = d.lang;
+                self.toast_secs = d.toast_secs;
             }
             Defaults::Tweaks => {
                 self.tw_log = d.tw_log;
@@ -1423,14 +1486,42 @@ mod tests {
         let old = HdrGame::parse(r"a.exe|1|C:\a b\a.exe").unwrap();
         assert_eq!((old.mode, old.path.as_str(), old.prisma), (1, r"C:\a b\a.exe", None));
         assert_eq!(HdrGame::parse(&old.line()).unwrap().line(), old.line());
-        let h = crate::sys::inject::Hdr { on: true, peak: 1000.0, paper: 203.5, gamma: 2.2, sat: 1.1, boost: 0.5, black: 0.25, ui: 150.0 };
-        let g = HdrGame { prisma: Some(h), mode: 5, ..old };
-        assert_eq!(HdrGame::parse(&g.line()).unwrap().prisma, Some(h));
+        let h = crate::sys::inject::Hdr { on: true, peak: 1000.0, paper: 203.5, gamma: 2.2, sat: 1.1, boost: 0.5, black: 0.25, ui: 150.0, ..Default::default() };
+        let scan = crate::sys::inject::Scan { frames: 600, peak: 980.5, p999: 700.0, p99: 400.0, med: 20.25, black: 0.01, ui: 250.0, white: 0.03, mode: 1 };
+        let g = HdrGame { prisma: Some(h), mode: 5, native: 2, tune: [10.0, 0.0, 0.0, 0.0, -0.5, 0.0, 0.0], scan: Some(scan), ac_off: true, ..old.clone() };
+        let back = HdrGame::parse(&g.line()).unwrap();
+        assert_eq!((back.prisma, back.native, back.tune, back.scan, back.ac_off), (Some(h), 2, g.tune, Some(scan), true));
+        assert!(!old.ac_off);
+        // Automático com medida, sem os ajustes do Manual: os números marcados não viram ajustes.
+        let auto = HdrGame { prisma: None, ..g };
+        assert_eq!(HdrGame::parse(&auto.line()).unwrap().prisma, None);
+        assert_eq!(HdrGame::parse(&old.line()).unwrap().native, 0);
         // Linha de antes do brilho da interface: ele fica desligado.
         assert_eq!(HdrGame::parse(r"a.exe|5|C:\a.exe|1000|203.5|2.2|1.1|0.5|0.25").unwrap().prisma, Some(crate::sys::inject::Hdr { ui: 0.0, ..h }));
         // Ajuste faltando: fica sem os ajustes, com a escolha mantida.
         assert_eq!(HdrGame::parse(r"a.exe|5|C:\a.exe|1000|200").map(|g| (g.mode, g.prisma)), Some((5, None)));
         assert!(HdrGame::parse("a.exe|5").is_none());
+    }
+
+    #[test]
+    fn funcs_off_round_trip() {
+        assert_eq!(parse_funcs(&funcs_line(&[2, 17, 25])), vec![2, 17, 25]);
+        // Linha vazia ou ausente (quem atualiza): nenhuma desligada.
+        assert!(parse_funcs("").is_empty());
+        assert!(Config::default().funcs_off.is_empty());
+        assert_eq!(parse_funcs("3, x,300,4"), vec![3, 4]);
+    }
+
+    #[test]
+    fn toast_secs_round_trip() {
+        for n in TOAST_SECS {
+            assert_eq!(parse_toast_secs(&n.to_string()), n);
+        }
+        // Valor fora da lista ou sujeira: o padrão, 3 s, o mesmo de quem atualiza (linha ausente).
+        assert_eq!(Config::default().toast_secs, 3);
+        for v in ["0", "", "1", "8", "31", "x"] {
+            assert_eq!(parse_toast_secs(v), 3, "{v:?}");
+        }
     }
 
     #[test]
