@@ -536,6 +536,11 @@ fn ask(ai: Ai, key: &str, prompt: &str, search: bool) -> Result<(String, Vec<Str
     }
 }
 
+/// Uma pergunta ao Gemini com a busca do Google, para quem não é desta página (a aba Jogos).
+pub fn ask_gemini(key: &str, prompt: &str) -> Result<String, String> {
+    gemini(key, prompt, true).map(|r| r.0)
+}
+
 fn gemini(key: &str, prompt: &str, search: bool) -> Result<(String, Vec<String>), String> {
     let mut body = serde_json::json!({"contents":[{"parts":[{"text":prompt}]}]});
     if search {
@@ -691,7 +696,7 @@ fn sev(s: &str) -> Sev {
 }
 
 /// O objeto JSON pedido no texto (às vezes entre crases).
-fn json_in(text: &str) -> Option<Value> {
+pub fn json_in(text: &str) -> Option<Value> {
     let (a, b) = (text.find('{')?, text.rfind('}')?);
     serde_json::from_str(text.get(a..=b)?).ok()
 }

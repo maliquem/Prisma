@@ -3131,3 +3131,94 @@ Desmarque o que você não vai usar: some da barra lateral e para de rodar. Isso
 Tempo dos avisos	Duración de avisos
 Quanto tempo todo aviso do Prisma fica na tela. Padrão: 3 s.	Cuánto tiempo permanece en pantalla cada aviso de Prisma. Predeterminado: 3 s.
 Assim fica o aviso do Prisma	Así se ve un aviso de Prisma
+Medidor e limitador de FPS	Medidor y limitador de FPS
+Esse jogo já está na lista.	Ese juego ya está en la lista.
+Nenhum executável nessa pasta.	No hay ningún ejecutable en esa carpeta.
+Os ajustes de cada jogo num lugar só.	Los ajustes de cada juego en un solo lugar.
+Adicionar .exe ou .dll…	Añadir .exe o .dll…
+Escanear pasta…	Escanear carpeta…
+Com perfil	Con perfil
+Loja	Tienda
+Buscar jogo	Buscar juego
+Os jogos da Steam, Epic, GOG e Xbox aparecem aqui sozinhos com o Prisma Launcher aberto. Sem ele, ficam os postos à mão e os que já têm ajuste.	Los juegos de Steam, Epic, GOG y Xbox aparecen aquí solos con Prisma Launcher abierto. Sin él, quedan los añadidos a mano y los que ya tienen ajustes.
+1 jogo novo chegou das lojas.	Ha llegado 1 juego nuevo de las tiendas.
+{} jogos novos chegaram das lojas.	Han llegado {} juegos nuevos de las tiendas.
+Escaneando a pasta…	Escaneando la carpeta…
+Nenhum jogo com esse nome.	Ningún juego con ese nombre.
+Nenhum jogo com ajuste ainda. Abra um da aba Sem perfil para ajustar.	Ningún juego con ajustes todavía. Abre uno de la pestaña Sin perfil para ajustarlo.
+Nenhum jogo. Use Adicionar ou Escanear pasta.	Ningún juego. Usa Añadir o Escanear carpeta.
+exe não encontrado	exe no encontrado
+API: medindo…	API: midiendo…
+API: {} (provável, pelos arquivos)	API: {} (probable, según los archivos)
+API: {}	API: {}
+API: não encontrada	API: no encontrada
+Anti-cheat: detectado	Antitrampas: detectado
+Anti-cheat: não encontrado	Antitrampas: no encontrado
+Anti-cheat: …	Antitrampas: …
+Pasta: desconhecida (só o perfil conhece o jogo)	Carpeta: desconocida (solo el perfil conoce el juego)
+O exe não foi encontrado nesse caminho.	No se encontró el exe en esa ruta.
+Os ajustes do jogo nas outras abas continuam salvos.	Los ajustes del juego en las otras pestañas siguen guardados.
+Abrir na aba {}	Abrir en la pestaña {}
+Voltar ao padrão	Restablecer
+HDR do Windows ao abrir	HDR de Windows al abrir
+Medidor ao abrir	Medidor al abrir
+Plano ao abrir o jogo	Plan al abrir el juego
+HDR próprio do jogo	HDR propio del juego
+Guardar o volume deste jogo	Guardar el volumen de este juego
+Perfil de controle	Perfil de mando
+Este jogo tem perfil de shader, com os filtros e ajustes só dele.	Este juego tiene perfil de shader, con sus propios filtros y ajustes.
+Sem perfil de shader.	Sin perfil de shader.
+Sem perfil de shader. Abrir na aba cria um para este jogo.	Sin perfil de shader. Abrir la pestaña crea uno para este juego.
+Tela cheia sem bordas sozinho ao abrir	Pantalla completa sin bordes automática al abrir
+Tipo de jogo (filtro de upscale)	Tipo de juego (filtro de escalado)
+Usa o perfil "{}" do driver. Os ajustes ficam na aba Driver NVIDIA.	Usa el perfil "{}" del driver. Los ajustes están en la pestaña Driver NVIDIA.
+Sem perfil no driver: o jogo segue o global.	Sin perfil en el driver: el juego sigue el global.
+Criar perfil (segue o global)	Crear perfil (sigue el global)
+Criar com cópia do global	Crear con copia del global
+Criar com cópia do global?	¿Crear con copia del global?
+O perfil novo grava os valores de agora do global. Depois disso, mudar o global não muda mais este jogo.	El perfil nuevo guarda los valores actuales del global. Después, cambiar el global ya no cambia este juego.
+Jogos encontrados	Juegos encontrados
+Marque o que é jogo. O nome pode ser trocado, e o exe escolhido é o que os perfis usam.	Marca lo que es un juego. Se puede cambiar el nombre, y el exe elegido es el que usan los perfiles.
+É jogo	Es juego
+Nome do jogo	Nombre del juego
+{} (provável)	{} (probable)
+sem API de imagem	sin API de imagen
+Pôr {} na lista	Poner {} en la lista
+Alguns já estavam na lista.	Algunos ya estaban en la lista.
+executável do Unreal	ejecutable de Unreal
+na pasta principal	en la carpeta principal
+usa uma API de imagem	usa una API de imagen
+nome parecido com a pasta	nombre parecido al de la carpeta
+parece um iniciador	parece un lanzador
+Os ajustes de cada jogo num lugar só: medidor, HDR, som, controle, shader e driver.	Los ajustes de cada juego en un solo lugar: medidor, HDR, sonido, mando, shader y driver.
+Página Jogos	Página Juegos
+ajustado	ajustado
+{} agora usa {} na aba Jogos.	{} ahora usa {} en la pestaña Juegos.
+API: {} (visto rodando)	API: {} (vista en ejecución)
+Anti-cheat: {}	Antitrampas: {}
+anti-cheat	antitrampas
+Copiar ajustes de…	Copiar ajustes de…
+Copiar os ajustes de {}?	¿Copiar los ajustes de {}?
+Onde o outro jogo tem ajuste (Medidor, Energia, HDR, Som, Controle, Shader e Fullscreenizer), o deste jogo é trocado pelo dele. O driver NVIDIA não é copiado.	Donde el otro juego tiene ajustes (Medidor, Energía, HDR, Sonido, Mando, Shader y Fullscreenizer), los de este juego se sustituyen por los suyos. El driver NVIDIA no se copia.
+Ajustes de {} copiados.	Ajustes de {} copiados.
+Perguntar à IA	Preguntar a la IA
+Apagar o jogo?	¿Eliminar el juego?
+O exe não está mais no caminho. O jogo sai da lista e os ajustes dele em todas as abas são apagados.	El exe ya no está en la ruta. El juego sale de la lista y se eliminan sus ajustes en todas las pestañas.
+Apagar o perfil de shader?	¿Eliminar el perfil de shader?
+Os filtros e ajustes só deste jogo são apagados, e ele volta aos shaders gerais.	Se eliminan los filtros y ajustes solo de este juego, y vuelve a los shaders generales.
+Voltar o driver ao padrão?	¿Volver el driver a lo predeterminado?
+Os ajustes da aba Driver NVIDIA gravados no perfil deste jogo são apagados; o perfil criado pelo Prisma sai junto. O limite de FPS e o DLSS do Medidor ficam. Antes, o Prisma guarda uma cópia do driver.	Se eliminan los ajustes de la pestaña Driver NVIDIA guardados en el perfil de este juego; el perfil creado por Prisma se va con ellos. El límite de FPS y el DLSS del Medidor se mantienen. Antes, Prisma guarda una copia del driver.
+IA: procurando na PCGamingWiki…	IA: buscando en PCGamingWiki…
+IA: não deu certo ({}).	IA: no salió bien ({}).
+IA (PCGamingWiki): {}	IA (PCGamingWiki): {}
+exe {}	exe {}
+sem anti-cheat	sin antitrampas
+anti-cheat {}	antitrampas {}
+tem HDR próprio	tiene HDR propio
+sem HDR próprio	sin HDR propio
+nada achado	nada encontrado
+Aceitar	Aceptar
+Não achei {} na pasta do jogo.	No encontré {} en la carpeta del juego.
+Não deu para copiar o perfil de shader.	No se pudo copiar el perfil de shader.
+Não deu para apagar o perfil de shader.	No se pudo eliminar el perfil de shader.
+Também nos perfis: {}	También en los perfiles: {}

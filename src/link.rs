@@ -214,6 +214,7 @@ fn caps_with(nvidia: bool) -> Vec<String> {
         cap::SOUND_GAME_VOLUME,
         cap::SOUND_EQ,
         cap::LAUNCH_HDR,
+        cap::GAMES,
     ];
     if cfg!(feature = "stream") {
         caps.push(cap::SHARE_MODE);
@@ -505,6 +506,12 @@ impl App {
                     return fail(code::NOT_SUPPORTED, "O jogo não usa o HDR do Prisma");
                 }
                 if autohdr::open(&exe, &args) { Outcome::Reply(Reply::Done) } else { fail(code::FAILED, "O Prisma não abriu o jogo") }
+            }
+            Request::Games { games, first } => {
+                crate::games::receive(&mut self.cfg.games, games, first);
+                self.cfg.save();
+                self.invalidate();
+                Outcome::Done
             }
             Request::NvidiaCatalog => {
                 if !crate::pages::nvidia::available() {
@@ -1040,7 +1047,7 @@ mod tests {
                 cap::CONTROLLERS_MAPPING, cap::CONTROLLERS_KEYBOARD, cap::OPTIONS, cap::METER_FPS_LIMIT,
                 cap::HDR_AUTO, cap::SOUND_DEVICES, cap::REPLAY_OPTIONS, cap::FULLSCREENIZER, cap::OPTIMIZE,
                 cap::METER_ON_LAUNCH, cap::HDR_ON_LAUNCH, cap::SOUND_GAME_VOLUME, cap::SOUND_EQ,
-                cap::LAUNCH_HDR,
+                cap::LAUNCH_HDR, cap::GAMES,
             ] {
                 assert!(has(c), "{c}");
             }
@@ -1083,6 +1090,7 @@ mod tests {
             Request::SetOption { exe: String::new(), pid: 0, option: OptionValue::Optimize(true) },
             Request::ShareInviteForGame { exe: String::new(), minutes: None, to: None },
             Request::ShareInviteCancel { exe: String::new() },
+            Request::Games { games: Vec::new(), first: true },
         ];
         for r in &answer {
             assert_eq!(wait_of(r), Wait::Answer, "{r:?}");

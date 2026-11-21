@@ -3137,3 +3137,94 @@ Desmarque o que você não vai usar: some da barra lateral e para de rodar. Isso
 Tempo dos avisos	Notice duration
 Quanto tempo todo aviso do Prisma fica na tela. Padrão: 3 s.	How long every Prisma notice stays on screen. Default: 3 s.
 Assim fica o aviso do Prisma	This is how a Prisma notice looks
+Medidor e limitador de FPS	Meter and FPS limiter
+Esse jogo já está na lista.	That game is already on the list.
+Nenhum executável nessa pasta.	No executable in that folder.
+Os ajustes de cada jogo num lugar só.	Each game's settings in one place.
+Adicionar .exe ou .dll…	Add .exe or .dll…
+Escanear pasta…	Scan folder…
+Com perfil	With profile
+Loja	Store
+Buscar jogo	Search game
+Os jogos da Steam, Epic, GOG e Xbox aparecem aqui sozinhos com o Prisma Launcher aberto. Sem ele, ficam os postos à mão e os que já têm ajuste.	Games from Steam, Epic, GOG and Xbox show up here by themselves while Prisma Launcher is open. Without it, only the ones added by hand and the ones that already have settings remain.
+1 jogo novo chegou das lojas.	1 new game arrived from the stores.
+{} jogos novos chegaram das lojas.	{} new games arrived from the stores.
+Escaneando a pasta…	Scanning the folder…
+Nenhum jogo com esse nome.	No game with that name.
+Nenhum jogo com ajuste ainda. Abra um da aba Sem perfil para ajustar.	No game with settings yet. Open one from the No profile tab to adjust it.
+Nenhum jogo. Use Adicionar ou Escanear pasta.	No games. Use Add or Scan folder.
+exe não encontrado	exe not found
+API: medindo…	API: measuring…
+API: {} (provável, pelos arquivos)	API: {} (likely, from the files)
+API: {}	API: {}
+API: não encontrada	API: not found
+Anti-cheat: detectado	Anti-cheat: detected
+Anti-cheat: não encontrado	Anti-cheat: not found
+Anti-cheat: …	Anti-cheat: …
+Pasta: desconhecida (só o perfil conhece o jogo)	Folder: unknown (only the profile knows the game)
+O exe não foi encontrado nesse caminho.	The exe was not found at that path.
+Os ajustes do jogo nas outras abas continuam salvos.	The game's settings in the other tabs are still saved.
+Abrir na aba {}	Open in the {} tab
+Voltar ao padrão	Reset to default
+HDR do Windows ao abrir	Windows HDR on open
+Medidor ao abrir	Meter on open
+Plano ao abrir o jogo	Plan when the game opens
+HDR próprio do jogo	Game's own HDR
+Guardar o volume deste jogo	Remember this game's volume
+Perfil de controle	Controller profile
+Este jogo tem perfil de shader, com os filtros e ajustes só dele.	This game has a shader profile, with its own filters and settings.
+Sem perfil de shader.	No shader profile.
+Sem perfil de shader. Abrir na aba cria um para este jogo.	No shader profile. Opening the tab creates one for this game.
+Tela cheia sem bordas sozinho ao abrir	Borderless full screen automatically on open
+Tipo de jogo (filtro de upscale)	Game type (upscale filter)
+Usa o perfil "{}" do driver. Os ajustes ficam na aba Driver NVIDIA.	Uses the driver profile "{}". Its settings are in the NVIDIA driver tab.
+Sem perfil no driver: o jogo segue o global.	No driver profile: the game follows the global one.
+Criar perfil (segue o global)	Create profile (follows global)
+Criar com cópia do global	Create with a copy of global
+Criar com cópia do global?	Create with a copy of global?
+O perfil novo grava os valores de agora do global. Depois disso, mudar o global não muda mais este jogo.	The new profile saves the current global values. After that, changing the global no longer changes this game.
+Jogos encontrados	Games found
+Marque o que é jogo. O nome pode ser trocado, e o exe escolhido é o que os perfis usam.	Check what is a game. The name can be changed, and the chosen exe is the one profiles use.
+É jogo	Is a game
+Nome do jogo	Game name
+{} (provável)	{} (likely)
+sem API de imagem	no graphics API
+Pôr {} na lista	Add {} to the list
+Alguns já estavam na lista.	Some were already on the list.
+executável do Unreal	Unreal executable
+na pasta principal	in the main folder
+usa uma API de imagem	uses a graphics API
+nome parecido com a pasta	name similar to the folder
+parece um iniciador	looks like a launcher
+Os ajustes de cada jogo num lugar só: medidor, HDR, som, controle, shader e driver.	Each game's settings in one place: meter, HDR, sound, controller, shader and driver.
+Página Jogos	Games page
+ajustado	adjusted
+{} agora usa {} na aba Jogos.	{} now uses {} in the Games tab.
+API: {} (visto rodando)	API: {} (seen running)
+Anti-cheat: {}	Anti-cheat: {}
+anti-cheat	anti-cheat
+Copiar ajustes de…	Copy settings from…
+Copiar os ajustes de {}?	Copy the settings from {}?
+Onde o outro jogo tem ajuste (Medidor, Energia, HDR, Som, Controle, Shader e Fullscreenizer), o deste jogo é trocado pelo dele. O driver NVIDIA não é copiado.	Where the other game has settings (Meter, Power, HDR, Sound, Controller, Shader and Fullscreenizer), this game's are replaced with theirs. The NVIDIA driver is not copied.
+Ajustes de {} copiados.	Settings from {} copied.
+Perguntar à IA	Ask the AI
+Apagar o jogo?	Delete the game?
+O exe não está mais no caminho. O jogo sai da lista e os ajustes dele em todas as abas são apagados.	The exe is no longer at the path. The game leaves the list and its settings in all tabs are deleted.
+Apagar o perfil de shader?	Delete the shader profile?
+Os filtros e ajustes só deste jogo são apagados, e ele volta aos shaders gerais.	The filters and settings for this game only are deleted, and it goes back to the general shaders.
+Voltar o driver ao padrão?	Reset the driver to default?
+Os ajustes da aba Driver NVIDIA gravados no perfil deste jogo são apagados; o perfil criado pelo Prisma sai junto. O limite de FPS e o DLSS do Medidor ficam. Antes, o Prisma guarda uma cópia do driver.	The NVIDIA driver tab settings saved in this game's profile are deleted; the profile created by Prisma goes with them. The FPS limit and the Meter's DLSS stay. First, Prisma saves a copy of the driver.
+IA: procurando na PCGamingWiki…	AI: searching PCGamingWiki…
+IA: não deu certo ({}).	AI: it did not work ({}).
+IA (PCGamingWiki): {}	AI (PCGamingWiki): {}
+exe {}	exe {}
+sem anti-cheat	no anti-cheat
+anti-cheat {}	anti-cheat {}
+tem HDR próprio	has its own HDR
+sem HDR próprio	no own HDR
+nada achado	nothing found
+Aceitar	Accept
+Não achei {} na pasta do jogo.	Could not find {} in the game folder.
+Não deu para copiar o perfil de shader.	Could not copy the shader profile.
+Não deu para apagar o perfil de shader.	Could not delete the shader profile.
+Também nos perfis: {}	Also in the profiles: {}
