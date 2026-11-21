@@ -371,6 +371,7 @@ fn prepare(b: &[u8]) -> Option<(u32, Vec<u8>)> {
             let list = unpack_files(b)?;
             // Com o serviço, o processo é SYSTEM: a Temp dele ela não lê, e a C:\Windows\Temp aceita
             // junções de qualquer usuário. A pasta do serviço é só do SYSTEM e ela lê.
+            // shortcut: só a conta que instalou o serviço lê; outra conta no console não cola arquivos, refazer com a pasta por sessão se pedirem.
             let base = if super::SERVICE.load(std::sync::atomic::Ordering::Relaxed) { super::service_dir() } else { std::env::temp_dir().join("Prisma") };
             let root = base.join("Colado");
             let _ = std::fs::remove_dir_all(&root);

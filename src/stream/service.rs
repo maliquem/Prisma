@@ -165,15 +165,17 @@ unsafe fn admin_owned(p: &std::path::Path) -> bool {
 /// `ProgramData\Prisma` criada por um programa comum: o dono dela (pelo CREATOR OWNER do
 /// ProgramData) apagaria `compartilhar` e poria outra no lugar. Passa aos administradores e refaz as
 /// permissões herdadas, como se um administrador a tivesse criado.
-unsafe fn own_parent(p: &std::path::Path) -> std::result::Result<(), String> {
+unsafe fn own_admin(p: &std::path::Path) -> std::result::Result<(), String> {
     if admin_owned(p) {
         return Ok(());
     }
     let mut ba = PSID::default();
     ConvertStringSidToSidW(w!("S-1-5-32-544"), &mut ba).map_err(|e| e.message())?;
-    let mut acl = ACL::default();
-    let r = InitializeAcl(&mut acl, std::mem::size_of::<ACL>() as u32, ACL_REVISION).map(|_| {
-        SetNamedSecurityInfoW(&HSTRING::from(p.as_os_str()), SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION | UNPROTECTED_DACL_SECURITY_INFORMATION, Some(ba), None, Some(&acl), None)
+    // A ACL vazia: o Windows a quer alinhada a 4 bytes, e a struct ACL do Rust só garante 2.
+    let mut buf = [0u32; 2];
+    let acl = buf.as_mut_ptr().cast::<ACL>();
+    let r = InitializeAcl(acl, std::mem::size_of_val(&buf) as u32, ACL_REVISION).map(|_| {
+        SetNamedSecurityInfoW(&HSTRING::from(p.as_os_str()), SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION | UNPROTECTED_DACL_SECURITY_INFORMATION, Some(ba), None, Some(acl), None)
     });
     let _ = LocalFree(Some(HLOCAL(ba.0)));
     match r {
@@ -194,9 +196,10 @@ unsafe fn secure_dir(dir: &std::path::Path, create: bool) -> std::result::Result
     if create {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    own_parent(parent)?;
-    if create {
-        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    own_admin(parent)?;
+    // Criada agora pelo instalador: é dele, mesmo se o dono padrão dos administradores for a conta dela.
+    if create && std::fs::create_dir(dir).is_ok() {
+        own_admin(dir)?;
     }
     // Conferido depois de criar: um programa comum ainda pode criar pastas ali, mas não apagar as dos outros.
     if is_link(dir) || !admin_owned(dir) {
