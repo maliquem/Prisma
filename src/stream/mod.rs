@@ -1007,6 +1007,49 @@ mod tests {
     }
 
     #[test]
+    fn cut_and_random_packets_never_panic() {
+        // Os pacotes vêm do outro PC: cortados em qualquer ponto ou com lixo, só None ou um Msg.
+        let msgs = [
+            Msg::Video { key: true, more: false, idx: 3, count: 9, frame: 77, pts: -5, data: &[1, 2, 3] },
+            Msg::Info { codec: VideoCodec::Wave, w: 1920, h: 1080, fps: 60, perms: 0, recover: true, hdr10: false, yuv444: false, priority: 1, deep: true },
+            Msg::Hello { w: 3840, h: 2160, hz: 119, codecs: 7, pid: 4321, flags: SEES_HDR | DECODES_444 },
+            Msg::Pong { t: 1, host: 2, gpu: Some(GpuUse::default()) },
+            Msg::Input { first: 5, events: &[0; INPUT_SIZE * 2] },
+            Msg::Pad { pad: 4, seq: 65535, on: true, state: PadState::default() },
+            Msg::Fec { frame: 4, pts: -9, key: true, count: 30, idx: 2, rec: 6, data: &[5, 6] },
+            Msg::ClipWant { id: 3, start: 64, count: 256 },
+            Msg::ClipData { id: 3, idx: 69, data: &[1, 2, 3] },
+            Msg::Rate(rate::Report { delay_ms: 31, loss_pm: 1000, kbps: 150_000 }),
+        ];
+        for m in &msgs {
+            let mut b = Vec::new();
+            write(&mut b, m);
+            for n in 0..b.len() {
+                let _ = read(&b[..n]);
+            }
+        }
+        let mut x = 0x9E37_79B9_7F4A_7C15u64;
+        let mut next = || {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            x
+        };
+        for _ in 0..20_000 {
+            let len = (next() % 48) as usize;
+            let mut b: Vec<u8> = (0..len).map(|_| next() as u8).collect();
+            if len >= 4 {
+                b[..2].copy_from_slice(&MAGIC);
+                b[2] = (next() % 30) as u8;
+                b[3] = VERSION;
+            }
+            if let Some(m) = read(&b) {
+                write(&mut Vec::new(), &m);
+            }
+        }
+    }
+
+    #[test]
     fn video_header_size() {
         let mut b = Vec::new();
         write(&mut b, &Msg::Video { key: false, more: false, idx: 0, count: 1, frame: 0, pts: 0, data: &[] });

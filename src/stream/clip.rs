@@ -362,14 +362,17 @@ pub fn unpack_files(b: &[u8]) -> Option<Vec<(PathBuf, &[u8])>> {
 }
 
 /// Prepara a imagem ou os arquivos que chegaram para a área de transferência: o formato e os
-/// bytes. Os arquivos vão para `%TEMP%\Prisma\Colado`, que é esvaziada a cada vez (o que ficou lá
+/// bytes. Os arquivos vão para `%TEMP%\Prisma\Colado` (com o serviço, `ProgramData\Prisma\compartilhar\Colado`), que é esvaziada a cada vez (o que ficou lá
 /// já foi colado ou saiu da área de transferência).
 fn prepare(b: &[u8]) -> Option<(u32, Vec<u8>)> {
     match b.first() {
         Some(&IMAGE) => Some((CF_DIB, b[1..].to_vec())),
         Some(&FILES) => {
             let list = unpack_files(b)?;
-            let root = std::env::temp_dir().join("Prisma").join("Colado");
+            // Com o serviço, o processo é SYSTEM: a Temp dele ela não lê, e a C:\Windows\Temp aceita
+            // junções de qualquer usuário. A pasta do serviço é só do SYSTEM e ela lê.
+            let base = if super::SERVICE.load(std::sync::atomic::Ordering::Relaxed) { super::service_dir() } else { std::env::temp_dir().join("Prisma") };
+            let root = base.join("Colado");
             let _ = std::fs::remove_dir_all(&root);
             let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
             let dir = root.join(stamp.to_string());
