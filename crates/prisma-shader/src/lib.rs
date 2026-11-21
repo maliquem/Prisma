@@ -61,26 +61,28 @@ pub fn write_safe(path: &std::path::Path, data: impl AsRef<[u8]>) -> std::io::Re
 
 #[cfg(test)]
 mod write_safe_tests {
+    use std::os::windows::fs::OpenOptionsExt;
+
     #[test]
-    fn parallel_writes_all_land() {
+    fn tmp_is_per_call_and_cleaned() {
         let d = std::env::temp_dir().join(format!("prisma_write_safe_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         let p = d.join("c.ini");
-        // Com um temporário só para todos, um escrevia por cima do outro e alguma gravação falhava.
-        std::thread::scope(|s| {
-            for i in 0..8u8 {
-                let p = &p;
-                // Erro de troca simultânea no mesmo destino pode acontecer; aqui importa o que sobra.
-                s.spawn(move || (0..50).for_each(|_| drop(super::write_safe(p, [i; 64]))));
-            }
-        });
+        let lock = |f: &std::path::Path| std::fs::OpenOptions::new().write(true).create(true).share_mode(0).open(f).unwrap();
+        // Outro gravador no meio, com o temporário de nome fixo de antes aberto: antes esta gravação falhava.
+        let other = lock(&d.join("c.tmp"));
+        super::write_safe(&p, b"a").unwrap();
+        // Destino preso por outro programa: a troca falha e o temporário desta gravação não fica para trás.
+        let held = lock(&p);
+        assert!(super::write_safe(&p, b"b").is_err());
+        drop((held, other));
+        let mut names: Vec<_> = std::fs::read_dir(&d).unwrap().flatten().map(|e| e.file_name()).collect();
+        names.sort();
         let data = std::fs::read(&p).unwrap();
-        let left = std::fs::read_dir(&d).unwrap().count();
         let _ = std::fs::remove_dir_all(&d);
-        // Com um temporário só para todos, uma gravação trocava o arquivo da outra pela metade.
-        assert!(data.len() == 64 && data.iter().all(|&b| b == data[0]), "arquivo misturado");
-        assert_eq!(left, 1, "sobrou temporário");
+        assert_eq!(names, ["c.ini", "c.tmp"]);
+        assert_eq!(data, b"a");
     }
 }
 
