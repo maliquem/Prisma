@@ -384,6 +384,8 @@ pub struct Config {
     pub meter_games: Vec<MeterGame>,
     /// Jogos na tela Driver NVIDIA, pelo nome do .exe.
     pub nv_games: Vec<String>,
+    /// Lista da aba Jogos: os das lojas, vindos do Prisma Launcher, e os postos à mão.
+    pub games: Vec<crate::games::Game>,
     /// HDR do Windows ao abrir o jogo: 0 desligado, 1 só na lista, 2 em todos.
     pub meter_hdr: u8,
     pub meter_items: u32,
@@ -599,6 +601,7 @@ impl Default for Config {
             hdr_games: Vec::new(),
             meter_games: Vec::new(),
             nv_games: Vec::new(),
+            games: Vec::new(),
             meter_hdr: 0,
             meter_items: crate::meter::ITEMS_DEFAULT,
             meter_compact: 0,
@@ -960,6 +963,7 @@ impl Config {
                     }
                 }
                 "nv_game" => c.nv_games.push(v.to_string()),
+                "game" => c.games.extend(crate::games::Game::parse(v)),
                 "fs_app" => {
                     c.fs_apps.extend(FsApp::parse(v));
                 }
@@ -1242,6 +1246,9 @@ impl Config {
         }
         for g in &self.nv_games {
             let _ = writeln!(s, "nv_game={g}");
+        }
+        for g in &self.games {
+            let _ = writeln!(s, "game={}", g.line());
         }
         for a in &self.fs_apps {
             let _ = writeln!(s, "fs_app={}", a.line());

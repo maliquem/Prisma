@@ -47,6 +47,16 @@ Mostra GPU, CPU, RAM e VRAM em quatro seções, escolhidas no seletor no alto da
 - **Detalhe do programa:** clique numa linha da tabela para ver tudo o que se mede dele, incluindo a thread mais cheia, a prioridade e o pico de VRAM. Ali ficam **Abrir no Medidor** (leva o programa ao Medidor, onde fica o limite de FPS) e **Finalizar tarefa** (pergunta antes). Outro clique na linha fecha o detalhe.
 - **Medir com a janela fechada:** opção que mantém as leituras extras rodando sempre, para os gráficos já estarem prontos ao abrir a página. Desligada, que é o padrão, essas leituras rodam só com a página aberta.
 
+## Jogos
+
+Os ajustes de cada jogo num lugar só. A aba não abre o jogo: ela junta o que as outras abas guardam para ele e grava no mesmo lugar que elas, então mudar aqui ou na aba de origem dá no mesmo.
+
+- **Lista:** **Com perfil** tem os jogos com algum ajuste, com o nome das funções ajustadas à direita; **Sem perfil**, os outros. Dá para buscar pelo nome e ordenar por nome, loja ou tamanho. Um exe que sumiu do caminho aparece com o aviso **exe não encontrado**.
+- **De onde vêm os jogos:** com o Prisma Launcher aberto, os jogos da Steam, Epic, GOG e Xbox chegam sozinhos, com um aviso quando chegam jogos novos. Sem ele, ficam os postos à mão e os que já têm ajuste em alguma aba. **Adicionar .exe ou .dll…** põe um arquivo na lista; **Escanear pasta…** procura os jogos de uma pasta, sugere o exe de cada um (com o motivo, a API de imagem e se é emulador ou tem anti-cheat) e só põe na lista os marcados em **É jogo**, com o nome que você escrever.
+- **O jogo aberto:** clique num jogo para ver a pasta, a API de imagem (DirectX 9 a 12, Vulkan ou OpenGL; **provável** quando vem dos arquivos da pasta, sem ler o exe) e se tem anti-cheat. Abaixo vem uma seção por função: **Medidor e limitador de FPS**, **HDR**, **Som**, **Energia**, **Controle**, **Shader**, **Fullscreenizer** e **Driver NVIDIA**. Cada uma diz se está no padrão ou ajustada, tem **Abrir na aba** e, quando dá, **Voltar ao padrão**, que apaga só aquela função do jogo. A seção de uma função desligada em Configurações não aparece.
+- **Driver NVIDIA:** se o driver já tem perfil para o jogo, a seção mostra o nome dele. Sem perfil, **Criar perfil (segue o global)** cria um vazio, que continua seguindo o global; **Criar com cópia do global** grava os valores de agora do global no perfil novo, e daí em diante mudar o global não muda mais esse jogo.
+- **Tirar da lista:** só para jogos postos à mão. Os ajustes nas outras abas continuam salvos.
+
 ## Medidor
 
 Mostra o desempenho por cima do jogo e limita o FPS. As leituras vêm dos eventos do Windows, sem nada dentro do jogo. Precisa do Prisma como administrador.

@@ -16,7 +16,7 @@ const NOT_GAME: [&str; 27] = [
 ];
 
 /// Pastas que não têm o jogo.
-const SKIP_DIRS: [&str; 10] = ["_commonredist", "redist", "redistributables", "directx", "vcredist", "easyanticheat", "battleye", "__installer", "support", "engine"];
+pub(crate) const SKIP_DIRS: [&str; 10] = ["_commonredist", "redist", "redistributables", "directx", "vcredist", "easyanticheat", "battleye", "__installer", "support", "engine"];
 
 pub fn games() -> Vec<Entry> {
     let mut out = steam(&|_| true);
@@ -116,7 +116,7 @@ fn steam(keep: &dyn Fn(&Path) -> bool) -> Vec<Entry> {
     out
 }
 
-fn same_dir(a: &Path, b: &Path) -> bool {
+pub(crate) fn same_dir(a: &Path, b: &Path) -> bool {
     let n = |p: &Path| p.display().to_string().replace('/', "\\").trim_end_matches('\\').to_lowercase();
     n(a) == n(b)
 }
@@ -144,7 +144,7 @@ fn main_exe(folder: &Path, installdir: &str) -> Option<PathBuf> {
         .map(|(p, ..)| p)
 }
 
-fn walk(dir: &Path, depth: usize, found: &mut Vec<(PathBuf, u64, usize)>, seen: &mut usize) {
+pub(crate) fn walk(dir: &Path, depth: usize, found: &mut Vec<(PathBuf, u64, usize)>, seen: &mut usize) {
     let Ok(rd) = std::fs::read_dir(dir) else { return };
     for e in rd.flatten() {
         // Uma pasta enorme não trava a lista.

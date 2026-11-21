@@ -13,7 +13,7 @@ mod server;
 pub use frame::{read_frame, write_frame};
 pub use proto::{
     AudioDevice, Capabilities, Controller, FpsLimit, GameInvite, InviteState, MeterView, NvidiaKind, NvidiaSetting, NvidiaValue, OptionValue, Page,
-    PowerPlan, ReplayOptions, ReplayResolution, Reply, Request, ShareMode, VolumeChange,
+    PowerPlan, ReplayOptions, ReplayResolution, Reply, Request, ShareMode, StoreGame, VolumeChange,
 };
 
 #[cfg(windows)]
@@ -93,6 +93,8 @@ pub mod cap {
     pub const SOUND_EQ: &str = "sound.eq";
     /// `Request::LaunchGame`: o Prisma abre o jogo que usa o HDR do Prisma.
     pub const LAUNCH_HDR: &str = "launch.hdr";
+    /// `Request::Games`: o Prisma recebe a lista de jogos das lojas para a aba Jogos.
+    pub const GAMES: &str = "games";
 }
 
 /// Códigos estáveis de `Reply::Failed`.

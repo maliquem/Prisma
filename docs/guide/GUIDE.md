@@ -47,6 +47,16 @@ Shows GPU, CPU, RAM and VRAM in four sections, chosen in the selector at the top
 - **Program detail:** click a row in the table to see everything measured for that program, including its busiest thread, priority and VRAM peak. There you find **Open in Meter** (sends the program to the Meter, where the FPS limit is) and **End task** (asks first). Clicking the row again closes the detail.
 - **Measure with the window closed:** keeps the extra readings running all the time, so the charts are ready when you open the page. Off by default: then these readings run only while the page is open.
 
+## Games
+
+Each game's settings in one place. The tab does not launch the game: it gathers what the other tabs keep for it and saves to the same place they do, so changing it here or in the source tab is the same.
+
+- **List:** **With profile** has the games with any setting, with the names of the adjusted functions on the right; **No profile**, the others. You can search by name and sort by name, store or size. An exe that is gone from its path shows **exe not found**.
+- **Where games come from:** with the Prisma Launcher open, Steam, Epic, GOG and Xbox games arrive by themselves, with a notice when new games arrive. Without it, the list has the games added by hand and those that already have a setting in some tab. **Add .exe or .dll…** adds one file; **Scan folder…** looks for the games in a folder, suggests each one's exe (with the reason, the graphics API and whether it is an emulator or has anti-cheat) and only adds the ones checked in **Is a game**, with the name you type.
+- **The open game:** click a game to see its folder, the graphics API (DirectX 9 to 12, Vulkan or OpenGL; **probable** when it comes from the folder's files, without reading the exe) and whether it has anti-cheat. Below comes one section per function: **Meter and FPS limiter**, **HDR**, **Sound**, **Power**, **Controller**, **Shader**, **Fullscreenizer** and **NVIDIA driver**. Each one says whether it is at default or adjusted, has **Open in the … tab** and, where possible, **Reset to default**, which clears only that function for the game. The section of a function turned off in Settings does not show.
+- **NVIDIA driver:** if the driver already has a profile for the game, the section shows its name. Without one, **Create profile (follows global)** creates an empty one that keeps following the global; **Create with a copy of global** saves the global's current values in the new profile, and from then on changing the global no longer changes that game.
+- **Remove from list:** only for games added by hand. The settings in the other tabs stay saved.
+
 ## Meter
 
 Shows performance over the game and limits FPS. Readings come from Windows events, with nothing inside the game. It needs Prisma as administrator.

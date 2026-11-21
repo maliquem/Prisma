@@ -3131,3 +3131,65 @@ Desmarque o que você não vai usar: some da barra lateral e para de rodar. Isso
 Tempo dos avisos	Duración de avisos
 Quanto tempo todo aviso do Prisma fica na tela. Padrão: 3 s.	Cuánto tiempo permanece en pantalla cada aviso de Prisma. Predeterminado: 3 s.
 Assim fica o aviso do Prisma	Así se ve un aviso de Prisma
+Medidor e limitador de FPS	Medidor y limitador de FPS
+Esse jogo já está na lista.	Ese juego ya está en la lista.
+Nenhum executável nessa pasta.	No hay ningún ejecutable en esa carpeta.
+Os ajustes de cada jogo num lugar só.	Los ajustes de cada juego en un solo lugar.
+Adicionar .exe ou .dll…	Añadir .exe o .dll…
+Escanear pasta…	Escanear carpeta…
+Com perfil	Con perfil
+Loja	Tienda
+Buscar jogo	Buscar juego
+Os jogos da Steam, Epic, GOG e Xbox aparecem aqui sozinhos com o Prisma Launcher aberto. Sem ele, ficam os postos à mão e os que já têm ajuste.	Los juegos de Steam, Epic, GOG y Xbox aparecen aquí solos con Prisma Launcher abierto. Sin él, quedan los añadidos a mano y los que ya tienen ajustes.
+1 jogo novo chegou das lojas.	Ha llegado 1 juego nuevo de las tiendas.
+{} jogos novos chegaram das lojas.	Han llegado {} juegos nuevos de las tiendas.
+Escaneando a pasta…	Escaneando la carpeta…
+Nenhum jogo com esse nome.	Ningún juego con ese nombre.
+Nenhum jogo com ajuste ainda. Abra um da aba Sem perfil para ajustar.	Ningún juego con ajustes todavía. Abre uno de la pestaña Sin perfil para ajustarlo.
+Nenhum jogo. Use Adicionar ou Escanear pasta.	Ningún juego. Usa Añadir o Escanear carpeta.
+exe não encontrado	exe no encontrado
+API: medindo…	API: midiendo…
+API: {} (provável, pelos arquivos)	API: {} (probable, según los archivos)
+API: {}	API: {}
+API: não encontrada	API: no encontrada
+Anti-cheat: detectado	Antitrampas: detectado
+Anti-cheat: não encontrado	Antitrampas: no encontrado
+Anti-cheat: …	Antitrampas: …
+Pasta: desconhecida (só o perfil conhece o jogo)	Carpeta: desconocida (solo el perfil conoce el juego)
+O exe não foi encontrado nesse caminho.	No se encontró el exe en esa ruta.
+Os ajustes do jogo nas outras abas continuam salvos.	Los ajustes del juego en las otras pestañas siguen guardados.
+Abrir na aba {}	Abrir en la pestaña {}
+Voltar ao padrão	Restablecer
+HDR do Windows ao abrir	HDR de Windows al abrir
+Medidor ao abrir	Medidor al abrir
+Plano ao abrir o jogo	Plan al abrir el juego
+HDR próprio do jogo	HDR propio del juego
+Guardar o volume deste jogo	Guardar el volumen de este juego
+Perfil de controle	Perfil de mando
+Este jogo tem perfil de shader, com os filtros e ajustes só dele.	Este juego tiene perfil de shader, con sus propios filtros y ajustes.
+Sem perfil de shader.	Sin perfil de shader.
+Sem perfil de shader. Abrir na aba cria um para este jogo.	Sin perfil de shader. Abrir la pestaña crea uno para este juego.
+Tela cheia sem bordas sozinho ao abrir	Pantalla completa sin bordes automática al abrir
+Tipo de jogo (filtro de upscale)	Tipo de juego (filtro de escalado)
+Usa o perfil "{}" do driver. Os ajustes ficam na aba Driver NVIDIA.	Usa el perfil "{}" del driver. Los ajustes están en la pestaña Driver NVIDIA.
+Sem perfil no driver: o jogo segue o global.	Sin perfil en el driver: el juego sigue el global.
+Criar perfil (segue o global)	Crear perfil (sigue el global)
+Criar com cópia do global	Crear con copia del global
+Criar com cópia do global?	¿Crear con copia del global?
+O perfil novo grava os valores de agora do global. Depois disso, mudar o global não muda mais este jogo.	El perfil nuevo guarda los valores actuales del global. Después, cambiar el global ya no cambia este juego.
+Jogos encontrados	Juegos encontrados
+Marque o que é jogo. O nome pode ser trocado, e o exe escolhido é o que os perfis usam.	Marca lo que es un juego. Se puede cambiar el nombre, y el exe elegido es el que usan los perfiles.
+É jogo	Es juego
+Nome do jogo	Nombre del juego
+{} (provável)	{} (probable)
+sem API de imagem	sin API de imagen
+Pôr {} na lista	Poner {} en la lista
+Alguns já estavam na lista.	Algunos ya estaban en la lista.
+executável do Unreal	ejecutable de Unreal
+na pasta principal	en la carpeta principal
+usa uma API de imagem	usa una API de imagen
+nome parecido com a pasta	nombre parecido al de la carpeta
+parece um iniciador	parece un lanzador
+Os ajustes de cada jogo num lugar só: medidor, HDR, som, controle, shader e driver.	Los ajustes de cada juego en un solo lugar: medidor, HDR, sonido, mando, shader y driver.
+Página Jogos	Página Juegos
+ajustado	ajustado

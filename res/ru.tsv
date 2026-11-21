@@ -3131,3 +3131,65 @@ Desmarque o que você não vai usar: some da barra lateral e para de rodar. Isso
 Tempo dos avisos	Время уведомлений
 Quanto tempo todo aviso do Prisma fica na tela. Padrão: 3 s.	Как долго любое уведомление Prisma остаётся на экране. По умолчанию: 3 с.
 Assim fica o aviso do Prisma	Так выглядит уведомление Prisma
+Medidor e limitador de FPS	Счётчик и ограничитель FPS
+Esse jogo já está na lista.	Эта игра уже в списке.
+Nenhum executável nessa pasta.	В этой папке нет исполняемых файлов.
+Os ajustes de cada jogo num lugar só.	Настройки каждой игры в одном месте.
+Adicionar .exe ou .dll…	Добавить .exe или .dll…
+Escanear pasta…	Сканировать папку…
+Com perfil	С профилем
+Loja	Магазин
+Buscar jogo	Найти игру
+Os jogos da Steam, Epic, GOG e Xbox aparecem aqui sozinhos com o Prisma Launcher aberto. Sem ele, ficam os postos à mão e os que já têm ajuste.	Игры из Steam, Epic, GOG и Xbox появляются здесь сами, пока открыт Prisma Launcher. Без него остаются добавленные вручную и те, у которых уже есть настройки.
+1 jogo novo chegou das lojas.	1 новая игра из магазинов.
+{} jogos novos chegaram das lojas.	Новых игр из магазинов: {}.
+Escaneando a pasta…	Сканирование папки…
+Nenhum jogo com esse nome.	Нет игры с таким названием.
+Nenhum jogo com ajuste ainda. Abra um da aba Sem perfil para ajustar.	Пока нет игр с настройками. Откройте игру на вкладке «Нет профиля», чтобы настроить.
+Nenhum jogo. Use Adicionar ou Escanear pasta.	Игр нет. Нажмите «Добавить» или «Сканировать папку».
+exe não encontrado	exe не найден
+API: medindo…	API: измерение…
+API: {} (provável, pelos arquivos)	API: {} (вероятно, по файлам)
+API: {}	API: {}
+API: não encontrada	API: не найден
+Anti-cheat: detectado	Античит: обнаружен
+Anti-cheat: não encontrado	Античит: не найден
+Anti-cheat: …	Античит: …
+Pasta: desconhecida (só o perfil conhece o jogo)	Папка: неизвестна (игру знает только профиль)
+O exe não foi encontrado nesse caminho.	По этому пути exe не найден.
+Os ajustes do jogo nas outras abas continuam salvos.	Настройки игры на других вкладках сохранены.
+Abrir na aba {}	Открыть на вкладке {}
+Voltar ao padrão	Вернуть по умолчанию
+HDR do Windows ao abrir	HDR Windows при запуске
+Medidor ao abrir	Счётчик при запуске
+Plano ao abrir o jogo	План при запуске игры
+HDR próprio do jogo	Собственный HDR игры
+Guardar o volume deste jogo	Запомнить громкость этой игры
+Perfil de controle	Профиль геймпада
+Este jogo tem perfil de shader, com os filtros e ajustes só dele.	У этой игры есть профиль shader со своими фильтрами и настройками.
+Sem perfil de shader.	Нет профиля shader.
+Sem perfil de shader. Abrir na aba cria um para este jogo.	Нет профиля shader. Открытие вкладки создаст его для этой игры.
+Tela cheia sem bordas sozinho ao abrir	Автоматически без рамки при запуске
+Tipo de jogo (filtro de upscale)	Тип игры (фильтр апскейла)
+Usa o perfil "{}" do driver. Os ajustes ficam na aba Driver NVIDIA.	Использует профиль драйвера «{}». Настройки на вкладке Драйвер NVIDIA.
+Sem perfil no driver: o jogo segue o global.	Нет профиля в драйвере: игра использует глобальный.
+Criar perfil (segue o global)	Создать профиль (как глобальный)
+Criar com cópia do global	Создать копию глобального
+Criar com cópia do global?	Создать копию глобального?
+O perfil novo grava os valores de agora do global. Depois disso, mudar o global não muda mais este jogo.	Новый профиль сохраняет текущие значения глобального. После этого изменение глобального больше не влияет на эту игру.
+Jogos encontrados	Найденные игры
+Marque o que é jogo. O nome pode ser trocado, e o exe escolhido é o que os perfis usam.	Отметьте, что является игрой. Название можно изменить, а выбранный exe используется профилями.
+É jogo	Это игра
+Nome do jogo	Название игры
+{} (provável)	{} (вероятно)
+sem API de imagem	без графического API
+Pôr {} na lista	Добавить в список: {}
+Alguns já estavam na lista.	Некоторые уже были в списке.
+executável do Unreal	исполняемый файл Unreal
+na pasta principal	в главной папке
+usa uma API de imagem	использует графический API
+nome parecido com a pasta	имя похоже на папку
+parece um iniciador	похоже на лаунчер
+Os ajustes de cada jogo num lugar só: medidor, HDR, som, controle, shader e driver.	Настройки каждой игры в одном месте: счётчик, HDR, звук, геймпад, shader и драйвер.
+Página Jogos	Страница «Игры»
+ajustado	изменено

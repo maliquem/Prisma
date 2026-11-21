@@ -3,6 +3,7 @@
 mod app;
 mod capture;
 mod config;
+mod games;
 mod crash;
 mod hdr_menu;
 mod i18n;

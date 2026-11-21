@@ -390,6 +390,29 @@ fn write_with(who: &Profile, values: &[(u32, Option<u32>)], backup: bool) -> boo
     .unwrap_or(false)
 }
 
+/// Cria o perfil do jogo. Com `copy`, grava nele os valores de agora do global para esses ids (daí em diante
+/// mudar o global não muda o jogo); sem, fica vazio e segue o global.
+pub fn create(exe: &str, copy: &[u32]) -> bool {
+    let values: Vec<(u32, Option<u32>)> = match copy {
+        [] => Vec::new(),
+        ids => {
+            let Some(g) = snapshot(&Profile::Global, ids) else { return false };
+            ids.iter().zip(g.values).filter_map(|(id, v)| Some((*id, Some(v?.now)))).collect()
+        }
+    };
+    if !values.is_empty() {
+        return write(&Profile::Game(exe.to_string()), &values);
+    }
+    with_session(|a, s| unsafe {
+        if !backup_once(a, s) {
+            return Some(false);
+        }
+        game_profile(a, s, exe, true)?;
+        Some((a.save)(s) == 0)
+    })
+    .unwrap_or(false)
+}
+
 /// Volta o banco inteiro a uma cópia guardada.
 pub fn restore(file: &Path) -> bool {
     with_session_from(Some(file), |a, s| unsafe { Some((a.save)(s) == 0) }).unwrap_or(false)

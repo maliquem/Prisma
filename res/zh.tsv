@@ -3131,3 +3131,65 @@ Desmarque o que você não vai usar: some da barra lateral e para de rodar. Isso
 Tempo dos avisos	提示时长
 Quanto tempo todo aviso do Prisma fica na tela. Padrão: 3 s.	Prisma 的每条提示在屏幕上停留多久。默认：3 秒。
 Assim fica o aviso do Prisma	Prisma 提示就是这样显示的
+Medidor e limitador de FPS	性能监视与 FPS 限制
+Esse jogo já está na lista.	该游戏已在列表中。
+Nenhum executável nessa pasta.	该文件夹中没有可执行文件。
+Os ajustes de cada jogo num lugar só.	每个游戏的设置集中在一处。
+Adicionar .exe ou .dll…	添加 .exe 或 .dll…
+Escanear pasta…	扫描文件夹…
+Com perfil	有配置
+Loja	商店
+Buscar jogo	搜索游戏
+Os jogos da Steam, Epic, GOG e Xbox aparecem aqui sozinhos com o Prisma Launcher aberto. Sem ele, ficam os postos à mão e os que já têm ajuste.	打开 Prisma Launcher 后，Steam、Epic、GOG 和 Xbox 的游戏会自动出现在这里。未打开时，只保留手动添加的和已有设置的游戏。
+1 jogo novo chegou das lojas.	商店中新增了 1 个游戏。
+{} jogos novos chegaram das lojas.	商店中新增了 {} 个游戏。
+Escaneando a pasta…	正在扫描文件夹…
+Nenhum jogo com esse nome.	没有该名称的游戏。
+Nenhum jogo com ajuste ainda. Abra um da aba Sem perfil para ajustar.	还没有带设置的游戏。请从“无配置”标签页打开一个来调整。
+Nenhum jogo. Use Adicionar ou Escanear pasta.	没有游戏。请使用“添加”或“扫描文件夹”。
+exe não encontrado	未找到 exe
+API: medindo…	API：检测中…
+API: {} (provável, pelos arquivos)	API：{}（根据文件推测）
+API: {}	API：{}
+API: não encontrada	API：未找到
+Anti-cheat: detectado	反作弊：已检测到
+Anti-cheat: não encontrado	反作弊：未找到
+Anti-cheat: …	反作弊：…
+Pasta: desconhecida (só o perfil conhece o jogo)	文件夹：未知（只有配置知道该游戏）
+O exe não foi encontrado nesse caminho.	在该路径下未找到 exe。
+Os ajustes do jogo nas outras abas continuam salvos.	该游戏在其他标签页中的设置仍然保留。
+Abrir na aba {}	在“{}”标签页中打开
+Voltar ao padrão	恢复默认
+HDR do Windows ao abrir	打开时的 Windows HDR
+Medidor ao abrir	打开时的性能监视
+Plano ao abrir o jogo	打开游戏时的电源计划
+HDR próprio do jogo	游戏自带 HDR
+Guardar o volume deste jogo	记住此游戏的音量
+Perfil de controle	手柄配置
+Este jogo tem perfil de shader, com os filtros e ajustes só dele.	此游戏有专属的 shader 配置，包含它自己的滤镜和设置。
+Sem perfil de shader.	没有 shader 配置。
+Sem perfil de shader. Abrir na aba cria um para este jogo.	没有 shader 配置。在标签页中打开会为此游戏创建一个。
+Tela cheia sem bordas sozinho ao abrir	打开时自动无边框全屏
+Tipo de jogo (filtro de upscale)	游戏类型（放大滤镜）
+Usa o perfil "{}" do driver. Os ajustes ficam na aba Driver NVIDIA.	使用驱动配置“{}”。设置在“NVIDIA 驱动”标签页中。
+Sem perfil no driver: o jogo segue o global.	驱动中没有配置：该游戏沿用全局设置。
+Criar perfil (segue o global)	创建配置（沿用全局）
+Criar com cópia do global	用全局的副本创建
+Criar com cópia do global?	用全局的副本创建？
+O perfil novo grava os valores de agora do global. Depois disso, mudar o global não muda mais este jogo.	新配置会保存全局当前的值。之后修改全局不会再影响此游戏。
+Jogos encontrados	找到的游戏
+Marque o que é jogo. O nome pode ser trocado, e o exe escolhido é o que os perfis usam.	勾选属于游戏的项目。名称可以修改，所选的 exe 就是配置使用的 exe。
+É jogo	是游戏
+Nome do jogo	游戏名称
+{} (provável)	{}（推测）
+sem API de imagem	无图形 API
+Pôr {} na lista	将 {} 个加入列表
+Alguns já estavam na lista.	有些已在列表中。
+executável do Unreal	Unreal 可执行文件
+na pasta principal	在主文件夹中
+usa uma API de imagem	使用图形 API
+nome parecido com a pasta	名称与文件夹相近
+parece um iniciador	像是启动器
+Os ajustes de cada jogo num lugar só: medidor, HDR, som, controle, shader e driver.	每个游戏的设置集中在一处：性能监视、HDR、声音、手柄、shader 和驱动。
+Página Jogos	游戏页面
+ajustado	已调整

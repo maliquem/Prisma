@@ -83,6 +83,8 @@ const WM_PICK_RUN: u32 = WM_APP + 100;
 /// Janelas da página Shaders; o WPARAM diz qual (`pages::shaders::PICK_*`).
 pub const WM_PICK_SHADER: u32 = WM_APP + 104;
 const WM_PICK_MODS: u32 = WM_APP + 105;
+/// Página Jogos; o WPARAM diz o quê (`pages::games::ADD`, `SCAN` ou `REDRAW`).
+pub const WM_PICK_GAMES: u32 = WM_APP + 106;
 const WM_POW_OUT: u32 = WM_APP + 82;
 const WM_REPORT_PHOTO: u32 = WM_APP + 84;
 const WM_REPORT_DONE: u32 = WM_APP + 85;
@@ -1087,6 +1089,7 @@ pub fn start(background: bool) {
                 "--page=tweaks" => Page::Tweaks,
                 "--page=tools" => Page::Tools,
                 "--page=copies" => Page::Copies,
+                "--page=games" => Page::Games,
                 "--page=updates" => Page::Updates,
                 "--page=uninstall" => Page::Uninstall,
                 "--page=analyze" => Page::Analyze,
@@ -3123,6 +3126,11 @@ impl App {
             // `--test-page=share`: a página Compartilhar tela por cima das Novidades; `--test-en`: inglês.
             match arg("--test-page=").as_deref() {
                 Some("share") => self.page = Page::Share,
+                Some("games") => self.page = Page::Games,
+                Some("games-open") => {
+                    self.page = Page::Games;
+                    crate::pages::games::open_first(self);
+                }
                 Some("controllers") => self.page = Page::Controllers,
                 Some("controllers-edit") => {
                     self.page = Page::Controllers;
@@ -3965,6 +3973,7 @@ impl App {
             Page::Hdr => self.load_hdr(),
             Page::Optimize => self.refresh_candidates(),
             Page::Fullscreen => self.refresh_windows(),
+            Page::Games => crate::pages::games::refresh(),
             Page::Energy => self.active_plan = power::active().unwrap_or_default(),
             Page::Tweaks => {
                 self.load_disks();
@@ -4578,6 +4587,24 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                     a.invalidate();
                 });
             }
+            LRESULT(0)
+        }
+        WM_PICK_GAMES => {
+            use crate::pages::games as gp;
+            match w.0 {
+                gp::ADD => {
+                    if let Some(path) = capture::choose_file(h, "Programas", w!("*.exe;*.dll")) {
+                        with(|a| gp::added(a, &path));
+                    }
+                }
+                gp::SCAN => {
+                    if let Some(dir) = capture::choose_folder(h) {
+                        with(|a| crate::games::start_scan(dir.into(), a.hub.0 as isize));
+                    }
+                }
+                _ => {}
+            }
+            with(|a| a.invalidate());
             LRESULT(0)
         }
         WM_PICK_RUN => {
