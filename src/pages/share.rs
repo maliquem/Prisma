@@ -21,6 +21,14 @@ const TABS: [&str; 6] = ["Compartilhar", "Host", "Cliente", "Rede", "Atalhos", "
 struct Proc {
     child: Child,
     log: PathBuf,
+    /// O fim do log já lido e o (tamanho, data) do arquivo naquela leitura.
+    seen: std::cell::RefCell<Seen>,
+}
+
+#[derive(Default)]
+struct Seen {
+    key: Option<(u64, std::time::SystemTime)>,
+    lines: Vec<String>,
 }
 
 impl Proc {
@@ -196,7 +204,7 @@ fn spawn(st: &mut State, args: &[String], log: &str) -> Option<Proc> {
     unsafe {
         let _ = windows::Win32::System::JobObjects::AssignProcessToJobObject(job(st), windows::Win32::Foundation::HANDLE(child.as_raw_handle()));
     }
-    Some(Proc { child, log })
+    Some(Proc { child, log, seen: Default::default() })
 }
 
 /// Fim do arquivo de um processo, em linhas.
@@ -205,9 +213,31 @@ fn tail(p: &Option<Proc>) -> Vec<String> {
 }
 
 fn tail_of(p: &Proc) -> Vec<String> {
-    let Ok(b) = std::fs::read(&p.log) else { return Vec::new() };
-    let start = b.len().saturating_sub(16 * 1024);
-    String::from_utf8_lossy(&b[start..]).lines().filter(|l| !l.trim().is_empty()).map(str::to_string).collect()
+    read_tail(&p.log, &mut p.seen.borrow_mut())
+}
+
+/// Roda a cada quadro para até 6 logs: só relê quando tamanho ou data mudam, e só os últimos 16 KB,
+/// porque o log cresce a sessão inteira.
+fn read_tail(path: &std::path::Path, seen: &mut Seen) -> Vec<String> {
+    use std::io::{Read, Seek, SeekFrom};
+    const TAIL: u64 = 16 * 1024;
+    let Ok(mut f) = std::fs::File::open(path) else { return Vec::new() };
+    let Ok(meta) = f.metadata() else { return Vec::new() };
+    let key = meta.modified().ok().map(|t| (meta.len(), t));
+    if key.is_some() && key == seen.key {
+        return seen.lines.clone();
+    }
+    let skip = meta.len().saturating_sub(TAIL);
+    let mut b = Vec::new();
+    if f.seek(SeekFrom::Start(skip)).and_then(|_| f.read_to_end(&mut b)).is_err() {
+        return Vec::new();
+    }
+    let text = String::from_utf8_lossy(&b);
+    // Cortado no meio, a primeira linha vem pela metade.
+    let whole = if skip > 0 { text.split_once('\n').map_or("", |(_, r)| r) } else { &text };
+    seen.lines = whole.lines().filter(|l| !l.trim().is_empty()).map(str::to_string).collect();
+    seen.key = key;
+    seen.lines.clone()
 }
 
 /// O convite mais novo que o processo do convite escreveu.
@@ -753,7 +783,8 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
     // O que o pareamento e quem assiste disseram por último.
     let kvm_log = st.kvm.as_ref().map(|k| tail_of(&k.0)).unwrap_or_default();
     let ear_log = st.ear.as_ref().map(|k| tail_of(&k.0)).unwrap_or_default();
-    let side: Vec<String> = tail(&st.pair).into_iter().chain(tail(&st.view)).chain(kvm_log).chain(ear_log).filter(|l| !l.starts_with("Conexão pela internet")).collect();
+    let view_log = tail(&st.view);
+    let side: Vec<String> = tail(&st.pair).into_iter().chain(view_log.iter().cloned()).chain(kvm_log.iter().cloned()).chain(ear_log.iter().cloned()).filter(|l| !l.starts_with("Conexão pela internet")).collect();
     if let Some(last) = side.last() {
         ui.c.text_wrap(rect(rx, y, rw, 36.0), last, 12.0, TEXT2, Weight::Regular);
     }
@@ -762,9 +793,9 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
     // Latência de cada modo ligado: a última linha de cada um, por PC, e as últimas de todos.
     let watching = st.view.as_mut().is_some_and(Proc::alive).then(|| st.view_name.clone());
     let lat_of = |lines: &[String]| -> Vec<String> { lines.iter().filter_map(|l| l.strip_prefix(stream::LAT_LINE)).map(lat_words).collect() };
-    let view_lat = if watching.is_some() { lat_of(&tail(&st.view)) } else { Vec::new() };
-    let kvm_lat = st.kvm.as_ref().map(|k| lat_of(&tail_of(&k.0))).unwrap_or_default();
-    let ear_lat = st.ear.as_ref().map(|k| lat_of(&tail_of(&k.0))).unwrap_or_default();
+    let view_lat = if watching.is_some() { lat_of(&view_log) } else { Vec::new() };
+    let kvm_lat = lat_of(&kvm_log);
+    let ear_lat = lat_of(&ear_log);
     let mut lat_log: Vec<String> = Vec::new();
     for (mode, lines) in [("Assistir", &view_lat), ("Mouse e teclado", &kvm_lat), ("Só o som", &ear_lat)] {
         lat_log.extend(lines.iter().map(|l| format!("{} · {}", crate::i18n::tr(mode), l)));
@@ -1910,5 +1941,39 @@ mod net_seen_tests {
         assert!(t.contains("50000") && t.contains("200.1.2.3") && t.contains(&opened), "{t}");
         assert_eq!(super::net_seen("porta=50000\nupnp=0\n", false).unwrap().split(" · ").count(), 1);
         assert!(super::net_seen("", true).is_none());
+    }
+}
+
+#[cfg(test)]
+mod tail_tests {
+    use super::{read_tail, Seen};
+
+    #[test]
+    fn arquivo_pequeno_vem_inteiro() {
+        let f = std::env::temp_dir().join(format!("prisma-tail-curto-{}.txt", std::process::id()));
+        std::fs::write(&f, "um\n\ndois\n").unwrap();
+        let mut seen = Seen::default();
+        assert_eq!(read_tail(&f, &mut seen), ["um", "dois"]);
+        // Sem mudar o arquivo, vem do que já foi lido.
+        seen.lines.push("guardado".into());
+        assert_eq!(read_tail(&f, &mut seen).last().map(String::as_str), Some("guardado"));
+        std::fs::write(&f, "um\ndois\ntres\n").unwrap();
+        assert_eq!(read_tail(&f, &mut seen), ["um", "dois", "tres"], "tamanho mudou, relê");
+        let _ = std::fs::remove_file(&f);
+        assert!(read_tail(&f, &mut Seen::default()).is_empty());
+    }
+
+    #[test]
+    fn arquivo_grande_vem_so_o_fim() {
+        let f = std::env::temp_dir().join(format!("prisma-tail-longo-{}.txt", std::process::id()));
+        let text: String = (0..3000).map(|i| format!("linha {i}\n")).collect();
+        assert!(text.len() > 16 * 1024);
+        std::fs::write(&f, &text).unwrap();
+        let lines = read_tail(&f, &mut Seen::default());
+        let _ = std::fs::remove_file(&f);
+        assert_eq!(lines.last().map(String::as_str), Some("linha 2999"));
+        assert!(!lines.iter().any(|l| l == "linha 0"), "o começo fica de fora");
+        let first: usize = lines[0].trim_start_matches("linha ").parse().expect("a primeira linha vem inteira");
+        assert_eq!(lines.len(), 3000 - first);
     }
 }

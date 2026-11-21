@@ -327,6 +327,8 @@ pub struct App {
     pub main: Option<MainWin>,
     pick_win: Option<MainWin>,
     pub page: Page,
+    /// A página da última `refresh_page`: separa "a aba abriu" de "mais um tick".
+    refreshed_page: Option<Page>,
     pub full: Fullscreenizer,
     pub detector: Detector,
     pub widget: Widget,
@@ -583,6 +585,7 @@ pub fn start(background: bool) {
             snap: Snapshot::default(),
             main: None,
             page: Page::Monitor,
+            refreshed_page: None,
             full: Fullscreenizer::default(),
             detector: Detector::new(),
             widget: Widget::new(),
@@ -2899,7 +2902,12 @@ impl App {
 
     /// A linha de um jogo visto pela primeira vez no Medidor.
     pub fn new_meter_game(&self, exe: &str, path: &str) -> crate::config::MeterGame {
-        crate::config::MeterGame { exe: exe.to_string(), path: path.to_string(), limit_fps: crate::meter::first_limit(self.refresh_hz()), limit_real: true, inject: true, last: crate::config::today(), ..Default::default() }
+        crate::config::MeterGame { limit_fps: crate::meter::first_limit(self.refresh_hz()), ..Self::meter_row(exe, path) }
+    }
+
+    /// A mesma linha sem o teto (`limit_fps` 0), que pede a taxa da tela: para mostrar a cada quadro.
+    pub fn meter_row(exe: &str, path: &str) -> crate::config::MeterGame {
+        crate::config::MeterGame { exe: exe.to_string(), path: path.to_string(), limit_real: true, inject: true, last: crate::config::today(), ..Default::default() }
     }
 
     pub fn add_meter_game(&mut self, exe: &str, path: &str) {
@@ -3971,6 +3979,8 @@ impl App {
     }
 
     pub fn refresh_page(&mut self) {
+        let opened = self.refreshed_page != Some(self.page);
+        self.refreshed_page = Some(self.page);
         if self.page == Page::Share {
             unsafe {
                 SetTimer(Some(self.hub), TIMER_SHARE, 500, None);
@@ -3988,7 +3998,7 @@ impl App {
             Page::Hdr => self.load_hdr(),
             Page::Optimize => self.refresh_candidates(),
             Page::Fullscreen => self.refresh_windows(),
-            Page::Games => crate::pages::games::refresh(),
+            Page::Games if opened => crate::pages::games::refresh(),
             Page::Energy => self.active_plan = power::active().unwrap_or_default(),
             Page::Tweaks => {
                 self.load_disks();
@@ -5133,6 +5143,7 @@ unsafe extern "system" fn main_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
                 crate::sys::nav::set_window(0);
                 a.report.window_closed();
                 a.main = None;
+                a.refreshed_page = None;
                 a.sessions.clear();
                 a.exe_paths.clear();
                 a.disks = Vec::new();
