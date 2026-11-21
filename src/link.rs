@@ -8,7 +8,7 @@ use std::sync::mpsc::{sync_channel, SyncSender};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use prisma_link::{cap, fail as code, AudioDevice, Controller, FpsLimit, GameInvite, InviteState, MeterView, NvidiaKind, NvidiaSetting, NvidiaValue, OptionValue, Page as LinkPage, PowerPlan, ReplayOptions, ReplayResolution, Reply, Request, ServerInfo, ShareMode, VolumeChange};
+use prisma_link::{cap, fail as code, AudioDevice, Controller, FpsLimit, GameInvite, HdrMode, InviteState, MeterView, NvidiaKind, NvidiaSetting, NvidiaValue, OptionValue, Page as LinkPage, PowerPlan, ReplayOptions, ReplayResolution, Reply, Request, ServerInfo, ShareMode, VolumeChange};
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_APP};
 
@@ -215,6 +215,10 @@ fn caps_with(nvidia: bool) -> Vec<String> {
         cap::SOUND_EQ,
         cap::LAUNCH_HDR,
         cap::GAMES,
+        cap::HDR_MODE,
+        cap::HDR_NATIVE,
+        cap::SHADERS,
+        cap::SHADERS_PRESET,
     ];
     if cfg!(feature = "stream") {
         caps.push(cap::SHARE_MODE);
@@ -643,6 +647,21 @@ impl App {
         let optimize = !c.opt_skip.iter().any(|e| same(e));
         let eq_profile = c.eq_apps.iter().find(|(e, _)| same(e)).map(|(_, p)| p.clone()).unwrap_or_default();
         let eq_out = audio_out_id.clone();
+        let hdr_game = c.hdr_games.iter().find(|h| same(&h.exe));
+        let hdr_mode = match hdr_game.map_or(autohdr::DEFAULT, |h| h.mode) {
+            autohdr::OFF => HdrMode::Off,
+            autohdr::AUTO => HdrMode::Auto,
+            autohdr::AUTO10 => HdrMode::Auto10,
+            autohdr::RTX => HdrMode::Rtx,
+            autohdr::PRISMA => HdrMode::Prisma,
+            _ => HdrMode::Default,
+        };
+        // Só a marca feita à mão, como a aba HDR: o que o gancho viu não é escolha.
+        let native_hdr = match hdr_game.map_or(autohdr::NATIVE_UNKNOWN, |h| h.native) {
+            autohdr::NATIVE_YES => Some(true),
+            autohdr::NATIVE_NO => Some(false),
+            _ => None,
+        };
         let exe = exe.to_string();
         Outcome::Later(Box::new(move || {
             let same = |e: &str| !exe.is_empty() && e.eq_ignore_ascii_case(&exe);
@@ -650,6 +669,8 @@ impl App {
                 let def = audio::default_id(capture).unwrap_or_default();
                 audio::devices(capture).into_iter().map(|d| AudioDevice { default: d.id == def, id: d.id, name: d.name }).collect()
             };
+            // O perfil de shader é um arquivo: lê aqui, na thread do pipe.
+            let shader = (!exe.is_empty()).then(|| crate::shader_profile::Profile::load(&crate::shader_profile::path_for(std::path::Path::new(&exe))).ok()).flatten();
             let sessions: Vec<_> = if pid != 0 { audio::for_process(pid) } else { audio::sessions().into_iter().filter(|s| same(&s.exe)).collect() };
             let mut reply = Reply::Options {
                 meter,
@@ -672,6 +693,11 @@ impl App {
                 invite: GAME_INVITE.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|(i, _)| i.clone()),
                 eq_profiles: crate::sys::eq::profiles(&crate::sys::eq::guid_of(&if eq_out.is_empty() { audio::default_id(false).unwrap_or_default() } else { eq_out })),
                 eq_profile,
+                hdr_mode,
+                native_hdr,
+                shaders: shader.as_ref().is_some_and(|p| p.on),
+                shader_preset: shader.as_ref().map(crate::pages::shaders::preset_of).unwrap_or_default(),
+                shader_presets: crate::pages::shaders::offered(),
             };
             let r = rev_of(&reply);
             if let Reply::Options { rev, .. } = &mut reply {
@@ -761,14 +787,72 @@ impl App {
             }
             OptionValue::AutoHdr(on) => {
                 let mode = match on {
-                    Some(true) => 1,
-                    Some(false) => 2,
-                    None => 0,
+                    Some(true) => HdrMode::Auto,
+                    Some(false) => HdrMode::Off,
+                    None => HdrMode::Default,
                 };
-                if !crate::pages::meter::set_auto_hdr(self, &exe, path, mode) {
-                    return fail(code::FAILED, "Não consegui gravar a escolha.");
+                if let Err(o) = self.link_hdr_mode(&exe, path, mode) {
+                    return o;
+                }
+            }
+            OptionValue::HdrMode(mode) => {
+                if let Err(o) = self.link_hdr_mode(&exe, path, mode) {
+                    return o;
+                }
+            }
+            OptionValue::NativeHdr(mark) => {
+                let n = match mark {
+                    Some(true) => autohdr::NATIVE_YES,
+                    Some(false) => autohdr::NATIVE_NO,
+                    None => autohdr::NATIVE_UNKNOWN,
+                };
+                match self.cfg.hdr_games.iter_mut().find(|h| h.exe.eq_ignore_ascii_case(&exe)) {
+                    Some(h) => h.native = n,
+                    None if mark.is_some() => self.cfg.hdr_games.push(crate::config::HdrGame { exe: exe.clone(), path: path.to_string(), native: n, ..Default::default() }),
+                    None => {}
                 }
                 self.cfg.save();
+            }
+            OptionValue::Shaders(on) => {
+                let has = crate::shader_profile::path_for(std::path::Path::new(exe_path)).exists();
+                // Sem perfil, desligar já é o que ele está.
+                if has || on {
+                    if !has && path.is_empty() {
+                        return fail(code::INVALID, "Falta o .exe do jogo");
+                    }
+                    if on && !path.is_empty() && crate::meter::anti_cheat(path) {
+                        return fail(code::NOT_SUPPORTED, "Jogo com anti-cheat: o shader não entra nele");
+                    }
+                    if let Err(e) = crate::pages::shaders::edit_game(self, exe_path, on, |p| p.on = on) {
+                        return fail(code::FAILED, e);
+                    }
+                }
+            }
+            OptionValue::ShaderPreset(name) => {
+                let has = crate::shader_profile::path_for(std::path::Path::new(exe_path)).exists();
+                let file = match name.is_empty() {
+                    true => None,
+                    false => match crate::pages::shaders::preset_file(&name) {
+                        Some(f) => Some(f),
+                        None => return fail(code::INVALID, "Valor fora das opções"),
+                    },
+                };
+                // Sem perfil, tirar os passes já é o que ele está. O perfil novo nasce desligado: ligar é o `Shaders`.
+                if has || file.is_some() {
+                    if !has && path.is_empty() {
+                        return fail(code::INVALID, "Falta o .exe do jogo");
+                    }
+                    let set = |p: &mut crate::shader_profile::Profile| {
+                        p.passes.clear();
+                        p.params.clear();
+                        if let Some(f) = file {
+                            crate::shader_profile::add_pass(p, f);
+                        }
+                    };
+                    if let Err(e) = crate::pages::shaders::edit_game(self, exe_path, false, set) {
+                        return fail(code::FAILED, e);
+                    }
+                }
             }
             OptionValue::AudioOut(id) | OptionValue::AudioIn(id) if !id.is_empty() && !audio::devices(false).iter().chain(&audio::devices(true)).any(|d| d.id == id) => {
                 return fail(code::INVALID, "Valor fora das opções");
@@ -861,6 +945,24 @@ impl App {
         }
         self.invalidate();
         Outcome::Done
+    }
+
+    /// Grava o modo de HDR do jogo, como a aba HDR; `Rtx` só com placa NVIDIA.
+    fn link_hdr_mode(&mut self, exe: &str, path: &str, mode: HdrMode) -> Result<(), Outcome> {
+        let n = match mode {
+            HdrMode::Default => autohdr::DEFAULT,
+            HdrMode::Off => autohdr::OFF,
+            HdrMode::Auto => autohdr::AUTO,
+            HdrMode::Auto10 => autohdr::AUTO10,
+            HdrMode::Rtx if !autohdr::nvidia() => return Err(fail(code::NOT_SUPPORTED, "indisponível")),
+            HdrMode::Rtx => autohdr::RTX,
+            HdrMode::Prisma => autohdr::PRISMA,
+        };
+        if !crate::pages::meter::set_auto_hdr(self, exe, path, n) {
+            return Err(fail(code::FAILED, "Não consegui gravar a escolha."));
+        }
+        self.cfg.save();
+        Ok(())
     }
 
     /// Tela inteira ou só a janela do jogo, como a escolha da página Compartilhar tela.
@@ -1047,7 +1149,7 @@ mod tests {
                 cap::CONTROLLERS_MAPPING, cap::CONTROLLERS_KEYBOARD, cap::OPTIONS, cap::METER_FPS_LIMIT,
                 cap::HDR_AUTO, cap::SOUND_DEVICES, cap::REPLAY_OPTIONS, cap::FULLSCREENIZER, cap::OPTIMIZE,
                 cap::METER_ON_LAUNCH, cap::HDR_ON_LAUNCH, cap::SOUND_GAME_VOLUME, cap::SOUND_EQ,
-                cap::LAUNCH_HDR, cap::GAMES,
+                cap::LAUNCH_HDR, cap::GAMES, cap::HDR_MODE, cap::HDR_NATIVE, cap::SHADERS, cap::SHADERS_PRESET,
             ] {
                 assert!(has(c), "{c}");
             }
@@ -1091,6 +1193,10 @@ mod tests {
             Request::ShareInviteForGame { exe: String::new(), minutes: None, to: None },
             Request::ShareInviteCancel { exe: String::new() },
             Request::Games { games: Vec::new(), first: true },
+            Request::SetOption { exe: String::new(), pid: 0, option: OptionValue::HdrMode(HdrMode::Prisma) },
+            Request::SetOption { exe: String::new(), pid: 0, option: OptionValue::NativeHdr(None) },
+            Request::SetOption { exe: String::new(), pid: 0, option: OptionValue::Shaders(true) },
+            Request::SetOption { exe: String::new(), pid: 0, option: OptionValue::ShaderPreset(String::new()) },
         ];
         for r in &answer {
             assert_eq!(wait_of(r), Wait::Answer, "{r:?}");

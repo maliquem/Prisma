@@ -281,9 +281,34 @@ pub enum OptionValue {
     /// Perfil de equalizador que roda enquanto o jogo está aberto, um de `eq_profiles`; vazio é o
     /// padrão do aparelho (`sound.eq`).
     EqProfile(String),
+    /// Modo de HDR do jogo, como na aba HDR; vale na próxima abertura (`hdr.mode`). `Rtx` só com
+    /// placa NVIDIA (`not_supported` sem ela).
+    HdrMode(HdrMode),
+    /// Marca "o jogo tem HDR próprio"; `None` volta a detectar sozinho (`hdr.native`).
+    NativeHdr(Option<bool>),
+    /// Liga ou desliga os shaders do jogo; ligar cria o perfil, se não houver (`shaders`).
+    Shaders(bool),
+    /// Preset de shader do jogo, um de `shader_presets`; troca os passes do perfil. Vazio tira os
+    /// passes, o preset padrão (`shaders.preset`).
+    ShaderPreset(String),
     /// Opção que este lado não conhece, com o que veio nela.
     #[serde(untagged)]
     Unknown(serde_json::Value),
+}
+
+/// Modo de HDR do jogo, os da aba HDR. `Auto` e `Auto10` são o Auto HDR do Windows (8 e 10 bits).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HdrMode {
+    /// Deixa o Windows decidir.
+    #[default]
+    Default,
+    Off,
+    Auto,
+    Auto10,
+    Rtx,
+    /// O HDR do Prisma.
+    Prisma,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -503,6 +528,23 @@ pub enum Reply {
         /// Perfil escolhido para o jogo; vazio é o padrão do aparelho.
         #[serde(default)]
         eq_profile: String,
+        /// Modo de HDR do jogo (`OptionValue::HdrMode`).
+        #[serde(default)]
+        hdr_mode: HdrMode,
+        /// Marca "HDR próprio" do jogo; `None` sem escolha (`OptionValue::NativeHdr`).
+        #[serde(default)]
+        native_hdr: Option<bool>,
+        /// O jogo tem perfil de shader ligado (`OptionValue::Shaders`).
+        #[serde(default)]
+        shaders: bool,
+        /// Preset do jogo, um de `shader_presets`; vazio se não há um só preset (sem passes, ou
+        /// uma cadeia montada na página Shaders).
+        #[serde(default)]
+        shader_preset: String,
+        /// Presets que dá para escolher, com `\` e sem passar de um quadro: os do jogador vêm
+        /// primeiro, como `..\nome.slangp`, e os da biblioteca seguem, até onde cabe.
+        #[serde(default)]
+        shader_presets: Vec<String>,
     },
     #[serde(other)]
     Unknown,
@@ -727,6 +769,14 @@ mod tests {
             (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::HdrOnLaunch(true) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"hdr_on_launch":true}}"#),
             (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::Volume(Some(35)) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"volume":35}}"#),
             (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::Volume(None) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"volume":null}}"#),
+            (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::HdrMode(HdrMode::Default) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"hdr_mode":"default"}}"#),
+            (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::HdrMode(HdrMode::Auto10) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"hdr_mode":"auto10"}}"#),
+            (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::HdrMode(HdrMode::Prisma) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"hdr_mode":"prisma"}}"#),
+            (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::NativeHdr(None) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"native_hdr":null}}"#),
+            (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::NativeHdr(Some(false)) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"native_hdr":false}}"#),
+            (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::Shaders(true) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"shaders":true}}"#),
+            (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::ShaderPreset(String::new()) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"shader_preset":""}}"#),
+            (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::ShaderPreset(r"crt\a.slangp".into()) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"shader_preset":"crt\\a.slangp"}}"#),
         ];
         for (req, json) in cases {
             assert_eq!(serde_json::to_string(&req).unwrap(), json);
@@ -773,6 +823,11 @@ mod tests {
                 invite: None,
                 eq_profiles: vec!["Jogos".into(), "FPS".into()],
                 eq_profile: "FPS".into(),
+                hdr_mode: HdrMode::Prisma,
+                native_hdr: Some(true),
+                shaders: true,
+                shader_preset: r"crt\crt-lottes.slangp".into(),
+                shader_presets: vec![r"..\meu.slangp".into(), r"crt\crt-lottes.slangp".into()],
             },
             Reply::Options {
                 meter: MeterView::Off,
@@ -795,12 +850,79 @@ mod tests {
                 invite: Some(GameInvite { exe: "g.exe".into(), state: InviteState::Ready, code: "ABCD".into(), link: "https://x/ABCD".into(), reason: String::new() }),
                 eq_profiles: vec![],
                 eq_profile: String::new(),
+                hdr_mode: HdrMode::Rtx,
+                native_hdr: Some(false),
+                shaders: false,
+                shader_preset: String::new(),
+                shader_presets: vec![],
             },
         ];
         for r in replies {
             let json = serde_json::to_string(&r).unwrap();
             assert_eq!(serde_json::from_str::<Reply>(&json).unwrap(), r, "{json}");
         }
+    }
+
+    /// Um lado que fala a v1.11.2 e outro que fala esta: valor desconhecido e campo ausente valem nos dois sentidos.
+    #[test]
+    fn v1_11_options_still_talk_to_this_version() {
+        // Resposta da v1.11.2, sem os campos novos: leem-se com o valor de "nada escolhido".
+        let old = r#"{"type":"options","meter":"off","fps_limit":"off","hdr":null,"auto_hdr":null,"auto_hdr_windows":false,"audio_out":[],"audio_in":[],"audio_out_id":"","audio_in_id":"","volume":null,"muted":false,"share_mode":"screen","replay":{"on":false,"secs":30,"resolution":"native","hdr":false},"fullscreenizer":false,"optimize":true}"#;
+        let Reply::Options { hdr_mode, native_hdr, shaders, shader_preset, shader_presets, .. } = serde_json::from_str::<Reply>(old).unwrap() else { panic!("não é Options") };
+        assert_eq!((hdr_mode, native_hdr, shaders, shader_preset.as_str(), shader_presets.len()), (HdrMode::Default, None, false, "", 0));
+
+        // O launcher da v1.11.2 lê a resposta nova: os campos que ele não conhece são ignorados.
+        #[derive(Debug, Deserialize)]
+        #[serde(tag = "type", rename_all = "snake_case")]
+        enum OldReply {
+            Options { optimize: bool, #[serde(default)] eq_profile: String },
+        }
+        let new = serde_json::to_string(&Reply::Options {
+            meter: MeterView::Off,
+            fps_limit: FpsLimit::Off,
+            hdr: None,
+            auto_hdr: None,
+            auto_hdr_windows: false,
+            hdr_on_launch: false,
+            audio_out: vec![],
+            audio_in: vec![],
+            audio_out_id: String::new(),
+            audio_in_id: String::new(),
+            volume: None,
+            muted: false,
+            share_mode: ShareMode::Screen,
+            replay: ReplayOptions { on: false, secs: 30, target: ShareMode::Screen, resolution: ReplayResolution::Native, hdr: false },
+            fullscreenizer: false,
+            optimize: true,
+            rev: 1,
+            invite: None,
+            eq_profiles: vec![],
+            eq_profile: "FPS".into(),
+            hdr_mode: HdrMode::Auto,
+            native_hdr: Some(true),
+            shaders: true,
+            shader_preset: "x".into(),
+            shader_presets: vec!["x".into()],
+        })
+        .unwrap();
+        assert!(matches!(serde_json::from_str::<OldReply>(&new).unwrap(), OldReply::Options { optimize: true, eq_profile } if eq_profile == "FPS"));
+
+        // Uma opção nova vista por quem não a conhece cai em Unknown (não é erro); um modo que este lado
+        // não conhece também.
+        #[derive(Debug, PartialEq, Deserialize)]
+        #[serde(rename_all = "snake_case")]
+        enum OldOption {
+            Optimize(bool),
+            #[serde(untagged)]
+            Unknown(serde_json::Value),
+        }
+        for json in [r#"{"hdr_mode":"prisma"}"#, r#"{"native_hdr":null}"#, r#"{"shaders":true}"#, r#"{"shader_preset":""}"#] {
+            assert!(matches!(serde_json::from_str::<OldOption>(json).unwrap(), OldOption::Unknown(_)), "{json}");
+        }
+        assert_eq!(
+            serde_json::from_str::<OptionValue>(r#"{"hdr_mode":"hdr_do_futuro"}"#).unwrap(),
+            OptionValue::Unknown(serde_json::json!({"hdr_mode": "hdr_do_futuro"}))
+        );
     }
 
     #[test]
