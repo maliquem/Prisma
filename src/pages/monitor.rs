@@ -218,7 +218,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     if items.is_empty() && !needle.is_empty() {
         ui.c.text(rect(list.x + 16.0, list.y + 8.0, list.w - 32.0, 34.0), "Nenhum processo com esse nome ou PID", 14.0, MUTED, Align::Left, Weight::Regular);
     }
-    ui.begin_scroll(key, list, items.len() as f32 * 34.0);
+    ui.begin_rows(key, list, items.len() as f32 * 34.0);
     let first = (ui.scroll_y() / 34.0) as usize;
     let last = first + (list.h / 34.0) as usize + 2;
     for (i, item) in items.iter().enumerate().take(last).skip(first) {

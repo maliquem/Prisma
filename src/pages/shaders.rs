@@ -1234,7 +1234,7 @@ fn browse_sheet(ui: &mut Ui, app: &mut App, s: &mut St) {
     let cur = dirs.get(b.dir).map(|d| d.0.clone()).unwrap_or_default();
     let files: Vec<&String> = all.iter().filter(|f| if searching { f.to_lowercase().contains(q.trim()) } else { top_dir(f) == cur }).collect();
     let fl = rect(body.x + dw + 12.0, body.y, body.w - dw - 12.0, body.h);
-    ui.begin_scroll("shd-bfiles", fl, files.len() as f32 * 30.0);
+    ui.begin_rows("shd-bfiles", fl, files.len() as f32 * 30.0);
     let first = (ui.scroll_y() / 30.0) as usize;
     let last = first + (fl.h / 30.0) as usize + 2;
     let mut add = None;

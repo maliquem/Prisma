@@ -955,7 +955,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
             ui.set_scroll("find-list", ry + ROW - list.h);
         }
     }
-    ui.begin_scroll("find-list", list, n as f32 * ROW);
+    ui.begin_rows("find-list", list, n as f32 * ROW);
     let first = (ui.scroll_y() / ROW) as usize;
     let last = (first + page + 2).min(n);
     let rows: Vec<Row> = (first..last).filter_map(|i| app.find.row(i)).collect();

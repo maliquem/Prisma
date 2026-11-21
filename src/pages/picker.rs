@@ -87,7 +87,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, t: Rect) {
     if rows.is_empty() {
         ui.c.text(rect(list.x + 16.0, list.y + 4.0, list.w - 32.0, 24.0), "Nenhum programa encontrado.", 14.0, MUTED, Align::Left, Weight::Regular);
     }
-    ui.begin_scroll("pick", list, rows.len() as f32 * 44.0);
+    ui.begin_rows("pick", list, rows.len() as f32 * 44.0);
     let first = (ui.scroll_y() / 44.0) as usize;
     let last = first + (list.h / 44.0) as usize + 2;
     let mut pick = None;

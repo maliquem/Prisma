@@ -329,6 +329,8 @@ pub struct App {
     pub page: Page,
     /// A página da última `refresh_page`: separa "a aba abriu" de "mais um tick".
     refreshed_page: Option<Page>,
+    /// Página e altura da barra lateral no último desenho: mudou, a barra rola até o item da página.
+    pub side_seen: Option<(Page, f32)>,
     pub full: Fullscreenizer,
     pub detector: Detector,
     pub widget: Widget,
@@ -735,6 +737,7 @@ pub fn start(background: bool) {
             hdr_other_format: String::new(),
             asked: HashSet::new(),
             last_tick: Instant::now(),
+            side_seen: None,
             last_save: Instant::now(),
             capturing_keys: false,
             remote_front: false,
@@ -4007,7 +4010,7 @@ impl App {
         }
         match self.page {
             Page::Volume => self.sessions = audio::sessions(),
-            Page::Hdr => self.load_hdr(),
+            Page::Hdr if opened || self.hdr.lock().unwrap().stale() => self.load_hdr(),
             Page::Optimize => self.refresh_candidates(),
             Page::Fullscreen => self.refresh_windows(),
             Page::Games if opened => crate::pages::games::refresh(),
@@ -4192,6 +4195,8 @@ impl App {
                 w: c.right as f32 / scale,
                 h: c.bottom as f32 / scale,
             });
+            // Janela nova começa a barra lateral no topo: ela rola de novo até a página aberta.
+            self.side_seen = None;
             self.refresh_plans();
             self.refresh_page();
             let _ = ShowWindow(h, SW_SHOW);

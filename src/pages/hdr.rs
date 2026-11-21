@@ -681,11 +681,12 @@ fn cal_height(phase: &Phase) -> f32 {
 
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     header(ui, a, "HDR", "O que a tela, o perfil e o Windows estão informando, e a calibração própria.");
-    let (info, busy) = {
+    let (info, asked) = {
         let s = app.hdr.lock().unwrap();
-        (s.info.clone(), s.busy)
+        (s.info.clone(), s.reading())
     };
-    if ui.button("hdr-read", rect(a.right() - 148.0, 30.0, 120.0, 36.0), if busy { "Lendo…" } else { "Ler de novo" }, false) {
+    if ui.button("hdr-read", rect(a.right() - 148.0, 30.0, 120.0, 36.0), if asked { "Lendo…" } else { "Ler de novo" }, false) {
+        app.hdr.lock().unwrap().asked = true;
         app.load_hdr();
     }
     let Some(info) = info else {

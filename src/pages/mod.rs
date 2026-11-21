@@ -423,13 +423,29 @@ fn group_of(i: usize) -> usize {
         .unwrap_or(GROUPS.len() - 1)
 }
 
+/// Onde fica cada item `nav` (índices de `NAV`) no conteúdo da barra lateral e a altura dele todo:
+/// cada grupo abre com o nome dele.
+fn side_rows(nav: &[usize]) -> (Vec<f32>, f32) {
+    let (mut ys, mut y, mut group) = (Vec::new(), 0.0, usize::MAX);
+    for &i in nav {
+        if group_of(i) != group {
+            group = group_of(i);
+            y += GROUP_CAP;
+        }
+        ys.push(y);
+        y += SIDE_STEP;
+    }
+    (ys, y)
+}
+
 /// Ajuda fora da lista de funções: ao lado do nome, sempre à vista.
 const HELP: &[(Page, &str, Icon)] = &[(Page::Guide, "Guia e tutorial", ICON_HELP), (Page::Report, "Reportar bug", ICON_BUG)];
 
 const SIDE_W: f32 = 216.0;
-/// Altura do nome de um grupo na barra lateral; sem espaço para ele, fica só um vão de `GROUP_GAP`.
+/// Altura do nome de um grupo na barra lateral.
 const GROUP_CAP: f32 = 18.0;
-const GROUP_GAP: f32 = 8.0;
+/// Altura de cada item da barra lateral.
+const SIDE_STEP: f32 = 33.0;
 const KOFI_URL: &str = "https://ko-fi.com/maliquem";
 const KOFI_ICON: &[u8] = include_bytes!("../../res/kofi.bgra");
 
@@ -477,25 +493,34 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
         }
     }
 
-    let mut y = 52.0;
     let nav: Vec<_> = NAV.iter().enumerate().filter(|(_, n)| shown(&app.cfg, n.0)).collect();
-    // Em janela baixa as linhas apertam para não entrar no cartão de energia, e os nomes dos grupos
-    // viram só um vão entre eles.
-    let free = full.h - 100.0 - y;
-    let groups = GROUPS.len() as f32;
-    let captions = (free - groups * GROUP_CAP) / nav.len() as f32 >= 22.0;
-    let sep = if captions { GROUP_CAP } else { GROUP_GAP };
-    let step = ((free - groups * sep) / nav.len() as f32).min(33.0).floor();
+    let (ys, content) = side_rows(&nav.iter().map(|(i, _)| *i).collect::<Vec<_>>());
+    // Em janela baixa a lista rola, com a barra à direita (sem passar da barra lateral), e o cartão
+    // de energia fica parado embaixo.
+    let top = 52.0;
+    let view = rect(0.0, top, SIDE_W - crate::ui::BAR_GAP - crate::ui::BAR_W, (full.h - 100.0 - top).max(64.0));
+    // Página nova (pelo controle, um atalho ou ao abrir) ou janela de outra altura: a lista rola até
+    // o item da página aberta.
+    if app.side_seen != Some((app.page, view.h)) {
+        app.side_seen = Some((app.page, view.h));
+        if let Some(k) = nav.iter().position(|(_, n)| n.0 == app.page) {
+            let v = ui.scroll_y_of("side");
+            // O nome do grupo acima do item entra junto.
+            let to = v.clamp(ys[k] + SIDE_STEP - view.h, (ys[k] - GROUP_CAP).max(0.0));
+            if to != v {
+                ui.set_scroll("side", to);
+            }
+        }
+    }
+    ui.begin_scroll("side", view, content);
     let mut group = usize::MAX;
-    for (i, (page, label, icon, _)) in nav {
+    for ((i, (page, label, icon, _)), dy) in nav.into_iter().zip(ys) {
+        let y = top + dy;
         if group_of(i) != group {
             group = group_of(i);
-            if captions {
-                ui.c.text(rect(24.0, y, SIDE_W - 48.0, sep), GROUPS[group].0, 12.0, MUTED, Align::Left, Weight::Semibold);
-            }
-            y += sep;
+            ui.c.text(rect(24.0, y - GROUP_CAP, SIDE_W - 48.0, GROUP_CAP), GROUPS[group].0, 12.0, MUTED, Align::Left, Weight::Semibold);
         }
-        let r = rect(12.0, y, SIDE_W - 24.0, step - 1.0);
+        let r = rect(12.0, y, SIDE_W - 28.0, SIDE_STEP - 1.0);
         let current = app.page == *page;
         let hover = ui.is_hover(r);
         if current || hover {
@@ -514,8 +539,8 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
             app.refresh_page();
             ui.s.needs_redraw = true;
         }
-        y += step;
     }
+    ui.end_scroll();
 
     // Energia desligada: sem o cartão dela.
     if is_on(&app.cfg, Page::Energy) {
@@ -784,6 +809,20 @@ pub fn log_view(ui: &mut Ui, key: &str, r: Rect, lines: &[String]) {
 
 #[cfg(test)]
 mod tests {
+    /// A altura da barra lateral cobre cada item e o nome de cada grupo que aparece, sem sobrar.
+    #[test]
+    fn side_rows_fit_items_and_captions() {
+        use super::*;
+        let all: Vec<usize> = (0..NAV.len()).collect();
+        let (ys, h) = side_rows(&all);
+        assert_eq!(h, NAV.len() as f32 * SIDE_STEP + GROUPS.len() as f32 * GROUP_CAP);
+        assert_eq!(ys[0], GROUP_CAP);
+        assert_eq!(ys[ys.len() - 1] + SIDE_STEP, h);
+        // Um grupo inteiro desligado não deixa o nome dele.
+        let some: Vec<usize> = all.into_iter().filter(|&i| group_of(i) != 3).collect();
+        assert_eq!(side_rows(&some).1, some.len() as f32 * SIDE_STEP + (GROUPS.len() - 1) as f32 * GROUP_CAP);
+    }
+
     #[test]
     fn page_actions_follow_the_sidebar() {
         use crate::sys::remap::{ACTIONS, PAGES};

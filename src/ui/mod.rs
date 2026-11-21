@@ -15,8 +15,8 @@ use crate::config::Hotkey;
 use gfx::*;
 
 /// Faixa da barra de rolagem, na margem à direita da lista.
-const BAR_GAP: f32 = 2.0;
-const BAR_W: f32 = 8.0;
+pub const BAR_GAP: f32 = 2.0;
+pub const BAR_W: f32 = 8.0;
 
 /// Deixa um campo pronto para digitar.
 pub fn focus_on(s: &mut UiState, key: &str) {
@@ -75,6 +75,8 @@ struct Target {
     clip: Rect,
     area: u64,
     field: bool,
+    /// Linha de uma lista de `begin_rows`: para o Tab a lista toda é uma parada só.
+    rows: bool,
 }
 
 /// Altura da faixa de dicas do controle, embaixo da página.
@@ -210,16 +212,7 @@ impl UiState {
         if let Some(c) = cur.filter(|_| area != 0) {
             if let Some(i) = pick(ts, from, dir, |t| t.area == area) {
                 let t = ts[i];
-                let want = if t.r.y < t.clip.y {
-                    t.r.y - t.clip.y - 8.0
-                } else if t.r.bottom() > t.clip.bottom() {
-                    t.r.bottom() - t.clip.bottom() + 8.0
-                } else {
-                    0.0
-                };
-                let moved = if want != 0.0 { self.scroll_by(area, want) } else { 0.0 };
-                let (x, y) = t.center();
-                return Some((x, (y - moved).clamp(t.clip.y + 2.0, t.clip.bottom() - 2.0)));
+                return Some(self.reveal(t));
             }
             // Lista que só desenha as linhas à vista: rola um pedaço e as próximas aparecem.
             if dir & 1 == 1 {
@@ -233,22 +226,48 @@ impl UiState {
         pick(ts, from, dir, |t| t.shown()).map(|i| ts[i].center())
     }
 
-    /// Teclado: Tab leva ao próximo controle à vista na ordem do desenho (Shift+Tab, ao anterior),
-    /// dando a volta. Devolve onde pôr o cursor.
+    /// Rola a lista do alvo `t` até ele caber na vista e devolve onde pôr o cursor.
+    fn reveal(&mut self, t: Target) -> (f32, f32) {
+        let want = if t.r.y < t.clip.y {
+            t.r.y - t.clip.y - 8.0
+        } else if t.r.bottom() > t.clip.bottom() {
+            t.r.bottom() - t.clip.bottom() + 8.0
+        } else {
+            0.0
+        };
+        let moved = if want != 0.0 && t.area != 0 { self.scroll_by(t.area, want) } else { 0.0 };
+        let (x, y) = t.center();
+        (x, (y - moved).clamp(t.clip.y + 2.0, t.clip.bottom() - 2.0))
+    }
+
+    /// Teclado: Tab leva ao próximo controle na ordem do desenho (Shift+Tab, ao anterior), dando a
+    /// volta; os de uma área rolável fora da vista entram também e ela rola até eles. Uma lista de
+    /// `begin_rows` é uma parada só: Tab entra na primeira linha à vista e sai da lista inteira, e
+    /// as setas andam nela. Devolve onde pôr o cursor.
     pub fn tab_move(&mut self, back: bool) -> Option<(f32, f32)> {
         let (mx, my) = (self.mx, self.my);
-        let shown: Vec<&Target> = self.last.iter().filter(|t| t.shown()).collect();
-        let n = shown.len();
+        let ts = &self.last;
+        let same_list = |a: &Target, b: &Target| a.rows && b.rows && a.area == b.area;
+        let mut stops: Vec<usize> = Vec::new();
+        for (i, t) in ts.iter().enumerate() {
+            let stop = if t.rows { t.shown() && !stops.iter().any(|&j| same_list(&ts[j], t)) } else { t.shown() || t.area != 0 };
+            if stop {
+                stops.push(i);
+            }
+        }
+        let n = stops.len();
         if n == 0 {
             return None;
         }
-        let k = match shown.iter().rposition(|t| t.r.contains(mx, my)) {
+        let cur = ts.iter().rposition(|t| t.shown() && t.r.contains(mx, my)).and_then(|c| stops.iter().position(|&j| j == c || same_list(&ts[j], &ts[c])));
+        let k = match cur {
             Some(c) if back => (c + n - 1) % n,
             Some(c) => (c + 1) % n,
             None if back => n - 1,
             None => 0,
         };
-        Some(shown[k].center())
+        let t = ts[stops[k]];
+        Some(self.reveal(t))
     }
 
     /// Rola a lista `area` em `d` e devolve quanto andou de fato.
@@ -326,6 +345,8 @@ pub struct Ui<'a> {
     clip: Option<Rect>,
     /// Lista rolável em curso (0: nenhuma), para os alvos do controle.
     area: u64,
+    /// A lista em curso é de `begin_rows`.
+    rows: bool,
     bar: Option<Bar>,
     tip: Option<(Rect, String)>,
     /// Narrador: dica que chegou antes do alvo dela, com o lugar dele.
@@ -345,7 +366,7 @@ impl<'a> Ui<'a> {
         if std::env::var_os("PRISMA_TEST_PAD").is_some() {
             s.pad = true;
         }
-        Self { c, s, dy: 0.0, blocked, clip: None, area: 0, bar: None, tip: None, tip_name: None }
+        Self { c, s, dy: 0.0, blocked, clip: None, area: 0, rows: false, bar: None, tip: None, tip_name: None }
     }
 
     fn hover(&self, r: Rect) -> bool {
@@ -363,7 +384,7 @@ impl<'a> Ui<'a> {
     /// Guarda um alvo para o controle andar até ele.
     fn target(&mut self, r: Rect, clip: Option<Rect>, area: u64) {
         let view = rect(0.0, 0.0, self.s.view_w, self.s.view_h);
-        self.s.targets.push(Target { r, clip: clip.unwrap_or(view), area, field: false });
+        self.s.targets.push(Target { r, clip: clip.unwrap_or(view), area, field: false, rows: self.rows });
         let mut node = a11y::Node::default();
         // Ícone com dica desenhada antes do clique: a dica é o nome.
         if let Some((tr, name)) = self.tip_name.take() {
@@ -433,7 +454,7 @@ impl<'a> Ui<'a> {
             let h = (r.h * r.h / content_h).max(32.0);
             let span = r.h - h;
             let top = r.y + span * (v.clamp(0.0, max) / max);
-            let over = self.s.mx >= r.right() && self.s.mx <= r.right() + BAR_W + 2.0 && self.s.my >= r.y && self.s.my <= r.bottom();
+            let over = self.s.mx >= r.right() && self.s.mx <= r.right() + BAR_GAP + BAR_W && self.s.my >= r.y && self.s.my <= r.bottom();
             if !self.blocked && over && self.s.pressed {
                 self.s.active = bar_id;
                 // Clicar fora do trilho claro leva a barra até ali.
@@ -459,17 +480,24 @@ impl<'a> Ui<'a> {
         self.c.translate(0.0, -v);
     }
 
+    /// `begin_scroll` de uma lista de linhas, que pode ter milhares: para o Tab ela é uma parada só.
+    pub fn begin_rows(&mut self, key: &str, r: Rect, content_h: f32) {
+        self.begin_scroll(key, r, content_h);
+        self.rows = true;
+    }
+
     pub fn end_scroll(&mut self) {
         self.c.translate(0.0, 0.0);
         self.c.pop_clip();
         self.dy = 0.0;
         self.clip = None;
         self.area = 0;
+        self.rows = false;
         if let Some(b) = self.bar.take() {
             let hot = self.s.active == b.id;
             let near = !self.blocked
                 && self.s.mx >= b.r.right()
-                && self.s.mx <= b.r.right() + BAR_W + 2.0
+                && self.s.mx <= b.r.right() + BAR_GAP + BAR_W
                 && self.s.my >= b.r.y
                 && self.s.my <= b.r.bottom();
             let color = if hot { ACCENT } else if near { TEXT2 } else { BORDER2 };
@@ -1325,7 +1353,7 @@ mod tests {
     use super::*;
 
     fn t(x: f32, y: f32, area: u64, clip: Rect) -> Target {
-        Target { r: rect(x, y, 100.0, 30.0), clip, area, field: false }
+        Target { r: rect(x, y, 100.0, 30.0), clip, area, field: false, rows: false }
     }
 
     #[test]
@@ -1361,5 +1389,39 @@ mod tests {
         assert_eq!(s.tab_move(true), Some((60.0, 115.0)));
         (s.mx, s.my) = (60.0, 115.0);
         assert_eq!(s.tab_move(false), Some((60.0, 25.0)));
+    }
+
+    #[test]
+    fn tab_scrolls_a_list_to_the_next_row() {
+        let (list, id) = (rect(0.0, 100.0, 400.0, 100.0), 7);
+        let mut s = UiState::default();
+        s.scroll_max.insert(id, 500.0);
+        // Duas linhas à vista e a terceira abaixo da vista da lista.
+        s.last = vec![t(10.0, 110.0, id, list), t(10.0, 150.0, id, list), t(10.0, 230.0, id, list)];
+        (s.mx, s.my) = (20.0, 165.0);
+        // Tab: o cursor desce até a linha de fora, e a lista rola até ela caber.
+        let to = s.tab_move(false).unwrap();
+        assert_eq!(s.scroll[&id], 68.0);
+        assert!(list.contains(to.0, to.1));
+    }
+
+    #[test]
+    fn tab_takes_a_row_list_as_one_stop() {
+        let (view, list, id) = (rect(0.0, 0.0, 800.0, 600.0), rect(0.0, 100.0, 400.0, 100.0), 7);
+        let row = |y| Target { rows: true, ..t(10.0, y, id, list) };
+        let mut s = UiState::default();
+        s.scroll_max.insert(id, 5000.0);
+        // Botão, duas linhas à vista e uma abaixo da vista da lista, e outro botão.
+        s.last = vec![t(10.0, 10.0, 0, view), row(110.0), row(150.0), row(230.0), t(10.0, 400.0, 0, view)];
+        (s.mx, s.my) = (60.0, 25.0);
+        // Tab entra na primeira linha à vista.
+        assert_eq!(s.tab_move(false), Some((60.0, 125.0)));
+        // De qualquer linha, Tab sai da lista sem rolar, e Shift+Tab volta a ela.
+        (s.mx, s.my) = (60.0, 165.0);
+        assert_eq!(s.tab_move(false), Some((60.0, 415.0)));
+        assert!(s.scroll.is_empty());
+        assert_eq!(s.tab_move(true), Some((60.0, 25.0)));
+        (s.mx, s.my) = (60.0, 415.0);
+        assert_eq!(s.tab_move(true), Some((60.0, 125.0)));
     }
 }
