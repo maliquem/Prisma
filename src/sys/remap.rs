@@ -3,7 +3,7 @@
 //! relatórios de `pads`, troca o perfil pelo programa em foco e manda as teclas com `SendInput`.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -1907,12 +1907,16 @@ fn last_path() -> std::path::PathBuf {
 /// Grava o último perfil de cada programa fora do `RUN` (o gancho de teclado também o pega e não espera
 /// o disco). A trava faz quem lê por último gravar por último.
 fn save_last() {
-    std::thread::spawn(|| {
-        static WRITE: Mutex<()> = Mutex::new(());
-        let _w = WRITE.lock().unwrap();
-        let Some(text) = RUN.lock().unwrap().as_ref().map(|r| r.last.iter().map(|(e, n)| format!("{e}\t{n}\n")).collect::<String>()) else { return };
-        let _ = crate::config::write_safe(&last_path(), text);
-    });
+    std::thread::spawn(flush_last);
+}
+
+/// Grava o último perfil de cada programa agora; o fechamento chama, senão o `TerminateProcess`
+/// pega a gravação de `save_last` no meio.
+pub fn flush_last() {
+    static WRITE: Mutex<()> = Mutex::new(());
+    let _w = WRITE.lock().unwrap();
+    let Some(text) = RUN.lock().unwrap().as_ref().map(|r| r.last.iter().map(|(e, n)| format!("{e}\t{n}\n")).collect::<String>()) else { return };
+    let _ = crate::config::write_safe(&last_path(), text);
 }
 
 fn load_last() -> HashMap<String, String> {
@@ -2050,6 +2054,8 @@ fn reload() {
     super::macros::stop_all();
     // O disco é lido antes de travar: o gancho de teclado também pega o `RUN`.
     let fresh = load_profiles();
+    #[cfg(test)]
+    tests::LOADED.lock().unwrap().push(std::thread::current().id());
     let acts = {
         let mut g = RUN.lock().unwrap();
         let Some(r) = g.as_mut() else { return };
@@ -2071,17 +2077,22 @@ pub fn configure(kbm: bool, games: Vec<String>) {
     {
         let mut g = RUN.lock().unwrap();
         let r = g.get_or_insert_with(|| Run { profiles: load_profiles(), cur: 0, games: vec![], engines: HashMap::new(), want: None, lat: vec![], warned: HashSet::new(), ac: false, ac_seen: HashMap::new(), kbd: None, kheld: 0, kswallow: 0, typed: String::new(), exe: String::new(), last: load_last(), pids: HashMap::new(), fixed: HashMap::new() });
-        r.games = games.into_iter().map(|s| s.to_lowercase()).collect();
-        let first = !ON.swap(true, Ordering::Relaxed);
-        if first || KBM.swap(kbm, Ordering::Relaxed) != kbm {
-            KBM.store(kbm, Ordering::Relaxed);
-            r.exe.clear();
-            *FOCUS.lock().unwrap() = (None, 0, false);
-            // Só aqui: `set_keys` zera as teclas apertadas, e mexer em outra opção não deve soltá-las.
-            set_keys(r);
-        }
+        // `|`, não `||`: o KBM muda mesmo na primeira vez.
+        let changed = !ON.swap(true, Ordering::Relaxed) | (KBM.swap(kbm, Ordering::Relaxed) != kbm);
+        set_options(r, games, changed);
     }
     super::pads::poke();
+}
+
+/// Aplica os jogos do Medidor; só a troca de modo (ou a primeira vez) refaz as teclas.
+fn set_options(r: &mut Run, games: Vec<String>, mode_changed: bool) {
+    r.games = games.into_iter().map(|s| s.to_lowercase()).collect();
+    if mode_changed {
+        r.exe.clear();
+        *FOCUS.lock().unwrap() = (None, 0, false);
+        // Só aqui: `set_keys` zera as teclas apertadas, e mexer em outra opção não deve soltá-las.
+        set_keys(r);
+    }
 }
 
 /// Modo Teclado e mouse ligado (desligado é o Nativo).
@@ -2545,9 +2556,10 @@ pub fn key_tick() {
     send(&acts);
     events.into_iter().for_each(pads::emit);
     // Sem controle mandando relatórios, o foco é olhado daqui, fora da thread do gancho (ler a
-    // pasta de um jogo pode demorar).
+    // pasta de um jogo pode demorar). A cada 9 voltas (270 ms): `focus_tick` só olha a cada 250 ms.
     static LOOKING: AtomicBool = AtomicBool::new(false);
-    if !LOOKING.swap(true, Ordering::Relaxed) {
+    static TICKS: AtomicU32 = AtomicU32::new(0);
+    if TICKS.fetch_add(1, Ordering::Relaxed) % 9 == 0 && !LOOKING.swap(true, Ordering::Relaxed) {
         std::thread::spawn(move || {
             focus_tick(now);
             LOOKING.store(false, Ordering::Relaxed);
@@ -2937,13 +2949,53 @@ mod tests {
 
     #[test]
     fn switching_a_pads_own_profile_stops_its_macros() {
+        use super::super::macros;
         let mut r = test_run();
         r.profiles[1].name = "Corrida".into();
         r.fixed.insert("switch-a".into(), "Corrida".into());
-        let mine = super::super::macros::fake_running("switch-a", 0);
-        let (mut acts, mut events) = (vec![], vec![]);
-        pad_switch(&mut r, "switch-a", 0, &mut acts, &mut events);
-        assert!(mine.load(Ordering::Relaxed));
+        // Um `stop_all` de outro teste em paralelo para as duas: aí não prova nada, e tenta de novo.
+        for _ in 0..50 {
+            let (mine, other) = (macros::fake_running("switch-a", 0), macros::fake_running("switch-b", 0));
+            let (mut acts, mut events) = (vec![], vec![]);
+            pad_switch(&mut r, "switch-a", 0, &mut acts, &mut events);
+            if other.load(Ordering::Relaxed) {
+                continue;
+            }
+            macros::stop_pad("switch-b");
+            assert!(mine.load(Ordering::Relaxed));
+            return;
+        }
+        panic!("só parou junto com a macro de outro controle");
+    }
+
+    #[test]
+    fn changing_options_keeps_held_keys_unless_the_mode_changes() {
+        let mut r = test_run();
+        r.kheld = 0b101;
+        set_options(&mut r, vec!["Jogo.EXE".into()], false);
+        assert_eq!((r.kheld, r.games.as_slice()), (0b101, ["jogo.exe".to_string()].as_slice()));
+        set_options(&mut r, vec![], true);
+        assert_eq!(r.kheld, 0);
+    }
+
+    /// Threads que já leram os perfis do disco em `reload`.
+    pub(super) static LOADED: Mutex<Vec<std::thread::ThreadId>> = Mutex::new(vec![]);
+
+    #[test]
+    fn reload_reads_the_disk_before_taking_the_lock() {
+        // Com o `RUN` travado aqui, o `reload` tem de ler o disco antes de parar na trava.
+        let g = RUN.lock().unwrap();
+        let t = std::thread::spawn(reload);
+        let (id, t0) = (t.thread().id(), Instant::now());
+        while !LOADED.lock().unwrap().contains(&id) {
+            if t0.elapsed() > Duration::from_secs(5) {
+                drop(g);
+                panic!("reload leu o disco com o RUN travado");
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        drop(g);
+        t.join().unwrap();
     }
 
     #[test]

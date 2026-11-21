@@ -636,6 +636,15 @@ fn backoff(fails: u32) -> Duration {
     Duration::from_secs(1 << fails.clamp(1, 3))
 }
 
+/// Espera `d` em pedaços de 250 ms: desligar a ponte corta a espera.
+#[cfg(feature = "stream")]
+fn nap(d: Duration) {
+    let end = Instant::now() + d;
+    while ON.load(Ordering::Relaxed) && Instant::now() < end {
+        std::thread::sleep(end.saturating_duration_since(Instant::now()).min(Duration::from_millis(250)));
+    }
+}
+
 #[cfg(feature = "stream")]
 fn run() {
     // Falhas seguidas ao ligar o virtual, e desde quando o atual está no ar.
@@ -693,7 +702,7 @@ fn run() {
                 Err(_) => {
                     OWN.store(0, Ordering::Relaxed);
                     fails += 1;
-                    std::thread::sleep(backoff(fails));
+                    nap(backoff(fails));
                     continue;
                 }
             }
@@ -728,7 +737,7 @@ fn run() {
                 crate::config::log(&format!("ponte: o Xbox virtual caiu, religando em {} s", wait.as_secs()));
                 runner = None;
                 stop(&mut sent, &mut hidden);
-                std::thread::sleep(wait);
+                nap(wait);
                 continue;
             }
         }

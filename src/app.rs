@@ -1165,6 +1165,9 @@ fn share_start() {
 pub fn shutdown() {
     // O TerminateProcess não manda o Up: sem isto, tecla ou clique segurado pelo controle fica preso no Windows.
     crate::sys::remap::release_held();
+    // A macro parada solta a tecla da thread dela, até uns 10 ms depois.
+    crate::sys::macros::wait_stopped(std::time::Duration::from_millis(50));
+    crate::sys::remap::flush_last();
     crate::sys::pads::release_pads();
     crate::pages::share::shutdown();
     with(|a| a.meter.leave(&mut a.cfg));
