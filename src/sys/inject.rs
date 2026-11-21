@@ -229,6 +229,9 @@ impl Limiter {
     pub fn attach(pid: u32) -> Option<Self> {
         let mut me = Self::new(pid)?;
         if !me.open() {
+            if !me.create() {
+                return None;
+            }
             me.hook = Some(load(pid, DLL, "limiter", "prisma_hook")?);
         }
         Some(me)
@@ -256,6 +259,17 @@ impl Limiter {
             self.map = map;
             self.view = view.Value as *const Shared;
             true
+        }
+    }
+
+    /// A memória nasce no Prisma, antes da DLL: sem ela o gancho não liga nada (`hook::start`).
+    fn create(&mut self) -> bool {
+        unsafe {
+            if let Ok(map) = CreateFileMappingW(INVALID_HANDLE_VALUE, None, PAGE_READWRITE, 0, std::mem::size_of::<Shared>() as u32, &map_name(self.pid)) {
+                self.map = map;
+                self.view = MapViewOfFile(map, FILE_MAP_ALL_ACCESS, 0, 0, 0).Value as *const Shared;
+            }
+            !self.view.is_null()
         }
     }
 
@@ -292,10 +306,7 @@ impl Limiter {
             CreateProcessW(&HSTRING::from(exe), Some(PWSTR(line.as_mut_ptr())), None, None, false, CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT, block, &HSTRING::from(dir), &si, &mut pi).map_err(|e| e.message())?;
             let mut me = Self { pid: pi.dwProcessId, process: pi.hProcess, hook: None, map: HANDLE::default(), view: std::ptr::null(), since: Instant::now(), status: Status::Waiting };
             // A memória nasce aqui, com o HDR já pedido: a DLL só abre a mesma.
-            if let Ok(map) = CreateFileMappingW(INVALID_HANDLE_VALUE, None, PAGE_READWRITE, 0, std::mem::size_of::<Shared>() as u32, &map_name(me.pid)) {
-                me.map = map;
-                me.view = MapViewOfFile(map, FILE_MAP_ALL_ACCESS, 0, 0, 0).Value as *const Shared;
-            }
+            me.create();
             if let Some(s) = me.view.as_ref() {
                 s.hdr_proxy.store(1, SeqCst);
                 me.set_hdr(hdr);
@@ -521,6 +532,8 @@ impl Drop for Limiter {
             }
             if !self.view.is_null() {
                 let _ = UnmapViewOfFile(MEMORY_MAPPED_VIEW_ADDRESS { Value: self.view as *mut _ });
+            }
+            if !self.map.is_invalid() {
                 let _ = CloseHandle(self.map);
             }
             let _ = CloseHandle(self.process);

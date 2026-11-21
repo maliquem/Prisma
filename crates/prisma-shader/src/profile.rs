@@ -177,6 +177,9 @@ pub fn insert_pass(p: &mut Profile, at: usize, path: PathBuf) {
 
 /// Tira o passe `i` e os valores de parâmetro que eram só dele (outro passe com o mesmo nome segura o valor).
 pub fn remove_pass(p: &mut Profile, i: usize) {
+    if i >= p.passes.len() {
+        return;
+    }
     let before = params(p);
     p.passes.remove(i);
     let after = params(p);
@@ -241,6 +244,8 @@ mod tests {
         assert_eq!(names(&p), ["a.slangp", "b.slangp", "c.slangp", "d.slangp"]);
         remove_pass(&mut p, 1);
         assert_eq!(names(&p), ["a.slangp", "c.slangp", "d.slangp"]);
+        remove_pass(&mut p, 3);
+        assert_eq!(names(&p).len(), 3);
         // Valor que nenhum passe lido declara fica (o preset pode só não abrir agora).
         assert_eq!(p.param("x"), Some(1.0));
     }

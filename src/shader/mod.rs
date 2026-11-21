@@ -196,8 +196,8 @@ fn run(path: &Path) -> Res<()> {
         std::thread::sleep(std::time::Duration::from_millis(500));
     };
     let game_path = crate::sys::procs::image_path(crate::sys::procs::window_pid(game)).unwrap_or_default();
-    // Decisão do estudo: jogo com anti-cheat não recebe shader, nem por cima.
-    if crate::meter::anti_cheat(&game_path) {
+    // Decisão do estudo: jogo com anti-cheat não recebe shader, nem por cima. Sem o caminho não dá para saber.
+    if game_path.is_empty() || crate::meter::anti_cheat(&game_path) {
         return Err(format!("jogo com anti-cheat, o shader não entra: {game_path}").into());
     }
     eprintln!("jogo: {game_path} ({})", crate::sys::procs::window_title(game));

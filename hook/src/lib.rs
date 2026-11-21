@@ -128,6 +128,7 @@ type CreateDevice = unsafe extern "system" fn(Ptr, u32, Ptr, u32, *const u32, u3
 extern "system" {
     fn GetCurrentProcessId() -> u32;
     fn CreateFileMappingW(file: isize, attrs: Ptr, protect: u32, high: u32, low: u32, name: *const u16) -> Ptr;
+    fn OpenFileMappingW(access: u32, inherit: i32, name: *const u16) -> Ptr;
     fn MapViewOfFile(map: Ptr, access: u32, high: u32, low: u32, size: usize) -> Ptr;
     fn CreateThread(attrs: Ptr, stack: usize, start: unsafe extern "system" fn(Ptr) -> u32, arg: Ptr, flags: u32, id: *mut u32) -> Ptr;
     fn CloseHandle(h: Ptr) -> i32;
@@ -354,8 +355,15 @@ unsafe extern "system" fn start(_: Ptr) -> u32 {
     // O Windows solta o módulo quando o gancho sai: preso aqui, ele fica até o jogo fechar.
     GetModuleHandleExW(PIN_FROM_ADDRESS, start as *const c_void, &mut module);
     let name = wide(&format!("Local\\PrismaLimiter-{}", GetCurrentProcessId()));
-    let map = CreateFileMappingW(-1, std::ptr::null_mut(), PAGE_READWRITE, 0, std::mem::size_of::<Shared>() as u32, name.as_ptr());
+    // O Prisma cria a memória antes de carregar o gancho. Sem ela, quem carregou foi o carregador do Vulkan num
+    // processo filho (herdou as variáveis da camada), que o Prisma não conferiu: nada liga e a camada só repassa.
+    let mut map = OpenFileMappingW(FILE_MAP_ALL, 0, name.as_ptr());
+    if map.is_null() && native(module) {
+        map = CreateFileMappingW(-1, std::ptr::null_mut(), PAGE_READWRITE, 0, std::mem::size_of::<Shared>() as u32, name.as_ptr());
+    }
     if map.is_null() {
+        // O medidor ainda pode pôr o gancho neste processo, já com a memória: `prisma_hook` começa de novo.
+        STARTED.store(false, SeqCst);
         return 1;
     }
     let view = MapViewOfFile(map, FILE_MAP_ALL, 0, 0, 0);
