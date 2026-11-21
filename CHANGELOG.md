@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.11.2
 
 - **HDR** tab, **Game HDR**: the HDR mode list of each game (Windows default, Auto HDR, Prisma HDR...) works again; the choice went to the "TV picture mode" list of the calibration card above it, and with several games, the lists of one row answered in another. / Aba **HDR**, **HDR do jogo**: a lista do modo de HDR de cada jogo (Padrão do Windows, Auto HDR, HDR do Prisma...) volta a funcionar; a escolha ia para a lista "Modo de imagem da TV" do cartão de calibração, acima dela, e com vários jogos as listas de uma linha respondiam em outra.
 
