@@ -660,6 +660,10 @@ pub fn preset_of(p: &Profile) -> String {
 /// Barra do launcher: muda o perfil de shader do jogo `path` (o .exe inteiro), criando o perfil se não houver;
 /// o perfil novo nasce com `on`. O motor lê o arquivo, como quando a página grava.
 pub fn edit_game(app: &mut App, path: &str, on: bool, f: impl FnOnce(&mut Profile)) -> Result<(), &'static str> {
+    // Antes de ler: um ajuste da página ainda sem gravar não pode cair por cima do que o launcher grava.
+    if let Some(s) = st().as_mut() {
+        s.flush();
+    }
     let file = sp::path_for(Path::new(path));
     let new = !file.exists();
     let mut p = if new {

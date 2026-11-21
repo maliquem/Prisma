@@ -19,6 +19,16 @@ use crate::sys::drs::{self, Profile};
 use crate::sys::nvset::{self, Kind, Setting};
 use crate::sys::{audio, autohdr, power, procs};
 
+/// Os modos de HDR do protocolo e os números que o config grava (`autohdr`).
+const HDR_MODES: [(HdrMode, u8); 6] = [
+    (HdrMode::Default, autohdr::DEFAULT),
+    (HdrMode::Off, autohdr::OFF),
+    (HdrMode::Auto, autohdr::AUTO),
+    (HdrMode::Auto10, autohdr::AUTO10),
+    (HdrMode::Rtx, autohdr::RTX),
+    (HdrMode::Prisma, autohdr::PRISMA),
+];
+
 /// Avisa a janela de controle que há pedidos do launcher na fila.
 pub const WM_LINK: u32 = WM_APP + 92;
 
@@ -648,14 +658,7 @@ impl App {
         let eq_profile = c.eq_apps.iter().find(|(e, _)| same(e)).map(|(_, p)| p.clone()).unwrap_or_default();
         let eq_out = audio_out_id.clone();
         let hdr_game = c.hdr_games.iter().find(|h| same(&h.exe));
-        let hdr_mode = match hdr_game.map_or(autohdr::DEFAULT, |h| h.mode) {
-            autohdr::OFF => HdrMode::Off,
-            autohdr::AUTO => HdrMode::Auto,
-            autohdr::AUTO10 => HdrMode::Auto10,
-            autohdr::RTX => HdrMode::Rtx,
-            autohdr::PRISMA => HdrMode::Prisma,
-            _ => HdrMode::Default,
-        };
+        let hdr_mode = HDR_MODES.iter().find(|m| m.1 == hdr_game.map_or(autohdr::DEFAULT, |h| h.mode)).map_or(HdrMode::Default, |m| m.0);
         // Só a marca feita à mão, como a aba HDR: o que o gancho viu não é escolha.
         let native_hdr = match hdr_game.map_or(autohdr::NATIVE_UNKNOWN, |h| h.native) {
             autohdr::NATIVE_YES => Some(true),
@@ -815,12 +818,14 @@ impl App {
             }
             OptionValue::Shaders(on) => {
                 let has = crate::shader_profile::path_for(std::path::Path::new(exe_path)).exists();
+                // Criar o perfil precisa do caminho inteiro, com `\` ou `/`; só o nome não basta.
+                let full = exe_path.contains(['\\', '/']);
                 // Sem perfil, desligar já é o que ele está.
                 if has || on {
-                    if !has && path.is_empty() {
+                    if !has && !full {
                         return fail(code::INVALID, "Falta o .exe do jogo");
                     }
-                    if on && !path.is_empty() && crate::meter::anti_cheat(path) {
+                    if on && full && crate::meter::anti_cheat(exe_path) {
                         return fail(code::NOT_SUPPORTED, "Jogo com anti-cheat: o shader não entra nele");
                     }
                     if let Err(e) = crate::pages::shaders::edit_game(self, exe_path, on, |p| p.on = on) {
@@ -830,6 +835,8 @@ impl App {
             }
             OptionValue::ShaderPreset(name) => {
                 let has = crate::shader_profile::path_for(std::path::Path::new(exe_path)).exists();
+                // Criar o perfil precisa do caminho inteiro, com `\` ou `/`; só o nome não basta.
+                let full = exe_path.contains(['\\', '/']);
                 let file = match name.is_empty() {
                     true => None,
                     false => match crate::pages::shaders::preset_file(&name) {
@@ -839,7 +846,7 @@ impl App {
                 };
                 // Sem perfil, tirar os passes já é o que ele está. O perfil novo nasce desligado: ligar é o `Shaders`.
                 if has || file.is_some() {
-                    if !has && path.is_empty() {
+                    if !has && !full {
                         return fail(code::INVALID, "Falta o .exe do jogo");
                     }
                     let set = |p: &mut crate::shader_profile::Profile| {
@@ -949,15 +956,10 @@ impl App {
 
     /// Grava o modo de HDR do jogo, como a aba HDR; `Rtx` só com placa NVIDIA.
     fn link_hdr_mode(&mut self, exe: &str, path: &str, mode: HdrMode) -> Result<(), Outcome> {
-        let n = match mode {
-            HdrMode::Default => autohdr::DEFAULT,
-            HdrMode::Off => autohdr::OFF,
-            HdrMode::Auto => autohdr::AUTO,
-            HdrMode::Auto10 => autohdr::AUTO10,
-            HdrMode::Rtx if !autohdr::nvidia() => return Err(fail(code::NOT_SUPPORTED, "indisponível")),
-            HdrMode::Rtx => autohdr::RTX,
-            HdrMode::Prisma => autohdr::PRISMA,
-        };
+        if mode == HdrMode::Rtx && !autohdr::nvidia() {
+            return Err(fail(code::NOT_SUPPORTED, "indisponível"));
+        }
+        let n = HDR_MODES.iter().find(|m| m.0 == mode).map_or(autohdr::DEFAULT, |m| m.1);
         if !crate::pages::meter::set_auto_hdr(self, exe, path, n) {
             return Err(fail(code::FAILED, "Não consegui gravar a escolha."));
         }
@@ -1162,6 +1164,16 @@ mod tests {
             assert_eq!(has(cap::NVIDIA), nvidia);
             assert_eq!(has(cap::PAGE_NVIDIA), nvidia);
             assert!(!has(cap::PAGE_GAME_PROFILE));
+        }
+    }
+
+    #[test]
+    fn hdr_modes_cover_every_number_of_the_hdr_page() {
+        for (n, _, _) in autohdr::MODES {
+            assert!(HDR_MODES.iter().any(|m| m.1 == n), "{n}");
+        }
+        for (i, a) in HDR_MODES.iter().enumerate() {
+            assert!(HDR_MODES.iter().skip(i + 1).all(|b| a.0 != b.0 && a.1 != b.1));
         }
     }
 
