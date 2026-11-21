@@ -4,6 +4,8 @@
 
 mod hdr;
 mod hdr12;
+mod hdr9;
+mod hdrgl;
 mod hdrvk;
 mod scan;
 
@@ -135,7 +137,7 @@ extern "system" {
     fn GetTickCount64() -> u64;
     fn LoadLibraryW(name: *const u16) -> Ptr;
     fn GetProcAddress(module: Ptr, name: *const u8) -> Ptr;
-    fn VirtualProtect(at: Ptr, size: usize, protect: u32, old: *mut u32) -> i32;
+    pub(crate) fn VirtualProtect(at: Ptr, size: usize, protect: u32, old: *mut u32) -> i32;
     fn GetModuleHandleExW(flags: u32, name: *const c_void, module: *mut Ptr) -> i32;
 }
 
@@ -240,6 +242,12 @@ pub(crate) unsafe fn patch(table: *mut usize, slot: usize, new: usize, keep: &At
     (*(at as *const AtomicUsize)).store(new, SeqCst);
     VirtualProtect(at as Ptr, 8, old, &mut old);
     true
+}
+
+/// Uma função de uma DLL do sistema, achada só quando o HDR pede: o gancho não importa nada a mais.
+pub(crate) unsafe fn export(dll: &str, name: &[u8]) -> Ptr {
+    let module = LoadLibraryW(wide(dll).as_ptr());
+    if module.is_null() { module } else { GetProcAddress(module, name.as_ptr()) }
 }
 
 pub(crate) unsafe fn release(obj: Ptr) {
@@ -351,9 +359,12 @@ unsafe extern "system" fn start(_: Ptr) -> u32 {
     s.state.store(STATE_LOADED, SeqCst);
     s.magic.store(MAGIC, SeqCst);
     SHARED.store(view as usize, SeqCst);
-    // A camada do Vulkan entra antes de o jogo seguir; o carregador lê as variáveis na primeira instância.
+    // Tudo entra antes de o jogo seguir: o carregador do Vulkan lê as variáveis na primeira instância, e o DX9 e o
+    // OpenGL precisam do gancho antes do primeiro dispositivo.
     if hdr::wanted() {
         hdrvk::setup(module);
+        hdr9::install();
+        hdrgl::install();
     }
     s.state.store(if install() { STATE_READY } else { STATE_FAILED }, SeqCst);
     if hdr::wanted() && steam_overlay_hooked() {

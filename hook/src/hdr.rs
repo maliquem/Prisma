@@ -3,7 +3,8 @@
 //! paper white, brilhos até o pico e saturação; no HDR do próprio jogo (HDR10 ou scRGB), o reajuste
 //! pela calibração (paper white, saturação, pico com ombro suave e preto). A interface pode sair
 //! separada da cena, com brilho próprio. D3D11 aqui, D3D12 em `hdr12.rs` (a cadeia, a calibração e a
-//! separação são as mesmas), Vulkan em `hdrvk.rs`. Só janela: o resto passa direto.
+//! separação são as mesmas), Vulkan em `hdrvk.rs`; o DirectX 9 (`hdr9.rs`) e o OpenGL (`hdrgl.rs`) apresentam
+//! por uma cadeia DXGI nossa que passa por aqui. Só janela: o resto passa direto.
 
 use std::cell::Cell;
 use std::ffi::c_void;
@@ -810,17 +811,31 @@ pub(crate) unsafe fn screen_hdr(hwnd: HWND) -> bool {
 unsafe fn created(hr: HRESULT, out: *mut Ptr, hwnd: HWND) -> HRESULT {
     if hr.is_ok() && !out.is_null() {
         let chain = *out as usize;
-        let keep = |c: usize, h: usize| c != chain && h != hwnd.0 as usize && IsWindow(Some(HWND(h as *mut c_void))).as_bool();
-        let mut list = proxies();
-        list.retain(|p| keep(p.chain, p.hwnd));
-        let mut list12 = hdr12::proxies();
-        list12.retain(|p| keep(p.chain, p.hwnd));
-        // Sem proxy nenhum o passe não roda mais: o medidor deixa de mostrar o custo dele.
-        if let Some(s) = shared().filter(|_| list.is_empty() && list12.is_empty()) {
-            s.hdr_gpu_us.store(0, Relaxed);
-        }
+        prune(|c, h| c != chain && h != hwnd.0 as usize && unsafe { IsWindow(Some(HWND(h as *mut c_void))) }.as_bool());
     }
     hr
+}
+
+/// A cadeia ganhou proxy, no D3D11 ou no D3D12: sem ele ela nasceu comum, sem HDR.
+pub(crate) fn ours(chain: Ptr) -> bool {
+    proxies().iter().any(|p| p.chain == chain as usize) || hdr12::has(chain)
+}
+
+/// Uma cadeia nossa (DX9, OpenGL) que sai leva o proxy dela junto.
+pub(crate) fn forget(chain: Ptr) {
+    prune(|c, _| c != chain as usize);
+}
+
+/// Fica só o proxy em que `keep(cadeia, janela)` vale.
+fn prune(keep: impl Fn(usize, usize) -> bool) {
+    let mut list = proxies();
+    list.retain(|p| keep(p.chain, p.hwnd));
+    let mut list12 = hdr12::proxies();
+    list12.retain(|p| keep(p.chain, p.hwnd));
+    // Sem proxy nenhum o passe não roda mais: o medidor deixa de mostrar o custo dele.
+    if let Some(s) = shared().filter(|_| list.is_empty() && list12.is_empty()) {
+        s.hdr_gpu_us.store(0, Relaxed);
+    }
 }
 
 /// Cria a cadeia FP16 e o proxy; se algo falhar, cria a cadeia que o jogo pediu, sem HDR.
