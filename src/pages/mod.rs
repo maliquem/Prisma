@@ -11,6 +11,7 @@ mod pad_hide;
 mod energy;
 pub mod equalizer;
 mod fullscreen;
+pub mod games;
 pub mod guide;
 pub(crate) mod hdr;
 pub mod meter;
@@ -72,6 +73,7 @@ pub enum Page {
     Optimize,
     Energy,
     Fullscreen,
+    Games,
     Volume,
     Hdr,
     Nvidia,
@@ -249,6 +251,13 @@ const ICON_KEYS: Icon = &[
     &[(17.5, 9.5), (18.5, 9.5)],
     &[(8., 14.5), (16., 14.5)],
 ];
+/// Controle de jogo: o corpo e a cruz de direção.
+const ICON_LIB: Icon = &[
+    &[(7., 7.), (17., 7.), (21., 15.), (19., 18.), (15., 15.), (9., 15.), (5., 18.), (3., 15.), (7., 7.)],
+    &[(8., 9.5), (8., 12.5)],
+    &[(6.5, 11.), (9.5, 11.)],
+    &[(15.5, 10.), (16.5, 10.)],
+];
 const ICON_APP: Icon = &[
     &[(3., 5.), (21., 5.), (21., 19.), (3., 19.), (3., 5.)],
     &[(3., 9.), (21., 9.)],
@@ -293,9 +302,9 @@ pub fn shown(cfg: &crate::config::Config, p: Page) -> bool {
     is_on(cfg, p) && exists(p)
 }
 
-/// Ordem das ações "Página ..." (33 a 58): a da barra lateral antes dos grupos, com Cópias, Atalhos, Desempenho,
-/// Shaders e Atualizações no fim. Nunca muda, mesmo que a barra mude: os números já gravados dependem dela.
-const ACTION_PAGES: [Page; 26] = [
+/// Ordem das ações "Página ..." (33 a 59): a da barra lateral antes dos grupos, com Cópias, Atalhos, Desempenho,
+/// Shaders, Atualizações e Jogos no fim. Nunca muda, mesmo que a barra mude: os números já gravados dependem dela.
+const ACTION_PAGES: [Page; 27] = [
     Page::Monitor,
     Page::Meter,
     Page::Storage,
@@ -322,6 +331,7 @@ const ACTION_PAGES: [Page; 26] = [
     Page::Performance,
     Page::Shaders,
     Page::Updates,
+    Page::Games,
 ];
 
 /// Os itens da barra lateral na ordem das ações "Página ...".
@@ -383,6 +393,7 @@ const NAV: &[(Page, &str, Icon, &str)] = &[
     (Page::Updates, "Atualizações", ICON_UPD, "Avisa quando sai driver da NVIDIA ou atualização do Windows e diz se vale instalar."),
     (Page::Optimize, "Otimizar", ICON_OPT, "Fecha programas parados antes de jogar. Nada é fechado sem você confirmar."),
     (Page::Energy, "Energia", ICON_POW, "Troca o plano de energia sozinho entre repouso, carga alta e jogo."),
+    (Page::Games, "Jogos", ICON_LIB, "Os ajustes de cada jogo num lugar só: medidor, HDR, som, controle, shader e driver."),
     (Page::Meter, "Medidor", ICON_METER, "Leitor de performance, limitador de FPS e HDR automático por jogo."),
     (Page::Fullscreen, "Fullscreenizer", ICON_WIN, "Deixa a janela em foco em tela cheia sem bordas. O mesmo atalho desfaz."),
     (Page::Hdr, "HDR", ICON_HDR, "O que a tela, o perfil e o Windows estão informando, e a calibração própria."),
@@ -398,7 +409,7 @@ const NAV: &[(Page, &str, Icon, &str)] = &[
 ];
 
 /// Grupos da barra lateral: nome e quantos itens seguidos de `NAV` entram nele.
-const GROUPS: [(&str, usize); 5] = [("Sistema", 7), ("Manutenção", 7), ("Jogos e tela", 7), ("Entrada e som", 3), ("Prisma", 2)];
+const GROUPS: [(&str, usize); 5] = [("Sistema", 7), ("Manutenção", 7), ("Jogos e tela", 8), ("Entrada e som", 3), ("Prisma", 2)];
 
 /// Grupo do item `i` de `NAV`.
 fn group_of(i: usize) -> usize {
@@ -534,6 +545,7 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
         Page::Optimize => optimize::draw(&mut ui, app, area),
         Page::Energy => energy::draw(&mut ui, app, area),
         Page::Fullscreen => fullscreen::draw(&mut ui, app, area),
+        Page::Games => games::draw(&mut ui, app, area),
         Page::Volume => volume::draw(&mut ui, app, area),
         Page::Hdr => hdr::draw(&mut ui, app, area),
         Page::Nvidia => nvidia::draw(&mut ui, app, area),
@@ -799,7 +811,8 @@ mod tests {
         assert!(nav_page(23).is_some_and(|n| n.0 == Page::Performance));
         assert!(nav_page(24).is_some_and(|n| n.0 == Page::Shaders));
         assert!(nav_page(25).is_some_and(|n| n.0 == Page::Updates));
-        assert!(nav_page(26).is_none());
+        assert!(nav_page(26).is_some_and(|n| n.0 == Page::Games));
+        assert!(nav_page(27).is_none());
     }
 
     /// Tudo começa ligado; desligar e religar volta ao começo; o início e Configurações não desligam,

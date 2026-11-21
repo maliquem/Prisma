@@ -158,6 +158,12 @@ pub enum Request {
         #[serde(default)]
         args: Vec<String>,
     },
+    /// Jogos das lojas que o launcher lê, para a aba Jogos (`games`). Responde `Done`. Lista grande vai
+    /// em partes, cada uma abaixo de `MAX_FRAME`: a com `first` troca a lista guardada, as outras somam.
+    Games {
+        games: Vec<StoreGame>,
+        first: bool,
+    },
     #[serde(other)]
     Unknown,
 }
@@ -314,6 +320,20 @@ pub struct Controller {
     pub rate_hz: Option<u32>,
     /// p99 do intervalo entre relatórios, em microssegundos.
     pub p99_us: Option<u32>,
+}
+
+/// Jogo instalado por uma loja. `exe` é o caminho completo, a chave do jogo no Prisma; `store` é o
+/// nome da loja como o launcher mostra (Steam, Epic, GOG, Xbox).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoreGame {
+    pub name: String,
+    pub exe: String,
+    #[serde(default)]
+    pub folder: String,
+    pub store: String,
+    /// Tamanho em disco, em bytes; 0 quando a loja não diz.
+    #[serde(default)]
+    pub size: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -696,6 +716,10 @@ mod tests {
             (
                 Request::LaunchGame { exe: "C:/g/g.exe".into(), args: vec!["-w".into()] },
                 r#"{"type":"launch_game","exe":"C:/g/g.exe","args":["-w"]}"#,
+            ),
+            (
+                Request::Games { games: vec![StoreGame { name: "Jogo".into(), exe: "C:/g/g.exe".into(), folder: "C:/g".into(), store: "Steam".into(), size: 5 }], first: true },
+                r#"{"type":"games","games":[{"name":"Jogo","exe":"C:/g/g.exe","folder":"C:/g","store":"Steam","size":5}],"first":true}"#,
             ),
             (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::Fullscreenizer(true) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"fullscreenizer":true}}"#),
             (Request::SetOption { exe: "g.exe".into(), pid: 0, option: OptionValue::Optimize(false) }, r#"{"type":"set_option","exe":"g.exe","pid":0,"option":{"optimize":false}}"#),

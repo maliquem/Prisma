@@ -83,6 +83,8 @@ const WM_PICK_RUN: u32 = WM_APP + 100;
 /// Janelas da página Shaders; o WPARAM diz qual (`pages::shaders::PICK_*`).
 pub const WM_PICK_SHADER: u32 = WM_APP + 104;
 const WM_PICK_MODS: u32 = WM_APP + 105;
+/// Página Jogos; o WPARAM diz o quê (`pages::games::ADD`, `SCAN` ou `REDRAW`).
+pub const WM_PICK_GAMES: u32 = WM_APP + 106;
 const WM_POW_OUT: u32 = WM_APP + 82;
 const WM_REPORT_PHOTO: u32 = WM_APP + 84;
 const WM_REPORT_DONE: u32 = WM_APP + 85;
@@ -1087,6 +1089,7 @@ pub fn start(background: bool) {
                 "--page=tweaks" => Page::Tweaks,
                 "--page=tools" => Page::Tools,
                 "--page=copies" => Page::Copies,
+                "--page=games" => Page::Games,
                 "--page=updates" => Page::Updates,
                 "--page=uninstall" => Page::Uninstall,
                 "--page=analyze" => Page::Analyze,
@@ -2855,7 +2858,16 @@ impl App {
         let pid = std::env::var("PRISMA_METER_PID").ok().and_then(|v| v.parse().ok()).unwrap_or(self.fg_pid);
         #[cfg(not(debug_assertions))]
         let pid = self.fg_pid;
+        let entered = game.clone().filter(|g| g.0 != self.meter.session.exe);
         self.meter.tick(&mut self.cfg, game, pid, &self.snap);
+        // Jogo novo na tela: se ele saiu de um posto à mão na aba Jogos com outro exe, a lista passa a ele.
+        if let Some((_, gpid, path)) = entered {
+            let parent = procs::parent_map().get(&gpid).and_then(|p| procs::image_path(*p));
+            if let Some(name) = crate::games::seen_exe(&mut self.cfg.games, &path, parent.as_deref()) {
+                self.cfg.save();
+                self.toast.info(&crate::i18n::tr("{} agora usa {} na aba Jogos.").replacen("{}", &name, 1).replacen("{}", &procs::exe_name(&path), 1));
+            }
+        }
         // Teste: `PRISMA_TEST_METER=1` (compacto) ou `2` (completo) abre o medidor uma vez, sem atalho.
         #[cfg(debug_assertions)]
         if let Some(v) = std::env::var("PRISMA_TEST_METER").ok().and_then(|v| v.parse::<u8>().ok()) {
@@ -2885,9 +2897,15 @@ impl App {
         native_fps(capture::cursor_monitor()) as f32
     }
 
+    /// A linha de um jogo visto pela primeira vez no Medidor.
+    pub fn new_meter_game(&self, exe: &str, path: &str) -> crate::config::MeterGame {
+        crate::config::MeterGame { exe: exe.to_string(), path: path.to_string(), limit_fps: crate::meter::first_limit(self.refresh_hz()), limit_real: true, inject: true, last: crate::config::today(), ..Default::default() }
+    }
+
     pub fn add_meter_game(&mut self, exe: &str, path: &str) {
         if !self.cfg.meter_games.iter().any(|g| g.exe.eq_ignore_ascii_case(exe)) {
-            self.cfg.meter_games.push(crate::config::MeterGame { exe: exe.to_string(), path: path.to_string(), limit_fps: crate::meter::first_limit(self.refresh_hz()), limit_real: true, inject: true, last: crate::config::today(), ..Default::default() });
+            let g = self.new_meter_game(exe, path);
+            self.cfg.meter_games.push(g);
             self.apply_pads();
         }
     }
@@ -3123,6 +3141,11 @@ impl App {
             // `--test-page=share`: a página Compartilhar tela por cima das Novidades; `--test-en`: inglês.
             match arg("--test-page=").as_deref() {
                 Some("share") => self.page = Page::Share,
+                Some("games") => self.page = Page::Games,
+                Some("games-open") => {
+                    self.page = Page::Games;
+                    crate::pages::games::open_first(self);
+                }
                 Some("controllers") => self.page = Page::Controllers,
                 Some("controllers-edit") => {
                     self.page = Page::Controllers;
@@ -3965,6 +3988,7 @@ impl App {
             Page::Hdr => self.load_hdr(),
             Page::Optimize => self.refresh_candidates(),
             Page::Fullscreen => self.refresh_windows(),
+            Page::Games => crate::pages::games::refresh(),
             Page::Energy => self.active_plan = power::active().unwrap_or_default(),
             Page::Tweaks => {
                 self.load_disks();
@@ -4578,6 +4602,24 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                     a.invalidate();
                 });
             }
+            LRESULT(0)
+        }
+        WM_PICK_GAMES => {
+            use crate::pages::games as gp;
+            match w.0 {
+                gp::ADD => {
+                    if let Some(path) = capture::choose_file(h, "Programas", w!("*.exe;*.dll")) {
+                        with(|a| gp::added(a, &path));
+                    }
+                }
+                gp::SCAN => {
+                    if let Some(dir) = capture::choose_folder(h) {
+                        with(|a| crate::games::start_scan(dir.into(), a.hub.0 as isize));
+                    }
+                }
+                _ => {}
+            }
+            with(|a| a.invalidate());
             LRESULT(0)
         }
         WM_PICK_RUN => {

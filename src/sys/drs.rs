@@ -390,6 +390,29 @@ fn write_with(who: &Profile, values: &[(u32, Option<u32>)], backup: bool) -> boo
     .unwrap_or(false)
 }
 
+/// Cria o perfil do jogo. Com `copy`, grava nele os valores de agora do global para esses ids (daí em diante
+/// mudar o global não muda o jogo); sem, fica vazio e segue o global.
+pub fn create(exe: &str, copy: &[u32]) -> bool {
+    let values: Vec<(u32, Option<u32>)> = match copy {
+        [] => Vec::new(),
+        ids => {
+            let Some(g) = snapshot(&Profile::Global, ids) else { return false };
+            ids.iter().zip(g.values).filter_map(|(id, v)| Some((*id, Some(v?.now)))).collect()
+        }
+    };
+    if !values.is_empty() {
+        return write(&Profile::Game(exe.to_string()), &values);
+    }
+    with_session(|a, s| unsafe {
+        if !backup_once(a, s) {
+            return Some(false);
+        }
+        game_profile(a, s, exe, true)?;
+        Some((a.save)(s) == 0)
+    })
+    .unwrap_or(false)
+}
+
 /// Volta o banco inteiro a uma cópia guardada.
 pub fn restore(file: &Path) -> bool {
     with_session_from(Some(file), |a, s| unsafe { Some((a.save)(s) == 0) }).unwrap_or(false)
@@ -413,6 +436,19 @@ pub fn read(exe: &str, id: u32) -> Option<u32> {
 /// Tira o que o Prisma gravou no jogo. O perfil criado por ele sai junto se ficou vazio.
 pub fn forget(exe: &str) {
     apply(exe, &[(FRAME_LIMIT, None), (DLSS_PRESET, None), (DLSS_OVERRIDE, None)]);
+    drop_empty(exe);
+}
+
+/// Voltar ao padrão da aba Driver NVIDIA no jogo: apaga esses valores do perfil dele (com a cópia do
+/// banco antes) e o perfil criado pelo Prisma, se ficou vazio. O limite e o DLSS são do Medidor e ficam.
+pub fn reset_game(exe: &str, ids: &[u32]) -> bool {
+    let values: Vec<(u32, Option<u32>)> = ids.iter().filter(|id| ![FRAME_LIMIT, DLSS_PRESET, DLSS_OVERRIDE].contains(id)).map(|&id| (id, None)).collect();
+    let ok = write(&Profile::Game(exe.to_string()), &values);
+    drop_empty(exe);
+    ok
+}
+
+fn drop_empty(exe: &str) {
     let _ = with_session(|a, s| unsafe {
         let title = wide_name(&format!("Prisma {}", exe.to_lowercase()));
         let mut p: H = std::ptr::null_mut();

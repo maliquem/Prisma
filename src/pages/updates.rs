@@ -173,7 +173,7 @@ fn host(url: &str) -> &str {
 }
 
 /// O motivo da falha de uma IA ("chave", "limite"...), na língua da tela.
-fn why(ai: &str, e: &str) -> String {
+pub(crate) fn why(ai: &str, e: &str) -> String {
     let s = match e {
         "chave" => "a chave do {} foi recusada",
         "limite" => "o {} atingiu o limite de uso",
