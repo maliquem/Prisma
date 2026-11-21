@@ -53,7 +53,7 @@ fn draw_list(ui: &mut Ui, app: &mut App, a: Rect) {
         .map(|(i, _)| i)
         .collect();
     let list = rect(l.x + 8.0, l.y + 54.0, l.w - 16.0, l.h - 62.0);
-    ui.begin_scroll("un", list, rows.len() as f32 * 46.0);
+    ui.begin_rows("un", list, rows.len() as f32 * 46.0);
     let first = (ui.scroll_y() / 46.0) as usize;
     let last = first + (list.h / 46.0) as usize + 2;
     for (row, &i) in rows.iter().enumerate().take(last).skip(first) {

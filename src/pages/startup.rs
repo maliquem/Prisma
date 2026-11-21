@@ -23,7 +23,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let l = rect(x, top, a.w - 56.0 - rw - 12.0, h);
     ui.card(l);
     let list = l.inset(8.0);
-    ui.begin_scroll("boot", list, app.boot_items.len() as f32 * 52.0);
+    ui.begin_rows("boot", list, app.boot_items.len() as f32 * 52.0);
     let mut toggle = None;
     let mut pick = None;
     for (i, it) in app.boot_items.iter().enumerate() {

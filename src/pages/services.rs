@@ -64,7 +64,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         .collect();
 
     let list = rect(l.x + 8.0, l.y + 54.0, l.w - 16.0, l.h - 62.0);
-    ui.begin_scroll("svc", list, rows.len() as f32 * 34.0);
+    ui.begin_rows("svc", list, rows.len() as f32 * 34.0);
     let mut pick = None;
     let mut right = None;
     let first = (ui.scroll_y() / 34.0) as usize;

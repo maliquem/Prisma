@@ -305,7 +305,7 @@ fn draw_result(ui: &mut Ui, app: &mut App, s: &Scan, area: Rect) {
         _ => app.scan_type.as_ref().map_or(Vec::new(), |t| t.2.clone()),
     };
     let typed = app.scan_tab == 2;
-    ui.begin_scroll("tree", list, kids.len() as f32 * 40.0);
+    ui.begin_rows("tree", list, kids.len() as f32 * 40.0);
     let first = (ui.scroll_y() / 40.0) as usize;
     let last = first + (list.h / 40.0) as usize + 2;
     for (row, &k) in kids.iter().enumerate().take(last).skip(first) {

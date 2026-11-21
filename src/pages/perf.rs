@@ -121,7 +121,7 @@ fn table(ui: &mut Ui, app: &mut App, r: Rect, key: &str, title: &str, cols: &[(&
         cx += w + 6.0;
     }
     let list = rect(r.x + 8.0, hy + 24.0, r.w - 16.0, r.bottom() - hy - 32.0);
-    ui.begin_scroll(key, list, rows.len() as f32 * ROW);
+    ui.begin_rows(key, list, rows.len() as f32 * ROW);
     let first = (ui.scroll_y() / ROW) as usize;
     let last = first + (list.h / ROW) as usize + 2;
     for (i, row) in rows.iter().enumerate().take(last).skip(first) {
