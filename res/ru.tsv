@@ -3037,17 +3037,13 @@ O Windows não deu a permissão de administrador	Windows не дал права 
 Instalado. Reinicie o PC para terminar	Установлено. Перезагрузите ПК для завершения
 Ainda rodando depois de 10 minutos; confira no Windows Update	Всё ещё выполняется спустя 10 минут; проверьте в Windows Update
 Não deu certo; veja o registro de ações	Не получилось; см. журнал действий
-a chave do Gemini foi recusada	ключ Gemini отклонён
-acabou a cota grátis do Gemini por hoje	бесплатная квота Gemini на сегодня исчерпана
 sem resposta da internet	нет ответа из интернета
-o modelo do Gemini não está disponível	модель Gemini недоступна
 a resposta veio num formato inesperado	ответ пришёл в неожиданном формате
 A pesquisa falhou ({}). Tenta de novo em uma hora.	Поиск не удался ({}). Повторная попытка через час.
 Visto em {a}. Veredito depois de {b}, quando já houver relatos.	Замечено {a}. Вердикт после {b}, когда появятся отзывы.
 Pesquisar agora	Искать сейчас
 Problemas que a {} admite	Проблемы, которые признаёт {}
 Nenhum listado.	Нет в списке.
-Sem a chave do Gemini, o veredito usa só as fontes oficiais acima.	Без ключа Gemini вердикт опирается только на официальные источники выше.
 Recomendado instalar	Рекомендуется установить
 Melhor esperar	Лучше подождать
 {}% sem problemas (estimativa)	{}% без проблем (оценка)
@@ -3079,6 +3075,17 @@ Apagar chave	Удалить ключ
 Pegar uma chave grátis	Получить бесплатный ключ
 Chave guardada. O Gemini pesquisa os relatos com a busca do Google (megathreads do r/nvidia e do r/Windows11, fórum da NVIDIA, Guru3D e sites de notícias) e dá o veredito. A cota grátis passa de 500 pesquisas por dia.	Ключ сохранён. Gemini ищет отзывы через поиск Google (мегатемы r/nvidia и r/Windows11, форум NVIDIA, Guru3D и новостные сайты) и выносит вердикт. Бесплатная квота — более 500 запросов в день.
 Sem chave, o veredito usa só as fontes oficiais: os problemas conhecidos da Microsoft e os da NVIDIA nas notas da versão.	Без ключа вердикт опирается только на официальные источники: известные проблемы Microsoft и проблемы NVIDIA из примечаний к выпуску.
+a chave do {} foi recusada	ключ {} отклонён
+o {} atingiu o limite de uso	{} достиг лимита использования
+o servidor do {} está ocupado ou fora do ar	сервер {} занят или недоступен
+Sem chave de IA, o veredito usa só as fontes oficiais acima.	Без ключа ИИ вердикт опирается только на официальные источники выше.
+{a}: falhou ({b})	{a}: сбой ({b})
+{a}: recomenda instalar, {b}% sem problemas	{a}: рекомендует установить, {b}% без проблем
+{a}: melhor esperar, {b}% sem problemas	{a}: лучше подождать, {b}% без проблем
+Chave do DeepSeek	Ключ DeepSeek
+Chave do DeepSeek guardada	Ключ DeepSeek сохранён
+Pegar uma chave	Получить ключ
+Pesquisar com	Искать через
 Avisar antes de baixar atualizações do Windows e não trocar o driver de vídeo pelo Windows Update	Предупреждать перед загрузкой обновлений Windows и не менять видеодрайвер через Windows Update
 Usa a política do próprio Windows (pede administrador) e desfaz ao desmarcar. O serviço do Windows Update continua ligado.	Использует собственную политику Windows (нужны права администратора) и отменяется при снятии галочки. Служба Windows Update остаётся включённой.
 A % sem problemas é uma estimativa da IA a partir das reclamações nos fóruns: não existe essa estatística oficial.	Процент без проблем — это оценка ИИ по жалобам на форумах: официальной статистики нет.
@@ -3087,6 +3094,16 @@ Procurando...	Поиск...
 Nunca conferido	Никогда не проверялось
 Última conferência: {}	Последняя проверка: {}
 Página Atualizações	Страница «Обновления»
+acabou o saldo da conta do {}	на счёте {} закончились средства
+o modelo do {} não está disponível	модель {} недоступна
+Chave do Claude	Ключ Claude
+Chave do Claude guardada	Ключ Claude сохранён
+Chave do ChatGPT	Ключ ChatGPT
+Chave do ChatGPT guardada	Ключ ChatGPT сохранён
+Claude (Haiku)	Claude (Haiku)
+Só uma das IAs marcadas tem chave: a pesquisa usa só ela.	Ключ есть только у одного из выбранных ИИ: поиск использует только его.
+Chave guardada. O {} pesquisa os relatos com a busca própria (megathreads do r/nvidia e do r/Windows11, fórum da NVIDIA, Guru3D e sites de notícias) e dá o veredito. Ele não tem cota grátis: cada pesquisa gasta um pouco do saldo da conta.	Ключ сохранён. {} ищет отзывы через собственный поиск (мегатемы r/nvidia и r/Windows11, форум NVIDIA, Guru3D и новостные сайты) и выносит вердикт. Бесплатной квоты нет: каждый поиск расходует немного средств на счёте.
+As IAs marcadas pesquisam ao mesmo tempo e o Prisma junta os resultados: os problemas de todas as listas sem repetir, a média da estimativa, e só recomenda instalar se todas recomendarem. Se uma falhar, valem as outras. Só o Gemini é grátis: as outras gastam um pouco do saldo da conta a cada pesquisa.	Выбранные ИИ ищут одновременно, а Prisma объединяет результаты: проблемы из всех списков без повторов, среднее значение оценки, и рекомендует установку, только если её рекомендуют все. Если один не справится, используются остальные. Бесплатен только Gemini: остальные расходуют немного средств на счёте при каждом поиске.
 Gráficos de processador, placa de vídeo, memória, discos e rede.	Графики процессора, видеокарты, памяти, дисков и сети.
 O que ocupa espaço em cada disco, pasta por pasta.	Что занимает место на каждом диске, папка за папкой.
 Programas que abrem com o Windows, para ligar ou desligar.	Программы, которые запускаются с Windows: можно включить или выключить.

@@ -3043,17 +3043,13 @@ O Windows não deu a permissão de administrador	Windows did not grant administr
 Instalado. Reinicie o PC para terminar	Installed. Restart the PC to finish
 Ainda rodando depois de 10 minutos; confira no Windows Update	Still running after 10 minutes; check Windows Update
 Não deu certo; veja o registro de ações	It didn't work; see the action log
-a chave do Gemini foi recusada	the Gemini key was rejected
-acabou a cota grátis do Gemini por hoje	the free Gemini quota ran out for today
 sem resposta da internet	no response from the internet
-o modelo do Gemini não está disponível	the Gemini model is not available
 a resposta veio num formato inesperado	the response came in an unexpected format
 A pesquisa falhou ({}). Tenta de novo em uma hora.	The search failed ({}). Trying again in an hour.
 Visto em {a}. Veredito depois de {b}, quando já houver relatos.	Seen on {a}. Verdict after {b}, once there are reports.
 Pesquisar agora	Search now
 Problemas que a {} admite	Problems that {} acknowledges
 Nenhum listado.	None listed.
-Sem a chave do Gemini, o veredito usa só as fontes oficiais acima.	Without the Gemini key, the verdict uses only the official sources above.
 Recomendado instalar	Recommended to install
 Melhor esperar	Better to wait
 {}% sem problemas (estimativa)	{}% problem-free (estimate)
@@ -3085,6 +3081,17 @@ Apagar chave	Delete key
 Pegar uma chave grátis	Get a free key
 Chave guardada. O Gemini pesquisa os relatos com a busca do Google (megathreads do r/nvidia e do r/Windows11, fórum da NVIDIA, Guru3D e sites de notícias) e dá o veredito. A cota grátis passa de 500 pesquisas por dia.	Key saved. Gemini looks up user reports with Google search (r/nvidia and r/Windows11 megathreads, the NVIDIA forum, Guru3D and news sites) and gives the verdict. The free quota is over 500 searches per day.
 Sem chave, o veredito usa só as fontes oficiais: os problemas conhecidos da Microsoft e os da NVIDIA nas notas da versão.	Without a key, the verdict uses only the official sources: Microsoft's known issues and NVIDIA's in the release notes.
+a chave do {} foi recusada	the {} key was rejected
+o {} atingiu o limite de uso	{} reached its usage limit
+o servidor do {} está ocupado ou fora do ar	the {} server is busy or down
+Sem chave de IA, o veredito usa só as fontes oficiais acima.	Without an AI key, the verdict uses only the official sources above.
+{a}: falhou ({b})	{a}: failed ({b})
+{a}: recomenda instalar, {b}% sem problemas	{a}: recommends installing, {b}% problem-free
+{a}: melhor esperar, {b}% sem problemas	{a}: better to wait, {b}% problem-free
+Chave do DeepSeek	DeepSeek key
+Chave do DeepSeek guardada	DeepSeek key saved
+Pegar uma chave	Get a key
+Pesquisar com	Search with
 Avisar antes de baixar atualizações do Windows e não trocar o driver de vídeo pelo Windows Update	Warn before downloading Windows updates and don't replace the video driver through Windows Update
 Usa a política do próprio Windows (pede administrador) e desfaz ao desmarcar. O serviço do Windows Update continua ligado.	Uses Windows' own policy (asks for administrator) and is undone when unchecked. The Windows Update service stays on.
 A % sem problemas é uma estimativa da IA a partir das reclamações nos fóruns: não existe essa estatística oficial.	The % problem-free is an AI estimate based on complaints in forums: there is no official statistic for it.
@@ -3093,6 +3100,16 @@ Procurando...	Searching...
 Nunca conferido	Never checked
 Última conferência: {}	Last check: {}
 Página Atualizações	Updates page
+acabou o saldo da conta do {}	the {} account balance has run out
+o modelo do {} não está disponível	the {} model is not available
+Chave do Claude	Claude key
+Chave do Claude guardada	Claude key saved
+Chave do ChatGPT	ChatGPT key
+Chave do ChatGPT guardada	ChatGPT key saved
+Claude (Haiku)	Claude (Haiku)
+Só uma das IAs marcadas tem chave: a pesquisa usa só ela.	Only one of the selected AIs has a key: the search uses only that one.
+Chave guardada. O {} pesquisa os relatos com a busca própria (megathreads do r/nvidia e do r/Windows11, fórum da NVIDIA, Guru3D e sites de notícias) e dá o veredito. Ele não tem cota grátis: cada pesquisa gasta um pouco do saldo da conta.	Key saved. {} looks up user reports with its own search (r/nvidia and r/Windows11 megathreads, the NVIDIA forum, Guru3D and news sites) and gives the verdict. It has no free quota: each search uses a little of the account balance.
+As IAs marcadas pesquisam ao mesmo tempo e o Prisma junta os resultados: os problemas de todas as listas sem repetir, a média da estimativa, e só recomenda instalar se todas recomendarem. Se uma falhar, valem as outras. Só o Gemini é grátis: as outras gastam um pouco do saldo da conta a cada pesquisa.	The selected AIs search at the same time and Prisma merges the results: the problems from all lists without repeats, the average of the estimate, and it only recommends installing if all of them recommend it. If one fails, the others count. Only Gemini is free: the others use a little of the account balance on each search.
 Gráficos de processador, placa de vídeo, memória, discos e rede.	Charts for processor, graphics card, memory, disks and network.
 O que ocupa espaço em cada disco, pasta por pasta.	What takes up space on each disk, folder by folder.
 Programas que abrem com o Windows, para ligar ou desligar.	Programs that start with Windows, to turn on or off.
