@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use windows::core::*;
 use windows::Win32::Devices::Display::*;
@@ -162,8 +163,32 @@ pub struct Info {
 pub struct State {
     pub info: Option<Arc<Info>>,
     pub busy: bool,
-    /// A leitura em curso foi pedida no botão "Ler de novo" (a da página, a cada tick, não conta).
+    /// A leitura em curso foi pedida no botão "Ler de novo" (a da página aberta não conta).
     pub asked: bool,
+    /// Quando a última leitura terminou.
+    pub at: Option<Instant>,
+}
+
+/// De quanto em quanto tempo a página aberta relê a tela (cada leitura abre COM e consulta o vídeo).
+const EVERY: Duration = Duration::from_secs(10);
+
+impl State {
+    /// O botão "Ler de novo" mostra "Lendo…": só a leitura que ele pediu, para não piscar com as da página.
+    pub fn reading(&self) -> bool {
+        self.busy && self.asked
+    }
+
+    /// A página aberta já pode reler.
+    pub fn stale(&self) -> bool {
+        self.at.is_none_or(|t| t.elapsed() >= EVERY)
+    }
+
+    fn done(&mut self, info: Info) {
+        self.info = Some(Arc::new(info));
+        self.busy = false;
+        self.asked = false;
+        self.at = Some(Instant::now());
+    }
 }
 
 pub type Shared = Arc<Mutex<State>>;
@@ -589,11 +614,30 @@ pub fn load(shared: Shared, window: isize) {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
         let info = read();
         CoUninitialize();
-        let mut s = shared.lock().unwrap();
-        s.info = Some(Arc::new(info));
-        s.busy = false;
-        s.asked = false;
-        drop(s);
+        shared.lock().unwrap().done(info);
         let _ = InvalidateRect(Some(HWND(window as *mut _)), None, false);
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn button_shows_only_its_own_read() {
+        let mut s = State::default();
+        assert!(s.stale());
+        // Leitura da página: o botão continua "Ler de novo".
+        s.busy = true;
+        assert!(!s.reading());
+        // O botão pediu no meio dela: "Lendo…" até ela acabar.
+        s.asked = true;
+        assert!(s.reading());
+        s.done(Info::default());
+        assert!(!s.reading() && !s.busy && !s.asked && s.info.is_some());
+        // Recém-lida: a página espera `EVERY` para reler.
+        assert!(!s.stale());
+        s.at = Some(Instant::now() - EVERY);
+        assert!(s.stale());
+    }
 }
