@@ -197,9 +197,10 @@ fn now_secs() -> u64 {
 }
 
 fn from_table(letter: char, t: mft::Table, serial: u32, journal: u64, next_usn: i64) -> Vol {
+    // Consumir a tabela deixa a lista nova nascer na memória dela, sem as duas juntas no pico.
     let mut entries: Vec<Entry> = t
         .nodes
-        .iter()
+        .into_iter()
         .enumerate()
         .map(|(i, n)| {
             let used = n.used() && n.name_len > 0;
@@ -326,8 +327,9 @@ fn query_journal(h: &Handle) -> Option<(u64, i64)> {
     Some((u64::from_le_bytes(out[0..8].try_into().unwrap()), i64::from_le_bytes(out[16..24].try_into().unwrap())))
 }
 
-/// Tudo o que mudou desde `from`. Erro quer dizer que o diário foi refeito ou já esqueceu: lê de novo.
-fn read_journal(h: &Handle, journal: u64, mut from: i64, out: &mut Vec<u8>) -> std::result::Result<i64, ()> {
+/// Tudo o que mudou desde `from`, entregue a `each` um bloco de 64 KB por vez. Erro quer dizer que
+/// o diário foi refeito ou já esqueceu: lê de novo.
+fn read_journal(h: &Handle, journal: u64, mut from: i64, mut each: impl FnMut(&[u8])) -> std::result::Result<i64, ()> {
     let mut buf = vec![0u8; 1 << 16];
     for _ in 0..4096 {
         let mut input = [0u8; 40];
@@ -343,7 +345,7 @@ fn read_journal(h: &Handle, journal: u64, mut from: i64, out: &mut Vec<u8>) -> s
         if got == 8 || next == from {
             return Ok(next);
         }
-        out.extend_from_slice(&buf[8..got as usize]);
+        each(&buf[8..got as usize]);
         from = next;
     }
     Ok(from)
@@ -454,6 +456,9 @@ fn file_for(dir: &Path, letter: char) -> PathBuf {
 }
 
 fn save(dir: &Path, v: &Vol) -> bool {
+    // Sair do Prisma (flush) e a thread do índice podem gravar ao mesmo tempo no mesmo .tmp.
+    static SAVING: Mutex<()> = Mutex::new(());
+    let _one = SAVING.lock().unwrap_or_else(|e| e.into_inner());
     let _ = std::fs::create_dir_all(dir);
     let tmp = dir.join(format!("{}.tmp", v.letter));
     let ok = (|| -> std::io::Result<()> {
@@ -717,10 +722,12 @@ fn restore(letter: char) -> Option<Vol> {
         if id != v.journal || id == 0 {
             return None;
         }
-        let mut data = Vec::new();
-        v.next_usn = read_journal(&h, v.journal, v.next_usn, &mut data).ok()?;
         let mut refresh = HashMap::new();
-        apply(&mut v, &data, &mut refresh);
+        let (journal, from) = (v.journal, v.next_usn);
+        let next = read_journal(&h, journal, from, |d| {
+            apply(&mut v, d, &mut refresh);
+        });
+        v.next_usn = next.ok()?;
         for (idx, frn) in refresh.into_iter().take(REFRESH_MAX * 4) {
             if let Some((size, mtime)) = file_info(&h, frn) {
                 let e = &mut v.entries[idx as usize];
@@ -748,10 +755,14 @@ fn poll() {
     let list: Vec<(char, u64, i64)> = IX.vols.read().unwrap().iter().filter(|v| v.live).map(|v| (v.letter, v.journal, v.next_usn)).collect();
     for (letter, journal, from) in list {
         let Some(h) = open_volume(letter) else { continue };
-        let mut data = Vec::new();
-        let next = read_journal(&h, journal, from, &mut data);
         let mut refresh = HashMap::new();
         let mut changed = false;
+        // A trava de escrita só por bloco: a pesquisa não espera o diário inteiro de uma vez.
+        let next = read_journal(&h, journal, from, |d| {
+            if let Some(v) = IX.vols.write().unwrap().iter_mut().find(|v| v.letter == letter) {
+                changed |= apply(v, d, &mut refresh);
+            }
+        });
         {
             let mut vols = IX.vols.write().unwrap();
             let Some(v) = vols.iter_mut().find(|v| v.letter == letter) else { continue };
@@ -761,7 +772,6 @@ fn poll() {
                         v.next_usn = n;
                         v.dirty = true;
                     }
-                    changed = apply(v, &data, &mut refresh);
                 }
                 // O diário esqueceu o que faltava: a tabela é lida de novo.
                 Err(()) => {
@@ -1009,6 +1019,8 @@ enum Kind {
     Name,
     Glob,
     Path,
+    /// Glob com barra: vale para o caminho inteiro.
+    PathGlob,
 }
 
 struct Term {
@@ -1073,12 +1085,21 @@ impl Query {
             }
             let mut text = Vec::new();
             fold(&rest.replace('/', "\\"), &mut text);
-            let kind = if text.contains(&b'*') || text.contains(&b'?') {
-                Kind::Glob
-            } else if text.contains(&b'\\') {
-                Kind::Path
-            } else {
-                Kind::Name
+            let wild = text.contains(&b'*') || text.contains(&b'?');
+            let kind = match (wild, text.contains(&b'\\')) {
+                (true, false) => Kind::Glob,
+                (true, true) => {
+                    // Sem a letra do disco, o padrão casa com o fim do caminho: `downloads\*.pdf`.
+                    if text.get(1) != Some(&b':') {
+                        if text[0] != b'\\' {
+                            text.insert(0, b'\\');
+                        }
+                        text.insert(0, b'*');
+                    }
+                    Kind::PathGlob
+                }
+                (false, true) => Kind::Path,
+                (false, false) => Kind::Name,
             };
             out.terms.push(Term { not, kind, text });
         }
@@ -1164,12 +1185,16 @@ fn matches(v: &Vol, i: u32, q: &Query, rank: Option<&[u8]>, s: &mut Scratch) -> 
                     has(&s.folded, &t.text)
                 }
             }
-            Kind::Path => {
+            Kind::Path | Kind::PathGlob => {
                 s.path.clear();
                 s.path.extend_from_slice(dir_key(v, e.parent, &mut s.memo));
                 s.path.push(b'\\');
                 fold(v.name(i), &mut s.path);
-                has(&s.path, &t.text)
+                if t.kind == Kind::Path {
+                    has(&s.path, &t.text)
+                } else {
+                    glob(&t.text, &s.path)
+                }
             }
         };
         if hit == t.not {
@@ -1211,6 +1236,18 @@ pub struct Results {
 
 pub fn key(letter: char, i: u32) -> u64 {
     (letter as u64) << 32 | i as u64
+}
+
+/// Só os CAP primeiros na ordem pedida (os últimos, com `desc`), ainda fora de ordem entre si.
+fn keep_first<T: Ord>(v: &mut Vec<T>, desc: bool) {
+    if v.len() > CAP {
+        if desc {
+            v.select_nth_unstable_by(CAP, |a, b| b.cmp(a));
+        } else {
+            v.select_nth_unstable(CAP);
+        }
+        v.truncate(CAP);
+    }
 }
 
 fn search(q: &str, sort: Sort, desc: bool, gen: &AtomicU64, my: u64) -> Option<Results> {
@@ -1262,9 +1299,8 @@ fn search(q: &str, sort: Sort, desc: bool, gen: &AtomicU64, my: u64) -> Option<R
     }
     let mut all: Vec<(u32, u64)> = parts.into_iter().flatten().collect();
     let total = all.len();
-    if all.len() > CAP {
-        all.select_nth_unstable(CAP);
-        all.truncate(CAP);
+    if !matches!(sort, Sort::Size | Sort::Date) {
+        keep_first(&mut all, false);
     }
     let find = |k: u64| -> Option<(&Vol, u32)> {
         let l = (k >> 32) as u8 as char;
@@ -1290,6 +1326,8 @@ fn search(q: &str, sort: Sort, desc: bool, gen: &AtomicU64, my: u64) -> Option<R
                     (x, k)
                 })
                 .collect();
+            // O corte vem depois da chave: cortar pela nota deixaria de fora os maiores ou os mais novos.
+            keep_first(&mut v, desc);
             v.sort_unstable();
             v.into_iter().map(|(_, k)| k).collect()
         }
@@ -1468,6 +1506,127 @@ mod tests {
         assert_eq!(w.path(2), r"Q:\pasta\ação.txt");
         assert_eq!((w.entries[1].size, w.entries[2].mtime, w.entries[2].parent), (1 << 40, 34, 1));
         assert!(!w.dirty && !w.live);
+    }
+
+    /// Disco Q: com a raiz do NTFS (5) e espaço até o registro 40.
+    fn vol() -> Vol {
+        let mut v = Vol {
+            letter: 'Q',
+            ntfs: true,
+            entries: vec![Entry::default(); 40],
+            names: Vec::new(),
+            root: NTFS_ROOT,
+            serial: 0,
+            journal: 1,
+            next_usn: 0,
+            built: 0,
+            garbage: 0,
+            dirty: false,
+            files: 0,
+            live: true,
+        };
+        v.entries[NTFS_ROOT as usize] = Entry { parent: NTFS_ROOT, flags: USED | DIR, ..Default::default() };
+        v
+    }
+
+    fn put(v: &mut Vol, i: u32, parent: u32, name: &str, dir: bool) {
+        v.entries[i as usize] = Entry { parent, flags: USED | if dir { DIR } else { 0 }, ..Default::default() };
+        v.set_name(i, name);
+    }
+
+    /// Registro USN V2 como o Windows entrega.
+    fn usn(frn: u32, parent: u32, reason: u32, dir: bool, name: &str) -> Vec<u8> {
+        let w: Vec<u8> = name.encode_utf16().flat_map(|c| c.to_le_bytes()).collect();
+        let len = (60 + w.len() + 7) & !7;
+        let mut r = vec![0u8; len];
+        r[0..4].copy_from_slice(&(len as u32).to_le_bytes());
+        r[4..6].copy_from_slice(&2u16.to_le_bytes());
+        r[8..16].copy_from_slice(&(frn as u64 | 3 << 48).to_le_bytes());
+        r[16..24].copy_from_slice(&(parent as u64 | 1 << 48).to_le_bytes());
+        r[32..40].copy_from_slice(&((11_644_473_600u64 + 1000) * 10_000_000).to_le_bytes());
+        r[40..44].copy_from_slice(&reason.to_le_bytes());
+        r[52..56].copy_from_slice(&(if dir { 0x10u32 } else { 0x20 }).to_le_bytes());
+        r[56..58].copy_from_slice(&(w.len() as u16).to_le_bytes());
+        r[58..60].copy_from_slice(&60u16.to_le_bytes());
+        r[60..60 + w.len()].copy_from_slice(&w);
+        r
+    }
+
+    #[test]
+    fn journal_creates_renames_and_deletes() {
+        let mut v = vol();
+        let mut refresh = HashMap::new();
+        let data = [usn(30, 5, R_CREATE | R_CLOSE, true, "docs"), usn(31, 30, R_CREATE | R_DATA | R_CLOSE, false, "a.txt")].concat();
+        assert!(apply(&mut v, &data, &mut refresh));
+        assert_eq!(v.path(31), r"Q:\docs\a.txt");
+        assert_eq!((v.files, v.entries[31].mtime, v.dirty), (2, 1000, true));
+        assert_eq!(refresh.get(&31), Some(&(31 | 3 << 48)));
+
+        let data = [usn(31, 30, R_RENAME_OLD, false, "a.txt"), usn(31, 5, R_RENAME_NEW, false, "b.txt")].concat();
+        apply(&mut v, &data, &mut refresh);
+        assert_eq!(v.path(31), r"Q:\b.txt");
+        assert_eq!(v.files, 2);
+
+        apply(&mut v, &usn(31, 5, R_DELETE | R_CLOSE, false, "b.txt"), &mut refresh);
+        assert!(!v.live_entry(31) && !refresh.contains_key(&31));
+        assert_eq!(v.files, 1);
+
+        // Número além da lista faz a lista crescer; registro cortado no fim para sem quebrar.
+        let mut data = usn(100, 30, R_CREATE | R_CLOSE, false, "novo.txt");
+        data.extend_from_slice(&usn(101, 30, R_CREATE, false, "cortado.txt")[..70]);
+        apply(&mut v, &data, &mut refresh);
+        assert_eq!(v.path(100), r"Q:\docs\novo.txt");
+        assert!(!v.live_entry(101));
+    }
+
+    fn hits(v: &Vol, q: &str) -> Vec<u32> {
+        let q = Query::parse(q);
+        let mut s = Scratch { folded: Vec::new(), path: Vec::new(), memo: HashMap::new() };
+        (0..v.entries.len() as u32).filter(|&i| matches(v, i, &q, q.rank_term(), &mut s).is_some()).collect()
+    }
+
+    #[test]
+    fn filters_and_path_globs() {
+        let mut v = vol();
+        put(&mut v, 30, 5, "Docs", true);
+        put(&mut v, 31, 30, "Relatório.PDF", false);
+        put(&mut v, 32, 5, "Downloads", true);
+        put(&mut v, 33, 32, "x.pdf", false);
+        put(&mut v, 34, 32, "sub", true);
+        put(&mut v, 35, 34, "y.pdf", false);
+        put(&mut v, 36, 32, "nota.txt", false);
+        assert_eq!(hits(&v, "*.pdf"), vec![31, 33, 35]);
+        assert_eq!(hits(&v, r"downloads\*.pdf"), vec![33, 35]);
+        assert_eq!(hits(&v, r"q:\downloads\*.pdf"), vec![33, 35]);
+        assert_eq!(hits(&v, r"\sub\*"), vec![35]);
+        assert!(hits(&v, r"d:\downloads\*.pdf").is_empty());
+        assert_eq!(hits(&v, r"downloads\sub"), vec![34, 35]);
+        assert_eq!(hits(&v, "relatorio ext:pdf"), vec![31]);
+        assert_eq!(hits(&v, "pasta: d"), vec![30, 32]);
+        assert_eq!(hits(&v, "ext:pdf !y"), vec![31, 33]);
+    }
+
+    #[test]
+    fn prune_drops_what_has_no_way_to_the_root() {
+        let mut v = vol();
+        put(&mut v, 30, 5, "ok", true);
+        put(&mut v, 31, 30, "f", false);
+        put(&mut v, 32, 33, "laço", true);
+        put(&mut v, 33, 32, "laço2", true);
+        put(&mut v, 34, 39, "órfão", false);
+        prune(&mut v.entries, NTFS_ROOT);
+        assert!(v.live_entry(30) && v.live_entry(31));
+        assert!(!v.live_entry(32) && !v.live_entry(33) && !v.live_entry(34));
+    }
+
+    #[test]
+    fn cap_keeps_the_right_end() {
+        let mut v: Vec<u64> = (0..CAP as u64 + 5).collect();
+        keep_first(&mut v, true);
+        assert_eq!((v.len(), v.iter().min()), (CAP, Some(&5)));
+        let mut v: Vec<u64> = (0..CAP as u64 + 5).rev().collect();
+        keep_first(&mut v, false);
+        assert_eq!(v.iter().max(), Some(&(CAP as u64 - 1)));
     }
 }
 
