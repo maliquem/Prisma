@@ -50,7 +50,7 @@ pub fn apply_in(base: &Path, want: Option<(&str, &str)>) -> Result<(), String> {
     let dest = base.join(keep);
     // Só grava se mudou: o APO troca o som a cada gravação.
     if std::fs::read(&dest).ok().as_deref() != Some(&text[..]) {
-        std::fs::write(&dest, &text).map_err(|e| format!("não gravei {}: {e}", dest.display()))?;
+        write_whole(&dest, &text).map_err(|e| format!("não gravei {}: {e}", dest.display()))?;
     }
     Ok(())
 }
@@ -86,7 +86,16 @@ fn write_if_changed(f: &Path, text: &str) -> Result<(), String> {
     if std::fs::read_to_string(f).ok().as_deref() == Some(text) {
         return Ok(());
     }
-    std::fs::write(f, text).map_err(|e| format!("não gravei {}: {e}", f.display()))
+    write_whole(f, text.as_bytes()).map_err(|e| format!("não gravei {}: {e}", f.display()))
+}
+
+/// O APO lê o arquivo a qualquer hora: grava ao lado e troca de uma vez, para ele nunca ver meio perfil.
+fn write_whole(f: &Path, b: &[u8]) -> std::io::Result<()> {
+    let tmp = f.with_extension("tmp");
+    std::fs::write(&tmp, b)?;
+    std::fs::rename(&tmp, f).inspect_err(|_| {
+        let _ = std::fs::remove_file(&tmp);
+    })
 }
 
 pub fn rename_in(base: &Path, guid: &str, old: &str, new: &str) -> Result<(), String> {

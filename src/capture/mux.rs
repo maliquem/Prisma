@@ -474,6 +474,11 @@ impl Mp4 {
         let v = std::mem::take(&mut self.v);
         let split = self.a.iter().position(|a| a.pts >= end).unwrap_or(self.a.len());
         let a: Vec<Pkt> = self.a.drain(..split).collect();
+        if let (0, Some(f)) = (self.a_dts, a.first()) {
+            // Som que começa depois do vídeo (replay com a tela parada, o som já aparado) entra na
+            // hora dele, não colado no começo.
+            self.a_dts = ((f.pts - self.t0).max(0) as u64) * AUDIO_SCALE / 10_000_000;
+        }
         self.seq += 1;
         let conv = |t: i64| (t.max(0) as u64) * VIDEO_SCALE / 10_000_000;
         let base = conv(v[0].pts - self.t0);

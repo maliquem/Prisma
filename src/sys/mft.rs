@@ -468,6 +468,10 @@ fn fixup(r: &mut [u8]) -> bool {
         if end > r.len() {
             break;
         }
+        // Setor que não termina com o número da gravação: registro lido no meio de uma escrita.
+        if r[end - 2..end] != r[off..off + 2] {
+            return false;
+        }
         r[end - 2] = r[off + i * 2];
         r[end - 1] = r[off + i * 2 + 1];
     }
@@ -484,11 +488,58 @@ fn attrs(r: &[u8]) -> Vec<(u32, usize, usize)> {
             break;
         }
         let len = u32_at(r, o + 4) as usize;
-        if len < 16 || o + len > r.len() {
+        // Cabeçalho inteiro ou nada: residente tem 24 bytes, não residente 64.
+        let min = if r[o + 8] == 0 { 24 } else { 64 };
+        if len < min || o + len > r.len() {
             break;
         }
         out.push((t, o, len));
         o += len;
+    }
+    out
+}
+
+/// `n` bytes a partir de `at`: a leitura direta só aceita blocos alinhados de 4 KB.
+fn read_span(raw: &Raw, buf: &mut Aligned, at: u64, n: usize) -> Option<Vec<u8>> {
+    let cap = buf.raw.len() - 4096;
+    let (low, skip) = (at & !4095, (at & 4095) as usize);
+    if n > cap {
+        return None;
+    }
+    let len = (skip + n + 4095) & !4095;
+    if len > cap || !raw.read(low, buf.get(len)) {
+        return None;
+    }
+    Some(buf.get(len)[skip..skip + n].to_vec())
+}
+
+/// Onde fica no volume o byte `pos` da tabela, pelos pedaços dela.
+fn locate(runs: &[(i64, u64)], mut pos: u64, cluster: u64) -> Option<u64> {
+    for &(lcn, clusters) in runs {
+        let bytes = clusters.saturating_mul(cluster);
+        if pos < bytes {
+            return (lcn >= 0).then(|| (lcn as u64).saturating_mul(cluster) + pos);
+        }
+        pos -= bytes;
+    }
+    None
+}
+
+/// Pedaços dos dados da tabela depois do VCN 0, pela lista de atributos: (registro, VCN inicial).
+/// Um registro pode ter mais de um pedaço, e cada um aparece na lista.
+fn list_extents(l: &[u8]) -> Vec<(u64, u64)> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i + 26 <= l.len() {
+        let rl = u16_at(l, i + 4) as usize;
+        if rl == 0 {
+            break;
+        }
+        let vcn = u64_at(l, i + 8);
+        if u32_at(l, i) == 0x80 && vcn != 0 {
+            out.push((u64_at(l, i + 16) & 0xFFFF_FFFF_FFFF, vcn));
+        }
+        i += rl;
     }
     out
 }
@@ -688,49 +739,42 @@ pub(crate) fn read_table(drive: char, p: &Progress, with_times: bool) -> Option<
                 list_attr = Some((o, len));
             }
         }
-        // Tabela muito fragmentada continua em registros de extensão.
+        // Tabela muito fragmentada continua em registros de extensão, listados no atributo 0x20.
         if let Some((o, len)) = list_attr {
             let a = &first[o..o + len];
-            if a[8] == 0 {
-                let v = u16_at(a, 20) as usize;
-                let vl = u32_at(a, 16) as usize;
-                let l = &a[v..(v + vl).min(a.len())];
-                let mut i = 0;
-                while i + 26 <= l.len() {
-                    let tp = u32_at(l, i);
-                    let rl = u16_at(l, i + 4) as usize;
-                    let vcn = u64_at(l, i + 8);
-                    let number = u64_at(l, i + 16) & 0xFFFF_FFFF_FFFF;
-                    if rl == 0 {
-                        break;
+            let list = if a[8] == 0 {
+                let v = (u16_at(a, 20) as usize).min(a.len());
+                a[v..(v + u32_at(a, 16) as usize).min(a.len())].to_vec()
+            } else {
+                // Lista grande demais para o registro: fica nos pedaços dela no disco.
+                let mut lr = Vec::new();
+                decode_runs(a, &mut lr);
+                let mut l = Vec::new();
+                for (lcn, clusters) in lr {
+                    if lcn < 0 {
+                        return None;
                     }
-                    if tp == 0x80 && vcn != 0 {
-                        let mut pos = number * rec as u64;
-                        for (lcn, clusters) in &runs {
-                            let bytes = clusters * cluster;
-                            if pos < bytes {
-                                let at = *lcn as u64 * cluster + pos;
-                                let (low, skip) = (at & !4095, (at & 4095) as usize);
-                                if *lcn >= 0 && raw.read(low, buf.get(4096 + first_len)) {
-                                    let mut r = buf.get(4096 + first_len)[skip..skip + rec].to_vec();
-                                    if fixup(&mut r) {
-                                        for (t2, o2, l2) in attrs(&r) {
-                                            if t2 == 0x80 && r[o2 + 8] != 0 {
-                                                let mut more = Vec::new();
-                                                decode_runs(&r[o2..o2 + l2], &mut more);
-                                                runs.extend(more);
-                                            }
-                                        }
-                                    }
-                                }
-                                break;
-                            }
-                            pos -= bytes;
-                        }
+                    l.extend(read_span(raw, &mut buf, (lcn as u64).saturating_mul(cluster), clusters.saturating_mul(cluster) as usize)?);
+                }
+                l.truncate(u64_at(a, 48) as usize);
+                l
+            };
+            for (number, vcn) in list_extents(&list) {
+                // Extensão ilegível deixaria a tabela pela metade sem aviso: o caminho lento cobre.
+                let mut r = read_span(raw, &mut buf, locate(&runs, number * rec as u64, cluster)?, rec)?;
+                if !fixup(&mut r) {
+                    return None;
+                }
+                // Só o pedaço que a entrada aponta: ler o registro inteiro repetiria os outros.
+                for (t, o, l) in attrs(&r) {
+                    if t == 0x80 && r[o + 8] != 0 && u64_at(&r, o + 16) == vcn {
+                        decode_runs(&r[o..o + l], &mut runs);
                     }
-                    i += rl;
                 }
             }
+        }
+        if runs.iter().fold(0u64, |s, r| s.saturating_add(r.1)).saturating_mul(cluster) < mft_len {
+            return None;
         }
 
         let total = (mft_len / rec as u64) as usize;
@@ -1040,5 +1084,139 @@ mod tests {
         for p in [r"K:\src\build\a.obj", r"C:\Users\eu\Downloads\big.iso", r"D:\Jogos\Windows\x.bin"] {
             assert!(!system_file(p), "{p}");
         }
+    }
+
+    /// Registro FILE de 1024 bytes como o NTFS grava: números da gravação no fim de cada setor.
+    fn record_with(attrs: &[Vec<u8>]) -> Vec<u8> {
+        let mut r = vec![0u8; 1024];
+        r[..4].copy_from_slice(b"FILE");
+        r[4..6].copy_from_slice(&48u16.to_le_bytes());
+        r[6..8].copy_from_slice(&3u16.to_le_bytes());
+        r[20..22].copy_from_slice(&56u16.to_le_bytes());
+        r[22..24].copy_from_slice(&1u16.to_le_bytes());
+        let mut o = 56;
+        for a in attrs {
+            r[o..o + a.len()].copy_from_slice(a);
+            o += a.len();
+        }
+        r[o..o + 4].copy_from_slice(&u32::MAX.to_le_bytes());
+        // O fim de cada setor vai para a lista e dá lugar ao número 0xABCD.
+        for (i, end) in [512usize, 1024].into_iter().enumerate() {
+            let (a, b) = (r[end - 2], r[end - 1]);
+            r[50 + i * 2] = a;
+            r[51 + i * 2] = b;
+            r[end - 2..end].copy_from_slice(&[0xCD, 0xAB]);
+        }
+        r[48..50].copy_from_slice(&[0xCD, 0xAB]);
+        r
+    }
+
+    fn resident(t: u32, value: &[u8]) -> Vec<u8> {
+        let len = (24 + value.len() + 7) & !7;
+        let mut a = vec![0u8; len];
+        a[..4].copy_from_slice(&t.to_le_bytes());
+        a[4..8].copy_from_slice(&(len as u32).to_le_bytes());
+        a[16..20].copy_from_slice(&(value.len() as u32).to_le_bytes());
+        a[20..22].copy_from_slice(&24u16.to_le_bytes());
+        a[24..24 + value.len()].copy_from_slice(value);
+        a
+    }
+
+    fn file_name(parent: u64, ns: u8, name: &str) -> Vec<u8> {
+        let w: Vec<u16> = name.encode_utf16().collect();
+        let mut d = vec![0u8; 66];
+        d[..8].copy_from_slice(&parent.to_le_bytes());
+        d[64] = w.len() as u8;
+        d[65] = ns;
+        d.extend(w.iter().flat_map(|c| c.to_le_bytes()));
+        resident(0x30, &d)
+    }
+
+    /// $DATA fora do registro: um pedaço de 0x10 clusters no cluster 0x20.
+    fn data_runs(size: u64) -> Vec<u8> {
+        let mut a = vec![0u8; 72];
+        a[..4].copy_from_slice(&0x80u32.to_le_bytes());
+        a[4..8].copy_from_slice(&72u32.to_le_bytes());
+        a[8] = 1;
+        a[32..34].copy_from_slice(&64u16.to_le_bytes());
+        a[40..48].copy_from_slice(&8192u64.to_le_bytes());
+        a[48..56].copy_from_slice(&size.to_le_bytes());
+        a[64..67].copy_from_slice(&[0x11, 0x10, 0x20]);
+        a
+    }
+
+    fn parse(r: &mut [u8]) -> Option<(String, Node)> {
+        if !fixup(r) {
+            return None;
+        }
+        let mut p = Parser { nodes: vec![Node::default(); 8], names: Vec::new(), times: Vec::new() };
+        p.record(3, r);
+        let n = p.nodes[3];
+        Some((String::from_utf8(p.names[n.name_off as usize..][..n.name_len as usize].to_vec()).unwrap(), n))
+    }
+
+    #[test]
+    fn reads_a_file_record() {
+        let mut r = record_with(&[file_name(5, 2, "PROGRA~1.TXT"), file_name(5, 1, "Programas.txt"), data_runs(5000)]);
+        // O que o setor tinha no fim antes de dar lugar ao número da gravação.
+        r[50..52].copy_from_slice(&[0x11, 0x22]);
+        let (name, n) = parse(&mut r).expect("registro bom");
+        // O nome longo vence o 8.3, e o fim dos setores volta ao que era.
+        assert_eq!(name, "Programas.txt");
+        assert_eq!((n.parent, n.size, n.alloc, n.used()), (5, 5000, 8192, true));
+        assert_eq!(&r[510..512], &[0x11, 0x22]);
+        let mut runs = Vec::new();
+        decode_runs(&data_runs(0), &mut runs);
+        assert_eq!(runs, vec![(0x20, 0x10)]);
+    }
+
+    #[test]
+    fn torn_record_is_skipped() {
+        let mut r = record_with(&[file_name(5, 1, "a.txt")]);
+        // O segundo setor ainda é da gravação anterior.
+        r[1022] = 0x01;
+        assert!(parse(&mut r).is_none());
+        let mut r = record_with(&[]);
+        r[6..8].copy_from_slice(&600u16.to_le_bytes());
+        assert!(!fixup(&mut r));
+    }
+
+    #[test]
+    fn short_attributes_do_not_panic() {
+        // 0x30 residente com 16 bytes e 0x80 não residente com 24: cabeçalhos cortados.
+        let mut short = file_name(5, 1, "a.txt");
+        short[4..8].copy_from_slice(&16u32.to_le_bytes());
+        let mut r = record_with(&[short[..16].to_vec()]);
+        assert_eq!(parse(&mut r).unwrap().0, "");
+        let mut d = data_runs(1);
+        d[4..8].copy_from_slice(&24u32.to_le_bytes());
+        let mut r = record_with(&[d[..24].to_vec()]);
+        assert_eq!(parse(&mut r).unwrap().1.size, 0);
+        // Valor apontando para fora do atributo.
+        let mut far = file_name(5, 1, "a.txt");
+        far[20..22].copy_from_slice(&900u16.to_le_bytes());
+        let mut r = record_with(&[far]);
+        assert_eq!(parse(&mut r).unwrap().0, "");
+    }
+
+    #[test]
+    fn attribute_list_points_to_extents() {
+        let entry = |t: u32, vcn: u64, rec: u64| {
+            let mut e = vec![0u8; 32];
+            e[..4].copy_from_slice(&t.to_le_bytes());
+            e[4..6].copy_from_slice(&32u16.to_le_bytes());
+            e[8..16].copy_from_slice(&vcn.to_le_bytes());
+            e[16..24].copy_from_slice(&(rec | 7 << 48).to_le_bytes());
+            e
+        };
+        let l: Vec<u8> = [entry(0x10, 0, 0), entry(0x80, 0, 0), entry(0x80, 900, 17), entry(0x80, 5000, 18)].concat();
+        assert_eq!(list_extents(&l), vec![(17, 900), (18, 5000)]);
+        assert!(list_extents(&l[..40]).is_empty());
+        // Byte 5000 da tabela: segundo pedaço (depois de 1 cluster de 4096), cluster 100.
+        let runs = [(10, 1), (-1, 1), (100, 2)];
+        assert_eq!(locate(&runs, 100, 4096), Some(10 * 4096 + 100));
+        assert_eq!(locate(&runs, 5000, 4096), None);
+        assert_eq!(locate(&runs, 8192 + 5, 4096), Some(100 * 4096 + 5));
+        assert_eq!(locate(&runs, 1 << 30, 4096), None);
     }
 }
