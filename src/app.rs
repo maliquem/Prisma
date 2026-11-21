@@ -2902,7 +2902,12 @@ impl App {
 
     /// A linha de um jogo visto pela primeira vez no Medidor.
     pub fn new_meter_game(&self, exe: &str, path: &str) -> crate::config::MeterGame {
-        crate::config::MeterGame { exe: exe.to_string(), path: path.to_string(), limit_fps: crate::meter::first_limit(self.refresh_hz()), limit_real: true, inject: true, last: crate::config::today(), ..Default::default() }
+        crate::config::MeterGame { limit_fps: crate::meter::first_limit(self.refresh_hz()), ..Self::meter_row(exe, path) }
+    }
+
+    /// A mesma linha sem o teto (`limit_fps` 0), que pede a taxa da tela: para mostrar a cada quadro.
+    pub fn meter_row(exe: &str, path: &str) -> crate::config::MeterGame {
+        crate::config::MeterGame { exe: exe.to_string(), path: path.to_string(), limit_real: true, inject: true, last: crate::config::today(), ..Default::default() }
     }
 
     pub fn add_meter_game(&mut self, exe: &str, path: &str) {

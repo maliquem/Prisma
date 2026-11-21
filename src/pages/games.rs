@@ -594,14 +594,17 @@ fn nv_ids() -> Vec<u32> {
 fn meter(ui: &mut Ui, app: &mut App, r: Rect, exe: &str, path: &str, protected: bool) {
     let at = app.cfg.meter_games.iter().position(|g| g.exe.eq_ignore_ascii_case(exe));
     // Sem linha ainda, mostra o que a aba Medidor poria ao ver o jogo; só grava quando algo muda.
-    let mut g = at.map(|i| app.cfg.meter_games[i].clone()).unwrap_or_else(|| app.new_meter_game(exe, path));
+    // O teto fica 0 até gravar: lê a taxa da tela (EnumDisplaySettingsW), caro demais a cada quadro.
+    let mut g = at.map(|i| app.cfg.meter_games[i].clone()).unwrap_or_else(|| App::meter_row(exe, path));
     let (mut limit, mut preset, mut changed) = (false, false, false);
     let opts = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
     let mut m = g.limit_mode as usize;
     if ui.select("gm-ml", row(ui, r, 0, "Limitador"), &opts(&["Desligado", "Automático", "Manual"]), &mut m) {
         g.limit_mode = m as u8;
-        if m == 1 {
+        if m == 1 || g.limit_fps == 0 {
             g.limit_fps = crate::meter::first_limit(app.refresh_hz());
+        }
+        if m == 1 {
             g.measured = false;
         }
         limit = true;
@@ -655,6 +658,9 @@ fn meter(ui: &mut Ui, app: &mut App, r: Rect, exe: &str, path: &str, protected: 
     match at {
         Some(i) => app.cfg.meter_games[i] = g.clone(),
         None => {
+            if g.limit_fps == 0 {
+                g.limit_fps = crate::meter::first_limit(app.refresh_hz());
+            }
             app.cfg.meter_games.push(g.clone());
             // A lista de jogos do Medidor (perfil base, mapeamento do controle) vê a linha nova.
             app.apply_pads();
