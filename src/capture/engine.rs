@@ -103,17 +103,27 @@ pub fn start(cfg: Settings) -> Handle {
     Handle { tx, status, info, thread: Some(thread) }
 }
 
-/// Memória do replay: pacotes recentes, a partir de um quadro-chave.
-#[derive(Default)]
+/// Memória do replay: pacotes recentes, a partir de um quadro-chave. Em `Arc` para salvar o
+/// replay sem copiar centenas de MB na thread da captura.
+#[derive(Default, Clone)]
 struct Ring {
-    video: VecDeque<Pkt>,
-    audio: VecDeque<Pkt>,
+    video: VecDeque<Arc<Pkt>>,
+    audio: VecDeque<Arc<Pkt>>,
 }
 
 impl Ring {
+    /// Tela parada não manda quadro: o som se apara sozinho, senão cresce sem fim.
+    fn push_audio(&mut self, a: Pkt, secs: u32) {
+        let limit = a.pts - secs as i64 * 10_000_000;
+        self.audio.push_back(Arc::new(a));
+        while self.audio.front().is_some_and(|a| a.pts < limit) {
+            self.audio.pop_front();
+        }
+    }
+
     fn push_video(&mut self, p: Pkt, secs: u32) {
         let limit = p.pts - secs as i64 * 10_000_000;
-        self.video.push_back(p);
+        self.video.push_back(Arc::new(p));
         while self.video.len() > 1 {
             let next_key = self.video.iter().skip(1).position(|k| k.key);
             match next_key {
@@ -362,6 +372,14 @@ fn run(mut cfg: Settings, rx: Receiver<Cmd>, status: &Status, info: &std::sync::
             let _ = SetEvent(HANDLE(ev as *mut _));
             Ok(())
         }))?;
+        // Janela fechada ou monitor desligado: não chega mais quadro, então a gravação fecha.
+        let closed = Arc::new(AtomicBool::new(false));
+        let c = closed.clone();
+        let closed_token = item.Closed(&TypedEventHandler::new(move |_, _| {
+            c.store(true, Ordering::Relaxed);
+            let _ = SetEvent(HANDLE(ev as *mut _));
+            Ok(())
+        }))?;
         let session = pool.CreateCaptureSession(&item)?;
         let _ = session.SetIsCursorCaptureEnabled(cfg.cursor);
         let _ = session.SetIsBorderRequired(false);
@@ -443,7 +461,7 @@ fn run(mut cfg: Settings, rx: Receiver<Cmd>, status: &Status, info: &std::sync::
                     }
                     Cmd::SaveReplay(path) => {
                         // Gravar o MP4 leva tempo: a captura não pode parar esperando o disco.
-                        let copy = Ring { video: ring.video.clone(), audio: ring.audio.clone() };
+                        let copy = ring.clone();
                         let (codec, fps) = (cfg.codec, cfg.fps);
                         std::thread::spawn(move || {
                             if let Err(e) = copy.save(&path, codec, out_w, out_h, fps, hdr10) {
@@ -453,6 +471,9 @@ fn run(mut cfg: Settings, rx: Receiver<Cmd>, status: &Status, info: &std::sync::
                     }
                     Cmd::Quit => quit = true,
                 }
+            }
+            if closed.load(Ordering::Relaxed) {
+                break;
             }
             let _ = WaitForSingleObject(event, 4);
 
@@ -465,7 +486,7 @@ fn run(mut cfg: Settings, rx: Receiver<Cmd>, status: &Status, info: &std::sync::
                     m.push_audio(&a);
                 }
                 if cfg.replay_secs > 0 {
-                    ring.audio.push_back(a);
+                    ring.push_audio(a, cfg.replay_secs);
                 }
             }
             for p in out.drain(..) {
@@ -530,6 +551,7 @@ fn run(mut cfg: Settings, rx: Receiver<Cmd>, status: &Status, info: &std::sync::
 
         stop_audio.store(true, Ordering::Relaxed);
         let _ = pool.RemoveFrameArrived(token);
+        let _ = item.RemoveClosed(closed_token);
         let _ = session.Close();
         let _ = pool.Close();
         enc.drain(&mut out);
@@ -552,5 +574,29 @@ fn run(mut cfg: Settings, rx: Receiver<Cmd>, status: &Status, info: &std::sync::
             Some(e) => Err(e),
             None => Ok(()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn pkt(secs: i64, key: bool) -> Pkt {
+        Pkt { data: vec![0; 4], pts: secs * 10_000_000, key }
+    }
+
+    #[test]
+    fn replay_ring_trims_audio_without_video() {
+        let mut r = Ring::default();
+        r.push_video(pkt(0, true), 30);
+        // Uma hora de som com a tela parada: fica só a janela do replay.
+        for s in 0..3600 {
+            r.push_audio(pkt(s, true), 30);
+        }
+        assert_eq!(r.audio.len(), 31);
+        assert_eq!(r.audio.front().unwrap().pts, 3569 * 10_000_000);
+        // A cópia para salvar divide os pacotes, não os bytes.
+        let c = r.clone();
+        assert!(Arc::ptr_eq(&c.audio[0], &r.audio[0]));
     }
 }
