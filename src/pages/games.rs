@@ -362,7 +362,7 @@ fn game(ui: &mut Ui, app: &mut App, a: Rect, s: &mut St, g: &(String, String, St
         s.open = None;
     }
     if let Some(a) = &ai {
-        if let Some(moved) = ai_line(ui, app, rect(ir.x + 16.0, ir.y + ai_y, w - 32.0, 36.0), a, exe, path, listed) {
+        if let Some(moved) = ai_line(ui, app, rect(ir.x + 16.0, ir.y + ai_y, w - 32.0, 36.0), a, exe, path, manual) {
             s.open = Some((moved.0, moved.1, name.to_string()));
         }
     }
@@ -408,7 +408,7 @@ fn game(ui: &mut Ui, app: &mut App, a: Rect, s: &mut St, g: &(String, String, St
 
 /// A resposta da IA ao lado do que o exe mostrou; Aceitar grava o exe e o HDR próprio sugeridos.
 /// Devolve o (exe, caminho) novo quando o exe trocou.
-fn ai_line(ui: &mut Ui, app: &mut App, r: Rect, a: &gm::Ai, exe: &str, path: &str, listed: bool) -> Option<(String, String)> {
+fn ai_line(ui: &mut Ui, app: &mut App, r: Rect, a: &gm::Ai, exe: &str, path: &str, manual: bool) -> Option<(String, String)> {
     let i = match a {
         gm::Ai::Asking => {
             ui.c.text_fit(r, "IA: procurando na PCGamingWiki…", 13.0, MUTED, Align::Left, Weight::Regular);
@@ -439,8 +439,8 @@ fn ai_line(ui: &mut Ui, app: &mut App, r: Rect, a: &gm::Ai, exe: &str, path: &st
         None => {}
     }
     let line = crate::i18n::tr("IA (PCGamingWiki): {}").replace("{}", &if bits.is_empty() { crate::i18n::tr("nada achado").into_owned() } else { bits.join(" · ") });
-    // O exe só troca num jogo da lista, e só quando o sugerido está na pasta dele.
-    let new_exe = (listed && !i.exe.is_empty() && !i.exe.eq_ignore_ascii_case(exe)).then_some(i.exe.as_str());
+    // O exe só troca num jogo posto à mão, e só quando o sugerido está na pasta dele: o de loja volta no próximo envio do Launcher.
+    let new_exe = (manual && !i.exe.is_empty() && !i.exe.eq_ignore_ascii_case(exe)).then_some(i.exe.as_str());
     let native = i.hdr.map(|h| if h { autohdr::NATIVE_YES } else { autohdr::NATIVE_NO });
     let now = app.cfg.hdr_games.iter().find(|h| h.exe.eq_ignore_ascii_case(exe)).map_or(autohdr::NATIVE_UNKNOWN, |h| h.native);
     let useful = new_exe.is_some() || native.is_some_and(|n| n != now);
@@ -484,6 +484,7 @@ fn copy_from(app: &mut App, from: &str, exe: &str, path: &str) {
     let before = app.cfg.meter_games.iter().find(|g| same(&g.exe)).map_or((0, 0), |g| (g.limit_mode, g.preset));
     let pads = gm::copy_settings(&mut app.cfg, crate::sys::remap::profiles(), from, exe, path);
     save_pads(app, pads);
+    app.apply_pads();
     if let Some(g) = app.cfg.meter_games.iter().find(|g| same(&g.exe)).cloned() {
         // Como em `reset`: só toca no driver se havia ou há o que gravar.
         let limit = before.0 != 0 || g.limit_mode != 0;
@@ -497,7 +498,9 @@ fn copy_from(app: &mut App, from: &str, exe: &str, path: &str) {
     }
     app.route_app(exe);
     let shader = crate::shader_profile::path_for(Path::new(from));
-    if shader.exists() && std::fs::copy(&shader, crate::shader_profile::path_for(Path::new(exe))).is_err() {
+    // O `exe=` do perfil vai para o destino: o motor ignora um perfil cujo exe não é o do jogo aberto.
+    let dest = Path::new(if path.is_empty() { exe } else { path });
+    if shader.exists() && crate::shader_profile::copy_for(&shader, &crate::shader_profile::path_for(Path::new(exe)), dest).is_err() {
         app.toast.info("Não deu para copiar o perfil de shader.");
     }
     app.cfg.save();
@@ -589,7 +592,6 @@ fn nv_ids() -> Vec<u32> {
 }
 
 fn meter(ui: &mut Ui, app: &mut App, r: Rect, exe: &str, path: &str, protected: bool) {
-    let cap = crate::meter::first_limit(app.refresh_hz());
     let at = app.cfg.meter_games.iter().position(|g| g.exe.eq_ignore_ascii_case(exe));
     // Sem linha ainda, mostra o que a aba Medidor poria ao ver o jogo; só grava quando algo muda.
     let mut g = at.map(|i| app.cfg.meter_games[i].clone()).unwrap_or_else(|| app.new_meter_game(exe, path));
@@ -599,7 +601,7 @@ fn meter(ui: &mut Ui, app: &mut App, r: Rect, exe: &str, path: &str, protected: 
     if ui.select("gm-ml", row(ui, r, 0, "Limitador"), &opts(&["Desligado", "Automático", "Manual"]), &mut m) {
         g.limit_mode = m as u8;
         if m == 1 {
-            g.limit_fps = cap;
+            g.limit_fps = crate::meter::first_limit(app.refresh_hz());
             g.measured = false;
         }
         limit = true;
@@ -652,7 +654,11 @@ fn meter(ui: &mut Ui, app: &mut App, r: Rect, exe: &str, path: &str, protected: 
     }
     match at {
         Some(i) => app.cfg.meter_games[i] = g.clone(),
-        None => app.cfg.meter_games.push(g.clone()),
+        None => {
+            app.cfg.meter_games.push(g.clone());
+            // A lista de jogos do Medidor (perfil base, mapeamento do controle) vê a linha nova.
+            app.apply_pads();
+        }
     }
     if limit {
         if !crate::meter::write_limit(&g) {
@@ -679,7 +685,10 @@ fn energy(ui: &mut Ui, app: &mut App, r: Rect, exe: &str, path: &str) {
         let id = plans[k].0.clone();
         match at {
             Some(i) => app.cfg.meter_games[i].power = id,
-            None => app.cfg.meter_games.push(MeterGame { power: id, ..app.new_meter_game(exe, path) }),
+            None => {
+                app.cfg.meter_games.push(MeterGame { power: id, ..app.new_meter_game(exe, path) });
+                app.apply_pads();
+            }
         }
         app.cfg.save();
     }
@@ -787,12 +796,9 @@ fn full(ui: &mut Ui, app: &mut App, r: Rect, exe: &str, path: &str) {
     if !changed {
         return;
     }
-    // Tudo no padrão é o mesmo que não ter a linha.
+    // Tudo no padrão não cria linha, mas a que existe fica: a aba Tela cheia lista os programas por elas.
     match (at, f.auto || f.kind != 0) {
-        (Some(i), true) => app.cfg.fs_apps[i] = f,
-        (Some(i), false) => {
-            app.cfg.fs_apps.remove(i);
-        }
+        (Some(i), _) => app.cfg.fs_apps[i] = f,
         (None, true) => app.cfg.fs_apps.push(f),
         (None, false) => {}
     }

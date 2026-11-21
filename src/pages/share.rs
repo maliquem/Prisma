@@ -205,9 +205,17 @@ fn tail(p: &Option<Proc>) -> Vec<String> {
 }
 
 fn tail_of(p: &Proc) -> Vec<String> {
-    let Ok(b) = std::fs::read(&p.log) else { return Vec::new() };
-    let start = b.len().saturating_sub(16 * 1024);
-    String::from_utf8_lossy(&b[start..]).lines().filter(|l| !l.trim().is_empty()).map(str::to_string).collect()
+    use std::io::{Read, Seek, SeekFrom};
+    // Só os últimos 16 KB: o log cresce a sessão inteira e isto roda a cada quadro.
+    let mut b = Vec::new();
+    let read = std::fs::File::open(&p.log).and_then(|mut f| {
+        f.seek(SeekFrom::End(-16 * 1024)).or_else(|_| f.seek(SeekFrom::Start(0)))?;
+        f.read_to_end(&mut b)
+    });
+    if read.is_err() {
+        return Vec::new();
+    }
+    String::from_utf8_lossy(&b).lines().filter(|l| !l.trim().is_empty()).map(str::to_string).collect()
 }
 
 /// O convite mais novo que o processo do convite escreveu.
@@ -753,7 +761,8 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
     // O que o pareamento e quem assiste disseram por último.
     let kvm_log = st.kvm.as_ref().map(|k| tail_of(&k.0)).unwrap_or_default();
     let ear_log = st.ear.as_ref().map(|k| tail_of(&k.0)).unwrap_or_default();
-    let side: Vec<String> = tail(&st.pair).into_iter().chain(tail(&st.view)).chain(kvm_log).chain(ear_log).filter(|l| !l.starts_with("Conexão pela internet")).collect();
+    let view_log = tail(&st.view);
+    let side: Vec<String> = tail(&st.pair).into_iter().chain(view_log.iter().cloned()).chain(kvm_log.iter().cloned()).chain(ear_log.iter().cloned()).filter(|l| !l.starts_with("Conexão pela internet")).collect();
     if let Some(last) = side.last() {
         ui.c.text_wrap(rect(rx, y, rw, 36.0), last, 12.0, TEXT2, Weight::Regular);
     }
@@ -762,9 +771,9 @@ fn main_tab(ui: &mut Ui, app: &mut App, st: &mut State, opts: &Opts, new_opts: &
     // Latência de cada modo ligado: a última linha de cada um, por PC, e as últimas de todos.
     let watching = st.view.as_mut().is_some_and(Proc::alive).then(|| st.view_name.clone());
     let lat_of = |lines: &[String]| -> Vec<String> { lines.iter().filter_map(|l| l.strip_prefix(stream::LAT_LINE)).map(lat_words).collect() };
-    let view_lat = if watching.is_some() { lat_of(&tail(&st.view)) } else { Vec::new() };
-    let kvm_lat = st.kvm.as_ref().map(|k| lat_of(&tail_of(&k.0))).unwrap_or_default();
-    let ear_lat = st.ear.as_ref().map(|k| lat_of(&tail_of(&k.0))).unwrap_or_default();
+    let view_lat = if watching.is_some() { lat_of(&view_log) } else { Vec::new() };
+    let kvm_lat = lat_of(&kvm_log);
+    let ear_lat = lat_of(&ear_log);
     let mut lat_log: Vec<String> = Vec::new();
     for (mode, lines) in [("Assistir", &view_lat), ("Mouse e teclado", &kvm_lat), ("Só o som", &ear_lat)] {
         lat_log.extend(lines.iter().map(|l| format!("{} · {}", crate::i18n::tr(mode), l)));

@@ -154,6 +154,7 @@ pub enum Suggestion {
 }
 
 const DAY: u64 = 86400;
+const FORGET_DAYS: u64 = 90;
 
 impl Usage {
     fn path() -> std::path::PathBuf {
@@ -184,6 +185,7 @@ impl Usage {
         if !self.dirty {
             return;
         }
+        self.prune(now());
         let mut s = String::new();
         for (k, v) in &self.map {
             s.push_str(&format!("{k}|{}|{}|{}\n", v.first_seen, v.last_fg, v.fg_secs));
@@ -191,6 +193,12 @@ impl Usage {
         let _ = std::fs::create_dir_all(data_dir());
         let _ = std::fs::write(Self::path(), s);
         self.dirty = false;
+    }
+
+    /// Esquece o programa sem sinal há `FORGET_DAYS`: o mapa guarda todo exe já visto e crescia para sempre.
+    /// Um que ainda roda volta no próximo `note`, com a contagem dos 7 dias recomeçando.
+    fn prune(&mut self, t: u64) {
+        self.map.retain(|_, u| t.saturating_sub(u.first_seen.max(u.last_fg)) < FORGET_DAYS * DAY);
     }
 
     pub fn note(&mut self, groups: &[Group], fg_exe: &str, secs: u64) {
@@ -213,7 +221,7 @@ impl Usage {
     }
 
     pub fn used_today(&self, exe: &str) -> bool {
-        self.map.get(&exe.to_ascii_lowercase()).is_some_and(|u| now() - u.last_fg < DAY)
+        self.map.get(&exe.to_ascii_lowercase()).is_some_and(|u| now().saturating_sub(u.last_fg) < DAY)
     }
 
     /// Uma sugestão por vez, para a tela não virar lista de pendências.
@@ -225,14 +233,42 @@ impl Usage {
                 continue;
             }
             let Some(u) = self.map.get(&g.exe.to_ascii_lowercase()) else { continue };
-            if u.fg_secs > 3600 && t - u.last_fg < 3 * DAY {
+            if u.fg_secs > 3600 && t.saturating_sub(u.last_fg) < 3 * DAY {
                 return Some(Suggestion::Black(g.exe.clone()));
             }
-            let days = (t - u.first_seen.max(u.last_fg)) / DAY;
+            let days = t.saturating_sub(u.first_seen.max(u.last_fg)) / DAY;
             if days >= 7 && g.ram > 100 << 20 {
                 return Some(Suggestion::White(g.exe.clone(), days));
             }
         }
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn relogio_para_tras_nao_da_a_volta() {
+        let mut u = Usage::default();
+        // Carimbo no futuro (relógio voltou): nada de `u64` dando a volta.
+        u.map.insert("a.exe".into(), Use { first_seen: now() + 10 * DAY, last_fg: now() + 10 * DAY, fg_secs: 5 });
+        assert!(u.used_today("A.exe"), "foi usado 'daqui a pouco': conta como de hoje");
+        assert!(!u.used_today("b.exe"));
+    }
+
+    #[test]
+    fn esquece_quem_sumiu() {
+        let t = 1_000 * DAY;
+        let mut u = Usage::default();
+        u.map.insert("velho.exe".into(), Use { first_seen: t - 200 * DAY, last_fg: t - 100 * DAY, fg_secs: 9 });
+        u.map.insert("fundo.exe".into(), Use { first_seen: t - 100 * DAY, last_fg: 0, fg_secs: 0 });
+        u.map.insert("recente.exe".into(), Use { first_seen: t - 200 * DAY, last_fg: t - DAY, fg_secs: 9 });
+        u.map.insert("futuro.exe".into(), Use { first_seen: t + DAY, last_fg: 0, fg_secs: 0 });
+        u.prune(t);
+        let mut left: Vec<_> = u.map.keys().cloned().collect();
+        left.sort();
+        assert_eq!(left, ["futuro.exe", "recente.exe"]);
     }
 }

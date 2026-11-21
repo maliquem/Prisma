@@ -29,6 +29,13 @@ pub fn path_for(exe: &Path) -> PathBuf {
     profiles_dir().join(format!("{stem}.txt"))
 }
 
+/// Copia o perfil `src` para `dst` apontando para o jogo `exe`: o motor só liga um perfil cujo `exe` é o do jogo aberto.
+pub fn copy_for(src: &Path, dst: &Path, exe: &Path) -> std::io::Result<()> {
+    let mut p = Profile::load(src)?;
+    p.exe = exe.into();
+    p.save(dst)
+}
+
 /// Atalhos do motor (`teclas.txt`): `nome=mods,vk`, o mesmo texto do `config::Hotkey`. O app escreve, o motor lê.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Keys {
@@ -309,6 +316,23 @@ pub fn upscale_off(exe: &Path) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn copia_troca_o_exe() {
+        let d = std::env::temp_dir().join(format!("prisma-shd-copia-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        let src = d.join("a.txt");
+        let p = Profile { exe: PathBuf::from(r"C:\Jogos\A.exe"), params: vec![("x".into(), 2.0)], extra: vec!["linha=nova".into()], ..Profile::default() };
+        p.save(&src).unwrap();
+        let dst = d.join("b.txt");
+        copy_for(&src, &dst, Path::new(r"D:\Outro\B.exe")).unwrap();
+        let q = Profile::load(&dst).unwrap();
+        assert_eq!(q.exe, PathBuf::from(r"D:\Outro\B.exe"));
+        assert_eq!((q.params, q.extra), (p.params, p.extra), "o resto vai igual");
+        assert!(copy_for(&d.join("sumiu.txt"), &dst, Path::new("x.exe")).is_err());
+        let _ = std::fs::remove_dir_all(&d);
+    }
 
     #[test]
     fn escolha_do_filtro() {

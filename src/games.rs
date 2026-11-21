@@ -746,10 +746,12 @@ fn scan_indexed(root: &Path, list: Vec<(PathBuf, u64)>, programs: &[(String, Str
         .into_iter()
         .filter_map(|(p, size)| {
             let s = p.to_str()?;
-            if !s.get(..base.len())?.eq_ignore_ascii_case(&base) {
+            // Depois da raiz vem `\`: `D:\Jogos` não é pai de `D:\Jogos Antigos\x.exe`.
+            let rest = s.get(base.len()..)?;
+            if !s[..base.len()].eq_ignore_ascii_case(&base) || !(rest.is_empty() || rest.starts_with('\\')) {
                 return None;
             }
-            let parts: Vec<String> = s[base.len()..].split('\\').filter(|c| !c.is_empty()).map(String::from).collect();
+            let parts: Vec<String> = rest.split('\\').filter(|c| !c.is_empty()).map(String::from).collect();
             let name = parts.last()?.to_lowercase();
             let dirs = &parts[..parts.len() - 1];
             let ok = dirs.len() <= 4 && !dirs.iter().any(|d| crate::sys::stores::SKIP_DIRS.contains(&d.to_lowercase().as_str())) && !crate::sys::stores::NOT_GAME.iter().any(|n| name.contains(n));
@@ -975,6 +977,9 @@ mod tests {
         assert_eq!(by_index[1].folder, root.join("Beta"));
         let beta: Vec<_> = exes.into_iter().filter(|e| e.0.starts_with(root.join("Beta"))).collect();
         assert_eq!(scan_indexed(&root.join("Beta"), beta, &[]).len(), 1);
+        // Pasta irmã com o mesmo começo de nome não é filha da raiz.
+        let irma = vec![(PathBuf::from(format!(r"{}Antigos\jogo.exe", root.display())), 2)];
+        assert!(scan_indexed(&root, irma, &[]).is_empty());
         std::fs::remove_dir_all(&root).ok();
     }
 
