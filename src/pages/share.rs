@@ -263,6 +263,8 @@ fn stop(p: &mut Option<Proc>) {
 fn stop_kvm(st: &mut State) {
     let mut p = st.kvm.take().map(|k| k.0);
     stop(&mut p);
+    // Morto à força, ele não devolve o cursor que escondeu: devolve aqui, antes de o Prisma sair.
+    stream::cursor::restore_orphan();
 }
 
 /// Põe um PC no arranjo das telas, se ele ainda não está: ao lado deste PC, primeiro à

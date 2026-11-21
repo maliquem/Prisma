@@ -16,9 +16,11 @@ const CURSORS: [u32; 16] = [32512, 32513, 32514, 32515, 32516, 32642, 32643, 326
 
 const MARK: &str = "cursor-escondido.txt";
 
-/// Com o serviço, quem esconde é o ajudante SYSTEM, cuja pasta de usuário o Prisma não vê.
+/// Na pasta em que este processo escreve: a do serviço só para o ajudante SYSTEM (para a conta ela
+/// é só leitura, e o Mouse e teclado daqui, aberto pela conta, não deixaria a marca).
 fn mark() -> std::path::PathBuf {
-    super::dir().join(MARK)
+    let dir = if super::SERVICE.load(Ordering::Relaxed) { super::service_dir() } else { super::user_dir() };
+    dir.join(MARK)
 }
 
 /// Esconde o cursor deste PC. Sem efeito se já está escondido.
@@ -26,8 +28,11 @@ pub fn hide() {
     if HIDDEN.swap(true, Ordering::SeqCst) {
         return;
     }
-    let _ = std::fs::create_dir_all(super::dir());
-    let _ = std::fs::write(mark(), std::process::id().to_string());
+    let mark = mark();
+    if let Some(d) = mark.parent() {
+        let _ = std::fs::create_dir_all(d);
+    }
+    let _ = std::fs::write(&mark, std::process::id().to_string());
     // Máscara AND toda em 1 e XOR toda em 0: o pixel fica como está, ou seja, invisível.
     let and = [0xFFu8; 32 * 4];
     let xor = [0u8; 32 * 4];
@@ -61,14 +66,10 @@ fn restore_at(mark: &std::path::Path) {
     let _ = std::fs::remove_file(mark);
 }
 
-/// Para o Prisma: se o processo que escondeu o cursor não roda mais, devolve o cursor.
-///
-/// Com o serviço, a marca é do ajudante, e a pasta dele é só leitura para a conta: quem devolve é o
-/// ajudante, quando abre de novo (sem isso, o Prisma tentaria a cada segundo).
+/// Se o processo que escondeu o cursor não roda mais, devolve o cursor. O Prisma olha a marca da
+/// conta; a do ajudante (pasta só leitura para a conta) o ajudante devolve quando abre de novo.
 pub fn restore_orphan() {
-    if super::dir() == super::user_dir() || super::SERVICE.load(Ordering::Relaxed) {
-        restore_orphan_at(&mark());
-    }
+    restore_orphan_at(&mark());
 }
 
 fn restore_orphan_at(mark: &std::path::Path) {
@@ -87,5 +88,32 @@ fn restore_orphan_at(mark: &std::path::Path) {
     });
     if !alive {
         restore_at(mark);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mark_fica_onde_a_conta_escreve() {
+        // Fora do ajudante, mesmo com o serviço instalado: a pasta da conta, que ela pode gravar.
+        assert!(!super::super::SERVICE.load(Ordering::Relaxed));
+        assert_eq!(mark(), super::super::user_dir().join(MARK));
+    }
+
+    #[test]
+    fn marca_de_processo_vivo_fica_e_de_morto_devolve() {
+        let dir = std::env::temp_dir().join(format!("prisma-cursor-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mark = dir.join(MARK);
+        std::fs::write(&mark, std::process::id().to_string()).unwrap();
+        restore_orphan_at(&mark);
+        assert!(mark.exists(), "o processo que escondeu ainda roda");
+        // Um número que não é de processo nenhum (os números do Windows são múltiplos de 4).
+        std::fs::write(&mark, "4294967293").unwrap();
+        restore_orphan_at(&mark);
+        assert!(!mark.exists(), "processo morto: o cursor volta e a marca sai");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

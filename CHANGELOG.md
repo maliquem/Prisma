@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Share screen**, **Mouse and keyboard**: with the Share screen service installed, the mouse pointer no longer stays invisible after Mouse and keyboard stops or crashes while the mouse is on the other PC's screen; it comes back within a second, or when Prisma closes or opens again. / **Compartilhar tela**, **Mouse e teclado**: com o serviço do Compartilhar tela instalado, o ponteiro do mouse não fica mais invisível depois que o Mouse e teclado para ou cai com o mouse na tela do outro PC; ele volta em até um segundo, ou quando o Prisma fecha ou abre de novo.
+
 ## 1.11.2
 
 - **HDR** tab, **Game HDR**: the HDR mode list of each game (Windows default, Auto HDR, Prisma HDR...) works again; the choice went to the "TV picture mode" list of the calibration card above it, and with several games, the lists of one row answered in another. / Aba **HDR**, **HDR do jogo**: a lista do modo de HDR de cada jogo (Padrão do Windows, Auto HDR, HDR do Prisma...) volta a funcionar; a escolha ia para a lista "Modo de imagem da TV" do cartão de calibração, acima dela, e com vários jogos as listas de uma linha respondiam em outra.
