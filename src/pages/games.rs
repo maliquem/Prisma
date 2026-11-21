@@ -179,7 +179,8 @@ fn list(ui: &mut Ui, app: &mut App, a: Rect, s: &mut St) {
         if ui.is_hover(rr) {
             ui.c.round(rr, 8.0, CARD2);
         }
-        if ui.hit_as(&format!("gm-r{}", r.exe), rr, &r.name, crate::ui::a11y::Role::Item, None) {
+        // Pelo caminho: os jogos de RPG Maker, por exemplo, são todos Game.exe.
+        if ui.hit_as(&format!("gm-r{}", if r.path.is_empty() { &r.exe } else { &r.path }), rr, &r.name, crate::ui::a11y::Role::Item, None) {
             open = Some(r.clone());
         }
         ui.file_icon(&r.path, &r.exe, rect(rr.x + 10.0, top + 13.0, 26.0, 26.0));
@@ -230,8 +231,7 @@ fn rows_of(bit: u16, app: &App, exe: &str) -> usize {
         gm::METER => 7,
         gm::HDR => 2,
         gm::SOUND => 3 + app.cfg.snd_apps.iter().any(|a| a.exe.eq_ignore_ascii_case(exe) && a.pinned) as usize,
-        gm::SHADER | gm::FULL => 2,
-        gm::NVIDIA => 2,
+        gm::SHADER | gm::FULL | gm::NVIDIA => 2,
         _ => 1,
     }
 }
@@ -255,7 +255,7 @@ fn game(ui: &mut Ui, app: &mut App, a: Rect, s: &mut St, g: &(String, String, St
     let extra = gm::extra();
     let row_now = gm::rows(&app.cfg, &extra, on).into_iter().find(|r| r.exe.eq_ignore_ascii_case(exe));
     let funcs = row_now.as_ref().map_or(0, |r| r.funcs);
-    let manual = app.cfg.games.iter().any(|g| g.store.is_empty() && g.exe().eq_ignore_ascii_case(exe));
+    let manual = !path.is_empty() && app.cfg.games.iter().any(|g| g.store.is_empty() && g.path.eq_ignore_ascii_case(path));
     // Duas colunas, cada cartão na mais curta, na ordem de `SECTIONS`.
     let two = w >= 760.0;
     let cw = if two { (w - 16.0) / 2.0 } else { w };
@@ -298,7 +298,7 @@ fn game(ui: &mut Ui, app: &mut App, a: Rect, s: &mut St, g: &(String, String, St
         ui.ask("gm-drop", "Tirar da lista?", "Os ajustes do jogo nas outras abas continuam salvos.");
     }
     if ui.answered("gm-drop") {
-        app.cfg.games.retain(|g| !(g.store.is_empty() && g.exe().eq_ignore_ascii_case(exe)));
+        app.cfg.games.retain(|g| !(g.store.is_empty() && g.path.eq_ignore_ascii_case(path)));
         app.cfg.save();
     }
     let protected = info.is_some_and(|i| i.anti_cheat);
@@ -314,7 +314,7 @@ fn game(ui: &mut Ui, app: &mut App, a: Rect, s: &mut St, g: &(String, String, St
             gm::SOUND => sound(ui, app, r, exe, path, &s.outputs, &s.eq),
             gm::ENERGY => energy(ui, app, r, exe, path),
             gm::PAD => pad(ui, app, r, exe, &extra),
-            gm::SHADER => shader(ui, app, r, path, exe),
+            gm::SHADER => shader(ui, r, path, exe),
             gm::FULL => full(ui, app, r, exe, path),
             _ => nvidia(ui, app, r, exe, s),
         }
@@ -361,10 +361,13 @@ fn reset(app: &mut App, bit: u16, exe: &str) {
     match bit {
         gm::METER => {
             if let Some(g) = app.cfg.meter_games.iter_mut().find(|g| same(&g.exe)) {
+                // Só tira do driver o que havia: sem NVIDIA, um jogo só com o medidor ao abrir não avisa erro.
+                let (limit, preset) = (g.limit_mode != 0, g.preset != 0);
                 (g.limit_mode, g.hdr, g.preset, g.show) = (0, 0, 0, 0);
                 let g = g.clone();
-                crate::meter::write_limit(&g);
-                crate::meter::write_preset(&g);
+                if !((!limit || crate::meter::write_limit(&g)) & (!preset || crate::meter::write_preset(&g))) {
+                    app.toast.info("Não consegui gravar no driver NVIDIA.");
+                }
             }
         }
         gm::ENERGY => {
@@ -385,15 +388,7 @@ fn reset(app: &mut App, bit: u16, exe: &str) {
             app.cfg.snd_apps.retain(|a| !same(&a.exe));
             app.cfg.eq_apps.retain(|(e, _)| !same(e));
         }
-        gm::PAD => {
-            for mut p in crate::sys::remap::profiles().into_iter().filter(|p| p.games.iter().any(|g| same(g))) {
-                p.games.retain(|g| !same(g));
-                if !crate::sys::remap::save(&p) {
-                    app.toast.info("Não deu para salvar o perfil.");
-                }
-            }
-            gm::forget_extra();
-        }
+        gm::PAD => save_pads(app, gm::set_pad(crate::sys::remap::profiles(), exe, None)),
         gm::FULL => app.cfg.fs_apps.retain(|a| !same(&a.exe)),
         _ => {}
     }
@@ -404,7 +399,7 @@ fn meter(ui: &mut Ui, app: &mut App, r: Rect, exe: &str, path: &str, protected: 
     let cap = crate::meter::first_limit(app.refresh_hz());
     let at = app.cfg.meter_games.iter().position(|g| g.exe.eq_ignore_ascii_case(exe));
     // Sem linha ainda, mostra o que a aba Medidor poria ao ver o jogo; só grava quando algo muda.
-    let mut g = at.map(|i| app.cfg.meter_games[i].clone()).unwrap_or_else(|| MeterGame { exe: exe.to_string(), path: path.to_string(), limit_fps: cap, limit_real: true, inject: true, last: crate::config::today(), ..Default::default() });
+    let mut g = at.map(|i| app.cfg.meter_games[i].clone()).unwrap_or_else(|| app.new_meter_game(exe, path));
     let (mut limit, mut preset, mut changed) = (false, false, false);
     let opts = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
     let mut m = g.limit_mode as usize;
@@ -491,7 +486,7 @@ fn energy(ui: &mut Ui, app: &mut App, r: Rect, exe: &str, path: &str) {
         let id = plans[k].0.clone();
         match at {
             Some(i) => app.cfg.meter_games[i].power = id,
-            None => app.cfg.meter_games.push(MeterGame { exe: exe.to_string(), path: path.to_string(), limit_fps: crate::meter::first_limit(app.refresh_hz()), limit_real: true, inject: true, last: crate::config::today(), power: id, ..Default::default() }),
+            None => app.cfg.meter_games.push(MeterGame { power: id, ..app.new_meter_game(exe, path) }),
         }
         app.cfg.save();
     }
@@ -566,33 +561,23 @@ fn pad(ui: &mut Ui, app: &mut App, r: Rect, exe: &str, extra: &gm::Extra) {
     let now = extra.pads.iter().find(|(_, e)| e.eq_ignore_ascii_case(exe)).map(|(p, _)| p.as_str());
     let mut k = now.and_then(|n| extra.pad_names.iter().position(|p| p == n)).map_or(0, |i| i + 1);
     if ui.select("gm-pad", row(ui, r, 0, "Perfil de controle"), &names, &mut k) {
-        // Os perfis inteiros só na mudança: ler todos a cada quadro pesa. Como na aba Controles, o
-        // escolhido passa a abrir com este jogo e os outros dele continuam; "Nenhum" tira o jogo de todos.
-        // shortcut: com o jogo em vários perfis, a caixa mostra só o primeiro; listar todos se alguém usar assim.
-        let pick = k.checked_sub(1).and_then(|i| extra.pad_names.get(i));
-        let mut ok = true;
-        for mut p in crate::sys::remap::profiles() {
-            if Some(&p.name) == pick {
-                p.games = vec![exe.to_lowercase()];
-            } else if pick.is_none() && p.games.iter().any(|g| g.eq_ignore_ascii_case(exe)) {
-                p.games.retain(|g| !g.eq_ignore_ascii_case(exe));
-            } else {
-                continue;
-            }
-            ok &= crate::sys::remap::save(&p);
-        }
-        if !ok {
-            app.toast.info("Não deu para salvar o perfil.");
-        }
-        gm::forget_extra();
+        // Os perfis inteiros só na mudança: ler todos a cada quadro pesa.
+        let pick = k.checked_sub(1).and_then(|i| extra.pad_names.get(i)).map(String::as_str);
+        save_pads(app, gm::set_pad(crate::sys::remap::profiles(), exe, pick));
     }
 }
 
-fn shader(ui: &mut Ui, app: &mut App, r: Rect, path: &str, exe: &str) {
+fn save_pads(app: &mut App, changed: Vec<crate::sys::remap::Profile>) {
+    if !changed.iter().fold(true, |ok, p| crate::sys::remap::save(p) && ok) {
+        app.toast.info("Não deu para salvar o perfil.");
+    }
+    gm::forget_extra();
+}
+
+fn shader(ui: &mut Ui, r: Rect, path: &str, exe: &str) {
     let has = crate::shader_profile::path_for(Path::new(exe)).exists();
     let t = if has { "Este jogo tem perfil de shader, com os filtros e ajustes só dele." } else if path.is_empty() { "Sem perfil de shader." } else { "Sem perfil de shader. Abrir na aba cria um para este jogo." };
     note(ui, r, 0, t, TEXT2);
-    let _ = app;
 }
 
 fn full(ui: &mut Ui, app: &mut App, r: Rect, exe: &str, path: &str) {
@@ -699,7 +684,7 @@ fn scan_sheet(ui: &mut Ui, app: &mut App, s: &mut St) {
         return;
     }
     let label = crate::i18n::tr("Pôr {} na lista").replace("{}", &n.to_string());
-    if ui.button_ex("gm-scan-ok", rect(r.right() - 20.0 - 120.0 - 0.0, by, 120.0 + 0.0, 36.0), &label, true, n > 0) {
+    if ui.button_ex("gm-scan-ok", rect(r.right() - 20.0 - 120.0, by, 120.0, 36.0), &label, true, n > 0) {
         let mut put = 0;
         for f in found.iter().filter(|f| f.on) {
             let c = &f.cands[f.pick.min(f.cands.len() - 1)];

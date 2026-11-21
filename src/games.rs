@@ -14,6 +14,7 @@ use prisma_link::StoreGame;
 
 use crate::config::{Config, HdrGame};
 use crate::sys::autohdr;
+use crate::sys::remap::Profile;
 
 #[derive(Clone, Default, Debug, PartialEq)]
 pub struct Game {
@@ -133,7 +134,7 @@ pub struct Row {
 pub struct Extra {
     /// Nome do arquivo de perfil de shader, sem `.txt`, em minúsculas: o nome do exe sem extensão.
     pub shaders: Vec<String>,
-    /// (perfil de controle, exe).
+    /// (perfil de controle, exe), os padrões primeiro: o primeiro de cada exe é o que abre com ele.
     pub pads: Vec<(String, String)>,
     /// Nomes de todos os perfis de controle, na ordem da aba Controles.
     pub pad_names: Vec<String>,
@@ -152,7 +153,7 @@ pub fn extra() -> Extra {
     let shaders = std::fs::read_dir(crate::shader_profile::profiles_dir()).into_iter().flatten().flatten().filter_map(|e| e.file_name().to_string_lossy().to_lowercase().strip_suffix(".txt").map(str::to_string)).collect();
     let profiles = crate::sys::remap::profiles();
     let pad_names = profiles.iter().map(|p| p.name.clone()).collect();
-    let pads = profiles.into_iter().flat_map(|p| p.games.into_iter().map(move |g| (p.name.clone(), g))).collect();
+    let pads = profiles.iter().filter(|p| p.main).chain(profiles.iter().filter(|p| !p.main)).flat_map(|p| p.games.iter().map(|g| (p.name.clone(), g.clone()))).collect();
     let e = Extra { shaders, pads, pad_names };
     *g = Some((Instant::now(), e.clone()));
     e
@@ -161,6 +162,30 @@ pub fn extra() -> Extra {
 /// Depois de mudar um perfil de fora do config, para a lista já mostrar.
 pub fn forget_extra() {
     *EXTRA.lock().unwrap() = None;
+}
+
+/// O perfil de controle `pick` passa a abrir com o jogo: fica só com ele (como na aba Controles) e vira o
+/// padrão dele; os outros perfis do jogo continuam com ele, sem ser o padrão. None tira o jogo de todos.
+/// Devolve os perfis que mudaram, para gravar.
+pub fn set_pad(profiles: Vec<Profile>, exe: &str, pick: Option<&str>) -> Vec<Profile> {
+    let same = |g: &String| g.eq_ignore_ascii_case(exe);
+    profiles
+        .into_iter()
+        .filter_map(|mut p| {
+            let before = (p.games.clone(), p.main);
+            if Some(p.name.as_str()) == pick {
+                p.games = vec![exe.to_lowercase()];
+                p.main = true;
+            } else if p.games.iter().any(same) {
+                if pick.is_none() {
+                    p.games.retain(|g| !same(g));
+                } else {
+                    p.main = false;
+                }
+            }
+            ((p.games.clone(), p.main) != before).then_some(p)
+        })
+        .collect()
 }
 
 /// O HDR do jogo saiu do padrão.
@@ -694,6 +719,19 @@ mod tests {
         std::fs::write(dir.join("t.exe"), b"MZ....o\0p\0e\0n\0g\0l\x003\x002\0.\0d\0l\0l\0..D3D11.DLL").unwrap();
         assert_eq!(detect(&dir.join("t.exe")), (OPENGL | DX11, true));
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn set_pad_makes_pick_main() {
+        let p = |name: &str, games: &[&str], main: bool| Profile { games: games.iter().map(|g| g.to_string()).collect(), main, ..Profile::empty(name) };
+        // O jogo está em A (padrão); escolher B leva B a padrão e A só deixa de ser.
+        let list = vec![p("A", &["jogo.exe", "x.exe"], true), p("B", &["y.exe"], false), p("C", &["z.exe"], false)];
+        let got = set_pad(list.clone(), "JOGO.exe", Some("B"));
+        assert_eq!(got.iter().map(|p| (p.name.as_str(), p.games.clone(), p.main)).collect::<Vec<_>>(), [("A", vec!["jogo.exe".to_string(), "x.exe".into()], false), ("B", vec!["jogo.exe".into()], true)]);
+        // Nenhum: sai de todos, e só muda quem tinha o jogo.
+        let got = set_pad(list, "jogo.exe", None);
+        assert_eq!(got.len(), 1);
+        assert_eq!((got[0].name.as_str(), got[0].games.clone(), got[0].main), ("A", vec!["x.exe".to_string()], true));
     }
 
     #[test]

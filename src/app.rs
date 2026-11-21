@@ -2888,9 +2888,15 @@ impl App {
         native_fps(capture::cursor_monitor()) as f32
     }
 
+    /// A linha de um jogo visto pela primeira vez no Medidor.
+    pub fn new_meter_game(&self, exe: &str, path: &str) -> crate::config::MeterGame {
+        crate::config::MeterGame { exe: exe.to_string(), path: path.to_string(), limit_fps: crate::meter::first_limit(self.refresh_hz()), limit_real: true, inject: true, last: crate::config::today(), ..Default::default() }
+    }
+
     pub fn add_meter_game(&mut self, exe: &str, path: &str) {
         if !self.cfg.meter_games.iter().any(|g| g.exe.eq_ignore_ascii_case(exe)) {
-            self.cfg.meter_games.push(crate::config::MeterGame { exe: exe.to_string(), path: path.to_string(), limit_fps: crate::meter::first_limit(self.refresh_hz()), limit_real: true, inject: true, last: crate::config::today(), ..Default::default() });
+            let g = self.new_meter_game(exe, path);
+            self.cfg.meter_games.push(g);
             self.apply_pads();
         }
     }

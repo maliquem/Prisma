@@ -550,7 +550,7 @@ pub const DESKTOP: &str = "Desktop";
 pub const BASE: &str = "Base";
 
 impl Profile {
-    fn empty(name: &str) -> Self {
+    pub(crate) fn empty(name: &str) -> Self {
         let stick = Zone { start: 0.15, end: 0.95 };
         let trig = Zone { start: 0.05, end: 0.95 };
         Profile { name: name.into(), games: vec![], main: false, zones: [stick, stick, trig, trig], layers: vec![Layer { name: "Base".into(), parent: None, ls: None, rs: None, binds: vec![], keys: vec![], gyro: None, touch: None }], strings: vec![], turbo: vec![], turbo_key: TURBO_KEY, macros: vec![], texts: vec![], gyro_opt: GyroOpt::default(), curve: [2.0; 2], hair: [false; 2], light: None, light_bt: false, trig: [Trig::Pass; 2], buzz: 0, haptic: Haptic::default(), made_for: pads::Family::Xbox }
