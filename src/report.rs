@@ -20,8 +20,9 @@ use crate::sys::update;
 use crate::ui::edit::TextBox;
 
 const REPO: &str = "maliquem/Prisma";
-/// Medido deslogado, onde o GitHub leva o endereço até a tela de entrar: 6500 passa, 7500 dá erro.
-const URL_MAX: usize = 6000;
+/// Deslogado, o GitHub reembala o endereço em `/login?return_to=` e dá erro 500 quando esse passa de ~7000
+/// (medido em 2026-11-21: 6866 passa, 7541 não). Por isso a conta usa o endereço reembalado.
+const URL_MAX: usize = 6500;
 pub const TEXT_MAX: usize = 4000;
 const LOG_LINES: usize = 30;
 /// GitHub App do Prisma com device flow. Vazio esconde o envio direto.
@@ -161,19 +162,24 @@ impl Form {
         let mut url = address(&full);
         let mut short = false;
         let mut skip = 0;
-        while url.len() > URL_MAX && self.extras && skip < log.len() {
+        while too_long(&url) && self.extras && skip < log.len() {
             skip += 1;
             url = address(&self.body(area, info(skip), false));
         }
-        if url.len() > URL_MAX {
+        if too_long(&url) {
             url = address(&self.body(area, None, false));
         }
-        if url.len() > URL_MAX {
+        if too_long(&url) {
             url = address(&self.body(area, None, true));
             short = true;
         }
         self.ready = Some(Ready { title, full, url, short });
     }
+}
+
+/// Tamanho do endereço dentro do `return_to` do login do GitHub, que é o caso mais longo.
+fn too_long(url: &str) -> bool {
+    "https://github.com/login?return_to=".len() + encode(url).len() > URL_MAX
 }
 
 pub const LEVELS: [&str; 3] = ["Leve", "Moderado", "Grave"];
@@ -443,5 +449,12 @@ mod tests {
         assert_eq!(scrub_names("perfil da ana importado", &names), "<name> importado");
         assert_eq!(scrub_names("«PC-SALA» está pedindo", &names), "«<name>» está pedindo");
         assert_eq!(replace_any_case("İx MARIA", "maria", "<user>", false), "İx <user>");
+    }
+
+    #[test]
+    fn url_limit_counts_login_wrap() {
+        // 4000 caracteres de "%C3" viram ~6700 dentro do return_to: já não cabem.
+        assert!(too_long(&"%C3".repeat(1334)));
+        assert!(!too_long(&"%C3".repeat(1000)));
     }
 }
