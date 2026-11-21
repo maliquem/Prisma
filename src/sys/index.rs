@@ -1299,6 +1299,8 @@ fn search(q: &str, sort: Sort, desc: bool, gen: &AtomicU64, my: u64) -> Option<R
     }
     let mut all: Vec<(u32, u64)> = parts.into_iter().flatten().collect();
     let total = all.len();
+    // shortcut: Nome e Pasta com mais de CAP acertos cortam pela nota antes de ordenar (a chave de
+    // texto de milhões de acertos custaria centenas de MB); trocar se pedirem "todos por nome".
     if !matches!(sort, Sort::Size | Sort::Date) {
         keep_first(&mut all, false);
     }

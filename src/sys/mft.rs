@@ -525,8 +525,9 @@ fn locate(runs: &[(i64, u64)], mut pos: u64, cluster: u64) -> Option<u64> {
     None
 }
 
-/// Registros de extensão com o resto dos dados da tabela (VCN depois do 0), pela lista de atributos.
-fn list_extents(l: &[u8]) -> Vec<u64> {
+/// Pedaços dos dados da tabela depois do VCN 0, pela lista de atributos: (registro, VCN inicial).
+/// Um registro pode ter mais de um pedaço, e cada um aparece na lista.
+fn list_extents(l: &[u8]) -> Vec<(u64, u64)> {
     let mut out = Vec::new();
     let mut i = 0;
     while i + 26 <= l.len() {
@@ -534,8 +535,9 @@ fn list_extents(l: &[u8]) -> Vec<u64> {
         if rl == 0 {
             break;
         }
-        if u32_at(l, i) == 0x80 && u64_at(l, i + 8) != 0 {
-            out.push(u64_at(l, i + 16) & 0xFFFF_FFFF_FFFF);
+        let vcn = u64_at(l, i + 8);
+        if u32_at(l, i) == 0x80 && vcn != 0 {
+            out.push((u64_at(l, i + 16) & 0xFFFF_FFFF_FFFF, vcn));
         }
         i += rl;
     }
@@ -757,14 +759,15 @@ pub(crate) fn read_table(drive: char, p: &Progress, with_times: bool) -> Option<
                 l.truncate(u64_at(a, 48) as usize);
                 l
             };
-            for number in list_extents(&list) {
+            for (number, vcn) in list_extents(&list) {
                 // Extensão ilegível deixaria a tabela pela metade sem aviso: o caminho lento cobre.
                 let mut r = read_span(raw, &mut buf, locate(&runs, number * rec as u64, cluster)?, rec)?;
                 if !fixup(&mut r) {
                     return None;
                 }
+                // Só o pedaço que a entrada aponta: ler o registro inteiro repetiria os outros.
                 for (t, o, l) in attrs(&r) {
-                    if t == 0x80 && r[o + 8] != 0 {
+                    if t == 0x80 && r[o + 8] != 0 && u64_at(&r, o + 16) == vcn {
                         decode_runs(&r[o..o + l], &mut runs);
                     }
                 }
@@ -1207,8 +1210,8 @@ mod tests {
             e
         };
         let l: Vec<u8> = [entry(0x10, 0, 0), entry(0x80, 0, 0), entry(0x80, 900, 17), entry(0x80, 5000, 18)].concat();
-        assert_eq!(list_extents(&l), vec![17, 18]);
-        assert_eq!(list_extents(&l[..40]), Vec::<u64>::new());
+        assert_eq!(list_extents(&l), vec![(17, 900), (18, 5000)]);
+        assert!(list_extents(&l[..40]).is_empty());
         // Byte 5000 da tabela: segundo pedaço (depois de 1 cluster de 4096), cluster 100.
         let runs = [(10, 1), (-1, 1), (100, 2)];
         assert_eq!(locate(&runs, 100, 4096), Some(10 * 4096 + 100));

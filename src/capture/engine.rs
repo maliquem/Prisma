@@ -375,11 +375,13 @@ fn run(mut cfg: Settings, rx: Receiver<Cmd>, status: &Status, info: &std::sync::
         // Janela fechada ou monitor desligado: não chega mais quadro, então a gravação fecha.
         let closed = Arc::new(AtomicBool::new(false));
         let c = closed.clone();
-        let closed_token = item.Closed(&TypedEventHandler::new(move |_, _| {
-            c.store(true, Ordering::Relaxed);
-            let _ = SetEvent(HANDLE(ev as *mut _));
-            Ok(())
-        }))?;
+        let closed_token = item
+            .Closed(&TypedEventHandler::new(move |_, _| {
+                c.store(true, Ordering::Relaxed);
+                let _ = SetEvent(HANDLE(ev as *mut _));
+                Ok(())
+            }))
+            .ok();
         let session = pool.CreateCaptureSession(&item)?;
         let _ = session.SetIsCursorCaptureEnabled(cfg.cursor);
         let _ = session.SetIsBorderRequired(false);
@@ -551,7 +553,9 @@ fn run(mut cfg: Settings, rx: Receiver<Cmd>, status: &Status, info: &std::sync::
 
         stop_audio.store(true, Ordering::Relaxed);
         let _ = pool.RemoveFrameArrived(token);
-        let _ = item.RemoveClosed(closed_token);
+        if let Some(t) = closed_token {
+            let _ = item.RemoveClosed(t);
+        }
         let _ = session.Close();
         let _ = pool.Close();
         enc.drain(&mut out);
