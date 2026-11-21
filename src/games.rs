@@ -258,7 +258,14 @@ pub fn rows(cfg: &Config, extra: &Extra, on: u16) -> Vec<Row> {
     for stem in &extra.shaders {
         mark_row(&mut rows, on, SHADER, &format!("{stem}.exe"), "", true);
     }
+    // Quem só tem perfil e é programa de apoio (vigia de travamento, lançador) não é jogo.
+    rows.retain(|r| r.listed || !is_helper(&r.exe));
     rows
+}
+
+/// Vigia de travamento, lançador, navegador e afins: nunca é um jogo.
+fn is_helper(exe: &str) -> bool {
+    crate::sys::power::not_game(exe) || exe.to_ascii_lowercase().contains("crash")
 }
 
 /// Marca o jogo com o exe (`by_stem`: com o nome sem extensão, o dos perfis de shader), ou o traz.
@@ -860,11 +867,14 @@ mod tests {
         cfg.meter_games.push(crate::config::MeterGame { exe: "visto.exe".into(), ..Default::default() });
         cfg.hdr_games.push(HdrGame { exe: "outro.exe".into(), path: "D:\\o\\outro.exe".into(), mode: autohdr::DEFAULT, ..Default::default() });
         cfg.nv_games.push("outro.exe".into());
+        // O vigia de travamento do Unity tem ajuste no Medidor, mas não é jogo.
+        cfg.meter_games.push(crate::config::MeterGame { exe: "UnityCrashHandler64.exe".into(), show: 1, ..Default::default() });
         let extra = Extra { shaders: vec!["jogo".into()], pads: vec![("Perfil".into(), "pad.exe".into())], ..Default::default() };
         let all = rows(&cfg, &extra, u16::MAX);
         let by = |exe: &str| all.iter().find(|r| r.exe.eq_ignore_ascii_case(exe)).cloned();
         assert_eq!(by("jogo.exe").map(|r| r.funcs), Some(METER | ENERGY | SHADER));
         assert!(by("visto.exe").is_none());
+        assert!(by("UnityCrashHandler64.exe").is_none());
         let outro = by("outro.exe").unwrap();
         assert_eq!((outro.funcs, outro.listed), (NVIDIA, false));
         assert_eq!(by("pad.exe").map(|r| r.funcs), Some(PAD));

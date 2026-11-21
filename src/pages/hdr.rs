@@ -432,6 +432,23 @@ pub fn knobs(ui: &mut Ui, id: &str, p: Rect, cols: usize, h: &mut Hdr, base: Opt
     moved
 }
 
+/// Os modos de HDR que o jogo pode usar. Com HDR próprio sobra deixar o do jogo ou melhorar com o Prisma;
+/// sem ele, os HDR que criam um. A escolha de antes (`current`) fica à vista mesmo fora da lista.
+pub(super) fn mode_options(native: u8, current: u8) -> Vec<(u8, &'static str)> {
+    let all: Vec<(u8, &str)> = autohdr::MODES.iter().filter(|m| m.0 != autohdr::RTX || autohdr::nvidia()).map(|m| (m.0, m.1)).collect();
+    let mut modes: Vec<(u8, &str)> = if autohdr::has_native(native) {
+        vec![(autohdr::DEFAULT, "Deixar nativo"), (autohdr::PRISMA, "Melhorar com o Prisma")]
+    } else if autohdr::lacks_native(native) {
+        all.iter().copied().filter(|m| [autohdr::AUTO, autohdr::AUTO10, autohdr::RTX, autohdr::PRISMA].contains(&m.0)).collect()
+    } else {
+        all.clone()
+    };
+    if let Some(m) = all.iter().find(|m| m.0 == current).filter(|_| !modes.iter().any(|m| m.0 == current)) {
+        modes.insert(0, *m);
+    }
+    modes
+}
+
 fn games_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen) {
     ui.card(r);
     ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 150.0, 22.0), "HDR do jogo");
@@ -442,7 +459,6 @@ fn games_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen) {
         ("Um HDR por jogo. O Auto HDR está desligado nas configurações do Windows: ligue lá para ele valer.", WARN)
     };
     ui.c.text(rect(r.x + 16.0, r.y + 44.0, r.w - 32.0, 22.0), text, 13.0, color, Align::Left, Weight::Regular);
-    let all: Vec<(u8, &str)> = autohdr::MODES.iter().filter(|m| m.0 != autohdr::RTX || autohdr::nvidia()).map(|m| (m.0, m.1)).collect();
     let calibrated = Hdr::from_profile(app.cfg.hdr_profiles.iter().rfind(|p| p.screen == s.name));
     let (mut change, mut remove, mut tuned, mut launch, mut hotkey_changed) = (None, None, false, None, false);
     let (mut mark, mut way, mut reset, mut ac, mut mods_off) = (None, None, None, None, None);
@@ -460,18 +476,7 @@ fn games_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen) {
         if ui.select(&format!("hdr-game{i}"), rect(r.x + 52.0, y + 4.0, r.w - 368.0, 36.0), &names, &mut at) {
             PICK.set((order[at], app.cfg.hdr_games.len()));
         }
-        // Com HDR próprio sobra deixar o do jogo ou melhorar com o Prisma; sem ele, os HDR que criam um.
-        let mut modes: Vec<(u8, &str)> = if autohdr::has_native(g.native) {
-            vec![(autohdr::DEFAULT, "Deixar nativo"), (autohdr::PRISMA, "Melhorar com o Prisma")]
-        } else if autohdr::lacks_native(g.native) {
-            all.iter().copied().filter(|m| [autohdr::AUTO, autohdr::AUTO10, autohdr::RTX, autohdr::PRISMA].contains(&m.0)).collect()
-        } else {
-            all.clone()
-        };
-        // A escolha de antes fica à vista mesmo fora da lista.
-        if let Some(m) = all.iter().find(|m| m.0 == g.mode).filter(|_| !modes.iter().any(|m| m.0 == g.mode)) {
-            modes.insert(0, *m);
-        }
+        let modes = mode_options(g.native, g.mode);
         let options: Vec<String> = modes.iter().map(|m| m.1.to_string()).collect();
         let mut sel = modes.iter().position(|m| m.0 == g.mode).unwrap_or(0);
         if ui.select(&format!("hdr-gmode{i}"), rect(r.right() - 300.0, y + 4.0, 240.0, 36.0), &options, &mut sel) {

@@ -2916,7 +2916,8 @@ impl App {
     }
 
     pub fn add_meter_game(&mut self, exe: &str, path: &str) {
-        if !self.cfg.meter_games.iter().any(|g| g.exe.eq_ignore_ascii_case(exe)) {
+        // O vigia de travamento e o lançador nascem com o jogo e podem pegar o foco: não ganham linha.
+        if !not_meter_game(exe) && !self.cfg.meter_games.iter().any(|g| g.exe.eq_ignore_ascii_case(exe)) {
             let g = self.new_meter_game(exe, path);
             self.cfg.meter_games.push(g);
             self.apply_pads();
