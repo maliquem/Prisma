@@ -2936,6 +2936,7 @@ Proporção	Aspect ratio
 Manter (barras pretas)	Keep (black bars)
 Esticar	Stretch
 Escala inteira	Integer scale
+Manter: o jogo que aceita mudar de tamanho ocupa o monitor inteiro na proporção dele; o de tamanho fixo fica com barras pretas. Esticar cobre o monitor sempre.	Keep: a game that can change size fills the whole monitor in its own aspect ratio; a fixed-size one gets black bars. Stretch always covers the monitor.
 Filtros abertos	Open filters
 Baixar filtros	Download filters
 Baixados	Downloaded

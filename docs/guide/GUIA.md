@@ -259,7 +259,7 @@ Conta como jogo o programa em foco que cobre a tela e usa a GPU ele mesmo, ou qu
 
 Deixa a janela em foco em tela cheia sem bordas. Atalho: Ctrl + Alt + F. Quem usa uma vez entra numa lista salva, onde dá para marcar Automático e aplicar sempre que o programa abrir.
 
-- **Proporção:** **Manter (barras pretas)**, o padrão, põe o jogo no meio do monitor no formato dele, com barras pretas nas sobras (um jogo 800×600 num monitor 16:9 fica com barras dos lados). **Esticar** cobre o monitor inteiro, como antes. **Escala inteira** usa o maior múltiplo do tamanho do jogo que cabe (640×480 vira 1280×960 num 1080p), com pixels todos do mesmo tamanho; jogo maior que o monitor cai para Manter.
+- **Proporção:** **Manter (barras pretas)**, o padrão, põe o jogo no meio do monitor no formato dele, com barras pretas nas sobras (um jogo 800×600 num monitor 16:9 fica com barras dos lados); o jogo cuja janela aceita mudar de tamanho ocupa o monitor inteiro e desenha na proporção dele (num ultrawide 21:9, sem barras de 16:9). **Esticar** cobre o monitor inteiro, como antes. **Escala inteira** usa o maior múltiplo do tamanho do jogo que cabe (640×480 vira 1280×960 num 1080p), com pixels todos do mesmo tamanho; jogo maior que o monitor cai para Manter.
 - **Filtro de upscale:** quando o jogo em janela é menor que o monitor, o Prisma pode aumentar a imagem com um filtro em vez do esticado borrado do Windows. Cada tipo de jogo tem o seu filtro, e o tipo de cada programa se escolhe na lista **Programas salvos** (o padrão é 3D):
   - **3D:** **AMD FSR 1** e **NVIDIA NIS** (nítidos) ou **Lanczos** (suave).
   - **2D com 3D** (sprites sobre cenário 3D): **AMD FSR 1**, **Lanczos** ou **Pixels nítidos**.

@@ -2930,6 +2930,7 @@ Proporção	宽高比
 Manter (barras pretas)	保持（黑边）
 Esticar	拉伸
 Escala inteira	整数缩放
+Manter: o jogo que aceita mudar de tamanho ocupa o monitor inteiro na proporção dele; o de tamanho fixo fica com barras pretas. Esticar cobre o monitor sempre.	保持：可以改变大小的游戏会以自身的宽高比占满整个显示器；固定大小的游戏会加上黑边。拉伸总是占满显示器。
 Filtros abertos	开源滤镜
 Baixar filtros	下载滤镜
 Baixados	已下载

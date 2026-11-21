@@ -259,7 +259,7 @@ A game is the program in focus that covers the screen and uses the GPU itself, o
 
 Makes the window in focus borderless fullscreen. Shortcut: Ctrl + Alt + F. Anything you use it on goes into a saved list, where you can check Automatic to apply it whenever the program opens.
 
-- **Aspect ratio:** **Keep (black bars)**, the default, centers the game on the monitor in its own shape, with black bars in the leftover space (an 800×600 game on a 16:9 monitor gets bars on the sides). **Stretch** covers the whole monitor, as before. **Integer scale** uses the largest multiple of the game's size that fits (640×480 becomes 1280×960 on 1080p), with every pixel the same size; a game larger than the monitor falls back to Keep.
+- **Aspect ratio:** **Keep (black bars)**, the default, centers the game on the monitor in its own shape, with black bars in the leftover space (an 800×600 game on a 16:9 monitor gets bars on the sides); a game whose window can change size fills the whole monitor and draws in its own aspect ratio (on a 21:9 ultrawide, no 16:9 bars). **Stretch** covers the whole monitor, as before. **Integer scale** uses the largest multiple of the game's size that fits (640×480 becomes 1280×960 on 1080p), with every pixel the same size; a game larger than the monitor falls back to Keep.
 - **Upscale filter:** when the windowed game is smaller than the monitor, Prisma can enlarge the image with a filter instead of the blurry Windows stretch. Each kind of game has its own filter, and you pick each program's kind in the **Saved programs** list (3D by default):
   - **3D:** **AMD FSR 1** and **NVIDIA NIS** (sharp) or **Lanczos** (smooth).
   - **2D + 3D** (sprites over 3D scenery): **AMD FSR 1**, **Lanczos** or **Sharp pixels**.
