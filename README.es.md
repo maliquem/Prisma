@@ -99,6 +99,7 @@ Todos se pueden cambiar en el programa. Si la combinación nueva ya es de otra f
 | Subir o bajar el límite | Ctrl + Alt + ↑ o ↓ |
 | Iniciar o detener el registro de datos | Ctrl + Alt + 4 |
 | Foto de la pantalla entera | Ctrl + Alt + A |
+| Foto del monitor del ratón | Ctrl + Alt + K |
 | Foto de la ventana en foco | Ctrl + Alt + J |
 | Grabar Ventana y detener | Ctrl + Alt + R |
 | Grabar Pantalla y detener | Ctrl + Alt + T |

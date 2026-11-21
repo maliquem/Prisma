@@ -99,6 +99,7 @@ Prisma 每天检查一次本页面。有新版本且你打开窗口时，它会�
 | 提高或降低限制 | Ctrl + Alt + ↑ 或 ↓ |
 | 开始或停止数据日志 | Ctrl + Alt + 4 |
 | 全屏截图 | Ctrl + Alt + A |
+| 鼠标所在显示器截图 | Ctrl + Alt + K |
 | 当前窗口截图 | Ctrl + Alt + J |
 | 录制窗口并停止 | Ctrl + Alt + R |
 | 录制屏幕并停止 | Ctrl + Alt + T |

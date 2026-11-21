@@ -198,6 +198,12 @@ impl ToneMap {
     }
 
     pub fn draw(&self, ctx: &ID3D11DeviceContext, dev: &ID3D11Device, src: &ID3D11Texture2D, w: u32, h: u32) -> Result<()> {
+        self.draw_at(ctx, dev, src, w, h, 0, 0)
+    }
+
+    /// Como `draw`, com o ponto (`x`, `y`) do quadro `w` × `h` no canto do alvo: corta o que fica antes.
+    #[allow(clippy::too_many_arguments)]
+    pub fn draw_at(&self, ctx: &ID3D11DeviceContext, dev: &ID3D11Device, src: &ID3D11Texture2D, w: u32, h: u32, x: u32, y: u32) -> Result<()> {
         unsafe {
             let mut cache = self.cached.borrow_mut();
             let key = src.as_raw();
@@ -217,7 +223,7 @@ impl ToneMap {
                 }
             };
             ctx.OMSetRenderTargets(Some(&[Some(self.rtv.clone())]), None);
-            let vp = D3D11_VIEWPORT { Width: w as f32, Height: h as f32, MaxDepth: 1.0, ..Default::default() };
+            let vp = D3D11_VIEWPORT { TopLeftX: -(x as f32), TopLeftY: -(y as f32), Width: w as f32, Height: h as f32, MaxDepth: 1.0, ..Default::default() };
             ctx.RSSetViewports(Some(&[vp]));
             ctx.IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             ctx.IASetInputLayout(None);

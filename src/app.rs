@@ -14,7 +14,7 @@ use windows::Win32::Graphics::Direct2D::Common::*;
 use windows::Win32::Graphics::Dwm::*;
 use windows::Win32::Graphics::Gdi::*;
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows::Win32::UI::HiDpi::{AdjustWindowRectExForDpi, GetDpiForWindow};
+use windows::Win32::UI::HiDpi::{AdjustWindowRectExForDpi, GetDpiForWindow, GetSystemMetricsForDpi};
 use windows::Win32::UI::Input::KeyboardAndMouse::*;
 use windows::Win32::UI::Shell::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
@@ -245,7 +245,7 @@ fn hk_page(id: i32) -> Page {
         HK_WIDGET => Page::Widget,
         HK_OPT => Page::Optimize,
         HK_FORCE | HK_EXPLORER | HK_SHOW => Page::Adjust,
-        HK_SHOT | HK_SHOT_FULL | HK_SHOT_WIN | HK_REC | HK_REC_FULL | HK_REPLAY => Page::Capture,
+        HK_SHOT | HK_SHOT_FULL | HK_SHOT_WIN | HK_SHOT_MON | HK_REC | HK_REC_FULL | HK_REPLAY => Page::Capture,
         HK_METER_C | HK_METER_F | HK_METER_O | HK_LIMIT_T | HK_LIMIT_UP | HK_LIMIT_DOWN | HK_LOG | HK_METER_KEYS => Page::Meter,
         HK_FIND => Page::Search,
         HK_MACRO => Page::Controllers,
@@ -281,6 +281,7 @@ const HK_SHOW: i32 = 25;
 const HK_SHADER: i32 = 26;
 const HK_SHADER_MENU: i32 = 27;
 const HK_HDR_MENU: i32 = 28;
+const HK_SHOT_MON: i32 = 29;
 const HK_VOL_UP: i32 = 10;
 const HK_VOL_DOWN: i32 = 11;
 const HK_MUTE: i32 = 12;
@@ -331,6 +332,8 @@ pub struct App {
     refreshed_page: Option<Page>,
     /// Página e altura da barra lateral no último desenho: mudou, a barra rola até o item da página.
     pub side_seen: Option<(Page, f32)>,
+    /// Botões da barra de título no último desenho: lá o clique é do Prisma, no resto arrasta a janela.
+    pub title_hot: Vec<crate::ui::gfx::Rect>,
     pub full: Fullscreenizer,
     pub detector: Detector,
     pub widget: Widget,
@@ -738,6 +741,7 @@ pub fn start(background: bool) {
             asked: HashSet::new(),
             last_tick: Instant::now(),
             side_seen: None,
+            title_hot: Vec::new(),
             last_save: Instant::now(),
             capturing_keys: false,
             remote_front: false,
@@ -1262,7 +1266,7 @@ impl App {
     pub fn register_hotkeys(&mut self) {
         self.unhook_force_key();
         unsafe {
-            for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER, HK_FIND, HK_MACRO, HK_SHOW, HK_SHADER, HK_SHADER_MENU, HK_HDR_MENU, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE] {
+            for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_SHOT_MON, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER, HK_FIND, HK_MACRO, HK_SHOW, HK_SHADER, HK_SHADER_MENU, HK_HDR_MENU, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE] {
                 let _ = UnregisterHotKey(Some(self.hub), id);
             }
             for i in 0..SND_KEYS_MAX as i32 {
@@ -1341,6 +1345,7 @@ impl App {
             (HK_SHOT, c.hk_shot, "Foto da área", true),
             (HK_SHOT_FULL, c.hk_shot_full, "Foto da tela inteira", true),
             (HK_SHOT_WIN, c.hk_shot_win, "Foto da janela", true),
+            (HK_SHOT_MON, c.hk_shot_mon, "Foto do monitor do mouse", true),
             (HK_REC, c.hk_record, "Gravar janela", true),
             (HK_REC_FULL, c.hk_record_full, "Gravar tela", true),
             (HK_METER_C, c.hk_meter_compact, "Medidor compacto", true),
@@ -1391,6 +1396,7 @@ impl App {
             HK_SHOT => &mut c.hk_shot,
             HK_SHOT_FULL => &mut c.hk_shot_full,
             HK_SHOT_WIN => &mut c.hk_shot_win,
+            HK_SHOT_MON => &mut c.hk_shot_mon,
             HK_REC => &mut c.hk_record,
             HK_REC_FULL => &mut c.hk_record_full,
             HK_METER_C => &mut c.hk_meter_compact,
@@ -1448,7 +1454,7 @@ impl App {
         if on {
             self.unhook_force_key();
             unsafe {
-                for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER, HK_FIND, HK_MACRO, HK_SHOW, HK_SHADER, HK_HDR_MENU] {
+                for id in [HK_FULL, HK_WIDGET, HK_OPT, HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_SHOT_MON, HK_REC, HK_REC_FULL, HK_METER_C, HK_METER_F, HK_METER_O, HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, HK_LOG, HK_METER_KEYS, HK_REPLAY, HK_FORCE, HK_EXPLORER, HK_FIND, HK_MACRO, HK_SHOW, HK_SHADER, HK_HDR_MENU] {
                     let _ = UnregisterHotKey(Some(self.hub), id);
                 }
                 // Os da página Atalhos também: a combinação gravada não pode abrir o programa.
@@ -1504,6 +1510,7 @@ impl App {
             HK_SHOT => self.take_shot(),
             HK_SHOT_FULL => self.take_full_shot(),
             HK_SHOT_WIN => self.take_window_shot(),
+            HK_SHOT_MON => self.take_monitor_shot(),
             HK_METER_C => self.meter_view(crate::meter::VIEW_COMPACT),
             HK_METER_F => self.meter_view(crate::meter::VIEW_FULL),
             HK_METER_O => self.meter_view(crate::meter::VIEW_OFF),
@@ -2219,16 +2226,12 @@ impl App {
         }
     }
 
-    /// Abre o editor de foto com a janela em foco já selecionada.
+    /// Abre o editor de foto com a área cliente da janela em foco já selecionada, sem a barra de título.
     fn take_window_shot(&mut self) {
-        use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_EXTENDED_FRAME_BOUNDS};
         let fg = unsafe { GetForegroundWindow() };
-        let mut r = RECT::default();
-        let size = std::mem::size_of::<RECT>() as u32;
-        let found = !fg.is_invalid() && unsafe { DwmGetWindowAttribute(fg, DWMWA_EXTENDED_FRAME_BOUNDS, &mut r as *mut RECT as *mut _, size) }.is_ok();
-        if !found {
+        let Some(r) = (!fg.is_invalid()).then(|| capture::client_rect(fg).or_else(|| capture::frame_rect(fg))).flatten() else {
             return self.take_shot();
-        }
+        };
         let mon = unsafe { MonitorFromWindow(fg, MONITOR_DEFAULTTONEAREST) };
         match capture::grab(mon) {
             Ok(f) => capture::shot::open(f, mon, self.cfg.cap_dir.clone(), self.cfg.shot_hdr, Some(r)),
@@ -2249,8 +2252,18 @@ impl App {
         Some(path)
     }
 
+    /// Todos os monitores numa foto só, como a área de trabalho.
     fn take_full_shot(&mut self) {
-        let Ok(f) = capture::grab(capture::cursor_monitor()) else {
+        self.save_shot(capture::grab_all());
+    }
+
+    fn take_monitor_shot(&mut self) {
+        self.save_shot(capture::grab(capture::cursor_monitor()));
+    }
+
+    /// Salva a foto na pasta de capturas (e o JPEG XR, se pedido) e copia.
+    fn save_shot(&mut self, f: windows::core::Result<capture::Frame>) {
+        let Ok(f) = f else {
             self.toast.info("Não consegui capturar a tela");
             return;
         };
@@ -3276,6 +3289,7 @@ impl App {
             let Ok(rt) = crate::ui::gfx::factory().CreateWicBitmapRenderTarget(&bmp, &props) else { return };
             let canvas = Canvas::new(rt.clone());
             let mut st = UiState::default();
+            st.top = if popup { 0.0 } else { pages::TITLE_H };
             st.view_w = w;
             st.view_h = h;
             // `--test-scroll=key:px` desce uma área rolável antes da foto.
@@ -3294,7 +3308,8 @@ impl App {
                 }
                 if let Some((x, y)) = click {
                     st.mx = x;
-                    st.my = y;
+                    // O clique vem em px da foto, que tem a barra de título em cima.
+                    st.my = y - st.top;
                     st.pressed = pass == first;
                     st.down = pass == first;
                     st.released = pass == first + 1;
@@ -3311,6 +3326,7 @@ impl App {
                     pages::search::draw_popup(&mut ui, self, rect(0.0, 0.0, w, h));
                     ui.end();
                 } else {
+                    let h = h - ui.s.top;
                     let h = if ui.s.pad { h - crate::ui::PAD_BAR } else { h };
                     ui.s.view_h = h;
                     pages::draw(ui, self, rect(0.0, 0.0, w, h));
@@ -4181,7 +4197,8 @@ impl App {
             let _ = AdjustWindowRectExForDpi(&mut r, WS_OVERLAPPEDWINDOW, false, WINDOW_EX_STYLE(0), dpi);
             // No centro da tela onde está o mouse, sem passar da área livre (fora a barra de tarefas).
             let (x, y, ww, wh) = centered(work_area_at_cursor(), r.right - r.left, r.bottom - r.top, (16.0 * scale) as i32);
-            let _ = SetWindowPos(h, None, x, y, ww, wh, SWP_NOZORDER);
+            // SWP_FRAMECHANGED: o WM_NCCALCSIZE tira a barra de título do Windows (a do Prisma fica no lugar).
+            let _ = SetWindowPos(h, None, x, y, ww, wh, SWP_NOZORDER | SWP_FRAMECHANGED);
             let mut c = RECT::default();
             let _ = GetClientRect(h, &mut c);
             let rt = hwnd_target(h, c.right as u32, c.bottom as u32, dpi as f32).expect("alvo de desenho");
@@ -4190,7 +4207,11 @@ impl App {
                 hwnd: h,
                 rt,
                 canvas: Canvas::new(base),
-                ui: UiState::default(),
+                ui: {
+                    let mut ui = UiState::default();
+                    ui.top = pages::TITLE_H;
+                    ui
+                },
                 scale,
                 w: c.right as f32 / scale,
                 h: c.bottom as f32 / scale,
@@ -4221,7 +4242,8 @@ impl App {
             m.rt.BeginDraw();
             m.ui.view_w = w;
             let ui = crate::ui::Ui::begin(&m.canvas, &mut m.ui);
-            // A faixa de dicas do controle fica embaixo, fora da página.
+            // A página fica abaixo da barra de título, e a faixa de dicas do controle embaixo, fora dela.
+            let h = h - ui.s.top;
             let h = if ui.s.pad { h - crate::ui::PAD_BAR } else { h };
             ui.s.view_h = h;
             m.canvas.clear(BG);
@@ -4782,7 +4804,7 @@ fn pad_off(a: &mut App, mouse: bool) {
 
 /// Leva o cursor ao ponto `xy` da janela (em px sem escala), com a marca do Prisma.
 fn cursor_to(m: &MainWin, (x, y): (f32, f32)) {
-    let mut p = POINT { x: (x * m.scale) as i32, y: (y * m.scale) as i32 };
+    let mut p = POINT { x: (x * m.scale) as i32, y: ((y + m.ui.top) * m.scale) as i32 };
     unsafe {
         let _ = ClientToScreen(m.hwnd, &mut p);
     }
@@ -4793,7 +4815,7 @@ fn mouse_xy(a: &mut App, l: LPARAM) {
     if let Some(mw) = &mut a.main {
         let (x, y) = ((l.0 & 0xffff) as i16 as f32, ((l.0 >> 16) & 0xffff) as i16 as f32);
         mw.ui.mx = x / mw.scale;
-        mw.ui.my = y / mw.scale;
+        mw.ui.my = y / mw.scale - mw.ui.top;
     }
 }
 
@@ -4822,6 +4844,12 @@ fn typed_char(ui: &mut UiState, owner: HWND, c: u32) {
         c if c >= 32 => ui.typed.extend(char::from_u32(c)),
         _ => {}
     }
+}
+
+/// Grossura da borda de redimensionar da janela, em px.
+unsafe fn frame_px(h: HWND) -> i32 {
+    let dpi = GetDpiForWindow(h);
+    GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi) + GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi)
 }
 
 unsafe fn dark_caption(h: HWND) {
@@ -5027,6 +5055,16 @@ unsafe extern "system" fn main_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
             return r;
         }
     }
+    // Sem a barra de título do Windows: a janela toda é da página, menos as bordas de redimensionar
+    // dos lados e de baixo. Maximizada, o Windows põe a janela além da tela pela grossura da borda,
+    // então o topo desce o mesmo tanto. Fora do estado: chega dentro do `show_main`.
+    if m == WM_NCCALCSIZE && w.0 != 0 {
+        let p = &mut *(l.0 as *mut NCCALCSIZE_PARAMS);
+        let top = p.rgrc[0].top;
+        let r = DefWindowProcW(h, m, w, l);
+        p.rgrc[0].top = top + if IsZoomed(h).as_bool() { frame_px(h) } else { 0 };
+        return r;
+    }
     let r = with(|a| {
         match m {
             WM_PAINT => {
@@ -5037,6 +5075,75 @@ unsafe extern "system" fn main_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
                 Some(0)
             }
             WM_ERASEBKGND => Some(1),
+            WM_NCHITTEST => {
+                let d = DefWindowProcW(h, m, w, l);
+                if d.0 != HTCLIENT as isize {
+                    return Some(d.0);
+                }
+                let mw = a.main.as_ref()?;
+                let mut p = POINT { x: (l.0 & 0xffff) as i16 as i32, y: ((l.0 >> 16) & 0xffff) as i16 as i32 };
+                let _ = ScreenToClient(h, &mut p);
+                let (x, y) = (p.x as f32 / mw.scale, p.y as f32 / mw.scale - mw.ui.top);
+                // A borda de cima, que a barra do Prisma cobre, continua redimensionando.
+                let edge = frame_px(h);
+                if !IsZoomed(h).as_bool() && p.y < edge {
+                    let w_px = (mw.w * mw.scale) as i32;
+                    let hit = if p.x < edge * 2 {
+                        HTTOPLEFT
+                    } else if p.x >= w_px - edge * 2 {
+                        HTTOPRIGHT
+                    } else {
+                        HTTOP
+                    };
+                    return Some(hit as isize);
+                }
+                if let Some(i) = pages::caption_button(mw.w, x, y) {
+                    return Some([HTMINBUTTON, HTMAXBUTTON, HTCLOSE][i] as isize);
+                }
+                let free = y < 0.0 && !a.title_hot.iter().any(|r| r.contains(x, y));
+                Some((if free { HTCAPTION } else { HTCLIENT }) as isize)
+            }
+            // O mouse sobre a barra de título também acende os botões dela.
+            WM_NCMOUSEMOVE => {
+                if let Some(mw) = &mut a.main {
+                    let mut p = POINT { x: (l.0 & 0xffff) as i16 as i32, y: ((l.0 >> 16) & 0xffff) as i16 as i32 };
+                    let _ = ScreenToClient(h, &mut p);
+                    mw.ui.mx = p.x as f32 / mw.scale;
+                    mw.ui.my = p.y as f32 / mw.scale - mw.ui.top;
+                }
+                // Avisa quando o mouse sai pela barra: o botão de fechar não fica aceso.
+                let mut t = TRACKMOUSEEVENT { cbSize: std::mem::size_of::<TRACKMOUSEEVENT>() as u32, dwFlags: TME_LEAVE | TME_NONCLIENT, hwndTrack: h, dwHoverTime: 0 };
+                let _ = TrackMouseEvent(&mut t);
+                a.invalidate();
+                None
+            }
+            WM_NCMOUSELEAVE => {
+                // Também chega ao passar da barra para a página: aí o WM_MOUSEMOVE já cuida.
+                let mut p = POINT::default();
+                let _ = GetCursorPos(&mut p);
+                if WindowFromPoint(p) == h {
+                    return None;
+                }
+                if let Some(mw) = &mut a.main {
+                    mw.ui.mx = -1.0;
+                    mw.ui.my = -1.0e4;
+                }
+                a.invalidate();
+                None
+            }
+            // Minimizar, maximizar e fechar são desenhados pelo Prisma: o Windows não pode pintar os dele.
+            WM_NCLBUTTONDOWN | WM_NCLBUTTONDBLCLK if matches!(w.0 as u32, HTMINBUTTON | HTMAXBUTTON | HTCLOSE) => Some(0),
+            WM_NCLBUTTONUP if matches!(w.0 as u32, HTMINBUTTON | HTMAXBUTTON | HTCLOSE) => {
+                let cmd = match w.0 as u32 {
+                    HTMINBUTTON => SC_MINIMIZE,
+                    HTMAXBUTTON if IsZoomed(h).as_bool() => SC_RESTORE,
+                    HTMAXBUTTON => SC_MAXIMIZE,
+                    _ => SC_CLOSE,
+                };
+                // Postado: o fechar passa pelo WM_DESTROY, que precisa do estado livre.
+                let _ = PostMessageW(Some(h), WM_SYSCOMMAND, WPARAM(cmd as usize), LPARAM(0));
+                Some(0)
+            }
             WM_SIZE => {
                 if let Some(mw) = &mut a.main {
                     let (pw, ph) = ((l.0 & 0xffff) as u32, ((l.0 >> 16) & 0xffff) as u32);

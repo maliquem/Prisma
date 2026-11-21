@@ -99,6 +99,7 @@ Todos podem ser trocados no programa. Se a combinação nova já é de outra fun
 | Aumentar ou diminuir o limite | Ctrl + Alt + ↑ ou ↓ |
 | Ligar ou desligar o registro de dados | Ctrl + Alt + 4 |
 | Foto da tela inteira | Ctrl + Alt + A |
+| Foto do monitor do mouse | Ctrl + Alt + K |
 | Foto da janela em foco | Ctrl + Alt + J |
 | Gravar Janela e parar | Ctrl + Alt + R |
 | Gravar Tela e parar | Ctrl + Alt + T |

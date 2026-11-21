@@ -99,6 +99,7 @@ All of them can be changed in the program. If the new combination already belong
 | Raise or lower the limit | Ctrl + Alt + ↑ or ↓ |
 | Start or stop the data log | Ctrl + Alt + 4 |
 | Full screen photo | Ctrl + Alt + A |
+| Photo of the monitor under the mouse | Ctrl + Alt + K |
 | Focused window photo | Ctrl + Alt + J |
 | Record Window and stop | Ctrl + Alt + R |
 | Record Screen and stop | Ctrl + Alt + T |

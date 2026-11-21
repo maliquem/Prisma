@@ -21,7 +21,7 @@ use windows::Win32::System::WinRT::Direct3D11::*;
 use super::encoder::Encoder;
 use super::hdr::ToneMap;
 use super::mux::{Codec, Mp4, Pkt};
-use super::{d3d, monitor_color, monitor_item, sound, window_item};
+use super::{client_box, d3d, monitor_color, monitor_item, sound, window_item};
 
 #[derive(Clone)]
 pub struct Settings {
@@ -337,17 +337,19 @@ fn run(mut cfg: Settings, rx: Receiver<Cmd>, status: &Status, info: &std::sync::
         if let Ok(mt) = d.ctx.cast::<ID3D11Multithread>() {
             let _ = mt.SetMultithreadProtected(true);
         }
-        let (item, mon) = match cfg.target {
+        let (item, mon, win) = match cfg.target {
             Target::Monitor(m) => {
                 let h = windows::Win32::Graphics::Gdi::HMONITOR(m as *mut _);
-                (monitor_item(h)?, h)
+                (monitor_item(h)?, h, None)
             }
             Target::Window(w) => {
                 let h = HWND(w as *mut _);
                 let m = windows::Win32::Graphics::Gdi::MonitorFromWindow(h, windows::Win32::Graphics::Gdi::MONITOR_DEFAULTTONEAREST);
-                (window_item(h)?, m)
+                (window_item(h)?, m, Some(h))
             }
         };
+        // Janela: grava só a área cliente, sem barra de título nem borda; ela é medida de novo a cada quadro.
+        let client = |w: u32, h: u32| win.map_or((0, 0, w, h), |hw| client_box(hw, w, h));
         #[allow(unused_mut)]
         let mut color = monitor_color(mon);
         #[cfg(debug_assertions)]
@@ -355,7 +357,8 @@ fn run(mut cfg: Settings, rx: Receiver<Cmd>, status: &Status, info: &std::sync::
             color.hdr = true;
         }
         let size = item.Size()?;
-        let (src_w, src_h) = (even(size.Width as u32), even(size.Height as u32));
+        let first = client(size.Width as u32, size.Height as u32);
+        let (src_w, src_h) = (even(first.2), even(first.3));
         let out_h = if cfg.out_h == 0 || cfg.out_h >= src_h { src_h } else { even(cfg.out_h) };
         let out_w = even((src_w as u64 * out_h as u64 / src_h as u64) as u32);
         let hdr10 = cfg.hdr10 && color.hdr;
@@ -394,6 +397,7 @@ fn run(mut cfg: Settings, rx: Receiver<Cmd>, status: &Status, info: &std::sync::
         d.dev.CreateRenderTargetView(&mid, None, Some(&mut mid_rtv))?;
         let mid_rtv = mid_rtv.unwrap();
         let mut content = size;
+        let mut last_box = first;
         let tone = if color.hdr { Some(ToneMap::new(&d.dev, &mid, hdr10, color.white_nits)?) } else { None };
         let mut conv = Converter::new(&d.dev, &d.ctx, src_w, src_h, out_w, out_h, cfg.fps, hdr10)?;
         let in_view = conv.input_view(&mid)?;
@@ -529,12 +533,24 @@ fn run(mut cfg: Settings, rx: Receiver<Cmd>, status: &Status, info: &std::sync::
                     let tex: ID3D11Texture2D = access.GetInterface()?;
                     let mut td = D3D11_TEXTURE2D_DESC::default();
                     tex.GetDesc(&mut td);
+                    let cb = client(td.Width.min(cs.Width as u32), td.Height.min(cs.Height as u32));
+                    // Área cliente de outro tamanho (a barra de título sumiu ou voltou): sem sobra do quadro antigo.
+                    if (cb.2, cb.3) != (last_box.2, last_box.3) {
+                        last_box = cb;
+                        d.ctx.ClearRenderTargetView(&mid_rtv, &[0.0, 0.0, 0.0, 1.0]);
+                    }
                     if let Some(t) = &tone {
                         // Um para um: o que passa do quadro fica de fora.
-                        t.draw(&d.ctx, &d.dev, &tex, td.Width, td.Height)?;
+                        t.draw_at(&d.ctx, &d.dev, &tex, td.Width, td.Height, cb.0, cb.1)?;
+                        // O desenho não corta na área cliente: a borda de uma janela que encolheu sai de preto.
+                        if cb.2 < src_w || cb.3 < src_h {
+                            let ctx1: ID3D11DeviceContext1 = d.ctx.cast()?;
+                            let (w, h) = (src_w as i32, src_h as i32);
+                            let strips = [RECT { left: cb.2 as i32, top: 0, right: w, bottom: h }, RECT { left: 0, top: cb.3 as i32, right: w, bottom: h }];
+                            ctx1.ClearView(&mid_rtv, &[0.0, 0.0, 0.0, 1.0], Some(&strips));
+                        }
                     } else {
-                        let (cw, ch) = (td.Width.min(cs.Width as u32).min(src_w), td.Height.min(cs.Height as u32).min(src_h));
-                        let bx = D3D11_BOX { left: 0, top: 0, front: 0, right: cw, bottom: ch, back: 1 };
+                        let bx = D3D11_BOX { left: cb.0, top: cb.1, front: 0, right: cb.0 + cb.2.min(src_w), bottom: cb.1 + cb.3.min(src_h), back: 1 };
                         d.ctx.CopySubresourceRegion(&mid, 0, 0, 0, 0, &tex, 0, Some(&bx));
                     }
                     let t = conv.convert(&in_view)?;

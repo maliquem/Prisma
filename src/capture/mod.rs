@@ -316,10 +316,115 @@ pub fn grab(mon: HMONITOR) -> Result<Frame> {
     grab_item(&monitor_item(mon)?, monitor_color(mon))
 }
 
-/// Tira um quadro só da janela, mesmo com outra por cima.
+/// Os monitores e onde cada um fica na área de trabalho, em pixels de verdade (o Prisma é PerMonitorV2).
+pub fn monitors() -> Vec<(HMONITOR, RECT)> {
+    unsafe extern "system" fn add(m: HMONITOR, _: HDC, r: *mut RECT, l: LPARAM) -> BOOL {
+        (*(l.0 as *mut Vec<(HMONITOR, RECT)>)).push((m, *r));
+        TRUE
+    }
+    let mut list = Vec::new();
+    unsafe {
+        let _ = EnumDisplayMonitors(None, None, Some(add), LPARAM(&mut list as *mut _ as isize));
+    }
+    list
+}
+
+/// Foto de todos os monitores juntos, cada um no lugar dele na área de trabalho.
+pub fn grab_all() -> Result<Frame> {
+    let shots = monitors().into_iter().map(|(m, r)| Ok((r, grab(m)?))).collect::<Result<Vec<_>>>()?;
+    join(&shots).ok_or_else(|| Error::new(E_FAIL, "sem monitor"))
+}
+
+/// Junta as fotos pela posição de cada monitor; o que fica fora de todos sai preto. O JPEG XR só vem
+/// quando todas têm HDR.
+// shortcut: monitor em SDR junto de um em HDR fica sem JPEG XR, converter o SDR para meia precisão se pedirem.
+fn join(shots: &[(RECT, Frame)]) -> Option<Frame> {
+    let left = shots.iter().map(|s| s.0.left).min()?;
+    let top = shots.iter().map(|s| s.0.top).min()?;
+    let w = (shots.iter().map(|s| s.0.right).max()? - left) as usize;
+    let h = (shots.iter().map(|s| s.0.bottom).max()? - top) as usize;
+    let mut bgra = [0u8, 0, 0, 255].repeat(w * h);
+    // Preto opaco em meia precisão: alfa 1,0.
+    let mut half = shots.iter().all(|s| s.1.half.is_some()).then(|| [0u16, 0, 0, 0x3C00].repeat(w * h));
+    for (r, f) in shots {
+        let (x, y) = ((r.left - left) as usize, (r.top - top) as usize);
+        paste(&mut bgra, w, &f.bgra, f.w as usize, f.h as usize, x, y);
+        if let (Some(dst), Some(src)) = (&mut half, &f.half) {
+            paste(dst, w, src, f.w as usize, f.h as usize, x, y);
+        }
+    }
+    Some(Frame { w: w as u32, h: h as u32, bgra, half })
+}
+
+/// Cola a imagem `sw` × `sh` (4 canais) em (`x`, `y`) da de largura `dw`, cortando o que passa da borda.
+fn paste<T: Copy>(dst: &mut [T], dw: usize, src: &[T], sw: usize, sh: usize, x: usize, y: usize) {
+    let dh = dst.len() / 4 / dw.max(1);
+    let cw = sw.min(dw.saturating_sub(x));
+    for row in 0..sh.min(dh.saturating_sub(y)) {
+        let d = ((y + row) * dw + x) * 4;
+        dst[d..d + cw * 4].copy_from_slice(&src[row * sw * 4..(row * sw + cw) * 4]);
+    }
+}
+
+/// Borda visível da janela na tela (a da captura): sem a borda invisível de redimensionar.
+pub fn frame_rect(hwnd: HWND) -> Option<RECT> {
+    use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_EXTENDED_FRAME_BOUNDS};
+    let mut r = RECT::default();
+    unsafe { DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, &mut r as *mut RECT as *mut _, std::mem::size_of::<RECT>() as u32) }.ok()?;
+    Some(r)
+}
+
+/// Área cliente da janela na tela, sem barra de título nem borda. Os dois cantos passam pelo
+/// `ClientToScreen`, que já converte o DPI de uma janela sem suporte a ele.
+pub fn client_rect(hwnd: HWND) -> Option<RECT> {
+    let mut c = RECT::default();
+    unsafe { GetClientRect(hwnd, &mut c) }.ok()?;
+    let mut p = [POINT::default(), POINT { x: c.right, y: c.bottom }];
+    for q in &mut p {
+        if !unsafe { ClientToScreen(hwnd, q) }.as_bool() {
+            return None;
+        }
+    }
+    (p[1].x > p[0].x && p[1].y > p[0].y).then_some(RECT { left: p[0].x, top: p[0].y, right: p[1].x, bottom: p[1].y })
+}
+
+/// Onde fica a área cliente no quadro `fw` × `fh` da captura da janela: x, y, largura e altura. Sem
+/// área cliente à vista, o quadro todo.
+pub fn client_box(hwnd: HWND, fw: u32, fh: u32) -> (u32, u32, u32, u32) {
+    match (frame_rect(hwnd), client_rect(hwnd)) {
+        (Some(f), Some(c)) => crop_box(f, c, fw, fh),
+        _ => (0, 0, fw, fh),
+    }
+}
+
+/// A conta do `client_box`: `client` relativo ao canto de `frame`, preso dentro do quadro.
+fn crop_box(frame: RECT, client: RECT, fw: u32, fh: u32) -> (u32, u32, u32, u32) {
+    let x0 = (client.left - frame.left).clamp(0, fw as i32) as u32;
+    let y0 = (client.top - frame.top).clamp(0, fh as i32) as u32;
+    let x1 = (client.right - frame.left).clamp(0, fw as i32) as u32;
+    let y1 = (client.bottom - frame.top).clamp(0, fh as i32) as u32;
+    if x1 <= x0 || y1 <= y0 {
+        return (0, 0, fw, fh);
+    }
+    (x0, y0, x1 - x0, y1 - y0)
+}
+
+/// Tira um quadro só da área cliente da janela, mesmo com outra por cima.
 pub fn grab_window(hwnd: HWND) -> Result<Frame> {
     let mon = unsafe { MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST) };
-    grab_item(&window_item(hwnd)?, monitor_color(mon))
+    let f = grab_item(&window_item(hwnd)?, monitor_color(mon))?;
+    let (x, y, w, h) = client_box(hwnd, f.w, f.h);
+    Ok(Frame { w, h, bgra: cut(&f.bgra, f.w, x, y, w, h), half: f.half.as_deref().map(|v| cut(v, f.w, x, y, w, h)) })
+}
+
+/// O retângulo `w` × `h` em (`x`, `y`) da imagem de largura `fw` (4 canais).
+fn cut<T: Copy>(v: &[T], fw: u32, x: u32, y: u32, w: u32, h: u32) -> Vec<T> {
+    let mut out = Vec::with_capacity(w as usize * h as usize * 4);
+    for row in y..y + h {
+        let start = (row * fw + x) as usize * 4;
+        out.extend_from_slice(&v[start..start + w as usize * 4]);
+    }
+    out
 }
 
 fn grab_item(item: &GraphicsCaptureItem, color: MonitorColor) -> Result<Frame> {
@@ -678,6 +783,45 @@ pub fn hide_from_capture(h: HWND) {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    fn r(left: i32, top: i32, right: i32, bottom: i32) -> RECT {
+        RECT { left, top, right, bottom }
+    }
+
+    #[test]
+    fn client_area_leaves_title_bar_and_border_out() {
+        // Janela com borda visível de 1 px e barra de título de 31 px, num monitor à esquerda do principal.
+        let frame = r(-1920 + 100, 200, -1920 + 900, 800);
+        let client = r(-1920 + 101, 232, -1920 + 899, 799);
+        assert_eq!(crop_box(frame, client, 800, 600), (1, 32, 798, 567));
+        // Quadro menor que a janela (redimensionou no meio): fica dentro do quadro.
+        assert_eq!(crop_box(frame, client, 400, 300), (1, 32, 399, 268));
+        // Minimizada ou sem área cliente à vista: o quadro todo.
+        assert_eq!(crop_box(frame, r(-32000, -32000, -31800, -31900), 800, 600), (0, 0, 800, 600));
+        let px: Vec<u8> = (0..4 * 4 * 3).map(|v| v as u8).collect();
+        assert_eq!(cut(&px, 4, 1, 1, 2, 1), [20, 21, 22, 23, 24, 25, 26, 27]);
+    }
+
+    #[test]
+    fn monitors_join_without_gaps_or_overlap() {
+        let shot = |w: u32, h: u32, v: u8| Frame { w, h, bgra: vec![v; (w * h * 4) as usize], half: None };
+        // 4K a 150% à esquerda e 1080p a 100% à direita, mais abaixo: posições em pixels de verdade.
+        let j = join(&[(r(0, 0, 6, 4), shot(6, 4, 1)), (r(6, 1, 9, 3), shot(3, 2, 2))]).unwrap();
+        assert_eq!((j.w, j.h), (9, 4));
+        let at = |x: usize, y: usize| j.bgra[(y * 9 + x) * 4];
+        assert_eq!((at(5, 1), at(6, 1), at(8, 2)), (1, 2, 2));
+        // Fora dos dois monitores: preto opaco.
+        assert_eq!(&j.bgra[8 * 4..][..4], &[0, 0, 0, 255]);
+        assert_eq!(j.bgra.iter().filter(|&&v| v == 1).count(), 6 * 4 * 4);
+        assert_eq!(j.bgra.iter().filter(|&&v| v == 2).count(), 3 * 2 * 4);
+        // Monitor à esquerda do principal (coordenada negativa) e HDR nos dois.
+        let hdr = |w: u32, h: u32| Frame { w, h, bgra: vec![9; (w * h * 4) as usize], half: Some(vec![7; (w * h * 4) as usize]) };
+        let j = join(&[(r(-2, 0, 0, 1), hdr(2, 1)), (r(0, 0, 1, 1), hdr(1, 1))]).unwrap();
+        assert_eq!((j.w, j.h, j.half.map(|h| h.len())), (3, 1, Some(12)));
+        assert!(join(&[]).is_none());
+    }
+
     #[test]
     fn cut_bitmap_is_refused() {
         // 3x2 em 24 bits: linhas de 12 bytes (9 com o enchimento até 4).
