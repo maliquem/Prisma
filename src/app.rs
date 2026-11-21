@@ -1362,7 +1362,10 @@ impl App {
         for (id, hk, name, norepeat) in hk_to_retry(&self.hotkey_list(), &self.hk_errors) {
             if self.try_register(id, hk, norepeat) {
                 let e = hk_error(name, hk);
-                self.hk_errors.retain(|x| *x != e);
+                // Uma só: dois atalhos iguais na lista dão dois avisos iguais, e o segundo continua recusado.
+                if let Some(i) = self.hk_errors.iter().position(|x| *x == e) {
+                    self.hk_errors.remove(i);
+                }
                 got = true;
             }
         }
