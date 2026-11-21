@@ -954,9 +954,9 @@ impl App {
         Outcome::Done
     }
 
-    /// Grava o modo de HDR do jogo, como a aba HDR; `Rtx` só com placa NVIDIA.
+    /// Grava o modo de HDR do jogo, como a aba HDR; `Rtx` só com placa NVIDIA, e modo desconhecido nunca.
     fn link_hdr_mode(&mut self, exe: &str, path: &str, mode: HdrMode) -> Result<(), Outcome> {
-        if mode == HdrMode::Rtx && !autohdr::nvidia() {
+        if mode == HdrMode::Unknown || mode == HdrMode::Rtx && !autohdr::nvidia() {
             return Err(fail(code::NOT_SUPPORTED, "indisponível"));
         }
         let n = HDR_MODES.iter().find(|m| m.0 == mode).map_or(autohdr::DEFAULT, |m| m.1);

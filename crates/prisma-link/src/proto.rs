@@ -309,6 +309,9 @@ pub enum HdrMode {
     Rtx,
     /// O HDR do Prisma.
     Prisma,
+    /// Modo que este lado não conhece (de uma versão mais nova): não derruba o resto da resposta.
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -584,6 +587,12 @@ mod tests {
             .unwrap(),
             r#"{"type":"hello","protocol":1,"app_version":"0.1.0"}"#
         );
+    }
+
+    #[test]
+    fn unknown_hdr_mode_keeps_the_options() {
+        let m: HdrMode = serde_json::from_str(r#""future_hdr""#).unwrap();
+        assert_eq!(m, HdrMode::Unknown);
     }
 
     #[test]
@@ -907,8 +916,8 @@ mod tests {
         .unwrap();
         assert!(matches!(serde_json::from_str::<OldReply>(&new).unwrap(), OldReply::Options { optimize: true, eq_profile } if eq_profile == "FPS"));
 
-        // Uma opção nova vista por quem não a conhece cai em Unknown (não é erro); um modo que este lado
-        // não conhece também.
+        // Uma opção nova vista por quem não a conhece cai em Unknown (não é erro); um modo de HDR que este
+        // lado não conhece vira HdrMode::Unknown, que o Prisma recusa com not_supported.
         #[derive(Debug, PartialEq, Deserialize)]
         #[serde(rename_all = "snake_case")]
         enum OldOption {
@@ -921,7 +930,7 @@ mod tests {
         }
         assert_eq!(
             serde_json::from_str::<OptionValue>(r#"{"hdr_mode":"hdr_do_futuro"}"#).unwrap(),
-            OptionValue::Unknown(serde_json::json!({"hdr_mode": "hdr_do_futuro"}))
+            OptionValue::HdrMode(HdrMode::Unknown)
         );
     }
 
