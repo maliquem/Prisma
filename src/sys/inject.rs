@@ -16,6 +16,8 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 
 const DLL: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/hook/release/prisma_hook.dll"));
 const MAGIC: u32 = 0x5052_534d;
+/// O gancho deixou a cadeia como outro mod a fez (o mesmo em `hook::OTHER_FORMAT`).
+const OTHER_FORMAT: u32 = 0xE0E0_0F16;
 const STATE_READY: u32 = 2;
 const STATE_FAILED: u32 = 3;
 /// Tempo para o módulo carregar e o jogo apresentar um quadro por ele.
@@ -196,6 +198,21 @@ pub fn load_wow(pid: u32, dll: &[u8], helper: &[u8], dir: &str, name: &str) -> O
     None
 }
 
+/// Nome do gancho na pasta de DLLs de um carregador de mods; com este nome ele liga o HDR sozinho (`hook::native`).
+pub const NATIVE_DLL: &str = "prisma_hdr.dll";
+
+/// Põe ou atualiza o gancho na pasta `dir` de DLLs de um carregador de mods (`dll\offline` do ERR): o carregador
+/// abre a DLL com o jogo, sem o Prisma injetar nada, e o Prisma só passa os ajustes (`autohdr::adopt`).
+pub fn put_native(dir: &str) -> bool {
+    let path = std::path::Path::new(dir).join(NATIVE_DLL);
+    std::fs::read(&path).is_ok_and(|d| d == DLL) || std::fs::write(&path, DLL).is_ok()
+}
+
+pub fn take_native(dir: &str) -> bool {
+    let path = std::path::Path::new(dir).join(NATIVE_DLL);
+    !path.exists() || std::fs::remove_file(path).is_ok()
+}
+
 fn window_thread(pid: u32) -> Option<u32> {
     let list = crate::sys::procs::top_windows();
     let hwnd = list.into_iter().find(|h| crate::sys::procs::window_pid(*h) == pid)?;
@@ -210,14 +227,22 @@ fn map_name(pid: u32) -> HSTRING {
 impl Limiter {
     /// Começa a carregar no jogo. Se já foi carregado antes, só reconecta.
     pub fn attach(pid: u32) -> Option<Self> {
-        unsafe {
-            let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
-            let mut me = Self { pid, process, hook: None, map: HANDLE::default(), view: std::ptr::null(), since: Instant::now(), status: Status::Waiting };
-            if !me.open() {
-                me.hook = Some(load(pid, DLL, "limiter", "prisma_hook")?);
-            }
-            Some(me)
+        let mut me = Self::new(pid)?;
+        if !me.open() {
+            me.hook = Some(load(pid, DLL, "limiter", "prisma_hook")?);
         }
+        Some(me)
+    }
+
+    /// Liga ao gancho que já está no jogo (posto por um carregador de mods, `put_native`), sem carregar nada.
+    pub fn adopt(pid: u32) -> Option<Self> {
+        let mut me = Self::new(pid)?;
+        me.open().then_some(me)
+    }
+
+    fn new(pid: u32) -> Option<Self> {
+        let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }.ok()?;
+        Some(Self { pid, process, hook: None, map: HANDLE::default(), view: std::ptr::null(), since: Instant::now(), status: Status::Waiting })
     }
 
     fn open(&mut self) -> bool {
@@ -427,6 +452,12 @@ impl HdrLive {
     /// O último quadro veio de um buffer de 10 bits sem espaço de cor: SDR ou HDR10, o Prisma decide.
     pub fn untold(&self) -> bool {
         self.shared().hdr_untold.load(Relaxed) != 0
+    }
+
+    /// Nenhuma cadeia com proxy porque outro mod trocou o formato pedido (ERSS com ForceHDR): sem o HDR do Prisma.
+    pub fn other_format(&self) -> bool {
+        let s = self.shared();
+        s.hdr_chains.load(Relaxed) == 0 && s.hdr_error.load(Relaxed) == OTHER_FORMAT
     }
 
     /// Lê esse buffer como HDR10.

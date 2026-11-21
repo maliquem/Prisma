@@ -66,11 +66,13 @@ pub struct HdrGame {
     pub scan: Option<crate::sys::inject::Scan>,
     /// A pessoa abre este jogo sem o anti-cheat (offline, mods): o achado na pasta não barra o HDR do Prisma.
     pub ac_off: bool,
+    /// Pasta de DLLs do carregador de mods (me3 do ERR) onde o gancho fica (`inject::put_native`); vazia, nenhuma.
+    pub mods: String,
 }
 
 impl HdrGame {
     /// Linha `hdr_game=` do config.ini: `exe|modo|caminho`, os ajustes do Manual quando há (o brilho da
-    /// interface veio depois: linha com 6 vale 0) e por fim `|native=`, `|tune=`, `|scan=` e `|ac=off`. Versões
+    /// interface veio depois: linha com 6 vale 0) e por fim `|native=`, `|tune=`, `|scan=`, `|ac=off` e `|mods=`. Versões
     /// antigas pulam esses: não são números.
     pub fn line(&self) -> String {
         let mut s = format!("{}|{}|{}", self.exe, self.mode, self.path);
@@ -88,6 +90,9 @@ impl HdrGame {
         }
         if self.ac_off {
             s += "|ac=off";
+        }
+        if !self.mods.is_empty() {
+            s += &format!("|mods={}", self.mods);
         }
         s
     }
@@ -112,6 +117,7 @@ impl HdrGame {
             tune: std::array::from_fn(|i| tune.get(i).copied().unwrap_or(0.0)),
             scan,
             ac_off: tag("ac") == Some("off"),
+            mods: tag("mods").unwrap_or_default().into(),
         })
     }
 }
@@ -505,6 +511,14 @@ pub struct Config {
     pub safe_wait: u32,
     /// Chave da API do Gemini, colada pela pessoa. Nunca vai para o registro de ações.
     pub safe_key: String,
+    /// Chave da API do DeepSeek, como a do Gemini.
+    pub safe_ds_key: String,
+    /// Chaves do Claude (Anthropic) e do ChatGPT (OpenAI), como a do Gemini.
+    pub safe_claude_key: String,
+    pub safe_gpt_key: String,
+    /// IAs marcadas para pesquisar, um bit cada na ordem de `safeupd::ALL` (1 Gemini, 2 DeepSeek,
+    /// 4 Claude, 8 ChatGPT).
+    pub safe_ais: u8,
     /// Última versão aberta neste PC. Abrir uma mais nova mostra as novidades desde ela.
     pub seen_version: String,
     pub welcome: bool,
@@ -665,6 +679,10 @@ impl Default for Config {
             safe_every: 0,
             safe_wait: 72,
             safe_key: String::new(),
+            safe_ds_key: String::new(),
+            safe_claude_key: String::new(),
+            safe_gpt_key: String::new(),
+            safe_ais: 1,
             seen_version: String::new(),
             welcome: true,
             funcs_off: Vec::new(),
@@ -1007,6 +1025,10 @@ impl Config {
                 "safe_every" => c.safe_every = v.parse().unwrap_or(0),
                 "safe_wait" => c.safe_wait = v.parse().unwrap_or(72),
                 "safe_key" => c.safe_key = v.trim().to_string(),
+                "safe_ds_key" => c.safe_ds_key = v.trim().to_string(),
+                "safe_claude_key" => c.safe_claude_key = v.trim().to_string(),
+                "safe_gpt_key" => c.safe_gpt_key = v.trim().to_string(),
+                "safe_ais" => c.safe_ais = v.parse::<u8>().unwrap_or(1) & 15,
                 "seen_version" => c.seen_version = v.to_string(),
                 "welcome" => c.welcome = b,
                 "funcs_off" => c.funcs_off = parse_funcs(v),
@@ -1157,6 +1179,10 @@ impl Config {
         let _ = writeln!(s, "safe_every={}", self.safe_every);
         let _ = writeln!(s, "safe_wait={}", self.safe_wait);
         let _ = writeln!(s, "safe_key={}", self.safe_key);
+        let _ = writeln!(s, "safe_ds_key={}", self.safe_ds_key);
+        let _ = writeln!(s, "safe_claude_key={}", self.safe_claude_key);
+        let _ = writeln!(s, "safe_gpt_key={}", self.safe_gpt_key);
+        let _ = writeln!(s, "safe_ais={}", self.safe_ais);
         let _ = writeln!(s, "seen_version={}", self.seen_version);
         let _ = writeln!(s, "welcome={}", b(self.welcome));
         let _ = writeln!(s, "funcs_off={}", funcs_line(&self.funcs_off));
@@ -1468,9 +1494,9 @@ mod tests {
         assert_eq!(HdrGame::parse(&old.line()).unwrap().line(), old.line());
         let h = crate::sys::inject::Hdr { on: true, peak: 1000.0, paper: 203.5, gamma: 2.2, sat: 1.1, boost: 0.5, black: 0.25, ui: 150.0, ..Default::default() };
         let scan = crate::sys::inject::Scan { frames: 600, peak: 980.5, p999: 700.0, p99: 400.0, med: 20.25, black: 0.01, ui: 250.0, white: 0.03, mode: 1 };
-        let g = HdrGame { prisma: Some(h), mode: 5, native: 2, tune: [10.0, 0.0, 0.0, 0.0, -0.5, 0.0, 0.0], scan: Some(scan), ac_off: true, ..old.clone() };
+        let g = HdrGame { prisma: Some(h), mode: 5, native: 2, tune: [10.0, 0.0, 0.0, 0.0, -0.5, 0.0, 0.0], scan: Some(scan), ac_off: true, mods: r"K:\Jogos\ERR\dll\offline".into(), ..old.clone() };
         let back = HdrGame::parse(&g.line()).unwrap();
-        assert_eq!((back.prisma, back.native, back.tune, back.scan, back.ac_off), (Some(h), 2, g.tune, Some(scan), true));
+        assert_eq!((back.prisma, back.native, back.tune, back.scan, back.ac_off, back.mods.as_str()), (Some(h), 2, g.tune, Some(scan), true, g.mods.as_str()));
         assert!(!old.ac_off);
         // Automático com medida, sem os ajustes do Manual: os números marcados não viram ajustes.
         let auto = HdrGame { prisma: None, ..g };

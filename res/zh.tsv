@@ -2970,6 +2970,13 @@ Um HDR por jogo. Vale a partir da próxima vez que o jogo abrir.	每个游戏单
 Um HDR por jogo. O Auto HDR está desligado nas configurações do Windows: ligue lá para ele valer.	每个游戏单独设置 HDR。Windows 设置中自动 HDR 已关闭：请在那里开启，此项才会生效。
 Bloqueado: este jogo tem anti-cheat, e o HDR do Prisma precisa entrar no jogo. Escolha Auto HDR ou RTX HDR, ou marque abaixo se você abre o jogo sem o anti-cheat.	已锁定：此游戏有反作弊，而 Prisma HDR 需要注入游戏。请选择自动 HDR 或 RTX HDR，或在下方勾选“我在没有反作弊的情况下打开游戏”。
 Abro sem o anti-cheat (offline, mods); com ele rodando, o Prisma não entra	我不带反作弊启动（离线、模组）；反作弊运行时 Prisma 无法注入
+Pasta de mods	模组文件夹
+Tirar da pasta	从文件夹中移除
+Gancho na pasta de mods: abra o jogo pelo lançador dos mods, com o Prisma aberto.	模组文件夹中的钩子：请通过模组启动器打开游戏，并保持 Prisma 处于打开状态。
+Sem o HDR do Prisma na última abertura: outro mod trocou o formato da imagem (no ERR, o ForceHDR do ERSS). Desligue o HDR dele para usar o do Prisma.	上次启动时未启用 Prisma 的 HDR：另一个模组更改了图像格式（在 ERR 中是 ERSS 的 ForceHDR）。请关闭它的 HDR，以便使用 Prisma 的 HDR。
+Para jogo aberto por um lançador de mods (me3 do ELDEN RING Reforged): escolha a pasta de DLLs dele (dll\offline) e o gancho entra com o jogo, sem injeção.	适用于通过模组启动器打开的游戏（ELDEN RING Reforged 的 me3）：选择其 DLL 文件夹（dll\offline），钩子会随游戏加载，无需注入。
+Feche o jogo antes de tirar o gancho.	移除钩子前请先关闭游戏。
+Não consegui gravar o gancho nessa pasta.	无法将钩子写入该文件夹。
 Jogo da Steam: cole a linha abaixo em Propriedades > Opções de inicialização. Depois é só abrir pela Steam.	Steam 游戏：把下面这一行粘贴到 属性 > 启动选项 中。之后直接从 Steam 打开即可。
 Abra o jogo pelo botão Abrir com HDR, ou use a linha abaixo nas opções de inicialização do launcher.	用“以 HDR 打开”按钮打开游戏，或把下面这一行用在启动器的启动选项中。
 Copiar linha	复制该行
@@ -3037,17 +3044,13 @@ O Windows não deu a permissão de administrador	Windows 未授予管理员权�
 Instalado. Reinicie o PC para terminar	已安装。请重启电脑以完成
 Ainda rodando depois de 10 minutos; confira no Windows Update	10 分钟后仍在运行；请在 Windows Update 中查看
 Não deu certo; veja o registro de ações	未成功；请查看操作日志
-a chave do Gemini foi recusada	Gemini 密钥被拒绝
-acabou a cota grátis do Gemini por hoje	今天的 Gemini 免费额度已用完
 sem resposta da internet	网络无响应
-o modelo do Gemini não está disponível	Gemini 模型不可用
 a resposta veio num formato inesperado	返回的格式不符合预期
 A pesquisa falhou ({}). Tenta de novo em uma hora.	搜索失败（{}）。一小时后重试。
 Visto em {a}. Veredito depois de {b}, quando já houver relatos.	发现于 {a}。在 {b} 后给出结论，届时应已有用户反馈。
 Pesquisar agora	立即搜索
 Problemas que a {} admite	{} 承认的问题
 Nenhum listado.	未列出。
-Sem a chave do Gemini, o veredito usa só as fontes oficiais acima.	没有 Gemini 密钥时，结论仅依据上方的官方来源。
 Recomendado instalar	建议安装
 Melhor esperar	最好等一等
 {}% sem problemas (estimativa)	{}% 无问题（估算）
@@ -3079,6 +3082,17 @@ Apagar chave	删除密钥
 Pegar uma chave grátis	获取免费密钥
 Chave guardada. O Gemini pesquisa os relatos com a busca do Google (megathreads do r/nvidia e do r/Windows11, fórum da NVIDIA, Guru3D e sites de notícias) e dá o veredito. A cota grátis passa de 500 pesquisas por dia.	密钥已保存。Gemini 通过 Google 搜索查找用户反馈（r/nvidia 和 r/Windows11 的汇总帖、NVIDIA 论坛、Guru3D 和新闻网站）并给出结论。免费额度为每天 500 次以上搜索。
 Sem chave, o veredito usa só as fontes oficiais: os problemas conhecidos da Microsoft e os da NVIDIA nas notas da versão.	没有密钥时，结论仅依据官方来源：Microsoft 的已知问题，以及 NVIDIA 发行说明中的问题。
+a chave do {} foi recusada	{} 密钥被拒绝
+o {} atingiu o limite de uso	{} 已达到使用上限
+o servidor do {} está ocupado ou fora do ar	{} 服务器繁忙或已离线
+Sem chave de IA, o veredito usa só as fontes oficiais acima.	没有 AI 密钥时，结论仅依据上方的官方来源。
+{a}: falhou ({b})	{a}：失败（{b}）
+{a}: recomenda instalar, {b}% sem problemas	{a}：建议安装，{b}% 无问题
+{a}: melhor esperar, {b}% sem problemas	{a}：最好等一等，{b}% 无问题
+Chave do DeepSeek	DeepSeek 密钥
+Chave do DeepSeek guardada	DeepSeek 密钥已保存
+Pegar uma chave	获取密钥
+Pesquisar com	搜索方式
 Avisar antes de baixar atualizações do Windows e não trocar o driver de vídeo pelo Windows Update	下载 Windows 更新前先提醒，并且不通过 Windows Update 更换显卡驱动
 Usa a política do próprio Windows (pede administrador) e desfaz ao desmarcar. O serviço do Windows Update continua ligado.	使用 Windows 自带的策略（需要管理员权限），取消勾选即可撤销。Windows Update 服务仍保持开启。
 A % sem problemas é uma estimativa da IA a partir das reclamações nos fóruns: não existe essa estatística oficial.	“无问题”百分比是 AI 根据论坛上的抱怨做出的估算：并没有这样的官方统计。
@@ -3087,6 +3101,16 @@ Procurando...	正在查找...
 Nunca conferido	从未检查
 Última conferência: {}	上次检查：{}
 Página Atualizações	“更新”页面
+acabou o saldo da conta do {}	{} 账户余额已用完
+o modelo do {} não está disponível	{} 的模型不可用
+Chave do Claude	Claude 密钥
+Chave do Claude guardada	Claude 密钥已保存
+Chave do ChatGPT	ChatGPT 密钥
+Chave do ChatGPT guardada	ChatGPT 密钥已保存
+Claude (Haiku)	Claude (Haiku)
+Só uma das IAs marcadas tem chave: a pesquisa usa só ela.	勾选的 AI 中只有一个有密钥：搜索只使用它。
+Chave guardada. O {} pesquisa os relatos com a busca própria (megathreads do r/nvidia e do r/Windows11, fórum da NVIDIA, Guru3D e sites de notícias) e dá o veredito. Ele não tem cota grátis: cada pesquisa gasta um pouco do saldo da conta.	密钥已保存。{} 通过自带的搜索查找用户反馈（r/nvidia 和 r/Windows11 的汇总帖、NVIDIA 论坛、Guru3D 和新闻网站）并给出结论。它没有免费额度：每次搜索都会消耗一点账户余额。
+As IAs marcadas pesquisam ao mesmo tempo e o Prisma junta os resultados: os problemas de todas as listas sem repetir, a média da estimativa, e só recomenda instalar se todas recomendarem. Se uma falhar, valem as outras. Só o Gemini é grátis: as outras gastam um pouco do saldo da conta a cada pesquisa.	勾选的 AI 会同时搜索，Prisma 合并结果：所有列表中的问题去重合并，估算取平均值，只有全部都建议安装时才建议安装。如果有一个失败，则采用其他的结果。只有 Gemini 免费：其他的每次搜索都会消耗一点账户余额。
 Gráficos de processador, placa de vídeo, memória, discos e rede.	处理器、显卡、内存、磁盘和网络的图表。
 O que ocupa espaço em cada disco, pasta por pasta.	每个磁盘上什么占用空间，逐个文件夹查看。
 Programas que abrem com o Windows, para ligar ou desligar.	随 Windows 启动的程序，可开启或关闭。

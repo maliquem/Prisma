@@ -99,6 +99,10 @@ fn request(verb: PCWSTR, url: &str, headers: &str, follow: bool, data: &[u8]) ->
         if req.0.is_null() {
             return Err(());
         }
+        // A pesquisa das IAs na web (POST) passa dos 30 s que o WinHTTP espera a resposta por padrão.
+        if !data.is_empty() {
+            let _ = WinHttpSetTimeouts(req.0, 0, 60_000, 30_000, 180_000);
+        }
         if !follow {
             WinHttpSetOption(Some(req.0), WINHTTP_OPTION_REDIRECT_POLICY, Some(&WINHTTP_OPTION_REDIRECT_POLICY_NEVER.to_ne_bytes())).map_err(|_| ())?;
         }
