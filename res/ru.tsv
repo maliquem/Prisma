@@ -2874,6 +2874,7 @@ Ligar Fullscreenizer	Включить Fullscreenizer
 Monitor em HDR: a imagem é convertida para SDR antes do filtro (brilho acima do branco é cortado).	Монитор в HDR: изображение преобразуется в SDR перед фильтром (яркость выше белого обрезается).
 Salvar perfil	Сохранить профиль
 Salvar como preset	Сохранить как preset
+Nome do preset	Название preset
 Perfil salvo para este jogo	Профиль сохранён для этой игры
 Voltou ao último salvo	Возврат к последнему сохранённому
 Parâmetros	Параметры

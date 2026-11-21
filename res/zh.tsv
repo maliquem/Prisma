@@ -2874,6 +2874,7 @@ Ligar Fullscreenizer	开启 Fullscreenizer
 Monitor em HDR: a imagem é convertida para SDR antes do filtro (brilho acima do branco é cortado).	HDR 显示器：画面会先转换为 SDR 再经过滤镜（高于白色的亮度会被裁掉）。
 Salvar perfil	保存配置
 Salvar como preset	另存为 preset
+Nome do preset	preset 名称
 Perfil salvo para este jogo	已为此游戏保存配置
 Voltou ao último salvo	已恢复到上次保存
 Parâmetros	参数
