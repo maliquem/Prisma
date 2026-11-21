@@ -2979,6 +2979,7 @@ Abro sem o anti-cheat (offline, mods); com ele rodando, o Prisma não entra	I op
 Pasta de mods	Mods folder
 Tirar da pasta	Remove from folder
 Gancho na pasta de mods: abra o jogo pelo lançador dos mods, com o Prisma aberto.	Hook in the mods folder: open the game through the mod launcher, with Prisma open.
+Sem o HDR do Prisma na última abertura: outro mod trocou o formato da imagem (no ERR, o ForceHDR do ERSS). Desligue o HDR dele para usar o do Prisma.	No Prisma HDR on the last launch: another mod changed the image format (in ERR, ERSS's ForceHDR). Turn off its HDR to use Prisma's.
 Para jogo aberto por um lançador de mods (me3 do ELDEN RING Reforged): escolha a pasta de DLLs dele (dll\offline) e o gancho entra com o jogo, sem injeção.	For a game opened by a mod launcher (me3 for ELDEN RING Reforged): choose its DLL folder (dll\offline) and the hook loads with the game, no injection.
 Feche o jogo antes de tirar o gancho.	Close the game before removing the hook.
 Não consegui gravar o gancho nessa pasta.	Could not write the hook to that folder.

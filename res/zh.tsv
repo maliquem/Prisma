@@ -2973,6 +2973,7 @@ Abro sem o anti-cheat (offline, mods); com ele rodando, o Prisma não entra	我�
 Pasta de mods	模组文件夹
 Tirar da pasta	从文件夹中移除
 Gancho na pasta de mods: abra o jogo pelo lançador dos mods, com o Prisma aberto.	模组文件夹中的钩子：请通过模组启动器打开游戏，并保持 Prisma 处于打开状态。
+Sem o HDR do Prisma na última abertura: outro mod trocou o formato da imagem (no ERR, o ForceHDR do ERSS). Desligue o HDR dele para usar o do Prisma.	上次启动时未启用 Prisma 的 HDR：另一个模组更改了图像格式（在 ERR 中是 ERSS 的 ForceHDR）。请关闭它的 HDR，以便使用 Prisma 的 HDR。
 Para jogo aberto por um lançador de mods (me3 do ELDEN RING Reforged): escolha a pasta de DLLs dele (dll\offline) e o gancho entra com o jogo, sem injeção.	适用于通过模组启动器打开的游戏（ELDEN RING Reforged 的 me3）：选择其 DLL 文件夹（dll\offline），钩子会随游戏加载，无需注入。
 Feche o jogo antes de tirar o gancho.	移除钩子前请先关闭游戏。
 Não consegui gravar o gancho nessa pasta.	无法将钩子写入该文件夹。

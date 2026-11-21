@@ -499,6 +499,8 @@ pub struct App {
     pub replaces_tm: bool,
     fg_pid: u32,
     pub fg_exe: String,
+    /// Jogo em que outro mod trocou o formato da imagem e o HDR do Prisma ficou de fora (`HdrLive::other_format`).
+    pub hdr_other_format: String,
     asked: HashSet<String>,
     last_tick: Instant,
     last_save: Instant,
@@ -725,6 +727,7 @@ pub fn start(background: bool) {
             replaces_tm: crate::startup::replaces_taskmgr(),
             fg_pid: 0,
             fg_exe: String::new(),
+            hdr_other_format: String::new(),
             asked: HashSet::new(),
             last_tick: Instant::now(),
             last_save: Instant::now(),
@@ -1452,6 +1455,12 @@ impl App {
         if let Some(n) = crate::sys::autohdr::watch(&live, g.native) {
             g.native = n;
             self.cfg.save();
+            self.invalidate();
+        }
+        // Fica marcado depois que o jogo fecha, para a aba dizer por quê; sai na próxima abertura sem o problema.
+        let other = live.other_format();
+        if other != self.hdr_other_format.eq_ignore_ascii_case(&self.fg_exe) {
+            self.hdr_other_format = if other { self.fg_exe.clone() } else { String::new() };
             self.invalidate();
         }
         crate::sys::autohdr::adopt(&self.cfg, &live, self.fg_pid, &self.fg_exe);
@@ -4649,10 +4658,13 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
             LRESULT(0)
         }
         WM_PICK_MODS => {
-            if let Some(dir) = capture::choose_folder(h) {
+            // Pelo nome: com a janela de pastas aberta a lista ainda pode mudar e o índice apontar para outro jogo.
+            let exe = with(|a| a.cfg.hdr_games.get(w.0).map(|g| g.exe.clone())).flatten();
+            if let Some((exe, dir)) = exe.zip(capture::choose_folder(h)) {
                 with(|a| {
-                    if w.0 < a.cfg.hdr_games.len() && crate::sys::inject::put_native(&dir) {
-                        a.cfg.hdr_games[w.0].mods = dir;
+                    let i = a.cfg.hdr_games.iter().position(|g| g.exe == exe);
+                    if let Some(i) = i.filter(|_| crate::sys::inject::put_native(&dir)) {
+                        a.cfg.hdr_games[i].mods = dir;
                         a.cfg.save();
                     } else {
                         a.toast.info("Não consegui gravar o gancho nessa pasta.");

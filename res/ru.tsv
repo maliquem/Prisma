@@ -2973,6 +2973,7 @@ Abro sem o anti-cheat (offline, mods); com ele rodando, o Prisma não entra	За
 Pasta de mods	Папка модов
 Tirar da pasta	Убрать из папки
 Gancho na pasta de mods: abra o jogo pelo lançador dos mods, com o Prisma aberto.	Хук в папке модов: запустите игру через лаунчер модов при открытом Prisma.
+Sem o HDR do Prisma na última abertura: outro mod trocou o formato da imagem (no ERR, o ForceHDR do ERSS). Desligue o HDR dele para usar o do Prisma.	HDR Prisma не работал при последнем запуске: другой мод изменил формат изображения (в ERR это ForceHDR из ERSS). Отключите его HDR, чтобы использовать HDR Prisma.
 Para jogo aberto por um lançador de mods (me3 do ELDEN RING Reforged): escolha a pasta de DLLs dele (dll\offline) e o gancho entra com o jogo, sem injeção.	Для игры, запускаемой через лаунчер модов (me3 для ELDEN RING Reforged): выберите его папку с DLL (dll\offline), и хук загрузится вместе с игрой, без внедрения.
 Feche o jogo antes de tirar o gancho.	Закройте игру, прежде чем убирать хук.
 Não consegui gravar o gancho nessa pasta.	Не удалось записать хук в эту папку.

@@ -273,6 +273,8 @@ pub fn allowed(cfg: &crate::config::Config, path: &str) -> Result<(), String> {
 
 /// Gancho que um carregador de mods abriu com o jogo (`inject::put_native`): ele nasce sem ajustes (pico zero).
 /// Passa agora e segue passando até o jogo fechar. Jogo aberto pelo Prisma já tem os ajustes e fica como está.
+// shortcut: o Prisma reaberto com o jogo aberto vê o pico já gravado e não passa os ajustes ao vivo até o jogo reabrir;
+// guardar os pids servidos se alguém reclamar.
 pub fn adopt(cfg: &crate::config::Config, live: &crate::sys::inject::HdrLive, pid: u32, name: &str) {
     if live.get().peak != 0.0 {
         return;

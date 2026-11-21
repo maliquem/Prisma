@@ -16,6 +16,8 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 
 const DLL: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/hook/release/prisma_hook.dll"));
 const MAGIC: u32 = 0x5052_534d;
+/// O gancho deixou a cadeia como outro mod a fez (o mesmo em `hook::OTHER_FORMAT`).
+const OTHER_FORMAT: u32 = 0xE0E0_0F16;
 const STATE_READY: u32 = 2;
 const STATE_FAILED: u32 = 3;
 /// Tempo para o módulo carregar e o jogo apresentar um quadro por ele.
@@ -450,6 +452,12 @@ impl HdrLive {
     /// O último quadro veio de um buffer de 10 bits sem espaço de cor: SDR ou HDR10, o Prisma decide.
     pub fn untold(&self) -> bool {
         self.shared().hdr_untold.load(Relaxed) != 0
+    }
+
+    /// Nenhuma cadeia com proxy porque outro mod trocou o formato pedido (ERSS com ForceHDR): sem o HDR do Prisma.
+    pub fn other_format(&self) -> bool {
+        let s = self.shared();
+        s.hdr_chains.load(Relaxed) == 0 && s.hdr_error.load(Relaxed) == OTHER_FORMAT
     }
 
     /// Lê esse buffer como HDR10.

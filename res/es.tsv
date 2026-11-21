@@ -2973,6 +2973,7 @@ Abro sem o anti-cheat (offline, mods); com ele rodando, o Prisma não entra	Lo a
 Pasta de mods	Carpeta de mods
 Tirar da pasta	Quitar de la carpeta
 Gancho na pasta de mods: abra o jogo pelo lançador dos mods, com o Prisma aberto.	Gancho en la carpeta de mods: abre el juego desde el lanzador de mods, con Prisma abierto.
+Sem o HDR do Prisma na última abertura: outro mod trocou o formato da imagem (no ERR, o ForceHDR do ERSS). Desligue o HDR dele para usar o do Prisma.	Sin el HDR de Prisma en la última apertura: otro mod cambió el formato de la imagen (en ERR, el ForceHDR de ERSS). Desactiva su HDR para usar el de Prisma.
 Para jogo aberto por um lançador de mods (me3 do ELDEN RING Reforged): escolha a pasta de DLLs dele (dll\offline) e o gancho entra com o jogo, sem injeção.	Para un juego abierto con un lanzador de mods (me3 de ELDEN RING Reforged): elige su carpeta de DLL (dll\offline) y el gancho entra con el juego, sin inyección.
 Feche o jogo antes de tirar o gancho.	Cierra el juego antes de quitar el gancho.
 Não consegui gravar o gancho nessa pasta.	No se pudo grabar el gancho en esa carpeta.

@@ -837,7 +837,7 @@ unsafe fn proxied(device: Ptr, hwnd: HWND, want: Want, out: *mut Ptr, real: impl
     // que não é o dele e o D3D12 derrubaria o dispositivo. Aí a cadeia fica como ele fez, sem o HDR do Prisma.
     let fp16 = || IDXGISwapChain::from_raw_borrowed(&*out).and_then(|c| c.GetDesc().ok()).is_some_and(|d| d.BufferDesc.Format == DXGI_FORMAT_R16G16B16A16_FLOAT);
     if hr.is_ok() && !fp16() {
-        note(DXGI_ERROR_UNSUPPORTED);
+        note(HRESULT(crate::OTHER_FORMAT as i32));
         INSIDE.set(false);
         return created(hr, out, hwnd);
     }

@@ -15,6 +15,8 @@ type Present = unsafe extern "system" fn(Ptr, u32, u32) -> i32;
 type Present1 = unsafe extern "system" fn(Ptr, u32, u32, *const c_void) -> i32;
 
 const MAGIC: u32 = 0x5052_534d;
+/// Erro anotado quando outro mod trocou o FP16 da cadeia e o proxy saiu do caminho (o mesmo em `inject::OTHER_FORMAT`).
+pub(crate) const OTHER_FORMAT: u32 = 0xE0E0_0F16;
 const STATE_LOADED: u32 = 1;
 const STATE_READY: u32 = 2;
 const STATE_FAILED: u32 = 3;

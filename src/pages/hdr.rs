@@ -533,10 +533,17 @@ fn games_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen) {
             };
             ui.c.text_wrap(rect(p.x, p.y, p.w, 36.0), how, 13.0, TEXT2, Weight::Regular);
         }
+        // Na última abertura outro mod trocou o formato da imagem e o gancho saiu do caminho (`HdrLive::other_format`).
+        let other = app.hdr_other_format.eq_ignore_ascii_case(&g.exe);
+        const OTHER: &str = "Sem o HDR do Prisma na última abertura: outro mod trocou o formato da imagem (no ERR, o ForceHDR do ERSS). Desligue o HDR dele para usar o do Prisma.";
         if !g.mods.is_empty() {
             // O carregador de mods abre o gancho com o jogo (me3 do ERR); a linha e o Abrir ficam de fora.
-            ui.c.text(rect(p.x, p.y + 40.0, p.w - 160.0, 16.0), "Gancho na pasta de mods: abra o jogo pelo lançador dos mods, com o Prisma aberto.", 12.0, TEXT2, Align::Left, Weight::Regular);
-            ui.c.text(rect(p.x, p.y + 58.0, p.w - 160.0, 16.0), &g.mods, 12.0, MUTED, Align::Left, Weight::Regular);
+            if other {
+                ui.c.text_wrap(rect(p.x, p.y + 40.0, p.w - 160.0, 34.0), OTHER, 12.0, WARN, Weight::Regular);
+            } else {
+                ui.c.text(rect(p.x, p.y + 40.0, p.w - 160.0, 16.0), "Gancho na pasta de mods: abra o jogo pelo lançador dos mods, com o Prisma aberto.", 12.0, TEXT2, Align::Left, Weight::Regular);
+                ui.c.text(rect(p.x, p.y + 58.0, p.w - 160.0, 16.0), &g.mods, 12.0, MUTED, Align::Left, Weight::Regular);
+            }
             if ui.button(&format!("hdr-gx{i}"), rect(p.right() - 150.0, p.y + 38.0, 150.0, 34.0), "Tirar da pasta", false) {
                 if crate::sys::inject::take_native(&g.mods) {
                     mods_off = Some(i);
@@ -546,7 +553,11 @@ fn games_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen) {
             }
         } else {
             let line = autohdr::launch_option();
-            ui.c.text(rect(p.x, p.y + 40.0, p.w - 440.0, 32.0), &line, 12.0, MUTED, Align::Left, Weight::Regular);
+            if other {
+                ui.c.text_wrap(rect(p.x, p.y + 40.0, p.w - 440.0, 34.0), OTHER, 12.0, WARN, Weight::Regular);
+            } else {
+                ui.c.text(rect(p.x, p.y + 40.0, p.w - 440.0, 32.0), &line, 12.0, MUTED, Align::Left, Weight::Regular);
+            }
             let at = rect(p.right() - 430.0, p.y + 38.0, 140.0, 34.0);
             if ui.button(&format!("hdr-gm{i}"), at, "Pasta de mods", false) {
                 app.pick_mods(i);
