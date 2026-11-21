@@ -21,6 +21,14 @@ const TABS: [&str; 6] = ["Compartilhar", "Host", "Cliente", "Rede", "Atalhos", "
 struct Proc {
     child: Child,
     log: PathBuf,
+    /// O fim do log já lido e o (tamanho, data) do arquivo naquela leitura.
+    seen: std::cell::RefCell<Seen>,
+}
+
+#[derive(Default)]
+struct Seen {
+    key: Option<(u64, std::time::SystemTime)>,
+    lines: Vec<String>,
 }
 
 impl Proc {
@@ -196,7 +204,7 @@ fn spawn(st: &mut State, args: &[String], log: &str) -> Option<Proc> {
     unsafe {
         let _ = windows::Win32::System::JobObjects::AssignProcessToJobObject(job(st), windows::Win32::Foundation::HANDLE(child.as_raw_handle()));
     }
-    Some(Proc { child, log })
+    Some(Proc { child, log, seen: Default::default() })
 }
 
 /// Fim do arquivo de um processo, em linhas.
@@ -205,17 +213,31 @@ fn tail(p: &Option<Proc>) -> Vec<String> {
 }
 
 fn tail_of(p: &Proc) -> Vec<String> {
+    read_tail(&p.log, &mut p.seen.borrow_mut())
+}
+
+/// Roda a cada quadro para até 6 logs: só relê quando tamanho ou data mudam, e só os últimos 16 KB,
+/// porque o log cresce a sessão inteira.
+fn read_tail(path: &std::path::Path, seen: &mut Seen) -> Vec<String> {
     use std::io::{Read, Seek, SeekFrom};
-    // Só os últimos 16 KB: o log cresce a sessão inteira e isto roda a cada quadro.
+    const TAIL: u64 = 16 * 1024;
+    let Ok(mut f) = std::fs::File::open(path) else { return Vec::new() };
+    let Ok(meta) = f.metadata() else { return Vec::new() };
+    let key = meta.modified().ok().map(|t| (meta.len(), t));
+    if key.is_some() && key == seen.key {
+        return seen.lines.clone();
+    }
+    let skip = meta.len().saturating_sub(TAIL);
     let mut b = Vec::new();
-    let read = std::fs::File::open(&p.log).and_then(|mut f| {
-        f.seek(SeekFrom::End(-16 * 1024)).or_else(|_| f.seek(SeekFrom::Start(0)))?;
-        f.read_to_end(&mut b)
-    });
-    if read.is_err() {
+    if f.seek(SeekFrom::Start(skip)).and_then(|_| f.read_to_end(&mut b)).is_err() {
         return Vec::new();
     }
-    String::from_utf8_lossy(&b).lines().filter(|l| !l.trim().is_empty()).map(str::to_string).collect()
+    let text = String::from_utf8_lossy(&b);
+    // Cortado no meio, a primeira linha vem pela metade.
+    let whole = if skip > 0 { text.split_once('\n').map_or("", |(_, r)| r) } else { &text };
+    seen.lines = whole.lines().filter(|l| !l.trim().is_empty()).map(str::to_string).collect();
+    seen.key = key;
+    seen.lines.clone()
 }
 
 /// O convite mais novo que o processo do convite escreveu.
@@ -1919,5 +1941,39 @@ mod net_seen_tests {
         assert!(t.contains("50000") && t.contains("200.1.2.3") && t.contains(&opened), "{t}");
         assert_eq!(super::net_seen("porta=50000\nupnp=0\n", false).unwrap().split(" · ").count(), 1);
         assert!(super::net_seen("", true).is_none());
+    }
+}
+
+#[cfg(test)]
+mod tail_tests {
+    use super::{read_tail, Seen};
+
+    #[test]
+    fn arquivo_pequeno_vem_inteiro() {
+        let f = std::env::temp_dir().join(format!("prisma-tail-curto-{}.txt", std::process::id()));
+        std::fs::write(&f, "um\n\ndois\n").unwrap();
+        let mut seen = Seen::default();
+        assert_eq!(read_tail(&f, &mut seen), ["um", "dois"]);
+        // Sem mudar o arquivo, vem do que já foi lido.
+        seen.lines.push("guardado".into());
+        assert_eq!(read_tail(&f, &mut seen).last().map(String::as_str), Some("guardado"));
+        std::fs::write(&f, "um\ndois\ntres\n").unwrap();
+        assert_eq!(read_tail(&f, &mut seen), ["um", "dois", "tres"], "tamanho mudou, relê");
+        let _ = std::fs::remove_file(&f);
+        assert!(read_tail(&f, &mut Seen::default()).is_empty());
+    }
+
+    #[test]
+    fn arquivo_grande_vem_so_o_fim() {
+        let f = std::env::temp_dir().join(format!("prisma-tail-longo-{}.txt", std::process::id()));
+        let text: String = (0..3000).map(|i| format!("linha {i}\n")).collect();
+        assert!(text.len() > 16 * 1024);
+        std::fs::write(&f, &text).unwrap();
+        let lines = read_tail(&f, &mut Seen::default());
+        let _ = std::fs::remove_file(&f);
+        assert_eq!(lines.last().map(String::as_str), Some("linha 2999"));
+        assert!(!lines.iter().any(|l| l == "linha 0"), "o começo fica de fora");
+        let first: usize = lines[0].trim_start_matches("linha ").parse().expect("a primeira linha vem inteira");
+        assert_eq!(lines.len(), 3000 - first);
     }
 }
