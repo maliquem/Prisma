@@ -2954,8 +2954,10 @@ mod tests {
         r.profiles[1].name = "Corrida".into();
         r.fixed.insert("switch-a".into(), "Corrida".into());
         // Um `stop_all` de outro teste em paralelo para as duas: aí não prova nada, e tenta de novo.
+        // A outra entra antes: um `stop_all` entre as duas para só ela, nunca só a deste controle.
         for _ in 0..50 {
-            let (mine, other) = (macros::fake_running("switch-a", 0), macros::fake_running("switch-b", 0));
+            let other = macros::fake_running("switch-b", 0);
+            let mine = macros::fake_running("switch-a", 0);
             let (mut acts, mut events) = (vec![], vec![]);
             pad_switch(&mut r, "switch-a", 0, &mut acts, &mut events);
             if other.load(Ordering::Relaxed) {

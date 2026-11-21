@@ -690,6 +690,8 @@ fn run() {
             if !revive(&Win) {
                 note("ponte: o servidor do VIIPER não subiu");
                 START_FAILED.store(true, Ordering::Relaxed);
+                // Sem esperar, o servidor que não sobe (reinício pedido) gira o laço a 100% de um núcleo.
+                nap(Duration::from_secs(2));
                 continue;
             }
             server = Some(true);
