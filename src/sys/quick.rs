@@ -270,8 +270,17 @@ pub(crate) fn b64(data: &[u8]) -> String {
     out
 }
 
+/// O PowerShell também trata as aspas simples tipográficas (U+2018 a U+201B) como aspas.
 pub(crate) fn ps_quote(s: &str) -> String {
-    format!("'{}'", s.replace('\'', "''"))
+    let mut out = String::from("'");
+    for c in s.chars() {
+        out.push(c);
+        if matches!(c, '\'' | '\u{2018}' | '\u{2019}' | '\u{201A}' | '\u{201B}') {
+            out.push(c);
+        }
+    }
+    out.push('\'');
+    out
 }
 
 /// Pasta do usuário: o terminal abre nela, como o Terminal do Windows.
@@ -365,6 +374,13 @@ pub(crate) fn run_as_user(file: &str, args: &str, dir: &str, window: PROCESS_CRE
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ps_quote_doubles_every_kind_of_single_quote() {
+        assert_eq!(ps_quote("o'neil"), "'o''neil'");
+        assert_eq!(ps_quote("D\u{2019}Angelo"), "'D\u{2019}\u{2019}Angelo'");
+        assert_eq!(ps_quote("\u{2018}a\u{201A}b\u{201B}"), "'\u{2018}\u{2018}a\u{201A}\u{201A}b\u{201B}\u{201B}'");
+    }
 
     #[test]
     fn questions() {

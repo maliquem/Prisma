@@ -40,14 +40,50 @@ macro_rules! say {
 /// Grava num temporário ao lado e troca: o arquivo nunca fica pela metade se o PC cair no meio.
 pub fn write_safe(path: &std::path::Path, data: impl AsRef<[u8]>) -> std::io::Result<()> {
     use std::io::Write;
-    let tmp = path.with_extension("tmp");
-    {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    // Temporário só desta gravação: duas ao mesmo tempo (threads, ou o app e o gancho) não se atropelam.
+    static N: AtomicU32 = AtomicU32::new(0);
+    let name = path.file_name().unwrap_or_default().to_string_lossy();
+    let tmp = path.with_file_name(format!("{name}.{}-{}.tmp", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
+    let res = (|| {
         let mut f = std::fs::File::create(&tmp)?;
         f.write_all(data.as_ref())?;
         // No disco antes de trocar: uma queda logo depois não deixa o arquivo vazio.
         f.sync_all()?;
+        drop(f);
+        std::fs::rename(&tmp, path)
+    })();
+    if res.is_err() {
+        let _ = std::fs::remove_file(&tmp);
     }
-    std::fs::rename(tmp, path)
+    res
+}
+
+#[cfg(test)]
+mod write_safe_tests {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    #[test]
+    fn tmp_is_per_call_and_cleaned() {
+        let d = std::env::temp_dir().join(format!("prisma_write_safe_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        let p = d.join("c.ini");
+        let lock = |f: &std::path::Path| std::fs::OpenOptions::new().write(true).create(true).share_mode(0).open(f).unwrap();
+        // Outro gravador no meio, com o temporário de nome fixo de antes aberto: antes esta gravação falhava.
+        let other = lock(&d.join("c.tmp"));
+        super::write_safe(&p, b"a").unwrap();
+        // Destino preso por outro programa: a troca falha e o temporário desta gravação não fica para trás.
+        let held = lock(&p);
+        assert!(super::write_safe(&p, b"b").is_err());
+        drop((held, other));
+        let mut names: Vec<_> = std::fs::read_dir(&d).unwrap().flatten().map(|e| e.file_name()).collect();
+        names.sort();
+        let data = std::fs::read(&p).unwrap();
+        let _ = std::fs::remove_dir_all(&d);
+        assert_eq!(names, ["c.ini", "c.tmp"]);
+        assert_eq!(data, b"a");
+    }
 }
 
 /// Triângulo que cobre a tela, sem buffer de vértices.

@@ -19,7 +19,7 @@ use super::{from_wide, wide};
 const UNINSTALL: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall";
 const UNINSTALL32: &str = "Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall";
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Program {
     pub hive: isize,
     pub key: String,
@@ -443,13 +443,15 @@ fn stem_of(cmd: &str) -> Option<String> {
     (!n.starts_with("unins") && !n.starts_with("setup") && !n.starts_with("update")).then_some(n)
 }
 
-/// Lugares onde programas costumam deixar pasta com o próprio nome.
-fn deep_roots() -> Vec<PathBuf> {
-    let mut v = roots();
+/// Lugares onde programas costumam deixar pasta com o próprio nome. O `bool` diz se o achado pode
+/// vir marcado: em Documentos, Jogos Salvos, LocalLow e na pasta do usuário ficam os saves dos
+/// jogos, então ali nada vem marcado.
+fn deep_roots() -> Vec<(PathBuf, bool)> {
+    let mut v: Vec<(PathBuf, bool)> = roots().into_iter().map(|r| (r, true)).collect();
     let h = super::known_folder(&FOLDERID_Profile);
     if !h.as_os_str().is_empty() {
         for s in ["AppData\\LocalLow", "Documents", "Documents\\My Games", "Saved Games", ""] {
-            v.push(h.join(s));
+            v.push((h.join(s), false));
         }
     }
     v
@@ -458,6 +460,10 @@ fn deep_roots() -> Vec<PathBuf> {
 /// Procura o que sobrou. `others` são os programas que seguem instalados.
 /// Nome exato vem marcado. Nome parecido aparece desmarcado, para a pessoa decidir.
 pub fn scan(p: &Program, others: &[Program]) -> Vec<Leftover> {
+    scan_in(p, others, &deep_roots())
+}
+
+fn scan_in(p: &Program, others: &[Program], deep: &[(PathBuf, bool)]) -> Vec<Leftover> {
     let mut out: Vec<Leftover> = Vec::new();
     let name = clean_name(&p.name);
     let nn = norm(&name);
@@ -513,15 +519,15 @@ pub fn scan(p: &Program, others: &[Program]) -> Vec<Leftover> {
             add(d.clone(), grade(&leaf) == 2);
         }
     }
-    for root in deep_roots() {
-        let Ok(rd) = std::fs::read_dir(&root) else { continue };
+    for (root, may_mark) in deep {
+        let Ok(rd) = std::fs::read_dir(root) else { continue };
         for e in rd.flatten() {
             if !e.path().is_dir() {
                 continue;
             }
             let f = norm(&e.file_name().to_string_lossy());
             match grade(&f) {
-                2 => add(e.path(), true),
+                2 => add(e.path(), *may_mark),
                 1 => add(e.path(), false),
                 _ if !np.is_empty() && f == np && !too_generic(&np) => {
                     let Ok(inner) = std::fs::read_dir(e.path()) else { continue };
@@ -529,7 +535,7 @@ pub fn scan(p: &Program, others: &[Program]) -> Vec<Leftover> {
                     for i in inner.flatten() {
                         kids += 1;
                         match grade(&norm(&i.file_name().to_string_lossy())) {
-                            2 => add(i.path(), true),
+                            2 => add(i.path(), *may_mark),
                             1 => add(i.path(), false),
                             _ => {}
                         }
@@ -782,6 +788,21 @@ pub fn scan_preview(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn saves_folders_never_come_marked() {
+        let tmp = std::env::temp_dir().join(format!("prisma-unin-{}", std::process::id()));
+        let (docs, appd) = (tmp.join("Documents"), tmp.join("AppData"));
+        for d in [&docs, &appd] {
+            std::fs::create_dir_all(d.join("Zorblaxgame")).unwrap();
+        }
+        let p = Program { name: "Zorblaxgame".into(), ..Default::default() };
+        let out = scan_in(&p, &[], &[(docs.clone(), false), (appd.clone(), true)]);
+        let on = |root: &Path| out.iter().find(|l| l.label.starts_with(&root.display().to_string())).map(|l| l.on);
+        assert_eq!(on(&docs), Some(false));
+        assert_eq!(on(&appd), Some(true));
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
 
     #[test]
     fn only_the_program_name_comes_marked() {
