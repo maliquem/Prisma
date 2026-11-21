@@ -232,6 +232,15 @@ fn hk_conflict(old: &[(i32, Hotkey)], now: &[(i32, Hotkey)]) -> Option<(i32, i32
         .find_map(|(id, hk)| now.iter().find(|(o, ohk)| o != id && ohk == hk).map(|(o, _)| (*id, *o)))
 }
 
+fn hk_error(name: &str, hk: Hotkey) -> String {
+    format!("{name}: {} já está em uso", hk.label())
+}
+
+/// Atalhos que o Windows recusou e continuam na lista de erros: os que valem uma nova tentativa.
+fn hk_to_retry<'a>(list: &[(i32, Hotkey, &'a str, bool)], errors: &[String]) -> Vec<(i32, Hotkey, &'a str, bool)> {
+    list.iter().filter(|e| e.1.vk != 0 && errors.contains(&hk_error(e.2, e.1))).copied().collect()
+}
+
 /// Página onde se muda o atalho `id` (nome da barra lateral): a da função dona, menos o de Otimizar,
 /// que fica em Configurações.
 fn hk_place_page(id: i32) -> &'static str {
@@ -513,6 +522,8 @@ pub struct App {
     asked: HashSet<String>,
     last_tick: Instant,
     last_save: Instant,
+    /// Última nova tentativa dos atalhos que o Windows recusou (a outra cópia do Prisma pode ter fechado).
+    hk_retry: Instant,
     capturing_keys: bool,
     /// Uma janela de acesso remoto está na frente: atalhos soltos (`remote_window`).
     remote_front: bool,
@@ -743,6 +754,7 @@ pub fn start(background: bool) {
             side_seen: None,
             title_hot: Vec::new(),
             last_save: Instant::now(),
+            hk_retry: Instant::now(),
             capturing_keys: false,
             remote_front: false,
             engine: None,
@@ -1303,21 +1315,11 @@ impl App {
             if id == HK_FORCE && !std::env::args().any(|a| a.starts_with("--test-force-key=")) {
                 continue;
             }
-            let mut m = HOT_KEY_MODIFIERS(hk.mods);
-            if norepeat {
-                m |= MOD_NOREPEAT;
-            }
-            if unsafe { RegisterHotKey(Some(self.hub), id, m, hk.vk) }.is_ok() {
-                // Só a combinação que é nossa: a de outro programa continua dele.
-                if id == HK_SHADER {
-                    SHADER_VK.store(hk.vk, Ordering::Relaxed);
-                    SHADER_MODS.store(hk.mods, Ordering::Relaxed);
-                }
-            } else {
+            if !self.try_register(id, hk, norepeat) {
                 if id == HK_FORCE {
                     force_hook = Some(hk);
                 } else {
-                    errors.push(format!("{name}: {} já está em uso", hk.label()));
+                    errors.push(hk_error(name, hk));
                     if hk_changed(&self.hk_last, id, hk) {
                         taken = Some(hk);
                     }
@@ -1333,6 +1335,40 @@ impl App {
             self.hook_force_key(hk);
         }
         self.sync_hook();
+    }
+
+    fn try_register(&self, id: i32, hk: Hotkey, norepeat: bool) -> bool {
+        let mut m = HOT_KEY_MODIFIERS(hk.mods);
+        if norepeat {
+            m |= MOD_NOREPEAT;
+        }
+        let ok = unsafe { RegisterHotKey(Some(self.hub), id, m, hk.vk) }.is_ok();
+        // Só a combinação que é nossa: a de outro programa continua dele.
+        if ok && id == HK_SHADER {
+            SHADER_VK.store(hk.vk, Ordering::Relaxed);
+            SHADER_MODS.store(hk.mods, Ordering::Relaxed);
+        }
+        ok
+    }
+
+    /// De tempos em tempos, tenta de novo só os atalhos que falharam: quem os segurava (a outra cópia do Prisma)
+    /// pode ter fechado. Não mexe em pergunta, config nem no gancho do Fechar à força.
+    fn retry_hotkeys(&mut self) {
+        if self.hk_errors.is_empty() || self.capturing_keys || self.hk_retry.elapsed().as_secs() < 5 {
+            return;
+        }
+        self.hk_retry = Instant::now();
+        let mut got = false;
+        for (id, hk, name, norepeat) in hk_to_retry(&self.hotkey_list(), &self.hk_errors) {
+            if self.try_register(id, hk, norepeat) {
+                let e = hk_error(name, hk);
+                self.hk_errors.retain(|x| *x != e);
+                got = true;
+            }
+        }
+        if got {
+            self.sync_hook();
+        }
     }
 
     /// Atalhos globais: número, combinação, nome da função e se ignora a repetição da tecla.
@@ -3661,6 +3697,7 @@ impl App {
         for p in self.full.sweep().into_iter().filter(|p| !p.is_empty()) {
             crate::shader_profile::upscale_off(std::path::Path::new(&p));
         }
+        self.retry_hotkeys();
         self.update_tick();
         if self.on(Page::Volume) {
             self.sound_tick();
@@ -5319,6 +5356,18 @@ mod window_tests {
         assert!(remote_window("", "MSTSC.EXE"));
         assert!(!remote_window("PrismaMain", "prisma.exe"));
         assert!(!remote_window("", "notepad.exe"));
+    }
+
+    #[test]
+    fn retries_only_failed_hotkeys() {
+        let (f, g) = (Hotkey::new(3, 0x46), Hotkey::new(3, 0x47));
+        let list = [(HK_FULL, f, "Fullscreenizer", true), (HK_FIND, g, "Busca", true), (HK_WIDGET, Hotkey::default(), "Widget", true)];
+        assert!(hk_to_retry(&list, &[]).is_empty());
+        let r = hk_to_retry(&list, &[hk_error("Busca", g), hk_error("Widget", Hotkey::default())]);
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].0, HK_FIND);
+        // Combinação trocada depois do erro: o erro velho não vale para a nova.
+        assert!(hk_to_retry(&[(HK_FIND, f, "Busca", true)], &[hk_error("Busca", g)]).is_empty());
     }
 
     #[test]
