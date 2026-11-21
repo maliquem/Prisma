@@ -33,6 +33,9 @@ pub fn path_for(exe: &Path) -> PathBuf {
 pub fn copy_for(src: &Path, dst: &Path, exe: &Path) -> std::io::Result<()> {
     let mut p = Profile::load(src)?;
     p.exe = exe.into();
+    // api e fallback descrevem o jogo de origem e travam a Injeção na aba Shaders; o motor os redescobre no jogo novo.
+    p.api.clear();
+    p.fallback.clear();
     p.save(dst)
 }
 
@@ -323,12 +326,13 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         let src = d.join("a.txt");
-        let p = Profile { exe: PathBuf::from(r"C:\Jogos\A.exe"), params: vec![("x".into(), 2.0)], extra: vec!["linha=nova".into()], ..Profile::default() };
+        let p = Profile { exe: PathBuf::from(r"C:\Jogos\A.exe"), api: "dx9".into(), fallback: "dx9".into(), params: vec![("x".into(), 2.0)], extra: vec!["linha=nova".into()], ..Profile::default() };
         p.save(&src).unwrap();
         let dst = d.join("b.txt");
         copy_for(&src, &dst, Path::new(r"D:\Outro\B.exe")).unwrap();
         let q = Profile::load(&dst).unwrap();
         assert_eq!(q.exe, PathBuf::from(r"D:\Outro\B.exe"));
+        assert_eq!((q.api.as_str(), q.fallback.as_str()), ("", ""), "api e fallback eram do jogo de origem");
         assert_eq!((q.params, q.extra), (p.params, p.extra), "o resto vai igual");
         assert!(copy_for(&d.join("sumiu.txt"), &dst, Path::new("x.exe")).is_err());
         let _ = std::fs::remove_dir_all(&d);
