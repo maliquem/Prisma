@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **HDR** tab, **Game HDR**: the HDR mode list of each game (Windows default, Auto HDR, Prisma HDR...) works again; the choice went to the "TV picture mode" list of the calibration card above it, and with several games, the lists of one row answered in another. / Aba **HDR**, **HDR do jogo**: a lista do modo de HDR de cada jogo (Padrão do Windows, Auto HDR, HDR do Prisma...) volta a funcionar; a escolha ia para a lista "Modo de imagem da TV" do cartão de calibração, acima dela, e com vários jogos as listas de uma linha respondiam em outra.
+
 ## 1.11.1
 
 - **Prisma HDR** now also enters DirectX 9 and OpenGL (64-bit) games, windowed or borderless, with the same options: Automatic mode, fine-tunes, Analyze, the Ctrl+Alt+I in-game menu and the Meter's Prisma HDR line with GPU time. It stays out of exclusive fullscreen, of DirectX 9 games that use D3D9Ex, of DirectX 9 and OpenGL games with MSAA on the back buffer (MSAA antialiasing on in the game); the game then opens normally, without it; in OpenGL it covers one game window at a time. In DirectX 9 and OpenGL, **Interface brightness** doesn't set the HUD apart: the interface follows the scene. Games with anti-cheat stay out. / O **HDR do Prisma** agora também entra em jogos DirectX 9 e OpenGL (64 bits), em janela ou janela sem borda, com as mesmas opções: modo Automático, ajustes finos, Analisar, o menu Ctrl+Alt+I no jogo e a linha do HDR do Prisma no Medidor com o tempo de GPU. Fica de fora em tela cheia exclusiva, em jogos DirectX 9 que usam D3D9Ex, em jogos DirectX 9 e OpenGL com MSAA no buffer de trás (antisserrilhado MSAA ligado no jogo); o jogo então abre normal, sem ele; no OpenGL, vale para uma janela do jogo por vez. Em DirectX 9 e OpenGL, o **Brilho da interface** não separa o HUD: a interface segue a cena. Jogos com anti-cheat continuam de fora.

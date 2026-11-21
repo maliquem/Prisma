@@ -455,7 +455,9 @@ fn games_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen) {
         order.sort_by_cached_key(|&k| app_name(&app.cfg.hdr_games[k].exe).to_lowercase());
         let names: Vec<String> = order.iter().map(|&k| app_name(&app.cfg.hdr_games[k].exe).to_string()).collect();
         let mut at = order.iter().position(|&k| k == i).unwrap_or(0);
-        if ui.select("hdr-game", rect(r.x + 52.0, y + 4.0, r.w - 368.0, 36.0), &names, &mut at) {
+        // O id de cada dropdown é só dele: a escolha da lista volta pelo id (`popup_pick`), e um id repetido
+        // (o "hdr-mode" do modo de imagem da TV, ou o da linha de cima) a entregava ao primeiro que a lia.
+        if ui.select(&format!("hdr-game{i}"), rect(r.x + 52.0, y + 4.0, r.w - 368.0, 36.0), &names, &mut at) {
             PICK.set((order[at], app.cfg.hdr_games.len()));
         }
         // Com HDR próprio sobra deixar o do jogo ou melhorar com o Prisma; sem ele, os HDR que criam um.
@@ -472,7 +474,7 @@ fn games_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen) {
         }
         let options: Vec<String> = modes.iter().map(|m| m.1.to_string()).collect();
         let mut sel = modes.iter().position(|m| m.0 == g.mode).unwrap_or(0);
-        if ui.select("hdr-mode", rect(r.right() - 300.0, y + 4.0, 240.0, 36.0), &options, &mut sel) {
+        if ui.select(&format!("hdr-gmode{i}"), rect(r.right() - 300.0, y + 4.0, 240.0, 36.0), &options, &mut sel) {
             change = Some((i, modes[sel].0));
         }
         let b = rect(r.right() - 44.0, y + 10.0, 24.0, 24.0);
@@ -498,7 +500,7 @@ fn games_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen) {
             autohdr::NATIVE_NO => 2,
             _ => 0,
         };
-        if ui.select("hdr-native", rect(r.right() - 300.0, y, 240.0, 36.0), &marks, &mut m) {
+        if ui.select(&format!("hdr-native{i}"), rect(r.right() - 300.0, y, 240.0, 36.0), &marks, &mut m) {
             mark = Some((i, [autohdr::NATIVE_UNKNOWN, autohdr::NATIVE_YES, autohdr::NATIVE_NO][m]));
         }
         y += NATIVE_ROW;
