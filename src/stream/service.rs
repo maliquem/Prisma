@@ -153,13 +153,64 @@ pub(crate) fn is_link(p: &std::path::Path) -> bool {
     std::fs::symlink_metadata(p).is_ok_and(|m| m.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT.0 != 0)
 }
 
-/// Pasta só para SYSTEM, administradores e ela (alterar, sem mudar permissões), sem herdar de cima.
-unsafe fn protect_dir(dir: &std::path::Path, sid: &str) -> std::result::Result<(), String> {
+/// O dono é o SYSTEM ou os administradores: não foi um programa comum que criou.
+unsafe fn admin_owned(p: &std::path::Path) -> bool {
+    let (mut owner, mut sd) = (PSID::default(), PSECURITY_DESCRIPTOR::default());
+    let r = GetNamedSecurityInfoW(&HSTRING::from(p.as_os_str()), SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION, Some(&mut owner), None, None, None, &mut sd);
+    let ok = r == ERROR_SUCCESS && (IsWellKnownSid(owner, WinLocalSystemSid).as_bool() || IsWellKnownSid(owner, WinBuiltinAdministratorsSid).as_bool());
+    let _ = LocalFree(Some(HLOCAL(sd.0)));
+    ok
+}
+
+/// `ProgramData\Prisma` criada por um programa comum: o dono dela (pelo CREATOR OWNER do
+/// ProgramData) apagaria `compartilhar` e poria outra no lugar. Passa aos administradores e refaz as
+/// permissões herdadas, como se um administrador a tivesse criado.
+unsafe fn own_admin(p: &std::path::Path) -> std::result::Result<(), String> {
+    if admin_owned(p) {
+        return Ok(());
+    }
+    let mut ba = PSID::default();
+    ConvertStringSidToSidW(w!("S-1-5-32-544"), &mut ba).map_err(|e| e.message())?;
+    // A ACL vazia: o Windows a quer alinhada a 4 bytes, e a struct ACL do Rust só garante 2.
+    let mut buf = [0u32; 2];
+    let acl = buf.as_mut_ptr().cast::<ACL>();
+    let r = InitializeAcl(acl, std::mem::size_of_val(&buf) as u32, ACL_REVISION).map(|_| {
+        SetNamedSecurityInfoW(&HSTRING::from(p.as_os_str()), SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION | UNPROTECTED_DACL_SECURITY_INFORMATION, Some(ba), None, Some(acl), None)
+    });
+    let _ = LocalFree(Some(HLOCAL(ba.0)));
+    match r {
+        Ok(e) if e == ERROR_SUCCESS => Ok(()),
+        Ok(e) => Err(format!("{}: {}", p.display(), Error::from(e.to_hresult()).message())),
+        Err(e) => Err(e.message()),
+    }
+}
+
+/// A pasta dos dados (e a de cima) é do instalador: nenhuma é atalho, ninguém fora os
+/// administradores troca a dos dados por outra, e ela não foi criada por um programa comum.
+unsafe fn secure_dir(dir: &std::path::Path, create: bool) -> std::result::Result<(), String> {
     // ProgramData\Prisma aceita pastas novas de qualquer usuário: alguém pode ter posto uma junção lá antes.
     if let Some(p) = dir.ancestors().take(2).find(|p| is_link(p)) {
         return Err(format!("{} é um atalho para outra pasta; apague-o e instale de novo", p.display()));
     }
-    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let parent = dir.parent().ok_or("pasta sem a de cima")?;
+    if create {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    own_admin(parent)?;
+    // Criada agora pelo instalador: é dele, mesmo se o dono padrão dos administradores for a conta dela.
+    if create && std::fs::create_dir(dir).is_ok() {
+        own_admin(dir)?;
+    }
+    // Conferido depois de criar: um programa comum ainda pode criar pastas ali, mas não apagar as dos outros.
+    if is_link(dir) || !admin_owned(dir) {
+        return Err(format!("{} foi criada por outro programa; apague-a e instale de novo", dir.display()));
+    }
+    Ok(())
+}
+
+/// Pasta só para SYSTEM, administradores e ela (alterar, sem mudar permissões), sem herdar de cima.
+unsafe fn protect_dir(dir: &std::path::Path, sid: &str) -> std::result::Result<(), String> {
+    secure_dir(dir, true)?;
     // Ela só lê: quem assiste a este PC, o convite e os pedidos da sala mudam só como administrador
     // (antes, qualquer programa dela podia se pôr na lista com Acesso total). O OW tira do dono de um
     // arquivo o direito de mudar as permissões dele: um arquivo que ela criou antes voltaria a gravável.
@@ -532,6 +583,11 @@ unsafe extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
     // administradores mexerem.
     let helper_stop = CreateEventW(None, true, false, STOP_EVENT).unwrap_or_default();
     let sas = CreateEventW(None, false, false, SAS_EVENT).unwrap_or_default();
+    // Antes de confiar nos aparelhos dali e escrever ali como SYSTEM (nem o log, que iria aonde a
+    // pasta trocada apontasse).
+    if secure_dir(&data_dir(), false).is_err() {
+        return report(SERVICE_STOPPED, ERROR_ACCESS_DENIED.0);
+    }
     report(SERVICE_RUNNING, 0);
     log("ligado");
     supervise(stop, session, helper_stop, sas);
@@ -708,5 +764,25 @@ pub fn request_sas(who: &str) {
             }
             Err(e) => eprintln!("Ctrl+Alt+Del: o serviço não respondeu ({})", e.message()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn so_pasta_de_administrador_vale() {
+        // O ProgramData é do SYSTEM; uma pasta que este teste (sem elevar) cria é de quem rodou.
+        let pd = crate::sys::known_folder(&windows::Win32::UI::Shell::FOLDERID_ProgramData);
+        assert!(unsafe { admin_owned(&pd) });
+        let mine = std::env::temp_dir().join(format!("prisma-dono-{}", std::process::id()));
+        std::fs::create_dir_all(&mine).unwrap();
+        let ok = unsafe { admin_owned(&mine) };
+        let _ = std::fs::remove_dir(&mine);
+        if !crate::startup::is_elevated() {
+            assert!(!ok);
+        }
+        assert!(!unsafe { admin_owned(&mine) }, "pasta que não existe não vale");
     }
 }

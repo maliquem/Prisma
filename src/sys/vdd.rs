@@ -38,8 +38,19 @@ const SETTINGS: &str = r"C:\VirtualDisplayDriver\vdd_settings.xml";
 
 // ---------- Configuração do driver ----------
 
-/// O XML com o modo `w`x`h` a `hz` na lista e uma tela só. `None`: já estava tudo lá.
-pub fn with_mode(xml: Option<&str>, w: u32, h: u32, hz: u32) -> Option<String> {
+/// Maior lado da tela virtual: 8K. O pedido vem de quem assiste, e o driver não aguenta qualquer número.
+const MAX_SIDE: u32 = 8192;
+
+type Mode = (u32, u32, u32);
+
+/// Um `<resolution>` do XML é este modo.
+fn is_mode(r: &str, (w, h, hz): Mode) -> bool {
+    tag(r, "width") == Some(w) && tag(r, "height") == Some(h) && tag(r, "refresh_rate") == Some(hz)
+}
+
+/// O XML com o modo `w`x`h` a `hz` na lista e uma tela só. `None`: já estava tudo lá. `drop`: o
+/// modo que o Prisma pôs da vez anterior, que sai (a lista não cresce a cada aparelho novo).
+pub fn with_mode(xml: Option<&str>, w: u32, h: u32, hz: u32, drop: Option<Mode>) -> Option<String> {
     let Some(xml) = xml.filter(|x| x.contains("<resolutions>") && x.contains("</resolutions>")) else {
         return Some(format!(
             "<?xml version='1.0' encoding='utf-8'?>\n<vdd_settings>\n    <monitors>\n        <count>1</count>\n    </monitors>\n    <resolutions>\n{}    </resolutions>\n</vdd_settings>\n",
@@ -53,14 +64,29 @@ pub fn with_mode(xml: Option<&str>, w: u32, h: u32, hz: u32) -> Option<String> {
             out.replace_range(a + 7..b, "1");
         }
     }
-    let has = |x: &str| {
-        x.split("<resolution>").skip(1).any(|r| tag(r, "width") == Some(w) && tag(r, "height") == Some(h) && tag(r, "refresh_rate") == Some(hz))
-    };
-    if !has(&out) {
+    if let Some(d) = drop.filter(|&d| d != (w, h, hz)) {
+        let mut from = 0;
+        while let Some(a) = out[from..].find("<resolution>").map(|a| a + from) {
+            let Some(b) = out[a..].find("</resolution>").map(|b| a + b + "</resolution>".len()) else { break };
+            if is_mode(&out[a..b], d) {
+                // A linha inteira: o recuo antes e a quebra depois.
+                let start = out[..a].trim_end_matches([' ', '\t']).len();
+                let end = b + ["\r\n", "\n"].iter().find(|n| out[b..].starts_with(**n)).map_or(0, |n| n.len());
+                out.replace_range(start..end, "");
+                break;
+            }
+            from = b;
+        }
+    }
+    if !listed(&out, (w, h, hz)) {
         let at = out.find("</resolutions>").unwrap_or(out.len());
         out.insert_str(at, &format!("{}    ", entry(w, h, hz).trim_start()));
     }
     (out != xml).then_some(out)
+}
+
+fn listed(xml: &str, m: Mode) -> bool {
+    xml.split("<resolution>").skip(1).any(|r| is_mode(r, m))
 }
 
 fn entry(w: u32, h: u32, hz: u32) -> String {
@@ -228,6 +254,11 @@ fn mark() -> PathBuf {
     crate::config::data_dir().join("compartilhar").join("tela_virtual.txt")
 }
 
+/// O modo que o Prisma pôs no XML do driver (`w h hz`).
+fn mode_mark() -> PathBuf {
+    mark().with_file_name("tela_virtual_modo.txt")
+}
+
 impl Virtual {
     /// Para o host: liga quando o monitor escolhido para este aparelho é a tela virtual.
     pub fn for_monitor(monitor: u32, w: u32, h: u32, hz: u32, hdr: bool) -> Option<Self> {
@@ -241,16 +272,29 @@ impl Virtual {
             crate::config::log("tela virtual: o driver não está carregado; segue o monitor de sempre");
             return None;
         }
-        let (w, h) = if w >= 640 && h >= 480 { (w & !1, h & !1) } else { (1920, 1080) };
+        let (w, h) = if (640..=MAX_SIDE).contains(&w) && (480..=MAX_SIDE).contains(&h) { (w & !1, h & !1) } else { (1920, 1080) };
         let hz = if hz > 1 { hz.min(240) } else { 60 };
-        // O modo tem de estar na lista do driver: entra no XML e o driver recarrega.
+        // O modo tem de estar na lista do driver: entra no XML e o driver recarrega. O que o Prisma
+        // pôs da vez anterior sai; modo que já estava na lista é da pessoa e fica.
+        let mine = mode_mark();
+        let prev = std::fs::read_to_string(&mine).ok().and_then(|t| match t.split_whitespace().map(str::parse).collect::<Result<Vec<u32>, _>>().ok()?[..] {
+            [a, b, c] => Some((a, b, c)),
+            _ => None,
+        });
         let old = std::fs::read_to_string(SETTINGS).ok();
-        if let Some(new) = with_mode(old.as_deref(), w, h, hz) {
+        let ours = prev == Some((w, h, hz)) || !old.as_deref().is_some_and(|x| listed(x, (w, h, hz)));
+        let mut saved = true;
+        if let Some(new) = with_mode(old.as_deref(), w, h, hz, prev) {
             let _ = std::fs::create_dir_all(Path::new(SETTINGS).parent().unwrap());
-            if std::fs::write(SETTINGS, new).is_ok() {
+            saved = std::fs::write(SETTINGS, new).is_ok();
+            if saved {
                 let _ = pipe("RELOAD_DRIVER", false);
                 std::thread::sleep(Duration::from_millis(1500));
             }
+        }
+        if saved {
+            let _ = std::fs::create_dir_all(mark().parent().unwrap());
+            let _ = if ours { std::fs::write(&mine, format!("{w} {h} {hz}")) } else { std::fs::remove_file(&mine) };
         }
         if std::fs::create_dir_all(mark().parent().unwrap()).and_then(|_| std::fs::write(mark(), std::process::id().to_string())).is_err() {
             crate::config::log("tela virtual: sem a marca de volta no disco; não liga");
@@ -607,19 +651,26 @@ mod tests {
     #[test]
     fn modo_entra_uma_vez_e_conta_vira_um() {
         let xml = "<vdd_settings>\n    <monitors>\n        <count>2</count>\n    </monitors>\n    <resolutions>\n        <resolution>\n            <width>1920</width>\n            <height>1080</height>\n            <refresh_rate>60</refresh_rate>\n        </resolution>\n    </resolutions>\n    <colour><HDRPlus>false</HDRPlus></colour>\n</vdd_settings>\n";
-        let new = with_mode(Some(xml), 2560, 1440, 144).unwrap();
+        let new = with_mode(Some(xml), 2560, 1440, 144, None).unwrap();
         assert!(new.contains("<count>1</count>"));
         assert!(new.contains("<width>2560</width>") && new.contains("<refresh_rate>144</refresh_rate>"));
         // O resto do arquivo da pessoa fica.
         assert!(new.contains("<HDRPlus>false</HDRPlus>") && new.contains("<width>1920</width>"));
         assert_eq!(new.matches("<resolution>").count(), 2);
         // Já está lá: nada muda.
-        assert_eq!(with_mode(Some(&new), 2560, 1440, 144), None);
-        assert_eq!(with_mode(Some(&new), 1920, 1080, 60), None);
+        assert_eq!(with_mode(Some(&new), 2560, 1440, 144, None), None);
+        assert_eq!(with_mode(Some(&new), 1920, 1080, 60, None), None);
         // Sem arquivo (ou quebrado): um novo, só com o modo.
-        let fresh = with_mode(None, 1280, 720, 60).unwrap();
+        let fresh = with_mode(None, 1280, 720, 60, None).unwrap();
         assert_eq!(tag(&fresh, "count"), Some(1));
-        assert!(with_mode(Some(&fresh), 1280, 720, 60).is_none());
+        assert!(with_mode(Some(&fresh), 1280, 720, 60, None).is_none());
+        // Outro aparelho: o modo que o Prisma pôs antes sai, o da pessoa fica, e a lista não cresce.
+        let next = with_mode(Some(&new), 3840, 2160, 60, Some((2560, 1440, 144))).unwrap();
+        assert!(!next.contains("<width>2560</width>") && next.contains("<width>3840</width>") && next.contains("<width>1920</width>"));
+        assert_eq!(next.matches("<resolution>").count(), 2);
+        assert!(next.contains("<HDRPlus>false</HDRPlus>") && next.contains("</resolutions>"));
+        // O mesmo modo de antes: nada muda.
+        assert_eq!(with_mode(Some(&next), 3840, 2160, 60, Some((3840, 2160, 60))), None);
     }
 
     #[test]

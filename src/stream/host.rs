@@ -916,6 +916,58 @@ pub(super) struct Injector {
     win: Option<(HWND, u32)>,
     /// Onde o mouse de quem assiste está, em pixels da área de trabalho.
     at: POINT,
+    /// Com o serviço e sem a permissão de sistema: o nível de integridade de quem usa o PC. Tecla
+    /// e clique para um programa acima dele não vão (sem o serviço, o próprio Windows barra).
+    cap: Option<u32>,
+}
+
+/// Nível de integridade do token: 0x2000 comum, 0x3000 administrador, 0x4000 SYSTEM.
+unsafe fn integrity(tok: HANDLE) -> Option<u32> {
+    use windows::Win32::Security::*;
+    let mut need = 0u32;
+    let _ = GetTokenInformation(tok, TokenIntegrityLevel, None, 0, &mut need);
+    let mut buf = vec![0u64; (need as usize).div_ceil(8)];
+    GetTokenInformation(tok, TokenIntegrityLevel, Some(buf.as_mut_ptr() as *mut _), need, &mut need).ok()?;
+    let sid = (*(buf.as_ptr() as *const TOKEN_MANDATORY_LABEL)).Label.Sid;
+    let n = (*GetSidSubAuthorityCount(sid)).checked_sub(1)?;
+    Some(*GetSidSubAuthority(sid, n as u32))
+}
+
+fn process_integrity(pid: u32) -> Option<u32> {
+    unsafe {
+        let p = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
+        let mut tok = HANDLE::default();
+        let r = OpenProcessToken(p, windows::Win32::Security::TOKEN_QUERY, &mut tok);
+        let _ = CloseHandle(p);
+        r.ok()?;
+        let level = integrity(tok);
+        let _ = CloseHandle(tok);
+        level
+    }
+}
+
+/// O nível de quem está nesta sessão (o do Explorer dela); comum se não der para ler.
+fn user_integrity() -> u32 {
+    use windows::Win32::System::RemoteDesktop::{ProcessIdToSessionId, WTSQueryUserToken};
+    unsafe {
+        let mut session = 0;
+        let mut tok = HANDLE::default();
+        if ProcessIdToSessionId(GetCurrentProcessId(), &mut session).is_err() || WTSQueryUserToken(session, &mut tok).is_err() {
+            return 0x2000;
+        }
+        let level = integrity(tok);
+        let _ = CloseHandle(tok);
+        level.unwrap_or(0x2000)
+    }
+}
+
+/// A janela é de um programa acima de `cap` (ou de um que não se deixa ler).
+fn above(h: HWND, cap: u32) -> bool {
+    if h.is_invalid() {
+        return false;
+    }
+    let pid = crate::sys::procs::window_pid(h);
+    pid != std::process::id() && process_integrity(pid).is_none_or(|l| l > cap)
 }
 
 /// Da imagem (0 a 65535) para a área transmitida em pixels, e daí para a escala de 0 a 65535 da
@@ -986,7 +1038,8 @@ impl Injector {
             RECT { left: x, top: y, right: x + GetSystemMetrics(SM_CXVIRTUALSCREEN), bottom: y + GetSystemMetrics(SM_CYVIRTUALSCREEN) }
         };
         let id = INJECTORS.fetch_add(1, Ordering::Relaxed);
-        let mut me = Self { mon: mi.rcMonitor, virt, perms, next: None, keys: HashSet::new(), buttons: [false; 5], id, one_at_a_time: false, host_first: false, win: None, at: POINT::default() };
+        let cap = (SERVICE.load(Ordering::Relaxed) && perms & SYSTEM == 0).then(user_integrity);
+        let mut me = Self { mon: mi.rcMonitor, virt, perms, next: None, keys: HashSet::new(), buttons: [false; 5], id, one_at_a_time: false, host_first: false, win: None, at: POINT::default(), cap };
         me.rules(&Opts::load());
         me
     }
@@ -1088,6 +1141,20 @@ impl Injector {
         [k(KEYBD_EVENT_FLAGS(0)), k(KEYEVENTF_KEYUP)]
     }
 
+    /// Tecla ou clique que iria a um programa acima de quem usa o PC (`cap`). Soltar e mover vão:
+    /// nada fica preso, e o mouse sai de cima da janela.
+    fn into_admin(&self, e: Input) -> bool {
+        let Some(cap) = self.cap else { return false };
+        let fg = || above(unsafe { GetForegroundWindow() }, cap);
+        let under = || above(unsafe { WindowFromPoint(self.at) }, cap);
+        match e {
+            Input::Key { down: true, .. } | Input::Locks { .. } | Input::Mask => fg(),
+            Input::Button { down: true, .. } => under(),
+            Input::Wheel { .. } => under() || fg(),
+            _ => false,
+        }
+    }
+
     /// O mouse está em cima da janela compartilhada (ou de um menu dela)? Sem janela, sempre.
     fn inside(&self) -> bool {
         let Some((_, pid)) = self.win else { return true };
@@ -1141,7 +1208,7 @@ impl Injector {
             if self.next.is_some_and(|n| (seq.wrapping_sub(n) as i32) < 0) {
                 continue;
             }
-            if let Some(e) = Input::get(chunk) {
+            if let Some(e) = Input::get(chunk).filter(|&e| !self.into_admin(e)) {
                 if matches!(e, Input::Locks { .. } | Input::Mask) && self.perms & KEYBOARD != 0 {
                     // O mesmo GetKeyState do Console.CapsLock do .NET: vale fora da janela da frente.
                     let now = unsafe { (GetKeyState(VK_CAPITAL.0 as i32) & 1 != 0, GetKeyState(VK_NUMLOCK.0 as i32) & 1 != 0) };
@@ -2357,6 +2424,15 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn integrity_of_this_process() {
+        // Sem elevar, comum (0x2000); elevado, 0x3000. Janela nenhuma não barra nada.
+        let me = process_integrity(std::process::id()).unwrap();
+        assert!((0x2000..=0x4000).contains(&me));
+        assert!(!above(HWND::default(), 0));
+        assert!(process_integrity(0).is_none());
+    }
 
     #[test]
     fn gpu_mark_round_trip() {

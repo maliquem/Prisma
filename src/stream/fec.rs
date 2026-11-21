@@ -154,7 +154,9 @@ impl Rx {
     #[allow(clippy::too_many_arguments)]
     pub fn parity(&mut self, frame: u32, count: u16, idx: u16, rec: u16, key: bool, pts: i64, shard: &[u8]) -> Vec<Vec<u8>> {
         let Some(f) = self.slot(frame, count, key, pts) else { return Vec::new() };
-        if rec == 0 || idx >= rec || (f.rec != 0 && f.rec != rec) || shard.is_empty() || shard.len() % 2 != 0 {
+        // Mais paridade que pedaços nenhum host manda (até 20%): sem o teto, um host hostil faria
+        // guardar 65535 pedaços de paridade por quadro.
+        if rec == 0 || rec > count || idx >= rec || (f.rec != 0 && f.rec != rec) || shard.is_empty() || shard.len() % 2 != 0 {
             return Vec::new();
         }
         f.rec = rec;
@@ -283,6 +285,9 @@ mod tests {
         assert!(rx.parity(1, 3, 0, 1, false, 0, &[1, 2, 3]).is_empty());
         assert!(rx.data(1, 0, 0, false, 0, &[1]).is_empty());
         assert!(rx.data(1, 3, 9, false, 0, &[1]).is_empty());
+        // Mais paridade que pedaços: nem guarda.
+        assert!(rx.parity(3, 2, 2, 3, false, 0, &[1, 2]).is_empty());
+        assert!(rx.frames.iter().find(|f| f.frame == 3).is_some_and(|f| f.parity.is_empty()));
         // Paridade que não confere com os pedaços: nada de pânico, nada refeito.
         rx.data(2, 2, 0, false, 0, &[9; 40]);
         assert!(rx.parity(2, 2, 0, 1, false, 0, &[0; 8]).is_empty());
