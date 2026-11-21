@@ -445,7 +445,7 @@ fn games_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen) {
     let all: Vec<(u8, &str)> = autohdr::MODES.iter().filter(|m| m.0 != autohdr::RTX || autohdr::nvidia()).map(|m| (m.0, m.1)).collect();
     let calibrated = Hdr::from_profile(app.cfg.hdr_profiles.iter().rfind(|p| p.screen == s.name));
     let (mut change, mut remove, mut tuned, mut launch, mut hotkey_changed) = (None, None, false, None, false);
-    let (mut mark, mut way, mut reset, mut ac) = (None, None, None, None);
+    let (mut mark, mut way, mut reset, mut ac, mut mods_off) = (None, None, None, None, None);
     let mut y = r.y + 72.0;
     for i in chosen(app).into_iter() {
         let g = &app.cfg.hdr_games[i];
@@ -533,14 +533,43 @@ fn games_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen) {
             };
             ui.c.text_wrap(rect(p.x, p.y, p.w, 36.0), how, 13.0, TEXT2, Weight::Regular);
         }
-        let line = autohdr::launch_option();
-        ui.c.text(rect(p.x, p.y + 40.0, p.w - 290.0, 32.0), &line, 12.0, MUTED, Align::Left, Weight::Regular);
-        if ui.button(&format!("hdr-gc{i}"), rect(p.right() - 280.0, p.y + 38.0, 120.0, 34.0), "Copiar linha", false) {
-            let ok = crate::capture::copy_text(app.paint_window.0, &line);
-            app.toast.info(if ok { "Linha copiada." } else { "Não consegui copiar." });
-        }
-        if ui.button(&format!("hdr-go{i}"), rect(p.right() - 150.0, p.y + 38.0, 150.0, 34.0), if steam.is_some() { "Abrir pela Steam" } else { "Abrir com HDR" }, true) {
-            launch = Some((g.path.clone(), steam));
+        // Na última abertura outro mod trocou o formato da imagem e o gancho saiu do caminho (`HdrLive::other_format`).
+        let other = app.hdr_other_format.eq_ignore_ascii_case(&g.exe);
+        const OTHER: &str = "Sem o HDR do Prisma na última abertura: outro mod trocou o formato da imagem (no ERR, o ForceHDR do ERSS). Desligue o HDR dele para usar o do Prisma.";
+        if !g.mods.is_empty() {
+            // O carregador de mods abre o gancho com o jogo (me3 do ERR); a linha e o Abrir ficam de fora.
+            if other {
+                ui.c.text_wrap(rect(p.x, p.y + 40.0, p.w - 160.0, 34.0), OTHER, 12.0, WARN, Weight::Regular);
+            } else {
+                ui.c.text(rect(p.x, p.y + 40.0, p.w - 160.0, 16.0), "Gancho na pasta de mods: abra o jogo pelo lançador dos mods, com o Prisma aberto.", 12.0, TEXT2, Align::Left, Weight::Regular);
+                ui.c.text(rect(p.x, p.y + 58.0, p.w - 160.0, 16.0), &g.mods, 12.0, MUTED, Align::Left, Weight::Regular);
+            }
+            if ui.button(&format!("hdr-gx{i}"), rect(p.right() - 150.0, p.y + 38.0, 150.0, 34.0), "Tirar da pasta", false) {
+                if crate::sys::inject::take_native(&g.mods) {
+                    mods_off = Some(i);
+                } else {
+                    app.toast.info("Feche o jogo antes de tirar o gancho.");
+                }
+            }
+        } else {
+            let line = autohdr::launch_option();
+            if other {
+                ui.c.text_wrap(rect(p.x, p.y + 40.0, p.w - 440.0, 34.0), OTHER, 12.0, WARN, Weight::Regular);
+            } else {
+                ui.c.text(rect(p.x, p.y + 40.0, p.w - 440.0, 32.0), &line, 12.0, MUTED, Align::Left, Weight::Regular);
+            }
+            let at = rect(p.right() - 430.0, p.y + 38.0, 140.0, 34.0);
+            if ui.button(&format!("hdr-gm{i}"), at, "Pasta de mods", false) {
+                app.pick_mods(i);
+            }
+            ui.tip(at, "Para jogo aberto por um lançador de mods (me3 do ELDEN RING Reforged): escolha a pasta de DLLs dele (dll\\offline) e o gancho entra com o jogo, sem injeção.");
+            if ui.button(&format!("hdr-gc{i}"), rect(p.right() - 280.0, p.y + 38.0, 120.0, 34.0), "Copiar linha", false) {
+                let ok = crate::capture::copy_text(app.paint_window.0, &line);
+                app.toast.info(if ok { "Linha copiada." } else { "Não consegui copiar." });
+            }
+            if ui.button(&format!("hdr-go{i}"), rect(p.right() - 150.0, p.y + 38.0, 150.0, 34.0), if steam.is_some() { "Abrir pela Steam" } else { "Abrir com HDR" }, true) {
+                launch = Some((g.path.clone(), steam));
+            }
         }
         // Automático: a calibração da tela e a análise, com o ajuste fino guardado como diferença.
         let auto = g.prisma.is_none();
@@ -599,6 +628,10 @@ fn games_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen) {
     }
     if let Some((i, off)) = ac {
         app.cfg.hdr_games[i].ac_off = off;
+        app.cfg.save();
+    }
+    if let Some(i) = mods_off {
+        app.cfg.hdr_games[i].mods.clear();
         app.cfg.save();
     }
     if hotkey_changed {

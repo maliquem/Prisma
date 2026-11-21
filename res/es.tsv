@@ -2970,6 +2970,13 @@ Um HDR por jogo. Vale a partir da próxima vez que o jogo abrir.	Un HDR por jueg
 Um HDR por jogo. O Auto HDR está desligado nas configurações do Windows: ligue lá para ele valer.	Un HDR por juego. Auto HDR está desactivado en la configuración de Windows: actívalo allí para que surta efecto.
 Bloqueado: este jogo tem anti-cheat, e o HDR do Prisma precisa entrar no jogo. Escolha Auto HDR ou RTX HDR, ou marque abaixo se você abre o jogo sem o anti-cheat.	Bloqueado: este juego tiene antitrampas y el HDR de Prisma necesita entrar en el juego. Elige Auto HDR o RTX HDR, o marca abajo si abres el juego sin el antitrampas.
 Abro sem o anti-cheat (offline, mods); com ele rodando, o Prisma não entra	Lo abro sin antitrampas (sin conexión, mods); si está activo, Prisma no entra
+Pasta de mods	Carpeta de mods
+Tirar da pasta	Quitar de la carpeta
+Gancho na pasta de mods: abra o jogo pelo lançador dos mods, com o Prisma aberto.	Gancho en la carpeta de mods: abre el juego desde el lanzador de mods, con Prisma abierto.
+Sem o HDR do Prisma na última abertura: outro mod trocou o formato da imagem (no ERR, o ForceHDR do ERSS). Desligue o HDR dele para usar o do Prisma.	Sin el HDR de Prisma en la última apertura: otro mod cambió el formato de la imagen (en ERR, el ForceHDR de ERSS). Desactiva su HDR para usar el de Prisma.
+Para jogo aberto por um lançador de mods (me3 do ELDEN RING Reforged): escolha a pasta de DLLs dele (dll\offline) e o gancho entra com o jogo, sem injeção.	Para un juego abierto con un lanzador de mods (me3 de ELDEN RING Reforged): elige su carpeta de DLL (dll\offline) y el gancho entra con el juego, sin inyección.
+Feche o jogo antes de tirar o gancho.	Cierra el juego antes de quitar el gancho.
+Não consegui gravar o gancho nessa pasta.	No se pudo grabar el gancho en esa carpeta.
 Jogo da Steam: cole a linha abaixo em Propriedades > Opções de inicialização. Depois é só abrir pela Steam.	Juego de Steam: pega la línea de abajo en Propiedades > Opciones de lanzamiento. Después solo ábrelo desde Steam.
 Abra o jogo pelo botão Abrir com HDR, ou use a linha abaixo nas opções de inicialização do launcher.	Abre el juego con el botón Abrir con HDR, o usa la línea de abajo en las opciones de lanzamiento del launcher.
 Copiar linha	Copiar línea

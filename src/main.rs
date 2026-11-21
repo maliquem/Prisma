@@ -110,6 +110,13 @@ fn main() {
     if sys::autohdr::run_args() {
         return;
     }
+    // Teste do gancho posto por um carregador de mods: --test-adopt=saida.txt|eldenring.exe
+    #[cfg(debug_assertions)]
+    if let Some(v) = std::env::args().find_map(|a| a.strip_prefix("--test-adopt=").map(str::to_string)) {
+        let (out, exe) = v.split_once('|').unwrap();
+        sys::autohdr::test_adopt(out, exe);
+        return;
+    }
     // Um link de convite (prisma://parear/...): a página Compartilhar tela pergunta se pareia.
     #[cfg(feature = "stream")]
     let link = stream::weblink::take_arg();

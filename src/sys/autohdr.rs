@@ -271,6 +271,64 @@ pub fn allowed(cfg: &crate::config::Config, path: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Gancho que um carregador de mods abriu com o jogo (`inject::put_native`): ele nasce sem ajustes (pico zero).
+/// Passa agora e segue passando até o jogo fechar. Jogo aberto pelo Prisma já tem os ajustes e fica como está.
+// shortcut: o Prisma reaberto com o jogo aberto vê o pico já gravado e não passa os ajustes ao vivo até o jogo reabrir;
+// guardar os pids servidos se alguém reclamar.
+pub fn adopt(cfg: &crate::config::Config, live: &crate::sys::inject::HdrLive, pid: u32, name: &str) {
+    if live.get().peak != 0.0 {
+        return;
+    }
+    let Some(hdr) = game_hdr(cfg, name) else { return };
+    // Já aqui, para o próximo segundo não adotar de novo.
+    live.set(&hdr);
+    let name = name.to_string();
+    std::thread::spawn(move || {
+        if let Some(l) = crate::sys::inject::Limiter::adopt(pid) {
+            crate::config::log(&format!("HDR do Prisma: {name} com o gancho do carregador de mods"));
+            serve(&l, &name, hdr);
+        }
+    });
+}
+
+/// Teste: espera até 10 min o jogo `name` ter janela e faz o que o app faz com ele na frente (`adopt`), gravando o
+/// estado do gancho a cada segundo até ele fechar.
+#[cfg(debug_assertions)]
+pub fn test_adopt(out: &str, name: &str) {
+    use super::procs;
+    let cfg = crate::config::Config::load();
+    let mut log = String::new();
+    for g in cfg.hdr_games.iter().filter(|g| !g.mods.is_empty()) {
+        log += &format!("gancho em {}: {}
+", g.mods, crate::sys::inject::put_native(&g.mods));
+    }
+    let found = (0..600).find_map(|_| {
+        let pid = procs::top_windows().into_iter().map(procs::window_pid).find(|p| procs::image_path(*p).is_some_and(|i| procs::exe_name(&i).eq_ignore_ascii_case(name)));
+        if pid.is_none() {
+            std::thread::sleep(std::time::Duration::from_secs(1));
+        }
+        pid
+    });
+    let Some(pid) = found else {
+        let _ = std::fs::write(out, "o jogo não apareceu
+");
+        return;
+    };
+    let mut i = 0;
+    while procs::is_alive(pid) {
+        let live = crate::sys::inject::HdrLive::connect(pid);
+        if let Some(live) = &live {
+            adopt(&cfg, live, pid, name);
+        }
+        let l = crate::sys::inject::Limiter::adopt(pid);
+        log += &format!("{i} s pid {pid}: gancho {} cadeias, quadros, erro {:?} saída, interface {:?} ajustes {:?}
+", live.is_some(), l.as_ref().and_then(|l| l.hdr_stats()), l.as_ref().and_then(|l| l.hdr_split()), live.as_ref().map(|l| l.get()));
+        let _ = std::fs::write(out, &log);
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        i += 1;
+    }
+}
+
 /// Passa os ajustes ao vivo até o jogo fechar.
 fn serve(l: &crate::sys::inject::Limiter, name: &str, mut hdr: Hdr) {
     let path = crate::config::config_path();

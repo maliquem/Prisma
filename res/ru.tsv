@@ -2970,6 +2970,13 @@ Um HDR por jogo. Vale a partir da próxima vez que o jogo abrir.	Свой HDR д
 Um HDR por jogo. O Auto HDR está desligado nas configurações do Windows: ligue lá para ele valer.	Свой HDR для каждой игры. Auto HDR выключен в настройках Windows: включите его там, чтобы он работал.
 Bloqueado: este jogo tem anti-cheat, e o HDR do Prisma precisa entrar no jogo. Escolha Auto HDR ou RTX HDR, ou marque abaixo se você abre o jogo sem o anti-cheat.	Заблокировано: в игре есть античит, а HDR Prisma должен проникнуть в игру. Выберите Auto HDR или RTX HDR либо отметьте ниже, если запускаете игру без античита.
 Abro sem o anti-cheat (offline, mods); com ele rodando, o Prisma não entra	Запускаю без античита (офлайн, моды); если он работает, Prisma не внедряется
+Pasta de mods	Папка модов
+Tirar da pasta	Убрать из папки
+Gancho na pasta de mods: abra o jogo pelo lançador dos mods, com o Prisma aberto.	Хук в папке модов: запустите игру через лаунчер модов при открытом Prisma.
+Sem o HDR do Prisma na última abertura: outro mod trocou o formato da imagem (no ERR, o ForceHDR do ERSS). Desligue o HDR dele para usar o do Prisma.	HDR Prisma не работал при последнем запуске: другой мод изменил формат изображения (в ERR это ForceHDR из ERSS). Отключите его HDR, чтобы использовать HDR Prisma.
+Para jogo aberto por um lançador de mods (me3 do ELDEN RING Reforged): escolha a pasta de DLLs dele (dll\offline) e o gancho entra com o jogo, sem injeção.	Для игры, запускаемой через лаунчер модов (me3 для ELDEN RING Reforged): выберите его папку с DLL (dll\offline), и хук загрузится вместе с игрой, без внедрения.
+Feche o jogo antes de tirar o gancho.	Закройте игру, прежде чем убирать хук.
+Não consegui gravar o gancho nessa pasta.	Не удалось записать хук в эту папку.
 Jogo da Steam: cole a linha abaixo em Propriedades > Opções de inicialização. Depois é só abrir pela Steam.	Игра из Steam: вставьте строку ниже в Свойства > Параметры запуска. Потом просто запускайте через Steam.
 Abra o jogo pelo botão Abrir com HDR, ou use a linha abaixo nas opções de inicialização do launcher.	Запустите игру кнопкой «Открыть с HDR» или используйте строку ниже в параметрах запуска лаунчера.
 Copiar linha	Копировать строку
