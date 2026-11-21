@@ -21,6 +21,8 @@ pub const PAD_BITS: Buttons = (super::pads::PHYSICAL & ((1 << 62) - 1)) | remap:
 
 /// Macros rodando: (controle, número) → modo e o sinal de parar.
 static RUNNING: Mutex<Option<HashMap<(String, u8), (Mode, Arc<AtomicBool>)>>> = Mutex::new(None);
+/// Threads de macro vivas: a que parou sai de `RUNNING` na hora, mas solta as teclas um pouco depois.
+static LIVE: AtomicU32 = AtomicU32::new(0);
 
 /// O botão ligado à macro `n` foi apertado no controle `pad`.
 pub fn press(pad: &str, n: u8, m: &Macro) {
@@ -39,6 +41,7 @@ pub fn press(pad: &str, n: u8, m: &Macro) {
     map.insert(key.clone(), (m.mode, stop.clone()));
     let (steps, mode) = (m.steps.clone(), m.mode);
     let pad = pad.to_string();
+    LIVE.fetch_add(1, Ordering::SeqCst);
     std::thread::spawn(move || {
         run(&steps, mode, &stop, |a| {
             // Botão do controle: pelo caminho do controle; o resto, ao Windows.
@@ -56,7 +59,16 @@ pub fn press(pad: &str, n: u8, m: &Macro) {
                 map.remove(&key);
             }
         }
+        LIVE.fetch_sub(1, Ordering::SeqCst);
     });
+}
+
+/// Espera até `max` as macros paradas soltarem o que seguravam (o fechamento, antes do `TerminateProcess`).
+pub fn wait_stopped(max: Duration) {
+    let end = Instant::now() + max;
+    while LIVE.load(Ordering::SeqCst) > 0 && Instant::now() < end {
+        std::thread::sleep(Duration::from_millis(2));
+    }
 }
 
 /// O botão soltou: "enquanto segura" para.
@@ -86,6 +98,14 @@ pub fn stop_pad(pad: &str) {
             }
             keep
         });
+    }
+}
+
+/// O controle saiu: para as macros dele e esquece o que segurava.
+pub fn forget(pad: &str) {
+    stop_pad(pad);
+    if let Some(m) = HELD.lock().unwrap().as_mut() {
+        m.remove(pad);
     }
 }
 
@@ -447,9 +467,27 @@ fn hooks() {
     }
 }
 
+/// Uma macro "rodando" de mentira, para os testes de quem a para.
+#[cfg(test)]
+pub(super) fn fake_running(pad: &str, n: u8) -> Arc<AtomicBool> {
+    let stop = Arc::new(AtomicBool::new(false));
+    RUNNING.lock().unwrap().get_or_insert_with(HashMap::new).insert((pad.into(), n), (Mode::Held, stop.clone()));
+    stop
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn forgetting_a_pad_stops_its_macros_and_drops_its_held_buttons() {
+        let mine = fake_running("forget-a", 0);
+        pad_input("forget-a", &mut Input::default(), Instant::now());
+        forget("forget-a");
+        assert!(mine.load(Ordering::Relaxed));
+        assert!(!RUNNING.lock().unwrap().as_ref().unwrap().keys().any(|k| k.0 == "forget-a"));
+        assert!(!HELD.lock().unwrap().as_ref().unwrap().contains_key("forget-a"));
+    }
 
     #[test]
     fn recorder_keeps_waits_and_drops_repeats_and_loose_ends() {

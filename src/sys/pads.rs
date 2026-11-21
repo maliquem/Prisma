@@ -1065,7 +1065,19 @@ struct Axis {
     link: u16,
     min: i32,
     max: i32,
+    /// Largura do campo no relatório, em bits: a estensão de sinal depende dela.
+    bits: u16,
     role: Option<Role>,
+}
+
+/// `HidP_GetUsageValue` entrega o campo cru, sem sinal: com mínimo lógico negativo (-128..127) o -1
+/// chega como 255. Estende o sinal pela largura do campo; se o Windows já estendeu, deixa como veio.
+fn signed(v: u32, bits: u16, min: i32) -> i32 {
+    if min < 0 && (1..32).contains(&bits) && v < 1u32 << bits && (v >> (bits - 1)) & 1 == 1 {
+        (v as i64 - (1i64 << bits)) as i32
+    } else {
+        v as i32
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -1136,7 +1148,7 @@ unsafe fn generic_axes(pre: PHIDP_PREPARSED_DATA) -> (Vec<Axis>, u8) {
         for v in &vc[..n as usize] {
             // Generic Desktop (sticks, hats) e Simulation (volante, pedais, leme, manete).
             if (v.UsagePage == 1 || v.UsagePage == 2) && !v.IsRange {
-                axes.push(Axis { page: v.UsagePage, usage: v.Anonymous.NotRange.Usage, link: v.LinkCollection, min: v.LogicalMin, max: v.LogicalMax, role: None });
+                axes.push(Axis { page: v.UsagePage, usage: v.Anonymous.NotRange.Usage, link: v.LinkCollection, min: v.LogicalMin, max: v.LogicalMax, bits: v.BitSize, role: None });
             }
         }
     }
@@ -1172,14 +1184,15 @@ unsafe fn generic_input(pre: PHIDP_PREPARSED_DATA, axes: &[Axis], report: &mut [
         if HidP_GetUsageValue(HidP_Input, a.page, Some(a.link), a.usage, &mut v, pre, report).is_err() {
             continue;
         }
+        let v = signed(v, a.bits, a.min);
         let span = (a.max - a.min).max(1) as f32;
-        let unit = ((v as i32 - a.min) as f32 / span).clamp(0.0, 1.0);
+        let unit = ((v - a.min) as f32 / span).clamp(0.0, 1.0);
         let stick = unit * 2.0 - 1.0;
         if (a.page, a.usage) != (1, 0x39) && raw < 8 {
             inp.axes[raw] = unit;
             raw += 1;
         }
-        let hat = || hat_bits(u8::try_from(v as i32 - a.min).unwrap_or(u8::MAX));
+        let hat = || hat_bits(u8::try_from(v - a.min).unwrap_or(u8::MAX));
         match a.role {
             Some(Role::Lx) => inp.lx = stick,
             Some(Role::Ly) => inp.ly = -stick,
@@ -1953,6 +1966,25 @@ pub fn trigger(rest: &[f32], pressed: &[f32]) -> Option<(f32, f32, f32)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn signed_axis_extends_the_sign_by_field_width() {
+        // Eixo -128..127 em 8 bits: 0xFF é -1, 0x80 é -128, 0x7F é 127.
+        assert_eq!(signed(0xFF, 8, -128), -1);
+        assert_eq!(signed(0x80, 8, -128), -128);
+        assert_eq!(signed(0x7F, 8, -128), 127);
+        assert_eq!(signed(0, 8, -128), 0);
+        // O Windows já estendeu: fica como veio.
+        assert_eq!(signed(-5i32 as u32, 8, -128), -5);
+        // Sem mínimo negativo o valor é o cru, mesmo com o bit alto ligado.
+        assert_eq!(signed(0xFF, 8, 0), 255);
+        // 16 bits.
+        assert_eq!(signed(0xFFFF, 16, -32768), -1);
+        // O centro de um eixo assinado cai a meio caminho, não no extremo.
+        let unit = |v: u32| ((signed(v, 8, -128) - -128) as f32 / 255.0).clamp(0.0, 1.0);
+        assert!((unit(0xFF) - 0.498).abs() < 0.01 && (unit(0) - 0.502).abs() < 0.01);
+        assert_eq!((unit(0x80), unit(0x7F)), (0.0, 1.0));
+    }
 
     #[test]
     fn generic_roles() {

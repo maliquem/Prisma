@@ -631,8 +631,25 @@ fn xinput_rumble(sent: &mut Vec<(String, (u8, u8))>, now: &[(String, (u8, u8))])
     }
 }
 
+/// Espera antes de religar o virtual depois de `fails` falhas seguidas: 2, 4 e no máximo 8 s.
+fn backoff(fails: u32) -> Duration {
+    Duration::from_secs(1 << fails.clamp(1, 3))
+}
+
+/// Espera `d` em pedaços de 250 ms: desligar a ponte corta a espera.
+#[cfg(feature = "stream")]
+fn nap(d: Duration) {
+    let end = Instant::now() + d;
+    while ON.load(Ordering::Relaxed) && Instant::now() < end {
+        std::thread::sleep(end.saturating_duration_since(Instant::now()).min(Duration::from_millis(250)));
+    }
+}
+
 #[cfg(feature = "stream")]
 fn run() {
+    // Falhas seguidas ao ligar o virtual, e desde quando o atual está no ar.
+    let mut fails = 0u32;
+    let mut up_since = Instant::now();
     let mut runner: Option<Runner> = None;
     let mut sent = vec![];
     let mut hidden: Vec<String> = vec![];
@@ -657,6 +674,7 @@ fn run() {
         let idle = no_pads.is_some_and(|t| t.elapsed() >= Duration::from_secs(30));
         let want = on && pads_now && stage() == Stage::Ready && !super::remap::stopped() && !super::remap::anti_cheat_front();
         if !want {
+            fails = 0;
             if runner.take().is_some() || !hidden.is_empty() {
                 stop(&mut sent, &mut hidden);
             }
@@ -672,6 +690,8 @@ fn run() {
             if !revive(&Win) {
                 note("ponte: o servidor do VIIPER não subiu");
                 START_FAILED.store(true, Ordering::Relaxed);
+                // Sem esperar, o servidor que não sobe (reinício pedido) gira o laço a 100% de um núcleo.
+                nap(Duration::from_secs(2));
                 continue;
             }
             server = Some(true);
@@ -683,10 +703,12 @@ fn run() {
                 Ok(b) => runner = Some(Runner::new(b)),
                 Err(_) => {
                     OWN.store(0, Ordering::Relaxed);
-                    std::thread::sleep(Duration::from_secs(3));
+                    fails += 1;
+                    nap(backoff(fails));
                     continue;
                 }
             }
+            up_since = Instant::now();
             ACTIVE.store(true, Ordering::Relaxed);
         }
         // O virtual de antes pode segurar uma vaga por uns segundos depois de solto, e o novo pega ela:
@@ -711,10 +733,13 @@ fn run() {
             }
             Err(_) => {
                 // O controle virtual caiu: o jogo não pode ficar sem o físico escondido.
-                crate::config::log("ponte: o Xbox virtual caiu, religando em 2 s");
+                // Um virtual que viveu bem não conta como falha seguida; um que cai logo vai esperando mais.
+                fails = if up_since.elapsed() >= Duration::from_secs(30) { 1 } else { fails + 1 };
+                let wait = backoff(fails);
+                crate::config::log(&format!("ponte: o Xbox virtual caiu, religando em {} s", wait.as_secs()));
                 runner = None;
                 stop(&mut sent, &mut hidden);
-                std::thread::sleep(Duration::from_secs(2));
+                nap(wait);
                 continue;
             }
         }
@@ -739,6 +764,13 @@ pub fn shutdown() {
 mod tests {
     use super::*;
     use std::cell::{Cell, RefCell};
+
+    #[test]
+    fn backoff_grows_and_stops_at_eight_seconds() {
+        let s: Vec<u64> = (0..7).map(|n| backoff(n).as_secs()).collect();
+        assert_eq!(s, [2, 2, 4, 8, 8, 8, 8]);
+        assert_eq!(backoff(u32::MAX).as_secs(), 8);
+    }
 
     #[derive(Default)]
     struct Fake {
