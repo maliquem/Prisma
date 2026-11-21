@@ -1352,6 +1352,19 @@ impl Searcher {
     }
 }
 
+/// Os .exe dentro de `dir` com o tamanho, direto do índice. None quando o disco não está no
+/// índice em memória (desligado, lendo ou fora da memória); quem chama anda pelas pastas.
+pub fn exes_under(dir: &Path) -> Option<Vec<(PathBuf, u64)>> {
+    let letter = dir.to_str()?.chars().next()?.to_ascii_uppercase();
+    touch();
+    if !active() || !IX.vols.read().unwrap().iter().any(|v| v.letter.to_ascii_uppercase() == letter) {
+        return None;
+    }
+    let folder = dir.to_str()?.trim_end_matches('\\');
+    let r = search(&format!("\"{folder}\\\" ext:exe"), Sort::Best, false, &AtomicU64::new(0), 0)?;
+    Some(items(&r.hits).into_iter().flatten().map(|i| (PathBuf::from(i.path()), i.size)).collect())
+}
+
 /// O que a lista mostra de cada resultado.
 pub struct Item {
     pub name: String,

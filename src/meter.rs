@@ -76,6 +76,8 @@ pub struct Found {
     pub version: String,
     pub frame_gen: String,
     pub reflex: bool,
+    /// A API pelas dlls carregadas (bits de `games`).
+    pub api: u8,
 }
 
 #[derive(Default)]
@@ -386,7 +388,9 @@ pub fn video_api(pid: u32) -> String {
 
 fn scan(pid: u32) -> Option<Found> {
     let mut out = Found::default();
-    for (name, path) in modules(pid)? {
+    let list = modules(pid)?;
+    out.api = crate::games::seen_api(list.iter().map(|m| m.0.as_str()));
+    for (name, path) in list {
         let found = |label: &str| (label.to_string(), fileinfo::version(&path).unwrap_or_default());
         if name == "nvngx_dlss.dll" {
             (out.upscaler, out.version) = found("DLSS");
@@ -450,22 +454,34 @@ fn child_of(pid: u32, parent: u32) -> bool {
 
 /// Sinais de anti-cheat na pasta do jogo. Achar nada não prova que não tem.
 pub fn anti_cheat(path: &str) -> bool {
-    let Some(dir) = std::path::Path::new(path).parent() else { return false };
-    const NAMES: [&str; 13] = ["easyanticheat", "battleye", "start_protected_game.exe", "beclient", "vgc", "eac", "xigncode", "gameguard", "nprotect", "punkbuster", "pnkbstr", "equ8", "mhyprot"];
+    anti_cheat_name(path).is_some()
+}
+
+/// O anti-cheat do jogo: o nome, vazio quando o sinal não diz qual, None sem sinal nenhum.
+pub fn anti_cheat_name(path: &str) -> Option<&'static str> {
+    let dir = std::path::Path::new(path).parent()?;
+    const EAC: &str = "Easy Anti-Cheat";
+    const BE: &str = "BattlEye";
+    const NAMES: [(&str, &str); 13] = [("easyanticheat", EAC), ("battleye", BE), ("start_protected_game.exe", EAC), ("beclient", BE), ("vgc", "Vanguard"), ("eac", EAC), ("xigncode", "XIGNCODE3"), ("gameguard", "GameGuard"), ("nprotect", "GameGuard"), ("punkbuster", "PunkBuster"), ("pnkbstr", "PunkBuster"), ("equ8", "EQU8"), ("mhyprot", "mhyprot")];
     const ANYWHERE: [&str; 2] = ["anticheat", "anti-cheat"];
     // O VAC e outros não deixam arquivo próprio: esses jogos só dá para reconhecer pela pasta.
-    const TITLES: [&str; 16] = ["counter-strike", "dota 2", "team fortress", "left 4 dead", "apex legends", "call of duty", "destiny 2", "pubgbattlegrounds", "rainbow six", "overwatch", "the finals", "delta force", "marvel rivals", "war thunder", "escape from tarkov", "dead by daylight"];
+    const TITLES: [(&str, &str); 16] = [("counter-strike", "VAC"), ("dota 2", "VAC"), ("team fortress", "VAC"), ("left 4 dead", "VAC"), ("apex legends", EAC), ("call of duty", "Ricochet"), ("destiny 2", BE), ("pubgbattlegrounds", BE), ("rainbow six", BE), ("overwatch", ""), ("the finals", EAC), ("delta force", ""), ("marvel rivals", ""), ("war thunder", EAC), ("escape from tarkov", BE), ("dead by daylight", EAC)];
     let low = path.to_ascii_lowercase();
-    if TITLES.iter().any(|t| low.contains(t)) {
-        return true;
+    if let Some((_, n)) = TITLES.iter().find(|(t, _)| low.contains(t)) {
+        return Some(n);
     }
     let check = |d: &std::path::Path| {
-        std::fs::read_dir(d).is_ok_and(|rd| rd.flatten().any(|e| {
+        let mut generic = false;
+        for e in std::fs::read_dir(d).ok()?.flatten() {
             let n = e.file_name().to_string_lossy().to_ascii_lowercase();
-            NAMES.iter().any(|k| n.starts_with(k)) || ANYWHERE.iter().any(|k| n.contains(k))
-        }))
+            if let Some((_, name)) = NAMES.iter().find(|(k, _)| n.starts_with(k)) {
+                return Some(*name);
+            }
+            generic |= ANYWHERE.iter().any(|k| n.contains(k));
+        }
+        generic.then_some("")
     };
-    check(dir) || dir.parent().is_some_and(check)
+    check(dir).or_else(|| dir.parent().and_then(check))
 }
 
 fn entry<'a>(cfg: &'a Config, exe: &str) -> Option<&'a MeterGame> {
@@ -1106,6 +1122,11 @@ impl Meter {
                 f.reflex |= frames::reflex_pids().contains(&pid);
                 *slot.lock().unwrap() = f;
             });
+        }
+        // A aba Jogos mostra a API vista rodando no lugar da provável.
+        let api = self.found.lock().unwrap().api;
+        if crate::games::see_api(&mut cfg.game_apis, &self.session.exe, api) {
+            cfg.save();
         }
         self.measure(cfg);
     }

@@ -3193,3 +3193,32 @@ parece um iniciador	похоже на лаунчер
 Os ajustes de cada jogo num lugar só: medidor, HDR, som, controle, shader e driver.	Настройки каждой игры в одном месте: счётчик, HDR, звук, геймпад, shader и драйвер.
 Página Jogos	Страница «Игры»
 ajustado	изменено
+{} agora usa {} na aba Jogos.	{} теперь использует {} во вкладке «Игры».
+API: {} (visto rodando)	API: {} (замечено при запуске)
+Anti-cheat: {}	Античит: {}
+anti-cheat	античит
+Copiar ajustes de…	Копировать настройки из…
+Copiar os ajustes de {}?	Скопировать настройки из {}?
+Onde o outro jogo tem ajuste (Medidor, Energia, HDR, Som, Controle, Shader e Fullscreenizer), o deste jogo é trocado pelo dele. O driver NVIDIA não é copiado.	Там, где у другой игры есть настройки (Счётчик, Питание, HDR, Звук, Геймпад, Shader и Fullscreenizer), настройки этой игры заменяются её настройками. Драйвер NVIDIA не копируется.
+Ajustes de {} copiados.	Настройки из {} скопированы.
+Perguntar à IA	Спросить ИИ
+Apagar o jogo?	Удалить игру?
+O exe não está mais no caminho. O jogo sai da lista e os ajustes dele em todas as abas são apagados.	Exe больше нет по этому пути. Игра исчезнет из списка, а её настройки на всех вкладках будут удалены.
+Apagar o perfil de shader?	Удалить профиль shader?
+Os filtros e ajustes só deste jogo são apagados, e ele volta aos shaders gerais.	Фильтры и настройки только этой игры удаляются, и она возвращается к общим shader.
+Voltar o driver ao padrão?	Вернуть драйвер по умолчанию?
+Os ajustes da aba Driver NVIDIA gravados no perfil deste jogo são apagados; o perfil criado pelo Prisma sai junto. O limite de FPS e o DLSS do Medidor ficam. Antes, o Prisma guarda uma cópia do driver.	Настройки вкладки «Драйвер NVIDIA», сохранённые в профиле этой игры, удаляются; профиль, созданный Prisma, удаляется вместе с ними. Лимит FPS и DLSS в Счётчике сохраняются. Перед этим Prisma сохраняет копию драйвера.
+IA: procurando na PCGamingWiki…	ИИ: поиск в PCGamingWiki…
+IA: não deu certo ({}).	ИИ: не получилось ({}).
+IA (PCGamingWiki): {}	ИИ (PCGamingWiki): {}
+exe {}	exe {}
+sem anti-cheat	без античита
+anti-cheat {}	античит {}
+tem HDR próprio	есть собственный HDR
+sem HDR próprio	нет собственного HDR
+nada achado	ничего не найдено
+Aceitar	Принять
+Não achei {} na pasta do jogo.	Не нашёл {} в папке игры.
+Não deu para copiar o perfil de shader.	Не удалось скопировать профиль shader.
+Não deu para apagar o perfil de shader.	Не удалось удалить профиль shader.
+Também nos perfis: {}	Также в профилях: {}

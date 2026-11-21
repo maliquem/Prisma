@@ -3193,3 +3193,32 @@ parece um iniciador	parece un lanzador
 Os ajustes de cada jogo num lugar só: medidor, HDR, som, controle, shader e driver.	Los ajustes de cada juego en un solo lugar: medidor, HDR, sonido, mando, shader y driver.
 Página Jogos	Página Juegos
 ajustado	ajustado
+{} agora usa {} na aba Jogos.	{} ahora usa {} en la pestaña Juegos.
+API: {} (visto rodando)	API: {} (vista en ejecución)
+Anti-cheat: {}	Antitrampas: {}
+anti-cheat	antitrampas
+Copiar ajustes de…	Copiar ajustes de…
+Copiar os ajustes de {}?	¿Copiar los ajustes de {}?
+Onde o outro jogo tem ajuste (Medidor, Energia, HDR, Som, Controle, Shader e Fullscreenizer), o deste jogo é trocado pelo dele. O driver NVIDIA não é copiado.	Donde el otro juego tiene ajustes (Medidor, Energía, HDR, Sonido, Mando, Shader y Fullscreenizer), los de este juego se sustituyen por los suyos. El driver NVIDIA no se copia.
+Ajustes de {} copiados.	Ajustes de {} copiados.
+Perguntar à IA	Preguntar a la IA
+Apagar o jogo?	¿Eliminar el juego?
+O exe não está mais no caminho. O jogo sai da lista e os ajustes dele em todas as abas são apagados.	El exe ya no está en la ruta. El juego sale de la lista y se eliminan sus ajustes en todas las pestañas.
+Apagar o perfil de shader?	¿Eliminar el perfil de shader?
+Os filtros e ajustes só deste jogo são apagados, e ele volta aos shaders gerais.	Se eliminan los filtros y ajustes solo de este juego, y vuelve a los shaders generales.
+Voltar o driver ao padrão?	¿Volver el driver a lo predeterminado?
+Os ajustes da aba Driver NVIDIA gravados no perfil deste jogo são apagados; o perfil criado pelo Prisma sai junto. O limite de FPS e o DLSS do Medidor ficam. Antes, o Prisma guarda uma cópia do driver.	Se eliminan los ajustes de la pestaña Driver NVIDIA guardados en el perfil de este juego; el perfil creado por Prisma se va con ellos. El límite de FPS y el DLSS del Medidor se mantienen. Antes, Prisma guarda una copia del driver.
+IA: procurando na PCGamingWiki…	IA: buscando en PCGamingWiki…
+IA: não deu certo ({}).	IA: no salió bien ({}).
+IA (PCGamingWiki): {}	IA (PCGamingWiki): {}
+exe {}	exe {}
+sem anti-cheat	sin antitrampas
+anti-cheat {}	antitrampas {}
+tem HDR próprio	tiene HDR propio
+sem HDR próprio	sin HDR propio
+nada achado	nada encontrado
+Aceitar	Aceptar
+Não achei {} na pasta do jogo.	No encontré {} en la carpeta del juego.
+Não deu para copiar o perfil de shader.	No se pudo copiar el perfil de shader.
+Não deu para apagar o perfil de shader.	No se pudo eliminar el perfil de shader.
+Também nos perfis: {}	También en los perfiles: {}

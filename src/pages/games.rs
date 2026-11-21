@@ -41,6 +41,8 @@ struct St {
     nv: HashMap<String, String>,
     /// Perfis do equalizador da saída do jogo aberto.
     eq: Vec<String>,
+    /// O jogo (exe, nome) de onde copiar os ajustes, esperando a confirmação.
+    copy: Option<(String, String)>,
 }
 
 thread_local! {
@@ -64,6 +66,9 @@ pub fn open_first(app: &mut App) {
     let mut rows = gm::rows(&app.cfg, &gm::extra(), mask(app));
     gm::sort(&mut rows, 0);
     if let Some(r) = rows.iter().find(|r| r.funcs != 0).or(rows.first()) {
+        if std::env::args().any(|a| a == "--test-ai") {
+            gm::fake_ai(&r.exe);
+        }
         ST.with(|s| open_game(app, &mut s.borrow_mut(), r));
     }
 }
@@ -226,8 +231,9 @@ fn note(ui: &Ui, r: Rect, k: usize, s: &str, c: Color) {
 }
 
 /// Linhas de cada seção (sem o título e o rodapé).
-fn rows_of(bit: u16, app: &App, exe: &str) -> usize {
+fn rows_of(bit: u16, app: &App, exe: &str, extra: &gm::Extra) -> usize {
     match bit {
+        gm::PAD => 1 + (extra.pads.iter().filter(|(_, e)| e.eq_ignore_ascii_case(exe)).count() > 1) as usize,
         gm::METER => 7,
         gm::HDR => 2,
         gm::SOUND => 3 + app.cfg.snd_apps.iter().any(|a| a.exe.eq_ignore_ascii_case(exe) && a.pinned) as usize,
@@ -253,17 +259,28 @@ fn game(ui: &mut Ui, app: &mut App, a: Rect, s: &mut St, g: &(String, String, St
     let view = rect(x, top, w, a.h - top - 20.0);
     let on = mask(app);
     let extra = gm::extra();
-    let row_now = gm::rows(&app.cfg, &extra, on).into_iter().find(|r| r.exe.eq_ignore_ascii_case(exe));
-    let funcs = row_now.as_ref().map_or(0, |r| r.funcs);
-    let manual = !path.is_empty() && app.cfg.games.iter().any(|g| g.store.is_empty() && g.path.eq_ignore_ascii_case(path));
+    let all = gm::rows(&app.cfg, &extra, on);
+    let funcs = all.iter().find(|r| r.exe.eq_ignore_ascii_case(exe)).map_or(0, |r| r.funcs);
+    let listed = !path.is_empty() && app.cfg.games.iter().any(|g| g.path.eq_ignore_ascii_case(path));
+    let manual = listed && app.cfg.games.iter().any(|g| g.store.is_empty() && g.path.eq_ignore_ascii_case(path));
+    let info = gm::info(path, hub(app));
+    let missing = info.is_some_and(|i| !i.exists) && !path.is_empty();
+    // De onde copiar: os outros jogos com algum ajuste.
+    let sources: Vec<&Row> = all.iter().filter(|r| r.funcs != 0 && !r.exe.eq_ignore_ascii_case(exe)).collect();
+    let has_key = !app.cfg.safe_key.trim().is_empty();
+    let ai = gm::ai_state(exe);
+    // A coluna da direita do cartão: copiar, perguntar à IA e tirar ou apagar, um embaixo do outro.
+    let right = !sources.is_empty() as usize + has_key as usize + (manual || missing) as usize;
+    // A resposta da IA vai embaixo de tudo, na largura toda do cartão.
+    let ai_y = 96.0f32.max(12.0 + right as f32 * 44.0);
+    let info_h = if ai.is_some() { ai_y + 48.0 } else { ai_y + 8.0 };
     // Duas colunas, cada cartão na mais curta, na ordem de `SECTIONS`.
     let two = w >= 760.0;
     let cw = if two { (w - 16.0) / 2.0 } else { w };
-    let info_h = 104.0;
     let mut col = [top + info_h + 16.0; 2];
     let mut cards = Vec::new();
     for sec in SECTIONS.iter().filter(|sec| on & sec.0 != 0) {
-        let h = card_h(rows_of(sec.0, app, exe));
+        let h = card_h(rows_of(sec.0, app, exe, &extra));
         let c = if two && col[1] < col[0] { 1 } else { 0 };
         cards.push((sec, rect(x + c as f32 * (cw + 16.0), col[c], cw, h)));
         col[c] += h + 16.0;
@@ -274,8 +291,9 @@ fn game(ui: &mut Ui, app: &mut App, a: Rect, s: &mut St, g: &(String, String, St
     let ir = rect(x, top, w, info_h);
     ui.card(ir);
     let folder = Path::new(path).parent().map(|p| p.display().to_string()).unwrap_or_default();
-    let info = gm::info(path, hub(app));
+    let seen = app.cfg.game_apis.iter().find(|(e, _)| e.eq_ignore_ascii_case(exe)).map(|(_, a)| *a);
     let api = match info {
+        _ if seen.is_some() => crate::i18n::tr("API: {} (visto rodando)").replace("{}", &gm::api_names(seen.unwrap_or(0))),
         None if !path.is_empty() => crate::i18n::tr("API: medindo…").into_owned(),
         Some(i) if i.api != 0 => {
             let names = gm::api_names(i.api);
@@ -283,25 +301,72 @@ fn game(ui: &mut Ui, app: &mut App, a: Rect, s: &mut St, g: &(String, String, St
         }
         _ => crate::i18n::tr("API: não encontrada").into_owned(),
     };
-    let ac = match info {
-        Some(i) if i.anti_cheat => "Anti-cheat: detectado",
-        Some(_) => "Anti-cheat: não encontrado",
-        None => "Anti-cheat: …",
+    let ac = match info.map(|i| i.anti_cheat) {
+        Some(Some("")) => crate::i18n::tr("Anti-cheat: detectado").into_owned(),
+        Some(Some(n)) => crate::i18n::tr("Anti-cheat: {}").replace("{}", n),
+        Some(None) => crate::i18n::tr("Anti-cheat: não encontrado").into_owned(),
+        None => crate::i18n::tr("Anti-cheat: …").into_owned(),
     };
-    let missing = info.is_some_and(|i| !i.exists) && !path.is_empty();
-    let lw = w - 32.0 - if manual { 170.0 } else { 0.0 };
+    let bw = 190.0;
+    let lw = w - 32.0 - if right > 0 { bw + 16.0 } else { 0.0 };
     let place = if path.is_empty() { crate::i18n::tr("Pasta: desconhecida (só o perfil conhece o jogo)").into_owned() } else { crate::i18n::tr("Pasta: {}").replace("{}", &folder) };
     ui.c.text_fit(rect(ir.x + 16.0, ir.y + 12.0, lw, 22.0), &place, 13.0, TEXT2, Align::Left, Weight::Regular);
     ui.c.text_fit(rect(ir.x + 16.0, ir.y + 40.0, lw, 22.0), &api, 13.0, TEXT2, Align::Left, Weight::Regular);
-    ui.c.text_fit(rect(ir.x + 16.0, ir.y + 68.0, lw, 22.0), if missing { "O exe não foi encontrado nesse caminho." } else { ac }, 13.0, if missing { WARN } else { TEXT2 }, Align::Left, Weight::Regular);
-    if manual && ui.button("gm-drop", rect(ir.right() - 16.0 - 154.0, ir.y + 12.0, 154.0, 36.0), "Tirar da lista", false) {
+    ui.c.text_fit(rect(ir.x + 16.0, ir.y + 68.0, lw, 22.0), if missing { "O exe não foi encontrado nesse caminho." } else { &ac }, 13.0, if missing { WARN } else { TEXT2 }, Align::Left, Weight::Regular);
+    let mut ry = ir.y + 12.0;
+    let mut next = || {
+        let r = rect(ir.right() - 16.0 - bw, ry, bw, 36.0);
+        ry += 44.0;
+        r
+    };
+    if !sources.is_empty() {
+        let names: Vec<String> = std::iter::once(crate::i18n::tr("Copiar ajustes de…").into_owned()).chain(sources.iter().map(|r| r.name.clone())).collect();
+        let mut k = 0;
+        if ui.select("gm-copy", next(), &names, &mut k) && k > 0 {
+            let from = sources[k - 1];
+            s.copy = Some((from.exe.clone(), from.name.clone()));
+            ui.ask("gm-copy", &crate::i18n::tr("Copiar os ajustes de {}?").replace("{}", &from.name), "Onde o outro jogo tem ajuste (Medidor, Energia, HDR, Som, Controle, Shader e Fullscreenizer), o deste jogo é trocado pelo dele. O driver NVIDIA não é copiado.");
+        }
+    }
+    if ui.answered("gm-copy") {
+        if let Some((from, name)) = s.copy.take() {
+            copy_from(app, &from, exe, path);
+            app.toast.info(&crate::i18n::tr("Ajustes de {} copiados.").replace("{}", &name));
+        }
+    }
+    if has_key && ui.button_ex("gm-ai", next(), "Perguntar à IA", false, ai != Some(gm::Ai::Asking)) {
+        gm::ask_ai(&app.cfg.safe_key, name, exe, hub(app));
+    }
+    if missing {
+        if ui.button("gm-del", next(), "Apagar", false) {
+            ui.ask("gm-del", "Apagar o jogo?", "O exe não está mais no caminho. O jogo sai da lista e os ajustes dele em todas as abas são apagados.");
+        }
+    } else if manual && ui.button("gm-drop", next(), "Tirar da lista", false) {
         ui.ask("gm-drop", "Tirar da lista?", "Os ajustes do jogo nas outras abas continuam salvos.");
     }
     if ui.answered("gm-drop") {
         app.cfg.games.retain(|g| !(g.store.is_empty() && g.path.eq_ignore_ascii_case(path)));
         app.cfg.save();
     }
-    let protected = info.is_some_and(|i| i.anti_cheat);
+    if ui.answered("gm-del") {
+        // Todas as funções, também as desligadas: o jogo não volta para nenhuma aba.
+        let every = gm::rows(&app.cfg, &extra, u16::MAX).into_iter().find(|r| r.exe.eq_ignore_ascii_case(exe)).map_or(0, |r| r.funcs);
+        for sec in SECTIONS.iter().filter(|sec| every & sec.0 != 0) {
+            reset(app, sec.0, exe);
+        }
+        app.cfg.games.retain(|g| !g.path.eq_ignore_ascii_case(path));
+        app.cfg.game_apis.retain(|(e, _)| !e.eq_ignore_ascii_case(exe));
+        app.cfg.save();
+        gm::forget_ai(exe);
+        s.nv.remove(&exe.to_lowercase());
+        s.open = None;
+    }
+    if let Some(a) = &ai {
+        if let Some(moved) = ai_line(ui, app, rect(ir.x + 16.0, ir.y + ai_y, w - 32.0, 36.0), a, exe, path, listed) {
+            s.open = Some((moved.0, moved.1, name.to_string()));
+        }
+    }
+    let protected = info.is_some_and(|i| i.anti_cheat.is_some());
     for (sec, r) in cards {
         let adjusted = funcs & sec.0 != 0;
         ui.card(r);
@@ -324,11 +389,118 @@ fn game(ui: &mut Ui, app: &mut App, a: Rect, s: &mut St, g: &(String, String, St
         if ui.button(&format!("gm-go{}", sec.0), rect(r.x + 16.0, fy, bw, 36.0), &label, false) {
             go_to(app, sec.1, exe, path);
         }
-        if sec.0 != gm::NVIDIA && sec.0 != gm::SHADER && ui.button_ex(&format!("gm-reset{}", sec.0), rect(r.right() - 16.0 - bw, fy, bw, 36.0), "Voltar ao padrão", false, adjusted) {
+        let id = format!("gm-reset{}", sec.0);
+        if ui.button_ex(&id, rect(r.right() - 16.0 - bw, fy, bw, 36.0), "Voltar ao padrão", false, adjusted) {
+            // O shader e o driver apagam o que não está no config.ini: perguntam antes.
+            match sec.0 {
+                gm::SHADER => ui.ask(&id, "Apagar o perfil de shader?", "Os filtros e ajustes só deste jogo são apagados, e ele volta aos shaders gerais."),
+                gm::NVIDIA => ui.ask(&id, "Voltar o driver ao padrão?", "Os ajustes da aba Driver NVIDIA gravados no perfil deste jogo são apagados; o perfil criado pelo Prisma sai junto. O limite de FPS e o DLSS do Medidor ficam. Antes, o Prisma guarda uma cópia do driver."),
+                _ => reset(app, sec.0, exe),
+            }
+        }
+        if ui.answered(&id) {
             reset(app, sec.0, exe);
+            s.nv.remove(&exe.to_lowercase());
         }
     }
     ui.end_scroll();
+}
+
+/// A resposta da IA ao lado do que o exe mostrou; Aceitar grava o exe e o HDR próprio sugeridos.
+/// Devolve o (exe, caminho) novo quando o exe trocou.
+fn ai_line(ui: &mut Ui, app: &mut App, r: Rect, a: &gm::Ai, exe: &str, path: &str, listed: bool) -> Option<(String, String)> {
+    let i = match a {
+        gm::Ai::Asking => {
+            ui.c.text_fit(r, "IA: procurando na PCGamingWiki…", 13.0, MUTED, Align::Left, Weight::Regular);
+            return None;
+        }
+        gm::Ai::Failed(e) => {
+            ui.c.text_fit(r, &crate::i18n::tr("IA: não deu certo ({}).").replace("{}", &super::updates::why("Gemini", e)), 13.0, WARN, Align::Left, Weight::Regular);
+            return None;
+        }
+        gm::Ai::Done(i) => i,
+    };
+    let mut moved = None;
+    let mut bits = Vec::new();
+    if !i.exe.is_empty() {
+        bits.push(crate::i18n::tr("exe {}").replace("{}", &i.exe));
+    }
+    if i.api != 0 {
+        bits.push(gm::api_names(i.api));
+    }
+    match i.anti_cheat.as_deref() {
+        Some("") => bits.push(crate::i18n::tr("sem anti-cheat").into_owned()),
+        Some(n) => bits.push(crate::i18n::tr("anti-cheat {}").replace("{}", n)),
+        None => {}
+    }
+    match i.hdr {
+        Some(true) => bits.push(crate::i18n::tr("tem HDR próprio").into_owned()),
+        Some(false) => bits.push(crate::i18n::tr("sem HDR próprio").into_owned()),
+        None => {}
+    }
+    let line = crate::i18n::tr("IA (PCGamingWiki): {}").replace("{}", &if bits.is_empty() { crate::i18n::tr("nada achado").into_owned() } else { bits.join(" · ") });
+    // O exe só troca num jogo da lista, e só quando o sugerido está na pasta dele.
+    let new_exe = (listed && !i.exe.is_empty() && !i.exe.eq_ignore_ascii_case(exe)).then_some(i.exe.as_str());
+    let native = i.hdr.map(|h| if h { autohdr::NATIVE_YES } else { autohdr::NATIVE_NO });
+    let now = app.cfg.hdr_games.iter().find(|h| h.exe.eq_ignore_ascii_case(exe)).map_or(autohdr::NATIVE_UNKNOWN, |h| h.native);
+    let useful = new_exe.is_some() || native.is_some_and(|n| n != now);
+    let bw = 100.0;
+    let tw = r.w - if useful { 2.0 * bw + 16.0 } else { bw + 8.0 };
+    ui.c.text_wrap(rect(r.x, r.y, tw, r.h), &line, 13.0, TEXT2, Weight::Regular);
+    if useful && ui.button("gm-ai-ok", rect(r.right() - 2.0 * bw - 8.0, r.y, bw, r.h), "Aceitar", false) {
+        if let Some(e) = new_exe {
+            match gm::find_exe(Path::new(path).parent().unwrap_or(Path::new(path)), e) {
+                Some(p) => {
+                    let p = p.to_string_lossy().to_string();
+                    if let Some(g) = app.cfg.games.iter_mut().find(|g| g.path.eq_ignore_ascii_case(path)) {
+                        g.path = p.clone();
+                    }
+                    moved = Some((e.to_string(), p));
+                }
+                None => app.toast.info(&crate::i18n::tr("Não achei {} na pasta do jogo.").replace("{}", e)),
+            }
+        }
+        // O HDR próprio vai para o exe que fica, o novo quando trocou.
+        if let Some(n) = native {
+            let (exe, path) = moved.as_ref().map_or((exe, path), |m: &(String, String)| (m.0.as_str(), m.1.as_str()));
+            match app.cfg.hdr_games.iter_mut().find(|h| h.exe.eq_ignore_ascii_case(exe)) {
+                Some(h) => h.native = n,
+                None => app.cfg.hdr_games.push(HdrGame { exe: exe.to_string(), path: path.to_string(), native: n, ..Default::default() }),
+            }
+        }
+        app.cfg.save();
+        gm::forget_ai(exe);
+    }
+    if ui.button("gm-ai-no", rect(r.right() - bw, r.y, bw, r.h), "Descartar", false) {
+        gm::forget_ai(exe);
+    }
+    moved
+}
+
+/// Copia para o jogo os ajustes de `from` e grava o que vive fora do config.ini: o driver (limite e DLSS),
+/// o HDR do Windows, o som do jogo aberto e o arquivo do perfil de shader.
+fn copy_from(app: &mut App, from: &str, exe: &str, path: &str) {
+    let same = |e: &str| e.eq_ignore_ascii_case(exe);
+    let before = app.cfg.meter_games.iter().find(|g| same(&g.exe)).map_or((0, 0), |g| (g.limit_mode, g.preset));
+    let pads = gm::copy_settings(&mut app.cfg, crate::sys::remap::profiles(), from, exe, path);
+    save_pads(app, pads);
+    if let Some(g) = app.cfg.meter_games.iter().find(|g| same(&g.exe)).cloned() {
+        // Como em `reset`: só toca no driver se havia ou há o que gravar.
+        let limit = before.0 != 0 || g.limit_mode != 0;
+        let preset = before.1 != 0 || g.preset != 0;
+        if !((!limit || crate::meter::write_limit(&g)) & (!preset || crate::meter::write_preset(&g))) {
+            app.toast.info("Não consegui gravar no driver NVIDIA.");
+        }
+    }
+    if let Some(mode) = app.cfg.hdr_games.iter().find(|h| same(&h.exe)).map(|h| h.mode) {
+        autohdr::apply(exe, mode);
+    }
+    app.route_app(exe);
+    let shader = crate::shader_profile::path_for(Path::new(from));
+    if shader.exists() && std::fs::copy(&shader, crate::shader_profile::path_for(Path::new(exe))).is_err() {
+        app.toast.info("Não deu para copiar o perfil de shader.");
+    }
+    app.cfg.save();
 }
 
 /// Abre a aba dona do dado já com o jogo, quando ela tem como escolher.
@@ -390,9 +562,30 @@ fn reset(app: &mut App, bit: u16, exe: &str) {
         }
         gm::PAD => save_pads(app, gm::set_pad(crate::sys::remap::profiles(), exe, None)),
         gm::FULL => app.cfg.fs_apps.retain(|a| !same(&a.exe)),
+        gm::SHADER => {
+            let prof = crate::shader_profile::path_for(Path::new(exe));
+            if prof.exists() && std::fs::remove_file(&prof).is_err() {
+                app.toast.info("Não deu para apagar o perfil de shader.");
+            }
+            gm::forget_extra();
+        }
+        gm::NVIDIA => {
+            if crate::sys::drs::reset_game(exe, &nv_ids()) {
+                app.cfg.nv_games.retain(|g| !same(g));
+                super::nvidia::stale();
+            } else {
+                app.toast.info("Não consegui gravar no driver NVIDIA.");
+            }
+        }
         _ => {}
     }
     app.cfg.save();
+}
+
+/// Os ajustes da aba Driver NVIDIA que valem por jogo neste driver.
+fn nv_ids() -> Vec<u32> {
+    let ver = crate::sys::drs::driver_version().unwrap_or(0);
+    crate::sys::nvset::GROUPS.iter().flat_map(|g| g.1.iter()).filter(|st| !st.global_only && st.min_driver <= ver).map(|st| st.id).collect()
 }
 
 fn meter(ui: &mut Ui, app: &mut App, r: Rect, exe: &str, path: &str, protected: bool) {
@@ -565,6 +758,11 @@ fn pad(ui: &mut Ui, app: &mut App, r: Rect, exe: &str, extra: &gm::Extra) {
         let pick = k.checked_sub(1).and_then(|i| extra.pad_names.get(i)).map(String::as_str);
         save_pads(app, gm::set_pad(crate::sys::remap::profiles(), exe, pick));
     }
+    // Os outros perfis em que o jogo está: abrem quando a pessoa escolhe na aba Controles.
+    let others: Vec<&str> = extra.pads.iter().filter(|(p, e)| e.eq_ignore_ascii_case(exe) && Some(p.as_str()) != now).map(|(p, _)| p.as_str()).collect();
+    if !others.is_empty() {
+        note(ui, r, 1, &crate::i18n::tr("Também nos perfis: {}").replace("{}", &others.join(", ")), MUTED);
+    }
 }
 
 fn save_pads(app: &mut App, changed: Vec<crate::sys::remap::Profile>) {
@@ -621,9 +819,7 @@ fn nvidia(ui: &mut Ui, app: &mut App, r: Rect, exe: &str, s: &mut St) {
     }
     if ui.answered("gm-nv-copy") {
         // shortcut: copia só os ajustes que o Prisma conhece (`nvset`), não o banco inteiro do driver.
-        let ver = crate::sys::drs::driver_version().unwrap_or(0);
-        let ids: Vec<u32> = crate::sys::nvset::GROUPS.iter().flat_map(|g| g.1.iter()).filter(|st| !st.global_only && st.min_driver <= ver).map(|st| st.id).collect();
-        made = Some(crate::sys::drs::create(exe, &ids));
+        made = Some(crate::sys::drs::create(exe, &nv_ids()));
     }
     match made {
         Some(true) => {
@@ -668,8 +864,10 @@ fn scan_sheet(ui: &mut Ui, app: &mut App, s: &mut St) {
         if f.emulator {
             facts.push(crate::i18n::tr("emulador").into_owned());
         }
-        if f.anti_cheat {
-            facts.push(crate::i18n::tr("anti-cheat").into_owned());
+        match f.anti_cheat {
+            Some("") => facts.push(crate::i18n::tr("anti-cheat").into_owned()),
+            Some(n) => facts.push(n.to_string()),
+            None => {}
         }
         let why = c.why.iter().map(|w| crate::i18n::tr(w).into_owned()).collect::<Vec<_>>().join(", ");
         let fx = list.x + 160.0 + ew + 12.0;

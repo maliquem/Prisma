@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use super::catalog::Entry;
 
 /// Partes de nome que nunca são o jogo.
-const NOT_GAME: [&str; 27] = [
+pub(crate) const NOT_GAME: [&str; 27] = [
     "crash", "report", "redist", "vcredist", "dxsetup", "setup", "unins", "install", "helper", "easyanticheat", "eac_", "battleye", "beservice", "be_service", "prereq", "dotnet", "directx", "cefprocess", "webhelper", "update", "patcher", "python", "7z", "notification", "editor", "packager", "toolkit",
 ];
 

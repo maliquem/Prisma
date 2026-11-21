@@ -3199,3 +3199,32 @@ parece um iniciador	looks like a launcher
 Os ajustes de cada jogo num lugar só: medidor, HDR, som, controle, shader e driver.	Each game's settings in one place: meter, HDR, sound, controller, shader and driver.
 Página Jogos	Games page
 ajustado	adjusted
+{} agora usa {} na aba Jogos.	{} now uses {} in the Games tab.
+API: {} (visto rodando)	API: {} (seen running)
+Anti-cheat: {}	Anti-cheat: {}
+anti-cheat	anti-cheat
+Copiar ajustes de…	Copy settings from…
+Copiar os ajustes de {}?	Copy the settings from {}?
+Onde o outro jogo tem ajuste (Medidor, Energia, HDR, Som, Controle, Shader e Fullscreenizer), o deste jogo é trocado pelo dele. O driver NVIDIA não é copiado.	Where the other game has settings (Meter, Power, HDR, Sound, Controller, Shader and Fullscreenizer), this game's are replaced with theirs. The NVIDIA driver is not copied.
+Ajustes de {} copiados.	Settings from {} copied.
+Perguntar à IA	Ask the AI
+Apagar o jogo?	Delete the game?
+O exe não está mais no caminho. O jogo sai da lista e os ajustes dele em todas as abas são apagados.	The exe is no longer at the path. The game leaves the list and its settings in all tabs are deleted.
+Apagar o perfil de shader?	Delete the shader profile?
+Os filtros e ajustes só deste jogo são apagados, e ele volta aos shaders gerais.	The filters and settings for this game only are deleted, and it goes back to the general shaders.
+Voltar o driver ao padrão?	Reset the driver to default?
+Os ajustes da aba Driver NVIDIA gravados no perfil deste jogo são apagados; o perfil criado pelo Prisma sai junto. O limite de FPS e o DLSS do Medidor ficam. Antes, o Prisma guarda uma cópia do driver.	The NVIDIA driver tab settings saved in this game's profile are deleted; the profile created by Prisma goes with them. The FPS limit and the Meter's DLSS stay. First, Prisma saves a copy of the driver.
+IA: procurando na PCGamingWiki…	AI: searching PCGamingWiki…
+IA: não deu certo ({}).	AI: it did not work ({}).
+IA (PCGamingWiki): {}	AI (PCGamingWiki): {}
+exe {}	exe {}
+sem anti-cheat	no anti-cheat
+anti-cheat {}	anti-cheat {}
+tem HDR próprio	has its own HDR
+sem HDR próprio	no own HDR
+nada achado	nothing found
+Aceitar	Accept
+Não achei {} na pasta do jogo.	Could not find {} in the game folder.
+Não deu para copiar o perfil de shader.	Could not copy the shader profile.
+Não deu para apagar o perfil de shader.	Could not delete the shader profile.
+Também nos perfis: {}	Also in the profiles: {}

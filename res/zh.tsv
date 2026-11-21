@@ -3193,3 +3193,32 @@ parece um iniciador	像是启动器
 Os ajustes de cada jogo num lugar só: medidor, HDR, som, controle, shader e driver.	每个游戏的设置集中在一处：性能监视、HDR、声音、手柄、shader 和驱动。
 Página Jogos	游戏页面
 ajustado	已调整
+{} agora usa {} na aba Jogos.	{} 现在在“游戏”标签页中使用 {}。
+API: {} (visto rodando)	API：{}（运行时检测到）
+Anti-cheat: {}	反作弊：{}
+anti-cheat	反作弊
+Copiar ajustes de…	复制设置自…
+Copiar os ajustes de {}?	复制 {} 的设置？
+Onde o outro jogo tem ajuste (Medidor, Energia, HDR, Som, Controle, Shader e Fullscreenizer), o deste jogo é trocado pelo dele. O driver NVIDIA não é copiado.	另一个游戏有设置的项目（性能监视、电源、HDR、声音、手柄、Shader 和 Fullscreenizer），本游戏的设置会被替换为它的设置。NVIDIA 驱动不会被复制。
+Ajustes de {} copiados.	已复制 {} 的设置。
+Perguntar à IA	询问 AI
+Apagar o jogo?	删除该游戏？
+O exe não está mais no caminho. O jogo sai da lista e os ajustes dele em todas as abas são apagados.	路径中已找不到该 exe。游戏将从列表中移除，它在所有标签页中的设置也会被删除。
+Apagar o perfil de shader?	删除 Shader 配置？
+Os filtros e ajustes só deste jogo são apagados, e ele volta aos shaders gerais.	仅此游戏的滤镜和设置会被删除，并恢复为通用 Shader。
+Voltar o driver ao padrão?	将驱动恢复默认？
+Os ajustes da aba Driver NVIDIA gravados no perfil deste jogo são apagados; o perfil criado pelo Prisma sai junto. O limite de FPS e o DLSS do Medidor ficam. Antes, o Prisma guarda uma cópia do driver.	保存在此游戏配置中的“NVIDIA 驱动”标签页设置会被删除；Prisma 创建的配置也会一并移除。性能监视中的 FPS 限制和 DLSS 会保留。之前 Prisma 会备份一份驱动。
+IA: procurando na PCGamingWiki…	AI：正在 PCGamingWiki 上搜索…
+IA: não deu certo ({}).	AI：未成功（{}）。
+IA (PCGamingWiki): {}	AI（PCGamingWiki）：{}
+exe {}	exe {}
+sem anti-cheat	无反作弊
+anti-cheat {}	反作弊 {}
+tem HDR próprio	有自带 HDR
+sem HDR próprio	无自带 HDR
+nada achado	什么也没找到
+Aceitar	接受
+Não achei {} na pasta do jogo.	在游戏文件夹中没找到 {}。
+Não deu para copiar o perfil de shader.	无法复制 Shader 配置。
+Não deu para apagar o perfil de shader.	无法删除 Shader 配置。
+Também nos perfis: {}	配置中也有：{}

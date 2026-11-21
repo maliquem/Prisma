@@ -188,6 +188,37 @@ pub fn set_pad(profiles: Vec<Profile>, exe: &str, pick: Option<&str>) -> Vec<Pro
         .collect()
 }
 
+/// Copiar ajustes: cada linha que `from` tem no Medidor e Energia, HDR, Som e Fullscreenizer passa
+/// para `to`, trocando a dele; o que `from` não tem fica como estava em `to`. Os perfis de controle
+/// ganham `to` onde `from` está. Devolve os perfis que mudaram, para gravar.
+pub fn copy_settings(cfg: &mut Config, profiles: Vec<Profile>, from: &str, to: &str, to_path: &str) -> Vec<Profile> {
+    fn take<T: Clone>(list: &mut Vec<T>, exe: impl Fn(&T) -> &str, from: &str, to: &str, set: impl Fn(&mut T)) {
+        if let Some(mut t) = list.iter().find(|x| exe(x).eq_ignore_ascii_case(from)).cloned() {
+            set(&mut t);
+            list.retain(|x| !exe(x).eq_ignore_ascii_case(to));
+            list.push(t);
+        }
+    }
+    let (exe, path) = (to.to_string(), to_path.to_string());
+    // O que é fato do jogo, não escolha, fica o de `to`: o último dia, a injeção que caiu ou achou
+    // anti-cheat e o HDR próprio. O automático mede de novo no outro jogo.
+    let (last, inject_off) = cfg.meter_games.iter().find(|g| g.exe.eq_ignore_ascii_case(to)).map_or((0, false), |g| (g.last, g.inject_off));
+    let native = cfg.hdr_games.iter().find(|g| g.exe.eq_ignore_ascii_case(to)).map_or(autohdr::NATIVE_UNKNOWN, |g| g.native);
+    take(&mut cfg.meter_games, |g| &g.exe, from, to, |g| (g.exe, g.path, g.measured, g.last, g.inject_off) = (exe.clone(), path.clone(), false, last, inject_off));
+    take(&mut cfg.hdr_games, |g| &g.exe, from, to, |g| (g.exe, g.path, g.scan, g.mods, g.ac_off, g.native) = (exe.clone(), path.clone(), None, String::new(), false, native));
+    take(&mut cfg.snd_apps, |a| &a.exe, from, to, |a| (a.exe, a.path) = (exe.clone(), path.clone()));
+    take(&mut cfg.eq_apps, |a| &a.0, from, to, |a| a.0 = exe.clone());
+    take(&mut cfg.fs_apps, |a| &a.exe, from, to, |a| (a.exe, a.path) = (exe.clone(), path.clone()));
+    profiles
+        .into_iter()
+        .filter(|p| p.games.iter().any(|g| g.eq_ignore_ascii_case(from)) && !p.games.iter().any(|g| g.eq_ignore_ascii_case(to)))
+        .map(|mut p| {
+            p.games.push(to.to_lowercase());
+            p
+        })
+        .collect()
+}
+
 /// O HDR do jogo saiu do padrão.
 pub fn hdr_adjusted(g: &HdrGame) -> bool {
     g.mode != autohdr::DEFAULT || matches!(g.native, autohdr::NATIVE_YES | autohdr::NATIVE_NO) || g.prisma.is_some()
@@ -390,6 +421,55 @@ pub fn detect(path: &Path) -> (u8, bool) {
     (bits, bits != 0)
 }
 
+/// A API das dlls carregadas no jogo rodando (nomes em minúsculas). Uma só: o jogo DX12 costuma carregar
+/// o d3d11 também, e o opengl32 vem junto com muita coisa.
+pub fn seen_api<'a>(names: impl IntoIterator<Item = &'a str>) -> u8 {
+    let names: Vec<&str> = names.into_iter().collect();
+    let order = [("d3d12.dll", DX12), ("vulkan-1.dll", VULKAN), ("d3d11.dll", DX11), ("d3d10.dll", DX10), ("d3d10_1.dll", DX10), ("d3d9.dll", DX9), ("opengl32.dll", OPENGL)];
+    order.iter().find(|(n, _)| names.contains(n)).map_or(0, |(_, b)| *b)
+}
+
+/// Guarda a API vista rodando (`game_api` no config). Verdadeiro se mudou.
+pub fn see_api(list: &mut Vec<(String, u8)>, exe: &str, api: u8) -> bool {
+    if exe.is_empty() || api == 0 {
+        return false;
+    }
+    match list.iter_mut().find(|(e, _)| e.eq_ignore_ascii_case(exe)) {
+        Some((_, a)) if *a == api => false,
+        Some((_, a)) => {
+            *a = api;
+            true
+        }
+        None => {
+            list.push((exe.to_string(), api));
+            true
+        }
+    }
+}
+
+/// O jogo rodando (`path`) saiu de um posto à mão com outro exe (um iniciador): o da lista passa a ser
+/// ele. Vale quando o pai do processo (`parent`) é o exe da lista, ou quando o jogo está dentro da pasta
+/// dele, que não é a raiz de um disco nem uma pasta de primeiro nível. Devolve o nome do jogo trocado.
+pub fn seen_exe(list: &mut [Game], path: &str, parent: Option<&str>) -> Option<String> {
+    let low = path.to_lowercase();
+    if path.is_empty() || list.iter().any(|g| g.path.to_lowercase() == low) {
+        return None;
+    }
+    let inside = |g: &Game| {
+        let Some(dir) = Path::new(&g.path).parent() else { return false };
+        let deep = dir.components().filter(|c| matches!(c, std::path::Component::Normal(_))).count() >= 2;
+        deep && low.starts_with(&format!("{}\\", dir.to_string_lossy().to_lowercase()))
+    };
+    let by_parent = |g: &Game| parent.is_some_and(|p| p.eq_ignore_ascii_case(&g.path));
+    let mut hits = list.iter_mut().filter(|g| g.store.is_empty() && (by_parent(g) || inside(g)));
+    let g = hits.next()?;
+    if hits.next().is_some() {
+        return None;
+    }
+    g.path = path.to_string();
+    Some(g.name.clone())
+}
+
 /// O que se sabe do executável, medido fora da tela.
 #[derive(Clone, Copy, Default, Debug, PartialEq)]
 pub struct Info {
@@ -397,7 +477,8 @@ pub struct Info {
     pub api: u8,
     /// A API veio do texto ou dos arquivos da pasta, não dos imports.
     pub guessed: bool,
-    pub anti_cheat: bool,
+    /// O anti-cheat achado: o nome, ou vazio quando o sinal não diz qual.
+    pub anti_cheat: Option<&'static str>,
 }
 
 #[derive(Default)]
@@ -436,7 +517,7 @@ pub fn info(path: &str, hub: isize) -> Option<Info> {
                 let Some(p) = next else { break };
                 let exists = Path::new(&p).is_file();
                 let (api, guessed) = if exists { detect(Path::new(&p)) } else { (0, false) };
-                let i = Info { exists, api, guessed, anti_cheat: exists && crate::meter::anti_cheat(&p) };
+                let i = Info { exists, api, guessed, anti_cheat: if exists { crate::meter::anti_cheat_name(&p) } else { None } };
                 if let Some(c) = INFO.lock().unwrap().as_mut() {
                     c.map.insert(p, Some(i));
                 }
@@ -467,6 +548,103 @@ fn redraw(hub: isize) {
     }
 }
 
+/// O que a IA achou na PCGamingWiki. Só sugere: a pessoa aceita ou não.
+#[derive(Clone, Default, Debug, PartialEq)]
+pub struct AiInfo {
+    pub exe: String,
+    pub api: u8,
+    /// None: a wiki não diz. Some(""): diz que não tem.
+    pub anti_cheat: Option<String>,
+    pub hdr: Option<bool>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Ai {
+    Asking,
+    Done(AiInfo),
+    /// O motivo curto do `safeupd` (rede, chave, limite, resposta).
+    Failed(String),
+}
+
+static AI: Mutex<Option<HashMap<String, Ai>>> = Mutex::new(None);
+
+pub fn ai_prompt(name: &str, exe: &str) -> String {
+    format!(
+        "Look up the PC game \"{name}\" (its executable may be {exe}) on PCGamingWiki (pcgamingwiki.com) with a web search. Answer ONLY with one JSON object, no other text: {{\"exe\":\"main game executable file name, for example Game-Win64-Shipping.exe\",\"apis\":[\"DirectX 9|DirectX 10|DirectX 11|DirectX 12|Vulkan|OpenGL\", ...],\"anti_cheat\":\"anti-cheat name, or empty if it has none\",\"native_hdr\":true|false|null}}. Use null when PCGamingWiki does not say."
+    )
+}
+
+/// A resposta da IA em `AiInfo`; None quando não veio o JSON pedido.
+pub fn parse_ai(text: &str) -> Option<AiInfo> {
+    let v = crate::sys::safeupd::json_in(text)?;
+    let api = v["apis"].as_array().map_or(0, |a| {
+        a.iter().filter_map(|s| s.as_str()).fold(0, |m, s| {
+            let s = s.to_lowercase();
+            m | if s.contains("vulkan") {
+                VULKAN
+            } else if s.contains("opengl") {
+                OPENGL
+            } else if s.contains("12") {
+                DX12
+            } else if s.contains("11") {
+                DX11
+            } else if s.contains("10") {
+                DX10
+            } else if s.contains('9') {
+                DX9
+            } else {
+                0
+            }
+        })
+    });
+    let exe = v["exe"].as_str().map(|e| e.trim().rsplit(['\\', '/']).next().unwrap_or("").to_string()).filter(|e| e.to_lowercase().ends_with(".exe")).unwrap_or_default();
+    Some(AiInfo { exe, api, anti_cheat: v["anti_cheat"].as_str().map(|s| s.trim().to_string()), hdr: v["native_hdr"].as_bool() })
+}
+
+/// O exe com esse nome na pasta do jogo (até 3 pastas abaixo, como o escanear) ou direto numa das duas
+/// acima: a IA dá o exe principal, que pode estar acima de `Binaries\Win64`. Não sobe até a raiz do disco
+/// nem a uma pasta de primeiro nível, onde outro jogo pode ter um exe com o mesmo nome.
+pub fn find_exe(dir: &Path, name: &str) -> Option<PathBuf> {
+    let mut found = Vec::new();
+    crate::sys::stores::walk(dir, 0, &mut found, &mut 0);
+    let same = |p: &Path| p.file_name().is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case(name));
+    found.into_iter().map(|f| f.0).find(|p| same(p)).or_else(|| {
+        dir.ancestors().skip(1).take(2).filter(|d| d.components().filter(|c| matches!(c, std::path::Component::Normal(_))).count() >= 2).map(|d| d.join(name)).find(|p| p.is_file())
+    })
+}
+
+/// Pergunta fora da tela; a resposta sai em `ai_state` e a aba é avisada para redesenhar.
+pub fn ask_ai(key: &str, name: &str, exe: &str, hub: isize) {
+    let id = exe.to_lowercase();
+    AI.lock().unwrap().get_or_insert_with(HashMap::new).insert(id.clone(), Ai::Asking);
+    let (key, prompt) = (key.to_string(), ai_prompt(name, exe));
+    let _ = std::thread::Builder::new().name("perguntar-ia".into()).spawn(move || {
+        let got = match crate::sys::safeupd::ask_gemini(&key, &prompt) {
+            Ok(t) => parse_ai(&t).map_or(Ai::Failed("resposta".into()), Ai::Done),
+            Err(e) => Ai::Failed(e),
+        };
+        AI.lock().unwrap().get_or_insert_with(HashMap::new).insert(id, got);
+        redraw(hub);
+    });
+}
+
+pub fn ai_state(exe: &str) -> Option<Ai> {
+    AI.lock().unwrap().as_ref()?.get(&exe.to_lowercase()).cloned()
+}
+
+/// Foto de teste (`--test-ai`): uma resposta pronta, sem chamar o Gemini.
+#[cfg(debug_assertions)]
+pub fn fake_ai(exe: &str) {
+    let i = AiInfo { exe: "Jogo-Win64-Shipping.exe".into(), api: DX11 | DX12, anti_cheat: Some("Easy Anti-Cheat".into()), hdr: Some(true) };
+    AI.lock().unwrap().get_or_insert_with(HashMap::new).insert(exe.to_lowercase(), Ai::Done(i));
+}
+
+pub fn forget_ai(exe: &str) {
+    if let Some(m) = AI.lock().unwrap().as_mut() {
+        m.remove(&exe.to_lowercase());
+    }
+}
+
 /// Um candidato a jogo numa pasta escaneada.
 #[derive(Clone, Default, Debug)]
 pub struct Cand {
@@ -485,7 +663,8 @@ pub struct Found {
     pub folder: PathBuf,
     pub cands: Vec<Cand>,
     pub pick: usize,
-    pub anti_cheat: bool,
+    /// Como em `Info::anti_cheat`.
+    pub anti_cheat: Option<&'static str>,
     pub emulator: bool,
     /// Marcado para entrar na lista ("é jogo").
     pub on: bool,
@@ -535,8 +714,11 @@ fn score(path: &Path, depth: usize, size: u64, max: u64, key: &str, api: u8) -> 
 
 /// Os jogos de uma pasta: ela mesma, se já tem executáveis; senão cada subpasta (uma pasta de jogos).
 /// `programs` são (nome, pasta) dos programas instalados, que dão o nome certo ao jogo.
-// shortcut: anda pelas pastas em vez de usar o índice da Busca; trocar se escanear disco inteiro ficar lento.
+/// Com o disco no índice da Busca, os executáveis saem dele sem andar pelas pastas.
 pub fn scan(root: &Path, programs: &[(String, String)]) -> Vec<Found> {
+    if let Some(list) = crate::sys::index::exes_under(root) {
+        return scan_indexed(root, list, programs);
+    }
     let entries: Vec<_> = std::fs::read_dir(root).into_iter().flatten().flatten().collect();
     let direct = entries.iter().any(|e| e.file_type().is_ok_and(|t| t.is_file()) && e.file_name().to_string_lossy().to_lowercase().ends_with(".exe"));
     let mut groups: Vec<PathBuf> = if direct {
@@ -545,12 +727,48 @@ pub fn scan(root: &Path, programs: &[(String, String)]) -> Vec<Found> {
         entries.iter().filter(|e| e.file_type().is_ok_and(|t| t.is_dir()) && !crate::sys::stores::SKIP_DIRS.contains(&e.file_name().to_string_lossy().to_lowercase().as_str())).map(|e| e.path()).collect()
     };
     groups.sort();
-    groups.iter().filter_map(|g| group(g, programs)).collect()
+    groups
+        .iter()
+        .filter_map(|g| {
+            let mut found = Vec::new();
+            crate::sys::stores::walk(g, 0, &mut found, &mut 0);
+            group(g, found, programs)
+        })
+        .collect()
 }
 
-fn group(dir: &Path, programs: &[(String, String)]) -> Option<Found> {
-    let mut found = Vec::new();
-    crate::sys::stores::walk(dir, 0, &mut found, &mut 0);
+/// O mesmo que `walk` faria com os .exe do índice: até 3 pastas abaixo, sem as de
+/// redistribuíveis e sem os executáveis que não são jogo, agrupados como em `scan`.
+fn scan_indexed(root: &Path, list: Vec<(PathBuf, u64)>, programs: &[(String, String)]) -> Vec<Found> {
+    let base = root.to_string_lossy().trim_end_matches('\\').to_string();
+    // O índice acha sem caixa; a parte depois da pasta mantém a caixa do disco, porque o nome da pasta vira o nome do jogo.
+    let mut rel: Vec<(Vec<String>, PathBuf, u64)> = list
+        .into_iter()
+        .filter_map(|(p, size)| {
+            let s = p.to_str()?;
+            if !s.get(..base.len())?.eq_ignore_ascii_case(&base) {
+                return None;
+            }
+            let parts: Vec<String> = s[base.len()..].split('\\').filter(|c| !c.is_empty()).map(String::from).collect();
+            let name = parts.last()?.to_lowercase();
+            let dirs = &parts[..parts.len() - 1];
+            let ok = dirs.len() <= 4 && !dirs.iter().any(|d| crate::sys::stores::SKIP_DIRS.contains(&d.to_lowercase().as_str())) && !crate::sys::stores::NOT_GAME.iter().any(|n| name.contains(n));
+            ok.then_some((parts, p, size))
+        })
+        .collect();
+    if rel.iter().any(|(parts, ..)| parts.len() == 1) {
+        rel.retain(|(parts, ..)| parts.len() <= 4);
+        let found = rel.into_iter().map(|(parts, p, s)| (p, s, parts.len() - 1)).collect();
+        return group(root, found, programs).into_iter().collect();
+    }
+    let mut by: std::collections::BTreeMap<String, (PathBuf, Vec<(PathBuf, u64, usize)>)> = Default::default();
+    for (parts, p, s) in rel {
+        by.entry(parts[0].to_lowercase()).or_insert_with(|| (root.join(&parts[0]), Vec::new())).1.push((p, s, parts.len() - 2));
+    }
+    by.into_values().filter_map(|(dir, found)| group(&dir, found, programs)).collect()
+}
+
+fn group(dir: &Path, found: Vec<(PathBuf, u64, usize)>, programs: &[(String, String)]) -> Option<Found> {
     if found.is_empty() {
         return None;
     }
@@ -570,7 +788,7 @@ fn group(dir: &Path, programs: &[(String, String)]) -> Option<Found> {
     let best = cands[0].path.to_string_lossy().to_string();
     let name = programs.iter().find(|(_, loc)| !loc.is_empty() && crate::sys::stores::same_dir(Path::new(loc), dir)).map_or(folder, |(n, _)| n.clone());
     let emulator = is_emulator(exe_of(&best));
-    Some(Found { name, folder: dir.to_path_buf(), on: cands[0].api != 0 || emulator, emulator, anti_cheat: crate::meter::anti_cheat(&best), cands, pick: 0 })
+    Some(Found { name, folder: dir.to_path_buf(), on: cands[0].api != 0 || emulator, emulator, anti_cheat: crate::meter::anti_cheat_name(&best), cands, pick: 0 })
 }
 
 static SCANNING: AtomicBool = AtomicBool::new(false);
@@ -750,6 +968,76 @@ mod tests {
         assert!(!found[0].on);
         // Uma pasta com exe direto é um jogo só.
         assert_eq!(scan(&root.join("Beta"), &[]).len(), 1);
+        // Pelo índice sai o mesmo que andando pelas pastas.
+        let exes: Vec<(PathBuf, u64)> = [r"Alfa\alfa.exe", r"Alfa\unins000.exe", r"Beta\bin\beta.exe", r"_CommonRedist\x.exe", r"Fundo\a\b\c\d\longe.exe"].iter().map(|p| (root.join(p), 2)).collect();
+        let by_index = scan_indexed(&root, exes.clone(), &progs);
+        assert_eq!(by_index.iter().map(|f| (f.name.as_str(), f.cands.len())).collect::<Vec<_>>(), [("Alfa: Edição Completa", 1), ("Beta", 1)]);
+        assert_eq!(by_index[1].folder, root.join("Beta"));
+        let beta: Vec<_> = exes.into_iter().filter(|e| e.0.starts_with(root.join("Beta"))).collect();
+        assert_eq!(scan_indexed(&root.join("Beta"), beta, &[]).len(), 1);
         std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn api_and_exe_seen_running() {
+        // O DX12 carrega o d3d11 também: vence o 12.
+        assert_eq!(seen_api(["kernel32.dll", "d3d11.dll", "d3d12.dll"]), DX12);
+        assert_eq!(seen_api(["kernel32.dll"]), 0);
+        let mut list = Vec::new();
+        assert!(see_api(&mut list, "Jogo.exe", DX11));
+        assert!(!see_api(&mut list, "jogo.exe", DX11));
+        assert!(see_api(&mut list, "jogo.exe", VULKAN));
+        assert!(!see_api(&mut list, "jogo.exe", 0));
+        assert_eq!(list, [("Jogo.exe".to_string(), VULKAN)]);
+        let g = |name: &str, path: &str, store: &str| Game { name: name.into(), path: path.into(), store: store.into(), size: 0 };
+        let mut games = vec![g("Jogo", r"D:\Jogos\Jogo\Launcher.exe", ""), g("Outro", r"D:\Jogos\Outro\Game.exe", ""), g("Loja", r"D:\Steam\X\x.exe", "Steam")];
+        // Dentro da pasta do posto à mão: troca e diz o nome.
+        assert_eq!(seen_exe(&mut games, r"D:\Jogos\Jogo\bin\Jogo.exe", None), Some("Jogo".into()));
+        assert_eq!(games[0].path, r"D:\Jogos\Jogo\bin\Jogo.exe");
+        // Já na lista, de loja, ou fora de qualquer pasta: nada muda.
+        assert_eq!(seen_exe(&mut games, r"D:\Jogos\Jogo\bin\Jogo.exe", None), None);
+        assert_eq!(seen_exe(&mut games, r"D:\Steam\X\y.exe", None), None);
+        assert_eq!(seen_exe(&mut games, r"E:\Solto\z.exe", None), None);
+        // Pelo processo pai, mesmo fora da pasta.
+        assert_eq!(seen_exe(&mut games, r"E:\Solto\z.exe", Some(r"d:\jogos\outro\game.exe")), Some("Outro".into()));
+        // Pasta de primeiro nível não conta: dois jogos em D:\Raiz pegariam qualquer exe de lá.
+        let mut raiz = vec![g("R", r"D:\Raiz\r.exe", "")];
+        assert_eq!(seen_exe(&mut raiz, r"D:\Raiz\sub\s.exe", None), None);
+    }
+
+    #[test]
+    fn copy_settings_replaces_only_what_from_has() {
+        use crate::config::{FsApp, MeterGame};
+        let mut cfg = Config::default();
+        cfg.meter_games.push(MeterGame { exe: "a.exe".into(), path: r"C:\a\a.exe".into(), limit_mode: 2, limit_fps: 90, measured: true, ..Default::default() });
+        cfg.meter_games.push(MeterGame { exe: "B.exe".into(), path: r"C:\b\B.exe".into(), limit_mode: 1, last: 77, inject_off: true, ..Default::default() });
+        cfg.hdr_games.push(HdrGame { exe: "a.exe".into(), mode: 1, native: autohdr::NATIVE_YES, ..Default::default() });
+        cfg.fs_apps.push(FsApp { exe: "b.exe".into(), path: r"C:\b\B.exe".into(), auto: true, kind: 1 });
+        cfg.eq_apps.push(("a.exe".into(), "Graves".into()));
+        let p = |name: &str, games: &[&str]| Profile { games: games.iter().map(|g| g.to_string()).collect(), ..Profile::empty(name) };
+        let pads = copy_settings(&mut cfg, vec![p("A", &["a.exe"]), p("B", &["b.exe", "a.exe"]), p("C", &["c.exe"])], "A.exe", "b.exe", r"C:\b\B.exe");
+        let b = cfg.meter_games.iter().find(|g| g.exe == "b.exe").unwrap();
+        assert_eq!((b.limit_mode, b.limit_fps, b.measured, b.last, b.path.as_str()), (2, 90, false, 77, r"C:\b\B.exe"));
+        assert!(b.inject_off);
+        let h = cfg.hdr_games.iter().find(|g| g.exe == "b.exe").unwrap();
+        assert_eq!((h.mode, h.native), (1, autohdr::NATIVE_UNKNOWN));
+        assert_eq!(cfg.meter_games.len(), 2);
+        // O de `from` fica, o Fullscreenizer de `to` também (o outro não tinha).
+        assert!(cfg.meter_games.iter().any(|g| g.exe == "a.exe" && g.limit_fps == 90));
+        assert_eq!(cfg.fs_apps.len(), 1);
+        assert_eq!(cfg.eq_apps, [("a.exe".to_string(), "Graves".to_string()), ("b.exe".into(), "Graves".into())]);
+        assert_eq!(pads.iter().map(|p| (p.name.as_str(), p.games.clone())).collect::<Vec<_>>(), [("A", vec!["a.exe".to_string(), "b.exe".into()])]);
+    }
+
+    #[test]
+    fn ai_answer() {
+        let t = r#"Aqui está:
+```json
+{"exe":"Binaries\\Win64\\Jogo-Win64-Shipping.exe","apis":["DirectX 11","Direct3D 12","Vulkan"],"anti_cheat":"Easy Anti-Cheat","native_hdr":true}
+```"#;
+        assert_eq!(parse_ai(t), Some(AiInfo { exe: "Jogo-Win64-Shipping.exe".into(), api: DX11 | DX12 | VULKAN, anti_cheat: Some("Easy Anti-Cheat".into()), hdr: Some(true) }));
+        let t = r#"{"exe":"não sei","apis":["DirectX 9.0c"],"anti_cheat":"","native_hdr":null}"#;
+        assert_eq!(parse_ai(t), Some(AiInfo { exe: String::new(), api: DX9, anti_cheat: Some(String::new()), hdr: None }));
+        assert_eq!(parse_ai("sem json"), None);
     }
 }

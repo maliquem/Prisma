@@ -2858,7 +2858,16 @@ impl App {
         let pid = std::env::var("PRISMA_METER_PID").ok().and_then(|v| v.parse().ok()).unwrap_or(self.fg_pid);
         #[cfg(not(debug_assertions))]
         let pid = self.fg_pid;
+        let entered = game.clone().filter(|g| g.0 != self.meter.session.exe);
         self.meter.tick(&mut self.cfg, game, pid, &self.snap);
+        // Jogo novo na tela: se ele saiu de um posto à mão na aba Jogos com outro exe, a lista passa a ele.
+        if let Some((_, gpid, path)) = entered {
+            let parent = procs::parent_map().get(&gpid).and_then(|p| procs::image_path(*p));
+            if let Some(name) = crate::games::seen_exe(&mut self.cfg.games, &path, parent.as_deref()) {
+                self.cfg.save();
+                self.toast.info(&crate::i18n::tr("{} agora usa {} na aba Jogos.").replacen("{}", &name, 1).replacen("{}", &procs::exe_name(&path), 1));
+            }
+        }
         // Teste: `PRISMA_TEST_METER=1` (compacto) ou `2` (completo) abre o medidor uma vez, sem atalho.
         #[cfg(debug_assertions)]
         if let Some(v) = std::env::var("PRISMA_TEST_METER").ok().and_then(|v| v.parse::<u8>().ok()) {
