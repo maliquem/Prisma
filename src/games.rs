@@ -259,13 +259,8 @@ pub fn rows(cfg: &Config, extra: &Extra, on: u16) -> Vec<Row> {
         mark_row(&mut rows, on, SHADER, &format!("{stem}.exe"), "", true);
     }
     // Quem só tem perfil e é programa de apoio (vigia de travamento, lançador) não é jogo.
-    rows.retain(|r| r.listed || !is_helper(&r.exe));
+    rows.retain(|r| r.listed || !crate::sys::power::is_helper(&r.exe));
     rows
-}
-
-/// Vigia de travamento, lançador, navegador e afins: nunca é um jogo.
-fn is_helper(exe: &str) -> bool {
-    crate::sys::power::not_game(exe) || exe.to_ascii_lowercase().contains("crash")
 }
 
 /// Marca o jogo com o exe (`by_stem`: com o nome sem extensão, o dos perfis de shader), ou o traz.

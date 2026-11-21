@@ -780,3 +780,19 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     sound_card(ui, app, rect(x + cw + 12.0, y, cw, h3), &info, s);
     ui.end_scroll();
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn modes_follow_native_hdr() {
+        let ids = |native, cur| mode_options(native, cur).iter().map(|m| m.0).collect::<Vec<_>>();
+        // Com HDR próprio: só deixar nativo ou melhorar com o Prisma.
+        assert_eq!(ids(autohdr::NATIVE_YES, autohdr::DEFAULT), [autohdr::DEFAULT, autohdr::PRISMA]);
+        // A escolha de antes continua à vista, mesmo fora da lista.
+        assert_eq!(ids(autohdr::NATIVE_YES, autohdr::AUTO)[0], autohdr::AUTO);
+        // Sem HDR próprio, nunca "Deixar nativo".
+        assert!(!ids(autohdr::NATIVE_NO, autohdr::PRISMA).contains(&autohdr::DEFAULT));
+    }
+}

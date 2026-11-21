@@ -197,13 +197,14 @@ fn list(ui: &mut Ui, app: &mut App, a: Rect, s: &mut St) {
         let funcs = func_names(r.funcs);
         let fw = if funcs.is_empty() { 0.0 } else { crate::ui::gfx::measure(&funcs, 12.0, Weight::Regular, None).0.min(rr.w * 0.4) + 16.0 };
         ui.c.text_fit(rect(rr.x + 48.0, top + 6.0, rr.w - 60.0 - fw, 22.0), &r.name, 14.0, TEXT, Align::Left, Weight::Regular);
-        let missing = gm::info(&r.path, hub(app)).is_some_and(|i| !i.exists) && !r.path.is_empty();
+        let info = gm::info(&r.path, hub(app));
+        let missing = info.is_some_and(|i| !i.exists) && !r.path.is_empty();
         let sub = if missing { format!("{} · {}", r.exe, crate::i18n::tr("exe não encontrado")) } else { r.exe.clone() };
         let sw = rr.w - 60.0 - fw;
         ui.c.text_fit(rect(rr.x + 48.0, top + 28.0, sw, 18.0), &sub, 12.0, if missing { WARN } else { MUTED }, Align::Left, Weight::Regular);
         // A API e o anti-cheat, em etiquetas depois do exe, as que couberem.
         let mut tx = rr.x + 48.0 + crate::ui::gfx::measure(&sub, 12.0, Weight::Regular, None).0 + 10.0;
-        for t in tags(app, r) {
+        for t in tags(app, r, info) {
             let tw = crate::ui::gfx::measure(&t, 11.0, Weight::Regular, None).0 + 14.0;
             if tx + tw > rr.x + 48.0 + sw {
                 break;
@@ -227,12 +228,14 @@ fn seen_api(app: &App, exe: &str) -> Option<u8> {
     app.cfg.game_apis.iter().find(|(e, _)| e.eq_ignore_ascii_case(exe)).map(|(_, a)| *a)
 }
 
-/// As etiquetas da linha: a API e o anti-cheat. `gm::info` guarda o que mediu, então não mede de novo a cada quadro.
-fn tags(app: &App, r: &Row) -> Vec<String> {
+/// As etiquetas da linha: a API e o anti-cheat. `info` vem de `gm::info`, que guarda o que mediu. A API só
+/// adivinhada pelos arquivos leva "?", como o "provável" da página.
+fn tags(app: &App, r: &Row, info: Option<gm::Info>) -> Vec<String> {
     let mut out = Vec::new();
-    let info = gm::info(&r.path, hub(app));
-    if let Some(a) = seen_api(app, &r.exe).filter(|a| *a != 0).or(info.map(|i| i.api).filter(|a| *a != 0)) {
+    if let Some(a) = seen_api(app, &r.exe).filter(|a| *a != 0) {
         out.push(gm::api_names(a));
+    } else if let Some(i) = info.filter(|i| i.api != 0) {
+        out.push(if i.guessed { format!("{}?", gm::api_names(i.api)) } else { gm::api_names(i.api) });
     }
     match info.and_then(|i| i.anti_cheat) {
         Some("") => out.push(crate::i18n::tr("Anti-cheat").into_owned()),
@@ -764,6 +767,7 @@ fn hdr(ui: &mut Ui, app: &mut App, r: Rect, exe: &str, path: &str) {
 }
 
 fn sound(ui: &mut Ui, app: &mut App, r: Rect, exe: &str, path: &str, outputs: &[crate::sys::audio::Device], profiles: &[String]) {
+    super::volume::flush_save(app);
     let entry = app.cfg.snd_apps.iter().find(|a| a.exe.eq_ignore_ascii_case(exe)).cloned().unwrap_or_default();
     let mut k = 0;
     let mut pinned = entry.pinned;
@@ -778,7 +782,7 @@ fn sound(ui: &mut Ui, app: &mut App, r: Rect, exe: &str, path: &str, outputs: &[
         let mut v = kept;
         let line = row(ui, r, k, "Volume");
         if ui.slider("gm-sv", rect(line.x, line.y, line.w - 56.0, line.h), &mut v) {
-            super::volume::set_pinned(app, exe, path, true, Some(v));
+            super::volume::slide_pinned(app, exe, path, v);
             // Já vale no jogo aberto, como na aba Som.
             for s in app.sessions.iter_mut().filter(|s| s.exe.eq_ignore_ascii_case(exe)) {
                 s.set_volume(v);
