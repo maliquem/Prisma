@@ -91,19 +91,24 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         changed = true;
     }
     let ry = y;
+    // O formato fica aqui: os atalhos de foto não deixam lugar no cartão da direita.
+    let fy = ry + 60.0;
+    ui.title(rect(col(0), fy, 300.0, 22.0), "Fotos");
 
     let r = rect(l.right() + GAP, top, rw, h);
     ui.card(r);
     ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Atalhos e pasta");
-    let items: [(&str, &str, u8); 6] = [
+    let items: [(&str, &str, u8); 7] = [
         ("hk1", "Foto da área", 0),
         ("hk2", "Foto da tela inteira", 1),
+        ("hk7", "Foto do monitor do mouse", 6),
         ("hk5", "Foto da janela em foco", 4),
         ("hk3", "Gravar Janela e parar", 2),
         ("hk6", "Gravar Tela e parar", 5),
         ("hk4", "Salvar replay", 3),
     ];
-    const STEP: f32 = 66.0;
+    // Cabe na janela de altura mínima com a barra de título do Prisma.
+    const STEP: f32 = 62.0;
     let mut hk_changed = false;
     for (i, (key, name, which)) in items.iter().enumerate() {
         let y = r.y + 40.0 + i as f32 * STEP;
@@ -114,27 +119,26 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
             2 => &mut app.cfg.hk_record,
             4 => &mut app.cfg.hk_shot_win,
             5 => &mut app.cfg.hk_record_full,
+            6 => &mut app.cfg.hk_shot_mon,
             _ => &mut app.cfg.hk_replay,
         };
-        hk_changed |= ui.hotkey(key, rect(r.x + 16.0, y + 20.0, r.w - 32.0, 40.0), hk);
+        hk_changed |= ui.hotkey(key, rect(r.x + 16.0, y + 20.0, r.w - 32.0, 38.0), hk);
     }
-    let py = r.y + 40.0 + 6.0 * STEP;
+    let py = r.y + 40.0 + items.len() as f32 * STEP;
     ui.label(rect(r.x + 16.0, py, r.w - 32.0, 18.0), "Pasta", TEXT2);
-    let pr = rect(r.x + 16.0, py + 20.0, r.w - 32.0, 40.0);
+    let pr = rect(r.x + 16.0, py + 20.0, r.w - 32.0, 38.0);
     ui.c.round(pr, 8.0, SIDE);
     ui.c.round_line(pr, 8.0, if ui.is_hover(pr) { BORDER2 } else { BORDER }, 1.0);
     ui.c.text(pr.inset_xy(10.0, 0.0), &app.cfg.cap_dir, 14.0, TEXT, Align::Left, Weight::Regular);
     if ui.hit("dir", pr) {
         app.pick_folder();
     }
-    let fy = py + STEP;
-    ui.label(rect(r.x + 16.0, fy, r.w - 32.0, 18.0), "Formato de foto", TEXT2);
 
     // Listas por último, para abrirem por cima do resto.
     let opt = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
     let c = &mut app.cfg;
     let mut s = c.shot_hdr as usize;
-    if ui.select("fmt", rect(r.x + 16.0, fy + 20.0, r.w - 32.0, 40.0), &opt(&["PNG em SDR", "PNG e JPEG XR em HDR"]), &mut s) {
+    if ui.select("fmt", rect(col(0), fy + 28.0, fw, 44.0), &opt(&["PNG em SDR", "PNG e JPEG XR em HDR"]), &mut s) {
         c.shot_hdr = s == 1;
         changed = true;
     }

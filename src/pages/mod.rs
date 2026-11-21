@@ -424,21 +424,21 @@ fn group_of(i: usize) -> usize {
 }
 
 /// Onde fica cada item `nav` (índices de `NAV`) no conteúdo da barra lateral e a altura dele todo:
-/// cada grupo abre com o nome dele.
-fn side_rows(nav: &[usize]) -> (Vec<f32>, f32) {
+/// cada grupo abre com `cap` (o nome dele, ou um traço na barra compacta) e cada item ocupa `step`.
+fn side_rows(nav: &[usize], cap: f32, step: f32) -> (Vec<f32>, f32) {
     let (mut ys, mut y, mut group) = (Vec::new(), 0.0, usize::MAX);
     for &i in nav {
         if group_of(i) != group {
             group = group_of(i);
-            y += GROUP_CAP;
+            y += cap;
         }
         ys.push(y);
-        y += SIDE_STEP;
+        y += step;
     }
     (ys, y)
 }
 
-/// Ajuda fora da lista de funções: ao lado do nome, sempre à vista.
+/// Ajuda fora da lista de funções: na barra de título, sempre à vista.
 const HELP: &[(Page, &str, Icon)] = &[(Page::Guide, "Guia e tutorial", ICON_HELP), (Page::Report, "Reportar bug", ICON_BUG)];
 
 const SIDE_W: f32 = 216.0;
@@ -446,13 +446,34 @@ const SIDE_W: f32 = 216.0;
 const GROUP_CAP: f32 = 18.0;
 /// Altura de cada item da barra lateral.
 const SIDE_STEP: f32 = 33.0;
+/// Barra lateral só com ícones: largura, lado do botão e o espaço do traço entre os grupos.
+const MINI_W: f32 = 68.0;
+const MINI_BTN: f32 = 44.0;
+const MINI_CAP: f32 = 15.0;
 const KOFI_URL: &str = "https://ko-fi.com/maliquem";
 const KOFI_ICON: &[u8] = include_bytes!("../../res/kofi.bgra");
+/// Altura da barra de título do Prisma (no lugar da do Windows): a página começa abaixo dela.
+pub const TITLE_H: f32 = 40.0;
+/// Largura de cada botão da janela (minimizar, maximizar, fechar) na barra de título.
+const CAP_W: f32 = 46.0;
+const LOGO: Icon = &[&[(12., 3.), (3., 20.), (21., 20.), (12., 3.)], &[(12., 3.), (12., 20.)]];
+const CLOSE_HOT: Color = rgb(0xc42b1c);
+
+/// Botão da janela sob `x`, `y` (em coordenadas da página: a barra de título fica entre `-TITLE_H`
+/// e 0) numa janela de largura `w`: 0 minimizar, 1 maximizar, 2 fechar. Quem clica neles é o
+/// Windows, que assim mostra o Encaixar no de maximizar.
+pub fn caption_button(w: f32, x: f32, y: f32) -> Option<usize> {
+    let left = w - 3.0 * CAP_W;
+    ((-TITLE_H..0.0).contains(&y) && x >= left && x < w).then(|| ((x - left) / CAP_W) as usize)
+}
 
 pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
     // Função desligada (por um aviso, pelo controle ou agora mesmo): fica em Configurações, onde se religa.
     if !shown(&app.cfg, app.page) && NAV.iter().any(|n| n.0 == app.page) {
         app.page = Page::Adjust;
+    }
+    if ui.s.top > 0.0 {
+        title_bar(&mut ui, app, full.w);
     }
     // O guia abre por cima das boas-vindas, que continuam esperando a resposta.
     if app.welcome.is_some() && app.page != Page::Guide {
@@ -463,50 +484,25 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
         ui.end();
         return;
     }
-    let side = rect(0.0, 0.0, SIDE_W, full.h);
+    let mini = app.cfg.side_compact;
+    let side_w = if mini { MINI_W } else { SIDE_W };
+    let (cap, step) = if mini { (MINI_CAP, MINI_BTN + 2.0) } else { (GROUP_CAP, SIDE_STEP) };
+    let side = rect(0.0, 0.0, side_w, full.h);
     ui.c.fill(side, SIDE);
-    let c = ui.c;
-    c.icon(24.0, 20.0, 22.0, &[&[(12., 3.), (3., 20.), (21., 20.), (12., 3.)], &[(12., 3.), (12., 20.)]], ACCENT);
-    c.text(rect(56.0, 18.0, 70.0, 26.0), "Prisma", 16.0, TEXT, Align::Left, Weight::Semibold);
-    // Ko-fi, Guia e Reportar bug, lado a lado à direita do nome.
-    let slot = |i: usize| rect(SIDE_W - 12.0 - 28.0 - (2 - i) as f32 * 32.0, 17.0, 28.0, 28.0);
-    let coffee = slot(0);
-    ui.c.round(coffee, 8.0, if ui.is_hover(coffee) { CARD2 } else { CARD });
-    ui.image("kofi", 64, KOFI_ICON, rect(coffee.x + 5.0, coffee.y + 5.0, 18.0, 18.0));
-    ui.tip(coffee, "Apoiar o Prisma no Ko-fi");
-    if ui.hit("kofi", coffee) {
-        crate::report::open_url(KOFI_URL);
-    }
-    for (i, (page, tip, icon)) in HELP.iter().enumerate() {
-        let r = slot(i + 1);
-        let current = app.page == *page;
-        ui.c.round(r, 8.0, if current { ACCENT } else if ui.is_hover(r) { CARD2 } else { CARD });
-        ui.c.icon(r.x + 5.0, r.y + 5.0, 18.0, icon, if current { ON_ACCENT } else { ACCENT });
-        ui.tip(r, tip);
-        if ui.hit(&format!("nav-help-{tip}"), r) && !current {
-            if *page == Page::Report {
-                app.report.area = report::area_of(app.page);
-            }
-            app.page = *page;
-            app.refresh_page();
-            ui.s.needs_redraw = true;
-        }
-    }
 
     let nav: Vec<_> = NAV.iter().enumerate().filter(|(_, n)| shown(&app.cfg, n.0)).collect();
-    let (ys, content) = side_rows(&nav.iter().map(|(i, _)| *i).collect::<Vec<_>>());
-    // Em janela baixa a lista rola, com a barra à direita (sem passar da barra lateral), e o cartão
-    // de energia fica parado embaixo.
-    let top = 52.0;
-    let view = rect(0.0, top, SIDE_W - crate::ui::BAR_GAP - crate::ui::BAR_W, (full.h - 100.0 - top).max(64.0));
-    // Página nova (pelo controle, um atalho ou ao abrir) ou janela de outra altura: a lista rola até
-    // o item da página aberta.
-    if app.side_seen != Some((app.page, view.h)) {
-        app.side_seen = Some((app.page, view.h));
+    let (ys, content) = side_rows(&nav.iter().map(|(i, _)| *i).collect::<Vec<_>>(), cap, step);
+    // Em janela baixa a lista rola, com a barra à direita (sem passar da barra lateral).
+    let top = 6.0;
+    let view = rect(0.0, top, side_w - crate::ui::BAR_GAP - crate::ui::BAR_W, (full.h - 8.0 - top).max(64.0));
+    // Página nova (pelo controle, um atalho ou ao abrir), janela de outra altura ou o outro jeito da
+    // barra: a lista rola até o item da página aberta.
+    if app.side_seen != Some((app.page, view.h + side_w)) {
+        app.side_seen = Some((app.page, view.h + side_w));
         if let Some(k) = nav.iter().position(|(_, n)| n.0 == app.page) {
             let v = ui.scroll_y_of("side");
             // O nome do grupo acima do item entra junto.
-            let to = v.clamp(ys[k] + SIDE_STEP - view.h, (ys[k] - GROUP_CAP).max(0.0));
+            let to = v.clamp(ys[k] + step - view.h, (ys[k] - cap).max(0.0));
             if to != v {
                 ui.set_scroll("side", to);
             }
@@ -517,10 +513,16 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
     for ((i, (page, label, icon, _)), dy) in nav.into_iter().zip(ys) {
         let y = top + dy;
         if group_of(i) != group {
+            // O primeiro grupo não leva traço em cima.
+            if mini && group != usize::MAX {
+                ui.c.fill(rect(16.0, y - (MINI_CAP + 1.0) / 2.0, side_w - 32.0, 1.0), BORDER);
+            }
             group = group_of(i);
-            ui.c.text(rect(24.0, y - GROUP_CAP, SIDE_W - 48.0, GROUP_CAP), GROUPS[group].0, 12.0, MUTED, Align::Left, Weight::Semibold);
+            if !mini {
+                ui.c.text(rect(24.0, y - GROUP_CAP, SIDE_W - 48.0, GROUP_CAP), GROUPS[group].0, 12.0, MUTED, Align::Left, Weight::Semibold);
+            }
         }
-        let r = rect(12.0, y, SIDE_W - 28.0, SIDE_STEP - 1.0);
+        let r = if mini { rect((side_w - MINI_BTN) / 2.0, y, MINI_BTN, MINI_BTN) } else { rect(12.0, y, SIDE_W - 28.0, SIDE_STEP - 1.0) };
         let current = app.page == *page;
         let hover = ui.is_hover(r);
         if current || hover {
@@ -528,26 +530,28 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
         }
         // A página aberta: traço azul à esquerda e ícone azul, além do fundo.
         if current {
-            ui.c.round(rect(r.x, r.y + 6.0, 3.0, r.h - 12.0), 1.5, ACCENT);
+            ui.c.round(rect(r.x, r.y + 8.0, 3.0, r.h - 16.0), 1.5, ACCENT);
         }
         let color = if current { WHITE } else { TEXT2 };
-        ui.c.icon(r.x + 12.0, r.y + (r.h - 18.0) / 2.0, 18.0, icon, if current { ACCENT } else { color });
-        ui.c.text(rect(r.x + 42.0, r.y, r.w - 48.0, r.h), label, 14.0, color, Align::Left, if current { Weight::Semibold } else { Weight::Regular });
+        if mini {
+            ui.c.icon(r.x + 11.0, r.y + 11.0, 22.0, icon, if current { ACCENT } else { color });
+        } else {
+            ui.c.icon(r.x + 12.0, r.y + (r.h - 18.0) / 2.0, 18.0, icon, if current { ACCENT } else { color });
+            ui.c.text(rect(r.x + 42.0, r.y, r.w - 48.0, r.h), label, 14.0, color, Align::Left, if current { Weight::Semibold } else { Weight::Regular });
+        }
         if ui.hit_as(&format!("nav-{label}"), r, label, crate::ui::a11y::Role::Tab, Some(current)) && !current {
             crate::report::note(&format!("page: {label}"));
             app.page = *page;
             app.refresh_page();
             ui.s.needs_redraw = true;
         }
+        if mini {
+            ui.tip_right(r, label);
+        }
     }
     ui.end_scroll();
 
-    // Energia desligada: sem o cartão dela.
-    if is_on(&app.cfg, Page::Energy) {
-        energy_chip(&ui, app, rect(12.0, full.h - 88.0, SIDE_W - 24.0, 76.0));
-    }
-
-    let area = rect(SIDE_W, 0.0, full.w - SIDE_W, full.h);
+    let area = rect(side_w, 0.0, full.w - side_w, full.h);
     if app.page != Page::Report {
         if let Some(t) = &mut app.report.text {
             t.hide();
@@ -590,26 +594,124 @@ pub fn draw(mut ui: Ui, app: &mut App, full: Rect) {
     ui.end();
 }
 
-/// Cartão da Energia automática, no pé da barra lateral.
-fn energy_chip(ui: &Ui, app: &App, chip: Rect) {
-    ui.c.round(chip, 10.0, CARD);
-    let plan = app.plans.iter().find(|p| p.id == app.active_plan).map(|p| p.name.as_str()).unwrap_or("Plano desconhecido");
-    let state = if !app.cfg.power_auto && !app.cfg.plan_fixed.is_empty() {
-        "Plano fixo"
-    } else if !app.cfg.power_auto {
-        "Troca desligada"
-    } else {
-        match app.detector.mode {
-            crate::sys::power::Mode::Rest => "Repouso",
-            crate::sys::power::Mode::Load => "Carga alta",
-            crate::sys::power::Mode::Game => "Modo jogo ativo",
+/// Barra de título do Prisma, no lugar da do Windows (entre `-TITLE_H` e 0): nome, Ko-fi, Guia,
+/// Reportar bug, o botão da energia automática, o do jeito da barra lateral e os botões da janela.
+/// Guarda em `app.title_hot` o que é clicável; o resto arrasta a janela (`WM_NCHITTEST`, app.rs).
+fn title_bar(ui: &mut Ui, app: &mut App, w: f32) {
+    let y = -TITLE_H;
+    ui.c.fill(rect(0.0, y, w, TITLE_H), SIDE);
+    ui.c.icon(14.0, y + 10.0, 20.0, LOGO, ACCENT);
+    ui.c.text(rect(42.0, y, 80.0, TITLE_H), "Prisma", 14.0, TEXT, Align::Left, Weight::Semibold);
+    app.title_hot.clear();
+    let by = y + 6.0;
+    let bg = |ui: &Ui, r: Rect, on: bool| {
+        if on || ui.is_hover(r) {
+            ui.c.round(r, 6.0, if on { ACCENT } else { CARD2 });
         }
     };
-    let cx = chip.x + 12.0;
-    ui.c.text(rect(cx, chip.y + 8.0, chip.w - 24.0, 18.0), "Energia automática", 12.0, MUTED, Align::Left, Weight::Regular);
-    // O nome do plano vem do Windows (e pode ser traduzido): diminui até caber.
-    ui.c.text_fit(rect(cx, chip.y + 27.0, chip.w - 24.0, 20.0), plan, 14.0, TEXT, Align::Left, Weight::Semibold);
-    ui.c.text(rect(cx, chip.y + 48.0, chip.w - 24.0, 18.0), state, 12.0, ACCENT, Align::Left, Weight::Regular);
+    let mut x = 42.0 + crate::ui::gfx::measure("Prisma", 14.0, Weight::Semibold, None).0 + 12.0;
+    let coffee = rect(x, by, 32.0, 28.0);
+    bg(ui, coffee, false);
+    ui.image("kofi", 64, KOFI_ICON, rect(coffee.x + 7.0, coffee.y + 5.0, 18.0, 18.0));
+    ui.tip(coffee, "Apoiar o Prisma no Ko-fi");
+    if ui.hit("kofi", coffee) {
+        crate::report::open_url(KOFI_URL);
+    }
+    app.title_hot.push(coffee);
+    for (page, tip, icon) in HELP {
+        x += 36.0;
+        let r = rect(x, by, 32.0, 28.0);
+        let current = app.page == *page;
+        bg(ui, r, current);
+        ui.c.icon(r.x + 7.0, r.y + 5.0, 18.0, icon, if current { ON_ACCENT } else { ACCENT });
+        ui.tip(r, tip);
+        if ui.hit(&format!("nav-help-{tip}"), r) && !current {
+            if *page == Page::Report {
+                app.report.area = report::area_of(app.page);
+            }
+            app.page = *page;
+            app.refresh_page();
+            ui.s.needs_redraw = true;
+        }
+        app.title_hot.push(r);
+    }
+    x += 36.0 + 14.0;
+
+    // Energia desligada: sem o botão dela. O clique liga e desliga a troca automática.
+    let modes_x = w - 4.0 * CAP_W;
+    if is_on(&app.cfg, Page::Energy) {
+        let auto = app.cfg.power_auto;
+        let plan = app.plans.iter().find(|p| p.id == app.active_plan).map(|p| p.name.as_str()).unwrap_or("Plano desconhecido");
+        let state = if !auto && !app.cfg.plan_fixed.is_empty() {
+            "Plano fixo"
+        } else if !auto {
+            "Troca desligada"
+        } else {
+            match app.detector.mode {
+                crate::sys::power::Mode::Rest => "Repouso",
+                crate::sys::power::Mode::Load => "Carga alta",
+                crate::sys::power::Mode::Game => "Modo jogo ativo",
+            }
+        };
+        // O nome do plano vem do Windows (e pode ser traduzido): fica com no máximo 200, e diminui até caber.
+        let pw = crate::ui::gfx::measure(plan, 14.0, Weight::Semibold, None).0.min(200.0);
+        let sw = crate::ui::gfx::measure(state, 12.0, Weight::Regular, None).0;
+        let r = rect(x, by, (10.0 + 18.0 + 8.0 + pw + 10.0 + sw + 10.0).min(modes_x - 8.0 - x), 28.0);
+        bg(ui, r, false);
+        ui.c.icon(r.x + 10.0, r.y + 5.0, 18.0, ICON_POW, if auto { ACCENT } else { TEXT2 });
+        ui.c.text_fit(rect(r.x + 36.0, r.y, pw, r.h), plan, 14.0, TEXT, Align::Left, Weight::Semibold);
+        ui.c.text(rect(r.x + 46.0 + pw, r.y, sw + 4.0, r.h), state, 12.0, if auto { ACCENT } else { MUTED }, Align::Left, Weight::Regular);
+        let tip = if auto { "Troca automática ligada. Clique para deixar o plano fixo." } else { "Troca automática desligada. Clique para ligar." };
+        ui.tip(r, tip);
+        if ui.hit_as("energy-auto", r, "Troca automática", crate::ui::a11y::Role::Check, Some(auto)) {
+            app.cfg.power_auto = !auto;
+            app.cfg.save();
+            app.apply_power_choice();
+            ui.s.needs_redraw = true;
+        }
+        app.title_hot.push(r);
+    }
+
+    // O jeito da barra lateral, ao lado do minimizar: com nomes ou só com ícones.
+    let mini = app.cfg.side_compact;
+    let r = rect(modes_x, y, CAP_W, TITLE_H);
+    bg(ui, r, false);
+    let rail: f32 = if mini { 7.0 } else { 4.0 };
+    ui.c.round_line(rect(r.x + 15.0, r.y + 13.0, 16.0, 14.0), 2.0, TEXT2, 1.2);
+    ui.c.fill(rect(r.x + 15.0 + rail, r.y + 13.0, 1.2, 14.0), TEXT2);
+    let tip = if mini { "Mostrar os nomes no menu" } else { "Menu só com ícones" };
+    ui.tip(r, tip);
+    if ui.hit_as("side-mode", r, tip, crate::ui::a11y::Role::Button, None) {
+        app.cfg.side_compact = !mini;
+        app.cfg.save();
+        ui.s.needs_redraw = true;
+    }
+    app.title_hot.push(r);
+
+    // Minimizar, maximizar e fechar: o clique vem pelo Windows (`caption_button`); aqui só o desenho.
+    let zoomed = unsafe { windows::Win32::UI::WindowsAndMessaging::IsZoomed(app.paint_window.0).as_bool() };
+    for i in 0..3 {
+        let r = rect(w - (3 - i) as f32 * CAP_W, y, CAP_W, TITLE_H);
+        let hot = ui.is_hover(r);
+        if hot {
+            ui.c.fill(r, if i == 2 { CLOSE_HOT } else { CARD2 });
+        }
+        let (cx, cy) = (r.x + CAP_W / 2.0, y + TITLE_H / 2.0);
+        let c = if hot && i == 2 { WHITE } else { TEXT2 };
+        match i {
+            0 => ui.c.line(cx - 5.0, cy, cx + 5.0, cy, c, 1.0),
+            1 if zoomed => {
+                ui.c.round_line(rect(cx - 5.0, cy - 3.0, 8.0, 8.0), 1.0, c, 1.0);
+                ui.c.line(cx - 3.0, cy - 5.0, cx + 5.0, cy - 5.0, c, 1.0);
+                ui.c.line(cx + 5.0, cy - 5.0, cx + 5.0, cy + 3.0, c, 1.0);
+            }
+            1 => ui.c.round_line(rect(cx - 5.0, cy - 5.0, 10.0, 10.0), 1.0, c, 1.0),
+            _ => {
+                ui.c.line(cx - 5.0, cy - 5.0, cx + 5.0, cy + 5.0, c, 1.0);
+                ui.c.line(cx + 5.0, cy - 5.0, cx - 5.0, cy + 5.0, c, 1.0);
+            }
+        }
+    }
 }
 
 /// Liga e desliga as funções, em Configurações e nas boas-vindas: nome, o que faz e a caixa, em
@@ -814,13 +916,26 @@ mod tests {
     fn side_rows_fit_items_and_captions() {
         use super::*;
         let all: Vec<usize> = (0..NAV.len()).collect();
-        let (ys, h) = side_rows(&all);
+        let (ys, h) = side_rows(&all, GROUP_CAP, SIDE_STEP);
         assert_eq!(h, NAV.len() as f32 * SIDE_STEP + GROUPS.len() as f32 * GROUP_CAP);
         assert_eq!(ys[0], GROUP_CAP);
         assert_eq!(ys[ys.len() - 1] + SIDE_STEP, h);
         // Um grupo inteiro desligado não deixa o nome dele.
         let some: Vec<usize> = all.into_iter().filter(|&i| group_of(i) != 3).collect();
-        assert_eq!(side_rows(&some).1, some.len() as f32 * SIDE_STEP + (GROUPS.len() - 1) as f32 * GROUP_CAP);
+        assert_eq!(side_rows(&some, GROUP_CAP, SIDE_STEP).1, some.len() as f32 * SIDE_STEP + (GROUPS.len() - 1) as f32 * GROUP_CAP);
+    }
+
+    #[test]
+    fn caption_buttons_sit_at_the_right_of_the_title_bar() {
+        use super::*;
+        let w = 1200.0;
+        assert_eq!(caption_button(w, w - 1.0, -20.0), Some(2));
+        assert_eq!(caption_button(w, w - CAP_W - 1.0, -20.0), Some(1));
+        assert_eq!(caption_button(w, w - 3.0 * CAP_W, -1.0), Some(0));
+        // Fora da barra (a página) ou à esquerda dos três: não é botão da janela.
+        assert_eq!(caption_button(w, w - 1.0, 0.0), None);
+        assert_eq!(caption_button(w, w - 3.0 * CAP_W - 1.0, -20.0), None);
+        assert_eq!(caption_button(w, w, -20.0), None);
     }
 
     #[test]

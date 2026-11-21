@@ -87,7 +87,8 @@ fn form(ui: &mut Ui, app: &mut App, a: Rect) {
         if covered {
             t.hide();
         } else {
-            t.place(inner, scale);
+            // A caixa é uma janela filha: vai em coordenadas da janela, abaixo da barra de título.
+            t.place(rect(inner.x, inner.y + ui.s.top, inner.w, inner.h), scale);
         }
     }
     if covered {

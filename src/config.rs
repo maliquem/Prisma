@@ -338,6 +338,8 @@ pub struct Config {
     pub hk_shot: Hotkey,
     pub hk_shot_full: Hotkey,
     pub hk_shot_win: Hotkey,
+    /// Foto só do monitor em que está o mouse.
+    pub hk_shot_mon: Hotkey,
     pub hk_record: Hotkey,
     pub hk_record_full: Hotkey,
     pub hk_replay: Hotkey,
@@ -346,6 +348,8 @@ pub struct Config {
     pub vol_step: u32,
     pub vol_osd: bool,
     pub widget_on: bool,
+    /// Barra lateral só com ícones (o botão ao lado do minimizar troca).
+    pub side_compact: bool,
     pub widget_style: u8,
     /// Itens que o widget mostra, um bit por item de `overlays::ITEMS`.
     pub widget_items: u16,
@@ -567,6 +571,7 @@ impl Default for Config {
             hk_shot: Hotkey::new(MOD_CTRL | MOD_ALT, b'P' as u32),
             hk_shot_full: Hotkey::new(MOD_CTRL | MOD_ALT, b'A' as u32),
             hk_shot_win: Hotkey::new(MOD_CTRL | MOD_ALT, b'J' as u32),
+            hk_shot_mon: Hotkey::new(MOD_CTRL | MOD_ALT, b'K' as u32),
             hk_record: Hotkey::new(MOD_CTRL | MOD_ALT, b'R' as u32),
             hk_record_full: Hotkey::new(MOD_CTRL | MOD_ALT, b'T' as u32),
             hk_replay: Hotkey::new(MOD_CTRL | MOD_ALT, b'B' as u32),
@@ -575,6 +580,7 @@ impl Default for Config {
             vol_step: 5,
             vol_osd: true,
             widget_on: false,
+            side_compact: true,
             widget_style: 0,
             widget_items: crate::overlays::ALL_ITEMS,
             widget_x: 24,
@@ -856,6 +862,7 @@ impl Config {
                 "hk_shot" => c.hk_shot = Hotkey::parse(v),
                 "hk_shot_full" => c.hk_shot_full = Hotkey::parse(v),
                 "hk_shot_win" => c.hk_shot_win = Hotkey::parse(v),
+                "hk_shot_mon" => c.hk_shot_mon = Hotkey::parse(v),
                 "hk_record_full" => c.hk_record_full = Hotkey::parse(v),
                 "hk_record" => c.hk_record = Hotkey::parse(v),
                 "hk_replay" => c.hk_replay = Hotkey::parse(v),
@@ -864,6 +871,7 @@ impl Config {
                 "vol_step" => c.vol_step = v.parse().unwrap_or(5),
                 "vol_osd" => c.vol_osd = b,
                 "widget_on" => c.widget_on = b,
+                "side_compact" => c.side_compact = b,
                 "widget_style" => c.widget_style = v.parse().unwrap_or(0),
                 "widget_items" => c.widget_items = crate::overlays::parse_items(v),
                 "widget_x" => c.widget_x = v.parse().unwrap_or(24),
@@ -1093,6 +1101,7 @@ impl Config {
         hk(&mut s, "hk_shot", self.hk_shot);
         hk(&mut s, "hk_shot_full", self.hk_shot_full);
         hk(&mut s, "hk_shot_win", self.hk_shot_win);
+        hk(&mut s, "hk_shot_mon", self.hk_shot_mon);
         hk(&mut s, "hk_record_full", self.hk_record_full);
         hk(&mut s, "hk_record", self.hk_record);
         hk(&mut s, "hk_replay", self.hk_replay);
@@ -1102,6 +1111,7 @@ impl Config {
         let _ = writeln!(s, "vol_step={}", self.vol_step);
         let _ = writeln!(s, "vol_osd={}", b(self.vol_osd));
         let _ = writeln!(s, "widget_on={}", b(self.widget_on));
+        let _ = writeln!(s, "side_compact={}", b(self.side_compact));
         let _ = writeln!(s, "widget_style={}", self.widget_style);
         let _ = writeln!(s, "widget_items={}", self.widget_items);
         let _ = writeln!(s, "widget_x={}", self.widget_x);
@@ -1321,6 +1331,7 @@ impl Config {
                 self.hk_shot = d.hk_shot;
                 self.hk_shot_full = d.hk_shot_full;
                 self.hk_shot_win = d.hk_shot_win;
+                self.hk_shot_mon = d.hk_shot_mon;
                 self.hk_record = d.hk_record;
                 self.hk_record_full = d.hk_record_full;
                 self.hk_replay = d.hk_replay;
@@ -1440,7 +1451,7 @@ mod tests {
     #[test]
     fn atalhos_padrao_nao_se_repetem() {
         let c = Config::default();
-        let mut v = vec![c.hk_fullscreen, c.hk_widget, c.hk_optimize, c.hk_force, c.hk_find, c.hk_shot, c.hk_shot_full, c.hk_shot_win, c.hk_record, c.hk_record_full, c.hk_replay];
+        let mut v = vec![c.hk_fullscreen, c.hk_widget, c.hk_optimize, c.hk_force, c.hk_find, c.hk_shot, c.hk_shot_full, c.hk_shot_win, c.hk_shot_mon, c.hk_record, c.hk_record_full, c.hk_replay];
         v.extend([c.hk_meter_compact, c.hk_meter_full, c.hk_meter_off, c.hk_log, c.hk_meter_keys, c.hk_limit_toggle, c.hk_limit_up, c.hk_limit_down]);
         v.extend(c.hk_shader);
         v.retain(|k| k.vk != 0);

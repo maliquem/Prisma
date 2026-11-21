@@ -17,11 +17,13 @@ The screen also has the language selector. Prisma starts in the Windows language
 
 All of this can be changed later in **Settings**. Prisma stays in the Windows tray: closing the window does not end the program. To exit, use the menu on the tray icon.
 
-The sidebar splits the pages into five groups: **System**, **Maintenance**, **Games and display**, **Input and sound** and **Prisma**. The open page is marked with a blue line on the left and a blue icon. In a short window the group names go away and only a gap is left between groups.
+The sidebar splits the pages into five groups: **System**, **Maintenance**, **Games and display**, **Input and sound** and **Prisma**. The open page is marked with a blue line on the left and a blue icon. The sidebar comes with icons only and a line between groups; hover over an icon to see the page name. The button next to **Minimize**, at the top right, switches between this icons-only menu and the full menu with names. In the full menu, in a short window, the group names go away and only a gap is left between groups.
+
+The top of the window is Prisma's own title bar: drag it to move the window, double-click it to maximize, and the minimize, maximize and close buttons sit on the right, as in Windows. With the Power page on, the bar shows the power plan in use; click it to turn **Automatic switching** on or off (off, the fixed plan stays).
 
 ## Guide and Report a bug
 
-Both sit next to the Prisma name, at the top of the window, always in view, together with the Ko-fi button to support Prisma. Hover over a button to see what it does. In the guide, clicking a topic on the left jumps straight to it.
+Both sit next to the Prisma name, in the title bar, always in view, together with the Ko-fi button to support Prisma. Hover over a button to see what it does. In the guide, clicking a topic on the left jumps straight to it.
 
 ![Guide and Report a bug buttons](help-en.png)
 
@@ -352,8 +354,8 @@ Only shows up with an NVIDIA card. Changes the driver options in the global prof
 
 Takes photos with annotations and records video in AV1, HEVC or H.264. With the display in HDR, it records in SDR or HDR10. Video goes to the folder you choose.
 
-- **Record Window and Record Screen:** Ctrl + Alt + R records the window in focus and Ctrl + Alt + T records the whole screen. With System sound on, it records every sound on the PC. Off, Record Window records only that window's sound. If the window changes size along the way, the video keeps the size it started with: the window shows in the corner, cut if it grew, with the rest black if it shrank.
-- **Photo:** Ctrl + Alt + P selects an area, Ctrl + Alt + A takes the whole screen and Ctrl + Alt + J takes the window in focus. Enter or Ctrl + C copies, Ctrl + S saves, Ctrl + Z undoes and Esc cancels.
+- **Record Window and Record Screen:** Ctrl + Alt + R records the window in focus and Ctrl + Alt + T records the whole screen. Record Window takes only the inside of the window, without the title bar and the border. With System sound on, it records every sound on the PC. Off, Record Window records only that window's sound. If the window changes size along the way, the video keeps the size it started with: the window shows in the corner, cut if it grew, with the rest black if it shrank.
+- **Photo:** Ctrl + Alt + P selects an area, Ctrl + Alt + A takes the whole screen (every monitor joined in one picture, laid out as in Windows), Ctrl + Alt + K takes only the monitor under the mouse and Ctrl + Alt + J takes the window in focus, without the title bar. Enter or Ctrl + C copies, Ctrl + S saves, Ctrl + Z undoes and Esc cancels.
 - **Replay:** in game mode, keeps the last seconds in memory. Ctrl + Alt + B saves.
 - **You can't:** capture protected content, such as Netflix, which comes out black. H.264 has no 10 bits: recording in HDR10 uses HEVC. Recording requires a video encoder on the GPU.
 

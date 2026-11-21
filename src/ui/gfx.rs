@@ -369,6 +369,8 @@ pub struct Canvas {
     pub rt: ID2D1RenderTarget,
     brush: ID2D1SolidColorBrush,
     factory: ID2D1Factory,
+    /// Tudo desce `top` (a barra de título da janela principal fica acima do zero).
+    top: std::cell::Cell<f32>,
 }
 
 fn cc(c: Color) -> D2D1_COLOR_F {
@@ -382,7 +384,7 @@ impl Canvas {
             rt.SetAntialiasMode(D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
             rt.SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
             let factory = rt.GetFactory().expect("fábrica");
-            Self { factory, rt, brush }
+            Self { factory, rt, brush, top: Default::default() }
         }
     }
 
@@ -659,7 +661,12 @@ impl Canvas {
         unsafe { self.rt.PopAxisAlignedClip() }
     }
 
+    pub fn set_top(&self, y: f32) {
+        self.top.set(y);
+    }
+
     pub fn translate(&self, dx: f32, dy: f32) {
+        let dy = dy + self.top.get();
         #[cfg(debug_assertions)]
         BOXES.with(|b| {
             let mut b = b.borrow_mut();
@@ -671,6 +678,7 @@ impl Canvas {
 
     /// Desenha na escala `k` a partir de `x`,`y` (miniaturas); `translate(0.0, 0.0)` volta ao normal.
     pub fn scale_at(&self, k: f32, x: f32, y: f32) {
+        let y = y + self.top.get();
         #[cfg(debug_assertions)]
         BOXES.with(|b| {
             let mut b = b.borrow_mut();

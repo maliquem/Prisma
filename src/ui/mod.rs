@@ -125,6 +125,9 @@ struct Bar {
 
 #[derive(Default)]
 pub struct UiState {
+    /// Altura da barra de título desenhada pelo Prisma: a página começa abaixo dela, e o mouse
+    /// (`mx`, `my`) vem nas coordenadas da página.
+    pub top: f32,
     pub mx: f32,
     pub my: f32,
     pub down: bool,
@@ -331,7 +334,7 @@ impl UiState {
             if (self.pad || self.keys) && t.r.contains(self.mx, self.my) {
                 focus = Some(items.len());
             }
-            items.push((t.r, n.clone()));
+            items.push((rect(t.r.x, t.r.y + self.top, t.r.w, t.r.h), n.clone()));
         }
         a11y::publish(hwnd, scale, items, focus);
     }
@@ -366,6 +369,8 @@ impl<'a> Ui<'a> {
         if std::env::var_os("PRISMA_TEST_PAD").is_some() {
             s.pad = true;
         }
+        c.set_top(s.top);
+        c.translate(0.0, 0.0);
         Self { c, s, dy: 0.0, blocked, clip: None, area: 0, rows: false, bar: None, tip: None, tip_name: None }
     }
 
@@ -383,7 +388,7 @@ impl<'a> Ui<'a> {
 
     /// Guarda um alvo para o controle andar até ele.
     fn target(&mut self, r: Rect, clip: Option<Rect>, area: u64) {
-        let view = rect(0.0, 0.0, self.s.view_w, self.s.view_h);
+        let view = rect(0.0, -self.s.top, self.s.view_w, self.s.view_h + self.s.top);
         self.s.targets.push(Target { r, clip: clip.unwrap_or(view), area, field: false, rows: self.rows });
         let mut node = a11y::Node::default();
         // Ícone com dica desenhada antes do clique: a dica é o nome.
@@ -540,6 +545,15 @@ impl<'a> Ui<'a> {
         if self.hover(r) {
             // A dica é desenhada fora da lista: guarda onde a linha está na tela, já com a rolagem.
             self.tip = Some((rect(r.x, r.y - self.dy, r.w, r.h), text.to_string()));
+        }
+    }
+
+    /// `tip` que abre à direita do controle, no meio da altura dele (ícones da barra lateral compacta).
+    pub fn tip_right(&mut self, r: Rect, text: &str) {
+        self.tip(r, text);
+        if self.hover(r) {
+            // A dica abre 6 abaixo do retângulo guardado: um sem altura, acima do meio, a centraliza.
+            self.tip = Some((rect(r.right() + 8.0, r.y - self.dy + r.h / 2.0 - 21.0, 0.0, 0.0), text.to_string()));
         }
     }
 

@@ -17,11 +17,13 @@ A tela também tem o seletor de idioma. O Prisma começa no idioma do Windows: p
 
 Tudo isso pode ser mudado depois em **Configurações**. O Prisma fica na bandeja do Windows: fechar a janela não encerra o programa. Para sair, use o menu do ícone na bandeja.
 
-A barra lateral separa as páginas em cinco grupos: **Sistema**, **Manutenção**, **Jogos e tela**, **Entrada e som** e **Prisma**. A página aberta fica marcada com um traço azul à esquerda e o ícone azul. Em janela baixa, os nomes dos grupos somem e fica só um vão entre eles.
+A barra lateral separa as páginas em cinco grupos: **Sistema**, **Manutenção**, **Jogos e tela**, **Entrada e som** e **Prisma**. A página aberta fica marcada com um traço azul à esquerda e o ícone azul. A barra vem só com os ícones, com uma linha entre os grupos; passe o mouse num ícone para ver o nome da página. O botão ao lado de **Minimizar**, no alto à direita, troca entre esse menu só com ícones e o menu completo, com os nomes. No menu completo, em janela baixa, os nomes dos grupos somem e fica só um vão entre eles.
+
+O alto da janela é a barra de título do próprio Prisma: arraste por ela para mover a janela, clique duas vezes para maximizar, e os botões de minimizar, maximizar e fechar ficam à direita, como no Windows. Com a página Energia ligada, a barra mostra o plano de energia em uso; clique nele para ligar ou desligar a **Troca automática** (desligada, fica o plano fixo).
 
 ## Guia e Reportar bug
 
-Os dois ficam ao lado do nome Prisma, no alto da janela, sempre à vista, junto com o botão do Ko-fi, para apoiar o Prisma. Passe o mouse em cima para ver o que cada botão faz. No guia, clicar num tópico à esquerda pula direto para ele.
+Os dois ficam ao lado do nome Prisma, na barra de título, sempre à vista, junto com o botão do Ko-fi, para apoiar o Prisma. Passe o mouse em cima para ver o que cada botão faz. No guia, clicar num tópico à esquerda pula direto para ele.
 
 ![Botões do guia e de reportar bug](help-pt.png)
 
@@ -352,8 +354,8 @@ Só aparece com placa NVIDIA. Muda as opções do driver no perfil global ou no 
 
 Tira foto com anotações e grava vídeo em AV1, HEVC ou H.264. Com a tela em HDR, grava em SDR ou HDR10. O vídeo fica na pasta que você escolher.
 
-- **Gravar Janela e Gravar Tela:** Ctrl + Alt + R grava a janela em foco e Ctrl + Alt + T grava a tela inteira. Com Som do sistema ligado, grava todos os sons do PC. Desligado, Gravar Janela grava só o som daquela janela. Se a janela mudar de tamanho no meio, o vídeo fica com o tamanho do começo: a janela aparece no canto, cortada se cresceu, com o resto preto se diminuiu.
-- **Foto:** Ctrl + Alt + P seleciona uma área, Ctrl + Alt + A pega a tela inteira e Ctrl + Alt + J pega a janela em foco. Enter ou Ctrl + C copia, Ctrl + S salva, Ctrl + Z desfaz e Esc cancela.
+- **Gravar Janela e Gravar Tela:** Ctrl + Alt + R grava a janela em foco e Ctrl + Alt + T grava a tela inteira. Gravar Janela pega só o miolo da janela, sem a barra de título e a borda. Com Som do sistema ligado, grava todos os sons do PC. Desligado, Gravar Janela grava só o som daquela janela. Se a janela mudar de tamanho no meio, o vídeo fica com o tamanho do começo: a janela aparece no canto, cortada se cresceu, com o resto preto se diminuiu.
+- **Foto:** Ctrl + Alt + P seleciona uma área, Ctrl + Alt + A pega a tela inteira (todos os monitores juntos numa foto, na posição do Windows), Ctrl + Alt + K pega só o monitor em que está o mouse e Ctrl + Alt + J pega a janela em foco, sem a barra de título. Enter ou Ctrl + C copia, Ctrl + S salva, Ctrl + Z desfaz e Esc cancela.
 - **Replay:** em modo jogo, guarda os últimos segundos na memória. Ctrl + Alt + B salva.
 - **Não dá para:** capturar conteúdo protegido, como Netflix, que sai preto. H.264 não tem 10 bits: gravar em HDR10 usa HEVC. Gravar exige codificador de vídeo na GPU.
 
