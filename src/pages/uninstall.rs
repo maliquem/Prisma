@@ -111,7 +111,13 @@ fn draw_list(ui: &mut Ui, app: &mut App, a: Rect) {
         uninstall::start(chosen, app.cfg.un_silent, app.cfg.un_restore, app.un_job.clone());
     }
     if !app.elevated {
-        ui.c.text(rect(f.right() - 460.0, f.y + 16.0, 236.0, 44.0), "Precisa do Prisma como administrador", 12.0, WARN, Align::Right, Weight::Regular);
+        // Em janela estreita o aviso quebra em linhas, à esquerda do botão, em vez de passar por cima da caixa ao lado.
+        let x0 = f.right() - 460.0;
+        if x0 >= f.x + 508.0 {
+            ui.c.text(rect(x0, f.y + 16.0, 236.0, 44.0), "Precisa do Prisma como administrador", 12.0, WARN, Align::Right, Weight::Regular);
+        } else {
+            ui.c.text_wrap(rect(f.x + 508.0, f.y + 14.0, f.right() - 224.0 - f.x - 508.0, 48.0), "Precisa do Prisma como administrador", 11.0, WARN, Weight::Regular);
+        }
     }
 }
 

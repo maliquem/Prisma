@@ -662,6 +662,9 @@ fn zone_row(ui: &mut Ui, zones: &mut [Zone; 4], i: usize, label: &str, x: f32, y
     false
 }
 
+/// Largura mínima do editor do perfil: a linha mais larga (a zona morta) cabe nela.
+const EDIT_MIN_W: f32 = 520.0;
+
 const ZONES: [&str; 4] = ["Stick esquerdo", "Stick direito", "Gatilho esquerdo", "Gatilho direito"];
 
 /// Troca o conteúdo do perfil pelo do modelo, mantendo nome e jogos.
@@ -949,7 +952,8 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
     let acc_i = remap::TEMPLATES.len() + 1;
     ui.card(r);
     let x = r.x + 16.0;
-    let w = r.w - 32.0;
+    // Mais estreito que isto (janela estreita, menu Compacto), o editor rola para os lados.
+    let w = r.w.max(EDIT_MIN_W) - 32.0;
     let mut y = r.y + 12.0;
 
     ed.layer = ed.layer.min(p.layers.len() - 1);
@@ -975,6 +979,11 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
     let wizard = ed.tpl == acc_i;
     ed.mac = ed.mac.min(p.macros.len().saturating_sub(1));
     ui.begin_scroll("pp-body", body, ed.body_h);
+    // A vista de lado é a parte à vista da rolagem de cima (em coordenadas do conteúdo), para a
+    // barra ficar embaixo do que se vê e não no fim da página. Só com barra ela tira 12 px de baixo.
+    let content_w = w + 24.0;
+    let bar = if content_w > body.w { 12.0 } else { 0.0 };
+    ui.begin_hscroll("pp-body-h", rect(body.x, body.y + ui.scroll_y(), body.w, body.h - bar), content_w);
     // A luz e os gatilhos deste perfil valem no controle enquanto o editor está aberto: é o teste.
     remap::preview_light(p.light.map(|l| (l, p.light_bt)));
     remap::preview_trig(Some(p.trig));
@@ -1714,6 +1723,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
     if let Some(r) = pick {
         super::picker::add_button(ui, app, r, super::picker::Target::PadProgram);
     }
+    ui.end_hscroll();
     ui.end_scroll();
 
     changed |= light_sheets(ui, app, &mut p);

@@ -279,6 +279,12 @@ fn games(ui: &mut Ui, app: &mut App, r: Rect) {
         app.cfg.meter_hide_days = HIDE_DAYS[s];
         app.cfg.save();
     }
+    // As colunas dos controles pedem CONTROLS_W: em janela mais estreita, a lista rola para os lados
+    // (o título e os botões de cima ficam parados) e o resto é desenhado numa largura só dela.
+    let bar = if r.w < CONTROLS_W + 16.0 { 12.0 } else { 0.0 };
+    let view = rect(r.x, r.y + 40.0, r.w, r.h - 40.0 - bar);
+    let r = rect(r.x, r.y, r.w.max(CONTROLS_W + 16.0), r.h);
+    ui.begin_hscroll("mt-games-h", view, r.w);
     let list = shown(app);
     let idle = app.cfg.meter_games.len() - list.len();
     let all = SHOW_IDLE.load(std::sync::atomic::Ordering::Relaxed);
@@ -424,6 +430,7 @@ fn games(ui: &mut Ui, app: &mut App, r: Rect) {
             remove = Some(i);
         }
     }
+    ui.end_hscroll();
     if blocked {
         app.toast.info("Injeção bloqueada: anti-cheat detectado.");
     }

@@ -170,6 +170,7 @@ As flags de teste ficam em `src/app.rs` (`start`, linha 366, e as checagens de `
 | `--test-opts` e `--test-query=` | `app.rs:3086` e `3096` | Foto das opções de pesquisa. |
 | `--test-en` e `--test-lang=n` | `app.rs:3104` e `3113` | Foto em inglês ou no idioma n. |
 | `--test-warm=<s>` | `app.rs:3199` | Tempo de aquecimento (padrão 3). |
+| `--test-w=<px>` | `app.rs:3321` em `render_test` | Largura da foto da janela (padrão 1180); 952 é o mínimo do menu Compacto. |
 | `--test-grab=`, `--test-rec=`, `--test-stream=`, `--test-uninstall=`, `--test-misc=`, `--test-tweaks=`, `--test-tools=`, `--test-audit=`, `--test-explorer=`, `--test-report=`, `--test-patterns=`, `--test-restore=`, `--test-profile=`, `--test-hdr=`, `--test-autohdr=`, `--test-plan=`, `--test-keep=`, `--test-frames=`, `--test-inject=`, `--test-drs=`, `--test-catalog=`, `--test-index=`, `--test-update=`, `--test-sign=`, `--test-scan=`, `--test-force=`, `--test-route=`, `--test-proc-audio=`, `--test-svc=`, `--test-task=`, `--test-overlay=` | `app.rs:740` a `1067`, uma por linha (ex.: `--test-hdr=` em 796, `--test-stream=` em 727, `--test-update=` em 867) | Caso de teste de cada módulo. |
 | `--test-crash`, `--test-panic`, `--test-gpu`, `--test-audio`, `--twlog`, `--profiles`, `--shot-clean`, `--update` | `app.rs:818`, `833`, `1030`, `1044`, `993`, `997`, `1075`, `627` | Casos sem valor. |
 | `--test-force-key=` | `app.rs:1297` e `1565` | Permite a combinação de fechar à força no teste. |
