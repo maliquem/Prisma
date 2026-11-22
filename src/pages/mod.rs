@@ -450,6 +450,11 @@ const SIDE_STEP: f32 = 33.0;
 const MINI_W: f32 = 68.0;
 const MINI_BTN: f32 = 44.0;
 const MINI_CAP: f32 = 15.0;
+
+/// Largura mínima da janela: o menu Compacto devolve à página o que o Completo ocupa a mais.
+pub fn min_width(compact: bool) -> f32 {
+    1100.0 - if compact { SIDE_W - MINI_W } else { 0.0 }
+}
 const KOFI_URL: &str = "https://ko-fi.com/maliquem";
 const KOFI_ICON: &[u8] = include_bytes!("../../res/kofi.bgra");
 /// Altura da barra de título do Prisma (no lugar da do Windows): a página começa abaixo dela.
@@ -672,19 +677,25 @@ fn title_bar(ui: &mut Ui, app: &mut App, w: f32) {
         app.title_hot.push(r);
     }
 
-    // O jeito da barra lateral, ao lado do minimizar: com nomes ou só com ícones.
+    // O jeito da barra lateral, ao lado do minimizar: Compacto (só ícones) ou Completo (com nomes).
     let mini = app.cfg.side_compact;
     let r = rect(modes_x, y, CAP_W, TITLE_H);
     bg(ui, r, false);
     let rail: f32 = if mini { 7.0 } else { 4.0 };
     ui.c.round_line(rect(r.x + 15.0, r.y + 13.0, 16.0, 14.0), 2.0, TEXT2, 1.2);
     ui.c.fill(rect(r.x + 15.0 + rail, r.y + 13.0, 1.2, 14.0), TEXT2);
-    let tip = if mini { "Mostrar os nomes no menu" } else { "Menu só com ícones" };
+    let tip = if mini { "Menu completo, com os nomes" } else { "Menu compacto, só com ícones" };
     ui.tip(r, tip);
     if ui.hit_as("side-mode", r, tip, crate::ui::a11y::Role::Button, None) {
         app.cfg.side_compact = !mini;
         app.cfg.save();
         ui.s.needs_redraw = true;
+        // De Compacto para Completo o mínimo cresce: a janela cresce junto, depois do desenho.
+        if mini {
+            unsafe {
+                let _ = windows::Win32::UI::WindowsAndMessaging::PostMessageW(Some(app.paint_window.0), crate::app::WM_SIDE_FULL, Default::default(), Default::default());
+            }
+        }
     }
     app.title_hot.push(r);
 
@@ -990,5 +1001,14 @@ mod tests {
         assert!(is_on(&cfg, Page::Meter));
         // Toda função que desliga tem o que ela faz, para a lista.
         assert!(NAV.iter().filter(|n| !ALWAYS.contains(&n.0)).all(|n| !n.3.is_empty()), "função sem descrição");
+    }
+}
+
+#[cfg(test)]
+mod min_width_tests {
+    #[test]
+    fn compact_menu_saves_the_names_column() {
+        assert_eq!(super::min_width(false), 1100.0);
+        assert_eq!(super::min_width(true), 1100.0 - (super::SIDE_W - super::MINI_W));
     }
 }

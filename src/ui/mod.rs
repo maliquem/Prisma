@@ -77,6 +77,8 @@ struct Target {
     field: bool,
     /// Linha de uma lista de `begin_rows`: para o Tab a lista toda é uma parada só.
     rows: bool,
+    /// Área de `begin_hscroll` dele (0: fora de uma).
+    harea: u64,
 }
 
 /// Altura da faixa de dicas do controle, embaixo da página.
@@ -116,6 +118,8 @@ fn pick(ts: &[Target], from: (f32, f32), dir: u8, ok: impl Fn(&Target) -> bool) 
         .map(|(i, _)| i)
 }
 
+/// Barra de rolagem: `y` e `h` são o começo e o tamanho do trilho claro ao longo dela (na horizontal,
+/// `x` e largura).
 struct Bar {
     r: Rect,
     y: f32,
@@ -137,6 +141,8 @@ pub struct UiState {
     /// Botão do meio (roda) solto neste quadro.
     pub middle_released: bool,
     pub wheel: f32,
+    /// Roda para os lados (Shift+roda ou a roda de lado do mouse); positivo é para a direita.
+    pub hwheel: f32,
     active: u64,
     popup: Option<Popup>,
     /// A lista acabou de abrir: o clique que a abriu não pode fechá-la.
@@ -211,14 +217,15 @@ impl UiState {
             return if cur.is_some() { None } else { ts.iter().filter(|t| t.shown()).min_by(|a, b| d(a).total_cmp(&d(b))).map(Target::center) };
         };
         let from = cur.map_or((mx, my), |i| ts[i].center());
-        let area = cur.map_or(0, |i| ts[i].area);
-        if let Some(c) = cur.filter(|_| area != 0) {
-            if let Some(i) = pick(ts, from, dir, |t| t.area == area) {
+        let (area, harea) = cur.map_or((0, 0), |i| (ts[i].area, ts[i].harea));
+        if let Some(c) = cur.filter(|_| area != 0 || harea != 0) {
+            let same = |t: &Target| if area != 0 { t.area == area } else { t.harea == harea };
+            if let Some(i) = pick(ts, from, dir, same) {
                 let t = ts[i];
                 return Some(self.reveal(t));
             }
             // Lista que só desenha as linhas à vista: rola um pedaço e as próximas aparecem.
-            if dir & 1 == 1 {
+            if dir & 1 == 1 && area != 0 {
                 let h = ts[c].clip.h * 0.6;
                 if self.scroll_by(area, if dir == 1 { -h } else { h }) != 0.0 {
                     return None;
@@ -229,17 +236,17 @@ impl UiState {
         pick(ts, from, dir, |t| t.shown()).map(|i| ts[i].center())
     }
 
-    /// Rola a lista do alvo `t` até ele caber na vista e devolve onde pôr o cursor.
+    /// Rola a lista do alvo `t` (e a rolagem de lado dele) até ele caber na vista e devolve onde pôr
+    /// o cursor.
     fn reveal(&mut self, t: Target) -> (f32, f32) {
-        let want = if t.r.y < t.clip.y {
-            t.r.y - t.clip.y - 8.0
-        } else if t.r.bottom() > t.clip.bottom() {
-            t.r.bottom() - t.clip.bottom() + 8.0
-        } else {
-            0.0
-        };
-        let moved = if want != 0.0 && t.area != 0 { self.scroll_by(t.area, want) } else { 0.0 };
+        let want = |a: f32, b: f32, lo: f32, hi: f32| if a < lo { a - lo - 8.0 } else if b > hi { b - hi + 8.0 } else { 0.0 };
+        let wy = want(t.r.y, t.r.bottom(), t.clip.y, t.clip.bottom());
+        let wx = want(t.r.x, t.r.right(), t.clip.x, t.clip.right());
+        let moved = if wy != 0.0 && t.area != 0 { self.scroll_by(t.area, wy) } else { 0.0 };
+        let moved_x = if wx != 0.0 && t.harea != 0 { self.scroll_by(t.harea, wx) } else { 0.0 };
         let (x, y) = t.center();
+        // Só aperta no eixo que rolou: sem rolagem de lado, o alvo fica onde está, como antes.
+        let x = if t.harea != 0 { (x - moved_x).clamp(t.clip.x + 2.0, (t.clip.right() - 2.0).max(t.clip.x + 2.0)) } else { x };
         (x, (y - moved).clamp(t.clip.y + 2.0, t.clip.bottom() - 2.0))
     }
 
@@ -253,7 +260,7 @@ impl UiState {
         let same_list = |a: &Target, b: &Target| a.rows && b.rows && a.area == b.area;
         let mut stops: Vec<usize> = Vec::new();
         for (i, t) in ts.iter().enumerate() {
-            let stop = if t.rows { t.shown() && !stops.iter().any(|&j| same_list(&ts[j], t)) } else { t.shown() || t.area != 0 };
+            let stop = if t.rows { t.shown() && !stops.iter().any(|&j| same_list(&ts[j], t)) } else { t.shown() || t.area != 0 || t.harea != 0 };
             if stop {
                 stops.push(i);
             }
@@ -315,6 +322,7 @@ impl UiState {
         self.right_released = false;
         self.middle_released = false;
         self.wheel = 0.0;
+        self.hwheel = 0.0;
         self.key_event = None;
         self.key_cancel = false;
         self.nav.clear();
@@ -344,6 +352,8 @@ pub struct Ui<'a> {
     pub c: &'a Canvas,
     pub s: &'a mut UiState,
     dy: f32,
+    /// Quanto a rolagem de lado em curso andou (0 fora de `begin_hscroll`).
+    dx: f32,
     blocked: bool,
     clip: Option<Rect>,
     /// Lista rolável em curso (0: nenhuma), para os alvos do controle.
@@ -351,6 +361,10 @@ pub struct Ui<'a> {
     /// A lista em curso é de `begin_rows`.
     rows: bool,
     bar: Option<Bar>,
+    /// Rolagem de lado em curso: id, barra e a vista de fora, que volta no `end_hscroll`.
+    harea: u64,
+    hbar: Option<Bar>,
+    hout: Option<Option<Rect>>,
     tip: Option<(Rect, String)>,
     /// Narrador: dica que chegou antes do alvo dela, com o lugar dele.
     tip_name: Option<(Rect, String)>,
@@ -371,7 +385,7 @@ impl<'a> Ui<'a> {
         }
         c.set_top(s.top);
         c.translate(0.0, 0.0);
-        Self { c, s, dy: 0.0, blocked, clip: None, area: 0, rows: false, bar: None, tip: None, tip_name: None }
+        Self { c, s, dy: 0.0, dx: 0.0, blocked, clip: None, area: 0, rows: false, bar: None, harea: 0, hbar: None, hout: None, tip: None, tip_name: None }
     }
 
     fn hover(&self, r: Rect) -> bool {
@@ -383,13 +397,23 @@ impl<'a> Ui<'a> {
                 return false;
             }
         }
-        r.contains(self.s.mx, self.s.my + self.dy)
+        r.contains(self.s.mx + self.dx, self.s.my + self.dy)
+    }
+
+    /// `r` do conteúdo rolado na tela (coordenadas da página).
+    fn screen(&self, r: Rect) -> Rect {
+        rect(r.x - self.dx, r.y - self.dy, r.w, r.h)
+    }
+
+    /// A vista em curso na tela: a da lista rolável, ou a página toda.
+    fn view(&self) -> Rect {
+        self.clip.unwrap_or(rect(0.0, -self.s.top, self.s.view_w, self.s.view_h + self.s.top))
     }
 
     /// Guarda um alvo para o controle andar até ele.
     fn target(&mut self, r: Rect, clip: Option<Rect>, area: u64) {
         let view = rect(0.0, -self.s.top, self.s.view_w, self.s.view_h + self.s.top);
-        self.s.targets.push(Target { r, clip: clip.unwrap_or(view), area, field: false, rows: self.rows });
+        self.s.targets.push(Target { r, clip: clip.unwrap_or(view), area, field: false, rows: self.rows, harea: self.harea });
         let mut node = a11y::Node::default();
         // Ícone com dica desenhada antes do clique: a dica é o nome.
         if let Some((tr, name)) = self.tip_name.take() {
@@ -422,7 +446,7 @@ impl<'a> Ui<'a> {
     /// Devolve true no clique que começou e terminou sobre este controle.
     fn clickable(&mut self, id: u64, r: Rect) -> bool {
         if !self.blocked {
-            self.target(rect(r.x, r.y - self.dy, r.w, r.h), self.clip, self.area);
+            self.target(self.screen(r), self.clip, self.area);
         }
         let hover = self.hover(r);
         if hover && self.s.pressed {
@@ -441,6 +465,7 @@ impl<'a> Ui<'a> {
 
     /// Área rolável. O conteúdo desenhado depois disso usa coordenadas sem rolagem.
     pub fn begin_scroll(&mut self, key: &str, r: Rect, content_h: f32) {
+        debug_assert!(self.harea == 0, "begin_scroll dentro de begin_hscroll");
         let id = hash_id(key);
         let max = (content_h - r.h).max(0.0);
         let mut v = self.s.scroll.get(&id).copied().unwrap_or(0.0);
@@ -511,6 +536,77 @@ impl<'a> Ui<'a> {
         }
     }
 
+    /// Rolagem para os lados em `r` (nas coordenadas de agora: pode ficar dentro de `begin_scroll`, não
+    /// o contrário). O que se desenha até `end_hscroll` tem `content_w` de largura e anda para os
+    /// lados; a barra fica embaixo de `r`, na margem, como a vertical fica à direita. Rola com
+    /// Shift+roda ou a roda de lado, arrastando a barra, e com Tab ou o controle até o item à vista.
+    pub fn begin_hscroll(&mut self, key: &str, r: Rect, content_w: f32) {
+        debug_assert!(self.harea == 0, "begin_hscroll dentro de outro");
+        let id = hash_id(key);
+        let max = (content_w - r.w).max(0.0);
+        let mut v = self.s.scroll.get(&id).copied().unwrap_or(0.0);
+        self.s.scroll_max.insert(id, max);
+        let out = self.view();
+        let live = !self.blocked && out.contains(self.s.mx, self.s.my);
+        // Mouse nas coordenadas de `r`.
+        let (mx, my) = (self.s.mx, self.s.my + self.dy);
+        if live && r.contains(mx, my) && self.s.hwheel != 0.0 && max > 0.0 {
+            v += self.s.hwheel * 72.0;
+            self.s.needs_redraw = true;
+        }
+        self.hbar = None;
+        if max > 0.0 {
+            let bar_id = id ^ 4;
+            let w = (r.w * r.w / content_w).max(32.0);
+            let span = r.w - w;
+            let left = r.x + span * (v.clamp(0.0, max) / max);
+            let over = live && mx >= r.x && mx <= r.right() && my >= r.bottom() && my <= r.bottom() + BAR_GAP + BAR_W;
+            if over && self.s.pressed {
+                self.s.active = bar_id;
+                // Clicar fora do trilho claro leva a barra até ali.
+                self.s.grab = if mx >= left && mx <= left + w { mx - left } else { w / 2.0 };
+            }
+            if self.s.active == bar_id {
+                v = (mx - self.s.grab - r.x) / span * max;
+                self.s.needs_redraw = true;
+                if self.s.released || !self.s.down {
+                    self.s.active = 0;
+                }
+            }
+            v = v.clamp(0.0, max);
+            self.hbar = Some(Bar { r, y: r.x + span * (v / max), h: w, id: bar_id });
+        }
+        v = v.clamp(0.0, max);
+        self.s.scroll.insert(id, v);
+        // A vista nova é `r` na tela, presa à de fora: com `r` fora dela, a vista fica na borda (vazia)
+        // e o Tab e o controle ainda sabem para que lado rolar.
+        let at = self.screen(r);
+        let (x0, x1) = (at.x.clamp(out.x, out.right()), at.right().clamp(out.x, out.right()));
+        let (y0, y1) = (at.y.clamp(out.y, out.bottom()), at.bottom().clamp(out.y, out.bottom()));
+        self.hout = Some(self.clip);
+        self.clip = Some(rect(x0, y0, x1 - x0, y1 - y0));
+        self.dx = v;
+        self.harea = id;
+        self.c.push_clip(r);
+        self.c.translate(-v, -self.dy);
+    }
+
+    pub fn end_hscroll(&mut self) {
+        self.c.translate(0.0, -self.dy);
+        self.c.pop_clip();
+        self.dx = 0.0;
+        self.harea = 0;
+        self.clip = self.hout.take().flatten();
+        if let Some(b) = self.hbar.take() {
+            let (mx, my) = (self.s.mx, self.s.my + self.dy);
+            let hot = self.s.active == b.id;
+            let near = !self.blocked && self.view().contains(self.s.mx, self.s.my) && mx >= b.r.x && mx <= b.r.right() && my >= b.r.bottom() && my <= b.r.bottom() + BAR_GAP + BAR_W;
+            let color = if hot { ACCENT } else if near { TEXT2 } else { BORDER2 };
+            let h = if hot || near { 5.0 } else { 3.0 };
+            self.c.round(rect(b.y, b.r.bottom() + BAR_GAP, b.h, h), h / 2.0, color);
+        }
+    }
+
     /// Se a lista está no fim, continua no fim quando crescer. Rolar para cima solta.
     pub fn stick_bottom(&mut self, key: &str) {
         let id = hash_id(key);
@@ -535,7 +631,7 @@ impl<'a> Ui<'a> {
     pub fn tip(&mut self, r: Rect, text: &str) {
         if a11y::on() {
             // A dica dá nome ao ícone clicável do mesmo lugar, venha antes ou depois do clique.
-            let at = rect(r.x, r.y - self.dy, r.w, r.h);
+            let at = self.screen(r);
             let name = crate::i18n::tr(text).into_owned();
             match (self.s.targets.last(), self.s.names.last_mut()) {
                 (Some(t), Some(n)) if t.r == at && n.name.is_empty() => n.name = name,
@@ -544,7 +640,7 @@ impl<'a> Ui<'a> {
         }
         if self.hover(r) {
             // A dica é desenhada fora da lista: guarda onde a linha está na tela, já com a rolagem.
-            self.tip = Some((rect(r.x, r.y - self.dy, r.w, r.h), text.to_string()));
+            self.tip = Some((self.screen(r), text.to_string()));
         }
     }
 
@@ -553,7 +649,8 @@ impl<'a> Ui<'a> {
         self.tip(r, text);
         if self.hover(r) {
             // A dica abre 6 abaixo do retângulo guardado: um sem altura, acima do meio, a centraliza.
-            self.tip = Some((rect(r.right() + 8.0, r.y - self.dy + r.h / 2.0 - 21.0, 0.0, 0.0), text.to_string()));
+            let at = self.screen(r);
+            self.tip = Some((rect(at.right() + 8.0, at.y + at.h / 2.0 - 21.0, 0.0, 0.0), text.to_string()));
         }
     }
 
@@ -726,7 +823,7 @@ impl<'a> Ui<'a> {
             let widest = options.iter().map(|o| measure(o, 14.0, Weight::Regular, None).0).fold(0.0, f32::max);
             let icon = if glyphs.iter().any(|&g| g != 0) { GLYPH_H + 8.0 } else { 0.0 };
             let w = r.w.min((widest + icon + 40.0).max(200.0));
-            let y = r.y - self.dy;
+            let (x, y) = (r.x - self.dx, r.y - self.dy);
             let mut top = y + r.h + 4.0;
             // Sem espaço embaixo, a lista abre para cima.
             if self.s.view_h > 0.0 && top + h > self.s.view_h - 8.0 {
@@ -736,7 +833,7 @@ impl<'a> Ui<'a> {
             let max = (options.len() as f32 * ROW + 8.0 - h).max(0.0);
             self.s.popup = Some(Popup {
                 id,
-                rect: rect(r.x, top, w, h),
+                rect: rect(x, top, w, h),
                 options: options.to_vec(),
                 selected: *sel,
                 off: Vec::new(),
@@ -813,8 +910,10 @@ impl<'a> Ui<'a> {
         let (vw, vh) = (self.s.view_w, self.s.view_h);
         self.c.translate(0.0, 0.0);
         self.dy = 0.0;
+        self.dx = 0.0;
         self.clip = None;
         self.area = 0;
+        self.harea = 0;
         self.c.fill(rect(0.0, 0.0, vw, vh), rgb(0x000000).alpha(0.6));
         #[cfg(debug_assertions)]
         gfx::forget_boxes();
@@ -936,7 +1035,7 @@ impl<'a> Ui<'a> {
             if ui.s.released || !ui.s.down {
                 ui.s.active = 0;
             }
-            Some((((ui.s.mx - area.x) / area.w).clamp(0.0, 1.0), ((ui.s.my + ui.dy - area.y) / area.h).clamp(0.0, 1.0)))
+            Some((((ui.s.mx + ui.dx - area.x) / area.w).clamp(0.0, 1.0), ((ui.s.my + ui.dy - area.y) / area.h).clamp(0.0, 1.0)))
         };
         if let Some((fx, fy)) = drag(self, "-sv", sq) {
             (hsv[1], hsv[2]) = (fx, 1.0 - fy);
@@ -964,7 +1063,7 @@ impl<'a> Ui<'a> {
         }
         let mut changed = false;
         if self.s.active == id {
-            *val = ((self.s.mx - r.x) / r.w).clamp(0.0, 1.0);
+            *val = ((self.s.mx + self.dx - r.x) / r.w).clamp(0.0, 1.0);
             changed = true;
             if self.s.released || !self.s.down {
                 self.s.active = 0;
@@ -1367,7 +1466,7 @@ mod tests {
     use super::*;
 
     fn t(x: f32, y: f32, area: u64, clip: Rect) -> Target {
-        Target { r: rect(x, y, 100.0, 30.0), clip, area, field: false, rows: false }
+        Target { r: rect(x, y, 100.0, 30.0), clip, area, field: false, rows: false, harea: 0 }
     }
 
     #[test]
@@ -1387,6 +1486,21 @@ mod tests {
         // Fora de qualquer controle: vai ao mais perto.
         (s.mx, s.my) = (700.0, 500.0);
         assert_eq!(s.pad_move(None), Some((550.0, 135.0)));
+    }
+
+    #[test]
+    fn tab_scrolls_sideways_to_a_cut_off_control() {
+        let (view, id) = (rect(0.0, 0.0, 400.0, 300.0), 9);
+        let mut s = UiState::default();
+        s.scroll_max.insert(id, 300.0);
+        // Dois botões à vista e um terceiro além da borda direita, numa rolagem de lado.
+        let col = |x| Target { harea: id, ..t(x, 10.0, 0, view) };
+        s.last = vec![col(10.0), col(150.0), col(450.0)];
+        (s.mx, s.my) = (200.0, 25.0);
+        let to = s.tab_move(false).unwrap();
+        // 450..550 passa de 400 por 150, mais a folga de 8: rolou 158 e o cursor ficou dentro da vista.
+        assert_eq!(s.scroll[&id], 158.0);
+        assert!(view.contains(to.0, to.1));
     }
 
     #[test]

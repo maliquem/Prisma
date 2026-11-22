@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Compact and Full menu**: the two sidebar modes are now called **Compact** (icons only) and **Full** (with names). With the Compact menu the window can be made narrower, by exactly what the names column takes (to 952 px instead of 1100); switching back to Full widens a narrower window up to its minimum. Wide areas that were cut off in a narrow window now have a horizontal scrollbar (drag it, Shift + mouse wheel, or Tab and the controller bring the item into view): the **Games** list on the Meter page and the profile editor on the Controls page. / **Menu Compacto e Completo**: os dois modos da barra lateral agora se chamam **Compacto** (só ícones) e **Completo** (com nomes). Com o menu Compacto a janela pode ficar mais estreita, exatamente o que a coluna dos nomes ocupa (até 952 px em vez de 1100); ao voltar para o Completo, uma janela mais estreita cresce até o mínimo dele. Áreas largas que ficavam cortadas na janela estreita agora têm barra de rolagem horizontal (arraste a barra, Shift + roda do mouse, ou o Tab e o controle levam o item à vista): a lista **Jogos** da página Medidor e o editor de perfil da página Controles.
+
 ## 2.1.0
 
 - **Shortcuts**: a global shortcut that Windows refused because another program held it (like the other copy of Prisma, installed or test) is now tried again every 5 seconds, and works by itself once the other copy closes; before, it stayed dead until Prisma restarted or the shortcut was changed. / **Atalhos**: um atalho global que o Windows recusou porque outro programa o segurava (como a outra cópia do Prisma, instalada ou de teste) agora é tentado de novo a cada 5 segundos, e passa a funcionar sozinho quando a outra cópia fecha; antes ele ficava parado até o Prisma reiniciar ou o atalho ser trocado.

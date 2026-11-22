@@ -348,7 +348,7 @@ pub struct Config {
     pub vol_step: u32,
     pub vol_osd: bool,
     pub widget_on: bool,
-    /// Barra lateral só com ícones (o botão ao lado do minimizar troca).
+    /// Menu Compacto: barra lateral só com ícones (o botão ao lado do minimizar troca para o Completo).
     pub side_compact: bool,
     pub widget_style: u8,
     /// Itens que o widget mostra, um bit por item de `overlays::ITEMS`.

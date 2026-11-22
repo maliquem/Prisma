@@ -85,6 +85,8 @@ pub const WM_PICK_SHADER: u32 = WM_APP + 104;
 const WM_PICK_MODS: u32 = WM_APP + 105;
 /// Página Jogos; o WPARAM diz o quê (`pages::games::ADD`, `SCAN` ou `REDRAW`).
 pub const WM_PICK_GAMES: u32 = WM_APP + 106;
+/// A barra lateral voltou ao menu Completo: a janela cresce até o mínimo dele.
+pub const WM_SIDE_FULL: u32 = WM_APP + 107;
 const WM_POW_OUT: u32 = WM_APP + 82;
 const WM_REPORT_PHOTO: u32 = WM_APP + 84;
 const WM_REPORT_DONE: u32 = WM_APP + 85;
@@ -3316,7 +3318,7 @@ impl App {
         self.pop.extras(&self.cfg, hub);
         self.find.extras(&self.cfg, hub);
         unsafe {
-            let (w, h) = if popup { (crate::pages::search::POP_W, crate::pages::search::pop_height(self)) } else { (1180.0, 780.0) };
+            let (w, h) = if popup { (crate::pages::search::POP_W, crate::pages::search::pop_height(self)) } else { (std::env::args().find_map(|a| a.strip_prefix("--test-w=").and_then(|v| v.parse().ok())).unwrap_or(1180.0), 780.0) };
             let Ok(wic) = CoCreateInstance::<_, IWICImagingFactory>(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER) else { return };
             let Ok(bmp) = wic.CreateBitmap(w as u32, h as u32, &GUID_WICPixelFormat32bppPBGRA, WICBitmapCacheOnLoad) else { return };
             let props = D2D1_RENDER_TARGET_PROPERTIES {
@@ -5105,6 +5107,20 @@ unsafe extern "system" fn main_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
         p.rgrc[0].top = top + if IsZoomed(h).as_bool() { frame_px(h) } else { 0 };
         return r;
     }
+    // Menu Completo de volta: a janela mais estreita que o mínimo dele cresce até o mínimo. Fora do
+    // estado, porque o `SetWindowPos` manda WM_SIZE na hora.
+    if m == WM_SIDE_FULL {
+        let mut wr = RECT::default();
+        if !IsZoomed(h).as_bool() && GetWindowRect(h, &mut wr).is_ok() {
+            let (min_w, _) = min_track(h, false);
+            if wr.right - wr.left < min_w {
+                let wa = work_area_of(MonitorFromWindow(h, MONITOR_DEFAULTTONEAREST));
+                let x = wr.left.min(wa.right - min_w).max(wa.left);
+                let _ = SetWindowPos(h, None, x, wr.top, min_w, wr.bottom - wr.top, SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+        }
+        return LRESULT(0);
+    }
     let r = with(|a| {
         match m {
             WM_PAINT => {
@@ -5215,11 +5231,7 @@ unsafe extern "system" fn main_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
             }
             WM_GETMINMAXINFO => {
                 let mi = &mut *(l.0 as *mut MINMAXINFO);
-                let s = GetDpiForWindow(h) as f32 / 96.0;
-                // O mínimo nunca passa da área livre da tela: em telas pequenas a janela ainda cabe.
-                let wa = work_area_of(MonitorFromWindow(h, MONITOR_DEFAULTTONEAREST));
-                mi.ptMinTrackSize.x = ((1100.0 * s) as i32).min(wa.right - wa.left);
-                mi.ptMinTrackSize.y = ((700.0 * s) as i32).min(wa.bottom - wa.top);
+                (mi.ptMinTrackSize.x, mi.ptMinTrackSize.y) = min_track(h, a.cfg.side_compact);
                 Some(0)
             }
             WM_MOUSEMOVE => {
@@ -5274,7 +5286,22 @@ unsafe extern "system" fn main_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LR
                 let d = ((w.0 >> 16) & 0xffff) as i16 as f32 / 120.0;
                 pad_off(a, true);
                 if let Some(mw) = &mut a.main {
-                    mw.ui.wheel += d;
+                    // Shift+roda rola para os lados (roda para cima vai à esquerda).
+                    if GetKeyState(VK_SHIFT.0 as i32) < 0 {
+                        mw.ui.hwheel -= d;
+                    } else {
+                        mw.ui.wheel += d;
+                    }
+                }
+                a.invalidate();
+                Some(0)
+            }
+            // A roda de lado do mouse: positivo é para a direita.
+            WM_MOUSEHWHEEL => {
+                let d = ((w.0 >> 16) & 0xffff) as i16 as f32 / 120.0;
+                pad_off(a, true);
+                if let Some(mw) = &mut a.main {
+                    mw.ui.hwheel += d;
                 }
                 a.invalidate();
                 Some(0)
@@ -5418,6 +5445,14 @@ mod window_tests {
         let (x, _, w, _) = centered(RECT { left: -1920, top: 0, right: 0, bottom: 1032 }, 1296, 859, 16);
         assert!(x >= -1920 && x + w <= 0);
     }
+}
+
+/// Tamanho mínimo da janela principal, em pixels: com o menu Compacto ela fica mais estreita. Nunca
+/// passa da área livre da tela, para a janela ainda caber em telas pequenas.
+unsafe fn min_track(h: HWND, compact: bool) -> (i32, i32) {
+    let s = GetDpiForWindow(h) as f32 / 96.0;
+    let wa = work_area_of(MonitorFromWindow(h, MONITOR_DEFAULTTONEAREST));
+    (((crate::pages::min_width(compact) * s) as i32).min(wa.right - wa.left), ((700.0 * s) as i32).min(wa.bottom - wa.top))
 }
 
 /// Área livre do monitor, sem a barra de tarefas.
