@@ -1,8 +1,9 @@
 # Changelog
 
-## Unreleased
+## 2.1.1
 
 - **Compact and Full menu**: the two sidebar modes are now called **Compact** (icons only) and **Full** (with names). With the Compact menu the window can be made narrower, by exactly what the names column takes (to 952 px instead of 1100); switching back to Full widens a narrower window up to its minimum. Wide areas that were cut off in a narrow window now have a horizontal scrollbar (drag it, Shift + mouse wheel, or Tab and the controller bring the item into view): the **Games** list on the Meter page and the profile editor on the Controls page. / **Menu Compacto e Completo**: os dois modos da barra lateral agora se chamam **Compacto** (só ícones) e **Completo** (com nomes). Com o menu Compacto a janela pode ficar mais estreita, exatamente o que a coluna dos nomes ocupa (até 952 px em vez de 1100); ao voltar para o Completo, uma janela mais estreita cresce até o mínimo dele. Áreas largas que ficavam cortadas na janela estreita agora têm barra de rolagem horizontal (arraste a barra, Shift + roda do mouse, ou o Tab e o controle levam o item à vista): a lista **Jogos** da página Medidor e o editor de perfil da página Controles.
+- **Prisma Launcher link**: a HDR mode this Prisma doesn't know (sent by a newer launcher) no longer breaks the whole options answer; only that mode is refused. / **Ponte com o Prisma Launcher**: um modo de HDR que este Prisma não conhece (vindo de um launcher mais novo) não derruba mais a resposta de opções inteira; só esse modo é recusado.
 
 ## 2.1.0
 
