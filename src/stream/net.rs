@@ -13,7 +13,7 @@
 //! - `--stream-forget=nome`: esquece um aparelho.
 
 use std::io;
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::Ipv4Addr;
 use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -381,8 +381,11 @@ fn addr_path() -> PathBuf {
     dir().join("endereco.txt")
 }
 
+/// Quanto o portão das redes espera o caminho cair numa rede marcada.
+const GATE_WAIT: Duration = Duration::from_secs(10);
+
 /// Hora local para as linhas do log do host.
-fn now_text() -> String {
+pub(super) fn now_text() -> String {
     let t = unsafe { windows::Win32::System::SystemInformation::GetLocalTime() };
     format!("{:04}-{:02}-{:02} {:02}:{:02}:{:02}", t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond)
 }
@@ -430,7 +433,7 @@ async fn watch_net(ep: Endpoint) {
         let mut text = String::new();
         for t in &w.get().addrs {
             let TransportAddr::Ip(a) = t else { continue };
-            if is_local(a.ip()) || is_cgnat(a.ip()) || vpn_of(a.ip()).is_some() {
+            if is_local(a.ip()) || is_cgnat(a.ip()) || super::route::vpn_of(a.ip(), Some(a.ip())).is_some() {
                 continue;
             }
             let key = if a.is_ipv4() { "ip4=" } else { "ip6=" };
@@ -569,7 +572,8 @@ fn sas(host: &EndpointId, viewer: &EndpointId, secret: &[u8]) -> String {
 // ---------- Canal ----------
 
 /// `host`: usa a porta fixa das opções. O UPnP vale para os dois lados.
-async fn endpoint(sk: SecretKey, alpns: Vec<Vec<u8>>, host: bool) -> std::result::Result<Endpoint, String> {
+/// `picker`: o seletor de caminho que respeita as redes de cada aparelho (veja `route`).
+async fn endpoint(sk: SecretKey, alpns: Vec<Vec<u8>>, host: bool, picker: Arc<super::route::Picker>) -> std::result::Result<Endpoint, String> {
     let o = Opts::load();
     // Um quadro-chave em 4K passa de 600 KB: os buffers de datagramas precisam caber nele.
     let cfg = QuicTransportConfig::builder()
@@ -578,7 +582,12 @@ async fn endpoint(sk: SecretKey, alpns: Vec<Vec<u8>>, host: bool) -> std::result
         .keep_alive_interval(Duration::from_secs(1))
         .build();
     let make = |port: u16| -> std::result::Result<iroh::endpoint::Builder, String> {
-        let mut b = Endpoint::builder(presets::N0).secret_key(sk.clone()).alpns(alpns.clone()).transport_config(cfg.clone()).ca_tls_config(super::code::ca());
+        let mut b = Endpoint::builder(presets::N0)
+            .secret_key(sk.clone())
+            .alpns(alpns.clone())
+            .transport_config(cfg.clone())
+            .ca_tls_config(super::code::ca())
+            .path_selector(picker.clone());
         if !o.upnp {
             b = b.portmapper_config(iroh::endpoint::PortmapperConfig::Disabled);
         }
@@ -663,61 +672,13 @@ impl Link for Net {
     }
 
     fn route(&self) -> String {
-        for p in self.conn.paths().iter() {
-            if !p.is_selected() {
-                continue;
-            }
-            let rtt = p.rtt().as_secs_f64() * 1000.0;
-            return match p.remote_addr() {
-                TransportAddr::Ip(a) => match vpn_of(a.ip()) {
-                    Some(v) => format!("pela VPN ({v}), {a}, {rtt:.0} ms"),
-                    None if is_local(a.ip()) => format!("direto na rede local, {a}, {rtt:.0} ms"),
-                    None if a.is_ipv6() => format!("direto pela internet por IPv6, {a}, {rtt:.0} ms"),
-                    None => format!("direto pela internet, {a}, {rtt:.0} ms"),
-                },
-                TransportAddr::Relay(u) => format!("pelo relé da n0 ({u}), {rtt:.0} ms"),
-                other => format!("{other:?}, {rtt:.0} ms"),
-            };
-        }
-        "procurando caminho".into()
+        super::route::route_of(&self.conn)
     }
 
     /// Só o caminho escolhido agora conta: o iroh pode trocar do relé para o direto (e voltar).
     fn near(&self) -> bool {
-        self.conn.paths().iter().filter(|p| p.is_selected()).any(|p| match p.remote_addr() {
-            TransportAddr::Ip(a) => is_local(a.ip()) || vpn_of(a.ip()).is_some(),
-            _ => false,
-        })
+        super::route::near_of(&self.conn)
     }
-}
-
-/// O endereço é de uma VPN deste PC (ZeroTier ou Tailscale)? Compara com os adaptadores daqui.
-fn vpn_of(ip: IpAddr) -> Option<&'static str> {
-    static NETS: OnceLock<Vec<(String, &'static str)>> = OnceLock::new();
-    let nets = NETS.get_or_init(|| {
-        let mut v = Vec::new();
-        for n in crate::sys::nets::list() {
-            let t = format!("{} {}", n.name, n.desc).to_lowercase();
-            let vendor = if t.contains("zerotier") {
-                "ZeroTier"
-            } else if t.contains("tailscale") {
-                "Tailscale"
-            } else {
-                continue;
-            };
-            if let Some(i) = n.ip.rfind('.') {
-                v.push((n.ip[..=i].to_string(), vendor));
-            }
-        }
-        v
-    });
-    let IpAddr::V4(v4) = ip else { return None };
-    let s = v4.to_string();
-    // Tailscale dá endereços soltos em 100.64.0.0/10.
-    if is_cgnat(ip) && nets.iter().any(|(_, v)| *v == "Tailscale") {
-        return Some("Tailscale");
-    }
-    nets.iter().find(|(p, _)| s.starts_with(p.as_str())).map(|(_, v)| *v)
 }
 
 // ---------- Janelas de pergunta ----------
@@ -870,10 +831,11 @@ fn signed_by(msg: &[u8], remote: EndpointId) -> Option<EndpointId> {
     Some(id)
 }
 
-/// Os MACs e os broadcasts deste PC, uma linha cada.
-fn presence_info() -> Vec<u8> {
+/// Os MACs e os broadcasts deste PC, uma linha cada, e as redes que este host não permite a
+/// `viewer` (no iroh só quem conecta escolhe o caminho direto: quem assiste precisa saber delas).
+fn presence_info(viewer: &EndpointId) -> Vec<u8> {
     let (macs, nets) = wake::local();
-    let mut s = String::new();
+    let mut s = format!("fora\t{}\n", super::route::host_deny(viewer).join(","));
     for m in &macs {
         s += &format!("mac\t{}\n", wake::mac_text(m));
     }
@@ -895,6 +857,11 @@ fn parse_info(b: &[u8]) -> (Vec<Mac>, Vec<Ipv4Addr>) {
     macs.truncate(8);
     nets.truncate(8);
     (macs, nets)
+}
+
+/// As redes que o host não permite a este aparelho (um host antigo não manda: nenhuma).
+fn parse_fora(b: &[u8]) -> Vec<String> {
+    String::from_utf8_lossy(b).lines().find_map(|l| l.strip_prefix("fora\t")).map(super::route::parse_deny).unwrap_or_default()
 }
 
 /// Outro aparelho pede para este PC ligar os MACs de `req` (6 bytes cada) na rede daqui. Só os
@@ -929,7 +896,7 @@ async fn presence_host(conn: Connection) {
             return None;
         }
         let reply = match &msg[96..] {
-            [] => presence_info(),
+            [] => presence_info(&viewer),
             [1, m @ ..] if !m.is_empty() && m.len() % 6 == 0 => relay_wake(&list, m),
             _ => return None,
         };
@@ -990,6 +957,14 @@ async fn accept_loop(ep: Endpoint, invite: Arc<Mutex<Invite>>, tx: mpsc::Sender<
                         return;
                     }
                 }
+                // As redes que este aparelho pode usar: espera o caminho cair numa delas.
+                if let Err(line) = super::route::gate(&conn, &super::route::host_deny(&who), GATE_WAIT).await {
+                    eprintln!("{} conexão de «{}» recusada: nenhuma rede marcada para ele chegou aqui ({line})", now_text(), dev.name);
+                    super::notice("Conexão de «{}» recusada: nenhuma rede marcada para ele chegou aqui", &dev.name);
+                    conn.close(super::route::CLOSE_NET.into(), b"rede fora");
+                    return;
+                }
+                tokio::spawn(super::route::guard(conn.clone(), move || super::route::host_deny(&who), dev.name.clone()));
                 let _ = tx.send((conn, dev));
             } else {
                 conn.close(3u32.into(), b"protocolo desconhecido");
@@ -1036,7 +1011,7 @@ fn host_with(invite_perms: Option<u8>, service: bool) {
         Ok(k) => k,
         Err(e) => return eprintln!("{e}"),
     };
-    let ep = match rt().block_on(endpoint(sk, vec![ALPN_STREAM.to_vec(), ALPN_PAIR.to_vec(), ALPN_PRESENCE.to_vec()], true)) {
+    let ep = match rt().block_on(endpoint(sk, vec![ALPN_STREAM.to_vec(), ALPN_PAIR.to_vec(), ALPN_PRESENCE.to_vec()], true, super::route::Picker::host())) {
         Ok(e) => e,
         Err(e) => return eprintln!("não deu para abrir a conexão: {e}"),
     };
@@ -1178,7 +1153,7 @@ pub fn pair(text: &str) {
         Err(e) => return eprintln!("{e}"),
     };
     let r: std::result::Result<String, String> = rt().block_on(async {
-        let ep = endpoint(sk.clone(), Vec::new(), false).await?;
+        let ep = endpoint(sk.clone(), Vec::new(), false, super::route::Picker::viewer(Vec::new())).await?;
         let host_id = host.id;
         let r = ask_pair(&ep, host, &secret).await.and_then(|name| {
             remember(Device { role: Role::Host, id: host_id, name: name.clone(), perms: 0, ask: false, macs: Vec::new(), nets: Vec::new() }).map(|_| name).map_err(|e| e.to_string())
@@ -1216,29 +1191,56 @@ pub(super) fn with_host(target: &str, work: impl FnOnce(Arc<dyn Link>, &str)) {
         Ok(k) => k,
         Err(e) => return eprintln!("{e}"),
     };
-    let ep = match rt().block_on(endpoint(sk.clone(), Vec::new(), false)) {
+    let mut deny = super::route::parse_deny(&super::route::client_deny(&hex(&dev.id)));
+    let picker = super::route::Picker::viewer(deny.clone());
+    let ep = match rt().block_on(endpoint(sk.clone(), Vec::new(), false, picker.clone())) {
         Ok(e) => e,
         Err(e) => return eprintln!("não deu para abrir a conexão: {e}"),
     };
     eprintln!("conectando a «{}»", dev.name);
+    // Antes do vídeo: os MACs e a rede de agora, e as redes que o host não permite a este
+    // aparelho, que entram junto com as daqui (um host antigo não responde, e tudo bem).
+    if let Some(Some(info)) = rt().block_on(ask_presence(&ep, &sk, dev.id, &[])) {
+        set_wol(dev.id, &info);
+        let host = parse_fora(&info);
+        if !host.is_empty() {
+            eprintln!("o host não permite a este aparelho: {}", host.join(", "));
+        }
+        deny = super::route::parse_deny(&[deny.join(","), host.join(",")].join(","));
+        picker.set_deny(deny.clone());
+    }
     let conn = rt().block_on(async { tokio::time::timeout(Duration::from_secs(30), ep.connect(dev.id, ALPN_STREAM)).await });
     match conn {
         Ok(Ok(conn)) => {
-            // A cada conexão, os MACs e a rede de agora (um host antigo não responde, e tudo bem).
-            let (ep2, id) = (ep.clone(), dev.id);
-            rt().spawn(async move {
-                if let Some(Some(info)) = ask_presence(&ep2, &sk, id, &[]).await {
-                    set_wol(id, &info);
+            if let Err(line) = rt().block_on(super::route::gate(&conn, &deny, GATE_WAIT)) {
+                if host_refused(&conn) {
+                    eprintln!("o host fechou: a conexão ficou numa rede que ele não permite para este aparelho");
+                } else {
+                    eprintln!("não conectou: nenhuma das redes marcadas para «{}» chegou ao host ({line})", dev.name);
                 }
-            });
+                conn.close(super::route::CLOSE_NET.into(), b"rede fora");
+                rt().block_on(ep.close());
+                return;
+            }
+            let fixed = deny.clone();
+            rt().spawn(super::route::guard(conn.clone(), move || fixed.clone(), dev.name.clone()));
+            let watched = conn.clone();
             let link = Net::new(conn);
             eprintln!("conectado: {}", link.route());
             work(link, &dev.name);
+            if host_refused(&watched) {
+                eprintln!("o host fechou: a conexão ficou numa rede que ele não permite para este aparelho");
+            }
         }
         Ok(Err(e)) => eprintln!("não conectou: {e}"),
         Err(_) => eprintln!("«{}» não respondeu em 30 s (está com o Prisma compartilhando?; {})", dev.name, rt().block_on(why_silent(&ep, dev.id))),
     }
     rt().block_on(ep.close());
+}
+
+/// O host fechou porque o caminho ficou numa rede que ele não permite a este aparelho.
+fn host_refused(conn: &Connection) -> bool {
+    matches!(conn.close_reason(), Some(iroh::endpoint::ConnectionError::ApplicationClosed(c)) if c.error_code == super::route::CLOSE_NET.into())
 }
 
 // ---------- Ligado ou desligado (a página de quem assiste) ----------
@@ -1362,7 +1364,7 @@ fn presence_worker() {
         // Runtime próprio: some junto com a linha quando a página fecha.
         let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().ok()?;
         rt.block_on(async {
-            let ep = endpoint(SecretKey::generate(), Vec::new(), false).await.ok()?;
+            let ep = endpoint(SecretKey::generate(), Vec::new(), false, super::route::Picker::viewer(Vec::new())).await.ok()?;
             let _ = tokio::time::timeout(PRESENCE_WAIT, ep.online()).await;
             let mut next = Instant::now();
             loop {
@@ -1726,6 +1728,9 @@ mod tests {
     /// O pedido de presença ou de ligar só vale assinado pelo aparelho para a chave que conectou.
     #[test]
     fn presence_request_is_signed() {
+        // As redes que o host não permite vêm numa linha a mais; um host antigo não manda.
+        assert_eq!(parse_fora(b"fora\tZeroTier,rele\nmac\t00:11:22:33:44:55\n"), vec!["ZeroTier", "rele"]);
+        assert!(parse_fora(b"mac\t00:11:22:33:44:55\n").is_empty() && parse_fora(b"fora\t\n").is_empty());
         let me = SecretKey::from_bytes(&[7; 32]);
         let pass = SecretKey::from_bytes(&[8; 32]).public();
         let mut msg = me.public().as_bytes().to_vec();

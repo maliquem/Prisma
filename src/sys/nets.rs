@@ -26,6 +26,8 @@ pub struct Net {
     pub prefix: u8,
     /// Placa de verdade (não VPN, Hyper-V nem outra placa virtual).
     pub hardware: bool,
+    /// Todos os endereços da placa, IPv4 e IPv6, com os bits da máscara.
+    pub addrs: Vec<(std::net::IpAddr, u8)>,
     prev: Option<(u64, u64, Instant)>,
 }
 
@@ -63,15 +65,21 @@ pub fn list() -> Vec<Net> {
             }
             let mut ip = String::new();
             let mut prefix = 0;
+            let mut addrs = Vec::new();
             let mut u = x.FirstUnicastAddress;
             while !u.is_null() {
                 let s = (*u).Address.lpSockaddr;
                 if !s.is_null() && (*s).sa_family == AF_INET {
                     let v4 = &*(s as *const SOCKADDR_IN);
                     let b = v4.sin_addr.S_un.S_un_b;
-                    ip = format!("{}.{}.{}.{}", b.s_b1, b.s_b2, b.s_b3, b.s_b4);
-                    prefix = (*u).OnLinkPrefixLength;
-                    break;
+                    if ip.is_empty() {
+                        ip = format!("{}.{}.{}.{}", b.s_b1, b.s_b2, b.s_b3, b.s_b4);
+                        prefix = (*u).OnLinkPrefixLength;
+                    }
+                    addrs.push((std::net::IpAddr::from([b.s_b1, b.s_b2, b.s_b3, b.s_b4]), (*u).OnLinkPrefixLength));
+                } else if !s.is_null() && (*s).sa_family == AF_INET6 {
+                    let v6 = &*(s as *const SOCKADDR_IN6);
+                    addrs.push((std::net::IpAddr::from(v6.sin6_addr.u.Byte), (*u).OnLinkPrefixLength));
                 }
                 u = (*u).Next;
             }
@@ -89,6 +97,7 @@ pub fn list() -> Vec<Net> {
                 hist: Vec::new(),
                 mac: (x.PhysicalAddressLength == 6).then(|| x.PhysicalAddress[..6].try_into().unwrap()),
                 prefix,
+                addrs,
                 hardware: {
                     let mut row = MIB_IF_ROW2 { InterfaceLuid: x.Luid, ..Default::default() };
                     // HardwareInterface é o primeiro bit.

@@ -99,8 +99,11 @@ pub struct Opts {
     pub host_first: bool,
     /// Recusa conexões enquanto este PC assiste a outro.
     pub no_chain: bool,
-    /// Clock da placa NVIDIA travado no mínimo do clock base enquanto alguém assiste (vale para todos).
+    /// GPU e memória da placa NVIDIA travadas no clock mais alto enquanto alguém assiste (vale para todos).
     pub gpu_max: bool,
+    /// Redes que quem assiste não pode usar, separadas por vírgula (veja `route`): `direto`, o
+    /// nome da VPN ou `rele`. Vazio: todas.
+    pub nets_off: String,
     /// Porta UDP fixa; 0 deixa o Windows escolher.
     pub port: u16,
     /// Pede ao roteador para abrir a porta (UPnP, NAT-PMP, PCP).
@@ -118,9 +121,14 @@ pub struct Opts {
 /// `Opts::sound_in`: a entrada padrão do Windows.
 pub const MIC_DEFAULT: &str = "padrao";
 
-/// As opções do host que cada aparelho que assiste pode ter diferentes (imagem, som e o mouse e o
-/// teclado). Nome, pessoas, rede, controles e atalhos valem para todos.
-pub const PER_CLIENT: [&str; 16] = [
+/// O arquivo próprio só tem as redes do aparelho (não é configuração própria na aba Host).
+fn nets_only(t: &str) -> bool {
+    t.lines().any(|l| l.starts_with("redes_fora=")) && t.lines().all(|l| l.trim().is_empty() || l.starts_with("redes_fora="))
+}
+
+/// As opções do host que cada aparelho que assiste pode ter diferentes (imagem, som, o mouse e o
+/// teclado e as redes que pode usar). Nome, pessoas, porta, controles e atalhos valem para todos.
+pub const PER_CLIENT: [&str; 17] = [
     "hdr_desligar",
     "resolucao",
     "quadros",
@@ -137,6 +145,7 @@ pub const PER_CLIENT: [&str; 16] = [
     "gpu",
     "som_saida",
     "som_entrada",
+    "redes_fora",
 ];
 
 impl Default for Opts {
@@ -163,6 +172,7 @@ impl Default for Opts {
             host_first: true,
             no_chain: true,
             gpu_max: false,
+            nets_off: String::new(),
             port: 0,
             upnp: true,
             key_panic: (MOD_CTRL | MOD_ALT | MOD_SHIFT, b'Q' as u32),
@@ -209,6 +219,7 @@ impl Opts {
                 "host_primeiro" => o.host_first = flag(v),
                 "sem_cadeia" => o.no_chain = flag(v),
                 "gpu_maximo" => o.gpu_max = flag(v),
+                "redes_fora" => o.nets_off = clean(v, 200),
                 "porta" => o.port = v.parse().unwrap_or(0),
                 "upnp" => o.upnp = flag(v),
                 "atalho_emergencia" => o.key_panic = keys_parse(v, o.key_panic),
@@ -227,7 +238,7 @@ impl Opts {
         format!(
             "hdr_desligar={}\npessoas={}\ncontroles={}\nconvite={}\nnome={}\nresolucao={}\nquadros={}\nbanda={}\ncodec={}\nprioridade={}\n\
 dez_bits={}\npermitir_444={}\nmonitor={}\nsom_programa={}\nsem_chamadas={}\num_por_vez={}\nhost_primeiro={}\n\
-sem_cadeia={}\nporta={}\njanela={}:{}\nupnp={}\natalho_emergencia={}\ngpu={}\nsom_saida={}\nsom_entrada={}\nconvite_minutos={}\ngpu_maximo={}\n",
+sem_cadeia={}\nporta={}\njanela={}:{}\nupnp={}\natalho_emergencia={}\ngpu={}\nsom_saida={}\nsom_entrada={}\nconvite_minutos={}\ngpu_maximo={}\nredes_fora={}\n",
             b(self.hdr_off),
             self.guests,
             self.pads,
@@ -256,6 +267,7 @@ sem_cadeia={}\nporta={}\njanela={}:{}\nupnp={}\natalho_emergencia={}\ngpu={}\nso
             self.sound_in,
             self.invite_min,
             b(self.gpu_max),
+            self.nets_off,
         )
     }
 
@@ -269,9 +281,9 @@ sem_cadeia={}\nporta={}\njanela={}:{}\nupnp={}\natalho_emergencia={}\ngpu={}\nso
         dir().join("opcoes-cliente").join(format!("{id}.txt"))
     }
 
-    /// O aparelho tem configuração própria?
+    /// O aparelho tem configuração própria? Só as redes (da aba Rede) não contam.
     pub fn has_own(id: &str) -> bool {
-        !id.is_empty() && Self::client_path(id).exists()
+        !id.is_empty() && std::fs::read_to_string(Self::client_path(id)).is_ok_and(|t| !nets_only(&t))
     }
 
     /// As opções que valem para um aparelho: as de todos, com as dele por cima (só as de
@@ -291,7 +303,8 @@ sem_cadeia={}\nporta={}\njanela={}:{}\nupnp={}\natalho_emergencia={}\ngpu={}\nso
     /// reescreve no formato novo, que nunca tem `ritmo_constante` (o ritmo passou a quem assiste depois da 1.9.1).
     fn old_reduced(own: &str) -> String {
         let has = |k: &str| own.lines().any(|l| l.split_once('=').is_some_and(|(x, _)| x.trim() == k));
-        if !(has("ritmo_constante") && PER_CLIENT.iter().all(|k| has(k))) {
+        // O arquivo antigo tem as 16 primeiras: `redes_fora` veio depois.
+        if !(has("ritmo_constante") && PER_CLIENT[..16].iter().all(|k| has(k))) {
             return own.to_string();
         }
         let def = Opts::default().text();
@@ -336,10 +349,16 @@ sem_cadeia={}\nporta={}\njanela={}:{}\nupnp={}\natalho_emergencia={}\ngpu={}\nso
             .collect()
     }
 
-    /// Tira a configuração própria: o aparelho volta a seguir a de todos.
+    /// Tira a configuração própria: o aparelho volta a seguir a de todos, menos nas redes, que são
+    /// da aba Rede.
     #[cfg_attr(not(feature = "stream"), allow(dead_code))]
     pub fn drop_own(id: &str) -> std::io::Result<()> {
-        match std::fs::remove_file(Self::client_path(id)) {
+        let p = Self::client_path(id);
+        let nets: String = std::fs::read_to_string(&p).unwrap_or_default().lines().filter(|l| l.starts_with("redes_fora=")).map(|l| format!("{l}\n")).collect();
+        if !nets.is_empty() {
+            return crate::config::write_safe(&p, nets);
+        }
+        match std::fs::remove_file(p) {
             Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e),
             _ => Ok(()),
         }
@@ -569,6 +588,7 @@ mod tests {
             host_first: false,
             no_chain: false,
             gpu_max: true,
+            nets_off: "ZeroTier,rele".into(),
             port: 47610,
             upnp: false,
             key_panic: (MOD_CTRL, b'K' as u32),
@@ -625,6 +645,11 @@ mod tests {
         assert_eq!(got.codec, "av1");
         // Sem nada diferente, a configuração própria fica vazia.
         assert_eq!(all.own_text(&all), "");
+        // As redes são por aparelho: o aparelho sem o relé não muda as de todos.
+        let no_relay = Opts { nets_off: "rele".into(), ..all.clone() };
+        assert_eq!(no_relay.own_text(&all), "redes_fora=rele\n");
+        assert_eq!(Opts::parse(&Opts::merge(&all.text(), &no_relay.own_text(&all))).nets_off, "rele");
+        assert!(nets_only("redes_fora=rele\n") && !nets_only("") && !nets_only("redes_fora=rele\ncodec=av1\n"));
     }
 
     #[test]

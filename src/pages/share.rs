@@ -130,6 +130,9 @@ struct State {
     renaming: Option<(String, String)>,
     /// Aba Host: as opções de qual aparelho que assiste (None: as de todos).
     host_for: Option<String>,
+    /// Aba Rede: de quem são as caixas de rede. Vazio: quem assiste a este PC, todos;
+    /// `v:<id>`: um aparelho que assiste; `h:<id>`: este PC assistindo a outro.
+    net_for: String,
     /// Saídas e entradas de som, lidas a cada 5 s.
     sound_devs: (Vec<crate::sys::audio::Device>, Vec<crate::sys::audio::Device>, Option<Instant>),
 }
@@ -354,30 +357,6 @@ fn tabs(ui: &mut Ui, x: f32, y: f32, sel: &mut usize, present: usize) {
     ui.tabs("sh-tab", x, y, &names, sel, true, Some(TABS.len()));
 }
 
-/// O caminho que o host grava, curto e traduzido: o tipo e a latência.
-fn route_text(route: &str) -> String {
-    let kind = if route.starts_with("pela VPN") {
-        "Pela VPN"
-    } else if route.starts_with("direto na rede local") {
-        "Direto na rede local"
-    } else if route.starts_with("direto pela internet por IPv6") {
-        "Direto pela internet (IPv6)"
-    } else if route.starts_with("direto pela internet") {
-        "Direto pela internet"
-    } else if route.starts_with("pelo relé") {
-        "Pelo relé da n0"
-    } else if route.starts_with("UDP") {
-        "UDP direto"
-    } else {
-        "Conectando"
-    };
-    let kind = crate::i18n::tr(kind).into_owned();
-    match route.rsplit(", ").next().filter(|t| t.ends_with(" ms")) {
-        Some(ms) => format!("{kind} · {ms}"),
-        None => kind,
-    }
-}
-
 /// Aba Conectados: cada pessoa na sala, com o acesso que muda na hora, desconectar e banir.
 #[allow(clippy::too_many_arguments)]
 fn room_tab(ui: &mut Ui, app: &mut App, present: &[stream::host::Present], x: f32, top: f32, w: f32, h: f32) {
@@ -410,7 +389,7 @@ fn room_tab(ui: &mut Ui, app: &mut App, present: &[stream::host::Present], x: f3
         let tw = (sel_r.x - 12.0 - px).max(40.0);
         let shown = app.cfg.share_names.iter().find(|n| n.0 == p.key).map_or(p.name.as_str(), |n| n.1.as_str());
         ui.c.text_raw(rect(px, row.y + 8.0, tw, 20.0), shown, 14.0, TEXT, Align::Left, Weight::Semibold);
-        ui.c.text_raw(rect(px, row.y + 30.0, tw, 18.0), &route_text(&p.route), 12.0, MUTED, Align::Left, Weight::Regular);
+        ui.c.text_raw(rect(px, row.y + 30.0, tw, 18.0), &stream::route_label(&p.route), 12.0, MUTED, Align::Left, Weight::Regular);
         if ui.button(&format!("sh-kick{i}"), kick_r, "Desconectar", false) {
             kick = Some(i);
         }
@@ -1269,8 +1248,12 @@ fn host_tab(ui: &mut Ui, app: &mut App, st: &mut State, all: &mut Opts, x: f32, 
     if target.is_none() {
         ui.check("sh-chain", rect(rx, y, rw, 30.0), "Recusar conexões enquanto este PC assiste a outro", &mut all.no_chain);
         y += 32.0;
-        let label = if crate::pages::nvidia::available() {
+        // A NVML só trava o clock com o serviço (SYSTEM) ou elevado: sem eles, a caixa já diz.
+        let can = stream::service_dir().join("servico.tsv").exists() || crate::startup::is_elevated();
+        let label = if crate::pages::nvidia::available() && can {
             "GPU em desempenho máximo enquanto compartilha"
+        } else if crate::pages::nvidia::available() {
+            "GPU em desempenho máximo enquanto compartilha (sem efeito: precisa do serviço do Prisma ou do Prisma como administrador)"
         } else {
             "GPU em desempenho máximo enquanto compartilha (sem efeito: só placas NVIDIA)"
         };
@@ -1279,9 +1262,9 @@ fn host_tab(ui: &mut Ui, app: &mut App, st: &mut State, all: &mut Opts, x: f32, 
     }
     y += 6.0;
     let note = if target.is_some() {
-        "Configuração própria: vale quando este aparelho conecta. Com mais de uma pessoa ao mesmo tempo, vale a de quem conectou primeiro. Nome, pessoas, rede, controles e atalhos são os de todos."
+        "Configuração própria: vale quando este aparelho conecta. Com mais de uma pessoa ao mesmo tempo, vale a de quem conectou primeiro. Nome, pessoas, porta, controles e atalhos são os de todos."
     } else {
-        "Com prioridade, quem assiste para por 1 segundo quando alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. O Windows só deixa tirar um programa de chamada (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), e só da saída padrão: sai o que estiver tocando. Uma saída escolhida manda o que toca nela. GPU em desempenho máximo: enquanto alguém assiste, o clock da placa NVIDIA não desce abaixo do clock base, e fica livre de novo no fim; precisa do serviço ou do Prisma como administrador. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante."
+        "Com prioridade, quem assiste para por 1 segundo quando alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. O Windows só deixa tirar um programa de chamada (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), e só da saída padrão: sai o que estiver tocando. Uma saída escolhida manda o que toca nela. GPU em desempenho máximo: enquanto alguém assiste, a placa NVIDIA fica no clock máximo da GPU e da memória, e fica livre de novo no fim; precisa do serviço ou do Prisma como administrador, e se a placa não obedecer aparece um aviso. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante."
     };
     ui.c.text_wrap(rect(rx, y, rw, (r.bottom() - y - 12.0).max(0.0)), note, 12.0, MUTED, Weight::Regular);
 
@@ -1568,7 +1551,6 @@ fn net_tab(ui: &mut Ui, app: &mut App, st: &mut State, o: &mut Opts, x: f32, top
         MUTED,
         Weight::Regular,
     );
-    let _ = app;
 
     let ch = cable_card(ui, l.right() + GAP, top + h, w - lw - GAP);
     let r = rect(l.right() + GAP, top, w - lw - GAP, h - ch - GAP);
@@ -1576,16 +1558,82 @@ fn net_tab(ui: &mut Ui, app: &mut App, st: &mut State, o: &mut Opts, x: f32, top
     let rx = r.x + 16.0;
     let rw = r.w - 32.0;
     ui.title(rect(rx, r.y + 12.0, rw, 22.0), "Como a conexão passa");
-    let y = r.y + 44.0;
+    let y = net_boxes(ui, app, st, o, rx, r.y + 44.0, rw);
     ui.c.text_wrap(rect(rx, y, rw, (r.bottom() - y - 12.0).max(0.0)), NOTICE, 13.0, TEXT2, Weight::Regular);
     let lines = tail(&st.view);
     if let Some(route) = lines.iter().rev().find_map(|l| l.strip_prefix("conectado: ")) {
-        let t = format!("{} {route}", crate::i18n::tr("Última conexão:"));
+        let t = format!("{} {}", crate::i18n::tr("Última conexão:"), stream::route_label(route));
         ui.c.text_raw(rect(rx, r.bottom() - 40.0, rw, 24.0), &t, 13.0, ACCENT, Align::Left, Weight::Regular);
         if route.starts_with("pelo relé") {
             ui.c.text(rect(rx, r.bottom() - 64.0, rw, 24.0), stream::RELAY_TIP, 12.0, WARN, Align::Left, Weight::Regular);
         }
     }
+}
+
+/// As caixas de rede da aba Rede, por aparelho: por onde a conexão pode passar (direto, cada VPN
+/// deste PC, o relé). Quem assiste a este PC fica nas opções do host (todos ou um aparelho); este
+/// PC assistindo a outro fica em `cliente-redes.txt`. Devolve onde o resto do cartão começa.
+#[allow(clippy::too_many_arguments)]
+fn net_boxes(ui: &mut Ui, app: &mut App, st: &mut State, o: &mut Opts, x: f32, y: f32, w: f32) -> f32 {
+    use crate::i18n::tr;
+    use stream::route;
+    let devs: Vec<(String, String)> = stream::device_rows()
+        .into_iter()
+        .map(|d| {
+            let shown = app.cfg.share_names.iter().find(|n| n.0 == d.id).map_or(d.name.clone(), |n| n.1.clone());
+            (format!("{}:{}", if d.viewer { "v" } else { "h" }, d.id), shown)
+        })
+        .collect();
+    let mut names = vec![tr("Quem assiste a este PC: todos os aparelhos").into_owned()];
+    for (k, n) in &devs {
+        let lead = if k.starts_with('v') { "Quem assiste a este PC:" } else { "Este PC assistindo a" };
+        names.push(format!("{} «{n}»", tr(lead)));
+    }
+    let mut s = devs.iter().position(|d| d.0 == st.net_for).map_or(0, |i| i + 1);
+    if s == 0 {
+        st.net_for.clear();
+    }
+    let sel_r = rect(x, y, w, 34.0);
+    let mut y = y + 44.0;
+    let (kind, id) = st.net_for.split_once(':').unwrap_or(("", ""));
+    let deny = match kind {
+        "v" => Opts::load_for(id).nets_off,
+        "h" => route::client_deny(id),
+        _ => o.nets_off.clone(),
+    };
+    let mut new = deny.clone();
+    for (i, key) in route::networks().into_iter().enumerate() {
+        let mut on = route::allowed(&route::parse_deny(&new), key);
+        if ui.check(&format!("sh-net{i}"), rect(x, y, w, 30.0), &route::network_name(key), &mut on) {
+            new = route::set_allowed(&new, key, on);
+        }
+        y += 34.0;
+    }
+    if new != deny {
+        let saved = match kind {
+            "v" => {
+                let mut e = Opts::load_for(id);
+                e.nets_off = new;
+                e.save_for(id, o)
+            }
+            "h" => route::set_client_deny(id, &new),
+            _ => {
+                o.nets_off = new;
+                Ok(())
+            }
+        };
+        if saved.is_err() {
+            app.toast.info("Não deu para salvar. Com o serviço, abra o Prisma como administrador.");
+        }
+    }
+    let note = "Com várias marcadas, o Prisma usa a melhor; o relé só quando nenhuma direta chega. Desmarcada, a rede não é usada: se só ela chegar, a conexão fecha. Quem assiste também evita as redes que o host desmarcou para ele. Uma conexão aberta numa rede que você desmarcar fecha; a próxima usa as redes novas.";
+    let nh = crate::ui::gfx::measure(&tr(note), 12.0, Weight::Regular, Some(w)).1.ceil();
+    ui.c.text_wrap(rect(x, y + 2.0, w, nh), note, 12.0, MUTED, Weight::Regular);
+    // A lista por último: aberta, ela fica por cima das caixas.
+    if ui.select("sh-netfor", sel_r, &names, &mut s) {
+        st.net_for = if s == 0 { String::new() } else { devs[s - 1].0.clone() };
+    }
+    y + nh + 14.0
 }
 
 /// A linha "o host vê" da aba Rede, a partir do `rede.txt` que o host grava.

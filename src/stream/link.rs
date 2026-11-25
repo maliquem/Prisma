@@ -51,6 +51,22 @@ pub fn is_local(ip: std::net::IpAddr) -> bool {
     }
 }
 
+/// A linha do caminho traduzida: o tipo, os detalhes entre parênteses (VPN, IPv4/IPv6, relé e
+/// região) e o resto como veio. Também lê as linhas das versões de antes.
+pub fn route_label(route: &str) -> String {
+    use crate::i18n::tr;
+    const KINDS: [&str; 7] = ["pela VPN", "direto na rede local", "direto pela internet por IPv6", "direto pela internet", "pelo relé da n0", "UDP direto", "procurando caminho"];
+    let Some(kind) = KINDS.iter().find(|k| route.starts_with(**k)) else { return route.to_string() };
+    let mut out = tr(kind).into_owned();
+    let mut rest = &route[kind.len()..];
+    if let Some(inner) = rest.strip_prefix(" (").and_then(|r| r.split_once(')')) {
+        let parts: Vec<String> = inner.0.split(" · ").map(|p| tr(p).into_owned()).collect();
+        out += &format!(" ({})", parts.join(" · "));
+        rest = inner.1;
+    }
+    out + rest
+}
+
 /// Endereço solto da faixa 100.64.0.0/10, a que o Tailscale usa.
 pub fn is_cgnat(ip: std::net::IpAddr) -> bool {
     matches!(ip, std::net::IpAddr::V4(v) if v.octets()[0] == 100 && (v.octets()[1] & 0xc0) == 64)
@@ -113,5 +129,18 @@ impl Link for Udp {
 
     fn near(&self) -> bool {
         is_local(self.peer.ip()) || is_cgnat(self.peer.ip())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn route_label_keeps_untranslated_and_old_lines() {
+        // Sem tradução carregada, o texto volta igual; as linhas antigas também passam.
+        let old = "direto pela internet por IPv6, [2804::1]:5, 3 ms";
+        assert_eq!(super::route_label(old), old);
+        let new = "pela VPN (ZeroTier · IPv4), 1.2.3.4:5, 12 ms";
+        assert_eq!(super::route_label(new), new);
+        assert_eq!(super::route_label("algo novo"), "algo novo");
     }
 }

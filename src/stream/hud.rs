@@ -161,7 +161,7 @@ impl Hud {
                 if let Some(g) = s.gpu {
                     lines.push((format!("{} {}% · Prisma: 3D {}% · {} {}%", tr("GPU daqui"), g.total, g.d3, tr("decodificação"), g.decode), MUTED, 13.0, Weight::Regular));
                 }
-                lines.push((s.route.clone(), MUTED, 13.0, Weight::Regular));
+                lines.push((super::route_label(&s.route), MUTED, 13.0, Weight::Regular));
                 if s.route.starts_with("pelo relé") {
                     lines.push((tr(super::RELAY_TIP).into_owned(), WARN, 13.0, Weight::Regular));
                 }

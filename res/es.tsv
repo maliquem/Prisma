@@ -3310,3 +3310,29 @@ Volume	Volumen
 O rótulo não aceita " * / : < > ? \ |	La etiqueta no admite " * / : < > ? \ |
 O rótulo FAT32 não aceita + , . ; = [ ]	Una etiqueta FAT32 no admite + , . ; = [ ]
 Os discos mudaram desde que a lista foi lida. Confira e tente de novo.	Los discos cambiaron desde que se leyó la lista. Revisa e inténtalo de nuevo.
+pela VPN	por VPN
+direto na rede local	directo en la red local
+direto pela internet por IPv6	directo por internet por IPv6
+direto pela internet	directo por internet
+pelo relé da n0	por el relay de n0
+procurando caminho	buscando camino
+EUA leste	EE. UU. este
+EUA oeste	EE. UU. oeste
+Europa	Europa
+Ásia	Asia
+Direto (rede local e internet)	Directo (red local e internet)
+Relé público da n0	Relay público de n0
+VPN	VPN
+Quem assiste a este PC: todos os aparelhos	Quién ve este PC: todos los dispositivos
+Quem assiste a este PC:	Quién ve este PC:
+Este PC assistindo a	Este PC viendo a
+Com várias marcadas, o Prisma usa a melhor; o relé só quando nenhuma direta chega. Desmarcada, a rede não é usada: se só ela chegar, a conexão fecha. Para quem assiste a este PC vale na hora; para este PC assistindo a outro, na próxima conexão.	Con varias marcadas, Prisma usa la mejor; el relay solo cuando ninguna directa llega. Si está desmarcada, la red no se usa: si solo llega por ella, la conexión se cierra. Para quien ve este PC se aplica al momento; para este PC viendo a otro, en la próxima conexión.
+Conexão de «{}» recusada: nenhuma rede marcada para ele chegou aqui	Conexión de «{}» rechazada: ninguna red marcada para él llegó aquí
+Conexão com «{}» fechada: o único caminho dela era por uma rede desmarcada	Conexión con «{}» cerrada: su único camino era por una red desmarcada
+GPU em desempenho máximo enquanto compartilha (sem efeito: precisa do serviço do Prisma ou do Prisma como administrador)	GPU a máximo rendimiento mientras comparte (sin efecto: requiere el servicio de Prisma o Prisma como administrador)
+GPU em desempenho máximo não ligou: a placa ou o driver recusou travar o clock (código {})	GPU a máximo rendimiento no se activó: la tarjeta o el controlador rechazó fijar el reloj (código {})
+GPU em desempenho máximo não ligou: precisa do serviço do Prisma ou do Prisma como administrador	GPU a máximo rendimiento no se activó: requiere el servicio de Prisma o Prisma como administrador
+GPU em desempenho máximo: a placa aceitou, mas o clock ficou em {} MHz	GPU a máximo rendimiento: la tarjeta aceptó, pero el reloj quedó en {} MHz
+Com prioridade, quem assiste para por 1 segundo quando alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. O Windows só deixa tirar um programa de chamada (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), e só da saída padrão: sai o que estiver tocando. Uma saída escolhida manda o que toca nela. GPU em desempenho máximo: enquanto alguém assiste, a placa NVIDIA fica no clock máximo da GPU e da memória, e fica livre de novo no fim; precisa do serviço ou do Prisma como administrador, e se a placa não obedecer aparece um aviso. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante.	Con prioridad, el visor se pausa 1 segundo cuando alguien aquí mueve el ratón o escribe. Una persona a la vez: el turno pasa tras 2 segundos sin entrada. Windows solo deja quitar una app de llamadas (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), y solo de la salida predeterminada: queda fuera la que esté sonando. Una salida elegida envía lo que suena en ella. GPU a máximo rendimiento: mientras alguien ve, la tarjeta NVIDIA queda en el reloj máximo de GPU y memoria, y se libera al final; requiere el servicio o Prisma como administrador, y si la tarjeta no obedece aparece un aviso. Los cambios se aplican al momento; los de la imagen reinician el vídeo un instante.
+Configuração própria: vale quando este aparelho conecta. Com mais de uma pessoa ao mesmo tempo, vale a de quem conectou primeiro. Nome, pessoas, porta, controles e atalhos são os de todos.	Configuración propia: vale cuando este dispositivo se conecta. Con más de una persona a la vez, vale la de quien se conectó primero. Nombre, personas, puerto, mandos y atajos son los de todos.
+Com várias marcadas, o Prisma usa a melhor; o relé só quando nenhuma direta chega. Desmarcada, a rede não é usada: se só ela chegar, a conexão fecha. Quem assiste também evita as redes que o host desmarcou para ele. Uma conexão aberta numa rede que você desmarcar fecha; a próxima usa as redes novas.	Con varias marcadas, Prisma usa la mejor; el relay solo cuando ninguna directa llega. Una red desmarcada no se usa: si solo llega ella, la conexión se cierra. Quien mira también evita las redes que el host desmarcó para él. Una conexión abierta en una red que desmarques se cierra; la siguiente usa las redes nuevas.

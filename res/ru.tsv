@@ -3310,3 +3310,29 @@ Volume	Том
 O rótulo não aceita " * / : < > ? \ |	Метка не может содержать " * / : < > ? \ |
 O rótulo FAT32 não aceita + , . ; = [ ]	Метка FAT32 не может содержать + , . ; = [ ]
 Os discos mudaram desde que a lista foi lida. Confira e tente de novo.	Диски изменились с момента чтения списка. Проверьте и попробуйте снова.
+pela VPN	через VPN
+direto na rede local	напрямую по локальной сети
+direto pela internet por IPv6	напрямую через интернет по IPv6
+direto pela internet	напрямую через интернет
+pelo relé da n0	через ретранслятор n0
+procurando caminho	поиск пути
+EUA leste	восток США
+EUA oeste	запад США
+Europa	Европа
+Ásia	Азия
+Direto (rede local e internet)	Напрямую (локальная сеть и интернет)
+Relé público da n0	Публичный ретранслятор n0
+VPN	VPN
+Quem assiste a este PC: todos os aparelhos	Кто смотрит этот ПК: все устройства
+Quem assiste a este PC:	Кто смотрит этот ПК:
+Este PC assistindo a	Этот ПК смотрит
+Com várias marcadas, o Prisma usa a melhor; o relé só quando nenhuma direta chega. Desmarcada, a rede não é usada: se só ela chegar, a conexão fecha. Para quem assiste a este PC vale na hora; para este PC assistindo a outro, na próxima conexão.	Если отмечено несколько сетей, Prisma использует лучшую; ретранслятор только тогда, когда ни одна прямая не доступна. Если сеть не отмечена, она не используется: если доступна только она, подключение закрывается. Для тех, кто смотрит этот ПК, действует сразу; для этого ПК, смотрящего другой, при следующем подключении.
+Conexão de «{}» recusada: nenhuma rede marcada para ele chegou aqui	Подключение от «{}» отклонено: ни одна отмеченная для него сеть сюда не дошла
+Conexão com «{}» fechada: o único caminho dela era por uma rede desmarcada	Подключение с «{}» закрыто: единственный путь шёл через неотмеченную сеть
+GPU em desempenho máximo enquanto compartilha (sem efeito: precisa do serviço do Prisma ou do Prisma como administrador)	GPU на максимальной производительности во время трансляции (без эффекта: нужна служба Prisma или Prisma от имени администратора)
+GPU em desempenho máximo não ligou: a placa ou o driver recusou travar o clock (código {})	GPU на максимальной производительности не включилась: видеокарта или драйвер отказались зафиксировать частоту (код {})
+GPU em desempenho máximo não ligou: precisa do serviço do Prisma ou do Prisma como administrador	GPU на максимальной производительности не включилась: нужна служба Prisma или Prisma от имени администратора
+GPU em desempenho máximo: a placa aceitou, mas o clock ficou em {} MHz	GPU на максимальной производительности: видеокарта согласилась, но частота осталась {} MHz
+Com prioridade, quem assiste para por 1 segundo quando alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. O Windows só deixa tirar um programa de chamada (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), e só da saída padrão: sai o que estiver tocando. Uma saída escolhida manda o que toca nela. GPU em desempenho máximo: enquanto alguém assiste, a placa NVIDIA fica no clock máximo da GPU e da memória, e fica livre de novo no fim; precisa do serviço ou do Prisma como administrador, e se a placa não obedecer aparece um aviso. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante.	При приоритете просмотр приостанавливается на 1 секунду, когда кто-то здесь двигает мышь или печатает. По одному: очередь переходит после 2 секунд без ввода. Windows позволяет убрать только одно приложение для звонков (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), и только из выхода по умолчанию: убирается то, что сейчас звучит. Выбранный выход передаёт то, что на нём звучит. GPU на максимальной производительности: пока кто-то смотрит, видеокарта NVIDIA держит максимальную частоту GPU и памяти, а в конце освобождается; нужна служба или Prisma от имени администратора, а если видеокарта не подчиняется, появляется предупреждение. Изменения действуют сразу; изменения изображения на мгновение перезапускают видео.
+Configuração própria: vale quando este aparelho conecta. Com mais de uma pessoa ao mesmo tempo, vale a de quem conectou primeiro. Nome, pessoas, porta, controles e atalhos são os de todos.	Свои настройки действуют, когда подключается это устройство. Если подключено несколько человек, действуют настройки того, кто подключился первым. Имя, число людей, порт, контроллеры и сочетания клавиш общие для всех.
+Com várias marcadas, o Prisma usa a melhor; o relé só quando nenhuma direta chega. Desmarcada, a rede não é usada: se só ela chegar, a conexão fecha. Quem assiste também evita as redes que o host desmarcou para ele. Uma conexão aberta numa rede que você desmarcar fecha; a próxima usa as redes novas.	Если отмечено несколько, Prisma выбирает лучшую; ретранслятор — только когда ни одна прямая не проходит. Неотмеченная сеть не используется: если доходит только она, подключение закрывается. Зритель тоже избегает сетей, которые хост снял для него. Открытое подключение в сети, которую вы сняли, закрывается; следующее использует новые сети.

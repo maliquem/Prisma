@@ -1592,7 +1592,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                 key_menu: co.key_menu,
                 pad_background: sh.pad_background.load(Ordering::Relaxed),
                 pad_keys: (sh.perms.load(Ordering::Relaxed) & PAD != 0).then(|| sh.pad_keys.load(Ordering::Relaxed)),
-                video: info.map(|(c, w, h, fps)| format!("{w}x{h} {}{extra} · {fps} {} · {}", codec_name(c), crate::i18n::tr("q/s"), link.route())).unwrap_or_default(),
+                video: info.map(|(c, w, h, fps)| format!("{w}x{h} {}{extra} · {fps} {} · {}", codec_name(c), crate::i18n::tr("q/s"), super::route_label(&link.route()))).unwrap_or_default(),
                 keys: [label(co.key_menu), label(co.key_full), label(co.key_imm), label(co.key_meter), label(co.key_sound), label(co.key_cad), label(co.key_disc)],
             };
             hud::menu_open(hwnd, st);

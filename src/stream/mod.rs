@@ -21,6 +21,8 @@ mod link;
 mod mic;
 #[cfg(feature = "stream")]
 pub(crate) mod net;
+#[cfg(feature = "stream")]
+pub mod route;
 mod pace;
 mod fec;
 mod opus;
