@@ -6,7 +6,7 @@
 - **Guide button with the launcher overlay**: holding the guide button for 1 s is the launcher's (Prisma no longer fires Win + G at 400 ms), and with the launcher overlay open a tap closes it instead of opening the radial. / **Botão guia com o overlay do launcher**: segurar o guia 1 s é do launcher (o Prisma não manda mais o Win + G aos 400 ms), e com o overlay do launcher aberto o toque o fecha em vez de abrir o radial.
 - **Game options reach the launcher at once**: a change in Prisma (Fullscreenizer, HDR, sound, meter, shaders, optimize) shows up right away in the launcher bar. / **Opções do jogo chegam na hora ao launcher**: o que muda no Prisma (Fullscreenizer, HDR, som, medidor, shaders, otimizar) aparece na hora na barra do launcher.
 - **RTX HDR from the launcher or the Meter and Games pages** now says the NVIDIA driver only accepts it with Prisma as administrator, instead of "Could not save the choice". / **RTX HDR pelo launcher ou pelas páginas Medidor e Jogos** agora diz que o driver NVIDIA só aceita com o Prisma como administrador, em vez de "Não consegui gravar a escolha".
-- **Helper programs** such as `UnityCrashHandler64.exe` no longer keep entries in the Fullscreenizer, HDR, Sound, Equalizer and Optimize lists. / **Programas auxiliares** como o `UnityCrashHandler64.exe` não ficam mais nas listas do Fullscreenizer, HDR, Som, Equalizador e Otimizar.
+- **Crash reporters** such as `UnityCrashHandler64.exe` no longer keep entries in the Fullscreenizer, HDR, Sound, Equalizer and Optimize lists. / **Vigias de travamento** como o `UnityCrashHandler64.exe` não ficam mais nas listas do Fullscreenizer, HDR, Som, Equalizador e Otimizar.
 
 ## 2.2.0
 

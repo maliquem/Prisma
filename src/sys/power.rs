@@ -268,8 +268,13 @@ const HELPERS: &[&str] = &[
 
 /// Programa de apoio (lista acima, ou vigia de travamento de outra engine): nunca ganha linha de jogo.
 pub fn is_helper(exe: &str) -> bool {
+    HELPERS.iter().any(|h| exe.eq_ignore_ascii_case(h)) || is_crash_helper(exe)
+}
+
+/// Vigia de travamento (UnityCrashHandler64.exe, CrashReportClient.exe...): nunca é escolha da pessoa.
+pub fn is_crash_helper(exe: &str) -> bool {
     let low = exe.to_ascii_lowercase();
-    HELPERS.contains(&low.as_str()) || ["crashhandler", "crashreport", "crashpad", "crashsender"].iter().any(|c| low.contains(c))
+    ["crashhandler", "crashreport", "crashpad", "crashsender"].iter().any(|c| low.contains(c))
 }
 
 /// Programa que nunca é jogo, mesmo em tela cheia.

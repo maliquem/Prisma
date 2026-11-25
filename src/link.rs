@@ -282,14 +282,15 @@ pub fn start(hub: HWND) {
     let dev = std::env::var("PRISMA_LINK_PIPE").ok().filter(|_| cfg!(debug_assertions));
     let (tx, events) = sync_channel(64);
     let _ = EVENTS.set(tx);
-    serve_on(dev.unwrap_or_else(|| prisma_link::pipe_name(&sid)), hub, events);
+    // O launcher saiu: o Guia volta a ser só do Prisma.
+    serve_on(dev.unwrap_or_else(|| prisma_link::pipe_name(&sid)), hub, events, || radial::set_launcher(0, false));
     if cfg!(feature = "stream") {
         // Sem avisos: quem usa este pipe é o serviço de compartilhar tela.
-        serve_on(prisma_link::share_pipe_name(&sid), hub, sync_channel(0).1);
+        serve_on(prisma_link::share_pipe_name(&sid), hub, sync_channel(0).1, || {});
     }
 }
 
-fn serve_on(name: String, hub: HWND, events: Receiver<Reply>) {
+fn serve_on(name: String, hub: HWND, events: Receiver<Reply>, ended: fn()) {
     let hub = hub.0 as isize;
     std::thread::spawn(move || {
         // O `Options` lê os aparelhos e as sessões de som nesta thread.
@@ -321,8 +322,7 @@ fn serve_on(name: String, hub: HWND, events: Receiver<Reply>) {
                 Err(_) => timeout_reply(wait),
             }
         };
-        // O launcher saiu: o Guia volta a ser só do Prisma.
-        let res = prisma_link::serve_events(&name, info, &events, handler, || radial::set_launcher(0, false));
+        let res = prisma_link::serve_events(&name, info, &events, handler, ended);
         if let Err(e) = res {
             crate::config::log(&format!("ponte com o launcher: pipe {name} indisponível ({e})"));
         }

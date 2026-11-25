@@ -113,7 +113,6 @@ pub fn nvidia() -> bool {
     *ON.get_or_init(|| drs::driver_version().is_some())
 }
 
-/// Grava a escolha. Vale na próxima vez que o jogo abrir.
 /// Por que `apply` recusou `mode`: o driver NVIDIA só grava o RTX HDR com o Prisma como administrador.
 pub fn refusal(mode: u8) -> &'static str {
     if mode == RTX && !crate::startup::is_elevated() {
@@ -123,6 +122,7 @@ pub fn refusal(mode: u8) -> &'static str {
     }
 }
 
+/// Grava a escolha. Vale na próxima vez que o jogo abrir.
 pub fn apply(exe: &str, mode: u8) -> bool {
     const REG_SZ: u32 = 1;
     if nvidia() {

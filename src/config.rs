@@ -809,7 +809,13 @@ fn game_lines(text: &str) -> GameLines {
     for line in text.lines() {
         if let Some(v) = GAME_KEYS.iter().find_map(|k| line.strip_prefix(k)) {
             let e = m.entry(v.split('|').next().unwrap_or_default().to_string()).or_default();
-            e.push_str(line);
+            if line.starts_with("meter_game=") {
+                // `measured` (5) e `last` (12) mudam sem a pessoa mexer.
+                let f: Vec<&str> = line.split('|').enumerate().map(|(i, f)| if i == 5 || i == 12 { "" } else { f }).collect();
+                e.push_str(&f.join("|"));
+            } else {
+                e.push_str(line);
+            }
             e.push('\n');
         }
     }
@@ -1115,15 +1121,7 @@ impl Config {
         if !power_seen {
             c.meter_items |= crate::meter::ITEM_POWER;
         }
-        // Versões antigas criaram linha para o vigia de travamento e o lançador, que nascem com o jogo.
-        // Nem os auxiliares (UnityCrashHandler64.exe) que o detector tomou por jogo em outras listas.
-        let helper = |e: &str| crate::sys::power::is_helper(e);
-        c.meter_games.retain(|g| !helper(&g.exe));
-        c.hdr_games.retain(|g| !helper(&g.exe));
-        c.fs_apps.retain(|a| !helper(&a.exe));
-        c.snd_apps.retain(|a| !helper(&a.exe));
-        c.eq_apps.retain(|(e, _)| !helper(e));
-        c.opt_skip.retain(|e| !helper(e));
+        c.drop_helpers();
         // A lista substitui a lembrança antiga por programa.
         for p in c.profiles.iter_mut().filter(|p| p.borderless) {
             p.borderless = false;
@@ -1513,6 +1511,19 @@ impl Config {
     pub fn profile(&self, exe: &str) -> Option<&Profile> {
         self.profiles.iter().find(|p| p.exe.eq_ignore_ascii_case(exe))
     }
+
+    /// Versões antigas criaram linha para o vigia de travamento e o lançador, que nascem com o jogo.
+    /// Nas listas que a pessoa monta à mão (som, equalizador, tela cheia, otimizar), só o vigia de
+    /// travamento sai: Steam ou Explorer ali foram escolha dela.
+    fn drop_helpers(&mut self) {
+        use crate::sys::power::{is_crash_helper as crash, is_helper as helper};
+        self.meter_games.retain(|g| !helper(&g.exe));
+        self.hdr_games.retain(|g| !helper(&g.exe));
+        self.fs_apps.retain(|a| !crash(&a.exe));
+        self.snd_apps.retain(|a| !crash(&a.exe));
+        self.eq_apps.retain(|(e, _)| !crash(e));
+        self.opt_skip.retain(|e| !crash(e));
+    }
 }
 
 #[cfg(test)]
@@ -1526,6 +1537,23 @@ mod tests {
         // b mudou, c saiu, d entrou; a ficou igual e as opções gerais não contam.
         assert_eq!(diff_games(&old, &new), ["b.exe", "c.exe", "d.exe"]);
         assert!(diff_games(&new, &new).is_empty());
+        // O dia jogado e o "já medido" mudam sozinhos: não são opção.
+        let a = game_lines("meter_game=g.exe|1|0|0|0|0|0|0||0|0||100|0\n");
+        let b = game_lines("meter_game=g.exe|1|0|0|0|1|0|0||0|0||200|0\n");
+        assert!(diff_games(&a, &b).is_empty());
+    }
+
+    #[test]
+    fn helpers_leave_only_the_lists_the_detector_fills() {
+        let mut c = Config::default();
+        let snd = |exe: &str| SndApp { exe: exe.into(), ..Default::default() };
+        c.snd_apps = vec![snd("steamwebhelper.exe"), snd("UnityCrashHandler64.exe")];
+        c.opt_skip = vec!["explorer.exe".into(), "CrashReportClient.exe".into()];
+        c.meter_games = vec![MeterGame { exe: "steam.exe".into(), ..Default::default() }, MeterGame { exe: "g.exe".into(), ..Default::default() }];
+        c.drop_helpers();
+        assert_eq!(c.snd_apps.iter().map(|a| a.exe.as_str()).collect::<Vec<_>>(), ["steamwebhelper.exe"]);
+        assert_eq!(c.opt_skip, ["explorer.exe"]);
+        assert_eq!(c.meter_games.iter().map(|g| g.exe.as_str()).collect::<Vec<_>>(), ["g.exe"]);
     }
 
     #[test]

@@ -23,7 +23,7 @@ use crate::{PROTOCOL, Reply, Request, read_frame, write_frame};
 
 const BUFFER: u32 = 64 * 1024;
 /// Intervalo entre consultas ao pipe enquanto o cliente recebe avisos.
-const WATCH_POLL: Duration = Duration::from_millis(10);
+const WATCH_POLL: Duration = Duration::from_millis(30);
 
 pub struct ServerInfo {
     pub app_version: String,
