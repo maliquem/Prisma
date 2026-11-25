@@ -3230,3 +3230,68 @@ Menu completo, com os nomes	Полное меню, с названиями
 Menu compacto, só com ícones	Компактное меню, только значки
 Troca automática ligada. Clique para deixar o plano fixo.	Автопереключение включено. Нажмите, чтобы закрепить план.
 Troca automática desligada. Clique para ligar.	Автопереключение выключено. Нажмите, чтобы включить.
+A letra do Windows não muda.	Буква диска Windows не меняется.
+A letra {}	Буква {}
+Analisar só lê o disco. Reparar mexe nele: leia os riscos antes.	«Анализировать» только читает диск. «Восстановить» вносит в него изменения: сначала прочитайте о рисках.
+Analisar {}	Анализ {}
+Apagar a partição {}	Удалить раздел {}
+Apagar partição…	Удалить раздел…
+Criar partição em {}	Создать раздел на {}
+Criar partição…	Создать раздел…
+Digite o tamanho em GB, só com números.	Введите размер в GB, только цифрами.
+Diminuir libera espaço para outra partição; aumentar usa o espaço livre logo depois dela. O Windows não diminui além do que está em uso. Faça uma cópia do que importa antes.	Сжатие освобождает место для другого раздела; расширение использует свободное место сразу за ним. Windows не сожмёт раздел меньше занятого места. Сначала сделайте копию важного.
+Disco do Windows: formatar e apagar ficam bloqueados.	Диск Windows: форматирование и удаление заблокированы.
+Em GB	В GB
+Escolha outra letra.	Выберите другую букву.
+Este disco não tem volume com letra.	На этом диске нет тома с буквой.
+Formatar {}	Форматирование {}
+Formatar	Форматировать
+Formatar…	Форматировать…
+Formatação rápida (sem ela, o Windows lê o disco todo e demora)	Быстрое форматирование (без него Windows читает весь диск, и это долго)
+Letra de volume inválida.	Недопустимая буква тома.
+Limpeza feita, sem erros.	Очистка выполнена, ошибок нет.
+Nenhum problema encontrado.	Проблем не найдено.
+No volume do Windows, o reparo roda na próxima reinicialização. Veja abaixo o que o CHKDSK disse.	На томе Windows восстановление запустится при следующей перезагрузке. Что сказал CHKDSK, смотрите ниже.
+Nova letra	Новая буква
+Novo tamanho (GB)	Новый размер (GB)
+O CHKDSK achou problemas ou não conseguiu ler o volume. Veja abaixo; Reparar corrige.	CHKDSK нашёл проблемы или не смог прочитать том. Подробности ниже; «Восстановить» исправляет их.
+O Prisma está nesse volume: ele e as configurações dele podem parar de funcionar.	Prisma находится на этом томе: она и её настройки могут перестать работать.
+O Windows aceita de {} a {}.	Windows принимает от {} до {}.
+O Windows não conseguiu. O motivo está abaixo.	Windows не удалось. Причина ниже.
+O Windows não deu a permissão de administrador.	Windows не получила права администратора.
+O reparo não terminou agora. Veja abaixo o que o CHKDSK disse.	Восстановление сейчас не завершилось. Что сказал CHKDSK, смотрите ниже.
+Para confirmar, digite	Для подтверждения введите
+Procurar setores ruins (/r): bem mais lento	Искать сбойные секторы (/r): гораздо медленнее
+Programas com arquivos abertos nesse volume perdem o que não foi salvo.	Программы с открытыми файлами на этом томе потеряют несохранённое.
+Programas instalados, atalhos e bibliotecas de jogos que usam {}: param de achar os arquivos até a letra voltar.	Установленные программы, ярлыки и библиотеки игр, использующие {}:, не найдут файлы, пока буква не вернётся.
+Pronto.	Готово.
+Redimensionar {}	Изменение размера {}
+Redimensionar	Изменить размер
+Redimensionar…	Изменить размер…
+Reparar {}	Восстановление {}
+Reparar…	Восстановить…
+Riscos do reparo:	Риски восстановления:
+Rodando há {}. Num HD grande pode levar horas; não desligue o PC no meio.	Выполняется уже {}. На большом жёстком диске это может занять часы; не выключайте ПК.
+Rótulo longo demais: até 11 letras no FAT32.	Метка слишком длинная: до 11 символов в FAT32.
+Rótulo longo demais: até 15 letras no exFAT.	Метка слишком длинная: до 15 символов в exFAT.
+Rótulo longo demais: até 32 letras no NTFS.	Метка слишком длинная: до 32 символов в NTFS.
+Rótulo	Метка
+Sem letra	Без буквы
+Sem rótulo	Без метки
+Sistema de arquivos desconhecido.	Неизвестная файловая система.
+Sistema de arquivos	Файловая система
+Tamanho (GB)	Размер (GB)
+Tamanho inválido.	Недопустимый размер.
+Todo o espaço livre	Всё свободное место
+Trocar a letra de {}	Смена буквы {}
+Trocar letra…	Изменить букву…
+Trocar	Изменить
+Tudo em {} será apagado: {} usados. Isso não tem volta.	Всё на {} будет стёрто: занято {}. Это нельзя отменить.
+Usa o espaço livre do disco, sem mexer nas partições que já existem. Disco novo, sem partições, é preparado como GPT.	Использует свободное место диска, не затрагивая существующие разделы. Новый диск без разделов подготавливается как GPT.
+Verificar e reparar (CHKDSK)	Проверка и восстановление (CHKDSK)
+Volume	Том
+• Arquivos em partes corrompidas do disco podem ser apagados ou ir para a pasta FOUND.000.	• Файлы в повреждённых частях диска могут быть удалены или попасть в папку FOUND.000.
+• No volume do Windows, o reparo só roda na próxima reinicialização.	• На томе Windows восстановление запустится только при следующей перезагрузке.
+• Num HD grande pode levar horas. Não desligue o PC no meio.	• На большом жёстком диске это может занять часы. Не выключайте ПК.
+• O volume é desmontado: programas com arquivos abertos nele perdem o que não foi salvo.	• Том размонтируется: программы с открытыми на нём файлами потеряют несохранённое.
+O rótulo não aceita " * / : < > ? \ |	Метка не может содержать " * / : < > ? \ |

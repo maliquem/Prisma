@@ -131,6 +131,8 @@ Files go to Documents, Prisma, Logs: every frame, every second, the CPU of each 
 Shows speed, active time and space of each disk, with a SMART health grade: Good, Warning or At risk, including USB drives. Each network shows speed, address and total transferred.
 
 - **You can't:** treat the grade as a guarantee. A disk can fail without warning. Health requires Prisma as administrator.
+- **Tools:** the **Tools** view next to **Health** runs the Windows tools on the chosen disk and volume, as administrator (Windows asks when you click). **Analyze** checks the volume with CHKDSK without changing anything. **Repair…** fixes it (tick **Look for bad sectors** for `/r`, much slower); read the risks first: damaged files can be deleted or go to FOUND.000, programs with files open on the volume lose what wasn't saved, on the Windows volume the repair runs at the next restart, and a big hard drive can take hours. **Format…**, **Change letter…**, **Resize…**, **Delete partition…** and **Create partition…** (in the disk's free space) use Windows' PowerShell. Formatting and deleting erase everything on the volume: Prisma lists what will be lost and asks you to type the volume letter. The progress and the result show on the page.
+- **You can't:** format or delete a partition on the disk that holds Windows, or change the Windows letter. Copy what matters before repairing, formatting, resizing or deleting.
 
 ## Disk space
 

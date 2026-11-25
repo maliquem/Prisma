@@ -307,13 +307,15 @@ A barra lateral é `NAV` (`src/pages/mod.rs:381`), em cinco grupos (`GROUPS` `:4
 | Primeiro limite de FPS | Automático | `meter.rs:1917` `first_limit` | |
 | Mostrar e iniciar o Medidor | Automático | `meter::show` `meter.rs:691`; `meter::start` `meter.rs:1114`; `meter::leave` `meter.rs:1217` | |
 
-### 4.3 Discos e redes (`src/pages/storage.rs`, `draw` linha 40)
+### 4.3 Discos e redes (`src/pages/storage.rs`, `draw` linha 146)
 
 | Função | Como é chamada | Onde no código | Observações |
 |---|---|---|---|
-| Ver discos, saúde e velocidade | Página | `pages/storage.rs:40` `draw`; `:56` `draw_disks`; `sys/disks.rs:236` `list`; `:246` `sample`; `:528` `spawn_health`; `:150` `is_ssd` (usado por `copy.rs` `workers` `:436`) | |
-| Ver redes (adaptadores) | Página | `pages/storage.rs:154` `draw_nets`; `sys/nets.rs:35` `list`; `:91` `sample` | |
-| Cores e nomes de saúde | Automático | `pages/storage.rs:6` `level_color`; `:15` `level_name`; `:32` `fmt_hours` | |
+| Ver discos, saúde e velocidade | Página | `pages/storage.rs:146` `draw`; `:163` `draw_disks`; `:247` `draw_health`; `sys/disks.rs:236` `list`; `:246` `sample`; `:528` `spawn_health`; `:150` `is_ssd` (usado por `copy.rs` `workers` `:436`) | Vistas Saúde e Ferramentas no cartão da direita |
+| Ver redes (adaptadores) | Página | `pages/storage.rs:582` `draw_nets`; `sys/nets.rs:35` `list`; `:91` `sample` | |
+| Cores e nomes de saúde | Automático | `pages/storage.rs:112` `level_color`; `:121` `level_name`; `:138` `fmt_hours` | |
+| Analisar e reparar (CHKDSK) | Ferramentas → Analisar / Reparar… | `pages/storage.rs:334` `draw_tools`; `:299` `start`; `:283` `poll`; `:413` `draw_run`; `:400` `outcome`; `sys/disks.rs:628` `script`; `:669` `run_job`; `:686` `parse_log` | PowerShell do sistema oculto e elevado (UAC no clique) grava o log em `%TEMP%\prisma-disco-*.log`; marcas `@@fim` e `@@faixa`. Reparo no volume do Windows fica para a reinicialização |
+| Formatar, trocar letra, redimensionar, apagar e criar partição | Ferramentas → janelas de confirmação | `pages/storage.rs:458` `draw_sheet`; `:317` `new_sheet`; `:41` `Sheet::job`; `:101` `system_letters`; `:108` `prisma_on`; `sys/disks.rs:603` `refuse`; `:576` `check_label`; `:703` `free_letters` | `refuse` bloqueia formatar/apagar no disco do Windows e trocar a letra do Windows; formatar e apagar pedem a letra digitada. Testes em `sys/disks.rs` (`mod tests`) |
 
 ### 4.4 Espaço em disco (`src/pages/analyze.rs`, `draw` linha 125)
 

@@ -131,6 +131,8 @@ Os arquivos ficam em Documentos, Prisma, Logs: cada quadro, cada segundo, a CPU 
 Mostra velocidade, tempo ativo e espaço de cada disco, com nota de saúde pelo SMART: Bom, Atenção ou Risco, inclusive em HDs USB. Cada rede mostra velocidade, endereço e total transferido.
 
 - **Não dá para:** tratar a nota como garantia. Um disco pode falhar sem aviso. A saúde exige o Prisma como administrador.
+- **Ferramentas:** a vista **Ferramentas**, ao lado de **Saúde**, roda as ferramentas do Windows no disco e no volume escolhidos, como administrador (o Windows pergunta quando você clica). **Analisar** confere o volume com o CHKDSK sem mudar nada. **Reparar…** corrige (marque **Procurar setores ruins** para o `/r`, bem mais lento); leia os riscos antes: arquivos danificados podem ser apagados ou ir para a FOUND.000, programas com arquivos abertos no volume perdem o que não foi salvo, no volume do Windows o reparo roda na próxima reinicialização, e um HD grande pode levar horas. **Formatar…**, **Trocar letra…**, **Redimensionar…**, **Apagar partição…** e **Criar partição…** (no espaço livre do disco) usam o PowerShell do Windows. Formatar e apagar apagam tudo no volume: o Prisma lista o que se perde e pede para você digitar a letra do volume. O andamento e o resultado aparecem na página.
+- **Não dá para:** formatar nem apagar partição no disco onde está o Windows, nem trocar a letra do Windows. Copie o que importa antes de reparar, formatar, redimensionar ou apagar.
 
 ## Espaço em disco
 
