@@ -181,9 +181,11 @@ float4 native(float3 raw, bool hud) {
     float y = dot(n, LUM);
     n = y + (n - y) * sat;
     // Contraste no PQ, entre o preto e o pico do jogo; o que passa do pico fica como está.
-    float m0 = max(max(n.r, n.g), n.b), lo = pq_of(src_black * k), span = max(pq_of(lw) - lo, 1e-4);
-    float e0 = (pq_of(m0) - lo) / span;
-    if (contrast != 0 && m0 > 1e-6 && e0 > 0 && e0 < 1) n *= nits_of(contrasted(e0.xxx).x * span + lo) / m0;
+    if (contrast != 0) {
+        float m0 = max(max(n.r, n.g), n.b), lo = pq_of(src_black * k), span = max(pq_of(lw) - lo, 1e-4);
+        float e0 = (pq_of(m0) - lo) / span;
+        if (m0 > 1e-6 && e0 > 0 && e0 < 1) n *= nits_of(contrasted(e0.xxx).x * span + lo) / m0;
+    }
     // Jogo que para abaixo do pico da tela: os brilhos sobem até ele, como no SDR.
     float m = max(max(n.r, n.g), n.b), t = saturate(m / lw), up = max(peak / lw - 1, 0) * boost;
     float o = eetf(m * (1 + up * t * t * t), src_black * k, lw * (1 + up));
@@ -202,7 +204,8 @@ float4 ps(float4 p : SV_Position) : SV_Target {
     if (!on) return float4(decode_srgb(c) * paper / 80, 1);
     // Gama 2.2 pura: a curva por partes levanta os pretos. O contraste fica só na cena.
     if (hud) return float4(min(pow(c, gamma) * ui, peak) / 80, 1);
-    float3 l = pow(contrasted(c), gamma);
+    // Em 0 nem passa pela curva: pow(x, 1) na GPU não devolve x exato.
+    float3 l = pow(contrast != 0 ? contrasted(c) : c, gamma);
     float y = dot(l, LUM);
     l = max(y + (l - y) * sat, 0);
     // Só os brilhos sobem: o ganho cresce com y^3 e chega ao pico no branco.
