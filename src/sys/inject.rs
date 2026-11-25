@@ -35,7 +35,8 @@ struct Shared {
     magic: AtomicU32,
     state: AtomicU32,
     fps_milli: AtomicU32,
-    pad: u32,
+    /// Contraste da curva HDR (bits de f32), no antigo enchimento: DLL velha ignora, Prisma velho deixa 0.
+    hdr_contrast: AtomicU32,
     beat: AtomicU64,
     presents: AtomicU64,
     waits: AtomicU64,
@@ -95,6 +96,8 @@ pub struct Hdr {
     pub src_peak: f32,
     pub src_black: f32,
     pub src_paper: f32,
+    /// Contraste da curva: 0 é neutro; de -0,5 a 0,5 (a inclinação no meio vai de 0,5 a 1,5).
+    pub contrast: f32,
 }
 
 /// O que o Analisar mediu, em nits: pico e preto (o mais claro e o mais escuro dos quadros), p99,9 e p99 do
@@ -420,7 +423,7 @@ pub fn is_crash(code: u32) -> bool {
 
 fn write_hdr(s: &Shared, h: &Hdr) {
     s.hdr_on.store(h.on as u32, Relaxed);
-    for (at, v) in [(&s.hdr_peak, h.peak), (&s.hdr_paper, h.paper), (&s.hdr_gamma, h.gamma), (&s.hdr_sat, h.sat), (&s.hdr_boost, h.boost), (&s.hdr_black, h.black), (&s.hdr_ui, h.ui), (&s.hdr_src_peak, h.src_peak), (&s.hdr_src_black, h.src_black), (&s.hdr_src_paper, h.src_paper)] {
+    for (at, v) in [(&s.hdr_peak, h.peak), (&s.hdr_paper, h.paper), (&s.hdr_gamma, h.gamma), (&s.hdr_sat, h.sat), (&s.hdr_boost, h.boost), (&s.hdr_black, h.black), (&s.hdr_ui, h.ui), (&s.hdr_src_peak, h.src_peak), (&s.hdr_src_black, h.src_black), (&s.hdr_src_paper, h.src_paper), (&s.hdr_contrast, h.contrast)] {
         at.store(v.to_bits(), Relaxed);
     }
 }
@@ -451,7 +454,7 @@ impl HdrLive {
     pub fn get(&self) -> Hdr {
         let s = self.shared();
         let f = |a: &AtomicU32| f32::from_bits(a.load(Relaxed));
-        Hdr { on: s.hdr_on.load(Relaxed) != 0, peak: f(&s.hdr_peak), paper: f(&s.hdr_paper), gamma: f(&s.hdr_gamma), sat: f(&s.hdr_sat), boost: f(&s.hdr_boost), black: f(&s.hdr_black), ui: f(&s.hdr_ui), src_peak: f(&s.hdr_src_peak), src_black: f(&s.hdr_src_black), src_paper: f(&s.hdr_src_paper) }
+        Hdr { on: s.hdr_on.load(Relaxed) != 0, peak: f(&s.hdr_peak), paper: f(&s.hdr_paper), gamma: f(&s.hdr_gamma), sat: f(&s.hdr_sat), boost: f(&s.hdr_boost), black: f(&s.hdr_black), ui: f(&s.hdr_ui), src_peak: f(&s.hdr_src_peak), src_black: f(&s.hdr_src_black), src_paper: f(&s.hdr_src_paper), contrast: f(&s.hdr_contrast) }
     }
 
     /// Saída do jogo no último quadro (0 SDR, 1 HDR10, 2 scRGB) e quadros desenhados pelo passe do HDR.
@@ -572,6 +575,7 @@ pub fn test_hdr(out: &str, exe: &str, params: &str, args: &str) {
                 "boost" => hdr.boost = v,
                 "black" => hdr.black = v,
                 "ui" => hdr.ui = v,
+                "contrast" => hdr.contrast = v,
                 // Analisar: um número novo começa outra medida, 0 para.
                 "scan" => scan = v as u32,
                 "native" if native.is_none() => native = Some(v as u8),

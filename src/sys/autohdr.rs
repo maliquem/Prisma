@@ -222,7 +222,7 @@ pub fn auto_base(cal: Hdr, g: &HdrGame) -> Hdr {
 }
 
 /// `base` com o ajuste fino por cima, dentro das faixas dos ajustes.
-pub fn tuned(base: Hdr, tune: &[f32; 7]) -> Hdr {
+pub fn tuned(base: Hdr, tune: &[f32; KNOBS.len()]) -> Hdr {
     let mut h = base;
     for (i, (_, lo, hi)) in KNOBS.iter().enumerate().filter(|(i, _)| tune[*i] != 0.0) {
         let v = knob(&mut h, i);
@@ -232,7 +232,7 @@ pub fn tuned(base: Hdr, tune: &[f32; 7]) -> Hdr {
 }
 
 /// O ajuste fino que leva `base` a `h`.
-pub fn tune_of(base: Hdr, h: Hdr) -> [f32; 7] {
+pub fn tune_of(base: Hdr, h: Hdr) -> [f32; KNOBS.len()] {
     let (mut a, mut b) = (h, base);
     std::array::from_fn(|i| *knob(&mut a, i) - *knob(&mut b, i))
 }

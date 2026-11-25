@@ -61,7 +61,7 @@ pub struct HdrGame {
     /// Se o jogo tem HDR próprio (`sys::autohdr::NATIVE_*`).
     pub native: u8,
     /// Ajuste fino do Automático: o quanto cada ajuste sai da base, na ordem de `pages::hdr::KNOBS`.
-    pub tune: [f32; 7],
+    pub tune: [f32; crate::pages::hdr::KNOBS.len()],
     /// A última medida do Analisar.
     pub scan: Option<crate::sys::inject::Scan>,
     /// A pessoa abre este jogo sem o anti-cheat (offline, mods): o achado na pasta não barra o HDR do Prisma.
@@ -72,12 +72,12 @@ pub struct HdrGame {
 
 impl HdrGame {
     /// Linha `hdr_game=` do config.ini: `exe|modo|caminho`, os ajustes do Manual quando há (o brilho da
-    /// interface veio depois: linha com 6 vale 0) e por fim `|native=`, `|tune=`, `|scan=`, `|ac=off` e `|mods=`. Versões
+    /// interface e o contraste vieram depois: linha sem eles vale 0) e por fim `|native=`, `|tune=`, `|scan=`, `|ac=off` e `|mods=`. Versões
     /// antigas pulam esses: não são números.
     pub fn line(&self) -> String {
         let mut s = format!("{}|{}|{}", self.exe, self.mode, self.path);
         if let Some(h) = self.prisma {
-            s += &format!("|{}|{}|{}|{}|{}|{}|{}", h.peak, h.paper, h.gamma, h.sat, h.boost, h.black, h.ui);
+            s += &format!("|{}|{}|{}|{}|{}|{}|{}|{}", h.peak, h.paper, h.gamma, h.sat, h.boost, h.black, h.ui, h.contrast);
         }
         if self.native != 0 {
             s += &format!("|native={}", self.native);
@@ -102,7 +102,7 @@ impl HdrGame {
             return None;
         }
         let f: Vec<f32> = p[3..].iter().filter_map(|v| v.parse().ok()).collect();
-        let prisma = (f.len() >= 6).then(|| crate::sys::inject::Hdr { on: true, peak: f[0], paper: f[1], gamma: f[2], sat: f[3], boost: f[4], black: f[5], ui: f.get(6).copied().unwrap_or(0.0), ..Default::default() });
+        let prisma = (f.len() >= 6).then(|| crate::sys::inject::Hdr { on: true, peak: f[0], paper: f[1], gamma: f[2], sat: f[3], boost: f[4], black: f[5], ui: f.get(6).copied().unwrap_or(0.0), contrast: f.get(7).copied().unwrap_or(0.0), ..Default::default() });
         let tag = |k: &str| p[3..].iter().find_map(|v| v.strip_prefix(k)?.strip_prefix('='));
         let list = |k: &str| tag(k).map_or(Vec::new(), |v| v.split(',').filter_map(|x| x.parse::<f32>().ok()).collect());
         let tune = list("tune");
@@ -1530,9 +1530,9 @@ mod tests {
         let old = HdrGame::parse(r"a.exe|1|C:\a b\a.exe").unwrap();
         assert_eq!((old.mode, old.path.as_str(), old.prisma), (1, r"C:\a b\a.exe", None));
         assert_eq!(HdrGame::parse(&old.line()).unwrap().line(), old.line());
-        let h = crate::sys::inject::Hdr { on: true, peak: 1000.0, paper: 203.5, gamma: 2.2, sat: 1.1, boost: 0.5, black: 0.25, ui: 150.0, ..Default::default() };
+        let h = crate::sys::inject::Hdr { on: true, peak: 1000.0, paper: 203.5, gamma: 2.2, sat: 1.1, boost: 0.5, black: 0.25, ui: 150.0, contrast: 0.2, ..Default::default() };
         let scan = crate::sys::inject::Scan { frames: 600, peak: 980.5, p999: 700.0, p99: 400.0, med: 20.25, black: 0.01, ui: 250.0, white: 0.03, mode: 1 };
-        let g = HdrGame { prisma: Some(h), mode: 5, native: 2, tune: [10.0, 0.0, 0.0, 0.0, -0.5, 0.0, 0.0], scan: Some(scan), ac_off: true, mods: r"K:\Jogos\ERR\dll\offline".into(), ..old.clone() };
+        let g = HdrGame { prisma: Some(h), mode: 5, native: 2, tune: [10.0, 0.0, 0.0, 0.0, -0.5, 0.0, 0.0, -0.1], scan: Some(scan), ac_off: true, mods: r"K:\Jogos\ERR\dll\offline".into(), ..old.clone() };
         let back = HdrGame::parse(&g.line()).unwrap();
         assert_eq!((back.prisma, back.native, back.tune, back.scan, back.ac_off, back.mods.as_str()), (Some(h), 2, g.tune, Some(scan), true, g.mods.as_str()));
         assert!(!old.ac_off);
@@ -1540,8 +1540,10 @@ mod tests {
         let auto = HdrGame { prisma: None, ..g };
         assert_eq!(HdrGame::parse(&auto.line()).unwrap().prisma, None);
         assert_eq!(HdrGame::parse(&old.line()).unwrap().native, 0);
-        // Linha de antes do brilho da interface: ele fica desligado.
-        assert_eq!(HdrGame::parse(r"a.exe|5|C:\a.exe|1000|203.5|2.2|1.1|0.5|0.25").unwrap().prisma, Some(crate::sys::inject::Hdr { ui: 0.0, ..h }));
+        // Linha de antes do brilho da interface e do contraste: ficam desligado e neutro.
+        assert_eq!(HdrGame::parse(r"a.exe|5|C:\a.exe|1000|203.5|2.2|1.1|0.5|0.25").unwrap().prisma, Some(crate::sys::inject::Hdr { ui: 0.0, contrast: 0.0, ..h }));
+        // Ajuste fino de antes do contraste (7 números): o contraste fica neutro.
+        assert_eq!(HdrGame::parse(r"a.exe|0|C:\a.exe|tune=10,0,0,0,-0.5,0,0").unwrap().tune[7], 0.0);
         // Ajuste faltando: fica sem os ajustes, com a escolha mantida.
         assert_eq!(HdrGame::parse(r"a.exe|5|C:\a.exe|1000|200").map(|g| (g.mode, g.prisma)), Some((5, None)));
         assert!(HdrGame::parse("a.exe|5").is_none());

@@ -16,6 +16,9 @@ static MAIN: AtomicIsize = AtomicIsize::new(0);
 /// Uma tela do Prisma lê o controle (campo de tecla, gravação de macro, medição): não navega.
 static PAUSED: AtomicBool = AtomicBool::new(false);
 static STATE: Mutex<Option<HashMap<String, Pad>>> = Mutex::new(None);
+/// Menu do HDR aberto por cima do jogo: o controle navega nele (`menu_feed`), e o mapeamento não vê nada.
+static MENU: AtomicBool = AtomicBool::new(false);
+static MENU_PADS: Mutex<Option<HashMap<String, Pad>>> = Mutex::new(None);
 
 /// Repetição de quem segura uma direção.
 const FIRST: Duration = Duration::from_millis(400);
@@ -159,6 +162,32 @@ pub fn window_open() -> bool {
     MAIN.load(Ordering::Relaxed) != 0
 }
 
+/// O menu do HDR abriu ou fechou. Aberto, o XInput é lido a cada 8 ms, como com o Prisma aberto.
+pub fn set_menu(on: bool) {
+    *MENU_PADS.lock().unwrap() = None;
+    if MENU.swap(on, Ordering::Relaxed) != on {
+        pads::poke();
+    }
+}
+
+pub fn menu_open() -> bool {
+    MENU.load(Ordering::Relaxed)
+}
+
+/// Relatório do controle `key` com o menu do HDR aberto: vira `Event::Menu` (direcional, A, B) e o
+/// mapeamento não vê nada, como no teclado e no radial. Fechado, false.
+pub fn menu_feed(key: &str, inp: &Input, now: Instant) -> bool {
+    if !menu_open() {
+        return false;
+    }
+    let (cmds, _) = MENU_PADS.lock().unwrap().get_or_insert_with(HashMap::new).entry(key.to_string()).or_insert_with(|| Pad::new(inp)).step(inp, now);
+    // Os analógicos e o X não mexem o mouse aqui: o foco é do jogo.
+    for c in cmds.into_iter().filter(|c| *c != Cmd::Wake) {
+        pads::emit(pads::Event::Menu(c));
+    }
+    true
+}
+
 /// A janela principal do Prisma está em foco.
 pub fn front() -> bool {
     use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
@@ -168,6 +197,9 @@ pub fn front() -> bool {
 
 /// O controle `key` saiu: esquece o estado dele e solta o clique se o X estava apertado.
 pub fn forget(key: &str) {
+    if let Some(m) = MENU_PADS.lock().unwrap().as_mut() {
+        m.remove(key);
+    }
     let held = STATE.lock().unwrap().as_mut().and_then(|m| m.remove(key)).is_some_and(|p| p.buttons & pads::X != 0);
     if held {
         remap::send(&[Act::Up(Out::Mouse(1))]);

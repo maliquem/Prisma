@@ -119,14 +119,14 @@ pub(crate) const SHADER: &str = r#"
 #ifdef VULKAN
 [[vk::binding(0)]] Texture2D<float4> tex;
 [[vk::binding(1)]] Texture2D<float4> scene;
-[[vk::push_constant]] cbuffer C { float paper, peak, gamma, sat, boost, black, ui; uint srgb, on, split, mode; float src_peak, src_black, src_paper; uint pad0, pad1; };
+[[vk::push_constant]] cbuffer C { float paper, peak, gamma, sat, boost, black, ui; uint srgb, on, split, mode; float src_peak, src_black, src_paper, contrast; uint pad1; };
 #ifdef SCAN
 [[vk::binding(2)]] RWByteAddressBuffer hist;
 #endif
 #else
 Texture2D<float4> tex : register(t0);
 Texture2D<float4> scene : register(t1);
-cbuffer C : register(b0) { float paper, peak, gamma, sat, boost, black, ui; uint srgb, on, split, mode; float src_peak, src_black, src_paper; uint pad0, pad1; };
+cbuffer C : register(b0) { float paper, peak, gamma, sat, boost, black, ui; uint srgb, on, split, mode; float src_peak, src_black, src_paper, contrast; uint pad1; };
 #ifdef SCAN
 RWByteAddressBuffer hist : register(u0);
 #endif
@@ -149,6 +149,12 @@ float pq_of(float n) {
     return pow((0.8359375 + 18.8515625 * y) / (1 + 18.6875 * y), 78.84375);
 }
 float nits_of(float e) { return pq_nits(e.xxx).x; }
+// Contraste: curva em S no valor codificado (0 a 1), presa no preto, no meio e no branco; a inclinação no
+// meio é 1 + contrast. Zero devolve o mesmo valor.
+float3 contrasted(float3 c) {
+    float p = 1 + contrast;
+    return c < 0.5 ? 0.5 * pow(2 * c, p) : 1 - 0.5 * pow(2 - 2 * c, p);
+}
 // BT.2390: o que o jogo entrega, de lb a lw nits, cabe no preto e no pico da tela. Abaixo do joelho fica
 // igual; acima, uma curva de Hermite encosta no pico; o preto da tela entra pelo termo (1-e)^4.
 float eetf(float n, float lb, float lw) {
@@ -174,6 +180,10 @@ float4 native(float3 raw, bool hud) {
     n *= k;
     float y = dot(n, LUM);
     n = y + (n - y) * sat;
+    // Contraste no PQ, entre o preto e o pico do jogo; o que passa do pico fica como está.
+    float m0 = max(max(n.r, n.g), n.b), lo = pq_of(src_black * k), span = max(pq_of(lw) - lo, 1e-4);
+    float e0 = (pq_of(m0) - lo) / span;
+    if (contrast != 0 && m0 > 1e-6 && e0 > 0 && e0 < 1) n *= nits_of(contrasted(e0.xxx).x * span + lo) / m0;
     // Jogo que para abaixo do pico da tela: os brilhos sobem até ele, como no SDR.
     float m = max(max(n.r, n.g), n.b), t = saturate(m / lw), up = max(peak / lw - 1, 0) * boost;
     float o = eetf(m * (1 + up * t * t * t), src_black * k, lw * (1 + up));
@@ -190,9 +200,9 @@ float4 ps(float4 p : SV_Position) : SV_Target {
     float3 c = saturate(srgb ? encode_srgb(saturate(raw)) : raw);
     // Desligado: o mesmo que o Windows faz com SDR, curva sRGB por partes no paper white.
     if (!on) return float4(decode_srgb(c) * paper / 80, 1);
-    // Gama 2.2 pura: a curva por partes levanta os pretos.
-    float3 l = pow(c, gamma);
-    if (hud) return float4(min(l * ui, peak) / 80, 1);
+    // Gama 2.2 pura: a curva por partes levanta os pretos. O contraste fica só na cena.
+    if (hud) return float4(min(pow(c, gamma) * ui, peak) / 80, 1);
+    float3 l = pow(contrasted(c), gamma);
     float y = dot(l, LUM);
     l = max(y + (l - y) * sat, 0);
     // Só os brilhos sobem: o ganho cresce com y^3 e chega ao pico no branco.
@@ -253,7 +263,9 @@ pub(crate) struct Params {
     src_peak: f32,
     src_black: f32,
     src_paper: f32,
-    pad: [u32; 2],
+    /// Inclinação da curva de contraste no meio, menos 1 (`Shared::hdr_contrast`): 0 é neutro.
+    contrast: f32,
+    pad: u32,
 }
 
 /// O que o jogo pediu: o buffer dele segue isso, não a cadeia de verdade.
@@ -718,7 +730,8 @@ pub(crate) fn params(s: &Shared, srgb: bool, mode: u32, split: bool) -> Params {
         src_peak,
         src_black: f(&s.hdr_src_black).clamp(0.0, src_peak / 2.0),
         src_paper: Some(f(&s.hdr_src_paper)).filter(|v| *v >= 40.0).unwrap_or(203.0).min(src_peak),
-        pad: [0; 2],
+        contrast: f(&s.hdr_contrast).clamp(-0.5, 0.5),
+        pad: 0,
     }
 }
 
@@ -1272,8 +1285,36 @@ mod tests {
             compile(s!("ps_5_0"), s!("ps")).unwrap();
             compile(s!("cs_5_0"), s!("cs")).unwrap();
         }
-        // cbuffer C: 7 floats e 5 uints.
+        // cbuffer C: 16 números de 4 bytes (as constantes da raiz do D3D12).
         assert_eq!(std::mem::size_of::<Params>(), 64);
+    }
+
+    /// A curva de contraste do `SHADER`, conta por conta.
+    fn contrasted(c: f32, contrast: f32) -> f32 {
+        let p = 1.0 + contrast;
+        if c < 0.5 { 0.5 * (2.0 * c).powf(p) } else { 1.0 - 0.5 * (2.0 - 2.0 * c).powf(p) }
+    }
+
+    #[test]
+    fn contrast_neutral_and_monotonic() {
+        assert!(SHADER.contains("float p = 1 + contrast;
+    return c < 0.5 ? 0.5 * pow(2 * c, p) : 1 - 0.5 * pow(2 - 2 * c, p);"));
+        for k in [-0.5f32, -0.2, 0.0, 0.3, 0.5] {
+            let mut last = -1.0;
+            for i in 0..=1000 {
+                let c = i as f32 / 1000.0;
+                let v = contrasted(c, k);
+                if k == 0.0 {
+                    assert!((v - c).abs() < 1e-6, "neutro em {c}: {v}");
+                }
+                assert!(v >= last, "{k} desce em {c}");
+                last = v;
+            }
+            // Preto, meio e branco no lugar.
+            assert_eq!((contrasted(0.0, k), contrasted(0.5, k), contrasted(1.0, k)), (0.0, 0.5, 1.0));
+        }
+        // Mais contraste: sombras descem e claros sobem.
+        assert!(contrasted(0.25, 0.3) < 0.25 && contrasted(0.75, 0.3) > 0.75);
     }
 
     #[test]
