@@ -1049,7 +1049,7 @@ fn mapping(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
         app.cfg.save();
         app.apply_pads();
     }
-    ui.tip(check, "Ligado, fora dos jogos o controle mexe o mouse (perfil Desktop), e Guia + os dois gatilhos troca entre Desktop e Base. Desligado, vale o Base em todo lugar, e a troca some. Assistindo outro PC pelo Compartilhar tela, sempre o Base.");
+    ui.tip(check, "Ligado, fora dos jogos o controle mexe o mouse (perfil Desktop), e Guia + os dois gatilhos troca entre Desktop e Base. Desligado, vale o Base onde valeria o Desktop, e a troca some. Assistindo outro PC pelo Compartilhar tela, sempre o Base.");
     r.bottom() + 12.0
 }
 
@@ -1350,6 +1350,14 @@ fn slot_select(ui: &mut Ui, app: &mut App, ids: &[u8], names: &[String], i: usiz
     };
     let menu = format!("pad-radial-run-{i}");
     let mut changed = false;
+    // Programa: o ícone dele ao lado da caixa, como no radial aberto.
+    let at = if cur == PROGRAM {
+        let (name, path) = (&app.cfg.pad_radial_prog[i].0, &app.cfg.pad_radial_prog[i].1);
+        ui.file_icon(path, name, rect(at.x, at.y + (at.h - 22.0) / 2.0, 22.0, 22.0));
+        rect(at.x + 28.0, at.y, at.w - 28.0, at.h)
+    } else {
+        at
+    };
     if ui.select(&format!("pad-radial-{i}"), at, &opts, &mut sel) {
         if sel == pick_at {
             ui.menu(&menu, &[("Da lista de programas", true), ("Escolher arquivo .exe", true)]);

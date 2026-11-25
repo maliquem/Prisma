@@ -136,10 +136,14 @@ pub struct View {
     pub watch: pads::Buttons,
 }
 
-/// O radial está com os controles: aberto, ou fechando com botão ainda apertado. Nada deles vai para o
-/// jogo nem para o perfil.
-pub fn holding() -> bool {
-    !matches!(*STATE.lock().unwrap(), State::Closed)
+/// O radial está com o controle `key`: aberto por ele (ou sem dono), ou fechando com botão ainda
+/// apertado. Nada dele vai para o jogo; os outros jogadores seguem jogando.
+pub fn holding(key: &str) -> bool {
+    match &*STATE.lock().unwrap() {
+        State::Closed => false,
+        State::Open(r) => r.pad.as_deref().is_none_or(|p| p == key),
+        State::Drain => true,
+    }
 }
 
 pub fn view() -> View {

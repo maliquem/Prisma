@@ -507,8 +507,8 @@ impl Runner {
     }
 }
 
-/// O que o Xbox virtual recebe: com o radial do Prisma aberto (ou fechando com botão ainda apertado),
-/// nada; senão, o controle sem o que um atalho do Prisma está usando.
+/// O que o Xbox virtual recebe: com o radial do Prisma aberto por este controle (ou fechando com botão
+/// ainda apertado), nada; senão, o controle sem o que um atalho do Prisma está usando.
 fn to_game(i: Input, s: pads::Buttons, radial: bool) -> Input {
     if radial { Input::default() } else { mask(i, s) }
 }
@@ -723,8 +723,7 @@ fn run() {
             OWN.fetch_or(!crate::stream::pads::xinput_mask() & 0xF, Ordering::Relaxed);
             freed = Instant::now();
         }
-        let radial = super::radial::holding();
-        let list: Vec<(String, Input)> = pads::list().into_iter().map(|p| (to_game(p.input, super::remap::swallowed(&p.key), radial), p.key)).map(|(i, k)| (k, i)).collect();
+        let list: Vec<(String, Input)> = pads::list().into_iter().map(|p| (to_game(p.input, super::remap::swallowed(&p.key), super::radial::holding(&p.key)), p.key)).map(|(i, k)| (k, i)).collect();
         // Só acrescenta: um controle que some por um instante (reconexão, o reinício do HidHide)
         // fica escondido até a ponte parar. Mostrar e esconder de novo a cada sumiço deixava o jogo
         // pegar o físico e reiniciava o controle em laço.

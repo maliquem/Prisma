@@ -316,7 +316,7 @@ fn action_hotkey(n: u8) -> i32 {
         HK_FIND, 0, 0, 0, 0,
     ];
     // Mesma ordem de `remap::MORE`.
-    const MORE: [i32; 7] = [HK_MACRO, HK_SHOT_MON, HK_SHOW, HK_HDR_MENU, HK_SHADER, HK_SHADER_MENU, 0];
+    const MORE: [i32; crate::sys::remap::MORE.len()] = [HK_MACRO, HK_SHOT_MON, HK_SHOW, HK_HDR_MENU, HK_SHADER, HK_SHADER_MENU, 0];
     let m = crate::sys::remap::MACRO_REC;
     if n >= m { MORE.get((n - m) as usize) } else { HK.get(n as usize) }.copied().unwrap_or(0)
 }
@@ -1446,7 +1446,7 @@ impl App {
         }
         for &(n, k) in &c.act_keys {
             // Os de aumentar e diminuir repetem segurando, como os próprios.
-            list.push((HK_ACT + n as i32, k, crate::sys::remap::action_name(n), !matches!(n, 12 | 13 | 15 | 16)));
+            list.push((HK_ACT + n as i32, k, crate::sys::remap::action_name(n), !matches!(n, 15 | 16)));
         }
         list.retain(|e| crate::pages::is_on(c, hk_page(e.0)));
         list
@@ -1527,6 +1527,11 @@ impl App {
     }
 
     /// Atalhos que o Windows recusou (outro programa já tem a combinação).
+    /// Atalhos que valem agora (os de função desligada ficam guardados, mas fora do Windows).
+    pub fn hk_live(&self) -> Vec<i32> {
+        self.hotkey_list().into_iter().map(|e| e.0).collect()
+    }
+
     pub fn hk_taken(&self) -> Vec<i32> {
         hk_to_retry(&self.hotkey_list(), &self.hk_errors).into_iter().map(|e| e.0).collect()
     }

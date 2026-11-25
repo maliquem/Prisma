@@ -105,9 +105,10 @@ fn action_ids(app: &App) -> Vec<u8> {
 fn actions(ui: &mut Ui, app: &mut App, k: Rect) {
     ui.card(k);
     ui.title(rect(k.x + 16.0, k.y + 12.0, k.w - 32.0, 22.0), "Funções do Prisma");
-    ui.c.text_fit(rect(k.x + 16.0, k.y + 38.0, k.w - 32.0, 20.0), "As mesmas do Menu Radial. O atalho que a função já tem na página dela aparece aqui também.", 12.0, MUTED, Align::Left, Weight::Regular);
+    ui.c.text_fit(rect(k.x + 16.0, k.y + 38.0, k.w - 32.0, 20.0), "As mesmas do Menu Radial. O atalho que a função já tem na página dela aparece aqui também (menos o volume, que tem os dele na página Som).", 12.0, MUTED, Align::Left, Weight::Regular);
     let ids = action_ids(app);
     let taken = app.hk_taken();
+    let live = app.hk_live();
     let fw = 200.0f32.min(k.w * 0.3);
     let list = rect(k.x, k.y + 66.0, k.w, k.h - 74.0);
     ui.begin_scroll("act-list", list, ids.len() as f32 * 44.0);
@@ -125,6 +126,9 @@ fn actions(ui: &mut Ui, app: &mut App, k: Rect) {
         }
         if hk.vk != 0 && taken.contains(&id) {
             ui.c.text(rect(at.x, ry + 30.0, fw, 14.0), "Já usada por outro programa", 10.0, WARN, Align::Left, Weight::Regular);
+        } else if hk.vk != 0 && !live.contains(&id) {
+            // Função desligada (Pesquisa desligada, shader sem perfil): o atalho fica guardado, fora do Windows.
+            ui.c.text(rect(at.x, ry + 30.0, fw, 14.0), "Sem efeito agora: veja a página da função", 10.0, WARN, Align::Left, Weight::Regular);
         }
     }
     ui.end_scroll();

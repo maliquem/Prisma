@@ -1829,7 +1829,7 @@ impl Radial {
             }
             let fired = crate::sys::radial::fired();
             // Captura: some na hora, como antes, para o radial não sair na foto.
-            if fired.is_some_and(|a| a <= 5) {
+            if fired.is_some_and(|a| a <= 5 || a == crate::sys::remap::SHOT_MON) {
                 unsafe {
                     let _ = KillTimer(Some(hwnd), 1);
                     let _ = ShowWindow(hwnd, SW_HIDE);

@@ -245,6 +245,8 @@ pub const MORE: [&str; 7] = [
 ];
 /// Ação que liga e desliga o modo Desktop (`set_desktop`).
 pub const DESKTOP_MODE: u8 = 96;
+/// "Foto do monitor do mouse": captura, como 0 a 5 (o radial some antes da foto).
+pub const SHOT_MON: u8 = 91;
 
 /// Nome da ação `n` do Prisma (sem as combinações de som); vazio se não existe.
 pub fn action_name(n: u8) -> &'static str {
@@ -1870,7 +1872,9 @@ struct Run {
 
 /// Perfil que o controle `key` usa: o próprio dele ou, sem um (ou apagado), o do programa.
 fn prof_of(r: &Run, key: &str) -> usize {
-    r.fixed.get(key).and_then(|n| r.profiles.iter().position(|p| p.name == *n)).unwrap_or(r.cur)
+    let i = r.fixed.get(key).and_then(|n| r.profiles.iter().position(|p| p.name == *n)).unwrap_or(r.cur);
+    // O perfil fixo no Desktop e a troca manual para ele também cedem ao Base.
+    no_desktop(&r.profiles, i, desktop_allowed())
 }
 
 /// Perfis próprios de cada controle, vindos da configuração.
@@ -1884,6 +1888,7 @@ pub fn set_fixed(list: &[(String, String)]) {
 /// Troca pedida por um controle (radial ou ligação). Com perfil próprio, troca só o dele e avisa
 /// para gravar; senão, o de todos, até o foco mudar de programa.
 fn pad_switch(r: &mut Run, key: &str, to: usize, acts: &mut Vec<Act>, events: &mut Vec<pads::Event>) {
+    let to = no_desktop(&r.profiles, to, desktop_allowed());
     let name = r.profiles[to].name.clone();
     if r.fixed.contains_key(key) {
         r.fixed.insert(key.to_string(), name.clone());
@@ -2686,7 +2691,8 @@ fn focus_tick(now: Instant) {
     if (h.0 as isize, full) != (last.1, last.2) {
         (last.1, last.2) = (h.0 as isize, full);
         drop(last);
-        WATCHING.store(super::procs::class_of(h) == "PrismaAssistir", Ordering::Relaxed);
+        // O menu do assistir (PrismaAssistirMenu) também toma o foco.
+        WATCHING.store(super::procs::class_of(h).starts_with("PrismaAssistir"), Ordering::Relaxed);
         on_focus(super::procs::window_pid(h), full);
     }
 }
