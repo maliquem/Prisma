@@ -51,7 +51,8 @@ fn vpn_addrs() -> Arc<Vec<(IpAddr, u8, &'static str)>> {
         crate::sys::nets::list()
             .into_iter()
             .filter_map(|n| Some((vendor(&format!("{} {}", n.name, n.desc))?, n.addrs)))
-            .flat_map(|(v, a)| a.into_iter().map(move |(ip, bits)| (ip, bits, v)))
+            // O link-local (fe80::/64, 169.254/16) toda placa tem: casaria com a rede local.
+            .flat_map(|(v, a)| a.into_iter().filter(|(ip, _)| !link_local(*ip)).map(move |(ip, bits)| (ip, bits, v)))
             .collect(),
     );
     *c = Some((Instant::now(), v.clone()));
@@ -70,6 +71,13 @@ fn in_net(ip: IpAddr, net: IpAddr, bits: u8) -> bool {
             u128::from(a) & m == u128::from(b) & m
         }
         _ => false,
+    }
+}
+
+fn link_local(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(a) => a.is_link_local(),
+        IpAddr::V6(a) => a.segments()[0] & 0xffc0 == 0xfe80,
     }
 }
 
@@ -213,12 +221,19 @@ pub fn set_client_deny(id: &str, deny: &str) -> std::io::Result<()> {
 #[derive(Debug)]
 pub struct Picker {
     /// As redes fora de quem assiste (uma conexão por endpoint). None: o host, que vê pelo aparelho.
-    deny: Option<Vec<String>>,
+    deny: Option<Mutex<Vec<String>>>,
 }
 
 impl Picker {
     pub fn viewer(deny: Vec<String>) -> Arc<Picker> {
-        Arc::new(Picker { deny: Some(deny) })
+        Arc::new(Picker { deny: Some(Mutex::new(deny)) })
+    }
+
+    /// Troca as redes fora de quem assiste (as dele somadas às que o host não permite).
+    pub fn set_deny(&self, v: Vec<String>) {
+        if let Some(d) = &self.deny {
+            *d.lock().unwrap() = v;
+        }
     }
 
     pub fn host() -> Arc<Picker> {
@@ -270,7 +285,7 @@ impl PathSelector for Picker {
         // shortcut: no host, o aparelho sai do caminho pelo relé (quem assiste chega por ele); sem
         // relé, valem as de todos, e a vigia de `guard` fecha se a do aparelho for diferente.
         let deny = match &self.deny {
-            Some(d) => d.clone(),
+            Some(d) => d.lock().unwrap().clone(),
             None => match who {
                 Some(id) => host_deny(&id),
                 None => parse_deny(&super::Opts::load().nets_off),
@@ -401,6 +416,7 @@ pub fn network_name(key: &str) -> String {
     match key {
         DIRECT => crate::i18n::tr("Direto (rede local e internet)").into_owned(),
         RELAY => crate::i18n::tr("Relé público da n0").into_owned(),
+        v if v.ends_with("VPN") => v.to_string(),
         v => format!("{} {v}", crate::i18n::tr("VPN")),
     }
 }
@@ -455,6 +471,8 @@ mod tests {
         assert_eq!(vpn_in(ip("192.168.0.9"), None, &vpns), None);
         assert_eq!(vendor("Radmin VPN Radmin VPN Ethernet Adapter"), Some("Radmin VPN"));
         assert_eq!(vendor("Ethernet Realtek PCIe"), None);
+        assert!(link_local(ip("fe80::1")) && link_local(ip("169.254.3.4")) && !link_local(ip("fd80::1")));
+        assert_eq!(network_name("Radmin VPN"), "Radmin VPN");
     }
 
     #[test]

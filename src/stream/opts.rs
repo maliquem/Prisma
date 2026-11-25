@@ -99,7 +99,7 @@ pub struct Opts {
     pub host_first: bool,
     /// Recusa conexões enquanto este PC assiste a outro.
     pub no_chain: bool,
-    /// Clock da placa NVIDIA travado no mínimo do clock base enquanto alguém assiste (vale para todos).
+    /// GPU e memória da placa NVIDIA travadas no clock mais alto enquanto alguém assiste (vale para todos).
     pub gpu_max: bool,
     /// Redes que quem assiste não pode usar, separadas por vírgula (veja `route`): `direto`, o
     /// nome da VPN ou `rele`. Vazio: todas.
@@ -120,6 +120,11 @@ pub struct Opts {
 
 /// `Opts::sound_in`: a entrada padrão do Windows.
 pub const MIC_DEFAULT: &str = "padrao";
+
+/// O arquivo próprio só tem as redes do aparelho (não é configuração própria na aba Host).
+fn nets_only(t: &str) -> bool {
+    t.lines().any(|l| l.starts_with("redes_fora=")) && t.lines().all(|l| l.trim().is_empty() || l.starts_with("redes_fora="))
+}
 
 /// As opções do host que cada aparelho que assiste pode ter diferentes (imagem, som, o mouse e o
 /// teclado e as redes que pode usar). Nome, pessoas, porta, controles e atalhos valem para todos.
@@ -276,9 +281,9 @@ sem_cadeia={}\nporta={}\njanela={}:{}\nupnp={}\natalho_emergencia={}\ngpu={}\nso
         dir().join("opcoes-cliente").join(format!("{id}.txt"))
     }
 
-    /// O aparelho tem configuração própria?
+    /// O aparelho tem configuração própria? Só as redes (da aba Rede) não contam.
     pub fn has_own(id: &str) -> bool {
-        !id.is_empty() && Self::client_path(id).exists()
+        !id.is_empty() && std::fs::read_to_string(Self::client_path(id)).is_ok_and(|t| !nets_only(&t))
     }
 
     /// As opções que valem para um aparelho: as de todos, com as dele por cima (só as de
@@ -344,10 +349,16 @@ sem_cadeia={}\nporta={}\njanela={}:{}\nupnp={}\natalho_emergencia={}\ngpu={}\nso
             .collect()
     }
 
-    /// Tira a configuração própria: o aparelho volta a seguir a de todos.
+    /// Tira a configuração própria: o aparelho volta a seguir a de todos, menos nas redes, que são
+    /// da aba Rede.
     #[cfg_attr(not(feature = "stream"), allow(dead_code))]
     pub fn drop_own(id: &str) -> std::io::Result<()> {
-        match std::fs::remove_file(Self::client_path(id)) {
+        let p = Self::client_path(id);
+        let nets: String = std::fs::read_to_string(&p).unwrap_or_default().lines().filter(|l| l.starts_with("redes_fora=")).map(|l| format!("{l}\n")).collect();
+        if !nets.is_empty() {
+            return crate::config::write_safe(&p, nets);
+        }
+        match std::fs::remove_file(p) {
             Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e),
             _ => Ok(()),
         }
@@ -638,6 +649,7 @@ mod tests {
         let no_relay = Opts { nets_off: "rele".into(), ..all.clone() };
         assert_eq!(no_relay.own_text(&all), "redes_fora=rele\n");
         assert_eq!(Opts::parse(&Opts::merge(&all.text(), &no_relay.own_text(&all))).nets_off, "rele");
+        assert!(nets_only("redes_fora=rele\n") && !nets_only("") && !nets_only("redes_fora=rele\ncodec=av1\n"));
     }
 
     #[test]

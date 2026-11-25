@@ -1626,7 +1626,7 @@ fn net_boxes(ui: &mut Ui, app: &mut App, st: &mut State, o: &mut Opts, x: f32, y
             app.toast.info("Não deu para salvar. Com o serviço, abra o Prisma como administrador.");
         }
     }
-    let note = "Com várias marcadas, o Prisma usa a melhor; o relé só quando nenhuma direta chega. Desmarcada, a rede não é usada: se só ela chegar, a conexão fecha. Para quem assiste a este PC vale na hora; para este PC assistindo a outro, na próxima conexão.";
+    let note = "Com várias marcadas, o Prisma usa a melhor; o relé só quando nenhuma direta chega. Desmarcada, a rede não é usada: se só ela chegar, a conexão fecha. Quem assiste também evita as redes que o host desmarcou para ele. Uma conexão aberta numa rede que você desmarcar fecha; a próxima usa as redes novas.";
     let nh = crate::ui::gfx::measure(&tr(note), 12.0, Weight::Regular, Some(w)).1.ceil();
     ui.c.text_wrap(rect(x, y + 2.0, w, nh), note, 12.0, MUTED, Weight::Regular);
     // A lista por último: aberta, ela fica por cima das caixas.
