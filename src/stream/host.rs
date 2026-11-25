@@ -272,9 +272,10 @@ impl Drop for HdrOff {
     }
 }
 
-/// Opção GPU em desempenho máximo: enquanto alguém assiste, a NVML trava o clock da placa NVIDIA
-/// com o mínimo no clock base e o máximo livre (como `nvidia-smi -lgc tdp,unlimited`). Vale na hora,
-/// sem reabrir nada; precisa do serviço ou do Prisma como administrador. A marca guarda o processo,
+/// Opção GPU em desempenho máximo: enquanto alguém assiste, a NVML trava o clock da GPU e o da
+/// memória da placa NVIDIA no máximo, em MHz (como `nvidia-smi -lgc 3105,3105 -lmc 10501,10501`;
+/// o `-lgc tdp,unlimited` de antes a NVML aceitava e a placa ignorava, parada em P5/P8). Vale na
+/// hora, sem reabrir nada; precisa do serviço ou do Prisma como administrador. A marca guarda o processo,
 /// para destravar mesmo se o Prisma cair (veja [`restore_hdr`]).
 // shortcut: só a placa 0 da NVML, e um travamento feito antes por fora é desfeito no fim; ler o de antes se alguém usar os dois.
 struct GpuMax(bool);
@@ -287,7 +288,7 @@ fn gpu_lock_mark() -> std::path::PathBuf {
 fn gpu_lock_note(code: i32) -> String {
     let why = match code {
         -1 => "sem NVML: sem placa ou driver NVIDIA",
-        2 => "INVALID_ARGUMENT: driver antigo, sem o limite pelo clock base",
+        2 => "INVALID_ARGUMENT: a placa não aceita esse clock",
         3 => "NOT_SUPPORTED: esta placa ou este driver não deixa travar o clock",
         4 => "NO_PERMISSION: precisa do serviço do Prisma ou do Prisma como administrador",
         _ => "erro da NVML",
@@ -355,17 +356,41 @@ fn gpu_lock() -> bool {
         eprintln!("GPU em desempenho máximo: não deu para gravar a marca de volta; o clock fica livre");
         return false;
     }
-    match nv.lock_base_clock() {
-        0 => {
-            eprintln!("GPU em desempenho máximo: clock da {} travado no mínimo do clock base enquanto alguém assiste", nv.name);
+    let (gpu, mem) = nv.max_clocks();
+    match nv.lock_max_clocks(gpu, mem) {
+        (0, m) => {
+            let mem_note = if m == 0 { format!("memória em {mem} MHz") } else { format!("memória livre: {}", gpu_lock_note(m)) };
+            eprintln!("GPU em desempenho máximo: clock da {} travado em {gpu} MHz, {mem_note}, enquanto alguém assiste", nv.name);
+            drop(nv);
+            // A NVML já disse "certo" e a placa não subiu: confere de verdade depois de uns segundos.
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_secs(4));
+                let mine = std::fs::read_to_string(gpu_lock_mark()).is_ok_and(|t| t.trim() == std::process::id().to_string());
+                let Some(nv) = crate::sys::nvml::Nvml::load().filter(|_| mine) else { return };
+                let r = nv.read();
+                if gpu_low(r.mhz, gpu) {
+                    eprintln!("GPU em desempenho máximo: a placa aceitou a trava, mas o clock está em {} MHz de {gpu} (memória {} MHz)", r.mhz, r.mem_mhz);
+                    super::notice("GPU em desempenho máximo: a placa aceitou, mas o clock ficou em {} MHz", &r.mhz.to_string());
+                }
+            });
             true
         }
-        code => {
+        (code, _) => {
             let _ = std::fs::remove_file(gpu_lock_mark());
             eprintln!("GPU em desempenho máximo: a placa recusou travar o clock ({}); o clock fica livre", gpu_lock_note(code));
+            if code == 4 {
+                super::notice("GPU em desempenho máximo não ligou: precisa do serviço do Prisma ou do Prisma como administrador", "");
+            } else {
+                super::notice("GPU em desempenho máximo não ligou: a placa ou o driver recusou travar o clock (código {})", &code.to_string());
+            }
             false
         }
     }
+}
+
+/// O clock lido ficou bem abaixo do travado (a placa não cumpriu a trava)?
+fn gpu_low(now: u32, target: u32) -> bool {
+    target > 0 && now < target / 2
 }
 
 /// Destrava e apaga a marca. Sem conseguir, a marca fica para a próxima abertura.
@@ -2440,6 +2465,8 @@ mod tests {
         assert_eq!(gpu_mark_parse("prisma.exe\n-\n42\n"), Some(("prisma.exe".into(), None, Some(42))));
         // A recusa da NVML diz o porquê no registro.
         assert!(gpu_lock_note(4).contains("NO_PERMISSION") && gpu_lock_note(3).contains("NOT_SUPPORTED"));
+        // A 4070 SUPER parada em P5 com a trava aceita: 1290 de 3105 é "não subiu"; 2900 é a trava valendo.
+        assert!(gpu_low(1290, 3105) && gpu_low(210, 3105) && !gpu_low(2900, 3105) && !gpu_low(0, 0));
         // Sem a opção, a sala não mexe na placa.
         let mut g = GpuMax(false);
         g.follow(false);

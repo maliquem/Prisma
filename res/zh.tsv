@@ -3230,3 +3230,28 @@ Menu completo, com os nomes	完整菜单，显示名称
 Menu compacto, só com ícones	紧凑菜单，仅图标
 Troca automática ligada. Clique para deixar o plano fixo.	自动切换已开启。点击以固定电源计划。
 Troca automática desligada. Clique para ligar.	自动切换已关闭。点击以开启。
+pela VPN	通过 VPN
+direto na rede local	在局域网内直连
+direto pela internet por IPv6	通过 IPv6 经互联网直连
+direto pela internet	经互联网直连
+pelo relé da n0	通过 n0 中继
+procurando caminho	正在寻找路径
+EUA leste	美国东部
+EUA oeste	美国西部
+Europa	欧洲
+Ásia	亚洲
+Direto (rede local e internet)	直连（局域网和互联网）
+Relé público da n0	n0 公共中继
+VPN	VPN
+Quem assiste a este PC: todos os aparelhos	观看此电脑的人：所有设备
+Quem assiste a este PC:	观看此电脑的人：
+Este PC assistindo a	此电脑正在观看
+Com várias marcadas, o Prisma usa a melhor; o relé só quando nenhuma direta chega. Desmarcada, a rede não é usada: se só ela chegar, a conexão fecha. Para quem assiste a este PC vale na hora; para este PC assistindo a outro, na próxima conexão.	勾选多个时，Prisma 使用最佳的一个；只有没有直连可用时才用中继。未勾选的网络不会被使用：如果只有它可用，连接会关闭。对观看此电脑的人立即生效；对此电脑观看其他设备，则在下次连接时生效。
+Conexão de «{}» recusada: nenhuma rede marcada para ele chegou aqui	来自「{}」的连接被拒绝：没有为其勾选的网络能到达这里
+Conexão com «{}» fechada: o único caminho dela era por uma rede desmarcada	与「{}」的连接已关闭：它唯一的路径经过未勾选的网络
+GPU em desempenho máximo enquanto compartilha (sem efeito: precisa do serviço do Prisma ou do Prisma como administrador)	共享期间 GPU 以最高性能运行（无效：需要 Prisma 服务或以管理员身份运行 Prisma）
+GPU em desempenho máximo não ligou: a placa ou o driver recusou travar o clock (código {})	GPU 最高性能未能开启：显卡或驱动拒绝锁定时钟频率（代码 {}）
+GPU em desempenho máximo não ligou: precisa do serviço do Prisma ou do Prisma como administrador	GPU 最高性能未能开启：需要 Prisma 服务或以管理员身份运行 Prisma
+GPU em desempenho máximo: a placa aceitou, mas o clock ficou em {} MHz	GPU 最高性能：显卡已接受，但时钟频率仍为 {} MHz
+Com prioridade, quem assiste para por 1 segundo quando alguém mexe no mouse ou no teclado daqui. Uma pessoa por vez: a vez passa depois de 2 segundos sem mexer. O Windows só deixa tirar um programa de chamada (Discord, Teams, Zoom, WhatsApp, Skype, Telegram, Slack, Signal), e só da saída padrão: sai o que estiver tocando. Uma saída escolhida manda o que toca nela. GPU em desempenho máximo: enquanto alguém assiste, a placa NVIDIA fica no clock máximo da GPU e da memória, e fica livre de novo no fim; precisa do serviço ou do Prisma como administrador, e se a placa não obedecer aparece um aviso. As mudanças valem na hora; as da imagem recomeçam o vídeo por um instante.	开启优先时，每当这里有人移动鼠标或打字，观看方会暂停 1 秒。一次一人：2 秒无输入后轮换。Windows 只允许排除一个通话应用（Discord、Teams、Zoom、WhatsApp、Skype、Telegram、Slack、Signal），且只能从默认输出中排除：正在发声的会被排除。选定的输出会发送其上播放的内容。GPU 最高性能：有人观看时，NVIDIA 显卡保持 GPU 和显存的最高时钟频率，结束后恢复；需要服务或以管理员身份运行 Prisma，如果显卡不听从，会出现警告。更改会立即生效；画面相关的更改会让视频短暂重新开始。
+Configuração própria: vale quando este aparelho conecta. Com mais de uma pessoa ao mesmo tempo, vale a de quem conectou primeiro. Nome, pessoas, porta, controles e atalhos são os de todos.	单独设置：此设备连接时生效。多人同时连接时，以最先连接者的设置为准。名称、人数、端口、手柄和快捷键对所有设备通用。
