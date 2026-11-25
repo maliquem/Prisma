@@ -1,6 +1,7 @@
 //! Menu do HDR do Prisma por cima do jogo: o atalho abre, os ajustes vão ao vivo pela memória
 //! compartilhada e, ao fechar com mudanças, ele pergunta se salva no perfil do jogo. O jogo segue
-//! com o foco: as teclas do menu chegam como atalhos registrados só enquanto ele está aberto.
+//! com o foco: as teclas do menu chegam como atalhos registrados só enquanto ele está aberto, e o
+//! controle navega por `nav::menu_feed` (direcional como as setas, A como Enter, B como Esc).
 //! Analisar mede por uns segundos o que o jogo entrega e refaz o Automático com isso.
 
 use std::time::{Duration, Instant};
@@ -57,9 +58,15 @@ pub struct HdrMenu {
     /// O que a última análise mediu, ou por que não mediu.
     note: String,
     asking: bool,
-    /// Linha do ajuste que as setas mudam.
+    /// Linha do ajuste que as setas mudam; a seguinte à do último ajuste é a dos botões.
     row: usize,
+    /// Na linha dos botões, o escolhido (`BUTTONS`); `press` o aperta no próximo desenho.
+    col: usize,
+    press: bool,
 }
+
+/// Botões da linha de baixo: Voltar ao automático, Analisar (só com perfil do jogo) e Fechar.
+const BUTTONS: usize = 3;
 
 unsafe extern "system" fn menu_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT {
     match m {
@@ -108,6 +115,8 @@ impl HdrMenu {
             note: String::new(),
             asking: false,
             row: 0,
+            col: BUTTONS - 1,
+            press: false,
         }
     }
 
@@ -129,7 +138,7 @@ impl HdrMenu {
         self.scanning = None;
         self.note = game.and_then(|g| g.1.scan).map_or(String::new(), |s| crate::pages::hdr::scan_text(&s));
         self.asking = false;
-        self.row = 0;
+        (self.row, self.col, self.press) = (0, BUTTONS - 1, false);
         self.ui = UiState::default();
         self.redraw();
         let hwnd = self.surface.hwnd;
@@ -142,6 +151,7 @@ impl HdrMenu {
             }
             SetTimer(Some(hwnd), TIMER_GAME, 500, None);
         }
+        crate::sys::nav::set_menu(true);
     }
 
     fn hide(&mut self) {
@@ -149,6 +159,7 @@ impl HdrMenu {
             l.scan_set(0);
         }
         self.live = None;
+        crate::sys::nav::set_menu(false);
         let hwnd = self.surface.hwnd;
         unsafe {
             for i in 1..=KEYS.len() as i32 {
@@ -217,6 +228,15 @@ impl HdrMenu {
         let (x, y) = (mon.left + (24.0 * scale) as i32, mon.top + (24.0 * scale) as i32);
         let (mut act, mut now, mut moved, mut to_auto, mut scan) = (None, self.now, false, false, false);
         let (asking, base, auto, can_save, row) = (self.asking, self.base, self.auto, self.game.is_some(), self.row);
+        let on_buttons = row == crate::pages::hdr::KNOBS.len();
+        let (col, press) = (on_buttons.then_some(self.col), std::mem::take(&mut self.press));
+        // O botão escolhido pelas setas ou pelo controle: contorno, e Enter (A) aperta.
+        let pick = |u: &mut Ui, i: usize, r: Rect| {
+            if col == Some(i) {
+                u.c.round(rect(r.x - 3.0, r.y - 3.0, r.w + 6.0, r.h + 6.0), 10.0, ACCENT);
+            }
+            press && col == Some(i)
+        };
         let title = format!("{} · {}", crate::i18n::tr("HDR do Prisma"), self.name);
         let note = match (self.scanning, &self.live) {
             (Some((gen, _)), Some(l)) => format!("Analisando: {} quadros", l.scan(gen).map_or(0, |s| s.frames)),
@@ -241,18 +261,23 @@ impl HdrMenu {
                 u.c.text(rect(PAD, 12.0, W - 2.0 * PAD - 110.0, 26.0), &title, 14.0, WHITE, Align::Left, Weight::Semibold);
                 let (way, color) = if auto { ("Automático", ACCENT) } else { ("Manual", TEXT2) };
                 u.c.text(rect(W - PAD - 110.0, 12.0, 110.0, 26.0), way, 13.0, color, Align::Right, Weight::Regular);
-                u.c.round(rect(PAD - 8.0, 54.0 + row as f32 * 48.0 - 6.0, W - 2.0 * PAD + 16.0, 42.0), 8.0, rgb(0x262a33));
+                if !on_buttons {
+                    u.c.round(rect(PAD - 8.0, 54.0 + row as f32 * 48.0 - 6.0, W - 2.0 * PAD + 16.0, 42.0), 8.0, rgb(0x262a33));
+                }
                 moved = crate::pages::hdr::knobs(&mut u, "hm-k", rect(PAD, 54.0, W - 2.0 * PAD, KNOBS_H), 1, &mut now, auto.then_some(base));
                 let by = h - PAD - 34.0;
                 u.c.text(rect(PAD, by - 30.0, W - 2.0 * PAD, 24.0), &note, 12.0, TEXT2, Align::Left, Weight::Regular);
-                if u.button("hm-cal", rect(PAD, by, 180.0, 34.0), "Voltar ao automático", false) {
+                let r = rect(PAD, by, 180.0, 34.0);
+                if pick(&mut u, 0, r) | u.button("hm-cal", r, "Voltar ao automático", false) {
                     now = Hdr { on: now.on, ..base };
                     (moved, to_auto) = (true, true);
                 }
-                if can_save && u.button("hm-scan", rect(PAD + 190.0, by, 120.0, 34.0), if scanning { "Analisando" } else { "Analisar" }, false) {
+                let r = rect(PAD + 190.0, by, 120.0, 34.0);
+                if can_save && (pick(&mut u, 1, r) | u.button("hm-scan", r, if scanning { "Analisando" } else { "Analisar" }, false)) {
                     scan = !scanning;
                 }
-                if u.button("hm-close", rect(W - PAD - 110.0, by, 110.0, 34.0), "Fechar", true) {
+                let r = rect(W - PAD - 110.0, by, 110.0, 34.0);
+                if pick(&mut u, 2, r) | u.button("hm-close", r, "Fechar", true) {
                     act = Some(Act::Close);
                 }
             }
@@ -351,21 +376,45 @@ impl crate::app::App {
         }
     }
 
-    /// Esc e Enter fecham; na pergunta, Enter salva e Esc descarta. Setas: ajuste e valor.
+    /// Esc fecha; Enter fecha ou, na linha dos botões, aperta o escolhido. Na pergunta, Enter salva e
+    /// Esc descarta. Setas: para cima e para baixo a linha (ajustes e, por último, os botões), para os
+    /// lados o valor ou o botão.
     fn hdr_menu_keydown(&mut self, k: VIRTUAL_KEY) {
         let m = &mut self.hdr_menu;
         let n = crate::pages::hdr::KNOBS.len();
+        // Sem perfil do jogo não há Analisar.
+        let scan = m.game.is_some();
         match (k, m.asking) {
             (VK_RETURN, true) => return self.hdr_menu_act(Act::Save),
             (VK_ESCAPE, true) => return self.hdr_menu_act(Act::Discard),
+            (VK_RETURN, false) if m.row == n => m.press = true,
             (VK_ESCAPE | VK_RETURN, false) => return self.hdr_menu_close(),
-            (VK_UP, false) => m.row = (m.row + n - 1) % n,
-            (VK_DOWN, false) => m.row = (m.row + 1) % n,
+            (VK_UP, false) => m.row = (m.row + n) % (n + 1),
+            (VK_DOWN, false) => m.row = (m.row + 1) % (n + 1),
+            (VK_LEFT, false) if m.row == n => m.col = if m.col == BUTTONS - 1 && scan { 1 } else { 0 },
+            (VK_RIGHT, false) if m.row == n => m.col = if m.col == 0 && scan { 1 } else { BUTTONS - 1 },
             (VK_LEFT, false) => m.step(-1.0),
             (VK_RIGHT, false) => m.step(1.0),
             _ => return,
         }
-        m.redraw();
+        if let Some(act) = m.redraw() {
+            self.hdr_menu_act(act);
+        }
+    }
+
+    /// O controle no menu: o direcional faz as setas, A o Enter e B o Esc.
+    pub(crate) fn hdr_menu_pad(&mut self, c: crate::sys::nav::Cmd) {
+        use crate::sys::nav::Cmd;
+        if !self.hdr_menu.is_open() {
+            return;
+        }
+        let k = match c {
+            Cmd::Move(d) => [VK_LEFT, VK_UP, VK_RIGHT, VK_DOWN][d as usize & 3],
+            Cmd::Ok => VK_RETURN,
+            Cmd::Back => VK_ESCAPE,
+            _ => return,
+        };
+        self.hdr_menu_keydown(k);
     }
 
     fn hdr_menu_act(&mut self, act: Act) {

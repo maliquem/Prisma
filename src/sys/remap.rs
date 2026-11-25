@@ -2322,8 +2322,8 @@ pub fn feed(key: &str, inp: &Input, arrived: Instant) {
             }
         }
     }
-    // Teclado aberto: o controle digita nele, mesmo com o mapeamento desligado.
-    if super::osk::feed(key, inp, arrived) || super::radial::feed(key, inp, arrived) {
+    // Teclado aberto: o controle digita nele, mesmo com o mapeamento desligado. O mesmo com o menu do HDR.
+    if super::osk::feed(key, inp, arrived) || super::radial::feed(key, inp, arrived) || super::nav::menu_feed(key, inp, arrived) {
         return;
     }
     // Prisma em foco: o controle navega por ele.

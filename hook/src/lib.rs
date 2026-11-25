@@ -45,7 +45,9 @@ pub(crate) struct Shared {
     state: AtomicU32,
     /// Milésimos de FPS. Zero desliga.
     fps_milli: AtomicU32,
-    pad: u32,
+    /// Contraste da curva HDR (bits de f32): 0 é a imagem de sempre. Ocupa o antigo enchimento antes de
+    /// `beat`, então a DLL e o Prisma de versões diferentes seguem com o mesmo formato (o velho lê 0).
+    pub hdr_contrast: AtomicU32,
     beat: AtomicU64,
     presents: AtomicU64,
     waits: AtomicU64,

@@ -3895,6 +3895,10 @@ impl App {
                     self.pad_nav(c);
                     continue;
                 }
+                Event::Menu(c) => {
+                    self.hdr_menu_pad(c);
+                    continue;
+                }
                 Event::PadProfile { key, name } => {
                     if let Some(e) = self.cfg.pad_fixed.iter_mut().find(|e| e.0 == key) {
                         e.1 = name.clone();

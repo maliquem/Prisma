@@ -331,8 +331,9 @@ fn saved_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen, list: &[HdrProfil
 const PRISMA_H: f32 = 394.0;
 /// Linha do HDR próprio do jogo.
 const NATIVE_ROW: f32 = 44.0;
-/// Ajustes ao vivo: nome, mínimo e máximo.
-pub const KNOBS: [(&str, f32, f32); 7] = [("Pico", 200.0, 4000.0), ("Paper white", 80.0, 400.0), ("Gama", 1.8, 2.6), ("Saturação", 0.5, 1.5), ("Realce dos claros", 0.0, 2.0), ("Preto", 0.0, 1.0), ("Brilho da interface", 0.0, 400.0)];
+/// Ajustes ao vivo: nome, mínimo e máximo. A posição é o número do ajuste fino gravado (`HdrGame::tune`):
+/// ajuste novo entra no fim.
+pub const KNOBS: [(&str, f32, f32); 8] = [("Pico", 200.0, 4000.0), ("Paper white", 80.0, 400.0), ("Gama", 1.8, 2.6), ("Saturação", 0.5, 1.5), ("Realce dos claros", 0.0, 2.0), ("Preto", 0.0, 1.0), ("Brilho da interface", 0.0, 400.0), ("Contraste", -0.5, 0.5)];
 
 thread_local!(static PICK: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) });
 
@@ -363,7 +364,8 @@ pub(crate) fn knob(h: &mut Hdr, i: usize) -> &mut f32 {
         3 => &mut h.sat,
         4 => &mut h.boost,
         5 => &mut h.black,
-        _ => &mut h.ui,
+        6 => &mut h.ui,
+        _ => &mut h.contrast,
     }
 }
 
@@ -373,7 +375,7 @@ fn delta_text(i: usize, d: f32) -> String {
     let v = match i {
         0 | 1 | 6 => format!("{a:.0}"),
         2 => format!("{a:.2}"),
-        3 => format!("{:.0}%", a * 100.0),
+        3 | 7 => format!("{:.0}%", a * 100.0),
         4 => format!("{a:.1}x"),
         _ => format!("{a:.2}"),
     };
@@ -400,6 +402,7 @@ fn knob_text(i: usize, v: f32) -> String {
         3 => format!("{:.0}%", v * 100.0),
         4 => format!("{v:.1}x"),
         5 => format!("{v:.2} nits"),
+        7 => format!("{:+.0}%", v * 100.0),
         // Abaixo de 1 nit a interface fica junto com a cena.
         _ if v < 1.0 => crate::i18n::tr("Junto").into_owned(),
         _ => format!("{v:.0} nits"),
@@ -626,7 +629,7 @@ fn games_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen) {
     }
     if let Some(i) = reset {
         let g = &mut app.cfg.hdr_games[i];
-        (g.prisma, g.tune) = (None, [0.0; 7]);
+        (g.prisma, g.tune) = (None, [0.0; KNOBS.len()]);
         app.cfg.save();
     }
     if let Some((i, n)) = mark {
