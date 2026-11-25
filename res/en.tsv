@@ -3249,3 +3249,70 @@ Combinações de teclas que abrem programas e chamam as funções do Prisma de q
 As mesmas do Menu Radial. O atalho que a função já tem na página dela aparece aqui também (menos o volume, que tem os dele na página Som).	The same as the Radial Menu. The shortcut a function already has on its own page shows up here too (except volume, which has its own on the Sound page).
 Sem efeito agora: veja a página da função	Inactive: see the function's page
 Contraste	Contrast
+A letra do Windows não muda.	The Windows letter doesn't change.
+A letra {}	The letter {}
+Analisar só lê o disco. Reparar mexe nele: leia os riscos antes.	Analyze only reads the disk. Repair changes it: read the risks first.
+Analisar {}	Analyze {}
+Apagar a partição {}	Delete partition {}
+Apagar partição…	Delete partition…
+Criar partição em {}	Create partition on {}
+Criar partição…	Create partition…
+Digite o tamanho em GB, só com números.	Enter the size in GB, numbers only.
+Diminuir libera espaço para outra partição; aumentar usa o espaço livre logo depois dela. O Windows não diminui além do que está em uso. Faça uma cópia do que importa antes.	Shrinking frees space for another partition; extending uses the free space right after it. Windows won't shrink below what is in use. Back up what matters first.
+Disco do Windows: formatar e apagar ficam bloqueados.	Windows disk: format and delete are blocked.
+Em GB	In GB
+Escolha outra letra.	Choose another letter.
+Este disco não tem volume com letra.	This disk has no volume with a letter.
+Formatar {}	Format {}
+Formatar	Format
+Formatar…	Format…
+Formatação rápida (sem ela, o Windows lê o disco todo e demora)	Quick format (without it, Windows reads the whole disk and it takes long)
+Letra de volume inválida.	Invalid volume letter.
+Limpeza feita, sem erros.	Cleanup done, no errors.
+Nenhum problema encontrado.	No problems found.
+No volume do Windows, o reparo roda na próxima reinicialização. Veja abaixo o que o CHKDSK disse.	On the Windows volume, the repair runs at the next restart. See below what CHKDSK said.
+Nova letra	New letter
+Novo tamanho (GB)	New size (GB)
+O CHKDSK achou problemas ou não conseguiu ler o volume. Veja abaixo; Reparar corrige.	CHKDSK found problems or couldn't read the volume. See below; Repair fixes them.
+O Prisma está nesse volume: ele e as configurações dele podem parar de funcionar.	Prisma is on this volume: it and its settings may stop working.
+O Windows aceita de {} a {}.	Windows accepts from {} to {}.
+O Windows não conseguiu. O motivo está abaixo.	Windows couldn't do it. The reason is below.
+O Windows não deu a permissão de administrador.	Windows didn't grant administrator permission.
+O reparo não terminou agora. Veja abaixo o que o CHKDSK disse.	The repair didn't finish now. See below what CHKDSK said.
+Para confirmar, digite	To confirm, type
+Procurar setores ruins (/r): bem mais lento	Look for bad sectors (/r): much slower
+Programas com arquivos abertos nesse volume perdem o que não foi salvo.	Programs with files open on this volume lose what wasn't saved.
+Programas instalados, atalhos e bibliotecas de jogos que usam {}: param de achar os arquivos até a letra voltar.	Installed programs, shortcuts and game libraries that use {}: stop finding their files until the letter is back.
+Pronto.	Done.
+Redimensionar {}	Resize {}
+Redimensionar	Resize
+Redimensionar…	Resize…
+Reparar {}	Repair {}
+Reparar…	Repair…
+Riscos do reparo:	Repair risks:
+Rodando há {}. Num HD grande pode levar horas; não desligue o PC no meio.	Running for {}. On a large hard drive it can take hours; don't turn off the PC midway.
+Rótulo longo demais: até 11 letras no FAT32.	Label too long: up to 11 characters on FAT32.
+Rótulo longo demais: até 11 letras no exFAT.	Label too long: up to 11 characters on exFAT.
+Rótulo longo demais: até 32 letras no NTFS.	Label too long: up to 32 characters on NTFS.
+Rótulo	Label
+Sem letra	No letter
+Sem rótulo	No label
+Sistema de arquivos desconhecido.	Unknown file system.
+Sistema de arquivos	File system
+Tamanho (GB)	Size (GB)
+Tamanho inválido.	Invalid size.
+Todo o espaço livre	All the free space
+Trocar a letra de {}	Change the letter of {}
+Trocar letra…	Change letter…
+Trocar	Change
+Tudo em {} será apagado: {} usados. Isso não tem volta.	Everything on {} will be erased: {} used. This can't be undone.
+Usa o espaço livre do disco, sem mexer nas partições que já existem. Disco novo, sem partições, é preparado como GPT.	Uses the disk's free space without touching existing partitions. A new disk with no partitions is set up as GPT.
+Verificar e reparar (CHKDSK)	Check and repair (CHKDSK)
+Volume	Volume
+• Arquivos em partes corrompidas do disco podem ser apagados ou ir para a pasta FOUND.000.	• Files in corrupted parts of the disk may be deleted or go to the FOUND.000 folder.
+• No volume do Windows, o reparo só roda na próxima reinicialização.	• On the Windows volume, the repair only runs at the next restart.
+• Num HD grande pode levar horas. Não desligue o PC no meio.	• On a large hard drive it can take hours. Don't turn off the PC midway.
+• O volume é desmontado: programas com arquivos abertos nele perdem o que não foi salvo.	• The volume is unmounted: programs with files open on it lose what wasn't saved.
+O rótulo não aceita " * / : < > ? \ |	The label can't contain " * / : < > ? \ |
+O rótulo FAT32 não aceita + , . ; = [ ]	A FAT32 label can't contain + , . ; = [ ]
+Os discos mudaram desde que a lista foi lida. Confira e tente de novo.	The disks changed since the list was read. Check and try again.

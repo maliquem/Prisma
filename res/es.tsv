@@ -3243,3 +3243,70 @@ Combinações de teclas que abrem programas e chamam as funções do Prisma de q
 As mesmas do Menu Radial. O atalho que a função já tem na página dela aparece aqui também (menos o volume, que tem os dele na página Som).	Las mismas del Menú radial. El atajo que la función ya tiene en su página también aparece aquí (menos el volumen, que tiene los suyos en la página Sonido).
 Sem efeito agora: veja a página da função	Sin efecto: mira la página de la función
 Contraste	Contraste
+A letra do Windows não muda.	La letra de Windows no cambia.
+A letra {}	La letra {}
+Analisar só lê o disco. Reparar mexe nele: leia os riscos antes.	Analizar solo lee el disco. Reparar lo modifica: lee antes los riesgos.
+Analisar {}	Analizar {}
+Apagar a partição {}	Eliminar la partición {}
+Apagar partição…	Eliminar partición…
+Criar partição em {}	Crear partición en {}
+Criar partição…	Crear partición…
+Digite o tamanho em GB, só com números.	Escribe el tamaño en GB, solo con números.
+Diminuir libera espaço para outra partição; aumentar usa o espaço livre logo depois dela. O Windows não diminui além do que está em uso. Faça uma cópia do que importa antes.	Reducir libera espacio para otra partición; ampliar usa el espacio libre justo después de ella. Windows no reduce más allá de lo que está en uso. Haz una copia de lo importante antes.
+Disco do Windows: formatar e apagar ficam bloqueados.	Disco de Windows: formatear y eliminar están bloqueados.
+Em GB	En GB
+Escolha outra letra.	Elige otra letra.
+Este disco não tem volume com letra.	Este disco no tiene ningún volumen con letra.
+Formatar {}	Formatear {}
+Formatar	Formatear
+Formatar…	Formatear…
+Formatação rápida (sem ela, o Windows lê o disco todo e demora)	Formato rápido (sin él, Windows lee todo el disco y tarda)
+Letra de volume inválida.	Letra de volumen no válida.
+Limpeza feita, sem erros.	Limpieza hecha, sin errores.
+Nenhum problema encontrado.	No se encontraron problemas.
+No volume do Windows, o reparo roda na próxima reinicialização. Veja abaixo o que o CHKDSK disse.	En el volumen de Windows, la reparación se ejecuta en el próximo reinicio. Mira abajo lo que dijo CHKDSK.
+Nova letra	Nueva letra
+Novo tamanho (GB)	Nuevo tamaño (GB)
+O CHKDSK achou problemas ou não conseguiu ler o volume. Veja abaixo; Reparar corrige.	CHKDSK encontró problemas o no pudo leer el volumen. Mira abajo; Reparar los corrige.
+O Prisma está nesse volume: ele e as configurações dele podem parar de funcionar.	Prisma está en ese volumen: él y sus ajustes pueden dejar de funcionar.
+O Windows aceita de {} a {}.	Windows acepta de {} a {}.
+O Windows não conseguiu. O motivo está abaixo.	Windows no pudo. El motivo está abajo.
+O Windows não deu a permissão de administrador.	Windows no concedió el permiso de administrador.
+O reparo não terminou agora. Veja abaixo o que o CHKDSK disse.	La reparación no terminó ahora. Mira abajo lo que dijo CHKDSK.
+Para confirmar, digite	Para confirmar, escribe
+Procurar setores ruins (/r): bem mais lento	Buscar sectores defectuosos (/r): bastante más lento
+Programas com arquivos abertos nesse volume perdem o que não foi salvo.	Los programas con archivos abiertos en ese volumen pierden lo que no se guardó.
+Programas instalados, atalhos e bibliotecas de jogos que usam {}: param de achar os arquivos até a letra voltar.	Los programas instalados, accesos directos y bibliotecas de juegos que usan {}: dejan de encontrar los archivos hasta que vuelva la letra.
+Pronto.	Listo.
+Redimensionar {}	Cambiar tamaño de {}
+Redimensionar	Cambiar tamaño
+Redimensionar…	Cambiar tamaño…
+Reparar {}	Reparar {}
+Reparar…	Reparar…
+Riscos do reparo:	Riesgos de la reparación:
+Rodando há {}. Num HD grande pode levar horas; não desligue o PC no meio.	Ejecutándose desde hace {}. En un disco duro grande puede tardar horas; no apagues el PC a medias.
+Rótulo longo demais: até 11 letras no FAT32.	Etiqueta demasiado larga: hasta 11 caracteres en FAT32.
+Rótulo longo demais: até 11 letras no exFAT.	Etiqueta demasiado larga: hasta 11 caracteres en exFAT.
+Rótulo longo demais: até 32 letras no NTFS.	Etiqueta demasiado larga: hasta 32 caracteres en NTFS.
+Rótulo	Etiqueta
+Sem letra	Sin letra
+Sem rótulo	Sin etiqueta
+Sistema de arquivos desconhecido.	Sistema de archivos desconocido.
+Sistema de arquivos	Sistema de archivos
+Tamanho (GB)	Tamaño (GB)
+Tamanho inválido.	Tamaño no válido.
+Todo o espaço livre	Todo el espacio libre
+Trocar a letra de {}	Cambiar la letra de {}
+Trocar letra…	Cambiar letra…
+Trocar	Cambiar
+Tudo em {} será apagado: {} usados. Isso não tem volta.	Todo en {} se borrará: {} en uso. No se puede deshacer.
+Usa o espaço livre do disco, sem mexer nas partições que já existem. Disco novo, sem partições, é preparado como GPT.	Usa el espacio libre del disco, sin tocar las particiones que ya existen. Un disco nuevo, sin particiones, se prepara como GPT.
+Verificar e reparar (CHKDSK)	Comprobar y reparar (CHKDSK)
+Volume	Volumen
+• Arquivos em partes corrompidas do disco podem ser apagados ou ir para a pasta FOUND.000.	• Los archivos en partes dañadas del disco pueden borrarse o ir a la carpeta FOUND.000.
+• No volume do Windows, o reparo só roda na próxima reinicialização.	• En el volumen de Windows, la reparación solo se ejecuta en el próximo reinicio.
+• Num HD grande pode levar horas. Não desligue o PC no meio.	• En un disco duro grande puede tardar horas. No apagues el PC a medias.
+• O volume é desmontado: programas com arquivos abertos nele perdem o que não foi salvo.	• El volumen se desmonta: los programas con archivos abiertos en él pierden lo que no se guardó.
+O rótulo não aceita " * / : < > ? \ |	La etiqueta no admite " * / : < > ? \ |
+O rótulo FAT32 não aceita + , . ; = [ ]	Una etiqueta FAT32 no admite + , . ; = [ ]
+Os discos mudaram desde que a lista foi lida. Confira e tente de novo.	Los discos cambiaron desde que se leyó la lista. Revisa e inténtalo de nuevo.

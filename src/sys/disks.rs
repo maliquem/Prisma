@@ -89,7 +89,7 @@ pub struct Volume {
     pub free: u64,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Disk {
     pub number: u32,
     pub name: String,
@@ -547,4 +547,273 @@ pub fn spawn_health(list: &[Disk], map: HealthMap) {
             map.lock().unwrap().insert(n, h);
         }
     });
+}
+
+// ---------- Ferramentas do Windows: CHKDSK, formatar, partições e letra ----------
+// Tudo roda pelo PowerShell do Windows como administrador, escondido, e conta o andamento num
+// arquivo que a página lê. O comando sai só de `script`, que valida o alvo e bloqueia o disco do
+// Windows: letra e número vêm da lista da página, o rótulo é o único texto livre e vai entre aspas.
+
+/// Sistemas de arquivos de Formatar e Criar partição.
+pub const FILE_SYSTEMS: [&str; 3] = ["NTFS", "exFAT", "FAT32"];
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Job {
+    /// CHKDSK só leitura.
+    Scan(char),
+    /// CHKDSK /f /x; com `sectors`, /r (procura setores ruins).
+    Repair { letter: char, sectors: bool },
+    Format { letter: char, fs: usize, label: String, quick: bool },
+    /// Letra nova; None tira a letra.
+    Letter { letter: char, to: Option<char> },
+    Delete(char),
+    /// Partição nova no espaço livre: tamanho em GB, ou None para todo o maior espaço livre.
+    Create { disk: u32, gb: Option<u64>, fs: usize, label: String },
+    Resize { letter: char, gb: u64 },
+}
+
+/// Rótulo aceito pelo sistema de arquivos: sem caracteres de controle nem os proibidos, no tamanho dele.
+fn check_label(label: &str, fs: usize) -> std::result::Result<(), &'static str> {
+    let max = match fs {
+        0 => 32,
+        1 | 2 => 11,
+        _ => return Err("Sistema de arquivos desconhecido."),
+    };
+    if label.chars().count() > max {
+        return Err(match max {
+            32 => "Rótulo longo demais: até 32 letras no NTFS.",
+            _ if fs == 1 => "Rótulo longo demais: até 11 letras no exFAT.",
+            _ => "Rótulo longo demais: até 11 letras no FAT32.",
+        });
+    }
+    if label.chars().any(|c| c.is_control() || "\"*/:<>?\\|".contains(c)) {
+        return Err("O rótulo não aceita \" * / : < > ? \\ |");
+    }
+    if fs == 2 && label.chars().any(|c| "+,.;=[]".contains(c)) {
+        return Err("O rótulo FAT32 não aceita + , . ; = [ ]");
+    }
+    Ok(())
+}
+
+/// Bytes de `gb` (GB de 1000), descendo para múltiplo de 1 MiB: partições alinham assim.
+fn gb_bytes(gb: u64) -> u64 {
+    gb.saturating_mul(1_000_000_000) / (1 << 20) * (1 << 20)
+}
+
+/// Por que o Prisma não monta este pedido, ou Ok. `windows` é a letra do Windows e `system`, as
+/// letras do disco onde ele está.
+pub fn refuse(job: &Job, windows: char, system: &[char]) -> std::result::Result<(), &'static str> {
+    let letter = match job {
+        Job::Scan(l) | Job::Delete(l) | Job::Repair { letter: l, .. } | Job::Format { letter: l, .. } | Job::Letter { letter: l, .. } | Job::Resize { letter: l, .. } => Some(*l),
+        Job::Create { .. } => None,
+    };
+    if letter.is_some_and(|l| !l.is_ascii_uppercase()) {
+        return Err("Letra de volume inválida.");
+    }
+    let on_system = letter.is_some_and(|l| l == windows || system.contains(&l));
+    const LOCKED: &str = "Disco do Windows: formatar e apagar ficam bloqueados.";
+    match job {
+        Job::Format { .. } | Job::Delete(_) if on_system => return Err(LOCKED),
+        Job::Format { fs, label, .. } => check_label(label, *fs)?,
+        Job::Create { gb: Some(0), .. } => return Err("Tamanho inválido."),
+        Job::Create { fs, label, .. } => check_label(label, *fs)?,
+        Job::Letter { letter, .. } if *letter == windows => return Err("A letra do Windows não muda."),
+        Job::Letter { letter, to: Some(t) } if !t.is_ascii_uppercase() || t == letter => return Err("Escolha outra letra."),
+        Job::Resize { gb, .. } if *gb == 0 || *gb > 1_000_000 => return Err("Tamanho inválido."),
+        _ => {}
+    }
+    Ok(())
+}
+
+/// O script do PowerShell que faz o pedido e conta tudo em `log`. A última linha do log é
+/// `@@fim <código>`: o código de saída do CHKDSK, 0 para os outros, -1 em erro.
+pub fn script(job: &Job, windows: char, system: &[char], log: &str) -> std::result::Result<String, &'static str> {
+    use crate::sys::quick::ps_quote;
+    refuse(job, windows, system)?;
+    // A resposta vai para qualquer pergunta do CHKDSK: no reparo, 'Y' marca para a próxima
+    // reinicialização; na análise, 'N' (cadeias perdidas no FAT32), para nada ficar esperando.
+    let chk = |l: char, args: &str, answer: char| {
+        format!("'{answer}' | & (Join-Path $env:SystemRoot 'System32\\chkdsk.exe') {l}:{args} 2>&1 | ForEach-Object {{ Say $_ }}\nSay \"@@fim $LASTEXITCODE\"")
+    };
+    let fmt = |fs: usize, label: &str| format!("-FileSystem {} -NewFileSystemLabel {} -Confirm:$false -ErrorAction Stop", FILE_SYSTEMS[fs], ps_quote(label));
+    let body = match job {
+        Job::Scan(l) => chk(*l, "", 'N'),
+        Job::Repair { letter, sectors } => chk(*letter, if *sectors { " /r /x" } else { " /f /x" }, 'Y'),
+        Job::Format { letter, fs, label, quick } => {
+            format!("Format-Volume -DriveLetter {letter} {}{} | Out-Null\nSay '@@fim 0'", fmt(*fs, label), if *quick { "" } else { " -Full" })
+        }
+        Job::Letter { letter, to: Some(t) } => format!("Get-Partition -DriveLetter {letter} -ErrorAction Stop | Set-Partition -NewDriveLetter {t} -ErrorAction Stop\nSay '@@fim 0'"),
+        Job::Letter { letter, to: None } => {
+            format!("Get-Partition -DriveLetter {letter} -ErrorAction Stop | Remove-PartitionAccessPath -AccessPath '{letter}:\\' -ErrorAction Stop\nSay '@@fim 0'")
+        }
+        Job::Delete(l) => format!("Remove-Partition -DriveLetter {l} -Confirm:$false -ErrorAction Stop\nSay '@@fim 0'"),
+        Job::Create { disk, gb, fs, label } => {
+            let size = gb.map_or("-UseMaximumSize".to_string(), |g| format!("-Size {}", gb_bytes(g)));
+            format!(
+                "if ((Get-Disk -Number {disk} -ErrorAction Stop).PartitionStyle -eq 'RAW') {{ Initialize-Disk -Number {disk} -PartitionStyle GPT -ErrorAction Stop }}\n\
+                 New-Partition -DiskNumber {disk} {size} -AssignDriveLetter -ErrorAction Stop | Format-Volume {} | Out-Null\nSay '@@fim 0'",
+                fmt(*fs, label)
+            )
+        }
+        Job::Resize { letter, gb } => format!(
+            "$p = Get-Partition -DriveLetter {letter} -ErrorAction Stop\n$s = $p | Get-PartitionSupportedSize -ErrorAction Stop\nSay (\"@@faixa {{0}} {{1}}\" -f $s.SizeMin, $s.SizeMax)\n\
+             $p | Resize-Partition -Size {} -ErrorAction Stop\nSay '@@fim 0'",
+            gb_bytes(*gb)
+        ),
+    };
+    Ok(format!(
+        "$log = {}\nfunction Say($t) {{ Add-Content -LiteralPath $log -Value $t -Encoding UTF8 }}\ntry {{\n{body}\n}} catch {{ Say $_.Exception.Message; Say '@@fim -1' }}\n",
+        ps_quote(log)
+    ))
+}
+
+/// Roda o script como administrador, escondido. O Windows pergunta; recusado, devolve false.
+pub fn run_job(script: &str) -> bool {
+    let ps = crate::sys::system_tool("powershell").display().to_string();
+    let args = format!("-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand {}", crate::sys::quick::utf16_b64(script));
+    crate::sys::quick::run_admin(&ps, &args, &crate::sys::system_dir().display().to_string())
+}
+
+/// O que identifica o alvo do pedido na lista: rótulo e tamanho do volume, ou nome, série e tamanho
+/// do disco. None se ele não está mais lá. Compara a lista mostrada com a de agora, antes do UAC.
+pub fn target(list: &[Disk], job: &Job) -> Option<String> {
+    let letter = match job {
+        Job::Create { disk, .. } => {
+            return list.iter().find(|d| d.number == *disk).map(|d| format!("{}|{}|{}", d.name, d.serial, d.size));
+        }
+        Job::Scan(l) | Job::Delete(l) | Job::Repair { letter: l, .. } | Job::Format { letter: l, .. } | Job::Letter { letter: l, .. } | Job::Resize { letter: l, .. } => *l,
+    };
+    list.iter().flat_map(|d| &d.volumes).find(|v| v.letter == letter).map(|v| format!("{}|{}", v.label, v.total))
+}
+
+/// O que o log contou até agora.
+#[derive(Default, Debug, PartialEq)]
+pub struct Progress {
+    pub lines: Vec<String>,
+    /// O código de `@@fim`, quando terminou.
+    pub done: Option<i32>,
+    /// Tamanho mínimo e máximo da partição, em bytes, de Redimensionar.
+    pub range: Option<(u64, u64)>,
+}
+
+/// O CHKDSK reescreve a linha do andamento com `\r`: fica o último pedaço de cada linha.
+pub fn parse_log(text: &str) -> Progress {
+    let mut p = Progress::default();
+    for line in text.trim_start_matches('\u{feff}').lines() {
+        let line = line.split('\r').map(str::trim).rfind(|s| !s.is_empty()).unwrap_or("");
+        if let Some(code) = line.strip_prefix("@@fim ") {
+            p.done = Some(code.trim().parse().unwrap_or(-1));
+        } else if let Some(r) = line.strip_prefix("@@faixa ") {
+            let mut n = r.split_whitespace().filter_map(|v| v.parse().ok());
+            p.range = n.next().zip(n.next());
+        } else if !line.is_empty() {
+            p.lines.push(line.to_string());
+        }
+    }
+    p
+}
+
+/// Letras sem volume, para Trocar letra (A e B ficam de fora, eram dos disquetes).
+pub fn free_letters() -> Vec<char> {
+    let mask = unsafe { GetLogicalDrives() };
+    (2..26u8).filter(|i| mask & (1 << i) == 0).map(|i| (b'A' + i) as char).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SYS: [char; 2] = ['C', 'D'];
+
+    fn run(job: Job) -> std::result::Result<String, &'static str> {
+        script(&job, 'C', &SYS, "C:\\t\\x.log")
+    }
+
+    #[test]
+    fn windows_disk_cannot_be_formatted_or_deleted() {
+        for l in ['C', 'D'] {
+            assert!(run(Job::Format { letter: l, fs: 0, label: String::new(), quick: true }).is_err());
+            assert!(run(Job::Delete(l)).is_err());
+        }
+        assert!(run(Job::Letter { letter: 'C', to: Some('X') }).is_err());
+        assert!(run(Job::Letter { letter: 'C', to: None }).is_err());
+        // Ler, reparar, redimensionar e trocar a letra de outro volume do mesmo disco continuam.
+        assert!(run(Job::Scan('C')).is_ok());
+        assert!(run(Job::Repair { letter: 'C', sectors: false }).is_ok());
+        assert!(run(Job::Resize { letter: 'C', gb: 100 }).is_ok());
+        assert!(run(Job::Letter { letter: 'D', to: Some('X') }).is_ok());
+        assert!(run(Job::Delete('E')).is_ok());
+    }
+
+    #[test]
+    fn rejects_bad_targets() {
+        assert!(run(Job::Scan('e')).is_err());
+        assert!(run(Job::Scan('1')).is_err());
+        assert!(run(Job::Delete(';')).is_err());
+        assert!(run(Job::Letter { letter: 'E', to: Some('E') }).is_err());
+        assert!(run(Job::Letter { letter: 'E', to: Some('$') }).is_err());
+        assert!(run(Job::Resize { letter: 'E', gb: 0 }).is_err());
+        assert!(run(Job::Create { disk: 1, gb: Some(0), fs: 0, label: String::new() }).is_err());
+        assert!(run(Job::Format { letter: 'E', fs: 9, label: String::new(), quick: true }).is_err());
+    }
+
+    #[test]
+    fn labels() {
+        assert!(check_label("Jogos", 2).is_ok());
+        assert!(check_label("Jogos e mais", 2).is_err());
+        assert!(check_label("Jogos e mais", 1).is_err());
+        assert!(check_label("Jogos 2", 1).is_ok());
+        assert!(check_label("A.B", 2).is_err());
+        assert!(check_label("A.B", 1).is_ok());
+        assert!(check_label(&"x".repeat(33), 0).is_err());
+        assert!(check_label("a|b", 0).is_err());
+        assert!(check_label("a\nb", 0).is_err());
+    }
+
+    #[test]
+    fn builds_commands() {
+        let s = run(Job::Scan('E')).unwrap();
+        assert!(s.contains("chkdsk.exe') E: 2>&1") && s.contains("'N' | &"), "{s}");
+        let s = run(Job::Repair { letter: 'E', sectors: true }).unwrap();
+        assert!(s.contains("'Y' | & (Join-Path") && s.contains("E: /r /x"), "{s}");
+        assert!(run(Job::Repair { letter: 'E', sectors: false }).unwrap().contains("E: /f /x"));
+        let s = run(Job::Format { letter: 'E', fs: 1, label: "O'Neil".into(), quick: false }).unwrap();
+        assert!(s.contains("Format-Volume -DriveLetter E -FileSystem exFAT -NewFileSystemLabel 'O''Neil' -Confirm:$false -ErrorAction Stop -Full"), "{s}");
+        assert!(!run(Job::Format { letter: 'E', fs: 0, label: String::new(), quick: true }).unwrap().contains("-Full"));
+        assert!(run(Job::Letter { letter: 'E', to: Some('G') }).unwrap().contains("Get-Partition -DriveLetter E -ErrorAction Stop | Set-Partition -NewDriveLetter G"));
+        assert!(run(Job::Letter { letter: 'E', to: None }).unwrap().contains("Remove-PartitionAccessPath -AccessPath 'E:\\'"));
+        assert!(run(Job::Delete('E')).unwrap().contains("Remove-Partition -DriveLetter E -Confirm:$false"));
+        let s = run(Job::Create { disk: 2, gb: None, fs: 0, label: "Dados".into() }).unwrap();
+        assert!(s.contains("New-Partition -DiskNumber 2 -UseMaximumSize -AssignDriveLetter") && s.contains("Initialize-Disk -Number 2 -PartitionStyle GPT"), "{s}");
+        assert!(s.starts_with("$log = 'C:\\t\\x.log'"));
+        assert!(run(Job::Create { disk: 2, gb: Some(1), fs: 0, label: String::new() }).unwrap().contains("-Size 999292928 "));
+        assert!(run(Job::Resize { letter: 'E', gb: 1 }).unwrap().contains("Resize-Partition -Size 999292928 "));
+    }
+
+    /// Pendrive trocado por outro disco na mesma letra: o alvo muda e o pedido é recusado.
+    #[test]
+    fn target_changes_with_the_volume() {
+        let vol = |label: &str, total| Volume { letter: 'E', label: label.into(), total, free: 0 };
+        let list = |v: Volume| vec![Disk { number: 2, name: "USB".into(), size: 16, volumes: vec![v], ..Default::default() }];
+        let job = Job::Delete('E');
+        let old = target(&list(vol("PENDRIVE", 16)), &job);
+        assert!(old.is_some());
+        assert_eq!(old, target(&list(vol("PENDRIVE", 16)), &job));
+        assert_ne!(old, target(&list(vol("BACKUP", 16)), &job));
+        assert_ne!(old, target(&list(vol("PENDRIVE", 2000)), &job));
+        assert_eq!(target(&list(vol("X", 1)), &Job::Scan('F')), None);
+        let new = Job::Create { disk: 2, gb: None, fs: 0, label: String::new() };
+        assert!(target(&list(vol("X", 1)), &new).is_some());
+        assert_eq!(target(&list(vol("X", 1)), &Job::Create { disk: 3, gb: None, fs: 0, label: String::new() }), None);
+    }
+
+    #[test]
+    fn reads_log() {
+        let p = parse_log("\u{feff}Etapa 1\r\n10 %\r20 %\r\n\r\n@@faixa 100 2000\r\n@@fim 3\r\n");
+        assert_eq!(p.lines, vec!["Etapa 1", "20 %"]);
+        assert_eq!(p.done, Some(3));
+        assert_eq!(p.range, Some((100, 2000)));
+        assert_eq!(parse_log("a").done, None);
+        assert_eq!(parse_log("@@fim x").done, Some(-1));
+    }
 }

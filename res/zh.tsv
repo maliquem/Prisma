@@ -3243,3 +3243,70 @@ Combinações de teclas que abrem programas e chamam as funções do Prisma de q
 As mesmas do Menu Radial. O atalho que a função já tem na página dela aparece aqui também (menos o volume, que tem os dele na página Som).	与轮盘菜单相同。功能在其自己页面上已有的快捷键，也会显示在这里（音量除外，其快捷键在“声音”页面）。
 Sem efeito agora: veja a página da função	暂无效果：见功能页面
 Contraste	对比度
+A letra do Windows não muda.	Windows 的盘符不会改变。
+A letra {}	盘符 {}
+Analisar só lê o disco. Reparar mexe nele: leia os riscos antes.	“分析”只读取磁盘。“修复”会修改磁盘：请先阅读风险说明。
+Analisar {}	分析 {}
+Apagar a partição {}	删除分区 {}
+Apagar partição…	删除分区…
+Criar partição em {}	在 {} 上创建分区
+Criar partição…	创建分区…
+Digite o tamanho em GB, só com números.	请输入以 GB 为单位的大小，只能是数字。
+Diminuir libera espaço para outra partição; aumentar usa o espaço livre logo depois dela. O Windows não diminui além do que está em uso. Faça uma cópia do que importa antes.	压缩会释放空间给其他分区；扩展会使用紧随其后的可用空间。Windows 不会压缩到小于已用空间。请先备份重要数据。
+Disco do Windows: formatar e apagar ficam bloqueados.	Windows 所在磁盘：格式化和删除已被禁用。
+Em GB	以 GB 计
+Escolha outra letra.	请选择其他盘符。
+Este disco não tem volume com letra.	此磁盘没有带盘符的卷。
+Formatar {}	格式化 {}
+Formatar	格式化
+Formatar…	格式化…
+Formatação rápida (sem ela, o Windows lê o disco todo e demora)	快速格式化（不勾选时，Windows 会读取整个磁盘，耗时较长）
+Letra de volume inválida.	卷盘符无效。
+Limpeza feita, sem erros.	清理完成，没有错误。
+Nenhum problema encontrado.	未发现问题。
+No volume do Windows, o reparo roda na próxima reinicialização. Veja abaixo o que o CHKDSK disse.	对于 Windows 所在的卷，修复将在下次重启时运行。请在下方查看 CHKDSK 的输出。
+Nova letra	新盘符
+Novo tamanho (GB)	新大小 (GB)
+O CHKDSK achou problemas ou não conseguiu ler o volume. Veja abaixo; Reparar corrige.	CHKDSK 发现了问题，或无法读取该卷。详见下方；“修复”可以解决。
+O Prisma está nesse volume: ele e as configurações dele podem parar de funcionar.	Prisma 位于此卷：它及其设置可能无法继续工作。
+O Windows aceita de {} a {}.	Windows 接受 {} 到 {}。
+O Windows não conseguiu. O motivo está abaixo.	Windows 未能完成。原因见下方。
+O Windows não deu a permissão de administrador.	Windows 未授予管理员权限。
+O reparo não terminou agora. Veja abaixo o que o CHKDSK disse.	这次修复没有完成。请在下方查看 CHKDSK 的输出。
+Para confirmar, digite	要确认，请输入
+Procurar setores ruins (/r): bem mais lento	查找坏扇区 (/r)：慢得多
+Programas com arquivos abertos nesse volume perdem o que não foi salvo.	在此卷上打开了文件的程序，会丢失未保存的内容。
+Programas instalados, atalhos e bibliotecas de jogos que usam {}: param de achar os arquivos até a letra voltar.	使用 {}: 的已安装程序、快捷方式和游戏库，在盘符恢复之前将找不到文件。
+Pronto.	完成。
+Redimensionar {}	调整 {} 的大小
+Redimensionar	调整大小
+Redimensionar…	调整大小…
+Reparar {}	修复 {}
+Reparar…	修复…
+Riscos do reparo:	修复的风险：
+Rodando há {}. Num HD grande pode levar horas; não desligue o PC no meio.	已运行 {}。在大容量硬盘上可能需要数小时；请勿中途关闭 PC。
+Rótulo longo demais: até 11 letras no FAT32.	卷标过长：FAT32 最多 11 个字符。
+Rótulo longo demais: até 11 letras no exFAT.	卷标过长：exFAT 最多 11 个字符。
+Rótulo longo demais: até 32 letras no NTFS.	卷标过长：NTFS 最多 32 个字符。
+Rótulo	卷标
+Sem letra	无盘符
+Sem rótulo	无卷标
+Sistema de arquivos desconhecido.	未知的文件系统。
+Sistema de arquivos	文件系统
+Tamanho (GB)	大小 (GB)
+Tamanho inválido.	大小无效。
+Todo o espaço livre	全部可用空间
+Trocar a letra de {}	更改 {} 的盘符
+Trocar letra…	更改盘符…
+Trocar	更改
+Tudo em {} será apagado: {} usados. Isso não tem volta.	{} 上的所有内容都将被清除：已用 {}。此操作无法撤销。
+Usa o espaço livre do disco, sem mexer nas partições que já existem. Disco novo, sem partições, é preparado como GPT.	使用磁盘的可用空间，不改动现有分区。没有分区的新磁盘会准备为 GPT。
+Verificar e reparar (CHKDSK)	检查并修复 (CHKDSK)
+Volume	卷
+• Arquivos em partes corrompidas do disco podem ser apagados ou ir para a pasta FOUND.000.	• 磁盘损坏部分中的文件可能被删除，或进入 FOUND.000 文件夹。
+• No volume do Windows, o reparo só roda na próxima reinicialização.	• 对于 Windows 所在的卷，修复只会在下次重启时运行。
+• Num HD grande pode levar horas. Não desligue o PC no meio.	• 在大容量硬盘上可能需要数小时。请勿中途关闭 PC。
+• O volume é desmontado: programas com arquivos abertos nele perdem o que não foi salvo.	• 该卷会被卸载：在其上打开了文件的程序会丢失未保存的内容。
+O rótulo não aceita " * / : < > ? \ |	卷标不能包含 " * / : < > ? \ |
+O rótulo FAT32 não aceita + , . ; = [ ]	FAT32 卷标不能包含 + , . ; = [ ]
+Os discos mudaram desde que a lista foi lida. Confira e tente de novo.	读取列表后磁盘已变化。请检查后重试。
