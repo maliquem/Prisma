@@ -70,6 +70,8 @@ struct Running {
     title: String,
     job: Job,
     log: PathBuf,
+    /// Até onde o log já foi lido.
+    pos: usize,
     p: disks::Progress,
     at: Instant,
     read: Instant,
@@ -286,17 +288,36 @@ fn poll(app: &mut App, s: &mut St) {
         return;
     }
     run.read = Instant::now();
+    // Só o trecho novo, até a última linha completa: num /r longo o log cresce a cada andamento.
     let Ok(bytes) = std::fs::read(&run.log) else { return };
-    run.p = disks::parse_log(&String::from_utf8_lossy(&bytes));
+    let Some(end) = bytes.get(run.pos..).and_then(|b| b.iter().rposition(|&c| c == b'\n')) else { return };
+    let new = disks::parse_log(&String::from_utf8_lossy(&bytes[run.pos..run.pos + end + 1]));
+    run.pos += end + 1;
+    run.p.lines.extend(new.lines);
+    let extra = run.p.lines.len().saturating_sub(200);
+    run.p.lines.drain(..extra);
+    run.p.range = new.range.or(run.p.range);
+    run.p.done = new.done;
     if run.p.done.is_some() && !matches!(run.job, Job::Scan(_) | Job::Repair { .. }) {
+        // A lista volta em outra ordem: fica no mesmo disco, se ele ainda existe.
+        let number = app.disks.get(app.disk_sel).map(|d| d.number);
         app.disks = disks::list();
-        app.disk_sel = app.disk_sel.min(app.disks.len().saturating_sub(1));
+        app.disk_sel = app.disks.iter().position(|d| Some(d.number) == number).unwrap_or(0);
         s.vol = 0;
     }
 }
 
 /// Monta o comando e pede o administrador ao Windows. O log fica na pasta temporária.
 fn start(app: &mut App, s: &mut St, job: Job, title: String) {
+    // Outro disco pode ter pegado a mesma letra (ou o mesmo número) desde que a lista foi lida.
+    let now = disks::list();
+    if disks::target(&app.disks, &job).is_none() || disks::target(&app.disks, &job) != disks::target(&now, &job) {
+        app.disks = now;
+        app.disk_sel = app.disk_sel.min(app.disks.len().saturating_sub(1));
+        s.vol = 0;
+        s.sheet = None;
+        return app.toast.info("Os discos mudaram desde que a lista foi lida. Confira e tente de novo.");
+    }
     let (win, sys) = system_letters(&app.disks);
     let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis());
     let log = std::env::temp_dir().join(format!("prisma-disco-{}-{stamp}.log", std::process::id()));
@@ -307,10 +328,7 @@ fn start(app: &mut App, s: &mut St, job: Job, title: String) {
     if !disks::run_job(&script) {
         return app.toast.info("O Windows não deu a permissão de administrador.");
     }
-    if let Some(old) = s.run.take() {
-        let _ = std::fs::remove_file(old.log);
-    }
-    s.run = Some(Running { title, job, log, p: Default::default(), at: Instant::now(), read: Instant::now() });
+    s.run = Some(Running { title, job, log, pos: 0, p: Default::default(), at: Instant::now(), read: Instant::now() });
     s.sheet = None;
 }
 
@@ -324,7 +342,7 @@ fn new_sheet(kind: Kind, vol: &Volume, d: &disks::Disk) -> Sheet {
         label: if kind == Kind::Format { vol.label.clone() } else { String::new() },
         quick: true,
         sectors: false,
-        size: if kind == Kind::Resize { (vol.total / 1_000_000_000).to_string() } else { String::new() },
+        size: String::new(),
         letters: disks::free_letters(),
         to: 0,
         typed: String::new(),
@@ -396,14 +414,15 @@ fn draw_tools(ui: &mut Ui, app: &mut App, s: &mut St, r: Rect) {
     }
 }
 
-/// O que o código de saída quer dizer. CHKDSK: 0 sem erro, 1 corrigiu, 2 limpeza, 3 erro sem correção.
+/// O que o código de saída quer dizer. CHKDSK: 0 sem erro, 1 corrigiu, 2 limpeza, 3 erro sem correção;
+/// na análise (sem /f), 1 a 3 querem dizer que há o que corrigir.
 fn outcome(job: &Job, code: i32, win: char) -> (&'static str, Color) {
     match (job, code) {
         (_, -1) => ("O Windows não conseguiu. O motivo está abaixo.", REC),
         (Job::Repair { letter, .. }, _) if *letter == win => ("No volume do Windows, o reparo roda na próxima reinicialização. Veja abaixo o que o CHKDSK disse.", WARN),
         (Job::Scan(_) | Job::Repair { .. }, 0) => ("Nenhum problema encontrado.", ACCENT),
-        (Job::Scan(_) | Job::Repair { .. }, 1) => ("Erros encontrados e corrigidos.", ACCENT),
-        (Job::Scan(_) | Job::Repair { .. }, 2) => ("Limpeza feita, sem erros.", ACCENT),
+        (Job::Repair { .. }, 1) => ("Erros encontrados e corrigidos.", ACCENT),
+        (Job::Repair { .. }, 2) => ("Limpeza feita, sem erros.", ACCENT),
         (Job::Scan(_), _) => ("O CHKDSK achou problemas ou não conseguiu ler o volume. Veja abaixo; Reparar corrige.", WARN),
         (Job::Repair { .. }, _) => ("O reparo não terminou agora. Veja abaixo o que o CHKDSK disse.", WARN),
         _ => ("Pronto.", ACCENT),
@@ -445,12 +464,10 @@ fn draw_run(ui: &mut Ui, app: &mut App, s: &mut St, r: Rect) {
         shown = t;
     }
     ui.c.text_wrap(area, &shown, 12.0, MUTED, Weight::Regular);
-    if ui.button("st-close", rect(x, r.bottom() - 52.0, w, 40.0), "Fechar", false) {
+    // Rodando, o volume está em uso: fechar liberaria Formatar e Apagar nele no meio do CHKDSK.
+    if ui.button_ex("st-close", rect(x, r.bottom() - 52.0, w, 40.0), "Fechar", false, run.p.done.is_some()) {
         if let Some(run) = s.run.take() {
-            // Rodando, o PowerShell ainda grava no log: ele fica para a limpeza da pasta temporária.
-            if run.p.done.is_some() {
-                let _ = std::fs::remove_file(run.log);
-            }
+            let _ = std::fs::remove_file(run.log);
         }
     }
 }
@@ -494,7 +511,7 @@ fn draw_sheet(ui: &mut Ui, app: &mut App, s: &mut St) {
         )],
         Kind::Create => vec![("Usa o espaço livre do disco, sem mexer nas partições que já existem. Disco novo, sem partições, é preparado como GPT.".into(), TEXT2)],
     };
-    if sh.kind != Kind::Create && sh.kind != Kind::Repair && prisma_on(l) {
+    if sh.kind != Kind::Create && prisma_on(l) {
         paras.push(("O Prisma está nesse volume: ele e as configurações dele podem parar de funcionar.".into(), REC));
     }
     for (t, c) in &paras {

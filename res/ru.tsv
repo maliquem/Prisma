@@ -3273,7 +3273,7 @@ Reparar…	Восстановить…
 Riscos do reparo:	Риски восстановления:
 Rodando há {}. Num HD grande pode levar horas; não desligue o PC no meio.	Выполняется уже {}. На большом жёстком диске это может занять часы; не выключайте ПК.
 Rótulo longo demais: até 11 letras no FAT32.	Метка слишком длинная: до 11 символов в FAT32.
-Rótulo longo demais: até 15 letras no exFAT.	Метка слишком длинная: до 15 символов в exFAT.
+Rótulo longo demais: até 11 letras no exFAT.	Метка слишком длинная: до 11 символов в exFAT.
 Rótulo longo demais: até 32 letras no NTFS.	Метка слишком длинная: до 32 символов в NTFS.
 Rótulo	Метка
 Sem letra	Без буквы
@@ -3295,3 +3295,5 @@ Volume	Том
 • Num HD grande pode levar horas. Não desligue o PC no meio.	• На большом жёстком диске это может занять часы. Не выключайте ПК.
 • O volume é desmontado: programas com arquivos abertos nele perdem o que não foi salvo.	• Том размонтируется: программы с открытыми на нём файлами потеряют несохранённое.
 O rótulo não aceita " * / : < > ? \ |	Метка не может содержать " * / : < > ? \ |
+O rótulo FAT32 não aceita + , . ; = [ ]	Метка FAT32 не может содержать + , . ; = [ ]
+Os discos mudaram desde que a lista foi lida. Confira e tente de novo.	Диски изменились с момента чтения списка. Проверьте и попробуйте снова.

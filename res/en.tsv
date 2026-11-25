@@ -3279,7 +3279,7 @@ Reparar…	Repair…
 Riscos do reparo:	Repair risks:
 Rodando há {}. Num HD grande pode levar horas; não desligue o PC no meio.	Running for {}. On a large hard drive it can take hours; don't turn off the PC midway.
 Rótulo longo demais: até 11 letras no FAT32.	Label too long: up to 11 characters on FAT32.
-Rótulo longo demais: até 15 letras no exFAT.	Label too long: up to 15 characters on exFAT.
+Rótulo longo demais: até 11 letras no exFAT.	Label too long: up to 11 characters on exFAT.
 Rótulo longo demais: até 32 letras no NTFS.	Label too long: up to 32 characters on NTFS.
 Rótulo	Label
 Sem letra	No letter
@@ -3301,3 +3301,5 @@ Volume	Volume
 • Num HD grande pode levar horas. Não desligue o PC no meio.	• On a large hard drive it can take hours. Don't turn off the PC midway.
 • O volume é desmontado: programas com arquivos abertos nele perdem o que não foi salvo.	• The volume is unmounted: programs with files open on it lose what wasn't saved.
 O rótulo não aceita " * / : < > ? \ |	The label can't contain " * / : < > ? \ |
+O rótulo FAT32 não aceita + , . ; = [ ]	A FAT32 label can't contain + , . ; = [ ]
+Os discos mudaram desde que a lista foi lida. Confira e tente de novo.	The disks changed since the list was read. Check and try again.

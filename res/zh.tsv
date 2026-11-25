@@ -3273,7 +3273,7 @@ Reparar…	修复…
 Riscos do reparo:	修复的风险：
 Rodando há {}. Num HD grande pode levar horas; não desligue o PC no meio.	已运行 {}。在大容量硬盘上可能需要数小时；请勿中途关闭 PC。
 Rótulo longo demais: até 11 letras no FAT32.	卷标过长：FAT32 最多 11 个字符。
-Rótulo longo demais: até 15 letras no exFAT.	卷标过长：exFAT 最多 15 个字符。
+Rótulo longo demais: até 11 letras no exFAT.	卷标过长：exFAT 最多 11 个字符。
 Rótulo longo demais: até 32 letras no NTFS.	卷标过长：NTFS 最多 32 个字符。
 Rótulo	卷标
 Sem letra	无盘符
@@ -3295,3 +3295,5 @@ Volume	卷
 • Num HD grande pode levar horas. Não desligue o PC no meio.	• 在大容量硬盘上可能需要数小时。请勿中途关闭 PC。
 • O volume é desmontado: programas com arquivos abertos nele perdem o que não foi salvo.	• 该卷会被卸载：在其上打开了文件的程序会丢失未保存的内容。
 O rótulo não aceita " * / : < > ? \ |	卷标不能包含 " * / : < > ? \ |
+O rótulo FAT32 não aceita + , . ; = [ ]	FAT32 卷标不能包含 + , . ; = [ ]
+Os discos mudaram desde que a lista foi lida. Confira e tente de novo.	读取列表后磁盘已变化。请检查后重试。

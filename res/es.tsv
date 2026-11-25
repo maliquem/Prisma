@@ -3273,7 +3273,7 @@ Reparar…	Reparar…
 Riscos do reparo:	Riesgos de la reparación:
 Rodando há {}. Num HD grande pode levar horas; não desligue o PC no meio.	Ejecutándose desde hace {}. En un disco duro grande puede tardar horas; no apagues el PC a medias.
 Rótulo longo demais: até 11 letras no FAT32.	Etiqueta demasiado larga: hasta 11 caracteres en FAT32.
-Rótulo longo demais: até 15 letras no exFAT.	Etiqueta demasiado larga: hasta 15 caracteres en exFAT.
+Rótulo longo demais: até 11 letras no exFAT.	Etiqueta demasiado larga: hasta 11 caracteres en exFAT.
 Rótulo longo demais: até 32 letras no NTFS.	Etiqueta demasiado larga: hasta 32 caracteres en NTFS.
 Rótulo	Etiqueta
 Sem letra	Sin letra
@@ -3295,3 +3295,5 @@ Volume	Volumen
 • Num HD grande pode levar horas. Não desligue o PC no meio.	• En un disco duro grande puede tardar horas. No apagues el PC a medias.
 • O volume é desmontado: programas com arquivos abertos nele perdem o que não foi salvo.	• El volumen se desmonta: los programas con archivos abiertos en él pierden lo que no se guardó.
 O rótulo não aceita " * / : < > ? \ |	La etiqueta no admite " * / : < > ? \ |
+O rótulo FAT32 não aceita + , . ; = [ ]	Una etiqueta FAT32 no admite + , . ; = [ ]
+Os discos mudaram desde que a lista foi lida. Confira e tente de novo.	Los discos cambiaron desde que se leyó la lista. Revisa e inténtalo de nuevo.

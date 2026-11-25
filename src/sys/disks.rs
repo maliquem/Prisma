@@ -89,7 +89,7 @@ pub struct Volume {
     pub free: u64,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Disk {
     pub number: u32,
     pub name: String,
@@ -576,19 +576,21 @@ pub enum Job {
 fn check_label(label: &str, fs: usize) -> std::result::Result<(), &'static str> {
     let max = match fs {
         0 => 32,
-        1 => 15,
-        2 => 11,
+        1 | 2 => 11,
         _ => return Err("Sistema de arquivos desconhecido."),
     };
     if label.chars().count() > max {
         return Err(match max {
             32 => "Rótulo longo demais: até 32 letras no NTFS.",
-            15 => "Rótulo longo demais: até 15 letras no exFAT.",
+            _ if fs == 1 => "Rótulo longo demais: até 11 letras no exFAT.",
             _ => "Rótulo longo demais: até 11 letras no FAT32.",
         });
     }
     if label.chars().any(|c| c.is_control() || "\"*/:<>?\\|".contains(c)) {
         return Err("O rótulo não aceita \" * / : < > ? \\ |");
+    }
+    if fs == 2 && label.chars().any(|c| "+,.;=[]".contains(c)) {
+        return Err("O rótulo FAT32 não aceita + , . ; = [ ]");
     }
     Ok(())
 }
@@ -628,15 +630,15 @@ pub fn refuse(job: &Job, windows: char, system: &[char]) -> std::result::Result<
 pub fn script(job: &Job, windows: char, system: &[char], log: &str) -> std::result::Result<String, &'static str> {
     use crate::sys::quick::ps_quote;
     refuse(job, windows, system)?;
-    let chk = |l: char, args: &str, answer: bool| {
-        // O 'Y' responde à pergunta do CHKDSK de marcar o reparo para a próxima reinicialização.
-        let pipe = if answer { "'Y' | " } else { "" };
-        format!("{pipe}& (Join-Path $env:SystemRoot 'System32\\chkdsk.exe') {l}:{args} 2>&1 | ForEach-Object {{ Say $_ }}\nSay \"@@fim $LASTEXITCODE\"")
+    // A resposta vai para qualquer pergunta do CHKDSK: no reparo, 'Y' marca para a próxima
+    // reinicialização; na análise, 'N' (cadeias perdidas no FAT32), para nada ficar esperando.
+    let chk = |l: char, args: &str, answer: char| {
+        format!("'{answer}' | & (Join-Path $env:SystemRoot 'System32\\chkdsk.exe') {l}:{args} 2>&1 | ForEach-Object {{ Say $_ }}\nSay \"@@fim $LASTEXITCODE\"")
     };
     let fmt = |fs: usize, label: &str| format!("-FileSystem {} -NewFileSystemLabel {} -Confirm:$false -ErrorAction Stop", FILE_SYSTEMS[fs], ps_quote(label));
     let body = match job {
-        Job::Scan(l) => chk(*l, "", false),
-        Job::Repair { letter, sectors } => chk(*letter, if *sectors { " /r /x" } else { " /f /x" }, true),
+        Job::Scan(l) => chk(*l, "", 'N'),
+        Job::Repair { letter, sectors } => chk(*letter, if *sectors { " /r /x" } else { " /f /x" }, 'Y'),
         Job::Format { letter, fs, label, quick } => {
             format!("Format-Volume -DriveLetter {letter} {}{} | Out-Null\nSay '@@fim 0'", fmt(*fs, label), if *quick { "" } else { " -Full" })
         }
@@ -670,6 +672,18 @@ pub fn run_job(script: &str) -> bool {
     let ps = crate::sys::system_tool("powershell").display().to_string();
     let args = format!("-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand {}", crate::sys::quick::utf16_b64(script));
     crate::sys::quick::run_admin(&ps, &args, &crate::sys::system_dir().display().to_string())
+}
+
+/// O que identifica o alvo do pedido na lista: rótulo e tamanho do volume, ou nome, série e tamanho
+/// do disco. None se ele não está mais lá. Compara a lista mostrada com a de agora, antes do UAC.
+pub fn target(list: &[Disk], job: &Job) -> Option<String> {
+    let letter = match job {
+        Job::Create { disk, .. } => {
+            return list.iter().find(|d| d.number == *disk).map(|d| format!("{}|{}|{}", d.name, d.serial, d.size));
+        }
+        Job::Scan(l) | Job::Delete(l) | Job::Repair { letter: l, .. } | Job::Format { letter: l, .. } | Job::Letter { letter: l, .. } | Job::Resize { letter: l, .. } => *l,
+    };
+    list.iter().flat_map(|d| &d.volumes).find(|v| v.letter == letter).map(|v| format!("{}|{}", v.label, v.total))
 }
 
 /// O que o log contou até agora.
@@ -747,7 +761,10 @@ mod tests {
     fn labels() {
         assert!(check_label("Jogos", 2).is_ok());
         assert!(check_label("Jogos e mais", 2).is_err());
-        assert!(check_label("Jogos e mais", 1).is_ok());
+        assert!(check_label("Jogos e mais", 1).is_err());
+        assert!(check_label("Jogos 2", 1).is_ok());
+        assert!(check_label("A.B", 2).is_err());
+        assert!(check_label("A.B", 1).is_ok());
         assert!(check_label(&"x".repeat(33), 0).is_err());
         assert!(check_label("a|b", 0).is_err());
         assert!(check_label("a\nb", 0).is_err());
@@ -756,7 +773,7 @@ mod tests {
     #[test]
     fn builds_commands() {
         let s = run(Job::Scan('E')).unwrap();
-        assert!(s.contains("chkdsk.exe') E: 2>&1") && !s.contains("'Y' |"), "{s}");
+        assert!(s.contains("chkdsk.exe') E: 2>&1") && s.contains("'N' | &"), "{s}");
         let s = run(Job::Repair { letter: 'E', sectors: true }).unwrap();
         assert!(s.contains("'Y' | & (Join-Path") && s.contains("E: /r /x"), "{s}");
         assert!(run(Job::Repair { letter: 'E', sectors: false }).unwrap().contains("E: /f /x"));
@@ -771,6 +788,23 @@ mod tests {
         assert!(s.starts_with("$log = 'C:\\t\\x.log'"));
         assert!(run(Job::Create { disk: 2, gb: Some(1), fs: 0, label: String::new() }).unwrap().contains("-Size 999292928 "));
         assert!(run(Job::Resize { letter: 'E', gb: 1 }).unwrap().contains("Resize-Partition -Size 999292928 "));
+    }
+
+    /// Pendrive trocado por outro disco na mesma letra: o alvo muda e o pedido é recusado.
+    #[test]
+    fn target_changes_with_the_volume() {
+        let vol = |label: &str, total| Volume { letter: 'E', label: label.into(), total, free: 0 };
+        let list = |v: Volume| vec![Disk { number: 2, name: "USB".into(), size: 16, volumes: vec![v], ..Default::default() }];
+        let job = Job::Delete('E');
+        let old = target(&list(vol("PENDRIVE", 16)), &job);
+        assert!(old.is_some());
+        assert_eq!(old, target(&list(vol("PENDRIVE", 16)), &job));
+        assert_ne!(old, target(&list(vol("BACKUP", 16)), &job));
+        assert_ne!(old, target(&list(vol("PENDRIVE", 2000)), &job));
+        assert_eq!(target(&list(vol("X", 1)), &Job::Scan('F')), None);
+        let new = Job::Create { disk: 2, gb: None, fs: 0, label: String::new() };
+        assert!(target(&list(vol("X", 1)), &new).is_some());
+        assert_eq!(target(&list(vol("X", 1)), &Job::Create { disk: 3, gb: None, fs: 0, label: String::new() }), None);
     }
 
     #[test]
