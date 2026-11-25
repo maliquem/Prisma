@@ -507,8 +507,14 @@ impl Runner {
     }
 }
 
+/// O que o Xbox virtual recebe: com o radial do Prisma aberto (ou fechando com botão ainda apertado),
+/// nada; senão, o controle sem o que um atalho do Prisma está usando.
+fn to_game(i: Input, s: pads::Buttons, radial: bool) -> Input {
+    if radial { Input::default() } else { mask(i, s) }
+}
+
 /// Tira o que um atalho do Prisma está usando (`remap::swallowed`): o jogo não vê a Guia nem os
-/// gatilhos da troca Desktop/Base, nem o botão do radial aberto.
+/// gatilhos da troca Desktop/Base.
 fn mask(mut i: Input, s: pads::Buttons) -> Input {
     use super::remap::{LT, LTF, RT, RTF};
     if s & LT != 0 {
@@ -717,7 +723,8 @@ fn run() {
             OWN.fetch_or(!crate::stream::pads::xinput_mask() & 0xF, Ordering::Relaxed);
             freed = Instant::now();
         }
-        let list: Vec<(String, Input)> = pads::list().into_iter().map(|p| (mask(p.input, super::remap::swallowed(&p.key)), p.key)).map(|(i, k)| (k, i)).collect();
+        let radial = super::radial::holding();
+        let list: Vec<(String, Input)> = pads::list().into_iter().map(|p| (to_game(p.input, super::remap::swallowed(&p.key), radial), p.key)).map(|(i, k)| (k, i)).collect();
         // Só acrescenta: um controle que some por um instante (reconexão, o reinício do HidHide)
         // fica escondido até a ponte parar. Mostrar e esconder de novo a cada sumiço deixava o jogo
         // pegar o físico e reiniciava o controle em laço.
@@ -874,6 +881,10 @@ mod tests {
         let o = mask(i, pads::GUIDE | LT | RT);
         assert_eq!((o.buttons, o.lt, o.rt), (pads::A, 0.0, 0.0));
         assert_eq!(mask(i, 0).buttons, i.buttons);
+        // Radial aberto: o jogo não vê nem botão, nem stick, nem gatilho.
+        let held = Input { lx: 0.7, ry: -1.0, ..i };
+        assert_eq!(to_game(held, 0, true), Input::default());
+        assert_eq!(to_game(held, 0, false), held);
     }
 
     #[test]

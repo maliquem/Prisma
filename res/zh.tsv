@@ -3230,3 +3230,14 @@ Menu completo, com os nomes	完整菜单，显示名称
 Menu compacto, só com ícones	紧凑菜单，仅图标
 Troca automática ligada. Clique para deixar o plano fixo.	自动切换已开启。点击以固定电源计划。
 Troca automática desligada. Clique para ligar.	自动切换已关闭。点击以开启。
+Mostrar e esconder o Prisma	显示或隐藏 Prisma
+Ligar e desligar o shader	开关着色器
+Ligar e desligar o modo Desktop	开关 Desktop 模式
+Modo Desktop ligado	Desktop 模式已开启
+Modo Desktop desligado: fora dos jogos vale o Base	Desktop 模式已关闭：游戏之外使用 Base
+Modo Desktop fora dos jogos	游戏之外的 Desktop 模式
+Ligado, fora dos jogos o controle mexe o mouse (perfil Desktop), e Guia + os dois gatilhos troca entre Desktop e Base. Desligado, vale o Base em todo lugar, e a troca some. Assistindo outro PC pelo Compartilhar tela, sempre o Base.	开启时，游戏之外手柄控制鼠标（Desktop 配置），Guide + 两个扳机键可在 Desktop 和 Base 之间切换。关闭时，所有地方都使用 Base，切换也随之消失。通过“屏幕共享”观看另一台电脑时，始终使用 Base。
+Modo Desktop desligado: fora e dentro dos jogos, o perfil do programa ou o Base, que não muda nada.	Desktop 模式已关闭：无论游戏内外，都使用该程序的配置，或不做任何更改的 Base。
+O jogo vê o controle como ele é, e o perfil vale junto. Fora dos jogos, o Base (modo Desktop desligado).	游戏看到的是真实手柄，配置在其上生效。游戏之外使用 Base（Desktop 模式已关闭）。
+Combinações de teclas que abrem programas e chamam as funções do Prisma de qualquer lugar do Windows.	可在 Windows 任意位置打开程序并调用 Prisma 功能的组合键。
+As mesmas do Menu Radial. O atalho que a função já tem na página dela aparece aqui também.	与轮盘菜单相同。功能在其自己页面上已有的快捷键，也会显示在这里。

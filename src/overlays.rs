@@ -1727,6 +1727,10 @@ pub struct Radial {
     at: (i32, i32),
     names: [String; crate::sys::radial::ALL],
     icons: [u8; crate::sys::radial::ALL],
+    /// Programa de cada lugar "Abrir programa" (vazio nos outros), e o ícone de cada programa como o
+    /// Windows mostra (BGRA), lido uma vez.
+    paths: [String; crate::sys::radial::ALL],
+    exe_icons: std::collections::HashMap<String, Option<(u32, u32, Vec<u8>)>>,
     /// Nome do lugar cabe em duas linhas no gomo; senão, uma com reticências.
     wraps: [bool; crate::sys::radial::SLOTS],
     two: bool,
@@ -1787,6 +1791,8 @@ impl Radial {
             at: (0, 0),
             names: std::array::from_fn(|_| String::new()),
             icons: [0; crate::sys::radial::ALL],
+            paths: std::array::from_fn(|_| String::new()),
+            exe_icons: std::collections::HashMap::new(),
             wraps: [false; crate::sys::radial::SLOTS],
             two: false,
             groups: false,
@@ -1859,10 +1865,16 @@ impl Radial {
                 } else if a == PROFILES {
                     crate::i18n::tr("Trocar perfil").into_owned()
                 } else {
-                    crate::i18n::tr(crate::sys::remap::action_name(a)).into_owned()
+                    crate::pages::pad_profiles::action_label(a)
                 };
             }
             self.icons = cfg.pad_radial;
+            for (i, &a) in cfg.pad_radial.iter().enumerate() {
+                self.paths[i] = if a == crate::sys::radial::PROGRAM { cfg.pad_radial_prog[i].1.clone() } else { String::new() };
+                if !self.paths[i].is_empty() && !self.exe_icons.contains_key(&self.paths[i]) {
+                    self.exe_icons.insert(self.paths[i].clone(), crate::ui::icons::load(&self.paths[i]));
+                }
+            }
             // Lugar de perfis: as opções são os perfis lidos ao abrir.
             let choices = crate::sys::radial::choices();
             for i in (0..SLOTS).filter(|&i| cfg.pad_radial[i] == PROFILES) {
@@ -2002,6 +2014,12 @@ impl Radial {
         let (sv, sslot, sx, son) = (self.strip.v(), self.strip_slot, self.strip_x.v(), self.strip_on.v());
         let (fl, fslot) = (self.flash.v(), self.flash_slot);
         let (names, icons, wraps, hint, arrow, two, left, style) = (&self.names, &self.icons, &self.wraps, &self.hint, self.arrow, self.two, self.left, self.style);
+        // Ícone do lugar `kk`: o do programa, como o Windows mostra, ou o da ação.
+        let (paths, exe_icons) = (&self.paths, &self.exe_icons);
+        let slot_icon = |c: &Canvas, kk: usize, x: f32, y: f32, size: f32, col: Color| match exe_icons.get(&paths[kk]).and_then(|p| p.as_ref()).and_then(|(w, h, px)| c.bitmap(*w, *h, px)) {
+            Some(b) => c.draw_bitmap(&b, rect(x, y, size, size)),
+            None => c.icon(x, y, size, crate::pages::action_icon(icons[kk]), col),
+        };
         let (w, h) = (self.width(), self.height());
         self.surface.alpha = (s.clamp(0.0, 1.0) * 255.0).round() as u8;
         let m = (SHADOW * dpi_scale(self.surface.hwnd)).round() as i32;
@@ -2044,13 +2062,13 @@ impl Radial {
                         for (d, (dx, dy)) in [(0.0, -1.0), (1.0, 0.0), (0.0, 1.0), (-1.0, 0.0)].into_iter().enumerate() {
                             let kk = icons[sub(i, d)];
                             if kk != EMPTY {
-                                c.icon(px - 8.0 + dx * 20.0, py - 8.0 + dy * 18.0, 16.0, crate::pages::action_icon(kk), ic);
+                                slot_icon(c, sub(i, d), px - 8.0 + dx * 20.0, py - 8.0 + dy * 18.0, 16.0, ic);
                             }
                         }
                         continue;
                     }
                     // Ícone em cima, nome embaixo: duas linhas se couber, senão uma com reticências.
-                    c.icon(px - 10.5, py - 22.0, 21.0, crate::pages::action_icon(icons[i]), ic);
+                    slot_icon(c, i, px - 10.5, py - 22.0, 21.0, ic);
                     let (tc, wt) = if lit { (WHITE.alpha(ck), Weight::Semibold) } else { (TEXT2.alpha(ck), Weight::Regular) };
                     if wraps[i] {
                         c.text_wrap_center(rect(px - 43.0, py + 2.0, 86.0, 30.0), &names[i], 11.0, tc, wt);
@@ -2113,7 +2131,7 @@ impl Radial {
                     let b = bx(d as f32);
                     let on = sel == Some(i) && v.sub == Some(d);
                     crate::ui::glyph::dpad(c, b.x + 17.0, b.y + 17.0, 18.0, Some(d), if on { WHITE } else { MUTED }.alpha(sv));
-                    c.icon(b.x + b.w / 2.0 - 10.0, b.y + 7.0, 20.0, crate::pages::action_icon(icons[kk]), if on { WHITE } else { ACCENT }.alpha(sv));
+                    slot_icon(c, kk, b.x + b.w / 2.0 - 10.0, b.y + 7.0, 20.0, if on { WHITE } else { ACCENT }.alpha(sv));
                     c.text_wrap_center(rect(b.x + 6.0, b.y + 31.0, b.w - 12.0, 46.0), &names[kk], 11.0, if on { WHITE } else { TEXT2 }.alpha(sv), if on { Weight::Semibold } else { Weight::Regular });
                 }
             }

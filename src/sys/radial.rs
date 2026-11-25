@@ -136,6 +136,12 @@ pub struct View {
     pub watch: pads::Buttons,
 }
 
+/// O radial está com os controles: aberto, ou fechando com botão ainda apertado. Nada deles vai para o
+/// jogo nem para o perfil.
+pub fn holding() -> bool {
+    !matches!(*STATE.lock().unwrap(), State::Closed)
+}
+
 pub fn view() -> View {
     match &*STATE.lock().unwrap() {
         State::Open(r) => View {

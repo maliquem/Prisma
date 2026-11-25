@@ -3236,3 +3236,14 @@ Menu completo, com os nomes	Full menu, with names
 Menu compacto, só com ícones	Compact menu, icons only
 Troca automática ligada. Clique para deixar o plano fixo.	Automatic switching on. Click to keep the plan fixed.
 Troca automática desligada. Clique para ligar.	Automatic switching off. Click to turn it on.
+Mostrar e esconder o Prisma	Show and hide Prisma
+Ligar e desligar o shader	Turn the shader on and off
+Ligar e desligar o modo Desktop	Turn Desktop mode on and off
+Modo Desktop ligado	Desktop mode on
+Modo Desktop desligado: fora dos jogos vale o Base	Desktop mode off: outside games, Base applies
+Modo Desktop fora dos jogos	Desktop mode outside games
+Ligado, fora dos jogos o controle mexe o mouse (perfil Desktop), e Guia + os dois gatilhos troca entre Desktop e Base. Desligado, vale o Base em todo lugar, e a troca some. Assistindo outro PC pelo Compartilhar tela, sempre o Base.	On, outside games the controller moves the mouse (Desktop profile), and Guide + both triggers switches between Desktop and Base. Off, Base applies everywhere and the switch goes away. While watching another PC through Share screen, always Base.
+Modo Desktop desligado: fora e dentro dos jogos, o perfil do programa ou o Base, que não muda nada.	Desktop mode off: outside and inside games, the program's profile or Base, which changes nothing.
+O jogo vê o controle como ele é, e o perfil vale junto. Fora dos jogos, o Base (modo Desktop desligado).	The game sees the real controller, and the profile applies on top. Outside games, Base (Desktop mode off).
+Combinações de teclas que abrem programas e chamam as funções do Prisma de qualquer lugar do Windows.	Key combinations that open programs and call Prisma's functions from anywhere in Windows.
+As mesmas do Menu Radial. O atalho que a função já tem na página dela aparece aqui também.	The same as the Radial Menu. The shortcut a function already has on its own page shows up here too.

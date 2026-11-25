@@ -231,13 +231,37 @@ pub const PAGES: u8 = 33;
 /// Começa e para a gravação de macro (`sys::macros`). Fora de `ACTIONS`, que termina nas páginas;
 /// o número fica entre elas e `SOUND`.
 pub const MACRO_REC: u8 = 90;
+/// Ações fora de `ACTIONS` (que termina nas páginas), a partir de `MACRO_REC`. A ordem é a do arquivo:
+/// só crescem no fim, até antes de `SOUND`. Função nova do Prisma entra aqui (e ganha atalho na
+/// página Atalhos e lugar no radial sozinha).
+pub const MORE: [&str; 7] = [
+    "Gravar macro e parar",
+    "Foto do monitor do mouse",
+    "Mostrar e esconder o Prisma",
+    "Menu do HDR no jogo",
+    "Ligar e desligar o shader",
+    "Menu do shader no jogo",
+    "Ligar e desligar o modo Desktop",
+];
+/// Ação que liga e desliga o modo Desktop (`set_desktop`).
+pub const DESKTOP_MODE: u8 = 96;
 
 /// Nome da ação `n` do Prisma (sem as combinações de som); vazio se não existe.
 pub fn action_name(n: u8) -> &'static str {
-    if n == MACRO_REC {
-        return "Gravar macro e parar";
+    if n >= MACRO_REC {
+        return MORE.get((n - MACRO_REC) as usize).copied().unwrap_or("");
     }
     ACTIONS.get(n as usize).copied().unwrap_or("")
+}
+
+/// A ação `n` existe (sem as combinações de som).
+pub fn is_action(n: u8) -> bool {
+    !action_name(n).is_empty()
+}
+
+/// Todas as ações do Prisma, sem as combinações de som.
+pub fn prisma_actions() -> impl Iterator<Item = u8> {
+    (0..ACTIONS.len() as u8).chain(MACRO_REC..MACRO_REC + MORE.len() as u8)
 }
 const FAMILIES: [pads::Family; 6] = [pads::Family::DualSense, pads::Family::Ds4, pads::Family::Xbox, pads::Family::EightBitDo, pads::Family::Switch, pads::Family::Generic];
 
@@ -279,7 +303,11 @@ pub fn action_section(n: u8) -> Option<&'static str> {
         21 => "Configurações",
         22 => "Monitor",
         23 => "Pesquisar",
-        24..=27 | MACRO_REC => "Controles",
+        24..=27 | MACRO_REC | DESKTOP_MODE => "Controles",
+        91 => "Captura",
+        92 => "Configurações",
+        93 => "HDR",
+        94 | 95 => "Shaders",
         29..=31 => "Energia",
         32 => "Compartilhar tela",
         n if n >= SOUND => "Som",
@@ -1134,7 +1162,7 @@ pub fn combo_conflict(p: &Profile, combo: Buttons, for_turbo: bool) -> Option<St
     if combo & STOP_COMBO == STOP_COMBO || STOP_COMBO & combo == combo {
         return Some(tr("a parada de emergência"));
     }
-    if combo & pads::GUIDE != 0 && combo & (LT | RT | LTF | RTF) != 0 {
+    if DESK_ON.load(Ordering::Relaxed) && combo & pads::GUIDE != 0 && combo & (LT | RT | LTF | RTF) != 0 {
         return Some(tr("a troca entre Desktop e Base"));
     }
     if !for_turbo && p.turbo_key != 0 && combo & p.turbo_key == p.turbo_key {
@@ -1219,7 +1247,7 @@ fn parse_out(s: &str, strings: &mut Vec<String>) -> Option<Out> {
         "toggle" => Out::Toggle(n.parse::<u8>().ok()?),
         "macro" => Out::Macro(n.parse::<u8>().ok().filter(|&m| (m as usize) < MAX_MACROS)?),
         "text" => Out::Text(n.parse::<u8>().ok().filter(|&m| (m as usize) < MAX_TEXTS)?),
-        "action" => Out::Action(n.parse::<u8>().ok().filter(|&a| (a as usize) < ACTIONS.len() || a == MACRO_REC || (SOUND..SOUND + crate::app::SND_KEYS_MAX as u8).contains(&a))?),
+        "action" => Out::Action(n.parse::<u8>().ok().filter(|&a| is_action(a) || (SOUND..SOUND + crate::app::SND_KEYS_MAX as u8).contains(&a))?),
         _ => return None,
     };
     it.next().is_none().then_some(out)
@@ -1889,6 +1917,34 @@ pub fn set_reopen_last(on: bool) {
     REOPEN_LAST.store(on, Ordering::Relaxed);
 }
 
+/// Modo Desktop ligado; desligado, fora dos jogos vale o Base e a troca Guia + gatilhos some.
+static DESK_ON: AtomicBool = AtomicBool::new(true);
+/// Janela Assistir do Prisma na frente: o controle é do outro PC, e aqui vale só o Base.
+static WATCHING: AtomicBool = AtomicBool::new(false);
+
+pub fn set_desktop(on: bool) {
+    if DESK_ON.swap(on, Ordering::Relaxed) != on {
+        // O programa em foco é conferido de novo, para o perfil sair do Desktop (ou voltar a ele).
+        if let Some(r) = RUN.lock().unwrap().as_mut() {
+            r.exe.clear();
+        }
+        *FOCUS.lock().unwrap() = (None, 0, false);
+    }
+}
+
+/// O Desktop e a troca para ele valem agora.
+fn desktop_allowed() -> bool {
+    DESK_ON.load(Ordering::Relaxed) && !WATCHING.load(Ordering::Relaxed)
+}
+
+/// Perfil `to`, ou o Base no lugar do Desktop quando ele não vale (`allowed` falso).
+fn no_desktop(profiles: &[Profile], to: usize, allowed: bool) -> usize {
+    if allowed || profiles[to].name != DESKTOP {
+        return to;
+    }
+    profiles.iter().position(|p| p.name == BASE).unwrap_or(to)
+}
+
 /// Perfil do programa `exe`, entre os que o têm: o de agora (`keep`, o programa não mudou), o
 /// último usado nele (`last`), o padrão dele ou o primeiro. Nenhum: o programa não tem perfil.
 fn pick_for(profiles: &[Profile], exe: &str, keep: Option<usize>, last: Option<&str>) -> Option<usize> {
@@ -2272,10 +2328,11 @@ pub fn feed(key: &str, inp: &Input, arrived: Instant) {
         return;
     }
     // Guia segurado com um gatilho: é a troca entre Desktop e Base, e o perfil não vê os gatilhos
-    // (o Desktop baixaria e subiria o volume).
-    let gtrig = chord(key, inp);
+    // (o Desktop baixaria e subiria o volume). Sem o Desktop, a troca não existe.
+    let modes = desktop_allowed();
+    let gtrig = chord(key, inp) && modes;
     let quiet = Input { lt: 0.0, rt: 0.0, ..*inp };
-    let swap = mode_swap(key, inp.buttons & pads::GUIDE != 0 && inp.lt > 0.5 && inp.rt > 0.5);
+    let swap = mode_swap(key, modes && inp.buttons & pads::GUIDE != 0 && inp.lt > 0.5 && inp.rt > 0.5);
     let inp = if gtrig { &quiet } else { inp };
     let mut events = vec![];
     let mut radial = None;
@@ -2332,7 +2389,7 @@ pub fn feed(key: &str, inp: &Input, arrived: Instant) {
             // Botões que o perfil liga junto com o do radial: com eles, o radial dá passagem.
             let combo = r.profiles[mine].layers.iter().flat_map(|l| &l.binds).fold(0, |m, b| if b.with & rb != 0 { m | b.button } else if b.button == rb && b.with != 0 { m | b.with } else { m }) & !rb;
             // A troca Desktop/Base conta como combinação do guia: o radial nele dá passagem.
-            let trig = super::radial::trigger(key, inp.buttons | if gtrig { LT } else { 0 }, arrived, r.profiles[mine].name == BASE, combo | LT);
+            let trig = super::radial::trigger(key, inp.buttons | if gtrig { LT } else { 0 }, arrived, r.profiles[mine].name == BASE, combo | if modes { LT } else { 0 });
             radial = trig.open;
             if trig.win_g {
                 acts.extend([Act::Down(Out::Key(0x47, WIN)), Act::Up(Out::Key(0x47, WIN))]);
@@ -2629,6 +2686,7 @@ fn focus_tick(now: Instant) {
     if (h.0 as isize, full) != (last.1, last.2) {
         (last.1, last.2) = (h.0 as isize, full);
         drop(last);
+        WATCHING.store(super::procs::class_of(h) == "PrismaAssistir", Ordering::Relaxed);
         on_focus(super::procs::window_pid(h), full);
     }
 }
@@ -2671,13 +2729,10 @@ fn chord(key: &str, inp: &Input) -> bool {
 }
 
 /// Bits que um atalho do Prisma consome no controle `key` (`Pad::key`), para a ponte não repassá-los ao
-/// Xbox virtual: Guia e gatilhos durante a troca Desktop/Base, e o botão do radial com ele aberto.
+/// Xbox virtual: Guia e gatilhos durante a troca Desktop/Base. Com o radial aberto, a ponte não
+/// repassa nada (`radial::holding`).
 pub fn swallowed(key: &str) -> pads::Buttons {
-    let mut b = if CHORD.lock().unwrap().iter().any(|k| k == key) { pads::GUIDE | LT | RT } else { 0 };
-    if super::radial::view().open {
-        b |= super::radial::button();
-    }
-    b
+    if desktop_allowed() && CHORD.lock().unwrap().iter().any(|k| k == key) { pads::GUIDE | LT | RT } else { 0 }
 }
 
 static MODE_HELD: Mutex<Vec<String>> = Mutex::new(Vec::new());
@@ -2730,6 +2785,7 @@ fn on_focus(pid: u32, full: bool) {
         let same_run = r.pids.insert(exe.clone(), pid) == Some(pid);
         let last = if same_run || REOPEN_LAST.load(Ordering::Relaxed) { r.last.get(&exe).map(String::as_str) } else { None };
         let to = pick_for(&r.profiles, &exe, keep, last).unwrap_or_else(|| if game { named(BASE) } else { named(DESKTOP) });
+        let to = no_desktop(&r.profiles, to, desktop_allowed());
         pads::trace(|| format!("foco {exe} tela cheia {full} jogo {game} perfil {} fixos {:?}", r.profiles[to].name, r.fixed));
         r.exe = exe.clone();
         r.want = (to != r.cur).then(|| (to, Instant::now() + SWITCH_DELAY));
@@ -3126,6 +3182,18 @@ buzz 9
         preview_light(None);
         preview_commit();
         assert_eq!(*PREVIEW.lock().unwrap(), None);
+    }
+
+    /// Sem o Desktop (desligado ou assistindo), o Base fica no lugar dele; os outros perfis não mudam.
+    #[test]
+    fn base_takes_the_desktop_place() {
+        let mut other = Profile::base();
+        other.name = "Corrida".into();
+        let list = vec![Profile::desktop(), other, Profile::base()];
+        assert_eq!(no_desktop(&list, 0, true), 0);
+        assert_eq!(no_desktop(&list, 0, false), 2);
+        assert_eq!(no_desktop(&list, 1, false), 1);
+        assert_eq!(no_desktop(&list[..2], 0, false), 0);
     }
 
     #[test]

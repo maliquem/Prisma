@@ -1,17 +1,20 @@
-//! Atalhos: combinações de teclas que abrem programas, da lista ou de um .exe.
+//! Atalhos: combinações de teclas que abrem programas, da lista ou de um .exe, e que chamam as
+//! ações do Prisma (as mesmas do radial e dos botões do controle).
 
 use super::picker::Target;
 use super::*;
 use crate::app::RUN_KEYS_MAX;
 use crate::config::RunKey;
+use crate::sys::remap;
 
 pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
-    header(ui, a, "Atalhos", "Combinações de teclas que abrem programas de qualquer lugar do Windows.");
+    header(ui, a, "Atalhos", "Combinações de teclas que abrem programas e chamam as funções do Prisma de qualquer lugar do Windows.");
     let x = a.x + 28.0;
     let w = a.w - 56.0;
     let top = 88.0;
     let n = app.cfg.run_keys.len();
-    let k = rect(x, top, w, a.h - 20.0 - top);
+    let room = a.h - 20.0 - top;
+    let k = rect(x, top, w, (room * 0.42).max(170.0));
     ui.card(k);
     ui.title(rect(k.x + 16.0, k.y + 12.0, k.w - 160.0, 22.0), "Atalhos de programa");
     if ui.button_ex("run-add", rect(k.right() - 124.0, k.y + 8.0, 108.0, 32.0), "Adicionar", false, n < RUN_KEYS_MAX) {
@@ -84,6 +87,48 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
         keys_changed = true;
     }
     if keys_changed {
+        app.cfg.save();
+        app.register_hotkeys();
+    }
+    actions(ui, app, rect(x, k.bottom() + 12.0, w, (top + room - k.bottom() - 12.0).max(120.0)));
+}
+
+/// Ações do Prisma que um atalho pode chamar: todas as do radial e dos botões do controle, menos as
+/// que só fazem sentido no controle (o radial, o teclado do Prisma, desconectar e a bateria).
+fn action_ids(app: &App) -> Vec<u8> {
+    let sounds = app.cfg.snd_keys.len().min(crate::app::SND_KEYS_MAX) as u8;
+    remap::prisma_actions().filter(|a| !remap::PAD_ACTIONS.contains(a)).chain((0..sounds).map(|n| remap::SOUND + n)).collect()
+}
+
+/// Cartão com um atalho para cada ação do Prisma. A que já tem atalho na página dela usa o mesmo:
+/// mudar aqui muda lá.
+fn actions(ui: &mut Ui, app: &mut App, k: Rect) {
+    ui.card(k);
+    ui.title(rect(k.x + 16.0, k.y + 12.0, k.w - 32.0, 22.0), "Funções do Prisma");
+    ui.c.text_fit(rect(k.x + 16.0, k.y + 38.0, k.w - 32.0, 20.0), "As mesmas do Menu Radial. O atalho que a função já tem na página dela aparece aqui também.", 12.0, MUTED, Align::Left, Weight::Regular);
+    let ids = action_ids(app);
+    let taken = app.hk_taken();
+    let fw = 200.0f32.min(k.w * 0.3);
+    let list = rect(k.x, k.y + 66.0, k.w, k.h - 74.0);
+    ui.begin_scroll("act-list", list, ids.len() as f32 * 44.0);
+    let mut changed = false;
+    for (i, &n) in ids.iter().enumerate() {
+        let ry = list.y + i as f32 * 44.0;
+        let id = app.action_key_id(n);
+        let mut hk = app.hotkey_of(id);
+        let nw = k.w - 32.0 - fw - 12.0;
+        ui.c.text_fit(rect(k.x + 16.0, ry, nw, 36.0), &super::pad_profiles::action_choice(n), 13.0, TEXT, Align::Left, Weight::Regular);
+        let at = rect(k.right() - 16.0 - fw, ry, fw, 36.0);
+        if ui.hotkey(&format!("act-k{n}"), at, &mut hk) {
+            app.set_hotkey(id, hk);
+            changed = true;
+        }
+        if hk.vk != 0 && taken.contains(&id) {
+            ui.c.text(rect(at.x, ry + 30.0, fw, 14.0), "Já usada por outro programa", 10.0, WARN, Align::Left, Weight::Regular);
+        }
+    }
+    ui.end_scroll();
+    if changed {
         app.cfg.save();
         app.register_hotkeys();
     }

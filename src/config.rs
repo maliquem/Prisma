@@ -275,6 +275,12 @@ impl RunKey {
     }
 }
 
+/// Linha `act_key=` do config.ini: `ação|mods,vk`.
+fn parse_act_key(v: &str) -> Option<(u8, Hotkey)> {
+    let (n, k) = v.split_once('|')?;
+    Some((n.parse().ok().filter(|&n| crate::sys::remap::is_action(n) && !crate::sys::remap::PAD_ACTIONS.contains(&n))?, Hotkey::parse(k)))
+}
+
 /// Tela cujas opções voltam ao padrão.
 #[derive(Clone, Copy, PartialEq)]
 pub enum Defaults {
@@ -429,6 +435,8 @@ pub struct Config {
     pub snd_keys: Vec<SndKey>,
     /// Atalhos que abrem programas (página Atalhos).
     pub run_keys: Vec<RunKey>,
+    /// Atalhos da página Atalhos para as ações do Prisma sem atalho próprio: (ação de `remap::ACTIONS`, teclas).
+    pub act_keys: Vec<(u8, Hotkey)>,
     /// Com o Prisma como administrador, atalhos "Como administrador" passam pela pergunta do Windows.
     pub run_key_uac: bool,
     /// Nomes que o usuário deu aos aparelhos pareados: (id do aparelho, nome).
@@ -490,6 +498,8 @@ pub struct Config {
     pub pad_radial_keep: bool,
     /// Programa com vários perfis abre com o último usado nele (desligado: com o padrão dele).
     pub pad_reopen_last: bool,
+    /// Perfil Desktop fora dos jogos (desligado: o Base, sem a troca Guia + gatilhos).
+    pub pad_desktop: bool,
     /// Teclado do Prisma com os dois sticks: letras num círculo, números e símbolos no outro.
     pub pad_osk_two: bool,
     /// Com os dois sticks, as letras ficam no direito (de fábrica, no esquerdo).
@@ -637,6 +647,7 @@ impl Default for Config {
             eq_devs: Vec::new(),
             snd_keys: Vec::new(),
             run_keys: Vec::new(),
+            act_keys: Vec::new(),
             run_key_uac: false,
             share_names: Vec::new(),
             black: Vec::new(),
@@ -675,6 +686,7 @@ impl Default for Config {
             pad_radial_tap: false,
             pad_radial_keep: true,
             pad_reopen_last: false,
+            pad_desktop: true,
             pad_osk_two: false,
             pad_osk_letters_right: false,
             pad_osk_dodge: true,
@@ -754,7 +766,7 @@ fn funcs_line(off: &[u8]) -> String {
 
 fn parse_radial(v: &str) -> Option<[u8; crate::sys::radial::ALL]> {
     use crate::sys::{radial::{ALL, EMPTY, GROUP, PROFILES, PROGRAM, SLOTS}, remap};
-    let list: Vec<u8> = v.split(',').enumerate().map(|(i, x)| x.trim().parse::<u8>().ok().filter(|&a| a == EMPTY || a == PROGRAM || ((a == GROUP || a == PROFILES) && i < SLOTS) || a == remap::MACRO_REC || ((a as usize) < remap::ACTIONS.len() && a != remap::RADIAL))).collect::<Option<_>>()?;
+    let list: Vec<u8> = v.split(',').enumerate().map(|(i, x)| x.trim().parse::<u8>().ok().filter(|&a| a == EMPTY || a == PROGRAM || ((a == GROUP || a == PROFILES) && i < SLOTS) || (remap::is_action(a) && a != remap::RADIAL) || (remap::SOUND..remap::SOUND + crate::app::SND_KEYS_MAX as u8).contains(&a))).collect::<Option<_>>()?;
     let mut out = radial_default();
     match list.len() {
         8 | SLOTS | ALL => out[..list.len()].copy_from_slice(&list),
@@ -927,6 +939,7 @@ impl Config {
                 }
                 "snd_key" => c.snd_keys.extend(SndKey::parse(v)),
                 "run_key" => c.run_keys.extend(RunKey::parse(v)),
+                "act_key" => c.act_keys.extend(parse_act_key(v)),
                 "run_key_uac" => c.run_key_uac = b,
                 "snd_keep" => c.snd_keep = v.parse().unwrap_or(0),
                 "share_name" => {
@@ -1023,6 +1036,7 @@ impl Config {
                 "pad_radial_tap" => c.pad_radial_tap = b,
                 "pad_radial_keep" => c.pad_radial_keep = b,
                 "pad_reopen_last" => c.pad_reopen_last = b,
+                "pad_desktop" => c.pad_desktop = b,
                 "pad_osk_two" => c.pad_osk_two = b,
                 "pad_osk_letters_right" => c.pad_osk_letters_right = b,
                 "pad_osk_dodge" => c.pad_osk_dodge = b,
@@ -1183,6 +1197,7 @@ impl Config {
         let _ = writeln!(s, "pad_radial_tap={}", b(self.pad_radial_tap));
         let _ = writeln!(s, "pad_radial_keep={}", b(self.pad_radial_keep));
         let _ = writeln!(s, "pad_reopen_last={}", b(self.pad_reopen_last));
+        let _ = writeln!(s, "pad_desktop={}", b(self.pad_desktop));
         let _ = writeln!(s, "pad_osk_two={}", b(self.pad_osk_two));
         let _ = writeln!(s, "pad_osk_letters_right={}", b(self.pad_osk_letters_right));
         let _ = writeln!(s, "pad_osk_dodge={}", b(self.pad_osk_dodge));
@@ -1231,6 +1246,9 @@ impl Config {
         }
         for k in &self.run_keys {
             let _ = writeln!(s, "run_key={}", k.line());
+        }
+        for (n, k) in self.act_keys.iter().filter(|e| e.1.vk != 0) {
+            let _ = writeln!(s, "act_key={n}|{},{}", k.mods, k.vk);
         }
         let _ = writeln!(s, "run_key_uac={}", b(self.run_key_uac));
         let _ = writeln!(s, "snd_keep={}", self.snd_keep);
@@ -1514,6 +1532,17 @@ mod tests {
         assert_eq!(FsApp::parse(r"jogo.exe|0|C:\jogo.exe").unwrap().kind, 0, "linha antiga fica 3D");
         assert_eq!(FsApp::parse(r"jogo.exe|0|C:\jogo.exe|9").unwrap().kind, 0, "tipo que não existe");
         assert!(FsApp::parse("jogo.exe|1").is_none());
+    }
+
+    #[test]
+    fn act_key_round_trip() {
+        assert_eq!(parse_act_key(&format!("14|{},72", MOD_CTRL)), Some((14, Hotkey::new(MOD_CTRL, 0x48))));
+        assert_eq!(parse_act_key("90|2,72").map(|e| e.0), Some(crate::sys::remap::MACRO_REC));
+        // Ação que não existe (ou só de controle, como o radial) e linha quebrada: nada.
+        assert_eq!(parse_act_key("27|2,72"), None);
+        assert_eq!(parse_act_key("250|2,72"), None);
+        assert_eq!(parse_act_key("x"), None);
+        assert!(Config::default().pad_desktop);
     }
 
     #[test]

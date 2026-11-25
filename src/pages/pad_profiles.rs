@@ -323,9 +323,14 @@ const PAD_KINDS: [(usize, u8, &str); 4] = [
     (15, 25, "Mostra a bateria deste controle"),
 ];
 
+/// Nome de uma ação do Prisma, com as combinações de som.
+pub fn action_label(n: u8) -> String {
+    if n >= remap::SOUND { tr("Combinação de som {}").replace("{}", &(n - remap::SOUND + 1).to_string()) } else { tr(remap::action_name(n)) }
+}
+
 /// Nome de uma ação do Prisma nas listas, com a página de onde vem antes: "(Medidor) Medidor compacto".
 pub fn action_choice(n: u8) -> String {
-    let name = if n >= remap::SOUND { tr("Combinação de som {}").replace("{}", &(n - remap::SOUND + 1).to_string()) } else { tr(remap::action_name(n)) };
+    let name = action_label(n);
     match remap::action_section(n) {
         Some(sec) => format!("({}) {name}", tr(sec)),
         None => name,
@@ -444,8 +449,7 @@ fn describe(o: Out, p: &Profile) -> String {
         Out::Wheel(n) => tr(WHEEL[if n > 0 { 0 } else { 1 }]),
         Out::Layer(n) => tr("Camada {} enquanto segura").replace("{}", &layer_name(p, n)),
         Out::Toggle(n) => tr("Liga e desliga a camada {}").replace("{}", &layer_name(p, n)),
-        Out::Action(n) if n >= remap::SOUND => tr("Combinação de som {}").replace("{}", &(n - remap::SOUND + 1).to_string()),
-        Out::Action(n) => tr(remap::action_name(n)),
+        Out::Action(n) => action_label(n),
         Out::Profile(n) => tr("Trocar para o perfil {}").replace("{}", p.strings.get(n as usize).map_or("", |s| s)),
         Out::Run(n) => tr("Abrir {}").replace("{}", &p.strings.get(n as usize).map_or_else(String::new, |s| if remap::link_ok(s) { s.clone() } else { crate::sys::procs::exe_name(s) })),
         Out::Macro(n) => tr("Macro {}").replace("{}", p.macros.get(n as usize).map_or("", |m| &m.name)),
@@ -1265,7 +1269,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, r: Rect, family: Family, tab: usize) {
     let sounds = app.cfg.snd_keys.len().min(crate::app::SND_KEYS_MAX);
     let others_p: Vec<String> = list.iter().map(|o| o.name.clone()).filter(|n| *n != p.name).collect();
     // Ações do Prisma fora da seção Controles, mais as combinações de som.
-    let prisma_ids: Vec<u8> = (0..remap::ACTIONS.len() as u8).filter(|a| !remap::PAD_ACTIONS.contains(a)).chain([remap::MACRO_REC]).chain((0..sounds as u8).map(|n| remap::SOUND + n)).collect();
+    let prisma_ids: Vec<u8> = remap::prisma_actions().filter(|a| !remap::PAD_ACTIONS.contains(a)).chain((0..sounds as u8).map(|n| remap::SOUND + n)).collect();
     let values: Vec<String> = match ed.kind {
         1 => SPECIAL.iter().map(|s| tr(s.1)).collect(),
         2 => MOUSE.iter().map(|s| tr(s)).collect(),

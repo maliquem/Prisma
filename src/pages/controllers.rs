@@ -417,8 +417,12 @@ fn pad_card(ui: &mut Ui, app: &mut App, list: &[Pad], at: Rect) -> f32 {
     }
     let note = if xbox {
         bridge_note(&stage)
+    } else if map && !app.cfg.pad_desktop {
+        "Modo Desktop desligado: fora e dentro dos jogos, o perfil do programa ou o Base, que não muda nada."
     } else if map {
         "Fora dos jogos, mouse e teclado. Nos jogos, o perfil do jogo ou o Base, que não muda nada."
+    } else if !app.cfg.pad_desktop {
+        "O jogo vê o controle como ele é, e o perfil vale junto. Fora dos jogos, o Base (modo Desktop desligado)."
     } else {
         "O jogo vê o controle como ele é, e o perfil vale junto. Fora dos jogos, o Desktop."
     };
@@ -525,7 +529,7 @@ fn alerts(ui: &mut Ui, app: &mut App, list: &[Pad], at: Rect) -> f32 {
         app.apply_pads();
     }
     y += r.h + 12.0;
-    y = mapping(ui, rect(x, y, lw, 0.0));
+    y = mapping(ui, app, rect(x, y, lw, 0.0));
     for t in &app.pads.conflicts {
         let r = rect(x, y, lw, 64.0);
         ui.card(r);
@@ -1025,8 +1029,8 @@ fn rows_draw(ui: &mut Ui, x: f32, y: f32, w: f32, rows: &[(&str, String, bool)])
 
 /// Texto para colar num relatório: controles, conexão, taxa, bateria, conflitos.
 /// Mapeamento: liga e desliga, perfil ativo, parada de emergência e o tempo interno.
-fn mapping(ui: &mut Ui, at: Rect) -> f32 {
-    let r = rect(at.x, at.y, at.w, 180.0);
+fn mapping(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
+    let r = rect(at.x, at.y, at.w, 228.0);
     ui.card(r);
     ui.title(rect(r.x + 16.0, r.y + 12.0, r.w - 32.0, 22.0), "Mapeamento");
     let state = match (remap::stopped(), remap::active()) {
@@ -1040,6 +1044,12 @@ fn mapping(ui: &mut Ui, at: Rect) -> f32 {
         let t = crate::i18n::tr("Tempo interno: {} µs na mediana, {} µs no p99").replacen("{}", &med.to_string(), 1).replacen("{}", &p99.to_string(), 1);
         ui.c.text_fit(rect(r.x + 16.0, r.y + ny + 80.0, r.w - 32.0, 20.0), &t, 12.0, MUTED, Align::Left, Weight::Regular);
     }
+    let check = rect(r.x + 10.0, r.y + ny + 108.0, r.w - 20.0, 36.0);
+    if ui.check("pad-desktop", check, "Modo Desktop fora dos jogos", &mut app.cfg.pad_desktop) {
+        app.cfg.save();
+        app.apply_pads();
+    }
+    ui.tip(check, "Ligado, fora dos jogos o controle mexe o mouse (perfil Desktop), e Guia + os dois gatilhos troca entre Desktop e Base. Desligado, vale o Base em todo lugar, e a troca some. Assistindo outro PC pelo Compartilhar tela, sempre o Base.");
     r.bottom() + 12.0
 }
 
@@ -1210,8 +1220,9 @@ fn radial(ui: &mut Ui, app: &mut App, at: Rect) -> f32 {
         changed = true;
     }
     ui.tip(check, "Um círculo em cada stick, com 8 lugares cada. O stick que apontar por último escolhe.");
-    // Nada, e todas as ações menos o próprio radial.
-    let ids: Vec<u8> = std::iter::once(EMPTY).chain((0..remap::ACTIONS.len() as u8).filter(|&a| a != remap::RADIAL)).chain([remap::MACRO_REC]).collect();
+    // Nada, e todas as ações menos o próprio radial, com as combinações de som.
+    let sounds = app.cfg.snd_keys.len().min(crate::app::SND_KEYS_MAX) as u8;
+    let ids: Vec<u8> = std::iter::once(EMPTY).chain(remap::prisma_actions().filter(|&a| a != remap::RADIAL)).chain((0..sounds).map(|n| remap::SOUND + n)).collect();
     let names: Vec<String> = ids.iter().map(|&a| if a == EMPTY { crate::i18n::tr("Nada").into_owned() } else { super::pad_profiles::action_choice(a) }).collect();
     // Nos lugares (não nas 4 opções), também a troca de perfil.
     // Logo depois de "Nada", para não sumir no fim da lista das ações.

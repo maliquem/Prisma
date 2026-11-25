@@ -3230,3 +3230,14 @@ Menu completo, com os nomes	Полное меню, с названиями
 Menu compacto, só com ícones	Компактное меню, только значки
 Troca automática ligada. Clique para deixar o plano fixo.	Автопереключение включено. Нажмите, чтобы закрепить план.
 Troca automática desligada. Clique para ligar.	Автопереключение выключено. Нажмите, чтобы включить.
+Mostrar e esconder o Prisma	Показать или скрыть Prisma
+Ligar e desligar o shader	Включить или выключить шейдер
+Ligar e desligar o modo Desktop	Включить или выключить режим Desktop
+Modo Desktop ligado	Режим Desktop включён
+Modo Desktop desligado: fora dos jogos vale o Base	Режим Desktop выключен: вне игр действует Base
+Modo Desktop fora dos jogos	Режим Desktop вне игр
+Ligado, fora dos jogos o controle mexe o mouse (perfil Desktop), e Guia + os dois gatilhos troca entre Desktop e Base. Desligado, vale o Base em todo lugar, e a troca some. Assistindo outro PC pelo Compartilhar tela, sempre o Base.	Когда включён, вне игр геймпад двигает мышь (профиль Desktop), а Guide + оба триггера переключает между Desktop и Base. Когда выключен, везде действует Base, а переключение пропадает. При просмотре другого ПК через «Общий экран» всегда Base.
+Modo Desktop desligado: fora e dentro dos jogos, o perfil do programa ou o Base, que não muda nada.	Режим Desktop выключен: и вне игр, и в играх — профиль программы или Base, который ничего не меняет.
+O jogo vê o controle como ele é, e o perfil vale junto. Fora dos jogos, o Base (modo Desktop desligado).	Игра видит настоящий геймпад, профиль действует поверх. Вне игр — Base (режим Desktop выключен).
+Combinações de teclas que abrem programas e chamam as funções do Prisma de qualquer lugar do Windows.	Сочетания клавиш, которые открывают программы и вызывают функции Prisma из любого места Windows.
+As mesmas do Menu Radial. O atalho que a função já tem na página dela aparece aqui também.	Те же, что и в радиальном меню. Сочетание, которое у функции уже есть на её странице, показано и здесь.

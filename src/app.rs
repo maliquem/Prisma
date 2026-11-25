@@ -302,6 +302,24 @@ pub const SND_KEYS_MAX: usize = 12;
 /// Atalhos da página Atalhos: um id para cada, a partir daqui.
 const HK_RUN: i32 = 200;
 pub const RUN_KEYS_MAX: usize = 32;
+/// Atalhos da página Atalhos para as ações do Prisma sem atalho próprio: `HK_ACT + ação`.
+const HK_ACT: i32 = 300;
+/// As ações vão até antes das combinações de som (`remap::SOUND`).
+const HK_ACT_END: i32 = HK_ACT + crate::sys::remap::SOUND as i32;
+
+/// Atalho próprio da ação `n` do Prisma (`remap::ACTIONS` e `remap::MORE`); 0 se não tem.
+fn action_hotkey(n: u8) -> i32 {
+    // Mesma ordem de `remap::ACTIONS`; 0 marca as que não são atalho.
+    const HK: [i32; 28] = [
+        HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_REPLAY, HK_METER_C, HK_METER_F, HK_METER_O, HK_METER_KEYS, HK_LOG,
+        HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, 0, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE, HK_FULL, HK_WIDGET, HK_OPT, HK_FORCE, HK_EXPLORER,
+        HK_FIND, 0, 0, 0, 0,
+    ];
+    // Mesma ordem de `remap::MORE`.
+    const MORE: [i32; 7] = [HK_MACRO, HK_SHOT_MON, HK_SHOW, HK_HDR_MENU, HK_SHADER, HK_SHADER_MENU, 0];
+    let m = crate::sys::remap::MACRO_REC;
+    if n >= m { MORE.get((n - m) as usize) } else { HK.get(n as usize) }.copied().unwrap_or(0)
+}
 
 const VK_VOL_UP: u32 = 0xAF;
 const VK_VOL_DOWN: u32 = 0xAE;
@@ -1289,6 +1307,9 @@ impl App {
             for i in 0..RUN_KEYS_MAX as i32 {
                 let _ = UnregisterHotKey(Some(self.hub), HK_RUN + i);
             }
+            for id in HK_ACT..HK_ACT_END {
+                let _ = UnregisterHotKey(Some(self.hub), id);
+            }
         }
         self.hk_errors.clear();
         let mut list = self.hotkey_list();
@@ -1423,6 +1444,10 @@ impl App {
         for (i, k) in c.run_keys.iter().take(RUN_KEYS_MAX).enumerate() {
             list.push((HK_RUN + i as i32, k.key, "Abrir programa", true));
         }
+        for &(n, k) in &c.act_keys {
+            // Os de aumentar e diminuir repetem segurando, como os próprios.
+            list.push((HK_ACT + n as i32, k, crate::sys::remap::action_name(n), !matches!(n, 12 | 13 | 15 | 16)));
+        }
         list.retain(|e| crate::pages::is_on(c, hk_page(e.0)));
         list
     }
@@ -1457,6 +1482,13 @@ impl App {
             HK_SHADER => &mut c.hk_shader[0],
             HK_SHADER_MENU => &mut c.hk_shader[1],
             HK_HDR_MENU => &mut c.hk_hdr_menu,
+            id if (HK_ACT..HK_ACT_END).contains(&id) => {
+                let n = (id - HK_ACT) as u8;
+                if !c.act_keys.iter().any(|e| e.0 == n) {
+                    c.act_keys.push((n, Hotkey::default()));
+                }
+                &mut c.act_keys.iter_mut().find(|e| e.0 == n)?.1
+            }
             id if id >= HK_RUN => &mut c.run_keys.get_mut((id - HK_RUN) as usize)?.key,
             id if id >= HK_SND => &mut c.snd_keys.get_mut((id - HK_SND) as usize)?.key,
             _ => return None,
@@ -1469,6 +1501,34 @@ impl App {
         let run = (HK_RUN..HK_RUN + RUN_KEYS_MAX as i32).contains(&id);
         let prog = self.cfg.run_keys.get((id - HK_RUN).max(0) as usize).filter(|k| run && !k.path.is_empty());
         (prog.map_or_else(|| self.hk_name(id).to_string(), |k| crate::sys::procs::exe_name(&k.path)), hk_place_page(id))
+    }
+
+    /// Atalho da ação `n` do Prisma na página Atalhos: o próprio dela (o mesmo da página dona) ou,
+    /// sem um, o desta página (`HK_ACT`). As combinações de som são as da página Som.
+    pub fn action_key_id(&mut self, n: u8) -> i32 {
+        let s = crate::sys::remap::SOUND;
+        let own = if n >= s { HK_SND + (n - s) as i32 } else { action_hotkey(n) };
+        if own != 0 && self.hk_slot(own).is_some() { own } else { HK_ACT + n as i32 }
+    }
+
+    /// Teclas do atalho `id` (sem criar a linha de um `HK_ACT` que ainda não existe).
+    pub fn hotkey_of(&mut self, id: i32) -> Hotkey {
+        if (HK_ACT..HK_ACT_END).contains(&id) {
+            return self.cfg.act_keys.iter().find(|e| e.0 as i32 == id - HK_ACT).map_or(Hotkey::default(), |e| e.1);
+        }
+        self.hk_slot(id).map_or(Hotkey::default(), |h| *h)
+    }
+
+    /// Troca as teclas do atalho `id`; quem chama grava e registra de novo.
+    pub fn set_hotkey(&mut self, id: i32, hk: Hotkey) {
+        if let Some(s) = self.hk_slot(id) {
+            *s = hk;
+        }
+    }
+
+    /// Atalhos que o Windows recusou (outro programa já tem a combinação).
+    pub fn hk_taken(&self) -> Vec<i32> {
+        hk_to_retry(&self.hotkey_list(), &self.hk_errors).into_iter().map(|e| e.0).collect()
     }
 
     pub fn hk_name(&self, id: i32) -> &'static str {
@@ -1501,6 +1561,9 @@ impl App {
                 // Os da página Atalhos também: a combinação gravada não pode abrir o programa.
                 for i in 0..RUN_KEYS_MAX as i32 {
                     let _ = UnregisterHotKey(Some(self.hub), HK_RUN + i);
+                }
+                for id in HK_ACT..HK_ACT_END {
+                    let _ = UnregisterHotKey(Some(self.hub), id);
                 }
             }
         } else {
@@ -1576,6 +1639,11 @@ impl App {
             HK_MUTE => self.volume(audio::Change::ToggleMute),
             id if (HK_SND..HK_SND + SND_KEYS_MAX as i32).contains(&id) => self.sound_default((id - HK_SND) as usize),
             id if (HK_RUN..HK_RUN + RUN_KEYS_MAX as i32).contains(&id) => self.run_key((id - HK_RUN) as usize),
+            id if (HK_ACT..HK_ACT_END).contains(&id) => {
+                if let Some(t) = self.pad_action((id - HK_ACT) as u8, "") {
+                    self.toast.info(&t);
+                }
+            }
             _ => {}
         }
     }
@@ -3956,12 +4024,6 @@ impl App {
     /// Botão do controle ligado a uma ação do Prisma. Devolve o aviso a mostrar, se houver.
     fn pad_action(&mut self, id: u8, pad: &str) -> Option<String> {
         let name = crate::sys::pads::list().into_iter().find(|p| p.key == pad);
-        // Mesma ordem de `remap::ACTIONS`; 0 marca as que não são atalho.
-        const HK: [i32; 28] = [
-            HK_SHOT, HK_SHOT_FULL, HK_SHOT_WIN, HK_REC, HK_REC_FULL, HK_REPLAY, HK_METER_C, HK_METER_F, HK_METER_O, HK_METER_KEYS, HK_LOG,
-            HK_LIMIT_T, HK_LIMIT_UP, HK_LIMIT_DOWN, 0, HK_VOL_UP, HK_VOL_DOWN, HK_MUTE, HK_FULL, HK_WIDGET, HK_OPT, HK_FORCE, HK_EXPLORER,
-            HK_FIND, 0, 0, 0, 0,
-        ];
         match id {
             14 => {
                 // O Windows leva até alguns segundos para trocar a tela: fora da janela.
@@ -3977,6 +4039,13 @@ impl App {
                 return Some(if crate::sys::pads::disconnect(pad) { format!("{n} desconectado") } else { format!("{n} não está no Bluetooth ou não desconectou") });
             }
             crate::sys::remap::MACRO_REC => self.macro_toggle(None),
+            crate::sys::remap::DESKTOP_MODE => {
+                self.cfg.pad_desktop = !self.cfg.pad_desktop;
+                self.cfg.save();
+                self.apply_pads();
+                self.invalidate();
+                return Some(crate::i18n::tr(if self.cfg.pad_desktop { "Modo Desktop ligado" } else { "Modo Desktop desligado: fora dos jogos vale o Base" }).into_owned());
+            }
             crate::sys::remap::RADIAL => {
                 crate::sys::radial::open_action(pad);
                 self.radial.update(&self.cfg);
@@ -4005,7 +4074,7 @@ impl App {
                     self.show_main();
                 }
             }
-            n if n >= crate::sys::remap::PAGES && n < crate::sys::remap::SOUND => {
+            n if n >= crate::sys::remap::PAGES && n < crate::sys::remap::MACRO_REC => {
                 if let Some((page, _)) = crate::pages::nav_page((n - crate::sys::remap::PAGES) as usize) {
                     if crate::pages::shown(&self.cfg, page) {
                         self.go(page);
@@ -4014,11 +4083,10 @@ impl App {
                 }
             }
             n if n >= crate::sys::remap::SOUND => self.sound_default((n - crate::sys::remap::SOUND) as usize),
-            n => {
-                if let Some(&hk) = HK.get(n as usize).filter(|&&h| h != 0) {
-                    self.on_hotkey(hk);
-                }
-            }
+            n => match action_hotkey(n) {
+                0 => {}
+                hk => self.on_hotkey(hk),
+            },
         }
         None
     }
@@ -4031,6 +4099,7 @@ impl App {
         let pads = self.on(Page::Controllers);
         crate::sys::remap::configure(self.cfg.pad_map && pads, self.cfg.meter_games.iter().map(|g| g.exe.clone()).collect());
         crate::sys::remap::set_reopen_last(self.cfg.pad_reopen_last);
+        crate::sys::remap::set_desktop(self.cfg.pad_desktop);
         crate::sys::remap::set_fixed(&self.cfg.pad_fixed);
         crate::sys::dsx::set_enabled(self.cfg.dsx_udp && pads);
         crate::sys::xbridge::configure(self.cfg.pad_xbox && pads, self.cfg.pad_xbox_merge);
