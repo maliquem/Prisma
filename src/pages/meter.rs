@@ -442,7 +442,7 @@ fn games(ui: &mut Ui, app: &mut App, r: Rect) {
         if set_auto_hdr(app, &exe, &path, mode) {
             changed = true;
         } else {
-            app.toast.info("Não consegui gravar a escolha.");
+            app.toast.info(crate::sys::autohdr::refusal(mode));
         }
     }
     if let Some(i) = limit {

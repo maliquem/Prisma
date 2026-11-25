@@ -549,6 +549,8 @@ pub struct App {
     remote_front: bool,
     engine: Option<Handle>,
     rec_start: Option<Instant>,
+    /// Pasta da gravação em curso, para o aviso ao parar.
+    rec_dir: String,
     hud: Hud,
     macro_hud: crate::overlays::MacroHud,
 }
@@ -779,6 +781,7 @@ pub fn start(background: bool) {
             remote_front: false,
             engine: None,
             rec_start: None,
+            rec_dir: String::new(),
             hud: Hud::new(),
             macro_hud: crate::overlays::MacroHud::new(),
             cfg,
@@ -1840,13 +1843,14 @@ impl App {
             if !(self.cfg.replay_on && self.detector.mode == Mode::Game) {
                 self.stop_engine();
             }
-            self.toast.info(&format!("Gravação salva em {}", self.cfg.cap_dir));
+            self.toast.info(&format!("Gravação salva em {}", self.rec_dir));
             return;
         }
         self.rec_window = window;
         self.rec_hwnd = target.map_or(0, |h| h.0 as isize);
         self.start_engine(false);
-        let path = capture::new_path(&self.cfg.cap_dir, "mp4");
+        self.rec_dir = capture::game_dir(&self.cfg.cap_dir, true);
+        let path = capture::new_path(&self.rec_dir, "mp4");
         if let Some(e) = &self.engine {
             e.send(Cmd::Record(path));
         }
@@ -1864,7 +1868,7 @@ impl App {
         }
         match &self.engine {
             Some(e) => {
-                e.send(Cmd::SaveReplay(capture::new_path(&self.cfg.cap_dir, "mp4")));
+                e.send(Cmd::SaveReplay(capture::new_path(&capture::game_dir(&self.cfg.cap_dir, true), "mp4")));
                 self.toast.info(&format!("Últimos {} s salvos", self.cfg.replay_secs));
             }
             None => self.toast.info("O replay só grava em modo jogo"),
@@ -2335,7 +2339,7 @@ impl App {
     fn take_shot(&mut self) {
         let mon = capture::cursor_monitor();
         match capture::grab(mon) {
-            Ok(f) => capture::shot::open(f, mon, self.cfg.cap_dir.clone(), self.cfg.shot_hdr, None),
+            Ok(f) => capture::shot::open(f, mon, capture::game_dir(&self.cfg.cap_dir, false), self.cfg.shot_hdr, None),
             Err(_) => self.toast.info("Não consegui capturar a tela"),
         }
     }
@@ -2348,7 +2352,7 @@ impl App {
         };
         let mon = unsafe { MonitorFromWindow(fg, MONITOR_DEFAULTTONEAREST) };
         match capture::grab(mon) {
-            Ok(f) => capture::shot::open(f, mon, self.cfg.cap_dir.clone(), self.cfg.shot_hdr, Some(r)),
+            Ok(f) => capture::shot::open(f, mon, capture::game_dir(&self.cfg.cap_dir, false), self.cfg.shot_hdr, Some(r)),
             Err(_) => self.toast.info("Não consegui capturar a tela"),
         }
     }
@@ -2356,10 +2360,11 @@ impl App {
     /// Foto só da janela, salva direto na pasta de capturas, sem abrir o editor. Devolve o arquivo.
     pub(crate) fn save_window_shot(&mut self, h: HWND) -> Option<String> {
         let f = capture::grab_window(h).ok()?;
-        let path = capture::new_path(&self.cfg.cap_dir, "png");
+        let dir = capture::game_dir(&self.cfg.cap_dir, false);
+        let path = capture::new_path(&dir, "png");
         capture::save_png(&path, f.w, f.h, &f.bgra).ok()?;
         if let (true, Some(half)) = (self.cfg.shot_hdr, &f.half) {
-            let _ = capture::save_jxr(&capture::new_path(&self.cfg.cap_dir, "jxr"), f.w, f.h, half);
+            let _ = capture::save_jxr(&capture::new_path(&dir, "jxr"), f.w, f.h, half);
         }
         self.toast.info("Foto salva e copiada");
         capture::copy_to_clipboard(self.hub, f.w, f.h, &f.bgra);
@@ -2381,10 +2386,11 @@ impl App {
             self.toast.info("Não consegui capturar a tela");
             return;
         };
-        let path = capture::new_path(&self.cfg.cap_dir, "png");
+        let dir = capture::game_dir(&self.cfg.cap_dir, false);
+        let path = capture::new_path(&dir, "png");
         let mut ok = capture::save_png(&path, f.w, f.h, &f.bgra).is_ok();
         if let (true, Some(half)) = (self.cfg.shot_hdr, &f.half) {
-            ok &= capture::save_jxr(&capture::new_path(&self.cfg.cap_dir, "jxr"), f.w, f.h, half).is_ok();
+            ok &= capture::save_jxr(&capture::new_path(&dir, "jxr"), f.w, f.h, half).is_ok();
         }
         capture::copy_to_clipboard(self.hub, f.w, f.h, &f.bgra);
         self.toast.info(if ok { "Foto salva e copiada" } else { "Não consegui salvar a foto" });

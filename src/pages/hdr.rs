@@ -661,10 +661,8 @@ fn games_card(ui: &mut Ui, app: &mut App, r: Rect, s: &Screen) {
         let g = &mut app.cfg.hdr_games[i];
         if autohdr::apply(&g.exe, mode) {
             g.mode = mode;
-        } else if mode == autohdr::RTX && !crate::startup::is_elevated() {
-            app.toast.info("O driver NVIDIA só aceita o RTX HDR com o Prisma aberto como administrador.");
         } else {
-            app.toast.info("Não consegui gravar a escolha.");
+            app.toast.info(autohdr::refusal(mode));
         }
         app.cfg.save();
     }

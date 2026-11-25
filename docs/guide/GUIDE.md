@@ -491,6 +491,10 @@ Prisma Launcher, the games launcher, talks to Prisma running on the same PC thro
 
 The game the launcher opens also enters game mode at once, without waiting for detection. Nothing opens over the game: Prisma only shows a notice, as with the shortcuts. With Prisma closed, the launcher reaches none of this.
 
+- **Captures per game:** with a game opened by the launcher, photos and videos (recording and replay) go to `<capture folder>\<game name>\Screenshots` and `\Videos` (with Prisma in Portuguese, `Fotos` and `Vídeos`). The name comes from the launcher, without the characters Windows doesn't accept in a folder. Without a launcher game, everything goes to the capture folder, as before.
+- **Guide button:** holding the guide button for 1 second opens the launcher overlay, and Prisma does nothing on that press; Prisma's radial and Win + G stay on the tap. With the launcher overlay open, the guide button belongs to it: a tap closes it and doesn't open the radial.
+- **Game options:** what changes in Prisma (Fullscreenizer, HDR, sound, meter, shaders, optimize) shows up at once in the launcher bar.
+
 ## Settings
 
 - **Start with Windows and administrator:** turn them on or off whenever you want. Changing this in the installed version asks for Windows permission.

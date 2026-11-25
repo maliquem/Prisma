@@ -491,6 +491,10 @@ O Prisma Launcher, o lançador de jogos, conversa com o Prisma aberto no mesmo P
 
 O jogo aberto pelo launcher também entra no modo jogo na hora, sem esperar a detecção. Nada abre por cima do jogo: o Prisma só mostra um aviso, como nos atalhos. Com o Prisma fechado, o launcher não alcança nada disso.
 
+- **Capturas por jogo:** com um jogo aberto pelo launcher, as fotos e os vídeos (gravação e replay) vão para `<pasta de capturas>\<nome do jogo>\Fotos` e `\Vídeos` (com o Prisma em outro idioma, `Screenshots` e `Videos`). O nome vem do launcher, sem os caracteres que o Windows não aceita em pasta. Sem jogo do launcher, tudo vai para a pasta de capturas, como antes.
+- **Botão guia:** quem segura o guia 1 segundo abre o overlay do launcher, e o Prisma não faz nada nesse aperto; o radial e o Win + G do Prisma ficam com o toque. Com o overlay do launcher aberto, o guia é dele: o toque o fecha e não abre o radial.
+- **Opções do jogo:** o que muda no Prisma (Fullscreenizer, HDR, som, medidor, shaders, otimizar) aparece na hora na barra do launcher.
+
 ## Configurações
 
 - **Início com o Windows e administrador:** ligue ou desligue quando quiser. Mudar isso na versão instalada pede a permissão do Windows.

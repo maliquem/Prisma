@@ -1,8 +1,11 @@
+use std::fs::File;
 use std::io;
+use std::os::windows::io::AsRawHandle;
 
 use windows::Win32::Foundation::{CloseHandle, HANDLE, HLOCAL, LocalFree};
 use windows::Win32::Security::Authorization::ConvertSidToStringSidW;
 use windows::Win32::Security::{GetTokenInformation, TOKEN_QUERY, TOKEN_USER, TokenUser};
+use windows::Win32::System::Pipes::PeekNamedPipe;
 use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 use windows::core::PWSTR;
 
@@ -20,6 +23,13 @@ pub fn share_pipe_name(sid: &str) -> String {
 /// Nome do pipe para o usuário do processo atual.
 pub fn default_pipe_name() -> io::Result<String> {
     current_user_sid().map(|sid| pipe_name(&sid))
+}
+
+/// Bytes esperando leitura no pipe, sem bloquear. Erro quando o outro lado fechou.
+pub(crate) fn available(pipe: &File) -> io::Result<u32> {
+    let mut avail = 0u32;
+    unsafe { PeekNamedPipe(HANDLE(pipe.as_raw_handle()), None, 0, None, Some(&mut avail), None) }?;
+    Ok(avail)
 }
 
 /// SID do usuário do token do processo, como texto (`S-1-5-21-...`).

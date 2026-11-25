@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::fs::{File, OpenOptions};
 use std::io::{self, ErrorKind};
 use std::os::windows::fs::OpenOptionsExt;
@@ -8,6 +9,7 @@ use std::time::{Duration, Instant};
 use windows::Win32::Foundation::HANDLE;
 use windows::Win32::System::Pipes::{GetNamedPipeServerProcessId, PeekNamedPipe};
 
+use crate::pipe::available;
 use crate::{Capabilities, PROTOCOL, Reply, Request, read_frame, write_frame};
 
 /// Quanto `connect` espera pelas `Capabilities` depois do `Hello`.
@@ -21,6 +23,8 @@ const SECURITY_ANONYMOUS: u32 = 0;
 pub struct Client {
     pipe: File,
     caps: Capabilities,
+    /// Avisos (`Reply::is_event`) que chegaram enquanto se esperava uma resposta.
+    events: VecDeque<Reply>,
 }
 
 impl Client {
@@ -53,6 +57,7 @@ impl Client {
                     app_version,
                     caps,
                 },
+                events: VecDeque::new(),
             }),
             Some(_) => Err(io::Error::new(
                 ErrorKind::InvalidData,
@@ -70,11 +75,12 @@ impl Client {
         write_frame(&mut self.pipe, req)
     }
 
-    /// Próxima resposta conhecida; `Reply::Unknown` é pulada.
+    /// Próxima resposta conhecida; `Reply::Unknown` é pulada, e os avisos ficam para `events`.
     pub fn recv(&mut self) -> io::Result<Reply> {
         loop {
             match read_frame::<_, Reply>(&mut self.pipe)? {
                 Some(Reply::Unknown) => continue,
+                Some(r) if r.is_event() => self.events.push_back(r),
                 Some(r) => return Ok(r),
                 None => return Err(ErrorKind::UnexpectedEof.into()),
             }
@@ -89,10 +95,25 @@ impl Client {
             wait_readable(&self.pipe, deadline)?;
             match read_frame::<_, Reply>(&mut self.pipe)? {
                 Some(Reply::Unknown) => continue,
+                Some(r) if r.is_event() => self.events.push_back(r),
                 Some(r) => return Ok(r),
                 None => return Err(ErrorKind::UnexpectedEof.into()),
             }
         }
+    }
+
+    /// Avisos recebidos até agora (depois de `Request::Watch`), sem bloquear. Chame também com
+    /// o cliente parado: o Prisma espera o pipe ter espaço para mandar o próximo. Uma resposta
+    /// atrasada, de pedido que já desistiu por tempo, é descartada aqui.
+    pub fn events(&mut self) -> io::Result<Vec<Reply>> {
+        while available(&self.pipe)? > 0 {
+            match read_frame::<_, Reply>(&mut self.pipe)? {
+                Some(r) if r.is_event() => self.events.push_back(r),
+                Some(_) => {}
+                None => return Err(ErrorKind::UnexpectedEof.into()),
+            }
+        }
+        Ok(self.events.drain(..).collect())
     }
 
     /// Processo que criou o pipe, para conferir de quem é antes de confiar na resposta.

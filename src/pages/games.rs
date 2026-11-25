@@ -746,7 +746,7 @@ fn hdr(ui: &mut Ui, app: &mut App, r: Rect, exe: &str, path: &str) {
         if super::meter::set_auto_hdr(app, exe, path, modes[k].0) {
             app.cfg.save();
         } else {
-            app.toast.info("Não consegui gravar a escolha.");
+            app.toast.info(autohdr::refusal(modes[k].0));
         }
     }
     let marks = ["Detectar sozinho", "Tem HDR próprio", "Não tem HDR próprio"].map(String::from);

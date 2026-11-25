@@ -264,6 +264,15 @@ pub fn filter_profile(key: &str) -> Option<(PathBuf, Profile)> {
     Some((path, p))
 }
 
+/// Grava o perfil e avisa o launcher: os shaders do jogo aparecem nas opções dele.
+pub fn save_game(p: &Profile, path: &Path) -> std::io::Result<()> {
+    p.save(path)?;
+    if !p.exe.as_os_str().is_empty() {
+        crate::link::options_changed(&crate::sys::procs::exe_name(&p.exe.to_string_lossy()));
+    }
+    Ok(())
+}
+
 /// Grava os ajustes do filtro e leva aos jogos que seguem ele; o motor de quem está aberto lê na hora.
 pub fn save_filter(path: &Path, f: &Profile) -> std::io::Result<()> {
     f.save(path)?;
@@ -302,7 +311,7 @@ pub fn upscale_on(exe: &Path, key: &str, input: &str) -> Result<(), &'static str
         p.passes = f.passes.clone();
         take_filter(&mut p, &f);
     }
-    p.save(&path).map_err(|_| "Filtro de upscale: não deu para gravar o perfil")
+    save_game(&p, &path).map_err(|_| "Filtro de upscale: não deu para gravar o perfil")
 }
 
 /// Desliga o filtro (só no perfil do Fullscreenizer).
@@ -311,7 +320,7 @@ pub fn upscale_off(exe: &Path) {
     if let Ok(mut p) = Profile::load(&path) {
         if p.on && p.extra.iter().any(|l| l == MANAGED) {
             p.on = false;
-            let _ = p.save(&path);
+            let _ = save_game(&p, &path);
         }
     }
 }

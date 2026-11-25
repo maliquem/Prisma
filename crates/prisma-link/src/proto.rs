@@ -164,6 +164,22 @@ pub enum Request {
         games: Vec<StoreGame>,
         first: bool,
     },
+    /// Pede os avisos do Prisma nesta conexão (`watch`): responde `Done`, e daí em diante o Prisma manda
+    /// `Reply::OptionsChanged` sem ser perguntado. Quem pede precisa ler o pipe também parado
+    /// (`Client::events`), senão o Prisma para quando o pipe enche.
+    Watch,
+    /// Como o launcher usa o botão Guia (`controllers.guide`); responde `Done`. Vale até a conexão cair,
+    /// e cada envio troca os dois campos. `hold_ms` > 0: o launcher abre o overlay dele segurando o Guia
+    /// esse tempo, e o Prisma não faz nada ao segurar o Guia (aperto mais curto é toque). Com o radial
+    /// aberto por segurar (sem "Toque abre"), o Guia então só faz a função de toque. `overlay_open`: o
+    /// overlay do launcher está aberto, e o Guia não abre o radial nem faz nada no Prisma (o launcher o
+    /// fecha). Mande `overlay_open: false` quando o overlay fechar.
+    LauncherGuide {
+        #[serde(default)]
+        hold_ms: u32,
+        #[serde(default)]
+        overlay_open: bool,
+    },
     #[serde(other)]
     Unknown,
 }
@@ -549,8 +565,20 @@ pub enum Reply {
         #[serde(default)]
         shader_presets: Vec<String>,
     },
+    /// Aviso, sem pedido (só depois de `Request::Watch`): uma opção do jogo `exe` (o nome do .exe)
+    /// mudou no Prisma; peça o `Options` de novo. Quem não conhece lê como `Unknown` e pula.
+    OptionsChanged {
+        exe: String,
+    },
     #[serde(other)]
     Unknown,
+}
+
+impl Reply {
+    /// Aviso mandado sem pedido, e não resposta a um pedido.
+    pub fn is_event(&self) -> bool {
+        matches!(self, Reply::OptionsChanged { .. })
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -952,6 +980,35 @@ mod tests {
         ] {
             assert_eq!(serde_json::from_str::<OldRequest>(json).unwrap(), OldRequest::Unknown);
         }
+    }
+
+    #[test]
+    fn watch_guide_and_events_json_shape() {
+        let cases: Vec<(Request, &str)> = vec![
+            (Request::Watch, r#"{"type":"watch"}"#),
+            (Request::LauncherGuide { hold_ms: 1000, overlay_open: true }, r#"{"type":"launcher_guide","hold_ms":1000,"overlay_open":true}"#),
+        ];
+        for (req, json) in cases {
+            assert_eq!(serde_json::to_string(&req).unwrap(), json);
+            assert_eq!(serde_json::from_str::<Request>(json).unwrap(), req);
+        }
+        // Os dois campos podem faltar.
+        assert_eq!(
+            serde_json::from_str::<Request>(r#"{"type":"launcher_guide"}"#).unwrap(),
+            Request::LauncherGuide { hold_ms: 0, overlay_open: false }
+        );
+        let ev = Reply::OptionsChanged { exe: "g.exe".into() };
+        assert_eq!(serde_json::to_string(&ev).unwrap(), r#"{"type":"options_changed","exe":"g.exe"}"#);
+        assert!(ev.is_event() && !Reply::Done.is_event());
+        // Um launcher antigo lê o aviso como Unknown, e o `Client` dele o pula.
+        #[derive(Debug, PartialEq, Deserialize)]
+        #[serde(tag = "type", rename_all = "snake_case")]
+        enum OldReply {
+            Done,
+            #[serde(other)]
+            Unknown,
+        }
+        assert_eq!(serde_json::from_str::<OldReply>(r#"{"type":"options_changed","exe":"g.exe"}"#).unwrap(), OldReply::Unknown);
     }
 
     #[test]

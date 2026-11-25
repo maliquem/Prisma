@@ -414,6 +414,37 @@ fn trig_step(t: &mut Trig, c: &Config, buttons: pads::Buttons, now: Instant) -> 
 
 static TRIG: Mutex<Option<HashMap<String, Trig>>> = Mutex::new(None);
 
+/// O que o Prisma Launcher disse do botão Guia (`Request::LauncherGuide`).
+#[derive(Clone, Copy, Default)]
+struct Launcher {
+    /// O launcher abre o overlay dele segurando o Guia esse tempo: o Prisma não faz nada ao segurar.
+    hold: Option<Duration>,
+    /// O overlay do launcher está aberto: o Guia é dele.
+    open: bool,
+    /// Quando o overlay fechou. O launcher pode fechar com o mesmo aperto antes de o Prisma ver o
+    /// relatório: um aperto que começou logo depois ainda é do launcher.
+    closed_at: Option<Instant>,
+}
+
+static LAUNCHER: Mutex<Launcher> = Mutex::new(Launcher {
+    hold: None,
+    open: false,
+    closed_at: None,
+});
+
+/// Folga de `Launcher::closed_at`.
+const CLOSE_GRACE: Duration = Duration::from_millis(300);
+
+/// O launcher conta como usa o Guia; `(0, false)` quando ele se desconecta.
+pub fn set_launcher(hold_ms: u32, overlay_open: bool) {
+    let mut l = LAUNCHER.lock().unwrap();
+    if l.open && !overlay_open {
+        l.closed_at = Some(Instant::now());
+    }
+    l.hold = (hold_ms > 0).then(|| Duration::from_millis(hold_ms.min(5000).into()));
+    l.open = overlay_open;
+}
+
 /// O que o mapeamento faz com um relatório por causa do botão que abre o radial.
 pub struct Trigger {
     /// Abrir o radial (depois de soltar a trava do mapeamento).
@@ -437,16 +468,33 @@ pub fn trigger(key: &str, buttons: pads::Buttons, now: Instant, game: bool, comb
             win_g: false,
         };
     }
+    let l = *LAUNCHER.lock().unwrap();
     let mut g = TRIG.lock().unwrap();
     let t = g
         .get_or_insert_with(HashMap::new)
         .entry(key.to_string())
         .or_default();
+    trigger_with(t, c, &l, buttons, now, combo)
+}
+
+fn trigger_with(t: &mut Trig, mut c: Config, l: &Launcher, buttons: pads::Buttons, now: Instant, combo: pads::Buttons) -> Trigger {
+    let guide = c.button == pads::GUIDE;
+    let held = buttons & c.button != 0;
+    if let (true, Some(h)) = (guide, l.hold) {
+        // Aperto mais curto que o do launcher é toque; chegando no tempo dele, o Guia é dele.
+        c.hold = c.hold.max(h);
+        if held && t.since.is_some_and(|s| now.saturating_duration_since(s) >= c.hold) {
+            t.aborted = true;
+        }
+    }
     let (open, normal) = trig_step(t, &c, buttons, now);
-    if buttons & c.button != 0 && buttons & combo != 0 && !t.fired {
+    let launcher_open = l.open || l.closed_at.zip(t.since).is_some_and(|(cl, s)| s.saturating_duration_since(cl) < CLOSE_GRACE);
+    if guide && held && launcher_open {
+        t.aborted = true;
+    }
+    if held && buttons & combo != 0 && !t.fired {
         (t.aborted, t.combo) = (true, true);
     }
-    let guide = c.button == pads::GUIDE;
     // O perfil não vê o botão que abre, menos quando a função normal está segurada ou numa
     // combinação do perfil.
     let rest = if t.normal_down || t.combo {
@@ -689,6 +737,36 @@ mod tests {
         assert_eq!((both.steps, both.open), (vec![pads::BACK | pads::START], None));
         assert_eq!(trigger(k2, 0, t0 + Duration::from_millis(60), false, pads::START).steps, vec![0]);
         configure(DEFAULT);
+    }
+
+    #[test]
+    fn launcher_owns_the_guide_hold_and_its_open_overlay() {
+        let t0 = Instant::now();
+        let ms = |n| t0 + Duration::from_millis(n);
+        let c = Config { button: pads::GUIDE, tap_opens: true, guide_normal: true, ..DEFAULT };
+        let own = Launcher { hold: Some(Duration::from_millis(1000)), ..Default::default() };
+        let run = |l: &Launcher, presses: &[(u64, pads::Buttons)]| {
+            let mut t = Trig::default();
+            presses.iter().map(|&(at, b)| {
+                let r = trigger_with(&mut t, c, l, b, ms(at), 0);
+                (r.open.is_some(), r.win_g)
+            }).collect::<Vec<_>>()
+        };
+        let g = pads::GUIDE;
+        // Toque de 600 ms (mais que os 400 do Prisma): ainda é toque e abre o radial.
+        assert_eq!(run(&own, &[(0, g), (600, g), (650, 0)]), [(false, false), (false, false), (true, false)]);
+        // Segurar 1 s é do launcher: nem Win + G aos 400 ms, nem radial ao soltar.
+        assert_eq!(run(&own, &[(0, g), (400, g), (1000, g), (1200, 0)]), [(false, false); 4]);
+        // Sem o launcher, segurar 400 ms faz a função normal (Win + G).
+        assert_eq!(run(&Launcher::default(), &[(0, g), (400, g)])[1], (false, true));
+        // Overlay aberto: o toque não abre o radial.
+        let open = Launcher { open: true, ..own };
+        assert_eq!(run(&open, &[(0, g), (100, 0)]), [(false, false); 2]);
+        // O launcher fechou com este aperto antes de o Prisma ver: também não abre.
+        let closed = Launcher { closed_at: Some(ms(0)), ..own };
+        assert_eq!(run(&closed, &[(100, g), (200, 0)]), [(false, false); 2]);
+        // Bem depois de fechar, o toque volta a abrir.
+        assert_eq!(run(&closed, &[(1000, g), (1100, 0)]), [(false, false), (true, false)]);
     }
 
     #[test]
