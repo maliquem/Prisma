@@ -21,7 +21,7 @@ pub use client::{CONNECT_TIMEOUT, Client};
 #[cfg(windows)]
 pub use pipe::{current_user_sid, default_pipe_name, pipe_name, share_pipe_name, token_user_sid};
 #[cfg(windows)]
-pub use server::{ServerInfo, serve};
+pub use server::{ServerInfo, serve, serve_events};
 
 pub const PROTOCOL: u32 = 1;
 pub const MAX_FRAME: u32 = 65_536;
@@ -103,6 +103,14 @@ pub mod cap {
     pub const SHADERS: &str = "shaders";
     /// `OptionValue::ShaderPreset` e a lista `shader_presets` no `Options`.
     pub const SHADERS_PRESET: &str = "shaders.preset";
+    /// `Request::Watch` e o aviso `Reply::OptionsChanged`.
+    pub const WATCH: &str = "watch";
+    /// `Request::LauncherGuide`: o launcher cuida do segurar o Guia e diz quando o overlay dele está aberto.
+    pub const CONTROLLERS_GUIDE: &str = "controllers.guide";
+    /// Fotos e vídeos de um jogo aberto pelo launcher (`GameStarted`) já saem em
+    /// `<pasta de capturas>\<nome do jogo>\Fotos` e `\Vídeos` (`Screenshots` e `Videos` com o Prisma
+    /// fora do português): o launcher não precisa mover nada.
+    pub const CAPTURE_GAME_DIRS: &str = "capture.game_dirs";
 }
 
 /// Códigos estáveis de `Reply::Failed`.

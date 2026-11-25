@@ -4,8 +4,8 @@
 
 use std::collections::VecDeque;
 use std::path::PathBuf;
-use std::sync::mpsc::{sync_channel, SyncSender};
-use std::sync::Mutex;
+use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use prisma_link::{cap, fail as code, AudioDevice, Controller, FpsLimit, GameInvite, HdrMode, InviteState, MeterView, NvidiaKind, NvidiaSetting, NvidiaValue, OptionValue, Page as LinkPage, PowerPlan, ReplayOptions, ReplayResolution, Reply, Request, ServerInfo, ShareMode, VolumeChange};
@@ -17,7 +17,7 @@ use crate::pages::Page;
 use crate::sys::remap;
 use crate::sys::drs::{self, Profile};
 use crate::sys::nvset::{self, Kind, Setting};
-use crate::sys::{audio, autohdr, power, procs};
+use crate::sys::{audio, autohdr, power, procs, radial};
 
 /// Os modos de HDR do protocolo e os números que o config grava (`autohdr`).
 const HDR_MODES: [(HdrMode, u8); 6] = [
@@ -181,6 +181,28 @@ type Entry = (Instant, Request, SyncSender<Outcome>);
 
 static QUEUE: Mutex<VecDeque<Entry>> = Mutex::new(VecDeque::new());
 
+/// Avisos para o launcher que pediu `Watch` (`options_changed`).
+static EVENTS: OnceLock<SyncSender<Reply>> = OnceLock::new();
+
+/// Jogos abertos pelo launcher (`GameStarted`): o processo e o nome que o launcher mostra.
+static GAMES: Mutex<Vec<(u32, String)>> = Mutex::new(Vec::new());
+
+/// Avisa o launcher que uma opção do jogo `exe` (o nome do .exe) mudou. Sem launcher olhando,
+/// o aviso se perde.
+pub fn options_changed(exe: &str) {
+    if let Some(tx) = EVENTS.get() {
+        let _ = tx.try_send(Reply::OptionsChanged { exe: exe.to_string() });
+    }
+}
+
+/// Nome do jogo aberto pelo launcher mais recente que ainda roda.
+pub fn game_name() -> Option<String> {
+    let mut g = GAMES.lock().unwrap_or_else(|e| e.into_inner());
+    // O aviso de parada pode ter se perdido (launcher fechado com o jogo aberto).
+    g.retain(|(pid, _)| procs::is_alive(*pid));
+    g.last().map(|(_, n)| n.clone())
+}
+
 /// O que este Prisma sabe fazer pelo launcher. Sem `page.game_profile`: ainda não há uma
 /// página de perfil por jogo.
 pub fn caps() -> Vec<String> {
@@ -229,6 +251,9 @@ fn caps_with(nvidia: bool) -> Vec<String> {
         cap::HDR_NATIVE,
         cap::SHADERS,
         cap::SHADERS_PRESET,
+        cap::WATCH,
+        cap::CONTROLLERS_GUIDE,
+        cap::CAPTURE_GAME_DIRS,
     ];
     if cfg!(feature = "stream") {
         caps.push(cap::SHARE_MODE);
@@ -255,13 +280,16 @@ pub fn start(hub: HWND) {
     };
     // Teste com o Prisma em uso aberto (ele prende o pipe): a versão de desenvolvimento usa outro nome.
     let dev = std::env::var("PRISMA_LINK_PIPE").ok().filter(|_| cfg!(debug_assertions));
-    serve_on(dev.unwrap_or_else(|| prisma_link::pipe_name(&sid)), hub);
+    let (tx, events) = sync_channel(64);
+    let _ = EVENTS.set(tx);
+    serve_on(dev.unwrap_or_else(|| prisma_link::pipe_name(&sid)), hub, events);
     if cfg!(feature = "stream") {
-        serve_on(prisma_link::share_pipe_name(&sid), hub);
+        // Sem avisos: quem usa este pipe é o serviço de compartilhar tela.
+        serve_on(prisma_link::share_pipe_name(&sid), hub, sync_channel(0).1);
     }
 }
 
-fn serve_on(name: String, hub: HWND) {
+fn serve_on(name: String, hub: HWND, events: Receiver<Reply>) {
     let hub = hub.0 as isize;
     std::thread::spawn(move || {
         // O `Options` lê os aparelhos e as sessões de som nesta thread.
@@ -272,7 +300,13 @@ fn serve_on(name: String, hub: HWND) {
             app_version: env!("CARGO_PKG_VERSION").to_string(),
             caps: caps(),
         };
-        let res = prisma_link::serve(&name, info, |req| {
+        let handler = |req| {
+            // Só mexe no radial: responde daqui, sem esperar a janela, que pode estar ocupada
+            // justo quando o Guia é apertado.
+            if let Request::LauncherGuide { hold_ms, overlay_open } = req {
+                radial::set_launcher(hold_ms, overlay_open);
+                return Some(Reply::Done);
+            }
             let wait = wait_of(&req);
             let (tx, rx) = sync_channel(1);
             push(req, tx);
@@ -286,7 +320,9 @@ fn serve_on(name: String, hub: HWND) {
                 Ok(outcome) => reply_for(wait, outcome),
                 Err(_) => timeout_reply(wait),
             }
-        });
+        };
+        // O launcher saiu: o Guia volta a ser só do Prisma.
+        let res = prisma_link::serve_events(&name, info, &events, handler, || radial::set_launcher(0, false));
         if let Err(e) = res {
             crate::config::log(&format!("ponte com o launcher: pipe {name} indisponível ({e})"));
         }
@@ -427,12 +463,16 @@ impl App {
             #[cfg(not(feature = "stream"))]
             Request::ShareInvite { .. } => Outcome::Failed(code::NOT_SUPPORTED, "indisponível".into()),
             Request::CaptureDirs => Outcome::CaptureDirs(self.cfg.cap_dir.clone()),
-            Request::GameStarted { pid, exe, .. } => {
+            Request::GameStarted { pid, exe, name } => {
                 self.detector.hint(pid, &exe);
+                let mut g = GAMES.lock().unwrap_or_else(|e| e.into_inner());
+                g.retain(|(p, _)| *p != pid);
+                g.push((pid, name));
                 Outcome::Done
             }
             Request::GameStopped { pid } => {
                 self.detector.unhint(pid);
+                GAMES.lock().unwrap_or_else(|e| e.into_inner()).retain(|(p, _)| *p != pid);
                 Outcome::Done
             }
             Request::MeterView { view } => {
@@ -603,7 +643,8 @@ impl App {
                 Outcome::Done
             }
             Request::SetOption { exe, pid, option } => self.link_set_option(&exe, pid, option),
-            Request::Hello { .. } | Request::Unknown => Outcome::Done,
+            // `Watch` fica no prisma-link e `LauncherGuide` na thread do pipe: não chegam aqui.
+            Request::Hello { .. } | Request::Unknown | Request::Watch | Request::LauncherGuide { .. } => Outcome::Done,
         }
     }
 
@@ -961,7 +1002,7 @@ impl App {
         }
         let n = HDR_MODES.iter().find(|m| m.0 == mode).map_or(autohdr::DEFAULT, |m| m.1);
         if !crate::pages::meter::set_auto_hdr(self, exe, path, n) {
-            return Err(fail(code::FAILED, "Não consegui gravar a escolha."));
+            return Err(fail(code::FAILED, autohdr::refusal(n)));
         }
         self.cfg.save();
         Ok(())
@@ -1152,6 +1193,7 @@ mod tests {
                 cap::HDR_AUTO, cap::SOUND_DEVICES, cap::REPLAY_OPTIONS, cap::FULLSCREENIZER, cap::OPTIMIZE,
                 cap::METER_ON_LAUNCH, cap::HDR_ON_LAUNCH, cap::SOUND_GAME_VOLUME, cap::SOUND_EQ,
                 cap::LAUNCH_HDR, cap::GAMES, cap::HDR_MODE, cap::HDR_NATIVE, cap::SHADERS, cap::SHADERS_PRESET,
+                cap::WATCH, cap::CONTROLLERS_GUIDE, cap::CAPTURE_GAME_DIRS,
             ] {
                 assert!(has(c), "{c}");
             }

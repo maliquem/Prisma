@@ -132,7 +132,7 @@ impl St {
     fn flush(&mut self) {
         if self.save_at.take().is_some() {
             if let Some((path, p)) = self.profiles.get(self.sel) {
-                if p.save(path).is_ok() {
+                if sp::save_game(p, path).is_ok() {
                     self.mtime = mtime(path);
                 }
             }
@@ -173,7 +173,7 @@ pub fn add_game(app: &mut App, path: &str) {
     if !file.exists() {
         let name = app_name(&crate::sys::procs::exe_name(path)).to_string();
         let p = Profile { name, exe: exe.to_path_buf(), ..Profile::default() };
-        if p.save(&file).is_err() {
+        if sp::save_game(&p, &file).is_err() {
             app.toast.info("Não deu para gravar o perfil");
             return;
         }
@@ -197,7 +197,7 @@ pub fn toggle_focused(app: &mut App) {
         return;
     };
     p.on = !p.on;
-    if p.save(&path).is_err() {
+    if sp::save_game(&p, &path).is_err() {
         return;
     }
     app.toast.info(if p.on { "Shader ligado" } else { "Shader desligado" });
@@ -243,7 +243,7 @@ pub fn menu_focused(app: &mut App) {
         }
     };
     p.on = true;
-    if p.save(&path).is_err() {
+    if sp::save_game(&p, &path).is_err() {
         app.toast.info("Não deu para gravar o perfil");
         return;
     }
@@ -672,7 +672,7 @@ pub fn edit_game(app: &mut App, path: &str, on: bool, f: impl FnOnce(&mut Profil
         Profile::load(&file).map_err(|_| "Não deu para gravar o perfil")?
     };
     f(&mut p);
-    p.save(&file).map_err(|_| "Não deu para gravar o perfil")?;
+    sp::save_game(&p, &file).map_err(|_| "Não deu para gravar o perfil")?;
     if new {
         if !sp::keys_path().exists() {
             write_keys(app);

@@ -2,6 +2,7 @@ use std::ffi::c_void;
 use std::fs::File;
 use std::io;
 use std::os::windows::io::{AsRawHandle, FromRawHandle};
+use std::sync::mpsc::{self, Receiver};
 use std::thread;
 use std::time::Duration;
 
@@ -17,10 +18,12 @@ use windows::Win32::System::Pipes::{
 };
 use windows::core::HSTRING;
 
-use crate::pipe::current_user_sid;
+use crate::pipe::{available, current_user_sid};
 use crate::{PROTOCOL, Reply, Request, read_frame, write_frame};
 
 const BUFFER: u32 = 64 * 1024;
+/// Intervalo entre consultas ao pipe enquanto o cliente recebe avisos.
+const WATCH_POLL: Duration = Duration::from_millis(10);
 
 pub struct ServerInfo {
     pub app_version: String,
@@ -32,7 +35,20 @@ pub struct ServerInfo {
 pub fn serve(
     name: &str,
     info: ServerInfo,
+    handler: impl FnMut(Request) -> Option<Reply>,
+) -> io::Result<()> {
+    let (_, none) = mpsc::channel();
+    serve_events(name, info, &none, handler, || {})
+}
+
+/// Como `serve`, e o cliente que pede `Request::Watch` recebe os avisos de `events` (os que
+/// chegam enquanto ninguém olha são descartados). `ended` roda quando cada cliente sai.
+pub fn serve_events(
+    name: &str,
+    info: ServerInfo,
+    events: &Receiver<Reply>,
     mut handler: impl FnMut(Request) -> Option<Reply>,
+    mut ended: impl FnMut(),
 ) -> io::Result<()> {
     let pipe = create_pipe(name)?;
     let handle = windows::Win32::Foundation::HANDLE(pipe.as_raw_handle());
@@ -47,8 +63,9 @@ pub fn serve(
                 continue;
             }
         }
-        let _ = attend(&pipe, &info, &mut handler);
+        let _ = attend(&pipe, &info, events, &mut handler);
         let _ = unsafe { DisconnectNamedPipe(handle) };
+        ended();
     }
 }
 
@@ -56,10 +73,26 @@ pub fn serve(
 fn attend(
     mut pipe: &File,
     info: &ServerInfo,
+    events: &Receiver<Reply>,
     handler: &mut impl FnMut(Request) -> Option<Reply>,
 ) -> io::Result<()> {
     let mut greeted = false;
-    while let Some(req) = read_frame::<_, Request>(&mut pipe)? {
+    let mut watching = false;
+    loop {
+        if watching {
+            // O pipe é síncrono: um ReadFile parado esperando o cliente seguraria também a
+            // escrita dos avisos. Então só lê quando já há bytes.
+            while let Ok(ev) = events.try_recv() {
+                write_frame(&mut pipe, &ev)?;
+            }
+            if available(pipe)? == 0 {
+                thread::sleep(WATCH_POLL);
+                continue;
+            }
+        }
+        let Some(req) = read_frame::<_, Request>(&mut pipe)? else {
+            return Ok(());
+        };
         let reply = match req {
             Request::Hello { .. } => {
                 greeted = true;
@@ -70,6 +103,12 @@ fn attend(
                 })
             }
             _ if !greeted => return Ok(()),
+            Request::Watch => {
+                // Avisos de antes desta conexão já não valem.
+                while events.try_recv().is_ok() {}
+                watching = true;
+                Some(Reply::Done)
+            }
             Request::Unknown => None,
             other => handler(other),
         };
@@ -77,7 +116,6 @@ fn attend(
             write_frame(&mut pipe, &reply)?;
         }
     }
-    Ok(())
 }
 
 fn create_pipe(name: &str) -> io::Result<File> {

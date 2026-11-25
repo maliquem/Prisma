@@ -488,6 +488,35 @@ fn stamp() -> String {
     format!("{:04}-{:02}-{:02}_{:02}-{:02}-{:02}", t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond)
 }
 
+/// Pasta das fotos (`videos: false`) ou dos vídeos: com um jogo aberto pelo launcher,
+/// `<root>\<jogo>\Fotos` ou `\Vídeos` (`Screenshots` e `Videos` fora do português); sem, `root`.
+pub fn game_dir(root: &str, videos: bool) -> String {
+    let Some(game) = crate::link::game_name().as_deref().and_then(folder_name) else {
+        return root.to_string();
+    };
+    let sub = match (videos, crate::i18n::lang() == crate::i18n::PT) {
+        (false, true) => "Fotos",
+        (false, false) => "Screenshots",
+        (true, true) => "Vídeos",
+        (true, false) => "Videos",
+    };
+    format!("{}\\{game}\\{sub}", root.trim_end_matches(['\\', '/']))
+}
+
+/// O nome do jogo como nome de pasta que o Windows aceita: sem `<>:"/\|?*` nem controle, sem ponto ou
+/// espaço no fim, e com `_` na frente dos nomes reservados (CON, COM1, LPT1.txt...). `None` se não sobra nada.
+pub fn folder_name(name: &str) -> Option<String> {
+    let s: String = name.chars().filter(|c| !c.is_control() && !r#"<>:"/\|?*"#.contains(*c)).take(100).collect();
+    let s = s.trim().trim_end_matches(['.', ' ']);
+    if s.is_empty() {
+        return None;
+    }
+    let stem = s.split('.').next().unwrap_or_default().trim_end().to_ascii_uppercase();
+    let numbered = |p: &str| stem.strip_prefix(p).is_some_and(|n| matches!(n, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³"));
+    let reserved = matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL") || numbered("COM") || numbered("LPT");
+    Some(if reserved { format!("_{s}") } else { s.to_string() })
+}
+
 pub fn new_path(dir: &str, ext: &str) -> String {
     let _ = std::fs::create_dir_all(dir);
     format!("{dir}\\Prisma_{}.{ext}", stamp())
@@ -784,6 +813,21 @@ pub fn hide_from_capture(h: HWND) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn game_names_become_valid_folders() {
+        assert_eq!(folder_name("Half-Life 2: Episode One").as_deref(), Some("Half-Life 2 Episode One"));
+        assert_eq!(folder_name("  Who? <What>/Why|*\u{7}  ").as_deref(), Some("Who WhatWhy"));
+        assert_eq!(folder_name("Game... ").as_deref(), Some("Game"));
+        assert_eq!(folder_name("con").as_deref(), Some("_con"));
+        assert_eq!(folder_name("LPT1.txt").as_deref(), Some("_LPT1.txt"));
+        assert_eq!(folder_name("com¹").as_deref(), Some("_com¹"));
+        assert_eq!(folder_name("COM10").as_deref(), Some("COM10"));
+        assert_eq!(folder_name("Console").as_deref(), Some("Console"));
+        assert_eq!(folder_name("..."), None);
+        assert_eq!(folder_name("???"), None);
+        assert_eq!(folder_name(&"a".repeat(300)).map(|s| s.len()), Some(100));
+    }
 
     fn r(left: i32, top: i32, right: i32, bottom: i32) -> RECT {
         RECT { left, top, right, bottom }

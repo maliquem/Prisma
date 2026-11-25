@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 use prisma_link::{
     Client, PROTOCOL, Page, Reply, Request, ServerInfo, current_user_sid, pipe_name, read_frame,
-    serve, share_pipe_name, write_frame,
+    serve, serve_events, share_pipe_name, write_frame,
 };
 
 const WAIT: Duration = Duration::from_secs(2);
@@ -423,4 +423,40 @@ fn capture_dirs_reply_comes_back() {
             replays: r"C:\V\Prisma".into(),
         }
     );
+}
+
+#[test]
+fn watcher_gets_events_while_idle_and_between_replies() {
+    let name = unique_name();
+    let (ev_tx, ev_rx) = mpsc::sync_channel::<Reply>(8);
+    let (end_tx, end_rx) = mpsc::channel();
+    let n = name.clone();
+    thread::spawn(move || {
+        let _ = serve_events(&n, info(), &ev_rx, |_| Some(Reply::Done), move || {
+            let _ = end_tx.send(());
+        });
+    });
+    let ev = |exe: &str| Reply::OptionsChanged { exe: exe.into() };
+    let mut c = connect(&name);
+    // Antes do Watch o aviso fica no canal e é descartado no Watch.
+    ev_tx.send(ev("old.exe")).unwrap();
+    c.send(&Request::Watch).unwrap();
+    assert_eq!(c.recv_timeout(WAIT).unwrap(), Reply::Done);
+    // Cliente parado: o aviso chega sem pedido.
+    ev_tx.send(ev("a.exe")).unwrap();
+    let start = Instant::now();
+    let mut got = Vec::new();
+    while got.is_empty() && start.elapsed() < WAIT {
+        got = c.events().unwrap();
+        thread::sleep(Duration::from_millis(5));
+    }
+    assert_eq!(got, vec![ev("a.exe")]);
+    // Aviso no meio de um pedido não vira a resposta dele.
+    ev_tx.send(ev("b.exe")).unwrap();
+    thread::sleep(Duration::from_millis(100));
+    c.send(&Request::CaptureDirs).unwrap();
+    assert_eq!(c.recv_timeout(WAIT).unwrap(), Reply::Done);
+    assert_eq!(c.events().unwrap(), vec![ev("b.exe")]);
+    drop(c);
+    end_rx.recv_timeout(WAIT).expect("ended roda quando o cliente sai");
 }

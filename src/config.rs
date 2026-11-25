@@ -795,6 +795,42 @@ pub fn data_dir() -> PathBuf {
     }
 }
 
+/// Linhas do config.ini com opções de um jogo, as que o `Options` do launcher lê.
+const GAME_KEYS: [&str; 6] = ["opt_skip=", "snd_app=", "eq_app=", "meter_game=", "hdr_game=", "fs_app="];
+
+type GameLines = std::collections::HashMap<String, String>;
+
+/// As linhas de jogo que `load` leu ou `save` gravou por último, para avisar só quem mudou.
+static SAVED: std::sync::Mutex<Option<GameLines>> = std::sync::Mutex::new(None);
+
+/// As linhas de `GAME_KEYS`, juntas pelo exe (o primeiro campo).
+fn game_lines(text: &str) -> GameLines {
+    let mut m = GameLines::new();
+    for line in text.lines() {
+        if let Some(v) = GAME_KEYS.iter().find_map(|k| line.strip_prefix(k)) {
+            let e = m.entry(v.split('|').next().unwrap_or_default().to_string()).or_default();
+            e.push_str(line);
+            e.push('\n');
+        }
+    }
+    m
+}
+
+/// Exes com linhas diferentes entre `old` e `new`, ordenados.
+fn diff_games(old: &GameLines, new: &GameLines) -> Vec<String> {
+    let mut out: Vec<String> = new.keys().chain(old.keys()).filter(|k| !k.is_empty() && new.get(*k) != old.get(*k)).cloned().collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// Jogos que mudaram desde o último `load` ou `save`; `text` passa a ser a referência.
+fn changed_games(text: &str) -> Vec<String> {
+    let new = game_lines(text);
+    let old = SAVED.lock().unwrap_or_else(|e| e.into_inner()).replace(new.clone()).unwrap_or_default();
+    diff_games(&old, &new)
+}
+
 /// Acrescenta uma linha ao registro de ações.
 pub fn log(line: &str) {
     use std::io::Write;
@@ -1080,7 +1116,14 @@ impl Config {
             c.meter_items |= crate::meter::ITEM_POWER;
         }
         // Versões antigas criaram linha para o vigia de travamento e o lançador, que nascem com o jogo.
-        c.meter_games.retain(|g| !crate::sys::power::is_helper(&g.exe));
+        // Nem os auxiliares (UnityCrashHandler64.exe) que o detector tomou por jogo em outras listas.
+        let helper = |e: &str| crate::sys::power::is_helper(e);
+        c.meter_games.retain(|g| !helper(&g.exe));
+        c.hdr_games.retain(|g| !helper(&g.exe));
+        c.fs_apps.retain(|a| !helper(&a.exe));
+        c.snd_apps.retain(|a| !helper(&a.exe));
+        c.eq_apps.retain(|(e, _)| !helper(e));
+        c.opt_skip.retain(|e| !helper(e));
         // A lista substitui a lembrança antiga por programa.
         for p in c.profiles.iter_mut().filter(|p| p.borderless) {
             p.borderless = false;
@@ -1088,10 +1131,12 @@ impl Config {
                 c.fs_apps.push(FsApp { exe: p.exe.clone(), path: String::new(), auto: true, kind: 0 });
             }
         }
+        *SAVED.lock().unwrap_or_else(|e| e.into_inner()) = Some(game_lines(&c.text()));
         c
     }
 
-    pub fn save(&self) {
+    /// O config.ini como `save` grava.
+    fn text(&self) -> String {
         let mut s = String::new();
         let hk = |s: &mut String, k: &str, h: Hotkey| {
             let _ = writeln!(s, "{k}={},{}", h.mods, h.vk);
@@ -1298,6 +1343,14 @@ impl Config {
         let _ = writeln!(s, "un_silent={}", b(self.un_silent));
         let _ = writeln!(s, "tm_hook={}", b(self.tm_hook));
         let _ = writeln!(s, "paste_key={}", b(self.paste_key));
+        s
+    }
+
+    pub fn save(&self) {
+        let s = self.text();
+        for exe in changed_games(&s) {
+            crate::link::options_changed(&exe);
+        }
         if self.keep_file {
             return;
         }
@@ -1465,6 +1518,15 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_games_whose_lines_changed_are_reported() {
+        let old = game_lines("opt_skip=a.exe\nfs_app=b.exe|1|C:/b.exe|0\nhdr_game=c.exe|2|\nmeter_on=1\n");
+        let new = game_lines("opt_skip=a.exe\nfs_app=b.exe|0|C:/b.exe|0\neq_app=d.exe|Fones\nmeter_on=0\n");
+        // b mudou, c saiu, d entrou; a ficou igual e as opções gerais não contam.
+        assert_eq!(diff_games(&old, &new), ["b.exe", "c.exe", "d.exe"]);
+        assert!(diff_games(&new, &new).is_empty());
+    }
 
     #[test]
     fn atalhos_padrao_nao_se_repetem() {
