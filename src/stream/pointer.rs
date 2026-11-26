@@ -111,20 +111,16 @@ impl Sender {
 
     /// WGC: lê o cursor do Windows (a Desktop Duplication já entrega o dela).
     pub fn read_system(&mut self) {
-        let mut ci = CURSORINFO { cbSize: std::mem::size_of::<CURSORINFO>() as u32, ..Default::default() };
-        if unsafe { GetCursorInfo(&mut ci) }.is_err() {
-            return;
-        }
-        let showing = ci.flags.0 & CURSOR_SHOWING.0 != 0 && !ci.hCursor.is_invalid();
-        if showing && ci.hCursor.0 as isize != self.handle {
-            self.handle = ci.hCursor.0 as isize;
+        let cur = system_cursor();
+        if let Some(c) = cur.filter(|c| c.0 as isize != self.handle) {
+            self.handle = c.0 as isize;
             // shortcut: cursor animado (o de espera) vai só no quadro que o Windows dá aqui; ler os
             // quadros pede uma função não documentada.
-            if let Some(s) = unsafe { shape_of(ci.hCursor) } {
+            if let Some(s) = unsafe { shape_of(c) } {
                 self.set_shape(&s);
             }
         }
-        self.visible = showing;
+        self.visible = cur.is_some();
     }
 
     /// Os pacotes a mandar agora: na mudança (duas vezes, contra perda) e a cada segundo. `on`
@@ -142,10 +138,15 @@ impl Sender {
     }
 }
 
-/// O cursor do Windows está à vista (o jogo não escondeu).
-pub(super) fn showing() -> bool {
+/// O cursor do Windows, se está à vista (o jogo não escondeu).
+fn system_cursor() -> Option<HCURSOR> {
     let mut ci = CURSORINFO { cbSize: std::mem::size_of::<CURSORINFO>() as u32, ..Default::default() };
-    unsafe { GetCursorInfo(&mut ci) }.is_ok() && ci.flags.0 & CURSOR_SHOWING.0 != 0 && !ci.hCursor.is_invalid()
+    let ok = unsafe { GetCursorInfo(&mut ci) }.is_ok() && ci.flags.0 & CURSOR_SHOWING.0 != 0 && !ci.hCursor.is_invalid();
+    ok.then_some(ci.hCursor)
+}
+
+pub(super) fn showing() -> bool {
+    system_cursor().is_some()
 }
 
 /// Escondido e preso por este tempo antes do mouse relativo: um esconder rápido não troca o modo.
@@ -189,6 +190,24 @@ pub(super) fn clipped() -> bool {
     let (x, y) = unsafe { (GetSystemMetrics(SM_XVIRTUALSCREEN), GetSystemMetrics(SM_YVIRTUALSCREEN)) };
     let (w, h) = unsafe { (GetSystemMetrics(SM_CXVIRTUALSCREEN), GetSystemMetrics(SM_CYVIRTUALSCREEN)) };
     r.left > x || r.top > y || r.right < x + w || r.bottom < y + h
+}
+
+/// A janela da frente cobre o monitor inteiro (jogo em tela cheia ou sem borda). Com um monitor só,
+/// o jogo que prende o cursor na própria janela prende na tela toda, e `clipped` não vê.
+pub(super) fn front_fullscreen() -> bool {
+    unsafe {
+        let h = GetForegroundWindow();
+        let mut r = windows::Win32::Foundation::RECT::default();
+        let mut mi = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
+        if h.is_invalid() || GetWindowRect(h, &mut r).is_err() || h == GetShellWindow() {
+            return false;
+        }
+        if !GetMonitorInfoW(MonitorFromWindow(h, MONITOR_DEFAULTTONEAREST), &mut mi).as_bool() {
+            return false;
+        }
+        let m = mi.rcMonitor;
+        r.left <= m.left && r.top <= m.top && r.right >= m.right && r.bottom >= m.bottom
+    }
 }
 
 /// Junta o cursor do lado de quem assiste.

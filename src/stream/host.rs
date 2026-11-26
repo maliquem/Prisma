@@ -1154,11 +1154,7 @@ impl Injector {
                 }
                 Self::key(scan, extended, down)
             }
-            Input::Rel { dx, dy } => {
-                // Para o clique saber se caiu na janela compartilhada.
-                let _ = unsafe { GetCursorPos(&mut self.at) };
-                Self::mouse(MOUSEEVENTF_MOVE, dx as i32, dy as i32, 0)
-            }
+            Input::Rel { dx, dy } => Self::mouse(MOUSEEVENTF_MOVE, dx as i32, dy as i32, 0),
             Input::Away | Input::Locks { .. } | Input::Mask => return None,
         })
     }
@@ -1232,28 +1228,47 @@ impl Injector {
             }
             return;
         }
-        let mut list = Vec::new();
+        let (mut list, mut moved) = (Vec::new(), false);
         for (i, chunk) in events.chunks(INPUT_SIZE).enumerate() {
             let seq = first.wrapping_add(i as u32);
             if self.next.is_some_and(|n| (seq.wrapping_sub(n) as i32) < 0) {
                 continue;
             }
-            if let Some(e) = Input::get(chunk).filter(|&e| !self.into_admin(e)) {
+            let e = Input::get(chunk);
+            if moved && matches!(e, Some(Input::Button { .. } | Input::Wheel { .. })) {
+                // Só o Windows sabe onde o movimento relativo deixou o cursor: ele sai antes, para
+                // o clique conferir se caiu na janela compartilhada.
+                self.send_moves(&mut list);
+                moved = false;
+            }
+            if let Some(e) = e.filter(|&e| !self.into_admin(e)) {
                 if matches!(e, Input::Locks { .. } | Input::Mask) && self.perms & KEYBOARD != 0 {
                     // O mesmo GetKeyState do Console.CapsLock do .NET: vale fora da janela da frente.
                     let now = unsafe { (GetKeyState(VK_CAPITAL.0 as i32) & 1 != 0, GetKeyState(VK_NUMLOCK.0 as i32) & 1 != 0) };
                     list.extend(keyboard_taps(e, now).into_iter().flat_map(Self::tap));
                 } else if let Some(inp) = self.one(e) {
+                    moved |= matches!(e, Input::Rel { .. });
                     list.push(inp);
                 }
             }
             self.next = Some(seq.wrapping_add(1));
         }
-        if !list.is_empty() {
+        if moved {
+            self.send_moves(&mut list);
+        } else if !list.is_empty() {
             unsafe {
                 SendInput(&list, std::mem::size_of::<INPUT>() as i32);
             }
         }
+    }
+
+    /// Manda o que juntou e relê onde o cursor ficou.
+    fn send_moves(&mut self, list: &mut Vec<INPUT>) {
+        unsafe {
+            SendInput(list, std::mem::size_of::<INPUT>() as i32);
+            let _ = GetCursorPos(&mut self.at);
+        }
+        list.clear();
     }
 
     /// Solta tudo que ficou apertado, para nenhuma tecla ficar presa quando quem assiste sai.
@@ -2120,7 +2135,8 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                 Cap::Wgc { .. } => !super::pointer::showing(),
                 Cap::Dda(x) => !x.cursor_visible,
             };
-            if let Some((relative, times)) = grab.due(hidden && super::pointer::clipped(), Instant::now()) {
+            let held = super::pointer::clipped() || super::pointer::front_fullscreen();
+            if let Some((relative, times)) = grab.due(hidden && held, Instant::now()) {
                 if times == 2 {
                     eprintln!("mouse: {}", if relative { "relativo (o jogo escondeu e prendeu o cursor)" } else { "absoluto" });
                 }

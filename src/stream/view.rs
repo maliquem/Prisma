@@ -593,7 +593,6 @@ static VIEW_HWND: AtomicIsize = AtomicIsize::new(0);
 /// Cursor local: o cursor daqui com o formato do host, enquanto ele está à vista lá (0: nenhum).
 static LOCAL_NOW: AtomicIsize = AtomicIsize::new(0);
 
-/// Põe o cursor local (ou nenhum) na janela, se o mouse está em cima dela.
 /// Soma ao último deslocamento ainda não mandado: o pacote leva só os 16 eventos mais novos.
 fn push_rel(pending: &mut Vec<Input>, dx: i32, dy: i32) {
     if dx == 0 && dy == 0 {
@@ -630,6 +629,7 @@ unsafe fn over_window(h: HWND) -> bool {
     p.x >= 0 && p.y >= 0 && (p.x as u32) < w && (p.y as u32) < hh
 }
 
+/// Põe o cursor local (ou nenhum) na janela, se o mouse está em cima dela.
 unsafe fn show_local(hwnd: HWND, cursor: Option<HCURSOR>) {
     LOCAL_NOW.store(cursor.map_or(0, |c| c.0 as isize), Ordering::Relaxed);
     let mut p = POINT::default();
@@ -2243,7 +2243,7 @@ mod tests {
         push_rel(&mut p, 3, -4);
         push_rel(&mut p, 2, 1);
         assert_eq!(p, vec![Input::Move { x: 1, y: 2 }, Input::Rel { dx: 5, dy: -3 }]);
-        // Passou do i16: começa outro, sem perder o movimento.
+        // Um deslocamento só acima do i16 é cortado no limite (a soma não passa dele).
         push_rel(&mut p, 40000, 0);
         assert_eq!(p[2..], [Input::Rel { dx: i16::MAX, dy: 0 }]);
         p.push(Input::Button { button: 0, down: true });
