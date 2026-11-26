@@ -4,7 +4,11 @@
 //! O host tira o cursor do vídeo e manda só o formato e se ele está à vista ([`Msg::Cursor`]); a
 //! posição é a do mouse de quem assiste, que o host já segue. Com o cursor escondido no host (jogo
 //! que trava o mouse), quem assiste esconde o dele também, como sem a opção.
+//!
+//! O cursor fica do tamanho que teria dentro do vídeo: o host reduz o formato junto com o vídeo
+//! (tela para vídeo) e quem assiste o escala junto com a janela (vídeo para janela).
 
+use std::borrow::Cow;
 use std::sync::atomic::{AtomicU16, Ordering};
 use std::time::{Duration, Instant};
 
@@ -30,6 +34,72 @@ const REPEAT: Duration = Duration::from_secs(1);
 
 /// Números de formato únicos no processo: uma sessão nova do vídeo nunca repete um número antigo.
 static NEXT_SHAPE: AtomicU16 = AtomicU16::new(1);
+
+/// O formato `f` vezes o tamanho, com o maior lado entre 8 e 256 px (um formato já menor que 8
+/// não cresce por causa do limite).
+fn scaled(s: &Shape, f: f64) -> Cow<'_, Shape> {
+    let side = s.img.w.max(s.img.h) as f64;
+    let f = f.clamp(side.min(8.0) / side, 256.0 / side);
+    let to = |v: u32| ((v as f64 * f).round() as u32).max(1);
+    let (w, h) = (to(s.img.w), to(s.img.h));
+    if (w, h) == (s.img.w, s.img.h) {
+        Cow::Borrowed(s)
+    } else {
+        Cow::Owned(resize(s, w, h))
+    }
+}
+
+/// Reamostra para `w`x`h`. A cor vai pela média da área ao encolher e bilinear ao aumentar, com o
+/// alfa pré-multiplicado (o pixel transparente não suja a borda). Com inversão não há mistura: vale um pixel vizinho e, ao
+/// encolher, o que aparece ganha do transparente, para o traço fino do cursor de texto não sumir.
+fn resize(s: &Shape, w: u32, h: u32) -> Shape {
+    let (sw, sh, dw, dh) = (s.img.w as usize, s.img.h as usize, w as usize, h as usize);
+    let src = &s.img.color;
+    let mut color = vec![0u8; dw * dh * 4];
+    let mut invert = s.img.invert.as_ref().map(|_| vec![0u8; dw * dh * 4]);
+    let (fx, fy) = (sw as f64 / dw as f64, sh as f64 / dh as f64);
+    for y in 0..dh {
+        for x in 0..dw {
+            let o = (y * dw + x) * 4;
+            if let (Some(inv), Some(out)) = (&s.img.invert, &mut invert) {
+                let span = |d: usize, from: usize, to: usize| d * from / to..((d + 1) * from / to).max(d * from / to + 1);
+                let seen = |i: &usize| if inv[i * 4] != 0 { 2 } else { (src[i * 4 + 3] >= 128) as u8 };
+                let i = span(y, sh, dh).flat_map(|sy| span(x, sw, dw).map(move |sx| sy * sw + sx)).max_by_key(seen).unwrap_or(0) * 4;
+                color[o..o + 4].copy_from_slice(&src[i..i + 4]);
+                out[o..o + 4].copy_from_slice(&inv[i..i + 4]);
+                continue;
+            }
+            // O trecho da origem que vale neste pixel: a área dele ao encolher; ao aumentar, 1 px em
+            // volta do centro, o que dá o bilinear. O que passa da borda não conta.
+            let span = |d: usize, f: f64, from: usize| {
+                let (mid, half) = ((d as f64 + 0.5) * f, f.max(1.0) / 2.0);
+                ((mid - half).max(0.0), (mid + half).min(from as f64))
+            };
+            let ((x0, x1), (y0, y1)) = (span(x, fx, sw), span(y, fy, sh));
+            // Soma de B, G e R vezes o alfa, e do alfa, cada um pela área coberta.
+            let mut sum = [0.0f64; 4];
+            for sy in y0 as usize..(y1.ceil() as usize).min(sh) {
+                let wy = y1.min((sy + 1) as f64) - y0.max(sy as f64);
+                for sx in x0 as usize..(x1.ceil() as usize).min(sw) {
+                    let p = &src[(sy * sw + sx) * 4..][..4];
+                    let a = p[3] as f64 * wy * (x1.min((sx + 1) as f64) - x0.max(sx as f64));
+                    for c in 0..3 {
+                        sum[c] += p[c] as f64 * a;
+                    }
+                    sum[3] += a;
+                }
+            }
+            if sum[3] > 0.0 {
+                for c in 0..3 {
+                    color[o + c] = (sum[c] / sum[3]).round() as u8;
+                }
+                color[o + 3] = (sum[3] / ((x1 - x0) * (y1 - y0))).round() as u8;
+            }
+        }
+    }
+    let at = |v: u16, to: u32, from: u32| (v as u32 * to / from).min(to - 1) as u16;
+    Shape { img: CursorImage { w, h, color, invert }, hot: (at(s.hot.0, w, s.img.w), at(s.hot.1, h, s.img.h)) }
+}
 
 fn encode(s: &Shape) -> Vec<u8> {
     let mut raw = Vec::with_capacity(9 + s.img.color.len() * 5 / 4);
@@ -80,6 +150,8 @@ fn packets(shape: u16, blob: Option<&[u8]>) -> Vec<Vec<u8>> {
 #[derive(Default)]
 pub(super) struct Sender {
     shape: u16,
+    /// Quanto o vídeo encolhe a tela (altura do vídeo ÷ altura capturada): o formato encolhe junto.
+    pub scale: Option<f64>,
     /// O formato atual, comprimido.
     blob: Option<Vec<u8>>,
     visible: bool,
@@ -94,7 +166,7 @@ pub(super) struct Sender {
 impl Sender {
     /// Formato novo, da Desktop Duplication ou do Windows.
     pub fn set_shape(&mut self, s: &Shape) {
-        let b = encode(s);
+        let b = encode(&scaled(s, self.scale.unwrap_or(1.0)));
         // shortcut: formato que não cabe em 255 pedaços (256x256 sem nada transparente) é ignorado e
         // fica o anterior; trocar por um formato reduzido se aparecer cursor assim.
         if b.len() > PART * MAX_PARTS || self.blob.as_ref() == Some(&b) {
@@ -292,9 +364,11 @@ unsafe fn bits(bm: HBITMAP, bpp: u16) -> Option<(u32, u32, u32, Vec<u8>)> {
     (n == h as i32).then_some((w, h, pitch, buf))
 }
 
-/// O cursor do Windows deste PC com o formato do host. Sem inversão, a cor com transparência; com
-/// inversão, as máscaras do Windows (o cursor de texto continua invertendo o que está atrás).
-pub(super) unsafe fn to_cursor(s: &Shape) -> Option<HCURSOR> {
+/// O cursor do Windows deste PC com o formato do host, `f` vezes o tamanho (o da imagem do vídeo
+/// na janela). Sem inversão, a cor com transparência; com inversão, as máscaras do Windows (o
+/// cursor de texto continua invertendo o que está atrás).
+pub(super) unsafe fn to_cursor(s: &Shape, f: f64) -> Option<HCURSOR> {
+    let s = scaled(s, f);
     let (w, h) = (s.img.w as usize, s.img.h as usize);
     let bi = BITMAPINFO { bmiHeader: BITMAPINFOHEADER { biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32, biWidth: w as i32, biHeight: -(h as i32), biPlanes: 1, biBitCount: 32, biCompression: BI_RGB.0, ..Default::default() }, ..Default::default() };
     let mut ptr = std::ptr::null_mut();
@@ -334,6 +408,39 @@ mod tests {
         let color: Vec<u8> = (0..w * h * 4).map(|i| i as u8).collect();
         let inv = invert.then(|| (0..w * h).flat_map(|i| [if i == 4 { 255 } else { 0 }; 4]).collect());
         Shape { img: CursorImage { w, h, color, invert: inv }, hot: (2, 1) }
+    }
+
+    #[test]
+    fn cursor_escala_com_o_video() {
+        // 4x4: o quadrado de cima à esquerda é vermelho, com um pixel transparente de cor suja.
+        let mut color = vec![0u8; 64];
+        for i in [0, 1, 4] {
+            color[i * 4..i * 4 + 4].copy_from_slice(&[0, 0, 255, 255]);
+        }
+        color[5 * 4..5 * 4 + 4].copy_from_slice(&[255, 255, 255, 0]);
+        let mut s = Shape { img: CursorImage { w: 4, h: 4, color, invert: None }, hot: (3, 2) };
+        let half = resize(&s, 2, 2);
+        assert_eq!((half.img.w, half.img.h, half.hot), (2, 2, (1, 1)));
+        assert_eq!(half.img.color[..8], [0, 0, 255, 191, 0, 0, 0, 0]);
+        // Ao aumentar, a passagem entre dois pixels é gradual.
+        let two = Shape { img: CursorImage { w: 2, h: 1, color: vec![0, 0, 0, 255, 255, 255, 255, 255], invert: None }, hot: (1, 0) };
+        let wide = resize(&two, 4, 1);
+        assert_eq!(wide.img.color.iter().step_by(4).copied().collect::<Vec<_>>(), [0, 64, 191, 255]);
+        // Com inversão, o traço de 1 px numa coluna ímpar continua depois de encolher.
+        s.img.color = vec![0; 64];
+        s.img.invert = Some((0..16).flat_map(|i| [if i % 4 == 1 { 255 } else { 0 }; 4]).collect());
+        let inv = resize(&s, 2, 2).img.invert.unwrap();
+        assert_eq!((inv[0], inv[4], inv[8], inv[12]), (255, 0, 255, 0));
+        // Limites: nem menor que 8 px nem maior que 256; o já pequeno e a escala 1 ficam como estão.
+        assert!(matches!(scaled(&s, 0.5), Cow::Borrowed(_)));
+        let big = resize(&s, 32, 32);
+        assert_eq!(scaled(&big, 0.01).img.w, 8);
+        assert_eq!(scaled(&big, 100.0).img.w, 256);
+        assert!(matches!(scaled(&big, 1.0), Cow::Borrowed(_)));
+        // O host manda o formato já encolhido junto com o vídeo.
+        let mut tx = Sender { scale: Some(0.5), ..Default::default() };
+        tx.set_shape(&big);
+        assert_eq!(tx.blob.as_deref().and_then(decode).map(|x| x.img.w), Some(16));
     }
 
     #[test]
@@ -400,8 +507,14 @@ mod tests {
             assert!(s.img.w >= 16 && s.img.h >= 16);
             let ibeam = shape_of(LoadCursorW(None, IDC_IBEAM).unwrap()).expect("o cursor de texto");
             for x in [&s, &ibeam] {
-                let c = to_cursor(x).expect("cursor daqui");
-                let _ = DestroyCursor(c);
+                for f in [1.0, 0.5] {
+                    let c = to_cursor(x, f).expect("cursor daqui");
+                    // O Windows guarda o cursor no tamanho pedido.
+                    let back = shape_of(c).expect("o cursor feito aqui");
+                    let want = scaled(x, f);
+                    assert_eq!((back.img.w, back.img.h), (want.img.w, want.img.h));
+                    let _ = DestroyCursor(c);
+                }
             }
         }
     }

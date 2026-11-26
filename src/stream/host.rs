@@ -1939,6 +1939,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     let mut was_secure = false;
     // Cursor local: o formato vai à parte para quem pediu, e com todos pedindo sai do vídeo.
     let mut pointer = super::pointer::Sender::default();
+    pointer.scale = Some(out_h as f64 / src_h as f64);
     let mut grab = super::pointer::Grab::default();
     let mut cursor_out = local_cursor(&room.guests);
     if cursor_out {
