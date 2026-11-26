@@ -630,14 +630,15 @@ unsafe fn over_window(h: HWND) -> bool {
 }
 
 /// Quantas vezes a imagem desta janela é o vídeo: o cursor local escala junto. 1 antes de se saber
-/// o tamanho do vídeo ou com a janela minimizada.
+/// o tamanho do vídeo.
 unsafe fn video_zoom(h: HWND) -> f64 {
     let (w, hh) = client_size(h);
     let (iw, ih) = KEYS.lock().unwrap().video;
-    if iw == 0 || ih == 0 || w == 0 || hh == 0 {
+    if iw == 0 {
         return 1.0;
     }
-    (w as f64 / iw as f64).min(hh as f64 / ih as f64)
+    let r = video_rect(iw, ih, w, hh);
+    (r.right - r.left) as f64 / iw as f64
 }
 
 /// Põe o cursor local (ou nenhum) na janela, se o mouse está em cima dela.
@@ -2000,7 +2001,8 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         // Cursor local do tamanho que teria no vídeo: refeito com formato novo ou quando a escala
         // muda (janela, tela cheia, resolução do host).
         let zoom = video_zoom(hwnd);
-        if let Some(s) = local_shape.as_ref().filter(|_| zoom != local_zoom) {
+        // Minimizada, a janela não tem tamanho: espera ela voltar.
+        if let Some(s) = local_shape.as_ref().filter(|_| zoom != local_zoom && !IsIconic(hwnd).as_bool()) {
             local_zoom = zoom;
             if let Some(old) = std::mem::replace(&mut local.0, super::pointer::to_cursor(s, zoom)) {
                 // Fora da janela antes de destruir: o Windows não destrói o cursor em uso.

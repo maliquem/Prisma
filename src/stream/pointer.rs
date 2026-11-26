@@ -49,8 +49,8 @@ fn scaled(s: &Shape, f: f64) -> Cow<'_, Shape> {
     }
 }
 
-/// Reamostra para `w`x`h`. A cor vai pela média da área, com o alfa pré-multiplicado (o pixel
-/// transparente não suja a borda). Com inversão não há mistura: vale um pixel vizinho e, ao
+/// Reamostra para `w`x`h`. A cor vai pela média da área ao encolher e bilinear ao aumentar, com o
+/// alfa pré-multiplicado (o pixel transparente não suja a borda). Com inversão não há mistura: vale um pixel vizinho e, ao
 /// encolher, o que aparece ganha do transparente, para o traço fino do cursor de texto não sumir.
 fn resize(s: &Shape, w: u32, h: u32) -> Shape {
     let (sw, sh, dw, dh) = (s.img.w as usize, s.img.h as usize, w as usize, h as usize);
@@ -69,7 +69,13 @@ fn resize(s: &Shape, w: u32, h: u32) -> Shape {
                 out[o..o + 4].copy_from_slice(&inv[i..i + 4]);
                 continue;
             }
-            let (x0, x1, y0, y1) = (x as f64 * fx, (x + 1) as f64 * fx, y as f64 * fy, (y + 1) as f64 * fy);
+            // O trecho da origem que vale neste pixel: a área dele ao encolher; ao aumentar, 1 px em
+            // volta do centro, o que dá o bilinear. O que passa da borda não conta.
+            let span = |d: usize, f: f64, from: usize| {
+                let (mid, half) = ((d as f64 + 0.5) * f, f.max(1.0) / 2.0);
+                ((mid - half).max(0.0), (mid + half).min(from as f64))
+            };
+            let ((x0, x1), (y0, y1)) = (span(x, fx, sw), span(y, fy, sh));
             // Soma de B, G e R vezes o alfa, e do alfa, cada um pela área coberta.
             let mut sum = [0.0f64; 4];
             for sy in y0 as usize..(y1.ceil() as usize).min(sh) {
@@ -87,7 +93,7 @@ fn resize(s: &Shape, w: u32, h: u32) -> Shape {
                 for c in 0..3 {
                     color[o + c] = (sum[c] / sum[3]).round() as u8;
                 }
-                color[o + 3] = (sum[3] / (fx * fy)).round() as u8;
+                color[o + 3] = (sum[3] / ((x1 - x0) * (y1 - y0))).round() as u8;
             }
         }
     }
@@ -416,6 +422,10 @@ mod tests {
         let half = resize(&s, 2, 2);
         assert_eq!((half.img.w, half.img.h, half.hot), (2, 2, (1, 1)));
         assert_eq!(half.img.color[..8], [0, 0, 255, 191, 0, 0, 0, 0]);
+        // Ao aumentar, a passagem entre dois pixels é gradual.
+        let two = Shape { img: CursorImage { w: 2, h: 1, color: vec![0, 0, 0, 255, 255, 255, 255, 255], invert: None }, hot: (1, 0) };
+        let wide = resize(&two, 4, 1);
+        assert_eq!(wide.img.color.iter().step_by(4).copied().collect::<Vec<_>>(), [0, 64, 191, 255]);
         // Com inversão, o traço de 1 px numa coluna ímpar continua depois de encolher.
         s.img.color = vec![0; 64];
         s.img.invert = Some((0..16).flat_map(|i| [if i % 4 == 1 { 255 } else { 0 }; 4]).collect());
