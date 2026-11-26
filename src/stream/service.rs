@@ -569,6 +569,10 @@ pub fn refresh_copy() -> Option<String> {
             log(&format!("a pasta dos dados não ficou só leitura: {e}"));
         }
     }
+    // Quem instalou o serviço antes de o instalador criar a regra do firewall a ganha aqui.
+    if let Err(e) = unsafe { firewall_allow(&dst) } {
+        log(&format!("a regra do Firewall do Windows não entrou: {}", e.message()));
+    }
     let r = unsafe { swap_copy(&dst, &mine) };
     let line = match &r {
         Ok(()) => format!("programa trocado pela versão {}", env!("CARGO_PKG_VERSION")),
