@@ -1566,9 +1566,16 @@ fn pace_name(constant: bool) -> &'static str {
     }
 }
 
-/// Mudou só o pedido de ritmo: o vídeo segue sem recomeçar.
+/// Mudou só o pedido de ritmo ou o do cursor local: o vídeo segue sem recomeçar.
 fn only_pace_changed(a: &Hello, b: &Hello) -> bool {
-    (a.flags ^ b.flags) == CONSTANT && (a.w, a.h, a.hz, a.codecs, a.pid) == (b.w, b.h, b.hz, b.codecs, b.pid)
+    let d = a.flags ^ b.flags;
+    d != 0 && d & !(CONSTANT | LOCAL_CURSOR) == 0 && (a.w, a.h, a.hz, a.codecs, a.pid) == (b.w, b.h, b.hz, b.codecs, b.pid)
+}
+
+/// O cursor sai do vídeo só quando todos que assistem pediram o cursor local e mexem o mouse daqui
+/// (quem não mexe veria a própria seta, e não a do host). Com alguém sem pedir, o vídeo leva o cursor.
+fn local_cursor(guests: &[Guest]) -> bool {
+    !guests.is_empty() && guests.iter().all(|g| g.hello.flags & LOCAL_CURSOR != 0 && g.perms & MOUSE != 0)
 }
 
 /// Hora de dar um quadro ao codificador, numa grade de horários (`due`) que anda um intervalo por
@@ -1881,7 +1888,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                 Ok(())
             }))?;
             let capture = pool.CreateCaptureSession(&item)?;
-            let _ = capture.SetIsCursorCaptureEnabled(true);
+            let _ = capture.SetIsCursorCaptureEnabled(!local_cursor(&room.guests));
             let _ = capture.SetIsBorderRequired(false);
             let _ = capture.SetMinUpdateInterval(windows::Foundation::TimeSpan { Duration: 10_000_000 / fps as i64 });
             capture.StartCapture()?;
@@ -1901,12 +1908,20 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                 None => super::screen::Dda::new(d, mon, color.hdr, color.white_nits, &mid, vf.hdr10, src_w, src_h)?,
             };
             eprintln!("captura: Desktop Duplication, área de trabalho «{}»", x.desk_name);
-            Cap::Dda(Box::new(x))
+            let mut x = Box::new(x);
+            x.draw_cursor = !local_cursor(&room.guests);
+            Cap::Dda(x)
         }
     };
     let mut fed_at = Instant::now() - Duration::from_secs(1);
     let mut due = 0i64;
     let mut was_secure = false;
+    // Cursor local: o formato vai à parte para quem pediu, e com todos pedindo sai do vídeo.
+    let mut pointer = super::pointer::Sender::default();
+    let mut cursor_out = local_cursor(&room.guests);
+    if cursor_out {
+        eprintln!("cursor: fora do vídeo, desenhado por quem assiste");
+    }
     // Tamanho novo da janela compartilhada e desde quando.
     let mut resize: Option<((u32, u32), Instant)> = None;
     let mut first_size: Option<(u32, u32)> = None;
@@ -2049,6 +2064,49 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                 }
             }
         }
+        let local = local_cursor(&room.guests);
+        if local != cursor_out {
+            cursor_out = local;
+            eprintln!("cursor: {}", if local { "fora do vídeo, desenhado por quem assiste" } else { "de volta ao vídeo" });
+            match &mut cap {
+                // shortcut: no WGC, com a tela parada, o último quadro fica com o cursor até a tela
+                // mudar; a troca no meio da sessão é rara (alguém entra, sai ou muda a opção).
+                Cap::Wgc { pool: Some((_, session, ..)), .. } => {
+                    let _ = session.SetIsCursorCaptureEnabled(!local);
+                }
+                Cap::Wgc { .. } => {}
+                Cap::Dda(x) => {
+                    x.draw_cursor = !local;
+                    // Monta a imagem de novo, com ou sem o cursor.
+                    pending = Some(now());
+                }
+            }
+        }
+        if room.guests.iter().any(|g| g.hello.flags & LOCAL_CURSOR != 0) {
+            match &cap {
+                Cap::Wgc { .. } => {
+                    if local {
+                        pointer.read_system();
+                    }
+                }
+                Cap::Dda(x) => {
+                    if x.cursor_shapes != pointer.seen {
+                        pointer.seen = x.cursor_shapes;
+                        if let Some(s) = &x.shape {
+                            pointer.set_shape(s);
+                        }
+                    }
+                    pointer.set_visible(x.cursor_visible);
+                }
+            }
+            if let Some(pk) = pointer.due(local) {
+                for g in room.guests.iter().filter(|g| g.hello.flags & LOCAL_CURSOR != 0) {
+                    for p in &pk {
+                        g.link.send(p);
+                    }
+                }
+            }
+        }
         let secure = match &cap {
             Cap::Wgc { pool, .. } => {
                 if let Some((_, _, event, _)) = pool {
@@ -2130,7 +2188,9 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                                 continue;
                             }
                             if only_pace_changed(&h, &g.hello) {
-                                super::notice("«{}» mudou o ritmo dos quadros", &g.name);
+                                if (h.flags ^ g.hello.flags) & CONSTANT != 0 {
+                                    super::notice("«{}» mudou o ritmo dos quadros", &g.name);
+                                }
                                 g.hello = h;
                                 // O ritmo novo vale já na próxima volta, sem esperar o segundo.
                                 room_at = Instant::now() - Duration::from_secs(10);
@@ -2538,6 +2598,22 @@ mod tests {
     }
 
     #[test]
+    fn cursor_leaves_the_video_only_when_everyone_draws_it() {
+        assert!(!local_cursor(&[]));
+        let (mut a, _) = guest(MOUSE, false);
+        let (b, _) = guest(MOUSE, false);
+        a.hello.flags |= LOCAL_CURSOR;
+        assert!(local_cursor(std::slice::from_ref(&a)));
+        // Alguém sem a opção, ou sem mexer o mouse daqui: o cursor fica no vídeo.
+        let mut guests = vec![a, b];
+        assert!(!local_cursor(&guests));
+        guests[1].hello.flags |= LOCAL_CURSOR;
+        assert!(local_cursor(&guests));
+        guests[1].perms = 0;
+        assert!(!local_cursor(&guests));
+    }
+
+    #[test]
     fn pace_follows_the_lead_guest_without_restarting() {
         let (mut a, _) = guest(0, true);
         let (b, _) = guest(0, true);
@@ -2549,6 +2625,9 @@ mod tests {
         assert!(!only_pace_changed(&Hello { hz: 30, ..a.hello }, &old));
         assert!(!only_pace_changed(&Hello { flags: CONSTANT | ASKS_444, ..a.hello }, &old));
         assert!(!only_pace_changed(&old, &old));
+        // O cursor local também muda sem recomeçar, sozinho ou junto com o ritmo.
+        assert!(only_pace_changed(&Hello { flags: old.flags | LOCAL_CURSOR, ..old }, &old));
+        assert!(only_pace_changed(&Hello { flags: a.hello.flags | LOCAL_CURSOR, ..old }, &old));
         // Vale o pedido de quem lidera (o primeiro); o do segundo não muda a sala.
         let guests = vec![a, b];
         assert!(asks_constant(&guests));

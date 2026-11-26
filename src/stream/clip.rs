@@ -557,7 +557,12 @@ pub struct Pieces {
 
 impl Pieces {
     pub fn add(&mut self, id: u16, part: u8, parts: u8, data: &[u8]) -> Option<String> {
-        if self.done == Some(id) || parts == 0 || part >= parts || parts as usize > MAX_TEXT.div_ceil(PART) {
+        String::from_utf8(self.add_bytes(id, part, parts, data, MAX_TEXT.div_ceil(PART))?).ok()
+    }
+
+    /// Os bytes juntos quando chega o último pedaço de `id` (até `max_parts` pedaços).
+    pub fn add_bytes(&mut self, id: u16, part: u8, parts: u8, data: &[u8], max_parts: usize) -> Option<Vec<u8>> {
+        if self.done == Some(id) || parts == 0 || part >= parts || parts as usize > max_parts {
             return None;
         }
         if self.id != Some(id) {
@@ -572,8 +577,7 @@ impl Pieces {
             return None;
         }
         self.done = Some(id);
-        let all: Vec<u8> = std::mem::take(&mut self.got).into_iter().flatten().flatten().collect();
-        String::from_utf8(all).ok()
+        Some(std::mem::take(&mut self.got).into_iter().flatten().flatten().collect())
     }
 }
 

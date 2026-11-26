@@ -53,6 +53,11 @@ pub(super) struct Dda {
     /// Vezes que a duplicação perdeu o acesso (troca de área de trabalho, modo da tela).
     pub lost: u32,
     pub cursor_shapes: u32,
+    /// O último formato do cursor e se ele está à vista, para o cursor local de quem assiste.
+    pub shape: Option<super::pointer::Shape>,
+    pub cursor_visible: bool,
+    /// Falso com o cursor local: o vídeo sai sem o cursor.
+    pub draw_cursor: bool,
 }
 
 /// Saída de vídeo do monitor.
@@ -173,6 +178,9 @@ impl Dda {
             retry: Instant::now() - Duration::from_secs(1),
             lost: 0,
             cursor_shapes: 0,
+            shape: None,
+            cursor_visible: false,
+            draw_cursor: true,
         };
         me.attach();
         Ok(me)
@@ -256,7 +264,9 @@ impl Dda {
             if (p.Position, p.Visible.as_bool()) != (self.cursor.pos, self.cursor.visible) {
                 self.cursor.pos = p.Position;
                 self.cursor.visible = p.Visible.as_bool();
-                changed = true;
+                self.cursor_visible = self.cursor.visible;
+                // Sem o cursor no vídeo, mexer o mouse não pede quadro novo.
+                changed |= self.draw_cursor;
             }
         }
         if info.PointerShapeBufferSize > 0 {
@@ -267,7 +277,9 @@ impl Dda {
                 if let Some(img) = cursor_image(si.Type, si.Width, si.Height, si.Pitch, &buf) {
                     self.cursor.set(&self.dev, &img)?;
                     self.cursor_shapes += 1;
-                    changed = true;
+                    changed |= self.draw_cursor;
+                    let hot = ((si.HotSpot.x.max(0) as u32).min(img.w - 1) as u16, (si.HotSpot.y.max(0) as u32).min(img.h - 1) as u16);
+                    self.shape = Some(super::pointer::Shape { img, hot });
                 }
             }
         }
@@ -285,6 +297,9 @@ impl Dda {
             tone.draw(&self.ctx, &self.dev, raw, self.size.0, self.size.1)?;
         }
         self.ctx.CopyResource(mid, &self.base);
+        if !self.draw_cursor {
+            return Ok(());
+        }
         self.cursor.draw(&self.ctx, self.size)
     }
 }
@@ -302,7 +317,7 @@ impl Drop for Dda {
 
 /// O formato do ponteiro, em BGRA: a cor com transparência e, se houver, a máscara de inversão
 /// (branco onde a cor da tela se inverte, como no cursor de texto).
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub(super) struct CursorImage {
     pub w: u32,
     pub h: u32,

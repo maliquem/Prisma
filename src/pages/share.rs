@@ -1465,6 +1465,10 @@ fn client_tab(ui: &mut Ui, app: &App, c: &mut ClientOpts, x: f32, top: f32, w: f
     let cgpu_r = row(ui, rx, y, rw, "Placa de vídeo", rctl);
     y += 46.0;
     ui.check("sh-warn", rect(rx, y, rw, 30.0), "Avisar quando a conexão piorar", &mut c.warn);
+    y += 34.0;
+    let lc = rect(rx, y, rw, 30.0);
+    ui.check("sh-lcursor", lc, "Cursor local: o mouse anda na hora, mesmo com latência alta", &mut c.local_cursor);
+    ui.tip(lc, "O outro PC manda o formato do cursor e para de desenhá-lo no vídeo; este PC desenha com o próprio mouse. Quando o jogo esconde o cursor, volta ao normal. Só vale se todos que assistem ligarem.");
     y += 40.0;
     ui.c.text_wrap(
         rect(rx, y, rw, (r.bottom() - y - 12.0).max(0.0)),
