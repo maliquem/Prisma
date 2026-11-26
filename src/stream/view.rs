@@ -629,6 +629,17 @@ unsafe fn over_window(h: HWND) -> bool {
     p.x >= 0 && p.y >= 0 && (p.x as u32) < w && (p.y as u32) < hh
 }
 
+/// Quantas vezes a imagem desta janela é o vídeo: o cursor local escala junto. 1 antes de se saber
+/// o tamanho do vídeo ou com a janela minimizada.
+unsafe fn video_zoom(h: HWND) -> f64 {
+    let (w, hh) = client_size(h);
+    let (iw, ih) = KEYS.lock().unwrap().video;
+    if iw == 0 || ih == 0 || w == 0 || hh == 0 {
+        return 1.0;
+    }
+    (w as f64 / iw as f64).min(hh as f64 / ih as f64)
+}
+
 /// Põe o cursor local (ou nenhum) na janela, se o mouse está em cima dela.
 unsafe fn show_local(hwnd: HWND, cursor: Option<HCURSOR>) {
     LOCAL_NOW.store(cursor.map_or(0, |c| c.0 as isize), Ordering::Relaxed);
@@ -1582,6 +1593,8 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     // O último Info do host, para avisar quando ele muda alguma coisa.
     // Cursor local: o formato do host feito cursor daqui e se ele está à vista lá.
     let mut local: (Option<HCURSOR>, bool) = (None, false);
+    // O último formato recebido e a escala em que o cursor foi feito (0: fazer de novo).
+    let (mut local_shape, mut local_zoom) = (None::<super::pointer::Shape>, 0.0f64);
     let mut seen_info: Option<(VideoCodec, u32, u32, u32, u8, bool, bool, u8, bool)> = None;
     // Prioridade do host (255: versão que não manda).
     let mut host_priority = 255u8;
@@ -1944,12 +1957,8 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                 }
                 Event::Relative(r) => host_rel = r,
                 Event::Cursor { visible, shape } => {
-                    if let Some(s) = shape {
-                        if let Some(old) = std::mem::replace(&mut local.0, super::pointer::to_cursor(&s)) {
-                            // Fora da janela antes de destruir: o Windows não destrói o cursor em uso.
-                            show_local(hwnd, None);
-                            let _ = DestroyCursor(old);
-                        }
+                    if shape.is_some() {
+                        (local_shape, local_zoom) = (shape, 0.0);
                     }
                     local.1 = visible;
                     show_local(hwnd, local.0.filter(|_| local.1 && co.local_cursor));
@@ -1987,6 +1996,18 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                     }
                 }
             }
+        }
+        // Cursor local do tamanho que teria no vídeo: refeito com formato novo ou quando a escala
+        // muda (janela, tela cheia, resolução do host).
+        let zoom = video_zoom(hwnd);
+        if let Some(s) = local_shape.as_ref().filter(|_| zoom != local_zoom) {
+            local_zoom = zoom;
+            if let Some(old) = std::mem::replace(&mut local.0, super::pointer::to_cursor(s, zoom)) {
+                // Fora da janela antes de destruir: o Windows não destrói o cursor em uso.
+                show_local(hwnd, None);
+                let _ = DestroyCursor(old);
+            }
+            show_local(hwnd, local.0.filter(|_| local.1 && co.local_cursor));
         }
         second.queue = second.queue.max(arrived.saturating_sub(1) + dec.as_ref().map_or(0, |d| d.waiting()));
         // Mouse e teclado novos vão na hora; os recentes se repetem por um tempo, contra perda.

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Share screen**, **local cursor** at the right size: the cursor now has the same size as inside the video, following the other PC's resolution and this window (resizing and fullscreen), instead of keeping the size in the other PC's pixels; update both PCs. / **Compartilhar tela**, **cursor local** no tamanho certo: o cursor agora tem o mesmo tamanho que teria dentro do vídeo, acompanhando a resolução do outro PC e esta janela (redimensionar e tela cheia), em vez de ficar no tamanho em pixels do outro PC; atualize os dois PCs.
+
 ## 2.3.0
 
 - **Share screen service**: installing it now adds the Windows Firewall rule `Prisma Compartilhar (UDP)` (inbound UDP for the service's copy of Prisma, on every network), and removing it deletes the rule. Without it, Windows dropped what came from outside, the direct path over the internet did not form and latency went up. If you already have the service, the rule is added when Prisma, running as administrator, updates the service's copy; otherwise, remove the service and install it again on the **Share screen** page. / **Serviço do Compartilhar tela**: instalar agora cria no Firewall do Windows a regra `Prisma Compartilhar (UDP)` (entrada de UDP para a cópia do Prisma que o serviço roda, em qualquer rede), e remover apaga a regra. Sem ela, o Windows descartava o que chegava de fora, o caminho direto pela internet não se formava e o atraso subia. Se você já tem o serviço, a regra entra quando o Prisma, como administrador, atualiza a cópia do serviço; senão, remova o serviço e instale de novo na página **Compartilhar tela**.
