@@ -24,6 +24,7 @@ pub(crate) mod net;
 #[cfg(feature = "stream")]
 pub mod route;
 mod pace;
+mod pointer;
 mod fec;
 mod opus;
 pub use opus::Decoder as OpusDecoder;
@@ -215,6 +216,8 @@ pub enum Kind {
     Rate = 26,
     /// Microfone de quem assiste para o host (veja `mic.rs`). Host antigo ignora.
     Mic = 27,
+    /// Cursor do host desenhado por quem assiste (veja `pointer.rs`). Versões antigas ignoram.
+    Cursor = 28,
 }
 
 // ---------- Permissões de quem assiste ----------
@@ -422,6 +425,10 @@ pub const CONSTANT: u16 = 128;
 /// `Hello.flags` (segundo byte, no fim; host antigo ignora): quem assiste pede 10 bits com a tela
 /// SDR, para tirar as faixas dos degradês. O host aceita com a opção de 10 bits e um NVENC que faça.
 pub const ASKS_10: u16 = 256;
+/// `Hello.flags` (segundo byte): quem assiste desenha o cursor do host com o cursor dele, para o
+/// mouse não esperar a ida e volta. Com uma pessoa só assistindo, que pediu, o host tira o cursor
+/// do vídeo e manda o formato ([`Msg::Cursor`]). Mudar só ele não recomeça o vídeo. Host antigo ignora.
+pub const LOCAL_CURSOR: u16 = 512;
 
 /// O que um pacote diz.
 #[derive(Debug, PartialEq)]
@@ -485,6 +492,10 @@ pub enum Msg<'a> {
     Rate(rate::Report),
     /// Microfone de quem assiste, um bloco de `MIC_BLOCK` amostras. Host antigo ignora.
     Mic(&'a [u8]),
+    /// O cursor do host para quem pediu [`LOCAL_CURSOR`]: `visible` falso (o jogo escondeu, ou o
+    /// cursor voltou ao vídeo) vem sem pedaços; visível, cada pacote leva um pedaço do formato
+    /// `shape` (comprimido, veja `pointer.rs`).
+    Cursor { shape: u16, visible: bool, part: u8, parts: u8, data: &'a [u8] },
 }
 
 /// O codec do vídeo na rede: um dos de sempre (NVENC e Media Foundation) ou o PyroWave, que só
@@ -686,6 +697,12 @@ pub fn write(out: &mut Vec<u8>, m: &Msg) {
             head(out, Kind::Mic);
             out.extend_from_slice(data);
         }
+        Msg::Cursor { shape, visible, part, parts, data } => {
+            head(out, Kind::Cursor);
+            out.extend_from_slice(&shape.to_le_bytes());
+            out.extend_from_slice(&[visible as u8, part, parts]);
+            out.extend_from_slice(data);
+        }
     }
 }
 
@@ -764,6 +781,7 @@ pub fn read(b: &[u8]) -> Option<Msg<'_>> {
         25 => Msg::ClipData { id: u16_at(b, 4)?, idx: u32_at(b, 6)?, data: b.get(10..)? },
         26 => Msg::Rate(rate::Report { delay_ms: u16_at(b, 4)?, loss_pm: u16_at(b, 6)?, kbps: u32_at(b, 8)? }),
         27 => Msg::Mic(b.get(4..)?),
+        28 => Msg::Cursor { shape: u16_at(b, 4)?, visible: *b.get(6)? != 0, part: *b.get(7)?, parts: *b.get(8)?, data: b.get(9..)? },
         _ => return None,
     })
 }
@@ -925,9 +943,11 @@ mod tests {
         round(Msg::Clip { id: 300, part: 1, parts: 3, data: b"texto" });
         round(Msg::Rate(rate::Report { delay_ms: 31, loss_pm: 1000, kbps: 150_000 }));
         round(Msg::Mic(&[1, 2, 3, 4]));
+        round(Msg::Cursor { shape: 9, visible: true, part: 1, parts: 2, data: &[7, 8] });
+        round(Msg::Cursor { shape: 0, visible: false, part: 0, parts: 0, data: &[] });
         round(Msg::Nack { frame: 77 });
         round(Msg::Hello { w: 3840, h: 2160, hz: 119, codecs: 7, pid: 4321, flags: SEES_HDR | DECODES_444 });
-        round(Msg::Hello { w: 1920, h: 1080, hz: 60, codecs: 7, pid: 1, flags: CONSTANT | ASKS_10 });
+        round(Msg::Hello { w: 1920, h: 1080, hz: 60, codecs: 7, pid: 1, flags: CONSTANT | ASKS_10 | LOCAL_CURSOR });
         // Sem bit do segundo byte, o Hello sai do tamanho antigo (a versão anterior lê igual).
         let mut plain = Vec::new();
         write(&mut plain, &Msg::Hello { w: 1, h: 1, hz: 60, codecs: 7, pid: 1, flags: CONSTANT });

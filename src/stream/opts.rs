@@ -419,6 +419,8 @@ pub struct ClientOpts {
     pub fps: u32,
     /// Pede ao host o ritmo constante: com a tela parada, ele repete o último quadro.
     pub constant: bool,
+    /// Mostra o cursor do host com o cursor daqui, que anda sem esperar a rede (veja `pointer.rs`).
+    pub local_cursor: bool,
     /// Placa de vídeo que decodifica e mostra (nome do Windows); vazio usa a do Windows.
     pub gpu: String,
     /// Mouse e teclado entre PCs: quem fica na esquerda, no meio e na direita. `eu` é este PC;
@@ -458,6 +460,7 @@ impl Default for ClientOpts {
             key_full: (MOD_CTRL | MOD_ALT | MOD_SHIFT, b'F' as u32),
             fps: 0,
             constant: false,
+            local_cursor: false,
             key_cad: (MOD_CTRL | MOD_ALT, VK_END),
             key_disc: (MOD_CTRL | MOD_ALT | MOD_SHIFT, b'D' as u32),
             key_imm: (MOD_CTRL | MOD_ALT | MOD_SHIFT, b'I' as u32),
@@ -503,6 +506,7 @@ impl ClientOpts {
                 "atalho_som" => o.key_sound = keys_parse(v, o.key_sound),
                 "quadros" => o.fps = v.parse::<u32>().ok().filter(|f| CLIENT_FPS.contains(f)).unwrap_or(0),
                 "ritmo_constante" => o.constant = flag(v),
+                "cursor_local" => o.local_cursor = flag(v),
                 "gpu" => o.gpu = clean(v, 128),
                 "telas" => o.screens = screens_parse(v),
                 "atalho_travar_mouse" => o.key_lock = keys_parse(v, o.key_lock),
@@ -517,7 +521,7 @@ impl ClientOpts {
         let b = |x: bool| x as u8;
         format!(
             "tela_cheia={}\nvsync={}\nimersivo={}\nmedidor={}\naviso={}\nmudo={}\nmicrofone={}\npedir_444={}\ncontrole_fundo={}\nteclado_controle={}\n\
-quadros={}\natalho_menu={}\natalho_tela_cheia={}\natalho_ctrl_alt_del={}\natalho_desconectar={}\natalho_imersivo={}\natalho_medidor={}\natalho_som={}\ngpu={}\ntelas={}\natalho_travar_mouse={}\nvrr={}\nsuper_resolucao={}\nritmo_constante={}\npedir_10_bits={}\n",
+quadros={}\natalho_menu={}\natalho_tela_cheia={}\natalho_ctrl_alt_del={}\natalho_desconectar={}\natalho_imersivo={}\natalho_medidor={}\natalho_som={}\ngpu={}\ntelas={}\natalho_travar_mouse={}\nvrr={}\nsuper_resolucao={}\nritmo_constante={}\npedir_10_bits={}\ncursor_local={}\n",
             b(self.fullscreen),
             b(self.vsync),
             self.immersive,
@@ -543,6 +547,7 @@ quadros={}\natalho_menu={}\natalho_tela_cheia={}\natalho_ctrl_alt_del={}\natalho
             b(self.upscale),
             b(self.constant),
             b(self.ask10),
+            b(self.local_cursor),
         )
     }
 
@@ -606,7 +611,7 @@ mod tests {
         assert_eq!(Opts::parse("janela=x:5").window, (0, 0));
         // Arquivo da 0.11.0: o resto fica no padrão.
         assert_eq!(Opts::parse("hdr_desligar=1\npessoas=2\ncontroles=auto\nconvite=total\n"), Opts { hdr_off: true, guests: 2, invite: TOTAL, ..Opts::default() });
-        let c = ClientOpts { fullscreen: false, vsync: true, vrr: true, upscale: true, immersive: 1, meter: 2, warn: false, mute: true, mic: true, ask444: true, ask10: true, pad_background: true, pad_keys: true, fps: 60, constant: true, gpu: "AMD Radeon(TM) Graphics".into(), key_menu: (MOD_ALT, 0x70), key_sound: (MOD_CTRL, b'M' as u32), ..ClientOpts::default() };
+        let c = ClientOpts { fullscreen: false, vsync: true, vrr: true, upscale: true, immersive: 1, meter: 2, warn: false, mute: true, mic: true, ask444: true, ask10: true, pad_background: true, pad_keys: true, fps: 60, constant: true, local_cursor: true, gpu: "AMD Radeon(TM) Graphics".into(), key_menu: (MOD_ALT, 0x70), key_sound: (MOD_CTRL, b'M' as u32), ..ClientOpts::default() };
         assert_eq!(ClientOpts::parse(&c.text()), c);
         let c = ClientOpts { screens: ["eu".into(), "".into(), "31ded57656ab".into()], key_lock: (MOD_CTRL, b'L' as u32), ..ClientOpts::default() };
         assert_eq!(ClientOpts::parse(&c.text()), c);

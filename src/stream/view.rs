@@ -46,6 +46,8 @@ enum Event {
     Frame(Frame),
     /// Um quadro do PyroWave: os pacotes que chegaram (todos, ou o que deu antes do próximo quadro).
     Wave { pts: i64, parts: Vec<Vec<u8>> },
+    /// Cursor local: o do host está à vista ou não e, quando mudou, o formato novo.
+    Cursor { visible: bool, shape: Option<super::pointer::Shape> },
 }
 
 /// O que o host disse de um controle daqui: jogador (0 sem vaga), vaga do XInput lá e motivo.
@@ -126,6 +128,7 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
     // Área de transferência, aberta quando o host dá a permissão.
     let mut clip: Option<super::clip::Clip> = None;
     let mut clip_in = super::clip::Pieces::default();
+    let mut pointer = super::pointer::Receiver::default();
     let mut clip_id = 0u16;
     // O texto copiado aqui só vai quando a janela de assistir está na frente (ou esteve até 2 s
     // antes, para o Ctrl+C dentro dela valer): o host não lê o que se copia com ela atrás.
@@ -250,6 +253,11 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
                     if let Some(b) = rich.on(&m, &*link) {
                         let _ = c.set_rich.send(b);
                     }
+                }
+            }
+            Some(Msg::Cursor { shape, visible, part, parts, data }) => {
+                if let Some((visible, shape)) = pointer.on(shape, visible, part, parts, data) {
+                    push(Event::Cursor { visible, shape });
                 }
             }
             Some(Msg::Rumble { pad, low, high }) => {
@@ -575,6 +583,17 @@ static KEYS: Mutex<Keys> = Mutex::new(Keys {
 
 /// A janela de quem assiste, para o gancho do teclado e para a área de transferência.
 static VIEW_HWND: AtomicIsize = AtomicIsize::new(0);
+/// Cursor local: o cursor daqui com o formato do host, enquanto ele está à vista lá (0: nenhum).
+static LOCAL_NOW: AtomicIsize = AtomicIsize::new(0);
+
+/// Põe o cursor local (ou nenhum) na janela, se o mouse está em cima dela.
+unsafe fn show_local(hwnd: HWND, cursor: Option<HCURSOR>) {
+    LOCAL_NOW.store(cursor.map_or(0, |c| c.0 as isize), Ordering::Relaxed);
+    let mut p = POINT::default();
+    if KEYS.lock().unwrap().mouse && GetCursorPos(&mut p).is_ok() && WindowFromPoint(p) == hwnd {
+        SetCursor(cursor);
+    }
+}
 /// Quanto tempo depois de sair da frente a janela de assistir ainda manda o texto copiado.
 const CLIP_FRONT: Duration = Duration::from_secs(2);
 
@@ -1041,9 +1060,11 @@ unsafe extern "system" fn wndproc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRES
             KEYS.lock().unwrap().pending.push(locks_now());
             DefWindowProcW(h, m, w, l)
         }
-        // O cursor do host já vem na imagem: o daqui some em cima dela.
+        // O cursor do host já vem na imagem: o daqui some em cima dela. Com o cursor local, o
+        // daqui fica com o formato do host.
         WM_SETCURSOR if (l.0 & 0xFFFF) as u32 == HTCLIENT && KEYS.lock().unwrap().mouse => {
-            SetCursor(None);
+            let c = LOCAL_NOW.load(Ordering::Relaxed);
+            SetCursor((c != 0).then_some(HCURSOR(c as *mut _)));
             LRESULT(1)
         }
         WM_SIZE => {
@@ -1426,6 +1447,9 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     if co.ask10 {
         flags |= ASKS_10;
     }
+    if co.local_cursor {
+        flags |= LOCAL_CURSOR;
+    }
     if ask444 && !can444 && codecs & WAVE == 0 {
         eprintln!("4:4:4: esta placa não decodifica HEVC 4:4:4; fica o 4:2:0");
     }
@@ -1486,6 +1510,8 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     let mut info: Option<(VideoCodec, u32, u32, u32)> = None;
     let mut lat = super::LatLog::new("ponta a ponta");
     // O último Info do host, para avisar quando ele muda alguma coisa.
+    // Cursor local: o formato do host feito cursor daqui e se ele está à vista lá.
+    let mut local: (Option<HCURSOR>, bool) = (None, false);
     let mut seen_info: Option<(VideoCodec, u32, u32, u32, u8, bool, bool, u8, bool)> = None;
     // Prioridade do host (255: versão que não manda).
     let mut host_priority = 255u8;
@@ -1556,6 +1582,16 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
             let fresh = ClientOpts::load();
             if fresh != seen {
                 picks.extend(page_picks(&seen, &fresh, &co));
+                // Cursor local ligado ou desligado na aba: o host troca sem recomeçar o vídeo.
+                if fresh.local_cursor != co.local_cursor {
+                    flags ^= LOCAL_CURSOR;
+                    let mut again = Vec::new();
+                    write(&mut again, &Msg::Hello { w: screen_w, h: screen_h, hz: ask_hz(co.fps), codecs, pid: std::process::id(), flags });
+                    link.send(&again);
+                    link.send(&again);
+                    // O host só manda de novo o que mudou: ao religar, vale o último cursor recebido.
+                    show_local(hwnd, local.0.filter(|_| local.1 && fresh.local_cursor));
+                }
                 // O resto (atalhos, placa...) vem da página; o menu grava por cima só o que muda.
                 co = ClientOpts { immersive: co.immersive, fps: co.fps, meter: co.meter, warn: co.warn, vsync: co.vsync, ask444: co.ask444, ask10: co.ask10, constant: co.constant, pad_background: co.pad_background, pad_keys: co.pad_keys, ..fresh.clone() };
                 seen = fresh;
@@ -1817,6 +1853,17 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                             };
                         }
                     }
+                }
+                Event::Cursor { visible, shape } => {
+                    if let Some(s) = shape {
+                        if let Some(old) = std::mem::replace(&mut local.0, super::pointer::to_cursor(&s)) {
+                            // Fora da janela antes de destruir: o Windows não destrói o cursor em uso.
+                            show_local(hwnd, None);
+                            let _ = DestroyCursor(old);
+                        }
+                    }
+                    local.1 = visible;
+                    show_local(hwnd, local.0.filter(|_| local.1 && co.local_cursor));
                 }
                 Event::Wave { pts, parts } => {
                     // Cada quadro vale sozinho: só o mais novo vai para a tela.
