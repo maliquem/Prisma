@@ -1572,10 +1572,11 @@ fn only_pace_changed(a: &Hello, b: &Hello) -> bool {
     d != 0 && d & !(CONSTANT | LOCAL_CURSOR) == 0 && (a.w, a.h, a.hz, a.codecs, a.pid) == (b.w, b.h, b.hz, b.codecs, b.pid)
 }
 
-/// O cursor sai do vídeo só quando todos que assistem pediram o cursor local e mexem o mouse daqui
-/// (quem não mexe veria a própria seta, e não a do host). Com alguém sem pedir, o vídeo leva o cursor.
+/// O cursor sai do vídeo só com uma pessoa assistindo, que pediu o cursor local e mexe o mouse daqui.
+/// Quem não mexe veria a própria seta, e não a do host; com duas mexendo, cada uma veria a sua e
+/// clicaria onde a outra deixou o cursor.
 fn local_cursor(guests: &[Guest]) -> bool {
-    !guests.is_empty() && guests.iter().all(|g| g.hello.flags & LOCAL_CURSOR != 0 && g.perms & MOUSE != 0)
+    matches!(guests, [g] if g.hello.flags & LOCAL_CURSOR != 0 && g.perms & MOUSE != 0)
 }
 
 /// Hora de dar um quadro ao codificador, numa grade de horários (`due`) que anda um intervalo por
@@ -2064,7 +2065,8 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                 }
             }
         }
-        let local = local_cursor(&room.guests);
+        // Jogo que prende o cursor na janela: a seta daqui sairia da borda, então volta ao vídeo.
+        let local = local_cursor(&room.guests) && !super::pointer::clipped();
         if local != cursor_out {
             cursor_out = local;
             eprintln!("cursor: {}", if local { "fora do vídeo, desenhado por quem assiste" } else { "de volta ao vídeo" });
@@ -2604,12 +2606,12 @@ mod tests {
         let (b, _) = guest(MOUSE, false);
         a.hello.flags |= LOCAL_CURSOR;
         assert!(local_cursor(std::slice::from_ref(&a)));
-        // Alguém sem a opção, ou sem mexer o mouse daqui: o cursor fica no vídeo.
+        // Sem mexer o mouse daqui, ou com mais alguém assistindo: o cursor fica no vídeo.
+        a.perms = 0;
+        assert!(!local_cursor(std::slice::from_ref(&a)));
+        a.perms = MOUSE;
         let mut guests = vec![a, b];
-        assert!(!local_cursor(&guests));
         guests[1].hello.flags |= LOCAL_CURSOR;
-        assert!(local_cursor(&guests));
-        guests[1].perms = 0;
         assert!(!local_cursor(&guests));
     }
 

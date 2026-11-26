@@ -142,6 +142,19 @@ impl Sender {
     }
 }
 
+/// O cursor do host está preso numa área (`ClipCursor`) menor que a área de trabalho inteira.
+/// shortcut: o Windows também prende durante o arraste de janela, e o cursor volta ao vídeo nesse
+/// tempo; trocar por um teste do processo em primeiro plano se isso incomodar.
+pub(super) fn clipped() -> bool {
+    let mut r = windows::Win32::Foundation::RECT::default();
+    if unsafe { GetClipCursor(&mut r) }.is_err() {
+        return false;
+    }
+    let (x, y) = unsafe { (GetSystemMetrics(SM_XVIRTUALSCREEN), GetSystemMetrics(SM_YVIRTUALSCREEN)) };
+    let (w, h) = unsafe { (GetSystemMetrics(SM_CXVIRTUALSCREEN), GetSystemMetrics(SM_CYVIRTUALSCREEN)) };
+    r.left > x || r.top > y || r.right < x + w || r.bottom < y + h
+}
+
 /// Junta o cursor do lado de quem assiste.
 #[derive(Default)]
 pub(super) struct Receiver {

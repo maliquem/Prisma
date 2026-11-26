@@ -426,8 +426,8 @@ pub const CONSTANT: u16 = 128;
 /// SDR, para tirar as faixas dos degradês. O host aceita com a opção de 10 bits e um NVENC que faça.
 pub const ASKS_10: u16 = 256;
 /// `Hello.flags` (segundo byte): quem assiste desenha o cursor do host com o cursor dele, para o
-/// mouse não esperar a ida e volta. Com todos pedindo, o host tira o cursor do vídeo e manda o
-/// formato ([`Msg::Cursor`]). Mudar só ele não recomeça o vídeo. Host antigo ignora.
+/// mouse não esperar a ida e volta. Com uma pessoa só assistindo, que pediu, o host tira o cursor
+/// do vídeo e manda o formato ([`Msg::Cursor`]). Mudar só ele não recomeça o vídeo. Host antigo ignora.
 pub const LOCAL_CURSOR: u16 = 512;
 
 /// O que um pacote diz.

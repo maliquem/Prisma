@@ -1589,10 +1589,8 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                     write(&mut again, &Msg::Hello { w: screen_w, h: screen_h, hz: ask_hz(co.fps), codecs, pid: std::process::id(), flags });
                     link.send(&again);
                     link.send(&again);
-                    if !fresh.local_cursor {
-                        local.1 = false;
-                        show_local(hwnd, None);
-                    }
+                    // O host só manda de novo o que mudou: ao religar, vale o último cursor recebido.
+                    show_local(hwnd, local.0.filter(|_| local.1 && fresh.local_cursor));
                 }
                 // O resto (atalhos, placa...) vem da página; o menu grava por cima só o que muda.
                 co = ClientOpts { immersive: co.immersive, fps: co.fps, meter: co.meter, warn: co.warn, vsync: co.vsync, ask444: co.ask444, ask10: co.ask10, constant: co.constant, pad_background: co.pad_background, pad_keys: co.pad_keys, ..fresh.clone() };
