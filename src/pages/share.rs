@@ -1427,6 +1427,10 @@ fn client_tab(ui: &mut Ui, app: &App, c: &mut ClientOpts, x: f32, top: f32, w: f
     let ctl = 240.0f32.min(iw * 0.55);
     let imm_r = row(ui, ix, y, iw, "Modo imersivo", ctl);
     y += 46.0;
+    let rm = rect(ix, y, iw, 30.0);
+    ui.check("sh-relmouse", rm, "Mouse relativo nos jogos: a câmera gira sem bater na borda", &mut c.relative_mouse);
+    ui.tip(rm, "Quando um jogo do outro PC esconde e prende o cursor (tiro, câmera em terceira pessoa), este PC manda só o quanto o mouse andou, como no Parsec. Fora disso, o mouse vai como sempre. O outro PC precisa estar nesta versão.");
+    y += 34.0;
     ui.check("sh-ask444", rect(ix, y, iw, 30.0), "Pedir 4:4:4 (texto mais nítido; HEVC só em NVIDIA ou Intel)", &mut c.ask444);
     y += 34.0;
     ui.check("sh-ask10", rect(ix, y, iw, 30.0), "Pedir 10 bits (degradês sem faixas; host com NVIDIA)", &mut c.ask10);

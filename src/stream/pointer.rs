@@ -111,20 +111,16 @@ impl Sender {
 
     /// WGC: lê o cursor do Windows (a Desktop Duplication já entrega o dela).
     pub fn read_system(&mut self) {
-        let mut ci = CURSORINFO { cbSize: std::mem::size_of::<CURSORINFO>() as u32, ..Default::default() };
-        if unsafe { GetCursorInfo(&mut ci) }.is_err() {
-            return;
-        }
-        let showing = ci.flags.0 & CURSOR_SHOWING.0 != 0 && !ci.hCursor.is_invalid();
-        if showing && ci.hCursor.0 as isize != self.handle {
-            self.handle = ci.hCursor.0 as isize;
+        let cur = system_cursor();
+        if let Some(c) = cur.filter(|c| c.0 as isize != self.handle) {
+            self.handle = c.0 as isize;
             // shortcut: cursor animado (o de espera) vai só no quadro que o Windows dá aqui; ler os
             // quadros pede uma função não documentada.
-            if let Some(s) = unsafe { shape_of(ci.hCursor) } {
+            if let Some(s) = unsafe { shape_of(c) } {
                 self.set_shape(&s);
             }
         }
-        self.visible = showing;
+        self.visible = cur.is_some();
     }
 
     /// Os pacotes a mandar agora: na mudança (duas vezes, contra perda) e a cada segundo. `on`
@@ -142,6 +138,47 @@ impl Sender {
     }
 }
 
+/// O cursor do Windows, se está à vista (o jogo não escondeu).
+fn system_cursor() -> Option<HCURSOR> {
+    let mut ci = CURSORINFO { cbSize: std::mem::size_of::<CURSORINFO>() as u32, ..Default::default() };
+    let ok = unsafe { GetCursorInfo(&mut ci) }.is_ok() && ci.flags.0 & CURSOR_SHOWING.0 != 0 && !ci.hCursor.is_invalid();
+    ok.then_some(ci.hCursor)
+}
+
+pub(super) fn showing() -> bool {
+    system_cursor().is_some()
+}
+
+/// Escondido e preso por este tempo antes do mouse relativo: um esconder rápido não troca o modo.
+const GRAB_WAIT: Duration = Duration::from_millis(150);
+
+/// O modo do mouse para quem pediu o relativo: relativo quando o jogo escondeu e prendeu o
+/// cursor. Manda na mudança (duas vezes, contra perda) e a cada segundo, para quem entrou depois.
+#[derive(Default)]
+pub(super) struct Grab {
+    since: Option<Instant>,
+    sent: Option<Instant>,
+    on: bool,
+}
+
+impl Grab {
+    /// `locked`: o cursor está escondido e preso agora. Devolve o modo e quantas vezes mandar.
+    pub fn due(&mut self, locked: bool, now: Instant) -> Option<(bool, usize)> {
+        self.since = if locked { self.since.or(Some(now)) } else { None };
+        let on = self.since.is_some_and(|t| now - t >= GRAB_WAIT);
+        if on != self.on || self.sent.is_none() {
+            self.on = on;
+            self.sent = Some(now);
+            return Some((on, 2));
+        }
+        if self.sent.is_some_and(|t| now - t >= REPEAT) {
+            self.sent = Some(now);
+            return Some((on, 1));
+        }
+        None
+    }
+}
+
 /// O cursor do host está preso numa área (`ClipCursor`) menor que a área de trabalho inteira.
 /// shortcut: o Windows também prende durante o arraste de janela, e o cursor volta ao vídeo nesse
 /// tempo; trocar por um teste do processo em primeiro plano se isso incomodar.
@@ -153,6 +190,24 @@ pub(super) fn clipped() -> bool {
     let (x, y) = unsafe { (GetSystemMetrics(SM_XVIRTUALSCREEN), GetSystemMetrics(SM_YVIRTUALSCREEN)) };
     let (w, h) = unsafe { (GetSystemMetrics(SM_CXVIRTUALSCREEN), GetSystemMetrics(SM_CYVIRTUALSCREEN)) };
     r.left > x || r.top > y || r.right < x + w || r.bottom < y + h
+}
+
+/// A janela da frente cobre o monitor inteiro (jogo em tela cheia ou sem borda). Com um monitor só,
+/// o jogo que prende o cursor na própria janela prende na tela toda, e `clipped` não vê.
+pub(super) fn front_fullscreen() -> bool {
+    unsafe {
+        let h = GetForegroundWindow();
+        let mut r = windows::Win32::Foundation::RECT::default();
+        let mut mi = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
+        if h.is_invalid() || GetWindowRect(h, &mut r).is_err() || h == GetShellWindow() {
+            return false;
+        }
+        if !GetMonitorInfoW(MonitorFromWindow(h, MONITOR_DEFAULTTONEAREST), &mut mi).as_bool() {
+            return false;
+        }
+        let m = mi.rcMonitor;
+        r.left <= m.left && r.top <= m.top && r.right >= m.right && r.bottom >= m.bottom
+    }
 }
 
 /// Junta o cursor do lado de quem assiste.
@@ -279,6 +334,21 @@ mod tests {
         let color: Vec<u8> = (0..w * h * 4).map(|i| i as u8).collect();
         let inv = invert.then(|| (0..w * h).flat_map(|i| [if i == 4 { 255 } else { 0 }; 4]).collect());
         Shape { img: CursorImage { w, h, color, invert: inv }, hot: (2, 1) }
+    }
+
+    #[test]
+    fn relativo_so_depois_de_preso_um_tempo() {
+        let t = Instant::now();
+        let mut g = Grab::default();
+        assert_eq!(g.due(false, t), Some((false, 2)));
+        assert_eq!(g.due(true, t), None);
+        assert_eq!(g.due(true, t + GRAB_WAIT), Some((true, 2)));
+        assert_eq!(g.due(true, t + GRAB_WAIT * 2), None);
+        assert_eq!(g.due(true, t + GRAB_WAIT + REPEAT), Some((true, 1)));
+        // Soltou: volta na hora; um esconder curto não liga de novo.
+        assert_eq!(g.due(false, t + REPEAT * 2), Some((false, 2)));
+        assert_eq!(g.due(true, t + REPEAT * 2), None);
+        assert_eq!(g.due(false, t + REPEAT * 2 + GRAB_WAIT / 2), None);
     }
 
     #[test]

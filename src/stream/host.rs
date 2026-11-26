@@ -1154,6 +1154,7 @@ impl Injector {
                 }
                 Self::key(scan, extended, down)
             }
+            Input::Rel { dx, dy } => Self::mouse(MOUSEEVENTF_MOVE, dx as i32, dy as i32, 0),
             Input::Away | Input::Locks { .. } | Input::Mask => return None,
         })
     }
@@ -1227,28 +1228,47 @@ impl Injector {
             }
             return;
         }
-        let mut list = Vec::new();
+        let (mut list, mut moved) = (Vec::new(), false);
         for (i, chunk) in events.chunks(INPUT_SIZE).enumerate() {
             let seq = first.wrapping_add(i as u32);
             if self.next.is_some_and(|n| (seq.wrapping_sub(n) as i32) < 0) {
                 continue;
             }
-            if let Some(e) = Input::get(chunk).filter(|&e| !self.into_admin(e)) {
+            let e = Input::get(chunk);
+            if moved && matches!(e, Some(Input::Button { .. } | Input::Wheel { .. })) {
+                // Só o Windows sabe onde o movimento relativo deixou o cursor: ele sai antes, para
+                // o clique conferir se caiu na janela compartilhada.
+                self.send_moves(&mut list);
+                moved = false;
+            }
+            if let Some(e) = e.filter(|&e| !self.into_admin(e)) {
                 if matches!(e, Input::Locks { .. } | Input::Mask) && self.perms & KEYBOARD != 0 {
                     // O mesmo GetKeyState do Console.CapsLock do .NET: vale fora da janela da frente.
                     let now = unsafe { (GetKeyState(VK_CAPITAL.0 as i32) & 1 != 0, GetKeyState(VK_NUMLOCK.0 as i32) & 1 != 0) };
                     list.extend(keyboard_taps(e, now).into_iter().flat_map(Self::tap));
                 } else if let Some(inp) = self.one(e) {
+                    moved |= matches!(e, Input::Rel { .. });
                     list.push(inp);
                 }
             }
             self.next = Some(seq.wrapping_add(1));
         }
-        if !list.is_empty() {
+        if moved {
+            self.send_moves(&mut list);
+        } else if !list.is_empty() {
             unsafe {
                 SendInput(&list, std::mem::size_of::<INPUT>() as i32);
             }
         }
+    }
+
+    /// Manda o que juntou e relê onde o cursor ficou.
+    fn send_moves(&mut self, list: &mut Vec<INPUT>) {
+        unsafe {
+            SendInput(list, std::mem::size_of::<INPUT>() as i32);
+            let _ = GetCursorPos(&mut self.at);
+        }
+        list.clear();
     }
 
     /// Solta tudo que ficou apertado, para nenhuma tecla ficar presa quando quem assiste sai.
@@ -1569,7 +1589,7 @@ fn pace_name(constant: bool) -> &'static str {
 /// Mudou só o pedido de ritmo ou o do cursor local: o vídeo segue sem recomeçar.
 fn only_pace_changed(a: &Hello, b: &Hello) -> bool {
     let d = a.flags ^ b.flags;
-    d != 0 && d & !(CONSTANT | LOCAL_CURSOR) == 0 && (a.w, a.h, a.hz, a.codecs, a.pid) == (b.w, b.h, b.hz, b.codecs, b.pid)
+    d != 0 && d & !(CONSTANT | LOCAL_CURSOR | RELATIVE_MOUSE) == 0 && (a.w, a.h, a.hz, a.codecs, a.pid) == (b.w, b.h, b.hz, b.codecs, b.pid)
 }
 
 /// O cursor sai do vídeo só com uma pessoa assistindo, que pediu o cursor local e mexe o mouse daqui.
@@ -1919,6 +1939,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     let mut was_secure = false;
     // Cursor local: o formato vai à parte para quem pediu, e com todos pedindo sai do vídeo.
     let mut pointer = super::pointer::Sender::default();
+    let mut grab = super::pointer::Grab::default();
     let mut cursor_out = local_cursor(&room.guests);
     if cursor_out {
         eprintln!("cursor: fora do vídeo, desenhado por quem assiste");
@@ -2105,6 +2126,25 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                 for g in room.guests.iter().filter(|g| g.hello.flags & LOCAL_CURSOR != 0) {
                     for p in &pk {
                         g.link.send(p);
+                    }
+                }
+            }
+        }
+        if room.guests.iter().any(|g| g.hello.flags & RELATIVE_MOUSE != 0) {
+            let hidden = match &cap {
+                Cap::Wgc { .. } => !super::pointer::showing(),
+                Cap::Dda(x) => !x.cursor_visible,
+            };
+            let held = super::pointer::clipped() || super::pointer::front_fullscreen();
+            if let Some((relative, times)) = grab.due(hidden && held, Instant::now()) {
+                if times == 2 {
+                    eprintln!("mouse: {}", if relative { "relativo (o jogo escondeu e prendeu o cursor)" } else { "absoluto" });
+                }
+                let mut pk = Vec::new();
+                write(&mut pk, &Msg::Mouse { relative });
+                for g in room.guests.iter().filter(|g| g.hello.flags & RELATIVE_MOUSE != 0) {
+                    for _ in 0..times {
+                        g.link.send(&pk);
                     }
                 }
             }
@@ -2630,6 +2670,7 @@ mod tests {
         // O cursor local também muda sem recomeçar, sozinho ou junto com o ritmo.
         assert!(only_pace_changed(&Hello { flags: old.flags | LOCAL_CURSOR, ..old }, &old));
         assert!(only_pace_changed(&Hello { flags: a.hello.flags | LOCAL_CURSOR, ..old }, &old));
+        assert!(only_pace_changed(&Hello { flags: old.flags | RELATIVE_MOUSE, ..old }, &old));
         // Vale o pedido de quem lidera (o primeiro); o do segundo não muda a sala.
         let guests = vec![a, b];
         assert!(asks_constant(&guests));
