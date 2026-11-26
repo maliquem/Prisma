@@ -26,6 +26,7 @@ use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::*;
 use windows::Win32::UI::HiDpi::*;
 use windows::Win32::UI::Input::KeyboardAndMouse::*;
+use windows::Win32::UI::Input::*;
 use windows::Win32::UI::Input::XboxController::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
@@ -48,6 +49,8 @@ enum Event {
     Wave { pts: i64, parts: Vec<Vec<u8>> },
     /// Cursor local: o do host está à vista ou não e, quando mudou, o formato novo.
     Cursor { visible: bool, shape: Option<super::pointer::Shape> },
+    /// O jogo do host prendeu o cursor (mouse relativo) ou soltou.
+    Relative(bool),
 }
 
 /// O que o host disse de um controle daqui: jogador (0 sem vaga), vaga do XInput lá e motivo.
@@ -260,6 +263,7 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
                     push(Event::Cursor { visible, shape });
                 }
             }
+            Some(Msg::Mouse { relative }) => push(Event::Relative(relative)),
             Some(Msg::Rumble { pad, low, high }) => {
                 if pad < 4 {
                     let v = XINPUT_VIBRATION { wLeftMotorSpeed: low as u16 * 257, wRightMotorSpeed: high as u16 * 257 };
@@ -558,6 +562,8 @@ struct Keys {
     /// Modo imersivo: bit 1 o mouse fica na janela, bit 2 o Alt+Tab e a tecla Windows vão ao host,
     /// bit 4 (Tudo) todas as teclas vão, menos os atalhos de quem assiste.
     immersive: u8,
+    /// Mouse relativo no ar: o movimento vai como deslocamento do mouse cru, não como posição.
+    rel: bool,
 }
 
 static KEYS: Mutex<Keys> = Mutex::new(Keys {
@@ -579,6 +585,7 @@ static KEYS: Mutex<Keys> = Mutex::new(Keys {
     key_sound: (0, 0),
     acts: Vec::new(),
     immersive: 0,
+    rel: false,
 });
 
 /// A janela de quem assiste, para o gancho do teclado e para a área de transferência.
@@ -587,6 +594,42 @@ static VIEW_HWND: AtomicIsize = AtomicIsize::new(0);
 static LOCAL_NOW: AtomicIsize = AtomicIsize::new(0);
 
 /// Põe o cursor local (ou nenhum) na janela, se o mouse está em cima dela.
+/// Soma ao último deslocamento ainda não mandado: o pacote leva só os 16 eventos mais novos.
+fn push_rel(pending: &mut Vec<Input>, dx: i32, dy: i32) {
+    if dx == 0 && dy == 0 {
+        return;
+    }
+    if let Some(Input::Rel { dx: a, dy: b }) = pending.last_mut() {
+        if let (Ok(x), Ok(y)) = (i16::try_from(*a as i32 + dx), i16::try_from(*b as i32 + dy)) {
+            (*a, *b) = (x, y);
+            return;
+        }
+    }
+    let c = |v: i32| v.clamp(i16::MIN as i32, i16::MAX as i32) as i16;
+    pending.push(Input::Rel { dx: c(dx), dy: c(dy) });
+}
+
+/// O centro do vídeo na tela, num retângulo de um pixel: no relativo o cursor daqui fica ali.
+unsafe fn video_center(h: HWND) -> RECT {
+    let (w, hh) = client_size(h);
+    let v = KEYS.lock().unwrap().video;
+    let r = video_rect(v.0, v.1, w, hh);
+    let mut p = POINT { x: (r.left + r.right) / 2, y: (r.top + r.bottom) / 2 };
+    let _ = ClientToScreen(h, &mut p);
+    RECT { left: p.x, top: p.y, right: p.x + 1, bottom: p.y + 1 }
+}
+
+/// O ponteiro está em cima da área da imagem desta janela.
+unsafe fn over_window(h: HWND) -> bool {
+    let mut p = POINT::default();
+    if GetCursorPos(&mut p).is_err() || WindowFromPoint(p) != h {
+        return false;
+    }
+    let _ = ScreenToClient(h, &mut p);
+    let (w, hh) = client_size(h);
+    p.x >= 0 && p.y >= 0 && (p.x as u32) < w && (p.y as u32) < hh
+}
+
 unsafe fn show_local(hwnd: HWND, cursor: Option<HCURSOR>) {
     LOCAL_NOW.store(cursor.map_or(0, |c| c.0 as isize), Ordering::Relaxed);
     let mut p = POINT::default();
@@ -1015,6 +1058,8 @@ unsafe extern "system" fn wndproc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRES
             }
             let hi = (w.0 >> 16) as u16;
             match m {
+                // No relativo, o deslocamento vem pelo WM_INPUT; o cursor daqui fica parado no meio.
+                WM_MOUSEMOVE if k.rel => {}
                 WM_MOUSEMOVE => {
                     let (x, y) = ((l.0 & 0xFFFF) as i16 as i32, ((l.0 >> 16) & 0xFFFF) as i16 as i32);
                     let (ow, oh) = client_size(h);
@@ -1050,6 +1095,21 @@ unsafe extern "system" fn wndproc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRES
                 }
             }
             LRESULT(if m == WM_XBUTTONDOWN || m == WM_XBUTTONUP { 1 } else { 0 })
+        }
+        WM_INPUT => {
+            let mut k = KEYS.lock().unwrap();
+            if k.rel && k.mouse {
+                let mut ri: RAWINPUT = std::mem::zeroed();
+                let mut size = std::mem::size_of::<RAWINPUT>() as u32;
+                let got = GetRawInputData(HRAWINPUT(l.0 as *mut _), RID_INPUT, Some(&mut ri as *mut RAWINPUT as *mut _), &mut size, std::mem::size_of::<RAWINPUTHEADER>() as u32);
+                // shortcut: mouse que só dá posição (área de trabalho remota, máquina virtual) não anda
+                // no relativo; tirar a diferença entre posições se alguém usar assim.
+                if got != u32::MAX && ri.header.dwType == RIM_TYPEMOUSE.0 && ri.data.mouse.usFlags.0 & MOUSE_MOVE_ABSOLUTE.0 == 0 {
+                    push_rel(&mut k.pending, ri.data.mouse.lLastX, ri.data.mouse.lLastY);
+                }
+            }
+            drop(k);
+            DefWindowProcW(h, m, w, l)
         }
         WM_KILLFOCUS => {
             release_all(&mut KEYS.lock().unwrap());
@@ -1351,6 +1411,11 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         None,
     )?;
     VIEW_HWND.store(hwnd.0 as isize, Ordering::Relaxed);
+    // Mouse cru para o relativo; só chega com a janela na frente.
+    let raw = RAWINPUTDEVICE { usUsagePage: 1, usUsage: 2, dwFlags: RAWINPUTDEVICE_FLAGS(0), hwndTarget: hwnd };
+    if let Err(e) = RegisterRawInputDevices(&[raw], std::mem::size_of::<RAWINPUTDEVICE>() as u32) {
+        eprintln!("mouse relativo: sem o mouse cru ({e:?})");
+    }
     // Medições sem ninguém olhando abrem em janela, como sempre.
     if co.fullscreen && out_file.is_none() {
         toggle_full(hwnd);
@@ -1369,7 +1434,9 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     };
     let mut hook = hook_for(immersive, None);
     let mut hud = hud::Hud::new(hwnd);
-    let mut clipped = false;
+    let mut clipped: Option<RECT> = None;
+    // O host disse que o jogo prendeu o cursor; `rel_on`: o relativo está no ar aqui.
+    let (mut host_rel, mut rel_on) = (false, false);
 
     // Cadeia de troca com tearing permitido: mostra o quadro assim que ele fica pronto.
     let factory: IDXGIFactory2 = d.dev.cast::<IDXGIDevice>()?.GetAdapter()?.GetParent()?;
@@ -1449,6 +1516,9 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     }
     if co.local_cursor {
         flags |= LOCAL_CURSOR;
+    }
+    if co.relative_mouse {
+        flags |= RELATIVE_MOUSE;
     }
     if ask444 && !can444 && codecs & WAVE == 0 {
         eprintln!("4:4:4: esta placa não decodifica HEVC 4:4:4; fica o 4:2:0");
@@ -1567,12 +1637,28 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                 h.update(hwnd, co.meter, co.warn, None);
             }
         }
-        // Modo imersivo: em tela cheia, com a janela na frente, o mouse não sai dela.
-        let want_clip = immersive & 1 != 0 && SAVED.lock().unwrap().is_some() && GetForegroundWindow() == hwnd && KEYS.lock().unwrap().mouse;
-        if want_clip != clipped {
+        // Mouse relativo: o jogo do host prendeu o cursor. Começa só com o ponteiro em cima da janela,
+        // para não pegar o mouse que está na barra de título ou noutra tela.
+        let front = GetForegroundWindow() == hwnd && KEYS.lock().unwrap().mouse;
+        let rel = host_rel && co.relative_mouse && front && !hud::menu_is_open() && (rel_on || over_window(hwnd));
+        if rel != rel_on {
+            rel_on = rel;
+            KEYS.lock().unwrap().rel = rel;
+            eprintln!("mouse: {}", if rel { "relativo" } else { "absoluto" });
+        }
+        // Modo imersivo: em tela cheia, com a janela na frente, o mouse não sai dela. No relativo, o
+        // cursor daqui fica parado no meio do vídeo, onde o jogo do host também deixa o dele.
+        let want_clip = if rel_on {
+            Some(video_center(hwnd))
+        } else if immersive & 1 != 0 && SAVED.lock().unwrap().is_some() && front {
             let mut r = RECT::default();
             let _ = GetWindowRect(hwnd, &mut r);
-            let _ = ClipCursor(want_clip.then_some(&r as *const RECT));
+            Some(r)
+        } else {
+            None
+        };
+        if want_clip != clipped {
+            let _ = ClipCursor(want_clip.as_ref().map(|r| r as *const RECT));
             clipped = want_clip;
         }
         let mut picks: Vec<hud::Pick> = std::mem::take(&mut KEYS.lock().unwrap().acts);
@@ -1582,9 +1668,11 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
             let fresh = ClientOpts::load();
             if fresh != seen {
                 picks.extend(page_picks(&seen, &fresh, &co));
-                // Cursor local ligado ou desligado na aba: o host troca sem recomeçar o vídeo.
-                if fresh.local_cursor != co.local_cursor {
-                    flags ^= LOCAL_CURSOR;
+                // Cursor local ou mouse relativo ligado ou desligado na aba: o host troca sem recomeçar
+                // o vídeo.
+                let want = if fresh.local_cursor { LOCAL_CURSOR } else { 0 } | if fresh.relative_mouse { RELATIVE_MOUSE } else { 0 };
+                if flags & (LOCAL_CURSOR | RELATIVE_MOUSE) != want {
+                    flags = flags & !(LOCAL_CURSOR | RELATIVE_MOUSE) | want;
                     let mut again = Vec::new();
                     write(&mut again, &Msg::Hello { w: screen_w, h: screen_h, hz: ask_hz(co.fps), codecs, pid: std::process::id(), flags });
                     link.send(&again);
@@ -1606,9 +1694,9 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
             }
         }
         if std::mem::take(&mut KEYS.lock().unwrap().menu) && !hud::menu_is_open() {
-            if clipped {
+            if clipped.is_some() {
                 let _ = ClipCursor(None);
-                clipped = false;
+                clipped = None;
             }
             let extra = fmt_label(vfmt);
             let label = |k: opts::Keys| if k.1 == 0 { String::new() } else { crate::config::Hotkey::new(k.0, k.1).label() };
@@ -1854,6 +1942,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                         }
                     }
                 }
+                Event::Relative(r) => host_rel = r,
                 Event::Cursor { visible, shape } => {
                     if let Some(s) = shape {
                         if let Some(old) = std::mem::replace(&mut local.0, super::pointer::to_cursor(&s)) {
@@ -2050,7 +2139,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     }
 
     sh.quit.store(true, Ordering::Relaxed);
-    if clipped {
+    if clipped.is_some() {
         let _ = ClipCursor(None);
     }
     if let Some(h) = hook {
@@ -2148,6 +2237,21 @@ mod tests {
     use super::*;
 
     #[test]
+    fn relative_moves_add_up_until_sent() {
+        let mut p = vec![Input::Move { x: 1, y: 2 }];
+        push_rel(&mut p, 0, 0);
+        push_rel(&mut p, 3, -4);
+        push_rel(&mut p, 2, 1);
+        assert_eq!(p, vec![Input::Move { x: 1, y: 2 }, Input::Rel { dx: 5, dy: -3 }]);
+        // Passou do i16: começa outro, sem perder o movimento.
+        push_rel(&mut p, 40000, 0);
+        assert_eq!(p[2..], [Input::Rel { dx: i16::MAX, dy: 0 }]);
+        p.push(Input::Button { button: 0, down: true });
+        push_rel(&mut p, 1, 1);
+        assert_eq!(p.last(), Some(&Input::Rel { dx: 1, dy: 1 }));
+    }
+
+    #[test]
     fn shift_released_without_message_goes_up() {
         // Os dois Shifts desceram; o esquerdo subiu sem WM_KEYUP e o direito sobe agora.
         let held = [(0x2A, false), (0x36, false), (0x1E, false)];
@@ -2159,7 +2263,7 @@ mod tests {
 
     #[test]
     fn client_shortcuts_reach_the_hook() {
-        let mut k = Keys { keyboard: true, mouse: false, pad_keys: false, video: (0, 0), pending: Vec::new(), held: Vec::new(), buttons: [false; 5], sas: false, menu: false, key_menu: (0, 0), key_full: (0, 0), key_cad: (0, 0), key_disc: (0, 0), key_imm: (0, 0), key_meter: (0, 0), key_sound: (0, 0), acts: Vec::new(), immersive: 7 };
+        let mut k = Keys { keyboard: true, mouse: false, pad_keys: false, video: (0, 0), pending: Vec::new(), held: Vec::new(), buttons: [false; 5], sas: false, menu: false, key_menu: (0, 0), key_full: (0, 0), key_cad: (0, 0), key_disc: (0, 0), key_imm: (0, 0), key_meter: (0, 0), key_sound: (0, 0), acts: Vec::new(), immersive: 7, rel: false };
         let co = ClientOpts { key_disc: (crate::config::MOD_CTRL, b'Q' as u32), ..ClientOpts::default() };
         set_keys(&mut k, &co);
         // Menu padrão com Ctrl, Alt e Shift apertados fica aqui; só com Ctrl e Shift (o Alt que faltava), vai.

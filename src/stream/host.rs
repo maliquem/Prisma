@@ -1154,6 +1154,11 @@ impl Injector {
                 }
                 Self::key(scan, extended, down)
             }
+            Input::Rel { dx, dy } => {
+                // Para o clique saber se caiu na janela compartilhada.
+                let _ = unsafe { GetCursorPos(&mut self.at) };
+                Self::mouse(MOUSEEVENTF_MOVE, dx as i32, dy as i32, 0)
+            }
             Input::Away | Input::Locks { .. } | Input::Mask => return None,
         })
     }
@@ -1569,7 +1574,7 @@ fn pace_name(constant: bool) -> &'static str {
 /// Mudou só o pedido de ritmo ou o do cursor local: o vídeo segue sem recomeçar.
 fn only_pace_changed(a: &Hello, b: &Hello) -> bool {
     let d = a.flags ^ b.flags;
-    d != 0 && d & !(CONSTANT | LOCAL_CURSOR) == 0 && (a.w, a.h, a.hz, a.codecs, a.pid) == (b.w, b.h, b.hz, b.codecs, b.pid)
+    d != 0 && d & !(CONSTANT | LOCAL_CURSOR | RELATIVE_MOUSE) == 0 && (a.w, a.h, a.hz, a.codecs, a.pid) == (b.w, b.h, b.hz, b.codecs, b.pid)
 }
 
 /// O cursor sai do vídeo só com uma pessoa assistindo, que pediu o cursor local e mexe o mouse daqui.
@@ -1919,6 +1924,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
     let mut was_secure = false;
     // Cursor local: o formato vai à parte para quem pediu, e com todos pedindo sai do vídeo.
     let mut pointer = super::pointer::Sender::default();
+    let mut grab = super::pointer::Grab::default();
     let mut cursor_out = local_cursor(&room.guests);
     if cursor_out {
         eprintln!("cursor: fora do vídeo, desenhado por quem assiste");
@@ -2105,6 +2111,24 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                 for g in room.guests.iter().filter(|g| g.hello.flags & LOCAL_CURSOR != 0) {
                     for p in &pk {
                         g.link.send(p);
+                    }
+                }
+            }
+        }
+        if room.guests.iter().any(|g| g.hello.flags & RELATIVE_MOUSE != 0) {
+            let hidden = match &cap {
+                Cap::Wgc { .. } => !super::pointer::showing(),
+                Cap::Dda(x) => !x.cursor_visible,
+            };
+            if let Some((relative, times)) = grab.due(hidden && super::pointer::clipped(), Instant::now()) {
+                if times == 2 {
+                    eprintln!("mouse: {}", if relative { "relativo (o jogo escondeu e prendeu o cursor)" } else { "absoluto" });
+                }
+                let mut pk = Vec::new();
+                write(&mut pk, &Msg::Mouse { relative });
+                for g in room.guests.iter().filter(|g| g.hello.flags & RELATIVE_MOUSE != 0) {
+                    for _ in 0..times {
+                        g.link.send(&pk);
                     }
                 }
             }
@@ -2630,6 +2654,7 @@ mod tests {
         // O cursor local também muda sem recomeçar, sozinho ou junto com o ritmo.
         assert!(only_pace_changed(&Hello { flags: old.flags | LOCAL_CURSOR, ..old }, &old));
         assert!(only_pace_changed(&Hello { flags: a.hello.flags | LOCAL_CURSOR, ..old }, &old));
+        assert!(only_pace_changed(&Hello { flags: old.flags | RELATIVE_MOUSE, ..old }, &old));
         // Vale o pedido de quem lidera (o primeiro); o do segundo não muda a sala.
         let guests = vec![a, b];
         assert!(asks_constant(&guests));

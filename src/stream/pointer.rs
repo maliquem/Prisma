@@ -142,6 +142,42 @@ impl Sender {
     }
 }
 
+/// O cursor do Windows está à vista (o jogo não escondeu).
+pub(super) fn showing() -> bool {
+    let mut ci = CURSORINFO { cbSize: std::mem::size_of::<CURSORINFO>() as u32, ..Default::default() };
+    unsafe { GetCursorInfo(&mut ci) }.is_ok() && ci.flags.0 & CURSOR_SHOWING.0 != 0 && !ci.hCursor.is_invalid()
+}
+
+/// Escondido e preso por este tempo antes do mouse relativo: um esconder rápido não troca o modo.
+const GRAB_WAIT: Duration = Duration::from_millis(150);
+
+/// O modo do mouse para quem pediu o relativo: relativo quando o jogo escondeu e prendeu o
+/// cursor. Manda na mudança (duas vezes, contra perda) e a cada segundo, para quem entrou depois.
+#[derive(Default)]
+pub(super) struct Grab {
+    since: Option<Instant>,
+    sent: Option<Instant>,
+    on: bool,
+}
+
+impl Grab {
+    /// `locked`: o cursor está escondido e preso agora. Devolve o modo e quantas vezes mandar.
+    pub fn due(&mut self, locked: bool, now: Instant) -> Option<(bool, usize)> {
+        self.since = if locked { self.since.or(Some(now)) } else { None };
+        let on = self.since.is_some_and(|t| now - t >= GRAB_WAIT);
+        if on != self.on || self.sent.is_none() {
+            self.on = on;
+            self.sent = Some(now);
+            return Some((on, 2));
+        }
+        if self.sent.is_some_and(|t| now - t >= REPEAT) {
+            self.sent = Some(now);
+            return Some((on, 1));
+        }
+        None
+    }
+}
+
 /// O cursor do host está preso numa área (`ClipCursor`) menor que a área de trabalho inteira.
 /// shortcut: o Windows também prende durante o arraste de janela, e o cursor volta ao vídeo nesse
 /// tempo; trocar por um teste do processo em primeiro plano se isso incomodar.
@@ -279,6 +315,21 @@ mod tests {
         let color: Vec<u8> = (0..w * h * 4).map(|i| i as u8).collect();
         let inv = invert.then(|| (0..w * h).flat_map(|i| [if i == 4 { 255 } else { 0 }; 4]).collect());
         Shape { img: CursorImage { w, h, color, invert: inv }, hot: (2, 1) }
+    }
+
+    #[test]
+    fn relativo_so_depois_de_preso_um_tempo() {
+        let t = Instant::now();
+        let mut g = Grab::default();
+        assert_eq!(g.due(false, t), Some((false, 2)));
+        assert_eq!(g.due(true, t), None);
+        assert_eq!(g.due(true, t + GRAB_WAIT), Some((true, 2)));
+        assert_eq!(g.due(true, t + GRAB_WAIT * 2), None);
+        assert_eq!(g.due(true, t + GRAB_WAIT + REPEAT), Some((true, 1)));
+        // Soltou: volta na hora; um esconder curto não liga de novo.
+        assert_eq!(g.due(false, t + REPEAT * 2), Some((false, 2)));
+        assert_eq!(g.due(true, t + REPEAT * 2), None);
+        assert_eq!(g.due(false, t + REPEAT * 2 + GRAB_WAIT / 2), None);
     }
 
     #[test]

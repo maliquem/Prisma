@@ -218,6 +218,8 @@ pub enum Kind {
     Mic = 27,
     /// Cursor do host desenhado por quem assiste (veja `pointer.rs`). Versões antigas ignoram.
     Cursor = 28,
+    /// O jogo do host prendeu o cursor: quem pediu o mouse relativo passa a mandar deslocamentos.
+    Mouse = 29,
 }
 
 // ---------- Permissões de quem assiste ----------
@@ -358,6 +360,9 @@ pub enum Input {
     /// toca uma tecla sem uso antes de soltá-los, senão o Alt+Shift e o Ctrl+Shift trocam o
     /// teclado dele (ABNT2, US-Internacional...).
     Mask,
+    /// Mouse relativo: quanto o mouse andou, para o jogo que escondeu e prendeu o cursor
+    /// ([`RELATIVE_MOUSE`]). Host antigo ignora.
+    Rel { dx: i16, dy: i16 },
 }
 
 pub const INPUT_SIZE: usize = 8;
@@ -374,6 +379,7 @@ impl Input {
             Input::Away => (5, 0, 0, 0),
             Input::Locks { caps, num } => (6, caps as u8 | (num as u8) << 1, 0, 0),
             Input::Mask => (7, 0, 0, 0),
+            Input::Rel { dx, dy } => (8, 0, dx as u16, dy as u16),
         };
         out.push(k);
         out.push(f);
@@ -392,6 +398,7 @@ impl Input {
             5 => Input::Away,
             6 => Input::Locks { caps: f & 1 != 0, num: f & 2 != 0 },
             7 => Input::Mask,
+            8 => Input::Rel { dx: a as i16, dy: c as i16 },
             _ => return None,
         })
     }
@@ -429,6 +436,10 @@ pub const ASKS_10: u16 = 256;
 /// mouse não esperar a ida e volta. Com uma pessoa só assistindo, que pediu, o host tira o cursor
 /// do vídeo e manda o formato ([`Msg::Cursor`]). Mudar só ele não recomeça o vídeo. Host antigo ignora.
 pub const LOCAL_CURSOR: u16 = 512;
+/// `Hello.flags` (segundo byte): quem assiste manda o mouse relativo ([`Input::Rel`]) quando o host
+/// avisa que o jogo escondeu e prendeu o cursor ([`Msg::Mouse`]). Mudar só ele não recomeça o
+/// vídeo. Host antigo ignora.
+pub const RELATIVE_MOUSE: u16 = 1024;
 
 /// O que um pacote diz.
 #[derive(Debug, PartialEq)]
@@ -496,6 +507,8 @@ pub enum Msg<'a> {
     /// cursor voltou ao vídeo) vem sem pedaços; visível, cada pacote leva um pedaço do formato
     /// `shape` (comprimido, veja `pointer.rs`).
     Cursor { shape: u16, visible: bool, part: u8, parts: u8, data: &'a [u8] },
+    /// Para quem pediu [`RELATIVE_MOUSE`]: o mouse vai relativo (o jogo prendeu o cursor) ou não.
+    Mouse { relative: bool },
 }
 
 /// O codec do vídeo na rede: um dos de sempre (NVENC e Media Foundation) ou o PyroWave, que só
@@ -703,6 +716,10 @@ pub fn write(out: &mut Vec<u8>, m: &Msg) {
             out.extend_from_slice(&[visible as u8, part, parts]);
             out.extend_from_slice(data);
         }
+        Msg::Mouse { relative } => {
+            head(out, Kind::Mouse);
+            out.push(relative as u8);
+        }
     }
 }
 
@@ -782,6 +799,7 @@ pub fn read(b: &[u8]) -> Option<Msg<'_>> {
         26 => Msg::Rate(rate::Report { delay_ms: u16_at(b, 4)?, loss_pm: u16_at(b, 6)?, kbps: u32_at(b, 8)? }),
         27 => Msg::Mic(b.get(4..)?),
         28 => Msg::Cursor { shape: u16_at(b, 4)?, visible: *b.get(6)? != 0, part: *b.get(7)?, parts: *b.get(8)?, data: b.get(9..)? },
+        29 => Msg::Mouse { relative: *b.get(4)? != 0 },
         _ => return None,
     })
 }
@@ -945,9 +963,11 @@ mod tests {
         round(Msg::Mic(&[1, 2, 3, 4]));
         round(Msg::Cursor { shape: 9, visible: true, part: 1, parts: 2, data: &[7, 8] });
         round(Msg::Cursor { shape: 0, visible: false, part: 0, parts: 0, data: &[] });
+        round(Msg::Mouse { relative: true });
+        round(Msg::Mouse { relative: false });
         round(Msg::Nack { frame: 77 });
         round(Msg::Hello { w: 3840, h: 2160, hz: 119, codecs: 7, pid: 4321, flags: SEES_HDR | DECODES_444 });
-        round(Msg::Hello { w: 1920, h: 1080, hz: 60, codecs: 7, pid: 1, flags: CONSTANT | ASKS_10 | LOCAL_CURSOR });
+        round(Msg::Hello { w: 1920, h: 1080, hz: 60, codecs: 7, pid: 1, flags: CONSTANT | ASKS_10 | LOCAL_CURSOR | RELATIVE_MOUSE });
         // Sem bit do segundo byte, o Hello sai do tamanho antigo (a versão anterior lê igual).
         let mut plain = Vec::new();
         write(&mut plain, &Msg::Hello { w: 1, h: 1, hz: 60, codecs: 7, pid: 1, flags: CONSTANT });
@@ -985,6 +1005,7 @@ mod tests {
             Input::Away,
             Input::Locks { caps: false, num: true },
             Input::Mask,
+            Input::Rel { dx: -5, dy: 300 },
         ];
         let mut b = Vec::new();
         write_input(&mut b, 41, &evs);
