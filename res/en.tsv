@@ -1386,7 +1386,8 @@ O que ele faz: roda como SYSTEM (o nível mais alto do Windows) e começa junto 
 O que muda no PC:	What changes on the PC:
 • uma cópia do Prisma em Arquivos de Programas\PrismaServico;	• a copy of Prisma in Program Files\PrismaServico;
 • a identidade e os aparelhos pareados passam para ProgramData\Prisma\compartilhar, que só o SYSTEM, os administradores e você abrem;	• the identity and paired devices move to ProgramData\Prisma\compartilhar, which only SYSTEM, administrators and you can open;
-• o serviço "Prisma: compartilhar tela".	• the service "Prisma: compartilhar tela".
+• o serviço "Prisma: compartilhar tela";	• the service "Prisma: compartilhar tela";
+• uma regra no Firewall do Windows que deixa essa cópia receber conexões (UDP), em qualquer rede.	• a Windows Firewall rule that lets this copy receive connections (UDP), on any network.
 Para tirar tudo: Remover, na página Compartilhar tela do Prisma.	To undo everything: Remove, on Prisma's Share screen page.
 Permitir o Ctrl+Alt+Del de longe?	Allow Ctrl+Alt+Del remotely?
 Para isso, o Windows pede uma política: "SoftwareSASGeneration" igual a 1, que deixa serviços gerarem o Ctrl+Alt+Del. Ela é desfeita quando o serviço for removido.	For that, Windows needs a policy: "SoftwareSASGeneration" set to 1, which lets services generate Ctrl+Alt+Del. It is undone when the service is removed.

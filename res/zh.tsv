@@ -1380,7 +1380,8 @@ O que ele faz: roda como SYSTEM (o nível mais alto do Windows) e começa junto 
 O que muda no PC:	电脑上会改变的内容：
 • uma cópia do Prisma em Arquivos de Programas\PrismaServico;	• Program Files\PrismaServico 中的一份 Prisma 副本；
 • a identidade e os aparelhos pareados passam para ProgramData\Prisma\compartilhar, que só o SYSTEM, os administradores e você abrem;	• 身份和已配对设备移到 ProgramData\Prisma\compartilhar，只有 SYSTEM、管理员和你可以打开；
-• o serviço "Prisma: compartilhar tela".	• 服务 "Prisma: compartilhar tela"。
+• o serviço "Prisma: compartilhar tela";	• 服务 "Prisma: compartilhar tela"；
+• uma regra no Firewall do Windows que deixa essa cópia receber conexões (UDP), em qualquer rede.	• 一条 Windows 防火墙规则，允许这份副本在任何网络上接收连接（UDP）。
 Para tirar tudo: Remover, na página Compartilhar tela do Prisma.	要撤销一切：在 Prisma 的“屏幕共享”页面点击“移除”。
 Permitir o Ctrl+Alt+Del de longe?	允许远程 Ctrl+Alt+Del？
 Para isso, o Windows pede uma política: "SoftwareSASGeneration" igual a 1, que deixa serviços gerarem o Ctrl+Alt+Del. Ela é desfeita quando o serviço for removido.	为此 Windows 需要一项策略："SoftwareSASGeneration" 设为 1，允许服务生成 Ctrl+Alt+Del。移除服务时会撤销。

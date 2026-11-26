@@ -4,9 +4,10 @@
 //!
 //! - `--stream-service-install`: pergunta, copia o Prisma para `Arquivos de Programas\PrismaServico`
 //!   (pasta que só administrador altera), leva a identidade e os aparelhos pareados para
-//!   `ProgramData\Prisma\compartilhar` (só SYSTEM, administradores e ela) e liga o serviço.
-//! - `--stream-service-remove`: desliga, apaga o serviço e as duas pastas, devolve os aparelhos
-//!   pareados e a política do Ctrl+Alt+Del como estavam.
+//!   `ProgramData\Prisma\compartilhar` (só SYSTEM, administradores e ela), deixa o UDP dessa cópia
+//!   passar no Firewall do Windows e liga o serviço.
+//! - `--stream-service-remove`: desliga, apaga o serviço, a regra do firewall e as duas pastas,
+//!   devolve os aparelhos pareados e a política do Ctrl+Alt+Del como estavam.
 //! - `--stream-service-status`: mostra se está instalado e rodando.
 //! - `--stream-invite[=permissões]`: cria um convite (código curto) para o host que estiver rodando,
 //!   o do serviço ou o da página.
@@ -23,9 +24,11 @@ use std::time::{Duration, Instant};
 
 use windows::core::*;
 use windows::Win32::Foundation::*;
+use windows::Win32::NetworkManagement::WindowsFirewall::*;
 use windows::Win32::Security::Authorization::*;
 use windows::Win32::Security::*;
 use windows::Win32::Storage::FileSystem::*;
+use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED};
 use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
 use windows::Win32::System::Registry::*;
 use windows::Win32::System::RemoteDesktop::WTSGetActiveConsoleSessionId;
@@ -40,6 +43,7 @@ const STOP_EVENT: PCWSTR = w!("Global\\PrismaCompartilharParar");
 const SAS_EVENT: PCWSTR = w!("Global\\PrismaCompartilharSAS");
 const POLICY_KEY: PCWSTR = w!("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System");
 const POLICY_VALUE: PCWSTR = w!("SoftwareSASGeneration");
+const FIREWALL_RULE: &str = "Prisma Compartilhar (UDP)";
 
 pub fn run_args(a: &str) -> bool {
     match a {
@@ -254,6 +258,50 @@ unsafe fn set_sas_policy(v: Option<u32>) -> bool {
     ok
 }
 
+// ---------- Firewall do Windows ----------
+
+unsafe fn firewall_rules() -> Result<INetFwRules> {
+    let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+    let policy: INetFwPolicy2 = CoCreateInstance(&NetFwPolicy2, None, CLSCTX_INPROC_SERVER)?;
+    policy.Rules()
+}
+
+/// Entrada de UDP para o programa, nos três perfis (Domínio, Particular e Pública).
+unsafe fn firewall_rule(exe: &std::path::Path) -> Result<INetFwRule> {
+    let rule: INetFwRule = CoCreateInstance(&NetFwRule, None, CLSCTX_INPROC_SERVER)?;
+    rule.SetName(&BSTR::from(FIREWALL_RULE))?;
+    rule.SetApplicationName(&BSTR::from(&*exe.to_string_lossy()))?;
+    rule.SetProtocol(NET_FW_IP_PROTOCOL_UDP.0)?;
+    rule.SetDirection(NET_FW_RULE_DIR_IN)?;
+    rule.SetAction(NET_FW_ACTION_ALLOW)?;
+    rule.SetProfiles(NET_FW_PROFILE2_ALL.0)?;
+    rule.SetEnabled(VARIANT_TRUE)?;
+    Ok(rule)
+}
+
+/// Apaga todas as regras com este nome (o `Remove` tira uma por vez).
+unsafe fn firewall_clear(rules: &INetFwRules, name: &str) -> Result<()> {
+    let name = BSTR::from(name);
+    // O limite é só para nunca girar para sempre numa regra que o `Remove` não tira.
+    for _ in 0..100 {
+        match rules.Item(&name) {
+            Ok(_) => rules.Remove(&name)?,
+            Err(e) if e.code() == ERROR_FILE_NOT_FOUND.to_hresult() => return Ok(()),
+            Err(e) => return Err(e),
+        }
+    }
+    Err(E_FAIL.into())
+}
+
+/// Sem a regra, o Firewall descarta o UDP que chega sem ter sido pedido: o caminho direto pela
+/// internet não se forma, e a conexão dá a volta por outro, com muito mais atraso.
+unsafe fn firewall_allow(exe: &std::path::Path) -> Result<()> {
+    let rules = firewall_rules()?;
+    let rule = firewall_rule(exe)?;
+    firewall_clear(&rules, FIREWALL_RULE)?;
+    rules.Add(&rule)
+}
+
 /// Para o serviço e espera até 15 s.
 unsafe fn stop_service(svc: SC_HANDLE) {
     let mut st = SERVICE_STATUS::default();
@@ -276,7 +324,8 @@ O que ele faz: roda como SYSTEM (o nível mais alto do Windows) e começa junto 
 O que muda no PC:\n\
 • uma cópia do Prisma em Arquivos de Programas\\PrismaServico;\n\
 • a identidade e os aparelhos pareados passam para ProgramData\\Prisma\\compartilhar, que só o SYSTEM, os administradores e você abrem;\n\
-• o serviço \"Prisma: compartilhar tela\".\n\n\
+• o serviço \"Prisma: compartilhar tela\";\n\
+• uma regra no Firewall do Windows que deixa essa cópia receber conexões (UDP), em qualquer rede.\n\n\
 Para tirar tudo: Remover, na página Compartilhar tela do Prisma.";
     if !ask(text, MESSAGEBOX_STYLE(0)) {
         return eprintln!("instalação cancelada");
@@ -341,6 +390,9 @@ unsafe fn do_install(before: Option<u32>, want_sas: bool) -> std::result::Result
     let mut acts = [SC_ACTION { Type: SC_ACTION_RESTART, Delay: 5000 }; 3];
     let fa = SERVICE_FAILURE_ACTIONSW { dwResetPeriod: 86_400, cActions: 3, lpsaActions: acts.as_mut_ptr(), ..Default::default() };
     let _ = ChangeServiceConfig2W(svc, SERVICE_CONFIG_FAILURE_ACTIONS, Some(&fa as *const _ as *const _));
+    if let Err(e) = firewall_allow(&dst) {
+        log(&format!("a regra do Firewall do Windows não entrou: {}", e.message()));
+    }
     let started = StartServiceW(svc, None);
     let _ = CloseServiceHandle(svc);
     let _ = CloseServiceHandle(scm);
@@ -369,6 +421,12 @@ fn remove() {
                 let _ = CloseServiceHandle(svc);
             }
             let _ = CloseServiceHandle(scm);
+        }
+        // No registro do Prisma: o do serviço é apagado logo abaixo.
+        if let Err(e) = firewall_rules().and_then(|r| firewall_clear(&r, FIREWALL_RULE)) {
+            let line = format!("a regra «{FIREWALL_RULE}» do Firewall do Windows não saiu: {}", e.message());
+            eprintln!("aviso: {line}");
+            crate::config::log(&format!("compartilhar: {line}"));
         }
         let m = std::fs::read_to_string(marker()).unwrap_or_default();
         let field = |k: &str| m.lines().find_map(|l| l.strip_prefix(k).and_then(|r| r.strip_prefix('\t'))).map(str::to_string);
@@ -784,5 +842,17 @@ mod tests {
             assert!(!ok);
         }
         assert!(!unsafe { admin_owned(&mine) }, "pasta que não existe não vale");
+    }
+
+    #[test]
+    fn regra_do_firewall() {
+        // Montar e procurar não pedem administrador; só gravar pede, e o teste não grava.
+        unsafe {
+            let rules = firewall_rules().unwrap();
+            firewall_clear(&rules, &format!("Prisma teste sem regra {}", std::process::id())).unwrap();
+            let rule = firewall_rule(&program_dir().join("prisma.exe")).unwrap();
+            assert!(rule.ApplicationName().unwrap().to_string().ends_with("\\PrismaServico\\prisma.exe"));
+            assert_eq!(rule.Profiles().unwrap(), NET_FW_PROFILE2_ALL.0);
+        }
     }
 }
