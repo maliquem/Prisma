@@ -1135,6 +1135,9 @@ mod tests {
         // Faltando um pedaço do pacote partido, ele sai inteiro; os outros ficam.
         let lost = vec![Some(vec![1, 2, 3]), None, Some(vec![8, 9, 10]), Some(vec![11])];
         assert_eq!(join(lost, &c.more), vec![vec![1, 2, 3], vec![11]]);
+        // Quem assiste não sabe o `more` do pedaço perdido e usa true: o fim de um pacote partido não sai sozinho.
+        let three = vec![Some(vec![1]), None, Some(vec![3])];
+        assert_eq!(join(three, &[true, true, false]), Vec::<Vec<u8>>::new());
         assert_eq!(Chunks::plain(&[], 4).parts, vec![Vec::<u8>::new()]);
     }
 }

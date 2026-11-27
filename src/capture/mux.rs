@@ -554,7 +554,9 @@ impl Mp4 {
             return Ok(());
         }
         let step = 10_000_000 / self.fps.max(1) as i64;
-        let end = self.last_pts + step;
+        // Tela parada não manda quadro: o último quadro fica na tela até o fim do som, que não se perde.
+        let sound_end = self.a.last().map_or(i64::MIN, |a| a.pts + 1024 * 10_000_000 / AUDIO_SCALE as i64);
+        let end = (self.last_pts + step).max(sound_end);
         self.a_pending = end;
         self.flush(end)?;
         let tfra = full(b"tfra", 1, 0, |b| {

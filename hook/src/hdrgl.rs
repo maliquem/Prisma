@@ -12,7 +12,7 @@ use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Direct3D11::*;
 use windows::Win32::Graphics::Dxgi::Common::*;
 use windows::Win32::Graphics::Dxgi::*;
-use windows::Win32::Graphics::Gdi::{WindowFromDC, HDC};
+use windows::Win32::Graphics::Gdi::{GetDC, ReleaseDC, WindowFromDC, HDC};
 use windows::Win32::UI::WindowsAndMessaging::GetClientRect;
 
 use crate::hdr::{self, INSIDE};
@@ -365,6 +365,28 @@ impl Drop for Window {
     }
 }
 
+/// O jogo trocou de contexto: o `Drop` só solta os objetos do GL com o contexto dono ligado. Liga o
+/// velho por um instante e volta ao do jogo (um `wglMakeCurrent` que falha desliga o atual, então a
+/// volta vem sempre). Sem conseguir (janela fechada, contexto apagado ou noutra thread), eles ficam.
+unsafe fn drop_in_own_context(old: Window, glrc: usize) {
+    let (make, get_dc) = (export("opengl32.dll", b"wglMakeCurrent\0"), export("opengl32.dll", b"wglGetCurrentDC\0"));
+    if old.glrc == glrc || make.is_null() || get_dc.is_null() {
+        return drop(old);
+    }
+    let make: unsafe extern "system" fn(HDC, Ptr) -> i32 = std::mem::transmute(make);
+    let get_dc: unsafe extern "system" fn() -> HDC = std::mem::transmute(get_dc);
+    let (cur_dc, hwnd) = (get_dc(), old.hwnd);
+    let dc = GetDC(Some(hwnd));
+    if !dc.is_invalid() {
+        make(dc, old.glrc as Ptr);
+    }
+    drop(old);
+    make(cur_dc, glrc as Ptr);
+    if !dc.is_invalid() {
+        ReleaseDC(Some(hwnd), dc);
+    }
+}
+
 /// `Some(sync)`: o quadro foi para a cadeia nossa. `None`: esta janela segue sem HDR.
 unsafe fn swap(hdc: HDC) -> Result<Option<u32>> {
     let (hwnd, glrc) = (WindowFromDC(hdc), current());
@@ -373,7 +395,9 @@ unsafe fn swap(hdc: HDC) -> Result<Option<u32>> {
     }
     let mut slot = window();
     if slot.as_ref().is_none_or(|w| w.hwnd != hwnd || w.glrc != glrc) {
-        *slot = None;
+        if let Some(old) = slot.take() {
+            drop_in_own_context(old, glrc);
+        }
         let Some(w) = Window::new(hwnd, glrc)? else { return Ok(None) };
         *slot = Some(w);
     }

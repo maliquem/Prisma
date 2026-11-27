@@ -505,6 +505,8 @@ struct Peer {
     done: Arc<AtomicBool>,
     history: VecDeque<Input>,
     first: u32,
+    /// Eventos do fim de `history` que ainda não foram mandados nenhuma vez.
+    unsent: usize,
     last_input: Instant,
     last_send: Instant,
     last_ping: Instant,
@@ -610,6 +612,7 @@ fn run(me: u8, targets: Vec<(String, u8)>, lock_key: Keys) {
         write_input(pkt, p.first, &list);
         p.link.send(pkt);
         p.last_send = Instant::now();
+        p.unsent = 0;
     };
     // Fecha a conexão com um PC: o mouse volta se estava lá, e o que ficou apertado é solto.
     let drop_peer = |peers: &mut Vec<Option<Peer>>, i: usize, why: &str, out: &mut Vec<u8>, pkt: &mut Vec<u8>| {
@@ -628,7 +631,7 @@ fn run(me: u8, targets: Vec<(String, u8)>, lock_key: Keys) {
         };
         if !fresh.is_empty() {
             for e in fresh {
-                push(&mut p, e);
+                push(&mut p, e, pkt);
             }
             send_input(&mut p, pkt);
             send_input(&mut p, pkt);
@@ -652,7 +655,7 @@ fn run(me: u8, targets: Vec<(String, u8)>, lock_key: Keys) {
                     if perms & KEYBOARD == 0 {
                         eprintln!("«{name}» não deu a permissão de teclado: lá só vai o mouse");
                     }
-                    peers[i] = Some(Peer { lat: super::LatLog::new("").of(&name), rich: Default::default(), link, name, done, history: VecDeque::new(), first: 0, last_input: now_, last_send: now_, last_ping: now_ - Duration::from_secs(1), heard: now_, perms });
+                    peers[i] = Some(Peer { lat: super::LatLog::new("").of(&name), rich: Default::default(), link, name, done, history: VecDeque::new(), first: 0, unsent: 0, last_input: now_, last_send: now_, last_ping: now_ - Duration::from_secs(1), heard: now_, perms });
                 }
                 Event::Gone(i) => {
                     lines -= 1;
@@ -693,7 +696,7 @@ fn run(me: u8, targets: Vec<(String, u8)>, lock_key: Keys) {
         let fresh = STATE.lock().ok().and_then(|mut g| g.as_mut().map(|s| std::mem::take(&mut s.pending))).unwrap_or_default();
         for (i, e) in fresh {
             if let Some(p) = peers[i].as_mut() {
-                push(p, e);
+                push(p, e, &mut pkt);
                 p.last_input = Instant::now();
             }
         }
@@ -759,7 +762,15 @@ fn run(me: u8, targets: Vec<(String, u8)>, lock_key: Keys) {
     }
 }
 
-fn push(p: &mut Peer, e: Input) {
+fn push(p: &mut Peer, e: Input, pkt: &mut Vec<u8>) {
+    // Mais de INPUT_KEEP de uma vez: manda o que juntou antes que o mais velho saia sem ter ido.
+    if p.unsent == INPUT_KEEP {
+        let list: Vec<Input> = p.history.iter().copied().collect();
+        write_input(pkt, p.first, &list);
+        p.link.send(pkt);
+        p.unsent = 0;
+    }
+    p.unsent += 1;
     p.history.push_back(e);
     if p.history.len() > INPUT_KEEP {
         p.history.pop_front();

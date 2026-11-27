@@ -650,7 +650,9 @@ pub fn remove(l: &Leftover, backups: &Path) -> bool {
         LeftKind::Registry(hive, path) => {
             let _ = std::fs::create_dir_all(backups);
             let safe: String = l.label.chars().map(|c| if c.is_alphanumeric() { c } else { '_' }).take(80).collect();
-            let file = backups.join(format!("{safe}.reg"));
+            // O nome cortado repete (as chaves Uninstall\{GUID} do Office): a soma (FNV-1a) do caminho inteiro separa.
+            let sum = l.label.bytes().fold(0xcbf2_9ce4_8422_2325u64, |h, b| (h ^ b as u64).wrapping_mul(0x100_0000_01b3));
+            let file = backups.join(format!("{safe}_{:08x}.reg", sum as u32));
             let done = std::process::Command::new(crate::sys::system_tool("reg"))
                 .args(["export", &l.label, &file.display().to_string(), "/y"])
                 .output()

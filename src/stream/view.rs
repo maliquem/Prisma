@@ -363,7 +363,8 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
                     if let (None, Some(e)) = (&cur, expect.filter(|&e| e != frame)) {
                         sh.lost.fetch_add(frame.wrapping_sub(e).min(1000), Ordering::Relaxed);
                     }
-                    let a = cur.get_or_insert_with(|| Asm { frame, count, got: 0, key, pts, parts: vec![None; count as usize], more: vec![false; count as usize] });
+                    // Um pedaço que não chegou conta como "continua": o fim do pacote dele não sai como pacote inteiro.
+                    let a = cur.get_or_insert_with(|| Asm { frame, count, got: 0, key, pts, parts: vec![None; count as usize], more: vec![true; count as usize] });
                     if a.count != count {
                         continue;
                     }
@@ -460,16 +461,33 @@ fn play(sh: Arc<Shared>) {
 }
 
 /// Toca o som recebido na saída `id` (vazio: a padrão), com o menor período que o Windows deixa, até `quit`.
+/// Se a saída some (fone USB ou headset tirado), abre de novo a cada segundo; enquanto isso a
+/// fila é jogada fora, para não crescer sem fim.
 pub(super) fn play_until(spk: &Speaker, quit: &AtomicBool, id: &str) {
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-        if let Err(e) = play_loop(spk, quit, id) {
-            eprintln!("som: {e:?}");
+        let Ok(ev) = CreateEventW(None, false, false, None) else { return eprintln!("som: sem evento") };
+        let mut last = String::new();
+        while !quit.load(Ordering::Relaxed) {
+            let Err(e) = play_loop(spk, quit, id, ev) else { break };
+            let msg = format!("{e:?}");
+            if msg != last {
+                eprintln!("som: {msg}");
+                last = msg;
+            }
+            spk.audio.lock().unwrap().clear();
+            for _ in 0..10 {
+                if quit.load(Ordering::Relaxed) {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
         }
+        let _ = CloseHandle(ev);
     }
 }
 
-unsafe fn play_loop(sh: &Speaker, quit: &AtomicBool, id: &str) -> Result<()> {
+unsafe fn play_loop(sh: &Speaker, quit: &AtomicBool, id: &str, ev: HANDLE) -> Result<()> {
     let en: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
     let dev = if id.is_empty() { en.GetDefaultAudioEndpoint(eRender, eConsole)? } else { en.GetDevice(&HSTRING::from(id))? };
     let f = sound::format();
@@ -486,7 +504,6 @@ unsafe fn play_loop(sh: &Speaker, quit: &AtomicBool, id: &str) -> Result<()> {
         let flags = AUDCLNT_STREAMFLAGS_EVENTCALLBACK | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY;
         client.Initialize(AUDCLNT_SHAREMODE_SHARED, flags, 100_000, 0, &f.Format, None)?;
     }
-    let ev = CreateEventW(None, false, false, None)?;
     client.SetEventHandle(ev)?;
     let size = client.GetBufferSize()?;
     let render: IAudioRenderClient = client.GetService()?;
@@ -532,7 +549,6 @@ unsafe fn play_loop(sh: &Speaker, quit: &AtomicBool, id: &str) -> Result<()> {
         render.ReleaseBuffer(free, 0)?;
     }
     let _ = client.Stop();
-    let _ = CloseHandle(ev);
     Ok(())
 }
 
@@ -2025,7 +2041,13 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         }
         let fresh: Vec<Input> = std::mem::take(&mut KEYS.lock().unwrap().pending);
         if !fresh.is_empty() {
-            for e in fresh {
+            for (n, e) in fresh.into_iter().enumerate() {
+                // Mais de INPUT_KEEP de uma vez: manda o que juntou antes que o mais velho saia sem ter ido.
+                if n > 0 && n % INPUT_KEEP == 0 {
+                    let list: Vec<Input> = history.iter().copied().collect();
+                    write_input(&mut input_pkt, input_first, &list);
+                    link.send(&input_pkt);
+                }
                 history.push_back(e);
                 if history.len() > INPUT_KEEP {
                     history.pop_front();
