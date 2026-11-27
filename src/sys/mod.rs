@@ -108,6 +108,13 @@ pub fn known_folder(id: &windows::core::GUID) -> PathBuf {
     PathBuf::from(path.unwrap_or_default())
 }
 
+/// Junção ou atalho: o instalador, elevado, daria permissão e gravaria na pasta para onde ele aponta.
+pub(crate) fn is_link(p: &std::path::Path) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    use windows::Win32::Storage::FileSystem::FILE_ATTRIBUTE_REPARSE_POINT;
+    std::fs::symlink_metadata(p).is_ok_and(|m| m.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT.0 != 0)
+}
+
 /// Texto do Windows: UTF-16 terminado em zero.
 pub fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
