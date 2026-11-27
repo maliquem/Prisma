@@ -871,8 +871,8 @@ pub(super) fn serve(link: Arc<dyn Link>, perms: u8, name: String) {
             Poll::Closed => break,
             _ => {}
         }
-        // O mouse daqui se mexeu: o cursor volta para quem está neste PC.
-        if hidden_at.is_some_and(|t| host::HOST_MOUSE_MS.load(Ordering::Relaxed) > t) {
+        // O mouse daqui se mexeu, ou alguém usa este PC pelo Compartilhar tela: o cursor volta.
+        if hidden_at.is_some_and(|t| host::HOST_MOUSE_MS.load(Ordering::Relaxed).max(host::GUEST_INPUT_MS.load(Ordering::Relaxed)) > t) {
             super::cursor::show();
             hidden_at = None;
         }

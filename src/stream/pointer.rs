@@ -375,11 +375,17 @@ unsafe fn bits(bm: HBITMAP, bpp: u16) -> Option<(u32, u32, u32, Vec<u8>)> {
 /// cursor de texto continua invertendo o que está atrás).
 pub(super) unsafe fn to_cursor(s: &Shape, f: f64) -> Option<HCURSOR> {
     let s = scaled(s, f);
-    // Invisível lá (o Mouse e teclado esconde o cursor do host assim): a seta daqui, no tamanho
-    // daqui, em vez do quadrado preto; sumir deixaria quem controla o host sem cursor.
+    // Invisível lá (o Mouse e teclado esconde o cursor do host assim): uma cópia da seta daqui
+    // em vez do quadrado preto; sumir deixaria quem controla o host sem cursor. A seta também
+    // fica quando o Windows não monta o cursor.
+    let arrow = || CopyIcon(HICON(LoadCursorW(None, IDC_ARROW).ok()?.0)).ok().map(|i| HCURSOR(i.0));
     if blank(&s) {
-        return to_cursor(&shape_of(LoadCursorW(None, IDC_ARROW).ok()?)?, 1.0);
+        return arrow();
     }
+    build(&s).or_else(arrow)
+}
+
+unsafe fn build(s: &Shape) -> Option<HCURSOR> {
     let (w, h) = (s.img.w as usize, s.img.h as usize);
     let bi = BITMAPINFO { bmiHeader: BITMAPINFOHEADER { biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32, biWidth: w as i32, biHeight: -(h as i32), biPlanes: 1, biBitCount: 32, biCompression: BI_RGB.0, ..Default::default() }, ..Default::default() };
     let mut ptr = std::ptr::null_mut();
@@ -522,9 +528,7 @@ mod tests {
             let arrow = shape_of(LoadCursorW(None, IDC_ARROW).unwrap()).unwrap();
             for f in [1.0, 0.5] {
                 let c = to_cursor(&hidden, f).expect("a seta");
-                let back = shape_of(c).expect("o cursor feito aqui");
-                assert_eq!((back.img.w, back.img.h, back.hot), (arrow.img.w, arrow.img.h, arrow.hot));
-                assert!(!blank(&back));
+                assert_eq!(shape_of(c), Some(arrow.clone()));
                 let _ = DestroyCursor(c);
             }
         }
