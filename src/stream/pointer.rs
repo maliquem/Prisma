@@ -101,6 +101,12 @@ fn resize(s: &Shape, w: u32, h: u32) -> Shape {
     Shape { img: CursorImage { w, h, color, invert }, hot: (at(s.hot.0, w, s.img.w), at(s.hot.1, h, s.img.h)) }
 }
 
+/// Nenhum pixel aparece: o cursor que esconde o do Windows (o do Mouse e teclado, ou o de um
+/// jogo). Feito cursor sem inversão, o Windows ignora o alfa todo zero e pinta um quadrado preto.
+fn blank(s: &Shape) -> bool {
+    s.img.invert.is_none() && s.img.color.chunks_exact(4).all(|p| p[3] == 0)
+}
+
 fn encode(s: &Shape) -> Vec<u8> {
     let mut raw = Vec::with_capacity(9 + s.img.color.len() * 5 / 4);
     for v in [s.img.w as u16, s.img.h as u16, s.hot.0, s.hot.1] {
@@ -369,6 +375,17 @@ unsafe fn bits(bm: HBITMAP, bpp: u16) -> Option<(u32, u32, u32, Vec<u8>)> {
 /// cursor de texto continua invertendo o que está atrás).
 pub(super) unsafe fn to_cursor(s: &Shape, f: f64) -> Option<HCURSOR> {
     let s = scaled(s, f);
+    // Invisível lá (o Mouse e teclado esconde o cursor do host assim): uma cópia da seta daqui
+    // em vez do quadrado preto; sumir deixaria quem controla o host sem cursor. A seta também
+    // fica quando o Windows não monta o cursor.
+    let arrow = || CopyIcon(HICON(LoadCursorW(None, IDC_ARROW).ok()?.0)).ok().map(|i| HCURSOR(i.0));
+    if blank(&s) {
+        return arrow();
+    }
+    build(&s).or_else(arrow)
+}
+
+unsafe fn build(s: &Shape) -> Option<HCURSOR> {
     let (w, h) = (s.img.w as usize, s.img.h as usize);
     let bi = BITMAPINFO { bmiHeader: BITMAPINFOHEADER { biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32, biWidth: w as i32, biHeight: -(h as i32), biPlanes: 1, biBitCount: 32, biCompression: BI_RGB.0, ..Default::default() }, ..Default::default() };
     let mut ptr = std::ptr::null_mut();
@@ -497,6 +514,24 @@ mod tests {
         let pk = tx.due(true).unwrap();
         let Some(Msg::Cursor { shape, visible, part, parts, data }) = read(&pk[0]) else { panic!() };
         assert_eq!(rx.on(shape, visible, part, parts, data), Some((true, None)));
+    }
+
+    #[test]
+    fn formato_invisivel_nao_vira_quadrado_preto() {
+        // O cursor do Mouse e teclado ao esconder: máscara E toda 1, OU-exclusivo todo 0.
+        let masks: Vec<u8> = [0xFFu8; 4 * 32].into_iter().chain([0; 4 * 32]).collect();
+        let mono = cursor_image(1, 32, 64, 4, &masks).unwrap();
+        let hidden = Shape { img: mono, hot: (0, 0) };
+        assert!(blank(&hidden) && !blank(&shape(false)) && !blank(&shape(true)));
+        // Vira a seta do Windows daqui, nunca o quadrado.
+        unsafe {
+            let arrow = shape_of(LoadCursorW(None, IDC_ARROW).unwrap()).unwrap();
+            for f in [1.0, 0.5] {
+                let c = to_cursor(&hidden, f).expect("a seta");
+                assert_eq!(shape_of(c), Some(arrow.clone()));
+                let _ = DestroyCursor(c);
+            }
+        }
     }
 
     #[test]

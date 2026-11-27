@@ -1439,6 +1439,8 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         None,
     )?;
     VIEW_HWND.store(hwnd.0 as isize, Ordering::Relaxed);
+    // O cursor local da conexão anterior não vale nesta janela (o handle podia ficar para sempre).
+    LOCAL_NOW.store(0, Ordering::Relaxed);
     // Mouse cru para o relativo; só chega com a janela na frente.
     let raw = RAWINPUTDEVICE { usUsagePage: 1, usUsage: 2, dwFlags: RAWINPUTDEVICE_FLAGS(0), hwndTarget: hwnd };
     if let Err(e) = RegisterRawInputDevices(&[raw], std::mem::size_of::<RAWINPUTDEVICE>() as u32) {
@@ -2184,6 +2186,10 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     }
 
     sh.quit.store(true, Ordering::Relaxed);
+    show_local(hwnd, None);
+    if let Some(c) = local.0.take() {
+        let _ = DestroyCursor(c);
+    }
     if clipped.is_some() {
         let _ = ClipCursor(None);
     }

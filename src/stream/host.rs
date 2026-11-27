@@ -891,6 +891,8 @@ pub(super) fn ms_now() -> i64 {
 
 /// Hora (ms desde o início do processo) do último movimento do mouse de verdade deste PC.
 pub(super) static HOST_MOUSE_MS: AtomicI64 = AtomicI64::new(i64::MIN / 2);
+/// Hora da última entrada de quem assiste aplicada aqui: o Mouse e teclado devolve o cursor.
+pub(super) static GUEST_INPUT_MS: AtomicI64 = AtomicI64::new(i64::MIN / 2);
 
 /// Vigia o mouse e o teclado de verdade (o Windows marca o que foi injetado), numa linha própria.
 pub(super) fn watch_host_input() {
@@ -2280,6 +2282,7 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                             Msg::Input { first, events } => {
                                 // Na tela segura, só quem tem a permissão de sistema.
                                 if let Some(inj) = g.input.as_mut().filter(|_| !secure || g.perms & SYSTEM != 0) {
+                                    GUEST_INPUT_MS.store(ms_now(), Ordering::Relaxed);
                                     inj.apply(first, events);
                                 }
                             }
