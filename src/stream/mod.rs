@@ -506,8 +506,10 @@ pub enum Msg<'a> {
     Mic(&'a [u8]),
     /// O cursor do host para quem pediu [`LOCAL_CURSOR`]: `visible` falso (o jogo escondeu, ou o
     /// cursor voltou ao vídeo) vem sem pedaços; visível, cada pacote leva um pedaço do formato
-    /// `shape` (comprimido, veja `pointer.rs`).
-    Cursor { shape: u16, visible: bool, part: u8, parts: u8, data: &'a [u8] },
+    /// `shape` (comprimido, veja `pointer.rs`). `std`: o cursor padrão do Windows que está à vista
+    /// (veja `pointer.rs`), ou 0 para o formato próprio. Vai no mesmo byte do `visible` (1 + `std`):
+    /// quem assiste antigo lê só "à vista", e host antigo manda 1.
+    Cursor { shape: u16, visible: bool, std: u8, part: u8, parts: u8, data: &'a [u8] },
     /// Para quem pediu [`RELATIVE_MOUSE`]: o mouse vai relativo (o jogo prendeu o cursor) ou não.
     Mouse { relative: bool },
 }
@@ -711,10 +713,10 @@ pub fn write(out: &mut Vec<u8>, m: &Msg) {
             head(out, Kind::Mic);
             out.extend_from_slice(data);
         }
-        Msg::Cursor { shape, visible, part, parts, data } => {
+        Msg::Cursor { shape, visible, std, part, parts, data } => {
             head(out, Kind::Cursor);
             out.extend_from_slice(&shape.to_le_bytes());
-            out.extend_from_slice(&[visible as u8, part, parts]);
+            out.extend_from_slice(&[if visible { std.saturating_add(1) } else { 0 }, part, parts]);
             out.extend_from_slice(data);
         }
         Msg::Mouse { relative } => {
@@ -799,7 +801,7 @@ pub fn read(b: &[u8]) -> Option<Msg<'_>> {
         25 => Msg::ClipData { id: u16_at(b, 4)?, idx: u32_at(b, 6)?, data: b.get(10..)? },
         26 => Msg::Rate(rate::Report { delay_ms: u16_at(b, 4)?, loss_pm: u16_at(b, 6)?, kbps: u32_at(b, 8)? }),
         27 => Msg::Mic(b.get(4..)?),
-        28 => Msg::Cursor { shape: u16_at(b, 4)?, visible: *b.get(6)? != 0, part: *b.get(7)?, parts: *b.get(8)?, data: b.get(9..)? },
+        28 => Msg::Cursor { shape: u16_at(b, 4)?, visible: *b.get(6)? != 0, std: b.get(6)?.saturating_sub(1), part: *b.get(7)?, parts: *b.get(8)?, data: b.get(9..)? },
         29 => Msg::Mouse { relative: *b.get(4)? != 0 },
         _ => return None,
     })
@@ -962,8 +964,9 @@ mod tests {
         round(Msg::Clip { id: 300, part: 1, parts: 3, data: b"texto" });
         round(Msg::Rate(rate::Report { delay_ms: 31, loss_pm: 1000, kbps: 150_000 }));
         round(Msg::Mic(&[1, 2, 3, 4]));
-        round(Msg::Cursor { shape: 9, visible: true, part: 1, parts: 2, data: &[7, 8] });
-        round(Msg::Cursor { shape: 0, visible: false, part: 0, parts: 0, data: &[] });
+        round(Msg::Cursor { shape: 9, visible: true, std: 0, part: 1, parts: 2, data: &[7, 8] });
+        round(Msg::Cursor { shape: 9, visible: true, std: 3, part: 0, parts: 1, data: &[7] });
+        round(Msg::Cursor { shape: 0, visible: false, std: 0, part: 0, parts: 0, data: &[] });
         round(Msg::Mouse { relative: true });
         round(Msg::Mouse { relative: false });
         round(Msg::Nack { frame: 77 });
