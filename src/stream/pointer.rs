@@ -184,7 +184,7 @@ pub(super) struct Sender {
     visible: bool,
     /// O cursor padrão do Windows em uso (0: nenhum).
     std: u8,
-    /// WGC: o último cursor do Windows lido.
+    /// O último cursor do Windows lido (0: escondido).
     handle: isize,
     /// Desktop Duplication: quantos formatos ela já tinha dado na última leitura.
     pub seen: u32,
@@ -215,20 +215,29 @@ impl Sender {
         self.std = std;
     }
 
-    /// Vê se o cursor do Windows à vista é um dos padrões.
+    /// Vê se o cursor do Windows à vista é um dos padrões (Desktop Duplication, que só dá a imagem).
     pub fn read_standard(&mut self) {
-        self.set_standard(system_cursor().map_or(0, standard_id));
+        self.new_cursor(system_cursor());
+    }
+
+    /// Só compara quando o handle muda (isto roda a cada volta do laço do host). Devolve se mudou.
+    fn new_cursor(&mut self, cur: Option<HCURSOR>) -> bool {
+        let handle = cur.map_or(0, |c| c.0 as isize);
+        if handle == self.handle {
+            return false;
+        }
+        self.handle = handle;
+        self.set_standard(cur.map_or(0, standard_id));
+        true
     }
 
     /// WGC: lê o cursor do Windows (a Desktop Duplication já entrega o dela).
     pub fn read_system(&mut self) {
         let cur = system_cursor();
-        self.set_standard(cur.map_or(0, standard_id));
-        if let Some(c) = cur.filter(|c| c.0 as isize != self.handle) {
-            self.handle = c.0 as isize;
+        if self.new_cursor(cur) {
             // shortcut: cursor animado próprio de um programa (ou os de espera, em quem assiste antigo)
             // vai só no quadro que o Windows dá aqui; ler os quadros pede uma função não documentada.
-            if let Some(s) = unsafe { shape_of(c) } {
+            if let Some(s) = cur.and_then(|c| unsafe { shape_of(c) }) {
                 self.set_shape(&s);
             }
         }
@@ -583,6 +592,12 @@ mod tests {
         let pk = tx.due(true).expect("o id mudou");
         let Some(Msg::Cursor { shape: n, visible, std, part, parts, data }) = read(&pk[0]) else { panic!() };
         assert_eq!(rx.on(n, visible, std, part, parts, data), Some((true, 0, None)));
+        // O host só compara de novo com um handle novo; escondido zera o id.
+        let c = standard_cursor(wait);
+        assert!(tx.new_cursor(c) && !tx.new_cursor(c));
+        assert_eq!(tx.std, wait);
+        assert!(tx.new_cursor(None));
+        assert_eq!(tx.std, 0);
         // O cursor padrão não espera o formato; id desconhecido espera, como o formato próprio.
         let mut rx = Receiver::default();
         assert_eq!(rx.on(7, true, wait, 0, 2, &[1]), Some((true, wait, None)));
