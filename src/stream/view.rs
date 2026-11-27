@@ -47,8 +47,9 @@ enum Event {
     Frame(Frame),
     /// Um quadro do PyroWave: os pacotes que chegaram (todos, ou o que deu antes do próximo quadro).
     Wave { pts: i64, parts: Vec<Vec<u8>> },
-    /// Cursor local: o do host está à vista ou não e, quando mudou, o formato novo.
-    Cursor { visible: bool, shape: Option<super::pointer::Shape> },
+    /// Cursor local: o do host está à vista ou não, o cursor padrão (0: nenhum) e, quando mudou, o
+    /// formato novo.
+    Cursor { visible: bool, std: u8, shape: Option<super::pointer::Shape> },
     /// O jogo do host prendeu o cursor (mouse relativo) ou soltou.
     Relative(bool),
 }
@@ -258,9 +259,9 @@ fn receive(link: Arc<dyn Link>, hello: Vec<u8>, sh: Arc<Shared>) {
                     }
                 }
             }
-            Some(Msg::Cursor { shape, visible, part, parts, data }) => {
-                if let Some((visible, shape)) = pointer.on(shape, visible, part, parts, data) {
-                    push(Event::Cursor { visible, shape });
+            Some(Msg::Cursor { shape, visible, std, part, parts, data }) => {
+                if let Some((visible, std, shape)) = pointer.on(shape, visible, std, part, parts, data) {
+                    push(Event::Cursor { visible, std, shape });
                 }
             }
             Some(Msg::Mouse { relative }) => push(Event::Relative(relative)),
@@ -1612,6 +1613,9 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
     // O último Info do host, para avisar quando ele muda alguma coisa.
     // Cursor local: o formato do host feito cursor daqui e se ele está à vista lá.
     let mut local: (Option<HCURSOR>, bool) = (None, false);
+    // O cursor do Windows daqui, quando o do host é um dos padrões: vale no lugar do formato (e é do
+    // sistema, não se destrói).
+    let mut local_std = None::<HCURSOR>;
     // O último formato recebido e a escala em que o cursor foi feito (0: fazer de novo).
     let (mut local_shape, mut local_zoom) = (None::<super::pointer::Shape>, 0.0f64);
     let mut seen_info: Option<(VideoCodec, u32, u32, u32, u8, bool, bool, u8, bool)> = None;
@@ -1710,7 +1714,7 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                     link.send(&again);
                     link.send(&again);
                     // O host só manda de novo o que mudou: ao religar, vale o último cursor recebido.
-                    show_local(hwnd, local.0.filter(|_| local.1 && fresh.local_cursor));
+                    show_local(hwnd, local_std.or(local.0).filter(|_| local.1 && fresh.local_cursor));
                 }
                 // O resto (atalhos, placa...) vem da página; o menu grava por cima só o que muda.
                 co = ClientOpts { immersive: co.immersive, fps: co.fps, meter: co.meter, warn: co.warn, vsync: co.vsync, ask444: co.ask444, ask10: co.ask10, constant: co.constant, pad_background: co.pad_background, pad_keys: co.pad_keys, ..fresh.clone() };
@@ -1975,12 +1979,13 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
                     }
                 }
                 Event::Relative(r) => host_rel = r,
-                Event::Cursor { visible, shape } => {
+                Event::Cursor { visible, std, shape } => {
                     if shape.is_some() {
                         (local_shape, local_zoom) = (shape, 0.0);
                     }
                     local.1 = visible;
-                    show_local(hwnd, local.0.filter(|_| local.1 && co.local_cursor));
+                    local_std = super::pointer::standard_cursor(std);
+                    show_local(hwnd, local_std.or(local.0).filter(|_| local.1 && co.local_cursor));
                 }
                 Event::Wave { pts, parts } => {
                     // Cada quadro vale sozinho: só o mais novo vai para a tela.
@@ -2019,8 +2024,9 @@ unsafe fn watch(link: Arc<dyn Link>, out_file: Option<&str>, secs: Option<u64>) 
         // Cursor local do tamanho que teria no vídeo: refeito com formato novo ou quando a escala
         // muda (janela, tela cheia, resolução do host).
         let zoom = video_zoom(hwnd);
-        // Minimizada, a janela não tem tamanho: espera ela voltar.
-        if let Some(s) = local_shape.as_ref().filter(|_| zoom != local_zoom && !IsIconic(hwnd).as_bool()) {
+        // Minimizada, a janela não tem tamanho: espera ela voltar. Com um cursor padrão, o formato
+        // não é feito: fica para quando ele sair.
+        if let Some(s) = local_shape.as_ref().filter(|_| local_std.is_none() && zoom != local_zoom && !IsIconic(hwnd).as_bool()) {
             local_zoom = zoom;
             if let Some(old) = std::mem::replace(&mut local.0, super::pointer::to_cursor(s, zoom)) {
                 // Fora da janela antes de destruir: o Windows não destrói o cursor em uso.

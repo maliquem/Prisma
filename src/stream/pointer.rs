@@ -7,11 +7,15 @@
 //!
 //! O cursor fica do tamanho que teria dentro do vídeo: o host reduz o formato junto com o vídeo
 //! (tela para vídeo) e quem assiste o escala junto com a janela (vídeo para janela).
+//!
+//! Com um cursor padrão do Windows ([`STANDARD`]) vai também o id dele, e quem assiste usa o dele:
+//! a rodinha gira e segue o tema daqui. O formato vai junto para quem não conhece o id.
 
 use std::borrow::Cow;
 use std::sync::atomic::{AtomicU16, Ordering};
 use std::time::{Duration, Instant};
 
+use windows::core::PCWSTR;
 use windows::Win32::Graphics::Gdi::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
@@ -31,6 +35,23 @@ const MAX_PARTS: usize = 255;
 const MAX_RAW: usize = 9 + 256 * 256 * 5;
 /// Quem perdeu um pedaço, ou acabou de entrar, recebe o estado de novo a cada segundo.
 const REPEAT: Duration = Duration::from_secs(1);
+
+/// Os cursores do Windows que quem assiste troca pelos dele. Na rede vai a posição mais 1 (0:
+/// formato próprio): só acrescentar no fim.
+/// shortcut: um programa que troca um deles no Windows inteiro (`SetSystemCursor`, como um
+/// conta-gotas) aparece lá com o cursor normal; comparar a imagem com a do tema se incomodar.
+const STANDARD: [PCWSTR; 11] = [IDC_ARROW, IDC_WAIT, IDC_APPSTARTING, IDC_IBEAM, IDC_HAND, IDC_SIZEALL, IDC_SIZENWSE, IDC_SIZENESW, IDC_SIZEWE, IDC_SIZENS, IDC_NO];
+
+/// O cursor do Windows deste PC com este id.
+pub(super) fn standard_cursor(std: u8) -> Option<HCURSOR> {
+    let name = *STANDARD.get((std as usize).checked_sub(1)?)?;
+    unsafe { LoadCursorW(None, name) }.ok()
+}
+
+/// O id do cursor padrão que `c` é (0: nenhum). O handle deles é o mesmo em todo processo.
+fn standard_id(c: HCURSOR) -> u8 {
+    (1..=STANDARD.len() as u8).find(|&i| standard_cursor(i) == Some(c)).unwrap_or(0)
+}
 
 /// Números de formato únicos no processo: uma sessão nova do vídeo nunca repete um número antigo.
 static NEXT_SHAPE: AtomicU16 = AtomicU16::new(1);
@@ -138,12 +159,12 @@ fn decode(b: &[u8]) -> Option<Shape> {
 }
 
 /// Os pacotes de um estado: escondido (um pacote sem pedaços) ou à vista com o formato em pedaços.
-fn packets(shape: u16, blob: Option<&[u8]>) -> Vec<Vec<u8>> {
+fn packets(shape: u16, std: u8, blob: Option<&[u8]>) -> Vec<Vec<u8>> {
     let pieces: Vec<&[u8]> = blob.map_or(Vec::new(), |b| b.chunks(PART).collect());
     let parts = pieces.len() as u8;
     let one = |part: u8, data: &[u8]| {
         let mut out = Vec::with_capacity(data.len() + 16);
-        write(&mut out, &Msg::Cursor { shape, visible: blob.is_some(), part, parts, data });
+        write(&mut out, &Msg::Cursor { shape, visible: blob.is_some(), std, part, parts, data });
         out
     };
     if pieces.is_empty() {
@@ -161,6 +182,8 @@ pub(super) struct Sender {
     /// O formato atual, comprimido.
     blob: Option<Vec<u8>>,
     visible: bool,
+    /// O cursor padrão do Windows em uso (0: nenhum).
+    std: u8,
     /// WGC: o último cursor do Windows lido.
     handle: isize,
     /// Desktop Duplication: quantos formatos ela já tinha dado na última leitura.
@@ -187,13 +210,24 @@ impl Sender {
         self.visible = v;
     }
 
+    fn set_standard(&mut self, std: u8) {
+        self.dirty |= std != self.std;
+        self.std = std;
+    }
+
+    /// Vê se o cursor do Windows à vista é um dos padrões.
+    pub fn read_standard(&mut self) {
+        self.set_standard(system_cursor().map_or(0, standard_id));
+    }
+
     /// WGC: lê o cursor do Windows (a Desktop Duplication já entrega o dela).
     pub fn read_system(&mut self) {
         let cur = system_cursor();
+        self.set_standard(cur.map_or(0, standard_id));
         if let Some(c) = cur.filter(|c| c.0 as isize != self.handle) {
             self.handle = c.0 as isize;
-            // shortcut: cursor animado (o de espera) vai só no quadro que o Windows dá aqui; ler os
-            // quadros pede uma função não documentada.
+            // shortcut: cursor animado próprio de um programa (ou os de espera, em quem assiste antigo)
+            // vai só no quadro que o Windows dá aqui; ler os quadros pede uma função não documentada.
             if let Some(s) = unsafe { shape_of(c) } {
                 self.set_shape(&s);
             }
@@ -211,7 +245,7 @@ impl Sender {
             return None;
         }
         self.sent = Some((now, visible));
-        let p = packets(self.shape, if visible { self.blob.as_deref() } else { None });
+        let p = packets(self.shape, self.std, if visible { self.blob.as_deref() } else { None });
         Some(if changed { p.iter().chain(p.iter()).cloned().collect() } else { p })
     }
 }
@@ -294,21 +328,29 @@ pub(super) struct Receiver {
     pieces: super::clip::Pieces,
     shape: Option<u16>,
     visible: bool,
+    std: u8,
 }
 
 impl Receiver {
-    /// Um pacote do cursor. Devolve o que mudou: se ele está à vista e, quando chegou inteiro, o
-    /// formato novo.
-    pub fn on(&mut self, shape: u16, visible: bool, part: u8, parts: u8, data: &[u8]) -> Option<(bool, Option<Shape>)> {
+    /// Um pacote do cursor. Devolve o que mudou: se ele está à vista, o cursor padrão (0: o
+    /// formato próprio) e, quando chegou inteiro, o formato novo.
+    pub fn on(&mut self, shape: u16, visible: bool, std: u8, part: u8, parts: u8, data: &[u8]) -> Option<(bool, u8, Option<Shape>)> {
         if !visible {
-            return std::mem::take(&mut self.visible).then_some((false, None));
+            return std::mem::take(&mut self.visible).then_some((false, 0, None));
         }
-        if let Some(s) = self.pieces.add_bytes(shape, part, parts, data, MAX_PARTS).and_then(|b| decode(&b)) {
+        // Id que esta versão não conhece: vale o formato.
+        let std = if std as usize <= STANDARD.len() { std } else { 0 };
+        let new = self.pieces.add_bytes(shape, part, parts, data, MAX_PARTS).and_then(|b| decode(&b));
+        if new.is_some() {
             self.shape = Some(shape);
-            self.visible = true;
-            return Some((true, Some(s)));
         }
-        (self.shape == Some(shape) && !std::mem::replace(&mut self.visible, true)).then_some((true, None))
+        // O cursor padrão não espera o formato; o próprio só vale depois que ele chega.
+        if std == 0 && self.shape != Some(shape) {
+            return None;
+        }
+        let appeared = !std::mem::replace(&mut self.visible, true);
+        let changed = std::mem::replace(&mut self.std, std) != std;
+        (appeared || changed || new.is_some()).then_some((true, std, new))
     }
 }
 
@@ -500,20 +542,52 @@ mod tests {
         let mut rx = Receiver::default();
         let mut got = Vec::new();
         for p in pk.iter().rev() {
-            if let Some(Msg::Cursor { shape, visible, part, parts, data }) = read(p) {
-                got.extend(rx.on(shape, visible, part, parts, data));
+            if let Some(Msg::Cursor { shape, visible, std, part, parts, data }) = read(p) {
+                got.extend(rx.on(shape, visible, std, part, parts, data));
             }
         }
-        assert_eq!(got, vec![(true, Some(s.clone()))], "um formato só, mesmo com o pacote repetido");
+        assert_eq!(got, vec![(true, 0, Some(s.clone()))], "um formato só, mesmo com o pacote repetido");
         // O cursor volta ao vídeo: quem assiste esconde o dele.
         let pk = tx.due(false).unwrap();
-        let Some(Msg::Cursor { shape, visible, part, parts, data }) = read(&pk[0]) else { panic!() };
-        assert_eq!(rx.on(shape, visible, part, parts, data), Some((false, None)));
-        assert_eq!(rx.on(shape, visible, part, parts, data), None);
+        let Some(Msg::Cursor { shape, visible, std, part, parts, data }) = read(&pk[0]) else { panic!() };
+        assert_eq!(rx.on(shape, visible, std, part, parts, data), Some((false, 0, None)));
+        assert_eq!(rx.on(shape, visible, std, part, parts, data), None);
         // E de volta à vista com o mesmo formato: só a visibilidade muda.
         let pk = tx.due(true).unwrap();
-        let Some(Msg::Cursor { shape, visible, part, parts, data }) = read(&pk[0]) else { panic!() };
-        assert_eq!(rx.on(shape, visible, part, parts, data), Some((true, None)));
+        let Some(Msg::Cursor { shape, visible, std, part, parts, data }) = read(&pk[0]) else { panic!() };
+        assert_eq!(rx.on(shape, visible, std, part, parts, data), Some((true, 0, None)));
+    }
+
+    #[test]
+    fn id_do_cursor_padrao_vai_e_volta() {
+        for i in 1..=STANDARD.len() as u8 {
+            let c = standard_cursor(i).expect("cursor do Windows");
+            assert_eq!(standard_id(c), i);
+        }
+        assert_eq!((standard_cursor(0), standard_cursor(STANDARD.len() as u8 + 1)), (None, None));
+        let wait = 2;
+        assert_eq!(STANDARD[wait as usize - 1], IDC_WAIT);
+        let mut tx = Sender::default();
+        tx.set_shape(&shape(false));
+        tx.set_visible(true);
+        tx.set_standard(wait);
+        let pk = tx.due(true).unwrap();
+        // Quem assiste antigo lê o mesmo byte só como "à vista".
+        assert_eq!(pk[0][6], wait + 1);
+        let Some(Msg::Cursor { shape: n, visible, std, part, parts, data }) = read(&pk[0]) else { panic!() };
+        assert_eq!((visible, std), (true, wait));
+        let mut rx = Receiver::default();
+        assert_eq!(rx.on(n, visible, std, part, parts, data), Some((true, wait, Some(shape(false)))));
+        // Só o id muda, com o mesmo formato: vai na hora.
+        tx.set_standard(0);
+        let pk = tx.due(true).expect("o id mudou");
+        let Some(Msg::Cursor { shape: n, visible, std, part, parts, data }) = read(&pk[0]) else { panic!() };
+        assert_eq!(rx.on(n, visible, std, part, parts, data), Some((true, 0, None)));
+        // O cursor padrão não espera o formato; id desconhecido espera, como o formato próprio.
+        let mut rx = Receiver::default();
+        assert_eq!(rx.on(7, true, wait, 0, 2, &[1]), Some((true, wait, None)));
+        assert_eq!(rx.on(8, true, 0, 0, 2, &[1]), None);
+        assert_eq!(rx.on(8, true, 200, 0, 2, &[1]), None);
     }
 
     #[test]

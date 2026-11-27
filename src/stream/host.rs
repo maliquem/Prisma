@@ -2123,6 +2123,9 @@ unsafe fn session(d: &D3d, room: &mut Room, joins: Option<&mpsc::Receiver<Joiner
                         }
                     }
                     pointer.set_visible(x.cursor_visible);
+                    if local {
+                        pointer.read_standard();
+                    }
                 }
             }
             if let Some(pk) = pointer.due(local) {
