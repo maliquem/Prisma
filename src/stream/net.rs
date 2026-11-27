@@ -1027,6 +1027,8 @@ fn host_with(invite_perms: Option<u8>, service: bool) {
     let invite = Arc::new(Mutex::new(Invite { secret, until: unix_now() + INVITE_TTL.as_secs(), tries: Vec::new(), used: invite_perms.is_none(), perms: invite_perms.unwrap_or(SOUND) }));
     match invite_perms {
         Some(perms) => {
+            // O convite da partida é o mais novo: um da página que sobrou no arquivo não o troca.
+            let _ = std::fs::remove_file(invite_path());
             eprintln!("Prisma compartilhando pela internet. Quem parear agora: {}. Este PC: «{}», id {}", perms_text(perms), my_name(), ep.id().fmt_short());
             eprintln!("Convite para parear outro PC (vale 10 minutos e uma vez).");
             eprintln!("{CODE_LINE}{shown}");

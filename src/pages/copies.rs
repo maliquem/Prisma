@@ -101,7 +101,14 @@ pub fn launch(job: &Job, quiet: bool) -> bool {
         c.arg("--quiet");
     }
     // Deixa a janela nova vir para a frente (a página está em foco; a agendada não rouba o foco).
-    c.spawn().map(|ch| quiet || unsafe { windows::Win32::UI::WindowsAndMessaging::AllowSetForegroundWindow(ch.id()) }.is_ok()).is_ok()
+    let Ok(ch) = c.spawn() else {
+        let _ = std::fs::remove_file(&spec);
+        return false;
+    };
+    if !quiet {
+        let _ = unsafe { windows::Win32::UI::WindowsAndMessaging::AllowSetForegroundWindow(ch.id()) };
+    }
+    true
 }
 
 fn load_history(d: &mut Data) {
@@ -136,11 +143,18 @@ pub fn tick(app: &mut App) {
     let now = copylist::now();
     if now != app.cp.checked {
         app.cp.checked = now;
-        let mut ran = Vec::new();
+        let (mut ran, mut failed) = (Vec::new(), Vec::new());
+        // Só marca como feita a lista que abriu: a que falhou tenta de novo no próximo minuto.
         for j in app.cp.jobs.iter_mut().filter(|j| copylist::due(j, now)) {
-            j.last = now;
-            launch(j, true);
-            ran.push(j.name.clone());
+            if launch(j, true) {
+                j.last = now;
+                ran.push(j.name.clone());
+            } else {
+                failed.push(j.name.clone());
+            }
+        }
+        if !failed.is_empty() {
+            app.log(&format!("cópia agendada não abriu: {}", failed.join(", ")));
         }
         if !ran.is_empty() {
             let _ = copylist::save_jobs(&copylist::jobs_path(), &app.cp.jobs);

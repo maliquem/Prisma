@@ -294,6 +294,10 @@ unsafe fn run(system: bool, pid: u32, mic: bool, stop: &AtomicBool, tx: &Sender<
             aac.encode(&pcm, pts, tx)?;
             produced += FRAME as i64;
         }
+        // O relógio do microfone anda um pouco mais rápido: sem o limite, a voz atrasa e a fila cresce.
+        if b.len() > FRAME * 2 * 8 {
+            b.drain(..b.len() - FRAME * 2 * 4);
+        }
     }
     if let Some(s) = &sys {
         let _ = s.client.Stop();

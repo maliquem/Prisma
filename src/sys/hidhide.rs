@@ -258,8 +258,20 @@ pub(crate) fn cached<T: Clone>(slot: &Mutex<Option<(std::time::Instant, T)>>, f:
 
 static LEDGER: Mutex<Option<(std::time::Instant, Ledger)>> = Mutex::new(None);
 
+/// None quando o arquivo existe e não abriu: gravar por cima dele perderia o que o Prisma escondeu.
+fn read_ledger() -> Option<Ledger> {
+    match std::fs::read_to_string(ledger_path()) {
+        Ok(s) => Some(Ledger::parse(&s)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Some(Ledger::default()),
+        Err(e) => {
+            eprintln!("hidhide: a anotação não abriu: {e}");
+            None
+        }
+    }
+}
+
 pub fn ledger() -> Ledger {
-    cached(&LEDGER, || Ledger::parse(&std::fs::read_to_string(ledger_path()).unwrap_or_default()))
+    cached(&LEDGER, || read_ledger().unwrap_or_default())
 }
 
 fn save(l: &Ledger) {
@@ -269,7 +281,9 @@ fn save(l: &Ledger) {
         let _ = std::fs::remove_file(p);
     } else {
         let _ = std::fs::create_dir_all(p.parent().unwrap_or(&p));
-        let _ = std::fs::write(p, l.text());
+        if let Err(e) = crate::config::write_safe(&p, l.text()) {
+            eprintln!("hidhide: a anotação não gravou: {e}");
+        }
     }
 }
 
@@ -375,7 +389,7 @@ fn touched(op: &str, before: &[String]) -> Vec<String> {
 
 /// `hide:<instância>`, `show:<instância>` ou `undo`.
 fn apply(d: &mut dyn Driver, op: &str) -> bool {
-    let mut lg = ledger();
+    let Some(mut lg) = read_ledger() else { return false };
     let before = lg.devs.clone();
     let r = match op.split_once(':') {
         Some(("hide", dev)) => match own_image() {
@@ -443,7 +457,7 @@ pub fn set_hidden(id: &str, on: bool) -> bool {
 
 /// Desfaz tudo o que o Prisma acrescentou. Também na abertura (o Prisma pode ter caído) e ao fechar.
 pub fn limpar() -> bool {
-    ledger().clean() || run("undo")
+    read_ledger().is_some_and(|l| l.clean()) || run("undo")
 }
 
 /// Trabalho fora da janela (a confirmação de administrador e a instalação esperam a pessoa).
@@ -480,9 +494,10 @@ pub fn install() -> Result<bool, &'static str> {
     let was = installed();
     let reboot = crate::sys::nefarius::HIDHIDE.install()?;
     if !was {
-        let mut lg = ledger();
-        lg.installed = true;
-        save(&lg);
+        if let Some(mut lg) = read_ledger() {
+            lg.installed = true;
+            save(&lg);
+        }
     }
     Ok(reboot)
 }
@@ -491,19 +506,21 @@ pub fn install() -> Result<bool, &'static str> {
 pub fn remove() -> Result<bool, &'static str> {
     let _ = limpar();
     let r = crate::sys::nefarius::HIDHIDE.uninstall()?;
-    let mut lg = ledger();
-    lg.installed = false;
-    save(&lg);
+    if let Some(mut lg) = read_ledger() {
+        lg.installed = false;
+        save(&lg);
+    }
     Ok(r)
 }
 
 /// Desinstalação do Prisma: tira o que ele acrescentou e remove o driver só se foi ele que instalou.
 pub fn uninstall() {
+    // Sem conseguir ler a anotação, ela fica: apagar perderia o que o Prisma escondeu.
+    let Some(mut lg) = read_ledger() else { return };
     if let Ok(mut d) = Device::open() {
-        let mut lg = ledger();
         let _ = undo(&mut d, &mut lg, &mut |_: &Ledger| {});
     }
-    if ledger().installed {
+    if lg.installed {
         if let Some((exe, args)) = crate::sys::nefarius::HIDHIDE.uninstall_command(true) {
             use std::os::windows::process::CommandExt;
             // `start /wait`: o msiexec é programa de janela e o cmd não esperaria por ele.
