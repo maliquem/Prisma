@@ -22,6 +22,7 @@ use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
+use crate::sys::is_link;
 use windows::core::*;
 use windows::Win32::Foundation::*;
 use windows::Win32::NetworkManagement::WindowsFirewall::*;
@@ -149,12 +150,6 @@ unsafe fn my_sid() -> Option<String> {
     let out = s.to_string().ok();
     let _ = LocalFree(Some(HLOCAL(s.0 as *mut _)));
     out
-}
-
-/// Junção ou atalho: o instalador, elevado, daria permissão e gravaria na pasta para onde ele aponta.
-pub(crate) fn is_link(p: &std::path::Path) -> bool {
-    use std::os::windows::fs::MetadataExt;
-    std::fs::symlink_metadata(p).is_ok_and(|m| m.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT.0 != 0)
 }
 
 /// O dono é o SYSTEM ou os administradores: não foi um programa comum que criou.

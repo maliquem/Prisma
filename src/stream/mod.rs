@@ -31,6 +31,7 @@ pub use opus::Decoder as OpusDecoder;
 pub use fec::Rx as FecRx;
 #[cfg(feature = "stream")]
 pub use net::{device_rows, forget_device, me, net_path, presence_keep, presence_of, revoke_invite, set_device, wake_device, wake_note, DeviceRow, Presence, CODE_FAIL, CODE_LINE, CODE_OK, EXPIRES_LINE, INVITE_MINUTES};
+#[cfg(feature = "stream")]
 pub use net::unix_now;
 pub(crate) mod pads;
 mod screen;

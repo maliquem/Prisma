@@ -807,7 +807,6 @@ impl Drop for WaveDecoder {
 /// da imagem pronta no D3D11 até os pacotes, e dos pacotes até a imagem pronta de novo, contra o
 /// NVENC e o Media Foundation (AV1 e HEVC) com os mesmos quadros. A imagem rola um pouco a cada
 /// quadro, para o NVENC não ganhar de graça com a tela parada. Não captura a tela nem abre rede.
-#[cfg(any(debug_assertions, feature = "stream"))]
 pub fn bench(arg: &str) {
     let mut parts = arg.split('|');
     let out = parts.next().filter(|s| !s.is_empty()).unwrap_or("pyrowave.txt").to_string();
@@ -831,10 +830,8 @@ pub fn bench(arg: &str) {
     }
 }
 
-#[cfg(any(debug_assertions, feature = "stream"))]
 struct Series(Vec<f64>);
 
-#[cfg(any(debug_assertions, feature = "stream"))]
 impl Series {
     fn line(&mut self, name: &str) -> String {
         if self.0.is_empty() {
@@ -847,7 +844,6 @@ impl Series {
     }
 }
 
-#[cfg(any(debug_assertions, feature = "stream"))]
 unsafe fn bench_run(secs: u32, image: &str, vf: VideoFmt) -> Result<String> {
     use std::fmt::Write as _;
     use std::time::{Duration, Instant};
