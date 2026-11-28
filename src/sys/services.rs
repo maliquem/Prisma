@@ -204,9 +204,8 @@ mod props {
         crate::sys::procs::all_windows()
     }
 
-    #[cfg(debug_assertions)]
-    pub fn frames() -> Vec<isize> {
-        tops().into_iter().filter(|h| class_of(*h) == "MMCMainFrame").map(|h| h.0 as isize).collect()
+    pub fn frames() -> impl Iterator<Item = HWND> {
+        tops().into_iter().filter(|h| class_of(*h) == "MMCMainFrame")
     }
 
     fn list_in(frame: HWND) -> Option<HWND> {
@@ -273,7 +272,7 @@ mod props {
             if t0.elapsed() > Duration::from_secs(15) {
                 return Err("a janela Serviços não apareceu");
             }
-            if let Some(f) = tops().into_iter().find(|h| class_of(*h) == "MMCMainFrame" && crate::sys::procs::window_pid(*h) == pid) {
+            if let Some(f) = frames().find(|h| crate::sys::procs::window_pid(*h) == pid) {
                 break f;
             }
             std::thread::sleep(Duration::from_millis(100));
@@ -347,7 +346,7 @@ pub fn console_dump(frame: isize) -> Vec<String> {
 
 #[cfg(debug_assertions)]
 pub fn console_windows() -> Vec<isize> {
-    props::frames()
+    props::frames().map(|h| h.0 as isize).collect()
 }
 
 #[cfg(debug_assertions)]

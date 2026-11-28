@@ -11,6 +11,8 @@ use windows::Win32::Globalization::*;
 
 use super::disks::Level;
 
+/// Medido no Windows 11, com a saída em cano: o netsh escreve em UTF-8, o chkdsk e o pnputil em ANSI
+/// e o ipconfig em OEM. Ser de console não diz a página: medir antes de trocar.
 #[derive(Clone, Copy, PartialEq)]
 pub enum Enc {
     Oem,

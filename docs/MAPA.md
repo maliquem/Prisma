@@ -372,8 +372,8 @@ A barra lateral é `NAV` (`src/pages/mod.rs:381`), em cinco grupos (`GROUPS` `:4
 |---|---|---|---|
 | Listar serviços do Windows | Página | `sys/services.rs:54` `list`; `:104` `details` | |
 | Iniciar, parar ou reiniciar | Botões (com pergunta) | `sys/services.rs:145` `control`; `pages/services.rs:6` `run_action`; `:19` `ask_action` | `select_service` `app.rs:2089`. |
-| Abrir propriedades nativas | Botão | `sys/services.rs:169` `open_native`; `:328` `open_properties`; `:336` `show_properties` | A janela se acha pelo processo do `mmc` que o Prisma abriu (`CONSOLE` em `mod props`), não pelo título, que muda com o idioma. |
-| Fechar janelas de console | Botão | `sys/services.rs:354` `close_consoles` | |
+| Abrir propriedades nativas | Botão | `sys/services.rs:169` `open_native`; `:327` `open_properties`; `:335` `show_properties` | A janela se acha pelo processo do `mmc` que o Prisma abriu (`CONSOLE` em `mod props`), não pelo título, que muda com o idioma. |
+| Fechar janelas de console | Botão | `sys/services.rs:353` `close_consoles` | |
 
 ### 4.8 Desinstalar (`src/pages/uninstall.rs`, `draw` linha 7)
 
@@ -402,8 +402,8 @@ A barra lateral é `NAV` (`src/pages/mod.rs:381`), em cinco grupos (`GROUPS` `:4
 
 | Função | Como é chamada | Onde no código | Observações |
 |---|---|---|---|
-| Rodar uma ferramenta (SFC, DISM, limpeza etc.) | Botão | `sys/tools.rs:165` `start`; `:52` `cmd`; `:59` `native`; `:207` `simple` | Pede administrador: `pages/tools.rs:95` `elevate_needed`. |
-| Ver o resultado | Página | `app.rs:2042` `tool_log`; `app.rs:2046` `tool_busy`; `sys/tools.rs:233` `sfc_verdict`; `:257` `read_cbs` | Saída decodificada em `decode` `sys/tools.rs:22`, por linhas inteiras; `Enc::Utf8` cai na página OEM se não for UTF-8. |
+| Rodar uma ferramenta (SFC, DISM, limpeza etc.) | Botão | `sys/tools.rs:167` `start`; `:54` `cmd`; `:61` `native`; `:209` `simple` | Pede administrador: `pages/tools.rs:95` `elevate_needed`. |
+| Ver o resultado | Página | `app.rs:2042` `tool_log`; `app.rs:2046` `tool_busy`; `sys/tools.rs:235` `sfc_verdict`; `:259` `read_cbs` | Saída decodificada em `decode` `sys/tools.rs:24`, por linhas inteiras; `Enc::Utf8` cai na página OEM se não for UTF-8. |
 | Escolher pasta da ferramenta | Botão | `pick_tool_folder` `app.rs:1977` | |
 | Plano de execução | Automático | `pages/tools.rs:99` `plan` | |
 | Teste | `--test-tools=` | `app.rs:810`; `selftest.rs:189` `toolrun` | |
