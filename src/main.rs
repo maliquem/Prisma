@@ -5,6 +5,7 @@ mod capture;
 mod config;
 mod games;
 mod crash;
+mod erase;
 mod hdr_menu;
 mod i18n;
 mod link;
@@ -101,6 +102,10 @@ fn main() {
     }
     // "Colar com o Prisma" do botão direito do Explorer: a janela de cópia, também sem o nome único.
     if paste::run_args() {
+        return;
+    }
+    // Shift+Del do Prisma (--erase) e a cópia de administrador dele, também sem o nome único.
+    if erase::run_args() {
         return;
     }
     // Motor de shaders (--shader-profile) e prévia (--shader-preview), também sem o nome único.

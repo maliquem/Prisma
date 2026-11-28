@@ -20,6 +20,9 @@ pub struct Data {
     pub tab: usize,
     pub history: Vec<Record>,
     stamp: Option<std::time::SystemTime>,
+    /// O que o Shift+Del do Prisma apagou, só para ler.
+    pub erased: Vec<crate::sys::erase::Erased>,
+    erased_stamp: Option<std::time::SystemTime>,
     pub search: String,
     pub jobs: Vec<Job>,
     loaded: bool,
@@ -118,6 +121,31 @@ fn load_history(d: &mut Data) {
         d.stamp = stamp;
         d.history = copylist::load_history(&path);
     }
+    // Enquanto uma exclusão grava, o arquivo está trancado: fica a lista de antes e tenta de novo.
+    let path = crate::sys::erase::history_path();
+    let stamp = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
+    if stamp != d.erased_stamp {
+        if let Some(v) = crate::sys::erase::load(&path) {
+            d.erased = v;
+            d.erased_stamp = stamp;
+        }
+    }
+}
+
+/// Foto de teste (`--test-page=copies-erased`): a aba Excluídos com três exclusões de exemplo.
+#[cfg(debug_assertions)]
+pub fn test_erased(d: &mut Data) {
+    use crate::sys::erase::Erased;
+    let path = crate::sys::erase::history_path();
+    d.erased_stamp = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
+    d.tab = 2;
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |t| t.as_secs() as i64);
+    let item = |s: &str| s.to_string();
+    d.erased = vec![
+        Erased { at: now - 60, files: 12_344, bytes: 3_650_000_000, pending: 1, errors: 0, plan_b: true, items: vec![item(r"D:\Programas\WindowsApps antigo")] },
+        Erased { at: now - 3_600, files: 3, bytes: 52_000_000, pending: 0, errors: 2, plan_b: false, items: vec![item(r"C:\Users\a\Downloads\video.mkv"), item(r"C:\Users\a\Downloads\b.zip"), item(r"C:\Users\a\Downloads\c.iso")] },
+        Erased { at: now - 90_000, files: 45_210, bytes: 18_400_000_000, pending: 0, errors: 0, plan_b: false, items: vec![item(r"E:\Jogos\Jogo velho com nome bem comprido para ver o corte")] },
+    ];
 }
 
 /// Sem conseguir ler o arquivo, `loaded` fica falso: tenta de novo no próximo segundo e nada grava
@@ -162,9 +190,9 @@ pub fn tick(app: &mut App) {
         }
     }
     if app.page == Page::Copies {
-        let before = app.cp.stamp;
+        let before = (app.cp.stamp, app.cp.erased_stamp);
         load_history(&mut app.cp);
-        if app.cp.stamp != before {
+        if (app.cp.stamp, app.cp.erased_stamp) != before {
             app.invalidate();
         }
     }
@@ -206,16 +234,79 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     let x = a.x + 28.0;
     tabs(ui, x, 88.0, &mut app.cp.tab);
     let body = rect(x, 136.0, a.w - 56.0, a.h - 136.0 - 20.0 - 44.0);
-    if app.cp.tab == 0 {
-        history(ui, app, body);
-    } else {
-        lists(ui, app, body);
+    match app.cp.tab {
+        0 => history(ui, app, body),
+        2 => erased(ui, app, body),
+        _ => lists(ui, app, body),
     }
-    super::adjust::paste_key_check(ui, app, rect(x, body.bottom() + 8.0, body.w, 32.0));
+    let half = body.w / 2.0;
+    super::adjust::paste_key_check(ui, app, rect(x, body.bottom() + 8.0, half - 8.0, 32.0));
+    super::adjust::del_key_check(ui, app, rect(x + half, body.bottom() + 8.0, half, 32.0));
 }
 
 fn tabs(ui: &mut Ui, x: f32, y: f32, sel: &mut usize) {
-    ui.tabs("cp-tab", x, y, &["Histórico", "Listas de cópia"].map(tr), sel, true, None);
+    ui.tabs("cp-tab", x, y, &["Histórico", "Listas de cópia", "Excluídos"].map(tr), sel, true, None);
+}
+
+/// O que o Shift+Del do Prisma apagou: só o registro, sem desfazer (não tem volta).
+fn erased(ui: &mut Ui, app: &mut App, b: Rect) {
+    let l = rect(b.x, b.y, b.w, b.h - 52.0);
+    ui.card(l);
+    if app.cp.erased.is_empty() {
+        ui.c.text_wrap(rect(l.x + 20.0, l.y + 20.0, l.w - 40.0, 60.0), "Nada apagado pelo Shift+Del do Prisma ainda.", 14.0, MUTED, Weight::Regular);
+    }
+    let list = l.inset(8.0);
+    ui.begin_scroll("cp-erased", list, app.cp.erased.len() as f32 * ROW);
+    let wide = list.w - 150.0 - 120.0 - 150.0;
+    for (n, rec) in app.cp.erased.iter().enumerate() {
+        let y = list.y + n as f32 * ROW;
+        if y - ui.scroll_y() + ROW < list.y || y - ui.scroll_y() > list.bottom() {
+            continue;
+        }
+        let r = rect(list.x, y, list.w, ROW - 2.0);
+        if ui.is_hover(r) {
+            ui.c.round(r, 8.0, CARD2);
+        }
+        ui.c.text_raw(rect(r.x + 12.0, y + 8.0, 128.0, 20.0), &date(rec.at), 13.0, TEXT2, Align::Left, Weight::Regular);
+        ui.c.text(rect(r.x + 12.0, y + 28.0, 128.0, 18.0), "Apagado para sempre", 12.0, MUTED, Align::Left, Weight::Regular);
+        let first = rec.items.first().map(std::path::Path::new);
+        let name = first.and_then(|p| p.file_name()).map_or(String::new(), |n| n.to_string_lossy().into_owned());
+        let name = if rec.items.len() > 1 { tr(&format!("{} e mais {}", name, rec.items.len() - 1)).into_owned() } else { name };
+        let parent = first.and_then(|p| p.parent()).map_or(String::new(), |p| p.display().to_string());
+        let fx = r.x + 150.0;
+        ui.c.text_raw(rect(fx, y + 8.0, wide, 20.0), &name, 14.0, TEXT, Align::Left, Weight::Regular);
+        ui.c.text_raw(rect(fx, y + 28.0, wide, 18.0), &parent, 12.0, MUTED, Align::Left, Weight::Regular);
+        let sx = fx + wide + 10.0;
+        ui.c.text_raw(rect(sx, y + 8.0, 110.0, 20.0), &crate::paste::size_text(rec.bytes), 13.0, TEXT2, Align::Right, Weight::Regular);
+        ui.c.text_raw(rect(sx, y + 28.0, 110.0, 18.0), &tr(&format!("{} arquivos", rec.files)), 12.0, MUTED, Align::Right, Weight::Regular);
+        let (label, col) = if rec.pending > 0 {
+            (tr(&format!("{} no reinício", rec.pending)).into_owned(), WARN)
+        } else if rec.errors == 1 {
+            (tr("1 erro").into_owned(), WARN)
+        } else if rec.errors > 1 {
+            (tr(&format!("{} erros", rec.errors)).into_owned(), WARN)
+        } else {
+            (tr("Apagado").into_owned(), ACCENT)
+        };
+        let cw = (measure(&label, 12.0, Weight::Semibold, None).0 + 20.0).min(140.0);
+        let chip = rect(sx + 120.0 + (140.0 - cw) / 2.0, y + 15.0, cw, 24.0);
+        ui.c.round(chip, 12.0, col.alpha(0.16));
+        ui.c.text_fit(chip.inset_xy(6.0, 0.0), &label, 12.0, col, Align::Center, Weight::Semibold);
+        // Na dica: o que foi escolhido, o que ficou para o reinício e se precisou do plano B.
+        let mut tip: Vec<String> = rec.items.iter().take(8).cloned().collect();
+        if rec.items.len() > 8 {
+            tip.push(tr(&format!("e mais {}", rec.items.len() - 8)).into_owned());
+        }
+        if rec.pending > 0 {
+            tip.push(tr(&format!("{} itens ficaram para o próximo reinício", rec.pending)).into_owned());
+        }
+        if rec.plan_b {
+            tip.push(tr("Usou o plano B (takeown e icacls)").into_owned());
+        }
+        ui.tip(r, &tip.join("\n"));
+    }
+    ui.end_scroll();
+    ui.c.text(rect(b.x + 4.0, l.bottom() + 12.0, b.w, 40.0), "Só o registro do que o Shift+Del do Prisma apagou: não passa pela Lixeira e não tem volta. Guarda as últimas 500.", 13.0, MUTED, Align::Left, Weight::Regular);
 }
 
 fn result_chip(r: &Record) -> (String, Color) {

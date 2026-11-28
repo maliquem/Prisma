@@ -3347,3 +3347,36 @@ Cursor local: o mouse anda na hora, mesmo com latência alta	Local cursor: the m
 O outro PC manda o formato do cursor e para de desenhá-lo no vídeo; este PC desenha com o próprio mouse. Quando o jogo esconde o cursor ou o prende na janela, volta ao normal. Só vale com uma pessoa só assistindo.	The other PC sends the cursor's shape and stops drawing it in the video; this PC draws it with its own mouse. When the game hides the cursor or locks it to its window, it goes back to normal. Only applies with a single person watching.
 Mouse relativo nos jogos: a câmera gira sem bater na borda	Relative mouse in games: the camera turns without hitting the edge
 Quando um jogo do outro PC esconde e prende o cursor (tiro, câmera em terceira pessoa), este PC manda só o quanto o mouse andou, como no Parsec. Fora disso, o mouse vai como sempre. O outro PC precisa estar nesta versão.	When a game on the other PC hides and locks the cursor (shooters, third-person camera), this PC sends only how far the mouse moved, like Parsec. Otherwise the mouse works as usual. The other PC must run this version.
+Raiz de disco	Disk root
+Pasta do Windows ou do Prisma	Windows or Prisma folder
+Pasta do sistema	System folder
+Apagar para sempre?	Delete permanently?
+Pedindo permissão de administrador…	Asking for administrator permission…
+Apagado	Deleted
+Apagado, com {} erros	Deleted, with {} errors
+Apagando…	Deleting…
+1 arquivo	1 file
+Tomando posse de {}	Taking ownership of {}
+Dando permissão em {}	Granting permission on {}
+Plano B (takeown e icacls) em {}	Plan B (takeown and icacls) on {}
+Contando… {}	Counting… {}
+Não passa pela Lixeira e não tem volta.	It doesn't go through the Recycle Bin and can't be undone.
+Como administrador, passa por cima das permissões.	As administrator, it overrides permissions.
+O que o Windows negar pede a permissão de administrador.	Anything Windows denies asks for administrator permission.
+1 item fica para o próximo reinício	1 item is left for the next restart
+{} itens ficam para o próximo reinício	{} items are left for the next restart
+Usou o plano B (takeown e icacls)	Used plan B (takeown and icacls)
+Ficam de fora	Left out
+Apagar para sempre	Delete permanently
+Shift+Del do Prisma	Prisma's Shift+Del
+Shift+Del nas pastas do Explorer apaga pelo Prisma	Shift+Del in Explorer folders deletes through Prisma
+Apagar para sempre com o Shift+Del?	Delete permanently with Shift+Del?
+Com o Prisma aberto, o Shift+Del nas pastas do Explorer e na Área de Trabalho apaga pelo Prisma, mais rápido que o Windows. Não passa pela Lixeira e não tem como recuperar. Como administrador, passa por cima das permissões, até em pastas como WindowsApps. Cada Shift+Del pede confirmação antes. O Del comum continua mandando para a Lixeira. Dá para desligar em Configurações ou em Cópias a qualquer hora.	With Prisma open, Shift+Del in Explorer folders and on the Desktop deletes through Prisma, faster than Windows. It doesn't go through the Recycle Bin and can't be recovered. As administrator, it overrides permissions, even in folders like WindowsApps. Each Shift+Del asks for confirmation first. Plain Del still sends items to the Recycle Bin. You can turn this off in Settings or in Copies at any time.
+Excluídos	Deleted
+Nada apagado pelo Shift+Del do Prisma ainda.	Nothing deleted by Prisma's Shift+Del yet.
+Apagado para sempre	Permanently deleted
+{} no reinício	{} on restart
+{} itens ficaram para o próximo reinício	{} items were left for the next restart
+Só o registro do que o Shift+Del do Prisma apagou: não passa pela Lixeira e não tem volta. Guarda as últimas 500.	Only a record of what Prisma's Shift+Del deleted: it doesn't go through the Recycle Bin and can't be undone. Keeps the last 500.
+Com o Prisma aberto, o Shift+Del nas pastas do Explorer apaga para sempre, mais rápido que o Windows e sem a Lixeira. Cada vez pede confirmação.	With Prisma open, Shift+Del in Explorer folders deletes permanently, faster than Windows and without the Recycle Bin. It asks for confirmation each time.
+Não passa pela Lixeira e não tem como recuperar. Como administrador, passa por cima das permissões. O Del comum continua mandando para a Lixeira.	It doesn't go through the Recycle Bin and can't be recovered. As administrator, it overrides permissions. Plain Del still sends items to the Recycle Bin.

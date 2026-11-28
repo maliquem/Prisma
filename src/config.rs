@@ -554,6 +554,8 @@ pub struct Config {
     pub tm_hook: bool,
     /// Ctrl+V nas pastas do Explorer cola pela janela de cópia do Prisma (desligado até a pessoa ligar).
     pub paste_key: bool,
+    /// Shift+Del nas pastas do Explorer apaga para sempre pelo Prisma.
+    pub del_key: bool,
 }
 
 impl Default for Config {
@@ -718,6 +720,7 @@ impl Default for Config {
             un_silent: true,
             tm_hook: false,
             paste_key: false,
+            del_key: false,
         }
     }
 }
@@ -1114,6 +1117,7 @@ impl Config {
                 "un_silent" => c.un_silent = b,
                 "tm_hook" => c.tm_hook = b,
                 "paste_key" => c.paste_key = b,
+                "del_key" => c.del_key = b,
                 _ => {}
             }
         }
@@ -1341,6 +1345,7 @@ impl Config {
         let _ = writeln!(s, "un_silent={}", b(self.un_silent));
         let _ = writeln!(s, "tm_hook={}", b(self.tm_hook));
         let _ = writeln!(s, "paste_key={}", b(self.paste_key));
+        let _ = writeln!(s, "del_key={}", b(self.del_key));
         s
     }
 

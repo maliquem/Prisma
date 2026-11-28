@@ -721,9 +721,21 @@ pub fn clear_clipboard(items: &[PathBuf]) {
 /// está em foco (não a barra de endereço nem um nome sendo editado) e há arquivos copiados.
 /// Chamado de dentro do gancho de teclado: só perguntas rápidas ao Windows.
 pub fn explorer_paste_target() -> Option<windows::Win32::Foundation::HWND> {
-    use windows::Win32::Foundation::HWND;
     use windows::Win32::System::DataExchange::IsClipboardFormatAvailable;
     use windows::Win32::System::Ole::CF_HDROP;
+    let focus = explorer_list_focus(false)?;
+    unsafe { IsClipboardFormatAvailable(CF_HDROP.0 as u32) }.ok()?;
+    Some(focus)
+}
+
+/// Shift+Del: a lista de arquivos em foco numa pasta do Explorer ou na Área de Trabalho. Um nome
+/// sendo editado, a barra de endereço e a pesquisa têm o foco numa caixa de texto e ficam com o Windows.
+pub fn explorer_del_target() -> Option<windows::Win32::Foundation::HWND> {
+    explorer_list_focus(true)
+}
+
+fn explorer_list_focus(desktop: bool) -> Option<windows::Win32::Foundation::HWND> {
+    use windows::Win32::Foundation::HWND;
     use windows::Win32::UI::WindowsAndMessaging::*;
     let class = |h: HWND| {
         let mut b = [0u16; 64];
@@ -732,33 +744,41 @@ pub fn explorer_paste_target() -> Option<windows::Win32::Foundation::HWND> {
     };
     unsafe {
         let fg = GetForegroundWindow();
-        if class(fg) != "CabinetWClass" {
+        let top = class(fg);
+        if top != "CabinetWClass" && !(desktop && (top == "Progman" || top == "WorkerW")) {
             return None;
         }
         let mut gi = GUITHREADINFO { cbSize: std::mem::size_of::<GUITHREADINFO>() as u32, ..Default::default() };
         GetGUIThreadInfo(GetWindowThreadProcessId(fg, None), &mut gi).ok()?;
         let focus = gi.hwndFocus;
-        if focus.is_invalid() || class(focus) != "DirectUIHWND" || class(GetParent(focus).ok()?) != "SHELLDLL_DefView" {
+        // Na Área de Trabalho a lista ainda é a antiga (SysListView32).
+        let list = class(focus);
+        if focus.is_invalid() || !(list == "DirectUIHWND" || (desktop && list == "SysListView32")) || class(GetParent(focus).ok()?) != "SHELLDLL_DefView" {
             return None;
         }
-        IsClipboardFormatAvailable(CF_HDROP.0 as u32).ok()?;
         Some(focus)
     }
 }
 
 /// Manda o Ctrl+V de volta para o Explorer, como tecla enviada por programa (o gancho deixa passar).
 pub fn send_paste() {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{VK_CONTROL, VK_V};
+    send_keys(VK_CONTROL, VK_V);
+}
+
+/// Manda `modifier` + `vk` como tecla enviada por programa. Com o modificador ainda segurado, só a
+/// tecla; senão ele vai junto e é solto no fim.
+pub fn send_keys(modifier: windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY, vk: windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY) {
     use windows::Win32::UI::Input::KeyboardAndMouse::*;
     let key = |vk: VIRTUAL_KEY, up: bool| INPUT {
         r#type: INPUT_KEYBOARD,
         Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: vk, dwFlags: if up { KEYEVENTF_KEYUP } else { KEYBD_EVENT_FLAGS(0) }, ..Default::default() } },
     };
-    // Com o Ctrl ainda segurado, só o V; senão o Ctrl vai junto e é solto no fim.
-    let held = unsafe { GetAsyncKeyState(VK_CONTROL.0 as i32) } as u16 & 0x8000 != 0;
+    let held = unsafe { GetAsyncKeyState(modifier.0 as i32) } as u16 & 0x8000 != 0;
     let list: Vec<INPUT> = if held {
-        vec![key(VK_V, false), key(VK_V, true)]
+        vec![key(vk, false), key(vk, true)]
     } else {
-        vec![key(VK_CONTROL, false), key(VK_V, false), key(VK_V, true), key(VK_CONTROL, true)]
+        vec![key(modifier, false), key(vk, false), key(vk, true), key(modifier, true)]
     };
     unsafe {
         SendInput(&list, std::mem::size_of::<INPUT>() as i32);
@@ -767,6 +787,22 @@ pub fn send_paste() {
 
 /// A pasta aberta na aba do Explorer que contém `focus` (as abas do Windows 11 dividem a janela).
 pub fn explorer_folder(focus: windows::Win32::Foundation::HWND) -> Option<PathBuf> {
+    use windows::Win32::System::Com::CoTaskMemFree;
+    use windows::Win32::UI::Shell::*;
+    unsafe {
+        let folder: IPersistFolder2 = folder_view(focus)?.GetFolder().ok()?;
+        let pidl = folder.GetCurFolder().ok()?;
+        let name = SHGetNameFromIDList(pidl, SIGDN_FILESYSPATH);
+        CoTaskMemFree(Some(pidl as *const _));
+        let name = name.ok()?;
+        let path = name.to_string().ok();
+        CoTaskMemFree(Some(name.0 as *const _));
+        path.map(PathBuf::from)
+    }
+}
+
+/// A lista de arquivos da aba do Explorer (ou da Área de Trabalho) que contém `focus`.
+fn folder_view(focus: windows::Win32::Foundation::HWND) -> Option<windows::Win32::UI::Shell::IFolderView> {
     use windows::core::Interface;
     use windows::Win32::System::Com::*;
     use windows::Win32::System::Variant::VARIANT;
@@ -774,25 +810,52 @@ pub fn explorer_folder(focus: windows::Win32::Foundation::HWND) -> Option<PathBu
     use windows::Win32::UI::WindowsAndMessaging::IsChild;
     unsafe {
         let windows: IShellWindows = CoCreateInstance(&ShellWindows, None, CLSCTX_ALL).ok()?;
+        let view = |browser: IShellBrowser| -> Option<IFolderView> { browser.QueryActiveShellView().ok()?.cast().ok() };
         for i in 0..windows.Count().ok()? {
             let Ok(disp) = windows.Item(&VARIANT::from(i)) else { continue };
             let Ok(sp) = disp.cast::<IServiceProvider>() else { continue };
             let Ok(browser) = sp.QueryService::<IShellBrowser>(&SID_STopLevelBrowser) else { continue };
             let Ok(tab) = browser.GetWindow() else { continue };
-            if tab != focus && !IsChild(tab, focus).as_bool() {
-                continue;
+            if tab == focus || IsChild(tab, focus).as_bool() {
+                return view(browser);
             }
-            let view: IFolderView = browser.QueryActiveShellView().ok()?.cast().ok()?;
-            let folder: IPersistFolder2 = view.GetFolder().ok()?;
-            let pidl = folder.GetCurFolder().ok()?;
-            let name = SHGetNameFromIDList(pidl, SIGDN_FILESYSPATH);
-            CoTaskMemFree(Some(pidl as *const _));
-            let name = name.ok()?;
+        }
+        // A Área de Trabalho não está na lista das janelas: pede ela à parte.
+        let mut hwnd = 0;
+        let disp = windows.FindWindowSW(&VARIANT::from(CSIDL_DESKTOP as i32), &VARIANT::default(), SWC_DESKTOP, &mut hwnd, SWFO_NEEDDISPATCH).ok()?;
+        let browser = disp.cast::<IServiceProvider>().ok()?.QueryService::<IShellBrowser>(&SID_STopLevelBrowser).ok()?;
+        let tab = browser.GetWindow().ok()?;
+        if tab == focus || IsChild(tab, focus).as_bool() {
+            view(browser)
+        } else {
+            None
+        }
+    }
+}
+
+/// Os itens escolhidos na lista que contém `focus`, se todos são arquivos ou pastas de verdade e a
+/// pasta aberta é uma pasta do disco. Lixeira, bibliotecas, resultados de pesquisa, dentro de um .zip
+/// e celular (MTP) dão None e ficam com o Windows.
+pub fn explorer_selection(focus: windows::Win32::Foundation::HWND) -> Option<Vec<PathBuf>> {
+    use windows::Win32::System::Com::CoTaskMemFree;
+    use windows::Win32::UI::Shell::*;
+    let dir = explorer_folder(focus)?;
+    // Um .zip aberto tem caminho, mas é um arquivo.
+    if !std::fs::metadata(&dir).is_ok_and(|m| m.is_dir()) {
+        return None;
+    }
+    unsafe {
+        let items: IShellItemArray = folder_view(focus)?.Items(SVGIO_SELECTION).ok()?;
+        let mut out = Vec::new();
+        for i in 0..items.GetCount().ok()? {
+            let name = items.GetItemAt(i).ok()?.GetDisplayName(SIGDN_FILESYSPATH).ok()?;
             let path = name.to_string().ok();
             CoTaskMemFree(Some(name.0 as *const _));
-            return path.map(PathBuf::from);
+            let path = PathBuf::from(path?);
+            std::fs::symlink_metadata(&path).ok()?;
+            out.push(path);
         }
-        None
+        (!out.is_empty()).then_some(out)
     }
 }
 

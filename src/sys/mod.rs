@@ -48,6 +48,7 @@ pub mod quick;
 pub mod cmds;
 pub mod copy;
 pub mod copylist;
+pub mod erase;
 pub mod reg;
 pub mod shellmenu;
 pub mod services;

@@ -1,4 +1,4 @@
-//! Boas-vindas: três escolhas marcadas por padrão e a da cópia desmarcada, aplicadas de uma vez só;
+//! Boas-vindas: três escolhas marcadas por padrão e as da cópia e do Shift+Del desmarcadas, aplicadas de uma vez só;
 //! depois, a lista de funções (todas ligadas), que vale na hora.
 
 use super::*;
@@ -14,6 +14,8 @@ pub struct Choices {
     pub taskmgr: bool,
     /// Substituir a cópia do Windows (Ctrl+V do Explorer); começa desmarcada.
     pub paste: bool,
+    /// Shift+Del do Prisma (apaga para sempre); começa desmarcada e só marca depois do aviso.
+    pub del: bool,
     /// Não mostrar novamente.
     pub hide: bool,
     /// Segundo passo: a lista de funções.
@@ -22,7 +24,7 @@ pub struct Choices {
 
 impl Choices {
     pub fn new() -> Self {
-        Self { install: true, admin: true, taskmgr: true, paste: false, hide: true, funcs: false }
+        Self { install: true, admin: true, taskmgr: true, paste: false, del: false, hide: true, funcs: false }
     }
 }
 
@@ -61,6 +63,10 @@ fn finish(ui: &mut Ui, app: &mut App, c: Choices) {
     if paste != app.cfg.paste_key {
         app.set_paste_key(paste);
     }
+    let del = paste_after(c.del, app.cfg.del_key);
+    if del != app.cfg.del_key {
+        app.set_del_key(del);
+    }
     let install = c.install && !app.installed;
     // A troca só aponta para a cópia instalada: veja `startup::replace_taskmgr_with`.
     let taskmgr = c.taskmgr && !app.replaces_tm && (install || app.installed);
@@ -79,7 +85,7 @@ pub fn draw(ui: &mut Ui, app: &mut App, full: Rect) {
     }
     let w = W.min(full.w - 48.0);
     let x = (full.w - w) / 2.0;
-    let total = 574.0;
+    let total = 668.0;
     let mut y = ((full.h - total) / 2.0).max(16.0);
 
     ui.c.icon(x, y + 4.0, 30.0, &[&[(12., 3.), (3., 20.), (21., 20.), (12., 3.)], &[(12., 3.), (12., 20.)]], ACCENT);
@@ -113,7 +119,18 @@ pub fn draw(ui: &mut Ui, app: &mut App, full: Rect) {
     row(ui, "w-admin", rect(x, y + step, w, ROW), "Dar permissão de administrador", admin_note, &mut c.admin, app.cfg.always_admin, false);
     row(ui, "w-tm", rect(x, y + step * 2.0, w, ROW), "Substituir o Gerenciador de Tarefas", tm_note, &mut c.taskmgr, app.replaces_tm, tm_locked);
     row(ui, "w-paste", rect(x, y + step * 3.0, w, ROW), "Substituir a cópia do Windows", "Com o Prisma aberto, o Ctrl+V nas pastas do Explorer cola pela janela de cópia do Prisma. Arrastar com o mouse continua com o Windows.", &mut c.paste, app.cfg.paste_key, false);
-    y += step * 4.0 + 4.0;
+    // Marcar pergunta antes, com o aviso de que não tem volta.
+    let mut del = c.del;
+    row(ui, "w-del", rect(x, y + step * 4.0, w, ROW), "Shift+Del do Prisma", "Com o Prisma aberto, o Shift+Del nas pastas do Explorer apaga para sempre, mais rápido que o Windows e sem a Lixeira. Cada vez pede confirmação.", &mut del, app.cfg.del_key, false);
+    if del && !c.del {
+        ui.ask("w-del-on", "Apagar para sempre com o Shift+Del?", "Não passa pela Lixeira e não tem como recuperar. Como administrador, passa por cima das permissões. O Del comum continua mandando para a Lixeira.");
+    } else {
+        c.del = del;
+    }
+    if ui.answered("w-del-on") {
+        c.del = true;
+    }
+    y += step * 5.0 + 4.0;
 
     ui.check("w-hide", rect(x, y, 220.0, 44.0), "Não mostrar novamente", &mut c.hide);
     let go = rect(x + w - 150.0, y, 150.0, 44.0);
@@ -156,6 +173,7 @@ mod tests {
     #[test]
     fn paste_starts_off_and_welcome_never_turns_it_off() {
         assert!(!Choices::new().paste);
+        assert!(!Choices::new().del);
         assert!(!paste_after(false, false));
         assert!(paste_after(true, false));
         assert!(paste_after(false, true));

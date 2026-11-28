@@ -78,6 +78,8 @@ const WM_PICK_RADIAL: u32 = WM_APP + 97;
 pub const WM_PICK_COPY: u32 = WM_APP + 98;
 /// Ctrl+V numa pasta do Explorer (`PASTE_HOOK`); `lparam` é o controle em foco.
 const WM_PASTE_KEY: u32 = WM_APP + 99;
+/// Shift+Del numa pasta do Explorer ou na Área de Trabalho (`DEL_HOOK`); `lparam` é o controle em foco.
+const WM_DEL_KEY: u32 = WM_APP + 108;
 /// Escolher o .exe de um atalho da página Atalhos; WPARAM é o atalho.
 const WM_PICK_RUN: u32 = WM_APP + 100;
 /// Janelas da página Shaders; o WPARAM diz qual (`pages::shaders::PICK_*`).
@@ -113,6 +115,8 @@ static TM_HELD: AtomicBool = AtomicBool::new(false);
 /// Ctrl+V nas pastas do Explorer vai para a janela de cópia do Prisma.
 static PASTE_HOOK: AtomicBool = AtomicBool::new(false);
 static PASTE_HELD: AtomicBool = AtomicBool::new(false);
+static DEL_HOOK: AtomicBool = AtomicBool::new(false);
+static DEL_HELD: AtomicBool = AtomicBool::new(false);
 
 fn apply_route(pid: u32, a: &crate::config::SndApp) -> bool {
     audio::set_route(pid, false, &a.output) && audio::set_route(pid, true, &a.input)
@@ -163,6 +167,20 @@ unsafe extern "system" fn key_hook(code: i32, w: WPARAM, l: LPARAM) -> LRESULT {
                     if !PASTE_HELD.swap(true, Ordering::Relaxed) {
                         let hub = HWND(FORCE_HUB.load(Ordering::Relaxed) as *mut _);
                         let _ = PostMessageW(Some(hub), WM_PASTE_KEY, WPARAM(0), LPARAM(focus.0 as isize));
+                    }
+                    return LRESULT(1);
+                }
+            }
+        }
+        if vk == VK_DELETE.0 as u32 && !injected && DEL_HOOK.load(Ordering::Relaxed) {
+            let press = w.0 as u32 == WM_KEYDOWN || w.0 as u32 == WM_SYSKEYDOWN;
+            if !press {
+                DEL_HELD.store(false, Ordering::Relaxed);
+            } else if held_mods() == MOD_SHIFT {
+                if let Some(focus) = crate::sys::copy::explorer_del_target() {
+                    if !DEL_HELD.swap(true, Ordering::Relaxed) {
+                        let hub = HWND(FORCE_HUB.load(Ordering::Relaxed) as *mut _);
+                        let _ = PostMessageW(Some(hub), WM_DEL_KEY, WPARAM(0), LPARAM(focus.0 as isize));
                     }
                     return LRESULT(1);
                 }
@@ -1682,7 +1700,9 @@ impl App {
         TM_HOOK.store(tm, Ordering::Relaxed);
         let paste = self.cfg.paste_key && self.on(Page::Copies);
         PASTE_HOOK.store(paste, Ordering::Relaxed);
-        let want = tm || paste || FORCE_VK.load(Ordering::Relaxed) != 0 || SHADER_VK.load(Ordering::Relaxed) != 0;
+        let del = self.cfg.del_key && self.on(Page::Copies);
+        DEL_HOOK.store(del, Ordering::Relaxed);
+        let want = tm || paste || del || FORCE_VK.load(Ordering::Relaxed) != 0 || SHADER_VK.load(Ordering::Relaxed) != 0;
         if want && self.force_hook.is_none() {
             let inst = unsafe { GetModuleHandleW(None) }.unwrap_or_default();
             self.force_hook = unsafe { SetWindowsHookExW(WH_KEYBOARD_LL, Some(key_hook), Some(inst.into()), 0) }.ok();
@@ -1698,6 +1718,13 @@ impl App {
     /// Substituir a cópia do Windows: só a configuração e o gancho do Prisma aberto, nada no Windows.
     pub fn set_paste_key(&mut self, on: bool) {
         self.cfg.paste_key = on;
+        self.cfg.save();
+        self.sync_hook();
+    }
+
+    /// Shift+Del do Prisma: como o Ctrl+V, só a configuração e o gancho, nada no Windows.
+    pub fn set_del_key(&mut self, on: bool) {
+        self.cfg.del_key = on;
         self.cfg.save();
         self.sync_hook();
     }
@@ -3346,6 +3373,11 @@ impl App {
                 Some("tweaks") => self.page = Page::Tweaks,
                 Some("tools") => self.page = Page::Tools,
                 Some("copies") => self.page = Page::Copies,
+                #[cfg(debug_assertions)]
+                Some("copies-erased") => {
+                    self.page = Page::Copies;
+                    crate::pages::copies::test_erased(&mut self.cp);
+                }
                 Some("updates") => self.page = Page::Updates,
                 Some("optimize") => self.page = Page::Optimize,
                 Some("energy") => self.page = Page::Energy,
@@ -4747,6 +4779,25 @@ unsafe extern "system" fn hub_proc(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRE
                     }
                 }
                 None => crate::sys::copy::send_paste(),
+            }
+            LRESULT(0)
+        }
+        WM_DEL_KEY => {
+            // Lixeira, biblioteca, dentro de um .zip, celular ou nada escolhido: o Shift+Del volta
+            // para o Explorer. Os caminhos vão pela entrada do processo, que nenhum outro programa troca.
+            match crate::sys::copy::explorer_selection(HWND(l.0 as *mut _)) {
+                Some(items) => {
+                    use std::io::Write;
+                    let ch = std::process::Command::new(std::env::current_exe().unwrap_or_default()).arg("--erase").stdin(std::process::Stdio::piped()).spawn();
+                    if let Ok(mut ch) = ch {
+                        let _ = unsafe { AllowSetForegroundWindow(ch.id()) };
+                        let list: String = items.iter().map(|p| format!("{}\n", p.display())).collect();
+                        if let Some(mut pipe) = ch.stdin.take() {
+                            let _ = pipe.write_all(list.as_bytes());
+                        }
+                    }
+                }
+                None => crate::sys::copy::send_keys(VK_SHIFT, VK_DELETE),
             }
             LRESULT(0)
         }
