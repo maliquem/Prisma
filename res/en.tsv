@@ -3380,3 +3380,5 @@ Apagado para sempre	Permanently deleted
 Só o registro do que o Shift+Del do Prisma apagou: não passa pela Lixeira e não tem volta. Guarda as últimas 500.	Only a record of what Prisma's Shift+Del deleted: it doesn't go through the Recycle Bin and can't be undone. Keeps the last 500.
 Com o Prisma aberto, o Shift+Del nas pastas do Explorer apaga para sempre, mais rápido que o Windows e sem a Lixeira. Cada vez pede confirmação.	With Prisma open, Shift+Del in Explorer folders deletes permanently, faster than Windows and without the Recycle Bin. It asks for confirmation each time.
 Não passa pela Lixeira e não tem como recuperar. Como administrador, passa por cima das permissões. O Del comum continua mandando para a Lixeira.	It doesn't go through the Recycle Bin and can't be recovered. As administrator, it overrides permissions. Plain Del still sends items to the Recycle Bin.
+{} itens	{} items
+Não saiu tudo	Not everything was deleted

@@ -3374,3 +3374,5 @@ Apagado para sempre	Eliminado para siempre
 Só o registro do que o Shift+Del do Prisma apagou: não passa pela Lixeira e não tem volta. Guarda as últimas 500.	Solo el registro de lo que eliminó Shift+Supr de Prisma: no pasa por la Papelera de reciclaje y no se puede deshacer. Guarda las últimas 500.
 Com o Prisma aberto, o Shift+Del nas pastas do Explorer apaga para sempre, mais rápido que o Windows e sem a Lixeira. Cada vez pede confirmação.	Con Prisma abierto, Shift+Supr en las carpetas del Explorador elimina para siempre, más rápido que Windows y sin la Papelera de reciclaje. Cada vez pide confirmación.
 Não passa pela Lixeira e não tem como recuperar. Como administrador, passa por cima das permissões. O Del comum continua mandando para a Lixeira.	No pasa por la Papelera de reciclaje y no se puede recuperar. Como administrador, se salta los permisos. Supr normal sigue enviando a la Papelera de reciclaje.
+{} itens	{} elementos
+Não saiu tudo	No se borró todo

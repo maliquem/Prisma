@@ -301,18 +301,13 @@ fn start(o: &mut Win) {
     }
     o.asking = false;
     let counter = o.worker.take();
-    // A contagem parada no meio não serve como total.
-    let whole = counter.as_ref().is_none_or(|t| t.is_finished());
-    if !whole {
+    if counter.as_ref().is_some_and(|t| !t.is_finished()) {
         o.count.cancel.store(true, Relaxed);
     }
-    let (count, st, items, admin, base) = (o.count.clone(), o.st.clone(), o.items.clone(), o.admin, o.base);
+    let (st, items, admin, base) = (o.st.clone(), o.items.clone(), o.admin, o.base);
     o.worker = Some(std::thread::spawn(move || {
         if let Some(t) = counter {
             let _ = t.join();
-        }
-        if !whole {
-            count.counted.store(false, Relaxed);
         }
         erase::erase(&items, &st, admin);
         if st.phase.load(Relaxed) != erase::NEED_ADMIN {
@@ -549,7 +544,7 @@ fn test(dir: &str) {
             View { refused: vec![("C:\\Windows".into(), tr("Pasta do Windows ou do Prisma").into_owned())], ..base() },
             View { asking: false, admin: true, phase: erase::DELETING, counted: true, done: 8_000, freed: 2_000_000_000, step: erase::STEP_PLAN_B, current: "D:\\Programas\\WindowsApps antigo\\x".into(), ..base() },
             View { asking: false, admin: true, phase: erase::DONE, counted: true, done: 12_344, freed: 3_650_000_000, pending: 1, plan_b: true, errors, ..base() },
-            View { asking: false, phase: erase::DONE, counted: true, done: 12_345, freed: 3_650_722_201, name: "3 itens".into(), ..base() },
+            View { asking: false, phase: erase::DONE, counted: true, done: 12_345, freed: 3_650_722_201, name: tr("3 itens").into_owned(), ..base() },
         ];
         std::env::set_var("PRISMA_LAYER_DUMP", dir);
         for (i, v) in views.iter().enumerate() {

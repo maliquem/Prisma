@@ -3374,3 +3374,5 @@ Apagado para sempre	已永久删除
 Só o registro do que o Shift+Del do Prisma apagou: não passa pela Lixeira e não tem volta. Guarda as últimas 500.	仅记录 Prisma 的 Shift+Del 删除过的内容：不经过回收站，无法恢复。保留最近 500 条。
 Com o Prisma aberto, o Shift+Del nas pastas do Explorer apaga para sempre, mais rápido que o Windows e sem a Lixeira. Cada vez pede confirmação.	Prisma 打开时，在资源管理器文件夹中按 Shift+Del 会永久删除，比 Windows 更快，且不经过回收站。每次都会请求确认。
 Não passa pela Lixeira e não tem como recuperar. Como administrador, passa por cima das permissões. O Del comum continua mandando para a Lixeira.	不经过回收站，无法恢复。以管理员身份运行时，会绕过权限限制。普通的 Del 仍会移到回收站。
+{} itens	{} 项
+Não saiu tudo	未能全部删除

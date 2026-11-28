@@ -90,6 +90,8 @@ pub fn protected() -> Protected {
     let mut above = vec![kf(&FOLDERID_Profile), kf(&FOLDERID_ProgramFiles), kf(&FOLDERID_ProgramFilesX86), kf(&FOLDERID_ProgramData)];
     above.extend(exe.parent().map(norm));
     above.push(norm(&exe));
+    // Instalado, os dados ficam no %APPDATA%: apagar o Roaming levaria a config e os históricos.
+    above.push(norm(&crate::config::data_dir()));
     let mut inside = vec![kf(&FOLDERID_Windows), norm(&crate::config::data_dir())];
     inside.retain(|s| !s.is_empty());
     above.retain(|s| !s.is_empty());
@@ -201,11 +203,11 @@ fn raw(h: &OwnedHandle) -> HANDLE {
     HANDLE(h.as_raw_handle())
 }
 
-/// (atributos, é link) pelo handle já aberto.
-fn attrs(h: &OwnedHandle) -> Option<(u32, bool)> {
+/// (atributos, marca do ponto de nova análise) pelo handle já aberto.
+fn attrs(h: &OwnedHandle) -> Option<(u32, u32)> {
     let mut t = FILE_ATTRIBUTE_TAG_INFO::default();
     unsafe { GetFileInformationByHandleEx(raw(h), FileAttributeTagInfo, &mut t as *mut _ as *mut c_void, std::mem::size_of::<FILE_ATTRIBUTE_TAG_INFO>() as u32) }.ok()?;
-    Some((t.FileAttributes, t.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT.0 != 0))
+    Some((t.FileAttributes, t.ReparseTag))
 }
 
 /// Onde o handle está de verdade, com as junções do caminho resolvidas.
@@ -215,12 +217,23 @@ fn final_path(h: &OwnedHandle) -> Option<PathBuf> {
     (n > 0 && n < buf.len()).then(|| PathBuf::from(String::from_utf16_lossy(&buf[..n])))
 }
 
-fn is_dir(a: u32) -> bool {
-    a & FILE_ATTRIBUTE_DIRECTORY.0 != 0 && a & FILE_ATTRIBUTE_REPARSE_POINT.0 == 0
+/// Pasta para entrar. Junção e link (marca de nome substituto) não: sai só o link. As pastas do
+/// OneDrive também têm marca, sem esse bit, e são pastas comuns.
+fn is_dir(a: u32, tag: u32) -> bool {
+    a & FILE_ATTRIBUTE_DIRECTORY.0 != 0 && (a & FILE_ATTRIBUTE_REPARSE_POINT.0 == 0 || !surrogate(tag))
 }
 
-/// Lista a pasta pelo handle: (nome, atributos, tamanho), sem "." e "..".
-fn list(h: &OwnedHandle, mut f: impl FnMut(&[u16], u32, u64)) -> Result<(), u32> {
+fn surrogate(tag: u32) -> bool {
+    tag & 0x2000_0000 != 0
+}
+
+/// Junção ou link de verdade pelo caminho; sem conseguir olhar, conta como link.
+fn is_link(p: &Path) -> bool {
+    open_path(p, READ_ATTRS).ok().and_then(|h| attrs(&h)).is_none_or(|(a, t)| a & FILE_ATTRIBUTE_REPARSE_POINT.0 != 0 && surrogate(t))
+}
+
+/// Lista a pasta pelo handle: (nome, atributos, marca, tamanho), sem "." e "..".
+fn list(h: &OwnedHandle, mut f: impl FnMut(&[u16], u32, u32, u64)) -> Result<(), u32> {
     let mut buf = vec![0u64; 8192];
     let mut class = FileFullDirectoryRestartInfo;
     loop {
@@ -234,7 +247,9 @@ fn list(h: &OwnedHandle, mut f: impl FnMut(&[u16], u32, u64)) -> Result<(), u32>
             let e = unsafe { &*((buf.as_ptr() as *const u8).add(off) as *const FILE_FULL_DIR_INFO) };
             let name = unsafe { std::slice::from_raw_parts(e.FileName.as_ptr(), e.FileNameLength as usize / 2) };
             if name != [46] && name != [46, 46] {
-                f(name, e.FileAttributes, e.EndOfFile.max(0) as u64);
+                // Com o atributo de ponto de nova análise, o EaSize traz a marca.
+                let tag = if e.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT.0 != 0 { e.EaSize } else { 0 };
+                f(name, e.FileAttributes, tag, e.EndOfFile.max(0) as u64);
             }
             if e.NextEntryOffset == 0 {
                 break;
@@ -291,26 +306,34 @@ fn admins_sid() -> [u8; 68] {
 }
 
 /// Toma posse para os Administradores e dá controle total a eles, só neste item, pelo handle.
+/// `SetKernelObjectSecurity` grava só nele: o `SetSecurityInfo` passaria a permissão herdável por
+/// toda a árvore abaixo antes de apagar. Cada filho negado passa por aqui sozinho.
 fn take_over(dir: HANDLE, name: &[u16], st: &State) -> bool {
-    use windows::Win32::Security::Authorization::{SetSecurityInfo, SE_FILE_OBJECT};
     use windows::Win32::Security::*;
     let mut sid = admins_sid();
     let psid = PSID(sid.as_mut_ptr() as *mut c_void);
+    let mut sd = SECURITY_DESCRIPTOR::default();
+    let psd = PSECURITY_DESCRIPTOR(&mut sd as *mut _ as *mut c_void);
     st.step.store(STEP_OWNER, Relaxed);
     let Ok(h) = open_in(dir, name, WRITE_OWNER) else { return false };
-    if unsafe { SetSecurityInfo(raw(&h), SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION, Some(psid), None, None, None) }.is_err() {
-        return false;
+    unsafe {
+        if InitializeSecurityDescriptor(psd, 1).is_err() || SetSecurityDescriptorOwner(psd, Some(psid), false).is_err() || SetKernelObjectSecurity(raw(&h), OWNER_SECURITY_INFORMATION, psd).is_err() {
+            return false;
+        }
     }
     drop(h);
     st.step.store(STEP_GRANT, Relaxed);
     let Ok(h) = open_in(dir, name, WRITE_DAC) else { return false };
+    let mut sd = SECURITY_DESCRIPTOR::default();
+    let psd = PSECURITY_DESCRIPTOR(&mut sd as *mut _ as *mut c_void);
     let mut acl = [0u32; 32];
     let pacl = acl.as_mut_ptr() as *mut ACL;
     unsafe {
-        if InitializeAcl(pacl, 128, ACL_REVISION).is_err() || AddAccessAllowedAceEx(pacl, ACL_REVISION, CONTAINER_INHERIT_ACE | OBJECT_INHERIT_ACE, FILE_ALL_ACCESS.0, psid).is_err() {
-            return false;
-        }
-        SetSecurityInfo(raw(&h), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION, None, None, Some(pacl), None).is_ok()
+        InitializeSecurityDescriptor(psd, 1).is_ok()
+            && InitializeAcl(pacl, 128, ACL_REVISION).is_ok()
+            && AddAccessAllowedAce(pacl, ACL_REVISION, FILE_ALL_ACCESS.0, psid).is_ok()
+            && SetSecurityDescriptorDacl(psd, true, Some(pacl), false).is_ok()
+            && SetKernelObjectSecurity(raw(&h), DACL_SECURITY_INFORMATION, psd).is_ok()
     }
 }
 
@@ -343,22 +366,54 @@ struct Ctx {
     delete: bool,
     admin: bool,
     items: Vec<PathBuf>,
+    /// Item escolhido com algo já contado como erro ou para o reinício.
+    trouble: Vec<AtomicBool>,
+}
+
+impl Ctx {
+    fn new(items: &[PathBuf], st: &Arc<State>, admin: bool, delete: bool) -> Arc<Ctx> {
+        Arc::new(Ctx { st: st.clone(), delete, admin, items: items.to_vec(), trouble: items.iter().map(|_| AtomicBool::new(false)).collect() })
+    }
+}
+
+/// Disco deste PC. Unidade de rede e `subst` não existem na sessão de administrador.
+fn local(p: &Path) -> bool {
+    use std::path::{Component, Prefix};
+    use windows::core::PCWSTR;
+    let Some(Component::Prefix(pre)) = p.components().next() else { return false };
+    let (Prefix::Disk(l) | Prefix::VerbatimDisk(l)) = pre.kind() else { return false };
+    let root = super::wide(&format!("{}:\\", l as char));
+    // DRIVE_REMOVABLE, DRIVE_FIXED
+    if !matches!(unsafe { GetDriveTypeW(PCWSTR(root.as_ptr())) }, 2 | 3) {
+        return false;
+    }
+    // A unidade do `subst` aponta para uma pasta (\??\C:\...).
+    let mut buf = [0u16; 1024];
+    let n = unsafe { QueryDosDeviceW(PCWSTR(super::wide(&format!("{}:", l as char)).as_ptr()), Some(&mut buf)) } as usize;
+    !String::from_utf16_lossy(&buf[..n.min(buf.len())]).starts_with(r"\??\")
 }
 
 impl Ctx {
     /// Sem administrador, o que ficou por permissão ou em uso vai para a cópia de administrador.
     fn denied(&self, top: usize) {
+        if !local(&self.items[top]) {
+            return;
+        }
         let mut d = self.st.denied.lock().unwrap();
         if !d.contains(&self.items[top]) {
             d.push(self.items[top].clone());
         }
     }
 
-    /// O que não saiu: como administrador, fica para o próximo reinício (depois do que está dentro).
-    fn leftover(&self, p: &Path, err: u32, top: usize, count: bool) {
+    /// O que não saiu. Como administrador, `reboot` fica para o próximo reinício: arquivo, ou pasta
+    /// cujo conteúdo já foi tratado. Pasta que nem abriu ou listou é erro: o que tem dentro não sairia.
+    fn leftover(&self, p: &Path, err: u32, top: usize, count: bool, reboot: bool) {
+        if count {
+            self.trouble[top].store(true, Relaxed);
+        }
         if self.admin {
             let w = long(p);
-            if unsafe { MoveFileExW(windows::core::PCWSTR(w.as_ptr()), None, MOVEFILE_DELAY_UNTIL_REBOOT) }.is_ok() {
+            if reboot && unsafe { MoveFileExW(windows::core::PCWSTR(w.as_ptr()), None, MOVEFILE_DELAY_UNTIL_REBOOT) }.is_ok() {
                 if count {
                     self.st.pending.fetch_add(1, Relaxed);
                 }
@@ -386,7 +441,7 @@ impl Ctx {
         // pasta do caminho por junção) e o item não é link, para o takeown não sair do lugar.
         // shortcut: sobra a janela entre esta conferência e o comando; o plano B é o último recurso.
         let same = final_path(dir).is_some_and(|d| path.parent().is_some_and(|q| norm(&d) == norm(q)));
-        if r.as_ref().err() == Some(&ERR_DENIED) && same && !super::is_link(path) {
+        if r.as_ref().err() == Some(&ERR_DENIED) && same && !is_link(path) {
             plan_b(path, &self.st);
             r = open_in(raw(dir), name, access);
         }
@@ -414,7 +469,7 @@ impl Drop for Node {
         let r = if self.keep { Err(ERR_IN_USE) } else { unlink(&self.h) };
         if let Err(e) = r {
             // Pasta que não esvaziou: o motivo já está no que ficou dentro dela.
-            self.ctx.leftover(&self.path, e, self.top, e != ERR_NOT_EMPTY);
+            self.ctx.leftover(&self.path, e, self.top, e != ERR_NOT_EMPTY, true);
         }
     }
 }
@@ -453,7 +508,7 @@ fn delete_file(ctx: &Ctx, dir: &Node, name: &[u16], size: u64) {
             ctx.st.done.fetch_add(1, Relaxed);
             ctx.st.freed.fetch_add(size, Relaxed);
         }
-        Err(e) => ctx.leftover(&path, e, dir.top, true),
+        Err(e) => ctx.leftover(&path, e, dir.top, true, true),
     }
 }
 
@@ -461,8 +516,8 @@ fn delete_file(ctx: &Ctx, dir: &Node, name: &[u16], size: u64) {
 fn enter(ctx: &Arc<Ctx>, q: &Queue, h: OwnedHandle, keep: bool, path: PathBuf, top: usize, parent: Option<Arc<Node>>) {
     let node = Arc::new(Node { h, keep, path, top, ctx: ctx.clone(), _parent: parent });
     let mut batch = Vec::new();
-    let r = list(&node.h, |name, a, size| {
-        if is_dir(a) {
+    let r = list(&node.h, |name, a, tag, size| {
+        if is_dir(a, tag) {
             q.push(Job::Dir(node.clone(), name.to_vec()));
         } else if ctx.delete {
             batch.push((name.to_vec(), size));
@@ -479,7 +534,7 @@ fn enter(ctx: &Arc<Ctx>, q: &Queue, h: OwnedHandle, keep: bool, path: PathBuf, t
     }
     if let Err(e) = r {
         if ctx.delete {
-            ctx.leftover(&node.path, e, top, true);
+            ctx.leftover(&node.path, e, top, true, false);
         }
     }
 }
@@ -511,7 +566,7 @@ fn run(ctx: &Arc<Ctx>, q: &Queue, job: Job) {
             };
             match h {
                 // Virou link ou arquivo depois de listada: apaga como arquivo, sem entrar.
-                Ok(h) if !attrs(&h).is_some_and(|(a, _)| is_dir(a)) => {
+                Ok(h) if !attrs(&h).is_some_and(|(a, t)| is_dir(a, t)) => {
                     drop(h);
                     if ctx.delete {
                         delete_file(ctx, &parent, &name, 0);
@@ -520,7 +575,7 @@ fn run(ctx: &Arc<Ctx>, q: &Queue, job: Job) {
                     }
                 }
                 Ok(h) => enter(ctx, q, h, keep, path, parent.top, Some(parent.clone())),
-                Err(e) if ctx.delete => ctx.leftover(&path, e, parent.top, true),
+                Err(e) if ctx.delete => ctx.leftover(&path, e, parent.top, true, false),
                 Err(_) => {}
             }
         }
@@ -545,7 +600,7 @@ fn root(ctx: &Arc<Ctx>, q: &Queue, i: usize) {
         Err(2 | 3) => return,
         Err(e) => {
             if ctx.delete {
-                ctx.leftover(&p, e, i, true);
+                ctx.leftover(&p, e, i, true, !p.is_dir());
             }
             return;
         }
@@ -555,12 +610,13 @@ fn root(ctx: &Arc<Ctx>, q: &Queue, i: usize) {
     let pr = protected();
     if let Some(why) = refusal(&real, &pr).or_else(|| refusal(&p, &pr)) {
         if ctx.delete {
+            ctx.trouble[i].store(true, Relaxed);
             ctx.st.error(&p, why);
         }
         return;
     }
     match attrs(&h) {
-        Some((a, _)) if is_dir(a) => enter(ctx, q, h, keep, p, i, None),
+        Some((a, t)) if is_dir(a, t) => enter(ctx, q, h, keep, p, i, None),
         _ if !ctx.delete => {
             ctx.st.files.fetch_add(1, Relaxed);
             ctx.st.bytes.fetch_add(std::fs::symlink_metadata(&p).map_or(0, |m| m.len()), Relaxed);
@@ -574,7 +630,7 @@ fn root(ctx: &Arc<Ctx>, q: &Queue, i: usize) {
                 }
                 Err(e) => {
                     drop(h);
-                    ctx.leftover(&p, e, i, true);
+                    ctx.leftover(&p, e, i, true, true);
                 }
             }
         }
@@ -582,7 +638,7 @@ fn root(ctx: &Arc<Ctx>, q: &Queue, i: usize) {
 }
 
 /// Vários threads pegando da mesma fila; acaba quando a fila esvazia e ninguém mais trabalha.
-fn walk(ctx: Arc<Ctx>) {
+fn walk(ctx: &Arc<Ctx>) {
     let q = Queue::default();
     for i in 0..ctx.items.len() {
         q.push(Job::Root(i));
@@ -606,7 +662,7 @@ fn walk(ctx: Arc<Ctx>) {
                     }
                 };
                 // O nó solto aqui pode apagar a pasta dele (e as de cima): antes de dizer que terminou.
-                run(&ctx, &q, job);
+                run(ctx, &q, job);
                 let mut g = q.jobs.lock().unwrap();
                 g.1 -= 1;
                 if g.1 == 0 && g.0.is_empty() {
@@ -619,15 +675,25 @@ fn walk(ctx: Arc<Ctx>) {
 
 /// Conta arquivos e bytes, sem apagar nada (a janela mostra enquanto pergunta).
 pub fn count(items: &[PathBuf], st: &Arc<State>, admin: bool) {
-    walk(Arc::new(Ctx { st: st.clone(), delete: false, admin, items: items.to_vec() }));
-    st.counted.store(true, Relaxed);
+    walk(&Ctx::new(items, st, admin, false));
+    // Parada no meio, a contagem não serve como total.
+    st.counted.store(!st.cancel.load(Relaxed), Relaxed);
 }
 
 /// Apaga tudo. Como administrador (`admin`, com `enable_privileges` antes), toma posse do que negar
 /// e marca o que está em uso para o próximo reinício.
 pub fn erase(items: &[PathBuf], st: &Arc<State>, admin: bool) {
     st.phase.store(DELETING, Relaxed);
-    walk(Arc::new(Ctx { st: st.clone(), delete: true, admin, items: items.to_vec() }));
+    let ctx = Ctx::new(items, st, admin, true);
+    walk(&ctx);
+    // Pasta que ainda está lá sem nenhum erro contado: alguém pôs um arquivo nela enquanto apagava.
+    if !st.cancel.load(Relaxed) {
+        for (p, t) in items.iter().zip(&ctx.trouble) {
+            if !t.load(Relaxed) && std::fs::symlink_metadata(p).is_ok() {
+                st.error(p, "Não saiu tudo");
+            }
+        }
+    }
     let phase = if st.cancel.load(Relaxed) {
         CANCELED
     } else if !admin && !st.denied.lock().unwrap().is_empty() {
@@ -726,8 +792,9 @@ pub fn append(path: &Path, r: &Erased) -> std::io::Result<()> {
         std::fs::create_dir_all(d)?;
     }
     let mut f = locked(path)?;
-    let mut text = String::new();
-    f.read_to_string(&mut text)?;
+    let mut bytes = Vec::new();
+    f.read_to_end(&mut bytes)?;
+    let mut text = String::from_utf8_lossy(&bytes).into_owned();
     text.push_str(&r.line());
     text.push('\n');
     let n = text.lines().count();
@@ -743,8 +810,8 @@ pub fn append(path: &Path, r: &Erased) -> std::io::Result<()> {
 
 /// Da mais nova para a mais velha; None enquanto outra cópia grava (a página tenta de novo).
 pub fn load(path: &Path) -> Option<Vec<Erased>> {
-    let text = match std::fs::read_to_string(path) {
-        Ok(t) => t,
+    let text = match std::fs::read(path) {
+        Ok(t) => String::from_utf8_lossy(&t).into_owned(),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
         Err(_) => return None,
     };
@@ -872,7 +939,7 @@ mod tests {
     fn recusa_pastas_do_sistema() {
         let pr = Protected {
             inside: vec![r"c:\windows".into(), r"d:\prisma\prismadata".into()],
-            above: vec![r"c:\users\ana".into(), r"c:\program files".into(), r"c:\program files (x86)".into(), r"c:\programdata".into(), r"d:\prisma".into(), r"d:\prisma\prisma.exe".into()],
+            above: vec![r"c:\users\ana\appdata\roaming\prisma".into(), r"c:\users\ana".into(), r"c:\program files".into(), r"c:\program files (x86)".into(), r"c:\programdata".into(), r"d:\prisma".into(), r"d:\prisma\prisma.exe".into()],
             profiles: r"c:\users".into(),
         };
         let no = |s: &str| refusal(Path::new(s), &pr);
@@ -895,6 +962,8 @@ mod tests {
             r"D:\Prisma",
             r"D:\Prisma\prisma.exe",
             r"D:\Prisma\PrismaData\config.txt",
+            r"C:\Users\Ana\AppData\Roaming",
+            r"C:\Users\Ana\AppData",
         ] {
             assert!(no(bad).is_some(), "devia recusar {bad}");
         }
@@ -903,9 +972,24 @@ mod tests {
         }
         // As pastas de verdade deste PC também.
         let real = protected();
+        assert!(real.above.contains(&norm(&crate::config::data_dir())));
         assert!(refusal(&crate::sys::known_folder(&windows::Win32::UI::Shell::FOLDERID_Windows), &real).is_some());
         assert!(refusal(&crate::sys::known_folder(&windows::Win32::UI::Shell::FOLDERID_Profile), &real).is_some());
         assert_eq!(refusal(&std::env::temp_dir().join("x"), &real), None);
+    }
+
+    #[test]
+    fn onedrive_e_pasta_e_juncao_e_link() {
+        let dir = FILE_ATTRIBUTE_DIRECTORY.0 | FILE_ATTRIBUTE_REPARSE_POINT.0;
+        // IO_REPARSE_TAG_CLOUD_6 (OneDrive) e IO_REPARSE_TAG_MOUNT_POINT (junção), IO_REPARSE_TAG_SYMLINK.
+        assert!(is_dir(dir, 0x9000_601A));
+        assert!(!is_dir(dir, 0xA000_0003));
+        assert!(!is_dir(dir, 0xA000_000C));
+        assert!(is_dir(FILE_ATTRIBUTE_DIRECTORY.0, 0));
+        assert!(!is_dir(FILE_ATTRIBUTE_ARCHIVE.0, 0));
+        // Só disco deste PC vai para a cópia de administrador.
+        assert!(local(&std::env::temp_dir()));
+        assert!(!local(Path::new(r"\\servidor\pasta\x")));
     }
 
     #[test]
