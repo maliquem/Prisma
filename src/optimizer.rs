@@ -54,8 +54,9 @@ fn visible_pids() -> Vec<u32> {
 }
 
 fn in_windows_dir(pid: u32) -> bool {
+    static DIR: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| format!("{}\\", crate::sys::windows_dir().display()).to_ascii_lowercase());
     procs::image_path(pid)
-        .map(|p| p.to_ascii_lowercase().starts_with("c:\\windows\\"))
+        .map(|p| p.to_ascii_lowercase().starts_with(DIR.as_str()))
         .unwrap_or(true)
 }
 

@@ -136,7 +136,7 @@ pub fn run(disks: &[(u32, String, Vec<char>)], health: &[(u32, Health)]) -> Vec<
     if procs::parent_map().is_empty() {
         out.push(f(Level::Unknown, "Lista de processos indisponível", "", Fix::None));
     }
-    if std::path::Path::new("C:\\Windows.old").is_dir() {
+    if crate::sys::windows_dir().with_file_name("Windows.old").is_dir() {
         out.push(f(Level::Good, "Pasta Windows.old presente", "Permite voltar de versão. Apagar libera espaço, mas encerra essa volta.", Fix::None));
     }
     let (b, name) = build();

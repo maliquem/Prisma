@@ -450,9 +450,15 @@ fn deep_roots() -> Vec<(PathBuf, bool)> {
     let mut v: Vec<(PathBuf, bool)> = roots().into_iter().map(|r| (r, true)).collect();
     let h = super::known_folder(&FOLDERID_Profile);
     if !h.as_os_str().is_empty() {
-        for s in ["AppData\\LocalLow", "Documents", "Documents\\My Games", "Saved Games", ""] {
+        for s in ["AppData\\LocalLow", "Saved Games", ""] {
             v.push((h.join(s), false));
         }
+    }
+    // Documentos pode estar fora da pasta do usuário (OneDrive, outro disco).
+    let docs = super::known_folder(&FOLDERID_Documents);
+    if !docs.as_os_str().is_empty() {
+        v.push((docs.join("My Games"), false));
+        v.push((docs, false));
     }
     v
 }
@@ -548,14 +554,8 @@ fn scan_in(p: &Program, others: &[Program], deep: &[(PathBuf, bool)]) -> Vec<Lef
             }
         }
     }
-    let mut menus = Vec::new();
-    for (base, sub) in [("APPDATA", "Microsoft\\Windows\\Start Menu\\Programs"), ("PROGRAMDATA", "Microsoft\\Windows\\Start Menu\\Programs"), ("USERPROFILE", "Desktop"), ("PUBLIC", "Desktop")] {
-        if let Ok(b) = std::env::var(base) {
-            menus.push(PathBuf::from(b).join(sub));
-        }
-    }
-    for menu in menus {
-        let Ok(rd) = std::fs::read_dir(&menu) else { continue };
+    for menu in [FOLDERID_Programs, FOLDERID_CommonPrograms, FOLDERID_Desktop, FOLDERID_PublicDesktop] {
+        let Ok(rd) = std::fs::read_dir(super::known_folder(&menu)) else { continue };
         for e in rd.flatten() {
             let stem = Path::new(&e.file_name()).file_stem().map(|s| norm(&s.to_string_lossy())).unwrap_or_default();
             match grade(&stem) {
