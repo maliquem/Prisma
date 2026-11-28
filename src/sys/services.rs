@@ -179,19 +179,20 @@ pub fn open_native() {
 // Serviços, acha o item pela automação de interface e pede a ação padrão da lista.
 // O Enter vai por mensagem à própria lista, nunca ao teclado: não digita em outra janela.
 mod props {
-    use std::collections::HashSet;
     use std::time::{Duration, Instant};
 
     use windows::core::{BOOL, BSTR};
     use windows::Win32::Foundation::*;
     use windows::Win32::System::Com::*;
-    use windows::Win32::System::Threading::*;
     use windows::Win32::System::Variant::VARIANT;
     use windows::Win32::UI::Accessibility::*;
     use windows::Win32::UI::WindowsAndMessaging::*;
 
     const LVM_GETITEMCOUNT: u32 = 0x1004;
     const VK_RETURN: usize = 0x0D;
+
+    /// O `mmc` que o Prisma abriu. A janela se acha pelo processo: o título muda com o idioma do Windows.
+    static CONSOLE: std::sync::Mutex<Option<std::process::Child>> = std::sync::Mutex::new(None);
 
     fn class_of(h: HWND) -> String {
         let mut b = [0u16; 64];
@@ -203,7 +204,8 @@ mod props {
         crate::sys::procs::all_windows()
     }
 
-    pub fn frames() -> HashSet<isize> {
+    #[cfg(debug_assertions)]
+    pub fn frames() -> Vec<isize> {
         tops().into_iter().filter(|h| class_of(*h) == "MMCMainFrame").map(|h| h.0 as isize).collect()
     }
 
@@ -263,19 +265,16 @@ mod props {
 
     pub fn open(display: &str) -> Result<isize, &'static str> {
         close_open();
-        let t0 = Instant::now();
-        while frames().iter().any(|f| crate::sys::procs::window_title(HWND(*f as *mut _)) == "Serviços") && t0.elapsed() < Duration::from_secs(2) {
-            std::thread::sleep(Duration::from_millis(50));
-        }
-        let before = frames();
-        std::process::Command::new(crate::sys::system_tool("mmc")).arg(crate::sys::system_tool("services.msc")).spawn().map_err(|_| "não abriu a janela Serviços")?;
+        let child = std::process::Command::new(crate::sys::system_tool("mmc")).arg(crate::sys::system_tool("services.msc")).spawn().map_err(|_| "não abriu a janela Serviços")?;
+        let pid = child.id();
+        *CONSOLE.lock().unwrap() = Some(child);
         let t0 = Instant::now();
         let frame = loop {
             if t0.elapsed() > Duration::from_secs(15) {
                 return Err("a janela Serviços não apareceu");
             }
-            if let Some(f) = frames().difference(&before).next() {
-                break HWND(*f as *mut _);
+            if let Some(f) = tops().into_iter().find(|h| class_of(*h) == "MMCMainFrame" && crate::sys::procs::window_pid(*h) == pid) {
+                break f;
             }
             std::thread::sleep(Duration::from_millis(100));
         };
@@ -315,22 +314,12 @@ mod props {
         Err("a janela Serviços abriu, mas as propriedades não")
     }
 
-    /// Fecha as janelas Serviços abertas: com várias ao mesmo tempo, só a última responde.
+    /// Fecha a janela Serviços que o Prisma abriu antes: com várias ao mesmo tempo, só a última responde.
     /// Encerra o processo porque o console recusa fechar com uma janela de propriedades aberta.
     pub fn close_open() {
-        for h in tops() {
-            let title = crate::sys::procs::window_title(h);
-            if class_of(h) != "MMCMainFrame" || !(title == "Serviços" || title == "Services") {
-                continue;
-            }
-            let mut pid = 0;
-            unsafe {
-                GetWindowThreadProcessId(h, Some(&mut pid));
-                if let Ok(p) = OpenProcess(PROCESS_TERMINATE, false, pid) {
-                    let _ = TerminateProcess(p, 0);
-                    let _ = CloseHandle(p);
-                }
-            }
+        if let Some(mut c) = CONSOLE.lock().unwrap().take() {
+            let _ = c.kill();
+            let _ = c.wait();
         }
     }
 }
@@ -358,7 +347,7 @@ pub fn console_dump(frame: isize) -> Vec<String> {
 
 #[cfg(debug_assertions)]
 pub fn console_windows() -> Vec<isize> {
-    props::frames().into_iter().collect()
+    props::frames()
 }
 
 #[cfg(debug_assertions)]

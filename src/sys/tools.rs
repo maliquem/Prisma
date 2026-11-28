@@ -21,7 +21,8 @@ pub enum Enc {
 
 fn decode(cp: Enc, b: &[u8]) -> String {
     match cp {
-        Enc::Utf8 => String::from_utf8_lossy(b).to_string(),
+        // O netsh escreve em UTF-8 no Windows novo e na página OEM no antigo.
+        Enc::Utf8 => std::str::from_utf8(b).map_or_else(|_| decode(Enc::Oem, b), str::to_string),
         Enc::Utf16 => {
             let w: Vec<u16> = b.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
             String::from_utf16_lossy(&w)
@@ -100,7 +101,8 @@ fn pump(mut o: impl Read, enc: Enc, out: &Shared) {
             break;
         }
         pending.extend_from_slice(&buf[..n]);
-        let take = if enc == Enc::Utf16 { pending.len() & !1 } else { pending.len() };
+        // Só linhas inteiras: a leitura corta no meio de um acento ou de um caractere de dois bytes.
+        let take = if enc == Enc::Utf16 { pending.len() & !1 } else { pending.iter().rposition(|&c| c == b'\n' || c == b'\r').map_or(0, |i| i + 1) };
         text.push_str(&decode(enc, &pending[..take]));
         pending.drain(..take);
         while let Some(i) = text.find(['\n', '\r']) {
@@ -108,6 +110,7 @@ fn pump(mut o: impl Read, enc: Enc, out: &Shared) {
             push(out, &line);
         }
     }
+    text.push_str(&decode(enc, &pending));
     push(out, &text);
 }
 
@@ -269,3 +272,29 @@ pub const CLEAN: &[&str] = &[
     "Setup Log Files",
     "System error memory dump files",
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Entrega um byte por leitura, como um cano que corta no meio de um acento.
+    struct Drip<'a>(&'a [u8]);
+
+    impl Read for Drip<'_> {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            let n = self.0.len().min(1);
+            buf[..n].copy_from_slice(&self.0[..n]);
+            self.0 = &self.0[n..];
+            Ok(n)
+        }
+    }
+
+    #[test]
+    fn accents_survive_split_reads_and_old_netsh() {
+        let out: Shared = Default::default();
+        pump(Drip("Configuração\r\nConexão".as_bytes()), Enc::Utf8, &out);
+        assert_eq!(out.lock().unwrap().lines, ["Configuração", "Conexão"]);
+        let oem = b"Configura\x87\xc6o";
+        assert_eq!(decode(Enc::Utf8, oem), decode(Enc::Oem, oem));
+    }
+}

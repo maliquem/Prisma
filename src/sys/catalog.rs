@@ -25,6 +25,7 @@ const LINK: GUID = GUID::from_u128(0xb9b4b3fc_2b51_4a42_b5d8_324146afcf25);
 const APP_ID: PROPERTYKEY = PROPERTYKEY { fmtid: MODEL, pid: 5 };
 const PACKAGE_PATH: PROPERTYKEY = PROPERTYKEY { fmtid: MODEL, pid: 15 };
 const LINK_TARGET: PROPERTYKEY = PROPERTYKEY { fmtid: LINK, pid: 2 };
+const LINK_ARGS: PROPERTYKEY = PROPERTYKEY { fmtid: GUID::from_u128(0x436f2667_14e2_4feb_b30a_146c53b5b674), pid: 100 };
 
 fn taken(p: PWSTR) -> String {
     unsafe {
@@ -48,20 +49,29 @@ fn package_exe(dir: &str, app_id: &str, name: &str) -> Option<String> {
     Some(if own.is_file() { own } else { path }.display().to_string())
 }
 
+/// Desinstalador pelo alvo do atalho, que não muda com o idioma. O título é só um reforço.
+fn is_uninstaller(name: &str, path: &str, args: &str) -> bool {
+    let low = path.to_ascii_lowercase();
+    let file = low.rsplit('\\').next().unwrap_or_default();
+    let msi_remove = file == "msiexec.exe"
+        && args.to_ascii_lowercase().split_whitespace().any(|a| {
+            // `/x {código}`, `/x{código}` e `/uninstall`, com barra ou hífen.
+            a.strip_prefix(['/', '-']).is_some_and(|a| a == "uninstall" || a == "x" || a.starts_with("x{") || a.starts_with("x\""))
+        });
+    let title = name.to_lowercase();
+    msi_remove || file.starts_with("unins") || file.contains("uninstall") || title.contains("uninstall") || title.contains("desinstal")
+}
+
 /// Instaladores e desinstaladores não são o programa.
 fn is_program(name: &str, path: &str) -> bool {
     let low = path.to_ascii_lowercase();
     let file = low.rsplit('\\').next().unwrap_or_default();
-    let title = name.to_lowercase();
     low.ends_with(".exe")
         && !low.contains("\\installer\\")
         && !low.contains("\\package cache\\")
-        && !file.starts_with("unins")
         && !file.contains("setup")
-        && !file.contains("uninstall")
-        && !matches!(file, "rundll32.exe" | "mmc.exe" | "control.exe")
-        && !title.contains("uninstall")
-        && !title.contains("desinstal")
+        && !matches!(file, "rundll32.exe" | "mmc.exe" | "control.exe" | "msiexec.exe")
+        && !is_uninstaller(name, path, "")
         && Path::new(path).is_file()
 }
 
@@ -121,11 +131,10 @@ pub fn start_apps() -> Vec<StartApp> {
                 let app = item.GetString(&APP_ID).map(|p| taken(p)).unwrap_or_default();
                 path = package_exe(&dir, &app, &name).unwrap_or_default();
             }
-            let title = name.to_lowercase();
+            let args = item.GetString(&LINK_ARGS).map(|p| taken(p)).unwrap_or_default();
             let low = path.to_ascii_lowercase();
-            let file = low.rsplit('\\').next().unwrap_or_default();
             let doc = [".txt", ".pdf", ".chm", ".htm", ".html", ".url", ".rtf", ".md", ".ini", ".log"].iter().any(|e| low.ends_with(e) || id.to_ascii_lowercase().ends_with(e));
-            if title.contains("uninstall") || title.contains("desinstal") || file.starts_with("unins") || file.contains("uninstall") || doc || id.is_empty() {
+            if is_uninstaller(&name, &path, &args) || doc || id.is_empty() {
                 continue;
             }
             out.push(StartApp { name, path, id });
@@ -160,4 +169,21 @@ pub fn load(shared: Shared, open: Vec<(String, String)>, window: isize) {
         *shared.lock().unwrap() = Some(found);
         let _ = InvalidateRect(Some(HWND(window as *mut _)), None, false);
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_uninstaller;
+
+    #[test]
+    fn uninstaller_by_target_in_any_language() {
+        let msi = r"C:\Windows\SysWOW64\msiexec.exe";
+        for (path, args) in [(r"C:\A\unins000.exe", ""), (r"C:\A\uninst.exe", ""), (r"C:\A\App-Uninstall.exe", ""), (msi, "/x {00E7FE65}"), (msi, "/X{00E7FE65}"), (msi, "/qb -uninstall {00E7FE65}")] {
+            assert!(is_uninstaller("アンインストール", path, args), "{path} {args}");
+        }
+        assert!(is_uninstaller("Desinstalar o App", r"C:\A\app.exe", ""));
+        for (path, args) in [(r"C:\A\app.exe", "/x {00E7FE65}"), (msi, "/i {00E7FE65}"), (msi, ""), (r"C:\A\app.exe", "")] {
+            assert!(!is_uninstaller("App", path, args), "{path} {args}");
+        }
+    }
 }

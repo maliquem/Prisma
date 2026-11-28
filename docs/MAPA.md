@@ -144,7 +144,7 @@ Convenção: `arquivo:linha nome`. "Atalho" é a combinação global (chaves `hk
 | Watch | (no `prisma-link`) | `Request::Watch` (`proto.rs:170`, capacidade `cap::WATCH` `lib.rs:107`): o servidor (`attend`, `crates/prisma-link/src/server.rs:73`) descarta os avisos antigos e passa a mandar os novos sozinho, olhando o cano com `available` (`pipe.rs:29`, `PeekNamedPipe`) a cada `WATCH_POLL` (`server.rs:26`). O Launcher lê com `Client::events` (`client.rs:108`); `recv` guarda os avisos que chegam no meio de uma resposta. |
 | LauncherGuide | (na thread do cano) | `Request::LauncherGuide` (`proto.rs:177`, capacidade `cap::CONTROLLERS_GUIDE` `lib.rs:109`): `serve_on` (`src/link.rs:292`) responde ali mesmo e chama `radial::set_launcher` (`src/sys/radial.rs:439`). Com o Launcher dono do Guia, o toque longo do radial espera pelo menos `hold_ms` e não dispara; com o overlay do Launcher aberto (ou até `CLOSE_GRACE` depois de fechar), o Guia não abre o radial (`trigger_with` `radial.rs:480`). Ao desconectar, `serve_events` (`server.rs:46`) chama `ended`, que zera o estado. |
 
-Avisos do Prisma ao Launcher: `Reply::OptionsChanged { exe }` (`proto.rs:570`, `Reply::is_event` `:579`). Saem por `link::options_changed` (`src/link.rs:192`, canal `EVENTS` `:185`, 64 vagas; cheio ou sem Launcher olhando, o aviso se perde), chamado por `Config::save` (`src/config.rs`, `changed_games` `:828` compara as linhas por jogo de `GAME_KEYS` `:799` com a última gravada em `SAVED` `:804`; `game_lines` `:807`, `diff_games` `:820`, `text` `:1139`) e por `shader_profile::save_game` (`src/shader_profile.rs:268`, perfil de shader do jogo). Nome do jogo aberto: `GameStarted` guarda `(pid, nome)` em `GAMES` (`link.rs:188`), lido por `link::game_name` (`:199`). Recusa do RTX HDR: `link_hdr_mode` e as páginas usam `autohdr::refusal` (`src/sys/autohdr.rs:118`), que diz quando falta administrador.
+Avisos do Prisma ao Launcher: `Reply::OptionsChanged { exe }` (`proto.rs:570`, `Reply::is_event` `:579`). Saem por `link::options_changed` (`src/link.rs:192`, canal `EVENTS` `:185`, 64 vagas; cheio ou sem Launcher olhando, o aviso se perde), chamado por `Config::save` (`src/config.rs`, `changed_games` `:828` compara as linhas por jogo de `GAME_KEYS` `:803` com a última gravada em `SAVED` `:808`; `game_lines` `:811`, `diff_games` `:820`, `text` `:1139`) e por `shader_profile::save_game` (`src/shader_profile.rs:268`, perfil de shader do jogo). Nome do jogo aberto: `GameStarted` guarda `(pid, nome)` em `GAMES` (`link.rs:188`), lido por `link::game_name` (`:199`). Recusa do RTX HDR: `link_hdr_mode` e as páginas usam `autohdr::refusal` (`src/sys/autohdr.rs:118`), que diz quando falta administrador.
 
 Tipos de resposta: `Reply` (`proto.rs:397`), `Page` (`proto.rs:379`), `MeterView` (`proto.rs:291`), `VolumeChange` (`proto.rs:299`), `NvidiaKind` (`proto.rs:357`). Códigos de erro: `lib.rs:101-114`. Versão do protocolo: `lib.rs:26`.
 
@@ -354,6 +354,7 @@ A barra lateral é `NAV` (`src/pages/mod.rs:381`), em cinco grupos (`GROUPS` `:4
 | Abrir o arquivo ou programa | Enter ou clique | `send` `pages/search.rs:154`; `sys/quick.rs:141` `launch_app` | |
 | Procurar programas instalados | Automático | `sys/quick.rs:91` `find_apps`; `:49` `refresh_apps` | 2 testes em `sys/quick.rs`. |
 | Pesquisa na web | Resultado de pesquisa na web | `sys/procs.rs:192` `search_online` | |
+| Itens do menu Iniciar (sem desinstaladores nem documentos) | Automático | `sys/catalog.rs:113` `start_apps`; `:53` `is_uninstaller` | O desinstalador sai pelo alvo do atalho (`unins*`, `uninstall`, `msiexec` com `/x` ou `/uninstall`); o título é só reforço. 1 teste. |
 | Comandos (terminal e PowerShell) | Campo de comando | `sys/cmds.rs:383` `complete`; `:632` `term_ask`; `:657` `term_get`; `:690` `term_stop`; `:695` `term_tick`; `:124` `forget`; `:88` `ensure` | 4 testes em `sys/cmds.rs`. |
 | Propriedades de arquivo | Menu | `sys/procs.rs:173` `file_properties`; `sys/fileinfo.rs:94` `check` | |
 
@@ -371,15 +372,15 @@ A barra lateral é `NAV` (`src/pages/mod.rs:381`), em cinco grupos (`GROUPS` `:4
 |---|---|---|---|
 | Listar serviços do Windows | Página | `sys/services.rs:54` `list`; `:104` `details` | |
 | Iniciar, parar ou reiniciar | Botões (com pergunta) | `sys/services.rs:145` `control`; `pages/services.rs:6` `run_action`; `:19` `ask_action` | `select_service` `app.rs:2089`. |
-| Abrir propriedades nativas | Botão | `sys/services.rs:169` `open_native`; `:339` `open_properties`; `:347` `show_properties` | |
-| Fechar janelas de console | Botão | `sys/services.rs:365` `close_consoles` | |
+| Abrir propriedades nativas | Botão | `sys/services.rs:169` `open_native`; `:328` `open_properties`; `:336` `show_properties` | A janela se acha pelo processo do `mmc` que o Prisma abriu (`CONSOLE` em `mod props`), não pelo título, que muda com o idioma. |
+| Fechar janelas de console | Botão | `sys/services.rs:354` `close_consoles` | |
 
 ### 4.8 Desinstalar (`src/pages/uninstall.rs`, `draw` linha 7)
 
 | Função | Como é chamada | Onde no código | Observações |
 |---|---|---|---|
 | Listar programas instalados | Página | `sys/uninstall.rs:124` `list`; `:181` `command`; `pages/uninstall.rs:26` `draw_list` | |
-| Revisar o que vai sumir | Botão | `pages/uninstall.rs:140` `draw_review`; `sys/uninstall.rs:462` `scan`; `:779` `scan_preview` | |
+| Revisar o que vai sumir | Botão | `pages/uninstall.rs:140` `draw_review`; `sys/uninstall.rs:468` `scan`; `:779` `scan_preview` | |
 | Ponto de restauração | Automático | `sys/uninstall.rs:279` `restore_point`; `:252` `restore_begin`; `:266` `restore_end` | |
 | Remover programa | Botão | `sys/uninstall.rs:647` `remove`; `:633` `to_recycle`; `:738` `start` | Vai para a Lixeira quando possível. |
 | Acompanhar a desinstalação | Página | `pages/uninstall.rs:118` `draw_running` | |
@@ -401,8 +402,8 @@ A barra lateral é `NAV` (`src/pages/mod.rs:381`), em cinco grupos (`GROUPS` `:4
 
 | Função | Como é chamada | Onde no código | Observações |
 |---|---|---|---|
-| Rodar uma ferramenta (SFC, DISM, limpeza etc.) | Botão | `sys/tools.rs:162` `start`; `:51` `cmd`; `:58` `native`; `:204` `simple` | Pede administrador: `pages/tools.rs:95` `elevate_needed`. |
-| Ver o resultado | Página | `app.rs:2042` `tool_log`; `app.rs:2046` `tool_busy`; `sys/tools.rs:230` `sfc_verdict`; `:254` `read_cbs` | |
+| Rodar uma ferramenta (SFC, DISM, limpeza etc.) | Botão | `sys/tools.rs:165` `start`; `:52` `cmd`; `:59` `native`; `:207` `simple` | Pede administrador: `pages/tools.rs:95` `elevate_needed`. |
+| Ver o resultado | Página | `app.rs:2042` `tool_log`; `app.rs:2046` `tool_busy`; `sys/tools.rs:233` `sfc_verdict`; `:257` `read_cbs` | Saída decodificada em `decode` `sys/tools.rs:22`, por linhas inteiras; `Enc::Utf8` cai na página OEM se não for UTF-8. |
 | Escolher pasta da ferramenta | Botão | `pick_tool_folder` `app.rs:1977` | |
 | Plano de execução | Automático | `pages/tools.rs:99` `plan` | |
 | Teste | `--test-tools=` | `app.rs:810`; `selftest.rs:189` `toolrun` | |
@@ -411,12 +412,12 @@ A barra lateral é `NAV` (`src/pages/mod.rs:381`), em cinco grupos (`GROUPS` `:4
 
 | Função | Como é chamada | Onde no código | Observações |
 |---|---|---|---|
-| Lista de programas que usam recurso | Página | `pages/optimize.rs:4` `list_card`; `app.rs:3421` `refresh_candidates`; `optimizer.rs:62` `candidates` | |
-| Fechar os escolhidos | Botão; atalho `HK_OPT` (`app.rs:261`); ação 20; bandeja | `optimize_prompt` `app.rs:3454`; `optimizer::close` `src/optimizer.rs:109` | Pergunta antes, exceto no atalho manual. |
+| Lista de programas que usam recurso | Página | `pages/optimize.rs:4` `list_card`; `app.rs:3421` `refresh_candidates`; `optimizer.rs:63` `candidates` | |
+| Fechar os escolhidos | Botão; atalho `HK_OPT` (`app.rs:261`); ação 20; bandeja | `optimize_prompt` `app.rs:3454`; `optimizer::close` `src/optimizer.rs:110` | Pergunta antes, exceto no atalho manual. |
 | Fechar o item selecionado | Botão | `close_selected` `app.rs:3433` | |
 | Não fechar processos do sistema | Automático | `optimizer.rs:32` `is_system` | |
-| Forçar fechamento | Botão | `force_stubborn` `app.rs:3447`; `optimizer::force` `optimizer.rs:122` | |
-| Lembrar o uso do dia | Automático | `optimizer.rs:163` `load`; `:183` `save`; `:196` `note`; `:215` `used_today`; `:220` `suggest` | |
+| Forçar fechamento | Botão | `force_stubborn` `app.rs:3447`; `optimizer::force` `optimizer.rs:123` | |
+| Lembrar o uso do dia | Automático | `optimizer.rs:165` `load`; `:185` `save`; `:205` `note`; `:224` `used_today`; `:229` `suggest` | |
 | Pergunta com o mouse | Janela | `prompt_mouse` `app.rs:3504`; `prompt_hide` `app.rs:3528` | |
 
 ### 4.12 Energia (`src/pages/energy.rs`, `draw` linha 25)

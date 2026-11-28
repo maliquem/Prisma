@@ -248,7 +248,7 @@ fn plan(id: Id, app: &mut App, letter: char) -> Option<(Vec<Step>, tools::Verdic
             let free = || {
                 let (mut f, mut t) = (0u64, 0u64);
                 unsafe {
-                    let _ = windows::Win32::Storage::FileSystem::GetDiskFreeSpaceExW(windows::core::w!("C:\\"), None, Some(&mut t), Some(&mut f));
+                    let _ = windows::Win32::Storage::FileSystem::GetDiskFreeSpaceExW(&windows::core::HSTRING::from(crate::sys::windows_dir().as_os_str()), None, Some(&mut t), Some(&mut f));
                 }
                 f
             };

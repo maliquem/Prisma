@@ -723,8 +723,12 @@ impl Default for Config {
 }
 
 fn default_capture_dir() -> String {
-    let base = std::env::var("USERPROFILE").unwrap_or_else(|_| "C:\\".into());
-    format!("{base}\\Videos\\Prisma")
+    // Pelo Windows: a pasta Vídeos pode ter sido movida (OneDrive, outro disco).
+    let mut videos = crate::sys::known_folder(&windows::Win32::UI::Shell::FOLDERID_Videos);
+    if videos.as_os_str().is_empty() {
+        videos = "C:\\Videos".into();
+    }
+    videos.join("Prisma").display().to_string()
 }
 
 /// Instalado guarda em %APPDATA%; portátil guarda ao lado do programa.
