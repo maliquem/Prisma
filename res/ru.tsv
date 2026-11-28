@@ -3341,3 +3341,38 @@ Cursor local: o mouse anda na hora, mesmo com latência alta	Локальный 
 O outro PC manda o formato do cursor e para de desenhá-lo no vídeo; este PC desenha com o próprio mouse. Quando o jogo esconde o cursor ou o prende na janela, volta ao normal. Só vale com uma pessoa só assistindo.	Другой ПК передаёт форму курсора и перестаёт рисовать его в видео; этот ПК рисует его своей мышью. Когда игра скрывает курсор или запирает его в своём окне, всё возвращается к обычному режиму. Работает, только когда смотрит один человек.
 Mouse relativo nos jogos: a câmera gira sem bater na borda	Относительная мышь в играх: камера поворачивается, не упираясь в край
 Quando um jogo do outro PC esconde e prende o cursor (tiro, câmera em terceira pessoa), este PC manda só o quanto o mouse andou, como no Parsec. Fora disso, o mouse vai como sempre. O outro PC precisa estar nesta versão.	Когда игра на другом ПК скрывает и запирает курсор (шутеры, камера от третьего лица), этот ПК передаёт только то, насколько сдвинулась мышь, как в Parsec. В остальных случаях мышь работает как обычно. На другом ПК должна быть эта версия.
+Raiz de disco	Корень диска
+Pasta do Windows ou do Prisma	Папка Windows или Prisma
+Pasta do sistema	Системная папка
+Apagar para sempre?	Удалить навсегда?
+Pedindo permissão de administrador…	Запрос прав администратора…
+Apagado	Удалено
+Apagado, com {} erros	Удалено, ошибок: {}
+Apagando…	Удаление…
+1 arquivo	1 файл
+Tomando posse de {}	Получение владения: {}
+Dando permissão em {}	Выдача прав: {}
+Plano B (takeown e icacls) em {}	План Б (takeown и icacls): {}
+Contando… {}	Подсчёт… {}
+Não passa pela Lixeira e não tem volta.	Минует Корзину, вернуть нельзя.
+Como administrador, passa por cima das permissões.	От имени администратора обходит ограничения доступа.
+O que o Windows negar pede a permissão de administrador.	Всё, что Windows запретит, запрашивает права администратора.
+1 item fica para o próximo reinício	1 элемент останется до следующей перезагрузки
+{} itens ficam para o próximo reinício	Элементов до следующей перезагрузки: {}
+Usou o plano B (takeown e icacls)	Использован план Б (takeown и icacls)
+Ficam de fora	Не удаляются
+Apagar para sempre	Удалить навсегда
+Shift+Del do Prisma	Shift+Del в Prisma
+Shift+Del nas pastas do Explorer apaga pelo Prisma	Shift+Del в папках Проводника удаляет через Prisma
+Apagar para sempre com o Shift+Del?	Удалить навсегда через Shift+Del?
+Com o Prisma aberto, o Shift+Del nas pastas do Explorer e na Área de Trabalho apaga pelo Prisma, mais rápido que o Windows. Não passa pela Lixeira e não tem como recuperar. Como administrador, passa por cima das permissões, até em pastas como WindowsApps. Cada Shift+Del pede confirmação antes. O Del comum continua mandando para a Lixeira. Dá para desligar em Configurações ou em Cópias a qualquer hora.	Пока Prisma открыт, Shift+Del в папках Проводника и на рабочем столе удаляет через Prisma, быстрее, чем Windows. Минует Корзину, восстановить нельзя. От имени администратора обходит ограничения доступа, даже в таких папках, как WindowsApps. Каждый Shift+Del сначала просит подтверждение. Обычный Del по-прежнему отправляет в Корзину. Это можно отключить в «Настройках» или в «Копировании» в любой момент.
+Excluídos	Удалённые
+Nada apagado pelo Shift+Del do Prisma ainda.	Через Shift+Del в Prisma пока ничего не удалено.
+Apagado para sempre	Удалено навсегда
+{} no reinício	{} после перезагрузки
+{} itens ficaram para o próximo reinício	Элементов до следующей перезагрузки: {}
+Só o registro do que o Shift+Del do Prisma apagou: não passa pela Lixeira e não tem volta. Guarda as últimas 500.	Только журнал того, что удалил Shift+Del в Prisma: минует Корзину, вернуть нельзя. Хранит последние 500.
+Com o Prisma aberto, o Shift+Del nas pastas do Explorer apaga para sempre, mais rápido que o Windows e sem a Lixeira. Cada vez pede confirmação.	Пока Prisma открыт, Shift+Del в папках Проводника удаляет навсегда, быстрее, чем Windows, и мимо Корзины. Каждый раз просит подтверждение.
+Não passa pela Lixeira e não tem como recuperar. Como administrador, passa por cima das permissões. O Del comum continua mandando para a Lixeira.	Минует Корзину, восстановить нельзя. От имени администратора обходит ограничения доступа. Обычный Del по-прежнему отправляет в Корзину.
+{} itens	Элементов: {}
+Não saiu tudo	Удалено не всё

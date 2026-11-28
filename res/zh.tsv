@@ -3341,3 +3341,38 @@ Cursor local: o mouse anda na hora, mesmo com latência alta	本地光标：即�
 O outro PC manda o formato do cursor e para de desenhá-lo no vídeo; este PC desenha com o próprio mouse. Quando o jogo esconde o cursor ou o prende na janela, volta ao normal. Só vale com uma pessoa só assistindo.	另一台电脑发送光标形状，并不再把它画进视频；这台电脑用自己的鼠标画出它。游戏隐藏光标或把它锁在窗口内时恢复正常。只在仅有一人观看时生效。
 Mouse relativo nos jogos: a câmera gira sem bater na borda	游戏中的相对鼠标：镜头转动不会碰到边缘
 Quando um jogo do outro PC esconde e prende o cursor (tiro, câmera em terceira pessoa), este PC manda só o quanto o mouse andou, como no Parsec. Fora disso, o mouse vai como sempre. O outro PC precisa estar nesta versão.	当另一台电脑上的游戏隐藏并锁定光标时（射击游戏、第三人称镜头），这台电脑只发送鼠标移动的距离，就像 Parsec 一样。其他情况下鼠标照常工作。另一台电脑需要是这个版本。
+Raiz de disco	磁盘根目录
+Pasta do Windows ou do Prisma	Windows 或 Prisma 文件夹
+Pasta do sistema	系统文件夹
+Apagar para sempre?	永久删除？
+Pedindo permissão de administrador…	正在请求管理员权限…
+Apagado	已删除
+Apagado, com {} erros	已删除，有 {} 个错误
+Apagando…	正在删除…
+1 arquivo	1 个文件
+Tomando posse de {}	正在获取 {} 的所有权
+Dando permissão em {}	正在授予 {} 的权限
+Plano B (takeown e icacls) em {}	备用方案（takeown 和 icacls）：{}
+Contando… {}	正在统计… {}
+Não passa pela Lixeira e não tem volta.	不经过回收站，无法恢复。
+Como administrador, passa por cima das permissões.	以管理员身份运行时，会绕过权限限制。
+O que o Windows negar pede a permissão de administrador.	Windows 拒绝的操作会请求管理员权限。
+1 item fica para o próximo reinício	1 项将在下次重启时删除
+{} itens ficam para o próximo reinício	{} 项将在下次重启时删除
+Usou o plano B (takeown e icacls)	已使用备用方案（takeown 和 icacls）
+Ficam de fora	不会删除
+Apagar para sempre	永久删除
+Shift+Del do Prisma	Prisma 的 Shift+Del
+Shift+Del nas pastas do Explorer apaga pelo Prisma	在资源管理器文件夹中按 Shift+Del 通过 Prisma 删除
+Apagar para sempre com o Shift+Del?	用 Shift+Del 永久删除？
+Com o Prisma aberto, o Shift+Del nas pastas do Explorer e na Área de Trabalho apaga pelo Prisma, mais rápido que o Windows. Não passa pela Lixeira e não tem como recuperar. Como administrador, passa por cima das permissões, até em pastas como WindowsApps. Cada Shift+Del pede confirmação antes. O Del comum continua mandando para a Lixeira. Dá para desligar em Configurações ou em Cópias a qualquer hora.	Prisma 打开时，在资源管理器文件夹和桌面中按 Shift+Del 会通过 Prisma 删除，比 Windows 更快。不经过回收站，无法恢复。以管理员身份运行时，会绕过权限限制，连 WindowsApps 这类文件夹也不例外。每次 Shift+Del 都会先请求确认。普通的 Del 仍会移到回收站。可随时在设置或“复制”页面中关闭。
+Excluídos	已删除
+Nada apagado pelo Shift+Del do Prisma ainda.	Prisma 的 Shift+Del 还没有删除过任何内容。
+Apagado para sempre	已永久删除
+{} no reinício	重启后 {} 项
+{} itens ficaram para o próximo reinício	{} 项留待下次重启时删除
+Só o registro do que o Shift+Del do Prisma apagou: não passa pela Lixeira e não tem volta. Guarda as últimas 500.	仅记录 Prisma 的 Shift+Del 删除过的内容：不经过回收站，无法恢复。保留最近 500 条。
+Com o Prisma aberto, o Shift+Del nas pastas do Explorer apaga para sempre, mais rápido que o Windows e sem a Lixeira. Cada vez pede confirmação.	Prisma 打开时，在资源管理器文件夹中按 Shift+Del 会永久删除，比 Windows 更快，且不经过回收站。每次都会请求确认。
+Não passa pela Lixeira e não tem como recuperar. Como administrador, passa por cima das permissões. O Del comum continua mandando para a Lixeira.	不经过回收站，无法恢复。以管理员身份运行时，会绕过权限限制。普通的 Del 仍会移到回收站。
+{} itens	{} 项
+Não saiu tudo	未能全部删除

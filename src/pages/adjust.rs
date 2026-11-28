@@ -108,8 +108,9 @@ pub fn draw(ui: &mut Ui, app: &mut App, a: Rect) {
     }
     // Substituir a cópia do Windows: só o Ctrl+V, pelo gancho de teclado do Prisma aberto.
     ui.c.line(rp.x + 16.0, rp.y + 74.0, rp.right() - 16.0, rp.y + 74.0, LINE, 1.0);
-    paste_key_check(ui, app, rect(rp.x + 16.0, rp.y + 78.0, 400.0, 32.0));
-    ui.c.text_fit(rect(rp.x + 426.0, rp.y + 78.0, rp.w - 442.0, 32.0), "Arrastar com o mouse continua com o Windows.", 13.0, MUTED, Align::Left, Weight::Regular);
+    let half = (rp.w - 32.0) / 2.0;
+    paste_key_check(ui, app, rect(rp.x + 16.0, rp.y + 78.0, half - 8.0, 32.0));
+    del_key_check(ui, app, rect(rp.x + 16.0 + half, rp.y + 78.0, half, 32.0));
 
     let top = top + 128.0;
     let col = (w - 36.0) / 4.0;
@@ -213,6 +214,22 @@ pub fn paste_key_check(ui: &mut Ui, app: &mut App, r: Rect) {
     }
     if ui.answered("paste-key-on") {
         app.set_paste_key(true);
+    }
+}
+
+/// Caixa do Shift+Del do Prisma, a mesma em Configurações e em Cópias. Ligar pergunta com o aviso
+/// de que não tem volta; desligar é na hora. Só grava `del_key` e liga ou solta o gancho.
+pub fn del_key_check(ui: &mut Ui, app: &mut App, r: Rect) {
+    let mut key_on = app.cfg.del_key;
+    if ui.check("del-key", r, "Shift+Del nas pastas do Explorer apaga pelo Prisma", &mut key_on) {
+        if key_on {
+            ui.ask("del-key-on", "Apagar para sempre com o Shift+Del?", "Com o Prisma aberto, o Shift+Del nas pastas do Explorer e na Área de Trabalho apaga pelo Prisma, mais rápido que o Windows. Não passa pela Lixeira e não tem como recuperar. Como administrador, passa por cima das permissões, até em pastas como WindowsApps. Cada Shift+Del pede confirmação antes. O Del comum continua mandando para a Lixeira. Dá para desligar em Configurações ou em Cópias a qualquer hora.");
+        } else {
+            app.set_del_key(false);
+        }
+    }
+    if ui.answered("del-key-on") {
+        app.set_del_key(true);
     }
 }
 

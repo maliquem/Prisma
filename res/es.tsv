@@ -3341,3 +3341,38 @@ Cursor local: o mouse anda na hora, mesmo com latência alta	Cursor local: el ra
 O outro PC manda o formato do cursor e para de desenhá-lo no vídeo; este PC desenha com o próprio mouse. Quando o jogo esconde o cursor ou o prende na janela, volta ao normal. Só vale com uma pessoa só assistindo.	El otro PC envía la forma del cursor y deja de dibujarlo en el video; este PC lo dibuja con su propio ratón. Cuando el juego oculta el cursor o lo encierra en su ventana, vuelve a lo normal. Solo se aplica con una sola persona mirando.
 Mouse relativo nos jogos: a câmera gira sem bater na borda	Ratón relativo en los juegos: la cámara gira sin chocar con el borde
 Quando um jogo do outro PC esconde e prende o cursor (tiro, câmera em terceira pessoa), este PC manda só o quanto o mouse andou, como no Parsec. Fora disso, o mouse vai como sempre. O outro PC precisa estar nesta versão.	Cuando un juego del otro PC oculta y encierra el cursor (disparos, cámara en tercera persona), este PC envía solo cuánto se movió el ratón, como en Parsec. Fuera de eso, el ratón funciona como siempre. El otro PC debe tener esta versión.
+Raiz de disco	Raíz del disco
+Pasta do Windows ou do Prisma	Carpeta de Windows o de Prisma
+Pasta do sistema	Carpeta del sistema
+Apagar para sempre?	¿Eliminar para siempre?
+Pedindo permissão de administrador…	Pidiendo permiso de administrador…
+Apagado	Eliminado
+Apagado, com {} erros	Eliminado, con {} errores
+Apagando…	Eliminando…
+1 arquivo	1 archivo
+Tomando posse de {}	Tomando posesión de {}
+Dando permissão em {}	Dando permiso en {}
+Plano B (takeown e icacls) em {}	Plan B (takeown e icacls) en {}
+Contando… {}	Contando… {}
+Não passa pela Lixeira e não tem volta.	No pasa por la Papelera de reciclaje y no se puede deshacer.
+Como administrador, passa por cima das permissões.	Como administrador, se salta los permisos.
+O que o Windows negar pede a permissão de administrador.	Lo que Windows deniegue pide el permiso de administrador.
+1 item fica para o próximo reinício	1 elemento queda para el próximo reinicio
+{} itens ficam para o próximo reinício	{} elementos quedan para el próximo reinicio
+Usou o plano B (takeown e icacls)	Usó el plan B (takeown e icacls)
+Ficam de fora	Se quedan fuera
+Apagar para sempre	Eliminar para siempre
+Shift+Del do Prisma	Shift+Supr de Prisma
+Shift+Del nas pastas do Explorer apaga pelo Prisma	Shift+Supr en las carpetas del Explorador elimina con Prisma
+Apagar para sempre com o Shift+Del?	¿Eliminar para siempre con Shift+Supr?
+Com o Prisma aberto, o Shift+Del nas pastas do Explorer e na Área de Trabalho apaga pelo Prisma, mais rápido que o Windows. Não passa pela Lixeira e não tem como recuperar. Como administrador, passa por cima das permissões, até em pastas como WindowsApps. Cada Shift+Del pede confirmação antes. O Del comum continua mandando para a Lixeira. Dá para desligar em Configurações ou em Cópias a qualquer hora.	Con Prisma abierto, Shift+Supr en las carpetas del Explorador y en el Escritorio elimina con Prisma, más rápido que Windows. No pasa por la Papelera de reciclaje y no se puede recuperar. Como administrador, se salta los permisos, incluso en carpetas como WindowsApps. Cada Shift+Supr pide confirmación antes. Supr normal sigue enviando a la Papelera de reciclaje. Se puede desactivar en Configuración o en Copias en cualquier momento.
+Excluídos	Eliminados
+Nada apagado pelo Shift+Del do Prisma ainda.	Aún no se ha eliminado nada con Shift+Supr de Prisma.
+Apagado para sempre	Eliminado para siempre
+{} no reinício	{} al reiniciar
+{} itens ficaram para o próximo reinício	{} elementos quedaron para el próximo reinicio
+Só o registro do que o Shift+Del do Prisma apagou: não passa pela Lixeira e não tem volta. Guarda as últimas 500.	Solo el registro de lo que eliminó Shift+Supr de Prisma: no pasa por la Papelera de reciclaje y no se puede deshacer. Guarda las últimas 500.
+Com o Prisma aberto, o Shift+Del nas pastas do Explorer apaga para sempre, mais rápido que o Windows e sem a Lixeira. Cada vez pede confirmação.	Con Prisma abierto, Shift+Supr en las carpetas del Explorador elimina para siempre, más rápido que Windows y sin la Papelera de reciclaje. Cada vez pide confirmación.
+Não passa pela Lixeira e não tem como recuperar. Como administrador, passa por cima das permissões. O Del comum continua mandando para a Lixeira.	No pasa por la Papelera de reciclaje y no se puede recuperar. Como administrador, se salta los permisos. Supr normal sigue enviando a la Papelera de reciclaje.
+{} itens	{} elementos
+Não saiu tudo	No se borró todo
